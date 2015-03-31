@@ -2,6 +2,7 @@ package rpc
 
 import (
 	"encoding/json"
+	"fmt"
 	"math/big"
 	"sync"
 
@@ -151,6 +152,15 @@ func (api *EthereumApi) GetRequestReply(req *RpcRequest, reply *interface{}) err
 		args := new(NewTxArgs)
 		if err := json.Unmarshal(req.Params, &args); err != nil {
 			return err
+		}
+
+		// call ConfirmTransaction first
+		var obj []json.RawMessage
+		if err := json.Unmarshal(req.Params, &obj); err != nil {
+			return NewDecodeParamError(err.Error())
+		}
+		if !api.xeth().ConfirmTransaction(string(obj[0])) {
+			return fmt.Errorf("Transaction not confirmed")
 		}
 
 		v, err := api.xeth().Transact(args.From, args.To, args.Value.String(), args.Gas.String(), args.GasPrice.String(), args.Data)

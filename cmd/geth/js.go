@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common/natspec"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -139,11 +138,11 @@ var net = web3.net;
 
 }
 
-func (self *jsre) ConfirmTransaction(tx *types.Transaction) bool {
+func (self *jsre) ConfirmTransaction(tx string) bool {
 	var notice string
-	nat, err := natspec.New()
+	nat, err := natspec.New(self.xeth, tx)
 	if err == nil {
-		notice, err = nat.Notice(tx)
+		notice, err = nat.Notice()
 	}
 	if err != nil {
 		notice = fmt.Sprintf("About to submit transaction: %v")
