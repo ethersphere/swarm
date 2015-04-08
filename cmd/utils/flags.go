@@ -82,6 +82,10 @@ var (
 		Usage: "Network Id",
 		Value: eth.NetworkId,
 	}
+	NatspecEnabledFlag = cli.BoolFlag{
+		Name:  "natspec",
+		Usage: "Enable NatSpec confirmation notice",
+	}
 
 	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
@@ -228,6 +232,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		MaxPeers:        ctx.GlobalInt(MaxPeersFlag.Name),
 		Port:            ctx.GlobalString(ListenPortFlag.Name),
 		NAT:             GetNAT(ctx),
+		NatSpec:         ctx.GlobalBool(NatspecEnabledFlag.Name),
 		NodeKey:         GetNodeKey(ctx),
 		Shh:             true,
 		Dial:            true,
