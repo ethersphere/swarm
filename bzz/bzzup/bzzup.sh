@@ -26,7 +26,11 @@ name=`echo "$path" | cut -c3-`
 echo -n "$delimiter"
 hash=`wget -q -O- --post-file="$path" http://localhost:8500/raw`
 mime=`mimetype -b "$path"`
+if [ "_$name" = '_.' ]; then
+echo -n "\"hash\":\"$hash\",\"contentType\":\"$mime\""
+else
 echo -n "\"hash\":\"$hash\",\"path\":\"$name\",\"contentType\":\"$mime\""
+fi
 delimiter='},{'
 
 done
