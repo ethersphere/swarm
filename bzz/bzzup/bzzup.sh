@@ -6,7 +6,7 @@ delimiter='{"entries":[{'
 
 if [ -f "$1" ]; then
 hash=`wget -q -O- --post-file="$1" http://localhost:8500/raw`
-mime=`file --mime-type -b "$1"`
+mime=`mimetype -b "$1"`
 wget -q -O- --post-data="$delimiter\"hash\":\"$hash\",\"contentType\":\"$mime\"}]}" http://localhost:8500/raw
 echo
 
@@ -25,7 +25,7 @@ name=`echo "$path" | cut -c3-`
 [ _`basename "$name"` = "_$INDEX" ] && name=`dirname "$name"`
 echo -n "$delimiter"
 hash=`wget -q -O- --post-file="$path" http://localhost:8500/raw`
-mime=`file --mime-type -b "$path"`
+mime=`mimetype -b "$path"`
 echo -n "\"hash\":\"$hash\",\"path\":\"$name\",\"contentType\":\"$mime\""
 delimiter='},{'
 
