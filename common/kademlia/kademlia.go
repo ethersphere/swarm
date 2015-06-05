@@ -235,7 +235,7 @@ func (self *Kademlia) adjustProx(r int, add int) {
 		}
 		self.proxLimit = r
 	case add < 0 && self.proxLimit > 0 && r >= self.proxLimit-1:
-		for i = self.proxLimit - 1; len(self.buckets[i].nodes)+self.proxSize <= self.ProxBinSize; i-- {
+		for i = self.proxLimit - 1; i > 0 && len(self.buckets[i].nodes)+self.proxSize <= self.ProxBinSize; i-- {
 			self.proxSize += len(self.buckets[i].nodes)
 		}
 		self.proxLimit = i
@@ -330,7 +330,7 @@ node record a is more favoured to b a > b iff
 This has double role. Starting as naive node with empty db, this implements
 Kademlia bootstrapping
 As a mature node, it manages quickly fill in blanks or short lines
-All on demand
+All on demand.
 */
 func (self *Kademlia) GetNodeRecord() (*NodeRecord, bool) {
 	full := true

@@ -47,6 +47,12 @@ func (self *hive) start(address kademlia.Address, connectPeer func(string) error
 		dpaLogger.Warnf("Warning: error reading kademlia node db (skipping): %v", err)
 		err = nil
 	}
+	/* this loop is doing the actual table maintenance
+	including bootstrapping and maintaining a healthy table
+	Note: At the moment, this does not have any timer/timeout . That means if your
+	peers do not reply to launch the game into movement , it will stay stuck
+	add or remove a peer to wake up
+	*/
 	go func() {
 		// whenever pinged ask kademlia about most preferred peer
 		for _ = range self.ping {
