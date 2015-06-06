@@ -157,11 +157,11 @@ type retrieveRequestMsgData struct {
 func (self retrieveRequestMsgData) String() string {
 	var from string
 	if self.peer == nil {
-		from = "self"
+		from = "ourselves"
 	} else {
 		from = self.peer.Addr().String()
 	}
-	return fmt.Sprintf("From: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %v", from, self.Key[:4], self.Id, self.MaxSize, self.MaxPeers)
+	return fmt.Sprintf("From: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %s", from, self.Key[:4], self.Id, self.MaxSize, self.MaxPeers)
 }
 
 type peerAddr struct {
