@@ -78,7 +78,7 @@ func (js *jsre) adminBindings() {
 	miner.Set("stopAutoDAG", js.stopAutoDAG)
 	miner.Set("makeDAG", js.makeDAG)
 
-	admin.Set("x", struct{}{})
+	admin.Set("txPool", struct{}{})
 	t, _ = admin.Get("txPool")
 	txPool := t.Object()
 	txPool.Set("pending", js.allPendingTransactions)
