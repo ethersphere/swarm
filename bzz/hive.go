@@ -75,6 +75,7 @@ func (self *hive) start(address kademlia.Address, connectPeer func(string) error
 					}
 				}
 			}
+			dpaLogger.Debugf("hive population: %d (%d)\n%v", self.kad.Count(), self.kad.DBCount(), self.kad)
 		}
 	}()
 	return

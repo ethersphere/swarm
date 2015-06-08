@@ -97,6 +97,31 @@ func (self *Kademlia) Count() int {
 	return self.count
 }
 
+func (self *Kademlia) String() string {
+	var rows []string
+	for i, b := range self.buckets {
+
+		if i == self.proxLimit {
+			rows = append(rows, "=============== PROX LIMIT: %d ===============", i)
+		}
+		row := []string{fmt.Sprintf("%03d", i), fmt.Sprintf("%2d", len(b.nodes))}
+		for j, p := range b.nodes {
+			row = append(row, fmt.Sprintf("%08x", p.Addr()))
+		}
+		row = append(row, fmt.Sprintf("|"))
+		row = append(row, fmt.Sprintf("%2d", len(self.nodeDB[i])))
+
+		for j, p := range self.nodeDB[i] {
+			row = append(row, fmt.Sprintf("%08x", p.Addr()[:4]))
+		}
+		if i == self.MaxProx {
+			break
+		}
+		rows = append(rows, strings.Join(row, " "))
+	}
+	return strings.Join(rows, "\n")
+}
+
 // Start brings up a pool of entries potentially from an offline persisted source
 // and sets default values for optional parameters
 func (self *Kademlia) Start(addr Address) error {
