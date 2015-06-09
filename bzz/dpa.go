@@ -4,7 +4,8 @@ import (
 	"errors"
 	"sync"
 
-	ethlogger "github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 /*
@@ -34,7 +35,7 @@ var (
 	notFound = errors.New("not found")
 )
 
-var dpaLogger = ethlogger.NewLogger("BZZ")
+var dpaLogger = logger.NewLogger("BZZ")
 
 type DPA struct {
 	Chunker    Chunker
@@ -84,7 +85,7 @@ SPLIT:
 		select {
 		case err, ok := <-errC:
 			if err != nil {
-				dpaLogger.Warnf("chunker split error: %v", err)
+				glog.V(logger.Error).Infof("[BZZ] chunker split error: %v", err)
 			}
 			if !ok {
 				break SPLIT
@@ -108,7 +109,7 @@ func (self *DPA) Start() {
 	self.quitC = make(chan bool)
 	self.storeLoop()
 	self.retrieveLoop()
-	dpaLogger.Debugf("Swarm DPA started.")
+	glog.V(logger.Info).Infof("[BZZ] Swarm DPA started.")
 }
 
 func (self *DPA) Stop() {
@@ -129,12 +130,12 @@ func (self *DPA) retrieveLoop() {
 		for ch := range self.retrieveC {
 
 			go func(chunk *Chunk) {
-				dpaLogger.DebugDetailf("dpa: retrieve loop : chunk '%x'", chunk.Key)
+				glog.V(logger.Detail).Infof("[BZZ] dpa: retrieve loop : chunk '%x'", chunk.Key)
 				storedChunk, err := self.ChunkStore.Get(chunk.Key)
 				if err == notFound {
-					dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)
+					glog.V(logger.Detail).Infof("[BZZ] chunk '%x' not found", chunk.Key)
 				} else if err != nil {
-					dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
+					glog.V(logger.Detail).Infof("[BZZ] error retrieving chunk %x: %v", chunk.Key, err)
 				} else {
 					chunk.SData = storedChunk.SData
 					chunk.Size = storedChunk.Size
@@ -158,7 +159,7 @@ func (self *DPA) storeLoop() {
 			go func(chunk *Chunk) {
 				self.ChunkStore.Put(chunk)
 				if chunk.wg != nil {
-					dpaLogger.Debugf("DPA.storeLoop %064x", chunk.Key)
+					glog.V(logger.Detail).Infof("[BZZ] DPA.storeLoop %064x", chunk.Key)
 					chunk.wg.Done()
 				}
 			}(ch)

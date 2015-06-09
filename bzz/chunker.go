@@ -29,6 +29,9 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 const (
@@ -166,7 +169,7 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk, 
 			depth++
 		}
 
-		// dpaLogger.Debugf("split request received for data (%v bytes, depth: %v)", size, depth)
+		// glog.V(logger.Detail).Infof("[BZZ] split request received for data (%v bytes, depth: %v)", size, depth)
 
 		//launch actual recursive function passing the workgroup
 		self.split(depth, treeSize/self.Branches, key, data, chunkC, rerrC, wg, swg)
@@ -202,7 +205,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 	size := data.Size()
 	var newChunk *Chunk
 	var hash Key
-	// dpaLogger.Debugf("depth: %v, max subtree size: %v, data size: %v", depth, treeSize, size)
+	// glog.V(logger.Detail).Infof("[BZZ] depth: %v, max subtree size: %v, data size: %v", depth, treeSize, size)
 
 	for depth > 0 && size < treeSize {
 		treeSize /= self.Branches
@@ -215,7 +218,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		binary.LittleEndian.PutUint64(chunkData[0:8], uint64(size))
 		data.ReadAt(chunkData[8:], 0)
 		hash = self.Hash(chunkData)
-		// dpaLogger.Debugf("content chunk: max subtree size: %v, data size: %v", treeSize, size)
+		// glog.V(logger.Detail).Infof("[BZZ] content chunk: max subtree size: %v, data size: %v", treeSize, size)
 		newChunk = &Chunk{
 			Key:   hash,
 			SData: chunkData,
@@ -224,7 +227,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 	} else {
 		// intermediate chunk containing child nodes hashes
 		branchCnt := int64((size + treeSize - 1) / treeSize)
-		// dpaLogger.Debugf("intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
+		// glog.V(logger.Detail).Infof("[BZZ] intermediate node: setting branches: %v, depth: %v, max subtree size: %v, data size: %v", branches, depth, treeSize, size)
 
 		var chunk []byte = make([]byte, branchCnt*self.hashSize+8)
 		var pos, i int64
@@ -309,25 +312,25 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		C:   make(chan bool), // close channel to signal data delivery
 	}
 	self.chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
-	dpaLogger.Debugf("readAt: reading %x into %d bytes at offset %d.", chunk.Key[:4], len(b), off)
+	glog.V(logger.Detail).Infof("[BZZ] readAt: reading %x into %d bytes at offset %d.", chunk.Key[:4], len(b), off)
 
 	// waiting for the chunk retrieval
 	select {
 	case <-self.quitC:
 		// this is how we control process leakage (quitC is closed once join is finished (after timeout))
-		// dpaLogger.Debugf("quit")
+		// glog.V(logger.Detail).Infof("[BZZ] quit")
 		return
 	case <-chunk.C: // bells are ringing, data have been delivered
-		// dpaLogger.Debugf("chunk data received for %x", chunk.Key[:4])
+		// glog.V(logger.Detail).Infof("[BZZ] chunk data received for %x", chunk.Key[:4])
 	}
 	if len(chunk.SData) == 0 {
-		// dpaLogger.Debugf("No payload in %x", chunk.Key)
+		// glog.V(logger.Detail).Infof("[BZZ] No payload in %x", chunk.Key)
 		return 0, notFound
 	}
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.size = chunk.Size
 	if b == nil {
-		// dpaLogger.Debugf("Size query for %x", chunk.Key[:4])
+		// glog.V(logger.Detail).Infof("[BZZ] Size query for %x", chunk.Key[:4])
 		return
 	}
 	want := int64(len(b))
@@ -350,14 +353,14 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	}()
 	select {
 	case err = <-self.errC:
-		dpaLogger.Debugf("ReadAt received %v", err)
+		glog.V(logger.Detail).Infof("[BZZ] ReadAt received %v", err)
 		read = len(b)
 		if off+int64(read) == self.size {
 			err = io.EOF
 		}
-		dpaLogger.Debugf("ReadAt returning at %d: %v", read, err)
+		glog.V(logger.Detail).Infof("[BZZ] ReadAt returning at %d: %v", read, err)
 	case <-self.quitC:
-		dpaLogger.Debugf("ReadAt aborted at %d: %v", read, err)
+		glog.V(logger.Detail).Infof("[BZZ] ReadAt aborted at %d: %v", read, err)
 	}
 	return
 }
@@ -365,7 +368,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunk *Chunk, parentWg *sync.WaitGroup) {
 	defer parentWg.Done()
 
-	// dpaLogger.Debugf("depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
+	// glog.V(logger.Detail).Infof("[BZZ] depth: %v, loff: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, off, eoff, chunk.Size, treeSize)
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 
@@ -376,7 +379,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 	}
 
 	if depth == 0 {
-		// dpaLogger.Debugf("depth: %v, len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
+		// glog.V(logger.Detail).Infof("[BZZ] depth: %v, len(b): %v, off: %v, eoff: %v, chunk.Size: %v, treeSize: %v", depth, len(b), off, eoff, chunk.Size, treeSize)
 		if int64(len(b)) != eoff-off {
 			//fmt.Printf("len(b) = %v  off = %v  eoff = %v", len(b), off, eoff)
 			panic("len(b) does not match")
@@ -407,13 +410,13 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		wg.Add(1)
 		go func(j int64) {
 			childKey := chunk.SData[8+j*self.chunker.hashSize : 8+(j+1)*self.chunker.hashSize]
-			dpaLogger.Debugf("subtree index: %v -> %x", j, childKey[:4])
+			glog.V(logger.Detail).Infof("[BZZ] subtree index: %v -> %x", j, childKey[:4])
 
 			ch := &Chunk{
 				Key: childKey,
 				C:   make(chan bool), // close channel to signal data delivery
 			}
-			dpaLogger.Debugf("chunk data sent for %x (key interval in chunk %v-%v)", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
+			glog.V(logger.Detail).Infof("[BZZ] chunk data sent for %x (key interval in chunk %v-%v)", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
 			self.chunkC <- ch // submit retrieval request, someone should be listening on the other side (or we will time out globally)
 
 			// waiting for the chunk retrieval
@@ -422,7 +425,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 				// this is how we control process leakage (quitC is closed once join is finished (after timeout))
 				return
 			case <-ch.C: // bells are ringing, data have been delivered
-				// dpaLogger.Debugf("chunk data received")
+				// glog.V(logger.Detail).Infof("[BZZ] chunk data received")
 			}
 			if soff < off {
 				soff = off
