@@ -314,7 +314,7 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.Msg
 
 func (self *bzzProtocol) handle() error {
 	msg, err := self.rw.ReadMsg()
-	dpaLogger.Debugf("Incoming MSG: %v", msg)
+	glog.V(logger.Debug).Infof("[BZZ] Incoming MSG: %v", msg)
 	if err != nil {
 		return err
 	}
@@ -332,7 +332,7 @@ func (self *bzzProtocol) handle() error {
 
 	switch msg.Code {
 	case statusMsg:
-		dpaLogger.Debugf("Status message: %v", msg)
+		glog.V(logger.Debug).Infof("[BZZ] Status message: %v", msg)
 		return self.protoError(ErrExtraStatusMsg, "")
 
 	case storeRequestMsg:
@@ -352,7 +352,7 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
 		req.peer = &peer{bzzProtocol: self}
-		dpaLogger.Debugf("Receiving retrieve request: %s", req.String())
+		glog.V(logger.Debug).Infof("[BZZ] Receiving retrieve request: %s", req.String())
 		self.netStore.addRetrieveRequest(&req)
 
 	case peersMsg:
@@ -463,10 +463,10 @@ func (self *bzzProtocol) peerAddr() *peerAddr {
 
 // outgoing messages
 func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
-	dpaLogger.Debugf("Sending retrieve request: %v", req)
+	glog.V(logger.Debug).Infof("[BZZ] Sending retrieve request: %v", req)
 	err := p2p.Send(self.rw, retrieveRequestMsg, req)
 	if err != nil {
-		dpaLogger.Errorf("EncodeMsg error: %v", err)
+		glog.V(logger.Error).Infof("[BZZ] EncodeMsg error: %v", err)
 	}
 }
 
@@ -483,22 +483,22 @@ LOOP:
 	for {
 		if n == 0 {
 			it = self.requestDb.NewIterator()
-			// dpaLogger.Debugf("seek iterator: %x", key)
+			// glog.V(logger.Debug).Infof("[BZZ] seek iterator: %x", key)
 			it.Seek(key)
 			if !it.Valid() {
-				// dpaLogger.Debugf("not valid, sleep, continue: %x", key)
+				// glog.V(logger.Debug).Infof("[BZZ] not valid, sleep, continue: %x", key)
 				time.Sleep(1 * time.Second)
 				continue
 			}
 			key = it.Key()
-			// dpaLogger.Debugf("found db key: %x", key)
+			// glog.V(logger.Debug).Infof("[BZZ] found db key: %x", key)
 			n = 100
 		}
-		// dpaLogger.Debugf("checking key: %x <> %x ", key, self.key())
+		// glog.V(logger.Debug).Infof("[BZZ] checking key: %x <> %x ", key, self.key())
 
 		// reached the end of this peers range
 		if !bytes.Equal(key[:32], self.addrKey()) {
-			// dpaLogger.Debugf("reached the end of this peers range: %x", key)
+			// glog.V(logger.Debug).Infof("[BZZ] reached the end of this peers range: %x", key)
 			n = 0
 			continue
 		}
@@ -508,7 +508,7 @@ LOOP:
 			self.requestDb.Delete(key)
 			continue
 		}
-		// dpaLogger.Debugf("sending chunk: %x", chunk.Key)
+		// glog.V(logger.Debug).Infof("[BZZ] sending chunk: %x", chunk.Key)
 
 		id := generateId()
 		req := &storeRequestMsgData{
@@ -546,7 +546,7 @@ func (self *bzzProtocol) storeRequest(key Key) {
 	peerKey := make([]byte, 64)
 	copy(peerKey, self.addrKey())
 	copy(peerKey[32:], key[:])
-	dpaLogger.Debugf("enter store request %x into db", peerKey)
+	glog.V(logger.Debug).Infof("[BZZ] enter store request %x into db", peerKey)
 	self.requestDb.Put(peerKey, []byte{0})
 }
 
