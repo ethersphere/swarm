@@ -2,6 +2,7 @@ package bzz
 
 import (
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"math/big"
@@ -35,8 +36,11 @@ type Api struct {
 	Chunker   *TreeChunker
 	Port      string
 	Registrar registrar.VersionedRegistrar
-	dpa       *DPA
-	netStore  *netStore
+	datadir   string
+
+	dpa      *DPA
+	hive     *hive
+	netStore *netStore
 }
 
 /*
@@ -50,9 +54,15 @@ func NewApi(datadir, port string) (self *Api, err error) {
 	self = &Api{
 		Chunker: &TreeChunker{},
 		Port:    port,
+		datadir: datadir,
 	}
 
-	self.netStore, err = newNetStore(filepath.Join(datadir, "bzz"), filepath.Join(datadir, "bzzpeers.json"))
+	self.hive, err = newHive()
+	if err != nil {
+		return
+	}
+
+	self.netStore, err = newNetStore(filepath.Join(datadir, "bzz"), self.hive)
 	if err != nil {
 		return
 	}
@@ -101,14 +111,39 @@ Start is called when the ethereum stack is started
 - starts an http server
 */
 func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
+	var err error
+	if node == nil {
+		err = fmt.Errorf("basenode nil")
+	} else if self.netStore == nil {
+		err = fmt.Errorf("netStore is nil")
+	} else if connectPeer == nil {
+		err = fmt.Errorf("no connect peer function")
+	} else if bytes.Equal(node.ID[:], zeroKey) {
+		err = fmt.Errorf("zero ID invalid")
+	} else { // this is how we calculate the bzz address of the node
+		// ideally this should be using the swarm hash function
+
+		baseAddr := &peerAddr{
+			ID:   node.ID[:],
+			IP:   node.IP,
+			Port: node.TCP,
+		}
+		baseAddr.new()
+		err = self.hive.start(baseAddr, filepath.Join(self.datadir, "bzz-peers.json"), connectPeer)
+		if err == nil {
+			err = self.netStore.start(baseAddr)
+			if err == nil {
+				dpaLogger.Infof("Swarm network started on bzz address: %064x", baseAddr.hash[:])
+			}
+		}
+	}
+	//
+	if err != nil {
+		dpaLogger.Infof("Swarm started started offline: %v", err)
+	}
 	self.Chunker.Init()
 	self.dpa.Start()
-	if node != nil && self.netStore != nil && connectPeer != nil {
-		self.netStore.start(node, connectPeer)
-		dpaLogger.Infof("Swarm network started.")
-	} else {
-		dpaLogger.Infof("Local Swarm started without network")
-	}
+
 	if self.Port != "" {
 		go startHttpServer(self, self.Port)
 	}
@@ -117,6 +152,7 @@ func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
 func (self *Api) Stop() {
 	self.dpa.Stop()
 	self.netStore.stop()
+	self.hive.stop()
 }
 
 // Get uses iterative manifest retrieval and prefix matching

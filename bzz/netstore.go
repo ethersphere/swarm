@@ -6,8 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/kademlia"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/common"
 )
 
 /*
@@ -20,7 +19,8 @@ type netStore struct {
 	localStore *localStore
 	lock       sync.Mutex
 	hive       *hive
-	self       *discover.Node
+	self       *peerAddr
+	ready      chan bool
 	path       string
 }
 
@@ -41,49 +41,52 @@ const (
 
 var (
 	searchTimeout = 3 * time.Second
+	zeroKey       = Key(common.Hash{}.Bytes())
 )
 
 type requestStatus struct {
 	key        Key
 	status     int
-	requesters map[int64][]*retrieveRequestMsgData
+	requesters map[uint64][]*retrieveRequestMsgData
 	C          chan bool
 }
 
-func newNetStore(path, hivepath string) (netstore *netStore, err error) {
+func newNetStore(path string, h *hive) (netstore *netStore, err error) {
 	dbStore, err := newDbStore(path)
 	if err != nil {
 		return
 	}
-	hive := newHive(hivepath)
 	netstore = &netStore{
 		localStore: &localStore{
 			memStore: newMemStore(dbStore),
 			dbStore:  dbStore,
 		},
-		path: path,
-		hive: hive,
+		path:  path,
+		hive:  h,
+		ready: make(chan bool),
 	}
 	return
 }
 
-func (self *netStore) start(node *discover.Node, connectPeer func(string) error) (err error) {
-	self.self = node
-	err = self.hive.start(kademlia.Address(node.Sha()), connectPeer)
-	if err != nil {
-		return
-	}
+func (self *netStore) start(addr *peerAddr) (err error) {
+	self.self = addr
+	close(self.ready)
 	return
+}
+
+func (self *netStore) addr() *peerAddr {
+	<-self.ready
+	return self.self
 }
 
 func (self *netStore) stop() (err error) {
-	return self.hive.stop()
+	return
 }
 
 // called from dpa, entrypoint for *local* chunk store requests
 func (self *netStore) Put(entry *Chunk) {
 	chunk, err := self.localStore.Get(entry.Key)
-	dpaLogger.Debugf("netStore.Pszut: localStore.Get returned with %v.", err)
+	dpaLogger.Debugf("netStore.Put: localStore.Get returned with %v.", err)
 	if err != nil {
 		chunk = entry
 	} else if chunk.SData == nil {
@@ -148,10 +151,14 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 // waits for response or times out
 func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk = self.get(key)
-	id := generateId()
 	timeout := time.Now().Add(searchTimeout)
 	if chunk.SData == nil {
-		self.startSearch(chunk, id, &timeout)
+		req := &retrieveRequestMsgData{
+			Key: chunk.Key,
+			Id:  generateId(),
+		}
+		req.setTimeout(&timeout)
+		self.startSearch(req, chunk)
 	} else {
 		return
 	}
@@ -189,7 +196,7 @@ func (self *netStore) get(key Key) (chunk *Chunk) {
 
 func newRequestStatus() *requestStatus {
 	return &requestStatus{
-		requesters: make(map[int64][]*retrieveRequestMsgData),
+		requesters: make(map[uint64][]*retrieveRequestMsgData),
 		C:          make(chan bool),
 	}
 }
@@ -199,39 +206,39 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	// if key is zero or nil or matches requester address, then the request
+	// is a self lookup and not to be forwarded
+	// var chunk *Chunk
+	if !req.isLookup() {
+		chunk := self.get(req.Key)
+		if chunk.SData != nil {
+			chunk.req.status = reqFound
+		}
 
-	chunk := self.get(req.Key)
-	if chunk.SData == nil {
-		t := time.Now().Add(10 * time.Second)
-		req.timeout = &t
+		req = self.strategyUpdateRequest(chunk.req, req) // may change req status
+
+		if chunk.req.status == reqFound {
+			dpaLogger.Debugf("netStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
+			self.deliver(req, chunk)
+			return
+		}
+
+		dpaLogger.Debugf("netStore.addRetrieveRequest: %064x. Start net search by forwarding retrieve request. For now responding with peers.", req.Key)
+		self.startSearch(req, chunk)
+
 	} else {
-		chunk.req.status = reqFound
+		dpaLogger.Debugf("netStore.addRetrieveRequest: self lookup for %v: responding with peers...", req.peer)
 	}
 
-	timeout := self.strategyUpdateRequest(chunk.req, req) // may change req status
-
-	if timeout == nil {
-		dpaLogger.Debugf("netStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
-		self.deliver(req, chunk)
-	} else {
-		// we might need chunk.req to cache relevant peers response, or would it expire?
-		self.peers(req, chunk, timeout)
-		dpaLogger.Debugf("netStore.addRetrieveRequest: %064x - searching.... responding with peers...", req.Key)
-		self.startSearch(chunk, int64(req.Id), timeout)
-	}
+	self.peers(req)
 }
 
 // logic propagating retrieve requests to peers given by the kademlia hive
 // it's assumed that caller holds the lock
-func (self *netStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
+func (self *netStore) startSearch(req *retrieveRequestMsgData, chunk *Chunk) {
 	chunk.req.status = reqSearching
 	peers := self.hive.getPeers(chunk.Key, 0)
 	dpaLogger.Debugf("netStore.startSearch: %064x - received %d peers from KΛÐΞMLIΛ...", chunk.Key, len(peers))
-	req := &retrieveRequestMsgData{
-		Key:     chunk.Key,
-		Id:      uint64(id),
-		timeout: timeout,
-	}
 	for _, peer := range peers {
 		dpaLogger.Debugf("netStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
 		dpaLogger.Debugf("req.requesters: %v", chunk.req.requesters)
@@ -251,9 +258,9 @@ func (self *netStore) startSearch(chunk *Chunk, id int64, timeout *time.Time) {
 	}
 }
 
-func generateId() int64 {
+func generateId() uint64 {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return r.Int63()
+	return uint64(r.Int63())
 }
 
 /*
@@ -262,17 +269,21 @@ only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found)
 */
 func (self *netStore) addRequester(rs *requestStatus, req *retrieveRequestMsgData) {
-	dpaLogger.Debugf("netStore.addRequester: key %064x - add peer [%v] to req.Id %064x", req.Key, req.peer, req.Id)
-	list := rs.requesters[int64(req.Id)]
-	rs.requesters[int64(req.Id)] = append(list, req)
+	dpaLogger.Debugf("netStore.addRequester: key %064x - add peer [%v] to req.Id %v", req.Key, req.peer, req.Id)
+	list := rs.requesters[req.Id]
+	rs.requesters[req.Id] = append(list, req)
 }
 
 // add peer request the chunk and decides the timeout for the response if still searching
-func (self *netStore) strategyUpdateRequest(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
-	dpaLogger.Debugf("netStore.strategyUpdateRequest: key %064x", req.Key)
-	self.addRequester(rs, req)
-	if rs.status == reqSearching {
-		timeout = self.searchTimeout(rs, req)
+func (self *netStore) strategyUpdateRequest(rs *requestStatus, origReq *retrieveRequestMsgData) (req *retrieveRequestMsgData) {
+	dpaLogger.Debugf("netStore.strategyUpdateRequest: key %064x", origReq.Key)
+	// we do not create an alternative one
+	req = origReq
+	if rs != nil {
+		self.addRequester(rs, req)
+		if rs.status == reqSearching {
+			req.setTimeout(self.searchTimeout(rs, req))
+		}
 	}
 	return
 
@@ -305,38 +316,56 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 // called on each request when a chunk is found,
 // delivery is done by sending a request to the requesting peer
 func (self *netStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
-	storeReq := &storeRequestMsgData{
-		Key:            req.Key,
-		Id:             req.Id,
-		SData:          chunk.SData,
-		requestTimeout: req.timeout, //
-		// StorageTimeout *time.Time // expiry of content
-		// Metadata       metaData
+	// here we should check MaxSize if set to a value lower than chunk.Size
+	// we withhold
+	// also check for timeout and withhold if expired
+	if req.MaxSize == 0 || int64(req.MaxSize) >= chunk.Size {
+		storeReq := &storeRequestMsgData{
+			Key:            req.Key,
+			Id:             req.Id,
+			SData:          chunk.SData,
+			requestTimeout: req.timeout, //
+			// StorageTimeout *time.Time // expiry of content
+			// Metadata       metaData
+		}
+		req.peer.store(storeReq)
 	}
-	req.peer.store(storeReq)
 }
 
 // the immediate response to a retrieve request,
 // sends relevant peer data given by the kademlia hive to the requester
-func (self *netStore) peers(req *retrieveRequestMsgData, chunk *Chunk, timeout *time.Time) {
-	var addrs []*peerAddr
-	for _, peer := range self.hive.getPeers(req.Key, int(req.MaxPeers)) {
-		addrs = append(addrs, peer.peerAddr())
+func (self *netStore) peers(req *retrieveRequestMsgData) {
+	// FIXME: should check req.MaxPeers but then should not default to zero or make sure we set it when sending retrieveRequests
+	// we might need chunk.req to cache relevant peers response, or would it expire?
+	if req != nil && req.MaxPeers >= 0 {
+		var addrs []*peerAddr
+		if req.timeout == nil || time.Now().Before(*(req.timeout)) {
+			key := req.Key
+			if isZeroKey(key) {
+				key = req.peer.addrKey()
+				req.Key = nil
+			}
+			for _, peer := range self.hive.getPeers(key, int(req.MaxPeers)) {
+				addrs = append(addrs, peer.remoteAddr)
+			}
+			peersData := &peersMsgData{
+				Peers: addrs,
+				Key:   req.Key,
+				Id:    req.Id,
+			}
+			peersData.setTimeout(req.timeout)
+			req.peer.peers(peersData)
+		}
 	}
-	peersData := &peersMsgData{
-		Peers:   addrs,
-		Key:     req.Key,
-		Id:      req.Id,
-		timeout: timeout,
-	}
-	req.peer.peers(peersData)
 }
 
 // decides the timeout promise sent with the immediate peers response to a retrieve request
+// if timeout is explicitly set and expired
 func (self *netStore) searchTimeout(rs *requestStatus, req *retrieveRequestMsgData) (timeout *time.Time) {
+	reqt := req.getTimeout()
 	t := time.Now().Add(searchTimeout)
-	if req.timeout != nil && req.timeout.Before(t) {
-		return req.timeout
+	if reqt != nil && reqt.Before(t) {
+		return reqt
 	} else {
 		return &t
 	}

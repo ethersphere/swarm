@@ -503,7 +503,8 @@ func (s *Ethereum) Start() error {
 		s.whisper.Start()
 	}
 
-	if s.Swarm != nil {
+	if s.Swarm != nil && s.net.Self() != nil {
+		glog.V(logger.Info).Infof("net.self after net started: %v", s.net.Self())
 		s.Swarm.Start(s.net.Self(), s.AddPeer)
 	}
 

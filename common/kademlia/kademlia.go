@@ -97,22 +97,30 @@ func (self *Kademlia) Count() int {
 	return self.count
 }
 
+// accessor for KAD offline db count
+func (self *Kademlia) DBCount() int {
+	return len(self.nodeIndex)
+}
+
 func (self *Kademlia) String() string {
 	var rows []string
+	rows = append(rows, fmt.Sprintf("Address: %064x\nhive population: %d (%d)", self.addr[:], self.Count(), self.DBCount()))
+	rows = append(rows, fmt.Sprintf("MaxProx: %d, ProxBinSize: %d, BucketSize: %d, MinBucketSize: %d, proxLimit: %d, proxSize: %d", self.MaxProx, self.ProxBinSize, self.BucketSize, self.MinBucketSize, self.proxLimit, self.proxSize))
+
 	for i, b := range self.buckets {
 
 		if i == self.proxLimit {
-			rows = append(rows, "=============== PROX LIMIT: %d ===============", i)
+			rows = append(rows, fmt.Sprintf("=============== PROX LIMIT: %d ===============", i))
 		}
 		row := []string{fmt.Sprintf("%03d", i), fmt.Sprintf("%2d", len(b.nodes))}
-		for j, p := range b.nodes {
-			row = append(row, fmt.Sprintf("%08x", p.Addr()))
+		for _, p := range b.nodes {
+			row = append(row, fmt.Sprintf("%s", p.Addr().String()[:8]))
 		}
 		row = append(row, fmt.Sprintf("|"))
 		row = append(row, fmt.Sprintf("%2d", len(self.nodeDB[i])))
 
-		for j, p := range self.nodeDB[i] {
-			row = append(row, fmt.Sprintf("%08x", p.Addr()[:4]))
+		for _, p := range self.nodeDB[i] {
+			row = append(row, fmt.Sprintf("%08x|%08b", p.Address[:4], p.Address[0]^self.addr[0]))
 		}
 		if i == self.MaxProx {
 			break
@@ -592,6 +600,7 @@ func RandomAddressAt(self Address, prox int) (addr Address) {
 	for i := pos + 1; i < len(addr); i++ {
 		addr[i] = byte(rand.Intn(255))
 	}
+
 	return
 }
 

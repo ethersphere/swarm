@@ -14,13 +14,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
@@ -63,14 +63,15 @@ var errorToString = map[int]string{
 // bzzProtocol represents the swarm wire protocol
 // instance is running on each peer
 type bzzProtocol struct {
-	node      *discover.Node
-	netStore  *netStore
-	peer      *p2p.Peer
-	key       Key
-	rw        p2p.MsgReadWriter
-	errors    *errs.Errors
-	requestDb *LDBDatabase
-	quitC     chan bool
+	netStore   *netStore
+	peer       *p2p.Peer
+	localAddr  *peerAddr
+	remoteAddr *peerAddr
+	key        Key
+	rw         p2p.MsgReadWriter
+	errors     *errs.Errors
+	requestDb  *LDBDatabase
+	quitC      chan bool
 }
 
 /*
@@ -96,7 +97,6 @@ Peers
 type statusMsgData struct {
 	Version   uint64
 	ID        string
-	NodeID    []byte
 	Addr      *peerAddr
 	NetworkId uint64
 	Caps      []p2p.Cap
@@ -104,7 +104,7 @@ type statusMsgData struct {
 }
 
 func (self *statusMsgData) String() string {
-	return fmt.Sprintf("Status: Version: %v, ID: %v, NodeID: %v, Addr: %v, NetworkId: %v, Caps: %v", self.Version, self.ID, self.NodeID, self.Addr, self.NetworkId, self.Caps)
+	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, NetworkId: %v, Caps: %v", self.Version, self.ID, self.Addr, self.NetworkId, self.Caps)
 }
 
 /*
@@ -148,10 +148,9 @@ type retrieveRequestMsgData struct {
 	Id       uint64     // request id
 	MaxSize  uint64     // maximum size of delivery accepted
 	MaxPeers uint64     // maximum number of peers returned
+	Timeout  uint64     //  the longest time we are expecting a response
 	timeout  *time.Time //
-	//Metadata metaData  //
-	//
-	peer *peer // protocol registers the requester
+	peer     *peer      // protocol registers the requester
 }
 
 func (self retrieveRequestMsgData) String() string {
@@ -161,31 +160,51 @@ func (self retrieveRequestMsgData) String() string {
 	} else {
 		from = self.peer.Addr().String()
 	}
-	return fmt.Sprintf("From: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %s", from, self.Key[:4], self.Id, self.MaxSize, self.MaxPeers)
+	var target []byte
+	if len(self.Key) > 3 {
+		target = self.Key[:4]
+	}
+	return fmt.Sprintf("From: %v, Key: %x; ID: %v, MaxSize: %v, MaxPeers: %d", from, target, self.Id, self.MaxSize, self.MaxPeers)
+}
+
+func (self retrieveRequestMsgData) isLookup() bool {
+	return self.Id == 0
+}
+
+func isZeroKey(key Key) bool {
+	return len(key) == 0 || bytes.Equal(key, zeroKey)
+}
+
+func (self retrieveRequestMsgData) setTimeout(t *time.Time) {
+	self.timeout = t
+	if t != nil {
+		self.Timeout = uint64(t.UnixNano())
+	} else {
+		self.Timeout = 0
+	}
+}
+
+func (self retrieveRequestMsgData) getTimeout() (t *time.Time) {
+	if self.Timeout > 0 && self.timeout == nil {
+		timeout := time.Unix(int64(self.Timeout), 0)
+		t = &timeout
+		self.timeout = t
+	}
+	return
 }
 
 type peerAddr struct {
-	IP   net.IP
-	Port uint16
-	ID   []byte
-	n    *discover.Node
+	IP    net.IP
+	Port  uint16
+	ID    []byte
+	hash  common.Hash
+	enode string
 }
 
-func (self *peerAddr) node() *discover.Node {
-	if self.n == nil {
-		var nodeid discover.NodeID
-		copy(nodeid[:], self.ID)
-		self.n = discover.NewNode(nodeid, self.IP, self.Port, self.Port)
-	}
-	return self.n
-}
-
-func (self *peerAddr) addr() kademlia.Address {
-	return kademlia.Address(self.node().Sha())
-}
-
-func (self *peerAddr) url() string {
-	return self.node().String()
+func (self *peerAddr) new() *peerAddr {
+	self.hash = crypto.Sha3Hash(self.ID)
+	self.enode = fmt.Sprintf("enode://%x@%v:%d", self.ID, self.IP, self.Port)
+	return self
 }
 
 /*
@@ -198,11 +217,30 @@ It is unclear if PeersMsg with an empty Key has a special meaning or just mean t
 */
 type peersMsgData struct {
 	Peers   []*peerAddr //
-	timeout *time.Time  // indicate whether responder is expected to deliver content
-	Key     Key         // if a response to a retrieval request
-	Id      uint64      // if a response to a retrieval request
+	Timeout uint64
+	timeout *time.Time // indicate whether responder is expected to deliver content
+	Key     Key        // present if a response to a retrieval request
+	Id      uint64     // present if a response to a retrieval request
 	//
 	peer *peer
+}
+
+func (self peersMsgData) setTimeout(t *time.Time) {
+	self.timeout = t
+	if t != nil {
+		self.Timeout = uint64(t.UnixNano())
+	} else {
+		self.Timeout = 0
+	}
+}
+
+func (self peersMsgData) getTimeout() (t *time.Time) {
+	if self.Timeout > 0 && self.timeout == nil {
+		timeout := time.Unix(int64(self.Timeout), 0)
+		t = &timeout
+		self.timeout = t
+	}
+	return
 }
 
 /*
@@ -238,7 +276,13 @@ func BzzProtocol(netstore *netStore) (p2p.Protocol, error) {
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
 func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
-
+	localAddr := p.LocalAddr().(*net.TCPAddr)
+	addr := netstore.addr()
+	baseAddr := &peerAddr{
+		ID:   addr.ID,
+		IP:   localAddr.IP,
+		Port: uint16(localAddr.Port),
+	}
 	self := &bzzProtocol{
 		netStore: netstore,
 		rw:       rw,
@@ -248,6 +292,7 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.Msg
 			Errors:  errorToString,
 		},
 		requestDb: db,
+		localAddr: baseAddr.new(),
 		quitC:     make(chan bool),
 	}
 
@@ -303,11 +348,11 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		dpaLogger.Debugf("Receiving retrieve request: %v", req)
 		if req.Key == nil {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
 		req.peer = &peer{bzzProtocol: self}
+		dpaLogger.Debugf("Receiving retrieve request: %s", req.String())
 		self.netStore.addRetrieveRequest(&req)
 
 	case peersMsg:
@@ -326,16 +371,10 @@ func (self *bzzProtocol) handle() error {
 
 func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
-	sliceNodeID := self.netStore.self.ID
 	handshake := &statusMsgData{
-		Version: uint64(Version),
-		ID:      "honey",
-		NodeID:  sliceNodeID[:],
-		Addr: &peerAddr{
-			ID:   sliceNodeID[:],
-			IP:   self.netStore.self.IP,
-			Port: self.netStore.self.TCP,
-		},
+		Version:   uint64(Version),
+		ID:        "honey",
+		Addr:      self.localAddr,
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 	}
@@ -374,20 +413,28 @@ func (self *bzzProtocol) handleStatus() (err error) {
 
 	glog.V(logger.Info).Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
 
-	self.node = status.Addr.node()
+	self.remoteAddr = status.Addr.new()
 
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
 
 	return nil
 }
 
+func (self *bzzProtocol) addrKey() []byte {
+	id := self.peer.ID()
+	if self.key == nil {
+		self.key = Key(crypto.Sha3(id[:]))
+	}
+	return self.key
+}
+
 // protocol instance implements kademlia.Node interface (embedded hive.peer)
-func (self *bzzProtocol) Addr() (a kademlia.Address) {
-	return kademlia.Address(self.node.Sha())
+func (self *bzzProtocol) Addr() kademlia.Address {
+	return kademlia.Address(self.remoteAddr.hash)
 }
 
 func (self *bzzProtocol) Url() string {
-	return self.node.String()
+	return self.remoteAddr.enode
 }
 
 func (self *bzzProtocol) LastActive() time.Time {
@@ -395,10 +442,11 @@ func (self *bzzProtocol) LastActive() time.Time {
 }
 
 func (self *bzzProtocol) Drop() {
+	self.peer.Disconnect(p2p.DiscSubprotocolError)
 }
 
 func (self *bzzProtocol) String() string {
-	return fmt.Sprintf("%4x: %v\n", self.node.Sha().Bytes()[:4], self.Url())
+	return fmt.Sprintf("%08x: %v\n", self.remoteAddr.hash.Bytes()[:4], self.Url())
 }
 
 func (self *bzzProtocol) peerAddr() *peerAddr {
@@ -420,14 +468,6 @@ func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
 	if err != nil {
 		dpaLogger.Errorf("EncodeMsg error: %v", err)
 	}
-}
-
-func (self *bzzProtocol) addrKey() []byte {
-	id := self.peer.ID()
-	if self.key == nil {
-		self.key = Key(crypto.Sha3(id[:]))
-	}
-	return self.key
 }
 
 func (self *bzzProtocol) storeRequestLoop() {

@@ -3,7 +3,6 @@ package bzz
 import (
 	// "fmt"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/kademlia"
 )
 
@@ -31,17 +30,20 @@ type hive struct {
 	ping chan bool
 }
 
-func newHive(hivepath string) *hive {
+func newHive() (*hive, error) {
+	kad := kademlia.New()
+	kad.MaxProx = 10
 	return &hive{
-		path: hivepath,
-		kad:  kademlia.New(),
-	}
+		kad: kad,
+	}, nil
 }
 
-func (self *hive) start(address kademlia.Address, connectPeer func(string) error) (err error) {
+func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(string) error) (err error) {
 	self.ping = make(chan bool)
-	self.addr = address
-	self.kad.Start(address)
+	self.path = hivepath
+
+	self.addr = kademlia.Address(baseAddr.hash)
+	self.kad.Start(self.addr)
 	err = self.kad.Load(self.path)
 	if err != nil {
 		dpaLogger.Warnf("Warning: error reading kademlia node db (skipping): %v", err)
@@ -67,15 +69,16 @@ func (self *hive) start(address kademlia.Address, connectPeer func(string) error
 					peers := self.kad.GetNodes(kademlia.RandomAddress(), 1)
 					if len(peers) > 0 {
 						// a random address at prox bin 0 is sent for lookup
+						randAddr := kademlia.RandomAddressAt(self.addr, 0)
 						req := &retrieveRequestMsgData{
-							Key: Key(common.Hash(kademlia.RandomAddressAt(self.addr, 0)).Bytes()),
+							Key: Key(randAddr[:]),
 						}
 						dpaLogger.Debugf("hive: look up random address with prox order 0 from peer %v", peers[0])
 						peers[0].(peer).retrieve(req)
 					}
 				}
 			}
-			dpaLogger.Debugf("hive population: %d (%d)\n%v", self.kad.Count(), self.kad.DBCount(), self.kad)
+			dpaLogger.Debugf("%v", self.kad)
 		}
 	}()
 	return
@@ -91,10 +94,11 @@ func (self *hive) addPeer(p peer) {
 	dpaLogger.Debugf("hive: add peer %v", p)
 	self.kad.AddNode(p)
 	// self lookup
-	req := &retrieveRequestMsgData{
-		Key: Key(common.Hash(self.addr).Bytes()),
-	}
-	p.retrieve(req)
+	// dpaLogger.Debugf("hive: self lookup - \n%v\n%v\n%064x\n", self.addr, common.Hash(self.addr).Hex(), Key(common.Hash(self.addr).Bytes()[:]))
+	// self lookup is encoded as nil/zero key - easier to differentiate so that
+	// we do not record as request or forward it, just reply with peers
+	p.retrieve(&retrieveRequestMsgData{})
+	dpaLogger.Debugf("hive: self lookup sent to %v", p)
 	self.ping <- true
 }
 
@@ -116,9 +120,9 @@ func (self *hive) getPeers(target Key, max int) (peers []peer) {
 
 func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
 	return &kademlia.NodeRecord{
-		Address: addr.addr(),
+		Address: kademlia.Address(addr.hash),
 		Active:  0,
-		Url:     addr.url(),
+		Url:     addr.enode,
 	}
 }
 
