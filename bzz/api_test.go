@@ -80,10 +80,10 @@ func TestApiDirUpload(t *testing.T) {
 	}
 
 	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, path.Join(bzzhash, "index.html"), content, "text/html", 0, 202)
+	testGet(t, api, path.Join(bzzhash, "index.html"), content, "text/html; charset=utf-8", 0, 202)
 
 	content, err = ioutil.ReadFile(path.Join(testDir, "test0", "index.css"))
-	testGet(t, api, path.Join(bzzhash, "index.css"), content, "text/plain", 0, 132)
+	testGet(t, api, path.Join(bzzhash, "index.css"), content, "text/css", 0, 132)
 
 	content, err = ioutil.ReadFile(path.Join(testDir, "test0", "img", "logo.png"))
 	testGet(t, api, path.Join(bzzhash, "img", "logo.png"), content, "image/png", 0, 18136)
@@ -107,7 +107,7 @@ func TestApiDirUploadWithRootFile(t *testing.T) {
 	}
 
 	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, bzzhash, content, "text/html", 0, 202)
+	testGet(t, api, bzzhash, content, "text/html; charset=utf-8", 0, 202)
 }
 
 func TestApiFileUpload(t *testing.T) {
@@ -123,7 +123,7 @@ func TestApiFileUpload(t *testing.T) {
 	}
 
 	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, path.Join(bzzhash, "index.html"), content, "text/html", 0, 202)
+	testGet(t, api, path.Join(bzzhash, "index.html"), content, "text/html; charset=utf-8", 0, 202)
 }
 
 func TestApiFileUploadWithRootFile(t *testing.T) {
@@ -139,5 +139,5 @@ func TestApiFileUploadWithRootFile(t *testing.T) {
 	}
 
 	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
-	testGet(t, api, bzzhash, content, "text/html", 0, 202)
+	testGet(t, api, bzzhash, content, "text/html; charset=utf-8", 0, 202)
 }
