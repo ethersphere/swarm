@@ -30,8 +30,9 @@ var (
 )
 
 const (
-	blockCacheLimit = 10000
-	maxFutureBlocks = 256
+	blockCacheLimit     = 10000
+	maxFutureBlocks     = 256
+	maxTimeFutureBlocks = 30
 )
 
 func CalcDifficulty(block, parent *types.Header) *big.Int {
@@ -108,16 +109,22 @@ type ChainManager struct {
 	pow pow.PoW
 }
 
-func NewChainManager(blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) *ChainManager {
+func NewChainManager(genesis *types.Block, blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
 	bc := &ChainManager{
-		blockDb:      blockDb,
-		stateDb:      stateDb,
-		genesisBlock: GenesisBlock(stateDb),
-		eventMux:     mux,
-		quit:         make(chan struct{}),
-		cache:        NewBlockCache(blockCacheLimit),
-		pow:          pow,
+		blockDb:  blockDb,
+		stateDb:  stateDb,
+		eventMux: mux,
+		quit:     make(chan struct{}),
+		cache:    NewBlockCache(blockCacheLimit),
+		pow:      pow,
 	}
+
+	// Check the genesis block given to the chain manager. If the genesis block mismatches block number 0
+	// throw an error. If no block or the same block's found continue.
+	if g := bc.GetBlockByNumber(0); g != nil && g.Hash() != genesis.Hash() {
+		return nil, fmt.Errorf("Genesis mismatch. Maybe different nonce (%d vs %d)? %x / %x", g.Nonce(), genesis.Nonce(), g.Hash().Bytes()[:4], genesis.Hash().Bytes()[:4])
+	}
+	bc.genesisBlock = genesis
 	bc.setLastState()
 
 	// Check the current state of the block hashes and make sure that we do not have any of the bad blocks in our chain
@@ -143,7 +150,7 @@ func NewChainManager(blockDb, stateDb common.Database, pow pow.PoW, mux *event.T
 
 	go bc.update()
 
-	return bc
+	return bc, nil
 }
 
 func (bc *ChainManager) SetHead(head *types.Block) {
@@ -340,13 +347,24 @@ func (bc *ChainManager) ResetWithGenesisBlock(gb *types.Block) {
 
 // Export writes the active chain to the given writer.
 func (self *ChainManager) Export(w io.Writer) error {
+	if err := self.ExportN(w, uint64(0), self.currentBlock.NumberU64()); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ExportN writes a subset of the active chain to the given writer.
+func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
-	glog.V(logger.Info).Infof("exporting %v blocks...\n", self.currentBlock.Header().Number)
 
-	last := self.currentBlock.NumberU64()
+	if first > last {
+		return fmt.Errorf("export failed: first (%d) is greater than last (%d)", first, last)
+	}
 
-	for nr := uint64(1); nr <= last; nr++ {
+	glog.V(logger.Info).Infof("exporting %d blocks...\n", last-first+1)
+
+	for nr := first; nr <= last; nr++ {
 		block := self.GetBlockByNumber(nr)
 		if block == nil {
 			return fmt.Errorf("export failed on #%d: not found", nr)
@@ -550,12 +568,12 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		bstart := time.Now()
 		// Wait for block i's nonce to be verified before processing
 		// its state transition.
-		for nonceChecked[i] {
+		for !nonceChecked[i] {
 			r := <-nonceDone
 			nonceChecked[r.i] = true
 			if !r.valid {
-				block := chain[i]
-				return i, ValidationError("Block (#%v / %x) nonce is invalid (= %x)", block.Number(), block.Hash(), block.Nonce)
+				block := chain[r.i]
+				return r.i, &BlockNonceErr{Hash: block.Hash(), Number: block.Number(), Nonce: block.Nonce()}
 			}
 		}
 
@@ -579,6 +597,13 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 			}
 
 			if err == BlockFutureErr {
+				// Allow up to MaxFuture second in the future blocks. If this limit
+				// is exceeded the chain is discarded and processed at a later time
+				// if given.
+				if max := time.Now().Unix() + maxTimeFutureBlocks; block.Time() > max {
+					return i, fmt.Errorf("%v: BlockFutureErr, %v > %v", BlockFutureErr, block.Time(), max)
+				}
+
 				block.SetQueued(true)
 				self.futureBlocks.Push(block)
 				stats.queued++

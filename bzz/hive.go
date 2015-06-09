@@ -2,6 +2,7 @@ package bzz
 
 import (
 	// "fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common/kademlia"
 )
@@ -28,11 +29,14 @@ type hive struct {
 	kad  *kademlia.Kademlia
 	path string
 	ping chan bool
+	more chan bool
 }
 
 func newHive() (*hive, error) {
 	kad := kademlia.New()
+	kad.BucketSize = 3
 	kad.MaxProx = 10
+	kad.ProxBinSize = 8
 	return &hive{
 		kad: kad,
 	}, nil
@@ -55,6 +59,23 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 	peers do not reply to launch the game into movement , it will stay stuck
 	add or remove a peer to wake up
 	*/
+	self.more = make(chan bool)
+	go func() {
+		clock := time.NewTicker(1 * time.Second)
+		for {
+			select {
+			case <-clock.C:
+				select {
+				case self.ping <- true:
+				default:
+				}
+			case _, more := <-self.more:
+				if !more {
+					return
+				}
+			}
+		}
+	}()
 	go func() {
 		// whenever pinged ask kademlia about most preferred peer
 		for _ = range self.ping {
@@ -76,6 +97,7 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 						dpaLogger.Debugf("hive: look up random address with prox order 0 from peer %v", peers[0])
 						peers[0].(peer).retrieve(req)
 					}
+					self.more <- true
 				}
 			}
 			dpaLogger.Debugf("%v", self.kad)
@@ -87,6 +109,7 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 func (self *hive) stop() error {
 	// closing ping channel quits the updateloop
 	close(self.ping)
+	close(self.more)
 	return self.kad.Stop(self.path)
 }
 

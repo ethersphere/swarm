@@ -42,7 +42,7 @@ var (
 	errNoPeers          = errors.New("no peers to keep download active")
 	ErrPendingQueue     = errors.New("pending items in queue")
 	ErrTimeout          = errors.New("timeout")
-	errEmptyHashSet     = errors.New("empty hash set by peer")
+	ErrEmptyHashSet     = errors.New("empty hash set by peer")
 	errPeersUnavailable = errors.New("no peers available or all peers tried for block download process")
 	errAlreadyInPool    = errors.New("hash already in pool")
 	ErrInvalidChain     = errors.New("retrieved hash chain is invalid")
@@ -289,7 +289,7 @@ func (d *Downloader) fetchHashes(p *peer, h common.Hash) error {
 			// Make sure the peer actually gave something valid
 			if len(hashPack.hashes) == 0 {
 				glog.V(logger.Debug).Infof("Peer (%s) responded with empty hash set", active.id)
-				return errEmptyHashSet
+				return ErrEmptyHashSet
 			}
 			for _, hash := range hashPack.hashes {
 				if d.banned.Has(hash) {
@@ -422,28 +422,46 @@ out:
 			// in a reasonable time frame, ignore it's message.
 			if peer := d.peers.Peer(blockPack.peerId); peer != nil {
 				// Deliver the received chunk of blocks, and demote in case of errors
-				if err := d.queue.Deliver(blockPack.peerId, blockPack.blocks); err != nil {
-					if err == ErrInvalidChain {
-						// The hash chain is invalid (blocks are not ordered properly), abort
-						return err
+				err := d.queue.Deliver(blockPack.peerId, blockPack.blocks)
+				switch err {
+				case nil:
+					// If no blocks were delivered, demote the peer (need the delivery above)
+					if len(blockPack.blocks) == 0 {
+						peer.Demote()
+						peer.SetIdle()
+						glog.V(logger.Detail).Infof("%s: no blocks delivered", peer)
+						break
 					}
-					// Peer did deliver, but some blocks were off, penalize
+					// All was successful, promote the peer
+					peer.Promote()
+					peer.SetIdle()
+					glog.V(logger.Detail).Infof("%s: delivered %d blocks", peer, len(blockPack.blocks))
+
+				case ErrInvalidChain:
+					// The hash chain is invalid (blocks are not ordered properly), abort
+					return err
+
+				case errNoFetchesPending:
+					// Peer probably timed out with its delivery but came through
+					// in the end, demote, but allow to to pull from this peer.
 					peer.Demote()
 					peer.SetIdle()
-					glog.V(logger.Detail).Infof("%s: block delivery failed: %v", peer, err)
-					break
-				}
-				// If no blocks were delivered, demote the peer (above code is needed to mark the packet done!)
-				if len(blockPack.blocks) == 0 {
+					glog.V(logger.Detail).Infof("%s: out of bound delivery", peer)
+
+				case errStaleDelivery:
+					// Delivered something completely else than requested, usually
+					// caused by a timeout and delivery during a new sync cycle.
+					// Don't set it to idle as the original request should still be
+					// in flight.
+					peer.Demote()
+					glog.V(logger.Detail).Infof("%s: stale delivery", peer)
+
+				default:
+					// Peer did something semi-useful, demote but keep it around
 					peer.Demote()
 					peer.SetIdle()
-					glog.V(logger.Detail).Infof("%s: no blocks delivered", peer)
-					break
+					glog.V(logger.Detail).Infof("%s: delivery partially failed: %v", peer, err)
 				}
-				// All was successful, promote the peer
-				peer.Promote()
-				peer.SetIdle()
-				glog.V(logger.Detail).Infof("%s: delivered %d blocks", peer, len(blockPack.blocks))
 			}
 		case <-ticker.C:
 			// Check for bad peers. Bad peers may indicate a peer not responding
@@ -460,6 +478,7 @@ out:
 				// 3) Amount and availability.
 				if peer := d.peers.Peer(pid); peer != nil {
 					peer.Demote()
+					glog.V(logger.Detail).Infof("%s: block delivery timeout", peer)
 				}
 			}
 			// After removing bad peers make sure we actually have sufficient peer left to keep downloading
