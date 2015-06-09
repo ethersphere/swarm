@@ -6,6 +6,9 @@ import (
 	"io"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 /*

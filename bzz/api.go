@@ -17,6 +17,8 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -133,13 +135,13 @@ func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
 		if err == nil {
 			err = self.netStore.start(baseAddr)
 			if err == nil {
-				dpaLogger.Infof("Swarm network started on bzz address: %064x", baseAddr.hash[:])
+				glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %064x", baseAddr.hash[:])
 			}
 		}
 	}
 	//
 	if err != nil {
-		dpaLogger.Infof("Swarm started started offline: %v", err)
+		glog.V(logger.Info).Infof("[BZZ] Swarm started started offline: %v", err)
 	}
 	self.Chunker.Init()
 	self.dpa.Start()
@@ -236,20 +238,20 @@ func (self *Api) Download(bzzpath, localpath string) (err error) {
 	if len(parts) > 2 {
 		path = regularSlashes(parts[2]) + "/"
 	}
-	dpaLogger.Debugf("Swarm: host: '%s', path '%s' requested.", hostPort, path)
+	glog.V(logger.Debug).Infof("[BZZ] Swarm: host: '%s', path '%s' requested.", hostPort, path)
 
 	//resolving host and port
 	var key Key
 	key, err = self.Resolve(hostPort)
 	if err != nil {
 		err = errResolve(err)
-		dpaLogger.Debugf("Swarm: error : %v", err)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: error : %v", err)
 		return
 	}
 
 	trie, err := loadManifest(self.dpa, key)
 	if err != nil {
-		dpaLogger.Debugf("Swarm: loadManifestTrie error: %v", err)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: loadManifestTrie error: %v", err)
 		return
 	}
 
@@ -299,7 +301,7 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 	var start int
 	if stat.IsDir() {
 		start = len(localpath)
-		dpaLogger.Debugf("uploading '%s'", localpath)
+		glog.V(logger.Debug).Infof("[BZZ] uploading '%s'", localpath)
 		err = filepath.Walk(localpath, func(path string, info os.FileInfo, err error) error {
 			if (err == nil) && !info.IsDir() {
 				//fmt.Printf("lp %s  path %s\n", localpath, path)
@@ -410,7 +412,7 @@ func (self *Api) Register(sender common.Address, domain string, hash common.Hash
 	domainhash := common.BytesToHash(crypto.Sha3([]byte(domain)))
 
 	if self.Registrar != nil {
-		dpaLogger.Debugf("Swarm: host '%s' (hash: '%v') to be registered as '%v'", domain, domainhash.Hex(), hash.Hex())
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: host '%s' (hash: '%v') to be registered as '%v'", domain, domainhash.Hex(), hash.Hex())
 		_, err = self.Registrar.Registry().SetHashToHash(sender, domainhash, hash)
 	} else {
 		err = fmt.Errorf("no registry: %v", err)
@@ -424,7 +426,7 @@ func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
 	host := hostPort
 	if hashMatcher.MatchString(host) {
 		contentHash = Key(common.Hex2Bytes(host))
-		dpaLogger.Debugf("Swarm: host is a contentHash: '%064x'", contentHash)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: host is a contentHash: '%064x'", contentHash)
 	} else {
 		if self.Registrar != nil {
 			var hash common.Hash
@@ -440,7 +442,7 @@ func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
 				err = fmt.Errorf("unable to resolve '%s': %v", hostPort, err)
 			}
 			contentHash = Key(hash.Bytes())
-			dpaLogger.Debugf("Swarm: resolve host '%s' to contentHash: '%064x'", hostPort, contentHash)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: resolve host '%s' to contentHash: '%064x'", hostPort, contentHash)
 		} else {
 			err = fmt.Errorf("no resolver '%s': %v", hostPort, err)
 		}
@@ -455,34 +457,34 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 	if len(parts) > 2 {
 		path = parts[2]
 	}
-	dpaLogger.Debugf("Swarm: host: '%s', path '%s' requested.", hostPort, path)
+	glog.V(logger.Debug).Infof("[BZZ] Swarm: host: '%s', path '%s' requested.", hostPort, path)
 
 	//resolving host and port
 	var key Key
 	key, err = self.Resolve(hostPort)
 	if err != nil {
 		err = errResolve(err)
-		dpaLogger.Debugf("Swarm: error : %v", err)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: error : %v", err)
 		return
 	}
 
 	trie, err := loadManifest(self.dpa, key)
 	if err != nil {
-		dpaLogger.Debugf("Swarm: loadManifestTrie error: %v", err)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: loadManifestTrie error: %v", err)
 		return
 	}
 
-	dpaLogger.Debugf("Swarm: getEntry(%s)", path)
+	glog.V(logger.Debug).Infof("[BZZ] Swarm: getEntry(%s)", path)
 	entry, _ := trie.getEntry(path)
 	if entry != nil {
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		mimeType = entry.ContentType
-		dpaLogger.Debugf("Swarm: content lookup key: '%064x' (%v)", key, mimeType)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: content lookup key: '%064x' (%v)", key, mimeType)
 		reader = self.dpa.Retrieve(key)
 	} else {
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
-		dpaLogger.Debugf("Swarm: %v", err)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: %v", err)
 	}
 	return
 }
