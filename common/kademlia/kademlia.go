@@ -13,9 +13,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
-
-var kadlogger = logger.NewLogger("KΛÐ")
 
 const (
 	minBucketSize = 1
@@ -64,10 +63,10 @@ type Node interface {
 }
 
 type NodeRecord struct {
-	Address Address `json:address`
-	Url     string  `json:url`
-	Active  int64   `json:active`
-	node    Node
+	Addr   Address `json:address`
+	Url    string  `json:url`
+	Active int64   `json:active`
+	node   Node
 }
 
 func (self *NodeRecord) setActive() {
@@ -104,7 +103,7 @@ func (self *Kademlia) DBCount() int {
 
 func (self *Kademlia) String() string {
 	var rows []string
-	rows = append(rows, fmt.Sprintf("Address: %064x\nhive population: %d (%d)", self.addr[:], self.Count(), self.DBCount()))
+	rows = append(rows, fmt.Sprintf("KΛÐΞMLIΛ basenode address: %064x\n population: %d (%d)", self.addr[:], self.Count(), self.DBCount()))
 	rows = append(rows, fmt.Sprintf("MaxProx: %d, ProxBinSize: %d, BucketSize: %d, MinBucketSize: %d, proxLimit: %d, proxSize: %d", self.MaxProx, self.ProxBinSize, self.BucketSize, self.MinBucketSize, self.proxLimit, self.proxSize))
 
 	for i, b := range self.buckets {
@@ -120,7 +119,7 @@ func (self *Kademlia) String() string {
 		row = append(row, fmt.Sprintf("%2d", len(self.nodeDB[i])))
 
 		for _, p := range self.nodeDB[i] {
-			row = append(row, fmt.Sprintf("%08x|%08b", p.Address[:4], p.Address[0]^self.addr[0]))
+			row = append(row, fmt.Sprintf("%08x|%08b", p.Addr[:4], p.Addr[0]^self.addr[0]))
 		}
 		if i == self.MaxProx {
 			break
@@ -162,6 +161,7 @@ func (self *Kademlia) Start(addr Address) error {
 	self.nodeIndex = make(map[Address]*NodeRecord)
 
 	self.quitC = make(chan bool)
+	glog.V(logger.Info).Infof("[KΛÐ] started")
 	return nil
 }
 
@@ -178,7 +178,9 @@ func (self *Kademlia) Stop(path string) (err error) {
 	if len(path) > 0 {
 		err = self.Save(path)
 		if err != nil {
-			kadlogger.Warnf("unable to save node records: %v", err)
+			glog.V(logger.Warn).Infof("[KΛÐ]: unable to save node records: %v", err)
+		} else {
+			glog.V(logger.Info).Infof("[KΛÐ]: node records saved to '%v'", path)
 		}
 	}
 	return
@@ -195,6 +197,9 @@ func (self *Kademlia) RemoveNode(node Node) (err error) {
 			bucket.nodes = append(bucket.nodes[:i], bucket.nodes[(i+1):]...)
 		}
 	}
+
+	glog.V(logger.Info).Infof("[KΛÐ]: remove node %v from table", node)
+
 	self.count--
 	if len(bucket.nodes) < bucket.size {
 		err = fmt.Errorf("insufficient nodes (%v) in bucket %v", len(bucket.nodes), index)
@@ -217,7 +222,6 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 	defer self.lock.Unlock()
 
 	index := self.proximityBin(node.Addr())
-	kadlogger.Debugf("bin %d, len: %d\n", index, len(self.buckets))
 
 	bucket := self.buckets[index]
 	err = bucket.insert(node)
@@ -229,6 +233,8 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 		self.adjustProx(index, 1)
 	}
 
+	glog.V(logger.Info).Infof("[KΛÐ]: add new node %v to table", node)
+
 	go func() {
 		self.dblock.Lock()
 		defer self.dblock.Unlock()
@@ -236,24 +242,24 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 		if found {
 			record.node = node
 		} else {
+			glog.V(logger.Info).Infof("[KΛÐ]: add new record %v to node db", node)
 			record = &NodeRecord{
-				Address: node.Addr(),
-				Url:     node.Url(),
-				Active:  node.LastActive().UnixNano(),
-				node:    node,
+				Addr:   node.Addr(),
+				Url:    node.Url(),
+				Active: node.LastActive().UnixNano(),
+				node:   node,
 			}
 			self.nodeIndex[node.Addr()] = record
 			self.nodeDB[index] = append(self.nodeDB[index], record)
 		}
 	}()
-
-	kadlogger.Infof("add peer %v...", node)
 	return
 
 }
 
 // adjust Prox (proxLimit and proxSize after an insertion of add nodes into bucket r)
 func (self *Kademlia) adjustProx(r int, add int) {
+	was := self.proxLimit
 	var i int
 	switch {
 	case add > 0 && r >= self.proxLimit:
@@ -272,6 +278,9 @@ func (self *Kademlia) adjustProx(r int, add int) {
 			self.proxSize += len(self.buckets[i].nodes)
 		}
 		self.proxLimit = i
+	}
+	if was != self.proxLimit {
+		glog.V(logger.Detail).Infof("[KΛÐ]: adjust prox limit %v -> %v", was, self.proxLimit)
 	}
 }
 
@@ -327,6 +336,7 @@ func (self *Kademlia) getNodes(target Address, max int) (r nodesByDistance) {
 			}
 		}
 	}
+	glog.V(logger.Detail).Infof("[KΛÐ]: serve %d (=<%d) nodes for target lookup %v (PO%d)", n, self.MaxProx, target, index)
 	return
 }
 
@@ -336,16 +346,18 @@ func (self *Kademlia) getNodes(target Address, max int) (r nodesByDistance) {
 func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 	self.dblock.Lock()
 	defer self.dblock.Unlock()
+	var n int
 	for _, node := range nrs {
-		_, found := self.nodeIndex[node.Address]
+		_, found := self.nodeIndex[node.Addr]
 		if !found {
-			self.nodeIndex[node.Address] = node
-			index := proximity(self.addr, node.Address)
+			self.nodeIndex[node.Addr] = node
+			index := proximity(self.addr, node.Addr)
 			if index < len(self.nodeDB) {
 				self.nodeDB[index] = append(self.nodeDB[index], node)
 			}
 		}
 	}
+	glog.V(logger.Detail).Infof("[KΛÐ]: received %d node records added %d new", len(nrs), n)
 }
 
 /*
@@ -365,17 +377,20 @@ Kademlia bootstrapping
 As a mature node, it manages quickly fill in blanks or short lines
 All on demand.
 */
-func (self *Kademlia) GetNodeRecord() (*NodeRecord, bool) {
-	full := true
+func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
+	full = true
+	var n int
 	for i, b := range self.nodeDB {
 		if i >= self.MaxProx {
 			break
 		}
+		// this needs to be rewritten to rotate
 		if len(self.buckets[i].nodes) < self.MinBucketSize {
 			full = false
-			for _, node := range b {
+			for n, node = range b {
 				if node.node == nil {
-					return node, full
+					glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%d)", node.Addr, n)
+					return
 				}
 			}
 		}
@@ -386,14 +401,15 @@ func (self *Kademlia) GetNodeRecord() (*NodeRecord, bool) {
 		}
 		if len(self.buckets[i].nodes) < self.BucketSize {
 			full = false
-			for _, node := range b {
+			for n, node = range b {
 				if node.node == nil {
-					return node, full
+					glog.V(logger.Detail).Infof("[KΛÐ]: serve redundant node record %v (PO%d)", node.Addr, n)
+					return
 				}
 			}
 		}
 	}
-	return nil, full
+	return
 }
 
 // in situ mutable bucket

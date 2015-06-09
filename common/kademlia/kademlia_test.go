@@ -2,16 +2,11 @@ package kademlia
 
 import (
 	"fmt"
-	"log"
 	"math/rand"
-	"os"
 	"reflect"
-	"sync"
 	"testing"
 	"testing/quick"
 	"time"
-
-	"github.com/ethereum/go-ethereum/logger"
 )
 
 var (
@@ -19,14 +14,6 @@ var (
 	quickcfgGetNodes  = &quick.Config{MaxCount: 5000, Rand: quickrand}
 	quickcfgBootStrap = &quick.Config{MaxCount: 1000, Rand: quickrand}
 )
-
-var once sync.Once
-
-func LogInit(l logger.LogLevel) {
-	once.Do(func() {
-		logger.NewStdLogSystem(os.Stderr, log.LstdFlags, l)
-	})
-}
 
 type testNode struct {
 	addr Address
@@ -56,7 +43,6 @@ func (n *testNode) Add(a Address) (err error) {
 }
 
 func TestAddNode(t *testing.T) {
-	LogInit(logger.DebugLevel)
 	addr, ok := gen(Address{}, quickrand).(Address)
 	other, ok := gen(Address{}, quickrand).(Address)
 	if !ok {
@@ -70,7 +56,6 @@ func TestAddNode(t *testing.T) {
 
 func TestBootstrap(t *testing.T) {
 	t.Parallel()
-	LogInit(logger.DebugLevel)
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	test := func(test *bootstrapTest) bool {
@@ -91,7 +76,7 @@ func TestBootstrap(t *testing.T) {
 			var nrs []*NodeRecord
 			for i := 0; i < test.BucketSize; i++ {
 				nrs = append(nrs, &NodeRecord{
-					Address: RandomAddressAt(test.Self, p),
+					Addr: RandomAddressAt(test.Self, p),
 				})
 			}
 			kad.AddNodeRecords(nrs)
@@ -110,7 +95,7 @@ func TestBootstrap(t *testing.T) {
 			prox := proximity(node.addr, test.Self)
 			for i := 0; i < test.BucketSize; i++ {
 				nrs = append(nrs, &NodeRecord{
-					Address: RandomAddressAt(test.Self, prox+1),
+					Addr: RandomAddressAt(test.Self, prox+1),
 				})
 			}
 			kad.AddNodeRecords(nrs)
@@ -125,7 +110,7 @@ func TestBootstrap(t *testing.T) {
 				t.Logf("after round %d, no more node records needed", n)
 				break
 			}
-			node = &testNode{record.Address}
+			node = &testNode{record.Addr}
 			n++
 		}
 		exp := test.BucketSize * (test.MaxProx + 1)
@@ -146,7 +131,6 @@ func TestBootstrap(t *testing.T) {
 
 func TestGetNodes(t *testing.T) {
 	t.Parallel()
-	LogInit(logger.DebugLevel)
 
 	test := func(test *getNodesTest) bool {
 		// for any node kad.le, Target and N
@@ -214,9 +198,9 @@ func TestGetNodes(t *testing.T) {
 }
 
 type proxTest struct {
-	add     bool
-	index   int
-	address Address
+	add   bool
+	index int
+	addr  Address
 }
 
 var (
@@ -225,7 +209,6 @@ var (
 
 func TestProxAdjust(t *testing.T) {
 	t.Parallel()
-	LogInit(logger.DebugLevel)
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	self := gen(Address{}, r).(Address)
 
@@ -247,7 +230,7 @@ func TestProxAdjust(t *testing.T) {
 	}
 
 	test := func(test *proxTest) bool {
-		node := &testNode{test.address}
+		node := &testNode{test.addr}
 		if test.add {
 			kad.AddNode(node)
 		} else {
@@ -328,7 +311,7 @@ func TestSaveLoad(t *testing.T) {
 	kad.Load(path)
 	for _, b := range kad.DB() {
 		for _, node := range b {
-			node.node = &testNode{node.Address}
+			node.node = &testNode{node.Addr}
 			err = kad.AddNode(node.node)
 			if err != nil {
 				t.Errorf("backend not accepting node")
@@ -427,8 +410,8 @@ func (*proxTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	var t *proxTest
 	if add {
 		t = &proxTest{
-			address: gen(Address{}, rand).(Address),
-			add:     add,
+			addr: gen(Address{}, rand).(Address),
+			add:  add,
 		}
 	} else {
 		t = &proxTest{

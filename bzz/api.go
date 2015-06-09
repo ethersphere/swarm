@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	// "net"
 	"net/http"
 	"os"
 	"path/filepath"
