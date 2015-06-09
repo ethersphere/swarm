@@ -68,13 +68,13 @@ SPLIT:
 			go func(chunk *Chunk) {
 				storedChunk, err := m.Get(chunk.Key)
 				if err == notFound {
-					dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key)
+					glog.V(logger.DebugDetail).Infof("[BZZ] chunk '%x' not found", chunk.Key)
 				} else if err != nil {
-					dpaLogger.DebugDetailf("error retrieving chunk %x: %v", chunk.Key, err)
+					glog.V(logger.DebugDetail).Infof("[BZZ] error retrieving chunk %x: %v", chunk.Key, err)
 				} else {
 					chunk.SData = storedChunk.SData
 				}
-				dpaLogger.DebugDetailf("chunk '%x' not found", chunk.Key[:4])
+				glog.V(logger.DebugDetail).Infof("[BZZ] chunk '%x' not found", chunk.Key[:4])
 				close(chunk.C)
 			}(ch)
 		}

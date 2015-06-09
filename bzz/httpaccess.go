@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 const (
@@ -40,7 +42,7 @@ func startHttpServer(api *Api, port string) {
 		handler(w, r, api)
 	})
 	go http.ListenAndServe(":"+port, nil)
-	dpaLogger.Infof("Swarm HTTP proxy started on localhost:%s", port)
+	glog.V(logger.Info).Infof("[BZZ] Swarm HTTP proxy started on localhost:%s", port)
 }
 
 func handler(w http.ResponseWriter, r *http.Request, api *Api) {
@@ -53,7 +55,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			return
 		}
 	}
-	dpaLogger.Debugf("Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
+	glog.V(logger.Debug).Infof("[BZZ] Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
 	var raw bool
 	path := rawUrl.ReplaceAllStringFunc(uri, func(string) string {
@@ -64,7 +66,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 	switch {
 	case r.Method == "POST":
 		if raw {
-			dpaLogger.Debugf("Swarm: POST request received.")
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: POST request received.")
 			key, err := api.dpa.Store(io.NewSectionReader(&sequentialReader{
 				reader: r.Body,
 				ahead:  make(map[int64]chan bool),
@@ -72,7 +74,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			if err == nil {
 				w.Header().Set("Content-Type", "text/plain")
 				http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(common.Bytes2Hex(key))))
-				dpaLogger.Debugf("Swarm: Content for '%064x' stored", key)
+				glog.V(logger.Debug).Infof("[BZZ] Swarm: Content for '%064x' stored", key)
 			} else {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
@@ -85,19 +87,19 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 	case r.Method == "GET" || r.Method == "HEAD":
 		path = trailingSlashes.ReplaceAllString(path, "")
 		if raw {
-			dpaLogger.Debugf("Swarm: Raw GET request '%s' received", uri)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Raw GET request '%s' received", uri)
 
 			// resolving host
 			key, err := api.Resolve(path)
 			if err != nil {
-				dpaLogger.Debugf("Swarm: %v", err)
+				glog.V(logger.Debug).Infof("[BZZ] Swarm: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
 			// retrieving content
 			reader := api.dpa.Retrieve(key)
-			dpaLogger.Debugf("Swarm: Reading %d bytes.", reader.Size())
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Reading %d bytes.", reader.Size())
 
 			// setting mime type
 			qv := requestURL.Query()
@@ -108,21 +110,21 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 
 			w.Header().Set("Content-Type", mimeType)
 			http.ServeContent(w, r, uri, forever, reader)
-			dpaLogger.Debugf("Swarm: Serve raw content '%s' (%d bytes) as '%s'", uri, reader.Size(), mimeType)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Serve raw content '%s' (%d bytes) as '%s'", uri, reader.Size(), mimeType)
 
 			// retrieve path via manifest
 		} else {
 
-			dpaLogger.Debugf("Swarm: Structured GET request '%s' received.", uri)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Structured GET request '%s' received.", uri)
 
 			// call to api.getPath on uri
 			reader, mimeType, status, err := api.getPath(path)
 			if err != nil {
 				if _, ok := err.(errResolve); ok {
-					dpaLogger.Debugf("Swarm: %v", err)
+					glog.V(logger.Debug).Infof("[BZZ] Swarm: %v", err)
 					status = http.StatusBadRequest
 				} else {
-					dpaLogger.Debugf("Swarm: error retrieving '%s': %v", uri, err)
+					glog.V(logger.Debug).Infof("[BZZ] Swarm: error retrieving '%s': %v", uri, err)
 					status = http.StatusNotFound
 				}
 				http.Error(w, err.Error(), status)
@@ -136,7 +138,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			} else {
 				status = 200
 			}
-			dpaLogger.Debugf("Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, reader.Size(), mimeType, status)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, reader.Size(), mimeType, status)
 
 			http.ServeContent(w, r, path, forever, reader)
 
@@ -150,12 +152,12 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	self.lock.Lock()
 	// assert self.pos <= off
 	if self.pos > off {
-		dpaLogger.Errorf("Swarm: non-sequential read attempted from sequentialReader; %d > %d",
+		glog.V(logger.Error).Infof("[BZZ] Swarm: non-sequential read attempted from sequentialReader; %d > %d",
 			self.pos, off)
 		panic("Non-sequential read attempt")
 	}
 	if self.pos != off {
-		dpaLogger.Debugf("Swarm: deferred read in POST at position %d, offset %d.",
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: deferred read in POST at position %d, offset %d.",
 			self.pos, off)
 		wait := make(chan bool)
 		self.ahead[off] = wait
@@ -172,10 +174,10 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	for localPos < len(target) {
 		n, err = self.reader.Read(target[localPos:])
 		localPos += n
-		dpaLogger.Debugf("Swarm: Read %d bytes into buffer size %d from POST, error %v.",
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: Read %d bytes into buffer size %d from POST, error %v.",
 			n, len(target), err)
 		if err != nil {
-			dpaLogger.Debugf("Swarm: POST stream's reading terminated with %v.", err)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: POST stream's reading terminated with %v.", err)
 			for i := range self.ahead {
 				self.ahead[i] <- true
 				delete(self.ahead, i)
@@ -187,7 +189,7 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	}
 	wait := self.ahead[self.pos]
 	if wait != nil {
-		dpaLogger.Debugf("Swarm: deferred read in POST at position %d triggered.",
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: deferred read in POST at position %d triggered.",
 			self.pos)
 		delete(self.ahead, self.pos)
 		close(wait)
