@@ -56,10 +56,7 @@ func CalcTD(block, parent *types.Block) *big.Int {
 	if parent == nil {
 		return block.Difficulty()
 	}
-
-	td := new(big.Int).Add(parent.Td, block.Header().Difficulty)
-
-	return td
+	return new(big.Int).Add(parent.Td, block.Header().Difficulty)
 }
 
 func CalcGasLimit(parent *types.Block) *big.Int {
@@ -111,12 +108,13 @@ type ChainManager struct {
 
 func NewChainManager(genesis *types.Block, blockDb, stateDb common.Database, pow pow.PoW, mux *event.TypeMux) (*ChainManager, error) {
 	bc := &ChainManager{
-		blockDb:  blockDb,
-		stateDb:  stateDb,
-		eventMux: mux,
-		quit:     make(chan struct{}),
-		cache:    NewBlockCache(blockCacheLimit),
-		pow:      pow,
+		blockDb:      blockDb,
+		stateDb:      stateDb,
+		genesisBlock: GenesisBlock(42, stateDb),
+		eventMux:     mux,
+		quit:         make(chan struct{}),
+		cache:        NewBlockCache(blockCacheLimit),
+		pow:          pow,
 	}
 
 	// Check the genesis block given to the chain manager. If the genesis block mismatches block number 0
@@ -177,11 +175,13 @@ func (self *ChainManager) Td() *big.Int {
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	return self.td
+	return new(big.Int).Set(self.td)
 }
 
 func (self *ChainManager) GasLimit() *big.Int {
-	// return self.currentGasLimit
+	self.mu.RLock()
+	defer self.mu.RUnlock()
+
 	return self.currentBlock.GasLimit()
 }
 
@@ -203,7 +203,7 @@ func (self *ChainManager) Status() (td *big.Int, currentBlock common.Hash, genes
 	self.mu.RLock()
 	defer self.mu.RUnlock()
 
-	return self.td, self.currentBlock.Hash(), self.genesisBlock.Hash()
+	return new(big.Int).Set(self.td), self.currentBlock.Hash(), self.genesisBlock.Hash()
 }
 
 func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
@@ -378,11 +378,13 @@ func (self *ChainManager) ExportN(w io.Writer, first uint64, last uint64) error 
 	return nil
 }
 
+// insert injects a block into the current chain block chain. Note, this function
+// assumes that the `mu` mutex is held!
 func (bc *ChainManager) insert(block *types.Block) {
 	key := append(blockNumPre, block.Number().Bytes()...)
 	bc.blockDb.Put(key, block.Hash().Bytes())
-
 	bc.blockDb.Put([]byte("LastBlock"), block.Hash().Bytes())
+
 	bc.currentBlock = block
 	bc.lastBlockHash = block.Hash()
 }
@@ -486,9 +488,10 @@ func (self *ChainManager) GetAncestors(block *types.Block, length int) (blocks [
 	return
 }
 
+// setTotalDifficulty updates the TD of the chain manager. Note, this function
+// assumes that the `mu` mutex is held!
 func (bc *ChainManager) setTotalDifficulty(td *big.Int) {
-	//bc.blockDb.Put([]byte("LTD"), td.Bytes())
-	bc.td = td
+	bc.td = new(big.Int).Set(td)
 }
 
 func (self *ChainManager) CalcTotalDiff(block *types.Block) (*big.Int, error) {
@@ -625,7 +628,7 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 		cblock := self.currentBlock
 		// Compare the TD of the last known block in the canonical chain to make sure it's greater.
 		// At this point it's possible that a different chain (fork) becomes the new canonical chain.
-		if block.Td.Cmp(self.td) > 0 {
+		if block.Td.Cmp(self.Td()) > 0 {
 			// chain fork
 			if block.ParentHash() != cblock.Hash() {
 				// during split we merge two different chains and create the new canonical chain
@@ -638,8 +641,10 @@ func (self *ChainManager) InsertChain(chain types.Blocks) (int, error) {
 				queueEvent.splitCount++
 			}
 
+			self.mu.Lock()
 			self.setTotalDifficulty(block.Td)
 			self.insert(block)
+			self.mu.Unlock()
 
 			jsonlogger.LogJson(&logger.EthChainNewHead{
 				BlockHash:     block.Hash().Hex(),
@@ -747,9 +752,11 @@ func (self *ChainManager) merge(oldBlock, newBlock *types.Block) error {
 	}
 
 	// insert blocks. Order does not matter. Last block will be written in ImportChain itself which creates the new head properly
+	self.mu.Lock()
 	for _, block := range newChain {
 		self.insert(block)
 	}
+	self.mu.Unlock()
 
 	return nil
 }
