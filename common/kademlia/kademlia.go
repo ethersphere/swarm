@@ -364,8 +364,6 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 		if !found {
 			self.nodeIndex[node.Addr] = node
 			index := self.proximityBin(node.Addr)
-			glog.V(logger.Detail).Infof("[KΛÐ]: received %d node records, added %d new", len(nrs), n)
-
 			dbcursor := self.buckets[index].dbcursor
 			nodes = self.nodeDB[index]
 			newnodes := make([]*NodeRecord, len(nodes)+1)
@@ -400,9 +398,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
 	self.dblock.RLock()
 	defer self.dblock.RUnlock()
 	full = true
-	var fallback bool
-
-	for rounds := 0; ; rounds++ {
+	for rounds := 0; rounds < 2; rounds++ {
 		for i, dbrow := range self.nodeDB {
 			order := i
 			if order > self.MaxProx {
@@ -414,7 +410,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
 			bin := self.buckets[order]
 			var n, count int
 			if len(bin.nodes) < self.MinBucketSize ||
-				len(bin.nodes) < self.BucketSize && fallback {
+				len(bin.nodes) < self.BucketSize && rounds > 0 {
 				full = false
 				if len(dbrow) > 0 {
 					n = bin.dbcursor
@@ -435,11 +431,8 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
 				}
 			}
 		}
-		if fallback {
-			return
-		} else {
-			// fallback to filling up the rest depends on whether we got full (to minimumBucketSize)
-			fallback = full
+		if !full {
+			break
 		}
 
 	}

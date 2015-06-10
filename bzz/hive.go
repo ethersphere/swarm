@@ -46,6 +46,7 @@ func newHive() (*hive, error) {
 
 func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(string) error) (err error) {
 	self.ping = make(chan bool)
+	self.more = make(chan bool)
 	self.path = hivepath
 
 	self.addr = kademlia.Address(baseAddr.hash)
@@ -91,6 +92,10 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 					self.more <- true
 				} else {
 					close(self.more)
+					if self.more != nil {
+						close(self.more)
+						self.more = nil
+					}
 				}
 			}
 			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %x, population: %d (%d)\n%v", self.addr[:4], self.kad.Count(), self.kad.DBCount(), self.kad)
