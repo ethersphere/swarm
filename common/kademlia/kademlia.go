@@ -1,7 +1,6 @@
 package kademlia
 
 import (
-	// "bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -275,8 +274,6 @@ func (self *Kademlia) adjustProx(r int, add int) {
 	switch {
 	case add > 0 && r >= self.proxLimit:
 		self.proxSize += add
-		glog.V(logger.Detail).Infof("[KΛÐ]: start with adjusted prox size %v", self.proxLimit)
-
 		for i = self.proxLimit; i < self.MaxProx && len(self.buckets[i].nodes) > 0 && self.proxSize-len(self.buckets[i].nodes) > self.ProxBinSize; i++ {
 			self.proxSize -= len(self.buckets[i].nodes)
 		}

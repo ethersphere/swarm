@@ -431,11 +431,8 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	}
 
 	self.remoteAddr = status.Addr.new()
-	if isZeroKey(self.remoteAddr.hash[:]) {
-		glog.V(logger.Info).Infof("remote id incorrect - (%d/%d)\n", status.Version, status.NetworkId)
-		return self.protoError(ErrDecode, "remote id incorrect - (%d/%d)\n", status.Version, status.NetworkId)
-	}
-	glog.V(logger.Info).Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
+
+	glog.V(logger.Info).Infof("Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.hash[:4], status.Version, status.NetworkId)
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
 
 	return nil

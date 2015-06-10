@@ -85,8 +85,8 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 						peers[0].(peer).retrieve(req)
 					}
 					if self.more == nil {
-						go self.pinger()
 						self.more = make(chan bool)
+						go self.pinger()
 					}
 					self.more <- true
 				} else {

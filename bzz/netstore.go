@@ -349,13 +349,12 @@ func (self *netStore) peers(req *retrieveRequestMsgData) {
 			for _, peer := range self.hive.getPeers(key, int(req.MaxPeers)) {
 				addrs = append(addrs, peer.remoteAddr)
 			}
-			glog.V(logger.Debug).Infof("netStore.peers sending %d addresses. req.Id: %v, req.Key: %v\n%v", len(addrs), req.Id, req.Key, addrs)
+			glog.V(logger.Debug).Infof("netStore.peers sending %d addresses. req.Id: %v, req.Key: %v", len(addrs), req.Id, req.Key)
 
 			peersData := &peersMsgData{
 				Peers: addrs,
 				Key:   req.Key,
-				// Id:    req.Id,
-				Id: 1,
+				Id:    req.Id,
 			}
 			peersData.setTimeout(req.timeout)
 			req.peer.peers(peersData)
