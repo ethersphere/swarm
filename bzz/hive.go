@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/kademlia"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 type peer struct {
@@ -50,7 +52,7 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 	self.kad.Start(self.addr)
 	err = self.kad.Load(self.path)
 	if err != nil {
-		dpaLogger.Warnf("Warning: error reading kademlia node db (skipping): %v", err)
+		glog.V(logger.Warn).Infof("[BZZ] KΛÐΞMLIΛ Warning: error reading kaddb '%s' (skipping): %v", self.path, err)
 		err = nil
 	}
 	/* this loop is doing the actual table maintenance
@@ -83,7 +85,9 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 			if node != nil {
 				// if Url known, connect to peer
 				if len(node.Url) > 0 {
-					dpaLogger.Debugf("hive: attempt to connect kaddb node %v", node)
+					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node)
+					// enode or any lower level connection address is unnecessary in future
+					// discovery table is used to look it up.
 					connectPeer(node.Url)
 				} else if !full {
 					// a random peer is taken from the table
@@ -94,13 +98,15 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 						req := &retrieveRequestMsgData{
 							Key: Key(randAddr[:]),
 						}
-						dpaLogger.Debugf("hive: look up random address with prox order 0 from peer %v", peers[0])
+						glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %x messenger bee %v", randAddr[:4], peers[0])
 						peers[0].(peer).retrieve(req)
 					}
 					self.more <- true
+				} else {
+					close(self.more)
 				}
 			}
-			dpaLogger.Debugf("%v", self.kad)
+			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %x, population: %d (%d)\n%v", self.addr[:4], self.kad.Count(), self.kad.DBCount(), self.kad)
 		}
 	}()
 	return
@@ -114,19 +120,21 @@ func (self *hive) stop() error {
 }
 
 func (self *hive) addPeer(p peer) {
-	dpaLogger.Debugf("hive: add peer %v", p)
+
+	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: hi new bee %v", p)
 	self.kad.AddNode(p)
-	// self lookup
-	// dpaLogger.Debugf("hive: self lookup - \n%v\n%v\n%064x\n", self.addr, common.Hash(self.addr).Hex(), Key(common.Hash(self.addr).Bytes()[:]))
-	// self lookup is encoded as nil/zero key - easier to differentiate so that
+	// self lookup (can be encoded as nil/zero key since peers addr known) + no id ()
+	// the most common way of saying hi in bzz is initiation of gossip
+	// let me know about anyone new from my hood , here is the storageradius
+	// to send the 6 byte self lookup
 	// we do not record as request or forward it, just reply with peers
 	p.retrieve(&retrieveRequestMsgData{})
-	dpaLogger.Debugf("hive: self lookup sent to %v", p)
+	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: 'whatsup wheresdaparty' sent to %v", p)
 	self.ping <- true
 }
 
 func (self *hive) removePeer(p peer) {
-	dpaLogger.Debugf("hive: remove peer %v", p)
+	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: bee %v gone offline", p)
 	self.kad.RemoveNode(p)
 	self.ping <- false
 }
@@ -149,7 +157,7 @@ func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
 	}
 }
 
-// called by the protocol upon receiving peerset (for target address)
+// called by the protocol when receiving peerset (for target address)
 // peersMsgData is converted to a slice of NodeRecords for Kademlia
 // this is to store all thats needed
 func (self *hive) addPeerEntries(req *peersMsgData) {

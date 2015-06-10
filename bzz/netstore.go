@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 /*
@@ -86,7 +88,7 @@ func (self *netStore) stop() (err error) {
 // called from dpa, entrypoint for *local* chunk store requests
 func (self *netStore) Put(entry *Chunk) {
 	chunk, err := self.localStore.Get(entry.Key)
-	dpaLogger.Debugf("netStore.Put: localStore.Get returned with %v.", err)
+	glog.V(logger.Debug).Infof("netStore.Put: localStore.Get returned with %v.", err)
 	if err != nil {
 		chunk = entry
 	} else if chunk.SData == nil {
@@ -101,7 +103,7 @@ func (self *netStore) Put(entry *Chunk) {
 // store logic common to local and network chunk store requests
 func (self *netStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
-	dpaLogger.Debugf("netStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
+	glog.V(logger.Debug).Infof("netStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
 	if entry.req != nil {
 		if entry.req.status == reqSearching {
 			entry.req.status = reqFound
@@ -127,9 +129,9 @@ func (self *netStore) store(chunk *Chunk) {
 func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	dpaLogger.Debugf("netStore.addStoreRequest: req = %v", req)
+	glog.V(logger.Debug).Infof("netStore.addStoreRequest: req = %v", req)
 	chunk, err := self.localStore.Get(req.Key)
-	dpaLogger.Debugf("netStore.addStoreRequest: chunk reference %p", chunk)
+	glog.V(logger.Debug).Infof("netStore.addStoreRequest: chunk reference %p", chunk)
 	// we assume that a returned chunk is the one stored in the memory cache
 	if err != nil {
 		chunk = &Chunk{
@@ -166,10 +168,10 @@ func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
 	timer := time.After(searchTimeout)
 	select {
 	case <-timer:
-		dpaLogger.Debugf("netStore.Get: %064x request time out ", key)
+		glog.V(logger.Debug).Infof("netStore.Get: %064x request time out ", key)
 		err = notFound
 	case <-chunk.req.C:
-		dpaLogger.Debugf("netStore.Get: %064x retrieved, %d bytes (%p)", key, len(chunk.SData), chunk)
+		glog.V(logger.Debug).Infof("netStore.Get: %064x retrieved, %d bytes (%p)", key, len(chunk.SData), chunk)
 	}
 	return
 }
@@ -178,7 +180,7 @@ func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
 func (self *netStore) get(key Key) (chunk *Chunk) {
 	var err error
 	chunk, err = self.localStore.Get(key)
-	dpaLogger.Debugf("netStore.get: localStore.Get of %064x returned with %v.", key, err)
+	glog.V(logger.Debug).Infof("netStore.get: localStore.Get of %064x returned with %v.", key, err)
 	// we assume that a returned chunk is the one stored in the memory cache
 	if err != nil {
 		// no data and no request status
@@ -208,7 +210,6 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 	defer self.lock.Unlock()
 	// if key is zero or nil or matches requester address, then the request
 	// is a self lookup and not to be forwarded
-	// var chunk *Chunk
 	if !req.isLookup() {
 		chunk := self.get(req.Key)
 		if chunk.SData != nil {
@@ -218,16 +219,16 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 		req = self.strategyUpdateRequest(chunk.req, req) // may change req status
 
 		if chunk.req.status == reqFound {
-			dpaLogger.Debugf("netStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
+			glog.V(logger.Debug).Infof("netStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
 			self.deliver(req, chunk)
 			return
 		}
 
-		dpaLogger.Debugf("netStore.addRetrieveRequest: %064x. Start net search by forwarding retrieve request. For now responding with peers.", req.Key)
+		glog.V(logger.Debug).Infof("netStore.addRetrieveRequest: %064x. Start net search by forwarding retrieve request. For now responding with peers.", req.Key)
 		self.startSearch(req, chunk)
 
 	} else {
-		dpaLogger.Debugf("netStore.addRetrieveRequest: self lookup for %v: responding with peers...", req.peer)
+		glog.V(logger.Debug).Infof("netStore.addRetrieveRequest: self lookup for %v: responding with peers...", req.peer)
 	}
 
 	self.peers(req)
@@ -238,10 +239,10 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 func (self *netStore) startSearch(req *retrieveRequestMsgData, chunk *Chunk) {
 	chunk.req.status = reqSearching
 	peers := self.hive.getPeers(chunk.Key, 0)
-	dpaLogger.Debugf("netStore.startSearch: %064x - received %d peers from KΛÐΞMLIΛ...", chunk.Key, len(peers))
+	glog.V(logger.Debug).Infof("netStore.startSearch: %064x - received %d peers from KΛÐΞMLIΛ...", chunk.Key, len(peers))
 	for _, peer := range peers {
-		dpaLogger.Debugf("netStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
-		dpaLogger.Debugf("req.requesters: %v", chunk.req.requesters)
+		glog.V(logger.Debug).Infof("netStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
+		glog.V(logger.Debug).Infof("req.requesters: %v", chunk.req.requesters)
 		var requester bool
 	OUT:
 		for _, recipients := range chunk.req.requesters {
@@ -269,14 +270,14 @@ only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found)
 */
 func (self *netStore) addRequester(rs *requestStatus, req *retrieveRequestMsgData) {
-	dpaLogger.Debugf("netStore.addRequester: key %064x - add peer [%v] to req.Id %v", req.Key, req.peer, req.Id)
+	glog.V(logger.Debug).Infof("netStore.addRequester: key %064x - add peer [%v] to req.Id %v", req.Key, req.peer, req.Id)
 	list := rs.requesters[req.Id]
 	rs.requesters[req.Id] = append(list, req)
 }
 
 // add peer request the chunk and decides the timeout for the response if still searching
 func (self *netStore) strategyUpdateRequest(rs *requestStatus, origReq *retrieveRequestMsgData) (req *retrieveRequestMsgData) {
-	dpaLogger.Debugf("netStore.strategyUpdateRequest: key %064x", origReq.Key)
+	glog.V(logger.Debug).Infof("netStore.strategyUpdateRequest: key %064x", origReq.Key)
 	// we do not create an alternative one
 	req = origReq
 	if rs != nil {
@@ -291,10 +292,10 @@ func (self *netStore) strategyUpdateRequest(rs *requestStatus, origReq *retrieve
 
 // once a chunk is found propagate it its requesters unless timed out
 func (self *netStore) propagateResponse(chunk *Chunk) {
-	dpaLogger.Debugf("netStore.propagateResponse: key %064x", chunk.Key)
+	glog.V(logger.Debug).Infof("netStore.propagateResponse: key %064x", chunk.Key)
 	for id, requesters := range chunk.req.requesters {
 		counter := requesterCount
-		dpaLogger.Debugf("netStore.propagateResponse id %064x", id)
+		glog.V(logger.Debug).Infof("netStore.propagateResponse id %064x", id)
 		msg := &storeRequestMsgData{
 			Key:   chunk.Key,
 			SData: chunk.SData,
@@ -302,7 +303,7 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 		}
 		for _, req := range requesters {
 			if req.timeout.After(time.Now()) {
-				dpaLogger.Debugf("netStore.propagateResponse store -> %064x with %v", req.Id, req.peer)
+				glog.V(logger.Debug).Infof("netStore.propagateResponse store -> %064x with %v", req.Id, req.peer)
 				go req.peer.store(msg)
 				counter--
 				if counter <= 0 {
