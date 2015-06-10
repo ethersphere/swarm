@@ -500,8 +500,6 @@ func (s *Ethereum) Start() error {
 		s.StartAutoDAG()
 	}
 
-	// Start services
-	go s.txPool.Start()
 	s.protocolManager.Start()
 
 	if s.whisper != nil {
@@ -552,9 +550,6 @@ func (s *Ethereum) StartForTest() {
 		ClientString:    s.net.Name,
 		ProtocolVersion: ProtocolVersion,
 	})
-
-	// Start services
-	s.txPool.Start()
 }
 
 // AddPeer connects to the given node and maintains the connection until the
