@@ -1,6 +1,7 @@
 package kademlia
 
 import (
+	// "bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -104,6 +105,7 @@ func (self *Kademlia) DBCount() int {
 func (self *Kademlia) String() string {
 	var rows []string
 	// rows = append(rows, fmt.Sprintf("KΛÐΞMLIΛ basenode address: %064x\n population: %d (%d)", self.addr[:], self.Count(), self.DBCount()))
+	rows = append(rows, "============================================================")
 	rows = append(rows, fmt.Sprintf("MaxProx: %d, ProxBinSize: %d, BucketSize: %d, MinBucketSize: %d, proxLimit: %d, proxSize: %d", self.MaxProx, self.ProxBinSize, self.BucketSize, self.MinBucketSize, self.proxLimit, self.proxSize))
 
 	for i, b := range self.buckets {
@@ -112,20 +114,32 @@ func (self *Kademlia) String() string {
 			rows = append(rows, fmt.Sprintf("=============== PROX LIMIT: %d ===============", i))
 		}
 		row := []string{fmt.Sprintf("%03d", i), fmt.Sprintf("%2d", len(b.nodes))}
+		var k int
 		for _, p := range b.nodes {
 			row = append(row, fmt.Sprintf("%s", p.Addr().String()[:8]))
+			if k == 4 {
+				break
+			}
+			k++
 		}
-		row = append(row, fmt.Sprintf("|"))
-		row = append(row, fmt.Sprintf("%2d", len(self.nodeDB[i])))
+		for ; k < 5; k++ {
+			row = append(row, "        ")
+		}
+		row = append(row, fmt.Sprintf("| %2d %2d", len(self.nodeDB[i]), b.dbcursor))
 
-		for _, p := range self.nodeDB[i] {
-			row = append(row, fmt.Sprintf("%08x|%08b", p.Addr[:4], p.Addr[0]^self.addr[0]))
+		for j, p := range self.nodeDB[i] {
+			row = append(row, fmt.Sprintf("%08x", p.Addr[:4]))
+			if j == 4 {
+				break
+			}
 		}
 		if i == self.MaxProx {
 			break
 		}
 		rows = append(rows, strings.Join(row, " "))
 	}
+	rows = append(rows, "============================================================")
+
 	return strings.Join(rows, "\n")
 }
 
@@ -204,9 +218,8 @@ func (self *Kademlia) RemoveNode(node Node) (err error) {
 	if len(bucket.nodes) < bucket.size {
 		err = fmt.Errorf("insufficient nodes (%v) in bucket %v", len(bucket.nodes), index)
 	}
-	if len(bucket.nodes) == 0 || index >= self.proxLimit {
-		self.adjustProx(index, -1)
-	}
+	self.adjustProx(index, -1)
+
 	// async callback to notify user that bucket needs filling
 	// action is left to the user
 	if self.GetNode != nil {
@@ -224,14 +237,11 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 	index := self.proximityBin(node.Addr())
 
 	bucket := self.buckets[index]
-	err = bucket.insert(node)
-	if err != nil {
-		return
-	}
-	self.count++
-	if index >= self.proxLimit {
+	if !bucket.insert(node) {
 		self.adjustProx(index, 1)
 	}
+
+	self.count++
 
 	glog.V(logger.Info).Infof("[KΛÐ]: add new node %v to table", node)
 
@@ -260,11 +270,14 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 // adjust Prox (proxLimit and proxSize after an insertion of add nodes into bucket r)
 func (self *Kademlia) adjustProx(r int, add int) {
 	was := self.proxLimit
+
 	var i int
 	switch {
 	case add > 0 && r >= self.proxLimit:
 		self.proxSize += add
-		for i = self.proxLimit; i < self.MaxProx && len(self.buckets[i].nodes) > 0 && self.proxSize > self.ProxBinSize; i++ {
+		glog.V(logger.Detail).Infof("[KΛÐ]: start with adjusted prox size %v", self.proxLimit)
+
+		for i = self.proxLimit; i < self.MaxProx && len(self.buckets[i].nodes) > 0 && self.proxSize-len(self.buckets[i].nodes) > self.ProxBinSize; i++ {
 			self.proxSize -= len(self.buckets[i].nodes)
 		}
 		self.proxLimit = i
@@ -274,6 +287,7 @@ func (self *Kademlia) adjustProx(r int, add int) {
 		}
 		self.proxLimit = r
 	case add < 0 && self.proxLimit > 0 && r >= self.proxLimit-1:
+		self.proxSize -= add
 		for i = self.proxLimit - 1; i > 0 && len(self.buckets[i].nodes)+self.proxSize <= self.ProxBinSize; i-- {
 			self.proxSize += len(self.buckets[i].nodes)
 		}
@@ -347,17 +361,25 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 	self.dblock.Lock()
 	defer self.dblock.Unlock()
 	var n int
+	var nodes []*NodeRecord
 	for _, node := range nrs {
 		_, found := self.nodeIndex[node.Addr]
 		if !found {
 			self.nodeIndex[node.Addr] = node
 			index := proximity(self.addr, node.Addr)
 			if index < len(self.nodeDB) {
-				self.nodeDB[index] = append(self.nodeDB[index], node)
+				dbcursor := self.buckets[index].dbcursor
+				nodes = self.nodeDB[index]
+				newnodes := make([]*NodeRecord, len(nodes)+1)
+				copy(newnodes[:], nodes[:dbcursor])
+				newnodes[dbcursor] = node
+				copy(newnodes[dbcursor+1:], nodes[dbcursor:])
+				self.nodeDB[index] = newnodes
+				n++
 			}
 		}
 	}
-	glog.V(logger.Detail).Infof("[KΛÐ]: received %d node records added %d new", len(nrs), n)
+	glog.V(logger.Detail).Infof("[KΛÐ]: received %d node records, added %d new", len(nrs), n)
 }
 
 /*
@@ -378,14 +400,17 @@ As a mature node, it manages quickly fill in blanks or short lines
 All on demand.
 */
 func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
+	self.dblock.RLock()
+	defer self.dblock.RUnlock()
 	full = true
-	var n int
+	var n, count int
+	var fallback bool
 	for i, b := range self.nodeDB {
 		if i >= self.MaxProx {
 			break
 		}
-		// this needs to be rewritten to rotate
-		if len(self.buckets[i].nodes) < self.MinBucketSize {
+		if len(self.buckets[i].nodes) < self.MinBucketSize ||
+			len(self.buckets[i].nodes) < self.BucketSize && fallback {
 			full = false
 			for n, node = range b {
 				if node.node == nil {
@@ -393,30 +418,43 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
 					return
 				}
 			}
-		}
-	}
-	for i, b := range self.nodeDB {
-		if i > self.MaxProx {
-			break
-		}
-		if len(self.buckets[i].nodes) < self.BucketSize {
-			full = false
-			for n, node = range b {
-				if node.node == nil {
-					glog.V(logger.Detail).Infof("[KΛÐ]: serve redundant node record %v (PO%d)", node.Addr, n)
-					return
+			dbrow := self.nodeDB[i]
+			if len(dbrow) > 0 {
+				n = self.buckets[i].dbcursor
+				for {
+					if n >= len(dbrow) {
+						n = 0
+					}
+					node = dbrow[n]
+					n++
+					count++
+					if node.node == nil {
+						self.buckets[i].dbcursor = n
+						glog.V(logger.Detail).Infof("[KΛÐ]: serve redundant node record %v (PO%d:%d)", node.Addr, i, n)
+						return
+					}
+					if count == len(dbrow) {
+						if fallback {
+							return
+						} else {
+							fallback = true
+							count = 0
+						}
+					}
 				}
 			}
 		}
+		self.buckets[i].dbcursor = n
 	}
 	return
 }
 
 // in situ mutable bucket
 type bucket struct {
-	size  int
-	nodes []Node
-	lock  sync.RWMutex
+	dbcursor int
+	size     int
+	nodes    []Node
+	lock     sync.RWMutex
 }
 
 func (a Address) Bin() string {
@@ -466,14 +504,15 @@ func (h *nodesByDistance) push(node Node, max int) {
 // insert adds a peer to a bucket either by appending to existing items if
 // bucket length does not exceed bucketLength, or by replacing the worst
 // Node in the bucket
-func (self *bucket) insert(node Node) (err error) {
+func (self *bucket) insert(node Node) bool {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if len(self.nodes) >= self.size { // >= allows us to add peers beyond the bucketsize limitation
 		self.worstNode().Drop() // assumes self.size > 0
+		return true
 	}
 	self.nodes = append(self.nodes, node)
-	return
+	return false
 }
 
 // worst expunges the single worst entry in a row, where worst entry is with a peer that has not been active the longests

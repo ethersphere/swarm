@@ -201,6 +201,10 @@ type peerAddr struct {
 	enode string
 }
 
+func (self peerAddr) String() string {
+	return self.new().enode
+}
+
 func (self *peerAddr) new() *peerAddr {
 	self.hash = crypto.Sha3Hash(self.ID)
 	self.enode = fmt.Sprintf("enode://%x@%v:%d", self.ID, self.IP, self.Port)
@@ -223,6 +227,20 @@ type peersMsgData struct {
 	Id      uint64     // present if a response to a retrieval request
 	//
 	peer *peer
+}
+
+func (self peersMsgData) String() string {
+	var from string
+	if self.peer == nil {
+		from = "ourselves"
+	} else {
+		from = self.peer.Addr().String()
+	}
+	var target []byte
+	if len(self.Key) > 3 {
+		target = self.Key[:4]
+	}
+	return fmt.Sprintf("From: %v, Key: %x; ID: %v, Peers: %v", from, target, self.Id, self.Peers)
 }
 
 func (self peersMsgData) setTimeout(t *time.Time) {
@@ -361,6 +379,7 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		req.peer = &peer{bzzProtocol: self}
+		glog.V(logger.Debug).Infof("[BZZ] Receiving peer addresses: %s", req.String())
 		self.netStore.hive.addPeerEntries(&req)
 
 	default:
@@ -411,10 +430,12 @@ func (self *bzzProtocol) handleStatus() (err error) {
 		return self.protoError(ErrVersionMismatch, "%d (!= %d)", status.Version, Version)
 	}
 
-	glog.V(logger.Info).Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
-
 	self.remoteAddr = status.Addr.new()
-
+	if isZeroKey(self.remoteAddr.hash[:]) {
+		glog.V(logger.Info).Infof("remote id incorrect - (%d/%d)\n", status.Version, status.NetworkId)
+		return self.protoError(ErrDecode, "remote id incorrect - (%d/%d)\n", status.Version, status.NetworkId)
+	}
+	glog.V(logger.Info).Infof("Peer is [bzz] capable (%d/%d)\n", status.Version, status.NetworkId)
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
 
 	return nil

@@ -61,23 +61,6 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 	peers do not reply to launch the game into movement , it will stay stuck
 	add or remove a peer to wake up
 	*/
-	self.more = make(chan bool)
-	go func() {
-		clock := time.NewTicker(1 * time.Second)
-		for {
-			select {
-			case <-clock.C:
-				select {
-				case self.ping <- true:
-				default:
-				}
-			case _, more := <-self.more:
-				if !more {
-					return
-				}
-			}
-		}
-	}()
 	go func() {
 		// whenever pinged ask kademlia about most preferred peer
 		for _ = range self.ping {
@@ -101,6 +84,10 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 						glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %x messenger bee %v", randAddr[:4], peers[0])
 						peers[0].(peer).retrieve(req)
 					}
+					if self.more == nil {
+						go self.pinger()
+						self.more = make(chan bool)
+					}
 					self.more <- true
 				} else {
 					close(self.more)
@@ -110,6 +97,23 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 		}
 	}()
 	return
+}
+
+func (self *hive) pinger() {
+	clock := time.NewTicker(1 * time.Second)
+	for {
+		select {
+		case <-clock.C:
+			select {
+			case self.ping <- true:
+			default:
+			}
+		case _, more := <-self.more:
+			if !more {
+				return
+			}
+		}
+	}
 }
 
 func (self *hive) stop() error {
@@ -150,9 +154,10 @@ func (self *hive) getPeers(target Key, max int) (peers []peer) {
 }
 
 func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
+	addr.new()
 	return &kademlia.NodeRecord{
 		Addr:   kademlia.Address(addr.hash),
-		Active: 0,
+		Active: time.Now().UnixNano(),
 		Url:    addr.enode,
 	}
 }
