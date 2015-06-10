@@ -119,7 +119,9 @@ func (self *hive) pinger() {
 func (self *hive) stop() error {
 	// closing ping channel quits the updateloop
 	close(self.ping)
-	close(self.more)
+	if self.more != nil {
+		close(self.more)
+	}
 	return self.kad.Stop(self.path)
 }
 

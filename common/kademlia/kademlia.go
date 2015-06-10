@@ -104,13 +104,13 @@ func (self *Kademlia) DBCount() int {
 func (self *Kademlia) String() string {
 	var rows []string
 	// rows = append(rows, fmt.Sprintf("KΛÐΞMLIΛ basenode address: %064x\n population: %d (%d)", self.addr[:], self.Count(), self.DBCount()))
-	rows = append(rows, "============================================================")
+	rows = append(rows, "====================================================================")
 	rows = append(rows, fmt.Sprintf("MaxProx: %d, ProxBinSize: %d, BucketSize: %d, MinBucketSize: %d, proxLimit: %d, proxSize: %d", self.MaxProx, self.ProxBinSize, self.BucketSize, self.MinBucketSize, self.proxLimit, self.proxSize))
 
 	for i, b := range self.buckets {
 
 		if i == self.proxLimit {
-			rows = append(rows, fmt.Sprintf("=============== PROX LIMIT: %d ===============", i))
+			rows = append(rows, fmt.Sprintf("===================== PROX LIMIT: %d =====================", i))
 		}
 		row := []string{fmt.Sprintf("%03d", i), fmt.Sprintf("%2d", len(b.nodes))}
 		var k int
@@ -137,7 +137,7 @@ func (self *Kademlia) String() string {
 		}
 		rows = append(rows, strings.Join(row, " "))
 	}
-	rows = append(rows, "============================================================")
+	rows = append(rows, "====================================================================")
 
 	return strings.Join(rows, "\n")
 }
@@ -363,17 +363,17 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 		_, found := self.nodeIndex[node.Addr]
 		if !found {
 			self.nodeIndex[node.Addr] = node
-			index := proximity(self.addr, node.Addr)
-			if index < len(self.nodeDB) {
-				dbcursor := self.buckets[index].dbcursor
-				nodes = self.nodeDB[index]
-				newnodes := make([]*NodeRecord, len(nodes)+1)
-				copy(newnodes[:], nodes[:dbcursor])
-				newnodes[dbcursor] = node
-				copy(newnodes[dbcursor+1:], nodes[dbcursor:])
-				self.nodeDB[index] = newnodes
-				n++
-			}
+			index := self.proximityBin(node.Addr)
+			glog.V(logger.Detail).Infof("[KΛÐ]: received %d node records, added %d new", len(nrs), n)
+
+			dbcursor := self.buckets[index].dbcursor
+			nodes = self.nodeDB[index]
+			newnodes := make([]*NodeRecord, len(nodes)+1)
+			copy(newnodes[:], nodes[:dbcursor])
+			newnodes[dbcursor] = node
+			copy(newnodes[dbcursor+1:], nodes[dbcursor:])
+			self.nodeDB[index] = newnodes
+			n++
 		}
 	}
 	glog.V(logger.Detail).Infof("[KΛÐ]: received %d node records, added %d new", len(nrs), n)
@@ -400,48 +400,48 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
 	self.dblock.RLock()
 	defer self.dblock.RUnlock()
 	full = true
-	var n, count int
 	var fallback bool
-	for i, b := range self.nodeDB {
-		if i >= self.MaxProx {
-			break
-		}
-		if len(self.buckets[i].nodes) < self.MinBucketSize ||
-			len(self.buckets[i].nodes) < self.BucketSize && fallback {
-			full = false
-			for n, node = range b {
-				if node.node == nil {
-					glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%d)", node.Addr, n)
-					return
+
+	for rounds := 0; ; rounds++ {
+		for i, dbrow := range self.nodeDB {
+			order := i
+			if order > self.MaxProx {
+				order = self.MaxProx
+				for j := i; j < len(self.nodeDB); j++ {
+					dbrow = append(dbrow, self.nodeDB[j]...)
 				}
 			}
-			dbrow := self.nodeDB[i]
-			if len(dbrow) > 0 {
-				n = self.buckets[i].dbcursor
-				for {
-					if n >= len(dbrow) {
-						n = 0
-					}
-					node = dbrow[n]
-					n++
-					count++
-					if node.node == nil {
-						self.buckets[i].dbcursor = n
-						glog.V(logger.Detail).Infof("[KΛÐ]: serve redundant node record %v (PO%d:%d)", node.Addr, i, n)
-						return
-					}
-					if count == len(dbrow) {
-						if fallback {
-							return
-						} else {
-							fallback = true
-							count = 0
+			bin := self.buckets[order]
+			var n, count int
+			if len(bin.nodes) < self.MinBucketSize ||
+				len(bin.nodes) < self.BucketSize && fallback {
+				full = false
+				if len(dbrow) > 0 {
+					n = bin.dbcursor
+					for count < len(dbrow) {
+						if n >= len(dbrow) {
+							n = 0
 						}
+						node = dbrow[n]
+						n++
+						count++
+						if node.node == nil {
+							glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%d:%d)", node.Addr, i, n)
+							bin.dbcursor = n
+							return
+						}
+						bin.dbcursor = n
 					}
 				}
 			}
 		}
-		self.buckets[i].dbcursor = n
+		if fallback {
+			return
+		} else {
+			// fallback to filling up the rest depends on whether we got full (to minimumBucketSize)
+			fallback = full
+		}
+
 	}
 	return
 }
