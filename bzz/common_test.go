@@ -5,6 +5,9 @@ import (
 	"io"
 	"sync"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 func testDataReader(l int) (r *ChunkReader, slice []byte) {
@@ -68,13 +71,13 @@ SPLIT:
 			go func(chunk *Chunk) {
 				storedChunk, err := m.Get(chunk.Key)
 				if err == notFound {
-					glog.V(logger.DebugDetail).Infof("[BZZ] chunk '%x' not found", chunk.Key)
+					glog.V(logger.Detail).Infof("[BZZ] chunk '%x' not found", chunk.Key)
 				} else if err != nil {
-					glog.V(logger.DebugDetail).Infof("[BZZ] error retrieving chunk %x: %v", chunk.Key, err)
+					glog.V(logger.Detail).Infof("[BZZ] error retrieving chunk %x: %v", chunk.Key, err)
 				} else {
 					chunk.SData = storedChunk.SData
 				}
-				glog.V(logger.DebugDetail).Infof("[BZZ] chunk '%x' not found", chunk.Key[:4])
+				glog.V(logger.Detail).Infof("[BZZ] chunk '%x' not found", chunk.Key[:4])
 				close(chunk.C)
 			}(ch)
 		}
