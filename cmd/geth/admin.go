@@ -48,7 +48,7 @@ func (js *jsre) adminBindings() {
 	admin.Set("import", js.importChain)
 	admin.Set("export", js.exportChain)
 	admin.Set("verbosity", js.verbosity)
-	admin.Set("progress", js.downloadProgress)
+	admin.Set("progress", js.syncProgress)
 	admin.Set("setSolc", js.setSolc)
 	admin.Set("setGlobalRegistrar", js.setGlobalRegistrar)
 	admin.Set("setHashReg", js.setHashReg)
@@ -433,9 +433,12 @@ func (js *jsre) debugBlock(call otto.FunctionCall) otto.Value {
 	}
 
 	tstart := time.Now()
-
 	old := vm.Debug
-	vm.Debug = true
+
+	if len(call.ArgumentList) > 1 {
+		vm.Debug, _ = call.Argument(1).ToBoolean()
+	}
+
 	_, err = js.ethereum.BlockProcessor().RetryProcess(block)
 	if err != nil {
 		fmt.Println(err)
@@ -486,9 +489,14 @@ func (js *jsre) setHead(call otto.FunctionCall) otto.Value {
 	return otto.UndefinedValue()
 }
 
-func (js *jsre) downloadProgress(call otto.FunctionCall) otto.Value {
-	pending, cached := js.ethereum.Downloader().Stats()
-	v, _ := call.Otto.ToValue(map[string]interface{}{"pending": pending, "cached": cached})
+func (js *jsre) syncProgress(call otto.FunctionCall) otto.Value {
+	pending, cached, importing, eta := js.ethereum.Downloader().Stats()
+	v, _ := call.Otto.ToValue(map[string]interface{}{
+		"pending":   pending,
+		"cached":    cached,
+		"importing": importing,
+		"estimate":  (eta / time.Second * time.Second).String(),
+	})
 	return v
 }
 
