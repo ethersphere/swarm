@@ -62,6 +62,7 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 	peers do not reply to launch the game into movement , it will stay stuck
 	add or remove a peer to wake up
 	*/
+	go self.pinger()
 	go func() {
 		// whenever pinged ask kademlia about most preferred peer
 		for _ = range self.ping {
@@ -162,10 +163,12 @@ func (self *hive) getPeers(target Key, max int) (peers []peer) {
 
 func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
 	addr.new()
+	now := time.Now()
 	return &kademlia.NodeRecord{
 		Addr:   kademlia.Address(addr.hash),
 		Active: time.Now().UnixNano(),
 		Url:    addr.enode,
+		After:  now.UnixNano(),
 	}
 }
 

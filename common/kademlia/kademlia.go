@@ -20,6 +20,12 @@ const (
 	minBucketSize = 1
 	bucketSize    = 20
 	maxProx       = 255
+	connRetryExp  = 2
+)
+
+var (
+	purgeInterval        = 42 * time.Hour
+	initialRetryInterval = 1 * time.Second
 )
 
 type Kademlia struct {
@@ -27,12 +33,16 @@ type Kademlia struct {
 	addr Address
 
 	// adjustable parameters
-	MaxProx       int
-	ProxBinSize   int
-	BucketSize    int
-	MinBucketSize int
-	nodeDB        [][]*NodeRecord
-	nodeIndex     map[Address]*NodeRecord
+	MaxProx              int
+	ProxBinSize          int
+	BucketSize           int
+	MinBucketSize        int
+	PurgeInterval        time.Duration
+	InitialRetryInterval time.Duration
+	ConnRetryExp         int
+
+	nodeDB    [][]*NodeRecord
+	nodeIndex map[Address]*NodeRecord
 
 	GetNode func(int)
 
@@ -66,6 +76,8 @@ type NodeRecord struct {
 	Addr   Address `json:address`
 	Url    string  `json:url`
 	Active int64   `json:active`
+	After  int64   `json:after`
+	after  time.Time
 	node   Node
 }
 
@@ -92,8 +104,12 @@ func (self *Kademlia) Addr() Address {
 }
 
 // accessor for KAD self count
-func (self *Kademlia) Count() int {
-	return self.count
+func (self *Kademlia) Count() (sum int) {
+	for _, b := range self.buckets {
+		sum += len(b.nodes)
+	}
+	return
+	// return self.count
 }
 
 // accessor for KAD offline db count
@@ -132,10 +148,10 @@ func (self *Kademlia) String() string {
 				break
 			}
 		}
+		rows = append(rows, strings.Join(row, " "))
 		if i == self.MaxProx {
 			break
 		}
-		rows = append(rows, strings.Join(row, " "))
 	}
 	rows = append(rows, "====================================================================")
 
@@ -159,6 +175,15 @@ func (self *Kademlia) Start(addr Address) error {
 	}
 	if self.MinBucketSize == 0 {
 		self.MinBucketSize = minBucketSize
+	}
+	if self.InitialRetryInterval == 0 {
+		self.InitialRetryInterval = initialRetryInterval
+	}
+	if self.PurgeInterval == 0 {
+		self.PurgeInterval = purgeInterval
+	}
+	if self.ConnRetryExp == 0 {
+		self.ConnRetryExp = connRetryExp
 	}
 	// runtime parameters
 	if self.ProxBinSize == 0 {
@@ -203,27 +228,38 @@ func (self *Kademlia) Stop(path string) (err error) {
 func (self *Kademlia) RemoveNode(node Node) (err error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
+	var found bool
 	index := self.proximityBin(node.Addr())
 	bucket := self.buckets[index]
 	for i := 0; i < len(bucket.nodes); i++ {
 		if node.Addr() == bucket.nodes[i].Addr() {
+			found = true
 			bucket.nodes = append(bucket.nodes[:i], bucket.nodes[(i+1):]...)
 		}
 	}
 
-	glog.V(logger.Info).Infof("[KΛÐ]: remove node %v from table", node)
+	if found {
+		glog.V(logger.Info).Infof("[KΛÐ]: remove node %v from table", node)
 
-	self.count--
-	if len(bucket.nodes) < bucket.size {
-		err = fmt.Errorf("insufficient nodes (%v) in bucket %v", len(bucket.nodes), index)
-	}
-	self.adjustProx(index, -1)
+		self.count--
+		if len(bucket.nodes) < bucket.size {
+			err = fmt.Errorf("insufficient nodes (%v) in bucket %v", len(bucket.nodes), index)
+		}
+		self.adjustProxLess(index)
+		// async callback to notify user that bucket needs filling
+		// action is left to the user
+		if self.GetNode != nil {
+			go self.GetNode(index)
+		}
+		r := self.nodeIndex[node.Addr()]
+		r.node = nil
+		now := time.Now()
+		r.after = now
+		r.After = now.UnixNano()
+		r.Active = now.UnixNano()
 
-	// async callback to notify user that bucket needs filling
-	// action is left to the user
-	if self.GetNode != nil {
-		go self.GetNode(index)
 	}
+
 	return
 }
 
@@ -236,62 +272,76 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 	index := self.proximityBin(node.Addr())
 
 	bucket := self.buckets[index]
-	if !bucket.insert(node) {
-		self.adjustProx(index, 1)
+	// if bucket is full insertion replaces the worst node
+	// TODO probably should give priority to peers with active traffic
+	if worst, pos := bucket.insert(node); worst != nil {
+		glog.V(logger.Info).Infof("[KΛÐ]: replace node %v (%d) with node %v", worst, pos, node)
+		// no prox adjustment needed
+		// do not change count
+	} else {
+		glog.V(logger.Info).Infof("[KΛÐ]: add new node %v to table", node)
+		self.count++
+		self.adjustProxMore(index)
 	}
 
-	self.count++
-
-	glog.V(logger.Info).Infof("[KΛÐ]: add new node %v to table", node)
-
-	go func() {
-		self.dblock.Lock()
-		defer self.dblock.Unlock()
-		record, found := self.nodeIndex[node.Addr()]
-		if found {
-			record.node = node
-		} else {
-			glog.V(logger.Info).Infof("[KΛÐ]: add new record %v to node db", node)
-			record = &NodeRecord{
-				Addr:   node.Addr(),
-				Url:    node.Url(),
-				Active: node.LastActive().UnixNano(),
-				node:   node,
-			}
-			self.nodeIndex[node.Addr()] = record
-			self.nodeDB[index] = append(self.nodeDB[index], record)
+	self.dblock.Lock()
+	defer self.dblock.Unlock()
+	record, found := self.nodeIndex[node.Addr()]
+	if !found {
+		glog.V(logger.Info).Infof("[KΛÐ]: add new record %v to node db", node)
+		record = &NodeRecord{
+			Addr: node.Addr(),
+			Url:  node.Url(),
 		}
-	}()
+		self.nodeIndex[node.Addr()] = record
+		self.nodeDB[index] = append(self.nodeDB[index], record)
+	}
+	record.node = node
+	record.setActive()
+
 	return
 
 }
 
 // adjust Prox (proxLimit and proxSize after an insertion of add nodes into bucket r)
-func (self *Kademlia) adjustProx(r int, add int) {
-	was := self.proxLimit
+func (self *Kademlia) adjustProxMore(r int) {
+	if r >= self.proxLimit {
+		exLimit := self.proxLimit
+		exSize := self.proxSize
+		self.proxSize++
 
-	var i int
-	switch {
-	case add > 0 && r >= self.proxLimit:
-		self.proxSize += add
+		var i int
 		for i = self.proxLimit; i < self.MaxProx && len(self.buckets[i].nodes) > 0 && self.proxSize-len(self.buckets[i].nodes) > self.ProxBinSize; i++ {
 			self.proxSize -= len(self.buckets[i].nodes)
 		}
 		self.proxLimit = i
-	case add < 0 && r < self.proxLimit && len(self.buckets[r].nodes) == 0:
-		for i = self.proxLimit - 1; i > r; i-- {
+
+		glog.V(logger.Detail).Infof("[KΛÐ]: Max Prox Bin: Lower Limit: %v (was %v): Bin Size: %v (was %v)", self.proxLimit, exLimit, self.proxSize, exSize)
+	}
+}
+
+func (self *Kademlia) adjustProxLess(r int) {
+	exLimit := self.proxLimit
+	exSize := self.proxSize
+	if r >= self.proxLimit {
+		self.proxSize--
+	}
+
+	if r < self.proxLimit && len(self.buckets[r].nodes) == 0 {
+		for i := self.proxLimit - 1; i > r; i-- {
 			self.proxSize += len(self.buckets[i].nodes)
 		}
 		self.proxLimit = r
-	case add < 0 && self.proxLimit > 0 && r >= self.proxLimit-1:
-		self.proxSize -= add
+	} else if self.proxLimit > 0 && r >= self.proxLimit-1 {
+		var i int
 		for i = self.proxLimit - 1; i > 0 && len(self.buckets[i].nodes)+self.proxSize <= self.ProxBinSize; i-- {
 			self.proxSize += len(self.buckets[i].nodes)
 		}
 		self.proxLimit = i
 	}
-	if was != self.proxLimit {
-		glog.V(logger.Detail).Infof("[KΛÐ]: adjust prox limit %v -> %v", was, self.proxLimit)
+
+	if exLimit != self.proxLimit || exSize != self.proxSize {
+		glog.V(logger.Detail).Infof("[KΛÐ]: Max Prox Bin: Lower Limit: %v (was %v): Bin Size: %v (was %v)", self.proxLimit, exLimit, self.proxSize, exSize)
 	}
 }
 
@@ -361,7 +411,7 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 	var nodes []*NodeRecord
 	for _, node := range nrs {
 		_, found := self.nodeIndex[node.Addr]
-		if !found {
+		if !found && node.Addr != self.addr {
 			self.nodeIndex[node.Addr] = node
 			index := self.proximityBin(node.Addr)
 			dbcursor := self.buckets[index].dbcursor
@@ -401,6 +451,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
 	for rounds := 0; rounds < 2; rounds++ {
 		for i, dbrow := range self.nodeDB {
 			order := i
+			// for prox orders higher than MaxProx aggregate row is used
 			if order > self.MaxProx {
 				order = self.MaxProx
 				for j := i; j < len(self.nodeDB); j++ {
@@ -412,30 +463,64 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, full bool) {
 			if len(bin.nodes) < self.MinBucketSize ||
 				len(bin.nodes) < self.BucketSize && rounds > 0 {
 				full = false
+				var purge []int
+
+				// try all db elements that are ripe for checking
 				if len(dbrow) > 0 {
 					n = bin.dbcursor
 					for count < len(dbrow) {
 						if n >= len(dbrow) {
 							n = 0
+							bin.dbcursor = 0
 						}
 						node = dbrow[n]
+						bin.dbcursor = n + 1
+						if (node.after == time.Time{}) {
+							node.after = time.Unix(node.After, 0)
+						}
+
+						if node.node == nil && node.after.Before(time.Now()) {
+							if node.after.Add(self.PurgeInterval).Before(time.Now()) {
+								// delete node
+								purge = append(purge, n)
+							} else {
+								glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%d:%d)", node.Addr, i, n)
+								if node.After == 0 {
+									node.after = time.Now().Add(self.InitialRetryInterval)
+									node.After = node.after.UnixNano()
+								} else {
+									node.After = (time.Now().UnixNano()-node.After)*int64(self.ConnRetryExp) + node.After
+									node.after = time.Unix(node.After, 0)
+								}
+								return
+							}
+						}
 						n++
 						count++
-						if node.node == nil {
-							glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%d:%d)", node.Addr, i, n)
-							bin.dbcursor = n
-							return
-						}
-						bin.dbcursor = n
 					}
-				}
-			}
-		}
-		if !full {
-			break
-		}
 
-	}
+					// purge record inactive for more that PurgeInterval
+					var prev int
+					var nodes []*NodeRecord
+					for i, next := range purge {
+						// need to adjust dbcursor
+						if next > 0 {
+							if next <= bin.dbcursor {
+								bin.dbcursor--
+							}
+							nodes = append(nodes, dbrow[prev:next]...)
+						}
+						prev = i + 1
+						delete(self.nodeIndex, dbrow[next].Addr)
+					}
+					self.nodeDB[order] = append(nodes, dbrow[prev:]...)
+				} // if < max
+			} // if not full
+		} //for row
+		// if there is a missing element in any prox bin upto max then try request
+		// but if no success (tried recently, or no known peers) then fall back to
+		// filling in rows with redundant nodes starting from 0 upwards
+	} // for round
 	return
 }
 
@@ -494,24 +579,29 @@ func (h *nodesByDistance) push(node Node, max int) {
 // insert adds a peer to a bucket either by appending to existing items if
 // bucket length does not exceed bucketLength, or by replacing the worst
 // Node in the bucket
-func (self *bucket) insert(node Node) bool {
+func (self *bucket) insert(node Node) (dropped Node, pos int) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if len(self.nodes) >= self.size { // >= allows us to add peers beyond the bucketsize limitation
-		self.worstNode().Drop() // assumes self.size > 0
-		return true
+		dropped, pos = self.worstNode()
+		if dropped != nil {
+			self.nodes[pos] = node
+			dropped.Drop()
+			return
+		}
 	}
 	self.nodes = append(self.nodes, node)
-	return false
+	return
 }
 
 // worst expunges the single worst entry in a row, where worst entry is with a peer that has not been active the longests
-func (self *bucket) worstNode() (node Node) {
+func (self *bucket) worstNode() (node Node, pos int) {
 	var oldest time.Time
-	for _, n := range self.nodes {
+	for p, n := range self.nodes {
 		if (oldest == time.Time{}) || node.LastActive().Before(oldest) {
 			oldest = n.LastActive()
 			node = n
+			pos = p
 		}
 	}
 	return
