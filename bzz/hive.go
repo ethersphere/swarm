@@ -2,6 +2,7 @@ package bzz
 
 import (
 	// "fmt"
+	"math/rand"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common/kademlia"
@@ -66,37 +67,35 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 	go func() {
 		// whenever pinged ask kademlia about most preferred peer
 		for _ = range self.ping {
-			node, full := self.kad.GetNodeRecord()
-			if node != nil {
-				// if Url known, connect to peer
-				if len(node.Url) > 0 {
-					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node)
-					// enode or any lower level connection address is unnecessary in future
-					// discovery table is used to look it up.
-					connectPeer(node.Url)
-				} else if !full {
-					// a random peer is taken from the table
-					peers := self.kad.GetNodes(kademlia.RandomAddress(), 1)
-					if len(peers) > 0 {
-						// a random address at prox bin 0 is sent for lookup
-						randAddr := kademlia.RandomAddressAt(self.addr, 0)
-						req := &retrieveRequestMsgData{
-							Key: Key(randAddr[:]),
-						}
-						glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %x messenger bee %v", randAddr[:4], peers[0])
-						peers[0].(peer).retrieve(req)
+			node, proxLimit := self.kad.GetNodeRecord()
+			if node != nil && len(node.Url) > 0 {
+				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node)
+				// enode or any lower level connection address is unnecessary in future
+				// discovery table is used to look it up.
+				connectPeer(node.Url)
+			} else if proxLimit > -1 {
+				// a random peer is taken from the table
+				peers := self.kad.GetNodes(kademlia.RandomAddressAt(self.addr, rand.Intn(self.kad.MaxProx)), 1)
+				if len(peers) > 0 {
+					// a random address at prox bin 0 is sent for lookup
+					randAddr := kademlia.RandomAddressAt(self.addr, proxLimit)
+					req := &retrieveRequestMsgData{
+						Key: Key(randAddr[:]),
 					}
-					if self.more == nil {
-						self.more = make(chan bool)
-						go self.pinger()
-					}
-					self.more <- true
-				} else {
+					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %x messenger bee %v", randAddr[:4], peers[0])
+					peers[0].(peer).retrieve(req)
+				}
+				if self.more == nil {
+					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz buzz need more bees")
+					self.more = make(chan bool)
+					go self.pinger()
+				}
+				self.more <- true
+				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
+			} else {
+				if self.more != nil {
 					close(self.more)
-					if self.more != nil {
-						close(self.more)
-						self.more = nil
-					}
+					self.more = nil
 				}
 			}
 			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %x, population: %d (%d)\n%v", self.addr[:4], self.kad.Count(), self.kad.DBCount(), self.kad)
@@ -166,9 +165,9 @@ func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
 	now := time.Now()
 	return &kademlia.NodeRecord{
 		Addr:   kademlia.Address(addr.hash),
-		Active: time.Now().UnixNano(),
+		Active: time.Now().Unix(),
 		Url:    addr.enode,
-		After:  now.UnixNano(),
+		After:  now.Unix(),
 	}
 }
 
