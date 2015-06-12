@@ -109,9 +109,11 @@ func (self *hive) pinger() {
 	for {
 		select {
 		case <-clock.C:
-			select {
-			case self.ping <- true:
-			default:
+			if self.kad.DBCount() > 0 {
+				select {
+				case self.ping <- true:
+				default:
+				}
 			}
 		case _, more := <-self.more:
 			if !more {

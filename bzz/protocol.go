@@ -313,6 +313,7 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.Msg
 		localAddr: baseAddr.new(),
 		quitC:     make(chan bool),
 	}
+	glog.V(logger.Debug).Infof("[BZZ] local address: %v, %v, %v", self.localAddr, baseAddr, addr)
 
 	go self.storeRequestLoop()
 
@@ -389,11 +390,17 @@ func (self *bzzProtocol) handle() error {
 }
 
 func (self *bzzProtocol) handleStatus() (err error) {
+	if self.localAddr == nil {
+		panic("nil localaddress")
+	}
+	addr := self.localAddr
+	glog.V(logger.Debug).Infof("[BZZ] localAddr: %v", self.localAddr)
+
 	// send precanned status message
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
-		Addr:      self.localAddr,
+		Addr:      addr,
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 	}
@@ -410,7 +417,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	}
 
 	if msg.Code != statusMsg {
-		return self.protoError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, statusMsg)
+		self.protoError(ErrNoStatusMsg, "first msg has code %x (!= %x)", msg.Code, statusMsg)
 	}
 
 	if msg.Size > ProtocolMaxMsgSize {

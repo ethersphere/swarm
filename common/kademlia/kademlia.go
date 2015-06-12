@@ -461,10 +461,9 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 			if order > self.MaxProx {
 				break
 			}
-
 			bin := self.buckets[order]
-			var n, count int
 
+			var n, count int
 			if len(bin.nodes) < rounds {
 				if proxLimit < 0 {
 					proxLimit = i
@@ -533,7 +532,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 					if node != nil {
 						break
 					}
-				} // if < max
+				} // if len < rounds
 			} else { // if not full
 				toprow = i
 			}
@@ -544,8 +543,9 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 		} //for row
 		// if there is a missing element in any prox bin upto max then try request
 		// but if no success (tried recently, or no known peers) then fall back to
-		// filling in rows with redundant nodes starting from 0 upwards
-		if proxLimit < 0 {
+		// filling in rows with redundant nodes starting from 0 upwards if a cycle
+		// finishes with proxLimit
+		if proxLimit <= 0 {
 			return
 		}
 	} // for round
