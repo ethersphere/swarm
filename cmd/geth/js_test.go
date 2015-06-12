@@ -111,7 +111,7 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	ds := docserver.New("/")
 	tf := &testjethre{ds: ds}
-	repl := newJSRE(ethereum, assetPath, "", conf.Bzz, conf.BzzPort, false, tf)
+	repl := newJSRE(ethereum, assetPath, "", "", conf.Bzz, conf.BzzPort, false, tf)
 	tf.jsre = repl
 	return tmp, tf, ethereum
 }

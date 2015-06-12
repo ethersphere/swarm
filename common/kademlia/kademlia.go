@@ -120,31 +120,31 @@ func (self *Kademlia) DBCount() int {
 func (self *Kademlia) String() string {
 	var rows []string
 	// rows = append(rows, fmt.Sprintf("KΛÐΞMLIΛ basenode address: %064x\n population: %d (%d)", self.addr[:], self.Count(), self.DBCount()))
-	rows = append(rows, "====================================================================")
+	rows = append(rows, "=========================================================================")
 	rows = append(rows, fmt.Sprintf("%v : MaxProx: %d, ProxBinSize: %d, BucketSize: %d, MinBucketSize: %d, proxLimit: %d, proxSize: %d", time.Now(), self.MaxProx, self.ProxBinSize, self.BucketSize, self.MinBucketSize, self.proxLimit, self.proxSize))
 
 	for i, b := range self.buckets {
 
 		if i == self.proxLimit {
-			rows = append(rows, fmt.Sprintf("===================== PROX LIMIT: %d =====================", i))
+			rows = append(rows, fmt.Sprintf("===================== PROX LIMIT: %d =================================", i))
 		}
 		row := []string{fmt.Sprintf("%03d", i), fmt.Sprintf("%2d", len(b.nodes))}
 		var k int
 		for _, p := range b.nodes {
 			row = append(row, fmt.Sprintf("%s", p.Addr().String()[:8]))
-			if k == 4 {
+			if k == 3 {
 				break
 			}
 			k++
 		}
-		for ; k < 5; k++ {
+		for ; k < 3; k++ {
 			row = append(row, "        ")
 		}
 		row = append(row, fmt.Sprintf("| %2d %2d", len(self.nodeDB[i]), b.dbcursor))
 
 		for j, p := range self.nodeDB[i] {
 			row = append(row, fmt.Sprintf("%08x", p.Addr[:4]))
-			if j == 4 {
+			if j == 2 {
 				break
 			}
 		}
@@ -153,8 +153,7 @@ func (self *Kademlia) String() string {
 			break
 		}
 	}
-	rows = append(rows, "====================================================================")
-
+	rows = append(rows, "=========================================================================")
 	return strings.Join(rows, "\n")
 }
 

@@ -23,6 +23,9 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/rpc/api"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -206,6 +209,20 @@ var (
 		Usage: "Domain on which to send Access-Control-Allow-Origin header",
 		Value: "",
 	}
+	IPCDisabledFlag = cli.BoolFlag{
+		Name:  "ipcdisable",
+		Usage: "Disable the IPC-RPC server",
+	}
+	IPCApiFlag = cli.StringFlag{
+		Name:  "ipcapi",
+		Usage: "Specify the API's which are offered over this interface",
+		Value: api.DefaultIpcApis,
+	}
+	IPCPathFlag = DirectoryFlag{
+		Name:  "ipcpath",
+		Usage: "Filename for IPC socket/pipe",
+		Value: DirectoryString{common.DefaultIpcPath()},
+	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
@@ -377,6 +394,22 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	dataDir := ctx.GlobalString(DataDirFlag.Name)
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
 	return accounts.NewManager(ks)
+}
+
+func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
+	config := comms.IpcConfig{
+		Endpoint: filepath.Join(ctx.GlobalString(DataDirFlag.Name), "geth.ipc"),
+	}
+
+	xeth := xeth.New(eth, nil)
+	codec := codec.JSON
+
+	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, eth)
+	if err != nil {
+		return err
+	}
+
+	return comms.StartIpc(config, codec, apis...)
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {

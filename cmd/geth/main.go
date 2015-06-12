@@ -239,6 +239,9 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCEnabledFlag,
 		utils.RPCListenAddrFlag,
 		utils.RPCPortFlag,
+		utils.IPCDisabledFlag,
+		utils.IPCApiFlag,
+		utils.IPCPathFlag,
 		utils.WhisperEnabledFlag,
 		utils.SwarmEnabledFlag,
 		utils.SwarmProxyPortFlag,
@@ -307,6 +310,7 @@ func console(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		filepath.Join(ctx.GlobalString(utils.DataDirFlag.Name), "geth.ipc"),
 		ctx.GlobalBool(utils.SwarmEnabledFlag.Name),
 		ctx.GlobalString(utils.SwarmProxyPortFlag.Name),
 		true,
@@ -330,6 +334,7 @@ func execJSFiles(ctx *cli.Context) {
 		ethereum,
 		ctx.String(utils.JSpathFlag.Name),
 		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
+		ctx.GlobalString(utils.IPCPathFlag.Name),
 		ctx.GlobalBool(utils.SwarmEnabledFlag.Name),
 		ctx.GlobalString(utils.SwarmProxyPortFlag.Name),
 		false,
@@ -388,6 +393,11 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 	}
 	// Start auxiliary services if enabled.
+	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
+		if err := utils.StartIPC(eth, ctx); err != nil {
+			utils.Fatalf("Error string IPC: %v", err)
+		}
+	}
 	if ctx.GlobalBool(utils.RPCEnabledFlag.Name) {
 		if err := utils.StartRPC(eth, ctx); err != nil {
 			utils.Fatalf("Error starting RPC: %v", err)
