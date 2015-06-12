@@ -23,10 +23,10 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/xeth"
 	"github.com/ethereum/go-ethereum/rpc/api"
-	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 func init() {
@@ -265,6 +265,15 @@ var (
 		Name:  "shh",
 		Usage: "Enable whisper",
 	}
+	SwarmEnabledFlag = cli.BoolFlag{
+		Name:  "bzz",
+		Usage: "Enable swarm",
+	}
+	SwarmProxyPortFlag = cli.StringFlag{
+		Name:  "bzzport",
+		Usage: "Swarm HTTP Proxy Port on localhost",
+		Value: "8500",
+	}
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
@@ -335,6 +344,8 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Discovery:          !ctx.GlobalBool(NoDiscoverFlag.Name),
 		NodeKey:            MakeNodeKey(ctx),
 		Shh:                ctx.GlobalBool(WhisperEnabledFlag.Name),
+		Bzz:                ctx.GlobalBool(SwarmEnabledFlag.Name),
+		BzzPort:            ctx.GlobalString(SwarmProxyPortFlag.Name),
 		Dial:               true,
 		BootNodes:          ctx.GlobalString(BootnodesFlag.Name),
 		GasPrice:           common.String2Big(ctx.GlobalString(GasPriceFlag.Name)),
