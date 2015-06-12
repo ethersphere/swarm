@@ -614,6 +614,7 @@ func (self *bucket) insert(node Node) (dropped Node, pos int) {
 		dropped, pos = self.worstNode()
 		if dropped != nil {
 			self.nodes[pos] = node
+			glog.V(logger.Info).Infof("[KΛÐ] dropping node %v (%d)", dropped, pos)
 			dropped.Drop()
 			return
 		}
@@ -626,7 +627,7 @@ func (self *bucket) insert(node Node) (dropped Node, pos int) {
 func (self *bucket) worstNode() (node Node, pos int) {
 	var oldest time.Time
 	for p, n := range self.nodes {
-		if (oldest == time.Time{}) || node.LastActive().Before(oldest) {
+		if (oldest == time.Time{}) || !oldest.Before(n.LastActive()) {
 			oldest = n.LastActive()
 			node = n
 			pos = p
