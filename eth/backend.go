@@ -507,8 +507,8 @@ func (s *Ethereum) Start() error {
 	}
 
 	if s.Swarm != nil && s.net.Self() != nil {
-		glog.V(logger.Info).Infof("net.self after net started: %v", s.net.Self())
-		s.Swarm.Start(s.net.Self(), s.AddPeer)
+		glog.V(logger.Info).Infof("net.self after net started: %v, listening on: %v", s.net.Self(), s.net.ListenAddr)
+		s.Swarm.Start(s.net.Self(), s.net.ListenAddr, s.AddPeer)
 	}
 
 	glog.V(logger.Info).Infoln("Server started")
