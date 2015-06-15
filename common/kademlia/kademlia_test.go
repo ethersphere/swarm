@@ -62,12 +62,11 @@ func TestBootstrap(t *testing.T) {
 		// for any node kad.le, Target and N
 		kad := New()
 		kad.MaxProx = test.MaxProx
-		kad.MinBucketSize = test.MinBucketSize
 		kad.BucketSize = test.BucketSize
 		kad.Start(test.Self)
 		var err error
 
-		t.Logf("bootstapTest MaxProx: %v MinBucketSize: %v BucketSize: %v\n", test.MaxProx, test.MinBucketSize, test.BucketSize)
+		t.Logf("bootstapTest MaxProx: %v BucketSize: %v\n", test.MaxProx, test.BucketSize)
 
 		addr := gen(Address{}, r).(Address)
 		prox := proximity(addr, test.Self)
@@ -240,51 +239,6 @@ func TestProxAdjust(t *testing.T) {
 	}
 }
 
-func TestCallback(t *testing.T) {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	self := gen(Address{}, r).(Address)
-	kad := New()
-	var bucket int
-	var called chan bool
-	kad.MaxProx = 5
-	kad.BucketSize = 2
-	kad.GetNode = func(b int) {
-		bucket = b
-		close(called)
-	}
-	kad.Start(self)
-	var err error
-
-	for i := 0; i < 100; i++ {
-		a := gen(Address{}, r).(Address)
-		addresses = append(addresses, a)
-		err = kad.AddNode(&testNode{addr: a})
-		if err != nil {
-			t.Errorf("backend not accepting node")
-			return
-		}
-	}
-	for _, a := range addresses {
-		called = make(chan bool)
-		kad.RemoveNode(&testNode{a})
-		b := kad.proximityBin(a)
-		select {
-		case <-called:
-			if bucket != b {
-				t.Errorf("GetNode callback called with incorrect bucket, expected %v, got %v", b, bucket)
-			}
-		case <-time.After(100 * time.Millisecond):
-			l := len(kad.buckets[b].nodes)
-			if l < kad.BucketSize {
-				t.Errorf("GetNode not called on bucket %v although size is %v < %v", b, l, kad.BucketSize)
-			} else {
-				t.Logf("bucket callback ok")
-			}
-		}
-	}
-
-}
-
 func TestSaveLoad(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	addresses := gen([]Address{}, r).([]Address)
@@ -356,19 +310,16 @@ func (self *Kademlia) proxCheck(t *testing.T) bool {
 }
 
 type bootstrapTest struct {
-	MaxProx       int
-	MinBucketSize int
-	BucketSize    int
-	Self          Address
+	MaxProx    int
+	BucketSize int
+	Self       Address
 }
 
 func (*bootstrapTest) Generate(rand *rand.Rand, size int) reflect.Value {
-	m := rand.Intn(2) + 1
 	t := &bootstrapTest{
-		Self:          gen(Address{}, rand).(Address),
-		MaxProx:       10 + rand.Intn(3),
-		MinBucketSize: m,
-		BucketSize:    rand.Intn(3) + m,
+		Self:       gen(Address{}, rand).(Address),
+		MaxProx:    10 + rand.Intn(3),
+		BucketSize: rand.Intn(3) + 1,
 	}
 	return reflect.ValueOf(t)
 }
@@ -381,7 +332,7 @@ type getNodesTest struct {
 }
 
 func (c getNodesTest) String() string {
-	return fmt.Sprintf("A: %x\nT: %x\n(%d)\n", c.Self, c.Target, c.N)
+	return fmt.Sprintf("A: %064x\nT: %064x\n(%d)\n", c.Self[:], c.Target[:], c.N)
 }
 
 func (*getNodesTest) Generate(rand *rand.Rand, size int) reflect.Value {
