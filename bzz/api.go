@@ -126,7 +126,8 @@ func (self *Api) Start(node *discover.Node, listenAddr string, connectPeer func(
 	} else { // this is how we calculate the bzz address of the node
 		// ideally this should be using the swarm hash function
 
-		host, port, err := net.SplitHostPort(listenAddr)
+		var host, port string
+		host, port, err = net.SplitHostPort(listenAddr)
 		if err == nil {
 			ip := net.ParseIP(host)
 			intport, err := strconv.Atoi(port)

@@ -1,7 +1,6 @@
 package bzz
 
 import (
-	// "fmt"
 	"math/rand"
 	"time"
 
@@ -128,6 +127,7 @@ func (self *hive) stop() error {
 	close(self.ping)
 	if self.more != nil {
 		close(self.more)
+		self.more = nil
 	}
 	return self.kad.Stop(self.path)
 }
