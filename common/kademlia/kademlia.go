@@ -85,9 +85,7 @@ func (self *NodeRecord) setActive() {
 }
 
 func (self *NodeRecord) setChecked() {
-	if self.node != nil {
-		self.checked = time.Now()
-	}
+	self.checked = time.Now()
 }
 
 type kadDB struct {
@@ -482,7 +480,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 						if node.checked.Add(self.PurgeInterval).Before(time.Now()) {
 							// delete node
 							purge = append(purge, n)
-							glog.V(logger.Detail).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) next check: %v", node.Addr, po, n, node.after)
+							glog.V(logger.Detail).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.checked, node.after)
 						} else {
 
 							if node.After == 0 {
@@ -493,7 +491,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 								node.after = time.Unix(node.After, 0)
 							}
 
-							glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%03d:%d) next check: %d %v", node.Addr, po, n, node.After, node.after)
+							glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%03d:%d), last check: %v,  next check: %v", node.Addr, po, n, node.checked, node.after)
 						}
 						break ROW
 					}
@@ -509,6 +507,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 				self.deleteNodeRecords(po, purge...)
 				if node != nil {
 					glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: proxlimit: PO%03d\n%v", rounds, proxLimit, node)
+					node.setChecked()
 					bin.lock.Unlock()
 					return
 				}
