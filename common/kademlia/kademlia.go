@@ -411,6 +411,7 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 	for _, node := range nrs {
 		_, found := self.nodeIndex[node.Addr]
 		if !found && node.Addr != self.addr {
+			node.setChecked()
 			self.nodeIndex[node.Addr] = node
 			index := self.proximityBin(node.Addr)
 			dbcursor := self.dbcursors[index]
@@ -470,6 +471,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 					if (node.after == time.Time{}) {
 						node.after = time.Unix(node.After, 0)
 					}
+
 					glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not to be retried before %d %v", node.Addr, po, n, node.After, node.after)
 
 					delta := node.checked.Unix() - node.After
