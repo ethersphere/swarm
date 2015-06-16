@@ -17,15 +17,14 @@ import (
 )
 
 const (
-	minBucketSize = 1
-	bucketSize    = 20
-	maxProx       = 255
-	connRetryExp  = 2
+	bucketSize   = 20
+	maxProx      = 255
+	connRetryExp = 2
 )
 
 var (
 	purgeInterval        = 42 * time.Hour
-	initialRetryInterval = 4 * time.Second
+	initialRetryInterval = 42 * 100 * time.Millisecond
 )
 
 type Kademlia struct {
@@ -36,16 +35,13 @@ type Kademlia struct {
 	MaxProx              int
 	ProxBinSize          int
 	BucketSize           int
-	MinBucketSize        int
 	PurgeInterval        time.Duration
 	InitialRetryInterval time.Duration
 	ConnRetryExp         int
 
 	nodeDB    [][]*NodeRecord
 	nodeIndex map[Address]*NodeRecord
-
-	GetNode func(int)
-
+	dbcursors []int
 	// state
 	proxLimit int
 	proxSize  int
@@ -73,18 +69,23 @@ type Node interface {
 }
 
 type NodeRecord struct {
-	Addr   Address `json:address`
-	Url    string  `json:url`
-	Active int64   `json:active`
-	After  int64   `json:after`
-	after  time.Time
-	node   Node
+	Addr    Address `json:address`
+	Url     string  `json:url`
+	Active  int64   `json:active`
+	After   int64   `json:after`
+	after   time.Time
+	checked time.Time
+	node    Node
 }
 
 func (self *NodeRecord) setActive() {
 	if self.node != nil {
 		self.Active = self.node.LastActive().Unix()
 	}
+}
+
+func (self *NodeRecord) setChecked() {
+	self.checked = time.Now()
 }
 
 type kadDB struct {
@@ -118,10 +119,11 @@ func (self *Kademlia) DBCount() int {
 }
 
 func (self *Kademlia) String() string {
+
 	var rows []string
 	// rows = append(rows, fmt.Sprintf("KΛÐΞMLIΛ basenode address: %064x\n population: %d (%d)", self.addr[:], self.Count(), self.DBCount()))
 	rows = append(rows, "=========================================================================")
-	rows = append(rows, fmt.Sprintf("%v : MaxProx: %d, ProxBinSize: %d, BucketSize: %d, MinBucketSize: %d, proxLimit: %d, proxSize: %d", time.Now(), self.MaxProx, self.ProxBinSize, self.BucketSize, self.MinBucketSize, self.proxLimit, self.proxSize))
+	rows = append(rows, fmt.Sprintf("%v : MaxProx: %d, ProxBinSize: %d, BucketSize: %d, proxLimit: %d, proxSize: %d", time.Now(), self.MaxProx, self.ProxBinSize, self.BucketSize, self.proxLimit, self.proxSize))
 
 	for i, b := range self.buckets {
 
@@ -130,17 +132,18 @@ func (self *Kademlia) String() string {
 		}
 		row := []string{fmt.Sprintf("%03d", i), fmt.Sprintf("%2d", len(b.nodes))}
 		var k int
-		for _, p := range b.nodes {
+		c := self.dbcursors[i]
+		for ; k < len(b.nodes); k++ {
+			p := b.nodes[(c+k)%len(b.nodes)]
 			row = append(row, fmt.Sprintf("%s", p.Addr().String()[:8]))
 			if k == 3 {
 				break
 			}
-			k++
 		}
 		for ; k < 3; k++ {
 			row = append(row, "        ")
 		}
-		row = append(row, fmt.Sprintf("| %2d %2d", len(self.nodeDB[i]), b.dbcursor))
+		row = append(row, fmt.Sprintf("| %2d %2d", len(self.nodeDB[i]), self.dbcursors[i]))
 
 		for j, p := range self.nodeDB[i] {
 			row = append(row, fmt.Sprintf("%08x", p.Addr[:4]))
@@ -172,9 +175,6 @@ func (self *Kademlia) Start(addr Address) error {
 	if self.BucketSize == 0 {
 		self.BucketSize = bucketSize
 	}
-	if self.MinBucketSize == 0 {
-		self.MinBucketSize = minBucketSize
-	}
 	if self.InitialRetryInterval == 0 {
 		self.InitialRetryInterval = initialRetryInterval
 	}
@@ -194,7 +194,8 @@ func (self *Kademlia) Start(addr Address) error {
 		self.buckets[i] = &bucket{size: self.BucketSize} // will initialise bucket{int(0),[]Node(nil),sync.Mutex}
 	}
 
-	self.nodeDB = make([][]*NodeRecord, 8*len(self.addr))
+	self.nodeDB = make([][]*NodeRecord, self.MaxProx+1)
+	self.dbcursors = make([]int, self.MaxProx+1)
 	self.nodeIndex = make(map[Address]*NodeRecord)
 
 	self.quitC = make(chan bool)
@@ -245,11 +246,7 @@ func (self *Kademlia) RemoveNode(node Node) (err error) {
 			err = fmt.Errorf("insufficient nodes (%v) in bucket %v", len(bucket.nodes), index)
 		}
 		self.adjustProxLess(index)
-		// async callback to notify user that bucket needs filling
-		// action is left to the user
-		if self.GetNode != nil {
-			go self.GetNode(index)
-		}
+
 		r := self.nodeIndex[node.Addr()]
 		r.node = nil
 		now := time.Now()
@@ -297,6 +294,7 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 	}
 	record.node = node
 	record.setActive()
+	record.setChecked()
 
 	return
 
@@ -411,9 +409,10 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 	for _, node := range nrs {
 		_, found := self.nodeIndex[node.Addr]
 		if !found && node.Addr != self.addr {
+			node.setChecked()
 			self.nodeIndex[node.Addr] = node
 			index := self.proximityBin(node.Addr)
-			dbcursor := self.buckets[index].dbcursor
+			dbcursor := self.dbcursors[index]
 			nodes = self.nodeDB[index]
 			newnodes := make([]*NodeRecord, len(nodes)+1)
 			copy(newnodes[:], nodes[:dbcursor])
@@ -431,16 +430,16 @@ GetNodeRecord gives back a node record with the highest priority for desired
 connection
 Used to pick candidates for live nodes to satisfy Kademlia network for Swarm
 
-if len(nodes) < MinBucketSize, then take ith element in corresponding
-db row ordered by reputation (active time?)
+if len(nodes) < rounds, then take thte next element in corresponding
+db row ordered by time checked
 node record a is more favoured to b a > b iff
 |proxBin(a)| < |proxBin(b)|
-|| proxBin(a) < proxBin(b) && |proxBin(a)| < MinBucketSize
-|| lastActive(a) < lastActive(b)
+|| proxBin(a) < proxBin(b) && |proxBin(a)| == |proxBin(b)|
+|| lastChecked(a) < lastChecked(b)
 
 This has double role. Starting as naive node with empty db, this implements
 Kademlia bootstrapping
-As a mature node, it manages quickly fill in blanks or short lines
+As a mature node, it fills short lines
 All on demand.
 */
 func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
@@ -448,103 +447,85 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 	self.dblock.RLock()
 	defer self.dblock.RUnlock()
 	for rounds := 1; rounds <= self.BucketSize; rounds++ {
-		var toprow int
-		for i, dbrow := range self.nodeDB {
-			order := i
-			// for prox orders higher than MaxProx aggregate row is used
-			if order == self.MaxProx {
-				for j := i; j < len(self.nodeDB); j++ {
-					dbrow = append(dbrow, self.nodeDB[j]...)
-				}
+	ROUND:
+		for po, dbrow := range self.nodeDB {
+			if po > self.MaxProx {
+				break ROUND
 			}
-			if order > self.MaxProx {
-				break
-			}
-			bin := self.buckets[order]
-
-			var n, count int
+			bin := self.buckets[po]
+			bin.lock.Lock()
 			if len(bin.nodes) < rounds {
 				if proxLimit < 0 {
-					proxLimit = i
+					proxLimit = po
 				}
+				var count int
 				var purge []int
+				n := self.dbcursors[po]
 
-				// try all db elements that are ripe for checking
-				if len(dbrow) > 0 {
-					n = bin.dbcursor
-				ROW:
-					for count < len(dbrow) {
-						if n >= len(dbrow) {
-							n = 0
-							bin.dbcursor = 0
-						}
-						node = dbrow[n]
-						bin.dbcursor = n + 1
-						if (node.after == time.Time{}) {
-							node.after = time.Unix(node.After, 0)
-						}
-						glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) to be checked after %d %v", node.Addr, i, n, node.After, node.after)
+				// try all db elements if they are ripe for checking
+			ROW:
+				for count < len(dbrow) {
+					node = dbrow[n]
+					if (node.after == time.Time{}) {
+						node.after = time.Unix(node.After, 0)
+					}
 
-						delta := time.Now().Unix() - node.After
-						if delta < 4 {
-							node.After = 0
-						}
-						if node.node == nil && node.after.Before(time.Now()) {
-							if node.after.Add(self.PurgeInterval).Before(time.Now()) {
-								// delete node
-								purge = append(purge, n)
-								glog.V(logger.Detail).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) next check: %v", node.Addr, i, n, node.after)
-							} else {
-								if node.After == 0 {
-									node.after = time.Now().Add(self.InitialRetryInterval)
-									node.After = node.after.Unix()
-								} else {
-									node.After = (delta)*int64(self.ConnRetryExp) + node.After
-									node.after = time.Unix(node.After, 0)
-								}
-								glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%03d:%d) next check: %d %v", node.Addr, i, n, node.After, node.after)
-							}
-							break ROW
+					glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not to be retried before %d %v", node.Addr, po, n, node.After, node.after)
+
+					delta := node.checked.Unix() - node.After
+					if delta < 4 {
+						node.After = 0
+					}
+					if node.node == nil && node.after.Before(time.Now()) {
+						if node.checked.Add(self.PurgeInterval).Before(time.Now()) {
+							// delete node
+							purge = append(purge, n)
+							glog.V(logger.Detail).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.checked, node.after)
 						} else {
-							glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not ready skipped next check: %v", node.Addr, i, n, node.after)
-						}
-						n++
-						count++
-					}
 
-					// purge record inactive for more that PurgeInterval
-					var prev int
-					var nodes []*NodeRecord
-					for i, next := range purge {
-						// need to adjust dbcursor
-						if next > 0 {
-							if next <= bin.dbcursor {
-								bin.dbcursor--
+							if node.After == 0 {
+								node.after = time.Now().Add(self.InitialRetryInterval)
+								node.After = node.after.Unix()
+							} else {
+								node.After = delta*int64(self.ConnRetryExp) + node.After
+								node.after = time.Unix(node.After, 0)
 							}
-							nodes = append(nodes, dbrow[prev:next]...)
+
+							glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%03d:%d), last check: %v,  next check: %v", node.Addr, po, n, node.checked, node.after)
 						}
-						prev = i + 1
-						delete(self.nodeIndex, dbrow[next].Addr)
+						break ROW
 					}
-					self.nodeDB[order] = append(nodes, dbrow[prev:]...)
-
-					if node != nil {
-						break
+					glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not ready. skipped. not to be retried before: %v", node.Addr, po, n, node.after)
+					n++
+					count++
+					// cycle: n = n %  len(dbrow)
+					if n >= len(dbrow) {
+						n = 0
 					}
-				} // if len < rounds
-			} else { // if not full
-				toprow = i
-			}
-			glog.V(logger.Detail).Infof("[KΛÐ]: round %d: proxlimit: PO%03d, toprow: PO%03d\n%v", rounds, proxLimit, toprow, node)
-			// this means there was missing element already on level 1 but
-			// couldnt find anything on higher levels either
+				}
+				self.dbcursors[po] = n
+				self.deleteNodeRecords(po, purge...)
+				if node != nil {
+					glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: proxlimit: PO%03d\n%v", rounds, proxLimit, node)
+					node.setChecked()
+					bin.lock.Unlock()
+					return
+				}
+			} // if len < rounds
+			bin.lock.Unlock()
+		} // for po-s
+		glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: proxlimit: PO%03d", rounds, proxLimit)
 
-		} //for row
+		// glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: proxlimit: PO%03d", rounds, proxLimit)
+		// this means there was missing element already on level 1 but
+		// couldnt find anything on higher levels either
+
+		// } //for row
 		// if there is a missing element in any prox bin upto max then try request
 		// but if no success (tried recently, or no known peers) then fall back to
 		// filling in rows with redundant nodes starting from 0 upwards if a cycle
 		// finishes with proxLimit
-		if proxLimit <= 0 {
+		if proxLimit == 0 || proxLimit < 0 && self.BucketSize == rounds {
 			return
 		}
 	} // for round
@@ -552,12 +533,32 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 	return
 }
 
+// deletes the noderecords of a kaddb row corresponding to the indexes
+// caller must hold the dblock,
+// the call is unsafe, no index checks
+func (self *Kademlia) deleteNodeRecords(row int, indexes ...int) {
+	var prev int
+	var nodes []*NodeRecord
+	dbrow := self.nodeDB[row]
+	for _, next := range indexes {
+		// need to adjust dbcursor
+		if next > 0 {
+			if next <= self.dbcursors[row] {
+				self.dbcursors[row]--
+			}
+			nodes = append(nodes, dbrow[prev:next]...)
+		}
+		prev = next + 1
+		delete(self.nodeIndex, dbrow[next].Addr)
+	}
+	self.nodeDB[row] = append(nodes, dbrow[prev:]...)
+}
+
 // in situ mutable bucket
 type bucket struct {
-	dbcursor int
-	size     int
-	nodes    []Node
-	lock     sync.RWMutex
+	size  int
+	nodes []Node
+	lock  sync.RWMutex
 }
 
 func (a Address) Bin() string {
@@ -614,6 +615,7 @@ func (self *bucket) insert(node Node) (dropped Node, pos int) {
 		dropped, pos = self.worstNode()
 		if dropped != nil {
 			self.nodes[pos] = node
+			glog.V(logger.Info).Infof("[KΛÐ] dropping node %v (%d)", dropped, pos)
 			dropped.Drop()
 			return
 		}
@@ -626,7 +628,7 @@ func (self *bucket) insert(node Node) (dropped Node, pos int) {
 func (self *bucket) worstNode() (node Node, pos int) {
 	var oldest time.Time
 	for p, n := range self.nodes {
-		if (oldest == time.Time{}) || node.LastActive().Before(oldest) {
+		if (oldest == time.Time{}) || !oldest.Before(n.LastActive()) {
 			oldest = n.LastActive()
 			node = n
 			pos = p

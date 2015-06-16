@@ -1,7 +1,6 @@
 package bzz
 
 import (
-	// "fmt"
 	"math/rand"
 	"time"
 
@@ -69,7 +68,7 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 		for _ = range self.ping {
 			node, proxLimit := self.kad.GetNodeRecord()
 			if node != nil && len(node.Url) > 0 {
-				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node)
+				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node)
 				// enode or any lower level connection address is unnecessary in future
 				// discovery table is used to look it up.
 				connectPeer(node.Url)
@@ -82,16 +81,16 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 					req := &retrieveRequestMsgData{
 						Key: Key(randAddr[:]),
 					}
-					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %x messenger bee %v", randAddr[:4], peers[0])
+					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %x messenger bee %v", randAddr[:4], peers[0])
 					peers[0].(peer).retrieve(req)
 				}
 				if self.more == nil {
-					glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz buzz need more bees")
+					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz buzz need more bees")
 					self.more = make(chan bool)
 					go self.pinger()
 				}
 				self.more <- true
-				glog.V(logger.Debug).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
+				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
 			} else {
 				if self.more != nil {
 					close(self.more)
@@ -128,6 +127,7 @@ func (self *hive) stop() error {
 	close(self.ping)
 	if self.more != nil {
 		close(self.more)
+		self.more = nil
 	}
 	return self.kad.Stop(self.path)
 }

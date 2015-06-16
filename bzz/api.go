@@ -6,10 +6,12 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -111,7 +113,7 @@ Start is called when the ethereum stack is started
 - launches the netStore (starts kademlia hive peer management)
 - starts an http server
 */
-func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
+func (self *Api) Start(node *discover.Node, listenAddr string, connectPeer func(string) error) {
 	var err error
 	if node == nil {
 		err = fmt.Errorf("basenode nil")
@@ -124,21 +126,29 @@ func (self *Api) Start(node *discover.Node, connectPeer func(string) error) {
 	} else { // this is how we calculate the bzz address of the node
 		// ideally this should be using the swarm hash function
 
-		baseAddr := &peerAddr{
-			ID:   node.ID[:],
-			IP:   node.IP,
-			Port: node.TCP,
-		}
-		baseAddr.new()
-		err = self.hive.start(baseAddr, filepath.Join(self.datadir, "bzz-peers.json"), connectPeer)
+		var port string
+		_, port, err = net.SplitHostPort(listenAddr)
 		if err == nil {
-			err = self.netStore.start(baseAddr)
-			if err == nil {
-				glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %064x", baseAddr.hash[:])
+			intport, err := strconv.Atoi(port)
+			if err != nil {
+				err = fmt.Errorf("invalid port in '%s'", listenAddr)
+			} else {
+				baseAddr := &peerAddr{
+					ID:   node.ID[:],
+					IP:   node.IP,
+					Port: uint16(intport),
+				}
+				baseAddr.new()
+				err = self.hive.start(baseAddr, filepath.Join(self.datadir, "bzz-peers.json"), connectPeer)
+				if err == nil {
+					err = self.netStore.start(baseAddr)
+					if err == nil {
+						glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %064x", baseAddr.hash[:])
+					}
+				}
 			}
 		}
 	}
-	//
 	if err != nil {
 		glog.V(logger.Info).Infof("[BZZ] Swarm started started offline: %v", err)
 	}

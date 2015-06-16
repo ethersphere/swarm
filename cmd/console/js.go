@@ -231,7 +231,7 @@ func (js *jsre) apiBindings(ipcpath string) {
 	js.re.Eval(globalRegistrar + "registrar = GlobalRegistrar.at(\"" + globalRegistrarAddr + "\");")
 }
 
-var ds, _ = docserver.New("/")
+var ds = docserver.New("/")
 
 /*
 func (self *jsre) ConfirmTransaction(tx string) bool {

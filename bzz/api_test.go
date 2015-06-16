@@ -25,7 +25,7 @@ func testApi() (api *Api, err error) {
 	if err != nil {
 		return
 	}
-	api.Start(nil, nil)
+	api.Start(nil, ":0", nil)
 	return
 }
 

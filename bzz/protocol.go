@@ -65,7 +65,6 @@ var errorToString = map[int]string{
 type bzzProtocol struct {
 	netStore   *netStore
 	peer       *p2p.Peer
-	localAddr  *peerAddr
 	remoteAddr *peerAddr
 	key        Key
 	rw         p2p.MsgReadWriter
@@ -294,13 +293,6 @@ func BzzProtocol(netstore *netStore) (p2p.Protocol, error) {
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
 func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
-	localAddr := p.LocalAddr().(*net.TCPAddr)
-	addr := netstore.addr()
-	baseAddr := &peerAddr{
-		ID:   addr.ID,
-		IP:   localAddr.IP,
-		Port: uint16(localAddr.Port),
-	}
 	self := &bzzProtocol{
 		netStore: netstore,
 		rw:       rw,
@@ -310,10 +302,9 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.Msg
 			Errors:  errorToString,
 		},
 		requestDb: db,
-		localAddr: baseAddr.new(),
 		quitC:     make(chan bool),
 	}
-	glog.V(logger.Debug).Infof("[BZZ] local address: %v, %v, %v", self.localAddr, baseAddr, addr)
+	glog.V(logger.Debug).Infof("[BZZ] listening address: %v", self.netStore.addr())
 
 	go self.storeRequestLoop()
 
@@ -390,17 +381,11 @@ func (self *bzzProtocol) handle() error {
 }
 
 func (self *bzzProtocol) handleStatus() (err error) {
-	if self.localAddr == nil {
-		panic("nil localaddress")
-	}
-	addr := self.localAddr
-	glog.V(logger.Debug).Infof("[BZZ] localAddr: %v", self.localAddr)
-
 	// send precanned status message
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
-		Addr:      addr,
+		Addr:      self.netStore.addr(),
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 	}
@@ -438,6 +423,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	}
 
 	self.remoteAddr = status.Addr.new()
+	glog.V(logger.Debug).Infof("[BZZ] self: advertised IP: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.netStore.addr().IP, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
 
 	glog.V(logger.Info).Infof("Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.hash[:4], status.Version, status.NetworkId)
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
