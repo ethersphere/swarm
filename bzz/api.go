@@ -226,6 +226,8 @@ func (self *Api) Modify(rootHash, path, contentHash, contentType string) (newRoo
 	return fmt.Sprintf("%064x", trie.hash), nil
 }
 
+const maxParallelFiles = 5
+
 // Download replicates the manifest path structure on the local filesystem
 // under localpath
 func (self *Api) Download(bzzpath, localpath string) (err error) {
@@ -264,29 +266,79 @@ func (self *Api) Download(bzzpath, localpath string) (err error) {
 		return
 	}
 
+	type downloadListEntry struct {
+		key  Key
+		path string
+	}
+
+	var list []*downloadListEntry
+	var mde, mderr error
+
 	prevPath := lpath
-	trie.listWithPrefix(path, func(entry *manifestTrieEntry, suffix string) { // TODO: paralellize
+	err = trie.listWithPrefix(path, func(entry *manifestTrieEntry, suffix string) { // TODO: paralellize
 		key := common.Hex2Bytes(entry.Hash)
-		reader := self.dpa.Retrieve(key)
 		path := lpath + "/" + suffix
 		dir := filepath.Dir(path)
 		if dir != prevPath {
-			os.MkdirAll(dir, os.ModePerm) // TODO: handle errors
+			mde = os.MkdirAll(dir, os.ModePerm)
+			if mde != nil {
+				mderr = mde
+			}
 			prevPath = dir
 		}
-		f, _ := os.Create(path) // TODO: handle errors, ??path separators
-		writer := bufio.NewWriter(f)
-		//io.Copy(writer, reader) // TODO: handle errors
-		io.CopyN(writer, reader, reader.Size()) // TODO: handle errors
-
-		writer.Flush()
-		f.Close()
+		if (mde == nil) && (path != dir+"/") {
+			list = append(list, &downloadListEntry{key: key, path: path})
+		}
 	})
+	if err == nil {
+		err = mderr
+	}
 
+	cnt := len(list)
+	errors := make([]error, cnt)
+	done := make(chan bool, maxParallelFiles)
+	dcnt := 0
+
+	for i, entry := range list {
+		if i >= dcnt+maxParallelFiles {
+			<-done
+			dcnt++
+		}
+		go func(i int, entry *downloadListEntry, done chan bool) {
+			f, err := os.Create(entry.path) // TODO: path separators
+			if err == nil {
+				reader := self.dpa.Retrieve(entry.key)
+				writer := bufio.NewWriter(f)
+				_, err = io.CopyN(writer, reader, reader.Size()) // TODO: handle errors
+				err2 := writer.Flush()
+				if err == nil {
+					err = err2
+				}
+				err2 = f.Close()
+				if err == nil {
+					err = err2
+				}
+			}
+
+			errors[i] = err
+			done <- true
+		}(i, entry, done)
+	}
+	for dcnt < cnt {
+		<-done
+		dcnt++
+	}
+
+	if err != nil {
+		return
+	}
+	for i, _ := range list {
+		if errors[i] != nil {
+			return errors[i]
+		}
+	}
 	return
 }
-
-const maxParallelFiles = 5
 
 // Upload replicates a local directory as a manifest file and uploads it
 // using dpa store
