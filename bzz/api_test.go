@@ -94,6 +94,47 @@ func TestApiDirUpload(t *testing.T) {
 	}
 }
 
+func TestApiDirUploadModify(t *testing.T) {
+	api, err := testApi()
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	bzzhash, err := api.Upload(path.Join(testDir, "test0"), "")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	bzzhash, err = api.Modify(bzzhash, "index.html", "", "")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	bzzhash, err = api.Modify(bzzhash, "index2.html", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+	bzzhash, err = api.Modify(bzzhash, "img/logo.png", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8")
+	if err != nil {
+		t.Errorf("unexpected error: %v", err)
+		return
+	}
+
+	content, err := ioutil.ReadFile(path.Join(testDir, "test0", "index.html"))
+	testGet(t, api, path.Join(bzzhash, "index2.html"), content, "text/html; charset=utf-8", 0, 202)
+	testGet(t, api, path.Join(bzzhash, "img", "logo.png"), content, "text/html; charset=utf-8", 0, 202)
+
+	content, err = ioutil.ReadFile(path.Join(testDir, "test0", "index.css"))
+	testGet(t, api, path.Join(bzzhash, "index.css"), content, "text/css", 0, 132)
+
+	_, _, _, _, err = api.Get(bzzhash)
+	if err == nil {
+		t.Errorf("expected error: %v", err)
+	}
+}
+
 func TestApiDirUploadWithRootFile(t *testing.T) {
 	api, err := testApi()
 	if err != nil {
