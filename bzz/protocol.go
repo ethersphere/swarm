@@ -476,9 +476,9 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	}
 
 	self.remoteAddr = status.Addr.new()
-	glog.V(logger.Debug).Infof("[BZZ] self: advertised IP: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.netStore.addr().IP, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
+	glog.V(logger.Detail).Infof("[BZZ] self: advertised IP: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.netStore.addr().IP, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
 
-	glog.V(logger.Info).Infof("Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.hash[:4], status.Version, status.NetworkId)
+	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.hash[:4], status.Version, status.NetworkId)
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
 
 	return nil

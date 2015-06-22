@@ -185,7 +185,7 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 		hasher.Write(data)
 		if !bytes.Equal(hasher.Sum(nil), key) {
 			// data does not validate, ignore
-			glog.V(logger.Warn).Infof("netStore.addStoreRequest: chunk invalid. store request ignored: %v", req)
+			glog.V(logger.Warn).Infof("[BZZ] netStore.addStoreRequest: chunk invalid. store request ignored: %v", req)
 			return
 		}
 
