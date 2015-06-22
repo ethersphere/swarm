@@ -66,7 +66,7 @@ func TestBootstrap(t *testing.T) {
 		kad.Start(test.Self)
 		var err error
 
-		t.Logf("bootstapTest MaxProx: %v BucketSize: %v\n", test.MaxProx, test.BucketSize)
+		// t.Logf("bootstapTest MaxProx: %v BucketSize: %v\n", test.MaxProx, test.BucketSize)
 
 		addr := gen(Address{}, r).(Address)
 		prox := proximity(addr, test.Self)
@@ -106,7 +106,7 @@ func TestBootstrap(t *testing.T) {
 
 			record, _ := kad.GetNodeRecord()
 			if record == nil {
-				t.Logf("after round %d, no more node records needed", n)
+				// t.Logf("after round %d, no more node records needed", n)
 				break
 			}
 			node = &testNode{record.Addr}
@@ -134,7 +134,7 @@ func TestGetNodes(t *testing.T) {
 		kad.MaxProx = 10
 		kad.Start(test.Self)
 		var err error
-		t.Logf("getNodesTest %v: %v\n", len(test.All), test)
+		// t.Logf("getNodesTest %v: %v\n", len(test.All), test)
 		for _, node := range test.All {
 			err = kad.AddNode(node)
 			if err != nil {
@@ -176,12 +176,13 @@ func TestGetNodes(t *testing.T) {
 				if contains(nodes, n.Addr()) {
 					continue // don't run the check below for nodes in result
 				}
-				if proxCmp(test.Target, n.Addr(), farthestResult) < 0 {
+				if test.Target.ProxCmp(n.Addr(), farthestResult) < 0 {
+					_ = i * j
 					t.Errorf("kad.le contains node that is closer to target but it's not in result")
-					t.Logf("bucket %v, item %v\n", i, j)
-					t.Logf("  Target:          %x", test.Target)
-					t.Logf("  Farthest Result: %x", farthestResult)
-					t.Logf("  ID:              %x (%d)", n.Addr(), kad.proximityBin(n.Addr()))
+					// t.Logf("bucket %v, item %v\n", i, j)
+					// t.Logf("  Target:          %x", test.Target)
+					// t.Logf("  Farthest Result: %x", farthestResult)
+					// t.Logf("  ID:              %x (%d)", n.Addr(), kad.proximityBin(n.Addr()))
 					return false
 				}
 			}
@@ -260,7 +261,7 @@ func TestSaveLoad(t *testing.T) {
 	kad = New()
 	kad.Start(self)
 	kad.Load(path)
-	for _, b := range kad.DB() {
+	for _, b := range kad.nodeDB {
 		for _, node := range b {
 			node.node = &testNode{node.Addr}
 			err = kad.AddNode(node.node)
