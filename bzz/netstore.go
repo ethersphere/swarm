@@ -140,9 +140,19 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 			Size:  int64(binary.LittleEndian.Uint64(req.SData[0:8])),
 		}
 	} else if chunk.SData == nil {
+		// need data, validate now
+		hasher := hasherfunc.New()
+		hasher.Write(data)
+		if !bytes.Equal(hasher.Sum(nil), key) {
+			// data does not validate, ignore
+			glog.V(logger.Warn).Infof("netStore.addStoreRequest: chunk invalid. store request ignored: %v", req)
+			return
+		}
+
 		chunk.SData = req.SData
 		chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
 	} else {
+		// data is found, store request ignored
 		return
 	}
 	chunk.source = req.peer
@@ -287,7 +297,6 @@ func (self *netStore) strategyUpdateRequest(rs *requestStatus, origReq *retrieve
 		}
 	}
 	return
-
 }
 
 // once a chunk is found propagate it its requesters unless timed out
@@ -302,7 +311,7 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 			Id:    uint64(id),
 		}
 		for _, req := range requesters {
-			if req.timeout.After(time.Now()) {
+			if req.timeout == nil || req.timeout.After(time.Now()) {
 				glog.V(logger.Debug).Infof("netStore.propagateResponse store -> %064x with %v", req.Id, req.peer)
 				go req.peer.store(msg)
 				counter--
