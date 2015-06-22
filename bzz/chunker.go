@@ -1,5 +1,6 @@
 /*
-The distributed storage implemented in this package requires fix sized chunks of content
+The distributed storage implemented in this package requires fix sized chunks of content.
+
 Chunker is the interface to a component that is responsible for disassembling and assembling larger data.
 
 TreeChunker implements a Chunker based on a tree structure defined as follows:
@@ -50,12 +51,15 @@ type Key []byte
 
 /*
 Chunker is the interface to a component that is responsible for disassembling and assembling larger data and indended to be the dependency of a DPA storage system with fixed maximum chunksize.
+
 It relies on the underlying chunking model.
-When calling Split, the caller provides a channel (chan *Chunk) on which it receives chunks to store. The DPA delegates to storage layers (implementing ChunkStore interface). NewChunkstore(DB) is a convenience wrapper with which all DBs (conforming to DB interface) can serve as ChunkStores. See chunkStore.go
+
+When calling Split, the caller provides a channel (chan *Chunk) on which it receives chunks to store. The DPA delegates to storage layers (implementing ChunkStore interface).
+
+Split returns an error channel, which the caller can monitor.
 After getting notified that all the data has been split (the error channel is closed), the caller can safely read or save the root key. Optionally it times out if not all chunks get stored or not the entire stream of data has been processed. By inspecting the errc channel the caller can check if any explicit errors (typically IO read/write failures) occured during splitting.
 
-When calling Join with a root key, the caller gets returned a lazy reader. The caller again provides a channel and receives an error channel. The chunk channel is the one on which the caller receives placeholder chunks with missing data. The DPA is supposed to forward this to the chunk stores and notify the chunker if the data has been delivered (i.e. retrieved from memory cache, disk-persisted db or cloud based swarm delivery). The chunker then puts these together and notifies the DPA if data has been assembled by a closed error channel. Once the DPA finds the data has been joined, it is free to deliver it back to swarm in full (if the original request was via the bzz protocol) or save and serve if it it was a local client request.
-
+When calling Join with a root key, the caller gets returned a seekable lazy reader. The caller again provides a channel on which the caller receives placeholder chunks with missing data. The DPA is supposed to forward this to the chunk stores and notify the chunker if the data has been delivered (i.e. retrieved from memory cache, disk-persisted db or cloud based swarm delivery). As the seekable reader is used, the chunker then puts these together the relevant parts on demand.
 */
 type Chunker interface {
 	/*
@@ -68,10 +72,15 @@ type Chunker interface {
 	Split(key Key, data SectionReader, chunkC chan *Chunk, wg *sync.WaitGroup) chan error
 	/*
 		Join reconstructs original content based on a root key.
-		When joining, the caller gets returned a Lazy SectionReader
+		When joining, the caller gets returned a Lazy SectionReader, which is
+		seekable and implements on-demand fetching of chunks as and where it is read.
 		New chunks to retrieve are coming to caller via the Chunk channel, which the caller provides.
 		If an error is encountered during joining, it appears as a reader error.
-		The SectionReader provides on-demand fetching of chunks.
+		The SectionReader.
+		As a result, partial reads from a document are possible even if other parts
+		are corrupt or lost.
+		The chunks are not meant to be validated by the chunker when joining. This
+		is because it is left to the DPA to decide which sources are trusted.
 	*/
 	Join(key Key, chunkC chan *Chunk) SectionReader
 
@@ -83,8 +92,8 @@ type Chunker interface {
 Tree chunker is a concrete implementation of data chunking.
 This chunker works in a simple way, it builds a tree out of the document so that each node either represents a chunk of real data or a chunk of data representing an branching non-leaf node of the tree. In particular each such non-leaf chunk will represent is a concatenation of the hash of its respective children. This scheme simultaneously guarantees data integrity as well as self addressing. Abstract nodes are transparent since their represented size component is strictly greater than their maximum data size, since they encode a subtree.
 
-If all is well it is possible to implement this by simply composing readers so that no extra allocation or buffering is necessary for the data splitting and joining. This means that in principle there can be direct IO between : memory, file system, network socket (bzz peers storage request is read from the socket ). In practice there may be need for several stages of internal buffering.
-Unfortunately the hashing itself does use extra copies and allocation though since it does need it.
+If all is well it is possible to implement this by simply composing readers so that no extra allocation or buffering is necessary for the data splitting and joining. This means that in principle there can be direct IO between : memory, file system, network socket (bzz peers storage request is read from the socket). In practice there may be need for several stages of internal buffering.
+The hashing itself does use extra copies and allocation though, since it does need it.
 */
 
 type TreeChunker struct {
@@ -243,7 +252,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			} else {
 				secSize = treeSize
 			}
-			// take the section of the data corresponding encoded in the subTree
+			// take the section of the data encoded in the subTree
 			subTreeData := NewChunkReader(data, pos, secSize)
 			// the hash of that data
 			subTreeKey := chunk[8+i*self.hashSize : 8+(i+1)*self.hashSize]
@@ -256,11 +265,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 		}
 		// wait for all the children to complete calculating their hashes and copying them onto sections of the chunk
 		childrenWg.Wait()
-		// now we got the hashes in the chunk, then hash the chunk
-		/*		chunkReader := NewChunkReaderFromBytes(chunk) // bytes.Reader almost implements SectionReader
-				chunkData := make([]byte, chunkReader.Size())
-				chunkReader.ReadAt(chunkData, 0)*/
-
+		// now we got the hashes in the chunk, then hash the chunks
 		hash = self.Hash(chunk)
 		newChunk = &Chunk{
 			Key:   hash,
@@ -296,13 +301,14 @@ func (self *TreeChunker) Join(key Key, chunkC chan *Chunk) SectionReader {
 
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
-	key     Key
-	chunkC  chan *Chunk
-	size    int64
-	off     int64
-	quitC   chan bool
-	errC    chan error
-	chunker *TreeChunker
+	key     Key          // root key
+	chunkC  chan *Chunk  // chunk channel to send retrieve requests on
+	size    int64        // size of the entire subtree
+	off     int64        // offset
+	quitC   chan bool    // channel to abort retrieval
+	errC    chan error   // error channel to monitor retrieve errors
+	chunker *TreeChunker // needs TreeChunker params TODO: should just take
+	// the chunkSize, Branches etc as params
 }
 
 func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
@@ -353,14 +359,14 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	}()
 	select {
 	case err = <-self.errC:
-		glog.V(logger.Detail).Infof("[BZZ] ReadAt received %v", err)
+		// glog.V(logger.Detail).Infof("[BZZ] ReadAt received %v", err)
 		read = len(b)
 		if off+int64(read) == self.size {
 			err = io.EOF
 		}
-		glog.V(logger.Detail).Infof("[BZZ] ReadAt returning at %d: %v", read, err)
+		// glog.V(logger.Detail).Infof("[BZZ] ReadAt returning at %d: %v", read, err)
 	case <-self.quitC:
-		glog.V(logger.Detail).Infof("[BZZ] ReadAt aborted at %d: %v", read, err)
+		// glog.V(logger.Detail).Infof("[BZZ] ReadAt aborted at %d: %v", read, err)
 	}
 	return
 }
@@ -410,13 +416,13 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		wg.Add(1)
 		go func(j int64) {
 			childKey := chunk.SData[8+j*self.chunker.hashSize : 8+(j+1)*self.chunker.hashSize]
-			glog.V(logger.Detail).Infof("[BZZ] subtree index: %v -> %x", j, childKey[:4])
+			// glog.V(logger.Detail).Infof("[BZZ] subtree index: %v -> %x", j, childKey[:4])
 
 			ch := &Chunk{
 				Key: childKey,
 				C:   make(chan bool), // close channel to signal data delivery
 			}
-			glog.V(logger.Detail).Infof("[BZZ] chunk data sent for %x (key interval in chunk %v-%v)", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
+			// glog.V(logger.Detail).Infof("[BZZ] chunk data sent for %x (key interval in chunk %v-%v)", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
 			self.chunkC <- ch // submit retrieval request, someone should be listening on the other side (or we will time out globally)
 
 			// waiting for the chunk retrieval
