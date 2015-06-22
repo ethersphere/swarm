@@ -36,7 +36,7 @@ type manifestTrieEntry struct {
 
 func loadManifest(dpa *DPA, hash Key) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
-	glog.V(logger.Detail).Infof("Swarm: manifest lookup key: '%064x'.", hash)
+	glog.V(logger.Detail).Infof("[BZZ] manifest lookup key: '%064x'.", hash)
 	// retrieve manifest via DPA
 	manifestReader := dpa.Retrieve(hash)
 	return readManifest(manifestReader, hash, dpa)
@@ -49,23 +49,23 @@ func readManifest(manifestReader SectionReader, hash Key, dpa *DPA) (trie *manif
 	var size int
 	size, err = manifestReader.Read(manifestData)
 	if int64(size) < manifestReader.Size() {
-		glog.V(logger.Detail).Infof("Swarm: Manifest %064x not found.", hash)
+		glog.V(logger.Detail).Infof("[BZZ] Manifest %064x not found.", hash)
 		if err == nil {
 			err = fmt.Errorf("Manifest retrieval cut short: %v &lt; %v", size, manifestReader.Size())
 		}
 		return
 	}
 
-	glog.V(logger.Detail).Infof("Swarm: Manifest %064x retrieved", hash)
+	glog.V(logger.Detail).Infof("[BZZ] Manifest %064x retrieved", hash)
 	man := manifestJSON{}
 	err = json.Unmarshal(manifestData, &man)
 	if err != nil {
 		err = fmt.Errorf("Manifest %064x is malformed: %v", hash, err)
-		dpaLogger.Debugf("Swarm: %v", err)
+		glog.V(logger.Detail).Infof("[BZZ] %v", err)
 		return
 	}
 
-	glog.V(logger.Detail).Infof("Swarm: Manifest %064x has %d entries.", hash, len(man.Entries))
+	glog.V(logger.Detail).Infof("[BZZ] Manifest %064x has %d entries.", hash, len(man.Entries))
 
 	trie = &manifestTrie{
 		dpa: dpa,
@@ -255,7 +255,7 @@ func (self *manifestTrie) listWithPrefix(prefix string, cb func(entry *manifestT
 
 func (self *manifestTrie) findPrefixOf(path string) (entry *manifestTrieEntry, pos int) {
 
-	glog.V(logger.Detail).Infof("findPrefixOf(%s)", path)
+	glog.V(logger.Detail).Infof("[BZZ] findPrefixOf(%s)", path)
 
 	if len(path) == 0 {
 		return self.entries[256], 0
@@ -267,9 +267,9 @@ func (self *manifestTrie) findPrefixOf(path string) (entry *manifestTrieEntry, p
 		return self.entries[256], 0
 	}
 	epl := len(entry.Path)
-	glog.V(logger.Detail).Infof("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl)
+	glog.V(logger.Detail).Infof("[BZZ] path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl)
 	if (len(path) >= epl) && (path[:epl] == entry.Path) {
-		glog.V(logger.Detail).Infof("entry.ContentType = %v", entry.ContentType)
+		glog.V(logger.Detail).Infof("[BZZ] entry.ContentType = %v", entry.ContentType)
 		if entry.ContentType == manifestType {
 			if self.loadSubTrie(entry) != nil {
 				return nil, 0

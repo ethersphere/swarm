@@ -68,6 +68,7 @@ type Node interface {
 	Drop()
 }
 
+// allow inactive peers under
 type NodeRecord struct {
 	Addr    Address `json:address`
 	Url     string  `json:url`
@@ -88,6 +89,7 @@ func (self *NodeRecord) setChecked() {
 	self.checked = time.Now()
 }
 
+// persisted node record database ()
 type kadDB struct {
 	Address Address         `json:address`
 	Nodes   [][]*NodeRecord `json:nodes`
@@ -105,6 +107,7 @@ func (self *Kademlia) Addr() Address {
 }
 
 // accessor for KAD self count
+// TODO: either memoize or lock
 func (self *Kademlia) Count() (sum int) {
 	for _, b := range self.buckets {
 		sum += len(b.nodes)
@@ -118,6 +121,7 @@ func (self *Kademlia) DBCount() int {
 	return len(self.nodeIndex)
 }
 
+// kademlia table + kaddb table displayed with ascii
 func (self *Kademlia) String() string {
 
 	var rows []string
@@ -267,6 +271,7 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 
 	index := self.proximityBin(node.Addr())
 
+	// insert in kademlia table of active nodes
 	bucket := self.buckets[index]
 	// if bucket is full insertion replaces the worst node
 	// TODO probably should give priority to peers with active traffic
@@ -280,6 +285,7 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 		self.adjustProxMore(index)
 	}
 
+	// insert in kaddb, kademlia node record database
 	self.dblock.Lock()
 	defer self.dblock.Unlock()
 	record, found := self.nodeIndex[node.Addr()]
@@ -300,6 +306,9 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 
 }
 
+// proxLimit is dynamically adjusted so that 1) there is no
+// empty buckets in bin < proxLimit and 2) the sum of all items are the maximum
+// possible but lower than ProxBinSize
 // adjust Prox (proxLimit and proxSize after an insertion of add nodes into bucket r)
 func (self *Kademlia) adjustProxMore(r int) {
 	if r >= self.proxLimit {
@@ -345,9 +354,7 @@ func (self *Kademlia) adjustProxLess(r int) {
 /*
 GetNodes(target) returns the list of nodes belonging to the same proximity bin
 as the target. The most proximate bin will be the union of the bins between
-proxLimit and MaxProx. proxLimit is dynamically adjusted so that 1) there is no
-empty buckets in bin < proxLimit and 2) the sum of all items are the maximum
-possible but lower than ProxBinSize
+proxLimit and MaxProx.
 */
 func (self *Kademlia) GetNodes(target Address, max int) []Node {
 	return self.getNodes(target, max).nodes
@@ -398,9 +405,7 @@ func (self *Kademlia) getNodes(target Address, max int) (r nodesByDistance) {
 	return
 }
 
-// this is used to add node records to the persisted db
-// TODO: maybe db needs to be purged occasionally (reputation will take care of
-// that)
+// AddNodeRecords adds node records to kaddb (persisted node record db)
 func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 	self.dblock.Lock()
 	defer self.dblock.Unlock()
@@ -426,26 +431,48 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 }
 
 /*
-GetNodeRecord gives back a node record with the highest priority for desired
-connection
-Used to pick candidates for live nodes to satisfy Kademlia network for Swarm
+GetNodeRecord return one node record with the highest priority for desired
+connection.
+This is used to pick candidates for live nodes that are most wanted for
+a higly connected low centrality network structure for Swarm which best suits
+for a Kademlia-style routing.
 
-if len(nodes) < rounds, then take thte next element in corresponding
-db row ordered by time checked
-node record a is more favoured to b a > b iff
+The candidate is chosen using the following strategy.
+We check for missing online nodes in the buckets for 1 upto Max BucketSize rounds.
+On each round we proceed from the low to high proximity order buckets.
+If the number of active nodes (=connected peers) is < rounds, then start looking
+for a known candidate. To determine if there is a candidate to recommend the
+node record database row corresponding to the bucket is checked.
+If the row cursor is on position i, the ith element in the row is chosen.
+If the record is scheduled not to be retried before NOW, the next element is taken.
+If the record is scheduled can be retried, it is set as checked, scheduled for
+checking and is returned. The time of the next check is in X (duration) such that
+X = ConnRetryExp * delta where delta is the time past since the last check and
+ConnRetryExp is constant obsoletion factor. (Note that when node records are added
+from peer messages, they are marked as checked and placed at the cursor, ie.
+given priority over older entries). Entries which were checked more than
+purgeInterval ago are deleted from the kaddb row. If no candidate is found after
+a full round of checking the next bucket up is considered. If no candidate is
+found when we reach the maximum-proximity bucket, the next round starts.
+
+node record a is more favoured to b a > b iff a is a passive node (record of
+offline past peer)
 |proxBin(a)| < |proxBin(b)|
-|| proxBin(a) < proxBin(b) && |proxBin(a)| == |proxBin(b)|
-|| lastChecked(a) < lastChecked(b)
+|| (proxBin(a) < proxBin(b) && |proxBin(a)| == |proxBin(b)|)
+|| (proxBin(a) == proxBin(b) && lastChecked(a) < lastChecked(b))
 
 This has double role. Starting as naive node with empty db, this implements
 Kademlia bootstrapping
-As a mature node, it fills short lines
-All on demand.
+As a mature node, it fills short lines. All on demand.
+
+The second argument returned names the first missing slot found
 */
 func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
+	// return value -1 indicates that buckets are filled in all
 	proxLimit = -1
 	self.dblock.RLock()
 	defer self.dblock.RUnlock()
+
 	for rounds := 1; rounds <= self.BucketSize; rounds++ {
 	ROUND:
 		for po, dbrow := range self.nodeDB {
@@ -462,7 +489,8 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 				var purge []int
 				n := self.dbcursors[po]
 
-				// try all db elements if they are ripe for checking
+				// try node records in the relavant kaddb row (of identical prox order)
+				// if they are ripe for checking
 			ROW:
 				for count < len(dbrow) {
 					node = dbrow[n]
@@ -472,17 +500,19 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 
 					glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not to be retried before %d %v", node.Addr, po, n, node.After, node.after)
 
+					// time since last known connection attempt
 					delta := node.checked.Unix() - node.After
 					if delta < 4 {
 						node.After = 0
 					}
+
 					if node.node == nil && node.after.Before(time.Now()) {
 						if node.checked.Add(self.PurgeInterval).Before(time.Now()) {
 							// delete node
 							purge = append(purge, n)
 							glog.V(logger.Detail).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.checked, node.after)
 						} else {
-
+							// scheduling next check
 							if node.After == 0 {
 								node.after = time.Now().Add(self.InitialRetryInterval)
 								node.After = node.after.Unix()
@@ -506,7 +536,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 				self.dbcursors[po] = n
 				self.deleteNodeRecords(po, purge...)
 				if node != nil {
-					glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: proxlimit: PO%03d\n%v", rounds, proxLimit, node)
+					glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: prox limit: PO%03d\n%v", rounds, proxLimit, node)
 					node.setChecked()
 					bin.lock.Unlock()
 					return
@@ -515,16 +545,6 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 			bin.lock.Unlock()
 		} // for po-s
 		glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: proxlimit: PO%03d", rounds, proxLimit)
-
-		// glog.V(logger.Detail).Infof("[KΛÐ]: rounds %d: proxlimit: PO%03d", rounds, proxLimit)
-		// this means there was missing element already on level 1 but
-		// couldnt find anything on higher levels either
-
-		// } //for row
-		// if there is a missing element in any prox bin upto max then try request
-		// but if no success (tried recently, or no known peers) then fall back to
-		// filling in rows with redundant nodes starting from 0 upwards if a cycle
-		// finishes with proxLimit
 		if proxLimit == 0 || proxLimit < 0 && self.BucketSize == rounds {
 			return
 		}
@@ -561,14 +581,6 @@ type bucket struct {
 	lock  sync.RWMutex
 }
 
-func (a Address) Bin() string {
-	var bs []string
-	for _, b := range a[:] {
-		bs = append(bs, fmt.Sprintf("%08b", b))
-	}
-	return strings.Join(bs, "")
-}
-
 // nodesByDistance is a list of nodes, ordered by distance to target.
 type nodesByDistance struct {
 	nodes  []Node
@@ -579,7 +591,7 @@ func sortedByDistanceTo(target Address, slice []Node) bool {
 	var last Address
 	for i, node := range slice {
 		if i > 0 {
-			if proxCmp(target, node.Addr(), last) < 0 {
+			if target.ProxCmp(node.Addr(), last) < 0 {
 				return false
 			}
 		}
@@ -593,7 +605,7 @@ func sortedByDistanceTo(target Address, slice []Node) bool {
 func (h *nodesByDistance) push(node Node, max int) {
 	// returns the firt index ix such that func(i) returns true
 	ix := sort.Search(len(h.nodes), func(i int) bool {
-		return proxCmp(h.target, h.nodes[i].Addr(), node.Addr()) >= 0
+		return h.target.ProxCmp(h.nodes[i].Addr(), node.Addr()) >= 0
 	})
 
 	if len(h.nodes) < max {
@@ -606,7 +618,7 @@ func (h *nodesByDistance) push(node Node, max int) {
 }
 
 // insert adds a peer to a bucket either by appending to existing items if
-// bucket length does not exceed bucketLength, or by replacing the worst
+// bucket length does not exceed bucketSize, or by replacing the worst
 // Node in the bucket
 func (self *bucket) insert(node Node) (dropped Node, pos int) {
 	self.lock.Lock()
@@ -624,7 +636,8 @@ func (self *bucket) insert(node Node) (dropped Node, pos int) {
 	return
 }
 
-// worst expunges the single worst entry in a row, where worst entry is with a peer that has not been active the longests
+// worst expunges the single worst node in a row, where worst entry is the node
+// that has been inactive for the longests time
 func (self *bucket) worstNode() (node Node, pos int) {
 	var oldest time.Time
 	for p, n := range self.nodes {
@@ -638,10 +651,10 @@ func (self *bucket) worstNode() (node Node, pos int) {
 }
 
 /*
-Taking the proximity value relative to a fix point x classifies the points in
-the space (n byte long byte sequences) into bins the items in which are each at
+Taking the proximity order relative to a fix point x classifies the points in
+the space (n byte long byte sequences) into bins. Items in each are at
 most half as distant from x as items in the previous bin. Given a sample of
-uniformly distrbuted items (a hash function over arbitrary sequence) the
+uniformly distributed items (a hash function over arbitrary sequence) the
 proximity scale maps onto series of subsets with cardinalities on a negative
 exponential scale.
 
@@ -650,7 +663,7 @@ most half as distant from each other as they are from x.
 
 If we think of random sample of items in the bins as connections in a network of interconnected nodes than relative proximity can serve as the basis for local
 decisions for graph traversal where the task is to find a route between two
-points. Since in every step of forwarding, the finite distance halves, there is
+points. Since in every hop, the finite distance halves, there is
 a guaranteed constant maximum limit on the number of hops needed to reach one
 node from the other.
 */
@@ -664,13 +677,19 @@ func (self *Kademlia) proximityBin(other Address) (ret int) {
 }
 
 /*
+Proximity(x, y) returns the proximity order of the MSB distance between x and y
+
 The distance metric MSB(x, y) of two equal length byte sequences x an y is the
-value of the binary integer cast of the xor-ed byte sequence (most significant
-bit first).
-proximity(x, y) counts the common zeros in the front of this distance measure.
-which is equivalent to the reverse rank of the integer part of the base 2
-logarithm of the distance
-called proximity belt (0 farthest, 255 closest, 256 self)
+value of the binary integer cast of the x^y, ie., x and y bitwise xor-ed.
+the binary cast is big endian: most significant bit first (=MSB).
+
+Proximity(x, y) is a discrete logarithmic scaling of the MSB distance.
+It is defined as the reverse rank of the integer part of the base 2
+logarithm of the distance.
+It is calculated by counting the number of common leading zeros in the (MSB)
+binary representation of the x^y.
+
+(0 farthest, 255 closest, 256 self)
 */
 func proximity(one, other Address) (ret int) {
 	for i := 0; i < len(one); i++ {
@@ -684,10 +703,19 @@ func proximity(one, other Address) (ret int) {
 	return len(one) * 8
 }
 
-// proxCmp compares the distances a->target and b->target.
+// the string form of the binary representation of an address
+func (a Address) Bin() string {
+	var bs []string
+	for _, b := range a[:] {
+		bs = append(bs, fmt.Sprintf("%08b", b))
+	}
+	return strings.Join(bs, "")
+}
+
+// Address.ProxCmp compares the distances a->target and b->target.
 // Returns -1 if a is closer to target, 1 if b is closer to target
 // and 0 if they are equal.
-func proxCmp(target, a, b Address) int {
+func (target Address) ProxCmp(a, b Address) int {
 	for i := range target {
 		da := a[i] ^ target[i]
 		db := b[i] ^ target[i]
@@ -700,11 +728,8 @@ func proxCmp(target, a, b Address) int {
 	return 0
 }
 
-func (self *Kademlia) DB() [][]*NodeRecord {
-	return self.nodeDB
-}
-
-// save persists all peers encountered
+// save persists kaddb on disk (written to file on path in json format.
+// save is called by Kademlia.Stop()
 func (self *Kademlia) Save(path string) error {
 
 	kad := kadDB{
@@ -725,7 +750,8 @@ func (self *Kademlia) Save(path string) error {
 	return ioutil.WriteFile(path, data, os.ModePerm)
 }
 
-// loading the idle node record from disk
+// Load(path) loads the node record database (kaddb) from file on path.
+// TODO: urls will be supported and handled with bzz-enabled dox clienta
 func (self *Kademlia) Load(path string) (err error) {
 	var data []byte
 	data, err = ioutil.ReadFile(path)
