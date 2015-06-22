@@ -52,7 +52,6 @@ func (x Key) isEqual(y Key) bool {
 }
 
 func (h Key) bits(i, j uint) uint {
-
 	ii := i >> 3
 	jj := i & 7
 	if ii >= h.Size() {
@@ -93,7 +92,6 @@ type memTree struct {
 }
 
 func newMemTree(b uint, parent *memTree, pidx uint) (node *memTree) {
-
 	node = new(memTree)
 	node.bits = b
 	node.width = 1 << uint(b)
@@ -106,11 +104,9 @@ func newMemTree(b uint, parent *memTree, pidx uint) (node *memTree) {
 	}
 
 	return node
-
 }
 
 func (node *memTree) updateAccess(a uint64) {
-
 	aidx := uint(0)
 	var aa uint64
 	oa := node.access[0]
@@ -138,11 +134,9 @@ func (node *memTree) updateAccess(a uint64) {
 			a = aa
 		}
 	}
-
 }
 
 func (s *memStore) setCapacity(c uint) {
-
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -150,18 +144,14 @@ func (s *memStore) setCapacity(c uint) {
 		s.removeOldest()
 	}
 	s.capacity = c
-
 }
 
 func (s *memStore) getEntryCnt() uint {
-
 	return s.entryCnt
-
 }
 
 // entry (not its copy) is going to be in memStore
 func (s *memStore) Put(entry *Chunk) {
-
 	if s.capacity == 0 {
 		return
 	}
@@ -237,7 +227,6 @@ func (s *memStore) Put(entry *Chunk) {
 }
 
 func (s *memStore) Get(hash Key) (chunk *Chunk, err error) {
-
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -272,7 +261,6 @@ func (s *memStore) Get(hash Key) (chunk *Chunk, err error) {
 }
 
 func (s *memStore) removeOldest() {
-
 	node := s.memtree
 
 	for node.entry == nil {
@@ -344,5 +332,4 @@ func (s *memStore) removeOldest() {
 			node.access[aidx] = aa
 		}
 	}
-
 }
