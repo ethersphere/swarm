@@ -140,9 +140,19 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 			Size:  int64(binary.LittleEndian.Uint64(req.SData[0:8])),
 		}
 	} else if chunk.SData == nil {
+		// need data, validate now
+		hasher := hasherfunc.New()
+		hasher.Write(data)
+		if !bytes.Equal(hasher.Sum(nil), key) {
+			// data does not validate, ignore
+			glog.V(logger.Warn).Infof("netStore.addStoreRequest: chunk invalid. store request ignored: %v", req)
+			return
+		}
+
 		chunk.SData = req.SData
 		chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
 	} else {
+		// data is found, store request ignored
 		return
 	}
 	chunk.source = req.peer
