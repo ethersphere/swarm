@@ -211,7 +211,7 @@ func (self *manifestTrie) loadSubTrie(entry *manifestTrieEntry) (err error) {
 	return
 }
 
-func (self *manifestTrie) listWithPrefixInt(prefix, rp string, cb func(entry *manifestTrieEntry, suffix string)) {
+func (self *manifestTrie) listWithPrefixInt(prefix, rp string, cb func(entry *manifestTrieEntry, suffix string)) (err error) {
 	plen := len(prefix)
 	var start, stop int
 	if plen == 0 {
@@ -231,8 +231,13 @@ func (self *manifestTrie) listWithPrefixInt(prefix, rp string, cb func(entry *ma
 				if epl < l {
 					l = epl
 				}
-				if (prefix[:l] == entry.Path[:l]) && (self.loadSubTrie(entry) == nil) { // TODO: handle errors
-					entry.subtrie.listWithPrefixInt(prefix[l:], rp+entry.Path[l:], cb)
+				if prefix[:l] == entry.Path[:l] {
+					sterr := self.loadSubTrie(entry)
+					if sterr == nil {
+						entry.subtrie.listWithPrefixInt(prefix[l:], rp+entry.Path[l:], cb)
+					} else {
+						err = sterr
+					}
 				}
 			} else {
 				if (epl >= plen) && (prefix == entry.Path[:plen]) {
@@ -241,10 +246,11 @@ func (self *manifestTrie) listWithPrefixInt(prefix, rp string, cb func(entry *ma
 			}
 		}
 	}
+	return
 }
 
-func (self *manifestTrie) listWithPrefix(prefix string, cb func(entry *manifestTrieEntry, suffix string)) {
-	self.listWithPrefixInt(prefix, "", cb)
+func (self *manifestTrie) listWithPrefix(prefix string, cb func(entry *manifestTrieEntry, suffix string)) (err error) {
+	return self.listWithPrefixInt(prefix, "", cb)
 }
 
 func (self *manifestTrie) findPrefixOf(path string) (entry *manifestTrieEntry, pos int) {

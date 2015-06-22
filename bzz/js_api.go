@@ -23,6 +23,7 @@ func NewJSApi(vm *jsre.JSRE, api *Api) (jsapi *JSApi) {
 	o.Set("upload", jsapi.upload)
 	o.Set("get", jsapi.get)
 	o.Set("put", jsapi.put)
+	o.Set("modify", jsapi.modify)
 
 	return
 }
@@ -211,5 +212,42 @@ func (self *JSApi) upload(call otto.FunctionCall) otto.Value {
 	return v
 }
 
-// http.PostForm("http://example.com/form",
-//   url.Values{"key": {"Value"}, "id": {"123"}})
+func (self *JSApi) modify(call otto.FunctionCall) otto.Value {
+	argc := len(call.ArgumentList)
+	if (argc != 2) && (argc != 4) {
+		fmt.Println("requires 2 or 4 arguments: bzz.modify(rootHash, path[, contentHash, contentType])")
+		return otto.UndefinedValue()
+	}
+	root, err := call.Argument(0).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	path, err := call.Argument(1).ToString()
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+	var chash, ctype string
+	if argc == 4 {
+		chash, err = call.Argument(2).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+		ctype, err = call.Argument(3).ToString()
+		if err != nil {
+			fmt.Println(err)
+			return otto.UndefinedValue()
+		}
+	}
+
+	res, err := self.api.Modify(root, path, chash, ctype)
+	if err != nil {
+		fmt.Println(err)
+		return otto.UndefinedValue()
+	}
+
+	v, _ := call.Otto.ToValue(res)
+	return v
+}
