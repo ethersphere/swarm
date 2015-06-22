@@ -1,6 +1,7 @@
 package bzz
 
 import (
+	"bytes"
 	"encoding/binary"
 	"math/rand"
 	"sync"
@@ -182,8 +183,8 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 	} else if chunk.SData == nil {
 		// need data, validate now
 		hasher := hasherfunc.New()
-		hasher.Write(data)
-		if !bytes.Equal(hasher.Sum(nil), key) {
+		hasher.Write(req.SData)
+		if !bytes.Equal(hasher.Sum(nil), req.Key) {
 			// data does not validate, ignore
 			glog.V(logger.Warn).Infof("[BZZ] netStore.addStoreRequest: chunk invalid. store request ignored: %v", req)
 			return
