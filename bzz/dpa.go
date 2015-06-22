@@ -49,33 +49,37 @@ type DPA struct {
 	quitC   chan bool
 }
 
-// Chunk serves also serves as a request object passed to ChunkStores
+// Chunk also serves as a request object passed to ChunkStores
 // in case it is a retrieval request, Data is nil and Size is 0
-// Note that Size is not the size of the data chunk, which is Data.Size() see SectionReader
+// Note that Size is not the size of the data chunk, which is Data.Size()
 // but the size of the subtree encoded in the chunk
 // 0 if request, to be supplied by the dpa
 type Chunk struct {
-	SData    []byte         // nil if request, to be supplied by dpa
-	Size     int64          // size of the data covered by the subtree encoded in this chunk
-	Key      Key            // always
-	C        chan bool      // to signal data delivery by the dpa
-	req      *requestStatus //
-	wg       *sync.WaitGroup
-	dbStored chan bool
-	source   *peer
+	SData    []byte          // nil if request, to be supplied by dpa
+	Size     int64           // size of the data covered by the subtree encoded in this chunk
+	Key      Key             // always
+	C        chan bool       // to signal data delivery by the dpa
+	req      *requestStatus  // request Status needed by netStore
+	wg       *sync.WaitGroup // wg to synchronize
+	dbStored chan bool       // never remove a chunk from memStore before it is written to dbStore
+	source   *peer           // source peer of the chunk
 }
 
 type ChunkStore interface {
-	Put(*Chunk) // effectively there is no error even if there is no error
+	Put(*Chunk) // effectively there is no error even if there is an error
 	Get(Key) (*Chunk, error)
 }
 
+// Public API. Main entry point for document retrieval directly. Used by the
+// FS-aware API and httpaccess
+// Chunk retrieval blocks on netStore requests with a timeout so reader will
+// report error if retrieval of chunks within requested range time out.
 func (self *DPA) Retrieve(key Key) SectionReader {
-
 	return self.Chunker.Join(key, self.retrieveC)
-	// we can add subscriptions etc. or timeout here
 }
 
+// Public API. Main entry point for document storage directly. Used by the
+// FS-aware API and httpaccess
 func (self *DPA) Store(data SectionReader, wg *sync.WaitGroup) (key Key, err error) {
 	key = make([]byte, self.Chunker.KeySize())
 	errC := self.Chunker.Split(key, data, self.storeC, wg)
@@ -122,6 +126,8 @@ func (self *DPA) Stop() {
 	close(self.quitC)
 }
 
+// retrieveLoop dispatches the parallel chunk retrieval requests received on the
+// retrieve channel to its ChunkStore  (netStore or localStore)
 func (self *DPA) retrieveLoop() {
 	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
 
@@ -151,6 +157,8 @@ func (self *DPA) retrieveLoop() {
 	}()
 }
 
+// storeLoop dispatches the parallel chunk store requests received on the
+// store channel to its ChunkStore  (netStore or localStore)
 func (self *DPA) storeLoop() {
 	self.storeC = make(chan *Chunk)
 	go func() {
