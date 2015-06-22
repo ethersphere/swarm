@@ -458,8 +458,8 @@ found when we reach the maximum-proximity bucket, the next round starts.
 node record a is more favoured to b a > b iff a is a passive node (record of
 offline past peer)
 |proxBin(a)| < |proxBin(b)|
-|| proxBin(a) < proxBin(b) && |proxBin(a)| == |proxBin(b)|
-|| proxBin(a) == proxBin(b) && lastChecked(a) < lastChecked(b)
+|| (proxBin(a) < proxBin(b) && |proxBin(a)| == |proxBin(b)|)
+|| (proxBin(a) == proxBin(b) && lastChecked(a) < lastChecked(b))
 
 This has double role. Starting as naive node with empty db, this implements
 Kademlia bootstrapping
