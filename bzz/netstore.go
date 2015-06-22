@@ -287,7 +287,6 @@ func (self *netStore) strategyUpdateRequest(rs *requestStatus, origReq *retrieve
 		}
 	}
 	return
-
 }
 
 // once a chunk is found propagate it its requesters unless timed out
@@ -302,7 +301,7 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 			Id:    uint64(id),
 		}
 		for _, req := range requesters {
-			if req.timeout.After(time.Now()) {
+			if req.timeout == nil || req.timeout.After(time.Now()) {
 				glog.V(logger.Debug).Infof("netStore.propagateResponse store -> %064x with %v", req.Id, req.peer)
 				go req.peer.store(msg)
 				counter--
