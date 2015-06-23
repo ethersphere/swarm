@@ -7,7 +7,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	"net/url"
+	//	"net/url"
 	"regexp"
 	"sync"
 	"time"
@@ -47,14 +47,15 @@ func startHttpServer(api *Api, port string) {
 
 func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 	requestURL := r.URL
-	if requestURL.Host == "" {
-		var err error
-		requestURL, err = url.Parse(r.Referer() + requestURL.String())
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-	}
+	// This is wrong
+	//	if requestURL.Host == "" {
+	//		var err error
+	//		requestURL, err = url.Parse(r.Referer() + requestURL.String())
+	//		if err != nil {
+	//			http.Error(w, err.Error(), http.StatusBadRequest)
+	//			return
+	//		}
+	//	}
 	glog.V(logger.Debug).Infof("[BZZ] Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
 	var raw bool
@@ -63,36 +64,73 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 		return ""
 	})
 
+	glog.V(logger.Debug).Infof("[BZZ] Swarm: %s request '%s' received.", r.Method, uri)
+
 	switch {
-	case r.Method == "POST":
-		if raw {
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: POST request received.")
-			key, err := api.dpa.Store(io.NewSectionReader(&sequentialReader{
-				reader: r.Body,
-				ahead:  make(map[int64]chan bool),
-			}, 0, r.ContentLength), nil)
-			if err == nil {
+	case r.Method == "POST" || r.Method == "PUT":
+		key, err := api.dpa.Store(io.NewSectionReader(&sequentialReader{
+			reader: r.Body,
+			ahead:  make(map[int64]chan bool),
+		}, 0, r.ContentLength), nil)
+		if err == nil {
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Content for '%064x' stored", key)
+		} else {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		if r.Method == "POST" {
+			if raw {
 				w.Header().Set("Content-Type", "text/plain")
 				http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(common.Bytes2Hex(key))))
-				glog.V(logger.Debug).Infof("[BZZ] Swarm: Content for '%064x' stored", key)
 			} else {
-				http.Error(w, err.Error(), http.StatusBadRequest)
+				http.Error(w, "No POST to "+uri+" allowed.", http.StatusBadRequest)
 				return
 			}
 		} else {
-			http.Error(w, "No POST to "+uri+" allowed.", http.StatusBadRequest)
-			return
+			// PUT
+			if raw {
+				http.Error(w, "No PUT to /raw allowed.", http.StatusBadRequest)
+				return
+			} else {
+				path = regularSlashes(path)
+				mime := r.Header.Get("Content-Type")
+				// TODO proper root hash separation
+				glog.V(logger.Debug).Infof("[BZZ] Modify '%s' to store '%064x' as '%s'.", path, key, mime)
+				newKey, err := api.Modify(path[:64], path[65:], common.Bytes2Hex(key), mime)
+				if err == nil {
+					glog.V(logger.Debug).Infof("[BZZ] Swarm replaced manifest by '%s'", newKey)
+					w.Header().Set("Content-Type", "text/plain")
+					http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(newKey)))
+				} else {
+					http.Error(w, "PUT to "+path+"failed.", http.StatusBadRequest)
+					return
+				}
+			}
 		}
-
+	case r.Method == "DELETE":
+		if raw {
+			http.Error(w, "No DELETE to /raw allowed.", http.StatusBadRequest)
+			return
+		} else {
+			path = regularSlashes(path)
+			glog.V(logger.Debug).Infof("[BZZ] Delete '%s'.", path)
+			newKey, err := api.Modify(path[:64], path[65:], "", "")
+			if err == nil {
+				glog.V(logger.Debug).Infof("[BZZ] Swarm replaced manifest by '%s'", newKey)
+				w.Header().Set("Content-Type", "text/plain")
+				http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(newKey)))
+			} else {
+				http.Error(w, "DELETE to "+path+"failed.", http.StatusBadRequest)
+				return
+			}
+		}
 	case r.Method == "GET" || r.Method == "HEAD":
 		path = trailingSlashes.ReplaceAllString(path, "")
 		if raw {
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Raw GET request '%s' received", uri)
-
 			// resolving host
 			key, err := api.Resolve(path)
 			if err != nil {
-				glog.V(logger.Debug).Infof("[BZZ] Swarm: %v", err)
+				glog.V(logger.Error).Infof("[BZZ] Swarm: %v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
