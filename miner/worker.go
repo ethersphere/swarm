@@ -253,7 +253,7 @@ func (self *worker) wait() {
 
 			// broadcast before waiting for validation
 			go self.mux.Post(core.NewMinedBlockEvent{block})
-
+			go self.mux.Post(core.ChainHeadEvent{block})
 			self.commitNewWork()
 		}
 	}
