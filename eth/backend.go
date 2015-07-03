@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -56,10 +57,9 @@ var (
 )
 
 type Config struct {
-	Name            string
-	ProtocolVersion int
-	NetworkId       int
-	GenesisNonce    int
+	Name         string
+	NetworkId    int
+	GenesisNonce int
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -71,6 +71,7 @@ type Config struct {
 	VmDebug   bool
 	NatSpec   bool
 	AutoDAG   bool
+	PowTest   bool
 
 	MaxPeers        int
 	MaxPendingPeers int
@@ -89,13 +90,19 @@ type Config struct {
 	Dial    bool
 	Bzz     bool
 	BzzPort string
-	PowTest bool
 
 	Etherbase      string
 	GasPrice       *big.Int
 	MinerThreads   int
 	AccountManager *accounts.Manager
 	SolcPath       string
+
+	GpoMinGasPrice          *big.Int
+	GpoMaxGasPrice          *big.Int
+	GpoFullBlockRatio       int
+	GpobaseStepDown         int
+	GpobaseStepUp           int
+	GpobaseCorrectionFactor int
 
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
@@ -202,6 +209,13 @@ type Ethereum struct {
 	SolcPath        string
 	solc            *compiler.Solidity
 
+	GpoMinGasPrice          *big.Int
+	GpoMaxGasPrice          *big.Int
+	GpoFullBlockRatio       int
+	GpobaseStepDown         int
+	GpobaseStepUp           int
+	GpobaseCorrectionFactor int
+
 	net      *p2p.Server
 	eventMux *event.TypeMux
 	miner    *miner.Miner
@@ -213,10 +227,10 @@ type Ethereum struct {
 	NatSpec       bool
 	DataDir       string
 	AutoDAG       bool
+	PowTest       bool
 	autodagquit   chan bool
 	etherbase     common.Address
 	clientVersion string
-	ethVersionId  int
 	netVersionId  int
 	shhVersionId  int
 }
@@ -240,25 +254,61 @@ func New(config *Config) (*Ethereum, error) {
 	if err != nil {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
+	if db, ok := blockDb.(*ethdb.LDBDatabase); ok {
+		db.GetTimer = metrics.NewTimer("eth/db/block/user/gets")
+		db.PutTimer = metrics.NewTimer("eth/db/block/user/puts")
+		db.MissMeter = metrics.NewMeter("eth/db/block/user/misses")
+		db.ReadMeter = metrics.NewMeter("eth/db/block/user/reads")
+		db.WriteMeter = metrics.NewMeter("eth/db/block/user/writes")
+		db.CompTimeMeter = metrics.NewMeter("eth/db/block/compact/time")
+		db.CompReadMeter = metrics.NewMeter("eth/db/block/compact/input")
+		db.CompWriteMeter = metrics.NewMeter("eth/db/block/compact/output")
+	}
 	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, fmt.Errorf("state db err: %v", err)
+	}
+	if db, ok := stateDb.(*ethdb.LDBDatabase); ok {
+		db.GetTimer = metrics.NewTimer("eth/db/state/user/gets")
+		db.PutTimer = metrics.NewTimer("eth/db/state/user/puts")
+		db.MissMeter = metrics.NewMeter("eth/db/state/user/misses")
+		db.ReadMeter = metrics.NewMeter("eth/db/state/user/reads")
+		db.WriteMeter = metrics.NewMeter("eth/db/state/user/writes")
+		db.CompTimeMeter = metrics.NewMeter("eth/db/state/compact/time")
+		db.CompReadMeter = metrics.NewMeter("eth/db/state/compact/input")
+		db.CompWriteMeter = metrics.NewMeter("eth/db/state/compact/output")
 	}
 	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
 	if err != nil {
 		return nil, fmt.Errorf("extra db err: %v", err)
 	}
+	if db, ok := extraDb.(*ethdb.LDBDatabase); ok {
+		db.GetTimer = metrics.NewTimer("eth/db/extra/user/gets")
+		db.PutTimer = metrics.NewTimer("eth/db/extra/user/puts")
+		db.MissMeter = metrics.NewMeter("eth/db/extra/user/misses")
+		db.ReadMeter = metrics.NewMeter("eth/db/extra/user/reads")
+		db.WriteMeter = metrics.NewMeter("eth/db/extra/user/writes")
+		db.CompTimeMeter = metrics.NewMeter("eth/db/extra/compact/time")
+		db.CompReadMeter = metrics.NewMeter("eth/db/extra/compact/input")
+		db.CompWriteMeter = metrics.NewMeter("eth/db/extra/compact/output")
+	}
 	nodeDb := filepath.Join(config.DataDir, "nodes")
 
 	// Perform database sanity checks
-	d, _ := blockDb.Get([]byte("ProtocolVersion"))
-	protov := int(common.NewValue(d).Uint())
-	if protov != config.ProtocolVersion && protov != 0 {
-		path := filepath.Join(config.DataDir, "blockchain")
-		return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
-	}
-	saveProtocolVersion(blockDb, config.ProtocolVersion)
-	glog.V(logger.Info).Infof("Protocol Version: %v, Network Id: %v", config.ProtocolVersion, config.NetworkId)
+	/*
+		// The databases were previously tied to protocol versions. Currently we
+		// are moving away from this decision as approaching Frontier. The below
+		// check was left in for now but should eventually be just dropped.
+
+		d, _ := blockDb.Get([]byte("ProtocolVersion"))
+		protov := int(common.NewValue(d).Uint())
+		if protov != config.ProtocolVersion && protov != 0 {
+			path := filepath.Join(config.DataDir, "blockchain")
+			return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
+		}
+		saveProtocolVersion(blockDb, config.ProtocolVersion)
+	*/
+	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
 
 	if !config.SkipBcVersionCheck {
 		b, _ := blockDb.Get([]byte("BlockchainVersion"))
@@ -271,22 +321,28 @@ func New(config *Config) (*Ethereum, error) {
 	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
 	eth := &Ethereum{
-		shutdownChan:    make(chan bool),
-		databasesClosed: make(chan bool),
-		blockDb:         blockDb,
-		stateDb:         stateDb,
-		extraDb:         extraDb,
-		eventMux:        &event.TypeMux{},
-		accountManager:  config.AccountManager,
-		DataDir:         config.DataDir,
-		etherbase:       common.HexToAddress(config.Etherbase),
-		clientVersion:   config.Name, // TODO should separate from Name
-		ethVersionId:    config.ProtocolVersion,
-		netVersionId:    config.NetworkId,
-		NatSpec:         config.NatSpec,
-		MinerThreads:    config.MinerThreads,
-		SolcPath:        config.SolcPath,
-		AutoDAG:         config.AutoDAG,
+		shutdownChan:            make(chan bool),
+		databasesClosed:         make(chan bool),
+		blockDb:                 blockDb,
+		stateDb:                 stateDb,
+		extraDb:                 extraDb,
+		eventMux:                &event.TypeMux{},
+		accountManager:          config.AccountManager,
+		DataDir:                 config.DataDir,
+		etherbase:               common.HexToAddress(config.Etherbase),
+		clientVersion:           config.Name, // TODO should separate from Name
+		netVersionId:            config.NetworkId,
+		NatSpec:                 config.NatSpec,
+		MinerThreads:            config.MinerThreads,
+		SolcPath:                config.SolcPath,
+		AutoDAG:                 config.AutoDAG,
+		PowTest:                 config.PowTest,
+		GpoMinGasPrice:          config.GpoMinGasPrice,
+		GpoMaxGasPrice:          config.GpoMaxGasPrice,
+		GpoFullBlockRatio:       config.GpoFullBlockRatio,
+		GpobaseStepDown:         config.GpobaseStepDown,
+		GpobaseStepUp:           config.GpobaseStepUp,
+		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
 	}
 
 	if config.PowTest {
@@ -299,18 +355,18 @@ func New(config *Config) (*Ethereum, error) {
 		eth.pow = ethash.New()
 	}
 	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, eth.pow, eth.EventMux())
+	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
 	if err != nil {
 		return nil, err
 	}
-	eth.downloader = downloader.New(eth.EventMux(), eth.chainManager.HasBlock, eth.chainManager.GetBlock)
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
+
 	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
+	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager)
+
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
-
-	eth.protocolManager = NewProtocolManager(config.ProtocolVersion, config.NetworkId, eth.eventMux, eth.txPool, eth.chainManager, eth.downloader)
 	if config.Shh {
 		eth.whisper = whisper.New()
 		eth.shhVersionId = int(eth.whisper.Version())
@@ -321,7 +377,7 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, err
 	}
 
-	protocols := []p2p.Protocol{eth.protocolManager.SubProtocol}
+	protocols := append([]p2p.Protocol{}, eth.protocolManager.SubProtocols...)
 
 	if config.Bzz {
 		eth.Swarm, err = bzz.NewApi(config.DataDir, config.BzzPort)
@@ -477,16 +533,16 @@ func (s *Ethereum) PeerCount() int                       { return s.net.PeerCoun
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
 func (s *Ethereum) MaxPeers() int                        { return s.net.MaxPeers }
 func (s *Ethereum) ClientVersion() string                { return s.clientVersion }
-func (s *Ethereum) EthVersion() int                      { return s.ethVersionId }
+func (s *Ethereum) EthVersion() int                      { return int(s.protocolManager.SubProtocols[0].Version) }
 func (s *Ethereum) NetVersion() int                      { return s.netVersionId }
 func (s *Ethereum) ShhVersion() int                      { return s.shhVersionId }
-func (s *Ethereum) Downloader() *downloader.Downloader   { return s.downloader }
+func (s *Ethereum) Downloader() *downloader.Downloader   { return s.protocolManager.downloader }
 
 // Start the ethereum
 func (s *Ethereum) Start() error {
 	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,
-		ProtocolVersion: ProtocolVersion,
+		ProtocolVersion: s.EthVersion(),
 	})
 
 	err := s.net.Start()
@@ -552,7 +608,7 @@ done:
 func (s *Ethereum) StartForTest() {
 	jsonlogger.LogJson(&logger.LogStarting{
 		ClientString:    s.net.Name,
-		ProtocolVersion: ProtocolVersion,
+		ProtocolVersion: s.EthVersion(),
 	})
 }
 
@@ -664,14 +720,20 @@ func (self *Ethereum) StopAutoDAG() {
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
 }
 
-func saveProtocolVersion(db common.Database, protov int) {
-	d, _ := db.Get([]byte("ProtocolVersion"))
-	protocolVersion := common.NewValue(d).Uint()
+/*
+	// The databases were previously tied to protocol versions. Currently we
+	// are moving away from this decision as approaching Frontier. The below
+	// code was left in for now but should eventually be just dropped.
 
-	if protocolVersion == 0 {
-		db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
+	func saveProtocolVersion(db common.Database, protov int) {
+		d, _ := db.Get([]byte("ProtocolVersion"))
+		protocolVersion := common.NewValue(d).Uint()
+
+		if protocolVersion == 0 {
+			db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
+		}
 	}
-}
+*/
 
 func saveBlockchainVersion(db common.Database, bcVersion int) {
 	d, _ := db.Get([]byte("BlockchainVersion"))

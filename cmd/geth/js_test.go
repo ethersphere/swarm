@@ -21,6 +21,8 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/comms"
 )
 
 const (
@@ -109,9 +111,10 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *eth
 	}
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
+	client := comms.NewInProcClient(codec.JSON)
 	ds := docserver.New("/")
 	tf := &testjethre{ds: ds}
-	repl := newJSRE(ethereum, assetPath, "", "", conf.Bzz, conf.BzzPort, false, tf)
+	repl := newJSRE(ethereum, assetPath, "", client, false, tf)
 	tf.jsre = repl
 	return tmp, tf, ethereum
 }
@@ -125,7 +128,7 @@ func TestNodeInfo(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 	want := `{"DiscPort":0,"IP":"0.0.0.0","ListenAddr":"","Name":"test","NodeID":"4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5","NodeUrl":"enode://4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5@0.0.0.0:0","TCPPort":0,"Td":"131072"}`
-	checkEvalJSON(t, repl, `admin.nodeInfo()`, want)
+	checkEvalJSON(t, repl, `admin.nodeInfo`, want)
 }
 
 func TestAccounts(t *testing.T) {
@@ -139,7 +142,7 @@ func TestAccounts(t *testing.T) {
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
 	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
 
-	val, err := repl.re.Run(`admin.newAccount("password")`)
+	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -161,7 +164,7 @@ func TestBlockChain(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 	// get current block dump before export/import.
-	val, err := repl.re.Run("JSON.stringify(admin.debug.dumpBlock())")
+	val, err := repl.re.Run("JSON.stringify(debug.dumpBlock(eth.blockNumber))")
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
 	}
@@ -178,14 +181,14 @@ func TestBlockChain(t *testing.T) {
 
 	ethereum.ChainManager().Reset()
 
-	checkEvalJSON(t, repl, `admin.export(`+tmpfileq+`)`, `true`)
+	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
 	if _, err := os.Stat(tmpfile); err != nil {
 		t.Fatal(err)
 	}
 
 	// check import, verify that dumpBlock gives the same result.
-	checkEvalJSON(t, repl, `admin.import(`+tmpfileq+`)`, `true`)
-	checkEvalJSON(t, repl, `admin.debug.dumpBlock()`, beforeExport)
+	checkEvalJSON(t, repl, `admin.importChain(`+tmpfileq+`)`, `true`)
+	checkEvalJSON(t, repl, `debug.dumpBlock(eth.blockNumber)`, beforeExport)
 }
 
 func TestMining(t *testing.T) {
@@ -207,7 +210,7 @@ func TestRPC(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 
-	checkEvalJSON(t, repl, `admin.startRPC("127.0.0.1", 5004)`, `true`)
+	checkEvalJSON(t, repl, `admin.startRPC("127.0.0.1", 5004, "*", "web3,eth,net")`, `true`)
 }
 
 func TestCheckTestAccountBalance(t *testing.T) {
@@ -253,7 +256,7 @@ func TestSignature(t *testing.T) {
 }
 
 func TestContract(t *testing.T) {
-	t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
+	// t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
 	tmp, repl, ethereum := testJEthRE(t)
 	if err := ethereum.Start(); err != nil {
 		t.Errorf("error starting ethereum: %v", err)
@@ -284,7 +287,7 @@ func TestContract(t *testing.T) {
 		`   }\n` +
 		`}\n`
 
-	if checkEvalJSON(t, repl, `admin.contractInfo.stop()`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.stopNatSpec()`, `true`) != nil {
 		return
 	}
 
@@ -329,13 +332,12 @@ func TestContract(t *testing.T) {
 	if checkEvalJSON(
 		t, repl,
 		`contractaddress = eth.sendTransaction({from: primary, data: contract.code})`,
-		`"0x46d69d55c3c4b86a924a92c9fc4720bb7bce1d74"`,
-		// `"0x291293d57e0a0ab47effe97c02577f90d9211567"`,
+		`"0x291293d57e0a0ab47effe97c02577f90d9211567"`,
 	) != nil {
 		return
 	}
 
-	if !processTxs(repl, t, 8) {
+	if !processTxs(repl, t, 7) {
 		return
 	}
 
@@ -355,10 +357,10 @@ multiply7 = Multiply7.at(contractaddress);
 		return
 	}
 
-	if checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.startNatSpec()`, `true`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `undefined`) != nil {
+	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `"0xcb08355dff8f8cadb5dc3d72e652ef5c33792cb0d871229dd1aef5db1c4ba1f2"`) != nil {
 		return
 	}
 
@@ -366,7 +368,7 @@ multiply7 = Multiply7.at(contractaddress);
 		return
 	}
 
-	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x46d69d55c3c4b86a924a92c9fc4720bb7bce1d74","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
+	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x291293d57e0a0ab47effe97c02577f90d9211567","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
 	if repl.lastConfirm != expNotice {
 		t.Errorf("incorrect confirmation message: expected\n%v, got\n%v", expNotice, repl.lastConfirm)
 		return
@@ -381,17 +383,17 @@ multiply7 = Multiply7.at(contractaddress);
 	if checkEvalJSON(t, repl, `filename = "/tmp/info.json"`, `"/tmp/info.json"`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `contentHash = admin.contractInfo.saveInfo(contract.info, filename)`, contentHash) != nil {
+	if checkEvalJSON(t, repl, `contentHash = admin.saveInfo(contract.info, filename)`, contentHash) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `admin.contractInfo.register(primary, contractaddress, contentHash)`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.register(primary, contractaddress, contentHash)`, `true`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `admin.contractInfo.registerUrl(primary, contentHash, "file://"+filename)`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.registerUrl(primary, contentHash, "file://"+filename)`, `true`) != nil {
 		return
 	}
 
-	if checkEvalJSON(t, repl, `admin.contractInfo.start()`, `true`) != nil {
+	if checkEvalJSON(t, repl, `admin.startNatSpec()`, `true`) != nil {
 		return
 	}
 
@@ -399,7 +401,7 @@ multiply7 = Multiply7.at(contractaddress);
 		return
 	}
 
-	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `undefined`) != nil {
+	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `"0xe773bf05b027e4485c8b28967c35c939a71c5f6c177db78b51db52e76760d903"`) != nil {
 		return
 	}
 
@@ -412,7 +414,66 @@ multiply7 = Multiply7.at(contractaddress);
 		t.Errorf("incorrect confirmation message: expected\n%v, got\n%v", expNotice, repl.lastConfirm)
 		return
 	}
+}
 
+func pendingTransactions(repl *testjethre, t *testing.T) (txc int64, err error) {
+	txs := repl.ethereum.TxPool().GetTransactions()
+	return int64(len(txs)), nil
+}
+
+func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
+	var txc int64
+	var err error
+	for i := 0; i < 50; i++ {
+		txc, err = pendingTransactions(repl, t)
+		if err != nil {
+			t.Errorf("unexpected error checking pending transactions: %v", err)
+			return false
+		}
+		if expTxc < int(txc) {
+			t.Errorf("too many pending transactions: expected %v, got %v", expTxc, txc)
+			return false
+		} else if expTxc == int(txc) {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	if int(txc) != expTxc {
+		t.Errorf("incorrect number of pending transactions, expected %v, got %v", expTxc, txc)
+		return false
+	}
+
+	err = repl.ethereum.StartMining(runtime.NumCPU())
+	if err != nil {
+		t.Errorf("unexpected error mining: %v", err)
+		return false
+	}
+	defer repl.ethereum.StopMining()
+
+	timer := time.NewTimer(100 * time.Second)
+	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))
+	repl.wait <- height
+	select {
+	case <-timer.C:
+		// if times out make sure the xeth loop does not block
+		go func() {
+			select {
+			case repl.wait <- nil:
+			case <-repl.wait:
+			}
+		}()
+	case <-repl.wait:
+	}
+	txc, err = pendingTransactions(repl, t)
+	if err != nil {
+		t.Errorf("unexpected error checking pending transactions: %v", err)
+		return false
+	}
+	if txc != 0 {
+		t.Errorf("%d trasactions were not mined", txc)
+		return false
+	}
+	return true
 }
 
 func pendingTransactions(repl *testjethre, t *testing.T) (txc int64, err error) {

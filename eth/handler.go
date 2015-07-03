@@ -3,7 +3,6 @@ package eth
 import (
 	"fmt"
 	"math"
-	"math/big"
 	"sync"
 	"time"
 
@@ -11,10 +10,12 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth/downloader"
+	"github.com/ethereum/go-ethereum/eth/fetcher"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/pow"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -45,20 +46,19 @@ type ProtocolManager struct {
 	txpool         txPool
 	chainman       *core.ChainManager
 	downloader     *downloader.Downloader
+	fetcher        *fetcher.Fetcher
 	peers          *peerSet
 
-	SubProtocol p2p.Protocol
+	SubProtocols []p2p.Protocol
 
 	eventMux      *event.TypeMux
 	txSub         event.Subscription
 	minedBlockSub event.Subscription
 
 	// channels for fetcher, syncer, txsyncLoop
-	newPeerCh  chan *peer
-	newHashCh  chan []*blockAnnounce
-	newBlockCh chan chan []*types.Block
-	txsyncCh   chan *txsync
-	quitSync   chan struct{}
+	newPeerCh chan *peer
+	txsyncCh  chan *txsync
+	quitSync  chan struct{}
 
 	// wait group is used for graceful shutdowns during downloading
 	// and processing
@@ -68,31 +68,43 @@ type ProtocolManager struct {
 
 // NewProtocolManager returns a new ethereum sub protocol manager. The Ethereum sub protocol manages peers capable
 // with the ethereum network.
-func NewProtocolManager(protocolVersion, networkId int, mux *event.TypeMux, txpool txPool, chainman *core.ChainManager, downloader *downloader.Downloader) *ProtocolManager {
+func NewProtocolManager(networkId int, mux *event.TypeMux, txpool txPool, pow pow.PoW, chainman *core.ChainManager) *ProtocolManager {
+	// Create the protocol manager with the base fields
 	manager := &ProtocolManager{
-		eventMux:   mux,
-		txpool:     txpool,
-		chainman:   chainman,
-		downloader: downloader,
-		peers:      newPeerSet(),
-		newPeerCh:  make(chan *peer, 1),
-		newHashCh:  make(chan []*blockAnnounce, 1),
-		newBlockCh: make(chan chan []*types.Block),
-		txsyncCh:   make(chan *txsync),
-		quitSync:   make(chan struct{}),
+		eventMux:  mux,
+		txpool:    txpool,
+		chainman:  chainman,
+		peers:     newPeerSet(),
+		newPeerCh: make(chan *peer, 1),
+		txsyncCh:  make(chan *txsync),
+		quitSync:  make(chan struct{}),
 	}
-	manager.SubProtocol = p2p.Protocol{
-		Name:    "eth",
-		Version: uint(protocolVersion),
-		Length:  ProtocolLength,
-		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			peer := manager.newPeer(protocolVersion, networkId, p, rw)
+	// Initiate a sub-protocol for every implemented version we can handle
+	manager.SubProtocols = make([]p2p.Protocol, len(ProtocolVersions))
+	for i := 0; i < len(manager.SubProtocols); i++ {
+		version := ProtocolVersions[i]
 
-			manager.newPeerCh <- peer
-
-			return manager.handle(peer)
-		},
+		manager.SubProtocols[i] = p2p.Protocol{
+			Name:    "eth",
+			Version: version,
+			Length:  ProtocolLengths[i],
+			Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+				peer := manager.newPeer(int(version), networkId, p, rw)
+				manager.newPeerCh <- peer
+				return manager.handle(peer)
+			},
+		}
 	}
+	// Construct the different synchronisation mechanisms
+	manager.downloader = downloader.New(manager.eventMux, manager.chainman.HasBlock, manager.chainman.GetBlock, manager.chainman.CurrentBlock, manager.chainman.InsertChain, manager.removePeer)
+
+	validator := func(block *types.Block, parent *types.Block) error {
+		return core.ValidateHeader(pow, block.Header(), parent, true)
+	}
+	heighter := func() uint64 {
+		return manager.chainman.CurrentBlock().NumberU64()
+	}
+	manager.fetcher = fetcher.New(manager.chainman.GetBlock, validator, manager.BroadcastBlock, heighter, manager.chainman.InsertChain, manager.removePeer)
 
 	return manager
 }
@@ -126,7 +138,6 @@ func (pm *ProtocolManager) Start() {
 
 	// start sync handlers
 	go pm.syncer()
-	go pm.fetcher()
 	go pm.txsyncLoop()
 }
 
@@ -147,31 +158,32 @@ func (pm *ProtocolManager) Stop() {
 }
 
 func (pm *ProtocolManager) newPeer(pv, nv int, p *p2p.Peer, rw p2p.MsgReadWriter) *peer {
-	td, current, genesis := pm.chainman.Status()
-
-	return newPeer(pv, nv, genesis, current, td, p, rw)
+	return newPeer(pv, nv, p, rw)
 }
 
+// handle is the callback invoked to manage the life cycle of an eth peer. When
+// this function terminates, the peer is disconnected.
 func (pm *ProtocolManager) handle(p *peer) error {
-	// Execute the Ethereum handshake.
-	if err := p.handleStatus(); err != nil {
+	glog.V(logger.Debug).Infof("%v: peer connected [%s]", p, p.Name())
+
+	// Execute the Ethereum handshake
+	td, head, genesis := pm.chainman.Status()
+	if err := p.Handshake(td, head, genesis); err != nil {
+		glog.V(logger.Debug).Infof("%v: handshake failed: %v", p, err)
 		return err
 	}
-
-	// Register the peer locally.
-	glog.V(logger.Detail).Infoln("Adding peer", p.id)
+	// Register the peer locally
+	glog.V(logger.Detail).Infof("%v: adding peer", p)
 	if err := pm.peers.Register(p); err != nil {
-		glog.V(logger.Error).Infoln("Addition failed:", err)
+		glog.V(logger.Error).Infof("%v: addition failed: %v", p, err)
 		return err
 	}
 	defer pm.removePeer(p.id)
 
-	// Register the peer in the downloader. If the downloader
-	// considers it banned, we disconnect.
-	if err := pm.downloader.RegisterPeer(p.id, p.Head(), p.requestHashes, p.requestBlocks); err != nil {
+	// Register the peer in the downloader. If the downloader considers it banned, we disconnect
+	if err := pm.downloader.RegisterPeer(p.id, p.version, p.Head(), p.RequestHashes, p.RequestHashesFromNumber, p.RequestBlocks); err != nil {
 		return err
 	}
-
 	// Propagate existing transactions. new transactions appearing
 	// after this will be sent via broadcasts.
 	pm.syncTransactions(p)
@@ -179,13 +191,17 @@ func (pm *ProtocolManager) handle(p *peer) error {
 	// main loop. handle incoming messages.
 	for {
 		if err := pm.handleMsg(p); err != nil {
+			glog.V(logger.Debug).Infof("%v: message handling failed: %v", p, err)
 			return err
 		}
 	}
 	return nil
 }
 
-func (self *ProtocolManager) handleMsg(p *peer) error {
+// handleMsg is invoked whenever an inbound message is received from a remote
+// peer. The remote connection is torn down upon returning any error.
+func (pm *ProtocolManager) handleMsg(p *peer) error {
+	// Read the next message from the remote peer, and ensure it's fully consumed
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -193,118 +209,134 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 	if msg.Size > ProtocolMaxMsgSize {
 		return errResp(ErrMsgTooLarge, "%v > %v", msg.Size, ProtocolMaxMsgSize)
 	}
-	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 
+	// Handle the message depending on its contents
 	switch msg.Code {
 	case StatusMsg:
+		// Status messages should never arrive after the handshake
 		return errResp(ErrExtraStatusMsg, "uncontrolled status message")
 
-	case TxMsg:
-		// TODO: rework using lazy RLP stream
-		var txs []*types.Transaction
-		if err := msg.Decode(&txs); err != nil {
-			return errResp(ErrDecode, "msg %v: %v", msg, err)
-		}
-		for i, tx := range txs {
-			if tx == nil {
-				return errResp(ErrDecode, "transaction %d is nil", i)
-			}
-			jsonlogger.LogJson(&logger.EthTxReceived{
-				TxHash:   tx.Hash().Hex(),
-				RemoteId: p.ID().String(),
-			})
-		}
-		self.txpool.AddTransactions(txs)
-
 	case GetBlockHashesMsg:
-		var request getBlockHashesMsgData
+		// Retrieve the number of hashes to return and from which origin hash
+		var request getBlockHashesData
 		if err := msg.Decode(&request); err != nil {
-			return errResp(ErrDecode, "->msg %v: %v", msg, err)
+			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
-
 		if request.Amount > uint64(downloader.MaxHashFetch) {
 			request.Amount = uint64(downloader.MaxHashFetch)
 		}
-
-		hashes := self.chainman.GetBlockHashesFromHash(request.Hash, request.Amount)
-
-		if glog.V(logger.Debug) {
-			if len(hashes) == 0 {
-				glog.Infof("invalid block hash %x", request.Hash.Bytes()[:4])
-			}
+		// Retrieve the hashes from the block chain and return them
+		hashes := pm.chainman.GetBlockHashesFromHash(request.Hash, request.Amount)
+		if len(hashes) == 0 {
+			glog.V(logger.Debug).Infof("invalid block hash %x", request.Hash.Bytes()[:4])
 		}
+		return p.SendBlockHashes(hashes)
 
-		// returns either requested hashes or nothing (i.e. not found)
-		return p.sendBlockHashes(hashes)
+	case GetBlockHashesFromNumberMsg:
+		// Retrieve and decode the number of hashes to return and from which origin number
+		var request getBlockHashesFromNumberData
+		if err := msg.Decode(&request); err != nil {
+			return errResp(ErrDecode, "%v: %v", msg, err)
+		}
+		if request.Amount > uint64(downloader.MaxHashFetch) {
+			request.Amount = uint64(downloader.MaxHashFetch)
+		}
+		// Calculate the last block that should be retrieved, and short circuit if unavailable
+		last := pm.chainman.GetBlockByNumber(request.Number + request.Amount - 1)
+		if last == nil {
+			last = pm.chainman.CurrentBlock()
+			request.Amount = last.NumberU64() - request.Number + 1
+		}
+		if last.NumberU64() < request.Number {
+			return p.SendBlockHashes(nil)
+		}
+		// Retrieve the hashes from the last block backwards, reverse and return
+		hashes := []common.Hash{last.Hash()}
+		hashes = append(hashes, pm.chainman.GetBlockHashesFromHash(last.Hash(), request.Amount-1)...)
+
+		for i := 0; i < len(hashes)/2; i++ {
+			hashes[i], hashes[len(hashes)-1-i] = hashes[len(hashes)-1-i], hashes[i]
+		}
+		return p.SendBlockHashes(hashes)
 
 	case BlockHashesMsg:
+		// A batch of hashes arrived to one of our previous requests
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		reqHashInPacketsMeter.Mark(1)
 
 		var hashes []common.Hash
 		if err := msgStream.Decode(&hashes); err != nil {
 			break
 		}
-		err := self.downloader.DeliverHashes(p.id, hashes)
+		reqHashInTrafficMeter.Mark(int64(32 * len(hashes)))
+
+		// Deliver them all to the downloader for queuing
+		err := pm.downloader.DeliverHashes(p.id, hashes)
 		if err != nil {
 			glog.V(logger.Debug).Infoln(err)
 		}
 
 	case GetBlocksMsg:
-		var blocks []*types.Block
-
+		// Decode the retrieval message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
 		if _, err := msgStream.List(); err != nil {
 			return err
 		}
+		// Gather blocks until the fetch or network limits is reached
 		var (
-			i         int
-			totalsize common.StorageSize
+			hash   common.Hash
+			bytes  common.StorageSize
+			hashes []common.Hash
+			blocks []*types.Block
 		)
 		for {
-			i++
-			var hash common.Hash
 			err := msgStream.Decode(&hash)
 			if err == rlp.EOL {
 				break
 			} else if err != nil {
 				return errResp(ErrDecode, "msg %v: %v", msg, err)
 			}
+			hashes = append(hashes, hash)
 
-			block := self.chainman.GetBlock(hash)
-			if block != nil {
+			// Retrieve the requested block, stopping if enough was found
+			if block := pm.chainman.GetBlock(hash); block != nil {
 				blocks = append(blocks, block)
-				totalsize += block.Size()
-			}
-			if i == downloader.MaxBlockFetch || totalsize > maxBlockRespSize {
-				break
+				bytes += block.Size()
+				if len(blocks) >= downloader.MaxBlockFetch || bytes > maxBlockRespSize {
+					break
+				}
 			}
 		}
-		return p.sendBlocks(blocks)
+		if glog.V(logger.Detail) && len(blocks) == 0 && len(hashes) > 0 {
+			list := "["
+			for _, hash := range hashes {
+				list += fmt.Sprintf("%x, ", hash[:4])
+			}
+			list = list[:len(list)-2] + "]"
+
+			glog.Infof("%v: no blocks found for requested hashes %s", p, list)
+		}
+		return p.SendBlocks(blocks)
 
 	case BlocksMsg:
 		// Decode the arrived block message
 		msgStream := rlp.NewStream(msg.Payload, uint64(msg.Size))
+		reqBlockInPacketsMeter.Mark(1)
 
 		var blocks []*types.Block
 		if err := msgStream.Decode(&blocks); err != nil {
 			glog.V(logger.Detail).Infoln("Decode error", err)
 			blocks = nil
 		}
-		// Filter out any explicitly requested blocks (cascading select to get blocking back to peer)
-		filter := make(chan []*types.Block)
-		select {
-		case <-self.quitSync:
-		case self.newBlockCh <- filter:
-			select {
-			case <-self.quitSync:
-			case filter <- blocks:
-				select {
-				case <-self.quitSync:
-				case blocks := <-filter:
-					self.downloader.DeliverBlocks(p.id, blocks)
-				}
-			}
+		// Update the receive timestamp of each block
+		for _, block := range blocks {
+			reqBlockInTrafficMeter.Mark(block.Size().Int64())
+			block.ReceivedAt = msg.ReceivedAt
+		}
+		// Filter out any explicitly requested blocks, deliver the rest to the downloader
+		if blocks := pm.fetcher.Filter(blocks); len(blocks) > 0 {
+			pm.downloader.DeliverBlocks(p.id, blocks)
 		}
 
 	case NewBlockHashesMsg:
@@ -315,46 +347,80 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 		if err := msgStream.Decode(&hashes); err != nil {
 			break
 		}
+		propHashInPacketsMeter.Mark(1)
+		propHashInTrafficMeter.Mark(int64(32 * len(hashes)))
+
 		// Mark the hashes as present at the remote node
 		for _, hash := range hashes {
-			p.blockHashes.Add(hash)
+			p.MarkBlock(hash)
 			p.SetHead(hash)
 		}
 		// Schedule all the unknown hashes for retrieval
 		unknown := make([]common.Hash, 0, len(hashes))
 		for _, hash := range hashes {
-			if !self.chainman.HasBlock(hash) {
+			if !pm.chainman.HasBlock(hash) {
 				unknown = append(unknown, hash)
 			}
 		}
-		announces := make([]*blockAnnounce, len(unknown))
-		for i, hash := range unknown {
-			announces[i] = &blockAnnounce{
-				hash: hash,
-				peer: p,
-				time: time.Now(),
-			}
-		}
-		if len(announces) > 0 {
-			select {
-			case self.newHashCh <- announces:
-			case <-self.quitSync:
-			}
+		for _, hash := range unknown {
+			pm.fetcher.Notify(p.id, hash, time.Now(), p.RequestBlocks)
 		}
 
 	case NewBlockMsg:
-		var request newBlockMsgData
+		// Retrieve and decode the propagated block
+		var request newBlockData
 		if err := msg.Decode(&request); err != nil {
 			return errResp(ErrDecode, "%v: %v", msg, err)
 		}
+		propBlockInPacketsMeter.Mark(1)
+		propBlockInTrafficMeter.Mark(request.Block.Size().Int64())
+
 		if err := request.Block.ValidateFields(); err != nil {
 			return errResp(ErrDecode, "block validation %v: %v", msg, err)
 		}
 		request.Block.ReceivedAt = msg.ReceivedAt
 
-		if err := self.importBlock(p, request.Block, request.TD); err != nil {
-			return err
+		// Mark the block's arrival for whatever reason
+		_, chainHead, _ := pm.chainman.Status()
+		jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
+			BlockHash:     request.Block.Hash().Hex(),
+			BlockNumber:   request.Block.Number(),
+			ChainHeadHash: chainHead.Hex(),
+			BlockPrevHash: request.Block.ParentHash().Hex(),
+			RemoteId:      p.ID().String(),
+		})
+		// Mark the peer as owning the block and schedule it for import
+		p.MarkBlock(request.Block.Hash())
+		p.SetHead(request.Block.Hash())
+
+		pm.fetcher.Enqueue(p.id, request.Block)
+
+		// TODO: Schedule a sync to cover potential gaps (this needs proto update)
+		p.SetTd(request.TD)
+		go pm.synchronise(p)
+
+	case TxMsg:
+		// Transactions arrived, parse all of them and deliver to the pool
+		var txs []*types.Transaction
+		if err := msg.Decode(&txs); err != nil {
+			return errResp(ErrDecode, "msg %v: %v", msg, err)
 		}
+		propTxnInPacketsMeter.Mark(1)
+		for i, tx := range txs {
+			// Validate and mark the remote transaction
+			if tx == nil {
+				return errResp(ErrDecode, "transaction %d is nil", i)
+			}
+			p.MarkTransaction(tx.Hash())
+
+			// Log it's arrival for later analysis
+			propTxnInTrafficMeter.Mark(tx.Size().Int64())
+			jsonlogger.LogJson(&logger.EthTxReceived{
+				TxHash:   tx.Hash().Hex(),
+				RemoteId: p.ID().String(),
+			})
+		}
+		pm.txpool.AddTransactions(txs)
 
 	default:
 		return errResp(ErrInvalidMsgCode, "%v", msg.Code)
@@ -362,87 +428,37 @@ func (self *ProtocolManager) handleMsg(p *peer) error {
 	return nil
 }
 
-// importBlocks injects a new block retrieved from the given peer into the chain
-// manager.
-func (pm *ProtocolManager) importBlock(p *peer, block *types.Block, td *big.Int) error {
+// BroadcastBlock will either propagate a block to a subset of it's peers, or
+// will only announce it's availability (depending what's requested).
+func (pm *ProtocolManager) BroadcastBlock(block *types.Block, propagate bool) {
 	hash := block.Hash()
-
-	// Mark the block as present at the remote node (don't duplicate already held data)
-	p.blockHashes.Add(hash)
-	p.SetHead(hash)
-	if td != nil {
-		p.SetTd(td)
-	}
-	// Log the block's arrival
-	_, chainHead, _ := pm.chainman.Status()
-	jsonlogger.LogJson(&logger.EthChainReceivedNewBlock{
-		BlockHash:     hash.Hex(),
-		BlockNumber:   block.Number(),
-		ChainHeadHash: chainHead.Hex(),
-		BlockPrevHash: block.ParentHash().Hex(),
-		RemoteId:      p.ID().String(),
-	})
-	// If the block's already known or its difficulty is lower than ours, drop
-	if pm.chainman.HasBlock(hash) {
-		p.SetTd(pm.chainman.GetBlock(hash).Td) // update the peer's TD to the real value
-		return nil
-	}
-	if td != nil && pm.chainman.Td().Cmp(td) > 0 && new(big.Int).Add(block.Number(), big.NewInt(7)).Cmp(pm.chainman.CurrentBlock().Number()) < 0 {
-		glog.V(logger.Debug).Infof("[%s] dropped block %v due to low TD %v\n", p.id, block.Number(), td)
-		return nil
-	}
-	// Attempt to insert the newly received block and propagate to our peers
-	if pm.chainman.HasBlock(block.ParentHash()) {
-		if _, err := pm.chainman.InsertChain(types.Blocks{block}); err != nil {
-			glog.V(logger.Error).Infoln("removed peer (", p.id, ") due to block error", err)
-			return err
-		}
-		if td != nil && block.Td.Cmp(td) != 0 {
-			err := fmt.Errorf("invalid TD on block(%v) from peer(%s): block.td=%v, request.td=%v", block.Number(), p.id, block.Td, td)
-			glog.V(logger.Error).Infoln(err)
-			return err
-		}
-		pm.BroadcastBlock(hash, block)
-		return nil
-	}
-	// Parent of the block is unknown, try to sync with this peer if it seems to be good
-	if td != nil {
-		go pm.synchronise(p)
-	}
-	return nil
-}
-
-// BroadcastBlock will propagate the block to a subset of its connected peers,
-// only notifying the rest of the block's appearance.
-func (pm *ProtocolManager) BroadcastBlock(hash common.Hash, block *types.Block) {
-	// Retrieve all the target peers and split between full broadcast or only notification
 	peers := pm.peers.PeersWithoutBlock(hash)
-	split := int(math.Sqrt(float64(len(peers))))
 
-	transfer := peers[:split]
-	notify := peers[split:]
-
-	// Send out the data transfers and the notifications
-	for _, peer := range notify {
-		peer.sendNewBlockHashes([]common.Hash{hash})
+	// If propagation is requested, send to a subset of the peer
+	if propagate {
+		transfer := peers[:int(math.Sqrt(float64(len(peers))))]
+		for _, peer := range transfer {
+			peer.SendNewBlock(block)
+		}
+		glog.V(logger.Detail).Infof("propagated block %x to %d peers in %v", hash[:4], len(transfer), time.Since(block.ReceivedAt))
 	}
-	glog.V(logger.Detail).Infoln("broadcast hash to", len(notify), "peers.")
-
-	for _, peer := range transfer {
-		peer.sendNewBlock(block)
+	// Otherwise if the block is indeed in out own chain, announce it
+	if pm.chainman.HasBlock(hash) {
+		for _, peer := range peers {
+			peer.SendNewBlockHashes([]common.Hash{hash})
+		}
+		glog.V(logger.Detail).Infof("announced block %x to %d peers in %v", hash[:4], len(peers), time.Since(block.ReceivedAt))
 	}
-	glog.V(logger.Detail).Infoln("broadcast block to", len(transfer), "peers. Total processing time:", time.Since(block.ReceivedAt))
 }
 
-// BroadcastTx will propagate the block to its connected peers. It will sort
-// out which peers do not contain the block in their block set and will do a
-// sqrt(peers) to determine the amount of peers we broadcast to.
+// BroadcastTx will propagate a transaction to all peers which are not known to
+// already have the given transaction.
 func (pm *ProtocolManager) BroadcastTx(hash common.Hash, tx *types.Transaction) {
 	// Broadcast transaction to a batch of peers not knowing about it
 	peers := pm.peers.PeersWithoutTx(hash)
 	//FIXME include this again: peers = peers[:int(math.Sqrt(float64(len(peers))))]
 	for _, peer := range peers {
-		peer.sendTransaction(tx)
+		peer.SendTransactions(types.Transactions{tx})
 	}
 	glog.V(logger.Detail).Infoln("broadcast tx to", len(peers), "peers")
 }
@@ -453,7 +469,8 @@ func (self *ProtocolManager) minedBroadcastLoop() {
 	for obj := range self.minedBlockSub.Chan() {
 		switch ev := obj.(type) {
 		case core.NewMinedBlockEvent:
-			self.BroadcastBlock(ev.Block.Hash(), ev.Block)
+			self.BroadcastBlock(ev.Block, true)  // First propagate block to peers
+			self.BroadcastBlock(ev.Block, false) // Only then announce to the rest
 		}
 	}
 }

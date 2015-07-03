@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -30,25 +32,69 @@ type TransactionTest struct {
 	Transaction TtTransaction
 }
 
-func RunTransactionTests(file string, notWorking map[string]bool) error {
+func RunTransactionTestsWithReader(r io.Reader, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
+		skipTest[name] = true
+	}
+
 	bt := make(map[string]TransactionTest)
-	if err := LoadJSON(file, &bt); err != nil {
+	if err := readJson(r, &bt); err != nil {
 		return err
 	}
-	for name, in := range bt {
-		var err error
-		// TODO: remove this, we currently ignore some tests which are broken
-		if !notWorking[name] {
-			if err = runTest(in); err != nil {
-				return fmt.Errorf("bad test %s: %v", name, err)
-			}
-			fmt.Println("Test passed:", name)
+
+	for name, test := range bt {
+		// if the test should be skipped, return
+		if skipTest[name] {
+			glog.Infoln("Skipping transaction test", name)
+			return nil
 		}
+		// test the block
+		if err := runTransactionTest(test); err != nil {
+			return err
+		}
+		glog.Infoln("Transaction test passed: ", name)
+
 	}
 	return nil
 }
 
-func runTest(txTest TransactionTest) (err error) {
+func RunTransactionTests(file string, skipTests []string) error {
+	tests := make(map[string]TransactionTest)
+	if err := readJsonFile(file, &tests); err != nil {
+		return err
+	}
+
+	if err := runTransactionTests(tests, skipTests); err != nil {
+		return err
+	}
+	return nil
+}
+
+func runTransactionTests(tests map[string]TransactionTest, skipTests []string) error {
+	skipTest := make(map[string]bool, len(skipTests))
+	for _, name := range skipTests {
+		skipTest[name] = true
+	}
+
+	for name, test := range tests {
+		// if the test should be skipped, return
+		if skipTest[name] {
+			glog.Infoln("Skipping transaction test", name)
+			return nil
+		}
+
+		// test the block
+		if err := runTransactionTest(test); err != nil {
+			return err
+		}
+		glog.Infoln("Transaction test passed: ", name)
+
+	}
+	return nil
+}
+
+func runTransactionTest(txTest TransactionTest) (err error) {
 	tx := new(types.Transaction)
 	err = rlp.DecodeBytes(mustConvertBytes(txTest.Rlp), tx)
 
@@ -106,54 +152,53 @@ func verifyTxFields(txTest TransactionTest, decodedTx *types.Transaction) (err e
 	}
 
 	expectedData := mustConvertBytes(txTest.Transaction.Data)
-	if !bytes.Equal(expectedData, decodedTx.Payload) {
-		return fmt.Errorf("Tx input data mismatch: %#v %#v", expectedData, decodedTx.Payload)
+	if !bytes.Equal(expectedData, decodedTx.Data()) {
+		return fmt.Errorf("Tx input data mismatch: %#v %#v", expectedData, decodedTx.Data())
 	}
 
 	expectedGasLimit := mustConvertBigInt(txTest.Transaction.GasLimit, 16)
-	if expectedGasLimit.Cmp(decodedTx.GasLimit) != 0 {
-		return fmt.Errorf("GasLimit mismatch: %v %v", expectedGasLimit, decodedTx.GasLimit)
+	if expectedGasLimit.Cmp(decodedTx.Gas()) != 0 {
+		return fmt.Errorf("GasLimit mismatch: %v %v", expectedGasLimit, decodedTx.Gas())
 	}
 
 	expectedGasPrice := mustConvertBigInt(txTest.Transaction.GasPrice, 16)
-	if expectedGasPrice.Cmp(decodedTx.Price) != 0 {
-		return fmt.Errorf("GasPrice mismatch: %v %v", expectedGasPrice, decodedTx.Price)
+	if expectedGasPrice.Cmp(decodedTx.GasPrice()) != 0 {
+		return fmt.Errorf("GasPrice mismatch: %v %v", expectedGasPrice, decodedTx.GasPrice())
 	}
 
 	expectedNonce := mustConvertUint(txTest.Transaction.Nonce, 16)
-	if expectedNonce != decodedTx.AccountNonce {
-		return fmt.Errorf("Nonce mismatch: %v %v", expectedNonce, decodedTx.AccountNonce)
+	if expectedNonce != decodedTx.Nonce() {
+		return fmt.Errorf("Nonce mismatch: %v %v", expectedNonce, decodedTx.Nonce())
 	}
 
-	expectedR := common.Bytes2Big(mustConvertBytes(txTest.Transaction.R))
-	if expectedR.Cmp(decodedTx.R) != 0 {
-		return fmt.Errorf("R mismatch: %v %v", expectedR, decodedTx.R)
+	v, r, s := decodedTx.SignatureValues()
+	expectedR := mustConvertBigInt(txTest.Transaction.R, 16)
+	if r.Cmp(expectedR) != 0 {
+		return fmt.Errorf("R mismatch: %v %v", expectedR, r)
 	}
-
-	expectedS := common.Bytes2Big(mustConvertBytes(txTest.Transaction.S))
-	if expectedS.Cmp(decodedTx.S) != 0 {
-		return fmt.Errorf("S mismatch: %v %v", expectedS, decodedTx.S)
+	expectedS := mustConvertBigInt(txTest.Transaction.S, 16)
+	if s.Cmp(expectedS) != 0 {
+		return fmt.Errorf("S mismatch: %v %v", expectedS, s)
 	}
-
 	expectedV := mustConvertUint(txTest.Transaction.V, 16)
-	if expectedV != uint64(decodedTx.V) {
-		return fmt.Errorf("V mismatch: %v %v", expectedV, uint64(decodedTx.V))
+	if uint64(v) != expectedV {
+		return fmt.Errorf("V mismatch: %v %v", expectedV, v)
 	}
 
 	expectedTo := mustConvertAddress(txTest.Transaction.To)
-	if decodedTx.Recipient == nil {
+	if decodedTx.To() == nil {
 		if expectedTo != common.BytesToAddress([]byte{}) { // "empty" or "zero" address
 			return fmt.Errorf("To mismatch when recipient is nil (contract creation): %v", expectedTo)
 		}
 	} else {
-		if expectedTo != *decodedTx.Recipient {
-			return fmt.Errorf("To mismatch: %v %v", expectedTo, *decodedTx.Recipient)
+		if expectedTo != *decodedTx.To() {
+			return fmt.Errorf("To mismatch: %v %v", expectedTo, *decodedTx.To())
 		}
 	}
 
 	expectedValue := mustConvertBigInt(txTest.Transaction.Value, 16)
-	if expectedValue.Cmp(decodedTx.Amount) != 0 {
-		return fmt.Errorf("Value mismatch: %v %v", expectedValue, decodedTx.Amount)
+	if expectedValue.Cmp(decodedTx.Value()) != 0 {
+		return fmt.Errorf("Value mismatch: %v %v", expectedValue, decodedTx.Value())
 	}
 
 	return nil

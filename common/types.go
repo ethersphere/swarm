@@ -1,6 +1,7 @@
 package common
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -61,6 +62,10 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(h)
 }
 
+func EmptyHash(h Hash) bool {
+	return h == Hash{}
+}
+
 /////////// Address
 func BytesToAddress(b []byte) Address {
 	var a Address
@@ -94,4 +99,14 @@ func (a *Address) Set(other Address) {
 	for i, v := range other {
 		a[i] = v
 	}
+}
+
+// PP Pretty Prints a byte slice in the following format:
+// 	hex(value[:4])...(hex[len(value)-4:])
+func PP(value []byte) string {
+	if len(value) <= 8 {
+		return Bytes2Hex(value)
+	}
+
+	return fmt.Sprintf("%x...%x", value[:4], value[len(value)-4])
 }

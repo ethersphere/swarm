@@ -52,8 +52,9 @@ func (self *DocServer) HasScheme(scheme string) bool {
 
 func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {
 	// retrieve content
-
-	content, err = self.Get(uri, "")
+	url := uri
+	fmt.Printf("uri: %v\n", url)
+	content, err = self.Get(url, "")
 	if err != nil {
 		return
 	}
@@ -76,6 +77,7 @@ func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []b
 func (self *DocServer) Get(uri, path string) (content []byte, err error) {
 	// retrieve content
 	resp, err := self.Client().Get(uri)
+
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()

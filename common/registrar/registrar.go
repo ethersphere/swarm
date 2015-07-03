@@ -39,10 +39,10 @@ So the caller needs to make sure the relevant environment initialised the desire
 contracts
 */
 var (
-	UrlHintAddr         = "0x0"
-	HashRegAddr         = "0x0"
-	GlobalRegistrarAddr = "0x0"
-	// GlobalRegistrarAddr = "0xc6d9d2cd449a754c494264e1809c50e34d64562b"
+	UrlHintAddr = "0x0"
+	HashRegAddr = "0x0"
+	// GlobalRegistrarAddr = "0x0"
+	GlobalRegistrarAddr = "0xc6d9d2cd449a754c494264e1809c50e34d64562b"
 
 	zero = regexp.MustCompile("^(0x)?0*$")
 )
@@ -129,7 +129,7 @@ func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (err erro
 				return
 			}
 
-			HashRegAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "200000", "", HashRegCode)
+			HashRegAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "", "", HashRegCode)
 			if err != nil {
 				err = fmt.Errorf("HashReg address not found and sender for creation failed: %v", err)
 			}
@@ -310,7 +310,7 @@ func (self *Registrar) HashToHash(khash common.Hash) (chash common.Hash, err err
 	key := storageAddress(storageMapping(storageIdx2Addr(1), khash[:]))
 	hash := self.backend.StorageAt(at, key)
 
-	if hash == "0x0" || len(hash) < 3 {
+	if hash == "0x0" || len(hash) < 3 || (hash == common.Hash{}.Hex()) {
 		err = fmt.Errorf("content hash not found for '%v'", khash.Hex())
 		return
 	}
@@ -335,10 +335,17 @@ func (self *Registrar) HashToUrl(chash common.Hash) (uri string, err error) {
 		for (l > 0) && (str[l-1] == 0) {
 			l--
 		}
+
 		str = str[:l]
 		uri = uri + str
 		idx++
 	}
+
+	l := 0
+	for (l < len(uri)) && (uri[l] == 0) {
+		l++
+	}
+	uri = uri[l:]
 
 	if len(uri) == 0 {
 		err = fmt.Errorf("GetURLhint: URL hint not found for '%v'", chash.Hex())
