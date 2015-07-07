@@ -62,9 +62,9 @@ const (
 	TestBalance = "1000000000000"
 )
 
+// "` + TestAccount + `": {"balance": "` + TestBalance + `"},
+// ` + BuiltInContracts + `
 var GenesisAccounts = []byte(`{
-	"` + TestAccount + `": {"balance": "` + TestBalance + `"},
-	` + BuiltInContracts + `
 	"0000000000000000000000000000000000000001": {"balance": "1"},
 	"0000000000000000000000000000000000000002": {"balance": "1"},
 	"0000000000000000000000000000000000000003": {"balance": "1"},
