@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
@@ -322,12 +338,12 @@ func (self *adminApi) SetGlobalRegistrar(req *shared.Request) (interface{}, erro
 	sender := common.HexToAddress(args.ContractAddress)
 
 	reg := registrar.New(self.xeth)
-	err := reg.SetGlobalRegistrar(args.NameReg, sender)
+	txhash, err := reg.SetGlobalRegistrar(args.NameReg, sender)
 	if err != nil {
 		return false, err
 	}
 
-	return registrar.GlobalRegistrarAddr, nil
+	return txhash, nil
 }
 
 func (self *adminApi) SetHashReg(req *shared.Request) (interface{}, error) {
@@ -338,12 +354,12 @@ func (self *adminApi) SetHashReg(req *shared.Request) (interface{}, error) {
 
 	reg := registrar.New(self.xeth)
 	sender := common.HexToAddress(args.Sender)
-	err := reg.SetHashReg(args.HashReg, sender)
+	txhash, err := reg.SetHashReg(args.HashReg, sender)
 	if err != nil {
 		return false, err
 	}
 
-	return registrar.HashRegAddr, nil
+	return txhash, nil
 }
 
 func (self *adminApi) SetUrlHint(req *shared.Request) (interface{}, error) {
@@ -356,12 +372,12 @@ func (self *adminApi) SetUrlHint(req *shared.Request) (interface{}, error) {
 	sender := common.HexToAddress(args.Sender)
 
 	reg := registrar.New(self.xeth)
-	err := reg.SetUrlHint(urlHint, sender)
+	txhash, err := reg.SetUrlHint(urlHint, sender)
 	if err != nil {
 		return nil, err
 	}
 
-	return registrar.UrlHintAddr, nil
+	return txhash, nil
 }
 
 func (self *adminApi) SaveInfo(req *shared.Request) (interface{}, error) {

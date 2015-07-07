@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package main
 
 import (
@@ -127,6 +143,7 @@ func TestNodeInfo(t *testing.T) {
 	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
+
 	want := `{"DiscPort":0,"IP":"0.0.0.0","ListenAddr":"","Name":"test","NodeID":"4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5","NodeUrl":"enode://4cb2fc32924e94277bf94b5e4c983beedb2eabd5a0bc941db32202735c6625d020ca14a5963d1738af43b6ac0a711d61b1a06de931a499fe2aa0b1a132a902b5@0.0.0.0:0","TCPPort":0,"Td":"131072"}`
 	checkEvalJSON(t, repl, `admin.nodeInfo`, want)
 }
@@ -140,8 +157,7 @@ func TestAccounts(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`"]`)
-	checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
-
+	checkEvalJSON(t, repl, `eth.coinbase`, `null`)
 	val, err := repl.re.Run(`personal.newAccount("password")`)
 	if err != nil {
 		t.Errorf("expected no error, got %v", err)
@@ -151,9 +167,7 @@ func TestAccounts(t *testing.T) {
 		t.Errorf("address not hex: %q", addr)
 	}
 
-	// skip until order fixed #824
-	// checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`", "`+addr+`"]`)
-	// checkEvalJSON(t, repl, `eth.coinbase`, `"`+testAddress+`"`)
+	checkEvalJSON(t, repl, `eth.accounts`, `["`+testAddress+`","`+addr+`"]`)
 }
 
 func TestBlockChain(t *testing.T) {
@@ -256,8 +270,12 @@ func TestSignature(t *testing.T) {
 }
 
 func TestContract(t *testing.T) {
-	// t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
-	tmp, repl, ethereum := testJEthRE(t)
+	t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
+	coinbase := common.HexToAddress(testAddress)
+	tmp, repl, ethereum := testREPL(t, func(conf *eth.Config) {
+		conf.Etherbase = coinbase
+		conf.PowTest = true
+	})
 	if err := ethereum.Start(); err != nil {
 		t.Errorf("error starting ethereum: %v", err)
 		return
@@ -265,20 +283,25 @@ func TestContract(t *testing.T) {
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
 
-	coinbase := common.HexToAddress(testAddress)
 	reg := registrar.New(repl.xeth)
-	err := reg.SetGlobalRegistrar("", coinbase)
+	_, err := reg.SetGlobalRegistrar("", coinbase)
 	if err != nil {
 		t.Errorf("error setting HashReg: %v", err)
 	}
-	err = reg.SetHashReg("", coinbase)
+	_, err = reg.SetHashReg("", coinbase)
 	if err != nil {
 		t.Errorf("error setting HashReg: %v", err)
 	}
-	err = reg.SetUrlHint("", coinbase)
+	_, err = reg.SetUrlHint("", coinbase)
 	if err != nil {
 		t.Errorf("error setting HashReg: %v", err)
 	}
+	/* TODO:
+	* lookup receipt and contract addresses by tx hash
+	* name registration for HashReg and UrlHint addresses
+	* mine those transactions
+	* then set once more SetHashReg SetUrlHint
+	 */
 
 	source := `contract test {\n` +
 		"   /// @notice Will multiply `a` by 7." + `\n` +
@@ -332,12 +355,12 @@ func TestContract(t *testing.T) {
 	if checkEvalJSON(
 		t, repl,
 		`contractaddress = eth.sendTransaction({from: primary, data: contract.code})`,
-		`"0x291293d57e0a0ab47effe97c02577f90d9211567"`,
+		`"0x46d69d55c3c4b86a924a92c9fc4720bb7bce1d74"`,
 	) != nil {
 		return
 	}
 
-	if !processTxs(repl, t, 7) {
+	if !processTxs(repl, t, 8) {
 		return
 	}
 
@@ -360,7 +383,7 @@ multiply7 = Multiply7.at(contractaddress);
 	if checkEvalJSON(t, repl, `admin.startNatSpec()`, `true`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `"0xcb08355dff8f8cadb5dc3d72e652ef5c33792cb0d871229dd1aef5db1c4ba1f2"`) != nil {
+	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `"0x4ef9088431a8033e4580d00e4eb2487275e031ff4163c7529df0ef45af17857b"`) != nil {
 		return
 	}
 
@@ -368,7 +391,7 @@ multiply7 = Multiply7.at(contractaddress);
 		return
 	}
 
-	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x291293d57e0a0ab47effe97c02577f90d9211567","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
+	expNotice = `About to submit transaction (no NatSpec info found for contract: content hash not found for '0x87e2802265838c7f14bb69eecd2112911af6767907a702eeaa445239fb20711b'): {"params":[{"to":"0x46d69d55c3c4b86a924a92c9fc4720bb7bce1d74","data": "0xc6888fa10000000000000000000000000000000000000000000000000000000000000006"}]}`
 	if repl.lastConfirm != expNotice {
 		t.Errorf("incorrect confirmation message: expected\n%v, got\n%v", expNotice, repl.lastConfirm)
 		return
@@ -401,7 +424,7 @@ multiply7 = Multiply7.at(contractaddress);
 		return
 	}
 
-	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `"0xe773bf05b027e4485c8b28967c35c939a71c5f6c177db78b51db52e76760d903"`) != nil {
+	if checkEvalJSON(t, repl, `multiply7.multiply.sendTransaction(6, { from: primary })`, `"0x66d7635c12ad0b231e66da2f987ca3dfdca58ffe49c6442aa55960858103fd0c"`) != nil {
 		return
 	}
 
@@ -463,59 +486,6 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 			}
 		}()
 	case <-repl.wait:
-	}
-	txc, err = pendingTransactions(repl, t)
-	if err != nil {
-		t.Errorf("unexpected error checking pending transactions: %v", err)
-		return false
-	}
-	if txc != 0 {
-		t.Errorf("%d trasactions were not mined", txc)
-		return false
-	}
-	return true
-}
-
-func pendingTransactions(repl *testjethre, t *testing.T) (txc int64, err error) {
-	txs := repl.ethereum.TxPool().GetTransactions()
-	return int64(len(txs)), nil
-}
-
-func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
-	var txc int64
-	var err error
-	for i := 0; i < 50; i++ {
-		txc, err = pendingTransactions(repl, t)
-		if err != nil {
-			t.Errorf("unexpected error checking pending transactions: %v", err)
-			return false
-		}
-		if expTxc < int(txc) {
-			t.Errorf("too many pending transactions: expected %v, got %v", expTxc, txc)
-			return false
-		} else if expTxc == int(txc) {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if int(txc) != expTxc {
-		t.Errorf("incorrect number of pending transactions, expected %v, got %v", expTxc, txc)
-		return false
-	}
-
-	err = repl.ethereum.StartMining(runtime.NumCPU())
-	if err != nil {
-		t.Errorf("unexpected error mining: %v", err)
-		return false
-	}
-	defer repl.ethereum.StopMining()
-
-	timer := time.NewTimer(100 * time.Second)
-	height := new(big.Int).Add(repl.xeth.CurrentBlock().Number(), big.NewInt(1))
-	_, err = waitForBlocks(repl.wait, height, timer.C)
-	if err != nil {
-		t.Errorf("error mining transactions: %v", err)
-		return false
 	}
 	txc, err = pendingTransactions(repl, t)
 	if err != nil {

@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
@@ -114,7 +130,7 @@ func (args *StartRPCArgs) UnmarshalJSON(b []byte) (err error) {
 	args.ListenPort = 8545
 	args.Apis = "net,eth,web3"
 
-	if len(obj) >= 1 {
+	if len(obj) >= 1 && obj[0] != nil {
 		if addr, ok := obj[0].(string); ok {
 			args.ListenAddress = addr
 		} else {
@@ -122,7 +138,7 @@ func (args *StartRPCArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	if len(obj) >= 2 {
+	if len(obj) >= 2 && obj[1] != nil {
 		if port, ok := obj[1].(float64); ok && port >= 0 && port <= 64*1024 {
 			args.ListenPort = uint(port)
 		} else {
@@ -130,7 +146,7 @@ func (args *StartRPCArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	if len(obj) >= 3 {
+	if len(obj) >= 3 && obj[2] != nil {
 		if corsDomain, ok := obj[2].(string); ok {
 			args.CorsDomain = corsDomain
 		} else {
@@ -138,7 +154,7 @@ func (args *StartRPCArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	if len(obj) >= 4 {
+	if len(obj) >= 4 && obj[3] != nil {
 		if apis, ok := obj[3].(string); ok {
 			args.Apis = apis
 		} else {
@@ -229,7 +245,7 @@ func (args *SetGlobalRegistrarArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	if len(obj) >= 2 {
+	if len(obj) >= 2 && obj[1] != nil {
 		if addr, ok := obj[1].(string); ok {
 			args.ContractAddress = addr
 		} else {
@@ -251,7 +267,7 @@ func (args *SetHashRegArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	if len(obj) >= 1 {
+	if len(obj) >= 1 && obj[0] != nil {
 		if hashreg, ok := obj[0].(string); ok {
 			args.HashReg = hashreg
 		} else {
@@ -259,7 +275,7 @@ func (args *SetHashRegArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	if len(obj) >= 2 {
+	if len(obj) >= 2 && obj[1] != nil {
 		if sender, ok := obj[1].(string); ok {
 			args.Sender = sender
 		} else {
@@ -281,7 +297,7 @@ func (args *SetUrlHintArgs) UnmarshalJSON(b []byte) (err error) {
 		return shared.NewDecodeParamError(err.Error())
 	}
 
-	if len(obj) >= 1 {
+	if len(obj) >= 1 && obj[0] != nil {
 		if urlhint, ok := obj[0].(string); ok {
 			args.UrlHint = urlhint
 		} else {
@@ -289,7 +305,7 @@ func (args *SetUrlHintArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	if len(obj) >= 2 {
+	if len(obj) >= 2 && obj[1] != nil {
 		if sender, ok := obj[1].(string); ok {
 			args.Sender = sender
 		} else {
@@ -388,17 +404,19 @@ func (args *RegisterUrlArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	if len(obj) >= 1 {
-		if sender, ok := obj[1].(string); ok {
+		if sender, ok := obj[0].(string); ok {
 			args.Sender = sender
 		} else {
 			return shared.NewInvalidTypeError("Sender", "not a string")
 		}
 	}
 
-	if sender, ok := obj[1].(string); ok {
-		args.ContentHash = sender
-	} else {
-		return shared.NewInvalidTypeError("ContentHash", "not a string")
+	if len(obj) >= 2 {
+		if sender, ok := obj[1].(string); ok {
+			args.ContentHash = sender
+		} else {
+			return shared.NewInvalidTypeError("ContentHash", "not a string")
+		}
 	}
 
 	if len(obj) >= 3 {
@@ -460,7 +478,7 @@ func (args *HttpGetArgs) UnmarshalJSON(b []byte) (err error) {
 		}
 	}
 
-	if len(obj) >= 2 {
+	if len(obj) >= 2 && obj[1] != nil {
 		if path, ok := obj[1].(string); ok {
 			args.Path = path
 		} else {
