@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package core
 
 import (
@@ -10,32 +26,32 @@ import (
 )
 
 type VMEnv struct {
-	state *state.StateDB
-	block *types.Block
-	msg   Message
-	depth int
-	chain *ChainManager
-	typ   vm.Type
+	state  *state.StateDB
+	header *types.Header
+	msg    Message
+	depth  int
+	chain  *ChainManager
+	typ    vm.Type
 	// structured logging
 	logs []vm.StructLog
 }
 
-func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, block *types.Block) *VMEnv {
+func NewEnv(state *state.StateDB, chain *ChainManager, msg Message, header *types.Header) *VMEnv {
 	return &VMEnv{
-		chain: chain,
-		state: state,
-		block: block,
-		msg:   msg,
-		typ:   vm.StdVmTy,
+		chain:  chain,
+		state:  state,
+		header: header,
+		msg:    msg,
+		typ:    vm.StdVmTy,
 	}
 }
 
 func (self *VMEnv) Origin() common.Address   { f, _ := self.msg.From(); return f }
-func (self *VMEnv) BlockNumber() *big.Int    { return self.block.Number() }
-func (self *VMEnv) Coinbase() common.Address { return self.block.Coinbase() }
-func (self *VMEnv) Time() int64              { return self.block.Time() }
-func (self *VMEnv) Difficulty() *big.Int     { return self.block.Difficulty() }
-func (self *VMEnv) GasLimit() *big.Int       { return self.block.GasLimit() }
+func (self *VMEnv) BlockNumber() *big.Int    { return self.header.Number }
+func (self *VMEnv) Coinbase() common.Address { return self.header.Coinbase }
+func (self *VMEnv) Time() uint64             { return self.header.Time }
+func (self *VMEnv) Difficulty() *big.Int     { return self.header.Difficulty }
+func (self *VMEnv) GasLimit() *big.Int       { return self.header.GasLimit }
 func (self *VMEnv) Value() *big.Int          { return self.msg.Value() }
 func (self *VMEnv) State() *state.StateDB    { return self.state }
 func (self *VMEnv) Depth() int               { return self.depth }

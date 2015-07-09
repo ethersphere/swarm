@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package state
 
 import (
@@ -19,11 +35,11 @@ func (self Code) String() string {
 	return string(self) //strings.Join(Disassemble(self), " ")
 }
 
-type Storage map[string]*common.Value
+type Storage map[string]common.Hash
 
 func (self Storage) String() (str string) {
 	for key, value := range self {
-		str += fmt.Sprintf("%X : %X\n", key, value.Bytes())
+		str += fmt.Sprintf("%X : %X\n", key, value)
 	}
 
 	return
@@ -32,7 +48,6 @@ func (self Storage) String() (str string) {
 func (self Storage) Copy() Storage {
 	cpy := make(Storage)
 	for key, value := range self {
-		// XXX Do we need a 'value' copy or is this sufficient?
 		cpy[key] = value
 	}
 
@@ -41,9 +56,8 @@ func (self Storage) Copy() Storage {
 
 type StateObject struct {
 	// State database for storing state changes
-	db common.Database
-	// The state object
-	State *StateDB
+	db   common.Database
+	trie *trie.SecureTrie
 
 	// Address belonging to this account
 	address common.Address
@@ -59,8 +73,6 @@ type StateObject struct {
 	initCode Code
 	// Cached storage (flushed when updated)
 	storage Storage
-	// Temporary prepaid gas, reward after transition
-	prepaid *big.Int
 
 	// Total gas pool is the total amount of gas currently
 	// left if this object is the coinbase. Gas is directly
@@ -76,18 +88,13 @@ type StateObject struct {
 
 func (self *StateObject) Reset() {
 	self.storage = make(Storage)
-	self.State.Reset()
 }
 
 func NewStateObject(address common.Address, db common.Database) *StateObject {
-	// This to ensure that it has 20 bytes (and not 0 bytes), thus left or right pad doesn't matter.
-	//address := common.ToAddress(addr)
-
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
-	object.State = New(common.Hash{}, db) //New(trie.New(common.Config.Db, ""))
+	object.trie = trie.NewSecure((common.Hash{}).Bytes(), db)
 	object.storage = make(Storage)
 	object.gasPool = new(big.Int)
-	object.prepaid = new(big.Int)
 
 	return object
 }
@@ -107,14 +114,12 @@ func NewStateObjectFromBytes(address common.Address, data []byte, db common.Data
 	}
 
 	object := &StateObject{address: address, db: db}
-	//object.RlpDecode(data)
 	object.nonce = extobject.Nonce
 	object.balance = extobject.Balance
 	object.codeHash = extobject.CodeHash
-	object.State = New(extobject.Root, db)
-	object.storage = make(map[string]*common.Value)
+	object.trie = trie.NewSecure(extobject.Root[:], db)
+	object.storage = make(map[string]common.Hash)
 	object.gasPool = new(big.Int)
-	object.prepaid = new(big.Int)
 	object.code, _ = db.Get(extobject.CodeHash)
 
 	return object
@@ -129,35 +134,31 @@ func (self *StateObject) MarkForDeletion() {
 	}
 }
 
-func (c *StateObject) getAddr(addr common.Hash) *common.Value {
-	return common.NewValueFromBytes([]byte(c.State.trie.Get(addr[:])))
+func (c *StateObject) getAddr(addr common.Hash) common.Hash {
+	var ret []byte
+	rlp.DecodeBytes(c.trie.Get(addr[:]), &ret)
+	return common.BytesToHash(ret)
 }
 
-func (c *StateObject) setAddr(addr []byte, value interface{}) {
-	c.State.trie.Update(addr, common.Encode(value))
-}
-
-func (self *StateObject) GetStorage(key *big.Int) *common.Value {
-	fmt.Printf("%v: get %v %v", self.address.Hex(), key)
-	return self.GetState(common.BytesToHash(key.Bytes()))
-}
-
-func (self *StateObject) SetStorage(key *big.Int, value *common.Value) {
-	fmt.Printf("%v: set %v -> %v", self.address.Hex(), key, value)
-	self.SetState(common.BytesToHash(key.Bytes()), value)
+func (c *StateObject) setAddr(addr []byte, value common.Hash) {
+	v, err := rlp.EncodeToBytes(bytes.TrimLeft(value[:], "\x00"))
+	if err != nil {
+		// if RLPing failed we better panic and not fail silently. This would be considered a consensus issue
+		panic(err)
+	}
+	c.trie.Update(addr, v)
 }
 
 func (self *StateObject) Storage() Storage {
 	return self.storage
 }
 
-func (self *StateObject) GetState(key common.Hash) *common.Value {
+func (self *StateObject) GetState(key common.Hash) common.Hash {
 	strkey := key.Str()
-	value := self.storage[strkey]
-	if value == nil {
+	value, exists := self.storage[strkey]
+	if !exists {
 		value = self.getAddr(key)
-
-		if !value.IsNil() {
+		if (value != common.Hash{}) {
 			self.storage[strkey] = value
 		}
 	}
@@ -165,21 +166,21 @@ func (self *StateObject) GetState(key common.Hash) *common.Value {
 	return value
 }
 
-func (self *StateObject) SetState(k common.Hash, value *common.Value) {
-	self.storage[k.Str()] = value.Copy()
+func (self *StateObject) SetState(k, value common.Hash) {
+	self.storage[k.Str()] = value
 	self.dirty = true
 }
 
-func (self *StateObject) Sync() {
+// Update updates the current cached storage to the trie
+func (self *StateObject) Update() {
 	for key, value := range self.storage {
-		if value.Len() == 0 {
-			self.State.trie.Delete([]byte(key))
+		if (value == common.Hash{}) {
+			self.trie.Delete([]byte(key))
 			continue
 		}
 
 		self.setAddr([]byte(key), value)
 	}
-	self.storage = make(Storage)
 }
 
 func (c *StateObject) GetInstr(pc *big.Int) *common.Value {
@@ -221,20 +222,8 @@ func (c *StateObject) St() Storage {
 
 // Return the gas back to the origin. Used by the Virtual machine or Closures
 func (c *StateObject) ReturnGas(gas, price *big.Int) {}
-func (c *StateObject) ConvertGas(gas, price *big.Int) error {
-	total := new(big.Int).Mul(gas, price)
-	if total.Cmp(c.balance) > 0 {
-		return fmt.Errorf("insufficient amount: %v, %v", c.balance, total)
-	}
 
-	c.SubBalance(total)
-
-	c.dirty = true
-
-	return nil
-}
-
-func (self *StateObject) SetGasPool(gasLimit *big.Int) {
+func (self *StateObject) SetGasLimit(gasLimit *big.Int) {
 	self.gasPool = new(big.Int).Set(gasLimit)
 
 	if glog.V(logger.Core) {
@@ -242,7 +231,7 @@ func (self *StateObject) SetGasPool(gasLimit *big.Int) {
 	}
 }
 
-func (self *StateObject) BuyGas(gas, price *big.Int) error {
+func (self *StateObject) SubGas(gas, price *big.Int) error {
 	if self.gasPool.Cmp(gas) < 0 {
 		return GasLimitError(self.gasPool, gas)
 	}
@@ -257,7 +246,7 @@ func (self *StateObject) BuyGas(gas, price *big.Int) error {
 	return nil
 }
 
-func (self *StateObject) RefundGas(gas, price *big.Int) {
+func (self *StateObject) AddGas(gas, price *big.Int) {
 	self.gasPool.Add(self.gasPool, gas)
 }
 
@@ -266,9 +255,7 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.balance.Set(self.balance)
 	stateObject.codeHash = common.CopyBytes(self.codeHash)
 	stateObject.nonce = self.nonce
-	if self.State != nil {
-		stateObject.State = self.State.Copy()
-	}
+	stateObject.trie = self.trie
 	stateObject.code = common.CopyBytes(self.code)
 	stateObject.initCode = common.CopyBytes(self.initCode)
 	stateObject.storage = self.storage.Copy()
@@ -306,11 +293,11 @@ func (c *StateObject) Init() Code {
 }
 
 func (self *StateObject) Trie() *trie.SecureTrie {
-	return self.State.trie
+	return self.trie
 }
 
 func (self *StateObject) Root() []byte {
-	return self.Trie().Root()
+	return self.trie.Root()
 }
 
 func (self *StateObject) Code() []byte {
@@ -342,10 +329,10 @@ func (self *StateObject) EachStorage(cb func(key, value []byte)) {
 		cb([]byte(h), v.Bytes())
 	}
 
-	it := self.State.trie.Iterator()
+	it := self.trie.Iterator()
 	for it.Next() {
 		// ignore cached values
-		key := self.State.trie.GetKey(it.Key)
+		key := self.trie.GetKey(it.Key)
 		if _, ok := self.storage[string(key)]; !ok {
 			cb(key, it.Value)
 		}
@@ -369,8 +356,8 @@ func (c *StateObject) RlpDecode(data []byte) {
 	decoder := common.NewValueFromBytes(data)
 	c.nonce = decoder.Get(0).Uint()
 	c.balance = decoder.Get(1).BigInt()
-	c.State = New(common.BytesToHash(decoder.Get(2).Bytes()), c.db) //New(trie.New(common.Config.Db, decoder.Get(2).Interface()))
-	c.storage = make(map[string]*common.Value)
+	c.trie = trie.NewSecure(decoder.Get(2).Bytes(), c.db)
+	c.storage = make(map[string]common.Hash)
 	c.gasPool = new(big.Int)
 
 	c.codeHash = decoder.Get(3).Bytes()

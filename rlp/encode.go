@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package rlp
 
 import (
@@ -5,11 +21,8 @@ import (
 	"io"
 	"math/big"
 	"reflect"
+	"sync"
 )
-
-// TODO: put encbufs in a sync.Pool.
-//     Doing that requires zeroing the buffers after use.
-//     encReader will need to drop it's buffer when done.
 
 var (
 	// Common encoded values.
@@ -32,46 +45,10 @@ type Encoder interface {
 	EncodeRLP(io.Writer) error
 }
 
-// Flat wraps a value (which must encode as a list) so
-// it encodes as the list's elements.
-//
-// Example: suppose you have defined a type
-//
-//     type foo struct { A, B uint }
-//
-// Under normal encoding rules,
-//
-//     rlp.Encode(foo{1, 2}) --> 0xC20102
-//
-// This function can help you achieve the following encoding:
-//
-//     rlp.Encode(rlp.Flat(foo{1, 2})) --> 0x0102
-func Flat(val interface{}) Encoder {
-	return flatenc{val}
-}
-
-type flatenc struct{ val interface{} }
-
-func (e flatenc) EncodeRLP(out io.Writer) error {
-	// record current output position
-	var (
-		eb          = out.(*encbuf)
-		prevstrsize = len(eb.str)
-		prevnheads  = len(eb.lheads)
-	)
-	if err := eb.encode(e.val); err != nil {
-		return err
-	}
-	// check that a new list header has appeared
-	if len(eb.lheads) == prevnheads || eb.lheads[prevnheads].offset == prevstrsize-1 {
-		return fmt.Errorf("rlp.Flat: %T did not encode as list", e.val)
-	}
-	// remove the new list header
-	newhead := eb.lheads[prevnheads]
-	copy(eb.lheads[prevnheads:], eb.lheads[prevnheads+1:])
-	eb.lheads = eb.lheads[:len(eb.lheads)-1]
-	eb.lhsize -= headsize(uint64(newhead.size))
-	return nil
+// ListSize returns the encoded size of an RLP list with the given
+// content size.
+func ListSize(contentSize uint64) uint64 {
+	return uint64(headsize(contentSize)) + contentSize
 }
 
 // Encode writes the RLP encoding of val to w. Note that Encode may
@@ -112,7 +89,9 @@ func Encode(w io.Writer, val interface{}) error {
 		// Avoid copying by writing to the outer encbuf directly.
 		return outer.encode(val)
 	}
-	eb := newencbuf()
+	eb := encbufPool.Get().(*encbuf)
+	eb.reset()
+	defer encbufPool.Put(eb)
 	if err := eb.encode(val); err != nil {
 		return err
 	}
@@ -122,7 +101,9 @@ func Encode(w io.Writer, val interface{}) error {
 // EncodeBytes returns the RLP encoding of val.
 // Please see the documentation of Encode for the encoding rules.
 func EncodeToBytes(val interface{}) ([]byte, error) {
-	eb := newencbuf()
+	eb := encbufPool.Get().(*encbuf)
+	eb.reset()
+	defer encbufPool.Put(eb)
 	if err := eb.encode(val); err != nil {
 		return nil, err
 	}
@@ -135,7 +116,8 @@ func EncodeToBytes(val interface{}) ([]byte, error) {
 //
 // Please see the documentation of Encode for the encoding rules.
 func EncodeToReader(val interface{}) (size int, r io.Reader, err error) {
-	eb := newencbuf()
+	eb := encbufPool.Get().(*encbuf)
+	eb.reset()
 	if err := eb.encode(val); err != nil {
 		return 0, nil, err
 	}
@@ -182,8 +164,19 @@ func puthead(buf []byte, smalltag, largetag byte, size uint64) int {
 	}
 }
 
-func newencbuf() *encbuf {
-	return &encbuf{sizebuf: make([]byte, 9)}
+// encbufs are pooled.
+var encbufPool = sync.Pool{
+	New: func() interface{} { return &encbuf{sizebuf: make([]byte, 9)} },
+}
+
+func (w *encbuf) reset() {
+	w.lhsize = 0
+	if w.str != nil {
+		w.str = w.str[:0]
+	}
+	if w.lheads != nil {
+		w.lheads = w.lheads[:0]
+	}
 }
 
 // encbuf implements io.Writer so it can be passed it into EncodeRLP.
@@ -295,6 +288,8 @@ type encReader struct {
 func (r *encReader) Read(b []byte) (n int, err error) {
 	for {
 		if r.piece = r.next(); r.piece == nil {
+			encbufPool.Put(r.buf)
+			r.buf = nil
 			return n, io.EOF
 		}
 		nn := copy(b[n:], r.piece)
@@ -313,6 +308,9 @@ func (r *encReader) Read(b []byte) (n int, err error) {
 // it returns nil at EOF.
 func (r *encReader) next() []byte {
 	switch {
+	case r.buf == nil:
+		return nil
+
 	case r.piece != nil:
 		// There is still data available for reading.
 		return r.piece

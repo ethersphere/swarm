@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package xeth
 
 import (
@@ -22,7 +38,7 @@ func NewObject(state *state.StateObject) *Object {
 	return &Object{state}
 }
 
-func (self *Object) StorageString(str string) *common.Value {
+func (self *Object) StorageString(str string) []byte {
 	if common.IsHex(str) {
 		return self.storage(common.Hex2Bytes(str[2:]))
 	} else {
@@ -30,12 +46,12 @@ func (self *Object) StorageString(str string) *common.Value {
 	}
 }
 
-func (self *Object) StorageValue(addr *common.Value) *common.Value {
+func (self *Object) StorageValue(addr *common.Value) []byte {
 	return self.storage(addr.Bytes())
 }
 
-func (self *Object) storage(addr []byte) *common.Value {
-	return self.StateObject.GetStorage(common.BigD(addr))
+func (self *Object) storage(addr []byte) []byte {
+	return self.StateObject.GetState(common.BytesToHash(addr)).Bytes()
 }
 
 func (self *Object) Storage() (storage map[string]string) {
@@ -60,7 +76,7 @@ type Block struct {
 	Hash         string       `json:"hash"`
 	Transactions *common.List `json:"transactions"`
 	Uncles       *common.List `json:"uncles"`
-	Time         int64        `json:"time"`
+	Time         uint64       `json:"time"`
 	Coinbase     string       `json:"coinbase"`
 	Name         string       `json:"name"`
 	GasLimit     string       `json:"gasLimit"`
@@ -149,7 +165,8 @@ func NewTx(tx *types.Transaction) *Transaction {
 	if to := tx.To(); to != nil {
 		receiver = to.Hex()
 	} else {
-		receiver = core.AddressFromMessage(tx).Hex()
+		from, _ := tx.From()
+		receiver = crypto.CreateAddress(from, tx.Nonce()).Hex()
 	}
 	createsContract := core.MessageCreatesContract(tx)
 
@@ -165,16 +182,6 @@ func NewTx(tx *types.Transaction) *Transaction {
 
 func (self *Transaction) ToString() string {
 	return self.ref.String()
-}
-
-type Key struct {
-	Address    string `json:"address"`
-	PrivateKey string `json:"privateKey"`
-	PublicKey  string `json:"publicKey"`
-}
-
-func NewKey(key *crypto.KeyPair) *Key {
-	return &Key{common.ToHex(key.Address()), common.ToHex(key.PrivateKey), common.ToHex(key.PublicKey)}
 }
 
 type PReceipt struct {

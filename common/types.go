@@ -1,6 +1,23 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package common
 
 import (
+	"fmt"
 	"math/big"
 	"math/rand"
 	"reflect"
@@ -61,6 +78,10 @@ func (h Hash) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(h)
 }
 
+func EmptyHash(h Hash) bool {
+	return h == Hash{}
+}
+
 /////////// Address
 func BytesToAddress(b []byte) Address {
 	var a Address
@@ -94,4 +115,14 @@ func (a *Address) Set(other Address) {
 	for i, v := range other {
 		a[i] = v
 	}
+}
+
+// PP Pretty Prints a byte slice in the following format:
+// 	hex(value[:4])...(hex[len(value)-4:])
+func PP(value []byte) string {
+	if len(value) <= 8 {
+		return Bytes2Hex(value)
+	}
+
+	return fmt.Sprintf("%x...%x", value[:4], value[len(value)-4])
 }

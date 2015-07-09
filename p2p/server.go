@@ -1,3 +1,20 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package p2p implements the Ethereum p2p network protocols.
 package p2p
 
 import (
@@ -115,6 +132,7 @@ type Server struct {
 	ntab         discoverTable
 	listener     net.Listener
 	ourHandshake *protoHandshake
+	lastLookup   time.Time
 
 	// These are for Peers, PeerCount (and nothing else).
 	peerOp     chan peerOpFunc
@@ -547,9 +565,11 @@ func (srv *Server) listenLoop() {
 		if err != nil {
 			return
 		}
-		glog.V(logger.Debug).Infof("Accepted conn %v\n", fd.RemoteAddr())
+		mfd := newMeteredConn(fd, true)
+
+		glog.V(logger.Debug).Infof("Accepted conn %v\n", mfd.RemoteAddr())
 		go func() {
-			srv.setupConn(fd, inboundConn, nil)
+			srv.setupConn(mfd, inboundConn, nil)
 			slots <- struct{}{}
 		}()
 	}

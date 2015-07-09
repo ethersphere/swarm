@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package eth
 
 import (
@@ -11,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/eth/downloader"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -40,15 +55,15 @@ func TestStatusMsgErrors(t *testing.T) {
 			wantError: errResp(ErrNoStatusMsg, "first msg has code 2 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{10, NetworkId, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{10, NetworkId, td, currentBlock, genesis},
 			wantError: errResp(ErrProtocolVersionMismatch, "10 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{ProtocolVersion, 999, td, currentBlock, genesis},
+			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), 999, td, currentBlock, genesis},
 			wantError: errResp(ErrNetworkIdMismatch, "999 (!= 0)"),
 		},
 		{
-			code: StatusMsg, data: statusMsgData{ProtocolVersion, NetworkId, td, currentBlock, common.Hash{3}},
+			code: StatusMsg, data: statusData{uint32(ProtocolVersions[0]), NetworkId, td, currentBlock, common.Hash{3}},
 			wantError: errResp(ErrGenesisBlockMismatch, "0300000000000000000000000000000000000000000000000000000000000000 (!= %x)", genesis),
 		},
 	}
@@ -166,10 +181,9 @@ func newProtocolManagerForTesting(txAdded chan<- []*types.Transaction) *Protocol
 	var (
 		em       = new(event.TypeMux)
 		db, _    = ethdb.NewMemDatabase()
-		chain, _ = core.NewChainManager(core.GenesisBlock(0, db), db, db, core.FakePow{}, em)
+		chain, _ = core.NewChainManager(core.GenesisBlock(0, db), db, db, db, core.FakePow{}, em)
 		txpool   = &fakeTxPool{added: txAdded}
-		dl       = downloader.New(em, chain.HasBlock, chain.GetBlock)
-		pm       = NewProtocolManager(ProtocolVersion, 0, em, txpool, chain, dl)
+		pm       = NewProtocolManager(0, em, txpool, core.FakePow{}, chain)
 	)
 	pm.Start()
 	return pm
@@ -190,7 +204,7 @@ func newTestPeer(pm *ProtocolManager) (*testPeer, <-chan error) {
 
 func (p *testPeer) handshake(t *testing.T) {
 	td, currentBlock, genesis := p.pm.chainman.Status()
-	msg := &statusMsgData{
+	msg := &statusData{
 		ProtocolVersion: uint32(p.pm.protVer),
 		NetworkId:       uint32(p.pm.netId),
 		TD:              td,
@@ -236,7 +250,7 @@ func (pool *fakeTxPool) GetTransactions() types.Transactions {
 
 func newtx(from *crypto.Key, nonce uint64, datasize int) *types.Transaction {
 	data := make([]byte, datasize)
-	tx := types.NewTransactionMessage(common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), data)
-	tx.SetNonce(nonce)
+	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), data)
+	tx, _ = tx.SignECDSA(from.PrivateKey)
 	return tx
 }

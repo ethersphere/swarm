@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package miner
 
 import (
@@ -90,15 +106,13 @@ done:
 	}
 }
 
-func (self *CpuAgent) mine(block *types.Block, stop <- chan struct{}) {
+func (self *CpuAgent) mine(block *types.Block, stop <-chan struct{}) {
 	glog.V(logger.Debug).Infof("(re)started agent[%d]. mining...\n", self.index)
 
 	// Mine
 	nonce, mixDigest := self.pow.Search(block, stop)
 	if nonce != 0 {
-		block.SetNonce(nonce)
-		block.Header().MixDigest = common.BytesToHash(mixDigest)
-		self.returnCh <- block
+		self.returnCh <- block.WithMiningResult(nonce, common.BytesToHash(mixDigest))
 	} else {
 		self.returnCh <- nil
 	}

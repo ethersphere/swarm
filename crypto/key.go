@@ -1,25 +1,18 @@
-/*
-	This file is part of go-ethereum
-
-	go-ethereum is free software: you can redistribute it and/or modify
-	it under the terms of the GNU Lesser General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-
-	go-ethereum is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-
-	You should have received a copy of the GNU Lesser General Public License
-	along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
-*/
-/**
- * @authors
- * 	Gustav Simonsson <gustav.simonsson@gmail.com>
- * @date 2015
- *
- */
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
 
 package crypto
 
@@ -35,7 +28,7 @@ import (
 )
 
 const (
-	version = "1"
+	version = 3
 )
 
 type Key struct {
@@ -51,10 +44,17 @@ type plainKeyJSON struct {
 	Address    string `json:"address"`
 	PrivateKey string `json:"privatekey"`
 	Id         string `json:"id"`
-	Version    string `json:"version"`
+	Version    int    `json:"version"`
 }
 
-type encryptedKeyJSON struct {
+type encryptedKeyJSONV3 struct {
+	Address string `json:"address"`
+	Crypto  cryptoJSON
+	Id      string `json:"id"`
+	Version int    `json:"version"`
+}
+
+type encryptedKeyJSONV1 struct {
 	Address string `json:"address"`
 	Crypto  cryptoJSON
 	Id      string `json:"id"`
@@ -62,13 +62,12 @@ type encryptedKeyJSON struct {
 }
 
 type cryptoJSON struct {
-	Cipher       string           `json:"cipher"`
-	CipherText   string           `json:"ciphertext"`
-	CipherParams cipherparamsJSON `json:"cipherparams"`
-	KDF          string           `json:"kdf"`
-	KDFParams    scryptParamsJSON `json:"kdfparams"`
-	MAC          string           `json:"mac"`
-	Version      string           `json:"version"`
+	Cipher       string                 `json:"cipher"`
+	CipherText   string                 `json:"ciphertext"`
+	CipherParams cipherparamsJSON       `json:"cipherparams"`
+	KDF          string                 `json:"kdf"`
+	KDFParams    map[string]interface{} `json:"kdfparams"`
+	MAC          string                 `json:"mac"`
 }
 
 type cipherparamsJSON struct {
