@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
@@ -7,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
+	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -23,10 +40,19 @@ var (
 			"chainSyncStatus",
 			"setSolc",
 			"datadir",
+			"startRPC",
+			"stopRPC",
+		},
+		"db": []string{
+			"getString",
+			"putString",
+			"getHex",
+			"putHex",
 		},
 		"debug": []string{
 			"dumpBlock",
 			"getBlockRlp",
+			"metrics",
 			"printBlock",
 			"processBlock",
 			"seedHash",
@@ -35,45 +61,38 @@ var (
 		"eth": []string{
 			"accounts",
 			"blockNumber",
-			"getBalance",
-			"protocolVersion",
-			"coinbase",
-			"mining",
-			"gasPrice",
-			"getStorage",
-			"storageAt",
-			"getStorageAt",
-			"getTransactionCount",
-			"getBlockTransactionCountByHash",
-			"getBlockTransactionCountByNumber",
-			"getUncleCountByBlockHash",
-			"getUncleCountByBlockNumber",
-			"getData",
-			"getCode",
-			"sign",
-			"sendTransaction",
-			"transact",
-			"estimateGas",
 			"call",
-			"flush",
-			"getBlockByHash",
-			"getBlockByNumber",
-			"getTransactionByHash",
-			"getTransactionByBlockHashAndIndex",
-			"getUncleByBlockHashAndIndex",
-			"getUncleByBlockNumberAndIndex",
+			"contract",
+			"coinbase",
+			"compile.lll",
+			"compile.serpent",
+			"compile.solidity",
+			"contract",
+			"defaultAccount",
+			"defaultBlock",
+			"estimateGas",
+			"filter",
+			"getBalance",
+			"getBlock",
+			"getBlockTransactionCount",
+			"getBlockUncleCount",
+			"getCode",
 			"getCompilers",
-			"compileSolidity",
-			"newFilter",
-			"newBlockFilter",
-			"newPendingTransactionFilter",
-			"uninstallFilter",
-			"getFilterChanges",
-			"getFilterLogs",
-			"getLogs",
+			"gasPrice",
+			"getStorageAt",
+			"getTransaction",
+			"getTransactionCount",
+			"getTransactionFromBlock",
+			"getTransactionReceipt",
+			"getUncle",
 			"hashrate",
-			"getWork",
-			"submitWork",
+			"mining",
+			"namereg",
+			"pendingTransactions",
+			"resend",
+			"sendRawTransaction",
+			"sendTransaction",
+			"sign",
 		},
 		"miner": []string{
 			"hashrate",
@@ -96,13 +115,12 @@ var (
 			"unlockAccount",
 		},
 		"shh": []string{
-			"version",
 			"post",
+			"newIdentify",
 			"hasIdentity",
-			"newIdentity",
-			"newFilter",
-			"uninstallFilter",
-			"getFilterChanges",
+			"newGroup",
+			"addToGroup",
+			"filter",
 		},
 		"txpool": []string{
 			"status",
@@ -122,33 +140,35 @@ var (
 )
 
 // Parse a comma separated API string to individual api's
-func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum) ([]EthereumApi, error) {
+func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum) ([]shared.EthereumApi, error) {
 	if len(strings.TrimSpace(apistr)) == 0 {
 		return nil, fmt.Errorf("Empty apistr provided")
 	}
 
 	names := strings.Split(apistr, ",")
-	apis := make([]EthereumApi, len(names))
+	apis := make([]shared.EthereumApi, len(names))
 
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
-		case AdminApiName:
+		case shared.AdminApiName:
 			apis[i] = NewAdminApi(xeth, eth, codec)
-		case DebugApiName:
+		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
-		case EthApiName:
-			apis[i] = NewEthApi(xeth, codec)
-		case MinerApiName:
+		case shared.DbApiName:
+			apis[i] = NewDbApi(xeth, eth, codec)
+		case shared.EthApiName:
+			apis[i] = NewEthApi(xeth, eth, codec)
+		case shared.MinerApiName:
 			apis[i] = NewMinerApi(eth, codec)
-		case NetApiName:
+		case shared.NetApiName:
 			apis[i] = NewNetApi(xeth, eth, codec)
-		case ShhApiName:
+		case shared.ShhApiName:
 			apis[i] = NewShhApi(xeth, eth, codec)
-		case TxPoolApiName:
+		case shared.TxPoolApiName:
 			apis[i] = NewTxPoolApi(xeth, eth, codec)
-		case PersonalApiName:
+		case shared.PersonalApiName:
 			apis[i] = NewPersonalApi(xeth, eth, codec)
-		case Web3ApiName:
+		case shared.Web3ApiName:
 			apis[i] = NewWeb3Api(xeth, codec)
 		default:
 			return nil, fmt.Errorf("Unknown API '%s'", name)
@@ -160,19 +180,23 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 
 func Javascript(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case AdminApiName:
+	case shared.AdminApiName:
 		return Admin_JS
-	case DebugApiName:
+	case shared.DebugApiName:
 		return Debug_JS
-	case MinerApiName:
+	case shared.DbApiName:
+		return Db_JS
+	case shared.EthApiName:
+		return Eth_JS
+	case shared.MinerApiName:
 		return Miner_JS
-	case NetApiName:
+	case shared.NetApiName:
 		return Net_JS
-	case ShhApiName:
+	case shared.ShhApiName:
 		return Shh_JS
-	case TxPoolApiName:
+	case shared.TxPoolApiName:
 		return TxPool_JS
-	case PersonalApiName:
+	case shared.PersonalApiName:
 		return Personal_JS
 	}
 

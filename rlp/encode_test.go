@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package rlp
 
 import (
@@ -188,15 +204,6 @@ var encTests = []encTest{
 	{val: simplestruct{A: 3, B: "foo"}, output: "C50383666F6F"},
 	{val: &recstruct{5, nil}, output: "C205C0"},
 	{val: &recstruct{5, &recstruct{4, &recstruct{3, nil}}}, output: "C605C404C203C0"},
-
-	// flat
-	{val: Flat(uint(1)), error: "rlp.Flat: uint did not encode as list"},
-	{val: Flat(simplestruct{A: 3, B: "foo"}), output: "0383666F6F"},
-	{
-		// value generates more list headers after the Flat
-		val:    []interface{}{"foo", []uint{1, 2}, Flat([]uint{3, 4}), []uint{5, 6}, "bar"},
-		output: "D083666F6FC201020304C2050683626172",
-	},
 
 	// nil
 	{val: (*uint)(nil), output: "80"},

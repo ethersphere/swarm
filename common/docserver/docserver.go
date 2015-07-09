@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package docserver
 
 import (
@@ -22,6 +38,7 @@ func New(docRoot string) (self *DocServer) {
 		DocRoot:   docRoot,
 		schemes:   []string{"file"},
 	}
+	self.DocRoot = "/tmp/"
 	self.RegisterProtocol("file", http.NewFileTransport(http.Dir(self.DocRoot)))
 	return
 }
@@ -52,19 +69,16 @@ func (self *DocServer) HasScheme(scheme string) bool {
 
 func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []byte, err error) {
 	// retrieve content
-
 	content, err = self.Get(uri, "")
 	if err != nil {
 		return
 	}
 
 	// check hash to authenticate content
-	hashbytes := crypto.Sha3(content)
-	var chash common.Hash
-	copy(chash[:], hashbytes)
+	chash := crypto.Sha3Hash(content)
 	if chash != hash {
 		content = nil
-		err = fmt.Errorf("content hash mismatch")
+		err = fmt.Errorf("content hash mismatch %x != %x (exp)", hash[:], chash[:])
 	}
 
 	return
@@ -76,6 +90,7 @@ func (self *DocServer) GetAuthContent(uri string, hash common.Hash) (content []b
 func (self *DocServer) Get(uri, path string) (content []byte, err error) {
 	// retrieve content
 	resp, err := self.Client().Get(uri)
+
 	defer func() {
 		if resp != nil {
 			resp.Body.Close()

@@ -1,48 +1,26 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
-	"strings"
-
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
 
-const (
-	AdminApiName    = "admin"
-	EthApiName      = "eth"
-	DebugApiName    = "debug"
-	MergedApiName   = "merged"
-	MinerApiName    = "miner"
-	NetApiName      = "net"
-	ShhApiName      = "shh"
-	TxPoolApiName   = "txpool"
-	PersonalApiName = "personal"
-	Web3ApiName     = "web3"
-)
-
-var (
-	// List with all API's which are offered over the IPC interface by default
-	DefaultIpcApis = strings.Join([]string{
-		AdminApiName, EthApiName, DebugApiName, MinerApiName, NetApiName,
-		ShhApiName, TxPoolApiName, PersonalApiName, Web3ApiName,
-	}, ",")
-)
-
-// Ethereum RPC API interface
-type EthereumApi interface {
-	// API identifier
-	Name() string
-
-	// API version
-	ApiVersion() string
-
-	// Execute the given request and returns the response or an error
-	Execute(*shared.Request) (interface{}, error)
-
-	// List of supported RCP methods this API provides
-	Methods() []string
-}
-
 // Merge multiple API's to a single API instance
-func Merge(apis ...EthereumApi) EthereumApi {
+func Merge(apis ...shared.EthereumApi) shared.EthereumApi {
 	return newMergedApi(apis...)
 }

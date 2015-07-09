@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package p2p
 
 import (
@@ -17,10 +33,9 @@ const (
 	// redialing a certain node.
 	dialHistoryExpiration = 30 * time.Second
 
-	// Discovery lookup tasks will wait for this long when
-	// no results are returned. This can happen if the table
-	// becomes empty (i.e. not often).
-	emptyLookupDelay = 10 * time.Second
+	// Discovery lookups are throttled and can only run
+	// once every few seconds.
+	lookupInterval = 4 * time.Second
 )
 
 // dialstate schedules dials and discovery lookups.
@@ -197,7 +212,9 @@ func (t *dialTask) Do(srv *Server) {
 		glog.V(logger.Detail).Infof("dial error: %v", err)
 		return
 	}
-	srv.setupConn(fd, t.flags, t.dest)
+	mfd := newMeteredConn(fd, false)
+
+	srv.setupConn(mfd, t.flags, t.dest)
 }
 func (t *dialTask) String() string {
 	return fmt.Sprintf("%v %x %v:%d", t.flags, t.dest.ID[:8], t.dest.IP, t.dest.TCP)
@@ -206,18 +223,19 @@ func (t *dialTask) String() string {
 func (t *discoverTask) Do(srv *Server) {
 	if t.bootstrap {
 		srv.ntab.Bootstrap(srv.BootstrapNodes)
-	} else {
-		var target discover.NodeID
-		rand.Read(target[:])
-		t.results = srv.ntab.Lookup(target)
-		// newTasks generates a lookup task whenever dynamic dials are
-		// necessary. Lookups need to take some time, otherwise the
-		// event loop spins too fast. An empty result can only be
-		// returned if the table is empty.
-		if len(t.results) == 0 {
-			time.Sleep(emptyLookupDelay)
-		}
+		return
 	}
+	// newTasks generates a lookup task whenever dynamic dials are
+	// necessary. Lookups need to take some time, otherwise the
+	// event loop spins too fast.
+	next := srv.lastLookup.Add(lookupInterval)
+	if now := time.Now(); now.Before(next) {
+		time.Sleep(next.Sub(now))
+	}
+	srv.lastLookup = time.Now()
+	var target discover.NodeID
+	rand.Read(target[:])
+	t.results = srv.ntab.Lookup(target)
 }
 
 func (t *discoverTask) String() (s string) {

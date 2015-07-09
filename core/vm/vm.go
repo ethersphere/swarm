@@ -1,3 +1,20 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
+// Package vm implements the Ethereum Virtual Machine.
 package vm
 
 import (
@@ -116,7 +133,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 
 			context.UseGas(context.Gas)
 
-			return context.Return(nil), OutOfGasError{}
+			return context.Return(nil), OutOfGasError
 		}
 		// Resize the memory calculated previously
 		mem.Resize(newMemSize.Uint64())
@@ -444,7 +461,7 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 		case TIMESTAMP:
 			time := self.env.Time()
 
-			stack.push(big.NewInt(time))
+			stack.push(new(big.Int).SetUint64(time))
 
 		case NUMBER:
 			number := self.env.BlockNumber()
@@ -506,14 +523,14 @@ func (self *Vm) Run(context *Context, input []byte) (ret []byte, err error) {
 
 		case SLOAD:
 			loc := common.BigToHash(stack.pop())
-			val := common.Bytes2Big(statedb.GetState(context.Address(), loc))
+			val := statedb.GetState(context.Address(), loc).Big()
 			stack.push(val)
 
 		case SSTORE:
 			loc := common.BigToHash(stack.pop())
 			val := stack.pop()
 
-			statedb.SetState(context.Address(), loc, val)
+			statedb.SetState(context.Address(), loc, common.BigToHash(val))
 
 		case JUMP:
 			if err := jump(pc, stack.pop()); err != nil {
@@ -686,11 +703,16 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		var g *big.Int
 		y, x := stack.data[stack.len()-2], stack.data[stack.len()-1]
 		val := statedb.GetState(context.Address(), common.BigToHash(x))
-		if len(val) == 0 && len(y.Bytes()) > 0 {
+
+		// This checks for 3 scenario's and calculates gas accordingly
+		// 1. From a zero-value address to a non-zero value         (NEW VALUE)
+		// 2. From a non-zero value address to a zero-value address (DELETE)
+		// 3. From a nen-zero to a non-zero                         (CHANGE)
+		if common.EmptyHash(val) && !common.EmptyHash(common.BigToHash(y)) {
 			// 0 => non 0
 			g = params.SstoreSetGas
-		} else if len(val) > 0 && len(y.Bytes()) == 0 {
-			statedb.Refund(self.env.Origin(), params.SstoreRefundGas)
+		} else if !common.EmptyHash(val) && common.EmptyHash(common.BigToHash(y)) {
+			statedb.Refund(params.SstoreRefundGas)
 
 			g = params.SstoreClearGas
 		} else {
@@ -700,7 +722,7 @@ func (self *Vm) calculateGasAndSize(context *Context, caller ContextRef, op OpCo
 		gas.Set(g)
 	case SUICIDE:
 		if !statedb.IsDeleted(context.Address()) {
-			statedb.Refund(self.env.Origin(), params.SuicideRefundGas)
+			statedb.Refund(params.SuicideRefundGas)
 		}
 	case MLOAD:
 		newMemSize = calcMemSize(stack.peek(), u256(32))
@@ -784,7 +806,7 @@ func (self *Vm) RunPrecompiled(p *PrecompiledAccount, input []byte, context *Con
 
 		return context.Return(ret), nil
 	} else {
-		return nil, OutOfGasError{}
+		return nil, OutOfGasError
 	}
 }
 

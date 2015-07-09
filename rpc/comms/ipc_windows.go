@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 // +build windows
 
 package comms
@@ -14,7 +30,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
@@ -641,10 +656,18 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{codec.New(c)}, nil
+	return &ipcClient{cfg.Endpoint, c, codec, codec.New(c)}, nil
 }
 
-func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
+func (self *ipcClient) reconnect() error {
+	c, err := Dial(self.endpoint)
+	if err == nil {
+		self.coder = self.codec.New(c)
+	}
+	return err
+}
+
+func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
 
 	l, err := Listen(cfg.Endpoint)
@@ -661,33 +684,13 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api api.EthereumApi) error {
 				continue
 			}
 
-			go func(conn net.Conn) {
-				codec := codec.New(conn)
+			id := newIpcConnId()
+			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
 
-				for {
-					req, err := codec.ReadRequest()
-					if err == io.EOF {
-						codec.Close()
-						return
-					} else if err != nil {
-						glog.V(logger.Error).Infof("IPC recv err - %v\n", err)
-						codec.Close()
-						return
-					}
-
-					var rpcResponse interface{}
-					res, err := api.Execute(req)
-
-					rpcResponse = shared.NewRpcResponse(req.Id, req.Jsonrpc, res, err)
-					err = codec.WriteResponse(rpcResponse)
-					if err != nil {
-						glog.V(logger.Error).Infof("IPC send err - %v\n", err)
-						codec.Close()
-						return
-					}
-				}
-			}(conn)
+			go handle(id, conn, api, codec)
 		}
+
+		os.Remove(cfg.Endpoint)
 	}()
 
 	glog.V(logger.Info).Infof("IPC service started (%s)\n", cfg.Endpoint)

@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package registrar
 
 import (
@@ -92,7 +108,7 @@ func New(b Backend) (res *Registrar) {
 	return
 }
 
-func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (err error) {
+func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (txhash string, err error) {
 	if namereg != "" {
 		GlobalRegistrarAddr = namereg
 		return
@@ -102,7 +118,7 @@ func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (
 			err = fmt.Errorf("GlobalRegistrar address not found and sender for creation not given")
 			return
 		} else {
-			GlobalRegistrarAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "800000", "", GlobalRegistrarCode)
+			txhash, err = self.backend.Transact(addr.Hex(), "", "", "", "800000", "", GlobalRegistrarCode)
 			if err != nil {
 				err = fmt.Errorf("GlobalRegistrar address not found and sender for creation failed: %v", err)
 				return
@@ -112,7 +128,7 @@ func (self *Registrar) SetGlobalRegistrar(namereg string, addr common.Address) (
 	return
 }
 
-func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (err error) {
+func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (txhash string, err error) {
 	if hashreg != "" {
 		HashRegAddr = hashreg
 	} else {
@@ -122,32 +138,32 @@ func (self *Registrar) SetHashReg(hashreg string, addr common.Address) (err erro
 		nameHex, extra := encodeName(HashRegName, 2)
 		hashRegAbi := resolveAbi + nameHex + extra
 		glog.V(logger.Detail).Infof("\ncall HashRegAddr %v with %v\n", GlobalRegistrarAddr, hashRegAbi)
-		HashRegAddr, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", hashRegAbi)
+		var res string
+		res, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", hashRegAbi)
+		if len(res) >= 40 {
+			HashRegAddr = "0x" + res[len(res)-40:len(res)]
+		}
 		if err != nil || zero.MatchString(HashRegAddr) {
 			if (addr == common.Address{}) {
 				err = fmt.Errorf("HashReg address not found and sender for creation not given")
 				return
 			}
 
-			HashRegAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "200000", "", HashRegCode)
+			txhash, err = self.backend.Transact(addr.Hex(), "", "", "", "", "", HashRegCode)
 			if err != nil {
 				err = fmt.Errorf("HashReg address not found and sender for creation failed: %v", err)
 			}
-			glog.V(logger.Detail).Infof("created HashRegAddr @ %v\n", HashRegAddr)
+			glog.V(logger.Detail).Infof("created HashRegAddr @ txhash %v\n", txhash)
 		} else {
 			glog.V(logger.Detail).Infof("HashRegAddr found at @ %v\n", HashRegAddr)
 			return
 		}
 	}
 
-	// register as HashReg
-	self.ReserveName(addr, HashRegName)
-	self.SetAddressToName(addr, HashRegName, common.HexToAddress(HashRegAddr))
-
 	return
 }
 
-func (self *Registrar) SetUrlHint(urlhint string, addr common.Address) (err error) {
+func (self *Registrar) SetUrlHint(urlhint string, addr common.Address) (txhash string, err error) {
 	if urlhint != "" {
 		UrlHintAddr = urlhint
 	} else {
@@ -157,26 +173,26 @@ func (self *Registrar) SetUrlHint(urlhint string, addr common.Address) (err erro
 		nameHex, extra := encodeName(UrlHintName, 2)
 		urlHintAbi := resolveAbi + nameHex + extra
 		glog.V(logger.Detail).Infof("UrlHint address query data: %s to %s", urlHintAbi, GlobalRegistrarAddr)
-		UrlHintAddr, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", urlHintAbi)
+		var res string
+		res, _, err = self.backend.Call("", GlobalRegistrarAddr, "", "", "", urlHintAbi)
+		if len(res) >= 40 {
+			UrlHintAddr = "0x" + res[len(res)-40:len(res)]
+		}
 		if err != nil || zero.MatchString(UrlHintAddr) {
 			if (addr == common.Address{}) {
 				err = fmt.Errorf("UrlHint address not found and sender for creation not given")
 				return
 			}
-			UrlHintAddr, err = self.backend.Transact(addr.Hex(), "", "", "", "210000", "", UrlHintCode)
+			txhash, err = self.backend.Transact(addr.Hex(), "", "", "", "210000", "", UrlHintCode)
 			if err != nil {
 				err = fmt.Errorf("UrlHint address not found and sender for creation failed: %v", err)
 			}
-			glog.V(logger.Detail).Infof("created UrlHint @ %v\n", HashRegAddr)
+			glog.V(logger.Detail).Infof("created UrlHint @ txhash %v\n", txhash)
 		} else {
 			glog.V(logger.Detail).Infof("UrlHint found @ %v\n", HashRegAddr)
 			return
 		}
 	}
-
-	// register as UrlHint
-	self.ReserveName(addr, UrlHintName)
-	self.SetAddressToName(addr, UrlHintName, common.HexToAddress(UrlHintAddr))
 
 	return
 }
@@ -310,7 +326,7 @@ func (self *Registrar) HashToHash(khash common.Hash) (chash common.Hash, err err
 	key := storageAddress(storageMapping(storageIdx2Addr(1), khash[:]))
 	hash := self.backend.StorageAt(at, key)
 
-	if hash == "0x0" || len(hash) < 3 {
+	if hash == "0x0" || len(hash) < 3 || (hash == common.Hash{}.Hex()) {
 		err = fmt.Errorf("content hash not found for '%v'", khash.Hex())
 		return
 	}
@@ -331,11 +347,12 @@ func (self *Registrar) HashToUrl(chash common.Hash) (uri string, err error) {
 		key := storageAddress(storageFixedArray(mapaddr, storageIdx2Addr(idx)))
 		hex := self.backend.StorageAt(UrlHintAddr[2:], key)
 		str = string(common.Hex2Bytes(hex[2:]))
-		l := len(str)
-		for (l > 0) && (str[l-1] == 0) {
-			l--
+		l := 0
+		for (l < len(str)) && (str[l] == 0) {
+			l++
 		}
-		str = str[:l]
+
+		str = str[l:]
 		uri = uri + str
 		idx++
 	}

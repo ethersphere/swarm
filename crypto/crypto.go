@@ -1,3 +1,19 @@
+// Copyright 2014 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package crypto
 
 import (
@@ -209,7 +225,7 @@ func ImportBlockTestKey(privKeyBytes []byte) error {
 }
 
 // creates a Key and stores that in the given KeyStore by decrypting a presale key JSON
-func ImportPreSaleKey(keyStore KeyStore2, keyJSON []byte, password string) (*Key, error) {
+func ImportPreSaleKey(keyStore KeyStore, keyJSON []byte, password string) (*Key, error) {
 	key, err := decryptPreSaleKey(keyJSON, password)
 	if err != nil {
 		return nil, err
@@ -258,19 +274,31 @@ func decryptPreSaleKey(fileContent []byte, password string) (key *Key, err error
 	return key, err
 }
 
-func aesCBCDecrypt(key []byte, cipherText []byte, iv []byte) (plainText []byte, err error) {
+// AES-128 is selected due to size of encryptKey
+func aesCTRXOR(key, inText, iv []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
-		return plainText, err
+		return nil, err
+	}
+	stream := cipher.NewCTR(aesBlock, iv)
+	outText := make([]byte, len(inText))
+	stream.XORKeyStream(outText, inText)
+	return outText, err
+}
+
+func aesCBCDecrypt(key, cipherText, iv []byte) ([]byte, error) {
+	aesBlock, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
 	}
 	decrypter := cipher.NewCBCDecrypter(aesBlock, iv)
-	paddedPlainText := make([]byte, len(cipherText))
-	decrypter.CryptBlocks(paddedPlainText, cipherText)
-	plainText = PKCS7Unpad(paddedPlainText)
-	if plainText == nil {
+	paddedPlaintext := make([]byte, len(cipherText))
+	decrypter.CryptBlocks(paddedPlaintext, cipherText)
+	plaintext := PKCS7Unpad(paddedPlaintext)
+	if plaintext == nil {
 		err = errors.New("Decryption failed: PKCS7Unpad failed after AES decryption")
 	}
-	return plainText, err
+	return plaintext, err
 }
 
 // From https://leanpub.com/gocrypto/read#leanpub-auto-block-cipher-modes

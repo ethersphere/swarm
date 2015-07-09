@@ -100,18 +100,28 @@ type Light struct {
 func (l *Light) Verify(block pow.Block) bool {
 	// TODO: do ethash_quick_verify before getCache in order
 	// to prevent DOS attacks.
-	var (
-		blockNum   = block.NumberU64()
-		difficulty = block.Difficulty()
-		cache      = l.getCache(blockNum)
-		dagSize    = C.ethash_get_datasize(C.uint64_t(blockNum))
-	)
-	if l.test {
-		dagSize = dagSizeForTesting
-	}
+	blockNum := block.NumberU64()
 	if blockNum >= epochLength*2048 {
 		glog.V(logger.Debug).Infof("block number %d too high, limit is %d", epochLength*2048)
 		return false
+	}
+
+	difficulty := block.Difficulty()
+	/* Cannot happen if block header diff is validated prior to PoW, but can
+		 happen if PoW is checked first due to parallel PoW checking.
+		 We could check the minimum valid difficulty but for SoC we avoid (duplicating)
+	   Ethereum protocol consensus rules here which are not in scope of Ethash
+	*/
+	if difficulty.Cmp(common.Big0) == 0 {
+		glog.V(logger.Debug).Infof("invalid block difficulty")
+		return false
+	}
+
+	cache := l.getCache(blockNum)
+	dagSize := C.ethash_get_datasize(C.uint64_t(blockNum))
+
+	if l.test {
+		dagSize = dagSizeForTesting
 	}
 	// Recompute the hash using the cache.
 	hash := hashToH256(block.HashNoNonce())
@@ -119,6 +129,12 @@ func (l *Light) Verify(block pow.Block) bool {
 	if !ret.success {
 		return false
 	}
+
+	// avoid mixdigest malleability as it's not included in a block's "hashNononce"
+	if block.MixDigest() != h256ToHash(ret.mix_hash) {
+		return false
+	}
+
 	// Make sure cache is live until after the C call.
 	// This is important because a GC might happen and execute
 	// the finalizer before the call completes.

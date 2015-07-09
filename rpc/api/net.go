@@ -1,3 +1,19 @@
+// Copyright 2015 The go-ethereum Authors
+// This file is part of go-ethereum.
+//
+// go-ethereum is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// go-ethereum is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
@@ -14,10 +30,8 @@ const (
 var (
 	// mapping between methods and handlers
 	netMapping = map[string]nethandler{
-		"net_version":   (*netApi).Version,
 		"net_peerCount": (*netApi).PeerCount,
 		"net_listening": (*netApi).IsListening,
-		"net_peers":     (*netApi).Peers,
 	}
 )
 
@@ -63,27 +77,19 @@ func (self *netApi) Execute(req *shared.Request) (interface{}, error) {
 }
 
 func (self *netApi) Name() string {
-	return NetApiName
+	return shared.NetApiName
 }
 
 func (self *netApi) ApiVersion() string {
 	return NetApiVersion
 }
 
-// Network version
-func (self *netApi) Version(req *shared.Request) (interface{}, error) {
-	return self.xeth.NetworkVersion(), nil
-}
-
 // Number of connected peers
 func (self *netApi) PeerCount(req *shared.Request) (interface{}, error) {
-	return self.xeth.PeerCount(), nil
+	return newHexNum(self.xeth.PeerCount()), nil
 }
 
 func (self *netApi) IsListening(req *shared.Request) (interface{}, error) {
 	return self.xeth.IsListening(), nil
 }
 
-func (self *netApi) Peers(req *shared.Request) (interface{}, error) {
-	return self.ethereum.PeersInfo(), nil
-}
