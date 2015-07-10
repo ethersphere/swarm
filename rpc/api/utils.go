@@ -43,6 +43,15 @@ var (
 			"startRPC",
 			"stopRPC",
 		},
+		"bzz": []string{
+			"register",
+			"resolve",
+			"download",
+			"upload",
+			"get",
+			"put",
+			"modify",
+		},
 		"db": []string{
 			"getString",
 			"putString",
@@ -152,6 +161,8 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case shared.AdminApiName:
 			apis[i] = NewAdminApi(xeth, eth, codec)
+		case shared.BzzApiName:
+			apis[i] = NewBzzApi(xeth, eth, codec)
 		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case shared.DbApiName:
@@ -182,6 +193,8 @@ func Javascript(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case shared.AdminApiName:
 		return Admin_JS
+	case shared.BzzApiName:
+		return Bzz_JS
 	case shared.DebugApiName:
 		return Debug_JS
 	case shared.DbApiName:
