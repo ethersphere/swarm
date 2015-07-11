@@ -13,6 +13,7 @@ import (
 const port = "8500"
 
 func TestRoundTripper(t *testing.T) {
+	t.Skip("")
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "text/plain")
