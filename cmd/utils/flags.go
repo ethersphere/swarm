@@ -482,15 +482,16 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 	return
 }
 
-func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
+func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
 	config := comms.IpcConfig{
 		Endpoint: IpcSocketPath(ctx),
 	}
 
-	xeth := xeth.New(eth, nil)
+	xeth := xeth.New(ethereum, nil)
 	codec := codec.JSON
+	docRoot := ctx.GlobalString(JSpathFlag.Name)
 
-	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, eth)
+	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, ethereum, docRoot)
 	if err != nil {
 		return err
 	}
@@ -507,8 +508,9 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 
 	xeth := xeth.New(eth, nil)
 	codec := codec.JSON
+	docRoot := ctx.GlobalString(JSpathFlag.Name)
 
-	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth)
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth, docRoot)
 	if err != nil {
 		return err
 	}

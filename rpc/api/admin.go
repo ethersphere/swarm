@@ -23,11 +23,13 @@ import (
 	"os"
 	"time"
 
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/registrar"
+	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -83,17 +85,29 @@ type adminApi struct {
 	ethereum *eth.Ethereum
 	codec    codec.Codec
 	coder    codec.ApiCoder
+	docRoot  string
 	ds       *docserver.DocServer
 }
 
 // create a new admin api instance
-func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec) *adminApi {
+func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec, docRoot string) *adminApi {
+	ds := docserver.New(docRoot)
+	if ethereum.Swarm != nil {
+		// register the swarm rountripper with the bzz scheme on the docserver
+		ds.RegisterProtocol("bzz", &bzz.RoundTripper{
+			Port: ethereum.Swarm.Port,
+		})
+		// set versioned registrar is swarm is enabled
+		ethereum.Swarm.Registrar = ethreg.New(xeth)
+	}
+
 	return &adminApi{
 		xeth:     xeth,
 		ethereum: ethereum,
 		codec:    codec,
 		coder:    codec.New(nil),
-		ds:       docserver.New("/"),
+		docRoot:  docRoot,
+		ds:       ds,
 	}
 }
 
@@ -266,7 +280,7 @@ func (self *adminApi) StartRPC(req *shared.Request) (interface{}, error) {
 		CorsDomain:    args.CorsDomain,
 	}
 
-	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum)
+	apis, err := ParseApiString(args.Apis, self.codec, self.xeth, self.ethereum, self.docRoot)
 	if err != nil {
 		return false, err
 	}
@@ -466,7 +480,6 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 	if err := self.coder.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
-
 	resp, err := self.ds.Get(args.Uri, args.Path)
 	if err != nil {
 		return nil, err
