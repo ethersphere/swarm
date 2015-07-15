@@ -44,15 +44,15 @@ func (args *BzzRegisterArgs) UnmarshalJSON(b []byte) (err error) {
 
 	addstr, ok = obj[1].(string)
 	if !ok {
-		return shared.NewInvalidTypeError("ContentHash", "not a string")
-	}
-	args.ContentHash = addstr
-
-	addstr, ok = obj[2].(string)
-	if !ok {
 		return shared.NewInvalidTypeError("Domain", "not a string")
 	}
 	args.Domain = addstr
+
+	addstr, ok = obj[2].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("ContentHash", "not a string")
+	}
+	args.ContentHash = addstr
 
 	return nil
 }

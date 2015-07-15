@@ -19,6 +19,7 @@ package core
 import (
 	"bytes"
 	"math/big"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -28,13 +29,24 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
+var (
+	blockHashPre = []byte("block-hash-")
+	blockNumPre  = []byte("block-num-")
+)
+
 // CalcDifficulty is the difficulty adjustment algorithm. It returns
 // the difficulty that a new block b should have when created at time
 // given the parent block's time and difficulty.
-func CalcDifficulty(time int64, parentTime int64, parentDiff *big.Int) *big.Int {
+func CalcDifficulty(time, parentTime uint64, parentDiff *big.Int) *big.Int {
 	diff := new(big.Int)
 	adjust := new(big.Int).Div(parentDiff, params.DifficultyBoundDivisor)
-	if big.NewInt(time-parentTime).Cmp(params.DurationLimit) < 0 {
+	bigTime := new(big.Int)
+	bigParentTime := new(big.Int)
+
+	bigTime.SetUint64(time)
+	bigParentTime.SetUint64(parentTime)
+
+	if bigTime.Sub(bigTime, bigParentTime).Cmp(params.DurationLimit) < 0 {
 		diff.Add(parentDiff, adjust)
 	} else {
 		diff.Sub(parentDiff, adjust)
@@ -110,5 +122,24 @@ func WriteHead(db common.Database, block *types.Block) error {
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// WriteBlock writes a block to the database
+func WriteBlock(db common.Database, block *types.Block) error {
+	tstart := time.Now()
+
+	enc, _ := rlp.EncodeToBytes((*types.StorageBlock)(block))
+	key := append(blockHashPre, block.Hash().Bytes()...)
+	err := db.Put(key, enc)
+	if err != nil {
+		glog.Fatal("db write fail:", err)
+		return err
+	}
+
+	if glog.V(logger.Debug) {
+		glog.Infof("wrote block #%v %s. Took %v\n", block.Number(), common.PP(block.Hash().Bytes()), time.Since(tstart))
+	}
+
 	return nil
 }

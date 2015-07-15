@@ -94,7 +94,7 @@ func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec, doc
 	ds := docserver.New(docRoot)
 	if ethereum.Swarm != nil {
 		// register the swarm rountripper with the bzz scheme on the docserver
-		ds.RegisterProtocol("bzz", &bzz.RoundTripper{
+		ds.RegisterScheme("bzz", &bzz.RoundTripper{
 			Port: ethereum.Swarm.Port,
 		})
 		// set versioned registrar is swarm is enabled
