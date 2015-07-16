@@ -53,15 +53,15 @@ func TestHTTP(t *testing.T) {
 	if checkEvalJSON(t, repl, `hash = bzz.put("f42 = function() { return 42 }", "application/javascript")`, `"e6847876f00102441f850b2d438a06d10e3bf24e6a0a76d47b073a86c3c2f9ac"`) != nil {
 		return
 	}
-	if checkEvalJSON(t, repl, `http.get("bzz://"+hash)`, `"f42 = function() { return 42 }"`) != nil {
+	if checkEvalJSON(t, repl, `admin.httpGet("bzz://"+hash)`, `"f42 = function() { return 42 }"`) != nil {
 		return
 	}
 
-	if checkEvalJSON(t, repl, `http.loadScript("bzz://"+hash)`, `true`) != nil {
-		return
-	}
+	// if checkEvalJSON(t, repl, `http.loadScript("bzz://"+hash)`, `true`) != nil {
+	// 	return
+	// }
 
-	if checkEvalJSON(t, repl, `f42()`, `42`) != nil {
-		return
-	}
+	// if checkEvalJSON(t, repl, `f42()`, `42`) != nil {
+	// 	return
+	// }
 }

@@ -114,6 +114,10 @@ var (
 		Usage: "Sets the genesis nonce",
 		Value: 42,
 	}
+	GenesisFileFlag = cli.StringFlag{
+		Name:  "genesis",
+		Usage: "Inserts/Overwrites the genesis block (json format)",
+	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -387,6 +391,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
+		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		SkipBcVersionCheck:      false,
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
@@ -445,8 +450,8 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, ex
 
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
-	genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(genesis, blockDB, stateDB, extraDB, pow, eventMux)
+	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
+	chain, err = core.NewChainManager(blockDB, stateDB, extraDB, pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
@@ -482,15 +487,16 @@ func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
 	return
 }
 
-func StartIPC(eth *eth.Ethereum, ctx *cli.Context) error {
+func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
 	config := comms.IpcConfig{
 		Endpoint: IpcSocketPath(ctx),
 	}
 
-	xeth := xeth.New(eth, nil)
+	xeth := xeth.New(ethereum, nil)
 	codec := codec.JSON
+	docRoot := ctx.GlobalString(JSpathFlag.Name)
 
-	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, eth)
+	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, ethereum, docRoot)
 	if err != nil {
 		return err
 	}
@@ -507,8 +513,9 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 
 	xeth := xeth.New(eth, nil)
 	codec := codec.JSON
+	docRoot := ctx.GlobalString(JSpathFlag.Name)
 
-	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth)
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth, docRoot)
 	if err != nil {
 		return err
 	}

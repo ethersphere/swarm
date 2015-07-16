@@ -42,7 +42,6 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -77,6 +76,8 @@ type Config struct {
 	Name         string
 	NetworkId    int
 	GenesisNonce int
+	GenesisFile  string
+	GenesisBlock *types.Block // used by block tests
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
@@ -272,60 +273,43 @@ func New(config *Config) (*Ethereum, error) {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
 	if db, ok := blockDb.(*ethdb.LDBDatabase); ok {
-		db.GetTimer = metrics.NewTimer("eth/db/block/user/gets")
-		db.PutTimer = metrics.NewTimer("eth/db/block/user/puts")
-		db.MissMeter = metrics.NewMeter("eth/db/block/user/misses")
-		db.ReadMeter = metrics.NewMeter("eth/db/block/user/reads")
-		db.WriteMeter = metrics.NewMeter("eth/db/block/user/writes")
-		db.CompTimeMeter = metrics.NewMeter("eth/db/block/compact/time")
-		db.CompReadMeter = metrics.NewMeter("eth/db/block/compact/input")
-		db.CompWriteMeter = metrics.NewMeter("eth/db/block/compact/output")
+		db.Meter("eth/db/block/")
 	}
 	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
 	if err != nil {
 		return nil, fmt.Errorf("state db err: %v", err)
 	}
 	if db, ok := stateDb.(*ethdb.LDBDatabase); ok {
-		db.GetTimer = metrics.NewTimer("eth/db/state/user/gets")
-		db.PutTimer = metrics.NewTimer("eth/db/state/user/puts")
-		db.MissMeter = metrics.NewMeter("eth/db/state/user/misses")
-		db.ReadMeter = metrics.NewMeter("eth/db/state/user/reads")
-		db.WriteMeter = metrics.NewMeter("eth/db/state/user/writes")
-		db.CompTimeMeter = metrics.NewMeter("eth/db/state/compact/time")
-		db.CompReadMeter = metrics.NewMeter("eth/db/state/compact/input")
-		db.CompWriteMeter = metrics.NewMeter("eth/db/state/compact/output")
+		db.Meter("eth/db/state/")
 	}
 	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
 	if err != nil {
 		return nil, fmt.Errorf("extra db err: %v", err)
 	}
 	if db, ok := extraDb.(*ethdb.LDBDatabase); ok {
-		db.GetTimer = metrics.NewTimer("eth/db/extra/user/gets")
-		db.PutTimer = metrics.NewTimer("eth/db/extra/user/puts")
-		db.MissMeter = metrics.NewMeter("eth/db/extra/user/misses")
-		db.ReadMeter = metrics.NewMeter("eth/db/extra/user/reads")
-		db.WriteMeter = metrics.NewMeter("eth/db/extra/user/writes")
-		db.CompTimeMeter = metrics.NewMeter("eth/db/extra/compact/time")
-		db.CompReadMeter = metrics.NewMeter("eth/db/extra/compact/input")
-		db.CompWriteMeter = metrics.NewMeter("eth/db/extra/compact/output")
+		db.Meter("eth/db/extra/")
 	}
 	nodeDb := filepath.Join(config.DataDir, "nodes")
-
-	// Perform database sanity checks
-	/*
-		// The databases were previously tied to protocol versions. Currently we
-		// are moving away from this decision as approaching Frontier. The below
-		// check was left in for now but should eventually be just dropped.
-
-		d, _ := blockDb.Get([]byte("ProtocolVersion"))
-		protov := int(common.NewValue(d).Uint())
-		if protov != config.ProtocolVersion && protov != 0 {
-			path := filepath.Join(config.DataDir, "blockchain")
-			return nil, fmt.Errorf("Database version mismatch. Protocol(%d / %d). `rm -rf %s`", protov, config.ProtocolVersion, path)
-		}
-		saveProtocolVersion(blockDb, config.ProtocolVersion)
-	*/
 	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
+
+	if len(config.GenesisFile) > 0 {
+		fr, err := os.Open(config.GenesisFile)
+		if err != nil {
+			return nil, err
+		}
+
+		block, err := core.WriteGenesisBlock(stateDb, blockDb, fr)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Info).Infof("Successfully wrote genesis block. New genesis hash = %x\n", block.Hash())
+	}
+
+	// This is for testing only.
+	if config.GenesisBlock != nil {
+		core.WriteBlock(blockDb, config.GenesisBlock)
+		core.WriteHead(blockDb, config.GenesisBlock)
+	}
 
 	if !config.SkipBcVersionCheck {
 		b, _ := blockDb.Get([]byte("BlockchainVersion"))
@@ -371,9 +355,13 @@ func New(config *Config) (*Ethereum, error) {
 	} else {
 		eth.pow = ethash.New()
 	}
-	genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(genesis, blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
+	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
+	eth.chainManager, err = core.NewChainManager(blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
 	if err != nil {
+		if err == core.ErrNoGenesis {
+			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
+		}
+
 		return nil, err
 	}
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)

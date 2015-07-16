@@ -16,24 +16,56 @@
 
 package api
 
-const Net_JS = `
+const Bzz_JS = `
 web3._extend({
-	property: 'net',
+	property: 'bzz',
 	methods:
 	[
 		new web3._extend.Method({
-			name: 'addPeer',
-			call: 'net_addPeer',
+			name: 'register',
+			call: 'bzz_register',
+			params: 3,
+			inputFormatter: [null, null, null]
+		}),
+		new web3._extend.Method({
+			name: 'resolve',
+			call: 'bzz_resolve',
 			params: 1,
 			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'download',
+			call: 'bzz_download',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'upload',
+			call: 'bzz_upload',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'get',
+			call: 'bzz_get',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'put',
+			call: 'bzz_put',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
+			name: 'modify',
+			call: 'bzz_modify',
+			params: 4,
+			inputFormatter: [null, null, null, null]
 		})
 	],
 	properties:
 	[
-		new web3._extend.Property({
-			name: 'version',
-			getter: 'net_version'
-		})
 	]
 });
 `

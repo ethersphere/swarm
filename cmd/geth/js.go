@@ -25,14 +25,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	//	"github.com/ethereum/go-ethereum/bzz"
 	"sort"
 
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/registrar"
+	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -70,6 +71,7 @@ func (r dumbterm) PasswordPrompt(p string) (string, error) {
 func (r dumbterm) AppendHistory(string) {}
 
 type jsre struct {
+	docRoot    string
 	ds         *docserver.DocServer
 	re         *re.JSRE
 	ethereum   *eth.Ethereum
@@ -141,18 +143,17 @@ func apiWordCompleter(line string, pos int) (head string, completions []string, 
 	return begin, completionWords, end
 }
 
-func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
+func newLightweightJSRE(docRoot string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
-	js.ds = docserver.New("/")
 
 	if f == nil {
 		f = js
 	}
 
 	// update state in separare forever blocks
-	js.re = re.New(libPath)
+	js.re = re.New(docRoot)
 	if err := js.apiBindings(f); err != nil {
 		utils.Fatalf("Unable to initialize console - %v", err)
 	}
@@ -176,25 +177,33 @@ func newLightweightJSRE(libPath string, client comms.EthereumClient, interactive
 	return js
 }
 
-func newJSRE(ethereum *eth.Ethereum, libPath, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
-	js := &jsre{ethereum: ethereum, ps1: "> "}
+func newJSRE(ethereum *eth.Ethereum, docRoot, corsDomain string, client comms.EthereumClient, interactive bool, f xeth.Frontend) *jsre {
+	js := &jsre{ethereum: ethereum, ps1: "> ", docRoot: docRoot}
 	// set default cors domain used by startRpc from CLI flag
 	js.corsDomain = corsDomain
 	if f == nil {
 		f = js
 	}
-	js.ds = docserver.New("/")
 	js.xeth = xeth.New(ethereum, f)
 	js.wait = js.xeth.UpdateState()
 	js.client = client
+	js.ds = docserver.New(docRoot)
+	if ethereum.Swarm != nil {
+		// register the swarm rountripper with the bzz scheme on the docserver
+		js.ds.RegisterScheme("bzz", &bzz.RoundTripper{
+			Port: ethereum.Swarm.Port,
+		})
+		// set versioned registrar is swarm is enabled
+		ethereum.Swarm.Registrar = ethreg.New(js.xeth)
+	}
 	if clt, ok := js.client.(*comms.InProcClient); ok {
-		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, ethereum); err == nil {
+		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, ethereum, docRoot); err == nil {
 			clt.Initialize(api.Merge(offeredApis...))
 		}
 	}
 
 	// update state in separare forever blocks
-	js.re = re.New(libPath)
+	js.re = re.New(docRoot)
 	if err := js.apiBindings(f); err != nil {
 		utils.Fatalf("Unable to connect - %v", err)
 	}
@@ -282,7 +291,7 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 		apiNames = append(apiNames, a)
 	}
 
-	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.ethereum)
+	apiImpl, err := api.ParseApiString(strings.Join(apiNames, ","), codec.JSON, js.xeth, js.ethereum, js.docRoot)
 	if err != nil {
 		utils.Fatalf("Unable to determine supported api's: %v", err)
 	}

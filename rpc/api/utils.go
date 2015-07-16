@@ -42,6 +42,25 @@ var (
 			"datadir",
 			"startRPC",
 			"stopRPC",
+			"setGlobalRegistrar",
+			"setHashReg",
+			"setUrlHing",
+			"register",
+			"registerUrl",
+			"saveInfo",
+			"getContractInfo",
+			"sleepBlocks",
+			"sleep",
+			"httpGet",
+		},
+		"bzz": []string{
+			"register",
+			"resolve",
+			"download",
+			"upload",
+			"get",
+			"put",
+			"modify",
 		},
 		"db": []string{
 			"getString",
@@ -88,7 +107,7 @@ var (
 			"hashrate",
 			"mining",
 			"namereg",
-			"pendingTransactions",
+			"getPendingTransactions",
 			"resend",
 			"sendRawTransaction",
 			"sendTransaction",
@@ -100,6 +119,7 @@ var (
 			"setExtra",
 			"setGasPrice",
 			"startAutoDAG",
+			"setEtherbase",
 			"start",
 			"stopAutoDAG",
 			"stop",
@@ -140,7 +160,7 @@ var (
 )
 
 // Parse a comma separated API string to individual api's
-func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum) ([]shared.EthereumApi, error) {
+func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum, docRoot string) ([]shared.EthereumApi, error) {
 	if len(strings.TrimSpace(apistr)) == 0 {
 		return nil, fmt.Errorf("Empty apistr provided")
 	}
@@ -151,7 +171,9 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case shared.AdminApiName:
-			apis[i] = NewAdminApi(xeth, eth, codec)
+			apis[i] = NewAdminApi(xeth, eth, codec, docRoot)
+		case shared.BzzApiName:
+			apis[i] = NewBzzApi(xeth, eth, codec)
 		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case shared.DbApiName:
@@ -182,6 +204,8 @@ func Javascript(name string) string {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case shared.AdminApiName:
 		return Admin_JS
+	case shared.BzzApiName:
+		return Bzz_JS
 	case shared.DebugApiName:
 		return Debug_JS
 	case shared.DbApiName:
