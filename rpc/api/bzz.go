@@ -107,7 +107,8 @@ func (self *bzzApi) Resolve(req *shared.Request) (interface{}, error) {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	return self.api.Resolve(args.Domain)
+	key, err := self.api.Resolve(args.Domain)
+	return key.Hex(), err
 }
 
 func (self *bzzApi) Download(req *shared.Request) (interface{}, error) {

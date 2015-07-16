@@ -49,6 +49,10 @@ var (
 
 type Key []byte
 
+func (key Key) Hex() string {
+	return fmt.Sprintf("%064x", key[:])
+}
+
 /*
 Chunker is the interface to a component that is responsible for disassembling and assembling larger data and indended to be the dependency of a DPA storage system with fixed maximum chunksize.
 
