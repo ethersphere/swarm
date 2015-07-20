@@ -264,6 +264,40 @@ function centerThumb(duration)
   fscr = new Fx.Scroll(elist, { duration: duration }).start(x, y);
 }
 
+function uploadFile(files, nr, uri) {
+  if(files.length <= nr) {
+    if(uri != "") {
+      window.location.replace(uri);
+    }
+    return;
+  }
+  var imageType = /^image\//;
+  var file = files[nr];
+  if(!imageType.test(file.type)) {
+    uploadFile(files, nr + 1, uri);
+    return;
+  }
+  
+  var xhr = new XMLHttpRequest();
+  xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
+    var i = xhr.responseText;
+    uploadFile(files, nr + 1, "/" + i + "/");
+    return;
+  }};
+  xhr.open("PUT", uri + "imgs/" + file.name, true);
+  xhr.setRequestHeader('Content-Type', file.type);
+
+  var reader = new FileReader();
+  reader.onload = function(evt) {
+    xhr.send(evt.target.result);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleFiles(files) {
+  uploadFile(files, 0, "");
+}
+
 function deleteImg()
 {
   if(imgs.data.length < 2) return; // empty albums not allowed
@@ -310,6 +344,9 @@ function onMainReady()
   if(imgs.data.length > 1)
     dsc.push("<a title=\"Delete image\" onclick=\"deleteImg()\"><img src=\"delete.png\"/></a>");
 
+  // add image
+  dsc.push("<input type=\"file\" id=\"fileElem\" multiple accept=\"image/*\" style=\"display:none\" onchange=\"handleFiles(this.files)\"><a href=\"#\" id=\"fileSelect\"><img src=\"add.png\"></a>");
+
   if(imgs.data[eidx].file)
   {
     var img = imgs.data[eidx].file[0];
@@ -324,6 +361,16 @@ function onMainReady()
     dsc.push("<b>Date</b>: " + imgs.data[eidx].date);
   ehdr.set('html', dsc.join(' '));
   ehdr.setStyle('display', (dsc.length? 'block': 'none'));
+
+  // setup upload file selector
+  var fileSelect = document.getElementById("fileSelect"),
+      fileElem = document.getElementById("fileElem");
+  fileSelect.addEventListener("click", function (e) {
+    if (fileElem) {
+      fileElem.click();
+    }
+    e.preventDefault(); // prevent navigation to "#"
+  }, false);
 
   // complete thumbnails
   var d = duration;
