@@ -264,10 +264,33 @@ function centerThumb(duration)
   fscr = new Fx.Scroll(elist, { duration: duration }).start(x, y);
 }
 
+function sendImgs(xhr, uri) {
+  // set up request
+  xhr.open("PUT", uri + "data.json", true);
+  xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+
+  // send the collected data as JSON
+  xhr.send(JSON.stringify(imgs));
+}
+
+function imageToUrl(img, w, h) {
+  var can = document.createElement('canvas');
+  can.width = w;
+  can.height = h;
+  var cntxt = can.getContext("2d");
+  cntxt.drawImage(img, 0, 0, w, h);
+  return can.toDataURL();
+}
+
 function uploadFile(files, nr, uri) {
   if(files.length <= nr) {
     if(uri != "") {
-      window.location.replace(uri);
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
+        var i = xhr.responseText;
+        window.location.replace("/" + i + "/");
+      }};
+      sendImgs(xhr, uri);
     }
     return;
   }
@@ -277,11 +300,36 @@ function uploadFile(files, nr, uri) {
     uploadFile(files, nr + 1, uri);
     return;
   }
-  
+
   var xhr = new XMLHttpRequest();
   xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
     var i = xhr.responseText;
-    uploadFile(files, nr + 1, "/" + i + "/");
+
+    // insert image into index
+    var img = new Image();
+    img.onload = function() {
+      var blur = imageToUrl(img, 5, 5);
+      var thumbData = [];
+      var thumbSize = 200;
+      if(img.naturalWidth > img.naturalHeight) {
+        // landscape thumbnail
+        var h = img.naturalHeight * thumbSize / img.naturalWidth;
+        thumbData[0] = imageToUrl(img, thumbSize, h);
+        thumbData[1] = [thumbSize, h];
+      } else {
+        // portrait thumbnail
+        var w = img.naturalWidth * thumbSize / img.naturalHeight;
+        thumbData[0] = imageToUrl(img, w, thumbsize);
+        thumbData[1] = [w, thumbSize];
+      }
+      // update index
+      var imgData = [];
+      imgData[0] = "imgs/" + file.name;
+      imgData[1] = [img.naturalWidth, img.naturalHeight];
+      imgs.data.splice(eidx, 0, {img: imgData, thumb: thumbData, blur: blur});
+      uploadFile(files, nr + 1, "/" + i + "/");
+    }
+    img.src = "/" + i + "/imgs/" + file.name;
     return;
   }};
   xhr.open("PUT", uri + "imgs/" + file.name, true);
@@ -319,13 +367,7 @@ function deleteImg()
     xhrd.send();
   }};
 
-  // set up request
-  xhr.open("PUT", "data.json", true);
-  xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
-
-  // send the collected data as JSON
-  xhr.send(JSON.stringify(imgs));
-
+  sendImgs(xhr, "");
 }
 
 function onMainReady()
