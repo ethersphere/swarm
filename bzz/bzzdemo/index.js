@@ -370,6 +370,29 @@ function deleteImg()
   sendImgs(xhr, "");
 }
 
+function moveUpDown(off)
+{
+  var me = imgs.data[eidx];
+  imgs.data[eidx] = imgs.data[eidx + off];
+  imgs.data[eidx + off] = me;
+  var xhr = new XMLHttpRequest();
+  xhr.onreadystatechange = function () {  if (xhr.readyState === 4) {
+    var i = xhr.responseText;
+    window.location.replace("/" + i + "/#" + (eidx + off));
+  }};
+  sendImgs(xhr, "");
+}
+
+function moveUp()
+{
+  moveUpDown(-1);
+}
+
+function moveDown()
+{
+  moveUpDown(1);
+}
+
 function onMainReady()
 {
   resizeMainImg(eimg);
@@ -388,6 +411,14 @@ function onMainReady()
 
   // add image
   dsc.push("<input type=\"file\" id=\"fileElem\" multiple accept=\"image/*\" style=\"display:none\" onchange=\"handleFiles(this.files)\"><a href=\"#\" id=\"fileSelect\"><img src=\"add.png\"></a>");
+
+  // up image
+  if(eidx > 0)
+    dsc.push("<a title=\"Move up\" onclick=\"moveUp()\"><img src=\"up.png\"/></a>");
+
+  // down image
+  if(eidx < imgs.data.length - 1)
+    dsc.push("<a title=\"Move down\" onclick=\"moveDown()\"><img src=\"down.png\"/></a>");
 
   if(imgs.data[eidx].file)
   {
@@ -797,7 +828,7 @@ function init()
   // preload some resources
   Asset.images(['throbber.gif',
 		'left.png', 'right.png', 'delete.png', 'add.png',
-		'eye.png', 'download.png', 'back.png',
+		'eye.png', 'download.png', 'back.png', 'up.png', 'down.png',
 		'cut-left.png', 'cut-right.png',
 		'cut-top.png', 'cut-mov.png']);
 }
