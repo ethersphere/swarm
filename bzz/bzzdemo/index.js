@@ -264,6 +264,88 @@ function centerThumb(duration)
   fscr = new Fx.Scroll(elist, { duration: duration }).start(x, y);
 }
 
+function sendImgs(xhr, uri) {
+  // set up request
+  xhr.open("PUT", uri + "data.json", true);
+  xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+
+  // send the collected data as JSON
+  xhr.send(JSON.stringify(imgs));
+}
+
+function imageToUrl(img, w, h) {
+  var can = document.createElement('canvas');
+  can.width = w;
+  can.height = h;
+  var cntxt = can.getContext("2d");
+  cntxt.drawImage(img, 0, 0, w, h);
+  return can.toDataURL();
+}
+
+function uploadFile(files, nr, uri) {
+  if(files.length <= nr) {
+    if(uri != "") {
+      var xhr = new XMLHttpRequest();
+      xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
+        var i = xhr.responseText;
+        window.location.replace("/" + i + "/");
+      }};
+      sendImgs(xhr, uri);
+    }
+    return;
+  }
+  var imageType = /^image\//;
+  var file = files[nr];
+  if(!imageType.test(file.type)) {
+    uploadFile(files, nr + 1, uri);
+    return;
+  }
+
+  var xhr = new XMLHttpRequest();
+  xhr.onreadystatechange = function() { if (xhr.readyState === 4) {
+    var i = xhr.responseText;
+
+    // insert image into index
+    var img = new Image();
+    img.onload = function() {
+      var blur = imageToUrl(img, 5, 5);
+      var thumbData = [];
+      var thumbSize = 200;
+      if(img.naturalWidth > img.naturalHeight) {
+        // landscape thumbnail
+        var h = img.naturalHeight * thumbSize / img.naturalWidth;
+        thumbData[0] = imageToUrl(img, thumbSize, h);
+        thumbData[1] = [thumbSize, h];
+      } else {
+        // portrait thumbnail
+        var w = img.naturalWidth * thumbSize / img.naturalHeight;
+        thumbData[0] = imageToUrl(img, w, thumbsize);
+        thumbData[1] = [w, thumbSize];
+      }
+      // update index
+      var imgData = [];
+      imgData[0] = "imgs/" + file.name;
+      imgData[1] = [img.naturalWidth, img.naturalHeight];
+      imgs.data.splice(eidx, 0, {img: imgData, thumb: thumbData, blur: blur});
+      uploadFile(files, nr + 1, "/" + i + "/");
+    }
+    img.src = "/" + i + "/imgs/" + file.name;
+    return;
+  }};
+  xhr.open("PUT", uri + "imgs/" + file.name, true);
+  xhr.setRequestHeader('Content-Type', file.type);
+
+  var reader = new FileReader();
+  reader.onload = function(evt) {
+    xhr.send(evt.target.result);
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function handleFiles(files) {
+  uploadFile(files, 0, "");
+}
+
 function deleteImg()
 {
   if(imgs.data.length < 2) return; // empty albums not allowed
@@ -285,13 +367,30 @@ function deleteImg()
     xhrd.send();
   }};
 
-  // set up request
-  xhr.open("PUT", "data.json", true);
-  xhr.setRequestHeader('Content-Type', 'application/json; charset=UTF-8');
+  sendImgs(xhr, "");
+}
 
-  // send the collected data as JSON
-  xhr.send(JSON.stringify(imgs));
+function moveUpDown(off)
+{
+  var me = imgs.data[eidx];
+  imgs.data[eidx] = imgs.data[eidx + off];
+  imgs.data[eidx + off] = me;
+  var xhr = new XMLHttpRequest();
+  xhr.onreadystatechange = function () {  if (xhr.readyState === 4) {
+    var i = xhr.responseText;
+    window.location.replace("/" + i + "/#" + (eidx + off));
+  }};
+  sendImgs(xhr, "");
+}
 
+function moveUp()
+{
+  moveUpDown(-1);
+}
+
+function moveDown()
+{
+  moveUpDown(1);
 }
 
 function onMainReady()
@@ -310,6 +409,17 @@ function onMainReady()
   if(imgs.data.length > 1)
     dsc.push("<a title=\"Delete image\" onclick=\"deleteImg()\"><img src=\"delete.png\"/></a>");
 
+  // add image
+  dsc.push("<input type=\"file\" id=\"fileElem\" multiple accept=\"image/*\" style=\"display:none\" onchange=\"handleFiles(this.files)\"><a href=\"#\" id=\"fileSelect\"><img src=\"add.png\"></a>");
+
+  // up image
+  if(eidx > 0)
+    dsc.push("<a title=\"Move up\" onclick=\"moveUp()\"><img src=\"up.png\"/></a>");
+
+  // down image
+  if(eidx < imgs.data.length - 1)
+    dsc.push("<a title=\"Move down\" onclick=\"moveDown()\"><img src=\"down.png\"/></a>");
+
   if(imgs.data[eidx].file)
   {
     var img = imgs.data[eidx].file[0];
@@ -324,6 +434,16 @@ function onMainReady()
     dsc.push("<b>Date</b>: " + imgs.data[eidx].date);
   ehdr.set('html', dsc.join(' '));
   ehdr.setStyle('display', (dsc.length? 'block': 'none'));
+
+  // setup upload file selector
+  var fileSelect = document.getElementById("fileSelect"),
+      fileElem = document.getElementById("fileElem");
+  fileSelect.addEventListener("click", function (e) {
+    if (fileElem) {
+      fileElem.click();
+    }
+    e.preventDefault(); // prevent navigation to "#"
+  }, false);
 
   // complete thumbnails
   var d = duration;
@@ -708,7 +828,7 @@ function init()
   // preload some resources
   Asset.images(['throbber.gif',
 		'left.png', 'right.png', 'delete.png', 'add.png',
-		'eye.png', 'download.png', 'back.png',
+		'eye.png', 'download.png', 'back.png', 'up.png', 'down.png',
 		'cut-left.png', 'cut-right.png',
 		'cut-top.png', 'cut-mov.png']);
 }
