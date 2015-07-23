@@ -345,7 +345,7 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 			Id:    uint64(id),
 		}
 		for _, req := range requesters {
-			if req.timeout.After(time.Now()) {
+			if req.timeout == nil || req.timeout.After(time.Now()) {
 				glog.V(logger.Debug).Infof("[BZZ] netStore.propagateResponse store -> %064x with %v", req.Id, req.peer)
 				go req.peer.store(msg)
 				counter--
