@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package core implements the Ethereum consensus protocol.
 package core
@@ -73,9 +73,6 @@ type ChainManager struct {
 	lastBlockHash   common.Hash
 	currentGasLimit *big.Int
 
-	transState *state.StateDB
-	txState    *state.ManagedState
-
 	cache        *lru.Cache // cache is the LRU caching
 	futureBlocks *lru.Cache // future blocks are blocks added for later processing
 
@@ -101,13 +98,7 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 
 	bc.genesisBlock = bc.GetBlockByNumber(0)
 	if bc.genesisBlock == nil {
-		// XXX Uncomment me before Frontier
-		//return nil, ErrNoGenesis
-		genesis, err := WriteTestNetGenesisBlock(bc.stateDb, bc.blockDb, 42)
-		if err != nil {
-			glog.Fatalln("genisis err", err)
-		}
-		bc.genesisBlock = genesis
+		return nil, ErrNoGenesis
 	}
 
 	if err := bc.setLastState(); err != nil {
@@ -128,9 +119,7 @@ func NewChainManager(blockDb, stateDb, extraDb common.Database, pow pow.PoW, mux
 		}
 	}
 
-	bc.transState = bc.State().Copy()
 	// Take ownership of this particular state
-	bc.txState = state.ManageState(bc.State().Copy())
 
 	bc.futureBlocks, _ = lru.New(maxFutureBlocks)
 	bc.makeCache()
@@ -152,9 +141,6 @@ func (bc *ChainManager) SetHead(head *types.Block) {
 	bc.currentBlock = head
 	bc.makeCache()
 
-	statedb := state.New(head.Root(), bc.stateDb)
-	bc.txState = state.ManageState(statedb)
-	bc.transState = statedb.Copy()
 	bc.setTotalDifficulty(head.Td)
 	bc.insert(head)
 	bc.setLastState()
@@ -201,17 +187,6 @@ func (self *ChainManager) SetProcessor(proc types.BlockProcessor) {
 
 func (self *ChainManager) State() *state.StateDB {
 	return state.New(self.CurrentBlock().Root(), self.stateDb)
-}
-
-func (self *ChainManager) TransState() *state.StateDB {
-	self.tsmu.RLock()
-	defer self.tsmu.RUnlock()
-
-	return self.transState
-}
-
-func (self *ChainManager) setTransState(statedb *state.StateDB) {
-	self.transState = statedb
 }
 
 func (bc *ChainManager) recover() bool {
@@ -528,9 +503,6 @@ func (self *ChainManager) WriteBlock(block *types.Block, queued bool) (status wr
 		self.setTotalDifficulty(block.Td)
 		self.insert(block)
 		self.mu.Unlock()
-
-		self.setTransState(state.New(block.Root(), self.stateDb))
-		self.txState.SetState(state.New(block.Root(), self.stateDb))
 
 		status = CanonStatTy
 	} else {

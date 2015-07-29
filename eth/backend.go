@@ -1,18 +1,18 @@
 // Copyright 2014 The go-ethereum Authors
-// This file is part of go-ethereum.
+// This file is part of the go-ethereum library.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 //
-// go-ethereum is distributed in the hope that it will be useful,
+// The go-ethereum library is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
 // GNU Lesser General Public License for more details.
 //
 // You should have received a copy of the GNU Lesser General Public License
-// along with go-ethereum.  If not, see <http://www.gnu.org/licenses/>.
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // Package eth implements the Ethereum protocol.
 package eth
@@ -46,6 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -81,6 +82,7 @@ type Config struct {
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
+	DatabaseCache      int
 
 	DataDir   string
 	LogFile   string
@@ -266,7 +268,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
+		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
 	}
 	blockDb, err := newdb(filepath.Join(config.DataDir, "blockchain"))
 	if err != nil {
@@ -372,6 +374,13 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
+
+	extra := config.Name
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		extra = extra[:params.MaximumExtraDataSize.Uint64()]
+	}
+	eth.miner.SetExtra([]byte(extra))
+
 	if config.Shh {
 		eth.whisper = whisper.New()
 		eth.shhVersionId = int(eth.whisper.Version())
@@ -505,7 +514,11 @@ func (s *Ethereum) StartMining(threads int) error {
 func (s *Ethereum) Etherbase() (eb common.Address, err error) {
 	eb = s.etherbase
 	if (eb == common.Address{}) {
-		err = fmt.Errorf("etherbase address must be explicitly specified")
+		addr, e := s.AccountManager().AddressByIndex(0)
+		if e != nil {
+			err = fmt.Errorf("etherbase address must be explicitly specified")
+		}
+		eb = common.HexToAddress(addr)
 	}
 	return
 }
