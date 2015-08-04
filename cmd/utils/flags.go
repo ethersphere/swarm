@@ -126,11 +126,6 @@ var (
 		Name:  "natspec",
 		Usage: "Enable NatSpec confirmation notice",
 	}
-	CacheFlag = cli.IntFlag{
-		Name:  "cache",
-		Usage: "Megabytes of memory allocated to internal caching",
-		Value: 0,
-	}
 
 	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
@@ -398,7 +393,6 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
-		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		SkipBcVersionCheck:      false,
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		LogFile:                 ctx.GlobalString(LogFileFlag.Name),
@@ -442,17 +436,15 @@ func SetupLogger(ctx *cli.Context) {
 
 // MakeChain creates a chain manager from set command line flags.
 func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, extraDB common.Database) {
-	datadir := ctx.GlobalString(DataDirFlag.Name)
-	cache := ctx.GlobalInt(CacheFlag.Name)
-
+	dd := ctx.GlobalString(DataDirFlag.Name)
 	var err error
-	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "blockchain"), cache); err != nil {
+	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "blockchain")); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	if stateDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "state"), cache); err != nil {
+	if stateDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "state")); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "extra"), cache); err != nil {
+	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "extra")); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
 

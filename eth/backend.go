@@ -82,7 +82,6 @@ type Config struct {
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
-	DatabaseCache      int
 
 	DataDir   string
 	LogFile   string
@@ -268,7 +267,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
+		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
 	}
 	blockDb, err := newdb(filepath.Join(config.DataDir, "blockchain"))
 	if err != nil {
