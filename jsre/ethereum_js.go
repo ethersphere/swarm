@@ -1,7 +1,7 @@
 // Copyright 2015 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
-// go-ethereum is free software: you can redistribute it and/or modify
+// The go-ethereum library is free software: you can redistribute it and/or modify
 // it under the terms of the GNU Lesser General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
@@ -1137,10 +1137,10 @@ var toHex = function (val) {
     if (isString(val)) {
         if (val.indexOf('-0x') === 0)
             return fromDecimal(val);
-        else if (!isFinite(val))
-            return fromAscii(val);
         else if(val.indexOf('0x') === 0)
             return val;
+        else if (!isFinite(val))
+            return fromAscii(val);
     }
 
     return fromDecimal(val);
