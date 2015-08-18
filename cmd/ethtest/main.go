@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/codegangsta/cli"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/tests"
 )
@@ -36,6 +37,7 @@ var (
 	defaultTest     = "all"
 	defaultDir      = "."
 	allTests        = []string{"BlockTests", "StateTests", "TransactionTests", "VMTests", "RLPTests"}
+	testDirMapping  = map[string]string{"BlockTests": "BlockchainTests"}
 	skipTests       = []string{}
 
 	TestFlag = cli.StringFlag{
@@ -60,6 +62,10 @@ var (
 	SkipTestsFlag = cli.StringFlag{
 		Name:  "skip",
 		Usage: "Tests names to skip",
+	}
+	TraceFlag = cli.BoolFlag{
+		Name:  "trace",
+		Usage: "Enable VM tracing",
 	}
 )
 
@@ -135,8 +141,13 @@ func runSuite(test, file string) {
 		var err error
 		var files []string
 		if test == defaultTest {
-			files, err = getFiles(filepath.Join(file, curTest))
-
+			// check if we have an explicit directory mapping for the test
+			if _, ok := testDirMapping[curTest]; ok {
+				files, err = getFiles(filepath.Join(file, testDirMapping[curTest]))
+			} else {
+				// otherwise assume test name
+				files, err = getFiles(filepath.Join(file, curTest))
+			}
 		} else {
 			files, err = getFiles(file)
 		}
@@ -167,7 +178,6 @@ func runSuite(test, file string) {
 					glog.Fatalln(err)
 				}
 			}
-
 		}
 	}
 }
@@ -178,6 +188,7 @@ func setupApp(c *cli.Context) {
 	continueOnError = c.GlobalBool(ContinueOnErrorFlag.Name)
 	useStdIn := c.GlobalBool(ReadStdInFlag.Name)
 	skipTests = strings.Split(c.GlobalString(SkipTestsFlag.Name), " ")
+	vm.Debug = c.GlobalBool(TraceFlag.Name)
 
 	if !useStdIn {
 		runSuite(flagTest, flagFile)
@@ -205,6 +216,7 @@ func main() {
 		ContinueOnErrorFlag,
 		ReadStdInFlag,
 		SkipTestsFlag,
+		TraceFlag,
 	}
 
 	if err := app.Run(os.Args); err != nil {

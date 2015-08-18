@@ -39,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
 	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/ethereum/go-ethereum/rpc/useragent"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -73,6 +74,7 @@ var (
 		"admin_httpGet":            (*adminApi).HttpGet,
 		"admin_sleepBlocks":        (*adminApi).SleepBlocks,
 		"admin_sleep":              (*adminApi).Sleep,
+		"admin_enableUserAgent":    (*adminApi).EnableUserAgent,
 	}
 )
 
@@ -486,4 +488,11 @@ func (self *adminApi) HttpGet(req *shared.Request) (interface{}, error) {
 	}
 
 	return string(resp), nil
+}
+
+func (self *adminApi) EnableUserAgent(req *shared.Request) (interface{}, error) {
+	if fe, ok := self.xeth.Frontend().(*useragent.RemoteFrontend); ok {
+		fe.Enable()
+	}
+	return true, nil
 }

@@ -21,29 +21,32 @@ import (
 	"fmt"
 	"log"
 	"math/big"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 
-	"github.com/ethereum/go-ethereum/metrics"
-
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/ethereum/go-ethereum/rpc/useragent"
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
@@ -126,6 +129,15 @@ var (
 		Name:  "natspec",
 		Usage: "Enable NatSpec confirmation notice",
 	}
+	CacheFlag = cli.IntFlag{
+		Name:  "cache",
+		Usage: "Megabytes of memory allocated to internal caching",
+		Value: 0,
+	}
+	OlympicFlag = cli.BoolFlag{
+		Name:  "olympic",
+		Usage: "Use olympic style protocol",
+	}
 
 	// miner settings
 	MinerThreadsFlag = cli.IntFlag{
@@ -149,7 +161,7 @@ var (
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
 		Usage: "Sets the minimal gasprice when mining transactions",
-		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
+		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
 	}
 
 	UnlockedAccountFlag = cli.StringFlag{
@@ -161,6 +173,25 @@ var (
 		Name:  "password",
 		Usage: "Path to password file to use with options and subcommands needing a password",
 		Value: "",
+	}
+
+	// vm flags
+	VMDebugFlag = cli.BoolFlag{
+		Name:  "vmdebug",
+		Usage: "Virtual Machine debug output",
+	}
+	VMForceJitFlag = cli.BoolFlag{
+		Name:  "forcejit",
+		Usage: "Force the JIT VM to take precedence",
+	}
+	VMJitCacheFlag = cli.IntFlag{
+		Name:  "jitcache",
+		Usage: "Amount of cached JIT VM programs",
+		Value: 64,
+	}
+	VMEnableJitFlag = cli.BoolFlag{
+		Name:  "jitvm",
+		Usage: "Enable the JIT VM",
 	}
 
 	// logging and debug settings
@@ -186,10 +217,6 @@ var (
 		Name:  "vmodule",
 		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a log verbosity level.",
 		Value: glog.GetVModule(),
-	}
-	VMDebugFlag = cli.BoolFlag{
-		Name:  "vmdebug",
-		Usage: "Virtual Machine debug output",
 	}
 	BacktraceAtFlag = cli.GenericFlag{
 		Name:  "backtrace_at",
@@ -318,12 +345,12 @@ var (
 	GpoMinGasPriceFlag = cli.StringFlag{
 		Name:  "gpomin",
 		Usage: "Minimum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(1), common.Szabo).String(),
+		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
 	}
 	GpoMaxGasPriceFlag = cli.StringFlag{
 		Name:  "gpomax",
 		Usage: "Maximum suggested gas price",
-		Value: new(big.Int).Mul(big.NewInt(100), common.Szabo).String(),
+		Value: new(big.Int).Mul(big.NewInt(500), common.Shannon).String(),
 	}
 	GpoFullBlockRatioFlag = cli.IntFlag{
 		Name:  "gpofull",
@@ -393,6 +420,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
+		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		SkipBcVersionCheck:      false,
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		LogFile:                 ctx.GlobalString(LogFileFlag.Name),
@@ -405,6 +433,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		MaxPeers:                ctx.GlobalInt(MaxPeersFlag.Name),
 		MaxPendingPeers:         ctx.GlobalInt(MaxPendingPeersFlag.Name),
 		Port:                    ctx.GlobalString(ListenPortFlag.Name),
+		Olympic:                 ctx.GlobalBool(OlympicFlag.Name),
 		NAT:                     MakeNAT(ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
@@ -434,31 +463,41 @@ func SetupLogger(ctx *cli.Context) {
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
 }
 
+// SetupVM configured the VM package's global settings
+func SetupVM(ctx *cli.Context) {
+	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
+	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
+	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
+}
+
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context) (chain *core.ChainManager, blockDB, stateDB, extraDB common.Database) {
-	dd := ctx.GlobalString(DataDirFlag.Name)
+func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb common.Database) {
+	datadir := ctx.GlobalString(DataDirFlag.Name)
+	cache := ctx.GlobalInt(CacheFlag.Name)
+
 	var err error
-	if blockDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "blockchain")); err != nil {
+	if chainDb, err = ethdb.NewLDBDatabase(filepath.Join(datadir, "chaindata"), cache); err != nil {
 		Fatalf("Could not open database: %v", err)
 	}
-	if stateDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "state")); err != nil {
-		Fatalf("Could not open database: %v", err)
-	}
-	if extraDB, err = ethdb.NewLDBDatabase(filepath.Join(dd, "extra")); err != nil {
-		Fatalf("Could not open database: %v", err)
+	if ctx.GlobalBool(OlympicFlag.Name) {
+		InitOlympic()
+		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
+		if err != nil {
+			glog.Fatalln(err)
+		}
 	}
 
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(blockDB, stateDB, extraDB, pow, eventMux)
+	chain, err = core.NewChainManager(chainDb, pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
 
-	proc := core.NewBlockProcessor(stateDB, extraDB, pow, chain, eventMux)
+	proc := core.NewBlockProcessor(chainDb, pow, chain, eventMux)
 	chain.SetProcessor(proc)
-	return chain, blockDB, stateDB, extraDB
+	return chain, chainDb
 }
 
 // MakeChain creates an account manager from set command line flags.
@@ -469,7 +508,7 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 }
 
 func IpcSocketPath(ctx *cli.Context) (ipcpath string) {
-	if common.IsWindows() {
+	if runtime.GOOS == "windows" {
 		ipcpath = common.DefaultIpcPath()
 		if ctx.GlobalIsSet(IPCPathFlag.Name) {
 			ipcpath = ctx.GlobalString(IPCPathFlag.Name)
@@ -492,16 +531,20 @@ func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
 		Endpoint: IpcSocketPath(ctx),
 	}
 
-	xeth := xeth.New(ethereum, nil)
-	codec := codec.JSON
-	docRoot := ctx.GlobalString(JSpathFlag.Name)
+	initializer := func(conn net.Conn) (shared.EthereumApi, error) {
+		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
+		xeth := xeth.New(ethereum, fe)
+		codec := codec.JSON
 
-	apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, ethereum, docRoot)
-	if err != nil {
-		return err
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, ethereum, "")
+		if err != nil {
+			return nil, err
+		}
+
+		return api.Merge(apis...), nil
 	}
 
-	return comms.StartIpc(config, codec, api.Merge(apis...))
+	return comms.StartIpc(config, codec.JSON, initializer)
 }
 
 func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {

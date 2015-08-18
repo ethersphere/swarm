@@ -46,7 +46,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/whisper"
 )
 
@@ -63,10 +62,11 @@ var (
 
 	defaultBootNodes = []*discover.Node{
 		// ETH/DEV Go Bootnodes
-		discover.MustParseNode("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:30303"),
-		discover.MustParseNode("enode://de471bccee3d042261d52e9bff31458daecc406142b401d4cd848f677479f73104b9fdeb090af9583d3391b7f10cb2ba9e26865dd5fca4fcdc0fb1e3b723c786@54.94.239.50:30303"),
+		discover.MustParseNode("enode://a979fb575495b8d6db44f750317d0f4622bf4c2aa3365d6af7c284339968eef29b69ad0dce72a4d8db5ebb4968de0e3bec910127f134779fbcb0cb6d3331163c@52.16.188.185:30303"), // IE
+		discover.MustParseNode("enode://de471bccee3d042261d52e9bff31458daecc406142b401d4cd848f677479f73104b9fdeb090af9583d3391b7f10cb2ba9e26865dd5fca4fcdc0fb1e3b723c786@54.94.239.50:30303"),  // BR
+		discover.MustParseNode("enode://1118980bf48b0a3640bdba04e0fe78b1add18e1cd99bf22d53daac1fd9972ad650df52176e7c7d89d1114cfef2bc23a2959aa54998a46afcf7d91809f0855082@52.74.57.123:30303"),  // SG
 		// ETH/DEV cpp-ethereum (poc-9.ethdev.com)
-		discover.MustParseNode("enode://487611428e6c99a11a9795a6abe7b529e81315ca6aad66e2a2fc76e3adf263faba0d35466c2f8f68d561dbefa8878d4df5f1f2ddb1fbeab7f42ffb8cd328bd4a@5.1.83.226:30303"),
+		discover.MustParseNode("enode://979b7fa28feeb35a4741660a16076f1943202cb72b6af70d327f053e248bab9ba81760f39d0701ef1d8f89cc1fbd2cacba0710a12cd5314d5e0c9021aa3637f9@5.1.83.226:30303"),
 	}
 
 	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
@@ -79,9 +79,11 @@ type Config struct {
 	GenesisNonce int
 	GenesisFile  string
 	GenesisBlock *types.Block // used by block tests
+	Olympic      bool
 
 	BlockChainVersion  int
 	SkipBcVersionCheck bool // e.g. blockchain export
+	DatabaseCache      int
 
 	DataDir   string
 	LogFile   string
@@ -91,6 +93,7 @@ type Config struct {
 	NatSpec   bool
 	AutoDAG   bool
 	PowTest   bool
+	ExtraData []byte
 
 	MaxPeers        int
 	MaxPendingPeers int
@@ -207,9 +210,8 @@ type Ethereum struct {
 	shutdownChan chan bool
 
 	// DB interfaces
-	blockDb common.Database // Block chain database
-	stateDb common.Database // State changes database
-	extraDb common.Database // Extra database (txs, etc)
+	chainDb common.Database // Block chain databe
+	dappDb  common.Database // Dapp database
 
 	// Closed when databases are flushed and closed
 	databasesClosed chan bool
@@ -267,29 +269,29 @@ func New(config *Config) (*Ethereum, error) {
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path) }
+		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
 	}
-	blockDb, err := newdb(filepath.Join(config.DataDir, "blockchain"))
+
+	// attempt to merge database together, upgrading from an old version
+	if err := mergeDatabases(config.DataDir, newdb); err != nil {
+		return nil, err
+	}
+
+	chainDb, err := newdb(filepath.Join(config.DataDir, "chaindata"))
 	if err != nil {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
 	}
-	if db, ok := blockDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/block/")
+	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
+		db.Meter("eth/db/chaindata/")
 	}
-	stateDb, err := newdb(filepath.Join(config.DataDir, "state"))
+	dappDb, err := newdb(filepath.Join(config.DataDir, "dapp"))
 	if err != nil {
-		return nil, fmt.Errorf("state db err: %v", err)
+		return nil, fmt.Errorf("dapp db err: %v", err)
 	}
-	if db, ok := stateDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/state/")
+	if db, ok := dappDb.(*ethdb.LDBDatabase); ok {
+		db.Meter("eth/db/dapp/")
 	}
-	extraDb, err := newdb(filepath.Join(config.DataDir, "extra"))
-	if err != nil {
-		return nil, fmt.Errorf("extra db err: %v", err)
-	}
-	if db, ok := extraDb.(*ethdb.LDBDatabase); ok {
-		db.Meter("eth/db/extra/")
-	}
+
 	nodeDb := filepath.Join(config.DataDir, "nodes")
 	glog.V(logger.Info).Infof("Protocol Versions: %v, Network Id: %v", ProtocolVersions, config.NetworkId)
 
@@ -299,35 +301,42 @@ func New(config *Config) (*Ethereum, error) {
 			return nil, err
 		}
 
-		block, err := core.WriteGenesisBlock(stateDb, blockDb, fr)
+		block, err := core.WriteGenesisBlock(chainDb, fr)
 		if err != nil {
 			return nil, err
 		}
 		glog.V(logger.Info).Infof("Successfully wrote genesis block. New genesis hash = %x\n", block.Hash())
 	}
 
+	if config.Olympic {
+		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
+		if err != nil {
+			return nil, err
+		}
+		glog.V(logger.Error).Infoln("Starting Olympic network")
+	}
+
 	// This is for testing only.
 	if config.GenesisBlock != nil {
-		core.WriteBlock(blockDb, config.GenesisBlock)
-		core.WriteHead(blockDb, config.GenesisBlock)
+		core.WriteBlock(chainDb, config.GenesisBlock)
+		core.WriteHead(chainDb, config.GenesisBlock)
 	}
 
 	if !config.SkipBcVersionCheck {
-		b, _ := blockDb.Get([]byte("BlockchainVersion"))
+		b, _ := chainDb.Get([]byte("BlockchainVersion"))
 		bcVersion := int(common.NewValue(b).Uint())
 		if bcVersion != config.BlockChainVersion && bcVersion != 0 {
 			return nil, fmt.Errorf("Blockchain DB version mismatch (%d / %d). Run geth upgradedb.\n", bcVersion, config.BlockChainVersion)
 		}
-		saveBlockchainVersion(blockDb, config.BlockChainVersion)
+		saveBlockchainVersion(chainDb, config.BlockChainVersion)
 	}
 	glog.V(logger.Info).Infof("Blockchain DB Version: %d", config.BlockChainVersion)
 
 	eth := &Ethereum{
 		shutdownChan:            make(chan bool),
 		databasesClosed:         make(chan bool),
-		blockDb:                 blockDb,
-		stateDb:                 stateDb,
-		extraDb:                 extraDb,
+		chainDb:                 chainDb,
+		dappDb:                  dappDb,
 		eventMux:                &event.TypeMux{},
 		accountManager:          config.AccountManager,
 		DataDir:                 config.DataDir,
@@ -357,7 +366,7 @@ func New(config *Config) (*Ethereum, error) {
 		eth.pow = ethash.New()
 	}
 	//genesis := core.GenesisBlock(uint64(config.GenesisNonce), stateDb)
-	eth.chainManager, err = core.NewChainManager(blockDb, stateDb, extraDb, eth.pow, eth.EventMux())
+	eth.chainManager, err = core.NewChainManager(chainDb, eth.pow, eth.EventMux())
 	if err != nil {
 		if err == core.ErrNoGenesis {
 			return nil, fmt.Errorf(`Genesis block not found. Please supply a genesis block with the "--genesis /path/to/file" argument`)
@@ -367,18 +376,13 @@ func New(config *Config) (*Ethereum, error) {
 	}
 	eth.txPool = core.NewTxPool(eth.EventMux(), eth.chainManager.State, eth.chainManager.GasLimit)
 
-	eth.blockProcessor = core.NewBlockProcessor(stateDb, extraDb, eth.pow, eth.chainManager, eth.EventMux())
+	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
 	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager)
 
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
-
-	extra := config.Name
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
-		extra = extra[:params.MaximumExtraDataSize.Uint64()]
-	}
-	eth.miner.SetExtra([]byte(extra))
+	eth.miner.SetExtra(config.ExtraData)
 
 	if config.Shh {
 		eth.whisper = whisper.New()
@@ -395,12 +399,12 @@ func New(config *Config) (*Ethereum, error) {
 	if config.Bzz {
 		eth.Swarm, err = bzz.NewApi(config.DataDir, config.BzzPort)
 		if err != nil {
-			glog.V(logger.Warn).Infof("BZZ: error creating swarm: %v. Protocol skipped", err)
+			glog.V(logger.Warn).Infof("[BZZ] error creating swarm: %v. Protocol skipped", err)
 		} else {
 			var proto p2p.Protocol
 			proto, err = eth.Swarm.Bzz()
 			if err != nil {
-				glog.V(logger.Warn).Infof("BZZ: error creating swarm: %v. Protocol skipped", err)
+				glog.V(logger.Warn).Infof("[BZZ] error creating swarm: %v. Protocol skipped", err)
 				eth.Swarm = nil
 			} else {
 				protocols = append(protocols, proto)
@@ -540,9 +544,8 @@ func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcess
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) BlockDb() common.Database             { return s.blockDb }
-func (s *Ethereum) StateDb() common.Database             { return s.stateDb }
-func (s *Ethereum) ExtraDb() common.Database             { return s.extraDb }
+func (s *Ethereum) ChainDb() common.Database             { return s.chainDb }
+func (s *Ethereum) DappDb() common.Database              { return s.dappDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
@@ -599,23 +602,19 @@ done:
 		select {
 		case <-ticker.C:
 			// don't change the order of database flushes
-			if err := s.extraDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush extraDb: %v (Restart your node. We are aware of this issue)\n", err)
+			if err := s.dappDb.Flush(); err != nil {
+				glog.Fatalf("fatal error: flush dappDb: %v (Restart your node. We are aware of this issue)\n", err)
 			}
-			if err := s.stateDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush stateDb: %v (Restart your node. We are aware of this issue)\n", err)
-			}
-			if err := s.blockDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush blockDb: %v (Restart your node. We are aware of this issue)\n", err)
+			if err := s.chainDb.Flush(); err != nil {
+				glog.Fatalf("fatal error: flush chainDb: %v (Restart your node. We are aware of this issue)\n", err)
 			}
 		case <-s.shutdownChan:
 			break done
 		}
 	}
 
-	s.blockDb.Close()
-	s.stateDb.Close()
-	s.extraDb.Close()
+	s.chainDb.Close()
+	s.dappDb.Close()
 
 	close(s.databasesClosed)
 }
@@ -718,14 +717,6 @@ func (self *Ethereum) StartAutoDAG() {
 	}()
 }
 
-// dagFiles(epoch) returns the two alternative DAG filenames (not a path)
-// 1) <revision>-<hex(seedhash[8])> 2) full-R<revision>-<hex(seedhash[8])>
-func dagFiles(epoch uint64) (string, string) {
-	seedHash, _ := ethash.GetSeedHash(epoch * epochLength)
-	dag := fmt.Sprintf("full-R%d-%x", ethashRevision, seedHash[:8])
-	return dag, "full-R" + dag
-}
-
 // stopAutoDAG stops automatic DAG pregeneration by quitting the loop
 func (self *Ethereum) StopAutoDAG() {
 	if self.autodagquit != nil {
@@ -733,30 +724,6 @@ func (self *Ethereum) StopAutoDAG() {
 		self.autodagquit = nil
 	}
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
-}
-
-/*
-	// The databases were previously tied to protocol versions. Currently we
-	// are moving away from this decision as approaching Frontier. The below
-	// code was left in for now but should eventually be just dropped.
-
-	func saveProtocolVersion(db common.Database, protov int) {
-		d, _ := db.Get([]byte("ProtocolVersion"))
-		protocolVersion := common.NewValue(d).Uint()
-
-		if protocolVersion == 0 {
-			db.Put([]byte("ProtocolVersion"), common.NewValue(protov).Bytes())
-		}
-	}
-*/
-
-func saveBlockchainVersion(db common.Database, bcVersion int) {
-	d, _ := db.Get([]byte("BlockchainVersion"))
-	blockchainVersion := common.NewValue(d).Uint()
-
-	if blockchainVersion == 0 {
-		db.Put([]byte("BlockchainVersion"), common.NewValue(bcVersion).Bytes())
-	}
 }
 
 func (self *Ethereum) Solc() (*compiler.Solidity, error) {
@@ -772,4 +739,93 @@ func (self *Ethereum) SetSolc(solcPath string) (*compiler.Solidity, error) {
 	self.SolcPath = solcPath
 	self.solc = nil
 	return self.Solc()
+}
+
+// dagFiles(epoch) returns the two alternative DAG filenames (not a path)
+// 1) <revision>-<hex(seedhash[8])> 2) full-R<revision>-<hex(seedhash[8])>
+func dagFiles(epoch uint64) (string, string) {
+	seedHash, _ := ethash.GetSeedHash(epoch * epochLength)
+	dag := fmt.Sprintf("full-R%d-%x", ethashRevision, seedHash[:8])
+	return dag, "full-R" + dag
+}
+
+func saveBlockchainVersion(db common.Database, bcVersion int) {
+	d, _ := db.Get([]byte("BlockchainVersion"))
+	blockchainVersion := common.NewValue(d).Uint()
+
+	if blockchainVersion == 0 {
+		db.Put([]byte("BlockchainVersion"), common.NewValue(bcVersion).Bytes())
+	}
+}
+
+// mergeDatabases when required merge old database layout to one single database
+func mergeDatabases(datadir string, newdb func(path string) (common.Database, error)) error {
+	// Check if already upgraded
+	data := filepath.Join(datadir, "chaindata")
+	if _, err := os.Stat(data); !os.IsNotExist(err) {
+		return nil
+	}
+	// make sure it's not just a clean path
+	chainPath := filepath.Join(datadir, "blockchain")
+	if _, err := os.Stat(chainPath); os.IsNotExist(err) {
+		return nil
+	}
+	glog.Infoln("Database upgrade required. Upgrading...")
+
+	database, err := newdb(data)
+	if err != nil {
+		return fmt.Errorf("creating data db err: %v", err)
+	}
+	defer database.Close()
+
+	// Migrate blocks
+	chainDb, err := newdb(chainPath)
+	if err != nil {
+		return fmt.Errorf("state db err: %v", err)
+	}
+	defer chainDb.Close()
+
+	if chain, ok := chainDb.(*ethdb.LDBDatabase); ok {
+		glog.Infoln("Merging blockchain database...")
+		it := chain.NewIterator()
+		for it.Next() {
+			database.Put(it.Key(), it.Value())
+		}
+		it.Release()
+	}
+
+	// Migrate state
+	stateDb, err := newdb(filepath.Join(datadir, "state"))
+	if err != nil {
+		return fmt.Errorf("state db err: %v", err)
+	}
+	defer stateDb.Close()
+
+	if state, ok := stateDb.(*ethdb.LDBDatabase); ok {
+		glog.Infoln("Merging state database...")
+		it := state.NewIterator()
+		for it.Next() {
+			database.Put(it.Key(), it.Value())
+		}
+		it.Release()
+	}
+
+	// Migrate transaction / receipts
+	extraDb, err := newdb(filepath.Join(datadir, "extra"))
+	if err != nil {
+		return fmt.Errorf("state db err: %v", err)
+	}
+	defer extraDb.Close()
+
+	if extra, ok := extraDb.(*ethdb.LDBDatabase); ok {
+		glog.Infoln("Merging transaction database...")
+
+		it := extra.NewIterator()
+		for it.Next() {
+			database.Put(it.Key(), it.Value())
+		}
+		it.Release()
+	}
+
+	return nil
 }

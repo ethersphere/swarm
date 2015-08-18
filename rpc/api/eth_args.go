@@ -169,6 +169,37 @@ func (args *GetTxCountArgs) UnmarshalJSON(b []byte) (err error) {
 	return nil
 }
 
+type SubmitHashRateArgs struct {
+	Id   string
+	Rate uint64
+}
+
+func (args *SubmitHashRateArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	arg0, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("hash", "not a string")
+	}
+	args.Id = arg0
+
+	arg1, ok := obj[1].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("rate", "not a string")
+	}
+
+	args.Rate = common.String2Big(arg1).Uint64()
+
+	return nil
+}
+
 type HashArgs struct {
 	Hash string
 }
@@ -469,10 +500,6 @@ func (args *CallArgs) UnmarshalJSON(b []byte) (err error) {
 	}
 
 	args.From = ext.From
-
-	if len(ext.To) == 0 {
-		return shared.NewValidationError("to", "is required")
-	}
 	args.To = ext.To
 
 	var num *big.Int
@@ -881,13 +908,14 @@ func (args *SubmitWorkArgs) UnmarshalJSON(b []byte) (err error) {
 type tx struct {
 	tx *types.Transaction
 
-	To       string
-	From     string
-	Nonce    string
-	Value    string
-	Data     string
-	GasLimit string
-	GasPrice string
+	To       string `json:"to"`
+	From     string `json:"from"`
+	Nonce    string `json:"nonce"`
+	Value    string `json:"value"`
+	Data     string `json:"data"`
+	GasLimit string `json:"gas"`
+	GasPrice string `json:"gasPrice"`
+	Hash     string `json:"hash"`
 }
 
 func newTx(t *types.Transaction) *tx {
@@ -906,6 +934,7 @@ func newTx(t *types.Transaction) *tx {
 		Data:     "0x" + common.Bytes2Hex(t.Data()),
 		GasLimit: t.Gas().String(),
 		GasPrice: t.GasPrice().String(),
+		Hash:     t.Hash().Hex(),
 	}
 }
 
@@ -930,6 +959,12 @@ func (tx *tx) UnmarshalJSON(b []byte) (err error) {
 		data             []byte
 		contractCreation = true
 	)
+
+	if val, found := fields["Hash"]; found {
+		if hashVal, ok := val.(string); ok {
+			tx.Hash = hashVal
+		}
+	}
 
 	if val, found := fields["To"]; found {
 		if strVal, ok := val.(string); ok && len(strVal) > 0 {

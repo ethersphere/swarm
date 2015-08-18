@@ -21,8 +21,9 @@ import (
 	"encoding/json"
 	"math/big"
 
+	"fmt"
+
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
@@ -91,6 +92,7 @@ var (
 		"eth_hashrate":                            (*ethApi).Hashrate,
 		"eth_getWork":                             (*ethApi).GetWork,
 		"eth_submitWork":                          (*ethApi).SubmitWork,
+		"eth_submitHashrate":                      (*ethApi).SubmitHashrate,
 		"eth_resend":                              (*ethApi).Resend,
 		"eth_pendingTransactions":                 (*ethApi).PendingTransactions,
 		"eth_getTransactionReceipt":               (*ethApi).GetTransactionReceipt,
@@ -322,7 +324,7 @@ func (self *ethApi) EstimateGas(req *shared.Request) (interface{}, error) {
 	if len(gas) == 0 {
 		return newHexNum(0), nil
 	} else {
-		return newHexNum(gas), nil
+		return newHexNum(common.String2Big(gas)), err
 	}
 }
 
@@ -572,20 +574,32 @@ func (self *ethApi) SubmitWork(req *shared.Request) (interface{}, error) {
 	return self.xeth.RemoteMining().SubmitWork(args.Nonce, common.HexToHash(args.Digest), common.HexToHash(args.Header)), nil
 }
 
+func (self *ethApi) SubmitHashrate(req *shared.Request) (interface{}, error) {
+	args := new(SubmitHashRateArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return false, shared.NewDecodeParamError(err.Error())
+	}
+	self.xeth.RemoteMining().SubmitHashrate(common.HexToHash(args.Id), args.Rate)
+	return true, nil
+}
+
 func (self *ethApi) Resend(req *shared.Request) (interface{}, error) {
 	args := new(ResendArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	ret, err := self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
-	if err != nil {
-		return nil, err
+	from := common.HexToAddress(args.Tx.From)
+
+	pending := self.ethereum.TxPool().GetTransactions()
+	for _, p := range pending {
+		if pFrom, err := p.From(); err == nil && pFrom == from && p.SigHash() == args.Tx.tx.SigHash() {
+			self.ethereum.TxPool().RemoveTx(common.HexToHash(args.Tx.Hash))
+			return self.xeth.Transact(args.Tx.From, args.Tx.To, args.Tx.Nonce, args.Tx.Value, args.GasLimit, args.GasPrice, args.Tx.Data)
+		}
 	}
 
-	self.ethereum.TxPool().RemoveTransactions(types.Transactions{args.Tx.tx})
-
-	return ret, nil
+	return nil, fmt.Errorf("Transaction %s not found", args.Tx.Hash)
 }
 
 func (self *ethApi) PendingTransactions(req *shared.Request) (interface{}, error) {

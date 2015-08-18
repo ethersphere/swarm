@@ -22,6 +22,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -47,18 +48,19 @@ func (self *ipcClient) reconnect() error {
 	return err
 }
 
-func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
+func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.EthereumApi, error)) error {
 	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
 
-	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: cfg.Endpoint, Net: "unix"})
+	l, err := net.Listen("unix", cfg.Endpoint)
 	if err != nil {
 		return err
 	}
+	l = fdtrack.WrapListener("ipc", l)
 	os.Chmod(cfg.Endpoint, 0600)
 
 	go func() {
 		for {
-			conn, err := l.AcceptUnix()
+			conn, err := l.Accept()
 			if err != nil {
 				glog.V(logger.Error).Infof("Error accepting ipc connection - %v\n", err)
 				continue
@@ -66,6 +68,13 @@ func startIpc(cfg IpcConfig, codec codec.Codec, api shared.EthereumApi) error {
 
 			id := newIpcConnId()
 			glog.V(logger.Debug).Infof("New IPC connection with id %06d started\n", id)
+
+			api, err := initializer(conn)
+			if err != nil {
+				glog.V(logger.Error).Infof("Unable to initialize IPC connection - %v\n", err)
+				conn.Close()
+				continue
+			}
 
 			go handle(id, conn, api, codec)
 		}

@@ -153,7 +153,7 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 			b.Fatalf("cannot create temporary directory: %v", err)
 		}
 		defer os.RemoveAll(dir)
-		db, err = ethdb.NewLDBDatabase(dir)
+		db, err = ethdb.NewLDBDatabase(dir, 0)
 		if err != nil {
 			b.Fatalf("cannot create temporary database: %v", err)
 		}
@@ -168,8 +168,8 @@ func benchInsertChain(b *testing.B, disk bool, gen func(int, *BlockGen)) {
 	// Time the insertion of the new chain.
 	// State and blocks are stored in the same DB.
 	evmux := new(event.TypeMux)
-	chainman, _ := NewChainManager(db, db, db, FakePow{}, evmux)
-	chainman.SetProcessor(NewBlockProcessor(db, db, FakePow{}, chainman, evmux))
+	chainman, _ := NewChainManager(db, FakePow{}, evmux)
+	chainman.SetProcessor(NewBlockProcessor(db, FakePow{}, chainman, evmux))
 	defer chainman.Stop()
 	b.ReportAllocs()
 	b.ResetTimer()

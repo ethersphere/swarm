@@ -19,7 +19,6 @@ package main
 
 import (
 	"fmt"
-	"io"
 	"io/ioutil"
 	_ "net/http/pprof"
 	"os"
@@ -38,22 +37,26 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 )
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "1.0.0"
+	Version          = "1.0.1"
+	VersionMajor     = 1
+	VersionMinor     = 0
+	VersionPatch     = 1
 )
 
 var (
-	gitCommit       string // set via linker flag
+	gitCommit       string // set via linker flagg
 	nodeNameVersion string
 	app             *cli.App
 )
@@ -276,11 +279,12 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
-		utils.GenesisNonceFlag,
 		utils.GenesisFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.BlockchainVersionFlag,
+		utils.OlympicFlag,
+		utils.CacheFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
@@ -307,6 +311,9 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.SwarmEnabledFlag,
 		utils.SwarmProxyPortFlag,
 		utils.VMDebugFlag,
+		utils.VMForceJitFlag,
+		utils.VMJitCacheFlag,
+		utils.VMEnableJitFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
 		utils.VerbosityFlag,
@@ -328,6 +335,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
+		utils.SetupVM(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
 			utils.StartPProf(ctx)
 		}
@@ -346,10 +354,36 @@ func main() {
 	}
 }
 
+func makeDefaultExtra() []byte {
+	var clientInfo = struct {
+		Version   uint
+		Name      string
+		GoVersion string
+		Os        string
+	}{uint(VersionMajor<<16 | VersionMinor<<8 | VersionPatch), ClientIdentifier, runtime.Version(), runtime.GOOS}
+	extra, err := rlp.EncodeToBytes(clientInfo)
+	if err != nil {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
+	}
+
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
+		glog.V(logger.Debug).Infof("extra: %x\n", extra)
+		return nil
+	}
+
+	return extra
+}
+
 func run(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	if ctx.GlobalBool(utils.OlympicFlag.Name) {
+		utils.InitOlympic()
+	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg.ExtraData = makeDefaultExtra()
+
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -362,14 +396,6 @@ func run(ctx *cli.Context) {
 
 func attach(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
 
 	var client comms.EthereumClient
 	var err error
@@ -390,7 +416,7 @@ func attach(ctx *cli.Context) {
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		client,
 		true,
-		nil)
+	)
 
 	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
 		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
@@ -402,14 +428,6 @@ func attach(ctx *cli.Context) {
 
 func console(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-
-	// Wrap the standard output with a colorified stream (windows)
-	if isatty.IsTerminal(os.Stdout.Fd()) {
-		if pr, pw, err := os.Pipe(); err == nil {
-			go io.Copy(colorable.NewColorableStdout(), pr)
-			os.Stdout = pw
-		}
-	}
 
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
@@ -503,7 +521,7 @@ func blockRecovery(ctx *cli.Context) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	utils.CheckLegalese(cfg.DataDir)
 
-	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"))
+	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
 	if err != nil {
 		glog.Fatalln("could not open db:", err)
 	}
@@ -529,6 +547,9 @@ func blockRecovery(ctx *cli.Context) {
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 	// Start Ethereum itself
 	utils.StartEthereum(eth)
+
+	// Start logging file descriptor stats.
+	fdtrack.Start()
 
 	am := eth.AccountManager()
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
