@@ -38,10 +38,10 @@ contract chequebook is mortal {
             // Upon success, update the cumulative amount.
             sent[beneficiary] = amount;
         } else {
-            // Upon failure, punish owner (for writing a bounced cheque)
-            // and compensate beneficiary.
+            // Upon failure, punish owner for writing a bounced cheque.
             // owner.sendToDebtorsPrison();
             Overdraft(owner);
+            // Compensate beneficiary.
             suicide(beneficiary);
         }
     }
