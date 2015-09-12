@@ -246,9 +246,9 @@ func TestCash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-
+	interval := 10 * time.Millisecond
 	// setting autocash with interval of 100ms
-	quit := chbox.AutoCash(100 * time.Millisecond)
+	chbox.AutoCash(interval, nil)
 	_, err = chbox.Receive(ch0)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -257,21 +257,75 @@ func TestCash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
+	// after < interval time and 2 cheques received, no new cashing tx is sent
+	if len(backend.txs) != 1 {
+		t.Fatalf("expected 1 txs to send, got %v", len(backend.txs))
+	}
 	// after 3x interval time and 2 cheques received, exactly one cashing tx is sent
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(4 * interval)
 	if len(backend.txs) != 2 {
 		t.Fatalf("expected 2 txs to send, got %v", len(backend.txs))
 	}
 
 	// after stopping autocash no more tx are sent
-	close(quit)
+	chbox.Stop()
+	time.Sleep(interval) // make sure loop stops
 	_, err = chbox.Receive(ch2)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	time.Sleep(300 * time.Millisecond)
+	time.Sleep(2 * interval)
 	if len(backend.txs) != 2 {
 		t.Fatalf("expected 2 txs to send, got %v", len(backend.txs))
+	}
+
+	chbook.Deposit(common.Big2)
+	chbox.AutoCash(0, common.Big1)
+
+	ch3, err := chbook.NewCheque(recipient, amount)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	ch4, err := chbook.NewCheque(recipient, amount)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	_, err = chbox.Receive(ch3)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	_, err = chbox.Receive(ch4)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(backend.txs) != 3 {
+		t.Fatalf("expected 3 txs to send, got %v", len(backend.txs))
+	}
+
+	chbook.Deposit(common.Big2)
+	chbox.AutoCash(0, common.Big0)
+
+	ch5, err := chbook.NewCheque(recipient, amount)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	ch6, err := chbook.NewCheque(recipient, amount)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	_, err = chbox.Receive(ch5)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	_, err = chbox.Receive(ch6)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(backend.txs) != 5 {
+		t.Fatalf("expected 5 txs to send, got %v", len(backend.txs))
 	}
 
 }

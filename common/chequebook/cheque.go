@@ -19,12 +19,18 @@ import (
 
 /*
 Chequebook package is a go API to the 'chequebook' ethereum smart contract
-With convenience methods that allow using checkbook for
-issuing, receiving, verifying and (auto)cashing cheques in ether
+With convenience methods that allow using chequebook for
+* issuing, receiving, verifying and (auto)cashing cheques in ether
+* (auto)depositing ether to the chequebook contract
+* watching peer solvency and notifying of bouncing cheques
 
-Incoming cheque handling needs to interact with the blockchain
-to set current balance as well as sending the transaction to cash the cheque
-Backend is the interface that interacts with the ethereum blockchain.
+Some functionality require interacting with the blockchain:
+* setting current balance on peer's chequebook
+* sending the transaction to cash the cheque
+* depositing ether to the chequebook
+* watching incoming ether
+
+Backend is the interface for that
 */
 
 const (
@@ -66,10 +72,6 @@ func NewChequebook(path string, sender common.Address, prvKey *ecdsa.PrivateKey)
 		path:    path,
 		prvKey:  prvKey,
 	}
-	// err = self.Save()
-	// if err != nil {
-	// 	return nil, err
-	// }
 	glog.V(logger.Detail).Infof("\nnew chequebook initialised from %v ", sender)
 	return
 }
@@ -193,7 +195,7 @@ func sigHash(sender, recipient common.Address, sum *big.Int) []byte {
 func (self *Chequebook) Balance() *big.Int {
 	defer self.lock.Unlock()
 	self.lock.Lock()
-	return self.balance
+	return new(big.Int).Set(self.balance)
 }
 
 // Deposit(amount) deposits amount to the checkbook account
@@ -220,13 +222,15 @@ type Backend interface {
 // from a single sender to single recipient
 // incoming payment handler for peer to peer micropayments
 type Chequebox struct {
-	lock      sync.Mutex
-	signer    *ecdsa.PublicKey
-	sender    common.Address
-	recipient common.Address
-	cashed    bool
-	txhash    string
-	backend   Backend
+	lock        sync.Mutex
+	signer      *ecdsa.PublicKey
+	sender      common.Address
+	recipient   common.Address
+	txhash      string
+	backend     Backend
+	quit        chan bool // when closed causes autocash to stop
+	maxUncashed *big.Int
+	cashed      *big.Int
 	*Cheque
 }
 
@@ -239,16 +243,47 @@ func NewChequebox(sender, recipient common.Address, signer *ecdsa.PublicKey, bac
 		recipient: recipient,
 		signer:    signer,
 		backend:   backend,
+		cashed:    new(big.Int).Set(common.Big0),
 	}
 	return
 }
 
-// AutoCash(d) starts a loop that periodically clears the last check
+// Stop() quits the autocash loop if its running
+func (self *Chequebox) Stop() {
+	defer self.lock.Unlock()
+	self.lock.Lock()
+	if self.quit != nil {
+		close(self.quit)
+		self.quit = nil
+	}
+}
+
+// AutoCash(cashInterval, maxUncashed) (re)sets maximum time and amount which
+// triggers cashing of the last uncashed cheque
+// if maxUncashed is set to 0, then autocash on receipt
+func (self *Chequebox) AutoCash(cashInterval time.Duration, maxUncashed *big.Int) {
+	defer self.lock.Unlock()
+	self.lock.Lock()
+	self.maxUncashed = maxUncashed
+	self.autoCash(cashInterval)
+}
+
+// autoCash(d) starts a loop that periodically clears the last check
 // if the peer is trusted, clearing period could be 24h, or a week
-// returns a channel, which when closed causes autocash to stop
-func (self *Chequebox) AutoCash(cashInterval time.Duration) (quit chan bool) {
-	quit = make(chan bool)
+// caller holds the lock
+func (self *Chequebox) autoCash(cashInterval time.Duration) {
+	if self.quit != nil {
+		close(self.quit)
+		self.quit = nil
+	}
+	// if maxUncashed is set to 0, then autocash on receipt
+	if cashInterval == time.Duration(0) || self.maxUncashed != nil && self.maxUncashed.Cmp(common.Big0) == 0 {
+		return
+	}
+
 	ticker := time.NewTicker(cashInterval)
+	self.quit = make(chan bool)
+	quit := self.quit
 	go func() {
 	FOR:
 		for {
@@ -257,10 +292,10 @@ func (self *Chequebox) AutoCash(cashInterval time.Duration) (quit chan bool) {
 				break FOR
 			case <-ticker.C:
 				self.lock.Lock()
-				if self.Cheque != nil && !self.cashed {
-					txhash, err := self.Cheque.Cash(self.backend)
+				if self.Cheque != nil && self.Amount.Cmp(self.cashed) != 0 {
+					txhash, err := self.Cash(self.backend)
 					if err == nil {
-						self.cashed = true
+						self.cashed = self.Amount
 						self.txhash = txhash
 					}
 				}
@@ -289,13 +324,20 @@ func (self *Chequebox) Receive(ch *Cheque) (*big.Int, error) {
 		}
 
 	} else {
-		sum = self.Cheque.Amount
+		sum = self.Amount
 	}
 
 	amount, err := ch.Verify(self.signer, self.sender, self.recipient, sum)
 	if err == nil {
 		self.Cheque = ch
-		self.cashed = false
+
+		if self.maxUncashed != nil {
+			uncashed := new(big.Int).Sub(ch.Amount, self.cashed)
+			if self.maxUncashed.Cmp(uncashed) < 0 {
+				ch.Cash(self.backend)
+				self.cashed = ch.Amount
+			}
+		}
 	}
 
 	return amount, err
