@@ -20,9 +20,12 @@ import (
 /*
 Chequebook package is a go API to the 'chequebook' ethereum smart contract
 With convenience methods that allow using chequebook for
-* issuing, receiving, verifying and (auto)cashing cheques in ether
+* issuing, receiving, verifying cheques in ether
+* (auto)cashing cheques in ether
 * (auto)depositing ether to the chequebook contract
-* watching peer solvency and notifying of bouncing cheques
+TODO:
+* watch peer solvency and notify of bouncing cheques
+* enable paying with cheque by signing off
 
 Some functionality require interacting with the blockchain:
 * setting current balance on peer's chequebook
@@ -51,18 +54,25 @@ type Cheque struct {
 // chequebook to create, sign cheques from single sender to multiple recipients
 // outgoing payment handler for peer to peer micropayments
 type Chequebook struct {
-	path   string            // path to checkbook file
-	prvKey *ecdsa.PrivateKey // private key to sign cheque with
-	lock   sync.Mutex        //
+	path    string            // path to checkbook file
+	prvKey  *ecdsa.PrivateKey // private key to sign cheque with
+	lock    sync.Mutex        //
+	backend Backend           // blockchain API
+	quit    chan bool         // when closed causes autodeposit to stop
 
 	// persisted fields
 	balance *big.Int                    // not synced with blockchain
+	owner   common.Address              // owner address (derived from pubkey)
 	sender  common.Address              // contract address
 	sent    map[common.Address]*big.Int //tallies for recipients
+
+	txhash    string   // tx hash of last deposit tx
+	threshold *big.Int // threshold that triggers autodeposit if not nil
+	buffer    *big.Int // buffer to keep on top of balance for fork protection
 }
 
 // NewChequebook(path, sender, balance, prvKey) creates a new Chequebook
-func NewChequebook(path string, sender common.Address, prvKey *ecdsa.PrivateKey) (self *Chequebook, err error) {
+func NewChequebook(path string, sender common.Address, prvKey *ecdsa.PrivateKey, backend Backend) (self *Chequebook, err error) {
 	balance := new(big.Int)
 	sent := make(map[common.Address]*big.Int)
 	self = &Chequebook{
@@ -71,20 +81,22 @@ func NewChequebook(path string, sender common.Address, prvKey *ecdsa.PrivateKey)
 		sent:    sent,
 		path:    path,
 		prvKey:  prvKey,
+		backend: backend,
+		owner:   crypto.PubkeyToAddress(prvKey.PublicKey),
 	}
 	glog.V(logger.Detail).Infof("\nnew chequebook initialised from %v ", sender)
 	return
 }
 
 // LoadChequebook(path, prvKey) loads a chequebook from disk (file path)
-func LoadChequebook(path string, prvKey *ecdsa.PrivateKey) (self *Chequebook, err error) {
+func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (self *Chequebook, err error) {
 	var data []byte
 	data, err = ioutil.ReadFile(path)
 	if err != nil {
 		return
 	}
 
-	self, _ = NewChequebook(path, common.Address{}, prvKey)
+	self, _ = NewChequebook(path, common.Address{}, prvKey, backend)
 
 	err = json.Unmarshal(data, self)
 	if err != nil {
@@ -143,10 +155,20 @@ func (self *Chequebook) Save() (err error) {
 	return ioutil.WriteFile(self.path, data, os.ModePerm)
 }
 
-// New(recipient, amount) will create a Cheque
+// Stop() quits the autodeposit go routine to terminate
+func (self *Chequebook) Stop() {
+	defer self.lock.Unlock()
+	self.lock.Lock()
+	if self.quit != nil {
+		close(self.quit)
+		self.quit = nil
+	}
+}
+
+// Issue(recipient, amount) will create a Cheque
 // the cheque is signed by the checkbook owner's private key
-// the signer commits to a contract (one that they own), a recipient and an amount
-func (self *Chequebook) NewCheque(recipient common.Address, amount *big.Int) (ch *Cheque, err error) {
+// the signer commits to a contract (one that they own), a recipient and amount
+func (self *Chequebook) Issue(recipient common.Address, amount *big.Int) (ch *Cheque, err error) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	if amount.Cmp(common.Big0) <= 0 {
@@ -171,8 +193,18 @@ func (self *Chequebook) NewCheque(recipient common.Address, amount *big.Int) (ch
 			Amount:    sum,
 			Sig:       sig,
 		}
-		sent.Set(sum)                          // remember total sent
+		sent.Set(sum)
 		self.balance.Sub(self.balance, amount) // subtract amount from balance
+	}
+
+	// auto deposit if threshold is set and balance is less then threshold
+	// note this is called even if issueing cheque fails
+	// so we reattempt depositing
+	if self.threshold != nil {
+		if self.balance.Cmp(self.threshold) < 0 {
+			send := new(big.Int).Sub(self.buffer, self.balance)
+			self.deposit(send)
+		}
 	}
 
 	return
@@ -191,7 +223,7 @@ func sigHash(sender, recipient common.Address, sum *big.Int) []byte {
 	return crypto.Sha3(input)
 }
 
-// GetBalance() public accessor for Balance
+// Balance() public accessor for Balance
 func (self *Chequebook) Balance() *big.Int {
 	defer self.lock.Unlock()
 	self.lock.Lock()
@@ -199,14 +231,76 @@ func (self *Chequebook) Balance() *big.Int {
 }
 
 // Deposit(amount) deposits amount to the checkbook account
-// atm only used for bookkeeping
-func (self *Chequebook) Deposit(amount *big.Int) {
+func (self *Chequebook) Deposit(amount *big.Int) (string, error) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
-	self.balance.Add(self.balance, amount)
+	return self.deposit(amount)
 }
 
-// Backends is the interface to interact with the Ethereum blockchain
+// deposit(amount) deposits amount to the checkbook account
+// caller holds the lock
+func (self *Chequebook) deposit(amount *big.Int) (string, error) {
+	txhash, err := self.backend.Transact(self.owner.Hex(), self.sender.Hex(), "", amount.String(), "", "", "")
+	// assume that transaction is actually successful, we add the amount to balance right away
+	if err == nil {
+		self.balance.Add(self.balance, amount)
+	}
+	return txhash, err
+}
+
+// AutoDeposit(interval, threshold, buffer) (re)sets interval time and amount
+// which triggers sending funds to the chequebook contract
+// backend needs to be set
+// if threshold is not less than buffer, then deposit will be triggered on
+// every new cheque issued
+func (self *Chequebook) AutoDeposit(interval time.Duration, threshold, buffer *big.Int) {
+	defer self.lock.Unlock()
+	self.lock.Lock()
+	self.threshold = threshold
+	self.buffer = buffer
+	self.autoDeposit(interval)
+}
+
+// autoDeposit(interval) starts a go routine that periodically sends funds to the
+// chequebook contract
+// caller holds the lock
+// the go routine terminates if Chequebook.quit us closed
+func (self *Chequebook) autoDeposit(interval time.Duration) {
+	if self.quit != nil {
+		close(self.quit)
+		self.quit = nil
+	}
+	// if threshold >= balance autodeposit after every cheque issued
+	if interval == time.Duration(0) || self.threshold != nil && self.buffer != nil && self.threshold.Cmp(self.buffer) >= 0 {
+		return
+	}
+
+	ticker := time.NewTicker(interval)
+	self.quit = make(chan bool)
+	quit := self.quit
+	go func() {
+	FOR:
+		for {
+			select {
+			case <-quit:
+				break FOR
+			case <-ticker.C:
+				self.lock.Lock()
+				if self.balance.Cmp(self.buffer) < 0 {
+					amount := new(big.Int).Sub(self.buffer, self.balance)
+					txhash, err := self.deposit(amount)
+					if err == nil {
+						self.txhash = txhash
+					}
+				}
+				self.lock.Unlock()
+			}
+		}
+	}()
+	return
+}
+
+// Backend is the interface to interact with the Ethereum blockchain
 // implemented by xeth.XEth
 type Backend interface {
 	Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error)
@@ -223,15 +317,15 @@ type Backend interface {
 // incoming payment handler for peer to peer micropayments
 type Chequebox struct {
 	lock        sync.Mutex
-	signer      *ecdsa.PublicKey
-	sender      common.Address
-	recipient   common.Address
-	txhash      string
-	backend     Backend
-	quit        chan bool // when closed causes autocash to stop
-	maxUncashed *big.Int
-	cashed      *big.Int
-	*Cheque
+	sender      common.Address   // peer's chequebook contract
+	recipient   common.Address   // local peer's receiving address
+	signer      *ecdsa.PublicKey // peer's public key
+	txhash      string           // tx hash of last cashing tx
+	backend     Backend          // blockchain API
+	quit        chan bool        // when closed causes autocash to stop
+	maxUncashed *big.Int         // threshold that triggers autocashing
+	cashed      *big.Int         // cumulative amount cashed
+	*Cheque                      // last cheque, nil if none yet received
 }
 
 // NewChequebox(sender, recipient, signer, backend) constructor for Chequebox
@@ -248,7 +342,7 @@ func NewChequebox(sender, recipient common.Address, signer *ecdsa.PublicKey, bac
 	return
 }
 
-// Stop() quits the autocash loop if its running
+// Stop() quits the autocash go routine to terminate
 func (self *Chequebox) Stop() {
 	defer self.lock.Unlock()
 	self.lock.Lock()
