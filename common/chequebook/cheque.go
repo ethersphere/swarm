@@ -88,7 +88,7 @@ func NewChequebook(path string, sender common.Address, prvKey *ecdsa.PrivateKey,
 	return
 }
 
-// LoadChequebook(path, prvKey) loads a chequebook from disk (file path)
+// LoadChequebook(path, prvKey, backend) loads a chequebook from disk (file path)
 func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (self *Chequebook, err error) {
 	var data []byte
 	data, err = ioutil.ReadFile(path)
@@ -223,11 +223,16 @@ func sigHash(sender, recipient common.Address, sum *big.Int) []byte {
 	return crypto.Sha3(input)
 }
 
-// Balance() public accessor for Balance
+// Balance() public accessor for balance
 func (self *Chequebook) Balance() *big.Int {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	return new(big.Int).Set(self.balance)
+}
+
+// Backend() public accessor for backend
+func (self *Chequebook) Backend() Backend {
+	return self.backend
 }
 
 // Deposit(amount) deposits amount to the checkbook account
