@@ -38,7 +38,7 @@ Backend is the interface for that
 
 const (
 	gasToCash     = "500000"   // gas cost of a cash transaction using chequebook
-	getSentAbiPre = "d75d691d" // sent amount accessor in the checkbook contract
+	getSentAbiPre = "d75d691d" // sent amount accessor in the chequebook contract
 	cashAbiPre    = "fbf788d6" // abi preamble signature for cash method of the chequebook
 )
 
@@ -54,7 +54,7 @@ type Cheque struct {
 // chequebook to create, sign cheques from single sender to multiple recipients
 // outgoing payment handler for peer to peer micropayments
 type Chequebook struct {
-	path    string            // path to checkbook file
+	path    string            // path to chequebook file
 	prvKey  *ecdsa.PrivateKey // private key to sign cheque with
 	lock    sync.Mutex        //
 	backend Backend           // blockchain API
@@ -144,7 +144,7 @@ func (self *Chequebook) MarshalJSON() ([]byte, error) {
 	return json.Marshal(file)
 }
 
-// Save() persists the checkbook on disk
+// Save() persists the chequebook on disk
 // remembers balance, contract address and
 // cumulative amount of funds sent for each recipient
 func (self *Chequebook) Save() (err error) {
@@ -166,7 +166,7 @@ func (self *Chequebook) Stop() {
 }
 
 // Issue(recipient, amount) will create a Cheque
-// the cheque is signed by the checkbook owner's private key
+// the cheque is signed by the chequebook owner's private key
 // the signer commits to a contract (one that they own), a recipient and amount
 func (self *Chequebook) Issue(recipient common.Address, amount *big.Int) (ch *Cheque, err error) {
 	defer self.lock.Unlock()
@@ -235,14 +235,19 @@ func (self *Chequebook) Backend() Backend {
 	return self.backend
 }
 
-// Deposit(amount) deposits amount to the checkbook account
+// Address() public accessor for sender
+func (self *Chequebook) Address() common.Address {
+	return self.sender
+}
+
+// Deposit(amount) deposits amount to the chequebook account
 func (self *Chequebook) Deposit(amount *big.Int) (string, error) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	return self.deposit(amount)
 }
 
-// deposit(amount) deposits amount to the checkbook account
+// deposit(amount) deposits amount to the chequebook account
 // caller holds the lock
 func (self *Chequebook) deposit(amount *big.Int) (string, error) {
 	txhash, err := self.backend.Transact(self.owner.Hex(), self.sender.Hex(), "", amount.String(), "", "", "")
@@ -414,12 +419,12 @@ func (self *Chequebox) Receive(ch *Cheque) (*big.Int, error) {
 		// the sum is checked against the blockchain once a check is received
 		tally, _, err := self.backend.Call(self.recipient.Hex(), self.sender.Hex(), "", "", "", getSentAbiEncode(ch.Sender))
 		if err != nil {
-			return nil, fmt.Errorf("checkbox: error calling backend to set amount: %v", err)
+			return nil, fmt.Errorf("chequebox: error calling backend to set amount: %v", err)
 		}
 		var ok bool
 		sum, ok = new(big.Int).SetString(tally, 10)
 		if !ok {
-			return nil, fmt.Errorf("checkbox: cannot convert amount to integer")
+			return nil, fmt.Errorf("chequebox: cannot convert amount to integer")
 		}
 
 	} else {
