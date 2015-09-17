@@ -38,10 +38,11 @@ type sequentialReader struct {
 // starts up http server
 // TODO: started by dpa/api rather than backend
 func startHttpServer(api *Api, port string) {
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	serveMux := http.NewServeMux()
+	serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handler(w, r, api)
 	})
-	go http.ListenAndServe(":"+port, nil)
+	go http.ListenAndServe(":"+port, serveMux)
 	glog.V(logger.Info).Infof("[BZZ] Swarm HTTP proxy started on localhost:%s", port)
 }
 

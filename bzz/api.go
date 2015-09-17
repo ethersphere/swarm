@@ -3,6 +3,7 @@ package bzz
 import (
 	"bufio"
 	"bytes"
+	"crypto/ecdsa"
 	"fmt"
 	"io"
 	"math/big"
@@ -16,6 +17,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -37,13 +39,34 @@ it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
 	Chunker   *TreeChunker
-	Port      string
+	Config    *Config
 	Registrar registrar.VersionedRegistrar
 	datadir   string
+	dpa       *DPA
+	hive      *hive
+	netStore  *netStore
+}
 
-	dpa      *DPA
-	hive     *hive
-	netStore *netStore
+type Config struct {
+	*SwapData
+	Port           string
+	ChequebookPath string
+	chequebook     *chequebook.Chequebook
+	backend        chequebook.Backend
+}
+
+func NewConfig(datadir, path string, id *ecdsa.PrivateKey) *Config {
+	chbookPath := filepath.Join(datadir, "chequebooks", "chequebook.json")
+	// TODO: read sender from file if exists and unmarshalled
+	var sender = common.Address{}
+	config := &Config{
+		Port:           "8500",
+		ChequebookPath: chbookPath,
+		SwapData:       NewSwapData(sender, &id.PublicKey),
+	}
+	// TODO: read from json; write out default if not existing
+
+	return config
 }
 
 /*
@@ -52,11 +75,11 @@ the api constructor initialises
 - the chunker (bzz hash)
 - the dpa - single document retrieval api
 */
-func NewApi(datadir, port string) (self *Api, err error) {
+func NewApi(datadir string, prvKey *ecdsa.PrivateKey, config *Config) (self *Api, err error) {
 
 	self = &Api{
 		Chunker: &TreeChunker{},
-		Port:    port,
+		Config:  config,
 		datadir: datadir,
 	}
 
@@ -74,14 +97,23 @@ func NewApi(datadir, port string) (self *Api, err error) {
 		Chunker:    self.Chunker,
 		ChunkStore: self.netStore,
 	}
+
 	return
 }
 
 // Local swarm without netStore
-func NewLocalApi(datadir string) (self *Api, err error) {
+func NewLocalApi(datadir, port string) (self *Api, err error) {
 
+	prvKey, err := crypto.GenerateKey()
+	if err != nil {
+		return
+	}
+
+	config := NewConfig(datadir, "", prvKey)
+	config.Port = port
 	self = &Api{
 		Chunker: &TreeChunker{},
+		Config:  config,
 	}
 	dbStore, err := newDbStore(datadir)
 	dbStore.setCapacity(50000)
@@ -103,7 +135,7 @@ func NewLocalApi(datadir string) (self *Api, err error) {
 
 // Bzz returns the bzz protocol class instances of which run on every peer
 func (self *Api) Bzz() (p2p.Protocol, error) {
-	return BzzProtocol(self.netStore)
+	return BzzProtocol(self.netStore, self.Config.chequebook, self.Config.SwapData)
 }
 
 /*
@@ -155,15 +187,19 @@ func (self *Api) Start(node *discover.Node, listenAddr string, connectPeer func(
 	self.Chunker.Init()
 	self.dpa.Start()
 
-	if self.Port != "" {
-		go startHttpServer(self, self.Port)
+	if self.Config.Port != "" {
+		fmt.Printf("PORT: %v\n", self.Config.Port)
+		go startHttpServer(self, self.Config.Port)
 	}
 }
 
+// stops all component services.
 func (self *Api) Stop() {
 	self.dpa.Stop()
 	self.netStore.stop()
 	self.hive.stop()
+	self.Config.chequebook.Stop()
+	self.Config.chequebook.Save()
 }
 
 // Get uses iterative manifest retrieval and prefix matching

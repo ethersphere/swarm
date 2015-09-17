@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/errs"
@@ -43,6 +44,8 @@ const (
 	storeRequestMsg           // 0x02
 	retrieveRequestMsg        // 0x03
 	peersMsg                  // 0x04
+	paymentRequestMsg         // 0x05
+	paymentMsg                // 0x06
 )
 
 const (
@@ -53,6 +56,7 @@ const (
 	ErrNetworkIdMismatch
 	ErrNoStatusMsg
 	ErrExtraStatusMsg
+	ErrSwap
 )
 
 var errorToString = map[int]string{
@@ -63,13 +67,13 @@ var errorToString = map[int]string{
 	ErrNetworkIdMismatch: "NetworkId mismatch",
 	ErrNoStatusMsg:       "No status message",
 	ErrExtraStatusMsg:    "Extra status message",
+	ErrSwap:              "SWAP error",
 }
 
 // bzzProtocol represents the swarm wire protocol
 // an instance is running on each peer
 type bzzProtocol struct {
 	netStore   *netStore
-	swap       *swap
 	peer       *p2p.Peer
 	remoteAddr *peerAddr
 	key        Key
@@ -77,6 +81,10 @@ type bzzProtocol struct {
 	errors     *errs.Errors
 	requestDb  *LDBDatabase
 	quitC      chan bool
+
+	swap       *swap
+	localSwap  *SwapData
+	chequebook *chequebook.Chequebook
 }
 
 /*
@@ -87,27 +95,26 @@ type bzzProtocol struct {
 * Version: 8 byte integer version of the protocol
 * ID: arbitrary byte sequence client identifier human readable
 * Addr: the address advertised by the node, format identical to DEVp2p wire protocol
+* Swap: info for the swarm accounting protocol
 * NetworkID: 8 byte integer network identifier
 * Caps: swarm-specific capabilities, format identical to devp2p
+
 
 */
 type statusMsgData struct {
 	Version   uint64
 	ID        string
 	Addr      *peerAddr
-	Swap      swapData
+	Swap      *SwapData
 	NetworkId uint64
 	Caps      []p2p.Cap
-	// Strategy  uint64
 }
 
 func (self *statusMsgData) String() string {
-	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, NetworkId: %v, Caps: %v", self.Version, self.ID, self.Addr, self.NetworkId, self.Caps)
+	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, Swap: %v, NetworkId: %v, Caps: %v", self.Version, self.ID, self.Addr, self.Swap, self.NetworkId, self.Caps)
 }
 
 /*
- Given the chunker I see absolutely no reason why not allow storage and delivery
- of larger data . See my discussion on flexible chunking.
  store requests are forwarded to the peers in their kademlia proximity bin
  if they are distant
  if they are within our storage radius or have any incentive to store it
@@ -145,7 +152,7 @@ func (self storeRequestMsgData) String() string {
 }
 
 /*
-Root key retrieve request
+retrieve request
 Timeout in milliseconds. Note that zero timeout retrieval requests do not request forwarding, but prompt for a peers message response. therefore they serve also
 as messages to retrieve peers.
 
@@ -170,6 +177,7 @@ Retrieve request
 [0x03, key: B_32, Id: B_8, MaxSize: B_8, MaxPeers: B_8, Timeout: B_8, metadata: B]: key of the data chunk to be retrieved, timeout in milliseconds. Note that zero timeout retrievals serve also as messages to retrieve peers.
 
 */
+
 type retrieveRequestMsgData struct {
 	Key Key
 	// optional
@@ -231,10 +239,13 @@ type peerAddr struct {
 	enode string      // [not serialised] the enode URL of the peers Address
 }
 
+// peerAddr pretty prints as enode
 func (self peerAddr) String() string {
 	return self.new().enode
 }
 
+// peerAddr.new is called to initialise hash of ID and enode after peerAddr
+// is deserialised from RLP
 func (self *peerAddr) new() *peerAddr {
 	self.hash = crypto.Sha3Hash(self.ID)
 	self.enode = fmt.Sprintf("enode://%x@%v:%d", self.ID, self.IP, self.Port)
@@ -251,6 +262,8 @@ note that a node's DPA address is not the NodeID but the hash of the NodeID.
 Timeout serves to indicate whether the responder is forwarding the query within
 the timeout or not.
 
+NodeID serves as the owner of payment contracts and signer of proofs of transfer.
+
 The Key is the target (if response to a retrieval request) or missing (zero value)
 peers address (hash of NodeID) if retrieval request was a self lookup.
 
@@ -261,14 +274,15 @@ Peers message is requested by retrieval requests with a missing or zero value re
 */
 type peersMsgData struct {
 	Peers   []*peerAddr //
-	Timeout uint64
-	timeout *time.Time // indicate whether responder is expected to deliver content
-	Key     Key        // present if a response to a retrieval request
-	Id      uint64     // present if a response to a retrieval request
-	//
+	Timeout uint64      //
+	timeout *time.Time  // indicate whether responder is expected to deliver content
+	Key     Key         // present if a response to a retrieval request
+	Id      uint64      // present if a response to a retrieval request
+
 	peer *peer
 }
 
+// peers msg pretty printer
 func (self peersMsgData) String() string {
 	var from string
 	if self.peer == nil {
@@ -314,29 +328,57 @@ Finally metadata can hold accounting info relevant to incentivisation scheme
 type metaData struct{}
 
 /*
-main entrypoint, wrappers starting a server running the bzz protocol
+payment request
+
+is sent when the swap balance is tilted in favour of the host.
+The only argument is the recommended amount in units.
+
+[0x05, Units: B_32]
+*/
+
+type paymentRequestMsgData struct {
+	Units int // requested units to be paid for
+}
+
+/*
+payment
+
+is sent when the swap balance is tilted in favour of the remote peer and
+a payment requests message is received
+
+[0x05, Units: B_32]
+*/
+
+type paymentMsgData struct {
+	Units  int                // units actually paid for (checked against amount by swap)
+	Cheque *chequebook.Cheque // payment with cheque
+}
+
+/*
+main entrypoint, wrappers starting a server that will run the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netstore *netStore) (p2p.Protocol, error) {
+func BzzProtocol(netstore *netStore, chbook *chequebook.Chequebook, sd *SwapData) (p2p.Protocol, error) {
 
 	db, err := NewLDBDatabase(path.Join(netstore.path, "requests"))
 	if err != nil {
 		return p2p.Protocol{}, err
 	}
+
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(db, netstore, p, rw)
+			return runBzzProtocol(db, netstore, chbook, sd, p, rw)
 		},
 	}, nil
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(db *LDBDatabase, netstore *netStore, chbook *chequebook.Chequebook, sd *SwapData, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 	self := &bzzProtocol{
 		netStore: netstore,
 		rw:       rw,
@@ -345,10 +387,13 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.Msg
 			Package: "BZZ",
 			Errors:  errorToString,
 		},
-		requestDb: db,
-		quitC:     make(chan bool),
+		requestDb:  db,
+		chequebook: chbook,
+		localSwap:  sd,
+
+		quitC: make(chan bool),
 	}
-	glog.V(logger.Debug).Infof("[BZZ] listening address: %v", self.netStore.addr())
+	glog.V(logger.Info).Infof("[BZZ] listening address: %v", self.netStore.addr())
 
 	go self.storeRequestLoop()
 
@@ -359,15 +404,26 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, p *p2p.Peer, rw p2p.Msg
 			if err != nil {
 				// if the handler loop exits, the peer is disconnecting
 				// deregister the peer in the hive
+				glog.V(logger.Info).Infof("[BZZ] listening address: %v", self.netStore.addr())
 				self.netStore.hive.removePeer(peer{bzzProtocol: self})
 				break
 			}
 		}
-		close(self.quitC)
+		if self.swap != nil {
+			self.swap.stop() // quits chequebox autocash etc
+		}
+		close(self.quitC) // quits storerequest loop
 	}
 	return
 }
 
+func (self *bzzProtocol) setSwap(sd *SwapData) (err error) {
+	swap, err := newSwap(self.chequebook, self.localSwap, sd, self)
+	self.swap = swap
+	return err
+}
+
+// main loop that handles all incoming messages
 func (self *bzzProtocol) handle() error {
 	msg, err := self.rw.ReadMsg()
 	glog.V(logger.Debug).Infof("[BZZ] Incoming MSG: %v", msg)
@@ -379,12 +435,6 @@ func (self *bzzProtocol) handle() error {
 	}
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
-	/*
-	   statusMsg          = iota // 0x01
-	   storeRequestMsg           // 0x02
-	   retrieveRequestMsg        // 0x03
-	   peersMsg                  // 0x04
-	*/
 
 	switch msg.Code {
 	case statusMsg:
@@ -400,6 +450,7 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "msg %v: %v", msg, err)
 		}
 		req.peer = &peer{bzzProtocol: self}
+		glog.V(logger.Debug).Infof("[BZZ] incoming store request: %s", req.String())
 		self.netStore.addStoreRequest(&req)
 
 	case retrieveRequestMsg:
@@ -412,7 +463,7 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
 		req.peer = &peer{bzzProtocol: self}
-		glog.V(logger.Debug).Infof("[BZZ] Receiving retrieve request: %s", req.String())
+		glog.V(logger.Debug).Infof("[BZZ] incoming retrieve request: %s", req.String())
 		self.netStore.addRetrieveRequest(&req)
 
 	case peersMsg:
@@ -423,8 +474,24 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		req.peer = &peer{bzzProtocol: self}
-		glog.V(logger.Debug).Infof("[BZZ] Receiving peer addresses: %s", req.String())
+		glog.V(logger.Debug).Infof("[BZZ] incoming peer addresses: %s", req.String())
 		self.netStore.hive.addPeerEntries(&req)
+
+	case paymentRequestMsg:
+		// swap protocol message for requesting payment, requested units to pay for
+		var req paymentRequestMsgData
+		if err := msg.Decode(&req); err != nil {
+			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+		}
+		self.swap.send(req.Units)
+
+	case paymentMsg:
+		// swap protocol message for payment, Units paid for, Cheque paid with
+		var req paymentMsgData
+		if err := msg.Decode(&req); err != nil {
+			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+		}
+		self.swap.receive(req.Units, req.Cheque)
 
 	default:
 		// no other message is allowed
@@ -444,8 +511,9 @@ func (self *bzzProtocol) handleStatus() (err error) {
 		// Sync:      self.syncer.lastSynced(),
 	}
 
-	if err = p2p.Send(self.rw, statusMsg, handshake); err != nil {
-		return err
+	err = p2p.Send(self.rw, statusMsg, handshake)
+	if err != nil {
+		self.protoError(ErrNoStatusMsg, "")
 	}
 
 	// read and handle remote status
@@ -479,8 +547,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	self.remoteAddr = status.Addr.new()
 	glog.V(logger.Detail).Infof("[BZZ] self: advertised IP: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.netStore.addr().IP, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
 
-	self.swap = status.Swap
-	self.swap.reset()
+	self.setSwap(status.Swap)
 
 	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.hash[:4], status.Version, status.NetworkId)
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
@@ -529,15 +596,6 @@ func (self *bzzProtocol) peerAddr() *peerAddr {
 		ID:   id[:],
 		IP:   net.ParseIP(host),
 		Port: uint16(intport),
-	}
-}
-
-// outgoing messages
-func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
-	glog.V(logger.Debug).Infof("[BZZ] Sending retrieve request: %v", req)
-	err := p2p.Send(self.rw, retrieveRequestMsg, req)
-	if err != nil {
-		glog.V(logger.Error).Infof("[BZZ] EncodeMsg error: %v", err)
 	}
 }
 
@@ -616,10 +674,26 @@ LOOP:
 	}
 }
 
-func (self *bzzProtocol) store(req *storeRequestMsgData) {
-	p2p.Send(self.rw, storeRequestMsg, req)
+// outgoing messages
+// send retrieveRequestMsg
+func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
+	glog.V(logger.Debug).Infof("[BZZ] sending retrieve request: %v", req)
+	err := p2p.Send(self.rw, retrieveRequestMsg, req)
+	if err != nil {
+		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
+	}
 }
 
+// send storeRequestMsg
+func (self *bzzProtocol) store(req *storeRequestMsgData) {
+	glog.V(logger.Debug).Infof("[BZZ] sending store request: %v", req)
+	err := p2p.Send(self.rw, storeRequestMsg, req)
+	if err != nil {
+		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
+	}
+}
+
+// queue storeRequestMsg in request db
 func (self *bzzProtocol) storeRequest(key Key) {
 	peerKey := make([]byte, 64)
 	copy(peerKey, self.addrKey())
@@ -628,8 +702,31 @@ func (self *bzzProtocol) storeRequest(key Key) {
 	self.requestDb.Put(peerKey, []byte{0})
 }
 
+// send paymentRequestMsg
+func (self *bzzProtocol) paymentRequest(req *paymentRequestMsgData) {
+	glog.V(logger.Debug).Infof("[BZZ] sending payment request: %v", req)
+	err := p2p.Send(self.rw, paymentRequestMsg, req)
+	if err != nil {
+		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
+	}
+}
+
+// send paymentMsg
+func (self *bzzProtocol) payment(req *paymentMsgData) {
+	glog.V(logger.Detail).Infof("[BZZ] sending payment: %v", req)
+	err := p2p.Send(self.rw, paymentMsg, req)
+	if err != nil {
+		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
+	}
+}
+
+// sends peersMsg
 func (self *bzzProtocol) peers(req *peersMsgData) {
-	p2p.Send(self.rw, peersMsg, req)
+	glog.V(logger.Debug).Infof("[BZZ] sending peers: %v", req)
+	err := p2p.Send(self.rw, peersMsg, req)
+	if err != nil {
+		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
+	}
 }
 
 func (self *bzzProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {

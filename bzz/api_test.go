@@ -21,7 +21,7 @@ func init() {
 
 func testApi() (api *Api, err error) {
 	os.RemoveAll(datadir)
-	api, err = NewLocalApi(datadir)
+	api, err = NewLocalApi(datadir, "8500")
 	if err != nil {
 		return
 	}

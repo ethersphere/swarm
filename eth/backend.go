@@ -107,11 +107,11 @@ type Config struct {
 	// If nil, an ephemeral key is used.
 	NodeKey *ecdsa.PrivateKey
 
-	NAT     nat.Interface
-	Shh     bool
-	Dial    bool
-	Bzz     bool
-	BzzPort string
+	NAT       nat.Interface
+	Shh       bool
+	Dial      bool
+	Bzz       bool
+	BzzConfig *bzz.Config
 
 	Etherbase      common.Address
 	GasPrice       *big.Int
@@ -210,7 +210,7 @@ type Ethereum struct {
 	shutdownChan chan bool
 
 	// DB interfaces
-	chainDb common.Database // Block chain databe
+	chainDb common.Database // Block chain database
 	dappDb  common.Database // Dapp database
 
 	// Closed when databases are flushed and closed
@@ -397,7 +397,7 @@ func New(config *Config) (*Ethereum, error) {
 	protocols := append([]p2p.Protocol{}, eth.protocolManager.SubProtocols...)
 
 	if config.Bzz {
-		eth.Swarm, err = bzz.NewApi(config.DataDir, config.BzzPort)
+		eth.Swarm, err = bzz.NewApi(config.DataDir, netprv, config.BzzConfig)
 		if err != nil {
 			glog.V(logger.Warn).Infof("[BZZ] error creating swarm: %v. Protocol skipped", err)
 		} else {

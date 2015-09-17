@@ -10,11 +10,9 @@ import (
 	"github.com/ethereum/go-ethereum/common/docserver"
 )
 
-const port = "8500"
-
 func TestRoundTripper(t *testing.T) {
-	t.Skip("")
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+	serveMux := http.NewServeMux()
+	serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			w.Header().Set("Content-Type", "text/plain")
 			http.ServeContent(w, r, "", time.Unix(0, 0), strings.NewReader(r.RequestURI))
@@ -22,9 +20,9 @@ func TestRoundTripper(t *testing.T) {
 			http.Error(w, "Method "+r.Method+" is not supported.", http.StatusMethodNotAllowed)
 		}
 	})
-	go http.ListenAndServe(":"+port, nil)
+	go http.ListenAndServe(":8600", serveMux)
 
-	rt := &RoundTripper{port}
+	rt := &RoundTripper{"8600"}
 	ds := docserver.New("/")
 	ds.RegisterProtocol("bzz", rt)
 

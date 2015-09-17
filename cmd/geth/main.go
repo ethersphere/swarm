@@ -309,7 +309,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
 		utils.SwarmEnabledFlag,
-		utils.SwarmProxyPortFlag,
+		utils.SwarmConfigPathFlag,
 		utils.VMDebugFlag,
 		utils.VMForceJitFlag,
 		utils.VMJitCacheFlag,
