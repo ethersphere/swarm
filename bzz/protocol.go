@@ -212,6 +212,7 @@ func isZeroKey(key Key) bool {
 	return len(key) == 0 || bytes.Equal(key, zeroKey)
 }
 
+// sets timeout fields
 func (self retrieveRequestMsgData) setTimeout(t *time.Time) {
 	self.timeout = t
 	if t != nil {
