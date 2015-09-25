@@ -32,24 +32,24 @@ var (
 
 // rlp serializable config passed in handshake
 type SwapData struct {
-	ID        *ecdsa.PublicKey //
-	Sender    common.Address   // address of chequebook contract
-	Recipient common.Address   // addresses for swarm sales
-	BuyAt     *big.Int         // accepted max price for chunk
-	SellAt    *big.Int         // offered sale price for chunk
-	PayAt     int              // threshold that triggers payment request
-	DropAt    int              // threshold that triggers disconnect
+	ID          *ecdsa.PublicKey //
+	Contract    common.Address   // address of chequebook contract
+	Beneficiary common.Address   // addresses for swarm sales
+	BuyAt       *big.Int         // accepted max price for chunk
+	SellAt      *big.Int         // offered sale price for chunk
+	PayAt       int              // threshold that triggers payment request
+	DropAt      int              // threshold that triggers disconnect
 }
 
-func NewSwapData(sender common.Address, id *ecdsa.PublicKey) *SwapData {
+func NewSwapData(contract common.Address, id *ecdsa.PublicKey) *SwapData {
 	return &SwapData{
-		ID:        id,
-		Sender:    sender,
-		Recipient: crypto.PubkeyToAddress(*id),
-		BuyAt:     acceptedPrice,
-		SellAt:    offerPrice,
-		PayAt:     paymentThreshold,
-		DropAt:    disconnectThreshold,
+		ID:          id,
+		Contract:    contract,
+		Beneficiary: crypto.PubkeyToAddress(*id),
+		BuyAt:       acceptedPrice,
+		SellAt:      offerPrice,
+		PayAt:       paymentThreshold,
+		DropAt:      disconnectThreshold,
 	}
 }
 
@@ -86,28 +86,28 @@ func newSwap(chbook *chequebook.Chequebook, local, remote *SwapData, proto payme
 
 	// check if addresses are given to issue and receive cheques
 	if self.sells() { // ie. host receives payment
-		if (local.Recipient == common.Address{}) {
-			return nil, fmt.Errorf("host is seller but local recipient address missing")
+		if (local.Beneficiary == common.Address{}) {
+			return nil, fmt.Errorf("host is seller but local Beneficiary address missing")
 		}
-		if (remote.Sender == common.Address{}) {
-			return nil, fmt.Errorf("peer is buyer but remote sender address missing")
+		if (remote.Contract == common.Address{}) {
+			return nil, fmt.Errorf("peer is buyer but remote Contract address missing")
 		}
 	}
 
 	if self.buys() { // ie/ remote peer receives payment
-		if (local.Sender == common.Address{}) {
-			return nil, fmt.Errorf("host is buyer but local sender address missing")
+		if (local.Contract == common.Address{}) {
+			return nil, fmt.Errorf("host is buyer but local Contract address missing")
 		}
-		if (remote.Recipient == common.Address{}) {
-			return nil, fmt.Errorf("peer is seller but remote recipient address missing")
+		if (remote.Beneficiary == common.Address{}) {
+			return nil, fmt.Errorf("peer is seller but remote Beneficiary address missing")
 		}
 	}
 
-	self.chequebox, err = chequebook.NewChequebox(remote.Sender, local.Recipient, local.ID, chbook.Backend())
+	self.chequebox, err = chequebook.NewChequebox(remote.Contract, local.Beneficiary, local.ID, chbook.Backend())
 	// call autocash
 	self.chequebox.AutoCash(autoCashInterval, autoCashThreshold)
 
-	glog.V(logger.Info).Infof("[BZZ] SWAP auto cash ON for %v -> %v: interval = %v, threshold = %v, peer = %v)", local.Sender.Hex()[:8], remote.Sender.Hex()[:8], autoCashInterval, autoCashThreshold)
+	glog.V(logger.Info).Infof("[BZZ] SWAP auto cash ON for %v -> %v: interval = %v, threshold = %v, peer = %v)", local.Contract.Hex()[:8], remote.Contract.Hex()[:8], autoCashInterval, autoCashThreshold)
 
 	return
 }
@@ -122,12 +122,12 @@ func (self *swap) sells() bool {
 	return self.local.SellAt.Cmp(self.remote.BuyAt) <= 0
 }
 
-// NewChequebook(path, sender, prvKey*ecdsa.PrivateKey, backend) wraps the
+// NewChequebook(path, Contract, prvKey*ecdsa.PrivateKey, backend) wraps the
 // chequebook initialiser and sets up autoDeposit to cover spending.
-func newChequebook(path string, sender common.Address, prvKey *ecdsa.PrivateKey, backend chequebook.Backend) (chbook *chequebook.Chequebook, err error) {
+func newChequebook(path string, Contract common.Address, prvKey *ecdsa.PrivateKey, backend chequebook.Backend) (chbook *chequebook.Chequebook, err error) {
 	chbook, err = chequebook.LoadChequebook(path, prvKey, backend)
 	if err != nil {
-		chbook, err = chequebook.NewChequebook(path, sender, prvKey, backend)
+		chbook, err = chequebook.NewChequebook(path, Contract, prvKey, backend)
 		if err == nil {
 			glog.V(logger.Info).Infof("[BZZ] SWAP auto deposit ON: interval = %v, threshold = %v, buffer = %v)", autoDepositInterval, autoDepositThreshold, autoDepositBuffer)
 			chbook.AutoDeposit(autoDepositInterval, autoDepositThreshold, autoDepositBuffer)
@@ -166,9 +166,9 @@ func (self *swap) send(n int) {
 	if self.buys() && self.balance < 0 {
 		amount := big.NewInt(int64(-self.balance))
 		amount.Mul(amount, self.remote.SellAt)
-		ch, err := self.chequebook.Issue(self.remote.Recipient, amount)
+		ch, err := self.chequebook.Issue(self.remote.Beneficiary, amount)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[BZZ] cannot issue cheque. Sender: %v, Recipient: %v, Amount: %v", self.local.Sender, self.remote.Recipient, amount)
+			glog.V(logger.Warn).Infof("[BZZ] cannot issue cheque. Contract: %v, Beneficiary: %v, Amount: %v", self.local.Contract, self.remote.Beneficiary, amount)
 		} else {
 			self.proto.payment(&paymentMsgData{-self.balance, ch})
 			self.add(-self.balance)
