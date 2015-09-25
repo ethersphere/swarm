@@ -31,6 +31,7 @@ import (
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/vm"
@@ -326,10 +327,10 @@ var (
 		Name:  "bzz",
 		Usage: "Enable swarm",
 	}
-	SwarmProxyPortFlag = cli.StringFlag{
-		Name:  "bzzport",
-		Usage: "Swarm HTTP Proxy Port on localhost",
-		Value: "8500",
+	SwarmConfigPathFlag = cli.StringFlag{
+		Name:  "bzzconfig",
+		Usage: "Swarm config file path",
+		Value: "bzz.json",
 	}
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
@@ -413,10 +414,13 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	if err != nil {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
+	nodeKey := MakeNodeKey(ctx)
+	datadir := ctx.GlobalString(DataDirFlag.Name)
+	bzzconfig := bzz.NewConfig(ctx.GlobalString(SwarmConfigPathFlag.Name), datadir, nodeKey)
 
 	return &eth.Config{
 		Name:                    common.MakeName(clientID, version),
-		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
+		DataDir:                 datadir,
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
@@ -437,9 +441,9 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NAT:                     MakeNAT(ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
-		NodeKey:                 MakeNodeKey(ctx),
+		NodeKey:                 nodeKey,
 		Bzz:                     ctx.GlobalBool(SwarmEnabledFlag.Name),
-		BzzPort:                 ctx.GlobalString(SwarmProxyPortFlag.Name),
+		BzzConfig:               bzzconfig,
 		Shh:                     ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:                    true,
 		BootNodes:               ctx.GlobalString(BootnodesFlag.Name),
