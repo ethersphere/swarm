@@ -425,8 +425,17 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 	}
 	nodeKey := MakeNodeKey(ctx)
 	datadir := ctx.GlobalString(DataDirFlag.Name)
-	bzzconfig := bzz.NewConfig(datadir, ctx.GlobalString(SwarmConfigPathFlag.Name), nodeKey)
-
+	bzzenabled := ctx.GlobalBool(SwarmEnabledFlag.Name)
+	var bzzconfig *bzz.Config
+	if bzzenabled {
+		if nodeKey == nil {
+			nodeKey, err = crypto.GenerateKey()
+			if err != nil {
+				Fatalf("unable to generate node id: %v", err)
+			}
+		}
+		bzzconfig = bzz.NewConfig(datadir, ctx.GlobalString(SwarmConfigPathFlag.Name), nodeKey)
+	}
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 datadir,
@@ -451,7 +460,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
 		NodeKey:                 nodeKey,
-		Bzz:                     ctx.GlobalBool(SwarmEnabledFlag.Name),
+		Bzz:                     bzzenabled,
 		BzzConfig:               bzzconfig,
 		Shh:                     ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:                    true,
