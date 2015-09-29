@@ -29,7 +29,6 @@ import (
 	"io"
 	"io/ioutil"
 
-	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
@@ -178,7 +177,6 @@ func listenHTTP(addr string, h http.Handler) (*stopServer, error) {
 	if err != nil {
 		return nil, err
 	}
-	l = fdtrack.WrapListener("rpc", l)
 	s := &stopServer{l: l, idle: make(map[net.Conn]struct{})}
 	s.Server = &http.Server{
 		Addr:         addr,
@@ -273,13 +271,13 @@ func (self *httpClient) Send(req interface{}) error {
 		reply, _ := ioutil.ReadAll(resp.Body)
 		var rpcSuccessResponse shared.SuccessResponse
 		if err = self.codec.Decode(reply, &rpcSuccessResponse); err == nil {
-			self.lastRes = rpcSuccessResponse.Result
+			self.lastRes = &rpcSuccessResponse
 			self.lastErr = err
 			return nil
 		} else {
 			var rpcErrorResponse shared.ErrorResponse
 			if err = self.codec.Decode(reply, &rpcErrorResponse); err == nil {
-				self.lastRes = rpcErrorResponse.Error
+				self.lastRes = &rpcErrorResponse
 				self.lastErr = err
 				return nil
 			} else {

@@ -42,13 +42,11 @@ func (self *ipcClient) Close() {
 	self.coder.Close()
 }
 
-func (self *ipcClient) Send(req interface{}) error {
+func (self *ipcClient) Send(msg interface{}) error {
 	var err error
-	if err = self.coder.WriteResponse(req); err != nil {
-		if _, ok := err.(*net.OpError); ok { // connection lost, retry once
-			if err = self.reconnect(); err == nil {
-				err = self.coder.WriteResponse(req)
-			}
+	if err = self.coder.WriteResponse(msg); err != nil {
+		if err = self.reconnect(); err == nil {
+			err = self.coder.WriteResponse(msg)
 		}
 	}
 	return err

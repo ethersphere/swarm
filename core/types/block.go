@@ -60,7 +60,7 @@ type Header struct {
 	Number      *big.Int       // The block number
 	GasLimit    *big.Int       // Gas limit
 	GasUsed     *big.Int       // Gas used
-	Time        uint64         // Creation time
+	Time        *big.Int       // Creation time
 	Extra       []byte         // Extra data
 	MixDigest   common.Hash    // for quick difficulty verification
 	Nonce       BlockNonce
@@ -94,7 +94,7 @@ func (h *Header) UnmarshalJSON(data []byte) error {
 		Coinbase   string
 		Difficulty string
 		GasLimit   string
-		Time       uint64
+		Time       *big.Int
 		Extra      string
 	}
 	dec := json.NewDecoder(bytes.NewReader(data))
@@ -117,6 +117,13 @@ func rlpHash(x interface{}) (h common.Hash) {
 	return h
 }
 
+// Body is a simple (mutable, non-safe) data container for storing and moving
+// a block's data contents (transactions and uncles) together.
+type Body struct {
+	Transactions []*Transaction
+	Uncles       []*Header
+}
+
 type Block struct {
 	header       *Header
 	uncles       []*Header
@@ -129,12 +136,20 @@ type Block struct {
 
 	// Td is used by package core to store the total difficulty
 	// of the chain up to and including the block.
-	Td *big.Int
+	td *big.Int
 
 	// ReceivedAt is used by package eth to track block propagation time.
 	ReceivedAt time.Time
 }
 
+// DeprecatedTd is an old relic for extracting the TD of a block. It is in the
+// code solely to facilitate upgrading the database from the old format to the
+// new, after which it should be deleted. Do not use!
+func (b *Block) DeprecatedTd() *big.Int {
+	return b.td
+}
+
+// [deprecated by eth/63]
 // StorageBlock defines the RLP encoding of a Block stored in the
 // state database. The StorageBlock encoding contains fields that
 // would otherwise need to be recomputed.
@@ -147,6 +162,7 @@ type extblock struct {
 	Uncles []*Header
 }
 
+// [deprecated by eth/63]
 // "storage" block encoding. used for database.
 type storageblock struct {
 	Header *Header
@@ -168,7 +184,7 @@ var (
 // are ignored and set to values derived from the given txs, uncles
 // and receipts.
 func NewBlock(header *Header, txs []*Transaction, uncles []*Header, receipts []*Receipt) *Block {
-	b := &Block{header: copyHeader(header), Td: new(big.Int)}
+	b := &Block{header: copyHeader(header), td: new(big.Int)}
 
 	// TODO: panic if len(txs) != len(receipts)
 	if len(txs) == 0 {
@@ -210,6 +226,9 @@ func NewBlockWithHeader(header *Header) *Block {
 
 func copyHeader(h *Header) *Header {
 	cpy := *h
+	if cpy.Time = new(big.Int); h.Time != nil {
+		cpy.Time.Set(h.Time)
+	}
 	if cpy.Difficulty = new(big.Int); h.Difficulty != nil {
 		cpy.Difficulty.Set(h.Difficulty)
 	}
@@ -265,22 +284,14 @@ func (b *Block) EncodeRLP(w io.Writer) error {
 	})
 }
 
+// [deprecated by eth/63]
 func (b *StorageBlock) DecodeRLP(s *rlp.Stream) error {
 	var sb storageblock
 	if err := s.Decode(&sb); err != nil {
 		return err
 	}
-	b.header, b.uncles, b.transactions, b.Td = sb.Header, sb.Uncles, sb.Txs, sb.TD
+	b.header, b.uncles, b.transactions, b.td = sb.Header, sb.Uncles, sb.Txs, sb.TD
 	return nil
-}
-
-func (b *StorageBlock) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, storageblock{
-		Header: b.header,
-		Txs:    b.transactions,
-		Uncles: b.uncles,
-		TD:     b.Td,
-	})
 }
 
 // TODO: copies
@@ -301,13 +312,13 @@ func (b *Block) Number() *big.Int     { return new(big.Int).Set(b.header.Number)
 func (b *Block) GasLimit() *big.Int   { return new(big.Int).Set(b.header.GasLimit) }
 func (b *Block) GasUsed() *big.Int    { return new(big.Int).Set(b.header.GasUsed) }
 func (b *Block) Difficulty() *big.Int { return new(big.Int).Set(b.header.Difficulty) }
+func (b *Block) Time() *big.Int       { return new(big.Int).Set(b.header.Time) }
 
 func (b *Block) NumberU64() uint64        { return b.header.Number.Uint64() }
 func (b *Block) MixDigest() common.Hash   { return b.header.MixDigest }
 func (b *Block) Nonce() uint64            { return binary.BigEndian.Uint64(b.header.Nonce[:]) }
 func (b *Block) Bloom() Bloom             { return b.header.Bloom }
 func (b *Block) Coinbase() common.Address { return b.header.Coinbase }
-func (b *Block) Time() uint64             { return b.header.Time }
 func (b *Block) Root() common.Hash        { return b.header.Root }
 func (b *Block) ParentHash() common.Hash  { return b.header.ParentHash }
 func (b *Block) TxHash() common.Hash      { return b.header.TxHash }
@@ -353,8 +364,21 @@ func (b *Block) WithMiningResult(nonce uint64, mixDigest common.Hash) *Block {
 		transactions: b.transactions,
 		receipts:     b.receipts,
 		uncles:       b.uncles,
-		Td:           b.Td,
 	}
+}
+
+// WithBody returns a new block with the given transaction and uncle contents.
+func (b *Block) WithBody(transactions []*Transaction, uncles []*Header) *Block {
+	block := &Block{
+		header:       copyHeader(b.header),
+		transactions: make([]*Transaction, len(transactions)),
+		uncles:       make([]*Header, len(uncles)),
+	}
+	copy(block.transactions, transactions)
+	for i := range uncles {
+		block.uncles[i] = copyHeader(uncles[i])
+	}
+	return block
 }
 
 // Implement pow.Block
@@ -369,7 +393,7 @@ func (b *Block) Hash() common.Hash {
 }
 
 func (b *Block) String() string {
-	str := fmt.Sprintf(`Block(#%v): Size: %v TD: %v {
+	str := fmt.Sprintf(`Block(#%v): Size: %v {
 MinerHash: %x
 %v
 Transactions:
@@ -377,7 +401,7 @@ Transactions:
 Uncles:
 %v
 }
-`, b.Number(), b.Size(), b.Td, b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
+`, b.Number(), b.Size(), b.header.HashNoNonce(), b.header, b.transactions, b.uncles)
 	return str
 }
 

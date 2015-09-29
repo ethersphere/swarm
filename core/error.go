@@ -25,9 +25,10 @@ import (
 )
 
 var (
-	BlockNumberErr  = errors.New("block number invalid")
-	BlockFutureErr  = errors.New("block time is in the future")
-	BlockEqualTSErr = errors.New("block time stamp equal to previous")
+	BlockNumberErr   = errors.New("block number invalid")
+	BlockFutureErr   = errors.New("block time is in the future")
+	BlockTSTooBigErr = errors.New("block time too big")
+	BlockEqualTSErr  = errors.New("block time stamp equal to previous")
 )
 
 // Parent error. In case a parent is unknown this error will be thrown
@@ -174,5 +175,16 @@ func (self *ValueTransferError) Error() string {
 }
 func IsValueTransferErr(e error) bool {
 	_, ok := e.(*ValueTransferError)
+	return ok
+}
+
+type BadHashError common.Hash
+
+func (h BadHashError) Error() string {
+	return fmt.Sprintf("Found known bad hash in chain %x", h)
+}
+
+func IsBadHashError(err error) bool {
+	_, ok := err.(BadHashError)
 	return ok
 }

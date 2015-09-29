@@ -1,21 +1,31 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/bzz"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 )
 
-func bzzREPL(t *testing.T, port string) (string, *testjethre, *eth.Ethereum) {
+func bzzREPL(t *testing.T) (string, *testjethre, *eth.Ethereum) {
+	prvKey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal("unable to generate key")
+	}
+
+	config := bzz.NewConfig("/tmp/bzz", "", prvKey)
+
 	return testREPL(t, func(c *eth.Config) {
 		c.Bzz = true
-		c.BzzPort = port
+		c.BzzConfig = config
 	})
 }
 
 func TestBzzUploadDownload(t *testing.T) {
-	tmp, repl, ethereum := bzzREPL(t, "")
+	tmp, repl, ethereum := bzzREPL(t)
 	if err := ethereum.Start(); err != nil {
 		t.Fatalf("error starting ethereum: %v", err)
 	}
@@ -25,7 +35,7 @@ func TestBzzUploadDownload(t *testing.T) {
 }
 
 func TestBzzPutGet(t *testing.T) {
-	tmp, repl, ethereum := bzzREPL(t, "")
+	tmp, repl, ethereum := bzzREPL(t)
 	if err := ethereum.Start(); err != nil {
 		t.Fatalf("error starting ethereum: %v", err)
 	}
@@ -44,7 +54,8 @@ func TestBzzPutGet(t *testing.T) {
 // until we implement a stoppable http server
 // further http tests will need to make sure the correct server is running
 func TestHTTP(t *testing.T) {
-	tmp, repl, ethereum := bzzREPL(t, "8500")
+	t.Skip("the server can be initialized only once per test session until stoppable http server is implemented")
+	tmp, repl, ethereum := bzzREPL(t)
 	if err := ethereum.Start(); err != nil {
 		t.Fatalf("error starting ethereum: %v", err)
 	}
@@ -53,6 +64,7 @@ func TestHTTP(t *testing.T) {
 	if checkEvalJSON(t, repl, `hash = bzz.put("f42 = function() { return 42 }", "application/javascript")`, `"e6847876f00102441f850b2d438a06d10e3bf24e6a0a76d47b073a86c3c2f9ac"`) != nil {
 		return
 	}
+	fmt.Printf("debug\n")
 	if checkEvalJSON(t, repl, `admin.httpGet("bzz://"+hash)`, `"f42 = function() { return 42 }"`) != nil {
 		return
 	}
