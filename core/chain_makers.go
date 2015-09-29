@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/pow"
 )
@@ -130,6 +131,17 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 	return b.chain[index]
 }
 
+// OffsetTime modifies the time instance of a block, implicitly changing its
+// associated difficulty. It's useful to test scenarios where forking is not
+// tied to chain length directly.
+func (b *BlockGen) OffsetTime(seconds int64) {
+	b.header.Time.Add(b.header.Time, new(big.Int).SetInt64(seconds))
+	if b.header.Time.Cmp(b.parent.Header().Time) <= 0 {
+		panic("block time out of range")
+	}
+	b.header.Difficulty = CalcDifficulty(b.header.Time.Uint64(), b.parent.Time().Uint64(), b.parent.Number(), b.parent.Difficulty())
+}
+
 // GenerateChain creates a chain of n blocks. The first block's
 // parent will be the provided parent. db is used to store
 // intermediate states and should contain the parent's state trie.
@@ -142,7 +154,7 @@ func (b *BlockGen) PrevBlock(index int) *types.Block {
 // Blocks created by GenerateChain do not contain valid proof of work
 // values. Inserting them into ChainManager requires use of FakePow or
 // a similar non-validating proof of work implementation.
-func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int, *BlockGen)) []*types.Block {
+func GenerateChain(parent *types.Block, db ethdb.Database, n int, gen func(int, *BlockGen)) []*types.Block {
 	statedb := state.New(parent.Root(), db)
 	blocks := make(types.Blocks, n)
 	genblock := func(i int, h *types.Header) *types.Block {
@@ -158,7 +170,6 @@ func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int,
 	for i := 0; i < n; i++ {
 		header := makeHeader(parent, statedb)
 		block := genblock(i, header)
-		block.Td = CalcTD(block, parent)
 		blocks[i] = block
 		parent = block
 	}
@@ -166,22 +177,27 @@ func GenerateChain(parent *types.Block, db common.Database, n int, gen func(int,
 }
 
 func makeHeader(parent *types.Block, state *state.StateDB) *types.Header {
-	time := parent.Time() + 10 // block time is fixed at 10 seconds
+	var time *big.Int
+	if parent.Time() == nil {
+		time = big.NewInt(10)
+	} else {
+		time = new(big.Int).Add(parent.Time(), big.NewInt(10)) // block time is fixed at 10 seconds
+	}
 	return &types.Header{
 		Root:       state.Root(),
 		ParentHash: parent.Hash(),
 		Coinbase:   parent.Coinbase(),
-		Difficulty: CalcDifficulty(time, parent.Time(), parent.Number(), parent.Difficulty()),
+		Difficulty: CalcDifficulty(time.Uint64(), new(big.Int).Sub(time, big.NewInt(10)).Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit:   CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Number:     new(big.Int).Add(parent.Number(), common.Big1),
-		Time:       uint64(time),
+		Time:       time,
 	}
 }
 
 // newCanonical creates a new deterministic canonical chain by running
 // InsertChain on the result of makeChain.
-func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
+func newCanonical(n int, db ethdb.Database) (*BlockProcessor, error) {
 	evmux := &event.TypeMux{}
 
 	WriteTestNetGenesisBlock(db, 0)
@@ -197,7 +213,7 @@ func newCanonical(n int, db common.Database) (*BlockProcessor, error) {
 	return bman, err
 }
 
-func makeChain(parent *types.Block, n int, db common.Database, seed int) []*types.Block {
+func makeChain(parent *types.Block, n int, db ethdb.Database, seed int) []*types.Block {
 	return GenerateChain(parent, db, n, func(i int, b *BlockGen) {
 		b.SetCoinbase(common.Address{0: byte(seed), 19: byte(i)})
 	})

@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -100,7 +101,7 @@ type worker struct {
 	eth     core.Backend
 	chain   *core.ChainManager
 	proc    *core.BlockProcessor
-	chainDb common.Database
+	chainDb ethdb.Database
 
 	coinbase common.Address
 	gasPrice *big.Int
@@ -278,12 +279,12 @@ func (self *worker) wait() {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
 					continue
 				}
-				if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent, true); err != nil && err != core.BlockFutureErr {
+				if err := core.ValidateHeader(self.eth.BlockProcessor().Pow, block.Header(), parent.Header(), true, false); err != nil && err != core.BlockFutureErr {
 					glog.V(logger.Error).Infoln("Invalid header on mined block:", err)
 					continue
 				}
 
-				stat, err := self.chain.WriteBlock(block, false)
+				stat, err := self.chain.WriteBlock(block)
 				if err != nil {
 					glog.V(logger.Error).Infoln("error writing block to chain", err)
 					continue
@@ -297,14 +298,17 @@ func (self *worker) wait() {
 				}
 
 				// broadcast before waiting for validation
-				go func(block *types.Block, logs state.Logs) {
+				go func(block *types.Block, logs state.Logs, receipts []*types.Receipt) {
 					self.mux.Post(core.NewMinedBlockEvent{block})
 					self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
 					if stat == core.CanonStatTy {
 						self.mux.Post(core.ChainHeadEvent{block})
 						self.mux.Post(logs)
 					}
-				}(block, work.state.Logs())
+					if err := core.PutBlockReceipts(self.chainDb, block, receipts); err != nil {
+						glog.V(logger.Warn).Infoln("error writing block receipts:", err)
+					}
+				}(block, work.state.Logs(), work.receipts)
 			}
 
 			// check staleness and display confirmation
@@ -431,8 +435,8 @@ func (self *worker) commitNewWork() {
 	tstart := time.Now()
 	parent := self.chain.CurrentBlock()
 	tstamp := tstart.Unix()
-	if tstamp <= int64(parent.Time()) {
-		tstamp = int64(parent.Time()) + 1
+	if parent.Time().Cmp(new(big.Int).SetInt64(tstamp)) >= 0 {
+		tstamp = parent.Time().Int64() + 1
 	}
 	// this will ensure we're not going off too far in the future
 	if now := time.Now().Unix(); tstamp > now+4 {
@@ -445,12 +449,12 @@ func (self *worker) commitNewWork() {
 	header := &types.Header{
 		ParentHash: parent.Hash(),
 		Number:     num.Add(num, common.Big1),
-		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time(), parent.Number(), parent.Difficulty()),
+		Difficulty: core.CalcDifficulty(uint64(tstamp), parent.Time().Uint64(), parent.Number(), parent.Difficulty()),
 		GasLimit:   core.CalcGasLimit(parent),
 		GasUsed:    new(big.Int),
 		Coinbase:   self.coinbase,
 		Extra:      self.extra,
-		Time:       uint64(tstamp),
+		Time:       big.NewInt(tstamp),
 	}
 
 	previous := self.current
@@ -530,14 +534,12 @@ func (self *worker) commitNewWork() {
 
 	// create the new block whose nonce will be mined.
 	work.Block = types.NewBlock(header, work.txs, uncles, work.receipts)
-	work.Block.Td = new(big.Int).Set(core.CalcTD(work.Block, self.chain.GetBlock(work.Block.ParentHash())))
 
 	// We only care about logging if we're actually mining.
 	if atomic.LoadInt32(&self.mining) == 1 {
 		glog.V(logger.Info).Infof("commit new work on block %v with %d txs & %d uncles. Took %v\n", work.Block.Number(), work.tcount, len(uncles), time.Since(tstart))
 		self.logLocalMinedBlocks(work, previous)
 	}
-
 	self.push(work)
 }
 

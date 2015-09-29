@@ -22,7 +22,6 @@ import (
 
 	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/tests"
@@ -92,7 +91,6 @@ func runBlockTest(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("%v", err)
 	}
-	defer ethereum.Stop()
 	if rpc {
 		fmt.Println("Block Test post state validated, starting RPC interface.")
 		startEth(ctx, ethereum)
@@ -103,34 +101,31 @@ func runBlockTest(ctx *cli.Context) {
 
 func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, error) {
 	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
-	cfg.NewDB = func(path string) (common.Database, error) { return ethdb.NewMemDatabase() }
+	cfg.NewDB = func(path string) (ethdb.Database, error) { return ethdb.NewMemDatabase() }
 	cfg.MaxPeers = 0 // disable network
 	cfg.Shh = false  // disable whisper
 	cfg.NAT = nil    // disable port mapping
-
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		return nil, err
 	}
-	// if err := ethereum.Start(); err != nil {
-	// 	return nil, err
-	// }
 
 	// import the genesis block
 	ethereum.ResetWithGenesisBlock(test.Genesis)
-
 	// import pre accounts
-	statedb, err := test.InsertPreState(ethereum)
+	_, err = test.InsertPreState(ethereum)
 	if err != nil {
 		return ethereum, fmt.Errorf("InsertPreState: %v", err)
 	}
 
-	if err := test.TryBlocksInsert(ethereum.ChainManager()); err != nil {
+	cm := ethereum.ChainManager()
+	validBlocks, err := test.TryBlocksInsert(cm)
+	if err != nil {
 		return ethereum, fmt.Errorf("Block Test load error: %v", err)
 	}
-
-	if err := test.ValidatePostState(statedb); err != nil {
+	newDB := cm.State()
+	if err := test.ValidatePostState(newDB); err != nil {
 		return ethereum, fmt.Errorf("post state validation failed: %v", err)
 	}
-	return ethereum, nil
+	return ethereum, test.ValidateImportedHeaders(cm, validBlocks)
 }

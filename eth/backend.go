@@ -18,6 +18,7 @@
 package eth
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
@@ -74,6 +75,8 @@ var (
 )
 
 type Config struct {
+	DevMode bool
+
 	Name         string
 	NetworkId    int
 	GenesisNonce int
@@ -128,7 +131,7 @@ type Config struct {
 
 	// NewDB is used to create databases.
 	// If nil, the default is to create leveldb databases on disk.
-	NewDB func(path string) (common.Database, error)
+	NewDB func(path string) (ethdb.Database, error)
 }
 
 func (cfg *Config) parseBootNodes() []*discover.Node {
@@ -210,11 +213,8 @@ type Ethereum struct {
 	shutdownChan chan bool
 
 	// DB interfaces
-	chainDb common.Database // Block chain database
-	dappDb  common.Database // Dapp database
-
-	// Closed when databases are flushed and closed
-	databasesClosed chan bool
+	chainDb ethdb.Database // Block chain database
+	dappDb  ethdb.Database // Dapp database
 
 	//*** SERVICES ***
 	// State manager for processing new blocks and managing the over all states
@@ -269,14 +269,10 @@ func New(config *Config) (*Ethereum, error) {
 
 	newdb := config.NewDB
 	if newdb == nil {
-		newdb = func(path string) (common.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
+		newdb = func(path string) (ethdb.Database, error) { return ethdb.NewLDBDatabase(path, config.DatabaseCache) }
 	}
 
-	// attempt to merge database together, upgrading from an old version
-	if err := mergeDatabases(config.DataDir, newdb); err != nil {
-		return nil, err
-	}
-
+	// Open the chain database and perform any upgrades needed
 	chainDb, err := newdb(filepath.Join(config.DataDir, "chaindata"))
 	if err != nil {
 		return nil, fmt.Errorf("blockchain db err: %v", err)
@@ -284,6 +280,10 @@ func New(config *Config) (*Ethereum, error) {
 	if db, ok := chainDb.(*ethdb.LDBDatabase); ok {
 		db.Meter("eth/db/chaindata/")
 	}
+	if err := upgradeChainDatabase(chainDb); err != nil {
+		return nil, err
+	}
+
 	dappDb, err := newdb(filepath.Join(config.DataDir, "dapp"))
 	if err != nil {
 		return nil, fmt.Errorf("dapp db err: %v", err)
@@ -308,18 +308,23 @@ func New(config *Config) (*Ethereum, error) {
 		glog.V(logger.Info).Infof("Successfully wrote genesis block. New genesis hash = %x\n", block.Hash())
 	}
 
-	if config.Olympic {
+	// different modes
+	switch {
+	case config.Olympic:
+		glog.V(logger.Error).Infoln("Starting Olympic network")
+		fallthrough
+	case config.DevMode:
 		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
 		if err != nil {
 			return nil, err
 		}
-		glog.V(logger.Error).Infoln("Starting Olympic network")
 	}
-
 	// This is for testing only.
 	if config.GenesisBlock != nil {
+		core.WriteTd(chainDb, config.GenesisBlock.Hash(), config.GenesisBlock.Difficulty())
 		core.WriteBlock(chainDb, config.GenesisBlock)
-		core.WriteHead(chainDb, config.GenesisBlock)
+		core.WriteCanonicalHash(chainDb, config.GenesisBlock.Hash(), config.GenesisBlock.NumberU64())
+		core.WriteHeadBlockHash(chainDb, config.GenesisBlock.Hash())
 	}
 
 	if !config.SkipBcVersionCheck {
@@ -334,7 +339,6 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth := &Ethereum{
 		shutdownChan:            make(chan bool),
-		databasesClosed:         make(chan bool),
 		chainDb:                 chainDb,
 		dappDb:                  dappDb,
 		eventMux:                &event.TypeMux{},
@@ -378,7 +382,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	eth.blockProcessor = core.NewBlockProcessor(chainDb, eth.pow, eth.chainManager, eth.EventMux())
 	eth.chainManager.SetProcessor(eth.blockProcessor)
-	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager)
+	eth.protocolManager = NewProtocolManager(config.NetworkId, eth.eventMux, eth.txPool, eth.pow, eth.chainManager, chainDb)
 
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
@@ -544,8 +548,8 @@ func (s *Ethereum) BlockProcessor() *core.BlockProcessor { return s.blockProcess
 func (s *Ethereum) TxPool() *core.TxPool                 { return s.txPool }
 func (s *Ethereum) Whisper() *whisper.Whisper            { return s.whisper }
 func (s *Ethereum) EventMux() *event.TypeMux             { return s.eventMux }
-func (s *Ethereum) ChainDb() common.Database             { return s.chainDb }
-func (s *Ethereum) DappDb() common.Database              { return s.dappDb }
+func (s *Ethereum) ChainDb() ethdb.Database              { return s.chainDb }
+func (s *Ethereum) DappDb() ethdb.Database               { return s.dappDb }
 func (s *Ethereum) IsListening() bool                    { return true } // Always listening
 func (s *Ethereum) PeerCount() int                       { return s.net.PeerCount() }
 func (s *Ethereum) Peers() []*p2p.Peer                   { return s.net.Peers() }
@@ -567,8 +571,6 @@ func (s *Ethereum) Start() error {
 	if err != nil {
 		return err
 	}
-	// periodically flush databases
-	go s.syncDatabases()
 
 	if s.AutoDAG {
 		s.StartAutoDAG()
@@ -591,32 +593,6 @@ func (s *Ethereum) Start() error {
 
 	glog.V(logger.Info).Infoln("Server started")
 	return nil
-}
-
-// sync databases every minute. If flushing fails we exit immediatly. The system
-// may not continue under any circumstances.
-func (s *Ethereum) syncDatabases() {
-	ticker := time.NewTicker(1 * time.Minute)
-done:
-	for {
-		select {
-		case <-ticker.C:
-			// don't change the order of database flushes
-			if err := s.dappDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush dappDb: %v (Restart your node. We are aware of this issue)\n", err)
-			}
-			if err := s.chainDb.Flush(); err != nil {
-				glog.Fatalf("fatal error: flush chainDb: %v (Restart your node. We are aware of this issue)\n", err)
-			}
-		case <-s.shutdownChan:
-			break done
-		}
-	}
-
-	s.chainDb.Close()
-	s.dappDb.Close()
-
-	close(s.databasesClosed)
 }
 
 func (s *Ethereum) StartForTest() {
@@ -653,13 +629,13 @@ func (s *Ethereum) Stop() {
 		s.Swarm.Stop()
 	}
 
-	glog.V(logger.Info).Infoln("Server stopped")
+	s.chainDb.Close()
+	s.dappDb.Close()
 	close(s.shutdownChan)
 }
 
 // This function will wait for a shutdown and resumes main thread execution
 func (s *Ethereum) WaitForShutdown() {
-	<-s.databasesClosed
 	<-s.shutdownChan
 }
 
@@ -749,7 +725,7 @@ func dagFiles(epoch uint64) (string, string) {
 	return dag, "full-R" + dag
 }
 
-func saveBlockchainVersion(db common.Database, bcVersion int) {
+func saveBlockchainVersion(db ethdb.Database, bcVersion int) {
 	d, _ := db.Get([]byte("BlockchainVersion"))
 	blockchainVersion := common.NewValue(d).Uint()
 
@@ -758,74 +734,61 @@ func saveBlockchainVersion(db common.Database, bcVersion int) {
 	}
 }
 
-// mergeDatabases when required merge old database layout to one single database
-func mergeDatabases(datadir string, newdb func(path string) (common.Database, error)) error {
-	// Check if already upgraded
-	data := filepath.Join(datadir, "chaindata")
-	if _, err := os.Stat(data); !os.IsNotExist(err) {
+// upgradeChainDatabase ensures that the chain database stores block split into
+// separate header and body entries.
+func upgradeChainDatabase(db ethdb.Database) error {
+	// Short circuit if the head block is stored already as separate header and body
+	data, err := db.Get([]byte("LastBlock"))
+	if err != nil {
 		return nil
 	}
-	// make sure it's not just a clean path
-	chainPath := filepath.Join(datadir, "blockchain")
-	if _, err := os.Stat(chainPath); os.IsNotExist(err) {
+	head := common.BytesToHash(data)
+
+	if block := core.GetBlockByHashOld(db, head); block == nil {
 		return nil
 	}
-	glog.Infoln("Database upgrade required. Upgrading...")
+	// At least some of the database is still the old format, upgrade (skip the head block!)
+	glog.V(logger.Info).Info("Old database detected, upgrading...")
 
-	database, err := newdb(data)
-	if err != nil {
-		return fmt.Errorf("creating data db err: %v", err)
-	}
-	defer database.Close()
+	if db, ok := db.(*ethdb.LDBDatabase); ok {
+		blockPrefix := []byte("block-hash-")
+		for it := db.NewIterator(); it.Next(); {
+			// Skip anything other than a combined block
+			if !bytes.HasPrefix(it.Key(), blockPrefix) {
+				continue
+			}
+			// Skip the head block (merge last to signal upgrade completion)
+			if bytes.HasSuffix(it.Key(), head.Bytes()) {
+				continue
+			}
+			// Load the block, split and serialize (order!)
+			block := core.GetBlockByHashOld(db, common.BytesToHash(bytes.TrimPrefix(it.Key(), blockPrefix)))
 
-	// Migrate blocks
-	chainDb, err := newdb(chainPath)
-	if err != nil {
-		return fmt.Errorf("state db err: %v", err)
-	}
-	defer chainDb.Close()
-
-	if chain, ok := chainDb.(*ethdb.LDBDatabase); ok {
-		glog.Infoln("Merging blockchain database...")
-		it := chain.NewIterator()
-		for it.Next() {
-			database.Put(it.Key(), it.Value())
+			if err := core.WriteTd(db, block.Hash(), block.DeprecatedTd()); err != nil {
+				return err
+			}
+			if err := core.WriteBody(db, block.Hash(), &types.Body{block.Transactions(), block.Uncles()}); err != nil {
+				return err
+			}
+			if err := core.WriteHeader(db, block.Header()); err != nil {
+				return err
+			}
+			if err := db.Delete(it.Key()); err != nil {
+				return err
+			}
 		}
-		it.Release()
-	}
+		// Lastly, upgrade the head block, disabling the upgrade mechanism
+		current := core.GetBlockByHashOld(db, head)
 
-	// Migrate state
-	stateDb, err := newdb(filepath.Join(datadir, "state"))
-	if err != nil {
-		return fmt.Errorf("state db err: %v", err)
-	}
-	defer stateDb.Close()
-
-	if state, ok := stateDb.(*ethdb.LDBDatabase); ok {
-		glog.Infoln("Merging state database...")
-		it := state.NewIterator()
-		for it.Next() {
-			database.Put(it.Key(), it.Value())
+		if err := core.WriteTd(db, current.Hash(), current.DeprecatedTd()); err != nil {
+			return err
 		}
-		it.Release()
-	}
-
-	// Migrate transaction / receipts
-	extraDb, err := newdb(filepath.Join(datadir, "extra"))
-	if err != nil {
-		return fmt.Errorf("state db err: %v", err)
-	}
-	defer extraDb.Close()
-
-	if extra, ok := extraDb.(*ethdb.LDBDatabase); ok {
-		glog.Infoln("Merging transaction database...")
-
-		it := extra.NewIterator()
-		for it.Next() {
-			database.Put(it.Key(), it.Value())
+		if err := core.WriteBody(db, current.Hash(), &types.Body{current.Transactions(), current.Uncles()}); err != nil {
+			return err
 		}
-		it.Release()
+		if err := core.WriteHeader(db, current.Header()); err != nil {
+			return err
+		}
 	}
-
 	return nil
 }

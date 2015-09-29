@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,7 +39,7 @@ const (
 )
 
 // WriteGenesisBlock writes the genesis block to the database as block number 0
-func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block, error) {
+func WriteGenesisBlock(chainDb ethdb.Database, reader io.Reader) (*types.Block, error) {
 	contents, err := ioutil.ReadAll(reader)
 	if err != nil {
 		return nil, err
@@ -78,7 +79,7 @@ func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block,
 	difficulty := common.String2Big(genesis.Difficulty)
 	block := types.NewBlock(&types.Header{
 		Nonce:      types.EncodeNonce(common.String2Big(genesis.Nonce).Uint64()),
-		Time:       common.String2Big(genesis.Timestamp).Uint64(),
+		Time:       common.String2Big(genesis.Timestamp),
 		ParentHash: common.HexToHash(genesis.ParentHash),
 		Extra:      common.FromHex(genesis.ExtraData),
 		GasLimit:   common.String2Big(genesis.GasLimit),
@@ -87,34 +88,35 @@ func WriteGenesisBlock(chainDb common.Database, reader io.Reader) (*types.Block,
 		Coinbase:   common.HexToAddress(genesis.Coinbase),
 		Root:       statedb.Root(),
 	}, nil, nil, nil)
-	block.Td = difficulty
 
-	if block := GetBlockByHash(chainDb, block.Hash()); block != nil {
+	if block := GetBlock(chainDb, block.Hash()); block != nil {
 		glog.V(logger.Info).Infoln("Genesis block already in chain. Writing canonical number")
-		err := WriteCanonNumber(chainDb, block)
+		err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64())
 		if err != nil {
 			return nil, err
 		}
 		return block, nil
 	}
-
 	statedb.Sync()
 
-	err = WriteBlock(chainDb, block)
-	if err != nil {
+	if err := WriteTd(chainDb, block.Hash(), difficulty); err != nil {
 		return nil, err
 	}
-	err = WriteHead(chainDb, block)
-	if err != nil {
+	if err := WriteBlock(chainDb, block); err != nil {
 		return nil, err
 	}
-
+	if err := WriteCanonicalHash(chainDb, block.Hash(), block.NumberU64()); err != nil {
+		return nil, err
+	}
+	if err := WriteHeadBlockHash(chainDb, block.Hash()); err != nil {
+		return nil, err
+	}
 	return block, nil
 }
 
 // GenesisBlockForTesting creates a block in which addr has the given wei balance.
 // The state trie of the block is written to db.
-func GenesisBlockForTesting(db common.Database, addr common.Address, balance *big.Int) *types.Block {
+func GenesisBlockForTesting(db ethdb.Database, addr common.Address, balance *big.Int) *types.Block {
 	statedb := state.New(common.Hash{}, db)
 	obj := statedb.GetOrNewStateObject(addr)
 	obj.SetBalance(balance)
@@ -125,24 +127,35 @@ func GenesisBlockForTesting(db common.Database, addr common.Address, balance *bi
 		GasLimit:   params.GenesisGasLimit,
 		Root:       statedb.Root(),
 	}, nil, nil, nil)
-	block.Td = params.GenesisDifficulty
 	return block
 }
 
-func WriteGenesisBlockForTesting(db common.Database, addr common.Address, balance *big.Int) *types.Block {
+type GenesisAccount struct {
+	Address common.Address
+	Balance *big.Int
+}
+
+func WriteGenesisBlockForTesting(db ethdb.Database, accounts ...GenesisAccount) *types.Block {
+	accountJson := "{"
+	for i, account := range accounts {
+		if i != 0 {
+			accountJson += ","
+		}
+		accountJson += fmt.Sprintf(`"0x%x":{"balance":"0x%x"}`, account.Address, account.Balance.Bytes())
+	}
+	accountJson += "}"
+
 	testGenesis := fmt.Sprintf(`{
 	"nonce":"0x%x",
 	"gasLimit":"0x%x",
 	"difficulty":"0x%x",
-	"alloc": {
-		"0x%x":{"balance":"0x%x"}
-	}
-}`, types.EncodeNonce(0), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes(), addr, balance.Bytes())
+	"alloc": %s
+}`, types.EncodeNonce(0), params.GenesisGasLimit.Bytes(), params.GenesisDifficulty.Bytes(), accountJson)
 	block, _ := WriteGenesisBlock(db, strings.NewReader(testGenesis))
 	return block
 }
 
-func WriteTestNetGenesisBlock(chainDb common.Database, nonce uint64) (*types.Block, error) {
+func WriteTestNetGenesisBlock(chainDb ethdb.Database, nonce uint64) (*types.Block, error) {
 	testGenesis := fmt.Sprintf(`{
 	"nonce":"0x%x",
 	"gasLimit":"0x%x",

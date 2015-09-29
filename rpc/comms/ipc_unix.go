@@ -21,12 +21,13 @@ package comms
 import (
 	"net"
 	"os"
+	"path/filepath"
 
-	"github.com/ethereum/go-ethereum/fdtrack"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
+	"github.com/ethereum/go-ethereum/rpc/useragent"
 )
 
 func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
@@ -35,7 +36,18 @@ func newIpcClient(cfg IpcConfig, codec codec.Codec) (*ipcClient, error) {
 		return nil, err
 	}
 
-	return &ipcClient{cfg.Endpoint, c, codec, codec.New(c)}, nil
+	coder := codec.New(c)
+	msg := shared.Request{
+		Id:      0,
+		Method:  useragent.EnableUserAgentMethod,
+		Jsonrpc: shared.JsonRpcVersion,
+		Params:  []byte("[]"),
+	}
+
+	coder.WriteResponse(msg)
+	coder.Recv()
+
+	return &ipcClient{cfg.Endpoint, c, codec, coder}, nil
 }
 
 func (self *ipcClient) reconnect() error {
@@ -43,24 +55,36 @@ func (self *ipcClient) reconnect() error {
 	c, err := net.DialUnix("unix", nil, &net.UnixAddr{self.endpoint, "unix"})
 	if err == nil {
 		self.coder = self.codec.New(c)
+
+		msg := shared.Request{
+			Id:      0,
+			Method:  useragent.EnableUserAgentMethod,
+			Jsonrpc: shared.JsonRpcVersion,
+			Params:  []byte("[]"),
+		}
+		self.coder.WriteResponse(msg)
+		self.coder.Recv()
 	}
 
 	return err
 }
 
 func startIpc(cfg IpcConfig, codec codec.Codec, initializer func(conn net.Conn) (shared.EthereumApi, error)) error {
-	os.Remove(cfg.Endpoint) // in case it still exists from a previous run
+	// Ensure the IPC path exists and remove any previous leftover
+	if err := os.MkdirAll(filepath.Dir(cfg.Endpoint), 0751); err != nil {
+		return err
+	}
+	os.Remove(cfg.Endpoint)
 
-	l, err := net.Listen("unix", cfg.Endpoint)
+	l, err := net.ListenUnix("unix", &net.UnixAddr{Name: cfg.Endpoint, Net: "unix"})
 	if err != nil {
 		return err
 	}
-	l = fdtrack.WrapListener("ipc", l)
 	os.Chmod(cfg.Endpoint, 0600)
 
 	go func() {
 		for {
-			conn, err := l.Accept()
+			conn, err := l.AcceptUnix()
 			if err != nil {
 				glog.V(logger.Error).Infof("Error accepting ipc connection - %v\n", err)
 				continue

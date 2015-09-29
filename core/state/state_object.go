@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -56,7 +57,7 @@ func (self Storage) Copy() Storage {
 
 type StateObject struct {
 	// State database for storing state changes
-	db   common.Database
+	db   ethdb.Database
 	trie *trie.SecureTrie
 
 	// Address belonging to this account
@@ -82,15 +83,12 @@ type StateObject struct {
 	// Mark for deletion
 	// When an object is marked for deletion it will be delete from the trie
 	// during the "update" phase of the state transition
-	remove bool
-	dirty  bool
+	remove  bool
+	deleted bool
+	dirty   bool
 }
 
-func (self *StateObject) Reset() {
-	self.storage = make(Storage)
-}
-
-func NewStateObject(address common.Address, db common.Database) *StateObject {
+func NewStateObject(address common.Address, db ethdb.Database) *StateObject {
 	object := &StateObject{db: db, address: address, balance: new(big.Int), gasPool: new(big.Int), dirty: true}
 	object.trie = trie.NewSecure((common.Hash{}).Bytes(), db)
 	object.storage = make(Storage)
@@ -99,7 +97,7 @@ func NewStateObject(address common.Address, db common.Database) *StateObject {
 	return object
 }
 
-func NewStateObjectFromBytes(address common.Address, data []byte, db common.Database) *StateObject {
+func NewStateObjectFromBytes(address common.Address, data []byte, db ethdb.Database) *StateObject {
 	// TODO clean me up
 	var extobject struct {
 		Nonce    uint64
@@ -183,14 +181,6 @@ func (self *StateObject) Update() {
 	}
 }
 
-func (c *StateObject) GetInstr(pc *big.Int) *common.Value {
-	if int64(len(c.code)-1) < pc.Int64() {
-		return common.NewValue(0)
-	}
-
-	return common.NewValueFromBytes([]byte{c.code[pc.Int64()]})
-}
-
 func (c *StateObject) AddBalance(amount *big.Int) {
 	c.SetBalance(new(big.Int).Add(c.balance, amount))
 
@@ -262,12 +252,9 @@ func (self *StateObject) Copy() *StateObject {
 	stateObject.gasPool.Set(self.gasPool)
 	stateObject.remove = self.remove
 	stateObject.dirty = self.dirty
+	stateObject.deleted = self.deleted
 
 	return stateObject
-}
-
-func (self *StateObject) Set(stateObject *StateObject) {
-	*self = *stateObject
 }
 
 //
@@ -278,18 +265,9 @@ func (self *StateObject) Balance() *big.Int {
 	return self.balance
 }
 
-func (c *StateObject) N() *big.Int {
-	return big.NewInt(int64(c.nonce))
-}
-
 // Returns the address of the contract/account
 func (c *StateObject) Address() common.Address {
 	return c.address
-}
-
-// Returns the initialization Code
-func (c *StateObject) Init() Code {
-	return c.initCode
 }
 
 func (self *StateObject) Trie() *trie.SecureTrie {
@@ -306,11 +284,6 @@ func (self *StateObject) Code() []byte {
 
 func (self *StateObject) SetCode(code []byte) {
 	self.code = code
-	self.dirty = true
-}
-
-func (self *StateObject) SetInitCode(code []byte) {
-	self.initCode = code
 	self.dirty = true
 }
 
@@ -350,19 +323,6 @@ func (c *StateObject) RlpEncode() []byte {
 
 func (c *StateObject) CodeHash() common.Bytes {
 	return crypto.Sha3(c.code)
-}
-
-func (c *StateObject) RlpDecode(data []byte) {
-	decoder := common.NewValueFromBytes(data)
-	c.nonce = decoder.Get(0).Uint()
-	c.balance = decoder.Get(1).BigInt()
-	c.trie = trie.NewSecure(decoder.Get(2).Bytes(), c.db)
-	c.storage = make(map[string]common.Hash)
-	c.gasPool = new(big.Int)
-
-	c.codeHash = decoder.Get(3).Bytes()
-
-	c.code, _ = c.db.Get(c.codeHash)
 }
 
 // Storage change object. Used by the manifest for notifying changes to

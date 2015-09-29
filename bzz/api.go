@@ -198,8 +198,10 @@ func (self *Api) Stop() {
 	self.dpa.Stop()
 	self.netStore.stop()
 	self.hive.stop()
-	self.Config.chequebook.Stop()
-	self.Config.chequebook.Save()
+	if ch := self.Config.chequebook; ch != nil {
+		ch.Stop()
+		ch.Save()
+	}
 }
 
 // Get uses iterative manifest retrieval and prefix matching
