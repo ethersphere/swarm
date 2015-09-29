@@ -58,11 +58,12 @@ type Config struct {
 func NewConfig(datadir, path string, id *ecdsa.PrivateKey) *Config {
 	chbookPath := filepath.Join(datadir, "chequebooks", "chequebook.json")
 	// TODO: read sender from file if exists and unmarshalled
-	var sender = common.Address{}
+	pubKey := &id.PublicKey
+	sender := crypto.PubkeyToAddress(*pubKey)
 	config := &Config{
 		Port:           "8500",
 		ChequebookPath: chbookPath,
-		SwapData:       NewSwapData(sender, &id.PublicKey),
+		SwapData:       NewSwapData(sender, pubKey),
 	}
 	// TODO: read from json; write out default if not existing
 
