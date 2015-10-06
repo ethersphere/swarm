@@ -2,204 +2,119 @@ package bzz
 
 import (
 	"crypto/ecdsa"
-	"fmt"
 	"math/big"
-	"sync"
+	"path/filepath"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/chequebook"
+	"github.com/ethereum/go-ethereum/common/swap"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// SWAP Swarm Accounting Protocol
-// implements a peer to peer micropayment system
+// SwAP Swarm Accounting Protocol with
+//      Swift Automatic  Payments
+// using chequebook pkg for delayed payments
+// default parameters
 
-// these should come from bzz config
 var (
 	autoCashInterval     = 300 * time.Second // default interval for autocash
 	autoCashThreshold    = big.NewInt(100)   // threshold that triggers autocash (wei)
 	autoDepositInterval  = 300 * time.Second // default interval for autocash
 	autoDepositThreshold = big.NewInt(100)   // threshold that triggers autodeposit (wei)
 	autoDepositBuffer    = big.NewInt(200)   // buffer that is surplus for fork protection etc (wei)
-	acceptedPrice        = big.NewInt(2)     // maximum chunk price host is willing to pay (wei)
-	offerPrice           = big.NewInt(2)     // minimum chunk price host requires (wei)
-	paymentThreshold     = 10                // threshold that triggers payment request (units)
-	disconnectThreshold  = 30                // threshold that triggers disconnect (units)
+	buyAt                = big.NewInt(2)     // maximum chunk price host is willing to pay (wei)
+	sellAt               = big.NewInt(2)     // minimum chunk price host requires (wei)
+	payAt                = 10                // threshold that triggers payment request (units)
+	dropAt               = 30                // threshold that triggers disconnect (units)
 )
 
-// rlp serializable config passed in handshake
-type SwapData struct {
-	ID          *ecdsa.PublicKey //
-	Contract    common.Address   // address of chequebook contract
-	Beneficiary common.Address   // addresses for swarm sales
-	BuyAt       *big.Int         // accepted max price for chunk
-	SellAt      *big.Int         // offered sale price for chunk
-	PayAt       int              // threshold that triggers payment request
-	DropAt      int              // threshold that triggers disconnect
+type swapParams struct {
+	*swap.Params
+	*payProfile
 }
 
-func NewSwapData(contract common.Address, id *ecdsa.PublicKey) *SwapData {
-	return &SwapData{
-		ID:          id,
-		Contract:    contract,
-		Beneficiary: crypto.PubkeyToAddress(*id),
-		BuyAt:       acceptedPrice,
-		SellAt:      offerPrice,
-		PayAt:       paymentThreshold,
-		DropAt:      disconnectThreshold,
+type swapProfile struct {
+	*swap.Profile
+	*payProfile
+}
+
+type payProfile struct {
+	PublicKey   string                 // check againsst signature of promise
+	Contract    common.Address         // address of chequebook contract
+	Beneficiary common.Address         // recipient address for swarm sales revenue
+	privateKey  *ecdsa.PrivateKey      `json:"-"`
+	publicKey   *ecdsa.PublicKey       `json:"-"`
+	chequebook  *chequebook.Chequebook `json:"-"`
+}
+
+func defaultSwapParams(contract common.Address, prvkey *ecdsa.PrivateKey) *swapParams {
+	pubkey := &prvkey.PublicKey
+	return &swapParams{
+		payProfile: &payProfile{
+			PublicKey:   common.ToHex(crypto.FromECDSAPub(pubkey)),
+			Contract:    contract,
+			Beneficiary: crypto.PubkeyToAddress(*pubkey),
+			privateKey:  prvkey,
+		},
+		Params: &swap.Params{
+			Profile: &swap.Profile{
+				BuyAt:  buyAt,
+				SellAt: sellAt,
+				PayAt:  payAt,
+				DropAt: dropAt,
+			},
+			Strategy: &swap.Strategy{
+				AutoCashInterval:     autoCashInterval,
+				AutoCashThreshold:    autoCashThreshold,
+				AutoDepositInterval:  autoDepositInterval,
+				AutoDepositThreshold: autoDepositThreshold,
+				AutoDepositBuffer:    autoDepositBuffer,
+			},
+		},
 	}
-}
-
-// interface for the bzz protocol for testing
-type paymentProtocol interface {
-	payment(*paymentMsgData)
-	paymentRequest(*paymentRequestMsgData)
-	Drop()
-}
-
-// swap is the swarm accounting protocol instance
-// * pairwise accounting and payments
-type swap struct {
-	local      *SwapData              // local peer's swap data
-	remote     *SwapData              // remote peer's swap data
-	lock       sync.Mutex             // mutex for balance access
-	balance    int                    // units of chunk/retrieval request
-	chequebox  *chequebook.Chequebox  // incoming chequebox  (one per connection)
-	chequebook *chequebook.Chequebook // outgoing chequebook (shared amoung protocol insts)
-	proto      paymentProtocol        //
 }
 
 // swap constructor, parameters
 // * global chequebook, assumed deployed service and
 // * the balance is at buffer.
-func newSwap(chbook *chequebook.Chequebook, local, remote *SwapData, proto paymentProtocol) (self *swap, err error) {
-
-	self = &swap{
-		local:      local,
-		remote:     remote,
-		chequebook: chbook,
-		proto:      proto,
-	}
-
-	// check if addresses are given to issue and receive cheques
-	if self.sells() { // ie. host receives payment
-		if (local.Beneficiary == common.Address{}) {
-			return nil, fmt.Errorf("host is seller but local Beneficiary address missing")
-		}
-		if (remote.Contract == common.Address{}) {
-			return nil, fmt.Errorf("peer is buyer but remote Contract address missing")
-		}
-	}
-
-	if self.buys() { // ie/ remote peer receives payment
-		if (local.Contract == common.Address{}) {
-			return nil, fmt.Errorf("host is buyer but local Contract address missing")
-		}
-		if (remote.Beneficiary == common.Address{}) {
-			return nil, fmt.Errorf("peer is seller but remote Beneficiary address missing")
-		}
-	}
-
-	self.chequebox, err = chequebook.NewChequebox(remote.Contract, local.Beneficiary, local.ID, chbook.Backend())
-	// call autocash
-	self.chequebox.AutoCash(autoCashInterval, autoCashThreshold)
-
-	glog.V(logger.Info).Infof("[BZZ] SWAP auto cash ON for %v -> %v: interval = %v, threshold = %v, peer = %v)", local.Contract.Hex()[:8], remote.Contract.Hex()[:8], autoCashInterval, autoCashThreshold)
-
-	return
-}
-
-// true if host is buying.
-func (self *swap) buys() bool {
-	return self.remote.SellAt.Cmp(self.local.BuyAt) <= 0
-}
-
-// true iff host is selling.
-func (self *swap) sells() bool {
-	return self.local.SellAt.Cmp(self.remote.BuyAt) <= 0
-}
-
-// NewChequebook(path, Contract, prvKey*ecdsa.PrivateKey, backend) wraps the
-// chequebook initialiser and sets up autoDeposit to cover spending.
-func newChequebook(path string, Contract common.Address, prvKey *ecdsa.PrivateKey, backend chequebook.Backend) (chbook *chequebook.Chequebook, err error) {
-	chbook, err = chequebook.LoadChequebook(path, prvKey, backend)
-	if err != nil {
-		chbook, err = chequebook.NewChequebook(path, Contract, prvKey, backend)
-		if err == nil {
-			glog.V(logger.Info).Infof("[BZZ] SWAP auto deposit ON: interval = %v, threshold = %v, buffer = %v)", autoDepositInterval, autoDepositThreshold, autoDepositBuffer)
-			chbook.AutoDeposit(autoDepositInterval, autoDepositThreshold, autoDepositBuffer)
-		}
-	}
-	return
-}
-
-// add(n) called when sending chunks = receiving retrieve requests
+// swap.Add(n) called in netstore
+// n > 0 called when sending chunks = receiving retrieve requests
 //                 OR sending cheques.
-func (self *swap) add(n int) {
-	defer self.lock.Unlock()
-	self.lock.Lock()
-	self.balance += n
-	if self.balance > self.local.DropAt {
-		self.proto.Drop()
-	} else {
-		if self.balance > self.local.PayAt {
-			self.proto.paymentRequest(&paymentRequestMsgData{self.balance})
-		}
-	}
-}
-
-// sub(n) called when receiving chunks = receiving delivery responses
+// n < 0  called when receiving chunks = receiving delivery responses
 //                 OR receiving cheques.
-func (self *swap) sub(n int) {
-	defer self.lock.Unlock()
-	self.lock.Lock()
-	self.balance -= n
+
+func newSwap(local *swapParams, remote *swapProfile, proto swap.Protocol) (self *swap.Swap, err error) {
+
+	out := chequebook.NewOutbox(local.chequebook, remote.Beneficiary)
+
+	in, err := chequebook.NewInbox(remote.Contract, local.Beneficiary, remote.publicKey, local.chequebook.Backend())
+
+	self, err = swap.New(local.Params, out, in, proto)
+	if err != nil {
+		return
+	}
+
+	glog.V(logger.Info).Infof("[BZZ] SWAP auto cash ON for %v -> %v: interval = %v, threshold = %v, peer = %v)", local.Contract.Hex()[:8], remote.Contract.Hex()[:8], local.AutoCashInterval, local.AutoCashThreshold)
+
+	return
 }
 
-// send(units) is called by the protocol when a Payment request is received.
-// In case of insolvency no cheque is issued and sent, safe against fraud
-// No return value: no error = payment is opportunistic = hang in till dropped
-func (self *swap) send(n int) {
-	if self.buys() && self.balance < 0 {
-		amount := big.NewInt(int64(-self.balance))
-		amount.Mul(amount, self.remote.SellAt)
-		ch, err := self.chequebook.Issue(self.remote.Beneficiary, amount)
+// setBackend(path, backend) wraps the
+// chequebook initialiser and sets up autoDeposit to cover spending.
+func (self *swapParams) setBackend(path string, backend chequebook.Backend) (err error) {
+	hexkey := common.Bytes2Hex(self.Contract.Bytes())
+	chbookpath := filepath.Join(path, "chequebooks", hexkey+".json")
+	self.chequebook, err = chequebook.LoadChequebook(chbookpath, self.privateKey, backend)
+
+	if err != nil {
+		self.chequebook, err = chequebook.NewChequebook(chbookpath, self.Contract, self.privateKey, backend)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[BZZ] cannot issue cheque. Contract: %v, Beneficiary: %v, Amount: %v", self.local.Contract, self.remote.Beneficiary, amount)
-		} else {
-			self.proto.payment(&paymentMsgData{-self.balance, ch})
-			self.add(-self.balance)
+			self.chequebook.AutoDeposit(self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
+			glog.V(logger.Info).Infof("[BZZ] SWAP auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", self.Beneficiary.Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
 		}
 	}
-}
-
-// receive(units, cheque) is called by the protocol when a payment msg is received
-// returns error if cheque is invalid.
-func (self *swap) receive(units int, ch *chequebook.Cheque) error {
-	if units <= 0 {
-		return fmt.Errorf("invalid amount: %v <= 0", units)
-	}
-
-	// it could be easier to simply receive the price offer here, and negotiate
-	// only chequebook address at handshake
-	sum := new(big.Int).SetInt64(int64(units))
-	sum.Mul(sum, self.local.SellAt)
-	if sum.Cmp(ch.Amount) != 0 {
-		return fmt.Errorf("invalid amount: %v (sent in msg) != %v (signed in cheque)", units)
-	}
-
-	if _, err := self.chequebox.Receive(ch); err != nil {
-		return fmt.Errorf("invalid cheque: %v", err)
-	}
-	self.sub(units)
-	return nil
-}
-
-// stop() causes autocash loop to terminate.
-// Called after protocol handle loop terminates.
-func (self *swap) stop() {
-	self.chequebox.Stop()
+	return
 }

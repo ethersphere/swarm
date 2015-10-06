@@ -10,6 +10,8 @@ encoding and decoding requests for storage and retrieval
 handling the protocol handshake
 dispaching to netstore for handling the DHT logic
 registering peers in the KΛÐΞMLIΛ table via the hive logistic manager
+
+swap accounting is done within netStore
 */
 
 import (
@@ -21,8 +23,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/kademlia"
+	"github.com/ethereum/go-ethereum/common/swap"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/errs"
 	"github.com/ethereum/go-ethereum/logger"
@@ -44,8 +46,7 @@ const (
 	storeRequestMsg           // 0x02
 	retrieveRequestMsg        // 0x03
 	peersMsg                  // 0x04
-	paymentRequestMsg         // 0x05
-	paymentMsg                // 0x06
+	paymentMsg                // 0x05
 )
 
 const (
@@ -82,9 +83,8 @@ type bzzProtocol struct {
 	requestDb  *LDBDatabase
 	quitC      chan bool
 
-	swap       *swap
-	localSwap  *SwapData
-	chequebook *chequebook.Chequebook
+	swap       *swap.Swap
+	swapParams *swapParams
 }
 
 /*
@@ -105,7 +105,7 @@ type statusMsgData struct {
 	Version   uint64
 	ID        string
 	Addr      *peerAddr
-	Swap      *SwapData
+	Swap      *swapProfile
 	NetworkId uint64
 	Caps      []p2p.Cap
 }
@@ -329,30 +329,17 @@ Finally metadata can hold accounting info relevant to incentivisation scheme
 type metaData struct{}
 
 /*
-payment request
-
-is sent when the swap balance is tilted in favour of the host.
-The only argument is the recommended amount in units.
-
-[0x05, Units: B_32]
-*/
-
-type paymentRequestMsgData struct {
-	Units int // requested units to be paid for
-}
-
-/*
 payment
 
-is sent when the swap balance is tilted in favour of the remote peer and
-a payment requests message is received
+is sent when the swap balance is tilted in favour of the remote peer
+and in absolute units exceeds the PayAt parameter in the remote peer's profile
 
-[0x05, Units: B_32]
+[0x05, Units: B_32, []]
 */
 
 type paymentMsgData struct {
-	Units  int                // units actually paid for (checked against amount by swap)
-	Cheque *chequebook.Cheque // payment with cheque
+	Units   int          // units actually paid for (checked against amount by swap)
+	Promise swap.Promise // payment with cheque
 }
 
 /*
@@ -360,7 +347,7 @@ main entrypoint, wrappers starting a server that will run the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
 the Dev p2p layer then runs the protocol instance on each peer
 */
-func BzzProtocol(netstore *netStore, chbook *chequebook.Chequebook, sd *SwapData) (p2p.Protocol, error) {
+func BzzProtocol(netstore *netStore, sp *swapParams) (p2p.Protocol, error) {
 
 	db, err := NewLDBDatabase(path.Join(netstore.path, "requests"))
 	if err != nil {
@@ -372,14 +359,15 @@ func BzzProtocol(netstore *netStore, chbook *chequebook.Chequebook, sd *SwapData
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(db, netstore, chbook, sd, p, rw)
+			return runBzzProtocol(db, netstore, sp, p, rw)
 		},
 	}, nil
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(db *LDBDatabase, netstore *netStore, chbook *chequebook.Chequebook, sd *SwapData, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(db *LDBDatabase, netstore *netStore, sp *swapParams, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+
 	self := &bzzProtocol{
 		netStore: netstore,
 		rw:       rw,
@@ -389,11 +377,10 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, chbook *chequebook.Cheq
 			Errors:  errorToString,
 		},
 		requestDb:  db,
-		chequebook: chbook,
-		localSwap:  sd,
-
-		quitC: make(chan bool),
+		swapParams: sp,
+		quitC:      make(chan bool),
 	}
+
 	glog.V(logger.Info).Infof("[BZZ] listening address: %v", self.netStore.addr())
 
 	go self.storeRequestLoop()
@@ -411,17 +398,11 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, chbook *chequebook.Cheq
 			}
 		}
 		if self.swap != nil {
-			self.swap.stop() // quits chequebox autocash etc
+			self.swap.Stop() // quits chequebox autocash etc
 		}
 		close(self.quitC) // quits storerequest loop
 	}
 	return
-}
-
-func (self *bzzProtocol) setSwap(sd *SwapData) (err error) {
-	swap, err := newSwap(self.chequebook, self.localSwap, sd, self)
-	self.swap = swap
-	return err
 }
 
 // main loop that handles all incoming messages
@@ -452,6 +433,7 @@ func (self *bzzProtocol) handle() error {
 		}
 		req.peer = &peer{bzzProtocol: self}
 		glog.V(logger.Debug).Infof("[BZZ] incoming store request: %s", req.String())
+		// swap accounting is done within netStore
 		self.netStore.addStoreRequest(&req)
 
 	case retrieveRequestMsg:
@@ -465,6 +447,7 @@ func (self *bzzProtocol) handle() error {
 		}
 		req.peer = &peer{bzzProtocol: self}
 		glog.V(logger.Debug).Infof("[BZZ] incoming retrieve request: %s", req.String())
+		// swap accounting is done within netStore
 		self.netStore.addRetrieveRequest(&req)
 
 	case peersMsg:
@@ -478,21 +461,13 @@ func (self *bzzProtocol) handle() error {
 		glog.V(logger.Debug).Infof("[BZZ] incoming peer addresses: %s", req.String())
 		self.netStore.hive.addPeerEntries(&req)
 
-	case paymentRequestMsg:
-		// swap protocol message for requesting payment, requested units to pay for
-		var req paymentRequestMsgData
-		if err := msg.Decode(&req); err != nil {
-			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
-		}
-		self.swap.send(req.Units)
-
 	case paymentMsg:
 		// swap protocol message for payment, Units paid for, Cheque paid with
 		var req paymentMsgData
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		self.swap.receive(req.Units, req.Cheque)
+		self.swap.Receive(req.Units, req.Promise)
 
 	default:
 		// no other message is allowed
@@ -504,8 +479,12 @@ func (self *bzzProtocol) handle() error {
 func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
 	handshake := &statusMsgData{
-		Version:   uint64(Version),
-		ID:        "honey",
+		Version: uint64(Version),
+		ID:      "honey",
+		Swap: &swapProfile{
+			Profile:    self.swapParams.Profile,
+			payProfile: self.swapParams.payProfile,
+		},
 		Addr:      self.netStore.addr(),
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
@@ -548,7 +527,11 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	self.remoteAddr = status.Addr.new()
 	glog.V(logger.Detail).Infof("[BZZ] self: advertised IP: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.netStore.addr().IP, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
 
-	self.setSwap(status.Swap)
+	// set remote profile for accounting
+	self.swap, err = newSwap(self.swapParams, status.Swap, self)
+	if err != nil {
+		return
+	}
 
 	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.hash[:4], status.Version, status.NetworkId)
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
@@ -703,18 +686,15 @@ func (self *bzzProtocol) storeRequest(key Key) {
 	self.requestDb.Put(peerKey, []byte{0})
 }
 
-// send paymentRequestMsg
-func (self *bzzProtocol) paymentRequest(req *paymentRequestMsgData) {
-	glog.V(logger.Debug).Infof("[BZZ] sending payment request: %v", req)
-	err := p2p.Send(self.rw, paymentRequestMsg, req)
-	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
-	}
+// send paymentMsg
+func (self *bzzProtocol) Pay(units int, promise swap.Promise) {
+	req := &paymentMsgData{units, promise}
+	self.payment(req)
 }
 
 // send paymentMsg
 func (self *bzzProtocol) payment(req *paymentMsgData) {
-	glog.V(logger.Detail).Infof("[BZZ] sending payment: %v", req)
+	glog.V(logger.Debug).Infof("[BZZ] sending payment: %v", req)
 	err := p2p.Send(self.rw, paymentMsg, req)
 	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
