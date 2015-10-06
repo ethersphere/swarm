@@ -117,6 +117,19 @@ func (a *Address) Set(other Address) {
 	}
 }
 
+func (a *Address) MarshalJSON() (out []byte, err error) {
+	return []byte(quote(a.Hex())), nil
+}
+
+func (m *Address) UnmarshalJSON(value []byte) error {
+	*m = HexToAddress(string(value))
+	return nil
+}
+
+func quote(s string) string {
+	return `"` + s + `"`
+}
+
 // PP Pretty Prints a byte slice in the following format:
 // 	hex(value[:4])...(hex[len(value)-4:])
 func PP(value []byte) string {
