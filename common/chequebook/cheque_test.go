@@ -73,7 +73,7 @@ func TestIssueAndReceive(t *testing.T) {
 	backend := newTestBackend()
 	backend.calls = []string{"42"}
 	backend.errs = []error{nil}
-	chbox, err := NewChequebox(sender, recipient, &prvKey.PublicKey, backend)
+	chbox, err := NewInbox(sender, recipient, &prvKey.PublicKey, backend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -150,7 +150,7 @@ func TestVerifyErrors(t *testing.T) {
 	backend := newTestBackend()
 	backend.calls = []string{"42"}
 	backend.errs = []error{nil}
-	chbox, err := NewChequebox(sender0, recipient0, &prvKey.PublicKey, backend)
+	chbox, err := NewInbox(sender0, recipient0, &prvKey.PublicKey, backend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -372,7 +372,7 @@ func TestCash(t *testing.T) {
 	backend := newTestBackend()
 	backend.calls = []string{"42"}
 	backend.errs = []error{nil}
-	chbox, err := NewChequebox(sender, recipient, &prvKey.PublicKey, backend)
+	chbox, err := NewInbox(sender, recipient, &prvKey.PublicKey, backend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}

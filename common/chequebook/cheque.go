@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/swap"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -318,15 +319,34 @@ type Backend interface {
 	Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, string, error)
 }
 
+type Outbox struct {
+	chequeBook  *Chequebook
+	beneficiary common.Address
+}
+
+func NewOutbox(chbook *Chequebook, beneficiary common.Address) *Outbox {
+	return &Outbox{chbook, beneficiary}
+}
+
+func (self *Outbox) Issue(amount *big.Int) (swap.Promise, error) {
+	return self.chequeBook.Issue(self.beneficiary, amount)
+}
+
+func (self *Outbox) AutoDeposit(interval time.Duration, threshold, buffer *big.Int) {
+	self.chequeBook.AutoDeposit(interval, threshold, buffer)
+}
+
+func (self *Outbox) Stop() {}
+
 // type ChequeQueue struct {
 //   beneficiary common.Address
-//   last      map[string]*Chequebox
+//   last      map[string]*Inbox
 // }
 
-// chequebox to deposit, verify and cash cheques
+// inbox to deposit, verify and cash cheques
 // from a single contract to single beneficiary
 // incoming payment handler for peer to peer micropayments
-type Chequebox struct {
+type Inbox struct {
 	lock        sync.Mutex
 	contract    common.Address   // peer's chequebook contract
 	beneficiary common.Address   // local peer's receiving address
@@ -336,14 +356,14 @@ type Chequebox struct {
 	quit        chan bool        // when closed causes autocash to stop
 	maxUncashed *big.Int         // threshold that triggers autocashing
 	cashed      *big.Int         // cumulative amount cashed
-	*Cheque                      // last cheque, nil if none yet received
+	cheque      *Cheque          // last cheque, nil if none yet received
 }
 
-// NewChequebox(contract, beneficiary, signer, backend) constructor for Chequebox
-// not persisted, cumulative sum updated from blockchain when first check received
+// NewInbox(contract, beneficiary, signer, backend) constructor for Inbox
+// not persisted, cumulative sum updated from blockchain when first cheque received
 // backend used to sync amount (Call) as well as cash the cheques (Transact)
-func NewChequebox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, backend Backend) (self *Chequebox, err error) {
-	self = &Chequebox{
+func NewInbox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, backend Backend) (self *Inbox, err error) {
+	self = &Inbox{
 		contract:    contract,
 		beneficiary: beneficiary,
 		signer:      signer,
@@ -354,7 +374,7 @@ func NewChequebox(contract, beneficiary common.Address, signer *ecdsa.PublicKey,
 }
 
 // Stop() quits the autocash go routine to terminate
-func (self *Chequebox) Stop() {
+func (self *Inbox) Stop() {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	if self.quit != nil {
@@ -363,10 +383,16 @@ func (self *Chequebox) Stop() {
 	}
 }
 
+func (self *Inbox) Cash() {
+	if self.cheque != nil {
+		self.cheque.Cash(self.backend)
+	}
+}
+
 // AutoCash(cashInterval, maxUncashed) (re)sets maximum time and amount which
 // triggers cashing of the last uncashed cheque
 // if maxUncashed is set to 0, then autocash on receipt
-func (self *Chequebox) AutoCash(cashInterval time.Duration, maxUncashed *big.Int) {
+func (self *Inbox) AutoCash(cashInterval time.Duration, maxUncashed *big.Int) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	self.maxUncashed = maxUncashed
@@ -376,7 +402,7 @@ func (self *Chequebox) AutoCash(cashInterval time.Duration, maxUncashed *big.Int
 // autoCash(d) starts a loop that periodically clears the last check
 // if the peer is trusted, clearing period could be 24h, or a week
 // caller holds the lock
-func (self *Chequebox) autoCash(cashInterval time.Duration) {
+func (self *Inbox) autoCash(cashInterval time.Duration) {
 	if self.quit != nil {
 		close(self.quit)
 		self.quit = nil
@@ -397,10 +423,10 @@ func (self *Chequebox) autoCash(cashInterval time.Duration) {
 				break FOR
 			case <-ticker.C:
 				self.lock.Lock()
-				if self.Cheque != nil && self.Amount.Cmp(self.cashed) != 0 {
-					txhash, err := self.Cash(self.backend)
+				if self.cheque != nil && self.cheque.Amount.Cmp(self.cashed) != 0 {
+					txhash, err := self.cheque.Cash(self.backend)
 					if err == nil {
-						self.cashed = self.Amount
+						self.cashed = self.cheque.Amount
 						self.txhash = txhash
 					}
 				}
@@ -411,30 +437,31 @@ func (self *Chequebox) autoCash(cashInterval time.Duration) {
 	return
 }
 
-// Reveive(cheque) called to deposit latest cheque to incoming Chequebox
-func (self *Chequebox) Receive(ch *Cheque) (*big.Int, error) {
+// Reveive(cheque) called to deposit latest cheque to incoming Inbox
+func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
+	ch := promise.(*Cheque)
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	var sum *big.Int
-	if self.Cheque == nil {
+	if self.cheque == nil {
 		// the sum is checked against the blockchain once a check is received
 		tally, _, err := self.backend.Call(self.beneficiary.Hex(), self.contract.Hex(), "", "", "", getSentAbiEncode(ch.Contract))
 		if err != nil {
-			return nil, fmt.Errorf("chequebox: error calling backend to set amount: %v", err)
+			return nil, fmt.Errorf("inbox: error calling backend to set amount: %v", err)
 		}
 		var ok bool
 		sum, ok = new(big.Int).SetString(tally, 10)
 		if !ok {
-			return nil, fmt.Errorf("chequebox: cannot convert amount to integer")
+			return nil, fmt.Errorf("inbox: cannot convert amount to integer")
 		}
 
 	} else {
-		sum = self.Amount
+		sum = self.cheque.Amount
 	}
 
 	amount, err := ch.Verify(self.signer, self.contract, self.beneficiary, sum)
 	if err == nil {
-		self.Cheque = ch
+		self.cheque = ch
 
 		if self.maxUncashed != nil {
 			uncashed := new(big.Int).Sub(ch.Amount, self.cashed)
