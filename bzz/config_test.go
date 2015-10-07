@@ -29,7 +29,9 @@ const (
         "Beneficiary": "0x0d2f62485607cf38d9d795d93682a517661e513e"
     },
     "Path": "TMPDIR",
-    "Port": "8500"
+    "Port": "8500",
+    "PublicKey": "0x045f5cfd26692e48d0017d380349bcf50982488bc11b5145f3ddf88b24924299048450542d43527fbe29a5cb32f38d62755393ac002e6bfdd71b8d7ba725ecd7a3",
+    "BzzKey": "0xe861964402c0b78e2d44098329b8545726f215afa737d803714a4338552fcb81"
 }`
 )
 

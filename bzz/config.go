@@ -21,9 +21,11 @@ const (
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
-	Swap *swapParams
-	Path string
-	Port string
+	Swap      *swapParams
+	Path      string
+	Port      string
+	PublicKey string
+	BzzKey    string
 	// not serialised/not persisted fields
 	// address // node address
 }
@@ -42,6 +44,8 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
 	confpath := filepath.Join(path, common.Bytes2Hex(address.Bytes())+".json")
 	var data []byte
+	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
+	pubkeyhex := common.ToHex(pubkey)
 
 	data, err = ioutil.ReadFile(confpath)
 	if err != nil {
@@ -50,13 +54,15 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		}
 		// file does not exist
 
-		config := &Config{
-			Port: port,
-			Path: path,
-			Swap: defaultSwapParams(contract, prvKey),
+		self = &Config{
+			Port:      port,
+			Path:      path,
+			Swap:      defaultSwapParams(contract, prvKey),
+			PublicKey: pubkeyhex,
+			BzzKey:    crypto.Sha3Hash(pubkey).Hex(),
 		}
 		// write out config file
-		data, err = json.MarshalIndent(config, "", "    ")
+		data, err = json.MarshalIndent(self, "", "    ")
 		if err != nil {
 			return nil, fmt.Errorf("error writing config: %v", err)
 		}
@@ -70,9 +76,8 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 			return nil, err
 		}
 		// check public key
-		pubkey := common.ToHex(crypto.FromECDSAPub(&prvKey.PublicKey))
-		if pubkey != self.Swap.PublicKey {
-			return nil, fmt.Errorf("key does not match the one in the config file %v != %v", pubkey, self.Swap.PublicKey)
+		if pubkeyhex != self.PublicKey {
+			return nil, fmt.Errorf("key does not match the one in the config file %v != %v", pubkeyhex, self.PublicKey)
 		}
 
 	}
