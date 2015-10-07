@@ -100,7 +100,10 @@ func runBlockTest(ctx *cli.Context) {
 }
 
 func runOneBlockTest(ctx *cli.Context, test *tests.BlockTest) (*eth.Ethereum, error) {
-	cfg := utils.MakeEthConfig(ClientIdentifier, Version, ctx)
+	am := utils.MakeAccountManager(ctx)
+
+	cfg := utils.MakeEthConfig(ClientIdentifier, Version, am, ctx)
+
 	cfg.NewDB = func(path string) (ethdb.Database, error) { return ethdb.NewMemDatabase() }
 	cfg.MaxPeers = 0 // disable network
 	cfg.Shh = false  // disable whisper

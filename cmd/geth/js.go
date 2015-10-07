@@ -192,10 +192,10 @@ func newJSRE(ethereum *eth.Ethereum, docRoot, corsDomain string, client comms.Et
 	if ethereum.Swarm != nil {
 		// register the swarm rountripper with the bzz scheme on the docserver
 		js.ds.RegisterScheme("bzz", &bzz.RoundTripper{
-			Port: ethereum.Swarm.Config.Port,
+			Port: ethereum.Swarm.ProxyPort(),
 		})
 		// set versioned registrar is swarm is enabled
-		ethereum.Swarm.Registrar = ethreg.New(js.xeth)
+		ethereum.Swarm.SetRegistrar(ethreg.New(js.xeth))
 	}
 	if clt, ok := js.client.(*comms.InProcClient); ok {
 		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, ethereum, docRoot); err == nil {

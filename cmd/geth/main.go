@@ -313,8 +313,9 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCPathFlag,
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
-		utils.SwarmEnabledFlag,
 		utils.SwarmConfigPathFlag,
+		utils.SwarmAccountAddrFlag,
+		utils.ChequebookAddrFlag,
 		utils.DevModeFlag,
 		utils.VMDebugFlag,
 		utils.VMForceJitFlag,
@@ -397,7 +398,7 @@ func run(ctx *cli.Context) {
 		utils.InitOlympic()
 	}
 
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.ExtraData = makeExtra(ctx)
 
 	ethereum, err := eth.New(cfg)
@@ -445,7 +446,7 @@ func attach(ctx *cli.Context) {
 func console(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.ExtraData = makeExtra(ctx)
 
 	ethereum, err := eth.New(cfg)
@@ -479,7 +480,7 @@ func console(ctx *cli.Context) {
 func execJSFiles(ctx *cli.Context) {
 	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
 
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -501,6 +502,39 @@ func execJSFiles(ctx *cli.Context) {
 
 	ethereum.Stop()
 	ethereum.WaitForShutdown()
+}
+
+func blockRecovery(ctx *cli.Context) {
+	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+
+	arg := ctx.Args().First()
+	if len(ctx.Args()) < 1 && len(arg) > 0 {
+		glog.Fatal("recover requires block number or hash")
+	}
+
+	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	utils.CheckLegalese(cfg.DataDir)
+
+	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
+	if err != nil {
+		glog.Fatalln("could not open db:", err)
+	}
+
+	var block *types.Block
+	if arg[0] == '#' {
+		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
+	} else {
+		block = core.GetBlock(blockDb, common.HexToHash(arg))
+	}
+
+	if block == nil {
+		glog.Fatalln("block not found. Recovery failed")
+	}
+
+	if err = core.WriteHeadBlockHash(blockDb, block.Hash()); err != nil {
+		glog.Fatalln("block write err", err)
+	}
+	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
 }
 
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
@@ -528,44 +562,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (
 	return
 }
 
-func blockRecovery(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-
-	arg := ctx.Args().First()
-	if len(ctx.Args()) < 1 && len(arg) > 0 {
-		glog.Fatal("recover requires block number or hash")
-	}
-
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	utils.CheckLegalese(cfg.DataDir)
-
-	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
-	if err != nil {
-		glog.Fatalln("could not open db:", err)
-	}
-
-	var block *types.Block
-	if arg[0] == '#' {
-		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
-	} else {
-		block = core.GetBlock(blockDb, common.HexToHash(arg))
-	}
-
-	if block == nil {
-		glog.Fatalln("block not found. Recovery failed")
-	}
-
-	if err = core.WriteHeadBlockHash(blockDb, block.Hash()); err != nil {
-		glog.Fatalln("block write err", err)
-	}
-	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
-}
-
-func startEth(ctx *cli.Context, eth *eth.Ethereum) {
-	// Start Ethereum itself
-	utils.StartEthereum(eth)
-
-	am := eth.AccountManager()
+func unlockAccounts(ctx *cli.Context, am *accounts.Manager) {
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	accounts := strings.Split(account, " ")
 	for i, account := range accounts {
@@ -576,6 +573,20 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 			unlockAccount(ctx, am, account, i)
 		}
 	}
+}
+
+func makeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
+	am := utils.MakeAccountManager(ctx)
+	unlockAccounts(ctx, am)
+	return utils.MakeEthConfig(clientID, version, am, ctx)
+}
+
+func startEth(ctx *cli.Context, eth *eth.Ethereum) {
+	// Start Ethereum itself
+	utils.StartEthereum(eth)
+	// am := eth.AccountManager()
+	// 	unlockAccounts(ctx, am)
+
 	// Start auxiliary services if enabled.
 	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
 		if err := utils.StartIPC(eth, ctx); err != nil {

@@ -113,7 +113,6 @@ type Config struct {
 	NAT       nat.Interface
 	Shh       bool
 	Dial      bool
-	Bzz       bool
 	BzzConfig *bzz.Config
 
 	Etherbase      common.Address
@@ -226,7 +225,7 @@ type Ethereum struct {
 	pow             *ethash.Ethash
 	protocolManager *ProtocolManager
 	downloader      *downloader.Downloader
-	Swarm           *bzz.Api
+	Swarm           *bzz.Swarm
 	SolcPath        string
 	solc            *compiler.Solidity
 
@@ -400,19 +399,16 @@ func New(config *Config) (*Ethereum, error) {
 
 	protocols := append([]p2p.Protocol{}, eth.protocolManager.SubProtocols...)
 
-	if config.Bzz {
-		eth.Swarm, err = bzz.NewApi(config.DataDir, netprv, config.BzzConfig)
+	if config.BzzConfig != nil {
+		var proto p2p.Protocol
+		eth.Swarm, proto, err = bzz.NewSwarm(config.BzzConfig)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[BZZ] error creating swarm: %v. Protocol skipped", err)
+			fmt.Printf("error -> : %v\n", err)
+			panic("nyomi")
+			glog.V(logger.Warn).Infof("error setting up swarm: %v. bzz protocol skipped", err)
 		} else {
-			var proto p2p.Protocol
-			proto, err = eth.Swarm.Bzz()
-			if err != nil {
-				glog.V(logger.Warn).Infof("[BZZ] error creating swarm: %v. Protocol skipped", err)
-				eth.Swarm = nil
-			} else {
-				protocols = append(protocols, proto)
-			}
+			protocols = append(protocols, proto)
+			glog.V(logger.Info).Infof("bzz protocol added to peer caps", proto)
 		}
 	}
 

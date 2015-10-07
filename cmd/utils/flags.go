@@ -332,9 +332,13 @@ var (
 		Name:  "shh",
 		Usage: "Enable whisper",
 	}
-	SwarmEnabledFlag = cli.BoolFlag{
-		Name:  "bzz",
-		Usage: "Enable swarm",
+	ChequebookAddrFlag = cli.StringFlag{
+		Name:  "chequebook",
+		Usage: "chequebook contract address",
+	}
+	SwarmAccountAddrFlag = cli.StringFlag{
+		Name:  "bzzaccount",
+		Usage: "Swarm account address (swarm disabled if empty)",
 	}
 	SwarmConfigPathFlag = cli.StringFlag{
 		Name:  "bzzconfig",
@@ -413,32 +417,33 @@ func MakeNodeKey(ctx *cli.Context) (key *ecdsa.PrivateKey) {
 }
 
 // MakeEthConfig creates ethereum options from set command line flags.
-func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
+func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Context) *eth.Config {
 	customName := ctx.GlobalString(IdentityFlag.Name)
 	if len(customName) > 0 {
 		clientID += "/" + customName
 	}
-	am := MakeAccountManager(ctx)
 	etherbase, err := ParamToAddress(ctx.GlobalString(EtherbaseFlag.Name), am)
 	if err != nil {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
-	nodeKey := MakeNodeKey(ctx)
-	datadir := ctx.GlobalString(DataDirFlag.Name)
-	bzzenabled := ctx.GlobalBool(SwarmEnabledFlag.Name)
+
 	var bzzconfig *bzz.Config
-	if bzzenabled {
-		if nodeKey == nil {
-			nodeKey, err = crypto.GenerateKey()
-			if err != nil {
-				Fatalf("unable to generate node id: %v", err)
-			}
+	hexaddr := ctx.GlobalString(SwarmAccountAddrFlag.Name)
+	if hexaddr != "" {
+		swarmaccount := common.HexToAddress(hexaddr)
+		prvkey, err := am.GetUnlocked(swarmaccount)
+		if err != nil {
+			Fatalf("unable to unlock swarm account: %v", err)
 		}
-		bzzconfig = bzz.NewConfig(datadir, ctx.GlobalString(SwarmConfigPathFlag.Name), nodeKey)
+		chbookaddr := common.HexToAddress(ctx.GlobalString(ChequebookAddrFlag.Name))
+		bzzconfig, err = bzz.NewConfig(ctx.GlobalString(SwarmConfigPathFlag.Name), chbookaddr, prvkey)
+		if err != nil {
+			Fatalf("unable to configure swarm: %v", err)
+		}
 	}
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
-		DataDir:                 datadir,
+		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
@@ -459,8 +464,7 @@ func MakeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 		NAT:                     MakeNAT(ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
-		NodeKey:                 nodeKey,
-		Bzz:                     bzzenabled,
+		NodeKey:                 MakeNodeKey(ctx),
 		BzzConfig:               bzzconfig,
 		Shh:                     ctx.GlobalBool(WhisperEnabledFlag.Name),
 		Dial:                    true,

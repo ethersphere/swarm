@@ -18,17 +18,15 @@ import (
 
 // the swarm stack
 type Swarm struct {
-	config    *Config
-	chunker   *TreeChunker
-	registrar registrar.VersionedRegistrar
-	dpa       *DPA
-	hive      *hive
-	netStore  *netStore
-	api       *Api
+	config   *Config
+	dpa      *DPA
+	hive     *hive
+	netStore *netStore
+	api      *Api
 }
 
 //
-func NewSwarm(config *Config) (self *Swarm, err error) {
+func NewSwarm(config *Config) (self *Swarm, proto p2p.Protocol, err error) {
 
 	self = &Swarm{
 		config: config,
@@ -44,11 +42,87 @@ func NewSwarm(config *Config) (self *Swarm, err error) {
 		return
 	}
 
-	dpa := newDPA(self.netStore)
+	self.dpa = newDPA(self.netStore)
 
-	self.api = NewApi(dpa)
+	self.api = NewApi(self.dpa)
 
+	proto, err = BzzProtocol(self.netStore, self.config.Swap)
 	return
+}
+
+/*
+Start is called when the ethereum stack is started
+- launches the dpa (listening for chunk store/retrieve requests)
+- launches the netStore (starts kademlia hive peer management)
+- starts an http server
+*/
+func (self *Swarm) Start(node *discover.Node, listenAddr string, connectPeer func(string) error) {
+	var err error
+	if node == nil {
+		err = fmt.Errorf("basenode nil")
+	} else if self.netStore == nil {
+		err = fmt.Errorf("netStore is nil")
+	} else if connectPeer == nil {
+		err = fmt.Errorf("no connect peer function")
+	} else if bytes.Equal(common.Hex2Bytes(self.config.BzzKey), zeroKey) {
+		err = fmt.Errorf("invalid public key")
+	} else { // this is how we calculate the bzz address of the node
+		// ideally this should be using the swarm hash function
+
+		var port string
+		_, port, err = net.SplitHostPort(listenAddr)
+		if err == nil {
+			intport, err := strconv.Atoi(port)
+			if err != nil {
+				err = fmt.Errorf("invalid port in '%s'", listenAddr)
+			} else {
+				baseAddr := &peerAddr{
+					ID:   common.Hex2Bytes(self.config.BzzKey),
+					IP:   node.IP,
+					Port: uint16(intport),
+				}
+				baseAddr.new()
+				err = self.hive.start(baseAddr, filepath.Join(self.config.Path, "bzz-peers.json"), connectPeer)
+				if err == nil {
+					err = self.netStore.start(baseAddr)
+					if err == nil {
+						glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %064x", baseAddr.hash[:])
+					}
+				}
+			}
+		}
+	}
+	if err != nil {
+		glog.V(logger.Info).Infof("[BZZ] Swarm started started offline: %v", err)
+	}
+	self.dpa.Start()
+	if self.config.Port != "" {
+		fmt.Printf("PORT: %v\n", self.config.Port)
+		go startHttpServer(self.api, self.config.Port)
+	}
+}
+
+// stops all component services.
+func (self *Swarm) Stop() {
+	self.dpa.Stop()
+	self.netStore.stop()
+	self.hive.stop()
+	if ch := self.config.Swap.chequebook; ch != nil {
+		ch.Stop()
+		ch.Save()
+	}
+}
+
+func (self *Swarm) Api() *Api {
+	return self.api
+}
+
+func (self *Swarm) ProxyPort() string {
+	return self.config.Port
+}
+
+func (self *Swarm) SetRegistrar(reg registrar.VersionedRegistrar) {
+	self.api.registrar = reg
 }
 
 // Local swarm without netStore
@@ -90,76 +164,6 @@ func newLocalDPA(datadir string) (*DPA, error) {
 		newMemStore(dbStore),
 		dbStore,
 	}), nil
-}
-
-/*
-Start is called when the ethereum stack is started
-- calls Init() on treechunker
-- launches the dpa (listening for chunk store/retrieve requests)
-- launches the netStore (starts kademlia hive peer management)
-- starts an http server
-*/
-func (self *Swarm) Start(node *discover.Node, listenAddr string, connectPeer func(string) error) {
-	var err error
-	if node == nil {
-		err = fmt.Errorf("basenode nil")
-	} else if self.netStore == nil {
-		err = fmt.Errorf("netStore is nil")
-	} else if connectPeer == nil {
-		err = fmt.Errorf("no connect peer function")
-	} else if bytes.Equal(node.ID[:], zeroKey) {
-		err = fmt.Errorf("zero ID invalid")
-	} else { // this is how we calculate the bzz address of the node
-		// ideally this should be using the swarm hash function
-
-		var port string
-		_, port, err = net.SplitHostPort(listenAddr)
-		if err == nil {
-			intport, err := strconv.Atoi(port)
-			if err != nil {
-				err = fmt.Errorf("invalid port in '%s'", listenAddr)
-			} else {
-				baseAddr := &peerAddr{
-					ID:   node.ID[:],
-					IP:   node.IP,
-					Port: uint16(intport),
-				}
-				baseAddr.new()
-				err = self.hive.start(baseAddr, filepath.Join(self.config.Path, "bzz-peers.json"), connectPeer)
-				if err == nil {
-					err = self.netStore.start(baseAddr)
-					if err == nil {
-						glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %064x", baseAddr.hash[:])
-					}
-				}
-			}
-		}
-	}
-	if err != nil {
-		glog.V(logger.Info).Infof("[BZZ] Swarm started started offline: %v", err)
-	}
-	self.chunker.Init()
-	self.dpa.Start()
-	if self.config.Port != "" {
-		fmt.Printf("PORT: %v\n", self.config.Port)
-		go startHttpServer(self.api, self.config.Port)
-	}
-}
-
-// stops all component services.
-func (self *Swarm) Stop() {
-	self.dpa.Stop()
-	self.netStore.stop()
-	self.hive.stop()
-	if ch := self.config.Swap.chequebook; ch != nil {
-		ch.Stop()
-		ch.Save()
-	}
-}
-
-// Bzz returns the bzz protocol class instances of which run on every peer
-func (self *Swarm) Bzz() (p2p.Protocol, error) {
-	return BzzProtocol(self.netStore, self.config.Swap)
 }
 
 func newDPA(store ChunkStore) *DPA {
