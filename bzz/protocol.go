@@ -568,7 +568,7 @@ func (self *bzzProtocol) Drop() {
 }
 
 func (self *bzzProtocol) String() string {
-	return fmt.Sprintf("%08x: %v\n", self.remoteAddr.hash.Bytes()[:4], self.Url())
+	return fmt.Sprintf("%08x: %v (%v)\n", self.remoteAddr.hash.Bytes()[:4], self.Url(), self.swap.Balance())
 }
 
 func (self *bzzProtocol) peerAddr() *peerAddr {
