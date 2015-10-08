@@ -85,7 +85,9 @@ func NewChequebook(path string, contract common.Address, prvKey *ecdsa.PrivateKe
 		backend:  backend,
 		owner:    crypto.PubkeyToAddress(prvKey.PublicKey),
 	}
-	glog.V(logger.Detail).Infof("\nnew chequebook initialised from %v ", contract)
+	if (contract != common.Address{}) {
+		glog.V(logger.Detail).Infof("new chequebook initialised from %v ", contract.Hex())
+	}
 	return
 }
 
@@ -103,6 +105,7 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (sel
 	if err != nil {
 		return nil, err
 	}
+	glog.V(logger.Detail).Infof("loaded chequebook (%s) initialised from %v", self.contract.Hex(), path)
 
 	return
 }
@@ -154,6 +157,8 @@ func (self *Chequebook) Save() (err error) {
 	if err != nil {
 		return err
 	}
+	glog.V(logger.Detail).Infof("saving chequebook (%s) to %v", self.contract.Hex(), self.path)
+
 	return ioutil.WriteFile(self.path, data, os.ModePerm)
 }
 
@@ -257,6 +262,8 @@ func (self *Chequebook) deposit(amount *big.Int) (string, error) {
 	if err == nil {
 		self.balance.Add(self.balance, amount)
 	}
+	glog.V(logger.Detail).Infof("deposited %d wei to chequebook (%s)", amount, self.contract.Hex())
+
 	return txhash, err
 }
 
@@ -370,6 +377,7 @@ func NewInbox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, bac
 		backend:     backend,
 		cashed:      new(big.Int).Set(common.Big0),
 	}
+	glog.V(logger.Detail).Infof("initialised inbox (%s -> %s)", self.contract.Hex(), self.beneficiary.Hex())
 	return
 }
 
@@ -386,6 +394,7 @@ func (self *Inbox) Stop() {
 func (self *Inbox) Cash() {
 	if self.cheque != nil {
 		self.cheque.Cash(self.backend)
+		glog.V(logger.Detail).Infof("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.contract.Hex(), self.beneficiary.Hex())
 	}
 }
 
@@ -460,17 +469,19 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 	}
 
 	amount, err := ch.Verify(self.signer, self.contract, self.beneficiary, sum)
+	var uncashed *big.Int
 	if err == nil {
 		self.cheque = ch
 
 		if self.maxUncashed != nil {
-			uncashed := new(big.Int).Sub(ch.Amount, self.cashed)
+			uncashed = new(big.Int).Sub(ch.Amount, self.cashed)
 			if self.maxUncashed.Cmp(uncashed) < 0 {
 				ch.Cash(self.backend)
 				self.cashed = ch.Amount
 			}
 		}
 	}
+	glog.V(logger.Detail).Infof("received cheque of %v wei in inbox (%s, uncashed: %v)", amount, self.contract.Hex(), uncashed)
 
 	return amount, err
 }
