@@ -6,7 +6,8 @@ import (
 	"sync"
 	"time"
 
-	// "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 // SwAP Swarm Accounting Protocol with
@@ -85,8 +86,8 @@ func New(local *Params, out OutPayment, in InPayment, proto Protocol) (self *Swa
 		in:    in,
 		proto: proto,
 	}
-	self.in.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
-	self.out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
+
+	self.setParams(local)
 
 	return
 }
@@ -103,10 +104,15 @@ func (self *Swap) SetParams(local *Params) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	self.local = local
+}
 
+// caller holds the lock
+func (self *Swap) setParams(local *Params) {
 	self.in.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
-	self.out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
+	glog.V(logger.Debug).Infof("[SWAP] <%v> set autocash to every %v, max uncashed limit: %v", self.proto, local.AutoCashInterval, local.AutoCashThreshold)
 
+	self.out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
+	glog.V(logger.Debug).Infof("[SWAP] <%v> set autodeposit to every %v, pay at: %v, buffer: %v", self.proto, local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
 }
 
 // Add(n)
@@ -123,6 +129,12 @@ func (self *Swap) Add(n int) {
 	}
 }
 
+func (self *Swap) Balance() int {
+	defer self.lock.Unlock()
+	self.lock.Lock()
+	return self.balance
+}
+
 // send(units) is called when payment is due
 // In case of insolvency no promise is issued and sent, safe against fraud
 // No return value: no error = payment is opportunistic = hang in till dropped
@@ -132,8 +144,9 @@ func (self *Swap) send() {
 		amount.Mul(amount, self.remote.SellAt)
 		promise, err := self.out.Issue(amount)
 		if err != nil {
-			// glog.V(logger.Warn).Infof("[BZZ] cannot issue cheque. Contract: %v, Beneficiary: %v, Amount: %v", self.local.Contract, self.remote.Beneficiary, amount)
+			glog.V(logger.Warn).Infof("[SWAP] cannot issue cheque (amount: %v, channel: %v): %v", amount, self.out, err)
 		} else {
+			glog.V(logger.Warn).Infof("[SWAP] cheque issued (amount: %v, channel: %v)", amount, self.out)
 			self.proto.Pay(-self.balance, promise)
 			self.balance = 0
 		}
@@ -151,16 +164,22 @@ func (self *Swap) Receive(units int, promise Promise) error {
 	price.Mul(price, self.local.SellAt)
 
 	amount, err := self.in.Receive(promise)
+
 	if err != nil {
-		return fmt.Errorf("invalid promise: %v", err)
-	}
-	// verify amount = units * unit sale price
-	if price.Cmp(amount) != 0 {
+		err = fmt.Errorf("invalid promise: %v", err)
+	} else if price.Cmp(amount) != 0 {
+		// verify amount = units * unit sale price
 		return fmt.Errorf("invalid amount: %v = %v * %v (units sent in msg * agreed sale unit price) != %v (signed in cheque)", price, units, self.local.SellAt, amount)
+	}
+	if err != nil {
+		glog.V(logger.Detail).Infof("[SWAP] invalid promise (amount: %v, channel: %v): %v", amount, self.in, err)
+		return err
 	}
 
 	// credit remote peer with units
 	self.Add(-units)
+	glog.V(logger.Detail).Infof("[SWAP] received promise (amount: %v, channel: %v): %v", amount, self.in)
+
 	return nil
 }
 
