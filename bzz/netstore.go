@@ -140,7 +140,7 @@ func (self *netStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
 	glog.V(logger.Debug).Infof("[BZZ] netStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
 	if entry.req != nil {
-		// if entry had a requst status, it means it has recently been requested
+		// if entry had a request status, it means it has recently been requested
 		// by at least one peer
 		if entry.req.status == reqSearching {
 			// the status is set to found
@@ -158,6 +158,7 @@ func (self *netStore) put(entry *Chunk) {
 
 // store propagates store requests to specific peers given by the kademlia hive
 // except for peers that the store request came from (if any)
+// will be handled by sync logic
 func (self *netStore) store(chunk *Chunk) {
 	for _, peer := range self.hive.getPeers(chunk.Key, 0) {
 		if chunk.source == nil || peer.Addr() != chunk.source.Addr() {
@@ -172,28 +173,34 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 	defer self.lock.Unlock()
 	glog.V(logger.Debug).Infof("[BZZ] netStore.addStoreRequest: req = %v", req)
 	chunk, err := self.localStore.Get(req.Key)
-	glog.V(logger.Debug).Infof("[BZZ] netStore.addStoreRequest: chunk reference %p", chunk)
-	// we assume that a returned chunk is the one stored in the memory cache
+	glog.V(logger.Debug).Infof("[BZZ] netStore.addStoreRequest: %p from %v", chunk, req.peer)
 	if err != nil {
+		// not found in memory cache, ie., a genuine store request
 		chunk = &Chunk{
 			Key:   req.Key,
 			SData: req.SData,
 			Size:  int64(binary.LittleEndian.Uint64(req.SData[0:8])),
 		}
 	} else if chunk.SData == nil {
-		// need data, validate now
+		// found chunk in memory store, needs the data, validate now
 		hasher := hasherfunc.New()
 		hasher.Write(req.SData)
 		if !bytes.Equal(hasher.Sum(nil), req.Key) {
 			// data does not validate, ignore
+			// peer should be penalised/dropped?
 			glog.V(logger.Warn).Infof("[BZZ] netStore.addStoreRequest: chunk invalid. store request ignored: %v", req)
 			return
 		}
 
 		chunk.SData = req.SData
 		chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
+		// genuine delivery, account in swap
+		req.peer.swap.Add(-1)
+		glog.V(logger.Debug).Infof("[BZZ] delivery of %p from %v", chunk, req.peer)
+
 	} else {
 		// data is found, store request ignored
+		// this should update access count?
 		return
 	}
 	chunk.source = req.peer
@@ -252,8 +259,7 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	// if key is zero or nil or matches requester address, then the request
-	// is a self lookup and not to be forwarded
+	// if request is lookup and not to be delivered
 	if !req.isLookup() {
 		chunk := self.get(req.Key)
 		if chunk.SData != nil {
@@ -268,11 +274,14 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 			return
 		}
 
-		glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: %064x. Start net search by forwarding retrieve request. For now responding with peers.", req.Key)
 		self.startSearch(req, chunk)
+		// swap - record credit for 1 request
+		// note that only charge actual reqsearches
+		req.peer.swap.Add(1)
+		glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: %064x from %v. Start net search by forwarding retrieve request. For now responding with peers. ", req.Key, req.peer)
 
 	} else {
-		glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: self lookup for %v: responding with peers...", req.peer)
+		glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: self lookup for %v: responding with peers only...", req.peer)
 	}
 
 	self.peers(req)
@@ -358,7 +367,7 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 }
 
 // called on each request when a chunk is found,
-// delivery is done by sending a request to the requesting peer
+// delivery is done by sending a store request to the requesting peer
 func (self *netStore) deliver(req *retrieveRequestMsgData, chunk *Chunk) {
 	// here we should check MaxSize if set to a value lower than chunk.Size
 	// we withhold
