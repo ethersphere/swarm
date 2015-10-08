@@ -408,7 +408,7 @@ func New(config *Config) (*Ethereum, error) {
 			glog.V(logger.Warn).Infof("error setting up swarm: %v. bzz protocol skipped", err)
 		} else {
 			protocols = append(protocols, proto)
-			glog.V(logger.Info).Infof("bzz protocol added to peer caps", proto)
+			glog.V(logger.Info).Infof("bzz protocol added to peer caps")
 		}
 	}
 
@@ -579,7 +579,7 @@ func (s *Ethereum) Start() error {
 	}
 
 	if s.Swarm != nil && s.net.Self() != nil {
-		glog.V(logger.Info).Infof("net.self after net started: %v, listening on: %v", s.net.Self(), s.net.ListenAddr)
+		glog.V(logger.Info).Infof("enode after net started: %v, listening on: %v", s.net.Self(), s.net.ListenAddr)
 		listenAddr := s.net.ListenAddr
 		if listenAddr == "" {
 			listenAddr = ":0"

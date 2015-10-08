@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/eth"
 	re "github.com/ethereum/go-ethereum/jsre"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -194,8 +193,12 @@ func newJSRE(ethereum *eth.Ethereum, docRoot, corsDomain string, client comms.Et
 		js.ds.RegisterScheme("bzz", &bzz.RoundTripper{
 			Port: ethereum.Swarm.ProxyPort(),
 		})
-		// set versioned registrar is swarm is enabled
-		ethereum.Swarm.SetRegistrar(ethreg.New(js.xeth))
+		// // set versioned registrar is swarm is enabled
+		// ethereum.Swarm.SetRegistrar(ethreg.New(js.xeth))
+		// err := ethereum.Swarm.SetChequebook(js.xeth)
+		// if err != nil {
+		// 	utils.Fatalf("Unable to set swarm backend: %v", err)
+		// }
 	}
 	if clt, ok := js.client.(*comms.InProcClient); ok {
 		if offeredApis, err := api.ParseApiString(shared.AllApis, codec.JSON, js.xeth, ethereum, docRoot); err == nil {

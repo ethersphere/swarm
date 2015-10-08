@@ -338,7 +338,7 @@ and in absolute units exceeds the PayAt parameter in the remote peer's profile
 */
 
 type paymentMsgData struct {
-	Units   int          // units actually paid for (checked against amount by swap)
+	Units   uint         // units actually paid for (checked against amount by swap)
 	Promise swap.Promise // payment with cheque
 }
 
@@ -467,7 +467,7 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
-		self.swap.Receive(req.Units, req.Promise)
+		self.swap.Receive(int(req.Units), req.Promise)
 
 	default:
 		// no other message is allowed
@@ -493,7 +493,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 
 	err = p2p.Send(self.rw, statusMsg, handshake)
 	if err != nil {
-		self.protoError(ErrNoStatusMsg, "")
+		self.protoError(ErrNoStatusMsg, err.Error())
 	}
 
 	// read and handle remote status
@@ -688,7 +688,7 @@ func (self *bzzProtocol) storeRequest(key Key) {
 
 // send paymentMsg
 func (self *bzzProtocol) Pay(units int, promise swap.Promise) {
-	req := &paymentMsgData{units, promise}
+	req := &paymentMsgData{uint(units), promise}
 	self.payment(req)
 }
 

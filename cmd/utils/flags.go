@@ -342,8 +342,7 @@ var (
 	}
 	SwarmConfigPathFlag = cli.StringFlag{
 		Name:  "bzzconfig",
-		Usage: "Swarm config file path",
-		Value: "bzz.json",
+		Usage: "Swarm config file path (datadir/bzz)",
 	}
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
@@ -426,24 +425,31 @@ func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Cont
 	if err != nil {
 		glog.V(logger.Error).Infoln("WARNING: No etherbase set and no accounts found as default")
 	}
-
+	datadir := ctx.GlobalString(DataDirFlag.Name)
 	var bzzconfig *bzz.Config
 	hexaddr := ctx.GlobalString(SwarmAccountAddrFlag.Name)
 	if hexaddr != "" {
 		swarmaccount := common.HexToAddress(hexaddr)
+		if !am.HasAccount(swarmaccount) {
+			Fatalf("swarm account '%v' does not exist: %v", hexaddr, err)
+		}
 		prvkey, err := am.GetUnlocked(swarmaccount)
 		if err != nil {
 			Fatalf("unable to unlock swarm account: %v", err)
 		}
 		chbookaddr := common.HexToAddress(ctx.GlobalString(ChequebookAddrFlag.Name))
-		bzzconfig, err = bzz.NewConfig(ctx.GlobalString(SwarmConfigPathFlag.Name), chbookaddr, prvkey)
+		bzzdir := ctx.GlobalString(SwarmConfigPathFlag.Name)
+		if bzzdir == "" {
+			bzzdir = filepath.Join(datadir, "bzz")
+		}
+		bzzconfig, err = bzz.NewConfig(bzzdir, chbookaddr, prvkey)
 		if err != nil {
 			Fatalf("unable to configure swarm: %v", err)
 		}
 	}
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
-		DataDir:                 ctx.GlobalString(DataDirFlag.Name),
+		DataDir:                 datadir,
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),

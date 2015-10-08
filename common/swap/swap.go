@@ -19,8 +19,8 @@ import (
 type Profile struct {
 	BuyAt  *big.Int // accepted max price for chunk
 	SellAt *big.Int // offered sale price for chunk
-	PayAt  int      // threshold that triggers payment request
-	DropAt int      // threshold that triggers disconnect
+	PayAt  uint     // threshold that triggers payment request
+	DropAt uint     // threshold that triggers disconnect
 }
 
 // Strategy encapsulates parameters relating to
@@ -122,9 +122,9 @@ func (self *Swap) Add(n int) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	self.balance += n
-	if self.balance >= self.local.DropAt {
+	if self.balance >= int(self.local.DropAt) {
 		self.proto.Drop()
-	} else if self.balance <= -self.remote.PayAt {
+	} else if self.balance <= -int(self.remote.PayAt) {
 		self.send()
 	}
 }

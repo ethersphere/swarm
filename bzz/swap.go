@@ -2,7 +2,9 @@ package bzz
 
 import (
 	"crypto/ecdsa"
+	"fmt"
 	"math/big"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -58,13 +60,14 @@ func defaultSwapParams(contract common.Address, prvkey *ecdsa.PrivateKey) *swapP
 			Contract:    contract,
 			Beneficiary: crypto.PubkeyToAddress(*pubkey),
 			privateKey:  prvkey,
+			publicKey:   pubkey,
 		},
 		Params: &swap.Params{
 			Profile: &swap.Profile{
 				BuyAt:  buyAt,
 				SellAt: sellAt,
-				PayAt:  payAt,
-				DropAt: dropAt,
+				PayAt:  uint(payAt),
+				DropAt: uint(dropAt),
 			},
 			Strategy: &swap.Strategy{
 				AutoCashInterval:     autoCashInterval,
@@ -91,30 +94,39 @@ func newSwap(local *swapParams, remote *swapProfile, proto swap.Protocol) (self 
 	out := chequebook.NewOutbox(local.chequebook, remote.Beneficiary)
 
 	in, err := chequebook.NewInbox(remote.Contract, local.Beneficiary, remote.publicKey, local.chequebook.Backend())
+	if err != nil {
+		return
+	}
 
 	self, err = swap.New(local.Params, out, in, proto)
 	if err != nil {
 		return
 	}
 
-	glog.V(logger.Info).Infof("[BZZ] SWAP auto cash ON for %v -> %v: interval = %v, threshold = %v, peer = %v)", local.Contract.Hex()[:8], remote.Contract.Hex()[:8], local.AutoCashInterval, local.AutoCashThreshold)
+	glog.V(logger.Info).Infof("[BZZ] SWAP auto cash ON for %v -> %v: interval = %v, threshold = %v, peer = %v)", local.Contract.Hex()[:8], local.Beneficiary.Hex()[:8], local.AutoCashInterval, local.AutoCashThreshold, proto)
 
 	return
 }
 
 // setBackend(path, backend) wraps the
 // chequebook initialiser and sets up autoDeposit to cover spending.
-func (self *swapParams) setBackend(path string, backend chequebook.Backend) (err error) {
+func (self *swapParams) setChequebook(path string, backend chequebook.Backend) (err error) {
 	hexkey := common.Bytes2Hex(self.Contract.Bytes())
+	err = os.MkdirAll(filepath.Join(path, "chequebooks"), os.ModePerm)
+	if err != nil {
+		return fmt.Errorf("unable to create directory for chequebooks: %v", err)
+	}
 	chbookpath := filepath.Join(path, "chequebooks", hexkey+".json")
 	self.chequebook, err = chequebook.LoadChequebook(chbookpath, self.privateKey, backend)
 
 	if err != nil {
 		self.chequebook, err = chequebook.NewChequebook(chbookpath, self.Contract, self.privateKey, backend)
 		if err != nil {
-			self.chequebook.AutoDeposit(self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
-			glog.V(logger.Info).Infof("[BZZ] SWAP auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", self.Beneficiary.Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
+			return
 		}
 	}
+	self.chequebook.AutoDeposit(self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
+	glog.V(logger.Info).Infof("[BZZ] SWAP auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", self.Beneficiary.Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
+
 	return
 }

@@ -99,6 +99,10 @@ func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec, doc
 			Port: ethereum.Swarm.ProxyPort(),
 		})
 		// set versioned registrar if swarm is enabled
+		err := ethereum.Swarm.SetChequebook(xeth)
+		if err != nil {
+			glog.Fatalf("Unable to set swarm backend: %v", err)
+		}
 		ethereum.Swarm.SetRegistrar(ethreg.New(xeth))
 	}
 

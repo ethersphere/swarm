@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -37,7 +38,7 @@ func NewSwarm(config *Config) (self *Swarm, proto p2p.Protocol, err error) {
 		return
 	}
 
-	self.netStore, err = newNetStore(config.Path, self.hive)
+	self.netStore, err = newNetStore(filepath.Join(config.Path, "db"), self.hive)
 	if err != nil {
 		return
 	}
@@ -64,8 +65,10 @@ func (self *Swarm) Start(node *discover.Node, listenAddr string, connectPeer fun
 		err = fmt.Errorf("netStore is nil")
 	} else if connectPeer == nil {
 		err = fmt.Errorf("no connect peer function")
-	} else if bytes.Equal(common.Hex2Bytes(self.config.BzzKey), zeroKey) {
-		err = fmt.Errorf("invalid public key")
+	} else if bytes.Equal(common.FromHex(self.config.PublicKey), zeroKey) {
+		err = fmt.Errorf("empty public key")
+	} else if bytes.Equal(common.FromHex(self.config.BzzKey), zeroKey) {
+		err = fmt.Errorf("empty bzz key")
 	} else { // this is how we calculate the bzz address of the node
 		// ideally this should be using the swarm hash function
 
@@ -77,7 +80,7 @@ func (self *Swarm) Start(node *discover.Node, listenAddr string, connectPeer fun
 				err = fmt.Errorf("invalid port in '%s'", listenAddr)
 			} else {
 				baseAddr := &peerAddr{
-					ID:   common.Hex2Bytes(self.config.BzzKey),
+					ID:   common.FromHex(self.config.PublicKey),
 					IP:   node.IP,
 					Port: uint16(intport),
 				}
@@ -97,7 +100,6 @@ func (self *Swarm) Start(node *discover.Node, listenAddr string, connectPeer fun
 	}
 	self.dpa.Start()
 	if self.config.Port != "" {
-		fmt.Printf("PORT: %v\n", self.config.Port)
 		go startHttpServer(self.api, self.config.Port)
 	}
 }
@@ -123,6 +125,11 @@ func (self *Swarm) ProxyPort() string {
 
 func (self *Swarm) SetRegistrar(reg registrar.VersionedRegistrar) {
 	self.api.registrar = reg
+}
+
+// Backend interface implemented by xeth.XEth or JSON-IPC client
+func (self *Swarm) SetChequebook(backend chequebook.Backend) (err error) {
+	return self.config.Swap.setChequebook(self.config.Path, backend)
 }
 
 // Local swarm without netStore
