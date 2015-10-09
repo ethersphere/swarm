@@ -122,7 +122,7 @@ func (a *Address) MarshalJSON() (out []byte, err error) {
 }
 
 func (m *Address) UnmarshalJSON(value []byte) error {
-	*m = HexToAddress(string(value))
+	m.Set(HexToAddress(string(value)))
 	return nil
 }
 
