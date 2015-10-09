@@ -183,26 +183,27 @@ func (self *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *
 		return nil, fmt.Errorf("amount must be greater than zero (%v)", amount)
 	}
 	if self.balance.Cmp(amount) < 0 {
-		return nil, fmt.Errorf("insufficent funds to issue cheque for amount: %v. balance: %v", amount, self.balance)
-	}
-	var sig []byte
-	sent, found := self.sent[beneficiary]
-	if !found {
-		sent = new(big.Int)
-		self.sent[beneficiary] = sent
-	}
-	sum := new(big.Int).Set(sent)
-	sum.Add(sum, amount)
-	sig, err = crypto.Sign(sigHash(self.contract, beneficiary, sum), self.prvKey)
-	if err == nil {
-		ch = &Cheque{
-			Contract:    self.contract,
-			Beneficiary: beneficiary,
-			Amount:      sum,
-			Sig:         sig,
+		err = fmt.Errorf("insufficent funds to issue cheque for amount: %v. balance: %v", amount, self.balance)
+	} else {
+		var sig []byte
+		sent, found := self.sent[beneficiary]
+		if !found {
+			sent = new(big.Int)
+			self.sent[beneficiary] = sent
 		}
-		sent.Set(sum)
-		self.balance.Sub(self.balance, amount) // subtract amount from balance
+		sum := new(big.Int).Set(sent)
+		sum.Add(sum, amount)
+		sig, err = crypto.Sign(sigHash(self.contract, beneficiary, sum), self.prvKey)
+		if err == nil {
+			ch = &Cheque{
+				Contract:    self.contract,
+				Beneficiary: beneficiary,
+				Amount:      sum,
+				Sig:         sig,
+			}
+			sent.Set(sum)
+			self.balance.Sub(self.balance, amount) // subtract amount from balance
+		}
 	}
 
 	// auto deposit if threshold is set and balance is less then threshold
