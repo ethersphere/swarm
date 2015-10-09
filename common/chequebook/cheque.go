@@ -346,6 +346,10 @@ func (self *Outbox) AutoDeposit(interval time.Duration, threshold, buffer *big.I
 
 func (self *Outbox) Stop() {}
 
+func (self *Outbox) String() string {
+	return fmt.Sprintf("chequebook: %v, beneficiery: %s, balance: %v", self.chequeBook.Address().Hex(), self.beneficiary.Hex(), self.chequeBook.Balance())
+}
+
 // type ChequeQueue struct {
 //   beneficiary common.Address
 //   last      map[string]*Inbox
@@ -380,6 +384,10 @@ func NewInbox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, bac
 	}
 	glog.V(logger.Detail).Infof("initialised inbox (%s -> %s)", self.contract.Hex(), self.beneficiary.Hex())
 	return
+}
+
+func (self *Inbox) String() string {
+	return fmt.Sprintf("chequebook: %v, beneficiery: %s, balance: %v, tolerance: %v", self.contract.Hex(), self.beneficiary.Hex(), self.cheque.Amount, self.local.DropAt)
 }
 
 // Stop() quits the autocash go routine to terminate

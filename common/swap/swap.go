@@ -123,6 +123,7 @@ func (self *Swap) Add(n int) {
 	self.lock.Lock()
 	self.balance += n
 	if self.balance >= int(self.local.DropAt) {
+		glog.V(logger.Detail).Infof("[SWAP] peer %v has too much debt (balance: %v, target: %v)", self.out, self.balance, self.local.DropAt)
 		self.proto.Drop()
 	} else if self.balance <= -int(self.remote.PayAt) {
 		self.send()
