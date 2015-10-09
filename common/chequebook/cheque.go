@@ -259,11 +259,12 @@ func (self *Chequebook) Deposit(amount *big.Int) (string, error) {
 func (self *Chequebook) deposit(amount *big.Int) (string, error) {
 	txhash, err := self.backend.Transact(self.owner.Hex(), self.contract.Hex(), "", amount.String(), "", "", "")
 	// assume that transaction is actually successful, we add the amount to balance right away
-	if err == nil {
+	if err != nil {
+		glog.V(logger.Warn).Infof("error depositing %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contract.Hex(), self.balance, self.buffer, err)
+	} else {
 		self.balance.Add(self.balance, amount)
+		glog.V(logger.Detail).Infof("deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contract.Hex(), self.balance, self.buffer)
 	}
-	glog.V(logger.Detail).Infof("deposited %d wei to chequebook (%s)", amount, self.contract.Hex())
-
 	return txhash, err
 }
 
