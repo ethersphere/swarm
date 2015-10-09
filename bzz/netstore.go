@@ -268,6 +268,10 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 		req = self.strategyUpdateRequest(chunk.req, req) // may change req status
 
+		// swap - record credit for 1 request
+		// note that only charge actual reqsearches
+		req.peer.swap.Add(1)
+
 		if chunk.req.status == reqFound {
 			glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
 			self.deliver(req, chunk)
@@ -275,9 +279,6 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 		}
 
 		self.startSearch(req, chunk)
-		// swap - record credit for 1 request
-		// note that only charge actual reqsearches
-		req.peer.swap.Add(1)
 		glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: %064x from %v. Start net search by forwarding retrieve request. For now responding with peers. ", req.Key, req.peer)
 
 	} else {
@@ -401,7 +402,7 @@ func (self *netStore) peers(req *retrieveRequestMsgData) {
 			for _, peer := range self.hive.getPeers(key, int(req.MaxPeers)) {
 				addrs = append(addrs, peer.remoteAddr)
 			}
-			glog.V(logger.Debug).Infof("[BZZ] netStore.peers sending %d addresses. req.Id: %v, req.Key: %v", len(addrs), req.Id, req.Key)
+			glog.V(logger.Debug).Infof("[BZZ] netStore.peers sending %d addresses. req.Id: %v, req.Key: %x", len(addrs), req.Id, req.Key)
 
 			peersData := &peersMsgData{
 				Peers: addrs,
