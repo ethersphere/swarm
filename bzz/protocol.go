@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/common/swap"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -338,8 +339,8 @@ and in absolute units exceeds the PayAt parameter in the remote peer's profile
 */
 
 type paymentMsgData struct {
-	Units   uint         // units actually paid for (checked against amount by swap)
-	Promise swap.Promise // payment with cheque
+	Units   uint               // units actually paid for (checked against amount by swap)
+	Promise *chequebook.Cheque // payment with cheque
 }
 
 /*
@@ -688,7 +689,7 @@ func (self *bzzProtocol) storeRequest(key Key) {
 
 // send paymentMsg
 func (self *bzzProtocol) Pay(units int, promise swap.Promise) {
-	req := &paymentMsgData{uint(units), promise}
+	req := &paymentMsgData{uint(units), promise.(*chequebook.Cheque)}
 	self.payment(req)
 }
 
