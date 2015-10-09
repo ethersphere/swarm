@@ -43,25 +43,29 @@ func TestConfigWriteRead(t *testing.T) {
 	defer os.RemoveAll(tmp)
 
 	prvkey := crypto.ToECDSA(common.Hex2Bytes(hexprvkey))
-	_, err = NewConfig(tmp, common.Address{}, prvkey)
+	orig, err := NewConfig(tmp, common.Address{}, prvkey)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
 	account := crypto.PubkeyToAddress(prvkey.PublicKey)
-	confpath := filepath.Join(tmp, common.Bytes2Hex(account.Bytes())+".json")
+	dirpath := filepath.Join(tmp, common.Bytes2Hex(account.Bytes()))
+	confpath := filepath.Join(dirpath, "config.json")
 	data, err := ioutil.ReadFile(confpath)
 	if err != nil {
 		t.Fatalf("default config file cannot be read: %v", err)
 	}
-	exp := strings.Replace(defaultConfig, "TMPDIR", tmp, 1)
+	exp := strings.Replace(defaultConfig, "TMPDIR", dirpath, 1)
 
 	if string(data) != exp {
 		t.Fatalf("default config mismatch:\nexpected:\n'%v'\ngot:\n'%v'", exp, string(data))
 	}
 
-	_, err = NewConfig(tmp, common.Address{}, prvkey)
+	conf, err := NewConfig(tmp, common.Address{}, prvkey)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
+	}
+	if conf.Swap.Beneficiary.Hex() != orig.Swap.Beneficiary.Hex() {
+		t.Fatalf("expected beneficiary from loaded config %v to match original %v", conf.Swap.Beneficiary.Hex(), orig.Swap.Beneficiary.Hex())
 	}
 
 }

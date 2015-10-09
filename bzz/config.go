@@ -82,7 +82,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 			return nil, fmt.Errorf("public key does not match the one in the config file %v != %v", pubkeyhex, self.PublicKey)
 		}
 		if keyhex != self.BzzKey {
-			return nil, fmt.Errorf("bzz key does not match the one in the config file %v != %v", keyhex, self.PublicKey)
+			return nil, fmt.Errorf("bzz key does not match the one in the config file %v != %v", keyhex, self.BzzKey)
 		}
 		self.Swap.privateKey = prvKey
 		self.Swap.publicKey = &prvKey.PublicKey
