@@ -110,7 +110,7 @@ func newSwap(local *swapParams, remote *swapProfile, proto swap.Protocol) (self 
 	return
 }
 
-// setBackend(path, backend) wraps the
+// setChequebook(path, backend) wraps the
 // chequebook initialiser and sets up autoDeposit to cover spending.
 func (self *swapParams) setChequebook(path string, backend chequebook.Backend) (err error) {
 	hexkey := common.Bytes2Hex(self.Contract.Bytes())

@@ -76,6 +76,7 @@ type Chequebook struct {
 func NewChequebook(path string, contract common.Address, prvKey *ecdsa.PrivateKey, backend Backend) (self *Chequebook, err error) {
 	balance := new(big.Int)
 	sent := make(map[common.Address]*big.Int)
+	owner := crypto.PubkeyToAddress(prvKey.PublicKey)
 	self = &Chequebook{
 		balance:  balance,
 		contract: contract,
@@ -83,10 +84,10 @@ func NewChequebook(path string, contract common.Address, prvKey *ecdsa.PrivateKe
 		path:     path,
 		prvKey:   prvKey,
 		backend:  backend,
-		owner:    crypto.PubkeyToAddress(prvKey.PublicKey),
+		owner:    owner,
 	}
 	if (contract != common.Address{}) {
-		glog.V(logger.Detail).Infof("new chequebook initialised from %v ", contract.Hex())
+		glog.V(logger.Detail).Infof("new chequebook initialised from %v (owner: %v)", contract.Hex(), owner.Hex())
 	}
 	return
 }
@@ -105,7 +106,7 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (sel
 	if err != nil {
 		return nil, err
 	}
-	glog.V(logger.Detail).Infof("loaded chequebook (%s) initialised from %v", self.contract.Hex(), path)
+	glog.V(logger.Detail).Infof("loaded chequebook (%s, owner: %v) initialised from %v", self.contract.Hex(), self.owner.Hex(), path)
 
 	return
 }
@@ -347,7 +348,7 @@ func (self *Outbox) AutoDeposit(interval time.Duration, threshold, buffer *big.I
 func (self *Outbox) Stop() {}
 
 func (self *Outbox) String() string {
-	return fmt.Sprintf("chequebook: %v, beneficiery: %s, balance: %v", self.chequeBook.Address().Hex(), self.beneficiary.Hex(), self.chequeBook.Balance())
+	return fmt.Sprintf("chequebook: %v, beneficiary: %s, balance: %v", self.chequeBook.Address().Hex(), self.beneficiary.Hex(), self.chequeBook.Balance())
 }
 
 // type ChequeQueue struct {
@@ -387,7 +388,7 @@ func NewInbox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, bac
 }
 
 func (self *Inbox) String() string {
-	return fmt.Sprintf("chequebook: %v, beneficiery: %s, balance: %v, tolerance: %v", self.contract.Hex(), self.beneficiary.Hex(), self.cheque.Amount, self.local.DropAt)
+	return fmt.Sprintf("chequebook: %v, beneficiary: %s, balance: %v", self.contract.Hex(), self.beneficiary.Hex(), self.cheque.Amount)
 }
 
 // Stop() quits the autocash go routine to terminate
