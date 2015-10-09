@@ -34,7 +34,12 @@ type Config struct {
 func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (self *Config, err error) {
 
 	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
-	confpath := filepath.Join(path, common.Bytes2Hex(address.Bytes())+".json")
+	dirpath := filepath.Join(path, common.Bytes2Hex(address.Bytes()))
+	err = os.MkdirAll(dirpath, os.ModePerm)
+	if err != nil {
+		return
+	}
+	confpath := filepath.Join(dirpath, "config.json")
 	var data []byte
 	pubkey := crypto.FromECDSAPub(&prvKey.PublicKey)
 	pubkeyhex := common.ToHex(pubkey)
@@ -49,7 +54,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 
 		self = &Config{
 			Port:      port,
-			Path:      path,
+			Path:      dirpath,
 			Swap:      defaultSwapParams(contract, prvKey),
 			PublicKey: pubkeyhex,
 			BzzKey:    keyhex,
