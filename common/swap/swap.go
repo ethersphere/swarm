@@ -96,6 +96,8 @@ func New(local *Params, out OutPayment, in InPayment, proto Protocol) (self *Swa
 func (self *Swap) SetRemote(remote *Profile) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
+	glog.V(logger.Debug).Infof("[SWAP] <%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", self.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt)
+
 	self.remote = remote
 }
 
