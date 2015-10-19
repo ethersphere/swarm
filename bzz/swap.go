@@ -93,7 +93,7 @@ func newSwap(local *swapParams, remote *swapProfile, proto swap.Protocol) (self 
 
 	out := chequebook.NewOutbox(local.chequebook, remote.Beneficiary)
 
-	in, err := chequebook.NewInbox(remote.Contract, local.Beneficiary, remote.publicKey, local.chequebook.Backend())
+	in, err := chequebook.NewInbox(remote.Contract, local.Beneficiary, crypto.ToECDSAPub(common.FromHex(remote.PublicKey)), local.chequebook.Backend())
 	if err != nil {
 		return
 	}
