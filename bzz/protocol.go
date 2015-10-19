@@ -343,6 +343,10 @@ type paymentMsgData struct {
 	Promise *chequebook.Cheque // payment with cheque
 }
 
+func (self *paymentMsgData) String() string {
+	return fmt.Sprintf("payment for %d units: %v", self.Units, self.Promise)
+}
+
 /*
 main entrypoint, wrappers starting a server that will run the bzz protocol
 use this constructor to attach the protocol ("class") to server caps
@@ -468,6 +472,7 @@ func (self *bzzProtocol) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
+		glog.V(logger.Debug).Infof("[BZZ] incoming payment: %s", req.String())
 		self.swap.Receive(int(req.Units), req.Promise)
 
 	default:
