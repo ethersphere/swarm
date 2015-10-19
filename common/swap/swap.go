@@ -181,7 +181,7 @@ func (self *Swap) Receive(units int, promise Promise) error {
 
 	// credit remote peer with units
 	self.Add(-units)
-	glog.V(logger.Detail).Infof("[SWAP] received promise (amount: %v, channel: %v): %v", amount, self.in)
+	glog.V(logger.Detail).Infof("[SWAP] received promise (amount: %v, channel: %v): %v", amount, self.in, promise)
 
 	return nil
 }
