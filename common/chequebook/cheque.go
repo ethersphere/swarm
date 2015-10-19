@@ -53,7 +53,7 @@ type Cheque struct {
 }
 
 func (self *Cheque) String() string {
-	return fmt.Sprintf("contract: %s, beneficiary: %s, amount: %v, signature: %x", self.Contract, self.Beneficiary, self.Amount, self.Sig)
+	return fmt.Sprintf("contract: %s, beneficiary: %s, amount: %v, signature: %x", self.Contract.Hex(), self.Beneficiary.Hex(), self.Amount, self.Sig)
 }
 
 // chequebook to create, sign cheques from single contract to multiple beneficiarys
@@ -381,6 +381,11 @@ type Inbox struct {
 // not persisted, cumulative sum updated from blockchain when first cheque received
 // backend used to sync amount (Call) as well as cash the cheques (Transact)
 func NewInbox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, backend Backend) (self *Inbox, err error) {
+
+	if signer == nil {
+		return nil, fmt.Errorf("signer is null")
+	}
+
 	self = &Inbox{
 		contract:    contract,
 		beneficiary: beneficiary,
@@ -388,7 +393,7 @@ func NewInbox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, bac
 		backend:     backend,
 		cashed:      new(big.Int).Set(common.Big0),
 	}
-	glog.V(logger.Detail).Infof("initialised inbox (%s -> %s)", self.contract.Hex(), self.beneficiary.Hex())
+	glog.V(logger.Detail).Infof("initialised inbox (%s -> %s) expected signer: %x", self.contract.Hex(), self.beneficiary.Hex(), crypto.FromECDSAPub(signer))
 	return
 }
 
@@ -410,6 +415,7 @@ func (self *Inbox) Cash() {
 	if self.cheque != nil {
 		self.cheque.Cash(self.backend)
 		glog.V(logger.Detail).Infof("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.contract.Hex(), self.beneficiary.Hex())
+		self.cashed = self.cheque.Amount
 	}
 }
 
@@ -464,6 +470,7 @@ func (self *Inbox) autoCash(cashInterval time.Duration) {
 // Reveive(cheque) called to deposit latest cheque to incoming Inbox
 func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 	ch := promise.(*Cheque)
+
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	var sum *big.Int
@@ -473,6 +480,7 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 		if err != nil {
 			return nil, fmt.Errorf("inbox: error calling backend to set amount: %v", err)
 		}
+
 		tally := common.FromHex(tallyhex)
 		// var ok bool
 		// sum, ok = new(big.Int).SetString(tally, 10)
@@ -492,12 +500,11 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 		if self.maxUncashed != nil {
 			uncashed = new(big.Int).Sub(ch.Amount, self.cashed)
 			if self.maxUncashed.Cmp(uncashed) < 0 {
-				ch.Cash(self.backend)
-				self.cashed = ch.Amount
+				self.Cash()
 			}
 		}
+		glog.V(logger.Detail).Infof("received cheque of %v wei in inbox (%s, uncashed: %v)", amount, self.contract.Hex(), uncashed)
 	}
-	glog.V(logger.Detail).Infof("received cheque of %v wei in inbox (%s, uncashed: %v)", amount, self.contract.Hex(), uncashed)
 
 	return amount, err
 }
@@ -535,6 +542,11 @@ func (self *Cheque) cashAbiEncode() string {
 
 // Verify(cheque) verifies cheque for signer, contract, beneficiary, amount, valid signature
 func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary common.Address, sum *big.Int) (*big.Int, error) {
+	glog.V(logger.Detail).Infof("verify cheque: %v - sum: %v", self, sum)
+	if sum == nil {
+		return nil, fmt.Errorf("invalid amount")
+	}
+
 	if self.Beneficiary != beneficiary {
 		return nil, fmt.Errorf("beneficiary mismatch: %v != %v", self.Beneficiary.Hex(), beneficiary.Hex())
 	}
@@ -544,7 +556,7 @@ func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary com
 
 	amount := new(big.Int).Set(self.Amount)
 	if sum != nil {
-		amount.Sub(self.Amount, sum)
+		amount.Sub(amount, sum)
 		if amount.Cmp(common.Big0) <= 0 {
 			return nil, fmt.Errorf("incorrect amount: %v <= 0", amount)
 		}
@@ -555,7 +567,7 @@ func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary com
 		return nil, fmt.Errorf("invalid signature: %v", err)
 	}
 	if !bytes.Equal(crypto.FromECDSAPub(pubKey), crypto.FromECDSAPub(signerKey)) {
-		return nil, fmt.Errorf("signer mismatch: %x != %x", pubKey, signerKey)
+		return nil, fmt.Errorf("signer mismatch: %x != %x", crypto.FromECDSAPub(pubKey), crypto.FromECDSAPub(signerKey))
 	}
 	return amount, nil
 }
