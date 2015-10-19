@@ -52,6 +52,10 @@ type Cheque struct {
 	Sig         []byte         // signature Sign(Sha3(contract, beneficiary, amount), prvKey)
 }
 
+func (self *Cheque) String() string {
+	return fmt.Sprintf("contract: %s, beneficiary: %s, amount: %v, signature: %x", self.Contract, self.Beneficiary, self.Amount, self.Sig)
+}
+
 // chequebook to create, sign cheques from single contract to multiple beneficiarys
 // outgoing payment handler for peer to peer micropayments
 type Chequebook struct {
@@ -465,16 +469,17 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 	var sum *big.Int
 	if self.cheque == nil {
 		// the sum is checked against the blockchain once a check is received
-		tally, _, err := self.backend.Call(self.beneficiary.Hex(), self.contract.Hex(), "", "", "", getSentAbiEncode(ch.Contract))
+		tallyhex, _, err := self.backend.Call(self.beneficiary.Hex(), self.contract.Hex(), "", "", "", getSentAbiEncode(ch.Contract))
 		if err != nil {
 			return nil, fmt.Errorf("inbox: error calling backend to set amount: %v", err)
 		}
-		var ok bool
-		sum, ok = new(big.Int).SetString(tally, 10)
-		if !ok {
-			return nil, fmt.Errorf("inbox: cannot convert amount to integer")
-		}
-
+		tally := common.FromHex(tallyhex)
+		// var ok bool
+		// sum, ok = new(big.Int).SetString(tally, 10)
+		// if !ok {
+		// 	return nil, fmt.Errorf("inbox: cannot convert amount '%s' (%v) to integer", tallyhex, tally)
+		// }
+		sum = new(big.Int).SetBytes(tally)
 	} else {
 		sum = self.cheque.Amount
 	}
@@ -506,7 +511,9 @@ func sig2rsv(sig []byte) (v byte, r, s []byte) {
 }
 
 func getSentAbiEncode(beneficiary common.Address) string {
-	return getSentAbiPre + beneficiary.Hex()[2:]
+	var beneficiary32 [32]byte
+	copy(beneficiary32[12:], beneficiary.Bytes())
+	return getSentAbiPre + common.Bytes2Hex(beneficiary32[:])
 }
 
 // abi encoding of a cheque to send as eth tx data
@@ -518,10 +525,11 @@ func (self *Cheque) cashAbiEncode() string {
 		glog.V(logger.Detail).Infof("number too big: %v (>32 bytes)", self.Amount)
 		return ""
 	}
-	var amount32, vabi [32]byte
+	var beneficiary32, amount32, vabi [32]byte
+	copy(beneficiary32[12:], self.Beneficiary.Bytes())
 	copy(amount32[32-len(bigamount):32], bigamount)
 	vabi[31] = v
-	return cashAbiPre + self.Beneficiary.Hex()[2:] + common.Bytes2Hex(amount32[:]) +
+	return cashAbiPre + common.Bytes2Hex(beneficiary32[:]) + common.Bytes2Hex(amount32[:]) +
 		common.Bytes2Hex(vabi[:]) + common.Bytes2Hex(r) + common.Bytes2Hex(s)
 }
 
