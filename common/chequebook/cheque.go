@@ -38,7 +38,7 @@ Backend is the interface for that
 */
 
 const (
-	gasToCash     = "500000"   // gas cost of a cash transaction using chequebook
+	gasToCash     = "2000000"  // gas cost of a cash transaction using chequebook
 	getSentAbiPre = "d75d691d" // sent amount accessor in the chequebook contract
 	cashAbiPre    = "fbf788d6" // abi preamble signature for cash method of the chequebook
 )
@@ -119,6 +119,7 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (sel
 type chequebookFile struct {
 	Balance  string
 	Contract string
+	Owner    string
 	Sent     map[string]string
 }
 
@@ -146,6 +147,7 @@ func (self *Chequebook) MarshalJSON() ([]byte, error) {
 	var file = &chequebookFile{
 		Balance:  self.balance.String(),
 		Contract: self.contract.Hex(),
+		Owner:    self.owner.Hex(),
 		Sent:     make(map[string]string),
 	}
 	for addr, sent := range self.sent {
@@ -246,6 +248,11 @@ func (self *Chequebook) Balance() *big.Int {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	return new(big.Int).Set(self.balance)
+}
+
+// Balance() public accessor for balance
+func (self *Chequebook) Owner() common.Address {
+	return self.owner
 }
 
 // Backend() public accessor for backend
@@ -373,6 +380,7 @@ type Inbox struct {
 	lock        sync.Mutex
 	contract    common.Address   // peer's chequebook contract
 	beneficiary common.Address   // local peer's receiving address
+	sender      common.Address   // local peer's address to send cashing tx from
 	signer      *ecdsa.PublicKey // peer's public key
 	txhash      string           // tx hash of last cashing tx
 	backend     Backend          // blockchain API
@@ -385,7 +393,7 @@ type Inbox struct {
 // NewInbox(contract, beneficiary, signer, backend) constructor for Inbox
 // not persisted, cumulative sum updated from blockchain when first cheque received
 // backend used to sync amount (Call) as well as cash the cheques (Transact)
-func NewInbox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, backend Backend) (self *Inbox, err error) {
+func NewInbox(contract, sender, beneficiary common.Address, signer *ecdsa.PublicKey, backend Backend) (self *Inbox, err error) {
 
 	if signer == nil {
 		return nil, fmt.Errorf("signer is null")
@@ -394,6 +402,7 @@ func NewInbox(contract, beneficiary common.Address, signer *ecdsa.PublicKey, bac
 	self = &Inbox{
 		contract:    contract,
 		beneficiary: beneficiary,
+		sender:      sender,
 		signer:      signer,
 		backend:     backend,
 		cashed:      new(big.Int).Set(common.Big0),
@@ -418,7 +427,7 @@ func (self *Inbox) Stop() {
 
 func (self *Inbox) Cash() (txhash string, err error) {
 	if self.cheque != nil {
-		txhash, err = self.cheque.Cash(self.beneficiary, self.backend)
+		txhash, err = self.cheque.Cash(self.sender, self.backend)
 		glog.V(logger.Detail).Infof("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex())
 		self.cashed = self.cheque.Amount
 	}
