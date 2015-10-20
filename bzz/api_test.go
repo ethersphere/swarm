@@ -7,6 +7,9 @@ import (
 	"path"
 	"runtime"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -25,7 +28,9 @@ func testApi() (api *Api, err error) {
 	if err != nil {
 		return
 	}
-	api = NewApi(dpa)
+	prvkey, _ := crypto.GenerateKey()
+
+	api = NewApi(dpa, defaultSwapParams(common.Address{}, prvkey))
 	api.dpa.Start()
 
 	return

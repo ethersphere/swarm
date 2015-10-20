@@ -67,6 +67,10 @@ func (self *testProtocol) Drop() {
 	self.drop = true
 }
 
+func (self *testProtocol) String() string {
+	return ""
+}
+
 func (self *testProtocol) Pay(amount int, promise Promise) {
 	p := promise.(*testPromise)
 	self.promises = append(self.promises, p)

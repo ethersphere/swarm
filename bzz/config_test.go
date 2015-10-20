@@ -15,15 +15,15 @@ const (
 	hexprvkey     = "65138b2aa745041b372153550584587da326ab440576b2a1191dd95cee30039c"
 	defaultConfig = `{
     "Swap": {
-        "BuyAt": 2,
-        "SellAt": 2,
-        "PayAt": 10,
-        "DropAt": 30,
+        "BuyAt": 20000000000,
+        "SellAt": 20000000000,
+        "PayAt": 100,
+        "DropAt": 150,
         "AutoCashInterval": 300000000000,
-        "AutoCashThreshold": 100,
+        "AutoCashThreshold": 50000000000000,
         "AutoDepositInterval": 300000000000,
-        "AutoDepositThreshold": 100,
-        "AutoDepositBuffer": 200,
+        "AutoDepositThreshold": 50000000000000,
+        "AutoDepositBuffer": 100000000000000,
         "PublicKey": "0x045f5cfd26692e48d0017d380349bcf50982488bc11b5145f3ddf88b24924299048450542d43527fbe29a5cb32f38d62755393ac002e6bfdd71b8d7ba725ecd7a3",
         "Contract": "0x0000000000000000000000000000000000000000",
         "Beneficiary": "0x0d2f62485607cf38d9d795d93682a517661e513e"
