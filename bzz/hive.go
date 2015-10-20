@@ -9,6 +9,10 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
+var (
+	pingInterval = 10 * time.Second
+)
+
 type peer struct {
 	*bzzProtocol
 }
@@ -104,7 +108,7 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 }
 
 func (self *hive) pinger() {
-	clock := time.NewTicker(1 * time.Second)
+	clock := time.NewTicker(pingInterval)
 	for {
 		select {
 		case <-clock.C:

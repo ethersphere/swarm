@@ -96,10 +96,14 @@ func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec, doc
 	if ethereum.Swarm != nil {
 		// register the swarm rountripper with the bzz scheme on the docserver
 		ds.RegisterScheme("bzz", &bzz.RoundTripper{
-			Port: ethereum.Swarm.Config.Port,
+			Port: ethereum.Swarm.ProxyPort(),
 		})
 		// set versioned registrar if swarm is enabled
-		ethereum.Swarm.Registrar = ethreg.New(xeth)
+		err := ethereum.Swarm.SetChequebook(xeth)
+		if err != nil {
+			glog.Fatalf("Unable to set swarm backend: %v", err)
+		}
+		ethereum.Swarm.SetRegistrar(ethreg.New(xeth))
 	}
 
 	return &adminApi{
@@ -165,7 +169,7 @@ func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
 	return self.ethereum.DataDir, nil
 }
 
-func hasAllBlocks(chain *core.ChainManager, bs []*types.Block) bool {
+func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 	for _, b := range bs {
 		if !chain.HasBlock(b.Hash()) {
 			return false
@@ -207,10 +211,10 @@ func (self *adminApi) ImportChain(req *shared.Request) (interface{}, error) {
 			break
 		}
 		// Import the batch.
-		if hasAllBlocks(self.ethereum.ChainManager(), blocks[:i]) {
+		if hasAllBlocks(self.ethereum.BlockChain(), blocks[:i]) {
 			continue
 		}
-		if _, err := self.ethereum.ChainManager().InsertChain(blocks[:i]); err != nil {
+		if _, err := self.ethereum.BlockChain().InsertChain(blocks[:i]); err != nil {
 			return false, fmt.Errorf("invalid block %d: %v", n, err)
 		}
 	}
@@ -228,7 +232,7 @@ func (self *adminApi) ExportChain(req *shared.Request) (interface{}, error) {
 		return false, err
 	}
 	defer fh.Close()
-	if err := self.ethereum.ChainManager().Export(fh); err != nil {
+	if err := self.ethereum.BlockChain().Export(fh); err != nil {
 		return false, err
 	}
 

@@ -36,7 +36,7 @@ type blockPriceInfo struct {
 
 type GasPriceOracle struct {
 	eth                           *Ethereum
-	chain                         *core.ChainManager
+	chain                         *core.BlockChain
 	events                        event.Subscription
 	blocks                        map[uint64]*blockPriceInfo
 	firstProcessed, lastProcessed uint64
@@ -48,7 +48,7 @@ func NewGasPriceOracle(eth *Ethereum) (self *GasPriceOracle) {
 	self = &GasPriceOracle{}
 	self.blocks = make(map[uint64]*blockPriceInfo)
 	self.eth = eth
-	self.chain = eth.chainManager
+	self.chain = eth.blockchain
 	self.events = eth.EventMux().Subscribe(
 		core.ChainEvent{},
 		core.ChainSplitEvent{},
@@ -84,19 +84,16 @@ func (self *GasPriceOracle) processPastBlocks() {
 }
 
 func (self *GasPriceOracle) listenLoop() {
-	for {
-		ev, isopen := <-self.events.Chan()
-		if !isopen {
-			break
-		}
-		switch ev := ev.(type) {
+	defer self.events.Unsubscribe()
+
+	for event := range self.events.Chan() {
+		switch event := event.Data.(type) {
 		case core.ChainEvent:
-			self.processBlock(ev.Block)
+			self.processBlock(event.Block)
 		case core.ChainSplitEvent:
-			self.processBlock(ev.Block)
+			self.processBlock(event.Block)
 		}
 	}
-	self.events.Unsubscribe()
 }
 
 func (self *GasPriceOracle) processBlock(block *types.Block) {

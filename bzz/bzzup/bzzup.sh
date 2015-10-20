@@ -1,11 +1,15 @@
 #! /bin/bash
 
 INDEX='index.html'
-
+port="8500"
 delimiter='{"entries":[{'
 
+if [[ ! -z "$2" ]]; then
+  port="$2"
+fi
+
 if [ -f "$1" ]; then
-hash=`wget -q -O- --post-file="$1" http://localhost:8500/raw`
+hash=`wget -q -O- --post-file="$1" http://localhost:$port/raw`
 mime=`mimetype -b "$1"`
 wget -q -O- --post-data="$delimiter\"hash\":\"$hash\",\"contentType\":\"$mime\"}]}" http://localhost:8500/raw
 echo
@@ -24,7 +28,7 @@ do
 name=`echo "$path" | cut -c3-`
 [ _`basename "$name"` = "_$INDEX" ] && name=`dirname "$name"`
 echo -n "$delimiter"
-hash=`wget -q -O- --post-file="$path" http://localhost:8500/raw`
+hash=`wget -q -O- --post-file="$path" http://localhost:$port/raw`
 mime=`mimetype -b "$path"`
 if [ "_$name" = '_.' ]; then
 echo -n "\"hash\":\"$hash\",\"contentType\":\"$mime\""
@@ -34,7 +38,7 @@ fi
 delimiter='},{'
 
 done
-echo -n '}]}') | wget -q -O- --post-data=`cat` http://localhost:8500/raw
+echo -n '}]}') | wget -q -O- --post-data=`cat` http://localhost:$port/raw
 echo
 
 popd > /dev/null

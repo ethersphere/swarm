@@ -2,45 +2,56 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/bzz"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/eth"
 )
 
-func bzzREPL(t *testing.T) (string, *testjethre, *eth.Ethereum) {
+var port = 8500
+
+func bzzREPL(t *testing.T) (string, string, *testjethre, *eth.Ethereum) {
 	prvKey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal("unable to generate key")
 	}
+	bzztmp, err := ioutil.TempDir("", "bzz-js-test")
+	config, err := bzz.NewConfig(bzztmp, common.Address{}, prvKey)
+	if err != nil {
+		t.Fatal("unable to configure swarm")
+	}
+	port += 1
+	config.Port = fmt.Sprintf("%d", port)
 
-	config := bzz.NewConfig("/tmp/bzz", "", prvKey)
-
-	return testREPL(t, func(c *eth.Config) {
-		c.Bzz = true
+	tmp, repl, ethereum := testREPL(t, func(c *eth.Config) {
 		c.BzzConfig = config
 	})
+	return bzztmp, tmp, repl, ethereum
 }
 
 func TestBzzUploadDownload(t *testing.T) {
-	tmp, repl, ethereum := bzzREPL(t)
+	bzztmp, tmp, repl, ethereum := bzzREPL(t)
 	if err := ethereum.Start(); err != nil {
 		t.Fatalf("error starting ethereum: %v", err)
 	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
+	defer os.RemoveAll(bzztmp)
 	_ = repl
 }
 
 func TestBzzPutGet(t *testing.T) {
-	tmp, repl, ethereum := bzzREPL(t)
+	bzztmp, tmp, repl, ethereum := bzzREPL(t)
 	if err := ethereum.Start(); err != nil {
 		t.Fatalf("error starting ethereum: %v", err)
 	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
+	defer os.RemoveAll(bzztmp)
 	if checkEvalJSON(t, repl, `hash = bzz.put("console.log(\"hello from console\")", "application/javascript")`, `"97f1b7c7ea12468fd37c262383b9aa862d0cfbc4fc7218652374679fc5cf40cd"`) != nil {
 		return
 	}
@@ -54,13 +65,14 @@ func TestBzzPutGet(t *testing.T) {
 // until we implement a stoppable http server
 // further http tests will need to make sure the correct server is running
 func TestHTTP(t *testing.T) {
-	t.Skip("the server can be initialized only once per test session until stoppable http server is implemented")
-	tmp, repl, ethereum := bzzREPL(t)
+	// t.Skip("the server can be initialized only once per test session until stoppable http server is implemented")
+	bzztmp, tmp, repl, ethereum := bzzREPL(t)
 	if err := ethereum.Start(); err != nil {
 		t.Fatalf("error starting ethereum: %v", err)
 	}
 	defer ethereum.Stop()
 	defer os.RemoveAll(tmp)
+	defer os.RemoveAll(bzztmp)
 	if checkEvalJSON(t, repl, `hash = bzz.put("f42 = function() { return 42 }", "application/javascript")`, `"e6847876f00102441f850b2d438a06d10e3bf24e6a0a76d47b073a86c3c2f9ac"`) != nil {
 		return
 	}

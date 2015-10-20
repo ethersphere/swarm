@@ -17,6 +17,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/bzz"
@@ -36,7 +37,7 @@ const (
 type bzzApi struct {
 	xeth     *xeth.XEth
 	ethereum *eth.Ethereum
-	api      *bzz.Api
+	swarm    *bzz.Swarm
 	methods  map[string]bzzhandler
 	codec    codec.ApiCoder
 }
@@ -46,6 +47,10 @@ type bzzhandler func(*bzzApi, *shared.Request) (interface{}, error)
 
 var (
 	bzzMapping = map[string]bzzhandler{
+		"bzz_info":     (*bzzApi).Info,
+		"bzz_issue":    (*bzzApi).Issue,
+		"bzz_cash":     (*bzzApi).Cash,
+		"bzz_deposit":  (*bzzApi).Deposit,
 		"bzz_register": (*bzzApi).Register,
 		"bzz_resolve":  (*bzzApi).Resolve,
 		"bzz_download": (*bzzApi).Download,
@@ -55,6 +60,10 @@ var (
 		"bzz_modify":   (*bzzApi).Modify,
 	}
 )
+
+func newSwarmOfflineError(method string) error {
+	return shared.NewNotAvailableError(method, "swarm offline")
+}
 
 // create new bzzApi instance
 func NewBzzApi(xeth *xeth.XEth, eth *eth.Ethereum, codec codec.Codec) *bzzApi {
@@ -89,50 +98,134 @@ func (self *bzzApi) ApiVersion() string {
 	return BzzApiVersion
 }
 
+func (self *bzzApi) Info(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+	return s.Api().Info(), nil
+}
+
+func (self *bzzApi) Issue(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+
+	args := new(BzzIssueArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	cheque, err := s.Api().Issue(common.HexToAddress(args.Beneficiary), args.Amount)
+	if err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	out, err := json.MarshalIndent(cheque, "   ", "")
+	if err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	return string(out), nil
+}
+
+func (self *bzzApi) Cash(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+
+	args := new(BzzCashArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	return s.Api().Cash(args.Cheque)
+
+}
+
+func (self *bzzApi) Deposit(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+
+	args := new(BzzDepositArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	return s.Api().Deposit(args.Amount)
+}
+
 func (self *bzzApi) Register(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
 
 	args := new(BzzRegisterArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	err := self.api.Register(common.HexToAddress(args.Address), args.Domain, common.HexToHash(args.ContentHash))
+	err := s.Api().Register(common.HexToAddress(args.Address), args.Domain, common.HexToHash(args.ContentHash))
 	return err == nil, err
 }
 
 func (self *bzzApi) Resolve(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
 
 	args := new(BzzResolveArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	key, err := self.api.Resolve(args.Domain)
+	key, err := s.Api().Resolve(args.Domain)
 	return key.Hex(), err
 }
 
 func (self *bzzApi) Download(req *shared.Request) (interface{}, error) {
+
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
 
 	args := new(BzzDownloadArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	err := self.api.Download(args.BzzPath, args.LocalPath)
+	err := s.Api().Download(args.BzzPath, args.LocalPath)
 	return err == nil, err
 }
 
 func (self *bzzApi) Upload(req *shared.Request) (interface{}, error) {
+
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
 
 	args := new(BzzUploadArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	return self.api.Upload(args.LocalPath, args.Index)
+	return s.Api().Upload(args.LocalPath, args.Index)
 }
 
 func (self *bzzApi) Get(req *shared.Request) (interface{}, error) {
+
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
 
 	args := new(BzzGetArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
@@ -143,7 +236,7 @@ func (self *bzzApi) Get(req *shared.Request) (interface{}, error) {
 	var mimeType string
 	var status, size int
 	var err error
-	content, mimeType, status, size, err = self.api.Get(args.Path)
+	content, mimeType, status, size, err = s.Api().Get(args.Path)
 
 	obj := map[string]string{
 		"content":     string(content),
@@ -157,20 +250,30 @@ func (self *bzzApi) Get(req *shared.Request) (interface{}, error) {
 
 func (self *bzzApi) Put(req *shared.Request) (interface{}, error) {
 
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+
 	args := new(BzzPutArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	return self.api.Put(args.Content, args.ContenType)
+	return s.Api().Put(args.Content, args.ContenType)
 }
 
 func (self *bzzApi) Modify(req *shared.Request) (interface{}, error) {
+
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
 
 	args := new(BzzModifyArgs)
 	if err := self.codec.Decode(req.Params, &args); err != nil {
 		return nil, shared.NewDecodeParamError(err.Error())
 	}
 
-	return self.api.Modify(args.RootHash, args.Path, args.ContentHash, args.ContentType)
+	return s.Api().Modify(args.RootHash, args.Path, args.ContentHash, args.ContentType)
 }

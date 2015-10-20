@@ -8,17 +8,17 @@ contract chequebook is mortal {
 
     /// @notice Overdraft event
     event Overdraft(address deadbeat);
-    
+
     /// @notice Accessor for sent map
     ///
     /// @param beneficiary beneficiary address
     /// @return cumulative amount in wei sent to beneficiary
-    function getSent(address beneficiary) returns (uint256) {
+    function getSent(address beneficiary) constant returns (uint256) {
 	    return sent[beneficiary];
     }
 
     /// @notice Cash cheque
-    /// 
+    ///
     /// @param beneficiary beneficiary address
     /// @param amount cumulative amount in wei
     /// @param sig_v signature parameter v

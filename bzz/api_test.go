@@ -7,6 +7,9 @@ import (
 	"path"
 	"runtime"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 var (
@@ -21,11 +24,19 @@ func init() {
 
 func testApi() (api *Api, err error) {
 	os.RemoveAll(datadir)
-	api, err = NewLocalApi(datadir, "8500")
+	dpa, err := newLocalDPA(datadir)
 	if err != nil {
 		return
 	}
-	api.Start(nil, ":0", nil)
+	prvkey, _ := crypto.GenerateKey()
+
+	config, err := NewConfig(datadir, common.Address{}, prvkey)
+	if err != nil {
+		return
+	}
+	api = NewApi(dpa, config)
+	api.dpa.Start()
+
 	return
 }
 
@@ -35,6 +46,7 @@ func TestApiPut(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 		return
 	}
+	defer api.dpa.Stop()
 	expContent := "hello"
 	expMimeType := "text/plain"
 	expStatus := 0

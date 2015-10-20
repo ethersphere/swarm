@@ -18,9 +18,98 @@ package api
 
 import (
 	"encoding/json"
+	"math/big"
 
+	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 )
+
+type BzzDepositArgs struct {
+	Amount *big.Int
+}
+
+func (args *BzzDepositArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	amount, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("Amount", "not a string")
+	}
+	args.Amount, ok = new(big.Int).SetString(amount, 10)
+	if !ok {
+		return shared.NewInvalidTypeError("Amount", "not a number")
+	}
+
+	return nil
+}
+
+type BzzCashArgs struct {
+	Cheque *chequebook.Cheque
+}
+
+func (args *BzzCashArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 1 {
+		return shared.NewInsufficientParamsError(len(obj), 1)
+	}
+
+	chequestr, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("Cheque", "not a string")
+	}
+	var cheque chequebook.Cheque
+	err = json.Unmarshal([]byte(chequestr), &cheque)
+	if err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+	args.Cheque = &cheque
+
+	return nil
+}
+
+type BzzIssueArgs struct {
+	Beneficiary string
+	Amount      *big.Int
+}
+
+func (args *BzzIssueArgs) UnmarshalJSON(b []byte) (err error) {
+	var obj []interface{}
+	if err := json.Unmarshal(b, &obj); err != nil {
+		return shared.NewDecodeParamError(err.Error())
+	}
+
+	if len(obj) < 2 {
+		return shared.NewInsufficientParamsError(len(obj), 2)
+	}
+
+	beneficiary, ok := obj[0].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("Amount", "not a string")
+	}
+	args.Beneficiary = beneficiary
+
+	amount, ok := obj[1].(string)
+	if !ok {
+		return shared.NewInvalidTypeError("Amount", "not a string")
+	}
+	args.Amount, ok = new(big.Int).SetString(amount, 10)
+	if !ok {
+		return shared.NewInvalidTypeError("Amount", "not a number")
+	}
+
+	return nil
+}
 
 type BzzRegisterArgs struct {
 	Address, ContentHash, Domain string

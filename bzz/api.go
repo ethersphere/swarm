@@ -2,17 +2,13 @@ package bzz
 
 import (
 	"bufio"
-	"bytes"
-	"crypto/ecdsa"
 	"fmt"
 	"io"
 	"math/big"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"regexp"
-	"strconv"
 	"strings"
 	"sync"
 
@@ -22,8 +18,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 var (
@@ -38,171 +32,45 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
-	Chunker   *TreeChunker
-	Config    *Config
-	Registrar registrar.VersionedRegistrar
-	datadir   string
 	dpa       *DPA
-	hive      *hive
-	netStore  *netStore
+	registrar registrar.VersionedRegistrar
+	conf      *Config
 }
 
-type Config struct {
-	*SwapData
-	Port           string
-	ChequebookPath string
-	chequebook     *chequebook.Chequebook
-	backend        chequebook.Backend
-}
-
-func NewConfig(datadir, path string, id *ecdsa.PrivateKey) *Config {
-	chbookPath := filepath.Join(datadir, "chequebooks", "chequebook.json")
-	// TODO: read sender from file if exists and unmarshalled
-	pubKey := &id.PublicKey
-	sender := crypto.PubkeyToAddress(*pubKey)
-	config := &Config{
-		Port:           "8500",
-		ChequebookPath: chbookPath,
-		SwapData:       NewSwapData(sender, pubKey),
-	}
-	// TODO: read from json; write out default if not existing
-
-	return config
-}
-
-/*
-the api constructor initialises
-- the netstore endpoint for chunk store logic
-- the chunker (bzz hash)
-- the dpa - single document retrieval api
-*/
-func NewApi(datadir string, prvKey *ecdsa.PrivateKey, config *Config) (self *Api, err error) {
-
+//the api constructor initialises
+func NewApi(dpa *DPA, conf *Config) (self *Api) {
 	self = &Api{
-		Chunker: &TreeChunker{},
-		Config:  config,
-		datadir: datadir,
-	}
-
-	self.hive, err = newHive()
-	if err != nil {
-		return
-	}
-
-	self.netStore, err = newNetStore(filepath.Join(datadir, "bzz"), self.hive)
-	if err != nil {
-		return
-	}
-
-	self.dpa = &DPA{
-		Chunker:    self.Chunker,
-		ChunkStore: self.netStore,
-	}
-
-	return
-}
-
-// Local swarm without netStore
-func NewLocalApi(datadir, port string) (self *Api, err error) {
-
-	prvKey, err := crypto.GenerateKey()
-	if err != nil {
-		return
-	}
-
-	config := NewConfig(datadir, "", prvKey)
-	config.Port = port
-	self = &Api{
-		Chunker: &TreeChunker{},
-		Config:  config,
-	}
-	dbStore, err := newDbStore(datadir)
-	dbStore.setCapacity(50000)
-	if err != nil {
-		return
-	}
-	memStore := newMemStore(dbStore)
-	localStore := &localStore{
-		memStore,
-		dbStore,
-	}
-
-	self.dpa = &DPA{
-		Chunker:    self.Chunker,
-		ChunkStore: localStore,
+		dpa:  dpa,
+		conf: conf,
 	}
 	return
 }
 
-// Bzz returns the bzz protocol class instances of which run on every peer
-func (self *Api) Bzz() (p2p.Protocol, error) {
-	return BzzProtocol(self.netStore, self.Config.chequebook, self.Config.SwapData)
+func (self *Api) Issue(beneficiary common.Address, amount *big.Int) (cheque *chequebook.Cheque, err error) {
+	return self.conf.Swap.chequebook.Issue(beneficiary, amount)
 }
 
-/*
-Start is called when the ethereum stack is started
-- calls Init() on treechunker
-- launches the dpa (listening for chunk store/retrieve requests)
-- launches the netStore (starts kademlia hive peer management)
-- starts an http server
-*/
-func (self *Api) Start(node *discover.Node, listenAddr string, connectPeer func(string) error) {
-	var err error
-	if node == nil {
-		err = fmt.Errorf("basenode nil")
-	} else if self.netStore == nil {
-		err = fmt.Errorf("netStore is nil")
-	} else if connectPeer == nil {
-		err = fmt.Errorf("no connect peer function")
-	} else if bytes.Equal(node.ID[:], zeroKey) {
-		err = fmt.Errorf("zero ID invalid")
-	} else { // this is how we calculate the bzz address of the node
-		// ideally this should be using the swarm hash function
-
-		var port string
-		_, port, err = net.SplitHostPort(listenAddr)
-		if err == nil {
-			intport, err := strconv.Atoi(port)
-			if err != nil {
-				err = fmt.Errorf("invalid port in '%s'", listenAddr)
-			} else {
-				baseAddr := &peerAddr{
-					ID:   node.ID[:],
-					IP:   node.IP,
-					Port: uint16(intport),
-				}
-				baseAddr.new()
-				err = self.hive.start(baseAddr, filepath.Join(self.datadir, "bzz-peers.json"), connectPeer)
-				if err == nil {
-					err = self.netStore.start(baseAddr)
-					if err == nil {
-						glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %064x", baseAddr.hash[:])
-					}
-				}
-			}
-		}
-	}
-	if err != nil {
-		glog.V(logger.Info).Infof("[BZZ] Swarm started started offline: %v", err)
-	}
-	self.Chunker.Init()
-	self.dpa.Start()
-
-	if self.Config.Port != "" {
-		fmt.Printf("PORT: %v\n", self.Config.Port)
-		go startHttpServer(self, self.Config.Port)
-	}
+func (self *Api) Cash(cheque *chequebook.Cheque) (txhash string, err error) {
+	return self.conf.Swap.chequebook.Cash(cheque)
 }
 
-// stops all component services.
-func (self *Api) Stop() {
-	self.dpa.Stop()
-	self.netStore.stop()
-	self.hive.stop()
-	if ch := self.Config.chequebook; ch != nil {
-		ch.Stop()
-		ch.Save()
+func (self *Api) Deposit(amount *big.Int) (txhash string, err error) {
+	return self.conf.Swap.chequebook.Deposit(amount)
+}
+
+// serialisable info about swarm
+type Info struct {
+	*Config
+	*chequebook.Params
+}
+
+func (self *Api) Info() *Info {
+
+	return &Info{
+		Config: self.conf,
+		Params: chequebook.ContractParams,
 	}
+
 }
 
 // Get uses iterative manifest retrieval and prefix matching
@@ -511,9 +379,9 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 func (self *Api) Register(sender common.Address, domain string, hash common.Hash) (err error) {
 	domainhash := common.BytesToHash(crypto.Sha3([]byte(domain)))
 
-	if self.Registrar != nil {
+	if self.registrar != nil {
 		glog.V(logger.Debug).Infof("[BZZ] Swarm: host '%s' (hash: '%v') to be registered as '%v'", domain, domainhash.Hex(), hash.Hex())
-		_, err = self.Registrar.Registry().SetHashToHash(sender, domainhash, hash)
+		_, err = self.registrar.Registry().SetHashToHash(sender, domainhash, hash)
 	} else {
 		err = fmt.Errorf("no registry: %v", err)
 	}
@@ -528,7 +396,7 @@ func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
 		contentHash = Key(common.Hex2Bytes(host))
 		glog.V(logger.Debug).Infof("[BZZ] Swarm: host is a contentHash: '%064x'", contentHash)
 	} else {
-		if self.Registrar != nil {
+		if self.registrar != nil {
 			var hash common.Hash
 			var version *big.Int
 			parts := domainAndVersion.Split(host, 3)
@@ -537,7 +405,7 @@ func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
 				version = common.Big(parts[1])
 			}
 			hostHash := common.BytesToHash(crypto.Sha3([]byte(host)))
-			hash, err = self.Registrar.Resolver(version).HashToHash(hostHash)
+			hash, err = self.registrar.Resolver(version).HashToHash(hostHash)
 			if err != nil {
 				err = fmt.Errorf("unable to resolve '%s': %v", hostPort, err)
 			}

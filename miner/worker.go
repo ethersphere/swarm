@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger"
@@ -61,13 +62,12 @@ type uint64RingBuffer struct {
 // environment is the workers current environment and holds
 // all of the current state information
 type Work struct {
-	state              *state.StateDB     // apply state changes here
-	coinbase           *state.StateObject // the miner's account
-	ancestors          *set.Set           // ancestor set (used for checking uncle parent validity)
-	family             *set.Set           // family set (used for checking uncle invalidity)
-	uncles             *set.Set           // uncle set
-	remove             *set.Set           // tx which will be removed
-	tcount             int                // tx count in cycle
+	state              *state.StateDB // apply state changes here
+	ancestors          *set.Set       // ancestor set (used for checking uncle parent validity)
+	family             *set.Set       // family set (used for checking uncle invalidity)
+	uncles             *set.Set       // uncle set
+	remove             *set.Set       // tx which will be removed
+	tcount             int            // tx count in cycle
 	ignoredTransactors *set.Set
 	lowGasTransactors  *set.Set
 	ownedAccounts      *set.Set
@@ -99,7 +99,7 @@ type worker struct {
 	pow    pow.PoW
 
 	eth     core.Backend
-	chain   *core.ChainManager
+	chain   *core.BlockChain
 	proc    *core.BlockProcessor
 	chainDb ethdb.Database
 
@@ -130,7 +130,7 @@ func newWorker(coinbase common.Address, eth core.Backend) *worker {
 		chainDb:        eth.ChainDb(),
 		recv:           make(chan *Result, resultQueueSize),
 		gasPrice:       new(big.Int),
-		chain:          eth.ChainManager(),
+		chain:          eth.BlockChain(),
 		proc:           eth.BlockProcessor(),
 		possibleUncles: make(map[common.Hash]*types.Block),
 		coinbase:       coinbase,
@@ -214,13 +214,20 @@ func (self *worker) register(agent Agent) {
 }
 
 func (self *worker) update() {
-	events := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
+	eventSub := self.mux.Subscribe(core.ChainHeadEvent{}, core.ChainSideEvent{}, core.TxPreEvent{})
+	defer eventSub.Unsubscribe()
 
-out:
+	eventCh := eventSub.Chan()
 	for {
 		select {
-		case event := <-events.Chan():
-			switch ev := event.(type) {
+		case event, ok := <-eventCh:
+			if !ok {
+				// Event subscription closed, set the channel to nil to stop spinning
+				eventCh = nil
+				continue
+			}
+			// A real event arrived, process interesting content
+			switch ev := event.Data.(type) {
 			case core.ChainHeadEvent:
 				self.commitNewWork()
 			case core.ChainSideEvent:
@@ -236,11 +243,9 @@ out:
 				}
 			}
 		case <-self.quit:
-			break out
+			return
 		}
 	}
-
-	events.Unsubscribe()
 }
 
 func newLocalMinedBlock(blockNumber uint64, prevMinedBlocks *uint64RingBuffer) (minedBlocks *uint64RingBuffer) {
@@ -266,7 +271,6 @@ func (self *worker) wait() {
 			block := result.Block
 			work := result.Work
 
-			work.state.Sync()
 			if self.fullValidation {
 				if _, err := self.chain.InsertChain(types.Blocks{block}); err != nil {
 					glog.V(logger.Error).Infoln("mining err", err)
@@ -274,6 +278,7 @@ func (self *worker) wait() {
 				}
 				go self.mux.Post(core.NewMinedBlockEvent{block})
 			} else {
+				work.state.Commit()
 				parent := self.chain.GetBlock(block.ParentHash())
 				if parent == nil {
 					glog.V(logger.Error).Infoln("Invalid block found during mining")
@@ -295,10 +300,12 @@ func (self *worker) wait() {
 					core.PutTransactions(self.chainDb, block, block.Transactions())
 					// store the receipts
 					core.PutReceipts(self.chainDb, work.receipts)
+					// Write map map bloom filters
+					core.WriteMipmapBloom(self.chainDb, block.NumberU64(), work.receipts)
 				}
 
 				// broadcast before waiting for validation
-				go func(block *types.Block, logs state.Logs, receipts []*types.Receipt) {
+				go func(block *types.Block, logs vm.Logs, receipts []*types.Receipt) {
 					self.mux.Post(core.NewMinedBlockEvent{block})
 					self.mux.Post(core.ChainEvent{block, block.Hash(), logs})
 					if stat == core.CanonStatTy {
@@ -347,15 +354,17 @@ func (self *worker) push(work *Work) {
 }
 
 // makeCurrent creates a new environment for the current cycle.
-func (self *worker) makeCurrent(parent *types.Block, header *types.Header) {
-	state := state.New(parent.Root(), self.eth.ChainDb())
+func (self *worker) makeCurrent(parent *types.Block, header *types.Header) error {
+	state, err := state.New(parent.Root(), self.eth.ChainDb())
+	if err != nil {
+		return err
+	}
 	work := &Work{
 		state:     state,
 		ancestors: set.New(),
 		family:    set.New(),
 		uncles:    set.New(),
 		header:    header,
-		coinbase:  state.GetOrNewStateObject(self.coinbase),
 		createdAt: time.Now(),
 	}
 
@@ -379,6 +388,7 @@ func (self *worker) makeCurrent(parent *types.Block, header *types.Header) {
 		work.localMinedBlocks = self.current.localMinedBlocks
 	}
 	self.current = work
+	return nil
 }
 
 func (w *worker) setGasPrice(p *big.Int) {
@@ -458,7 +468,12 @@ func (self *worker) commitNewWork() {
 	}
 
 	previous := self.current
-	self.makeCurrent(parent, header)
+	// Could potentially happen if starting to mine in an odd state.
+	err := self.makeCurrent(parent, header)
+	if err != nil {
+		glog.V(logger.Info).Infoln("Could not create new env for mining, retrying on next block.")
+		return
+	}
 	work := self.current
 
 	/* //approach 1
@@ -497,7 +512,6 @@ func (self *worker) commitNewWork() {
 	transactions := append(singleTxOwner, multiTxOwner...)
 	*/
 
-	work.coinbase.SetGasLimit(header.GasLimit)
 	work.commitTransactions(transactions, self.gasPrice, self.proc)
 	self.eth.TxPool().RemoveTransactions(work.lowGasTxs)
 
@@ -528,8 +542,7 @@ func (self *worker) commitNewWork() {
 	if atomic.LoadInt32(&self.mining) == 1 {
 		// commit state root after all state transitions.
 		core.AccumulateRewards(work.state, header, uncles)
-		work.state.SyncObjects()
-		header.Root = work.state.Root()
+		header.Root = work.state.IntermediateRoot()
 	}
 
 	// create the new block whose nonce will be mined.
@@ -559,6 +572,8 @@ func (self *worker) commitUncle(work *Work, uncle *types.Header) error {
 }
 
 func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *big.Int, proc *core.BlockProcessor) {
+	gp := new(core.GasPool).AddGas(env.header.GasLimit)
+
 	for _, tx := range transactions {
 		// We can skip err. It has already been validated in the tx pool
 		from, _ := tx.From()
@@ -596,9 +611,9 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 
 		env.state.StartRecord(tx.Hash(), common.Hash{}, 0)
 
-		err := env.commitTransaction(tx, proc)
+		err := env.commitTransaction(tx, proc, gp)
 		switch {
-		case state.IsGasLimitErr(err):
+		case core.IsGasLimitErr(err):
 			// ignore the transactor so no nonce errors will be thrown for this account
 			// next time the worker is run, they'll be picked up again.
 			env.ignoredTransactors.Add(from)
@@ -616,9 +631,9 @@ func (env *Work) commitTransactions(transactions types.Transactions, gasPrice *b
 	}
 }
 
-func (env *Work) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor) error {
+func (env *Work) commitTransaction(tx *types.Transaction, proc *core.BlockProcessor, gp *core.GasPool) error {
 	snap := env.state.Copy()
-	receipt, _, err := proc.ApplyTransaction(env.coinbase, env.state, env.header, tx, env.header.GasUsed, true)
+	receipt, _, err := proc.ApplyTransaction(gp, env.state, env.header, tx, env.header.GasUsed, true)
 	if err != nil {
 		env.state.Set(snap)
 		return err

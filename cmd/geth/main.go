@@ -48,9 +48,9 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "1.2.0"
+	Version          = "1.3.0-dev"
 	VersionMajor     = 1
-	VersionMinor     = 2
+	VersionMinor     = 3
 	VersionPatch     = 0
 )
 
@@ -104,6 +104,22 @@ The makedag command generates an ethash DAG in /tmp/dag.
 
 This command exists to support the system testing project.
 Regular users do not need to execute it.
+`,
+		},
+		{
+			Action: gpuinfo,
+			Name:   "gpuinfo",
+			Usage:  "gpuinfo",
+			Description: `
+Prints OpenCL device info for all found GPUs.
+`,
+		},
+		{
+			Action: gpubench,
+			Name:   "gpubench",
+			Usage:  "benchmark GPU",
+			Description: `
+Runs quick benchmark on first GPU found.
 `,
 		},
 		{
@@ -298,6 +314,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.GasPriceFlag,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
+		utils.MiningGPUFlag,
 		utils.AutoDAGFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
@@ -313,9 +330,11 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCPathFlag,
 		utils.ExecFlag,
 		utils.WhisperEnabledFlag,
-		utils.SwarmEnabledFlag,
 		utils.SwarmConfigPathFlag,
+		utils.SwarmAccountAddrFlag,
+		utils.ChequebookAddrFlag,
 		utils.DevModeFlag,
+		utils.TestNetFlag,
 		utils.VMDebugFlag,
 		utils.VMForceJitFlag,
 		utils.VMJitCacheFlag,
@@ -342,6 +361,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 	}
 	app.Before = func(ctx *cli.Context) error {
 		utils.SetupLogger(ctx)
+		utils.SetupNetwork(ctx)
 		utils.SetupVM(ctx)
 		utils.SetupEth(ctx)
 		if ctx.GlobalBool(utils.PProfEanbledFlag.Name) {
@@ -392,12 +412,9 @@ func makeDefaultExtra() []byte {
 }
 
 func run(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-	if ctx.GlobalBool(utils.OlympicFlag.Name) {
-		utils.InitOlympic()
-	}
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.ExtraData = makeExtra(ctx)
 
 	ethereum, err := eth.New(cfg)
@@ -411,7 +428,7 @@ func run(ctx *cli.Context) {
 }
 
 func attach(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	var client comms.EthereumClient
 	var err error
@@ -431,6 +448,7 @@ func attach(ctx *cli.Context) {
 	repl := newLightweightJSRE(
 		ctx.GlobalString(utils.JSpathFlag.Name),
 		client,
+		ctx.GlobalString(utils.DataDirFlag.Name),
 		true,
 	)
 
@@ -443,9 +461,9 @@ func attach(ctx *cli.Context) {
 }
 
 func console(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	cfg.ExtraData = makeExtra(ctx)
 
 	ethereum, err := eth.New(cfg)
@@ -477,9 +495,9 @@ func console(ctx *cli.Context) {
 }
 
 func execJSFiles(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	ethereum, err := eth.New(cfg)
 	if err != nil {
 		utils.Fatalf("%v", err)
@@ -501,6 +519,39 @@ func execJSFiles(ctx *cli.Context) {
 
 	ethereum.Stop()
 	ethereum.WaitForShutdown()
+}
+
+func blockRecovery(ctx *cli.Context) {
+	utils.CheckLegalese(utils.MustDataDir(ctx))
+
+	arg := ctx.Args().First()
+	if len(ctx.Args()) < 1 && len(arg) > 0 {
+		glog.Fatal("recover requires block number or hash")
+	}
+
+	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
+	utils.CheckLegalese(cfg.DataDir)
+
+	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
+	if err != nil {
+		glog.Fatalln("could not open db:", err)
+	}
+
+	var block *types.Block
+	if arg[0] == '#' {
+		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
+	} else {
+		block = core.GetBlock(blockDb, common.HexToHash(arg))
+	}
+
+	if block == nil {
+		glog.Fatalln("block not found. Recovery failed")
+	}
+
+	if err = core.WriteHeadBlockHash(blockDb, block.Hash()); err != nil {
+		glog.Fatalln("block write err", err)
+	}
+	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
 }
 
 func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (addrHex, auth string) {
@@ -528,44 +579,7 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int) (
 	return
 }
 
-func blockRecovery(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
-
-	arg := ctx.Args().First()
-	if len(ctx.Args()) < 1 && len(arg) > 0 {
-		glog.Fatal("recover requires block number or hash")
-	}
-
-	cfg := utils.MakeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
-	utils.CheckLegalese(cfg.DataDir)
-
-	blockDb, err := ethdb.NewLDBDatabase(filepath.Join(cfg.DataDir, "blockchain"), cfg.DatabaseCache)
-	if err != nil {
-		glog.Fatalln("could not open db:", err)
-	}
-
-	var block *types.Block
-	if arg[0] == '#' {
-		block = core.GetBlock(blockDb, core.GetCanonicalHash(blockDb, common.String2Big(arg[1:]).Uint64()))
-	} else {
-		block = core.GetBlock(blockDb, common.HexToHash(arg))
-	}
-
-	if block == nil {
-		glog.Fatalln("block not found. Recovery failed")
-	}
-
-	if err = core.WriteHeadBlockHash(blockDb, block.Hash()); err != nil {
-		glog.Fatalln("block write err", err)
-	}
-	glog.Infof("Recovery succesful. New HEAD %x\n", block.Hash())
-}
-
-func startEth(ctx *cli.Context, eth *eth.Ethereum) {
-	// Start Ethereum itself
-	utils.StartEthereum(eth)
-
-	am := eth.AccountManager()
+func unlockAccounts(ctx *cli.Context, am *accounts.Manager) {
 	account := ctx.GlobalString(utils.UnlockedAccountFlag.Name)
 	accounts := strings.Split(account, " ")
 	for i, account := range accounts {
@@ -576,6 +590,20 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 			unlockAccount(ctx, am, account, i)
 		}
 	}
+}
+
+func makeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
+	am := utils.MakeAccountManager(ctx)
+	unlockAccounts(ctx, am)
+	return utils.MakeEthConfig(clientID, version, am, ctx)
+}
+
+func startEth(ctx *cli.Context, eth *eth.Ethereum) {
+	// Start Ethereum itself
+	utils.StartEthereum(eth)
+	// am := eth.AccountManager()
+	// 	unlockAccounts(ctx, am)
+
 	// Start auxiliary services if enabled.
 	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
 		if err := utils.StartIPC(eth, ctx); err != nil {
@@ -588,14 +616,17 @@ func startEth(ctx *cli.Context, eth *eth.Ethereum) {
 		}
 	}
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		if err := eth.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
+		err := eth.StartMining(
+			ctx.GlobalInt(utils.MinerThreadsFlag.Name),
+			ctx.GlobalString(utils.MiningGPUFlag.Name))
+		if err != nil {
 			utils.Fatalf("%v", err)
 		}
 	}
 }
 
 func accountList(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
 	accts, err := am.Accounts()
@@ -645,7 +676,7 @@ func getPassPhrase(ctx *cli.Context, desc string, confirmation bool, i int) (pas
 }
 
 func accountCreate(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
 	passphrase := getPassPhrase(ctx, "Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0)
@@ -657,7 +688,7 @@ func accountCreate(ctx *cli.Context) {
 }
 
 func accountUpdate(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	am := utils.MakeAccountManager(ctx)
 	arg := ctx.Args().First()
@@ -674,7 +705,7 @@ func accountUpdate(ctx *cli.Context) {
 }
 
 func importWallet(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
@@ -696,7 +727,7 @@ func importWallet(ctx *cli.Context) {
 }
 
 func accountImport(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	keyfile := ctx.Args().First()
 	if len(keyfile) == 0 {
@@ -712,7 +743,7 @@ func accountImport(ctx *cli.Context) {
 }
 
 func makedag(ctx *cli.Context) {
-	utils.CheckLegalese(ctx.GlobalString(utils.DataDirFlag.Name))
+	utils.CheckLegalese(utils.MustDataDir(ctx))
 
 	args := ctx.Args()
 	wrongArgs := func() {
@@ -737,6 +768,29 @@ func makedag(ctx *cli.Context) {
 			fmt.Println("making DAG, this could take awhile...")
 			ethash.MakeDAG(blockNum, dir)
 		}
+	default:
+		wrongArgs()
+	}
+}
+
+func gpuinfo(ctx *cli.Context) {
+	eth.PrintOpenCLDevices()
+}
+
+func gpubench(ctx *cli.Context) {
+	args := ctx.Args()
+	wrongArgs := func() {
+		utils.Fatalf(`Usage: geth gpubench <gpu number>`)
+	}
+	switch {
+	case len(args) == 1:
+		n, err := strconv.ParseUint(args[0], 0, 64)
+		if err != nil {
+			wrongArgs()
+		}
+		eth.GPUBench(n)
+	case len(args) == 0:
+		eth.GPUBench(0)
 	default:
 		wrongArgs()
 	}

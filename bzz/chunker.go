@@ -125,7 +125,6 @@ func (self *TreeChunker) Init() {
 	}
 	self.hashSize = int64(self.HashFunc.New().Size())
 	self.chunkSize = self.hashSize * self.Branches
-	// dpaLogger.Debugf("Chunker initialised: branches: %v, hashsize: %v, chunksize: %v, join timeout: %v , split timeout: %v", self.Branches, self.hashSize, self.chunkSize, self.JoinTimeout, self.SplitTimeout)
 
 }
 
