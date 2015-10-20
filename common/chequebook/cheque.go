@@ -52,6 +52,12 @@ type Cheque struct {
 	Sig         []byte         // signature Sign(Sha3(contract, beneficiary, amount), prvKey)
 }
 
+type Params struct {
+	ContractCode, ContractAbi, ContractSource string
+}
+
+var ContractParams = &Params{ContractCode, ContractAbi, ContractSource}
+
 func (self *Cheque) String() string {
 	return fmt.Sprintf("contract: %s, beneficiary: %s, amount: %v, signature: %x", self.Contract.Hex(), self.Beneficiary.Hex(), self.Amount, self.Sig)
 }
@@ -278,7 +284,7 @@ func (self *Chequebook) deposit(amount *big.Int) (string, error) {
 	txhash, err := self.backend.Transact(self.owner.Hex(), self.contract.Hex(), "", amount.String(), "", "", "")
 	// assume that transaction is actually successful, we add the amount to balance right away
 	if err != nil {
-		glog.V(logger.Warn).Infof("error depositing %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contract.Hex(), self.balance, self.buffer, err)
+		glog.V(logger.Warn).Infof("error depositing %d wei to chequebook (%s, balance: %v, target: %v): %v", amount, self.contract.Hex(), self.balance, self.buffer, err)
 	} else {
 		self.balance.Add(self.balance, amount)
 		glog.V(logger.Detail).Infof("deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contract.Hex(), self.balance, self.buffer)

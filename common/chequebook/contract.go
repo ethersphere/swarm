@@ -1,3 +1,13 @@
+package chequebook
+
+import ()
+
+const (
+	ContractCode = `606060405260008054600160a060020a03191633179055610201806100246000396000f3606060405260e060020a600035046341c0e1b58114610031578063d75d691d14610059578063fbf788d61461007e575b005b61002f60005433600160a060020a03908116911614156101ff57600054600160a060020a0316ff5b600160a060020a03600435166000908152600160205260409020546060908152602090f35b61002f600435602435604435606435608435600160a060020a03851660009081526001602052604081205485116100b8575b505050505050565b30600160a060020a039081166c0100000000000000000000000090810260609081529188160260745260888690526048812080825260ff8616608090815260a086905260c0859052909260019260e0926020928290866161da5a03f11561000257505060405151600054600160a060020a03908116911614610139576100b0565b85600160a060020a031660006001600050600089600160a060020a03168152602001908152602001600020600050548703604051809050600060405180830381858888f19350505050156101b357846001600050600088600160a060020a03168152602001908152602001600020600050819055506100b0565b60005460408051600160a060020a03929092168252517f2250e2993c15843b32621c89447cc589ee7a9f049c026986e545d3c2c0c6f9789181900360200190a185600160a060020a0316ff5b56`
+
+	ContractAbi = `[{"constant":false,"inputs":[],"name":"kill","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"beneficiary","type":"address"}],"name":"getSent","outputs":[{"name":"","type":"uint256"}],"type":"function"},{"constant":false,"inputs":[{"name":"beneficiary","type":"address"},{"name":"amount","type":"uint256"},{"name":"sig_v","type":"uint8"},{"name":"sig_r","type":"bytes32"},{"name":"sig_s","type":"bytes32"}],"name":"cash","outputs":[],"type":"function"},{"anonymous":false,"inputs":[{"indexed":false,"name":"deadbeat","type":"address"}],"name":"Overdraft","type":"event"}]`
+
+	ContractSource = `
 import "mortal";
 
 /// @title Chequebook for Ethereum micropayments
@@ -13,8 +23,8 @@ contract chequebook is mortal {
     ///
     /// @param beneficiary beneficiary address
     /// @return cumulative amount in wei sent to beneficiary
-    function getSent(address beneficiary) constant returns (uint256) {
-	    return sent[beneficiary];
+    function getSent(address beneficiary) returns (uint256) {
+      return sent[beneficiary];
     }
 
     /// @notice Cash cheque
@@ -47,3 +57,5 @@ contract chequebook is mortal {
         }
     }
 }
+`
+)
