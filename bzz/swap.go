@@ -22,15 +22,15 @@ import (
 // default parameters
 
 var (
-	autoCashInterval     = 300 * time.Second       // default interval for autocash
-	autoCashThreshold    = big.NewInt(10000000000) // threshold that triggers autocash (wei)
-	autoDepositInterval  = 300 * time.Second       // default interval for autocash
-	autoDepositThreshold = big.NewInt(10000000000) // threshold that triggers autodeposit (wei)
-	autoDepositBuffer    = big.NewInt(20000000000) // buffer that is surplus for fork protection etc (wei)
-	buyAt                = big.NewInt(20000000)    // maximum chunk price host is willing to pay (wei)
-	sellAt               = big.NewInt(20000000)    // minimum chunk price host requires (wei)
-	payAt                = 100                     // threshold that triggers payment request (units)
-	dropAt               = 150                     // threshold that triggers disconnect (units)
+	autoCashInterval     = 300 * time.Second           // default interval for autocash
+	autoCashThreshold    = big.NewInt(50000000000000)  // threshold that triggers autocash (wei)
+	autoDepositInterval  = 300 * time.Second           // default interval for autocash
+	autoDepositThreshold = big.NewInt(50000000000000)  // threshold that triggers autodeposit (wei)
+	autoDepositBuffer    = big.NewInt(100000000000000) // buffer that is surplus for fork protection etc (wei)
+	buyAt                = big.NewInt(20000000000)     // maximum chunk price host is willing to pay (wei)
+	sellAt               = big.NewInt(20000000000)     // minimum chunk price host requires (wei)
+	payAt                = 100                         // threshold that triggers payment request (units)
+	dropAt               = 150                         // threshold that triggers disconnect (units)
 )
 
 type swapParams struct {
@@ -93,7 +93,7 @@ func newSwap(local *swapParams, remote *swapProfile, proto swap.Protocol) (self 
 
 	out := chequebook.NewOutbox(local.chequebook, remote.Beneficiary)
 
-	in, err := chequebook.NewInbox(remote.Contract, local.Beneficiary, crypto.ToECDSAPub(common.FromHex(remote.PublicKey)), local.chequebook.Backend())
+	in, err := chequebook.NewInbox(remote.Contract, local.chequebook.Owner(), local.Beneficiary, crypto.ToECDSAPub(common.FromHex(remote.PublicKey)), local.chequebook.Backend())
 	if err != nil {
 		return
 	}

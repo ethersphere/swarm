@@ -50,6 +50,7 @@ type Promise interface{}
 type Protocol interface {
 	Pay(int, Promise) // units, payment proof
 	Drop()
+	String() string
 }
 
 // interface for the (delayed) ougoing payment system with autodeposit
@@ -125,7 +126,7 @@ func (self *Swap) Add(n int) {
 	self.lock.Lock()
 	self.balance += n
 	if self.balance >= int(self.local.DropAt) {
-		glog.V(logger.Detail).Infof("[SWAP] peer %v has too much debt (balance: %v, target: %v)", self.out, self.balance, self.local.DropAt)
+		glog.V(logger.Detail).Infof("[SWAP] <%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt)
 		self.proto.Drop()
 	} else if self.balance <= -int(self.remote.PayAt) {
 		self.send()
@@ -147,9 +148,9 @@ func (self *Swap) send() {
 		amount.Mul(amount, self.remote.SellAt)
 		promise, err := self.out.Issue(amount)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[SWAP] cannot issue cheque (amount: %v, channel: %v): %v", amount, self.out, err)
+			glog.V(logger.Warn).Infof("[SWAP] <%v> cannot issue cheque (amount: %v, channel: %v): %v", self.proto, amount, self.out, err)
 		} else {
-			glog.V(logger.Warn).Infof("[SWAP] cheque issued (amount: %v, channel: %v)", amount, self.out)
+			glog.V(logger.Warn).Infof("[SWAP] <%v> cheque issued (amount: %v, channel: %v)", self.proto, amount, self.out)
 			self.proto.Pay(-self.balance, promise)
 			self.balance = 0
 		}
@@ -175,13 +176,13 @@ func (self *Swap) Receive(units int, promise Promise) error {
 		return fmt.Errorf("invalid amount: %v = %v * %v (units sent in msg * agreed sale unit price) != %v (signed in cheque)", price, units, self.local.SellAt, amount)
 	}
 	if err != nil {
-		glog.V(logger.Detail).Infof("[SWAP] invalid promise (amount: %v, channel: %v): %v", amount, self.in, err)
+		glog.V(logger.Detail).Infof("[SWAP] <%v> invalid promise (amount: %v, channel: %v): %v", self.proto, amount, self.in, err)
 		return err
 	}
 
 	// credit remote peer with units
 	self.Add(-units)
-	glog.V(logger.Detail).Infof("[SWAP] received promise (amount: %v, channel: %v): %v", amount, self.in, promise)
+	glog.V(logger.Detail).Infof("[SWAP] <%v> received promise (amount: %v, channel: %v): %v", self.proto, amount, self.in, promise)
 
 	return nil
 }
