@@ -223,6 +223,11 @@ func (self *Chequebook) Issue(beneficiary common.Address, amount *big.Int) (ch *
 	return
 }
 
+// convenience method to cash any cheque
+func (self *Chequebook) Cash(ch *Cheque) (txhash string, err error) {
+	return ch.Cash(self.owner, self.backend)
+}
+
 // data to sign: contract address, beneficiary, cumulative amount of funds ever sent
 func sigHash(contract, beneficiary common.Address, sum *big.Int) []byte {
 	bigamount := sum.Bytes()
@@ -411,12 +416,13 @@ func (self *Inbox) Stop() {
 	}
 }
 
-func (self *Inbox) Cash() {
+func (self *Inbox) Cash() (txhash string, err error) {
 	if self.cheque != nil {
-		self.cheque.Cash(self.backend)
+		txhash, err = self.cheque.Cash(self.beneficiary, self.backend)
 		glog.V(logger.Detail).Infof("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex())
 		self.cashed = self.cheque.Amount
 	}
+	return
 }
 
 // AutoCash(cashInterval, maxUncashed) (re)sets maximum time and amount which
@@ -454,9 +460,8 @@ func (self *Inbox) autoCash(cashInterval time.Duration) {
 			case <-ticker.C:
 				self.lock.Lock()
 				if self.cheque != nil && self.cheque.Amount.Cmp(self.cashed) != 0 {
-					txhash, err := self.cheque.Cash(self.backend)
+					txhash, err := self.Cash()
 					if err == nil {
-						self.cashed = self.cheque.Amount
 						self.txhash = txhash
 					}
 				}
@@ -574,6 +579,6 @@ func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary com
 
 // Cash(backend) will cash the check using xeth backend to send a transaction
 // Beneficiary address should be unlocked
-func (self *Cheque) Cash(backend Backend) (string, error) {
-	return backend.Transact(self.Beneficiary.Hex(), self.Contract.Hex(), "", "", "", gasToCash, self.cashAbiEncode())
+func (self *Cheque) Cash(sender common.Address, backend Backend) (string, error) {
+	return backend.Transact(sender.Hex(), self.Contract.Hex(), "", "", "", gasToCash, self.cashAbiEncode())
 }
