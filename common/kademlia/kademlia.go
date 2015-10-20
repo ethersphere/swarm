@@ -61,6 +61,15 @@ func (a Address) String() string {
 	return fmt.Sprintf("%x", a[:])
 }
 
+func (a *Address) MarshalJSON() (out []byte, err error) {
+	return []byte(`"` + a.String() + `"`), nil
+}
+
+func (a *Address) UnmarshalJSON(value []byte) error {
+	*a = Address(common.HexToHash(string(value[1 : len(value)-1])))
+	return nil
+}
+
 type Node interface {
 	Addr() Address
 	Url() string
@@ -77,6 +86,10 @@ type NodeRecord struct {
 	after   time.Time
 	checked time.Time
 	node    Node
+}
+
+func (self *NodeRecord) String() string {
+	return fmt.Sprintf("<%v>", self.Addr)
 }
 
 func (self *NodeRecord) setActive() {
@@ -113,7 +126,6 @@ func (self *Kademlia) Count() (sum int) {
 		sum += len(b.nodes)
 	}
 	return
-	// return self.count
 }
 
 // accessor for KAD offline db count
@@ -207,7 +219,7 @@ func (self *Kademlia) Start(addr Address) error {
 	return nil
 }
 
-// Stop saves the routing table into a persistant form
+// Stop saves the routing table into a persistent form
 func (self *Kademlia) Stop(path string) (err error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
@@ -264,10 +276,11 @@ func (self *Kademlia) RemoveNode(node Node) (err error) {
 }
 
 // AddNode is the entry point where new nodes are registered
+// unsafe in that node is not checked to be already active node (to be called once)
 func (self *Kademlia) AddNode(node Node) (err error) {
 
-	self.lock.Lock()
 	defer self.lock.Unlock()
+	self.lock.Lock()
 
 	index := self.proximityBin(node.Addr())
 
@@ -286,8 +299,10 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 	}
 
 	// insert in kaddb, kademlia node record database
-	self.dblock.Lock()
 	defer self.dblock.Unlock()
+	self.dblock.Lock()
+	glog.V(logger.Detail).Infof("[KΛÐ]: '%v' (%v)", node.Addr().String(), node.Addr())
+
 	record, found := self.nodeIndex[node.Addr()]
 	if !found {
 		glog.V(logger.Info).Infof("[KΛÐ]: add new record %v to node db", node)
@@ -296,8 +311,12 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 			Url:  node.Url(),
 		}
 		self.nodeIndex[node.Addr()] = record
+		glog.V(logger.Detail).Infof("[KΛÐ]: nodeIndex: %#v", self.nodeIndex)
+		glog.V(logger.Detail).Infof("[KΛÐ]: nodes: %v", self.nodeDB[index])
 		self.nodeDB[index] = append(self.nodeDB[index], record)
+		glog.V(logger.Detail).Infof("[KΛÐ]: new nodes: %v", self.nodeDB[index])
 	}
+	// setting the node on the record, set it active and checked (for connectivity)
 	record.node = node
 	record.setActive()
 	record.setChecked()
@@ -361,10 +380,13 @@ func (self *Kademlia) GetNodes(target Address, max int) []Node {
 }
 
 func (self *Kademlia) getNodes(target Address, max int) (r nodesByDistance) {
-	self.lock.RLock()
+
 	defer self.lock.RUnlock()
+	self.lock.RLock()
+
 	r.target = target
 	index := self.proximityBin(target)
+
 	start := index
 	var down bool
 	if index >= self.proxLimit {
@@ -419,10 +441,12 @@ func (self *Kademlia) AddNodeRecords(nrs []*NodeRecord) {
 			index := self.proximityBin(node.Addr)
 			dbcursor := self.dbcursors[index]
 			nodes = self.nodeDB[index]
+			// this is inefficient for allocation, need to just append then shift
 			newnodes := make([]*NodeRecord, len(nodes)+1)
 			copy(newnodes[:], nodes[:dbcursor])
 			newnodes[dbcursor] = node
 			copy(newnodes[dbcursor+1:], nodes[dbcursor:])
+			glog.V(logger.Detail).Infof("[KΛÐ]: new nodes: %v (keys: %v)\nnodes: %v", newnodes, nodes)
 			self.nodeDB[index] = newnodes
 			n++
 		}
@@ -470,8 +494,8 @@ The second argument returned names the first missing slot found
 func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 	// return value -1 indicates that buckets are filled in all
 	proxLimit = -1
-	self.dblock.RLock()
-	defer self.dblock.RUnlock()
+	defer self.dblock.Unlock()
+	self.dblock.Lock()
 
 	for rounds := 1; rounds <= self.BucketSize; rounds++ {
 	ROUND:
@@ -483,6 +507,7 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 			bin.lock.Lock()
 			if len(bin.nodes) < rounds {
 				if proxLimit < 0 {
+					// set the first missing slot found
 					proxLimit = po
 				}
 				var count int
@@ -494,38 +519,47 @@ func (self *Kademlia) GetNodeRecord() (node *NodeRecord, proxLimit int) {
 			ROW:
 				for count < len(dbrow) {
 					node = dbrow[n]
-					if (node.after == time.Time{}) {
-						node.after = time.Unix(node.After, 0)
-					}
 
-					glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not to be retried before %d %v", node.Addr, po, n, node.After, node.after)
+					// skip already active nodes
+					if node.node == nil {
 
-					// time since last known connection attempt
-					delta := node.checked.Unix() - node.After
-					if delta < 4 {
-						node.After = 0
-					}
-
-					if node.node == nil && node.after.Before(time.Now()) {
-						if node.checked.Add(self.PurgeInterval).Before(time.Now()) {
-							// delete node
-							purge = append(purge, n)
-							glog.V(logger.Detail).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.checked, node.after)
-						} else {
-							// scheduling next check
-							if node.After == 0 {
-								node.after = time.Now().Add(self.InitialRetryInterval)
-								node.After = node.after.Unix()
-							} else {
-								node.After = delta*int64(self.ConnRetryExp) + node.After
-								node.after = time.Unix(node.After, 0)
-							}
-
-							glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%03d:%d), last check: %v,  next check: %v", node.Addr, po, n, node.checked, node.after)
+						// set persisted retry time
+						if (node.after == time.Time{}) {
+							node.after = time.Unix(node.After, 0)
 						}
-						break ROW
+
+						glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not to be retried before %d %v", node.Addr, po, n, node.After, node.after)
+
+						// time since last known connection attempt
+						delta := node.checked.Unix() - node.After
+						if delta < 4 {
+							node.After = 0
+						}
+
+						// if node is active
+						if node.after.Before(time.Now()) {
+
+							// if checked longer than purge interval
+							if node.checked.Add(self.PurgeInterval).Before(time.Now()) {
+								// delete node
+								purge = append(purge, n)
+								glog.V(logger.Detail).Infof("[KΛÐ]: inactive node record %v (PO%03d:%d) last check: %v, next check: %v", node.Addr, po, n, node.checked, node.after)
+							} else {
+								// scheduling next check
+								if node.After == 0 {
+									node.after = time.Now().Add(self.InitialRetryInterval)
+									node.After = node.after.Unix()
+								} else {
+									node.After = delta*int64(self.ConnRetryExp) + node.After
+									node.after = time.Unix(node.After, 0)
+								}
+
+								glog.V(logger.Detail).Infof("[KΛÐ]: serve node record %v (PO%03d:%d), last check: %v,  next check: %v", node.Addr, po, n, node.checked, node.after)
+							}
+							break ROW
+						}
+						glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not ready. skipped. not to be retried before: %v", node.Addr, po, n, node.after)
 					}
-					glog.V(logger.Detail).Infof("[KΛÐ]: kaddb record %v (PO%03d:%d) not ready. skipped. not to be retried before: %v", node.Addr, po, n, node.after)
 					n++
 					count++
 					// cycle: n = n %  len(dbrow)
@@ -703,7 +737,7 @@ func proximity(one, other Address) (ret int) {
 	return len(one) * 8
 }
 
-// the string form of the binary representation of an address
+// the string form of the binary representation of an address (only first 8 bits)
 func (a Address) Bin() string {
 	var bs []string
 	for _, b := range a[:] {
@@ -767,6 +801,11 @@ func (self *Kademlia) Load(path string) (err error) {
 		return fmt.Errorf("invalid kad db: address mismatch, expected %v, got %v", self.addr, kad.Address)
 	}
 	self.nodeDB = kad.Nodes
+	for _, b := range kad.Nodes {
+		for _, node := range b {
+			self.nodeIndex[node.Addr] = node
+		}
+	}
 	return
 }
 
