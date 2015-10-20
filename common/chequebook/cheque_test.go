@@ -71,9 +71,9 @@ func TestIssueAndReceive(t *testing.T) {
 	}
 
 	backend := newTestBackend()
-	backend.calls = []string{"42"}
+	backend.calls = []string{common.ToHex(big.NewInt(42).Bytes())}
 	backend.errs = []error{nil}
-	chbox, err := NewInbox(sender, recipient, &prvKey.PublicKey, backend)
+	chbox, err := NewInbox(sender, recipient, recipient, &prvKey.PublicKey, backend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -148,9 +148,9 @@ func TestVerifyErrors(t *testing.T) {
 	ch0, err := chbook0.Issue(recipient0, amount)
 
 	backend := newTestBackend()
-	backend.calls = []string{"42"}
+	backend.calls = []string{common.ToHex(big.NewInt(42).Bytes())}
 	backend.errs = []error{nil}
-	chbox, err := NewInbox(sender0, recipient0, &prvKey.PublicKey, backend)
+	chbox, err := NewInbox(sender0, recipient0, recipient0, &prvKey.PublicKey, backend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -370,9 +370,9 @@ func TestCash(t *testing.T) {
 	}
 
 	backend := newTestBackend()
-	backend.calls = []string{"42"}
+	backend.calls = []string{common.ToHex(big.NewInt(42).Bytes())}
 	backend.errs = []error{nil}
-	chbox, err := NewInbox(sender, recipient, &prvKey.PublicKey, backend)
+	chbox, err := NewInbox(sender, recipient, recipient, &prvKey.PublicKey, backend)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -382,7 +382,7 @@ func TestCash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	_, err = ch.Cash(backend)
+	_, err = ch.Cash(recipient, backend)
 	if len(backend.txs) != 1 {
 		t.Fatalf("expected 1 txs to send, got %v", len(backend.txs))
 	}
