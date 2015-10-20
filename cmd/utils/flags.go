@@ -20,6 +20,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"log"
+	"math"
 	"math/big"
 	"net"
 	"net/http"
@@ -43,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/nat"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc/api"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
@@ -126,6 +128,10 @@ var (
 		Name:  "dev",
 		Usage: "Developer mode. This mode creates a private network and sets several debugging flags",
 	}
+	TestNetFlag = cli.BoolFlag{
+		Name:  "testnet",
+		Usage: "Testnet mode. This enables your node to operate on the testnet",
+	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
 		Usage: "Custom node name",
@@ -150,6 +156,12 @@ var (
 	}
 
 	// miner settings
+	// TODO: refactor CPU vs GPU mining flags
+	MiningGPUFlag = cli.StringFlag{
+		Name:  "minegpu",
+		Usage: "Mine with given GPUs. '--minegpu 0,1' will mine with the first two GPUs found.",
+	}
+
 	MinerThreadsFlag = cli.IntFlag{
 		Name:  "minerthreads",
 		Usage: "Number of miner threads",
@@ -486,6 +498,17 @@ func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Cont
 		AutoDAG:                 ctx.GlobalBool(AutoDAGFlag.Name) || ctx.GlobalBool(MiningEnabledFlag.Name),
 	}
 
+	if ctx.GlobalBool(DevModeFlag.Name) && ctx.GlobalBool(TestNetFlag.Name) {
+		glog.Fatalf("%s and %s are mutually exclusive\n", DevModeFlag.Name, TestNetFlag.Name)
+	}
+
+	if ctx.GlobalBool(TestNetFlag.Name) {
+		// testnet is always stored in the testnet folder
+		cfg.DataDir += "/testnet"
+		cfg.NetworkId = 2
+		cfg.TestNet = true
+	}
+
 	if ctx.GlobalBool(DevModeFlag.Name) {
 		if !ctx.GlobalIsSet(VMDebugFlag.Name) {
 			cfg.VmDebug = true
@@ -522,6 +545,20 @@ func SetupLogger(ctx *cli.Context) {
 	glog.SetLogDir(ctx.GlobalString(LogFileFlag.Name))
 }
 
+// SetupNetwork configures the system for either the main net or some test network.
+func SetupNetwork(ctx *cli.Context) {
+	switch {
+	case ctx.GlobalBool(OlympicFlag.Name):
+		params.DurationLimit = big.NewInt(8)
+		params.GenesisGasLimit = big.NewInt(3141592)
+		params.MinGasLimit = big.NewInt(125000)
+		params.MaximumExtraDataSize = big.NewInt(1024)
+		NetworkIdFlag.Value = 0
+		core.BlockReward = big.NewInt(1.5e+18)
+		core.ExpDiffPeriod = big.NewInt(math.MaxInt64)
+	}
+}
+
 // SetupVM configured the VM package's global settings
 func SetupVM(ctx *cli.Context) {
 	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
@@ -542,8 +579,8 @@ func SetupEth(ctx *cli.Context) {
 }
 
 // MakeChain creates a chain manager from set command line flags.
-func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Database) {
-	datadir := ctx.GlobalString(DataDirFlag.Name)
+func MakeChain(ctx *cli.Context) (chain *core.BlockChain, chainDb ethdb.Database) {
+	datadir := MustDataDir(ctx)
 	cache := ctx.GlobalInt(CacheFlag.Name)
 
 	var err error
@@ -551,7 +588,6 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Databa
 		Fatalf("Could not open database: %v", err)
 	}
 	if ctx.GlobalBool(OlympicFlag.Name) {
-		InitOlympic()
 		_, err := core.WriteTestNetGenesisBlock(chainDb, 42)
 		if err != nil {
 			glog.Fatalln(err)
@@ -561,7 +597,7 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Databa
 	eventMux := new(event.TypeMux)
 	pow := ethash.New()
 	//genesis := core.GenesisBlock(uint64(ctx.GlobalInt(GenesisNonceFlag.Name)), blockDB)
-	chain, err = core.NewChainManager(chainDb, pow, eventMux)
+	chain, err = core.NewBlockChain(chainDb, pow, eventMux)
 	if err != nil {
 		Fatalf("Could not start chainmanager: %v", err)
 	}
@@ -573,9 +609,22 @@ func MakeChain(ctx *cli.Context) (chain *core.ChainManager, chainDb ethdb.Databa
 
 // MakeChain creates an account manager from set command line flags.
 func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
-	dataDir := ctx.GlobalString(DataDirFlag.Name)
+	dataDir := MustDataDir(ctx)
+	if ctx.GlobalBool(TestNetFlag.Name) {
+		dataDir += "/testnet"
+	}
 	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
 	return accounts.NewManager(ks)
+}
+
+// MustDataDir retrieves the currently requested data directory, terminating if
+// none (or the empty string) is specified.
+func MustDataDir(ctx *cli.Context) string {
+	if path := ctx.GlobalString(DataDirFlag.Name); path != "" {
+		return path
+	}
+	Fatalf("Cannot determine default data directory, please set manually (--datadir)")
+	return ""
 }
 
 func IpcSocketPath(ctx *cli.Context) (ipcpath string) {

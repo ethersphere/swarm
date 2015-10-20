@@ -181,10 +181,23 @@ func IsValueTransferErr(e error) bool {
 type BadHashError common.Hash
 
 func (h BadHashError) Error() string {
-	return fmt.Sprintf("Found known bad hash in chain %x", h)
+	return fmt.Sprintf("Found known bad hash in chain %x", h[:])
 }
 
 func IsBadHashError(err error) bool {
 	_, ok := err.(BadHashError)
 	return ok
+}
+
+type GasLimitErr struct {
+	Have, Want *big.Int
+}
+
+func IsGasLimitErr(err error) bool {
+	_, ok := err.(*GasLimitErr)
+	return ok
+}
+
+func (err *GasLimitErr) Error() string {
+	return fmt.Sprintf("GasLimit reached. Have %d gas, transaction requires %d", err.Have, err.Want)
 }
