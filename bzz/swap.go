@@ -22,15 +22,15 @@ import (
 // default parameters
 
 var (
-	autoCashInterval     = 300 * time.Second // default interval for autocash
-	autoCashThreshold    = big.NewInt(100)   // threshold that triggers autocash (wei)
-	autoDepositInterval  = 300 * time.Second // default interval for autocash
-	autoDepositThreshold = big.NewInt(100)   // threshold that triggers autodeposit (wei)
-	autoDepositBuffer    = big.NewInt(200)   // buffer that is surplus for fork protection etc (wei)
-	buyAt                = big.NewInt(2)     // maximum chunk price host is willing to pay (wei)
-	sellAt               = big.NewInt(2)     // minimum chunk price host requires (wei)
-	payAt                = 10                // threshold that triggers payment request (units)
-	dropAt               = 30                // threshold that triggers disconnect (units)
+	autoCashInterval     = 300 * time.Second       // default interval for autocash
+	autoCashThreshold    = big.NewInt(10000000000) // threshold that triggers autocash (wei)
+	autoDepositInterval  = 300 * time.Second       // default interval for autocash
+	autoDepositThreshold = big.NewInt(10000000000) // threshold that triggers autodeposit (wei)
+	autoDepositBuffer    = big.NewInt(20000000000) // buffer that is surplus for fork protection etc (wei)
+	buyAt                = big.NewInt(20000000)    // maximum chunk price host is willing to pay (wei)
+	sellAt               = big.NewInt(20000000)    // minimum chunk price host requires (wei)
+	payAt                = 100                     // threshold that triggers payment request (units)
+	dropAt               = 150                     // threshold that triggers disconnect (units)
 )
 
 type swapParams struct {
