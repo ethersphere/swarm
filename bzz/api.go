@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -33,14 +34,28 @@ it is the public interface of the dpa which is included in the ethereum stack
 type Api struct {
 	dpa       *DPA
 	registrar registrar.VersionedRegistrar
+	swap      *swapParams
 }
 
 //the api constructor initialises
-func NewApi(dpa *DPA) (self *Api) {
+func NewApi(dpa *DPA, swap *swapParams) (self *Api) {
 	self = &Api{
-		dpa: dpa,
+		dpa:  dpa,
+		swap: swap,
 	}
 	return
+}
+
+func (self *Api) Issue(beneficiary common.Address, amount *big.Int) (cheque *chequebook.Cheque, err error) {
+	return self.swap.chequebook.Issue(beneficiary, amount)
+}
+
+func (self *Api) Cash(cheque *chequebook.Cheque) (txhash string, err error) {
+	return self.swap.chequebook.Cash(cheque)
+}
+
+func (self *Api) Deposit(amount *big.Int) (txhash string, err error) {
+	return self.swap.chequebook.Deposit(amount)
 }
 
 // Get uses iterative manifest retrieval and prefix matching

@@ -17,6 +17,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/bzz"
@@ -46,6 +47,9 @@ type bzzhandler func(*bzzApi, *shared.Request) (interface{}, error)
 
 var (
 	bzzMapping = map[string]bzzhandler{
+		"bzz_issue":    (*bzzApi).Issue,
+		"bzz_cash":     (*bzzApi).Cash,
+		"bzz_deposit":  (*bzzApi).Deposit,
 		"bzz_register": (*bzzApi).Register,
 		"bzz_resolve":  (*bzzApi).Resolve,
 		"bzz_download": (*bzzApi).Download,
@@ -91,6 +95,59 @@ func (self *bzzApi) Name() string {
 
 func (self *bzzApi) ApiVersion() string {
 	return BzzApiVersion
+}
+
+func (self *bzzApi) Issue(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+
+	args := new(BzzIssueArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	cheque, err := s.Api().Issue(common.HexToAddress(args.Beneficiary), args.Amount)
+	if err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	out, err := json.MarshalIndent(cheque, "   ", "")
+	if err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	return string(out), nil
+}
+
+func (self *bzzApi) Cash(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+
+	args := new(BzzCashArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	return s.Api().Cash(args.Cheque)
+
+}
+
+func (self *bzzApi) Deposit(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+
+	args := new(BzzDepositArgs)
+	if err := self.codec.Decode(req.Params, &args); err != nil {
+		return nil, shared.NewDecodeParamError(err.Error())
+	}
+
+	return s.Api().Deposit(args.Amount)
 }
 
 func (self *bzzApi) Register(req *shared.Request) (interface{}, error) {

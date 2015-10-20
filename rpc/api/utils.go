@@ -56,6 +56,9 @@ var (
 			"verbosity",
 		},
 		"bzz": []string{
+			"issue",
+			"cash",
+			"deposit",
 			"register",
 			"resolve",
 			"download",

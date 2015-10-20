@@ -22,6 +22,24 @@ web3._extend({
 	methods:
 	[
 		new web3._extend.Method({
+			name: 'deposit',
+			call: 'bzz_deposit',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'cash',
+			call: 'bzz_cash',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
+			name: 'issue',
+			call: 'bzz_issue',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
 			name: 'register',
 			call: 'bzz_register',
 			params: 3,

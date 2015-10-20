@@ -45,7 +45,7 @@ func NewSwarm(config *Config) (self *Swarm, proto p2p.Protocol, err error) {
 
 	self.dpa = newDPA(self.netStore)
 
-	self.api = NewApi(self.dpa)
+	self.api = NewApi(self.dpa, self.config.Swap)
 
 	proto, err = BzzProtocol(self.netStore, self.config.Swap)
 	return
@@ -152,7 +152,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 
 	self = &Swarm{
-		api:    NewApi(dpa),
+		api:    NewApi(dpa, config.Swap),
 		config: config,
 	}
 
