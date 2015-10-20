@@ -34,28 +34,43 @@ it is the public interface of the dpa which is included in the ethereum stack
 type Api struct {
 	dpa       *DPA
 	registrar registrar.VersionedRegistrar
-	swap      *swapParams
+	conf      *Config
 }
 
 //the api constructor initialises
-func NewApi(dpa *DPA, swap *swapParams) (self *Api) {
+func NewApi(dpa *DPA, conf *Config) (self *Api) {
 	self = &Api{
 		dpa:  dpa,
-		swap: swap,
+		conf: conf,
 	}
 	return
 }
 
 func (self *Api) Issue(beneficiary common.Address, amount *big.Int) (cheque *chequebook.Cheque, err error) {
-	return self.swap.chequebook.Issue(beneficiary, amount)
+	return self.conf.Swap.chequebook.Issue(beneficiary, amount)
 }
 
 func (self *Api) Cash(cheque *chequebook.Cheque) (txhash string, err error) {
-	return self.swap.chequebook.Cash(cheque)
+	return self.conf.Swap.chequebook.Cash(cheque)
 }
 
 func (self *Api) Deposit(amount *big.Int) (txhash string, err error) {
-	return self.swap.chequebook.Deposit(amount)
+	return self.conf.Swap.chequebook.Deposit(amount)
+}
+
+// serialisable info about swarm
+type Info struct {
+	*Config
+	*chequebook.Params
+}
+
+func (self *Api) Info() *Info {
+
+	return &Info{
+		Config: self.conf,
+		Params: chequebook.ContractParams,
+	}
+
 }
 
 // Get uses iterative manifest retrieval and prefix matching

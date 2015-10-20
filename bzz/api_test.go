@@ -30,7 +30,11 @@ func testApi() (api *Api, err error) {
 	}
 	prvkey, _ := crypto.GenerateKey()
 
-	api = NewApi(dpa, defaultSwapParams(common.Address{}, prvkey))
+	config, err := NewConfig(datadir, common.Address{}, prvkey)
+	if err != nil {
+		return
+	}
+	api = NewApi(dpa, config)
 	api.dpa.Start()
 
 	return

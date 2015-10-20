@@ -128,7 +128,7 @@ func (self *swapParams) setChequebook(path string, backend chequebook.Backend) (
 		}
 	}
 	self.chequebook.AutoDeposit(self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
-	glog.V(logger.Info).Infof("[BZZ] SWAP auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", self.Beneficiary.Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
+	glog.V(logger.Info).Infof("[BZZ] SWAP auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(self.publicKey)).Hex()[:8], self.Contract.Hex()[:8], self.AutoDepositInterval, self.AutoDepositThreshold, self.AutoDepositBuffer)
 
 	return
 }

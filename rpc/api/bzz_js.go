@@ -28,6 +28,12 @@ web3._extend({
 			inputFormatter: [null]
 		}),
 		new web3._extend.Method({
+			name: 'info',
+			call: 'bzz_info',
+			params: 1,
+			inputFormatter: [null]
+		}),
+		new web3._extend.Method({
 			name: 'cash',
 			call: 'bzz_cash',
 			params: 1,

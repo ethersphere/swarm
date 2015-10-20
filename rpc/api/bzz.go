@@ -47,6 +47,7 @@ type bzzhandler func(*bzzApi, *shared.Request) (interface{}, error)
 
 var (
 	bzzMapping = map[string]bzzhandler{
+		"bzz_info":     (*bzzApi).Info,
 		"bzz_issue":    (*bzzApi).Issue,
 		"bzz_cash":     (*bzzApi).Cash,
 		"bzz_deposit":  (*bzzApi).Deposit,
@@ -95,6 +96,14 @@ func (self *bzzApi) Name() string {
 
 func (self *bzzApi) ApiVersion() string {
 	return BzzApiVersion
+}
+
+func (self *bzzApi) Info(req *shared.Request) (interface{}, error) {
+	s := self.swarm
+	if s == nil {
+		return nil, newSwarmOfflineError(req.Method)
+	}
+	return s.Api().Info(), nil
 }
 
 func (self *bzzApi) Issue(req *shared.Request) (interface{}, error) {
