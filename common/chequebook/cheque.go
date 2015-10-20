@@ -414,7 +414,7 @@ func (self *Inbox) Stop() {
 func (self *Inbox) Cash() {
 	if self.cheque != nil {
 		self.cheque.Cash(self.backend)
-		glog.V(logger.Detail).Infof("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.contract.Hex(), self.beneficiary.Hex())
+		glog.V(logger.Detail).Infof("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex())
 		self.cashed = self.cheque.Amount
 	}
 }
