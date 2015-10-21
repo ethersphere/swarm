@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/rand"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -25,12 +26,55 @@ logistics engine for swarm.
 It is aware of the node's network address
 */
 type netStore struct {
+	hashfunc   hasher
 	localStore *localStore
 	lock       sync.Mutex
+	requestDb  *LDBDatabase
 	hive       *hive
 	self       *peerAddr
 	ready      chan bool
-	path       string
+}
+
+type StoreParams struct {
+	ChunkDbPath   string
+	DbCapacity    uint64
+	RequestDbPath string
+	CacheCapacity uint
+	Radius        int
+}
+
+func NewStoreParams(path string) (self *StoreParams) {
+	return &StoreParams{
+		ChunkDbPath:   filepath.Join(path, "chunks"),
+		RequestDbPath: filepath.Join(path, "requests"),
+		DbCapacity:    defaultDbCapacity,
+		CacheCapacity: defaultCacheCapacity,
+		Radius:        defaultRadius,
+	}
+}
+
+// netstore contructor, takes path argument that is used to initialise dbStore,
+// the persistent (disk) storage component of localStore
+// the second argument is the hive, the connection/logistics manager for the node
+func newNetStore(hash hasher, params *StoreParams, h *hive) (netstore *netStore, err error) {
+	lstore, err := newLocalStore(hash, params)
+	if err != nil {
+		return
+	}
+
+	db, err := NewLDBDatabase(params.RequestDbPath)
+	if err != nil {
+		return
+	}
+
+	netstore = &netStore{
+		hashfunc:   hash,
+		localStore: lstore,
+		hive:       h,
+		requestDb:  db,
+		ready:      make(chan bool),
+	}
+	return
 }
 
 /*
@@ -75,26 +119,6 @@ func newRequestStatus() *requestStatus {
 	}
 }
 
-// netstore contructor, takes path argument that is used to initialise dbStore,
-// the persistent (disk) storage component of localStore
-// the second argument is the hive, the connection/logistics manager for the node
-func newNetStore(path string, h *hive) (netstore *netStore, err error) {
-	dbStore, err := newDbStore(path)
-	if err != nil {
-		return
-	}
-	netstore = &netStore{
-		localStore: &localStore{
-			memStore: newMemStore(dbStore),
-			dbStore:  dbStore,
-		},
-		path:  path,
-		hive:  h,
-		ready: make(chan bool),
-	}
-	return
-}
-
 // netStore is started only when the network is started and the node has a
 // network address advertised to peers via the bzz protocol handshake (Status Msg)
 func (self *netStore) start(addr *peerAddr) (err error) {
@@ -122,7 +146,7 @@ func (self *netStore) stop() (err error) {
 // called from dpa, entrypoint for *local* chunk store requests
 func (self *netStore) Put(entry *Chunk) {
 	chunk, err := self.localStore.Get(entry.Key)
-	glog.V(logger.Debug).Infof("[BZZ] netStore.Put: localStore.Get returned with %v.", err)
+	glog.V(logger.Detail).Infof("[BZZ] netStore.Put: localStore.Get returned with %v.", err)
 	if err != nil {
 		chunk = entry
 	} else if chunk.SData == nil {
@@ -138,7 +162,7 @@ func (self *netStore) Put(entry *Chunk) {
 // store logic common to local and network chunk store requests
 func (self *netStore) put(entry *Chunk) {
 	self.localStore.Put(entry)
-	glog.V(logger.Debug).Infof("[BZZ] netStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
+	glog.V(logger.Detail).Infof("[BZZ] netStore.put: localStore.Put of %064x completed, %d bytes (%p).", entry.Key, len(entry.SData), entry)
 	if entry.req != nil {
 		// if entry had a request status, it means it has recently been requested
 		// by at least one peer
@@ -171,9 +195,9 @@ func (self *netStore) store(chunk *Chunk) {
 func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	glog.V(logger.Debug).Infof("[BZZ] netStore.addStoreRequest: req = %v", req)
+	glog.V(logger.Detail).Infof("[BZZ] netStore.addStoreRequest: req = %v", req)
 	chunk, err := self.localStore.Get(req.Key)
-	glog.V(logger.Debug).Infof("[BZZ] netStore.addStoreRequest: %p from %v", chunk, req.peer)
+	glog.V(logger.Detail).Infof("[BZZ] netStore.addStoreRequest: %p from %v", chunk, req.peer)
 	if err != nil {
 		// not found in memory cache, ie., a genuine store request
 		chunk = &Chunk{
@@ -183,7 +207,7 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 		}
 	} else if chunk.SData == nil {
 		// found chunk in memory store, needs the data, validate now
-		hasher := hasherfunc.New()
+		hasher := self.hashfunc()
 		hasher.Write(req.SData)
 		if !bytes.Equal(hasher.Sum(nil), req.Key) {
 			// data does not validate, ignore
@@ -196,7 +220,7 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 		chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
 		// genuine delivery, account in swap
 		req.peer.swap.Add(-1)
-		glog.V(logger.Debug).Infof("[BZZ] delivery of %p from %v", chunk, req.peer)
+		glog.V(logger.Detail).Infof("[BZZ] delivery of %p from %v", chunk, req.peer)
 
 	} else {
 		// data is found, store request ignored
@@ -226,10 +250,10 @@ func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
 	timer := time.After(searchTimeout)
 	select {
 	case <-timer:
-		glog.V(logger.Debug).Infof("[BZZ] netStore.Get: %064x request time out ", key)
+		glog.V(logger.Detail).Infof("[BZZ] netStore.Get: %064x request time out ", key)
 		err = notFound
 	case <-chunk.req.C:
-		glog.V(logger.Debug).Infof("[BZZ] netStore.Get: %064x retrieved, %d bytes (%p)", key, len(chunk.SData), chunk)
+		glog.V(logger.Detail).Infof("[BZZ] netStore.Get: %064x retrieved, %d bytes (%p)", key, len(chunk.SData), chunk)
 	}
 	return
 }
@@ -238,7 +262,7 @@ func (self *netStore) Get(key Key) (chunk *Chunk, err error) {
 func (self *netStore) get(key Key) (chunk *Chunk) {
 	var err error
 	chunk, err = self.localStore.Get(key)
-	glog.V(logger.Debug).Infof("[BZZ] netStore.get: localStore.Get of %064x returned with %v.", key, err)
+	glog.V(logger.Detail).Infof("[BZZ] netStore.get: localStore.Get of %064x returned with %v.", key, err)
 	// we assume that a returned chunk is the one stored in the memory cache
 	if err != nil {
 		// no data and no request status
@@ -273,16 +297,16 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 		req.peer.swap.Add(1)
 
 		if chunk.req.status == reqFound {
-			glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
+			glog.V(logger.Detail).Infof("[BZZ] netStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
 			self.deliver(req, chunk)
 			return
 		}
 
 		self.startSearch(req, chunk)
-		glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: %064x from %v. Start net search by forwarding retrieve request. For now responding with peers. ", req.Key, req.peer)
+		glog.V(logger.Detail).Infof("[BZZ] netStore.addRetrieveRequest: %064x from %v. Start net search by forwarding retrieve request. For now responding with peers. ", req.Key, req.peer)
 
 	} else {
-		glog.V(logger.Debug).Infof("[BZZ] netStore.addRetrieveRequest: self lookup for %v: responding with peers only...", req.peer)
+		glog.V(logger.Detail).Infof("[BZZ] netStore.addRetrieveRequest: self lookup for %v: responding with peers only...", req.peer)
 	}
 
 	self.peers(req)
@@ -293,10 +317,10 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 func (self *netStore) startSearch(req *retrieveRequestMsgData, chunk *Chunk) {
 	chunk.req.status = reqSearching
 	peers := self.hive.getPeers(chunk.Key, 0)
-	glog.V(logger.Debug).Infof("[BZZ] netStore.startSearch: %064x - received %d peers from KΛÐΞMLIΛ...", chunk.Key, len(peers))
+	glog.V(logger.Detail).Infof("[BZZ] netStore.startSearch: %064x - received %d peers from KΛÐΞMLIΛ...", chunk.Key, len(peers))
 	for _, peer := range peers {
-		glog.V(logger.Debug).Infof("[BZZ] netStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
-		glog.V(logger.Debug).Infof("[BZZ] req.requesters: %v", chunk.req.requesters)
+		glog.V(logger.Detail).Infof("[BZZ] netStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
+		glog.V(logger.Detail).Infof("[BZZ] req.requesters: %v", chunk.req.requesters)
 		var requester bool
 	OUT:
 		for _, recipients := range chunk.req.requesters {
@@ -324,14 +348,14 @@ only add if less than requesterCount peers forwarded the same request id so far
 note this is done irrespective of status (searching or found)
 */
 func (self *netStore) addRequester(rs *requestStatus, req *retrieveRequestMsgData) {
-	glog.V(logger.Debug).Infof("[BZZ] netStore.addRequester: key %064x - add peer [%v] to req.Id %v", req.Key, req.peer, req.Id)
+	glog.V(logger.Detail).Infof("[BZZ] netStore.addRequester: key %064x - add peer [%v] to req.Id %v", req.Key, req.peer, req.Id)
 	list := rs.requesters[req.Id]
 	rs.requesters[req.Id] = append(list, req)
 }
 
 // add peer request the chunk and decides the timeout for the response if still searching
 func (self *netStore) strategyUpdateRequest(rs *requestStatus, origReq *retrieveRequestMsgData) (req *retrieveRequestMsgData) {
-	glog.V(logger.Debug).Infof("[BZZ] netStore.strategyUpdateRequest: key %064x", origReq.Key)
+	glog.V(logger.Detail).Infof("[BZZ] netStore.strategyUpdateRequest: key %064x", origReq.Key)
 	// we do not create an alternative one
 	req = origReq
 	if rs != nil {
@@ -345,10 +369,10 @@ func (self *netStore) strategyUpdateRequest(rs *requestStatus, origReq *retrieve
 
 // once a chunk is found propagate it its requesters unless timed out
 func (self *netStore) propagateResponse(chunk *Chunk) {
-	glog.V(logger.Debug).Infof("[BZZ] netStore.propagateResponse: key %064x", chunk.Key)
+	glog.V(logger.Detail).Infof("[BZZ] netStore.propagateResponse: key %064x", chunk.Key)
 	for id, requesters := range chunk.req.requesters {
 		counter := requesterCount
-		glog.V(logger.Debug).Infof("[BZZ] netStore.propagateResponse id %064x", id)
+		glog.V(logger.Detail).Infof("[BZZ] netStore.propagateResponse id %064x", id)
 		msg := &storeRequestMsgData{
 			Key:   chunk.Key,
 			SData: chunk.SData,
@@ -356,7 +380,7 @@ func (self *netStore) propagateResponse(chunk *Chunk) {
 		}
 		for _, req := range requesters {
 			if req.timeout == nil || req.timeout.After(time.Now()) {
-				glog.V(logger.Debug).Infof("[BZZ] netStore.propagateResponse store -> %064x with %v", req.Id, req.peer)
+				glog.V(logger.Detail).Infof("[BZZ] netStore.propagateResponse store -> %064x with %v", req.Id, req.peer)
 				go req.peer.store(msg)
 				counter--
 				if counter <= 0 {
@@ -402,7 +426,7 @@ func (self *netStore) peers(req *retrieveRequestMsgData) {
 			for _, peer := range self.hive.getPeers(key, int(req.MaxPeers)) {
 				addrs = append(addrs, peer.remoteAddr)
 			}
-			glog.V(logger.Debug).Infof("[BZZ] netStore.peers sending %d addresses. req.Id: %v, req.Key: %x", len(addrs), req.Id, req.Key)
+			glog.V(logger.Detail).Infof("[BZZ] netStore.peers sending %d addresses. req.Id: %v, req.Key: %x", len(addrs), req.Id, req.Key)
 
 			peersData := &peersMsgData{
 				Peers: addrs,

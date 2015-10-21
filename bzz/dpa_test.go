@@ -13,18 +13,17 @@ const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
 	os.RemoveAll("/tmp/bzz")
-	dbStore, err := newDbStore("/tmp/bzz")
+	dbStore, err := newDbStore("/tmp/bzz", makeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
 	dbStore.setCapacity(50000)
 	if err != nil {
 		t.Errorf("DB error: %v", err)
 	}
-	memStore := newMemStore(dbStore)
+	memStore := newMemStore(dbStore, defaultCacheCapacity)
 	localStore := &localStore{
 		memStore,
 		dbStore,
 	}
-	chunker := &TreeChunker{}
-	chunker.Init()
+	chunker := NewTreeChunker(NewChunkerParams())
 	dpa := &DPA{
 		Chunker:    chunker,
 		ChunkStore: localStore,
@@ -51,7 +50,7 @@ func TestDPArandom(t *testing.T) {
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
-	localStore.memStore = newMemStore(dbStore)
+	localStore.memStore = newMemStore(dbStore, defaultCacheCapacity)
 	resultReader = dpa.Retrieve(key)
 	for i, _ := range resultSlice {
 		resultSlice[i] = 0
@@ -70,18 +69,17 @@ func TestDPArandom(t *testing.T) {
 
 func TestDPA_capacity(t *testing.T) {
 	os.RemoveAll("/tmp/bzz")
-	dbStore, err := newDbStore("/tmp/bzz")
+	dbStore, err := newDbStore("/tmp/bzz", makeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
 	if err != nil {
 		t.Errorf("DB error: %v", err)
 	}
-	memStore := newMemStore(dbStore)
+	memStore := newMemStore(dbStore, defaultCacheCapacity)
 	localStore := &localStore{
 		memStore,
 		dbStore,
 	}
 	localStore.memStore.setCapacity(0)
-	chunker := &TreeChunker{}
-	chunker.Init()
+	chunker := NewTreeChunker(NewChunkerParams())
 	dpa := &DPA{
 		Chunker:    chunker,
 		ChunkStore: localStore,

@@ -6,6 +6,17 @@ type localStore struct {
 	dbStore  *dbStore
 }
 
+func newLocalStore(hash hasher, params *StoreParams) (*localStore, error) {
+	dbStore, err := newDbStore(params.ChunkDbPath, hash, params.DbCapacity, params.Radius)
+	if err != nil {
+		return nil, err
+	}
+	return &localStore{
+		memStore: newMemStore(dbStore, params.CacheCapacity),
+		dbStore:  dbStore,
+	}, nil
+}
+
 // localStore is itself a chunk store , to stores a chunk only
 // its integrity is checked ?
 func (self *localStore) Put(chunk *Chunk) {

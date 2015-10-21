@@ -15,17 +15,24 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-const gcArraySize = 10000
-const gcArrayFreeRatio = 0.1
+const (
+	defaultDbCapacity = 5000000
+	defaultRadius     = 0 // not yet used
 
-// key prefixes for leveldb storage
-const kpIndex = 0
-const kpData = 1
+	gcArraySize      = 10000
+	gcArrayFreeRatio = 0.1
 
-var keyAccessCnt = []byte{2}
-var keyEntryCnt = []byte{3}
-var keyDataIdx = []byte{4}
-var keyGCPos = []byte{5}
+	// key prefixes for leveldb storage
+	kpIndex = 0
+	kpData  = 1
+)
+
+var (
+	keyAccessCnt = []byte{2}
+	keyEntryCnt  = []byte{3}
+	keyDataIdx   = []byte{4}
+	keyGCPos     = []byte{5}
+)
 
 type gcItem struct {
 	idx    uint64
@@ -42,7 +49,38 @@ type dbStore struct {
 	gcPos, gcStartPos []byte
 	gcArray           []*gcItem
 
+	hashfunc hasher
+
 	lock sync.Mutex
+}
+
+func newDbStore(path string, hash hasher, capacity uint64, radius int) (s *dbStore, err error) {
+	s = new(dbStore)
+
+	s.hashfunc = hash
+
+	s.db, err = NewLDBDatabase(path)
+	if err != nil {
+		return
+	}
+
+	s.setCapacity(capacity)
+
+	s.gcStartPos = make([]byte, 1)
+	s.gcStartPos[0] = kpIndex
+	s.gcArray = make([]*gcItem, gcArraySize)
+
+	data, _ := s.db.Get(keyEntryCnt)
+	s.entryCnt = bytesToU64(data)
+	data, _ = s.db.Get(keyAccessCnt)
+	s.accessCnt = bytesToU64(data)
+	data, _ = s.db.Get(keyDataIdx)
+	s.dataIdx = bytesToU64(data)
+	s.gcPos, _ = s.db.Get(keyGCPos)
+	if s.gcPos == nil {
+		s.gcPos = s.gcStartPos
+	}
+	return
 }
 
 type dpaDBIndex struct {
@@ -289,7 +327,7 @@ func (s *dbStore) Get(key Key) (chunk *Chunk, err error) {
 			return
 		}
 
-		hasher := hasherfunc.New()
+		hasher := s.hashfunc()
 		hasher.Write(data)
 		if bytes.Compare(hasher.Sum(nil), key) != 0 {
 			s.db.Delete(getDataKey(index.Idx))
@@ -343,33 +381,6 @@ func (s *dbStore) setCapacity(c uint64) {
 
 func (s *dbStore) getEntryCnt() uint64 {
 	return s.entryCnt
-}
-
-func newDbStore(path string) (s *dbStore, err error) {
-	s = new(dbStore)
-
-	s.db, err = NewLDBDatabase(path)
-	if err != nil {
-		return
-	}
-
-	s.setCapacity(5000000) // TODO define default capacity as constant
-
-	s.gcStartPos = make([]byte, 1)
-	s.gcStartPos[0] = kpIndex
-	s.gcArray = make([]*gcItem, gcArraySize)
-
-	data, _ := s.db.Get(keyEntryCnt)
-	s.entryCnt = bytesToU64(data)
-	data, _ = s.db.Get(keyAccessCnt)
-	s.accessCnt = bytesToU64(data)
-	data, _ = s.db.Get(keyDataIdx)
-	s.dataIdx = bytesToU64(data)
-	s.gcPos, _ = s.db.Get(keyGCPos)
-	if s.gcPos == nil {
-		s.gcPos = s.gcStartPos
-	}
-	return
 }
 
 func (s *dbStore) close() {

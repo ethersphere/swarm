@@ -7,7 +7,7 @@ import (
 
 func initDbStore() (m *dbStore) {
 	os.RemoveAll("/tmp/bzz")
-	m, err := newDbStore("/tmp/bzz")
+	m, err := newDbStore("/tmp/bzz", makeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
 	if err != nil {
 		panic("no dbStore")
 	}
@@ -24,19 +24,19 @@ func TestDbStore128_0x1000000(t *testing.T) {
 	testDbStore(0x1000000, 128, t)
 }
 
-func TestDbStore128_10000(t *testing.T) {
+func TestDbStore128_10000_(t *testing.T) {
 	testDbStore(10000, 128, t)
 }
 
-func TestDbStore128_1000(t *testing.T) {
+func TestDbStore128_1000_(t *testing.T) {
 	testDbStore(1000, 128, t)
 }
 
-func TestDbStore128_100(t *testing.T) {
+func TestDbStore128_100_(t *testing.T) {
 	testDbStore(100, 128, t)
 }
 
-func TestDbStore2_100(t *testing.T) {
+func TestDbStore2_100_(t *testing.T) {
 	testDbStore(100, 2, t)
 }
 

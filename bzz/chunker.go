@@ -15,9 +15,9 @@ data_{i} := size(subtree_{i}) || key_{j} || key_{j+1} .... || key_{j+n-1}
 4 if data size is not more than maximum chunksize, the data is stored in a single chunk
   key = sha256(int64(size) + data)
 
-2 if data size is more than chunksize*Branches^l, but no more than chunksize*
-  Branches^(l+1), the data vector is split into slices of chunksize*
-  Branches^l length (except the last one).
+2 if data size is more than chunksize*branches^l, but no more than chunksize*
+  branches^(l+1), the data vector is split into slices of chunksize*
+  branches^l length (except the last one).
   key = sha256(int64(size) + key(slice0) + key(slice1) + ...)
 */
 
@@ -27,25 +27,27 @@ import (
 	"crypto"
 	"encoding/binary"
 	"fmt"
+	"hash"
 	"io"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 const (
-	hasherfunc      crypto.Hash = crypto.SHA256 // http://golang.org/pkg/hash/#Hash
-	defaultBranches int64       = 128
-)
-
-var (
+	// defaultHash           = "SHA3"   // http://golang.org/pkg/hash/#Hash
+	defaultHash           = "SHA256" // http://golang.org/pkg/hash/#Hash
+	defaultBranches int64 = 128
+	joinTimeout           = 120 // second
+	splitTimeout          = 120 // second
 	// hashSize     int64 = hasherfunc.New().Size() // hasher knows about its own length in bytes
 	// chunksize    int64 = branches * hashSize     // chunk is defined as this
-	joinTimeout  = 120 * time.Second
-	splitTimeout = 120 * time.Second
 )
+
+type hasher func() hash.Hash
 
 type Key []byte
 
@@ -100,32 +102,51 @@ If all is well it is possible to implement this by simply composing readers so t
 The hashing itself does use extra copies and allocation though, since it does need it.
 */
 
-type TreeChunker struct {
+type ChunkerParams struct {
 	Branches     int64
-	HashFunc     crypto.Hash
+	Hash         string
 	JoinTimeout  time.Duration
 	SplitTimeout time.Duration
-	// calculated
-	hashSize  int64 // self.HashFunc.New().Size()
-	chunkSize int64 // hashSize* Branches
 }
 
-func (self *TreeChunker) Init() {
-	if self.HashFunc == 0 {
-		self.HashFunc = hasherfunc
+func NewChunkerParams() *ChunkerParams {
+	return &ChunkerParams{
+		Branches:     defaultBranches,
+		Hash:         defaultHash,
+		JoinTimeout:  joinTimeout,
+		SplitTimeout: splitTimeout,
 	}
-	if self.Branches == 0 {
-		self.Branches = defaultBranches
-	}
-	if self.JoinTimeout == 0 {
-		self.JoinTimeout = joinTimeout
-	}
-	if self.SplitTimeout == 0 {
-		self.SplitTimeout = splitTimeout
-	}
-	self.hashSize = int64(self.HashFunc.New().Size())
-	self.chunkSize = self.hashSize * self.Branches
+}
 
+type TreeChunker struct {
+	branches     int64
+	hashFunc     hasher
+	joinTimeout  time.Duration
+	splitTimeout time.Duration
+	// calculated
+	hashSize  int64 // self.hashFunc.New().Size()
+	chunkSize int64 // hashSize* branches
+}
+
+func makeHashFunc(hash string) hasher {
+	switch hash {
+	case "SHA256":
+		return crypto.SHA256.New
+	case "SHA3":
+		return sha3.NewKeccak256
+	}
+	return nil
+}
+
+func NewTreeChunker(params *ChunkerParams) (self *TreeChunker) {
+	self = &TreeChunker{}
+	self.hashFunc = makeHashFunc(params.Hash)
+	self.branches = params.Branches
+	self.joinTimeout = params.JoinTimeout * time.Second
+	self.splitTimeout = params.SplitTimeout * time.Second
+	self.hashSize = int64(self.hashFunc().Size())
+	self.chunkSize = self.hashSize * self.branches
+	return
 }
 
 func (self *TreeChunker) KeySize() int64 {
@@ -143,7 +164,7 @@ func (self *Chunk) String() string {
 // - the size (of the subtree encoded in the Chunk)
 // - the Chunk, ie. the contents read from the input reader
 func (self *TreeChunker) Hash(input []byte) []byte {
-	hasher := self.HashFunc.New()
+	hasher := self.hashFunc()
 	hasher.Write(input)
 	return hasher.Sum(nil)
 }
@@ -166,7 +187,7 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk, 
 	wg := &sync.WaitGroup{}
 	errC = make(chan error)
 	rerrC := make(chan error)
-	timeout := time.After(self.SplitTimeout)
+	timeout := time.After(self.splitTimeout)
 
 	wg.Add(1)
 	go func() {
@@ -177,14 +198,14 @@ func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk, 
 		// takes lowest depth such that chunksize*HashCount^(depth+1) > size
 		// power series, will find the order of magnitude of the data size in base hashCount or numbers of levels of branching in the resulting tree.
 
-		for ; treeSize < size; treeSize *= self.Branches {
+		for ; treeSize < size; treeSize *= self.branches {
 			depth++
 		}
 
 		// glog.V(logger.Detail).Infof("[BZZ] split request received for data (%v bytes, depth: %v)", size, depth)
 
 		//launch actual recursive function passing the workgroup
-		self.split(depth, treeSize/self.Branches, key, data, chunkC, rerrC, wg, swg)
+		self.split(depth, treeSize/self.branches, key, data, chunkC, rerrC, wg, swg)
 	}()
 
 	// closes internal error channel if all subprocesses in the workgroup finished
@@ -220,7 +241,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 	// glog.V(logger.Detail).Infof("[BZZ] depth: %v, max subtree size: %v, data size: %v", depth, treeSize, size)
 
 	for depth > 0 && size < treeSize {
-		treeSize /= self.Branches
+		treeSize /= self.branches
 		depth--
 	}
 
@@ -261,7 +282,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data SectionR
 			subTreeKey := chunk[8+i*self.hashSize : 8+(i+1)*self.hashSize]
 
 			childrenWg.Add(1)
-			go self.split(depth-1, treeSize/self.Branches, subTreeKey, subTreeData, chunkC, errc, childrenWg, swg)
+			go self.split(depth-1, treeSize/self.branches, subTreeKey, subTreeData, chunkC, errc, childrenWg, swg)
 
 			i++
 			pos += treeSize
@@ -311,7 +332,7 @@ type LazyChunkReader struct {
 	quitC   chan bool    // channel to abort retrieval
 	errC    chan error   // error channel to monitor retrieve errors
 	chunker *TreeChunker // needs TreeChunker params TODO: should just take
-	// the chunkSize, Branches etc as params
+	// the chunkSize, branches etc as params
 }
 
 func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
@@ -350,12 +371,12 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	var depth int
 	// calculate depth and max treeSize
 	treeSize = self.chunker.chunkSize
-	for ; treeSize < chunk.Size; treeSize *= self.chunker.Branches {
+	for ; treeSize < chunk.Size; treeSize *= self.chunker.branches {
 		depth++
 	}
 	wg := sync.WaitGroup{}
 	wg.Add(1)
-	go self.join(b, off, off+want, depth, treeSize/self.chunker.Branches, chunk, &wg)
+	go self.join(b, off, off+want, depth, treeSize/self.chunker.branches, chunk, &wg)
 	go func() {
 		wg.Wait()
 		close(self.errC)
@@ -383,7 +404,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 
 	// find appropriate block level
 	for chunk.Size < treeSize && depth > 0 {
-		treeSize /= self.chunker.Branches
+		treeSize /= self.chunker.branches
 		depth--
 	}
 
@@ -443,7 +464,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 				self.errC <- fmt.Errorf("chunk %v-%v not found", off, off+treeSize)
 				return
 			}
-			self.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/self.chunker.Branches, ch, &wg)
+			self.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/self.chunker.branches, ch, &wg)
 		}(i)
 	} //for
 	wg.Wait()

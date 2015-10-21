@@ -20,6 +20,9 @@ const (
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
+	*StoreParams
+	*ChunkerParams
+	*HiveParams
 	Swap      *swapParams
 	Path      string
 	Port      string
@@ -53,11 +56,14 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		// file does not exist
 
 		self = &Config{
-			Port:      port,
-			Path:      dirpath,
-			Swap:      defaultSwapParams(contract, prvKey),
-			PublicKey: pubkeyhex,
-			BzzKey:    keyhex,
+			HiveParams:    NewHiveParams(),
+			ChunkerParams: NewChunkerParams(),
+			StoreParams:   NewStoreParams(path),
+			Port:          port,
+			Path:          dirpath,
+			Swap:          defaultSwapParams(contract, prvKey),
+			PublicKey:     pubkeyhex,
+			BzzKey:        keyhex,
 		}
 		// write out config file
 		data, err = json.MarshalIndent(self, "", "    ")

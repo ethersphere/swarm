@@ -137,13 +137,7 @@ func testRandomData(chunker *TreeChunker, tester *chunkerTester, n int, chunks i
 }
 
 func TestRandomData(t *testing.T) {
-	chunker := &TreeChunker{
-		Branches:     2,
-		SplitTimeout: 10 * time.Second,
-		JoinTimeout:  10 * time.Second,
-	}
-	chunker.Init()
-	tester := &chunkerTester{}
+	chunker, tester := chunkerAndTester()
 	testRandomData(chunker, tester, 60, 1, t)
 	testRandomData(chunker, tester, 179, 5, t)
 	testRandomData(chunker, tester, 253, 7, t)
@@ -151,12 +145,12 @@ func TestRandomData(t *testing.T) {
 }
 
 func chunkerAndTester() (chunker *TreeChunker, tester *chunkerTester) {
-	chunker = &TreeChunker{
+	chunker = NewTreeChunker(&ChunkerParams{
 		Branches:     2,
-		SplitTimeout: 10 * time.Second,
-		JoinTimeout:  10 * time.Second,
-	}
-	chunker.Init()
+		Hash:         "SHA256",
+		SplitTimeout: 10,
+		JoinTimeout:  10,
+	})
 	tester = &chunkerTester{}
 	return
 }

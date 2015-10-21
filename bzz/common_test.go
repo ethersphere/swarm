@@ -20,10 +20,11 @@ func testDataReader(l int) (r *ChunkReader, slice []byte) {
 }
 
 func randomChunks(l int64, branches int64, chunkC chan *Chunk) (key Key, errC chan error) {
-	chunker := &TreeChunker{
-		Branches: branches,
-	}
-	chunker.Init()
+	chunker := NewTreeChunker(&ChunkerParams{
+		Branches:     branches,
+		Hash:         defaultHash,
+		SplitTimeout: splitTimeout,
+	})
 	key = make([]byte, 32)
 	b := make([]byte, l)
 	_, err := rand.Read(b)
@@ -56,10 +57,11 @@ SPLIT:
 			}
 		}
 	}
-	chunker := &TreeChunker{
-		Branches: branches,
-	}
-	chunker.Init()
+	chunker := NewTreeChunker(&ChunkerParams{
+		Branches:     branches,
+		Hash:         defaultHash,
+		SplitTimeout: splitTimeout,
+	})
 	chunkC = make(chan *Chunk)
 	var r SectionReader
 	r = chunker.Join(key, chunkC)
