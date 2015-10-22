@@ -76,15 +76,12 @@ func runDialTest(t *testing.T, test dialtest) {
 
 type fakeTable []*discover.Node
 
-func (t fakeTable) Self() *discover.Node       { return new(discover.Node) }
-func (t fakeTable) Close()                     {}
-func (t fakeTable) Bootstrap([]*discover.Node) {}
-func (t fakeTable) Lookup(target discover.NodeID) []*discover.Node {
-	return nil
-}
-func (t fakeTable) ReadRandomNodes(buf []*discover.Node) int {
-	return copy(buf, t)
-}
+func (t fakeTable) Self() *discover.Node                     { return new(discover.Node) }
+func (t fakeTable) Close()                                   {}
+func (t fakeTable) Bootstrap([]*discover.Node)               {}
+func (t fakeTable) Lookup(discover.NodeID) []*discover.Node  { return nil }
+func (t fakeTable) Resolve(discover.NodeID) *discover.Node   { return nil }
+func (t fakeTable) ReadRandomNodes(buf []*discover.Node) int { return copy(buf, t) }
 
 // This test checks that dynamic dials are launched from discovery results.
 func TestDialStateDynDial(t *testing.T) {
@@ -118,9 +115,9 @@ func TestDialStateDynDial(t *testing.T) {
 					}},
 				},
 				new: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}, nil},
 				},
 			},
 			// Some of the dials complete but no new ones are launched yet because
@@ -134,8 +131,8 @@ func TestDialStateDynDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(4)}},
 				},
 				done: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}, nil},
 				},
 			},
 			// No new dial tasks are launched in the this round because
@@ -150,7 +147,7 @@ func TestDialStateDynDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
 				},
 				done: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}, nil},
 				},
 				new: []task{
 					&waitExpireTask{Duration: 14 * time.Second},
@@ -167,7 +164,7 @@ func TestDialStateDynDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
 				},
 				new: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(6)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(6)}, nil},
 				},
 			},
 			// More peers (3,4) drop off and dial for ID 6 completes.
@@ -180,10 +177,10 @@ func TestDialStateDynDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(5)}},
 				},
 				done: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(6)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(6)}, nil},
 				},
 				new: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(7)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(7)}, nil},
 					&discoverTask{},
 				},
 			},
@@ -198,7 +195,7 @@ func TestDialStateDynDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(7)}},
 				},
 				done: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(7)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(7)}, nil},
 				},
 			},
 			// Finish the running node discovery with an empty set. A new lookup
@@ -248,11 +245,11 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 					&discoverTask{bootstrap: true},
 				},
 				new: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(1)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(2)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(1)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(2)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}, nil},
 					&discoverTask{bootstrap: false},
 				},
 			},
@@ -263,8 +260,8 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				done: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(1)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(2)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(1)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(2)}, nil},
 					&discoverTask{results: []*discover.Node{
 						{ID: uintID(10)},
 						{ID: uintID(11)},
@@ -272,9 +269,9 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 					}},
 				},
 				new: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(10)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(11)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(12)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(10)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(11)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(12)}, nil},
 					&discoverTask{bootstrap: false},
 				},
 			},
@@ -288,12 +285,12 @@ func TestDialStateDynDialFromTable(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(12)}},
 				},
 				done: []task{
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(10)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(11)}},
-					&dialTask{dynDialedConn, &discover.Node{ID: uintID(12)}},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(3)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(4)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(5)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(10)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(11)}, nil},
+					&dialTask{dynDialedConn, &discover.Node{ID: uintID(12)}, nil},
 				},
 			},
 			// Waiting for expiry. No waitExpireTask is launched because the
@@ -344,9 +341,9 @@ func TestDialStateStaticDial(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				new: []task{
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(4)}},
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(5)}},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}, nil},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(4)}, nil},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(5)}, nil},
 				},
 			},
 			// No new tasks are launched in this round because all static
@@ -358,7 +355,7 @@ func TestDialStateStaticDial(t *testing.T) {
 					{rw: &conn{flags: staticDialedConn, id: uintID(3)}},
 				},
 				done: []task{
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}, nil},
 				},
 			},
 			// No new dial tasks are launched because all static
@@ -372,8 +369,8 @@ func TestDialStateStaticDial(t *testing.T) {
 					{rw: &conn{flags: staticDialedConn, id: uintID(5)}},
 				},
 				done: []task{
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(4)}},
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(5)}},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(4)}, nil},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(5)}, nil},
 				},
 				new: []task{
 					&waitExpireTask{Duration: 14 * time.Second},
@@ -398,8 +395,8 @@ func TestDialStateStaticDial(t *testing.T) {
 					{rw: &conn{flags: staticDialedConn, id: uintID(5)}},
 				},
 				new: []task{
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(2)}},
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(4)}},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(2)}, nil},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(4)}, nil},
 				},
 			},
 		},
@@ -422,9 +419,9 @@ func TestDialStateCache(t *testing.T) {
 			{
 				peers: nil,
 				new: []task{
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(1)}},
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(2)}},
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(1)}, nil},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(2)}, nil},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}, nil},
 				},
 			},
 			// No new tasks are launched in this round because all static
@@ -435,8 +432,8 @@ func TestDialStateCache(t *testing.T) {
 					{rw: &conn{flags: staticDialedConn, id: uintID(2)}},
 				},
 				done: []task{
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(1)}},
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(2)}},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(1)}, nil},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(2)}, nil},
 				},
 			},
 			// A salvage task is launched to wait for node 3's history
@@ -447,7 +444,7 @@ func TestDialStateCache(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				done: []task{
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}, nil},
 				},
 				new: []task{
 					&waitExpireTask{Duration: 14 * time.Second},
@@ -467,7 +464,7 @@ func TestDialStateCache(t *testing.T) {
 					{rw: &conn{flags: dynDialedConn, id: uintID(2)}},
 				},
 				new: []task{
-					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}},
+					&dialTask{staticDialedConn, &discover.Node{ID: uintID(3)}, nil},
 				},
 			},
 		},
