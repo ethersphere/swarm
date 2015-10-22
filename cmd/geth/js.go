@@ -46,9 +46,12 @@ import (
 	"github.com/robertkrimen/otto"
 )
 
-var passwordRegexp = regexp.MustCompile("personal.[nu]")
-
-const passwordRepl = ""
+var (
+	passwordRegexp = regexp.MustCompile("personal.[nu]")
+	leadingSpace   = regexp.MustCompile("^ ")
+	onlyws         = regexp.MustCompile("^\\s*$")
+	exit           = regexp.MustCompile("^\\s*exit\\s*;*\\s*$")
+)
 
 type prompter interface {
 	AppendHistory(string)
@@ -147,13 +150,13 @@ func apiWordCompleter(line string, pos int) (head string, completions []string, 
 	return begin, completionWords, end
 }
 
-func newLightweightJSRE(libPath string, client comms.EthereumClient, datadir string, interactive bool) *jsre {
+func newLightweightJSRE(docRoot string, client comms.EthereumClient, datadir string, interactive bool) *jsre {
 	js := &jsre{ps1: "> "}
 	js.wait = make(chan *big.Int)
 	js.client = client
 
 	// update state in separare forever blocks
-	js.re = re.New(libPath)
+	js.re = re.New(docRoot)
 	if err := js.apiBindings(js); err != nil {
 		utils.Fatalf("Unable to initialize console - %v", err)
 	}
@@ -341,6 +344,14 @@ func (js *jsre) apiBindings(f xeth.Frontend) error {
 	return nil
 }
 
+func (self *jsre) AskPassword() (string, bool) {
+	pass, err := self.PasswordPrompt("Passphrase: ")
+	if err != nil {
+		return "", false
+	}
+	return pass, true
+}
+
 func (self *jsre) ConfirmTransaction(tx string) bool {
 	if self.ethereum.NatSpec {
 		notice := natspec.GetNotice(self.xeth, tx, self.ds)
@@ -412,18 +423,17 @@ func (self *jsre) interactive() {
 			fmt.Println("caught interrupt, exiting")
 			return
 		case input, ok := <-inputln:
-			if !ok || indentCount <= 0 && input == "exit" {
+			if !ok || indentCount <= 0 && exit.MatchString(input) {
 				return
 			}
-			if input == "" {
+			if onlyws.MatchString(input) {
 				continue
 			}
 			str += input + "\n"
 			self.setIndent()
 			if indentCount <= 0 {
-				hist := hidepassword(str[:len(str)-1])
-				if len(hist) > 0 {
-					self.AppendHistory(hist)
+				if mustLogInHistory(str) {
+					self.AppendHistory(str[:len(str)-1])
 				}
 				self.parseInput(str)
 				str = ""
@@ -432,12 +442,10 @@ func (self *jsre) interactive() {
 	}
 }
 
-func hidepassword(input string) string {
-	if passwordRegexp.MatchString(input) {
-		return passwordRepl
-	} else {
-		return input
-	}
+func mustLogInHistory(input string) bool {
+	return len(input) == 0 ||
+		passwordRegexp.MatchString(input) ||
+		leadingSpace.MatchString(input)
 }
 
 func (self *jsre) withHistory(datadir string, op func(*os.File)) {

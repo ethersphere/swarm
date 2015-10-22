@@ -149,10 +149,9 @@ var (
 		Name:  "olympic",
 		Usage: "Use olympic style protocol",
 	}
-	EthVersionFlag = cli.IntFlag{
-		Name:  "eth",
-		Value: 62,
-		Usage: "Highest eth protocol to advertise (temporary, dev option)",
+	FastSyncFlag = cli.BoolFlag{
+		Name:  "fast",
+		Usage: "Enables fast syncing through state downloads",
 	}
 
 	// miner settings
@@ -184,6 +183,10 @@ var (
 		Name:  "gasprice",
 		Usage: "Sets the minimal gasprice when mining transactions",
 		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
+	}
+	ExtraDataFlag = cli.StringFlag{
+		Name:  "extradata",
+		Usage: "Extra data for the miner",
 	}
 
 	UnlockedAccountFlag = cli.StringFlag{
@@ -359,7 +362,7 @@ var (
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
-		Usage: "JS library path to be used with console and js subcommands",
+		Usage: "JS root path for loadScript and document root for admin.httpGet",
 		Value: ".",
 	}
 	SolcPathFlag = cli.StringFlag{
@@ -459,11 +462,13 @@ func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Cont
 			Fatalf("unable to configure swarm: %v", err)
 		}
 	}
+	// Assemble the entire eth configuration and return
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 datadir,
 		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
+		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
 		DatabaseCache:           ctx.GlobalInt(CacheFlag.Name),
 		SkipBcVersionCheck:      false,
@@ -509,6 +514,9 @@ func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Cont
 		cfg.TestNet = true
 	}
 
+	if ctx.GlobalBool(VMEnableJitFlag.Name) {
+		cfg.Name += "/JIT"
+	}
 	if ctx.GlobalBool(DevModeFlag.Name) {
 		if !ctx.GlobalIsSet(VMDebugFlag.Name) {
 			cfg.VmDebug = true
@@ -533,7 +541,6 @@ func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Cont
 
 		glog.V(logger.Info).Infoln("dev mode enabled")
 	}
-
 	return cfg
 }
 
@@ -564,18 +571,6 @@ func SetupVM(ctx *cli.Context) {
 	vm.EnableJit = ctx.GlobalBool(VMEnableJitFlag.Name)
 	vm.ForceJit = ctx.GlobalBool(VMForceJitFlag.Name)
 	vm.SetJITCacheSize(ctx.GlobalInt(VMJitCacheFlag.Name))
-}
-
-// SetupEth configures the eth packages global settings
-func SetupEth(ctx *cli.Context) {
-	version := ctx.GlobalInt(EthVersionFlag.Name)
-	for len(eth.ProtocolVersions) > 0 && eth.ProtocolVersions[0] > uint(version) {
-		eth.ProtocolVersions = eth.ProtocolVersions[1:]
-		eth.ProtocolLengths = eth.ProtocolLengths[1:]
-	}
-	if len(eth.ProtocolVersions) == 0 {
-		Fatalf("No valid eth protocols remaining")
-	}
 }
 
 // MakeChain creates a chain manager from set command line flags.
@@ -656,7 +651,7 @@ func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
 		xeth := xeth.New(ethereum, fe)
 		codec := codec.JSON
 
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, ethereum, "")
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, ethereum, ctx.GlobalString(JSpathFlag.Name))
 		if err != nil {
 			return nil, err
 		}
@@ -676,9 +671,7 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 
 	xeth := xeth.New(eth, nil)
 	codec := codec.JSON
-	docRoot := ctx.GlobalString(JSpathFlag.Name)
-
-	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth, docRoot)
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth, ctx.GlobalString(JSpathFlag.Name))
 	if err != nil {
 		return err
 	}

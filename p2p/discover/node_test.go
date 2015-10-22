@@ -39,13 +39,10 @@ var parseNodeTests = []struct {
 		wantError: `invalid URL scheme, want "enode"`,
 	},
 	{
-		rawurl:    "enode://foobar",
-		wantError: `does not contain node ID`,
-	},
-	{
 		rawurl:    "enode://01010101@123.124.125.126:3",
 		wantError: `invalid node ID (wrong length, need 64 hex bytes)`,
 	},
+	// Complete nodes with IP address.
 	{
 		rawurl:    "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439@hostname:3",
 		wantError: `invalid IP address`,
@@ -93,6 +90,18 @@ var parseNodeTests = []struct {
 			22334,
 			52150,
 		),
+	},
+	// Incomplete nodes with no address.
+	{
+		rawurl: "enode://1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439",
+		wantResult: newNode(
+			MustHexID("0x1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+			nil, 0, 0,
+		),
+	},
+	{
+		rawurl:    "enode://01010101",
+		wantError: `invalid node ID (wrong length, need 64 hex bytes)`,
 	},
 }
 
