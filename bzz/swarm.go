@@ -33,17 +33,17 @@ func NewSwarm(config *Config) (self *Swarm, proto p2p.Protocol, err error) {
 		config: config,
 	}
 
-	self.hive, err = newHive()
+	self.hive, err = newHive(config.HiveParams)
 	if err != nil {
 		return
 	}
 
-	self.netStore, err = newNetStore(filepath.Join(config.Path, "db"), self.hive)
+	self.netStore, err = newNetStore(makeHashFunc(config.ChunkerParams.Hash), config.StoreParams, self.hive)
 	if err != nil {
 		return
 	}
 
-	self.dpa = newDPA(self.netStore)
+	self.dpa = newDPA(self.netStore, self.config.ChunkerParams)
 
 	self.api = NewApi(self.dpa, self.config)
 
@@ -159,23 +159,24 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	return
 }
 
+// for testing locally
 func newLocalDPA(datadir string) (*DPA, error) {
 
-	dbStore, err := newDbStore(datadir)
-	// dbStore.setCapacity(50000)
+	hash := makeHashFunc("SHA256")
+
+	dbStore, err := newDbStore(datadir, hash, 50000, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	return newDPA(&localStore{
-		newMemStore(dbStore),
+		newMemStore(dbStore, 500),
 		dbStore,
-	}), nil
+	}, NewChunkerParams()), nil
 }
 
-func newDPA(store ChunkStore) *DPA {
-	chunker := &TreeChunker{}
-	chunker.Init()
+func newDPA(store ChunkStore, params *ChunkerParams) *DPA {
+	chunker := NewTreeChunker(params)
 	return &DPA{
 		Chunker:    chunker,
 		ChunkStore: store,

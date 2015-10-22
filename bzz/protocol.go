@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"fmt"
 	"net"
-	"path"
 	"strconv"
 	"time"
 
@@ -81,7 +80,6 @@ type bzzProtocol struct {
 	key        Key
 	rw         p2p.MsgReadWriter
 	errors     *errs.Errors
-	requestDb  *LDBDatabase
 	quitC      chan bool
 
 	swap       *swap.Swap
@@ -354,24 +352,19 @@ the Dev p2p layer then runs the protocol instance on each peer
 */
 func BzzProtocol(netstore *netStore, sp *swapParams) (p2p.Protocol, error) {
 
-	db, err := NewLDBDatabase(path.Join(netstore.path, "requests"))
-	if err != nil {
-		return p2p.Protocol{}, err
-	}
-
 	return p2p.Protocol{
 		Name:    "bzz",
 		Version: Version,
 		Length:  ProtocolLength,
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-			return runBzzProtocol(db, netstore, sp, p, rw)
+			return runBzzProtocol(netstore, sp, p, rw)
 		},
 	}, nil
 }
 
 // the main loop that handles incoming messages
 // note RemovePeer in the post-disconnect hook
-func runBzzProtocol(db *LDBDatabase, netstore *netStore, sp *swapParams, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
+func runBzzProtocol(netstore *netStore, sp *swapParams, p *p2p.Peer, rw p2p.MsgReadWriter) (err error) {
 
 	self := &bzzProtocol{
 		netStore: netstore,
@@ -381,7 +374,6 @@ func runBzzProtocol(db *LDBDatabase, netstore *netStore, sp *swapParams, p *p2p.
 			Package: "BZZ",
 			Errors:  errorToString,
 		},
-		requestDb:  db,
 		swapParams: sp,
 		quitC:      make(chan bool),
 	}
@@ -608,7 +600,7 @@ func (self *bzzProtocol) storeRequestLoop() {
 LOOP:
 	for {
 		if n == 0 {
-			it = self.requestDb.NewIterator()
+			it = self.netStore.requestDb.NewIterator()
 			// glog.V(logger.Debug).Infof("[BZZ] seek iterator: %x", key)
 			it.Seek(key)
 			if !it.Valid() {
@@ -631,7 +623,7 @@ LOOP:
 
 		chunk, err := self.netStore.localStore.dbStore.Get(key[32:])
 		if err != nil {
-			self.requestDb.Delete(key)
+			self.netStore.requestDb.Delete(key)
 			continue
 		}
 		// glog.V(logger.Debug).Infof("[BZZ] sending chunk: %x", chunk.Key)
@@ -645,7 +637,7 @@ LOOP:
 		self.store(req)
 
 		n--
-		self.requestDb.Delete(key)
+		self.netStore.requestDb.Delete(key)
 		it.Next()
 		key = it.Key()
 		if len(key) == 0 {
@@ -689,7 +681,7 @@ func (self *bzzProtocol) storeRequest(key Key) {
 	copy(peerKey, self.addrKey())
 	copy(peerKey[32:], key[:])
 	glog.V(logger.Debug).Infof("[BZZ] enter store request %x into db", peerKey)
-	self.requestDb.Put(peerKey, []byte{0})
+	self.netStore.requestDb.Put(peerKey, []byte{0})
 }
 
 // send paymentMsg

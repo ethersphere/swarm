@@ -24,8 +24,7 @@ func main() {
 
 	stat, _ := f.Stat()
 	sr := io.NewSectionReader(f, 0, stat.Size())
-	chunker := &bzz.TreeChunker{}
-	chunker.Init()
+	chunker := bzz.NewTreeChunker(bzz.NewChunkerParams())
 	hash := make([]byte, chunker.KeySize())
 	errC := chunker.Split(hash, sr, nil, nil)
 	err, ok := <-errC

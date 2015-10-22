@@ -11,6 +11,7 @@ const (
 	memTreeLW              = 2  // log2(subtree count) of the subtrees
 	memTreeFLW             = 14 // log2(subtree count) of the root layer
 	dbForceUpdateAccessCnt = 1000
+	defaultCacheCapacity   = 5000
 )
 
 type memStore struct {
@@ -35,11 +36,11 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
   (access[] is a binary tree inside the multi-bit leveled hash tree)
 */
 
-func newMemStore(d *dbStore) (m *memStore) {
+func newMemStore(d *dbStore, capacity uint) (m *memStore) {
 	m = &memStore{}
 	m.memtree = newMemTree(memTreeFLW, nil, 0)
 	m.dbStore = d
-	m.setCapacity(500)
+	m.setCapacity(capacity)
 	return
 }
 

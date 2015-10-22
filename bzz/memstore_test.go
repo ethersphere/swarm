@@ -5,7 +5,7 @@ import (
 )
 
 func testMemStore(l int64, branches int64, t *testing.T) {
-	m := newMemStore(nil)
+	m := newMemStore(nil, defaultCacheCapacity)
 	testStore(m, l, branches, t)
 }
 
@@ -26,7 +26,7 @@ func TestMemStore2_100(t *testing.T) {
 }
 
 func TestMemStoreNotFound(t *testing.T) {
-	m := newMemStore(nil)
+	m := newMemStore(nil, defaultCacheCapacity)
 	zeroKey := make([]byte, 32)
 	_, err := m.Get(zeroKey)
 	if err != notFound {

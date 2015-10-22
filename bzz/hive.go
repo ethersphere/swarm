@@ -38,7 +38,27 @@ type hive struct {
 	more chan bool
 }
 
-func newHive() (*hive, error) {
+const (
+	bucketSize  = 3
+	maxProx     = 10
+	proxBinSize = 8
+)
+
+type HiveParams struct {
+	BucketSize  uint
+	MaxProx     uint
+	ProxBinSize uint
+}
+
+func NewHiveParams() *HiveParams {
+	return &HiveParams{
+		BucketSize:  bucketSize,
+		MaxProx:     maxProx,
+		ProxBinSize: proxBinSize,
+	}
+}
+
+func newHive(params *HiveParams) (*hive, error) {
 	kad := kademlia.New()
 	kad.BucketSize = 3
 	kad.MaxProx = 10
