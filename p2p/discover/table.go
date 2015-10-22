@@ -197,6 +197,28 @@ func (tab *Table) Bootstrap(nodes []*Node) {
 	tab.requestRefresh()
 }
 
+// Resolve searches for a specific node with the given ID.
+// It returns nil if the node could not be found.
+func (tab *Table) Resolve(targetID NodeID) *Node {
+	// If the node is present in the local table, no
+	// network interaction is required.
+	hash := crypto.Sha3Hash(targetID[:])
+	tab.mutex.Lock()
+	cl := tab.closest(hash, 1)
+	tab.mutex.Unlock()
+	if len(cl.entries) > 0 && cl.entries[0].ID == targetID {
+		return cl.entries[0]
+	}
+	// Otherwise, do a network lookup.
+	result := tab.Lookup(targetID)
+	for _, n := range result {
+		if n.ID == targetID {
+			return n
+		}
+	}
+	return nil
+}
+
 // Lookup performs a network search for nodes close
 // to the given target. It approaches the target by querying
 // nodes that are closer to it on each iteration.
