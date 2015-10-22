@@ -2,11 +2,14 @@ package bzz
 
 import (
 	"math/rand"
+	"path/filepath"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 var (
@@ -31,11 +34,13 @@ type peer struct {
 // to keep the nodetable uptodate
 
 type hive struct {
-	addr kademlia.Address
-	kad  *kademlia.Kademlia
-	path string
-	ping chan bool
-	more chan bool
+	listenAddr func() string
+	id         discover.NodeID
+	addr       kademlia.Address
+	kad        *kademlia.Kademlia
+	path       string
+	ping       chan bool
+	more       chan bool
 }
 
 const (
@@ -48,32 +53,36 @@ type HiveParams struct {
 	BucketSize  uint
 	MaxProx     uint
 	ProxBinSize uint
+	KadDbPath   string
 }
 
-func NewHiveParams() *HiveParams {
+func NewHiveParams(path string) *HiveParams {
 	return &HiveParams{
 		BucketSize:  bucketSize,
 		MaxProx:     maxProx,
 		ProxBinSize: proxBinSize,
+		KadDbPath:   filepath.Join(path, "bzz-peers.json"),
 	}
 }
 
-func newHive(params *HiveParams) (*hive, error) {
+func newHive(addr common.Hash, id discover.NodeID, params *HiveParams) (*hive, error) {
 	kad := kademlia.New()
-	kad.BucketSize = 3
-	kad.MaxProx = 10
-	kad.ProxBinSize = 8
+	kad.BucketSize = int(params.BucketSize)
+	kad.MaxProx = int(params.MaxProx)
+	kad.ProxBinSize = int(params.ProxBinSize)
 	return &hive{
-		kad: kad,
+		id:   id,
+		kad:  kad,
+		addr: kademlia.Address(addr),
+		path: params.KadDbPath,
 	}, nil
 }
 
-func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(string) error) (err error) {
+func (self *hive) start(listenAddr func() string, connectPeer func(string) error) (err error) {
 	self.ping = make(chan bool)
 	self.more = make(chan bool)
-	self.path = hivepath
+	self.listenAddr = listenAddr
 
-	self.addr = kademlia.Address(baseAddr.hash)
 	self.kad.Start(self.addr)
 	err = self.kad.Load(self.path)
 	if err != nil {
@@ -92,7 +101,7 @@ func (self *hive) start(baseAddr *peerAddr, hivepath string, connectPeer func(st
 		for _ = range self.ping {
 			node, proxLimit := self.kad.GetNodeRecord()
 			if node != nil && len(node.Url) > 0 {
-				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node)
+				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node.Url)
 				// enode or any lower level connection address is unnecessary in future
 				// discovery table is used to look it up.
 				connectPeer(node.Url)

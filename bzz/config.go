@@ -56,9 +56,9 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		// file does not exist
 
 		self = &Config{
-			HiveParams:    NewHiveParams(),
+			HiveParams:    NewHiveParams(dirpath),
 			ChunkerParams: NewChunkerParams(),
-			StoreParams:   NewStoreParams(path),
+			StoreParams:   NewStoreParams(dirpath),
 			Port:          port,
 			Path:          dirpath,
 			Swap:          defaultSwapParams(contract, prvKey),

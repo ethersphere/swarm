@@ -14,9 +14,9 @@ import (
 const (
 	hexprvkey     = "65138b2aa745041b372153550584587da326ab440576b2a1191dd95cee30039c"
 	defaultConfig = `{
-    "ChunkDbPath": "TMPDIR/chunks",
+    "ChunkDbPath": "TMPDIR/0d2f62485607cf38d9d795d93682a517661e513e/chunks",
     "DbCapacity": 5000000,
-    "RequestDbPath": "TMPDIR/requests",
+    "RequestDbPath": "TMPDIR/0d2f62485607cf38d9d795d93682a517661e513e/requests",
     "CacheCapacity": 5000,
     "Radius": 0,
     "Branches": 128,

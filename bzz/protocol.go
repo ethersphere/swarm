@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
@@ -74,6 +75,7 @@ var errorToString = map[int]string{
 // bzzProtocol represents the swarm wire protocol
 // an instance is running on each peer
 type bzzProtocol struct {
+	selfID     discover.NodeID
 	netStore   *netStore
 	peer       *p2p.Peer
 	remoteAddr *peerAddr
@@ -378,8 +380,6 @@ func runBzzProtocol(netstore *netStore, sp *swapParams, p *p2p.Peer, rw p2p.MsgR
 		quitC:      make(chan bool),
 	}
 
-	glog.V(logger.Info).Infof("[BZZ] listening address: %v", self.netStore.addr())
-
 	go self.storeRequestLoop()
 
 	err = self.handleStatus()
@@ -389,7 +389,6 @@ func runBzzProtocol(netstore *netStore, sp *swapParams, p *p2p.Peer, rw p2p.MsgR
 			if err != nil {
 				// if the handler loop exits, the peer is disconnecting
 				// deregister the peer in the hive
-				glog.V(logger.Info).Infof("[BZZ] listening address: %v", self.netStore.addr())
 				self.netStore.hive.removePeer(peer{bzzProtocol: self})
 				break
 			}
@@ -483,7 +482,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 			Profile:    self.swapParams.Profile,
 			payProfile: self.swapParams.payProfile,
 		},
-		Addr:      self.netStore.addr(),
+		Addr:      self.selfAddr(),
 		NetworkId: uint64(NetworkId),
 		Caps:      []p2p.Cap{},
 		// Sync:      self.syncer.lastSynced(),
@@ -523,7 +522,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	}
 
 	self.remoteAddr = status.Addr.new()
-	glog.V(logger.Detail).Infof("[BZZ] self: advertised IP: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.netStore.addr().IP, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
+	glog.V(logger.Detail).Infof("[BZZ] self: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.selfAddr(), self.remoteAddr, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
 
 	// set remote profile for accounting
 	self.swap, err = newSwap(self.swapParams, status.Swap, self)
@@ -569,6 +568,7 @@ func (self *bzzProtocol) String() string {
 	return fmt.Sprintf("%v", self.peerAddr().new())
 }
 
+//
 func (self *bzzProtocol) peerAddr() *peerAddr {
 	p := self.peer
 	id := p.ID()
@@ -579,6 +579,20 @@ func (self *bzzProtocol) peerAddr() *peerAddr {
 		IP:   net.ParseIP(host),
 		Port: uint16(intport),
 	}
+}
+
+//
+func (self *bzzProtocol) selfAddr() *peerAddr {
+	id := self.netStore.hive.id
+	host, port, _ := net.SplitHostPort(self.netStore.hive.listenAddr())
+	intport, _ := strconv.Atoi(port)
+	addr := &peerAddr{
+		ID:   id[:],
+		IP:   net.ParseIP(host),
+		Port: uint16(intport),
+	}
+	glog.V(logger.Debug).Infof("[BZZ] self addr advertised: %v %v %v (%v)", addr, addr.IP, addr.Port, self.netStore.hive.listenAddr())
+	return addr
 }
 
 // storeRequestLoop is buffering store requests to be sent over to the peer

@@ -422,7 +422,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	if config.BzzConfig != nil {
 		var proto p2p.Protocol
-		eth.Swarm, proto, err = bzz.NewSwarm(config.BzzConfig)
+		eth.Swarm, proto, err = bzz.NewSwarm(discover.PubkeyID(&netprv.PublicKey), config.BzzConfig)
 		if err != nil {
 			fmt.Printf("error -> : %v\n", err)
 			panic("nyomi")
@@ -587,13 +587,8 @@ func (s *Ethereum) Start() error {
 		s.whisper.Start()
 	}
 
-	if s.Swarm != nil && s.net.Self() != nil {
-		glog.V(logger.Info).Infof("enode after net started: %v, listening on: %v", s.net.Self(), s.net.ListenAddr)
-		listenAddr := s.net.ListenAddr
-		if listenAddr == "" {
-			listenAddr = ":0"
-		}
-		s.Swarm.Start(s.net.Self(), listenAddr, s.AddPeer)
+	if s.Swarm != nil {
+		s.Swarm.Start(func() string { return s.net.ListenAddr }, s.AddPeer)
 	}
 
 	glog.V(logger.Info).Infoln("Server started")

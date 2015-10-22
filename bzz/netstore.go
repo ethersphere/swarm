@@ -31,8 +31,6 @@ type netStore struct {
 	lock       sync.Mutex
 	requestDb  *LDBDatabase
 	hive       *hive
-	self       *peerAddr
-	ready      chan bool
 }
 
 type StoreParams struct {
@@ -72,7 +70,6 @@ func newNetStore(hash hasher, params *StoreParams, h *hive) (netstore *netStore,
 		localStore: lstore,
 		hive:       h,
 		requestDb:  db,
-		ready:      make(chan bool),
 	}
 	return
 }
@@ -119,22 +116,9 @@ func newRequestStatus() *requestStatus {
 	}
 }
 
-// netStore is started only when the network is started and the node has a
-// network address advertised to peers via the bzz protocol handshake (Status Msg)
-func (self *netStore) start(addr *peerAddr) (err error) {
-	self.self = addr
-	close(self.ready)
+// netStore is started
+func (self *netStore) start() (err error) {
 	return
-}
-
-// The bzz protocol instance is started by the network when a bzz capable peer
-// is connected. Since this is on a different thread, the protocol needs to
-// wait for the netStore to be started before it sends out the handshake (Status Msg)
-// by closing the ready channel by start addr will block until network address
-// is available to the netStore also.
-func (self *netStore) addr() *peerAddr {
-	<-self.ready
-	return self.self
 }
 
 // not relevant as of yet

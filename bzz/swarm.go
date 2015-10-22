@@ -3,9 +3,6 @@ package bzz
 import (
 	"bytes"
 	"fmt"
-	"net"
-	"path/filepath"
-	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/chequebook"
@@ -27,13 +24,13 @@ type Swarm struct {
 }
 
 //
-func NewSwarm(config *Config) (self *Swarm, proto p2p.Protocol, err error) {
+func NewSwarm(id discover.NodeID, config *Config) (self *Swarm, proto p2p.Protocol, err error) {
 
 	self = &Swarm{
 		config: config,
 	}
 
-	self.hive, err = newHive(config.HiveParams)
+	self.hive, err = newHive(common.HexToHash(self.config.BzzKey), id, config.HiveParams)
 	if err != nil {
 		return
 	}
@@ -57,11 +54,9 @@ Start is called when the ethereum stack is started
 - launches the netStore (starts kademlia hive peer management)
 - starts an http server
 */
-func (self *Swarm) Start(node *discover.Node, listenAddr string, connectPeer func(string) error) {
+func (self *Swarm) Start(listenAddr func() string, connectPeer func(string) error) {
 	var err error
-	if node == nil {
-		err = fmt.Errorf("basenode nil")
-	} else if self.netStore == nil {
+	if self.netStore == nil {
 		err = fmt.Errorf("netStore is nil")
 	} else if connectPeer == nil {
 		err = fmt.Errorf("no connect peer function")
@@ -70,35 +65,27 @@ func (self *Swarm) Start(node *discover.Node, listenAddr string, connectPeer fun
 	} else if bytes.Equal(common.FromHex(self.config.BzzKey), zeroKey) {
 		err = fmt.Errorf("empty bzz key")
 	} else { // this is how we calculate the bzz address of the node
-		// ideally this should be using the swarm hash function
 
-		var port string
-		_, port, err = net.SplitHostPort(listenAddr)
-		if err == nil {
-			intport, err := strconv.Atoi(port)
+		err = self.hive.start(listenAddr, connectPeer)
+		if err != nil {
+			glog.V(logger.Warn).Infof("[BZZ] Swarm hive could not be started: %v", err)
+		} else {
+			err = self.netStore.start()
 			if err != nil {
-				err = fmt.Errorf("invalid port in '%s'", listenAddr)
+
+				glog.V(logger.Info).Infof("[BZZ] Swarm netstore could not be started: %v", err)
 			} else {
-				baseAddr := &peerAddr{
-					ID:   common.FromHex(self.config.PublicKey),
-					IP:   node.IP,
-					Port: uint16(intport),
-				}
-				baseAddr.new()
-				err = self.hive.start(baseAddr, filepath.Join(self.config.Path, "bzz-peers.json"), connectPeer)
-				if err == nil {
-					err = self.netStore.start(baseAddr)
-					if err == nil {
-						glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %064x", baseAddr.hash[:])
-					}
-				}
+				glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %v", self.hive.addr)
 			}
 		}
 	}
+
 	if err != nil {
 		glog.V(logger.Info).Infof("[BZZ] Swarm started started offline: %v", err)
 	}
+
 	self.dpa.Start()
+
 	if self.config.Port != "" {
 		go startHttpServer(self.api, self.config.Port)
 	}
