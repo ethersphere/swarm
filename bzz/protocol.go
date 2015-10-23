@@ -561,10 +561,8 @@ func (self *bzzProtocol) String() string {
 // repair reported address if IP missing
 func (self *bzzProtocol) peerAddr(base *peerAddr) *peerAddr {
 	if base.IP.IsUnspecified() {
-		host, port, _ := net.SplitHostPort(self.peer.RemoteAddr().String())
-		intport, _ := strconv.Atoi(port)
+		host, _, _ := net.SplitHostPort(self.peer.RemoteAddr().String())
 		base.IP = net.ParseIP(host)
-		base.Port = uint16(intport)
 	}
 	return base
 }
