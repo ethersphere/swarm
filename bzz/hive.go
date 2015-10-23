@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	pingInterval = 10 * time.Second
+	pingInterval = 1 * time.Second
 )
 
 type peer struct {
