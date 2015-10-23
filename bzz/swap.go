@@ -30,7 +30,7 @@ var (
 	buyAt                = big.NewInt(20000000000)     // maximum chunk price host is willing to pay (wei)
 	sellAt               = big.NewInt(20000000000)     // minimum chunk price host requires (wei)
 	payAt                = 100                         // threshold that triggers payment request (units)
-	dropAt               = 150                         // threshold that triggers disconnect (units)
+	dropAt               = 10000                       // threshold that triggers disconnect (units)
 )
 
 type swapParams struct {

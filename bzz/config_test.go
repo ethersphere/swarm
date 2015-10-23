@@ -31,7 +31,7 @@ const (
         "BuyAt": 20000000000,
         "SellAt": 20000000000,
         "PayAt": 100,
-        "DropAt": 150,
+        "DropAt": 10000,
         "AutoCashInterval": 300000000000,
         "AutoCashThreshold": 50000000000000,
         "AutoDepositInterval": 300000000000,
