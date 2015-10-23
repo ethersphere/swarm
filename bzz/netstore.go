@@ -317,6 +317,7 @@ func (self *netStore) startSearch(req *retrieveRequestMsgData, chunk *Chunk) {
 		}
 		if !requester {
 			peer.retrieve(req)
+			break
 		}
 	}
 }
