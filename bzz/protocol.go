@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/common/swap"
@@ -234,24 +233,15 @@ func (self retrieveRequestMsgData) getTimeout() (t *time.Time) {
 
 // peerAddr is sent in StatusMsg as part of the handshake
 type peerAddr struct {
-	IP    net.IP
-	Port  uint16
-	ID    []byte      // the 64 byte NodeID (ECDSA Public Key)
-	hash  common.Hash // [not serialised] Sha3 hash of NodeID
-	enode string      // [not serialised] the enode URL of the peers Address
+	IP   net.IP
+	Port uint16
+	ID   []byte // the 64 byte NodeID (ECDSA Public Key)
+	Addr kademlia.Address
 }
 
 // peerAddr pretty prints as enode
 func (self peerAddr) String() string {
-	return self.new().enode
-}
-
-// peerAddr.new is called to initialise hash of ID and enode after peerAddr
-// is deserialised from RLP
-func (self *peerAddr) new() *peerAddr {
-	self.hash = crypto.Sha3Hash(self.ID)
-	self.enode = fmt.Sprintf("enode://%x@%v:%d", self.ID, self.IP, self.Port)
-	return self
+	return fmt.Sprintf("enode://%x@%v:%d", self.ID, self.IP, self.Port)
 }
 
 /*
@@ -521,7 +511,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 		return self.protoError(ErrVersionMismatch, "%d (!= %d)", status.Version, Version)
 	}
 
-	self.remoteAddr = status.Addr.new()
+	self.remoteAddr = self.peerAddr(status.Addr)
 	glog.V(logger.Detail).Infof("[BZZ] self: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.selfAddr(), self.remoteAddr, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
 
 	// set remote profile for accounting
@@ -530,7 +520,7 @@ func (self *bzzProtocol) handleStatus() (err error) {
 		return
 	}
 
-	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.hash[:4], status.Version, status.NetworkId)
+	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
 	self.netStore.hive.addPeer(peer{bzzProtocol: self})
 
 	return nil
@@ -546,11 +536,11 @@ func (self *bzzProtocol) addrKey() []byte {
 
 // protocol instance implements kademlia.Node interface (embedded hive.peer)
 func (self *bzzProtocol) Addr() kademlia.Address {
-	return kademlia.Address(self.remoteAddr.hash)
+	return self.remoteAddr.Addr
 }
 
 func (self *bzzProtocol) Url() string {
-	return self.remoteAddr.enode
+	return self.remoteAddr.String()
 }
 
 // TODO:
@@ -565,28 +555,29 @@ func (self *bzzProtocol) Drop() {
 }
 
 func (self *bzzProtocol) String() string {
-	return fmt.Sprintf("%v", self.peerAddr().new())
+	return self.Url()
 }
 
-//
-func (self *bzzProtocol) peerAddr() *peerAddr {
-	p := self.peer
-	id := p.ID()
-	host, port, _ := net.SplitHostPort(p.RemoteAddr().String())
-	intport, _ := strconv.Atoi(port)
-	return &peerAddr{
-		ID:   id[:],
-		IP:   net.ParseIP(host),
-		Port: uint16(intport),
+// repair reported address if IP missing
+func (self *bzzProtocol) peerAddr(base *peerAddr) *peerAddr {
+	if base.IP.IsUnspecified() {
+		host, port, _ := net.SplitHostPort(self.peer.RemoteAddr().String())
+		intport, _ := strconv.Atoi(port)
+		base.IP = net.ParseIP(host)
+		base.Port = uint16(intport)
 	}
+	return base
 }
 
-//
+// returns self advertised node connection info (listening address w enodes)
+// IP will get repaired on the other end if missing
+// or resolved via ID by discovery at dialout
 func (self *bzzProtocol) selfAddr() *peerAddr {
 	id := self.netStore.hive.id
 	host, port, _ := net.SplitHostPort(self.netStore.hive.listenAddr())
 	intport, _ := strconv.Atoi(port)
 	addr := &peerAddr{
+		Addr: self.netStore.hive.addr,
 		ID:   id[:],
 		IP:   net.ParseIP(host),
 		Port: uint16(intport),

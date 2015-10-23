@@ -196,12 +196,11 @@ func (self *hive) getPeers(target Key, max int) (peers []peer) {
 }
 
 func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
-	addr.new()
 	now := time.Now()
 	return &kademlia.NodeRecord{
-		Addr:   kademlia.Address(addr.hash),
+		Addr:   addr.Addr,
 		Active: time.Now().Unix(),
-		Url:    addr.enode,
+		Url:    addr.String(),
 		After:  now.Unix(),
 	}
 }
