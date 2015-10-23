@@ -26,6 +26,7 @@ const (
     "BucketSize": 3,
     "MaxProx": 10,
     "ProxBinSize": 8,
+    "KadDbPath": "TMPDIR/0d2f62485607cf38d9d795d93682a517661e513e/bzz-peers.json",
     "Swap": {
         "BuyAt": 20000000000,
         "SellAt": 20000000000,
