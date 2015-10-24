@@ -23,6 +23,7 @@ const (
     "Hash": "SHA256",
     "JoinTimeout": 120,
     "SplitTimeout": 120,
+    "CallInterval": 1000000000,
     "BucketSize": 3,
     "MaxProx": 10,
     "ProxBinSize": 8,

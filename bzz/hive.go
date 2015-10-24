@@ -12,10 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-var (
-	pingInterval = 1 * time.Second
-)
-
 type peer struct {
 	*bzzProtocol
 }
@@ -34,34 +30,38 @@ type peer struct {
 // to keep the nodetable uptodate
 
 type hive struct {
-	listenAddr func() string
-	id         discover.NodeID
-	addr       kademlia.Address
-	kad        *kademlia.Kademlia
-	path       string
-	ping       chan bool
-	more       chan bool
+	listenAddr   func() string
+	callInterval uint
+	id           discover.NodeID
+	addr         kademlia.Address
+	kad          *kademlia.Kademlia
+	path         string
+	ping         chan bool
+	more         chan bool
 }
 
 const (
-	bucketSize  = 3
-	maxProx     = 10
-	proxBinSize = 8
+	callInterval = 1000000000
+	bucketSize   = 3
+	maxProx      = 10
+	proxBinSize  = 8
 )
 
 type HiveParams struct {
-	BucketSize  uint
-	MaxProx     uint
-	ProxBinSize uint
-	KadDbPath   string
+	CallInterval uint
+	BucketSize   uint
+	MaxProx      uint
+	ProxBinSize  uint
+	KadDbPath    string
 }
 
 func NewHiveParams(path string) *HiveParams {
 	return &HiveParams{
-		BucketSize:  bucketSize,
-		MaxProx:     maxProx,
-		ProxBinSize: proxBinSize,
-		KadDbPath:   filepath.Join(path, "bzz-peers.json"),
+		CallInterval: callInterval,
+		BucketSize:   bucketSize,
+		MaxProx:      maxProx,
+		ProxBinSize:  proxBinSize,
+		KadDbPath:    filepath.Join(path, "bzz-peers.json"),
 	}
 }
 
@@ -71,10 +71,11 @@ func newHive(addr common.Hash, id discover.NodeID, params *HiveParams) (*hive, e
 	kad.MaxProx = int(params.MaxProx)
 	kad.ProxBinSize = int(params.ProxBinSize)
 	return &hive{
-		id:   id,
-		kad:  kad,
-		addr: kademlia.Address(addr),
-		path: params.KadDbPath,
+		callInterval: params.CallInterval,
+		id:           id,
+		kad:          kad,
+		addr:         kademlia.Address(addr),
+		path:         params.KadDbPath,
 	}, nil
 }
 
@@ -137,7 +138,7 @@ func (self *hive) start(listenAddr func() string, connectPeer func(string) error
 }
 
 func (self *hive) pinger() {
-	clock := time.NewTicker(pingInterval)
+	clock := time.NewTicker(time.Duration(self.callInterval))
 	for {
 		select {
 		case <-clock.C:
