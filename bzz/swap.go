@@ -105,7 +105,7 @@ func newSwap(local *swapParams, remote *swapProfile, proto swap.Protocol) (self 
 	// remote profile given (first) in handshake
 	self.SetRemote(remote.Profile)
 
-	glog.V(logger.Info).Infof("[BZZ] SWAP auto cash ON for %v -> %v: interval = %v, threshold = %v, peer = %v)", local.Contract.Hex()[:8], local.Beneficiary.Hex()[:8], local.AutoCashInterval, local.AutoCashThreshold, proto)
+	glog.V(logger.Info).Infof("[BZZ] SWAP auto cash ON for %v -> %v: interval = %v, threshold = %v, peer = %v)", remote.Contract.Hex()[:8], local.Beneficiary.Hex()[:8], local.AutoCashInterval, local.AutoCashThreshold, proto)
 
 	return
 }
