@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/swap"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -38,10 +39,22 @@ Backend is the interface for that
 */
 
 const (
-	gasToCash     = "2000000"  // gas cost of a cash transaction using chequebook
-	getSentAbiPre = "d75d691d" // sent amount accessor in the chequebook contract
-	cashAbiPre    = "fbf788d6" // abi preamble signature for cash method of the chequebook
+	gasToCash     = "2000000"   // gas cost of a cash transaction using chequebook
+	getSentAbiPre = "d75d691d"  // sent amount accessor in the chequebook contract
+	cashAbiPre    = "fbf788d6"  // abi preamble signature for cash method of the chequebook
+	queryInterval = 15000000000 // 15 seconds
+	deployGas     = "3000000"
+	// confirmationInterval = 3 * 10 * *11 // 5 minutes
 )
+
+// Backend is the interface to interact with the Ethereum blockchain
+// implemented by xeth.XEth
+type Backend interface {
+	Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error)
+	Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, string, error)
+	GetTxReceipt(txhash common.Hash) *types.Receipt
+	CodeAt(address string) string
+}
 
 // rlp serialised cheque model for use with the chequebook
 type Cheque struct {
@@ -80,6 +93,61 @@ type Chequebook struct {
 	txhash    string   // tx hash of last deposit tx
 	threshold *big.Int // threshold that triggers autodeposit if not nil
 	buffer    *big.Int // buffer to keep on top of balance for fork protection
+}
+
+func Deploy(owner common.Address, backend Backend, amount *big.Int, confirmationInterval, timeout time.Duration) (contract common.Address, err error) {
+	if (owner == common.Address{}) {
+		return contract, fmt.Errorf("invalid owner %v. Owner needed to deploy chequebook contract: %v", owner.Hex(), err)
+	}
+
+	txhash, err := backend.Transact(owner.Hex(), "", "", amount.String(), deployGas, "", ContractCode)
+	if err != nil {
+		return contract, fmt.Errorf("unable to send chequebook creation transaction: %v", err)
+	}
+
+	timer := time.NewTimer(timeout).C
+	ticker := time.NewTicker(queryInterval).C
+OUT:
+	for {
+		select {
+
+		case <-timer:
+			if ticker == nil {
+				// ticker is nil, receipt was found and confirmation interval passed
+				err = Validate(contract, backend)
+				if err != nil {
+					return contract, fmt.Errorf("invalid contract at %v after %v: %v", contract.Hex(), confirmationInterval, err)
+				}
+				break OUT
+			}
+			// ticker is non-nil meaning receipt not found yet
+			return contract, fmt.Errorf("chequebook deployment timed out in %v", timeout)
+
+		case <-ticker:
+			receipt := backend.GetTxReceipt(common.HexToHash(txhash))
+			if receipt != nil {
+				contract = receipt.ContractAddress
+				glog.V(logger.Detail).Infof("chequebook deployed at %v (owner: %v)", contract.Hex(), owner.Hex())
+				timer = time.NewTimer(confirmationInterval).C
+				ticker = nil
+			} else {
+				glog.V(logger.Detail).Infof("check if chequebook deployed (txhash: %v)", txhash)
+			}
+
+		}
+	}
+	return contract, nil
+}
+
+func Validate(contract common.Address, backend Backend) (err error) {
+	if (contract == common.Address{}) {
+		return fmt.Errorf("zero address")
+	}
+	code := backend.CodeAt(contract.Hex())
+	if code != ContractDeployedCode {
+		return fmt.Errorf("incorrect code %v:\n%v\n%v", contract.Hex(), code, ContractDeployedCode)
+	}
+	return nil
 }
 
 // NewChequebook(path, contract, balance, prvKey) creates a new Chequebook
@@ -342,13 +410,6 @@ func (self *Chequebook) autoDeposit(interval time.Duration) {
 		}
 	}()
 	return
-}
-
-// Backend is the interface to interact with the Ethereum blockchain
-// implemented by xeth.XEth
-type Backend interface {
-	Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, error)
-	Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeStr string) (string, string, error)
 }
 
 type Outbox struct {

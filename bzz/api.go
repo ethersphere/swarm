@@ -47,15 +47,15 @@ func NewApi(dpa *DPA, conf *Config) (self *Api) {
 }
 
 func (self *Api) Issue(beneficiary common.Address, amount *big.Int) (cheque *chequebook.Cheque, err error) {
-	return self.conf.Swap.chequebook.Issue(beneficiary, amount)
+	return self.conf.Swap.chequebook().Issue(beneficiary, amount)
 }
 
 func (self *Api) Cash(cheque *chequebook.Cheque) (txhash string, err error) {
-	return self.conf.Swap.chequebook.Cash(cheque)
+	return self.conf.Swap.chequebook().Cash(cheque)
 }
 
 func (self *Api) Deposit(amount *big.Int) (txhash string, err error) {
-	return self.conf.Swap.chequebook.Deposit(amount)
+	return self.conf.Swap.chequebook().Deposit(amount)
 }
 
 // serialisable info about swarm

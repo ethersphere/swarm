@@ -92,9 +92,11 @@ type adminApi struct {
 // create a new admin api instance
 func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec, docRoot string) *adminApi {
 	ds := docserver.New(docRoot)
-	ds.RegisterScheme("bzz", &bzz.RoundTripper{
-		Port: ethereum.Swarm.ProxyPort(),
-	})
+	if ethereum.Swarm != nil {
+		ds.RegisterScheme("bzz", &bzz.RoundTripper{
+			Port: ethereum.Swarm.ProxyPort(),
+		})
+	}
 	return &adminApi{
 		xeth:     xeth,
 		ethereum: ethereum,

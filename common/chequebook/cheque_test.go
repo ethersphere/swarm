@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -34,6 +35,14 @@ func (b *testBackend) Call(fromStr, toStr, valueStr, gasStr, gasPriceStr, codeSt
 	b.calls = b.calls[1:]
 	b.errs = b.errs[1:]
 	return res, "", err
+}
+
+func (b *testBackend) GetTxReceipt(txhash common.Hash) *types.Receipt {
+	return nil
+}
+
+func (b *testBackend) CodeAt(address string) string {
+	return ""
 }
 
 func genAddr() common.Address {
