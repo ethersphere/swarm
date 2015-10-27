@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/docserver"
 	"github.com/ethereum/go-ethereum/common/natspec"
 	"github.com/ethereum/go-ethereum/common/registrar"
-	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -93,19 +92,9 @@ type adminApi struct {
 // create a new admin api instance
 func NewAdminApi(xeth *xeth.XEth, ethereum *eth.Ethereum, codec codec.Codec, docRoot string) *adminApi {
 	ds := docserver.New(docRoot)
-	if ethereum.Swarm != nil {
-		// register the swarm rountripper with the bzz scheme on the docserver
-		ds.RegisterScheme("bzz", &bzz.RoundTripper{
-			Port: ethereum.Swarm.ProxyPort(),
-		})
-		// set versioned registrar if swarm is enabled
-		err := ethereum.Swarm.SetChequebook(xeth)
-		if err != nil {
-			glog.Fatalf("Unable to set swarm backend: %v", err)
-		}
-		ethereum.Swarm.SetRegistrar(ethreg.New(xeth))
-	}
-
+	ds.RegisterScheme("bzz", &bzz.RoundTripper{
+		Port: ethereum.Swarm.ProxyPort(),
+	})
 	return &adminApi{
 		xeth:     xeth,
 		ethereum: ethereum,

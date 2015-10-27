@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/eth"
@@ -44,6 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/comms"
+	"github.com/ethereum/go-ethereum/xeth"
 )
 
 const (
@@ -599,6 +601,24 @@ func makeEthConfig(clientID, version string, ctx *cli.Context) *eth.Config {
 }
 
 func startEth(ctx *cli.Context, eth *eth.Ethereum) {
+
+	if eth.Swarm != nil {
+		// register the swarm rountripper with the bzz scheme on the docserver
+		// with PR 1919 http client will be part of ethereum
+		// ds.RegisterScheme("bzz", &bzz.RoundTripper{
+		// 	Port: ethereum.Swarm.ProxyPort(),
+		// })
+		xeth := xeth.New(eth, nil)
+		xeth.UpdateState()
+		// set chequebook
+		err := eth.Swarm.SetChequebook(xeth)
+		if err != nil {
+			glog.Fatalf("Unable to set swarm backend: %v", err)
+		}
+		// set versioned registrar
+		eth.Swarm.SetRegistrar(ethreg.New(xeth))
+	}
+
 	// Start Ethereum itself
 	utils.StartEthereum(eth)
 
