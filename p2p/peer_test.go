@@ -26,7 +26,6 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
-	"github.com/ethereum/go-ethereum/p2p/rlpx"
 )
 
 var discard = Protocol{
@@ -46,7 +45,7 @@ var discard = Protocol{
 	},
 }
 
-func testPeer(protos []Protocol, cfg *rlpx.Config) (*devConn, *Peer, <-chan DiscReason) {
+func testPeer(protos []Protocol) (*devConn, *Peer, <-chan DiscReason) {
 	fd1, fd2 := net.Pipe()
 	k1, k2 := newkey(), newkey()
 	c1 := &conn{transport: newDevConn(fd1, k1, &k2.PublicKey)}
@@ -153,8 +152,8 @@ func TestPeerDisconnectRace(t *testing.T) {
 	maybe := func() bool { return rand.Intn(1) == 1 }
 
 	for i := 0; i < 100; i++ {
-		protoclose := make(chan error)
-		protodisc := make(chan DiscReason)
+		protoclose := make(chan error, 1)
+		protodisc := make(chan DiscReason, 1)
 		conn, p, disc := testPeer([]Protocol{
 			{
 				Name:   "closereq",
@@ -167,6 +166,7 @@ func TestPeerDisconnectRace(t *testing.T) {
 				Length: 1,
 			},
 		})
+		conn.Handshake()
 
 		// Simulate incoming messages.
 		go SendItems(conn.protocols[1], 1)

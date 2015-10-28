@@ -120,6 +120,14 @@ func (p *Peer) run() DiscReason {
 		// *devConn.
 		devconn = p.conn.transport.(*devConn)
 	)
+
+	// Ensure that the RLPx handshake is done. The only time this will
+	// actually do anything is while testing because the tests don't
+	// trigger the handshake explicitly.
+	if err := devconn.Handshake(); err != nil {
+		return DiscProtocolError
+	}
+
 	p.wg.Add(2)
 	go p.readLoop(devconn.protocols[0], readErr)
 	go p.pingLoop(devconn.protocols[0])
