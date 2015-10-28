@@ -103,11 +103,10 @@ func doTestHandshake(t *testing.T) {
 // This test runs initator/recipient against each other for each test vector.
 func TestHandshakeTV(t *testing.T) {
 	for i, ht := range handshakeTV {
-		fmt.Println("test", i)
 		p1, p2 := net.Pipe()
 		run(t, rig{
-			"initiator": func() error { return checkInitiator(p1, ht, false) },
-			"recipient": func() error { return checkRecipient(p2, ht, false) },
+			"initiator": func() error { return checkInitiator(p1, ht) },
+			"recipient": func() error { return checkRecipient(p2, ht) },
 		})
 		if t.Failed() {
 			t.Fatalf("failed test case %d:\n%s", i, spew.Sdump(ht))
@@ -122,9 +121,8 @@ func TestHandshakePacketsRecipientTV(t *testing.T) {
 		p1, p2 := net.Pipe()
 		run(t, rig{
 			"recipient": func() error {
-				err := checkRecipient(p1, ht, true)
-				p1.Close()
-				return err
+				defer p1.Close()
+				return checkRecipient(p1, ht)
 			},
 			"auth packet send": func() error {
 				_, err := p2.Write(ht.encAuth)
@@ -148,9 +146,8 @@ func TestHandshakePacketsInitiatorTV(t *testing.T) {
 		p1, p2 := net.Pipe()
 		run(t, rig{
 			"initiator": func() error {
-				err := checkInitiator(p1, ht, true)
-				p1.Close()
-				return err
+				defer p1.Close()
+				return checkInitiator(p1, ht)
 			},
 			"authResp packet send": func() error {
 				_, err := p2.Write(ht.encAuthResp)
@@ -167,7 +164,38 @@ func TestHandshakePacketsInitiatorTV(t *testing.T) {
 	}
 }
 
-func checkInitiator(pipe net.Conn, ht handshakeTest, checkMAC bool) error {
+// This test checks that secrets.mac is initialized correctly.
+func TestHandshakeDeriveMacTV(t *testing.T) {
+	for i, ht := range handshakeTV {
+		h := handshake{
+			initiator:       true,
+			localPrivKey:    ht.initiator.Key,
+			remotePub:       ecies.ImportECDSAPublic(&ht.recipient.Key.PublicKey),
+			initNonce:       ht.initiatorNonce,
+			respNonce:       ht.recipientNonce,
+			randomPrivKey:   ecies.ImportECDSA(ht.initiatorEphemeralKey),
+			remoteRandomPub: ecies.ImportECDSAPublic(&ht.recipientEphemeralKey.PublicKey),
+		}
+		vsn, ingress, egress, err := h.deriveSecrets(ht.initiator.ForceV4, ht.encAuth, ht.encAuthResp)
+		if err != nil {
+			t.Error("deriveSecrets error: %v", err)
+		}
+		if sum := ingress.mac.Sum(nil); !bytes.Equal(sum, ht.initiatorIngressMacDigest) {
+			t.Errorf("ingress mac mismatch: got %x, want %x", sum, ht.initiatorIngressMacDigest)
+		}
+		if sum := egress.mac.Sum(nil); !bytes.Equal(sum, ht.initiatorEgressMacDigest) {
+			t.Errorf("egress mac mismatch: got %x, want %x", sum, ht.initiatorEgressMacDigest)
+		}
+		if err := ht.checkSecrets(vsn, nil, ingress, egress); err != nil {
+			t.Error(err)
+		}
+		if t.Failed() {
+			t.Fatalf("failed test case %d:\n%s", i, spew.Sdump(ht))
+		}
+	}
+}
+
+func checkInitiator(pipe net.Conn, ht handshakeTest) error {
 	remotePub := &ht.recipient.Key.PublicKey
 	conn := Client(pipe, remotePub, ht.initiator)
 	conn.handshakeRand = fakeRandSource{key: ht.initiatorEphemeralKey, nonce: ht.initiatorNonce}
@@ -175,20 +203,20 @@ func checkInitiator(pipe net.Conn, ht handshakeTest, checkMAC bool) error {
 	if err != nil {
 		return err
 	}
-	return ht.checkSecrets(vsn, nil, ingress, egress, checkMAC)
+	return ht.checkSecrets(vsn, nil, ingress, egress)
 }
 
-func checkRecipient(pipe net.Conn, ht handshakeTest, checkMAC bool) error {
+func checkRecipient(pipe net.Conn, ht handshakeTest) error {
 	conn := Server(pipe, ht.recipient)
 	conn.handshakeRand = fakeRandSource{key: ht.recipientEphemeralKey, nonce: ht.recipientNonce}
 	vsn, remoteID, ingress, egress, err := conn.recipientHandshake()
 	if err != nil {
 		return err
 	}
-	return ht.checkSecrets(vsn, remoteID, egress, ingress, checkMAC)
+	return ht.checkSecrets(vsn, remoteID, egress, ingress)
 }
 
-func (ht handshakeTest) checkSecrets(vsn uint, remoteID *ecdsa.PublicKey, ingress, egress secrets, checkMAC bool) error {
+func (ht handshakeTest) checkSecrets(vsn uint, remoteID *ecdsa.PublicKey, ingress, egress secrets) error {
 	if remoteID != nil && !reflect.DeepEqual(remoteID, &ht.initiator.Key.PublicKey) {
 		return fmt.Errorf("remoteID mismatch:\ngot  %x\nwant %x",
 			crypto.FromECDSAPub(remoteID), crypto.FromECDSAPub(&ht.initiator.Key.PublicKey))
@@ -196,15 +224,7 @@ func (ht handshakeTest) checkSecrets(vsn uint, remoteID *ecdsa.PublicKey, ingres
 	if vsn != ht.negotiatedVersion {
 		return fmt.Errorf("version mismatch: got %d, want %d", vsn, ht.negotiatedVersion)
 	}
-	if checkMAC {
-		if sum := ingress.mac.Sum(nil); !bytes.Equal(sum, ht.initiatorEgressMacDigest) {
-			return fmt.Errorf("ingress mac mismatch: got %x, want %x", sum, ht.initiatorEgressMacDigest)
-		}
-		if sum := egress.mac.Sum(nil); !bytes.Equal(sum, ht.initiatorIngressMacDigest) {
-			return fmt.Errorf("egress mac mismatch: got %x, want %x", sum, ht.initiatorIngressMacDigest)
-		}
-	}
-	// Remove the MACs so they are comparable with DeepEqual.
+	// Remove the MACs so secrets can be compared with DeepEqual.
 	ingress.mac, egress.mac = nil, nil
 	if !reflect.DeepEqual(ingress, ht.initiatorIngressSecrets) {
 		return fmt.Errorf("initiatorIngressSecrets mismatch:\ngot %swant %s",
@@ -223,8 +243,8 @@ type fakeRandSource struct {
 }
 
 func (ht fakeRandSource) generateNonce(b []byte) error {
-	if len(b) != len(ht.nonce) {
-		panic(fmt.Sprintf("requested nonce of size %d, have %d", len(b), len(ht.nonce)))
+	if len(b) > len(ht.nonce) {
+		panic(fmt.Sprintf("requested %d bytes of nonce data, have %d", len(b), len(ht.nonce)))
 	}
 	copy(b, ht.nonce)
 	return nil

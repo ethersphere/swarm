@@ -37,10 +37,9 @@ type handshakeTest struct {
 	// the other packet and computes the right secrets.
 	encAuth, encAuthResp []byte
 
-	// Digests of the string "foobar" created with each MAC hash.
-	// These are only checked when testing with the encrypted packets
-	// above because the initial hash states include the packets for
-	// RLPx V4.
+	// Digests of the empty string created with each MAC hash. These
+	// are checked TestHandshakeDeriveMacTV with the packets above
+	// because RLPx V4 includes the ciphertext in the hash.
 	initiatorIngressMacDigest, initiatorEgressMacDigest []byte
 }
 
@@ -57,8 +56,8 @@ var handshakeTV = []handshakeTest{
 		},
 		initiatorEphemeralKey: hexkey("19c2185f4f40634926ebed3af09070ca9e029f2edd5fae6253074896205f5f6c"),
 		recipientEphemeralKey: hexkey("d25688cf0ab10afa1a0e2dba7853ed5f1e5bf1c631757ed4e103b593ff3f5620"),
-		initiatorNonce:        hexb("cd26fecb93657d1cd9e9eaf4f8be720b56dd1d39f190c4e1"),
-		recipientNonce:        hexb("f37ec61d84cea03dcc5e8385db93248584e8af4b4d1c832d"),
+		initiatorNonce:        hexb("cd26fecb93657d1cd9e9eaf4f8be720b56dd1d39f190c4e10000000000000005"),
+		recipientNonce:        hexb("f37ec61d84cea03dcc5e8385db93248584e8af4b4d1c832d0000000000000005"),
 
 		encAuth: hexb(`
 			04f0849817e9483c39b1eead6f5a0dfb09cbc4c43151172c2549c5b07c9364f7
@@ -93,8 +92,8 @@ var handshakeTV = []handshakeTest{
 			encIV:  hexb("0e906055c0ca86940626d0fde4f3a9c2"),
 			macKey: hexb("c676534122bd3a555ca8f2d924b63222b1b5b5efccb7b37a52795c1c49450fdc"),
 		},
-		initiatorIngressMacDigest: hexb("47bb77bff168de73c7ae34473f4d085abdf97cce7e01cab6ee3a4f69a021645f"),
-		initiatorEgressMacDigest:  hexb("de72d7161bc7a9ddda4a70a48d08eda55d6fc4d90ef80a4b6645f81d6373e66b"),
+		initiatorIngressMacDigest: hexb("de72d7161bc7a9ddda4a70a48d08eda55d6fc4d90ef80a4b6645f81d6373e66b"),
+		initiatorEgressMacDigest:  hexb("47bb77bff168de73c7ae34473f4d085abdf97cce7e01cab6ee3a4f69a021645f"),
 	},
 
 	// initiator V5, recipient V4
@@ -109,7 +108,7 @@ var handshakeTV = []handshakeTest{
 		},
 		initiatorEphemeralKey: hexkey("19c2185f4f40634926ebed3af09070ca9e029f2edd5fae6253074896205f5f6c"),
 		recipientEphemeralKey: hexkey("d25688cf0ab10afa1a0e2dba7853ed5f1e5bf1c631757ed4e103b593ff3f5620"),
-		initiatorNonce:        hexb("cd26fecb93657d1cd9e9eaf4f8be720b56dd1d39f190c4e1"),
+		initiatorNonce:        hexb("cd26fecb93657d1cd9e9eaf4f8be720b56dd1d39f190c4e10000000000000005"),
 		recipientNonce:        hexb("f37ec61d84cea03dcc5e8385db93248584e8af4b4d1c832d8c7453c0089687a7"),
 
 		encAuth: hexb(`
@@ -145,8 +144,8 @@ var handshakeTV = []handshakeTest{
 			encIV:  hexb("00000000000000000000000000000000"),
 			macKey: hexb("cb2cd684639c1b64b80687b977c4140bea8c953a1f3975aca6f1589a850879ba"),
 		},
-		initiatorIngressMacDigest: hexb("a8cf67a022585ec79f180ed397769809d19a7901b12548f3a92e2834e8168cb7"),
-		initiatorEgressMacDigest:  hexb("cd93a99950e8679ff15eafb1d4c9055ad6fa3471e3851e5379704072fd495b70"),
+		initiatorIngressMacDigest: hexb("d835ba6c6ac42d4c686a2e3cee6b2ee0190a7da79d6275f2b0b4bdc71fb66709"),
+		initiatorEgressMacDigest:  hexb("1901e950288f010d005ccafede47d1dc177c442605a9702fcd6c5a0e717dc130"),
 	},
 
 	// initiator V4, recipient V5
@@ -162,7 +161,7 @@ var handshakeTV = []handshakeTest{
 		initiatorEphemeralKey: hexkey("19c2185f4f40634926ebed3af09070ca9e029f2edd5fae6253074896205f5f6c"),
 		recipientEphemeralKey: hexkey("d25688cf0ab10afa1a0e2dba7853ed5f1e5bf1c631757ed4e103b593ff3f5620"),
 		initiatorNonce:        hexb("cd26fecb93657d1cd9e9eaf4f8be720b56dd1d39f190c4e1c6b7ec66f077bb11"),
-		recipientNonce:        hexb("f37ec61d84cea03dcc5e8385db93248584e8af4b4d1c832d"),
+		recipientNonce:        hexb("f37ec61d84cea03dcc5e8385db93248584e8af4b4d1c832d0000000000000005"),
 
 		encAuth: hexb(`
 			0461109a208261e0bedca9b3d474e991409fe0f5be7fd757d33c3a2934be7819
@@ -197,6 +196,8 @@ var handshakeTV = []handshakeTest{
 			encIV:  hexb("00000000000000000000000000000000"),
 			macKey: hexb("274693e239751ff505004ed5ab680fd80823d49a12139554bffce549b32d048c"),
 		},
+		initiatorIngressMacDigest: hexb("395908f0f3da7e588aad3e6ec04fab504f0a65664bf8fe135b67ebaf4cc41daf"),
+		initiatorEgressMacDigest:  hexb("09cc2e837d5cf048f41ea39dccc4b07814a125dc5d47e416ae13dac8d4523239"),
 	},
 
 	// old V4 test vector from https://gist.github.com/fjl/3a78780d17c755d22df2
@@ -227,10 +228,13 @@ var handshakeTV = []handshakeTest{
 			c017fdd3d581e83cfd26cf125b6d2bda1f1d56
 		`),
 		encAuthResp: hexb(`
-			802b052f8b066640bba94a4fc39d63815c377fced6fcb84d27f791c9921ddf3e
-			9bf0108e298f490812847109cbd778fae393e80323fd643209841a3b7f110397
-			f37ec61d84cea03dcc5e8385db93248584e8af4b4d1c832d8c7453c0089687a7
-			00
+			049934a7b2d7f9af8fd9db941d9da281ac9381b5740e1f64f7092f3588d4f87f
+			5ce55191a6653e5e80c1c5dd538169aa123e70dc6ffc5af1827e546c0e958e42
+			dad355bcc1fcb9cdf2cf47ff524d2ad98cbf275e661bf4cf00960e74b5956b79
+			9771334f426df007350b46049adb21a6e78ab1408d5e6ccde6fb5e69f0f4c92b
+			b9c725c02f99fa72b9cdc8dd53cff089e0e73317f61cc5abf6152513cb7d833f
+			09d2851603919bf0fbe44d79a09245c6e8338eb502083dc84b846f2fee1cc310
+			d2cc8b1b9334728f97220bb799376233e113
 		`),
 
 		negotiatedVersion: 4,
@@ -244,5 +248,7 @@ var handshakeTV = []handshakeTest{
 			encIV:  hexb("00000000000000000000000000000000"),
 			macKey: hexb("48c938884d5067a1598272fcddaa4b833cd5e7d92e8228c0ecdfabbe68aef7f1"),
 		},
+		initiatorIngressMacDigest: hexb("75823d96e23136c89666ee025fb21a432be906512b3dd4a3049e898adb433847"),
+		initiatorEgressMacDigest:  hexb("09771e93b1a6109e97074cbe2d2b0cf3d3878efafe68f53c41bb60c0ec49097e"),
 	},
 }
