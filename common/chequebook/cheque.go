@@ -127,11 +127,11 @@ OUT:
 			receipt := backend.GetTxReceipt(common.HexToHash(txhash))
 			if receipt != nil {
 				contract = receipt.ContractAddress
-				glog.V(logger.Detail).Infof("chequebook deployed at %v (owner: %v)", contract.Hex(), owner.Hex())
+				glog.V(logger.Detail).Infof("[CHEQUEBOOK] chequebook deployed at %v (owner: %v)", contract.Hex(), owner.Hex())
 				timer = time.NewTimer(confirmationInterval).C
 				ticker = nil
 			} else {
-				glog.V(logger.Detail).Infof("check if chequebook deployed (txhash: %v)", txhash)
+				glog.V(logger.Detail).Infof("[CHEQUEBOOK] check if chequebook deployed (txhash: %v)", txhash)
 			}
 
 		}
@@ -165,7 +165,7 @@ func NewChequebook(path string, contract common.Address, prvKey *ecdsa.PrivateKe
 		owner:    owner,
 	}
 	if (contract != common.Address{}) {
-		glog.V(logger.Detail).Infof("new chequebook initialised from %v (owner: %v)", contract.Hex(), owner.Hex())
+		glog.V(logger.Detail).Infof("[CHEQUEBOOK] new chequebook initialised from %v (owner: %v)", contract.Hex(), owner.Hex())
 	}
 	return
 }
@@ -184,7 +184,7 @@ func LoadChequebook(path string, prvKey *ecdsa.PrivateKey, backend Backend) (sel
 	if err != nil {
 		return nil, err
 	}
-	glog.V(logger.Detail).Infof("loaded chequebook (%s, owner: %v) initialised from %v", self.contract.Hex(), self.owner.Hex(), path)
+	glog.V(logger.Detail).Infof("[CHEQUEBOOK] loaded chequebook (%s, owner: %v) initialised from %v", self.contract.Hex(), self.owner.Hex(), path)
 
 	return
 }
@@ -238,7 +238,7 @@ func (self *Chequebook) Save() (err error) {
 	if err != nil {
 		return err
 	}
-	glog.V(logger.Detail).Infof("saving chequebook (%s) to %v", self.contract.Hex(), self.path)
+	glog.V(logger.Detail).Infof("[CHEQUEBOOK] saving chequebook (%s) to %v", self.contract.Hex(), self.path)
 
 	return ioutil.WriteFile(self.path, data, os.ModePerm)
 }
@@ -352,10 +352,10 @@ func (self *Chequebook) deposit(amount *big.Int) (string, error) {
 	txhash, err := self.backend.Transact(self.owner.Hex(), self.contract.Hex(), "", amount.String(), "", "", "")
 	// assume that transaction is actually successful, we add the amount to balance right away
 	if err != nil {
-		glog.V(logger.Warn).Infof("error depositing %d wei to chequebook (%s, balance: %v, target: %v): %v", amount, self.contract.Hex(), self.balance, self.buffer, err)
+		glog.V(logger.Warn).Infof("[CHEQUEBOOK] error depositing %d wei to chequebook (%s, balance: %v, target: %v): %v", amount, self.contract.Hex(), self.balance, self.buffer, err)
 	} else {
 		self.balance.Add(self.balance, amount)
-		glog.V(logger.Detail).Infof("deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contract.Hex(), self.balance, self.buffer)
+		glog.V(logger.Detail).Infof("[CHEQUEBOOK] deposited %d wei to chequebook (%s, balance: %v, target: %v)", amount, self.contract.Hex(), self.balance, self.buffer)
 	}
 	return txhash, err
 }
@@ -474,7 +474,7 @@ func NewInbox(contract, sender, beneficiary common.Address, signer *ecdsa.Public
 		backend:     backend,
 		cashed:      new(big.Int).Set(common.Big0),
 	}
-	glog.V(logger.Detail).Infof("initialised inbox (%s -> %s) expected signer: %x", self.contract.Hex(), self.beneficiary.Hex(), crypto.FromECDSAPub(signer))
+	glog.V(logger.Detail).Infof("[CHEQUEBOOK] initialised inbox (%s -> %s) expected signer: %x", self.contract.Hex(), self.beneficiary.Hex(), crypto.FromECDSAPub(signer))
 	return
 }
 
@@ -495,7 +495,7 @@ func (self *Inbox) Stop() {
 func (self *Inbox) Cash() (txhash string, err error) {
 	if self.cheque != nil {
 		txhash, err = self.cheque.Cash(self.sender, self.backend)
-		glog.V(logger.Detail).Infof("cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex())
+		glog.V(logger.Detail).Infof("[CHEQUEBOOK] cashing cheque (total: %v) on chequebook (%s) sending to %v", self.cheque.Amount, self.contract.Hex(), self.beneficiary.Hex())
 		self.cashed = self.cheque.Amount
 	}
 	return
@@ -584,7 +584,7 @@ func (self *Inbox) Receive(promise swap.Promise) (*big.Int, error) {
 				self.Cash()
 			}
 		}
-		glog.V(logger.Detail).Infof("received cheque of %v wei in inbox (%s, uncashed: %v)", amount, self.contract.Hex(), uncashed)
+		glog.V(logger.Detail).Infof("[CHEQUEBOOK] received cheque of %v wei in inbox (%s, uncashed: %v)", amount, self.contract.Hex(), uncashed)
 	}
 
 	return amount, err
@@ -610,7 +610,7 @@ func (self *Cheque) cashAbiEncode() string {
 	// cashAbiPre, beneficiary, amount, v, r, s
 	bigamount := self.Amount.Bytes()
 	if len(bigamount) > 32 {
-		glog.V(logger.Detail).Infof("number too big: %v (>32 bytes)", self.Amount)
+		glog.V(logger.Detail).Infof("[CHEQUEBOOK] number too big: %v (>32 bytes)", self.Amount)
 		return ""
 	}
 	var beneficiary32, amount32, vabi [32]byte
@@ -623,7 +623,7 @@ func (self *Cheque) cashAbiEncode() string {
 
 // Verify(cheque) verifies cheque for signer, contract, beneficiary, amount, valid signature
 func (self *Cheque) Verify(signerKey *ecdsa.PublicKey, contract, beneficiary common.Address, sum *big.Int) (*big.Int, error) {
-	glog.V(logger.Detail).Infof("verify cheque: %v - sum: %v", self, sum)
+	glog.V(logger.Detail).Infof("[CHEQUEBOOK] verify cheque: %v - sum: %v", self, sum)
 	if sum == nil {
 		return nil, fmt.Errorf("invalid amount")
 	}
