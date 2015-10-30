@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
@@ -74,21 +75,26 @@ type Swap struct {
 	balance int        // units of chunk/retrieval request
 	local   *Params    // local peer's swap parameters
 	remote  *Profile   // remote peer's swap profile
-	out     OutPayment // outgoing payment handler
-	in      InPayment  // incoming  payment handler
 	proto   Protocol   // peer communication protocol
+	Payment
+}
+
+type Payment struct {
+	Out         OutPayment // outgoing payment handler
+	In          InPayment  // incoming  payment handler
+	Buys, Sells bool
 }
 
 // swap constructor
-func New(local *Params, out OutPayment, in InPayment, proto Protocol) (self *Swap, err error) {
+func New(local *Params, pm Payment, proto Protocol) (self *Swap, err error) {
+
 	self = &Swap{
-		local: local,
-		out:   out,
-		in:    in,
-		proto: proto,
+		local:   local,
+		Payment: pm,
+		proto:   proto,
 	}
 
-	self.setParams(local)
+	self.SetParams(local)
 
 	return
 }
@@ -100,6 +106,17 @@ func (self *Swap) SetRemote(remote *Profile) {
 	glog.V(logger.Debug).Infof("[SWAP] <%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", self.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt)
 
 	self.remote = remote
+	if self.Sells && (remote.BuyAt.Cmp(common.Big0) <= 0 || self.local.SellAt.Cmp(common.Big0) <= 0 || remote.BuyAt.Cmp(self.local.SellAt) < 0) {
+		self.Out.Stop()
+		self.Sells = false
+	}
+	if self.Buys && (remote.SellAt.Cmp(common.Big0) <= 0 || self.local.BuyAt.Cmp(common.Big0) <= 0 || self.local.BuyAt.Cmp(self.remote.SellAt) < 0) {
+		self.In.Stop()
+		self.Buys = false
+	}
+
+	glog.V(logger.Debug).Infof("[SWAP] <%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", self.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt)
+
 }
 
 // to set strategy dynamically
@@ -107,30 +124,51 @@ func (self *Swap) SetParams(local *Params) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	self.local = local
+	self.setParams(local)
 }
 
 // caller holds the lock
-func (self *Swap) setParams(local *Params) {
-	self.in.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
-	glog.V(logger.Debug).Infof("[SWAP] <%v> set autocash to every %v, max uncashed limit: %v", self.proto, local.AutoCashInterval, local.AutoCashThreshold)
 
-	self.out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
-	glog.V(logger.Debug).Infof("[SWAP] <%v> set autodeposit to every %v, pay at: %v, buffer: %v", self.proto, local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
+func (self *Swap) setParams(local *Params) {
+
+	if self.Sells {
+		self.In.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
+		glog.V(logger.Info).Infof("[SWAP] <%v> set autocash to every %v, max uncashed limit: %v", self.proto, local.AutoCashInterval, local.AutoCashThreshold)
+	} else {
+		glog.V(logger.Info).Infof("[SWAP] <%v> autocash off (not selling)")
+	}
+	if self.Buys {
+		self.Out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
+		glog.V(logger.Info).Infof("[SWAP] <%v> set autodeposit to every %v, pay at: %v, buffer: %v", self.proto, local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
+	} else {
+		glog.V(logger.Info).Infof("[SWAP] <%v> autodeposit off (not buying)")
+	}
 }
 
 // Add(n)
 // n > 0 called when promised/provided n units of service
 // n < 0 called when used/requested n units of service
-func (self *Swap) Add(n int) {
+func (self *Swap) Add(n int) error {
 	defer self.lock.Unlock()
 	self.lock.Lock()
 	self.balance += n
+	if !self.Sells && self.balance > 0 {
+		glog.V(logger.Detail).Infof("[SWAP] <%v> remote peer cannot have debt (unable to buy)", self.proto, self.balance)
+		self.proto.Drop()
+		return fmt.Errorf("[SWAP] <%v> remote peer cannot have debt (unable to buy)", self.proto, self.balance)
+	}
+	if !self.Buys && self.balance < 0 {
+		glog.V(logger.Detail).Infof("[SWAP] <%v> we cannot have debt (unable to buy)", self.proto, self.balance)
+		return fmt.Errorf("[SWAP] <%v> we cannot have debt (unable to buy)", self.proto, self.balance)
+	}
 	if self.balance >= int(self.local.DropAt) {
 		glog.V(logger.Detail).Infof("[SWAP] <%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt)
 		self.proto.Drop()
+		return fmt.Errorf("[SWAP] <%v> remote peer has too much debt (balance: %v, disconnect threshold: %v)", self.proto, self.balance, self.local.DropAt)
 	} else if self.balance <= -int(self.remote.PayAt) {
 		self.send()
 	}
+	return nil
 }
 
 func (self *Swap) Balance() int {
@@ -146,11 +184,11 @@ func (self *Swap) send() {
 	if self.local.BuyAt != nil && self.balance < 0 {
 		amount := big.NewInt(int64(-self.balance))
 		amount.Mul(amount, self.remote.SellAt)
-		promise, err := self.out.Issue(amount)
+		promise, err := self.Out.Issue(amount)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[SWAP] <%v> cannot issue cheque (amount: %v, channel: %v): %v", self.proto, amount, self.out, err)
+			glog.V(logger.Warn).Infof("[SWAP] <%v> cannot issue cheque (amount: %v, channel: %v): %v", self.proto, amount, self.Out, err)
 		} else {
-			glog.V(logger.Warn).Infof("[SWAP] <%v> cheque issued (amount: %v, channel: %v)", self.proto, amount, self.out)
+			glog.V(logger.Warn).Infof("[SWAP] <%v> cheque issued (amount: %v, channel: %v)", self.proto, amount, self.Out)
 			self.proto.Pay(-self.balance, promise)
 			self.balance = 0
 		}
@@ -167,7 +205,7 @@ func (self *Swap) Receive(units int, promise Promise) error {
 	price := new(big.Int).SetInt64(int64(units))
 	price.Mul(price, self.local.SellAt)
 
-	amount, err := self.in.Receive(promise)
+	amount, err := self.In.Receive(promise)
 
 	if err != nil {
 		err = fmt.Errorf("invalid promise: %v", err)
@@ -176,13 +214,13 @@ func (self *Swap) Receive(units int, promise Promise) error {
 		return fmt.Errorf("invalid amount: %v = %v * %v (units sent in msg * agreed sale unit price) != %v (signed in cheque)", price, units, self.local.SellAt, amount)
 	}
 	if err != nil {
-		glog.V(logger.Detail).Infof("[SWAP] <%v> invalid promise (amount: %v, channel: %v): %v", self.proto, amount, self.in, err)
+		glog.V(logger.Detail).Infof("[SWAP] <%v> invalid promise (amount: %v, channel: %v): %v", self.proto, amount, self.In, err)
 		return err
 	}
 
 	// credit remote peer with units
 	self.Add(-units)
-	glog.V(logger.Detail).Infof("[SWAP] <%v> received promise (amount: %v, channel: %v): %v", self.proto, amount, self.in, promise)
+	glog.V(logger.Detail).Infof("[SWAP] <%v> received promise (amount: %v, channel: %v): %v", self.proto, amount, self.In, promise)
 
 	return nil
 }
@@ -190,6 +228,12 @@ func (self *Swap) Receive(units int, promise Promise) error {
 // stop() causes autocash loop to terminate.
 // Called after protocol handle loop terminates.
 func (self *Swap) Stop() {
-	self.out.Stop()
-	self.in.Stop()
+	defer self.lock.Unlock()
+	self.lock.Lock()
+	if self.Buys {
+		self.Out.Stop()
+	}
+	if self.Sells {
+		self.In.Stop()
+	}
 }

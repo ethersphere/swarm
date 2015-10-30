@@ -202,8 +202,6 @@ func (self *netStore) addStoreRequest(req *storeRequestMsgData) {
 
 		chunk.SData = req.SData
 		chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
-		// genuine delivery, account in swap
-		req.peer.swap.Add(-1)
 		glog.V(logger.Detail).Infof("[BZZ] delivery of %p from %v", chunk, req.peer)
 
 	} else {
@@ -278,7 +276,10 @@ func (self *netStore) addRetrieveRequest(req *retrieveRequestMsgData) {
 
 		// swap - record credit for 1 request
 		// note that only charge actual reqsearches
-		req.peer.swap.Add(1)
+		if err := req.peer.swap.Add(1); err != nil {
+			glog.V(logger.Warn).Infof("[BZZ] netStore.addRetrieveRequest: %064x - cannot process request: %v", req.Key, err)
+			return
+		}
 
 		if chunk.req.status == reqFound {
 			glog.V(logger.Detail).Infof("[BZZ] netStore.addRetrieveRequest: %064x - content found, delivering...", req.Key)
@@ -303,7 +304,7 @@ func (self *netStore) startSearch(req *retrieveRequestMsgData, chunk *Chunk) {
 	peers := self.hive.getPeers(chunk.Key, 0)
 	glog.V(logger.Detail).Infof("[BZZ] netStore.startSearch: %064x - received %d peers from KΛÐΞMLIΛ...", chunk.Key, len(peers))
 	for _, peer := range peers {
-		glog.V(logger.Detail).Infof("[BZZ] netStore.startSearch: sending retrieveRequests to peer [%064x]", req.Key)
+		glog.V(logger.Detail).Infof("[BZZ] netStore.startSearch: sending retrieveRequest to peer [%064x]", req.Key)
 		glog.V(logger.Detail).Infof("[BZZ] req.requesters: %v", chunk.req.requesters)
 		var requester bool
 	OUT:
@@ -316,8 +317,12 @@ func (self *netStore) startSearch(req *retrieveRequestMsgData, chunk *Chunk) {
 			}
 		}
 		if !requester {
-			peer.retrieve(req)
-			break
+			if err := peer.swap.Add(-1); err == nil {
+				peer.retrieve(req)
+				break
+			} else {
+				glog.V(logger.Warn).Infof("[BZZ] netStore.startSearch: unable to send retrieveRequest to peer [%064x]: %v", req.Key, err)
+			}
 		}
 	}
 }

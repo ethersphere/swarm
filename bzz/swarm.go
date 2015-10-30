@@ -96,10 +96,11 @@ func (self *Swarm) Stop() {
 	self.dpa.Stop()
 	self.netStore.stop()
 	self.hive.stop()
-	if ch := self.config.Swap.chequebook; ch != nil {
+	if ch := self.config.Swap.chequebook(); ch != nil {
 		ch.Stop()
 		ch.Save()
 	}
+	self.config.Save()
 }
 
 func (self *Swarm) Api() *Api {
@@ -116,7 +117,19 @@ func (self *Swarm) SetRegistrar(reg registrar.VersionedRegistrar) {
 
 // Backend interface implemented by xeth.XEth or JSON-IPC client
 func (self *Swarm) SetChequebook(backend chequebook.Backend) (err error) {
-	return self.config.Swap.setChequebook(self.config.Path, backend)
+	done, err := self.config.Swap.setChequebook(self.config.Path, backend)
+	if err != nil {
+		return err
+	}
+	go func() {
+		ok := <-done
+		if ok {
+			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set: saving config file, resetting all connections in the hive", err)
+			self.config.Save()
+			self.hive.dropAll()
+		}
+	}()
+	return nil
 }
 
 // Local swarm without netStore

@@ -101,7 +101,7 @@ func TestSwap(t *testing.T) {
 	out := &testOutPayment{}
 	proto := &testProtocol{}
 
-	swap, _ := New(local, out, in, proto)
+	swap, _ := New(local, Payment{In: in, Out: out, Buys: true, Sells: true}, proto)
 
 	if in.autocashInterval != strategy.AutoCashInterval {
 		t.Fatalf("autocash interval not properly set, expect %v, got ", strategy.AutoCashInterval, in.autocashInterval)

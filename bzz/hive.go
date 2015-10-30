@@ -177,13 +177,20 @@ func (self *hive) addPeer(p peer) {
 	// we do not record as request or forward it, just reply with peers
 	p.retrieve(&retrieveRequestMsgData{})
 	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: 'whatsup wheresdaparty' sent to %v", p)
-	self.ping <- true
+	if self.ping != nil {
+		self.ping <- true
+	}
 }
 
 func (self *hive) removePeer(p peer) {
 	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: bee %v gone offline", p)
 	self.kad.RemoveNode(p)
-	self.ping <- false
+	if self.ping != nil {
+		self.ping <- false
+	}
+	if self.kad.Count() == 0 {
+		glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: empty, all bees gone", p)
+	}
 }
 
 // Retrieve a list of live peers that are closer to target than us
@@ -194,6 +201,13 @@ func (self *hive) getPeers(target Key, max int) (peers []peer) {
 		peers = append(peers, node.(peer))
 	}
 	return
+}
+
+func (self *hive) dropAll() {
+	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: dropping all bees")
+	for _, node := range self.kad.GetNodes(kademlia.Address{}, 0) {
+		node.Drop()
+	}
 }
 
 func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {

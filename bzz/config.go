@@ -48,52 +48,56 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 	pubkeyhex := common.ToHex(pubkey)
 	keyhex := crypto.Sha3Hash(pubkey).Hex()
 
+	self = &Config{
+		HiveParams:    NewHiveParams(dirpath),
+		ChunkerParams: NewChunkerParams(),
+		StoreParams:   NewStoreParams(dirpath),
+		Port:          port,
+		Path:          dirpath,
+		Swap:          defaultSwapParams(contract, prvKey),
+		PublicKey:     pubkeyhex,
+		BzzKey:        keyhex,
+	}
 	data, err = ioutil.ReadFile(confpath)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return
 		}
 		// file does not exist
-
-		self = &Config{
-			HiveParams:    NewHiveParams(dirpath),
-			ChunkerParams: NewChunkerParams(),
-			StoreParams:   NewStoreParams(dirpath),
-			Port:          port,
-			Path:          dirpath,
-			Swap:          defaultSwapParams(contract, prvKey),
-			PublicKey:     pubkeyhex,
-			BzzKey:        keyhex,
-		}
 		// write out config file
-		data, err = json.MarshalIndent(self, "", "    ")
+		err = self.Save()
 		if err != nil {
-			return nil, fmt.Errorf("error writing config: %v", err)
+			err = fmt.Errorf("error writing config: %v", err)
 		}
-		err = os.MkdirAll(path, os.ModePerm)
-		if err != nil {
-			return
-		}
-		err = ioutil.WriteFile(confpath, data, os.ModePerm)
-
-	} else {
-		// file exists, deserialise
-		self = &Config{}
-		err = json.Unmarshal(data, self)
-		if err != nil {
-			return nil, err
-		}
-		// check public key
-		if pubkeyhex != self.PublicKey {
-			return nil, fmt.Errorf("public key does not match the one in the config file %v != %v", pubkeyhex, self.PublicKey)
-		}
-		if keyhex != self.BzzKey {
-			return nil, fmt.Errorf("bzz key does not match the one in the config file %v != %v", keyhex, self.BzzKey)
-		}
-		self.Swap.privateKey = prvKey
-		self.Swap.publicKey = &prvKey.PublicKey
-
+		return
 	}
+	// file exists, deserialise
+	err = json.Unmarshal(data, self)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse config: %v", err)
+	}
+	// check public key
+	if pubkeyhex != self.PublicKey {
+		return nil, fmt.Errorf("public key does not match the one in the config file %v != %v", pubkeyhex, self.PublicKey)
+	}
+	if keyhex != self.BzzKey {
+		return nil, fmt.Errorf("bzz key does not match the one in the config file %v != %v", keyhex, self.BzzKey)
+	}
+	self.Swap.privateKey = prvKey
+	self.Swap.publicKey = &prvKey.PublicKey
 
 	return
+}
+
+func (self *Config) Save() error {
+	data, err := json.MarshalIndent(self, "", "    ")
+	if err != nil {
+		return err
+	}
+	err = os.MkdirAll(self.Path, os.ModePerm)
+	if err != nil {
+		return err
+	}
+	confpath := filepath.Join(self.Path, "config.json")
+	return ioutil.WriteFile(confpath, data, os.ModePerm)
 }
