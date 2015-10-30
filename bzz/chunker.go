@@ -32,6 +32,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -53,6 +54,20 @@ type Key []byte
 
 func (key Key) Hex() string {
 	return fmt.Sprintf("%064x", key[:])
+}
+
+func (key Key) String() string {
+	return fmt.Sprintf("%08x", []byte(key)[:8])
+}
+
+func (key Key) MarshalJSON() (out []byte, err error) {
+	return []byte(`"` + key.Hex() + `"`), nil
+}
+
+func (key Key) UnmarshalJSON(value []byte) error {
+	b := common.HexToHash(string(value[1 : len(value)-1]))
+	copy(key[:], b[:])
+	return nil
 }
 
 /*
@@ -155,9 +170,7 @@ func (self *TreeChunker) KeySize() int64 {
 
 // String() for pretty printing
 func (self *Chunk) String() string {
-	var size int64
-	var n int
-	return fmt.Sprintf("Key: [%x..] TreeSize: %v Chunksize: %v Data: %x\n", self.Key[:4], self.Size, size, self.SData[:n])
+	return fmt.Sprintf("Key: %v TreeSize: %v Chunksize: %v\n", self.Key, self.Size, len(self.SData))
 }
 
 // The treeChunkers own Hash hashes together

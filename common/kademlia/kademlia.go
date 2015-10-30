@@ -75,14 +75,17 @@ type Node interface {
 	Url() string
 	LastActive() time.Time
 	Drop()
+	GetMeta() interface{} // metadata to store for peers
+	SetMeta(interface{}) error
 }
 
 // allow inactive peers under
 type NodeRecord struct {
-	Addr    Address `json:address`
-	Url     string  `json:url`
-	Active  int64   `json:active`
-	After   int64   `json:after`
+	Addr    Address     `json:address`
+	Url     string      `json:url`
+	Active  int64       `json:active`
+	After   int64       `json:after`
+	Meta    interface{} `json:sync`
 	after   time.Time
 	checked time.Time
 	node    Node
@@ -95,6 +98,12 @@ func (self *NodeRecord) String() string {
 func (self *NodeRecord) setActive() {
 	if self.node != nil {
 		self.Active = self.node.LastActive().Unix()
+	}
+}
+
+func (self *NodeRecord) setMeta() {
+	if self.node != nil {
+		self.node.SetMeta(self.Meta)
 	}
 }
 
@@ -264,12 +273,12 @@ func (self *Kademlia) RemoveNode(node Node) (err error) {
 		self.adjustProxLess(index)
 
 		r := self.nodeIndex[node.Addr()]
-		r.node = nil
 		now := time.Now()
 		r.after = now
 		r.After = now.Unix()
 		r.Active = now.Unix()
-
+		r.Meta = r.node.GetMeta()
+		r.node = nil
 	}
 
 	return
@@ -320,7 +329,7 @@ func (self *Kademlia) AddNode(node Node) (err error) {
 	record.node = node
 	record.setActive()
 	record.setChecked()
-
+	record.setMeta()
 	return
 
 }
@@ -832,6 +841,37 @@ func RandomAddressAt(self Address, prox int) (addr Address) {
 	}
 
 	return
+}
+
+func CommonBitsAddrF(self, other Address, f func() byte) (addr Address) {
+	prox := proximity(self, other)
+	addr = self
+	var pos int
+	if prox >= 0 {
+		pos = prox / 8
+		trans := prox % 8
+		transbytea := byte(0)
+		for j := 0; j <= trans; j++ {
+			transbytea |= 1 << uint8(7-j)
+		}
+		flipbyte := byte(1 << uint8(7-trans))
+		transbyteb := transbytea ^ byte(255)
+		randbyte := f()
+		addr[pos] = ((addr[pos] & transbytea) ^ flipbyte) | randbyte&transbyteb
+	}
+	for i := pos + 1; i < len(addr); i++ {
+		addr[i] = f()
+	}
+
+	return
+}
+
+func CommonBitsAddr(self, other Address) (addr Address) {
+	return CommonBitsAddrF(self, other, func() byte { return byte(rand.Intn(255)) })
+}
+
+func CommonBitsAddrByte(self, other Address, b byte) (addr Address) {
+	return CommonBitsAddrF(self, other, func() byte { return b })
 }
 
 // randomAddressAt() generates a random address

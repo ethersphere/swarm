@@ -44,7 +44,7 @@ func NewSwarm(id discover.NodeID, config *Config) (self *Swarm, proto p2p.Protoc
 
 	self.api = NewApi(self.dpa, self.config)
 
-	proto, err = BzzProtocol(self.netStore, self.config.Swap)
+	proto, err = BzzProtocol(self.netStore, self.config.Swap, self.config.SyncParams)
 	return
 }
 
@@ -124,7 +124,7 @@ func (self *Swarm) SetChequebook(backend chequebook.Backend) (err error) {
 	go func() {
 		ok := <-done
 		if ok {
-			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set: saving config file, resetting all connections in the hive", err)
+			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract)
 			self.config.Save()
 			self.hive.dropAll()
 		}
