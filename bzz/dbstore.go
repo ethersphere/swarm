@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
 const (
@@ -113,11 +114,7 @@ func getIndexKey(hash Key) []byte {
 	HashSize := len(hash)
 	key := make([]byte, HashSize+1)
 	key[0] = 0
-	// db keys derived from hash:
-	// two halves swapped for uniformly distributed prefix
-	copy(key[1:HashSize/2+1], hash[HashSize/2:HashSize])
-	copy(key[HashSize/2+1:HashSize+1], hash[0:HashSize/2])
-
+	copy(key[1:], hash[:])
 	return key
 }
 
@@ -226,6 +223,7 @@ func (s *dbStore) collectGarbage(ratio float32) {
 			s.gcPos = nil
 		}
 	}
+	it.Release()
 
 	cutidx := gcListSelect(s.gcArray, 0, gcnt-1, int(float32(gcnt)*ratio))
 	cutval := s.gcArray[cutidx].value
@@ -385,4 +383,40 @@ func (s *dbStore) getEntryCnt() uint64 {
 
 func (s *dbStore) close() {
 	s.db.Close()
+}
+
+type dbSyncIterator struct {
+	it           iterator.Iterator
+	stop         Key
+	scFrom, scTo uint64
+}
+
+func (s *dbStore) newDbSyncIterator(start Key, stop Key, scFrom uint64, scTo uint64) (si *dbSyncIterator) {
+	si.it = s.db.NewIterator()
+	si.it.Seek(getIndexKey(start))
+	si.stop = stop
+	si.scFrom = scFrom
+	si.scTo = scTo
+	return
+}
+
+func (si *dbSyncIterator) next() (hash Key) {
+	for si.it.Valid() {
+		key := si.it.Key()
+		if key[0] != 0 {
+			break
+		}
+		hash = key[1:]
+		if bytes.Compare(hash, si.stop) > 0 {
+			break
+		}
+		var index dpaDBIndex
+		decodeIndex(si.it.Value(), &index)
+		si.it.Next()
+		if (index.Idx >= si.scFrom) && (index.Idx <= si.scTo) {
+			return
+		}
+	}
+	si.it.Release()
+	return nil
 }
