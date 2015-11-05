@@ -18,8 +18,9 @@
 package node
 
 import (
-	"crypto/ecdsa"
 	"errors"
+	"io/ioutil"
+	"os"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -34,8 +35,9 @@ var (
 
 // Node represents a P2P node into which arbitrary services might be registered.
 type Node struct {
-	config *p2p.Server                        // Configuration of the underlying P2P networking layer
-	stack  map[string]func() (Service, error) // Protocol stack registered into this node
+	datadir string                             // Path to the currently used data directory
+	config  *p2p.Server                        // Configuration of the underlying P2P networking layer
+	stack   map[string]func() (Service, error) // Protocol stack registered into this node
 
 	running  *p2p.Server        // Currently running P2P networking layer
 	services map[string]Service // Currently running services
@@ -44,22 +46,38 @@ type Node struct {
 }
 
 // New creates a new P2P node, ready for protocol registration.
-func New(key *ecdsa.PrivateKey, name string) *Node {
+func New(conf *Config) (*Node, error) {
+	// Ensure the data directory exists, failing if it cannot be created
+	if conf.DataDir != "" {
+		if err := os.MkdirAll(conf.DataDir, 0700); err != nil {
+			return nil, err
+		}
+	} else {
+		dir, err := ioutil.TempDir("", conf.Name)
+		if err != nil {
+			return nil, err
+		}
+		conf.DataDir = dir
+	}
+	// Assemble the networking layer and the node itself
 	return &Node{
+		datadir: conf.DataDir,
 		config: &p2p.Server{
-			PrivateKey: key,
-			Name:       name,
-			/*Discovery:      config.Discovery,
-			Protocols:      protocols,
-			NAT:            config.NAT,
-			NoDial:         !config.Dial,
-			BootstrapNodes: config.parseBootNodes(),
-			StaticNodes:    config.parseNodes(staticNodes),
-			TrustedNodes:   config.parseNodes(trustedNodes),
-			NodeDatabase:   nodeDb,*/
+			PrivateKey:      conf.NodeKey(),
+			Name:            conf.Name,
+			Discovery:       conf.Discovery,
+			BootstrapNodes:  conf.BootstrapNodes,
+			StaticNodes:     conf.StaticNodes(),
+			TrustedNodes:    conf.TrusterNodes(),
+			ListenAddr:      conf.ListenAddr,
+			NAT:             conf.NAT,
+			Dialer:          conf.Dialer,
+			NoDial:          conf.NoDial,
+			MaxPeers:        conf.MaxPeers,
+			MaxPendingPeers: conf.MaxPendingPeers,
 		},
 		stack: make(map[string]func() (Service, error)),
-	}
+	}, nil
 }
 
 // Register injects a new service into the node's stack.

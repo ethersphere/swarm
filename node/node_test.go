@@ -25,14 +25,20 @@ import (
 )
 
 var (
-	testNodeKey, _ = crypto.GenerateKey() // ECDSA private key used for the P2P server
-	testNodeName   = "test node"          // Textual id to advertise on the P2P network
+	testNodeKey, _ = crypto.GenerateKey()
+
+	testNodeConfig = &Config{
+		PrivateKey: testNodeKey,
+		Name:       "test node",
+	}
 )
 
 // Tests that an empty protocol stack can be started, restarted and stopped.
 func TestNodeLifeCycle(t *testing.T) {
-	stack := New(testNodeKey, testNodeName)
-
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
 	// Ensure that a stopped node can be stopped again
 	for i := 0; i < 3; i++ {
 		if err := stack.Stop(); err != ErrNodeStopped {
@@ -72,8 +78,10 @@ func NewNoopService() (Service, error) { return new(NoopService), nil }
 
 // Tests whether services can be registered and unregistered.
 func TestServiceRegistry(t *testing.T) {
-	stack := New(testNodeKey, testNodeName)
-
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
 	// Create a batch of dummy services and ensure they don't exist
 	ids := []string{"A", "B", "C"}
 	for i, id := range ids {
@@ -136,8 +144,10 @@ func (s *InstrumentedService) Stop() error {
 
 // Tests that registered services get started and stopped correctly.
 func TestServiceLifeCycle(t *testing.T) {
-	stack := New(testNodeKey, testNodeName)
-
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
 	// Register a batch of life-cycle instrumented services
 	ids := []string{"A", "B", "C"}
 
@@ -181,8 +191,10 @@ func TestServiceLifeCycle(t *testing.T) {
 
 // Tests that services are restarted cleanly as new instances.
 func TestServiceRestarts(t *testing.T) {
-	stack := New(testNodeKey, testNodeName)
-
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
 	// Define a service that does not support restarts
 	var (
 		running bool
@@ -227,8 +239,10 @@ func TestServiceRestarts(t *testing.T) {
 // Tests that if a service fails to start, all others started before it will be
 // shut down.
 func TestServiceStartupAbortion(t *testing.T) {
-	stack := New(testNodeKey, testNodeName)
-
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
 	// Register a batch of good services
 	ids := []string{"A", "B", "C", "D", "E", "F"}
 
@@ -275,8 +289,10 @@ func TestServiceStartupAbortion(t *testing.T) {
 // Tests that even if a registered service fails to shut down cleanly, it does
 // not influece the rest of the shutdown invocations.
 func TestServiceTerminationGuarantee(t *testing.T) {
-	stack := New(testNodeKey, testNodeName)
-
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
 	// Register a batch of good services
 	ids := []string{"A", "B", "C", "D", "E", "F"}
 
