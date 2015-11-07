@@ -250,7 +250,7 @@ func (s *dbStore) collectGarbage(ratio float32) {
 func (s *dbStore) Counter() uint64 {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.accessCnt
+	return s.dataIdx
 }
 
 func (s *dbStore) Put(chunk *Chunk) {
