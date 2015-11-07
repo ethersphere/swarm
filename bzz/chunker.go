@@ -57,7 +57,7 @@ func (key Key) Hex() string {
 }
 
 func (key Key) String() string {
-	return fmt.Sprintf("%08x", []byte(key)[:8])
+	return fmt.Sprintf("%064x", []byte(key)[:])
 }
 
 func (key Key) MarshalJSON() (out []byte, err error) {
