@@ -505,7 +505,7 @@ func (self *syncer) handleDeliveries() {
 				glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: failed to deliver %v: %v", self.key, req, err)
 			} else {
 				success++
-				glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: %v successfully delivered", self.key)
+				glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: %v successfully delivered", self.key, req)
 			}
 		}
 		if total%self.SyncBatchSize == 0 {
