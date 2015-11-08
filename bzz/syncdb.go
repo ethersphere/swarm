@@ -150,6 +150,9 @@ LOOP:
 				break LOOP
 			}
 			key = it.Key()
+			if key == nil {
+				break LOOP
+			}
 			entry = &syncDbEntry{key, it.Value()}
 			n = 10000
 		}
