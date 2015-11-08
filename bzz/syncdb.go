@@ -197,7 +197,7 @@ LOOP:
 
 //
 func (self *syncDb) stop() {
-	close(self.cache)
+	self.save()
 	close(self.quit)
 }
 
