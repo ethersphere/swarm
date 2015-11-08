@@ -282,6 +282,11 @@ func (self *syncer) handleHistory() {
 LOOP:
 	for state := range self.syncStates {
 		var n uint
+		glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: history sync iteration: %v unsynced keys", self.key, state)
+		if state.First == state.Last {
+			state.synced <- true
+			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: nothing to sync")
+		}
 		it := self.kitf(state)
 	IT:
 		for {

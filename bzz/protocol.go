@@ -419,23 +419,25 @@ func runBzzProtocol(netstore *netStore, sp *swapParams, sy *SyncParams, p *p2p.P
 		swapParams: sp,
 		syncParams: sy,
 	}
+	defer func() {
+		// if the handler loop exits, the peer is disconnecting
+		// deregister the peer in the hive
+		self.netStore.hive.removePeer(peer{bzzProtocol: self})
+		if self.syncer != nil {
+			self.syncer.stop() // quits request db and delivery loops, save requests
+		}
+		if self.swap != nil {
+			self.swap.Stop() // quits chequebox autocash etc
+		}
+	}()
 
 	err = self.handleStatus()
 	if err == nil {
 		for {
 			err = self.handle()
 			if err != nil {
-				// if the handler loop exits, the peer is disconnecting
-				// deregister the peer in the hive
-				self.netStore.hive.removePeer(peer{bzzProtocol: self})
-				break
+				return
 			}
-		}
-		if self.syncer != nil {
-			self.syncer.stop() // quits request db and delivery loops, save requests
-		}
-		if self.swap != nil {
-			self.swap.Stop() // quits chequebox autocash etc
 		}
 	}
 	return

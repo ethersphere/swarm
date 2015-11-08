@@ -109,7 +109,6 @@ LOOP:
 			}
 		case <-self.quit:
 			glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] quit: saving cache", self.priority)
-			self.save()
 			break LOOP
 		}
 	}
