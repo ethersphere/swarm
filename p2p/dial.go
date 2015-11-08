@@ -136,7 +136,7 @@ func (s *dialstate) newTasks(nRunning int, peers map[discover.NodeID]*Peer, now 
 	// Compute number of dynamic dials necessary at this point.
 	needDynDials := s.maxDynDials
 	for _, p := range peers {
-		if p.rw.is(dynDialedConn) {
+		if p.conn.is(dynDialedConn) {
 			needDynDials--
 		}
 	}
@@ -226,8 +226,13 @@ func (t *dialTask) Do(srv *Server) {
 		glog.V(logger.Debug).Infof("resolved %x: %v:%d", t.dest.ID[:6], dest.IP, dest.TCP)
 		t.resolved = dest
 	}
-	glog.V(logger.Debug).Infof("dialing %v\n", dest)
 	addr := &net.TCPAddr{IP: dest.IP, Port: int(dest.TCP)}
+	remotePubkey, err := dest.ID.Pubkey()
+	if err != nil {
+		glog.V(logger.Warn).Infof("aborted dialing (invalid pubkey) %v\n", t.dest)
+		return
+	}
+	glog.V(logger.Debug).Infof("dialing %v\n", t.dest)
 	fd, err := srv.Dialer.Dial("tcp", addr.String())
 	if err != nil {
 		// TODO: maybe try resolving the ID once if this is a static dial
@@ -235,7 +240,8 @@ func (t *dialTask) Do(srv *Server) {
 		return
 	}
 	mfd := newMeteredConn(fd, false)
-	srv.setupConn(mfd, t.flags, dest)
+	dc := newDevConn(mfd, srv.PrivateKey, remotePubkey)
+	srv.setupConn(dc, t.flags, dest)
 }
 
 func (t *dialTask) String() string {
