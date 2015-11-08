@@ -419,6 +419,11 @@ func runBzzProtocol(netstore *netStore, sp *swapParams, sy *SyncParams, p *p2p.P
 		swapParams: sp,
 		syncParams: sy,
 	}
+
+	err = self.handleStatus()
+	if err != nil {
+		return err
+	}
 	defer func() {
 		// if the handler loop exits, the peer is disconnecting
 		// deregister the peer in the hive
@@ -431,13 +436,10 @@ func runBzzProtocol(netstore *netStore, sp *swapParams, sy *SyncParams, p *p2p.P
 		}
 	}()
 
-	err = self.handleStatus()
-	if err == nil {
-		for {
-			err = self.handle()
-			if err != nil {
-				return
-			}
+	for {
+		err = self.handle()
+		if err != nil {
+			return
 		}
 	}
 	return

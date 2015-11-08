@@ -199,8 +199,8 @@ LOOP:
 
 //
 func (self *syncDb) stop() {
-	self.save()
 	close(self.quit)
+	self.save()
 }
 
 // saves the contents of the queue to db
