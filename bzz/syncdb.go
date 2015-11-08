@@ -22,6 +22,7 @@ type syncDb struct {
 	counter        uint64           // incrementing index to enforce order
 	cache          chan interface{} // incoming request channel
 	db             *LDBDatabase     // underlying db (should be interface)
+	done           chan bool        // chan to signal  quit for goroutines
 	quit           chan bool        // chan to signal  quit for goroutines
 	total, dbTotal int              // counts for one session
 }
@@ -33,7 +34,7 @@ var (
 // constructor needs a shared request db (leveldb)
 // priority is used in the index key
 // uses a cache and a leveldb for persistent storage
-func newSyncDb(db *LDBDatabase, key Key, priority uint, bufferSize uint, deliver func(interface{}), done chan bool) *syncDb {
+func newSyncDb(db *LDBDatabase, key Key, priority uint, bufferSize uint, deliver func(interface{})) *syncDb {
 	data, err := db.Get(counterKey)
 	var counter uint64
 	if err == nil {
@@ -46,16 +47,17 @@ func newSyncDb(db *LDBDatabase, key Key, priority uint, bufferSize uint, deliver
 		cache:    make(chan interface{}, bufferSize),
 		db:       db,
 		quit:     make(chan bool),
+		done:     make(chan bool),
 	}
 	glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] - initialised", priority)
 
-	go syncdb.handle(deliver, done)
+	go syncdb.handle(deliver)
 	return syncdb
 }
 
 // handle is the loop that takes care of caching, and persistent
 // storage
-func (self *syncDb) handle(deliver func(interface{}), done chan bool) {
+func (self *syncDb) handle(deliver func(interface{})) {
 	var caching bool
 	var n, t, d int
 	var queue chan interface{}
@@ -66,7 +68,7 @@ LOOP:
 		// if cache is full and we are delivering from,
 		// start draining and after n items will start
 		// putting in db
-		if caching && len(queue) == cap(queue) {
+		if caching && n == 0 && len(queue) == cap(queue) {
 			n = cap(queue)
 			glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] cache full: switching to db. session tally (db/total): %v/%v", self.priority, self.dbTotal, self.total)
 		}
@@ -77,14 +79,14 @@ LOOP:
 			t++
 			if caching {
 				deliver(req)
-				glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] - deliver from cache: %v/%v", self.priority, n, t)
+				// glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] - deliver from cache: %v/%v", self.priority, n, t)
 				// if draining n items from the queue
 				if n > 0 {
 					n--
 					if n == 0 {
 						glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] cache -> db mode", self.priority)
 						caching = false
-						go self.iterate(deliver, done)
+						go self.iterate(deliver)
 					}
 				}
 			} else {
@@ -98,13 +100,12 @@ LOOP:
 			}
 
 			// receives a signal
-		case <-done:
+		case <-self.done:
 			// (otherwise new items are put to the db
 			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] db -> cache mode", self.priority)
 			caching = true
 			if queue == nil {
 				queue = self.cache
-				done = make(chan bool)
 			}
 		case <-self.quit:
 			glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] quit: saving cache", self.priority)
@@ -129,7 +130,7 @@ func (self syncDbEntry) String() string {
 // TODO: when peer drops the iterator position is not persisted
 // the request DB is shared between peers, keys are prefixed by the peers address
 // and the iterator (id BE32)
-func (self *syncDb) iterate(fun func(interface{}), done chan bool) {
+func (self *syncDb) iterate(fun func(interface{})) {
 	start := make([]byte, 42)
 	start[1] = byte(priorities - self.priority)
 	copy(start[2:], self.key)
@@ -163,7 +164,7 @@ LOOP:
 
 		// apply func
 		fun(entry)
-		glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] - %v delivered chunk from db: %v/%v", self.priority, entry, self.total, r)
+		glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] - %v delivered chunk from db: %v/%v", self.priority, entry, self.total, r)
 		self.db.Delete(key)
 
 		n--
@@ -187,9 +188,7 @@ LOOP:
 		}
 	}
 	// signal to caller finish with db:
-	if done != nil {
-		close(done)
-	}
+	self.done <- true
 	it.Release()
 	glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] - deliver %v from db: %v/%v", self.priority, self.key, t, r)
 	// order counter reset to 0

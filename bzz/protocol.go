@@ -695,13 +695,19 @@ func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
 
 // send storeRequestMsg
 func (self *bzzProtocol) store(req *storeRequestMsgData) error {
+	var err error
 	glog.V(logger.Debug).Infof("[BZZ] sending store request: %v", req)
-	err := p2p.Send(self.rw, storeRequestMsg, req)
-	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
-		return err
+	for i := 0; i < 5; i++ {
+		err = p2p.Send(self.rw, storeRequestMsg, req)
+		if err != nil {
+			glog.V(logger.Debug).Infof("[BZZ] error sending msg: %v retry", err)
+		} else {
+			return nil
+		}
 	}
-	return nil
+	glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v retry", err)
+	self.Drop()
+	return err
 }
 
 // queue storeRequestMsg in request db
