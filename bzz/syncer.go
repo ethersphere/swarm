@@ -207,7 +207,7 @@ func (self *syncer) sync() {
 	// only called once
 
 	// unless peer is synced sync unfinished history beginning on
-	if !self.state.Synced && self.state.Last != self.state.SessionAt {
+	if !self.state.Synced && self.state.Last != self.state.LastSeenAt {
 
 		glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: syncing history between %v - %v for chunk addresses %v - %v", self.key, self.state.First, self.state.Last, self.state.Start, self.state.Stop)
 		self.syncStates <- self.state
