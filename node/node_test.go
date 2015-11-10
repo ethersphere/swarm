@@ -236,6 +236,50 @@ func TestServiceRestarts(t *testing.T) {
 	}
 }
 
+// Tests that if a service fails to initialize itself, none of the other services
+// will be allowed to even start.
+func TestServiceConstructionAbortion(t *testing.T) {
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+	// Define a batch of good services
+	ids := []string{"A", "B", "C", "D", "E", "F"}
+
+	started := make(map[string]bool)
+	for i, id := range ids {
+		id := id // Closure for the constructor
+		constructor := func() (Service, error) {
+			return &InstrumentedService{
+				startHook: func() { started[id] = true },
+			}, nil
+		}
+		if err := stack.Register(id, constructor); err != nil {
+			t.Fatalf("service %d: registration failed: %v", i, err)
+		}
+	}
+	// Register a service that fails to construct itself
+	failure := errors.New("fail")
+	failer := func() (Service, error) {
+		return nil, failure
+	}
+	if err := stack.Register("failer", failer); err != nil {
+		t.Fatalf("failer registration failed: %v", err)
+	}
+	// Start the protocol stack and ensure none of the services get started
+	for i := 0; i < 100; i++ {
+		if err := stack.Start(); err != failure {
+			t.Fatalf("iter %d: stack startup failure mismatch: have %v, want %v", i, err, failure)
+		}
+		for i, id := range ids {
+			if started[id] {
+				t.Fatalf("service %d: started should not have", i)
+			}
+			delete(started, id)
+		}
+	}
+}
+
 // Tests that if a service fails to start, all others started before it will be
 // shut down.
 func TestServiceStartupAbortion(t *testing.T) {
@@ -353,6 +397,59 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 			}
 			delete(started, id)
 			delete(stopped, id)
+		}
+	}
+}
+
+// Tests that all protocols defined by individual services get launched.
+func TestProtocolGather(t *testing.T) {
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+	// Register a batch of services with some configured number of protocols
+	services := map[string]int{
+		"Zero Protocols":  0,
+		"Single Protocol": 1,
+		"Many Protocols":  25,
+	}
+	for id, count := range services {
+		protocols := make([]p2p.Protocol, count)
+		for i := 0; i < len(protocols); i++ {
+			protocols[i].Name = id
+			protocols[i].Version = uint(i)
+		}
+		constructor := func() (Service, error) {
+			return &InstrumentedService{
+				protocols: protocols,
+			}, nil
+		}
+		if err := stack.Register(id, constructor); err != nil {
+			t.Fatalf("service %s: registration failed: %v", id, err)
+		}
+	}
+	// Start the services and ensure all protocols start successfully
+	if err := stack.Start(); err != nil {
+		t.Fatalf("failed to start protocol stack: %v", err)
+	}
+	defer stack.Stop()
+
+	protocols := stack.Server().Protocols
+	if len(protocols) != 26 {
+		t.Fatalf("mismatching number of protocols launched: have %d, want %d", len(protocols), 26)
+	}
+	for id, count := range services {
+		for ver := 0; ver < count; ver++ {
+			launched := false
+			for i := 0; i < len(protocols); i++ {
+				if protocols[i].Name == id && protocols[i].Version == uint(ver) {
+					launched = true
+					break
+				}
+			}
+			if !launched {
+				t.Errorf("configured protocol not launched: %s v%d", id, ver)
+			}
 		}
 	}
 }

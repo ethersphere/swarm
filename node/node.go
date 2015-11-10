@@ -137,7 +137,10 @@ func (n *Node) Start() error {
 		}
 		services[id] = service
 	}
-	// Start the freshly assembled P2P server
+	// Gather the protocols and start the freshly assembled P2P server
+	for _, service := range services {
+		running.Protocols = append(running.Protocols, service.Protocols()...)
+	}
 	if err := running.Start(); err != nil {
 		return err
 	}
@@ -201,4 +204,14 @@ func (n *Node) Restart() error {
 		return err
 	}
 	return nil
+}
+
+// Server retrieves the currently running P2P network layer. This method is meant
+// only to inspect fields of the currently running server, life cycle management
+// should be left to this Node entity.
+func (n *Node) Server() *p2p.Server {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	return n.running
 }
