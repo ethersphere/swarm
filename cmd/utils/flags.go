@@ -102,35 +102,29 @@ var (
 	// General settings
 	DataDirFlag = DirectoryFlag{
 		Name:  "datadir",
-		Usage: "Data directory to be used",
+		Usage: "Data directory for the databases and keystore",
 		Value: DirectoryString{common.DefaultDataDir()},
 	}
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
-		Usage: "Network Id (integer)",
+		Usage: "Network identifier (integer, 0=Olympic, 1=Frontier, 2=Morden)",
 		Value: eth.NetworkId,
 	}
-	BlockchainVersionFlag = cli.IntFlag{
-		Name:  "blockchainversion",
-		Usage: "Blockchain version (integer)",
-		Value: core.BlockChainVersion,
-	}
-	GenesisNonceFlag = cli.IntFlag{
-		Name:  "genesisnonce",
-		Usage: "Sets the genesis nonce",
-		Value: 42,
-	}
-	GenesisFileFlag = cli.StringFlag{
-		Name:  "genesis",
-		Usage: "Inserts/Overwrites the genesis block (json format)",
-	}
-	DevModeFlag = cli.BoolFlag{
-		Name:  "dev",
-		Usage: "Developer mode. This mode creates a private network and sets several debugging flags",
+	OlympicFlag = cli.BoolFlag{
+		Name:  "olympic",
+		Usage: "Olympic network: pre-configured pre-release test network",
 	}
 	TestNetFlag = cli.BoolFlag{
 		Name:  "testnet",
-		Usage: "Testnet mode. This enables your node to operate on the testnet",
+		Usage: "Morden network: pre-configured test network with modified starting nonces (replay protection)",
+	}
+	DevModeFlag = cli.BoolFlag{
+		Name:  "dev",
+		Usage: "Developer mode: pre-configured private network with several debugging flags",
+	}
+	GenesisFileFlag = cli.StringFlag{
+		Name:  "genesis",
+		Usage: "Insert/overwrite the genesis block (JSON format)",
 	}
 	IdentityFlag = cli.StringFlag{
 		Name:  "identity",
@@ -140,35 +134,43 @@ var (
 		Name:  "natspec",
 		Usage: "Enable NatSpec confirmation notice",
 	}
+	DocRootFlag = DirectoryFlag{
+		Name:  "docroot",
+		Usage: "Document Root for HTTPClient file scheme",
+		Value: DirectoryString{common.HomeDir()},
+	}
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
-		Usage: "Megabytes of memory allocated to internal caching",
+		Usage: "Megabytes of memory allocated to internal caching (min 16MB / database forced)",
 		Value: 0,
 	}
-	OlympicFlag = cli.BoolFlag{
-		Name:  "olympic",
-		Usage: "Use olympic style protocol",
+	BlockchainVersionFlag = cli.IntFlag{
+		Name:  "blockchainversion",
+		Usage: "Blockchain version (integer)",
+		Value: core.BlockChainVersion,
 	}
 	FastSyncFlag = cli.BoolFlag{
 		Name:  "fast",
 		Usage: "Enables fast syncing through state downloads",
 	}
-
-	// miner settings
+	LightKDFFlag = cli.BoolFlag{
+		Name:  "lightkdf",
+		Usage: "Reduce KDF memory & CPU usage at some expense of KDF strength",
+	}
+	// Miner settings
 	// TODO: refactor CPU vs GPU mining flags
-	MiningGPUFlag = cli.StringFlag{
-		Name:  "minegpu",
-		Usage: "Mine with given GPUs. '--minegpu 0,1' will mine with the first two GPUs found.",
-	}
-
-	MinerThreadsFlag = cli.IntFlag{
-		Name:  "minerthreads",
-		Usage: "Number of miner threads",
-		Value: runtime.NumCPU(),
-	}
 	MiningEnabledFlag = cli.BoolFlag{
 		Name:  "mine",
 		Usage: "Enable mining",
+	}
+	MinerThreadsFlag = cli.IntFlag{
+		Name:  "minerthreads",
+		Usage: "Number of CPU threads to use for mining",
+		Value: runtime.NumCPU(),
+	}
+	MiningGPUFlag = cli.StringFlag{
+		Name:  "minergpus",
+		Usage: "List of GPUs to use for mining (e.g. '0,1' will use the first two GPUs found)",
 	}
 	AutoDAGFlag = cli.BoolFlag{
 		Name:  "autodag",
@@ -176,27 +178,27 @@ var (
 	}
 	EtherbaseFlag = cli.StringFlag{
 		Name:  "etherbase",
-		Usage: "Public address for block mining rewards. By default the address first created is used",
+		Usage: "Public address for block mining rewards (default = first account created)",
 		Value: "0",
 	}
 	GasPriceFlag = cli.StringFlag{
 		Name:  "gasprice",
-		Usage: "Sets the minimal gasprice when mining transactions",
+		Usage: "Minimal gas price to accept for mining a transactions",
 		Value: new(big.Int).Mul(big.NewInt(50), common.Shannon).String(),
 	}
 	ExtraDataFlag = cli.StringFlag{
 		Name:  "extradata",
-		Usage: "Extra data for the miner",
+		Usage: "Block extra data set by the miner (default = client version)",
 	}
-
+	// Account settings
 	UnlockedAccountFlag = cli.StringFlag{
 		Name:  "unlock",
-		Usage: "Unlock the account given until this program exits (prompts for password). '--unlock n' unlocks the n-th account in order or creation.",
+		Usage: "Unlock an account (may be creation index) until this program exits (prompts for password)",
 		Value: "",
 	}
 	PasswordFileFlag = cli.StringFlag{
 		Name:  "password",
-		Usage: "Path to password file to use with options and subcommands needing a password",
+		Usage: "Password file to use with options/subcommands needing a pass phrase",
 		Value: "",
 	}
 
@@ -220,32 +222,24 @@ var (
 	}
 
 	// logging and debug settings
-	LogFileFlag = cli.StringFlag{
-		Name:  "logfile",
-		Usage: "Send log output to a file",
-	}
 	VerbosityFlag = cli.IntFlag{
 		Name:  "verbosity",
 		Usage: "Logging verbosity: 0-6 (0=silent, 1=error, 2=warn, 3=info, 4=core, 5=debug, 6=debug detail)",
 		Value: int(logger.InfoLevel),
 	}
-	LogJSONFlag = cli.StringFlag{
-		Name:  "logjson",
-		Usage: "Send json structured log output to a file or '-' for standard output (default: no json output)",
+	LogFileFlag = cli.StringFlag{
+		Name:  "logfile",
+		Usage: "Log output file within the data dir (default = no log file generated)",
 		Value: "",
-	}
-	LogToStdErrFlag = cli.BoolFlag{
-		Name:  "logtostderr",
-		Usage: "Logs are written to standard error instead of to files.",
 	}
 	LogVModuleFlag = cli.GenericFlag{
 		Name:  "vmodule",
-		Usage: "The syntax of the argument is a comma-separated list of pattern=N, where pattern is a literal file name (minus the \".go\" suffix) or \"glob\" pattern and N is a log verbosity level.",
+		Usage: "Per-module verbosity: comma-separated list of <module>=<level>, where <module> is file literal or a glog pattern",
 		Value: glog.GetVModule(),
 	}
 	BacktraceAtFlag = cli.GenericFlag{
-		Name:  "backtrace_at",
-		Usage: "If set to a file and line number (e.g., \"block.go:271\") holding a logging statement, a stack trace will be logged",
+		Name:  "backtrace",
+		Usage: "Request a stack trace at a specific logging statement (e.g. \"block.go:271\")",
 		Value: glog.GetTraceLocation(),
 	}
 	PProfEanbledFlag = cli.BoolFlag{
@@ -254,37 +248,37 @@ var (
 	}
 	PProfPortFlag = cli.IntFlag{
 		Name:  "pprofport",
-		Usage: "Port on which the profiler should listen",
+		Usage: "Profile server listening port",
 		Value: 6060,
 	}
 	MetricsEnabledFlag = cli.BoolFlag{
 		Name:  metrics.MetricsEnabledFlag,
-		Usage: "Enables metrics collection and reporting",
+		Usage: "Enable metrics collection and reporting",
 	}
 
 	// RPC settings
 	RPCEnabledFlag = cli.BoolFlag{
 		Name:  "rpc",
-		Usage: "Enable the JSON-RPC server",
+		Usage: "Enable the HTTP-RPC server",
 	}
 	RPCListenAddrFlag = cli.StringFlag{
 		Name:  "rpcaddr",
-		Usage: "Listening address for the JSON-RPC server",
+		Usage: "HTTP-RPC server listening interface",
 		Value: "127.0.0.1",
 	}
 	RPCPortFlag = cli.IntFlag{
 		Name:  "rpcport",
-		Usage: "Port on which the JSON-RPC server should listen",
+		Usage: "HTTP-RPC server listening port",
 		Value: 8545,
 	}
 	RPCCORSDomainFlag = cli.StringFlag{
 		Name:  "rpccorsdomain",
-		Usage: "Domain on which to send Access-Control-Allow-Origin header",
+		Usage: "Domains from which to accept cross origin requests (browser enforced)",
 		Value: "",
 	}
 	RpcApiFlag = cli.StringFlag{
 		Name:  "rpcapi",
-		Usage: "Specify the API's which are offered over the HTTP RPC interface",
+		Usage: "API's offered over the HTTP-RPC interface",
 		Value: comms.DefaultHttpRpcApis,
 	}
 	IPCDisabledFlag = cli.BoolFlag{
@@ -293,7 +287,7 @@ var (
 	}
 	IPCApiFlag = cli.StringFlag{
 		Name:  "ipcapi",
-		Usage: "Specify the API's which are offered over the IPC interface",
+		Usage: "API's offered over the IPC-RPC interface",
 		Value: comms.DefaultIpcApis,
 	}
 	IPCPathFlag = DirectoryFlag{
@@ -303,7 +297,7 @@ var (
 	}
 	ExecFlag = cli.StringFlag{
 		Name:  "exec",
-		Usage: "Execute javascript statement (only in combination with console/attach)",
+		Usage: "Execute JavaScript statement (only in combination with console/attach)",
 	}
 	// Network Settings
 	MaxPeersFlag = cli.IntFlag{
@@ -323,7 +317,7 @@ var (
 	}
 	BootnodesFlag = cli.StringFlag{
 		Name:  "bootnodes",
-		Usage: "Space-separated enode URLs for p2p discovery bootstrap",
+		Usage: "Space-separated enode URLs for P2P discovery bootstrap",
 		Value: "",
 	}
 	NodeKeyFileFlag = cli.StringFlag{
@@ -345,7 +339,7 @@ var (
 	}
 	WhisperEnabledFlag = cli.BoolFlag{
 		Name:  "shh",
-		Usage: "Enable whisper",
+		Usage: "Enable Whisper",
 	}
 	ChequebookAddrFlag = cli.StringFlag{
 		Name:  "chequebook",
@@ -362,14 +356,16 @@ var (
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
-		Usage: "JS root path for loadScript and document root for admin.httpGet",
+		Usage: "JavaSript root path for `loadScript` and document root for `admin.httpGet`",
 		Value: ".",
 	}
 	SolcPathFlag = cli.StringFlag{
 		Name:  "solc",
-		Usage: "solidity compiler to be used",
+		Usage: "Solidity compiler command to be used",
 		Value: "solc",
 	}
+
+	// Gas price oracle settings
 	GpoMinGasPriceFlag = cli.StringFlag{
 		Name:  "gpomin",
 		Usage: "Minimum suggested gas price",
@@ -466,7 +462,6 @@ func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Cont
 	cfg := &eth.Config{
 		Name:                    common.MakeName(clientID, version),
 		DataDir:                 datadir,
-		GenesisNonce:            ctx.GlobalInt(GenesisNonceFlag.Name),
 		GenesisFile:             ctx.GlobalString(GenesisFileFlag.Name),
 		FastSync:                ctx.GlobalBool(FastSyncFlag.Name),
 		BlockChainVersion:       ctx.GlobalInt(BlockchainVersionFlag.Name),
@@ -475,7 +470,6 @@ func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Cont
 		NetworkId:               ctx.GlobalInt(NetworkIdFlag.Name),
 		LogFile:                 ctx.GlobalString(LogFileFlag.Name),
 		Verbosity:               ctx.GlobalInt(VerbosityFlag.Name),
-		LogJSON:                 ctx.GlobalString(LogJSONFlag.Name),
 		Etherbase:               common.HexToAddress(etherbase),
 		MinerThreads:            ctx.GlobalInt(MinerThreadsFlag.Name),
 		AccountManager:          am,
@@ -486,6 +480,7 @@ func MakeEthConfig(clientID, version string, am *accounts.Manager, ctx *cli.Cont
 		Olympic:                 ctx.GlobalBool(OlympicFlag.Name),
 		NAT:                     MakeNAT(ctx),
 		NatSpec:                 ctx.GlobalBool(NatspecEnabledFlag.Name),
+		DocRoot:                 ctx.GlobalString(DocRootFlag.Name),
 		Discovery:               !ctx.GlobalBool(NoDiscoverFlag.Name),
 		NodeKey:                 MakeNodeKey(ctx),
 		BzzConfig:               bzzconfig,
@@ -608,7 +603,13 @@ func MakeAccountManager(ctx *cli.Context) *accounts.Manager {
 	if ctx.GlobalBool(TestNetFlag.Name) {
 		dataDir += "/testnet"
 	}
-	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"))
+	scryptN := crypto.StandardScryptN
+	scryptP := crypto.StandardScryptP
+	if ctx.GlobalBool(LightKDFFlag.Name) {
+		scryptN = crypto.LightScryptN
+		scryptP = crypto.LightScryptP
+	}
+	ks := crypto.NewKeyStorePassphrase(filepath.Join(dataDir, "keystore"), scryptN, scryptP)
 	return accounts.NewManager(ks)
 }
 
@@ -646,17 +647,14 @@ func StartIPC(ethereum *eth.Ethereum, ctx *cli.Context) error {
 		Endpoint: IpcSocketPath(ctx),
 	}
 
-	initializer := func(conn net.Conn) (shared.EthereumApi, error) {
+	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
 		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
 		xeth := xeth.New(ethereum, fe)
-		codec := codec.JSON
-
-		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec, xeth, ethereum, ctx.GlobalString(JSpathFlag.Name))
+		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, ethereum)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-
-		return api.Merge(apis...), nil
+		return xeth, api.Merge(apis...), nil
 	}
 
 	return comms.StartIpc(config, codec.JSON, initializer)
@@ -671,7 +669,8 @@ func StartRPC(eth *eth.Ethereum, ctx *cli.Context) error {
 
 	xeth := xeth.New(eth, nil)
 	codec := codec.JSON
-	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth, ctx.GlobalString(JSpathFlag.Name))
+
+	apis, err := api.ParseApiString(ctx.GlobalString(RpcApiFlag.Name), codec, xeth, eth)
 	if err != nil {
 		return err
 	}

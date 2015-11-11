@@ -112,12 +112,11 @@ type statusMsgData struct {
 	Addr      *peerAddr
 	Swap      *swapProfile
 	NetworkId uint64
-	Caps      []p2p.Cap
 	SyncState *syncState `rlp:"nil"`
 }
 
 func (self *statusMsgData) String() string {
-	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, Swap: %v, NetworkId: %v, Caps: %v, SyncState: %v", self.Version, self.ID, self.Addr, self.Swap, self.NetworkId, self.Caps, self.SyncState)
+	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, Swap: %v, NetworkId: %v, SyncState: %v", self.Version, self.ID, self.Addr, self.Swap, self.NetworkId, self.SyncState)
 }
 
 /*
@@ -130,7 +129,7 @@ func (self *statusMsgData) String() string {
 
 Store request
 
-[+0x02, key: B_32, metadata: [], data: B_4k]: the data chunk to be stored, preceded by its key.
+[+0x02, key: B_32, data: B_4k]: the data chunk to be stored, preceded by its key.
 
 
 */
@@ -141,7 +140,6 @@ type storeRequestMsgData struct {
 	Id             uint64     // request ID. if delivery, the ID is retrieve request ID
 	requestTimeout *time.Time // expiry for forwarding - [not serialised][not currently used]
 	storageTimeout *time.Time // expiry of content - [not serialised][not currently used]
-	Metadata       metaData   // routing and accounting metadata [not currently used]
 	peer           *peer      // [not serialised] protocol registers the requester
 }
 
@@ -179,7 +177,7 @@ corresponding to the address.
 
 Retrieve request
 
-[0x03, key: B_32, Id: B_8, MaxSize: B_8, MaxPeers: B_8, Timeout: B_8, metadata: B]: key of the data chunk to be retrieved, timeout in milliseconds. Note that zero timeout retrievals serve also as messages to retrieve peers.
+[0x03, key: B_32, Id: B_8, MaxSize: B_8, MaxPeers: B_8, Timeout: B_8]: key of the data chunk to be retrieved, timeout in milliseconds. Note that zero timeout retrievals serve also as messages to retrieve peers.
 
 */
 
@@ -311,18 +309,6 @@ func (self peersMsgData) getTimeout() (t *time.Time) {
 	}
 	return
 }
-
-/*
-metadata is as yet a placeholder
-
-it will likely contain info about hops or the entire forward chain of node IDs
-this may allow some interesting schemes to evolve optimal routing strategies
-metadata for storage and retrieval requests could specify format parameters
-relevant for the (blockhashing) chunking scheme used (for chunks corresponding
-to a treenode). For instance all runtime params for the chunker (hashing
-algorithm used, branching etc.)
-*/
-type metaData struct{}
 
 /*
 deliveryRequest
@@ -544,16 +530,15 @@ func (self *bzzProtocol) handle() error {
 func (self *bzzProtocol) handleStatus() (err error) {
 	// send precanned status message
 	handshake := &statusMsgData{
-		Version: uint64(Version),
-		ID:      "honey",
+		Version:   uint64(Version),
+		ID:        "honey",
+		Addr:      self.selfAddr(),
+		NetworkId: uint64(NetworkId),
+		SyncState: self.syncState,
 		Swap: &swapProfile{
 			Profile:    self.swapParams.Profile,
 			payProfile: self.swapParams.payProfile,
 		},
-		Addr:      self.selfAddr(),
-		NetworkId: uint64(NetworkId),
-		Caps:      []p2p.Cap{},
-		SyncState: self.syncState,
 	}
 
 	err = p2p.Send(self.rw, statusMsg, handshake)
@@ -601,7 +586,10 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	// syncer setup
 	// keyIterator func
 	kitf := func(s syncState) keyIterator {
-		it := self.netStore.localStore.dbStore.newSyncIterator(s.DbSyncState)
+		it, err := self.netStore.localStore.dbStore.newSyncIterator(s.DbSyncState)
+		if err != nil {
+			return nil
+		}
 		return keyIterator(it)
 	}
 	counter := self.netStore.localStore.dbStore.Counter
@@ -689,29 +677,15 @@ func (self *bzzProtocol) selfAddr() *peerAddr {
 
 // outgoing messages
 // send retrieveRequestMsg
-func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) {
+func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) error {
 	glog.V(logger.Debug).Infof("[BZZ] sending retrieve request: %v", req)
-	err := p2p.Send(self.rw, retrieveRequestMsg, req)
-	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
-	}
+	return self.send(retrieveRequestMsg, req)
 }
 
 // send storeRequestMsg
 func (self *bzzProtocol) store(req *storeRequestMsgData) error {
-	var err error
 	glog.V(logger.Debug).Infof("[BZZ] sending store request: %v", req)
-	for i := 0; i < 5; i++ {
-		err = p2p.Send(self.rw, storeRequestMsg, req)
-		if err != nil {
-			glog.V(logger.Debug).Infof("[BZZ] error sending msg: %v retry", err)
-		} else {
-			return nil
-		}
-	}
-	glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v retry", err)
-	self.Drop()
-	return err
+	return self.send(storeRequestMsg, req)
 }
 
 // queue storeRequestMsg in request db
@@ -719,11 +693,7 @@ func (self *bzzProtocol) deliveryRequest(reqs []*syncRequest) error {
 	req := &deliveryRequestMsgData{
 		Deliver: reqs,
 	}
-	err := p2p.Send(self.rw, deliveryRequestMsg, req)
-	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
-	}
-	return err
+	return self.send(deliveryRequestMsg, req)
 }
 
 // batch of syncRequests to send off
@@ -732,11 +702,7 @@ func (self *bzzProtocol) unsyncedKeys(reqs []*syncRequest, state syncState) erro
 		Unsynced: reqs,
 		State:    state,
 	}
-	err := p2p.Send(self.rw, unsyncedKeysMsg, req)
-	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
-	}
-	return err
+	return self.send(unsyncedKeysMsg, req)
 }
 
 // send paymentMsg
@@ -746,21 +712,15 @@ func (self *bzzProtocol) Pay(units int, promise swap.Promise) {
 }
 
 // send paymentMsg
-func (self *bzzProtocol) payment(req *paymentMsgData) {
+func (self *bzzProtocol) payment(req *paymentMsgData) error {
 	glog.V(logger.Debug).Infof("[BZZ] sending payment: %v", req)
-	err := p2p.Send(self.rw, paymentMsg, req)
-	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
-	}
+	return self.send(paymentMsg, req)
 }
 
 // sends peersMsg
-func (self *bzzProtocol) peers(req *peersMsgData) {
+func (self *bzzProtocol) peers(req *peersMsgData) error {
 	glog.V(logger.Debug).Infof("[BZZ] sending peers: %v", req)
-	err := p2p.Send(self.rw, peersMsg, req)
-	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] error sending msg: %v", err)
-	}
+	return self.send(peersMsg, req)
 }
 
 func (self *bzzProtocol) protoError(code int, format string, params ...interface{}) (err *errs.Error) {
@@ -774,4 +734,12 @@ func (self *bzzProtocol) protoErrorDisconnect(err *errs.Error) {
 	if err.Fatal() {
 		self.peer.Disconnect(p2p.DiscSubprotocolError)
 	}
+}
+
+func (self *bzzProtocol) send(msg uint64, data interface{}) error {
+	err := p2p.Send(self.rw, msg, data)
+	if err != nil {
+		self.Drop()
+	}
+	return err
 }

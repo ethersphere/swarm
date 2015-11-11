@@ -9,6 +9,7 @@ package bzz
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -333,9 +334,10 @@ func (s *dbStore) Get(key Key) (chunk *Chunk, err error) {
 
 		hasher := s.hashfunc()
 		hasher.Write(data)
-		if bytes.Compare(hasher.Sum(nil), key) != 0 {
+		hash := hasher.Sum(nil)
+		if bytes.Compare(hash, key) != 0 {
 			s.db.Delete(getDataKey(index.Idx))
-			err = notFound
+			err = fmt.Errorf("invalid chunk. hash=%x, key=%v", hash, key[:])
 			return
 		}
 
@@ -411,13 +413,16 @@ type dbSyncIterator struct {
 }
 
 // initialises a sync iterator from a syncToken (passed in with the handshake)
-func (self *dbStore) newSyncIterator(state DbSyncState) (si *dbSyncIterator) {
+func (self *dbStore) newSyncIterator(state DbSyncState) (si *dbSyncIterator, err error) {
+	if state.First > state.Last {
+		return nil, fmt.Errorf("no entries found")
+	}
 	si = &dbSyncIterator{
 		it:          self.db.NewIterator(),
 		DbSyncState: state,
 	}
 	si.it.Seek(getIndexKey(state.Start))
-	return
+	return si, nil
 }
 
 // walk the area from Start to Stop and returns items within time interval

@@ -59,24 +59,8 @@ const (
 	LogFilterTy
 )
 
-func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
-
-func (self *XEth) DefaultGasPrice() *big.Int {
-	if self.gpo == nil {
-		self.gpo = eth.NewGasPriceOracle(self.backend)
-	}
-	return self.gpo.SuggestPrice()
-}
-
 type XEth struct {
-	backend  *eth.Ethereum
-	frontend Frontend
-
-	state   *State
-	whisper *Whisper
-
-	quit          chan struct{}
-	filterManager *filters.FilterSystem
+	quit chan struct{}
 
 	logMu    sync.RWMutex
 	logQueue map[int]*logQueue
@@ -92,16 +76,18 @@ type XEth struct {
 
 	transactMu sync.Mutex
 
-	agent *miner.RemoteAgent
-
-	gpo *eth.GasPriceOracle
+	// read-only fields
+	backend       *eth.Ethereum
+	frontend      Frontend
+	agent         *miner.RemoteAgent
+	gpo           *eth.GasPriceOracle
+	state         *State
+	whisper       *Whisper
+	filterManager *filters.FilterSystem
 }
 
 func NewTest(eth *eth.Ethereum, frontend Frontend) *XEth {
-	return &XEth{
-		backend:  eth,
-		frontend: frontend,
-	}
+	return &XEth{backend: eth, frontend: frontend}
 }
 
 // New creates an XEth that uses the given frontend.
@@ -118,6 +104,7 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 		transactionQueue: make(map[int]*hashQueue),
 		messages:         make(map[int]*whisperFilter),
 		agent:            miner.NewRemoteAgent(),
+		gpo:              eth.NewGasPriceOracle(ethereum),
 	}
 	if ethereum.Whisper() != nil {
 		xeth.whisper = NewWhisper(ethereum.Whisper())
@@ -126,19 +113,15 @@ func New(ethereum *eth.Ethereum, frontend Frontend) *XEth {
 	if frontend == nil {
 		xeth.frontend = dummyFrontend{}
 	}
-	state, err := xeth.backend.BlockChain().State()
-	if err != nil {
-		return nil
-	}
+	state, _ := xeth.backend.BlockChain().State()
 	xeth.state = NewState(xeth, state)
-
 	go xeth.start()
-
 	return xeth
 }
 
 func (self *XEth) start() {
 	timer := time.NewTicker(2 * time.Second)
+	defer timer.Stop()
 done:
 	for {
 		select {
@@ -184,8 +167,12 @@ done:
 	}
 }
 
-func (self *XEth) stop() {
+// Stop releases any resources associated with self.
+// It may not be called more than once.
+func (self *XEth) Stop() {
 	close(self.quit)
+	self.filterManager.Stop()
+	self.backend.Miner().Unregister(self.agent)
 }
 
 func cAddress(a []string) []common.Address {
@@ -205,6 +192,12 @@ func cTopics(t [][]string) [][]common.Hash {
 		}
 	}
 	return topics
+}
+
+func DefaultGas() *big.Int { return new(big.Int).Set(defaultGas) }
+
+func (self *XEth) DefaultGasPrice() *big.Int {
+	return self.gpo.SuggestPrice()
 }
 
 func (self *XEth) RemoteMining() *miner.RemoteAgent { return self.agent }

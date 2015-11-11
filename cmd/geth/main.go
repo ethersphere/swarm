@@ -50,9 +50,9 @@ import (
 
 const (
 	ClientIdentifier = "Geth"
-	Version          = "1.3.0-dev"
+	Version          = "1.4.0-unstable"
 	VersionMajor     = 1
-	VersionMinor     = 3
+	VersionMinor     = 4
 	VersionPatch     = 0
 )
 
@@ -76,7 +76,7 @@ func init() {
 		{
 			Action: blockRecovery,
 			Name:   "recover",
-			Usage:  "attempts to recover a corrupted database by setting a new block by number or hash. See help recover.",
+			Usage:  "Attempts to recover a corrupted database by setting a new block by number or hash",
 			Description: `
 The recover commands will attempt to read out the last
 block based on that.
@@ -344,10 +344,8 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.RPCCORSDomainFlag,
 		utils.VerbosityFlag,
 		utils.BacktraceAtFlag,
-		utils.LogToStdErrFlag,
 		utils.LogVModuleFlag,
 		utils.LogFileFlag,
-		utils.LogJSONFlag,
 		utils.PProfEanbledFlag,
 		utils.PProfPortFlag,
 		utils.MetricsEnabledFlag,
@@ -407,7 +405,6 @@ func makeDefaultExtra() []byte {
 		glog.V(logger.Debug).Infof("extra: %x\n", extra)
 		return nil
 	}
-
 	return extra
 }
 
@@ -550,10 +547,10 @@ func unlockAccount(ctx *cli.Context, am *accounts.Manager, addr string, i int, i
 func blockRecovery(ctx *cli.Context) {
 	utils.CheckLegalese(utils.MustDataDir(ctx))
 
-	arg := ctx.Args().First()
-	if len(ctx.Args()) < 1 && len(arg) > 0 {
+	if len(ctx.Args()) < 1 {
 		glog.Fatal("recover requires block number or hash")
 	}
+	arg := ctx.Args().First()
 
 	cfg := makeEthConfig(ClientIdentifier, nodeNameVersion, ctx)
 	utils.CheckLegalese(cfg.DataDir)
