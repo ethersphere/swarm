@@ -843,18 +843,41 @@ func RandomAddressAt(self Address, prox int) (addr Address) {
 	return
 }
 
-func CommonBitsAddrF(self, other Address, f func() byte) (addr Address) {
+func (self *Kademlia) KeyRange(other Address) (start, stop Address) {
+	defer self.lock.RUnlock()
+	self.lock.RLock()
+	prox := proximity(self.Addr(), other)
+	if prox >= self.proxLimit {
+		prox = self.proxLimit
+	}
+	start = CommonBitsAddrByte(self.Addr(), other, byte(0x00), prox)
+	stop = CommonBitsAddrByte(self.Addr(), other, byte(0xff), prox)
+	glog.V(logger.Warn).Infof("%v - %v keyrange: %v - %v (%v/%v)", self.Addr(), other, start, stop, prox, self.proxLimit)
+	return
+}
+
+func CommonBitsAddrF(self, other Address, f func() byte, p int) (addr Address) {
 	prox := proximity(self, other)
-	addr = self
 	var pos int
+	if p <= prox {
+		prox = p
+	}
 	pos = prox / 8
+	addr = self
 	trans := byte(prox % 8)
-	transbytea := byte(0x7f) >> trans
-	flipbyte := byte(0x80 >> trans)
+	var transbytea byte
+	if p > prox {
+		transbytea = byte(0x7f)
+	} else {
+		transbytea = byte(0xff)
+	}
+	transbytea >>= trans
 	transbyteb := transbytea ^ byte(0xff)
 	addrpos := addr[pos]
 	addrpos &= transbyteb
-	addrpos ^= flipbyte
+	if p > prox {
+		addrpos ^= byte(0x80 >> trans)
+	}
 	addrpos |= transbytea & f()
 	addr[pos] = addrpos
 	for i := pos + 1; i < len(addr); i++ {
@@ -864,12 +887,12 @@ func CommonBitsAddrF(self, other Address, f func() byte) (addr Address) {
 	return
 }
 
-func CommonBitsAddr(self, other Address) (addr Address) {
-	return CommonBitsAddrF(self, other, func() byte { return byte(rand.Intn(255)) })
+func CommonBitsAddr(self, other Address, prox int) (addr Address) {
+	return CommonBitsAddrF(self, other, func() byte { return byte(rand.Intn(255)) }, prox)
 }
 
-func CommonBitsAddrByte(self, other Address, b byte) (addr Address) {
-	return CommonBitsAddrF(self, other, func() byte { return b })
+func CommonBitsAddrByte(self, other Address, b byte, prox int) (addr Address) {
+	return CommonBitsAddrF(self, other, func() byte { return b }, prox)
 }
 
 // randomAddressAt() generates a random address
