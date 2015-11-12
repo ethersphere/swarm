@@ -7,6 +7,8 @@ import (
 	"testing"
 	"testing/quick"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -39,6 +41,14 @@ func (n *testNode) LastActive() time.Time {
 }
 
 func (n *testNode) Add(a Address) (err error) {
+	return nil
+}
+
+func (n *testNode) GetMeta() interface{} {
+	return nil
+}
+
+func (n *testNode) SetMeta(interface{}) error {
 	return nil
 }
 
@@ -405,4 +415,37 @@ func (Address) Generate(rand *rand.Rand, size int) reflect.Value {
 		id[i] = byte(rand.Uint32())
 	}
 	return reflect.ValueOf(id)
+}
+
+func TestCommonBitsAddrF(t *testing.T) {
+	a := Address(common.HexToHash("0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
+	b := Address(common.HexToHash("0x8123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
+	c := Address(common.HexToHash("0x4123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
+	d := Address(common.HexToHash("0x0023456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
+	e := Address(common.HexToHash("0x01A3456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"))
+	ab := CommonBitsAddrF(a, b, func() byte { return byte(0x00) })
+	expab := Address(common.HexToHash("0x8000000000000000000000000000000000000000000000000000000000000000"))
+
+	if ab != expab {
+		t.Fatalf("%v != %v", ab, expab)
+	}
+	ac := CommonBitsAddrF(a, c, func() byte { return byte(0x00) })
+	expac := Address(common.HexToHash("0x4000000000000000000000000000000000000000000000000000000000000000"))
+
+	if ac != expac {
+		t.Fatalf("%v != %v", ac, expac)
+	}
+	ad := CommonBitsAddrF(a, d, func() byte { return byte(0x00) })
+	expad := Address(common.HexToHash("0x0000000000000000000000000000000000000000000000000000000000000000"))
+
+	if ad != expad {
+		t.Fatalf("%v != %v", ad, expad)
+	}
+	ae := CommonBitsAddrF(a, e, func() byte { return byte(0x00) })
+	expae := Address(common.HexToHash("0x0180000000000000000000000000000000000000000000000000000000000000"))
+
+	if ae != expae {
+		t.Fatalf("%v != %v", ae, expae)
+	}
+
 }

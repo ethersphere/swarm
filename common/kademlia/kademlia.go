@@ -847,18 +847,16 @@ func CommonBitsAddrF(self, other Address, f func() byte) (addr Address) {
 	prox := proximity(self, other)
 	addr = self
 	var pos int
-	if prox >= 0 {
-		pos = prox / 8
-		trans := prox % 8
-		transbytea := byte(0)
-		for j := 0; j <= trans; j++ {
-			transbytea |= 1 << uint8(7-j)
-		}
-		flipbyte := byte(1 << uint8(7-trans))
-		transbyteb := transbytea ^ byte(255)
-		randbyte := f()
-		addr[pos] = ((addr[pos] & transbytea) ^ flipbyte) | randbyte&transbyteb
-	}
+	pos = prox / 8
+	trans := byte(prox % 8)
+	transbytea := byte(0x7f) >> trans
+	flipbyte := byte(0x80 >> trans)
+	transbyteb := transbytea ^ byte(0xff)
+	addrpos := addr[pos]
+	addrpos &= transbyteb
+	addrpos ^= flipbyte
+	addrpos |= transbytea & f()
+	addr[pos] = addrpos
 	for i := pos + 1; i < len(addr); i++ {
 		addr[i] = f()
 	}
