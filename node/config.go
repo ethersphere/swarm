@@ -23,7 +23,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -36,6 +35,7 @@ var (
 	datadirPrivateKey   = "nodekey"            // Path within the datadir to the node's private key
 	datadirStaticNodes  = "static-nodes.json"  // Path within the datadir to the static node list
 	datadirTrustedNodes = "trusted-nodes.json" // Path within the datadir to the trusted node list
+	datadirNodeDatabase = "nodes"              // Path within the datadir to store the node infos
 )
 
 // Config represents a small collection of configuration values to fine tune the
@@ -43,9 +43,10 @@ var (
 // all registered services.
 type Config struct {
 	// DataDir is the file system folder the node should use for any data storage
-	// requirements. It will be passed to any registered service so they might also
-	// use the same data paths. If no data directory is specified, a temporary one
-	// will be created and this field updated (it will *not* be deleted afterwards).
+	// requirements. The configured data directory will not be directly shared with
+	// registered services, instead those can use utility methods to create/access
+	// databases or flat files. This enables ephemeral nodes which can fully reside
+	// in memory.
 	DataDir string
 
 	// This field should be a valid secp256k1 private key that will be used for both
@@ -58,9 +59,9 @@ type Config struct {
 	// that follows existing conventions.
 	Name string
 
-	// Discovery specifies whether the peer discovery mechanism should be started
+	// NoDiscovery specifies whether the peer discovery mechanism should be started
 	// or not. Disabling is usually useful for protocol debugging (manual topology).
-	Discovery bool
+	NoDiscovery bool
 
 	// Bootstrap nodes used to establish connectivity with the rest of the network.
 	BootstrapNodes []*discover.Node
@@ -97,6 +98,14 @@ func (c *Config) NodeKey() *ecdsa.PrivateKey {
 	if c.PrivateKey != nil {
 		return c.PrivateKey
 	}
+	// Generate ephemeral key if no datadir is being used
+	if c.DataDir == "" {
+		key, err := crypto.GenerateKey()
+		if err != nil {
+			glog.Fatalf("Failed to generate ephemeral node key: %v", err)
+		}
+		return key
+	}
 	// Fall back to persistent key from the data directory
 	keyfile := filepath.Join(c.DataDir, datadirPrivateKey)
 	if key, err := crypto.LoadECDSA(keyfile); err == nil {
@@ -127,6 +136,9 @@ func (c *Config) TrusterNodes() []*discover.Node {
 // file from within the data directory.
 func (c *Config) parsePersistentNodes(file string) []*discover.Node {
 	// Short circuit if no node config is present
+	if c.DataDir == "" {
+		return nil
+	}
 	path := filepath.Join(c.DataDir, file)
 	if _, err := os.Stat(path); err != nil {
 		return nil
@@ -156,20 +168,4 @@ func (c *Config) parsePersistentNodes(file string) []*discover.Node {
 		nodes = append(nodes, node)
 	}
 	return nodes
-}
-
-// ParseBootstrapNodes parses a space separated list of bootstrap enode node URLs.
-func ParseBootstrapNodes(bootnodes string) ([]*discover.Node, error) {
-	var nodes []*discover.Node
-	for _, url := range strings.Split(bootnodes, " ") {
-		if url == "" {
-			continue
-		}
-		node, err := discover.ParseNode(url)
-		if err != nil {
-			return nil, err
-		}
-		nodes = append(nodes, node)
-	}
-	return nodes, nil
 }

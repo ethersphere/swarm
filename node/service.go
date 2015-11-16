@@ -16,7 +16,35 @@
 
 package node
 
-import "github.com/ethereum/go-ethereum/p2p"
+import (
+	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/ethdb"
+	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/p2p"
+)
+
+// ServiceContext is a collection of service independent options inherited from
+// the protocol stack, that is passed to all constructors to be optionally used;
+// as well as utility methods to operate on the service environment.
+type ServiceContext struct {
+	dataDir  string         // Data directory for protocol persistence
+	EventMux *event.TypeMux // Event multiplexer used for decoupled notifications
+}
+
+// Database opens an existing database with the given name (or creates one if no
+// previous can be found) from within the node's data directory. If the node is
+// an ephemeral one, a memory database is returned.
+func (ctx *ServiceContext) Database(name string, cache int) (ethdb.Database, error) {
+	if ctx.dataDir == "" {
+		return ethdb.NewMemDatabase()
+	}
+	return ethdb.NewLDBDatabase(filepath.Join(ctx.dataDir, name), cache)
+}
+
+// ServiceConstructor is the function signature of the constructors needed to be
+// registered for service instantiation.
+type ServiceConstructor func(ctx *ServiceContext) (Service, error)
 
 // Service is an individual protocol that can be registered into a node.
 //

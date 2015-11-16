@@ -18,6 +18,8 @@ package node
 
 import (
 	"errors"
+	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -67,6 +69,35 @@ func TestNodeLifeCycle(t *testing.T) {
 	}
 }
 
+// Tests that if the data dir is already in use, an appropriate error is returned.
+func TestNodeUsedDataDir(t *testing.T) {
+	// Create a temporary folder to use as the data directory
+	dir, err := ioutil.TempDir("", "")
+	if err != nil {
+		t.Fatalf("failed to create temporary data directory: %v", err)
+	}
+	defer os.RemoveAll(dir)
+
+	// Create a new node based on the data directory
+	original, err := New(&Config{DataDir: dir})
+	if err != nil {
+		t.Fatalf("failed to create original protocol stack: %v", err)
+	}
+	if err := original.Start(); err != nil {
+		t.Fatalf("failed to start original protocol stack: %v", err)
+	}
+	defer original.Stop()
+
+	// Create a second node based on the same data directory and ensure failure
+	duplicate, err := New(&Config{DataDir: dir})
+	if err != nil {
+		t.Fatalf("failed to create duplicate protocol stack: %v", err)
+	}
+	if err := duplicate.Start(); err != ErrDatadirUsed {
+		t.Fatalf("duplicate datadir failure mismatch: have %v, want %v", err, ErrDatadirUsed)
+	}
+}
+
 // NoopService is a trivial implementation of the Service interface.
 type NoopService struct{}
 
@@ -74,7 +105,7 @@ func (s *NoopService) Protocols() []p2p.Protocol { return nil }
 func (s *NoopService) Start() error              { return nil }
 func (s *NoopService) Stop() error               { return nil }
 
-func NewNoopService() (Service, error) { return new(NoopService), nil }
+func NewNoopService(*ServiceContext) (Service, error) { return new(NoopService), nil }
 
 // Tests whether services can be registered and unregistered.
 func TestServiceRegistry(t *testing.T) {
@@ -156,7 +187,7 @@ func TestServiceLifeCycle(t *testing.T) {
 
 	for i, id := range ids {
 		id := id // Closure for the constructor
-		constructor := func() (Service, error) {
+		constructor := func(*ServiceContext) (Service, error) {
 			return &InstrumentedService{
 				startHook: func() { started[id] = true },
 				stopHook:  func() { stopped[id] = true },
@@ -177,6 +208,9 @@ func TestServiceLifeCycle(t *testing.T) {
 		if stopped[id] {
 			t.Fatalf("service %d: freshly started service already stopped", i)
 		}
+		if stack.Service(id) == nil {
+			t.Fatalf("service %d: freshly started service unaccessible", i)
+		}
 	}
 	// Stop the node and check that all services have been stopped
 	if err := stack.Stop(); err != nil {
@@ -184,7 +218,10 @@ func TestServiceLifeCycle(t *testing.T) {
 	}
 	for i, id := range ids {
 		if !stopped[id] {
-			t.Fatalf("service %d: freshly terminates service still running", i)
+			t.Fatalf("service %d: freshly terminated service still running", i)
+		}
+		if service := stack.Service(id); service != nil {
+			t.Fatalf("service %d: freshly terminated service still accessible: %v", i, service)
 		}
 	}
 }
@@ -200,7 +237,7 @@ func TestServiceRestarts(t *testing.T) {
 		running bool
 		started int
 	)
-	constructor := func() (Service, error) {
+	constructor := func(*ServiceContext) (Service, error) {
 		running = false
 
 		return &InstrumentedService{
@@ -249,7 +286,7 @@ func TestServiceConstructionAbortion(t *testing.T) {
 	started := make(map[string]bool)
 	for i, id := range ids {
 		id := id // Closure for the constructor
-		constructor := func() (Service, error) {
+		constructor := func(*ServiceContext) (Service, error) {
 			return &InstrumentedService{
 				startHook: func() { started[id] = true },
 			}, nil
@@ -260,7 +297,7 @@ func TestServiceConstructionAbortion(t *testing.T) {
 	}
 	// Register a service that fails to construct itself
 	failure := errors.New("fail")
-	failer := func() (Service, error) {
+	failer := func(*ServiceContext) (Service, error) {
 		return nil, failure
 	}
 	if err := stack.Register("failer", failer); err != nil {
@@ -295,7 +332,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 
 	for i, id := range ids {
 		id := id // Closure for the constructor
-		constructor := func() (Service, error) {
+		constructor := func(*ServiceContext) (Service, error) {
 			return &InstrumentedService{
 				startHook: func() { started[id] = true },
 				stopHook:  func() { stopped[id] = true },
@@ -307,7 +344,7 @@ func TestServiceStartupAbortion(t *testing.T) {
 	}
 	// Register a service that fails to start
 	failure := errors.New("fail")
-	failer := func() (Service, error) {
+	failer := func(*ServiceContext) (Service, error) {
 		return &InstrumentedService{
 			start: failure,
 		}, nil
@@ -345,7 +382,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 
 	for i, id := range ids {
 		id := id // Closure for the constructor
-		constructor := func() (Service, error) {
+		constructor := func(*ServiceContext) (Service, error) {
 			return &InstrumentedService{
 				startHook: func() { started[id] = true },
 				stopHook:  func() { stopped[id] = true },
@@ -357,7 +394,7 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 	}
 	// Register a service that fails to shot down cleanly
 	failure := errors.New("fail")
-	failer := func() (Service, error) {
+	failer := func(*ServiceContext) (Service, error) {
 		return &InstrumentedService{
 			stop: failure,
 		}, nil
@@ -419,7 +456,7 @@ func TestProtocolGather(t *testing.T) {
 			protocols[i].Name = id
 			protocols[i].Version = uint(i)
 		}
-		constructor := func() (Service, error) {
+		constructor := func(*ServiceContext) (Service, error) {
 			return &InstrumentedService{
 				protocols: protocols,
 			}, nil

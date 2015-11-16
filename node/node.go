@@ -19,25 +19,31 @@ package node
 
 import (
 	"errors"
-	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sync"
+	"syscall"
 
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
 var (
+	ErrDatadirUsed       = errors.New("datadir already used")
 	ErrNodeStopped       = errors.New("node not started")
 	ErrNodeRunning       = errors.New("node already running")
 	ErrServiceUnknown    = errors.New("service not registered")
 	ErrServiceRegistered = errors.New("service already registered")
+
+	datadirInUseErrnos = map[uint]bool{11: true, 32: true, 35: true}
 )
 
 // Node represents a P2P node into which arbitrary services might be registered.
 type Node struct {
-	datadir string                             // Path to the currently used data directory
-	config  *p2p.Server                        // Configuration of the underlying P2P networking layer
-	stack   map[string]func() (Service, error) // Protocol stack registered into this node
+	datadir string                        // Path to the currently used data directory
+	config  *p2p.Server                   // Configuration of the underlying P2P networking layer
+	stack   map[string]ServiceConstructor // Protocol stack registered into this node
+	emux    *event.TypeMux                // Event multiplexer used between the services of a stack
 
 	running  *p2p.Server        // Currently running P2P networking layer
 	services map[string]Service // Currently running services
@@ -52,23 +58,22 @@ func New(conf *Config) (*Node, error) {
 		if err := os.MkdirAll(conf.DataDir, 0700); err != nil {
 			return nil, err
 		}
-	} else {
-		dir, err := ioutil.TempDir("", conf.Name)
-		if err != nil {
-			return nil, err
-		}
-		conf.DataDir = dir
 	}
 	// Assemble the networking layer and the node itself
+	nodeDbPath := ""
+	if conf.DataDir != "" {
+		nodeDbPath = filepath.Join(conf.DataDir, datadirNodeDatabase)
+	}
 	return &Node{
 		datadir: conf.DataDir,
 		config: &p2p.Server{
 			PrivateKey:      conf.NodeKey(),
 			Name:            conf.Name,
-			Discovery:       conf.Discovery,
+			Discovery:       !conf.NoDiscovery,
 			BootstrapNodes:  conf.BootstrapNodes,
 			StaticNodes:     conf.StaticNodes(),
 			TrustedNodes:    conf.TrusterNodes(),
+			NodeDatabase:    nodeDbPath,
 			ListenAddr:      conf.ListenAddr,
 			NAT:             conf.NAT,
 			Dialer:          conf.Dialer,
@@ -76,12 +81,13 @@ func New(conf *Config) (*Node, error) {
 			MaxPeers:        conf.MaxPeers,
 			MaxPendingPeers: conf.MaxPendingPeers,
 		},
-		stack: make(map[string]func() (Service, error)),
+		stack: make(map[string]ServiceConstructor),
+		emux:  new(event.TypeMux),
 	}, nil
 }
 
 // Register injects a new service into the node's stack.
-func (n *Node) Register(id string, constructor func() (Service, error)) error {
+func (n *Node) Register(id string, constructor ServiceConstructor) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
@@ -129,9 +135,13 @@ func (n *Node) Start() error {
 	running := new(p2p.Server)
 	*running = *n.config
 
+	ctx := &ServiceContext{
+		dataDir:  n.datadir,
+		EventMux: n.emux,
+	}
 	services := make(map[string]Service)
 	for id, constructor := range n.stack {
-		service, err := constructor()
+		service, err := constructor(ctx)
 		if err != nil {
 			return err
 		}
@@ -142,6 +152,9 @@ func (n *Node) Start() error {
 		running.Protocols = append(running.Protocols, service.Protocols()...)
 	}
 	if err := running.Start(); err != nil {
+		if errno, ok := err.(syscall.Errno); ok && datadirInUseErrnos[uint(errno)] {
+			return ErrDatadirUsed
+		}
 		return err
 	}
 	// Start each of the services
@@ -214,4 +227,26 @@ func (n *Node) Server() *p2p.Server {
 	defer n.lock.RUnlock()
 
 	return n.running
+}
+
+// Service retrieves a currently running services registered under a given id.
+func (n *Node) Service(id string) Service {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	if n.services == nil {
+		return nil
+	}
+	return n.services[id]
+}
+
+// DataDir retrieves the current datadir used by the protocol stack.
+func (n *Node) DataDir() string {
+	return n.datadir
+}
+
+// EventMux retrieves the event multiplexer used by all the network services in
+// the current protocol stack.
+func (n *Node) EventMux() *event.TypeMux {
+	return n.emux
 }
