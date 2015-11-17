@@ -489,7 +489,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	// Unlock any account specifically requested
 	var ethereum *eth.Ethereum
-	if _, err := stack.SingletonService(ethereum); err != nil {
+	if _, err := stack.SingletonService(&ethereum); err != nil {
 		utils.Fatalf("ethereum service not running: %v", err)
 	}
 	accman := ethereum.AccountManager()
@@ -497,7 +497,9 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 
 	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
 	for i, account := range accounts {
-		unlockAccount(ctx, accman, strings.TrimSpace(account), i, passwords)
+		if trimmed := strings.TrimSpace(account); trimmed != "" {
+			unlockAccount(ctx, accman, trimmed, i, passwords)
+		}
 	}
 	// Start auxiliary services if enabled.
 	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {

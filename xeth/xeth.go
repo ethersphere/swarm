@@ -1028,7 +1028,7 @@ func (self *XEth) Transact(fromStr, toStr, nonceStr, valueStr, gasStr, gasPriceS
 	if len(nonceStr) != 0 {
 		nonce = common.Big(nonceStr).Uint64()
 	} else {
-		state := self.backend.TxPool().State()
+		state := self.EthereumService().TxPool().State()
 		nonce = state.GetNonce(from)
 	}
 	var tx *types.Transaction

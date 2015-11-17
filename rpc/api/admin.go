@@ -96,8 +96,9 @@ func NewAdminApi(xeth *xeth.XEth, stack *node.Node, codec codec.Codec) *adminApi
 		codec: codec,
 		coder: codec.New(nil),
 	}
-	stack.SingletonService(&api.ethereum)
-
+	if stack != nil {
+		stack.SingletonService(&api.ethereum)
+	}
 	return api
 }
 
@@ -151,7 +152,7 @@ func (self *adminApi) NodeInfo(req *shared.Request) (interface{}, error) {
 }
 
 func (self *adminApi) DataDir(req *shared.Request) (interface{}, error) {
-	return self.ethereum.DataDir, nil
+	return self.stack.DataDir(), nil
 }
 
 func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {

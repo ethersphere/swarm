@@ -119,12 +119,9 @@ type Ethereum struct {
 	eventMux *event.TypeMux
 	miner    *miner.Miner
 
-	// logger logger.LogSystem
-
 	Mining       bool
 	MinerThreads int
 	NatSpec      bool
-	DataDir      string
 	AutoDAG      bool
 	PowTest      bool
 	autodagquit  chan bool
@@ -287,7 +284,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 
 // Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
-func (s *Ethereum) Start() error {
+func (s *Ethereum) Start(*p2p.Server) error {
 	if s.AutoDAG {
 		s.StartAutoDAG()
 	}
@@ -295,7 +292,7 @@ func (s *Ethereum) Start() error {
 	return nil
 }
 
-// Start implements node.Service, terminating all internal goroutines used by the
+// Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
 	s.blockchain.Stop()
