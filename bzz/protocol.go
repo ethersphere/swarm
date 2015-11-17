@@ -16,7 +16,6 @@ The protocol takes care of actually communicating the bzz protocol
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"net"
 	"strconv"
@@ -45,9 +44,10 @@ const (
 	storeRequestMsg           // 0x02
 	retrieveRequestMsg        // 0x03
 	peersMsg                  // 0x04
-	deliveryRequestMsg        // 0x05
-	unsyncedKeysMsg           // 0x06
-	paymentMsg                // 0x07
+	syncRequestMsg            // 0x05
+	deliveryRequestMsg        // 0x06
+	unsyncedKeysMsg           // 0x07
+	paymentMsg                // 0x08
 )
 
 const (
@@ -85,11 +85,13 @@ type bzzProtocol struct {
 	rw         p2p.MsgReadWriter
 	errors     *errs.Errors
 
-	swap       *swap.Swap
-	swapParams *swapParams
-	syncer     *syncer
-	syncParams *SyncParams
-	syncState  *syncState
+	swap        *swap.Swap
+	swapParams  *swapParams
+	swapEnabled bool
+	syncer      *syncer
+	syncParams  *SyncParams
+	syncState   *syncState
+	syncEnabled bool
 }
 
 /*
@@ -112,11 +114,10 @@ type statusMsgData struct {
 	Addr      *peerAddr
 	Swap      *swapProfile
 	NetworkId uint64
-	SyncState *syncState `rlp:"nil"`
 }
 
 func (self *statusMsgData) String() string {
-	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, Swap: %v, NetworkId: %v, SyncState: %v", self.Version, self.ID, self.Addr, self.Swap, self.NetworkId, self.SyncState)
+	return fmt.Sprintf("Status: Version: %v, ID: %v, Addr: %v, Swap: %v, NetworkId: %v", self.Version, self.ID, self.Addr, self.Swap, self.NetworkId)
 }
 
 /*
@@ -126,12 +127,6 @@ func (self *statusMsgData) String() string {
  then attach your nodeID to the metadata
  if the storage request is sufficiently close (within our proxLimit, i. e., the
  last row of the routing table)
-
-Store request
-
-[+0x02, key: B_32, data: B_4k]: the data chunk to be stored, preceded by its key.
-
-
 */
 type storeRequestMsgData struct {
 	Key   Key    // hash of datasize | data
@@ -174,11 +169,6 @@ In the special case that the key is the zero value as well, the remote peer's
 address is assumed (the message is to be handled as a self lookup request).
 The response is a PeersMsg with the peers in the kademlia proximity bin
 corresponding to the address.
-
-Retrieve request
-
-[0x03, key: B_32, Id: B_8, MaxSize: B_8, MaxPeers: B_8, Timeout: B_8]: key of the data chunk to be retrieved, timeout in milliseconds. Note that zero timeout retrievals serve also as messages to retrieve peers.
-
 */
 
 type retrieveRequestMsgData struct {
@@ -263,9 +253,6 @@ The Key is the target (if response to a retrieval request) or missing (zero valu
 peers address (hash of NodeID) if retrieval request was a self lookup.
 
 Peers message is requested by retrieval requests with a missing or zero value request ID
-
-[0x04, Key: B_32, peers: [[IP, Port, NodeID], [IP, Port, NodeID], .... ], Timeout: B_8, Id: B_8 ]
-
 */
 type peersMsgData struct {
 	Peers   []*peerAddr //
@@ -311,6 +298,22 @@ func (self peersMsgData) getTimeout() (t *time.Time) {
 }
 
 /*
+syncRequest
+
+is sent after the handshake to initiate syncing
+the syncState of the remote node is persisted in kaddb and set on the
+peer/protocol instance when the node is registered by hive as online{
+*/
+
+type syncRequestMsgData struct {
+	SyncState *syncState `rlp:"nil"`
+}
+
+func (self *syncRequestMsgData) String() string {
+	return fmt.Sprintf("%v", self.SyncState)
+}
+
+/*
 deliveryRequest
 
 is sent once a batch of sync keys is filtered. The ones not found are
@@ -318,9 +321,6 @@ sent as a list of syncReuest (hash, priority) in the Deliver field.
 When the source receives the sync request it continues to iterate
 and fetch at most N items as yet unsynced.
 At the same time responds with deliveries of the items.
-
-[0x05, [B_32....]]
-
 */
 type deliveryRequestMsgData struct {
 	Deliver []*syncRequest
@@ -342,9 +342,6 @@ both ways.
 State contains the sync state sent by the source. When the source receives the
 sync state it continues to iterate and fetch at most N items as yet unsynced.
 At the same time responds with deliveries of the items.
-
-[0x06, [[B_32, B_32], ...], B_32]
-
 */
 type unsyncedKeysMsgData struct {
 	Unsynced []*syncRequest
@@ -360,8 +357,6 @@ payment
 
 is sent when the swap balance is tilted in favour of the remote peer
 and in absolute units exceeds the PayAt parameter in the remote peer's profile
-
-[0x07, Units: B_32, []]
 */
 
 type paymentMsgData struct {
@@ -402,8 +397,10 @@ func runBzzProtocol(netstore *netStore, sp *swapParams, sy *SyncParams, p *p2p.P
 			Package: "BZZ",
 			Errors:  errorToString,
 		},
-		swapParams: sp,
-		syncParams: sy,
+		swapParams:  sp,
+		syncParams:  sy,
+		swapEnabled: true,
+		syncEnabled: true,
 	}
 
 	err = self.handleStatus()
@@ -413,7 +410,7 @@ func runBzzProtocol(netstore *netStore, sp *swapParams, sy *SyncParams, p *p2p.P
 	defer func() {
 		// if the handler loop exits, the peer is disconnecting
 		// deregister the peer in the hive
-		self.netStore.hive.removePeer(peer{bzzProtocol: self})
+		self.netStore.hive.removePeer(&peer{bzzProtocol: self})
 		if self.syncer != nil {
 			self.syncer.stop() // quits request db and delivery loops, save requests
 		}
@@ -429,6 +426,12 @@ func runBzzProtocol(netstore *netStore, sp *swapParams, sy *SyncParams, p *p2p.P
 		}
 	}
 	return
+}
+
+// may need to implement protocol drop only? don't want to kick off the peer
+// if they are useful for other protocols
+func (self *bzzProtocol) Drop() {
+	self.peer.Disconnect(p2p.DiscSubprotocolError)
 }
 
 // main loop that handles all incoming messages
@@ -473,7 +476,7 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "protocol handler: req.Key == nil || req.Timeout == nil")
 		}
 		req.peer = &peer{bzzProtocol: self}
-		glog.V(logger.Debug).Infof("[BZZ] incoming retrieve request: %s", req.String())
+		glog.V(logger.Debug).Infof("[BZZ] incoming retrieve request: %v", req)
 		// swap accounting is done within netStore
 		self.netStore.addRetrieveRequest(&req)
 
@@ -485,8 +488,16 @@ func (self *bzzProtocol) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		req.peer = &peer{bzzProtocol: self}
-		glog.V(logger.Debug).Infof("[BZZ] incoming peer addresses: %s", req.String())
+		glog.V(logger.Debug).Infof("[BZZ] incoming peer addresses: %v", req)
 		self.netStore.hive.addPeerEntries(&req)
+
+	case syncRequestMsg:
+		var req syncRequestMsgData
+		if err := msg.Decode(&req); err != nil {
+			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
+		}
+		glog.V(logger.Debug).Infof("[BZZ] sync request received: %v", req)
+		self.sync(req.SyncState)
 
 	case unsyncedKeysMsg:
 		// coming from parent node offering
@@ -498,6 +509,8 @@ func (self *bzzProtocol) handle() error {
 		if err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
+		// set peers state to persist
+		self.syncState = &req.State
 
 	case deliveryRequestMsg:
 		// response to syncKeysMsg hashes filtered not existing in db
@@ -528,13 +541,12 @@ func (self *bzzProtocol) handle() error {
 }
 
 func (self *bzzProtocol) handleStatus() (err error) {
-	// send precanned status message
+
 	handshake := &statusMsgData{
 		Version:   uint64(Version),
 		ID:        "honey",
 		Addr:      self.selfAddr(),
 		NetworkId: uint64(NetworkId),
-		SyncState: self.syncState,
 		Swap: &swapProfile{
 			Profile:    self.swapParams.Profile,
 			payProfile: self.swapParams.payProfile,
@@ -577,13 +589,29 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	self.remoteAddr = self.peerAddr(status.Addr)
 	glog.V(logger.Detail).Infof("[BZZ] self: advertised IP: %v, peer advertised: %v, local address: %v\npeer: advertised IP: %v, remote address: %v\n", self.selfAddr(), self.remoteAddr, self.peer.LocalAddr(), status.Addr.IP, self.peer.RemoteAddr())
 
-	// set remote profile for accounting
-	self.swap, err = newSwap(self.swapParams, status.Swap, self)
-	if err != nil {
-		return self.protoError(ErrSwap, "%v", err)
+	if self.swapEnabled {
+		// set remote profile for accounting
+		self.swap, err = newSwap(self.swapParams, status.Swap, self)
+		if err != nil {
+			return self.protoError(ErrSwap, "%v", err)
+		}
 	}
 
+	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
+	self.netStore.hive.addPeer(&peer{bzzProtocol: self})
+
+	// hive sets syncstate so sync should start after node added
+	if self.syncEnabled {
+		self.syncRequest()
+	}
+	return nil
+}
+
+func (self *bzzProtocol) sync(state *syncState) error {
 	// syncer setup
+	if self.syncer != nil {
+		return self.protoError(ErrSync, "sync request can only be sent once")
+	}
 	// keyIterator func
 	kitf := func(s syncState) keyIterator {
 		it, err := self.netStore.localStore.dbStore.newSyncIterator(s.DbSyncState)
@@ -594,12 +622,13 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	}
 	counter := self.netStore.localStore.dbStore.Counter
 
-	state := status.SyncState
-	remoteaddr := self.Addr()
+	remoteaddr := self.remoteAddr.Addr
+	start, stop := self.netStore.hive.kad.KeyRange(remoteaddr)
 	if state == nil {
-		state = newSyncState(self.selfAddr().Addr, remoteaddr, counter())
+		state = newSyncState(start, stop, counter())
 		glog.V(logger.Warn).Infof("[BZZ] peer %v provided no sync state, setting up full sync: %v\n", remoteaddr, state)
 	}
+	var err error
 	self.syncer, err = newSyncer(
 		self.netStore.requestDb, Key(remoteaddr[:]),
 		counter, kitf, self.netStore.localStore.Get,
@@ -609,44 +638,11 @@ func (self *bzzProtocol) handleStatus() (err error) {
 	if err != nil {
 		return self.protoError(ErrSync, "%v", err)
 	}
-
-	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
-	self.netStore.hive.addPeer(peer{bzzProtocol: self})
-
 	return nil
 }
 
-// protocol instance implements kademlia.Node interface (embedded hive.peer)
-func (self *bzzProtocol) Addr() kademlia.Address {
-	return self.remoteAddr.Addr
-}
-
-func (self *bzzProtocol) Url() string {
-	return self.remoteAddr.String()
-}
-
-// TODO:
-func (self *bzzProtocol) LastActive() time.Time {
-	return time.Now()
-}
-
-func (self *bzzProtocol) GetMeta() interface{} {
-	return self.syncState
-}
-
-func (self *bzzProtocol) SetMeta(meta interface{}) error {
-	data, _ := json.Marshal(meta)
-	return json.Unmarshal(data, &self.syncState)
-}
-
-// may need to implement protocol drop only? don't want to kick off the peer
-// if they are useful for other protocols
-func (self *bzzProtocol) Drop() {
-	self.peer.Disconnect(p2p.DiscSubprotocolError)
-}
-
 func (self *bzzProtocol) String() string {
-	return self.Url()
+	return self.remoteAddr.String()
 }
 
 // repair reported address if IP missing
@@ -671,7 +667,6 @@ func (self *bzzProtocol) selfAddr() *peerAddr {
 		IP:   net.ParseIP(host),
 		Port: uint16(intport),
 	}
-	glog.V(logger.Debug).Infof("[BZZ] self addr advertised: %v %v %v (%v)", addr, addr.IP, addr.Port, self.netStore.hive.listenAddr())
 	return addr
 }
 
@@ -686,6 +681,13 @@ func (self *bzzProtocol) retrieve(req *retrieveRequestMsgData) error {
 func (self *bzzProtocol) store(req *storeRequestMsgData) error {
 	glog.V(logger.Debug).Infof("[BZZ] sending store request: %v", req)
 	return self.send(storeRequestMsg, req)
+}
+
+func (self *bzzProtocol) syncRequest() error {
+	req := &syncRequestMsgData{
+		SyncState: self.syncState,
+	}
+	return self.send(syncRequestMsg, req)
 }
 
 // queue storeRequestMsg in request db

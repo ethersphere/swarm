@@ -24,10 +24,13 @@ const (
     "JoinTimeout": 120,
     "SplitTimeout": 120,
     "CallInterval": 1000000000,
-    "BucketSize": 3,
+    "KadDbPath": "TMPDIR/0d2f62485607cf38d9d795d93682a517661e513e/bzz-peers.json",
     "MaxProx": 10,
     "ProxBinSize": 8,
-    "KadDbPath": "TMPDIR/0d2f62485607cf38d9d795d93682a517661e513e/bzz-peers.json",
+    "BucketSize": 3,
+    "PurgeInterval": 151200000000000,
+    "InitialRetryInterval": 4200000000,
+    "ConnRetryExp": 2,
     "Swap": {
         "BuyAt": 20000000000,
         "SellAt": 20000000000,
@@ -42,6 +45,24 @@ const (
         "Contract": "0x0000000000000000000000000000000000000000",
         "Beneficiary": "0x0d2f62485607cf38d9d795d93682a517661e513e"
     },
+    "KeyBufferSize": 1024,
+    "SyncBatchSize": 128,
+    "SyncBufferSize": 128,
+    "SyncCacheSize": 1024,
+    "SyncPriorities": [
+        2,
+        1,
+        1,
+        0,
+        0
+    ],
+    "SyncModes": [
+        true,
+        true,
+        true,
+        true,
+        false
+    ],
     "Path": "TMPDIR/0d2f62485607cf38d9d795d93682a517661e513e",
     "Port": "8500",
     "PublicKey": "0x045f5cfd26692e48d0017d380349bcf50982488bc11b5145f3ddf88b24924299048450542d43527fbe29a5cb32f38d62755393ac002e6bfdd71b8d7ba725ecd7a3",

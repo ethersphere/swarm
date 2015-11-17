@@ -53,7 +53,7 @@ type hasher func() hash.Hash
 type Key []byte
 
 func (key Key) Hex() string {
-	return fmt.Sprintf("%064x", key[:])
+	return fmt.Sprintf("%064x", []byte(key[:]))
 }
 
 func (key Key) String() string {
@@ -61,7 +61,7 @@ func (key Key) String() string {
 }
 
 func (key Key) MarshalJSON() (out []byte, err error) {
-	return []byte(`"` + key.Hex() + `"`), nil
+	return []byte(`"` + key.String() + `"`), nil
 }
 
 func (key Key) UnmarshalJSON(value []byte) error {

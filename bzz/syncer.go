@@ -2,6 +2,7 @@ package bzz
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -75,7 +76,7 @@ func newSyncParams() *SyncParams {
 		SyncBufferSize: syncBufferSize,
 		SyncBatchSize:  syncBatchSize,
 		SyncCacheSize:  syncCacheSize,
-		SyncPriorities: []uint{High, High, Medium, Low, Low},
+		SyncPriorities: []uint{High, Medium, Medium, Low, Low},
 		SyncModes:      []bool{true, true, true, true, false},
 	}
 }
@@ -168,20 +169,37 @@ func newSyncer(
 
 // newSyncState returns a default sync state given local and remote
 // addresses and db count
-func newSyncState(localaddr, remoteaddr kademlia.Address, count uint64) *syncState {
-	start := kademlia.CommonBitsAddrByte(localaddr, remoteaddr, byte(0))
-	stop := kademlia.CommonBitsAddrByte(localaddr, remoteaddr, byte(255))
+func newSyncState(start, stop kademlia.Address, count uint64) *syncState {
+	// inclusive keyrange boundaries for db iterator
 
 	return &syncState{
 		DbSyncState: DbSyncState{
 			Start: Key(start[:]),
 			Stop:  Key(stop[:]),
 			First: 0,
-			Last:  count,
+			Last:  count - 1,
 		},
 		SessionAt: count,
 		synced:    make(chan bool),
 	}
+}
+
+func encodeSync(state *syncState) (*json.RawMessage, error) {
+	data, err := json.MarshalIndent(state, "", " ")
+	if err != nil {
+		return nil, err
+	}
+	meta := json.RawMessage(data)
+	return &meta, nil
+}
+
+func decodeSync(meta *json.RawMessage) (*syncState, error) {
+	if meta == nil {
+		return nil, fmt.Errorf("unable to deserialise sync state from <nil>")
+	}
+	state := &syncState{}
+	err := json.Unmarshal([]byte(*(meta)), state)
+	return state, err
 }
 
 /*
@@ -192,8 +210,10 @@ func newSyncState(localaddr, remoteaddr kademlia.Address, count uint64) *syncSta
    * Priority: the items are replayed as the proirity specified for StaleSync
    * but within the order respects earlier priority level of request
  * after all items are consumed for a priority level, the the respective
-  queue for delivery requests is open (this way new reqs not writter to db)
- * the token is reset to current
+  queue for delivery requests is open (this way new reqs not written to db)
+ * the sync state provided by the remote peer is used to sync history
+   * all the backlog from earlier (aborted) syncing is completed starting from latest
+   * then all backlog upto last disconneec
 */
 func (self *syncer) sync() {
 
@@ -216,12 +236,17 @@ func (self *syncer) sync() {
 			self.state.Start = self.state.Latest
 			self.syncStates <- self.state
 			self.wait()
+			self.state.First = self.state.Last + 1
 		}
 		// 2. sync up to last disconnect
-		self.state.First = self.state.Last + 1
-		self.state.Last = self.state.LastSeenAt
-		self.syncStates <- self.state
-		self.wait()
+		if self.state.Last < self.state.LastSeenAt {
+			self.state.Last = self.state.LastSeenAt
+			self.syncStates <- self.state
+			self.wait()
+			self.state.First = self.state.LastSeenAt + 1
+		}
+		self.state.Last = self.state.SessionAt - 1
+	} else {
 		self.state.First = self.state.LastSeenAt + 1
 		self.state.Last = self.state.SessionAt - 1
 	}
@@ -281,11 +306,12 @@ func (self *syncer) newSyncRequest(req interface{}, p int) (*syncRequest, error)
 // * quits if all sync request srved and syncStates channel is close
 // * complete sync is signaled by the closed history channel
 func (self *syncer) syncHistory() {
-	var t uint
+	var t, r uint
 LOOP:
 	for state := range self.syncStates {
+		r++
 		var n uint
-		glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: syncing history between %v - %v for chunk addresses %v - %v", self.key, self.state.First, self.state.Last, self.state.Start, self.state.Stop)
+		glog.V(logger.Debug).Infof("[BZZ] syncer[%v/%v]: syncing history between %v - %v for chunk addresses %v - %v", self.key, r, self.state.First, self.state.Last, self.state.Start, self.state.Stop)
 		it := self.kitf(state)
 		if it != nil {
 		IT:
@@ -298,19 +324,19 @@ LOOP:
 						n++
 						t++
 						glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: history: %v. %v/%v unsynced keys", self.key, key, n, t)
+						state.Latest = key
 					case <-self.quit:
 						break LOOP
 					}
 				} else {
-					glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: history sync iteration finished: %v/%v unsynced keys", self.key, n, t)
 					break IT
 				}
 			}
-			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: history sync iteration: %v unsynced keys", self.key, n)
+			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: history sync iteration complete: %v/%v/%v", self.key, n, t, r)
 		}
 		// signal end of the iteration ended
 		state.synced <- true
-		glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: finished syncing history between %v - %v for chunk addresses %v - %v", self.key, self.state.First, self.state.Last, self.state.Start, self.state.Stop)
+		glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: finished syncing history between %v - %v for chunk addresses %v - %v (at %v) (%v/%v/%v)", self.key, self.state.First, self.state.Last, self.state.Start, self.state.Stop, self.state.Latest, n, t, r)
 
 	}
 	// all sync states consumed history channel closed
@@ -334,7 +360,7 @@ func (self *syncer) handleUnsyncedKeysMsg(unsynced []*syncRequest) error {
 		}
 	}
 	glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: received %v unsynced keys: %v missing", self.key, len(unsynced), len(missing))
-	glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: received %v unsynced keys: %v, missing: %v", self.key, unsynced, missing)
+	glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: received %v", self.key, unsynced)
 	// send delivery request with missing keys
 	err = self.deliveryRequest(missing)
 	if err != nil {
@@ -431,9 +457,12 @@ LOOP:
 			// if there are new keys unsynced
 			// or if the state just changed to synced (history is synced)
 			if len(unsynced) > 0 || !wasSynced && self.state.Synced {
+				// set sync to current counter
+				// (all nonhistorical outgoing traffic sheduled and persisted
+				self.state.LastSeenAt = self.counter()
 				glog.V(logger.Debug).Infof("[BZZ] syncer[%v] sending out msg with %v unsynced keys, state: %v", self.key, len(unsynced), self.state)
-				glog.V(logger.Detail).Infof("[BZZ] syncer[%v] sending out msg with %v unsynced keys: %v", self.key, unsynced)
-				glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: session tally: keys: %v + %v history (%v/%v)", self.key, self.keyCounts, history, total, self.keyCount)
+				glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: sending %v", self.key, unsynced)
+				glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: session tally: keys: %v (%v), history: %v, total: %v", self.key, self.keyCounts, self.keyCount, history, total)
 				glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: session tally: deliveries: %v (%v)", self.key, self.deliveryCounts, self.deliveryCount)
 				//  send the unsynced keys
 				err := self.unsyncedKeys(unsynced, self.state)
@@ -441,9 +470,6 @@ LOOP:
 					glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: unable to send unsynced keys: %v", err)
 				}
 				unsynced = nil
-				// set sync to current counter
-				// (all nonhistorical outgoing traffic sheduled and persisted
-				self.state.LastSeenAt = self.counter()
 			} else {
 				timer = time.NewTimer(500 * time.Millisecond).C
 				select {

@@ -62,6 +62,7 @@ func (self *syncDb) handle(deliver func(interface{})) {
 	var n, t, d int
 	var queue chan interface{}
 	var err error
+	var more bool
 LOOP:
 	for {
 		var req interface{}
@@ -75,7 +76,10 @@ LOOP:
 		// waiting for item on the relevant queue
 
 		select {
-		case req = <-queue:
+		case req, more = <-queue:
+			if !more {
+				break LOOP
+			}
 			t++
 			if caching {
 				deliver(req)
