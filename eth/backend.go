@@ -119,12 +119,9 @@ type Ethereum struct {
 	eventMux *event.TypeMux
 	miner    *miner.Miner
 
-	// logger logger.LogSystem
-
 	Mining       bool
 	MinerThreads int
 	NatSpec      bool
-	DataDir      string
 	AutoDAG      bool
 	PowTest      bool
 	autodagquit  chan bool

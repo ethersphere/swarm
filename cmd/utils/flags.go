@@ -434,7 +434,8 @@ func MakeNodeKey(ctx *cli.Context) *ecdsa.PrivateKey {
 }
 
 // MakeNodeName creates a node name from a base set and the command line flags.
-func MakeNodeName(name, version string, ctx *cli.Context) string {
+func MakeNodeName(client, version string, ctx *cli.Context) string {
+	name := common.MakeName(client, version)
 	if identity := ctx.GlobalString(IdentityFlag.Name); len(identity) > 0 {
 		name += "/" + identity
 	}
