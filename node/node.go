@@ -21,6 +21,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"syscall"
 
@@ -48,6 +49,7 @@ type Node struct {
 	running  *p2p.Server        // Currently running P2P networking layer
 	services map[string]Service // Currently running services
 
+	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
 }
 
@@ -173,6 +175,7 @@ func (n *Node) Start() error {
 	// Finish initializing the startup
 	n.services = services
 	n.running = running
+	n.stop = make(chan struct{})
 
 	return nil
 }
@@ -200,11 +203,25 @@ func (n *Node) Stop() error {
 
 	n.services = nil
 	n.running = nil
+	close(n.stop)
 
 	if len(failure.Services) > 0 {
 		return failure
 	}
 	return nil
+}
+
+// Wait blocks the thread until the node is stopped. If the node is not running
+// at the time of invocation, the method immediately returns.
+func (n *Node) Wait() {
+	n.lock.RLock()
+	if n.running == nil {
+		return
+	}
+	stop := n.stop
+	n.lock.RUnlock()
+
+	<-stop
 }
 
 // Restart terminates a running node and boots up a new one in its place. If the
@@ -238,6 +255,28 @@ func (n *Node) Service(id string) Service {
 		return nil
 	}
 	return n.services[id]
+}
+
+// SingletonService retrieves a currently running service using a specific type
+// implementing the Service interface. This is a utility function for scenarios
+// where it is known that only one instance of a given service type is running,
+// allowing to access services without needing to know their specific id with
+// which they were registered. Note, this method uses reflection, so do not run
+// in a tight loop.
+func (n *Node) SingletonService(service interface{}) (string, error) {
+	n.lock.RLock()
+	defer n.lock.RUnlock()
+
+	if n.services == nil {
+		return "", ErrServiceUnknown
+	}
+	for id, running := range n.services {
+		if reflect.TypeOf(running) == reflect.ValueOf(service).Elem().Type() {
+			reflect.ValueOf(service).Elem().Set(reflect.ValueOf(running))
+			return id, nil
+		}
+	}
+	return "", ErrServiceUnknown
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.
