@@ -438,6 +438,42 @@ func TestServiceTerminationGuarantee(t *testing.T) {
 	}
 }
 
+// TestSingletonServiceRetrieval tests that singleton services can be retrieved.
+func TestSingletonServiceRetrieval(t *testing.T) {
+	// Create a simple stack and register two service types
+	stack, err := New(testNodeConfig)
+	if err != nil {
+		t.Fatalf("failed to create protocol stack: %v", err)
+	}
+	if err := stack.Register("noop", func(*ServiceContext) (Service, error) { return new(NoopService), nil }); err != nil {
+		t.Fatalf("noop service registration failed: %v", err)
+	}
+	if err := stack.Register("instrumented", func(*ServiceContext) (Service, error) { return new(InstrumentedService), nil }); err != nil {
+		t.Fatalf("instrumented service registration failed: %v", err)
+	}
+	// Make sure none of the services can be retrieved until started
+	var noopServ *NoopService
+	if id, err := stack.SingletonService(&noopServ); id != "" || err != ErrServiceUnknown {
+		t.Fatalf("noop service retrieval mismatch: have %v/%v, want %v/%v", id, err, "", ErrServiceUnknown)
+	}
+	var instServ *InstrumentedService
+	if id, err := stack.SingletonService(&instServ); id != "" || err != ErrServiceUnknown {
+		t.Fatalf("instrumented service retrieval mismatch: have %v/%v, want %v/%v", id, err, "", ErrServiceUnknown)
+	}
+	// Start the stack and ensure everything is retrievable now
+	if err := stack.Start(); err != nil {
+		t.Fatalf("failed to start stack: %v", err)
+	}
+	defer stack.Stop()
+
+	if id, err := stack.SingletonService(&noopServ); id != "noop" || err != nil {
+		t.Fatalf("noop service retrieval mismatch: have %v/%v, want %v/%v", id, err, "noop", nil)
+	}
+	if id, err := stack.SingletonService(&instServ); id != "instrumented" || err != nil {
+		t.Fatalf("instrumented service retrieval mismatch: have %v/%v, want %v/%v", id, err, "instrumented", nil)
+	}
+}
+
 // Tests that all protocols defined by individual services get launched.
 func TestProtocolGather(t *testing.T) {
 	stack, err := New(testNodeConfig)

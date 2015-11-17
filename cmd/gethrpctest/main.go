@@ -42,11 +42,6 @@ var (
 	testName = flag.String("test", "", "Name of the test from the .json file to run")
 )
 
-var (
-	ethereumServiceId = "ethereum"
-	whisperServiceId  = "whisper"
-)
-
 func main() {
 	flag.Parse()
 
@@ -114,11 +109,11 @@ func MakeSystemNode(keydir string, test *tests.BlockTest) (*node.Node, error) {
 		TestGenesisBlock: test.Genesis,
 		AccountManager:   accman,
 	}
-	if err := stack.Register(ethereumServiceId, func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
+	if err := stack.Register("ethereum", func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
 		return nil, err
 	}
 	// Initialize and register the Whisper protocol
-	if err := stack.Register(whisperServiceId, func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
+	if err := stack.Register("whisper", func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
 		return nil, err
 	}
 	return stack, nil
@@ -127,7 +122,9 @@ func MakeSystemNode(keydir string, test *tests.BlockTest) (*node.Node, error) {
 // RunTest executes the specified test against an already pre-configured protocol
 // stack to ensure basic checks pass before running RPC tests.
 func RunTest(stack *node.Node, test *tests.BlockTest) error {
-	blockchain := stack.Service(ethereumServiceId).(*eth.Ethereum).BlockChain()
+	var ethereum *eth.Ethereum
+	stack.SingletonService(&ethereum)
+	blockchain := ethereum.BlockChain()
 
 	// Process the blocks and verify the imported headers
 	blocks, err := test.TryBlocksInsert(blockchain)
