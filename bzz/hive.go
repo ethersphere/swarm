@@ -100,7 +100,7 @@ func (self *hive) start(listenAddr func() string, connectPeer func(string) error
 					req := &retrieveRequestMsgData{
 						Key: Key(randAddr[:]),
 					}
-					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %x messenger bee %v", randAddr[:4], peers[0])
+					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %v messenger bee %v", randAddr, peers[0])
 					peers[0].(*peer).retrieve(req)
 				}
 				if self.more == nil {
@@ -116,7 +116,7 @@ func (self *hive) start(listenAddr func() string, connectPeer func(string) error
 					self.more = nil
 				}
 			}
-			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %x, population: %d (%d)\n%v", self.addr[:4], self.kad.Count(), self.kad.DBCount(), self.kad)
+			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)\n%v", self.addr, self.kad.Count(), self.kad.DBCount(), self.kad)
 		}
 	}()
 	return
@@ -247,7 +247,7 @@ func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
 			return nil
 		}
 		state, err := decodeSync(record.Meta)
-		glog.V(logger.Debug).Infof("meta for node record %v: %v -> %v", record, record.Meta, state)
+		glog.V(logger.Detail).Infof("meta for node record %v: %s -> %v", record, string(*(record.Meta)), state)
 		p.syncState = state
 		return err
 	}

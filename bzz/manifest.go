@@ -36,7 +36,7 @@ type manifestTrieEntry struct {
 
 func loadManifest(dpa *DPA, hash Key) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
-	glog.V(logger.Detail).Infof("[BZZ] manifest lookup key: '%v'.", hash)
+	glog.V(logger.Detail).Infof("[BZZ] manifest lookup key: '%v'.", hash.Log())
 	// retrieve manifest via DPA
 	manifestReader := dpa.Retrieve(hash)
 	return readManifest(manifestReader, hash, dpa)
@@ -49,23 +49,23 @@ func readManifest(manifestReader SectionReader, hash Key, dpa *DPA) (trie *manif
 	var size int
 	size, err = manifestReader.Read(manifestData)
 	if int64(size) < manifestReader.Size() {
-		glog.V(logger.Detail).Infof("[BZZ] Manifest %v not found.", hash)
+		glog.V(logger.Detail).Infof("[BZZ] Manifest %v not found.", hash.Log())
 		if err == nil {
 			err = fmt.Errorf("Manifest retrieval cut short: %v &lt; %v", size, manifestReader.Size())
 		}
 		return
 	}
 
-	glog.V(logger.Detail).Infof("[BZZ] Manifest %v retrieved", hash)
+	glog.V(logger.Detail).Infof("[BZZ] Manifest %v retrieved", hash.Log())
 	man := manifestJSON{}
 	err = json.Unmarshal(manifestData, &man)
 	if err != nil {
-		err = fmt.Errorf("Manifest %v is malformed: %v", hash, err)
+		err = fmt.Errorf("Manifest %v is malformed: %v", hash.Log(), err)
 		glog.V(logger.Detail).Infof("[BZZ] %v", err)
 		return
 	}
 
-	glog.V(logger.Detail).Infof("[BZZ] Manifest %v has %d entries.", hash, len(man.Entries))
+	glog.V(logger.Detail).Infof("[BZZ] Manifest %v has %d entries.", hash.Log(), len(man.Entries))
 
 	trie = &manifestTrie{
 		dpa: dpa,

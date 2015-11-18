@@ -88,7 +88,7 @@ LOOP:
 				if n > 0 {
 					n--
 					if n == 0 {
-						glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] cache -> db mode", self.priority)
+						glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] cache -> db mode", self.priority)
 						caching = false
 						go self.iterate(deliver)
 					}
@@ -99,7 +99,7 @@ LOOP:
 				if err != nil {
 					glog.V(logger.Warn).Infof("[BZZ] syncDb[%v] db.put %v failed: %v", self.priority, req, err)
 				} else {
-					glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] db.put %v : %v/%v", self.priority, req, d, t)
+					glog.V(logger.Ridiculousness).Infof("[BZZ] syncDb[%v] db.put %v : %v/%v", self.priority, req, d, t)
 				}
 			}
 
@@ -148,7 +148,7 @@ LOOP:
 		if n == 0 {
 			r++
 			it = self.db.NewIterator()
-			glog.V(logger.Debug).Infof("[BZZ] syncDb[%v]: seek iterator: %x", self.priority, key)
+			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v]: seek iterator: %x", self.priority, key)
 			it.Seek(key)
 			if !it.Valid() {
 				break LOOP
@@ -163,14 +163,14 @@ LOOP:
 
 		// reached the end of this peers range
 		if key[0] != 0 || key[1] != byte(priorities-self.priority) || !bytes.Equal(key[2:34], self.key) {
-			glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] - end of db range for %v %v/%v", self.priority, self.key, t, r)
+			glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] - end of db range for %v %v/%v", self.priority, self.key.Log(), t, r)
 			n = 0
 			break LOOP
 		}
 
 		// apply func
 		fun(entry)
-		glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] - %v delivered chunk from db: %v/%v", self.priority, entry, self.total, r)
+		glog.V(logger.Ridiculousness).Infof("[BZZ] syncDb[%v] - %v delivered chunk from db: %v/%v", self.priority, entry, self.total, r)
 		self.db.Delete(key)
 
 		n--
@@ -196,7 +196,9 @@ LOOP:
 	// signal to caller finish with db:
 	self.done <- true
 	it.Release()
-	glog.V(logger.Detail).Infof("[BZZ] syncDb[%v] - deliver %v from db: %v/%v", self.priority, self.key, t, r)
+	if t > 0 {
+		glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] - deliver %v chunks from db (%v rounds) to %v", self.priority, self.key.Log(), t, r)
+	}
 	// order counter reset to 0
 	self.counter = 0
 }
@@ -218,7 +220,7 @@ func (self *syncDb) save() error {
 		err = self.put(req)
 		if err != nil {
 			e++
-			glog.V(logger.Warn).Infof("[BZZ] syncDb[%v:%v] save failed: %v", self.key, self.priority, err)
+			glog.V(logger.Warn).Infof("[BZZ] syncDb[%v:%v] save failed: %v", self.key.Log(), self.priority, err)
 			glerr = err
 		}
 		if i == size {
@@ -226,7 +228,7 @@ func (self *syncDb) save() error {
 		}
 		i++
 	}
-	glog.V(logger.Info).Infof("[BZZ] syncDb[%v:%v]: saved %v/%v keys (counter at %v)", self.key, self.priority, i-e, i, self.counter)
+	glog.V(logger.Info).Infof("[BZZ] syncDb[%v:%v]: saved %v/%v keys (counter at %v)", self.key.Log(), self.priority, i-e, i, self.counter)
 	// save db counter
 	self.db.Put(counterKey, u64ToBytes(self.counter))
 	return glerr
@@ -236,7 +238,7 @@ func (self *syncDb) save() error {
 func (self *syncDb) put(req interface{}) error {
 	entry, err := self.newSyncDbEntry(req)
 	if err != nil {
-		return fmt.Errorf("syncDb.put: %v", err)
+		return fmt.Errorf("syncDb.put (%08x): %v", entry.key[:4], err)
 	}
 	self.db.Put(entry.key, entry.val)
 	return nil

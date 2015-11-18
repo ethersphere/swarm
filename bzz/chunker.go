@@ -56,6 +56,13 @@ func (key Key) Hex() string {
 	return fmt.Sprintf("%064x", []byte(key[:]))
 }
 
+func (key Key) Log() string {
+	if len(key[:]) < 4 {
+		return fmt.Sprintf("%x", []byte(key[:]))
+	}
+	return fmt.Sprintf("%08x", []byte(key[:4]))
+}
+
 func (key Key) String() string {
 	return fmt.Sprintf("%064x", []byte(key)[:])
 }
@@ -170,7 +177,7 @@ func (self *TreeChunker) KeySize() int64 {
 
 // String() for pretty printing
 func (self *Chunk) String() string {
-	return fmt.Sprintf("Key: %v TreeSize: %v Chunksize: %v\n", self.Key, self.Size, len(self.SData))
+	return fmt.Sprintf("Key: %v TreeSize: %v Chunksize: %v\n", self.Key.Log(), self.Size, len(self.SData))
 }
 
 // The treeChunkers own Hash hashes together
@@ -355,7 +362,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		C:   make(chan bool), // close channel to signal data delivery
 	}
 	self.chunkC <- chunk // submit retrieval request, someone should be listening on the other side (or we will time out globally)
-	glog.V(logger.Detail).Infof("[BZZ] readAt: reading %x into %d bytes at offset %d.", chunk.Key[:4], len(b), off)
+	glog.V(logger.Detail).Infof("[BZZ] readAt: reading %v into %d bytes at offset %d.", chunk.Key.Log(), len(b), off)
 
 	// waiting for the chunk retrieval
 	select {
@@ -364,16 +371,16 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		// glog.V(logger.Detail).Infof("[BZZ] quit")
 		return
 	case <-chunk.C: // bells are ringing, data have been delivered
-		// glog.V(logger.Detail).Infof("[BZZ] chunk data received for %x", chunk.Key[:4])
+		// glog.V(logger.Detail).Infof("[BZZ] chunk data received for %v", chunk.Key.Log())
 	}
 	if len(chunk.SData) == 0 {
-		// glog.V(logger.Detail).Infof("[BZZ] No payload in %x", chunk.Key)
+		// glog.V(logger.Detail).Infof("[BZZ] No payload in %v", chunk.Key.Log())
 		return 0, notFound
 	}
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.size = chunk.Size
 	if b == nil {
-		// glog.V(logger.Detail).Infof("[BZZ] Size query for %x", chunk.Key[:4])
+		// glog.V(logger.Detail).Infof("[BZZ] Size query for %v", chunk.Key.Log())
 		return
 	}
 	want := int64(len(b))
@@ -453,13 +460,13 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		wg.Add(1)
 		go func(j int64) {
 			childKey := chunk.SData[8+j*self.chunker.hashSize : 8+(j+1)*self.chunker.hashSize]
-			// glog.V(logger.Detail).Infof("[BZZ] subtree index: %v -> %x", j, childKey[:4])
+			// glog.V(logger.Detail).Infof("[BZZ] subtree index: %v -> %v", j, childKey.Log())
 
 			ch := &Chunk{
 				Key: childKey,
 				C:   make(chan bool), // close channel to signal data delivery
 			}
-			// glog.V(logger.Detail).Infof("[BZZ] chunk data sent for %x (key interval in chunk %v-%v)", ch.Key[:4], j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
+			// glog.V(logger.Detail).Infof("[BZZ] chunk data sent for %v (key interval in chunk %v-%v)", ch.Key.Log(), j*self.chunker.hashSize, (j+1)*self.chunker.hashSize)
 			self.chunkC <- ch // submit retrieval request, someone should be listening on the other side (or we will time out globally)
 
 			// waiting for the chunk retrieval

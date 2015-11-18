@@ -626,7 +626,7 @@ func (self *bzzProtocol) sync(state *syncState) error {
 	start, stop := self.netStore.hive.kad.KeyRange(remoteaddr)
 	if state == nil {
 		state = newSyncState(start, stop, counter())
-		glog.V(logger.Warn).Infof("[BZZ] peer %v provided no sync state, setting up full sync: %v\n", remoteaddr, state)
+		glog.V(logger.Warn).Infof("[BZZ] peer %08x provided no sync state, setting up full sync: %v\n", remoteaddr[:4], state)
 	}
 	var err error
 	self.syncer, err = newSyncer(
