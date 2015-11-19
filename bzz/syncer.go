@@ -292,7 +292,7 @@ func (self *syncRequest) String() string {
 }
 
 func (self *syncer) newSyncRequest(req interface{}, p int) (*syncRequest, error) {
-	key, _, _, _, err := self.parseRequest(req)
+	key, _, _, _, err := parseRequest(req)
 	// TODO: if req has chunk, it should be put in a cache
 	// create
 	if err != nil {
@@ -383,7 +383,7 @@ func (self *syncer) handleDeliveryRequestMsg(deliver []*syncRequest) error {
 	for _, sreq := range deliver {
 		// TODO: look up in cache here or in deliveries
 		// r = self.pullCached(sreq.Key) // pulls and deletes from cache
-		self.addDelivery(sreq.Key, sreq.Priority)
+		self.addDelivery(sreq.Key, sreq.Priority, self.quit)
 	}
 
 	// sends it out as unsyncedKeysMsg
@@ -582,44 +582,59 @@ func (self *syncer) addRequest(req interface{}, ty int) {
 	priority := self.SyncPriorities[ty]
 	// sync mode for this type ON
 	if self.SyncModes[ty] {
-		self.addKey(req, priority)
+		self.addKey(req, priority, self.quit)
 	} else {
-		self.addDelivery(req, priority)
+		self.addDelivery(req, priority, self.quit)
 	}
 }
 
 // addSyncRequest queues sync request for sync confirmation with given priority
 // ie the key will go out in an unsyncedKeys message
-func (self *syncer) addKey(req interface{}, priority uint) {
-	self.keys[priority] <- req
-	self.keyCounts[priority]++
-	self.keyCount++
+func (self *syncer) addKey(req interface{}, priority uint, quit chan bool) bool {
+	select {
+	case self.keys[priority] <- req:
+		self.keyCounts[priority]++
+		self.keyCount++
+		return true
+	case <-quit:
+		return false
+	}
 }
 
 // addDeliveryRequest queues delivery request for with given priority
 // ie the chunk will be delivered ASAP mod priorities
 // requests are persisted across sessions for correct sync
-func (self *syncer) addDelivery(req interface{}, priority uint) {
-	self.queues[priority].cache <- req
+func (self *syncer) addDelivery(req interface{}, priority uint, quit chan bool) bool {
+	select {
+	case self.queues[priority].buffer <- req:
+		return true
+	case <-quit:
+		return false
+	}
 }
 
 // doDeliveryRequest delivers the chunk for the request with given priority
-func (self *syncer) doDelivery(req interface{}, priority uint) {
+func (self *syncer) doDelivery(req interface{}, priority uint, quit chan bool) bool {
 	msgdata, err := self.newStoreRequestMsgData(req)
 	if err != nil {
 		glog.V(logger.Warn).Infof("unable to deliver request %v: %v", msgdata, err)
-		return
+		return false
 	}
-	self.deliveries[priority] <- msgdata
-	self.deliveryCounts[priority]++
-	self.deliveryCount++
+	select {
+	case self.deliveries[priority] <- msgdata:
+		self.deliveryCounts[priority]++
+		self.deliveryCount++
+		return true
+	case <-quit:
+		return false
+	}
 }
 
 // returns the delivery function for given priority
 // passed on to syncDb
-func (self *syncer) deliver(priority uint) func(req interface{}) {
-	return func(req interface{}) {
-		self.doDelivery(req, priority)
+func (self *syncer) deliver(priority uint) func(req interface{}, quit chan bool) bool {
+	return func(req interface{}, quit chan bool) bool {
+		return self.doDelivery(req, priority, quit)
 	}
 }
 
@@ -627,16 +642,19 @@ func (self *syncer) deliver(priority uint) func(req interface{}) {
 // depending on sync mode settings for StaleSyncReq,
 // re	play of request db backlog sends items via confirmation
 // or directly delivers
-func (self *syncer) replay() func(req interface{}) {
+func (self *syncer) replay() func(req interface{}, quit chan bool) bool {
 	sync := self.SyncModes[StaleSyncReq]
 	priority := self.SyncPriorities[StaleSyncReq]
-	return func(req interface{}) {
-		// sync mode for this type ON
-		if sync {
-			self.addKey(req, priority)
-		} else {
-			self.doDelivery(req, priority)
+	// sync mode for this type ON
+	if sync {
+		return func(req interface{}, quit chan bool) bool {
+			return self.addKey(req, priority, quit)
 		}
+	} else {
+		return func(req interface{}, quit chan bool) bool {
+			return self.doDelivery(req, priority, quit)
+		}
+
 	}
 }
 
@@ -644,7 +662,7 @@ func (self *syncer) replay() func(req interface{}) {
 // see types accepted
 func (self *syncer) newStoreRequestMsgData(req interface{}) (*storeRequestMsgData, error) {
 
-	key, id, chunk, sreq, err := self.parseRequest(req)
+	key, id, chunk, sreq, err := parseRequest(req)
 	if err != nil {
 		return nil, err
 	}
@@ -670,7 +688,7 @@ func (self *syncer) newStoreRequestMsgData(req interface{}) (*storeRequestMsgDat
 
 // parse request types and extracts, key, id, chunk, request if available
 // does not do chunk lookup !
-func (self *syncer) parseRequest(req interface{}) (Key, uint64, *Chunk, *storeRequestMsgData, error) {
+func parseRequest(req interface{}) (Key, uint64, *Chunk, *storeRequestMsgData, error) {
 	var key Key
 	var entry *syncDbEntry
 	var chunk *Chunk
@@ -681,6 +699,7 @@ func (self *syncer) parseRequest(req interface{}) (Key, uint64, *Chunk, *storeRe
 
 	if key, ok = req.(Key); ok {
 		id = generateId()
+
 	} else if entry, ok = req.(*syncDbEntry); ok {
 		id = binary.BigEndian.Uint64(entry.val[32:])
 		key = Key(entry.val[:32])
@@ -688,8 +707,10 @@ func (self *syncer) parseRequest(req interface{}) (Key, uint64, *Chunk, *storeRe
 	} else if chunk, ok = req.(*Chunk); ok {
 		key = chunk.Key
 		id = generateId()
+
 	} else if sreq, ok = req.(*storeRequestMsgData); !ok {
 		err = fmt.Errorf("type not allowed: %v (%T)", req, req)
 	}
+
 	return key, id, chunk, sreq, err
 }
