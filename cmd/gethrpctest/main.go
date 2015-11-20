@@ -37,9 +37,12 @@ import (
 	"github.com/ethereum/go-ethereum/xeth"
 )
 
+const defaultTestKey = "b71c71a67e1177ad4e901695e1b4b9ee17ae16c6668d313eac2f96dbcda3f291"
+
 var (
 	testFile = flag.String("json", "", "Path to the .json test file to load")
 	testName = flag.String("test", "", "Name of the test from the .json file to run")
+	testKey  = flag.String("key", defaultTestKey, "Private key of a test account to inject")
 )
 
 func main() {
@@ -61,7 +64,7 @@ func main() {
 	}
 	defer os.RemoveAll(keydir)
 
-	stack, err := MakeSystemNode(keydir, test)
+	stack, err := MakeSystemNode(keydir, *testKey, test)
 	if err != nil {
 		log.Fatalf("Failed to assemble test stack: %v", err)
 	}
@@ -91,15 +94,29 @@ func main() {
 
 // MakeSystemNode configures a protocol stack for the RPC tests based on a given
 // keystore path and initial pre-state.
-func MakeSystemNode(keydir string, test *tests.BlockTest) (*node.Node, error) {
+func MakeSystemNode(keydir string, privkey string, test *tests.BlockTest) (*node.Node, error) {
 	// Create a networkless protocol stack
 	stack, err := node.New(&node.Config{NoDiscovery: true})
 	if err != nil {
 		return nil, err
 	}
-	// Initialize and register the Ethereum protocol
-	accman := accounts.NewManager(crypto.NewKeyStorePassphrase(keydir, crypto.StandardScryptN, crypto.StandardScryptP))
+	// Create the keystore and inject an unlocked account if requested
+	keystore := crypto.NewKeyStorePassphrase(keydir, crypto.StandardScryptN, crypto.StandardScryptP)
+	accman := accounts.NewManager(keystore)
 
+	if len(privkey) > 0 {
+		key, err := crypto.HexToECDSA(privkey)
+		if err != nil {
+			return nil, err
+		}
+		if err := keystore.StoreKey(crypto.NewKeyFromECDSA(key), ""); err != nil {
+			return nil, err
+		}
+		if err := accman.Unlock(crypto.NewKeyFromECDSA(key).Address, ""); err != nil {
+			return nil, err
+		}
+	}
+	// Initialize and register the Ethereum protocol
 	db, _ := ethdb.NewMemDatabase()
 	if _, err := test.InsertPreState(db, accman); err != nil {
 		return nil, err
