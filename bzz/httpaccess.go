@@ -7,8 +7,9 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	//	"net/url"
+	"net/url"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +19,8 @@ import (
 )
 
 const (
-	rawType = "application/octet-stream"
+	rawType   = "application/octet-stream"
+	bzzPrefix = "bzz%3A%2F%2F"
 )
 
 var (
@@ -64,6 +66,14 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 		raw = true
 		return ""
 	})
+
+	// HTTP-based URL protocol handler
+	if strings.HasPrefix(uri, bzzPrefix) {
+		decodedUri, err := url.QueryUnescape(uri[len(bzzPrefix):len(uri)])
+		if err == nil {
+			uri = decodedUri
+		}
+	}
 
 	glog.V(logger.Debug).Infof("[BZZ] Swarm: %s request '%s' received.", r.Method, uri)
 
