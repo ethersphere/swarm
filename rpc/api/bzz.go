@@ -22,10 +22,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
-	"github.com/ethereum/go-ethereum/xeth"
 )
 
 const (
@@ -35,11 +34,9 @@ const (
 // eth api provider
 // See https://github.com/ethereum/wiki/wiki/JSON-RPC
 type bzzApi struct {
-	xeth     *xeth.XEth
-	ethereum *eth.Ethereum
-	swarm    *bzz.Swarm
-	methods  map[string]bzzhandler
-	codec    codec.ApiCoder
+	swarm   *bzz.Swarm
+	methods map[string]bzzhandler
+	codec   codec.ApiCoder
 }
 
 // eth callback handler
@@ -66,8 +63,9 @@ func newSwarmOfflineError(method string) error {
 }
 
 // create new bzzApi instance
-func NewBzzApi(xeth *xeth.XEth, eth *eth.Ethereum, codec codec.Codec) *bzzApi {
-	return &bzzApi{xeth, eth, eth.Swarm, bzzMapping, codec.New(nil)}
+func NewBzzApi(stack *node.Node, codec codec.Codec) *bzzApi {
+	swarm := stack.Service("bzz").(*bzz.Swarm)
+	return &bzzApi{swarm, bzzMapping, codec.New(nil)}
 }
 
 // collection with supported methods

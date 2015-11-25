@@ -35,8 +35,12 @@ type sequentialReader struct {
 	lock   sync.Mutex
 }
 
+// browser API for registering bzz url scheme handlers:
+// https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
+// electron (chromium) api for registering bzz url scheme handlers:
+// https://github.com/atom/electron/blob/master/docs/api/protocol.md
+
 // starts up http server
-// TODO: started by dpa/api rather than backend
 func startHttpServer(api *Api, port string) {
 	serveMux := http.NewServeMux()
 	serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

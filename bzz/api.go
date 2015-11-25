@@ -38,12 +38,8 @@ type Api struct {
 }
 
 //the api constructor initialises
-func NewApi(dpa *DPA, conf *Config) (self *Api) {
-	self = &Api{
-		dpa:  dpa,
-		conf: conf,
-	}
-	return
+func NewApi(dpa *DPA, registrar registrar.VersionedRegistrar, conf *Config) (self *Api) {
+	return &Api{dpa, registrar, conf}
 }
 
 func (self *Api) Issue(beneficiary common.Address, amount *big.Int) (cheque *chequebook.Cheque, err error) {

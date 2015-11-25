@@ -177,6 +177,7 @@ func (am *Manager) AddressByIndex(index int) (addr string, err error) {
 }
 
 func (am *Manager) Accounts() ([]Account, error) {
+	fmt.Printf("keyStore: %#v\n", am.keyStore)
 	addresses, err := am.keyStore.GetKeyAddresses()
 	if os.IsNotExist(err) {
 		return nil, ErrNoKeys

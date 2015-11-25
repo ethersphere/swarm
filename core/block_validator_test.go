@@ -30,16 +30,16 @@ import (
 	"github.com/ethereum/go-ethereum/pow/ezp"
 )
 
-func proc() (*BlockProcessor, *BlockChain) {
+func proc() (Validator, *BlockChain) {
 	db, _ := ethdb.NewMemDatabase()
 	var mux event.TypeMux
 
-	WriteTestNetGenesisBlock(db, 0)
+	WriteTestNetGenesisBlock(db)
 	blockchain, err := NewBlockChain(db, thePow(), &mux)
 	if err != nil {
 		fmt.Println(err)
 	}
-	return NewBlockProcessor(db, ezp.New(), blockchain, &mux), blockchain
+	return blockchain.validator, blockchain
 }
 
 func TestNumber(t *testing.T) {
@@ -81,7 +81,7 @@ func TestPutReceipt(t *testing.T) {
 		Index:       0,
 	}}
 
-	PutReceipts(db, types.Receipts{receipt})
+	WriteReceipts(db, types.Receipts{receipt})
 	receipt = GetReceipt(db, common.Hash{})
 	if receipt == nil {
 		t.Error("expected to get 1 receipt, got none.")
