@@ -9,6 +9,7 @@ package bzz
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/rlp"
@@ -247,6 +248,12 @@ func (s *dbStore) collectGarbage(ratio float32) {
 	s.db.Put(keyGCPos, s.gcPos)
 }
 
+func (s *dbStore) Counter() uint64 {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return s.dataIdx
+}
+
 func (s *dbStore) Put(chunk *Chunk) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -327,9 +334,10 @@ func (s *dbStore) Get(key Key) (chunk *Chunk, err error) {
 
 		hasher := s.hashfunc()
 		hasher.Write(data)
-		if bytes.Compare(hasher.Sum(nil), key) != 0 {
+		hash := hasher.Sum(nil)
+		if bytes.Compare(hash, key) != 0 {
 			s.db.Delete(getDataKey(index.Idx))
-			err = notFound
+			err = fmt.Errorf("invalid chunk. hash=%x, key=%v", hash, key[:])
 			return
 		}
 
@@ -385,38 +393,58 @@ func (s *dbStore) close() {
 	s.db.Close()
 }
 
+//  describes a section of the dbStore representing the unsynced
+// domain relevant to a peer
+// Start - Stop designate a continuous area Keys in an address space
+// typically the addresses closer to us than to the peer but not closer
+// another closer peer in between
+// From - To designates a time interval typically from the last disconnect
+// till the latest connection (real time traffic is relayed)
+type DbSyncState struct {
+	Start, Stop Key
+	First, Last uint64
+}
+
+// implements the syncer iterator interface
+// iterates by storage index (~ time of storage = first entry to db)
 type dbSyncIterator struct {
-	it           iterator.Iterator
-	stop         Key
-	scFrom, scTo uint64
+	it iterator.Iterator
+	DbSyncState
 }
 
-func (s *dbStore) newDbSyncIterator(start Key, stop Key, scFrom uint64, scTo uint64) (si *dbSyncIterator) {
-	si.it = s.db.NewIterator()
-	si.it.Seek(getIndexKey(start))
-	si.stop = stop
-	si.scFrom = scFrom
-	si.scTo = scTo
-	return
+// initialises a sync iterator from a syncToken (passed in with the handshake)
+func (self *dbStore) newSyncIterator(state DbSyncState) (si *dbSyncIterator, err error) {
+	if state.First > state.Last {
+		return nil, fmt.Errorf("no entries found")
+	}
+	si = &dbSyncIterator{
+		it:          self.db.NewIterator(),
+		DbSyncState: state,
+	}
+	si.it.Seek(getIndexKey(state.Start))
+	return si, nil
 }
 
-func (si *dbSyncIterator) next() (hash Key) {
-	for si.it.Valid() {
-		key := si.it.Key()
-		if key[0] != 0 {
+// walk the area from Start to Stop and returns items within time interval
+// First to Last
+func (self *dbSyncIterator) Next() (key Key) {
+	for self.it.Valid() {
+		dbkey := self.it.Key()
+		if dbkey[0] != 0 {
 			break
 		}
-		hash = key[1:]
-		if bytes.Compare(hash, si.stop) > 0 {
+		key = make([]byte, len(dbkey)-1)
+		copy(key, dbkey[1:])
+		if bytes.Compare(key, self.Stop) > 0 {
 			break
 		}
 		var index dpaDBIndex
-		decodeIndex(si.it.Value(), &index)
-		si.it.Next()
-		if (index.Idx >= si.scFrom) && (index.Idx <= si.scTo) {
+		decodeIndex(self.it.Value(), &index)
+		self.it.Next()
+		if (index.Idx >= self.First) && (index.Idx <= self.Last) {
 			return
 		}
 	}
-	si.it.Release()
+	self.it.Release()
 	return nil
 }

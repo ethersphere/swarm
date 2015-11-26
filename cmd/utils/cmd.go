@@ -29,9 +29,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/peterh/liner"
 )
@@ -95,16 +95,6 @@ func PromptPassword(prompt string, warnTerm bool) (string, error) {
 	return input, err
 }
 
-func CheckLegalese(datadir string) {
-	// check "first run"
-	if !common.FileExist(datadir) {
-		r, _ := PromptConfirm(legalese)
-		if !r {
-			Fatalf("Must accept to continue. Shutting down...\n")
-		}
-	}
-}
-
 // Fatalf formats a message to standard error and exits the program.
 // The message is also printed to standard output if standard error
 // is redirected to a different file.
@@ -120,10 +110,9 @@ func Fatalf(format string, args ...interface{}) {
 	os.Exit(1)
 }
 
-func StartEthereum(ethereum *eth.Ethereum) {
-	glog.V(logger.Info).Infoln("Starting", ethereum.Name())
-	if err := ethereum.Start(); err != nil {
-		Fatalf("Error starting Ethereum: %v", err)
+func StartNode(stack *node.Node) {
+	if err := stack.Start(); err != nil {
+		Fatalf("Error starting protocol stack: %v", err)
 	}
 	go func() {
 		sigc := make(chan os.Signal, 1)
@@ -131,7 +120,7 @@ func StartEthereum(ethereum *eth.Ethereum) {
 		defer signal.Stop(sigc)
 		<-sigc
 		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
-		go ethereum.Stop()
+		go stack.Stop()
 		logger.Flush()
 		for i := 10; i > 0; i-- {
 			<-sigc

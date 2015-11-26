@@ -38,12 +38,8 @@ type Api struct {
 }
 
 //the api constructor initialises
-func NewApi(dpa *DPA, conf *Config) (self *Api) {
-	self = &Api{
-		dpa:  dpa,
-		conf: conf,
-	}
-	return
+func NewApi(dpa *DPA, registrar registrar.VersionedRegistrar, conf *Config) (self *Api) {
+	return &Api{dpa, registrar, conf}
 }
 
 func (self *Api) Issue(beneficiary common.Address, amount *big.Int) (cheque *chequebook.Cheque, err error) {
@@ -98,14 +94,14 @@ func (self *Api) Put(content, contentType string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	manifest := fmt.Sprintf(`{"entries":[{"hash":"%064x","contentType":"%s"}]}`, key, contentType)
+	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	sr = io.NewSectionReader(strings.NewReader(manifest), 0, int64(len(manifest)))
 	key, err = self.dpa.Store(sr, wg)
 	if err != nil {
 		return "", err
 	}
 	wg.Wait()
-	return fmt.Sprintf("%064x", key), nil
+	return key.String(), nil
 }
 
 func (self *Api) Modify(rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
@@ -130,7 +126,7 @@ func (self *Api) Modify(rootHash, path, contentHash, contentType string) (newRoo
 	if err != nil {
 		return
 	}
-	return fmt.Sprintf("%064x", trie.hash), nil
+	return trie.hash.String(), nil
 }
 
 const maxParallelFiles = 5
@@ -323,7 +319,7 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 				var hash Key
 				hash, err = self.dpa.Store(sr, wg)
 				if hash != nil {
-					list[i].Hash = fmt.Sprintf("%064x", hash)
+					list[i].Hash = hash.String()
 				}
 				wg.Wait()
 				if err == nil {
@@ -371,7 +367,7 @@ func (self *Api) Upload(lpath, index string) (string, error) {
 	err2 := trie.recalcAndStore()
 	var hs string
 	if err2 == nil {
-		hs = fmt.Sprintf("%064x", trie.hash)
+		hs = trie.hash.String()
 	}
 	return hs, err2
 }
@@ -394,7 +390,7 @@ func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
 	host := hostPort
 	if hashMatcher.MatchString(host) {
 		contentHash = Key(common.Hex2Bytes(host))
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: host is a contentHash: '%064x'", contentHash)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: host is a contentHash: '%v'", contentHash)
 	} else {
 		if self.registrar != nil {
 			var hash common.Hash
@@ -410,7 +406,7 @@ func (self *Api) Resolve(hostPort string) (contentHash Key, err error) {
 				err = fmt.Errorf("unable to resolve '%s': %v", hostPort, err)
 			}
 			contentHash = Key(hash.Bytes())
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: resolve host '%s' to contentHash: '%064x'", hostPort, contentHash)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: resolve host '%s' to contentHash: '%v'", hostPort, contentHash)
 		} else {
 			err = fmt.Errorf("no resolver '%s': %v", hostPort, err)
 		}
@@ -448,7 +444,7 @@ func (self *Api) getPath(uri string) (reader SectionReader, mimeType string, sta
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		mimeType = entry.ContentType
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: content lookup key: '%064x' (%v)", key, mimeType)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: content lookup key: '%v' (%v)", key, mimeType)
 		reader = self.dpa.Retrieve(key)
 	} else {
 		err = fmt.Errorf("manifest entry for '%s' not found", path)

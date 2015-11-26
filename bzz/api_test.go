@@ -12,6 +12,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+//TODO: add tests for resolver/registrar
+// will most likely be its own package under service?
+
 var (
 	testDir string
 	datadir = "/tmp/bzz"
@@ -34,7 +37,7 @@ func testApi() (api *Api, err error) {
 	if err != nil {
 		return
 	}
-	api = NewApi(dpa, config)
+	api = NewApi(dpa, nil, config)
 	api.dpa.Start()
 
 	return

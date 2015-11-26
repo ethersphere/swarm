@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	quickrand         = rand.New(rand.NewSource(time.Now().Unix()))
-	quickcfgGetNodes  = &quick.Config{MaxCount: 5000, Rand: quickrand}
-	quickcfgBootStrap = &quick.Config{MaxCount: 1000, Rand: quickrand}
+	quickrand           = rand.New(rand.NewSource(time.Now().Unix()))
+	quickcfgFindClosest = &quick.Config{MaxCount: 5000, Rand: quickrand}
+	quickcfgBootStrap   = &quick.Config{MaxCount: 1000, Rand: quickrand}
 )
 
 type testNode struct {
@@ -38,75 +38,63 @@ func (n *testNode) LastActive() time.Time {
 	return time.Now()
 }
 
-func (n *testNode) Add(a Address) (err error) {
-	return nil
-}
-
-func TestAddNode(t *testing.T) {
+func TestOn(t *testing.T) {
 	addr, ok := gen(Address{}, quickrand).(Address)
 	other, ok := gen(Address{}, quickrand).(Address)
 	if !ok {
 		t.Errorf("oops")
 	}
-	kad := New()
-	kad.Start(addr)
-	err := kad.AddNode(&testNode{addr: other})
+	kad := New(addr, NewKadParams())
+	err := kad.On(&testNode{addr: other}, nil)
 	_ = err
 }
 
 func TestBootstrap(t *testing.T) {
 	t.Parallel()
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	// r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	test := func(test *bootstrapTest) bool {
 		// for any node kad.le, Target and N
-		kad := New()
-		kad.MaxProx = test.MaxProx
-		kad.BucketSize = test.BucketSize
-		kad.Start(test.Self)
+		params := NewKadParams()
+		params.MaxProx = test.MaxProx
+		params.BucketSize = test.BucketSize
+		params.ProxBinSize = test.BucketSize
+		kad := New(test.Self, params)
 		var err error
 
-		// t.Logf("bootstapTest MaxProx: %v BucketSize: %v\n", test.MaxProx, test.BucketSize)
-
-		addr := gen(Address{}, r).(Address)
+		addr := RandomAddress()
 		prox := proximity(addr, test.Self)
 
 		for p := 0; p <= prox; p++ {
 			var nrs []*NodeRecord
-			for i := 0; i < test.BucketSize; i++ {
+			for i := 0; i < 3; i++ {
 				nrs = append(nrs, &NodeRecord{
 					Addr: RandomAddressAt(test.Self, p),
 				})
 			}
-			kad.AddNodeRecords(nrs)
+			kad.Add(nrs)
 		}
 
 		node := &testNode{addr}
 
 		n := 0
 		for n < 100 {
-			err = kad.AddNode(node)
+			err = kad.On(node, nil)
 			if err != nil {
 				t.Errorf("backend not accepting node")
 				return false
 			}
 			var nrs []*NodeRecord
-			prox := proximity(node.addr, test.Self)
-			for i := 0; i < test.BucketSize; i++ {
+			prox := proximity(test.Self, node.addr)
+			for i := 0; i < 13; i++ {
 				nrs = append(nrs, &NodeRecord{
 					Addr: RandomAddressAt(test.Self, prox+1),
 				})
 			}
-			kad.AddNodeRecords(nrs)
+			kad.Add(nrs)
 
-			var lens []int
-			for i := 0; i <= test.MaxProx; i++ {
-				lens = append(lens, len(kad.buckets[i].nodes))
-			}
-
-			record, _ := kad.GetNodeRecord()
+			record, _ := kad.FindBest()
 			if record == nil {
-				// t.Logf("after round %d, no more node records needed", n)
 				break
 			}
 			node = &testNode{record.Addr}
@@ -125,18 +113,18 @@ func TestBootstrap(t *testing.T) {
 
 }
 
-func TestGetNodes(t *testing.T) {
+func TestFindClosest(t *testing.T) {
 	t.Parallel()
 
-	test := func(test *getNodesTest) bool {
+	test := func(test *FindClosestTest) bool {
 		// for any node kad.le, Target and N
-		kad := New()
-		kad.MaxProx = 10
-		kad.Start(test.Self)
+		params := NewKadParams()
+		params.MaxProx = 10
+		kad := New(test.Self, params)
 		var err error
-		// t.Logf("getNodesTest %v: %v\n", len(test.All), test)
+		// t.Logf("FindClosestTest %v: %v\n", len(test.All), test)
 		for _, node := range test.All {
-			err = kad.AddNode(node)
+			err = kad.On(node, nil)
 			if err != nil {
 				t.Errorf("backend not accepting node")
 				return false
@@ -146,7 +134,7 @@ func TestGetNodes(t *testing.T) {
 		if len(test.All) == 0 || test.N == 0 {
 			return true
 		}
-		nodes := kad.GetNodes(test.Target, test.N)
+		nodes := kad.FindClosest(test.Target, test.N)
 
 		// check that the number of results is min(N, kad.len)
 		wantN := test.N
@@ -189,7 +177,7 @@ func TestGetNodes(t *testing.T) {
 		}
 		return true
 	}
-	if err := quick.Check(test, quickcfgGetNodes); err != nil {
+	if err := quick.Check(test, quickcfgFindClosest); err != nil {
 		t.Error(err)
 	}
 }
@@ -208,15 +196,15 @@ func TestProxAdjust(t *testing.T) {
 	t.Parallel()
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	self := gen(Address{}, r).(Address)
+	params := NewKadParams()
+	params.MaxProx = 10
+	kad := New(self, params)
 
-	kad := New()
-	kad.MaxProx = 10
-	kad.Start(self)
 	var err error
 	for i := 0; i < 100; i++ {
 		a := gen(Address{}, r).(Address)
 		addresses = append(addresses, a)
-		err = kad.AddNode(&testNode{addr: a})
+		err = kad.On(&testNode{addr: a}, nil)
 		if err != nil {
 			t.Errorf("backend not accepting node")
 			return
@@ -229,13 +217,13 @@ func TestProxAdjust(t *testing.T) {
 	test := func(test *proxTest) bool {
 		node := &testNode{test.addr}
 		if test.add {
-			kad.AddNode(node)
+			kad.On(node, nil)
 		} else {
-			kad.RemoveNode(node)
+			kad.Off(node, nil)
 		}
 		return kad.proxCheck(t)
 	}
-	if err := quick.Check(test, quickcfgGetNodes); err != nil {
+	if err := quick.Check(test, quickcfgFindClosest); err != nil {
 		t.Error(err)
 	}
 }
@@ -243,38 +231,44 @@ func TestProxAdjust(t *testing.T) {
 func TestSaveLoad(t *testing.T) {
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 	addresses := gen([]Address{}, r).([]Address)
-	self := addresses[0]
-	kad := New()
-	kad.MaxProx = 10
-	kad.Start(self)
+	self := RandomAddress()
+	params := NewKadParams()
+	params.MaxProx = 10
+	kad := New(self, params)
+
 	var err error
-	for _, a := range addresses[1:] {
-		err = kad.AddNode(&testNode{addr: a})
+
+	for _, a := range addresses {
+		err = kad.On(&testNode{addr: a}, nil)
 		if err != nil {
 			t.Errorf("backend not accepting node")
 			return
 		}
 	}
-	nodes := kad.GetNodes(self, 100)
+	nodes := kad.FindClosest(self, 100)
 	path := "/tmp/bzz.peers"
-	kad.Stop(path)
-	kad = New()
-	kad.Start(self)
-	kad.Load(path)
-	for _, b := range kad.nodeDB {
+	err = kad.Save(path, nil)
+	if err != nil {
+		t.Fatalf("unepected error saving kaddb: %v", err)
+	}
+	kad = New(self, params)
+	err = kad.Load(path, nil)
+	if err != nil {
+		t.Fatalf("unepected error loading kaddb: %v", err)
+	}
+	for _, b := range kad.db.Nodes {
 		for _, node := range b {
-			node.node = &testNode{node.Addr}
-			err = kad.AddNode(node.node)
+			err = kad.On(&testNode{node.Addr}, nil)
 			if err != nil {
 				t.Errorf("backend not accepting node")
 				return
 			}
 		}
 	}
-	loadednodes := kad.GetNodes(self, 100)
+	loadednodes := kad.FindClosest(self, 100)
 	for i, node := range loadednodes {
 		if nodes[i].Addr() != node.Addr() {
-			t.Errorf("node mismatch at %d/%d", i, len(nodes))
+			t.Errorf("node mismatch at %d/%d: %v != %v", i, len(nodes), nodes[i].Addr(), node.Addr())
 		}
 	}
 }
@@ -325,19 +319,19 @@ func (*bootstrapTest) Generate(rand *rand.Rand, size int) reflect.Value {
 	return reflect.ValueOf(t)
 }
 
-type getNodesTest struct {
+type FindClosestTest struct {
 	Self   Address
 	Target Address
 	All    []Node
 	N      int
 }
 
-func (c getNodesTest) String() string {
+func (c FindClosestTest) String() string {
 	return fmt.Sprintf("A: %064x\nT: %064x\n(%d)\n", c.Self[:], c.Target[:], c.N)
 }
 
-func (*getNodesTest) Generate(rand *rand.Rand, size int) reflect.Value {
-	t := &getNodesTest{
+func (*FindClosestTest) Generate(rand *rand.Rand, size int) reflect.Value {
+	t := &FindClosestTest{
 		Self:   gen(Address{}, rand).(Address),
 		Target: gen(Address{}, rand).(Address),
 		N:      rand.Intn(bucketSize),
@@ -396,13 +390,4 @@ func gen(typ interface{}, rand *rand.Rand) interface{} {
 		panic(fmt.Sprintf("couldn't generate random value of type %T", typ))
 	}
 	return v.Interface()
-}
-
-func (Address) Generate(rand *rand.Rand, size int) reflect.Value {
-	var id Address
-	// m := rand.Intn(len(id))
-	for i := 0; i < len(id); i++ {
-		id[i] = byte(rand.Uint32())
-	}
-	return reflect.ValueOf(id)
 }

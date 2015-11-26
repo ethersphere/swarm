@@ -98,9 +98,9 @@ func New() *Whisper {
 	return whisper
 }
 
-// Protocol returns the whisper sub-protocol handler for this particular client.
-func (self *Whisper) Protocol() p2p.Protocol {
-	return self.protocol
+// Protocols returns the whisper sub-protocols ran by this particular client.
+func (self *Whisper) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{self.protocol}
 }
 
 // Version returns the whisper sub-protocols version number.
@@ -156,14 +156,20 @@ func (self *Whisper) Send(envelope *Envelope) error {
 	return self.add(envelope)
 }
 
-func (self *Whisper) Start() {
+// Start implements node.Service, starting the background data propagation thread
+// of the Whisper protocol.
+func (self *Whisper) Start(*p2p.Server) error {
 	glog.V(logger.Info).Infoln("Whisper started")
 	go self.update()
+	return nil
 }
 
-func (self *Whisper) Stop() {
+// Stop implements node.Service, stopping the background data propagation thread
+// of the Whisper protocol.
+func (self *Whisper) Stop() error {
 	close(self.quit)
 	glog.V(logger.Info).Infoln("Whisper stopped")
+	return nil
 }
 
 // Messages retrieves all the currently pooled messages matching a filter id.
@@ -233,6 +239,11 @@ func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 func (self *Whisper) add(envelope *Envelope) error {
 	self.poolMu.Lock()
 	defer self.poolMu.Unlock()
+
+	// short circuit when a received envelope has already expired
+	if envelope.Expiry <= uint32(time.Now().Unix()) {
+		return nil
+	}
 
 	// Insert the message into the tracked pool
 	hash := envelope.Hash()

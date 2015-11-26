@@ -22,6 +22,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/eth"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc/codec"
 	"github.com/ethereum/go-ethereum/rpc/shared"
 	"github.com/ethereum/go-ethereum/xeth"
@@ -109,6 +110,7 @@ var (
 			"getBlockTransactionCount",
 			"getBlockUncleCount",
 			"getCode",
+			"getNatSpec",
 			"getCompilers",
 			"gasPrice",
 			"getStorageAt",
@@ -150,7 +152,7 @@ var (
 		},
 		"shh": []string{
 			"post",
-			"newIdentify",
+			"newIdentity",
 			"hasIdentity",
 			"newGroup",
 			"addToGroup",
@@ -174,7 +176,7 @@ var (
 )
 
 // Parse a comma separated API string to individual api's
-func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.Ethereum, docRoot string) ([]shared.EthereumApi, error) {
+func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, stack *node.Node) ([]shared.EthereumApi, error) {
 	if len(strings.TrimSpace(apistr)) == 0 {
 		return nil, fmt.Errorf("Empty apistr provided")
 	}
@@ -182,12 +184,18 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 	names := strings.Split(apistr, ",")
 	apis := make([]shared.EthereumApi, len(names))
 
+	var eth *eth.Ethereum
+	if stack != nil {
+		if err := stack.Service(&eth); err != nil {
+			return nil, err
+		}
+	}
 	for i, name := range names {
 		switch strings.ToLower(strings.TrimSpace(name)) {
 		case shared.AdminApiName:
-			apis[i] = NewAdminApi(xeth, eth, codec, docRoot)
+			apis[i] = NewAdminApi(xeth, stack, codec)
 		case shared.BzzApiName:
-			apis[i] = NewBzzApi(xeth, eth, codec)
+			apis[i] = NewBzzApi(stack, codec)
 		case shared.DebugApiName:
 			apis[i] = NewDebugApi(xeth, eth, codec)
 		case shared.DbApiName:
@@ -210,7 +218,6 @@ func ParseApiString(apistr string, codec codec.Codec, xeth *xeth.XEth, eth *eth.
 			return nil, fmt.Errorf("Unknown API '%s'", name)
 		}
 	}
-
 	return apis, nil
 }
 
