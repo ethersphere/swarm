@@ -103,7 +103,6 @@ func New(local *Params, pm Payment, proto Protocol) (self *Swap, err error) {
 func (self *Swap) SetRemote(remote *Profile) {
 	defer self.lock.Unlock()
 	self.lock.Lock()
-	glog.V(logger.Debug).Infof("[SWAP] <%v> remote profile set: pay at: %v, drop at: %v, buy at: %v, sell at: %v", self.proto, remote.PayAt, remote.DropAt, remote.BuyAt, remote.SellAt)
 
 	self.remote = remote
 	if self.Sells && (remote.BuyAt.Cmp(common.Big0) <= 0 || self.local.SellAt.Cmp(common.Big0) <= 0 || remote.BuyAt.Cmp(self.local.SellAt) < 0) {
@@ -135,13 +134,13 @@ func (self *Swap) setParams(local *Params) {
 		self.In.AutoCash(local.AutoCashInterval, local.AutoCashThreshold)
 		glog.V(logger.Info).Infof("[SWAP] <%v> set autocash to every %v, max uncashed limit: %v", self.proto, local.AutoCashInterval, local.AutoCashThreshold)
 	} else {
-		glog.V(logger.Info).Infof("[SWAP] <%v> autocash off (not selling)")
+		glog.V(logger.Info).Infof("[SWAP] <%v> autocash off (not selling)", self.proto)
 	}
 	if self.Buys {
 		self.Out.AutoDeposit(local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
 		glog.V(logger.Info).Infof("[SWAP] <%v> set autodeposit to every %v, pay at: %v, buffer: %v", self.proto, local.AutoDepositInterval, local.AutoDepositThreshold, local.AutoDepositBuffer)
 	} else {
-		glog.V(logger.Info).Infof("[SWAP] <%v> autodeposit off (not buying)")
+		glog.V(logger.Info).Infof("[SWAP] <%v> autodeposit off (not buying)", self.proto)
 	}
 }
 

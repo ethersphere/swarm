@@ -123,8 +123,7 @@ type Server struct {
 
 	// Hooks for testing. These are useful because we can inhibit
 	// the whole protocol stack.
-	newTransport func(net.Conn) transport
-	newPeerHook  func(*Peer)
+	peerRunFunction func(*Peer) DiscReason
 
 	lock    sync.Mutex // protects running
 	running bool
@@ -157,30 +156,27 @@ const (
 	trustedConn
 )
 
+// used in place of devConn so server tests can substitute a mock.
+type transport interface {
+	// devConn
+	doProtoHandshake(our *protoHandshake) (their *protoHandshake, err error)
+	close(err error)
+	// rlpx.Conn
+	Handshake() error
+	RemoteAddr() net.Addr
+	LocalAddr() net.Addr
+	RemoteID() *ecdsa.PublicKey
+}
+
 // conn wraps a network connection with information gathered
 // during the two handshakes.
 type conn struct {
-	fd net.Conn
 	transport
+	id    discover.NodeID
 	flags connFlag
-	cont  chan error      // The run loop uses cont to signal errors to setupConn.
-	id    discover.NodeID // valid after the encryption handshake
-	caps  []Cap           // valid after the protocol handshake
-	name  string          // valid after the protocol handshake
-}
-
-type transport interface {
-	// The two handshakes.
-	doEncHandshake(prv *ecdsa.PrivateKey, dialDest *discover.Node) (discover.NodeID, error)
-	doProtoHandshake(our *protoHandshake) (*protoHandshake, error)
-	// The MsgReadWriter can only be used after the encryption
-	// handshake has completed. The code uses conn.id to track this
-	// by setting it to a non-nil value after the encryption handshake.
-	MsgReadWriter
-	// transports must provide Close because we use MsgPipe in some of
-	// the tests. Closing the actual network connection doesn't do
-	// anything in those tests because NsgPipe doesn't use it.
-	close(err error)
+	cont  chan error // The run loop uses cont to signal errors to setupConn.
+	caps  []Cap      // valid after the protocol handshake
+	name  string     // valid after the protocol handshake
 }
 
 func (c *conn) String() string {
@@ -188,7 +184,7 @@ func (c *conn) String() string {
 	if (c.id != discover.NodeID{}) {
 		s += fmt.Sprintf(" %x", c.id[:8])
 	}
-	s += " " + c.fd.RemoteAddr().String()
+	s += " " + c.RemoteAddr().String()
 	return s
 }
 
@@ -313,9 +309,6 @@ func (srv *Server) Start() (err error) {
 	// static fields
 	if srv.PrivateKey == nil {
 		return fmt.Errorf("Server.PrivateKey must be set to a non-nil key")
-	}
-	if srv.newTransport == nil {
-		srv.newTransport = newRLPX
 	}
 	if srv.Dialer == nil {
 		srv.Dialer = &net.Dialer{Timeout: defaultDialTimeout}
@@ -505,7 +498,7 @@ running:
 	}
 	// Disconnect all peers.
 	for _, p := range peers {
-		p.Disconnect(DiscQuitting)
+		p.conn.close(DiscQuitting)
 	}
 	// Wait for peers to shut down. Pending connections and tasks are
 	// not handled here and will terminate soon-ish because srv.quit
@@ -588,7 +581,7 @@ func (srv *Server) listenLoop() {
 		// Spawn the handler. It will give the slot back when the connection
 		// has been established.
 		go func() {
-			srv.setupConn(fd, inboundConn, nil)
+			srv.setupConn(newDevConn(fd, srv.PrivateKey, nil), inboundConn, nil)
 			slots <- struct{}{}
 		}()
 	}
@@ -597,24 +590,24 @@ func (srv *Server) listenLoop() {
 // setupConn runs the handshakes and attempts to add the connection
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
-func (srv *Server) setupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) {
+func (srv *Server) setupConn(t transport, flags connFlag, dialDest *discover.Node) {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running
 	srv.lock.Unlock()
-	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
+	c := &conn{transport: t, flags: flags, cont: make(chan error)}
 	if !running {
 		c.close(errServerStopped)
 		return
 	}
 	// Run the encryption handshake.
-	var err error
-	if c.id, err = c.doEncHandshake(srv.PrivateKey, dialDest); err != nil {
-		glog.V(logger.Debug).Infof("%v faild enc handshake: %v", c, err)
+	if err := c.Handshake(); err != nil {
+		glog.V(logger.Debug).Infof("%v failed enc handshake: %v", c, err)
 		c.close(err)
 		return
 	}
 	// For dialed connections, check that the remote public key matches.
+	c.id = discover.PubkeyID(c.RemoteID())
 	if dialDest != nil && c.id != dialDest.ID {
 		c.close(DiscUnexpectedIdentity)
 		glog.V(logger.Debug).Infof("%v dialed identity mismatch, want %x", c, dialDest.ID[:8])
@@ -675,17 +668,82 @@ func (srv *Server) runPeer(p *Peer) {
 		NumConnections:      srv.PeerCount(),
 	})
 
-	if srv.newPeerHook != nil {
-		srv.newPeerHook(p)
+	var reason DiscReason
+	if srv.peerRunFunction != nil {
+		reason = srv.peerRunFunction(p)
+	} else {
+		reason = p.run()
 	}
-	discreason := p.run()
 	// Note: run waits for existing peers to be sent on srv.delpeer
 	// before returning, so this send should not select on srv.quit.
 	srv.delpeer <- p
 
-	glog.V(logger.Debug).Infof("Removed %v (%v)\n", p, discreason)
+	glog.V(logger.Debug).Infof("Removed %v (%v)\n", p, reason)
 	srvjslog.LogJson(&logger.P2PDisconnected{
 		RemoteId:       p.ID().String(),
 		NumConnections: srv.PeerCount(),
 	})
+}
+
+// NodeInfo represents a short summary of the information known about the host.
+type NodeInfo struct {
+	ID    string `json:"id"`    // Unique node identifier (also the encryption key)
+	Name  string `json:"name"`  // Name of the node, including client type, version, OS, custom data
+	Enode string `json:"enode"` // Enode URL for adding this peer from remote peers
+	IP    string `json:"ip"`    // IP address of the node
+	Ports struct {
+		Discovery int `json:"discovery"` // UDP listening port for discovery protocol
+		Listener  int `json:"listener"`  // TCP listening port for RLPx
+	} `json:"ports"`
+	ListenAddr string                 `json:"listenAddr"`
+	Protocols  map[string]interface{} `json:"protocols"`
+}
+
+// Info gathers and returns a collection of metadata known about the host.
+func (srv *Server) NodeInfo() *NodeInfo {
+	node := srv.Self()
+
+	// Gather and assemble the generic node infos
+	info := &NodeInfo{
+		Name:       srv.Name,
+		Enode:      node.String(),
+		ID:         node.ID.String(),
+		IP:         node.IP.String(),
+		ListenAddr: srv.ListenAddr,
+		Protocols:  make(map[string]interface{}),
+	}
+	info.Ports.Discovery = int(node.UDP)
+	info.Ports.Listener = int(node.TCP)
+
+	// Gather all the running protocol infos (only once per protocol type)
+	for _, proto := range srv.Protocols {
+		if _, ok := info.Protocols[proto.Name]; !ok {
+			nodeInfo := interface{}("unknown")
+			if query := proto.NodeInfo; query != nil {
+				nodeInfo = proto.NodeInfo()
+			}
+			info.Protocols[proto.Name] = nodeInfo
+		}
+	}
+	return info
+}
+
+// PeersInfo returns an array of metadata objects describing connected peers.
+func (srv *Server) PeersInfo() []*PeerInfo {
+	// Gather all the generic and sub-protocol specific infos
+	infos := make([]*PeerInfo, 0, srv.PeerCount())
+	for _, peer := range srv.Peers() {
+		if peer != nil {
+			infos = append(infos, peer.Info())
+		}
+	}
+	// Sort the result array alphabetically by node identifier
+	for i := 0; i < len(infos); i++ {
+		for j := i + 1; j < len(infos); j++ {
+			if infos[i].ID > infos[j].ID {
+				infos[i], infos[j] = infos[j], infos[i]
+			}
+		}
+	}
+	return infos
 }

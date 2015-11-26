@@ -7,8 +7,9 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	//	"net/url"
+	//"net/url"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +19,8 @@ import (
 )
 
 const (
-	rawType = "application/octet-stream"
+	rawType   = "application/octet-stream"
+	bzzPrefix = "/bzz:/"
 )
 
 var (
@@ -60,6 +62,13 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 	glog.V(logger.Debug).Infof("[BZZ] Swarm: HTTP request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
 	var raw bool
+
+	// HTTP-based URL protocol handler
+	if strings.HasPrefix(uri, bzzPrefix) {
+		uri = uri[len(bzzPrefix)-1 : len(uri)]
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: BZZ request URI: '%s'", uri)
+	}
+
 	path := rawUrl.ReplaceAllStringFunc(uri, func(string) string {
 		raw = true
 		return ""
@@ -74,7 +83,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			ahead:  make(map[int64]chan bool),
 		}, 0, r.ContentLength), nil)
 		if err == nil {
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Content for '%064x' stored", key)
+			glog.V(logger.Debug).Infof("[BZZ] Swarm: Content for %v stored", key.Log())
 		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -96,7 +105,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 				path = regularSlashes(path)
 				mime := r.Header.Get("Content-Type")
 				// TODO proper root hash separation
-				glog.V(logger.Debug).Infof("[BZZ] Modify '%s' to store '%064x' as '%s'.", path, key, mime)
+				glog.V(logger.Debug).Infof("[BZZ] Modify '%s' to store %v as '%s'.", path, key.Log(), mime)
 				newKey, err := api.Modify(path[:64], path[65:], common.Bytes2Hex(key), mime)
 				if err == nil {
 					glog.V(logger.Debug).Infof("[BZZ] Swarm replaced manifest by '%s'", newKey)

@@ -23,13 +23,12 @@ type Config struct {
 	*StoreParams
 	*ChunkerParams
 	*HiveParams
-	Swap      *swapParams
+	Swap *swapParams
+	*SyncParams
 	Path      string
 	Port      string
 	PublicKey string
 	BzzKey    string
-	// not serialised/not persisted fields
-	// address // node address
 }
 
 // config is agnostic to where private key is coming from
@@ -49,6 +48,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 	keyhex := crypto.Sha3Hash(pubkey).Hex()
 
 	self = &Config{
+		SyncParams:    newSyncParams(),
 		HiveParams:    NewHiveParams(dirpath),
 		ChunkerParams: NewChunkerParams(),
 		StoreParams:   NewStoreParams(dirpath),

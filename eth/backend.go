@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/bzz"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/compiler"
+	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -65,7 +66,7 @@ const (
 var (
 	jsonlogger = logger.NewJsonLogger()
 
-	datadirInUseErrNos = []uint{11, 32, 35}
+	datadirInUseErrnos = map[uint]bool{11: true, 32: true, 35: true}
 	portInUseErrRE     = regexp.MustCompile("address already in use")
 
 	defaultBootNodes = []*discover.Node{
@@ -78,7 +79,8 @@ var (
 	}
 
 	defaultTestNetBootNodes = []*discover.Node{
-		discover.MustParseNode("enode://5374c1bff8df923d3706357eeb4983cd29a63be40a269aaa2296ee5f3b2119a8978c0ed68b8f6fc84aad0df18790417daadf91a4bfbb786a16c9b0a199fa254a@92.51.165.126:30303"),
+		discover.MustParseNode("enode://e4533109cc9bd7604e4ff6c095f7a1d807e15b38e9bfeb05d3b7c423ba86af0a9e89abbf40bd9dde4250fef114cd09270fa4e224cbeef8b7bf05a51e8260d6b8@94.242.229.4:40404"),
+		discover.MustParseNode("enode://8c336ee6f03e99613ad21274f269479bf4413fb294d697ef15ab897598afb931f56beb8e97af530aee20ce2bcba5776f4a312bc168545de4d43736992c814592@94.242.229.203:30303"),
 	}
 
 	staticNodes  = "static-nodes.json"  // Path within <datadir> to search for the static node list
@@ -91,7 +93,6 @@ type Config struct {
 
 	Name         string
 	NetworkId    int
-	GenesisNonce int
 	GenesisFile  string
 	GenesisBlock *types.Block // used by block tests
 	FastSync     bool
@@ -104,9 +105,9 @@ type Config struct {
 	DataDir   string
 	LogFile   string
 	Verbosity int
-	LogJSON   string
 	VmDebug   bool
 	NatSpec   bool
+	DocRoot   string
 	AutoDAG   bool
 	PowTest   bool
 	ExtraData []byte
@@ -253,6 +254,8 @@ type Ethereum struct {
 	GpobaseStepUp           int
 	GpobaseCorrectionFactor int
 
+	httpclient *httpclient.HTTPClient
+
 	net      *p2p.Server
 	eventMux *event.TypeMux
 	miner    *miner.Miner
@@ -273,11 +276,7 @@ type Ethereum struct {
 }
 
 func New(config *Config) (*Ethereum, error) {
-	// Bootstrap database
 	logger.New(config.DataDir, config.LogFile, config.Verbosity)
-	if len(config.LogJSON) > 0 {
-		logger.NewJSONsystem(config.DataDir, config.LogJSON)
-	}
 
 	// Let the database take 3/4 of the max open files (TODO figure out a way to get the actual limit of the open files)
 	const dbCount = 3
@@ -291,15 +290,7 @@ func New(config *Config) (*Ethereum, error) {
 	// Open the chain database and perform any upgrades needed
 	chainDb, err := newdb(filepath.Join(config.DataDir, "chaindata"))
 	if err != nil {
-		var ok bool
-		errno := uint(err.(syscall.Errno))
-		for _, no := range datadirInUseErrNos {
-			if errno == no {
-				ok = true
-				break
-			}
-		}
-		if ok {
+		if errno, ok := err.(syscall.Errno); ok && datadirInUseErrnos[uint(errno)] {
 			err = fmt.Errorf("%v (check if another instance of geth is already running with the same data directory '%s')", err, config.DataDir)
 		}
 		return nil, fmt.Errorf("blockchain db err: %v", err)
@@ -316,14 +307,7 @@ func New(config *Config) (*Ethereum, error) {
 
 	dappDb, err := newdb(filepath.Join(config.DataDir, "dapp"))
 	if err != nil {
-		var ok bool
-		for _, no := range datadirInUseErrNos {
-			if uint(err.(syscall.Errno)) == no {
-				ok = true
-				break
-			}
-		}
-		if ok {
+		if errno, ok := err.(syscall.Errno); ok && datadirInUseErrnos[uint(errno)] {
 			err = fmt.Errorf("%v (check if another instance of geth is already running with the same data directory '%s')", err, config.DataDir)
 		}
 		return nil, fmt.Errorf("dapp db err: %v", err)
@@ -404,6 +388,7 @@ func New(config *Config) (*Ethereum, error) {
 		GpobaseStepDown:         config.GpobaseStepDown,
 		GpobaseStepUp:           config.GpobaseStepUp,
 		GpobaseCorrectionFactor: config.GpobaseCorrectionFactor,
+		httpclient:              httpclient.New(config.DocRoot),
 	}
 
 	if config.PowTest {
@@ -490,62 +475,10 @@ func New(config *Config) (*Ethereum, error) {
 	return eth, nil
 }
 
-type NodeInfo struct {
-	Name       string
-	NodeUrl    string
-	NodeID     string
-	IP         string
-	DiscPort   int // UDP listening port for discovery protocol
-	TCPPort    int // TCP listening port for RLPx
-	Td         string
-	ListenAddr string
-}
-
-func (s *Ethereum) NodeInfo() *NodeInfo {
-	node := s.net.Self()
-
-	return &NodeInfo{
-		Name:       s.Name(),
-		NodeUrl:    node.String(),
-		NodeID:     node.ID.String(),
-		IP:         node.IP.String(),
-		DiscPort:   int(node.UDP),
-		TCPPort:    int(node.TCP),
-		ListenAddr: s.net.ListenAddr,
-		Td:         s.BlockChain().GetTd(s.BlockChain().CurrentBlock().Hash()).String(),
-	}
-}
-
-type PeerInfo struct {
-	ID            string
-	Name          string
-	Caps          string
-	RemoteAddress string
-	LocalAddress  string
-}
-
-func newPeerInfo(peer *p2p.Peer) *PeerInfo {
-	var caps []string
-	for _, cap := range peer.Caps() {
-		caps = append(caps, cap.String())
-	}
-	return &PeerInfo{
-		ID:            peer.ID().String(),
-		Name:          peer.Name(),
-		Caps:          strings.Join(caps, ", "),
-		RemoteAddress: peer.RemoteAddr().String(),
-		LocalAddress:  peer.LocalAddr().String(),
-	}
-}
-
-// PeersInfo returns an array of PeerInfo objects describing connected peers
-func (s *Ethereum) PeersInfo() (peersinfo []*PeerInfo) {
-	for _, peer := range s.net.Peers() {
-		if peer != nil {
-			peersinfo = append(peersinfo, newPeerInfo(peer))
-		}
-	}
-	return
+// Network retrieves the underlying P2P network server. This should eventually
+// be moved out into a protocol independent package, but for now use an accessor.
+func (s *Ethereum) Network() *p2p.Server {
+	return s.net
 }
 
 func (s *Ethereum) ResetWithGenesisBlock(gb *types.Block) {
@@ -620,7 +553,7 @@ func (s *Ethereum) Start() error {
 	}
 
 	if s.Swarm != nil {
-		s.Swarm.Start(func() string { return s.net.ListenAddr }, s.AddPeer)
+		s.Swarm.Start(s.httpclient, func() string { return s.net.ListenAddr }, s.AddPeer)
 	}
 
 	glog.V(logger.Info).Infoln("Server started")
@@ -732,6 +665,12 @@ func (self *Ethereum) StopAutoDAG() {
 		self.autodagquit = nil
 	}
 	glog.V(logger.Info).Infof("Automatic pregeneration of ethash DAG OFF (ethash dir: %s)", ethash.DefaultDir)
+}
+
+// HTTPClient returns the light http client used for fetching offchain docs
+// (natspec, source for verification)
+func (self *Ethereum) HTTPClient() *httpclient.HTTPClient {
+	return self.httpclient
 }
 
 func (self *Ethereum) Solc() (*compiler.Solidity, error) {

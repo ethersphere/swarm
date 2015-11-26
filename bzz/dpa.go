@@ -136,12 +136,12 @@ func (self *DPA) retrieveLoop() {
 		for ch := range self.retrieveC {
 
 			go func(chunk *Chunk) {
-				glog.V(logger.Detail).Infof("[BZZ] dpa: retrieve loop : chunk '%x'", chunk.Key)
+				glog.V(logger.Detail).Infof("[BZZ] dpa: retrieve loop : chunk %v", chunk.Key.Log())
 				storedChunk, err := self.ChunkStore.Get(chunk.Key)
 				if err == notFound {
-					glog.V(logger.Detail).Infof("[BZZ] chunk '%x' not found", chunk.Key)
+					glog.V(logger.Detail).Infof("[BZZ] chunk %v not found", chunk.Key.Log())
 				} else if err != nil {
-					glog.V(logger.Detail).Infof("[BZZ] error retrieving chunk %x: %v", chunk.Key, err)
+					glog.V(logger.Detail).Infof("[BZZ] error retrieving chunk %v: %v", chunk.Key.Log(), err)
 				} else {
 					chunk.SData = storedChunk.SData
 					chunk.Size = storedChunk.Size
@@ -167,7 +167,7 @@ func (self *DPA) storeLoop() {
 			go func(chunk *Chunk) {
 				self.ChunkStore.Put(chunk)
 				if chunk.wg != nil {
-					glog.V(logger.Detail).Infof("[BZZ] DPA.storeLoop %064x", chunk.Key)
+					glog.V(logger.Detail).Infof("[BZZ] DPA.storeLoop %v", chunk.Key.Log())
 					chunk.wg.Done()
 				}
 			}(ch)

@@ -161,10 +161,8 @@ func (self *swapParams) chequebook() *chequebook.Chequebook {
 }
 
 const (
-	confirmationInterval = 0
-	timeout              = 3000000000000 // 30 sec
-	// confirmationInterval = 300 * 10 ** 11 // 5 mins
-	// timeout              = 300 * 10 ** 11 // 5 mins
+	confirmationInterval = 60000000000
+	timeout              = 30000000000 // 30 sec
 )
 
 // setChequebook(path, backend) wraps the

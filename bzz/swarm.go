@@ -6,6 +6,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/chequebook"
+	"github.com/ethereum/go-ethereum/common/httpclient"
 	"github.com/ethereum/go-ethereum/common/registrar"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/logger"
@@ -44,7 +45,7 @@ func NewSwarm(id discover.NodeID, config *Config) (self *Swarm, proto p2p.Protoc
 
 	self.api = NewApi(self.dpa, self.config)
 
-	proto, err = BzzProtocol(self.netStore, self.config.Swap)
+	proto, err = BzzProtocol(self.netStore, self.config.Swap, self.config.SyncParams)
 	return
 }
 
@@ -54,7 +55,7 @@ Start is called when the ethereum stack is started
 - launches the netStore (starts kademlia hive peer management)
 - starts an http server
 */
-func (self *Swarm) Start(listenAddr func() string, connectPeer func(string) error) {
+func (self *Swarm) Start(client *httpclient.HTTPClient, listenAddr func() string, connectPeer func(string) error) {
 	var err error
 	if self.netStore == nil {
 		err = fmt.Errorf("netStore is nil")
@@ -89,6 +90,10 @@ func (self *Swarm) Start(listenAddr func() string, connectPeer func(string) erro
 	if self.config.Port != "" {
 		go startHttpServer(self.api, self.config.Port)
 	}
+	client.RegisterScheme("bzz", &RoundTripper{
+		Port: self.ProxyPort(),
+	})
+
 }
 
 // stops all component services.
@@ -124,7 +129,7 @@ func (self *Swarm) SetChequebook(backend chequebook.Backend) (err error) {
 	go func() {
 		ok := <-done
 		if ok {
-			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set: saving config file, resetting all connections in the hive", err)
+			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract)
 			self.config.Save()
 			self.hive.dropAll()
 		}
