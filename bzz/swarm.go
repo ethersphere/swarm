@@ -33,7 +33,7 @@ type Swarm struct {
 }
 
 // creates a new swarm instance
-func NewSwarm(stack *node.Node, id discover.NodeID, config *Config) (self *Swarm, err error) {
+func NewSwarm(stack *node.ServiceContext, config *Config) (self *Swarm, err error) {
 
 	if bytes.Equal(common.FromHex(config.PublicKey), zeroKey) {
 		return nil, fmt.Errorf("empty public key")
@@ -49,10 +49,7 @@ func NewSwarm(stack *node.Node, id discover.NodeID, config *Config) (self *Swarm
 
 	self.hive, err = newHive(
 		common.HexToHash(self.config.BzzKey), // key to hive (kademlia base address)
-		id,                 // node ID to advertise address in handshake
-		listenAddr(stack),  // listen addr to advertise
-		connectPeer(stack), // function to call to connect peer
-		config.HiveParams,  // configuration parameters
+		config.HiveParams,                    // configuration parameters
 	)
 	if err != nil {
 		return
@@ -84,10 +81,22 @@ Start is called when the stack is started
 - starts an http server
 */
 // implements the node.Service interface
-func (self *Swarm) Start() error {
+func (self *Swarm) Start(net *p2p.Server) error {
 	var err error
+	connectPeer := func(url string) error {
+		node, err := discover.ParseNode(url)
+		if err != nil {
+			return fmt.Errorf("invalid node URL: %v", err)
+		}
+		net.AddPeer(node)
+		return nil
+	}
 
-	err = self.hive.start()
+	err = self.hive.start(
+		discover.PubkeyID(&net.PrivateKey.PublicKey),
+		func() string { return net.ListenAddr },
+		connectPeer,
+	)
 	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] Swarm hive could not be started: %v", err)
 	} else {
@@ -185,23 +194,6 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 
 	return
-}
-
-func listenAddr(stack *node.Node) func() string {
-	return func() string {
-		return stack.Server().ListenAddr
-	}
-}
-
-func connectPeer(stack *node.Node) func(string) error {
-	return func(url string) error {
-		node, err := discover.ParseNode(url)
-		if err != nil {
-			return fmt.Errorf("invalid node URL: %v", err)
-		}
-		stack.Server().AddPeer(node)
-		return nil
-	}
 }
 
 // for testing locally

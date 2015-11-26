@@ -111,12 +111,9 @@ func Fatalf(format string, args ...interface{}) {
 }
 
 func StartNode(stack *node.Node) {
-	fmt.Println("start node")
-
 	if err := stack.Start(); err != nil {
 		Fatalf("Error starting protocol stack: %v", err)
 	}
-	fmt.Println("started node")
 	go func() {
 		sigc := make(chan os.Signal, 1)
 		signal.Notify(sigc, os.Interrupt)

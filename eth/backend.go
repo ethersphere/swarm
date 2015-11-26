@@ -67,11 +67,12 @@ type Config struct {
 	SkipBcVersionCheck bool // e.g. blockchain export
 	DatabaseCache      int
 
-	NatSpec        bool
-	DocRoot        string
-	AutoDAG        bool
-	PowTest        bool
-	ExtraData      []byte
+	NatSpec   bool
+	DocRoot   string
+	AutoDAG   bool
+	PowTest   bool
+	ExtraData []byte
+
 	AccountManager *accounts.Manager
 	Etherbase      common.Address
 	GasPrice       *big.Int
@@ -235,6 +236,7 @@ func New(ctx *node.ServiceContext, config *Config) (*Ethereum, error) {
 	eth.miner = miner.New(eth, eth.EventMux(), eth.pow)
 	eth.miner.SetGasPrice(config.GasPrice)
 	eth.miner.SetExtra(config.ExtraData)
+
 	return eth, nil
 }
 
@@ -283,7 +285,7 @@ func (s *Ethereum) Protocols() []p2p.Protocol {
 
 // Start implements node.Service, starting all internal goroutines needed by the
 // Ethereum protocol implementation.
-func (s *Ethereum) Start() error {
+func (s *Ethereum) Start(*p2p.Server) error {
 	if s.AutoDAG {
 		s.StartAutoDAG()
 	}
@@ -291,7 +293,7 @@ func (s *Ethereum) Start() error {
 	return nil
 }
 
-// Start implements node.Service, terminating all internal goroutines used by the
+// Stop implements node.Service, terminating all internal goroutines used by the
 // Ethereum protocol.
 func (s *Ethereum) Stop() error {
 	s.blockchain.Stop()

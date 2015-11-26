@@ -442,10 +442,6 @@ func MakeNodeKey(ctx *cli.Context) *ecdsa.PrivateKey {
 		if key, err = crypto.HexToECDSA(hex); err != nil {
 			Fatalf("Option %q: %v", NodeKeyHexFlag.Name, err)
 		}
-	default:
-		if key, err = crypto.GenerateKey(); err != nil {
-			Fatalf("Nodekey generation failed: %v", err)
-		}
 	}
 	return key
 }
@@ -678,7 +674,6 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	accounts := strings.Split(ctx.GlobalString(UnlockedAccountFlag.Name), ",")
 	for i, account := range accounts {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
-			fmt.Printf("unlocking account %d\n", i)
 			UnlockAccount(ctx, accman, trimmed, i, passwords)
 		}
 	}
@@ -789,13 +784,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 			Fatalf("unable to configure swarm: %v", err)
 		}
 		if err := stack.Register("bzz", func(ctx *node.ServiceContext) (node.Service, error) {
-			pubkey := netprv.PublicKey
-			fmt.Println("init bzz")
-			return bzz.NewSwarm(
-				stack,
-				discover.PubkeyID(&pubkey),
-				bzzconfig,
-			)
+			return bzz.NewSwarm(ctx, bzzconfig)
 		}); err != nil {
 			Fatalf("Failed to register the Swarm service: %v", err)
 		}

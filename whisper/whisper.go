@@ -158,7 +158,7 @@ func (self *Whisper) Send(envelope *Envelope) error {
 
 // Start implements node.Service, starting the background data propagation thread
 // of the Whisper protocol.
-func (self *Whisper) Start() error {
+func (self *Whisper) Start(*p2p.Server) error {
 	glog.V(logger.Info).Infoln("Whisper started")
 	go self.update()
 	return nil
@@ -239,6 +239,11 @@ func (self *Whisper) handlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 func (self *Whisper) add(envelope *Envelope) error {
 	self.poolMu.Lock()
 	defer self.poolMu.Unlock()
+
+	// short circuit when a received envelope has already expired
+	if envelope.Expiry <= uint32(time.Now().Unix()) {
+		return nil
+	}
 
 	// Insert the message into the tracked pool
 	hash := envelope.Hash()

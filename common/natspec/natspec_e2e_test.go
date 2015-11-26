@@ -166,7 +166,7 @@ func testInit(t *testing.T) (self *testFrontend) {
 		t.Errorf("error creating ethereum: %v", err)
 		return
 	}
-	err = ethereum.Start()
+	err = ethereum.Start(nil)
 	if err != nil {
 		t.Errorf("error starting ethereum: %v", err)
 		return

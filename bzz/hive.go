@@ -25,7 +25,6 @@ import (
 type hive struct {
 	listenAddr   func() string
 	callInterval uint
-	connectPeer  func(string) error
 	id           discover.NodeID
 	addr         kademlia.Address
 	kad          *kademlia.Kademlia
@@ -60,22 +59,21 @@ func NewHiveParams(path string) *HiveParams {
 	}
 }
 
-func newHive(addr common.Hash, id discover.NodeID, listenAddr func() string, connectPeer func(string) error, params *HiveParams) (*hive, error) {
+func newHive(addr common.Hash, params *HiveParams) (*hive, error) {
 	kad := kademlia.New(kademlia.Address(addr), params.KadParams)
 	return &hive{
 		callInterval: params.CallInterval,
-		id:           id,
 		kad:          kad,
 		addr:         kad.Addr(),
 		path:         params.KadDbPath,
-		listenAddr:   listenAddr,
-		connectPeer:  connectPeer,
 	}, nil
 }
 
-func (self *hive) start() (err error) {
+func (self *hive) start(id discover.NodeID, listenAddr func() string, connectPeer func(string) error) (err error) {
 	self.ping = make(chan bool)
 	self.more = make(chan bool)
+	self.id = id
+	self.listenAddr = listenAddr
 	err = self.kad.Load(self.path, nil)
 	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] KΛÐΞMLIΛ Warning: error reading kaddb '%s' (skipping): %v", self.path, err)
@@ -91,7 +89,7 @@ func (self *hive) start() (err error) {
 				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node.Url)
 				// enode or any lower level connection address is unnecessary in future
 				// discovery table is used to look it up.
-				self.connectPeer(node.Url)
+				connectPeer(node.Url)
 			} else if proxLimit > -1 {
 				// a random peer is taken from the table
 				peers := self.kad.FindClosest(kademlia.RandomAddressAt(self.addr, rand.Intn(self.kad.MaxProx)), 1)

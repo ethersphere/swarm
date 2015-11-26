@@ -446,6 +446,7 @@ func console(ctx *cli.Context) {
 	node.Stop()
 }
 
+// execScripts starts a new geth node based on the CLI flags, and executes each
 // of the JavaScript files specified as command arguments.
 func execScripts(ctx *cli.Context) {
 	// Create and start the node based on the CLI flags
@@ -472,6 +473,7 @@ func execScripts(ctx *cli.Context) {
 func startNode(ctx *cli.Context, stack *node.Node) {
 	// Start up the node itself
 	utils.StartNode(stack)
+
 	// Start auxiliary services if enabled.
 	if !ctx.GlobalBool(utils.IPCDisabledFlag.Name) {
 		if err := utils.StartIPC(stack, ctx); err != nil {
