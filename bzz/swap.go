@@ -17,8 +17,9 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-// SwAP Swarm Accounting Protocol with
-//      Swift Automatic  Payments
+// SwAP       Swarm Accounting Protocol with
+// SWAP^2     Strategies of Withholding Automatic Payments
+// SWAP^3     Accreditation: payment via credit SWAP
 // using chequebook pkg for delayed payments
 // default parameters
 
@@ -92,7 +93,7 @@ func defaultSwapParams(contract common.Address, prvkey *ecdsa.PrivateKey) *swapP
 }
 
 // swap constructor, parameters
-// * global chequebook, assumed deployed service and
+// * global chequebook, assume deployed service and
 // * the balance is at buffer.
 // swap.Add(n) called in netstore
 // n > 0 called when sending chunks = receiving retrieve requests

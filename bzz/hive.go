@@ -59,22 +59,21 @@ func NewHiveParams(path string) *HiveParams {
 	}
 }
 
-func newHive(addr common.Hash, id discover.NodeID, params *HiveParams) (*hive, error) {
+func newHive(addr common.Hash, params *HiveParams) (*hive, error) {
 	kad := kademlia.New(kademlia.Address(addr), params.KadParams)
 	return &hive{
 		callInterval: params.CallInterval,
-		id:           id,
 		kad:          kad,
 		addr:         kad.Addr(),
 		path:         params.KadDbPath,
 	}, nil
 }
 
-func (self *hive) start(listenAddr func() string, connectPeer func(string) error) (err error) {
+func (self *hive) start(id discover.NodeID, listenAddr func() string, connectPeer func(string) error) (err error) {
 	self.ping = make(chan bool)
 	self.more = make(chan bool)
+	self.id = id
 	self.listenAddr = listenAddr
-
 	err = self.kad.Load(self.path, nil)
 	if err != nil {
 		glog.V(logger.Warn).Infof("[BZZ] KΛÐΞMLIΛ Warning: error reading kaddb '%s' (skipping): %v", self.path, err)

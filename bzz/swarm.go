@@ -7,31 +7,54 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/chequebook"
 	"github.com/ethereum/go-ethereum/common/httpclient"
-	"github.com/ethereum/go-ethereum/common/registrar"
+	"github.com/ethereum/go-ethereum/common/registrar/ethreg"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
+const (
+	singletonSwarmDbCapacity    = 50000
+	singletonSwarmCacheCapacity = 500
+)
+
 // the swarm stack
 type Swarm struct {
-	config   *Config
-	dpa      *DPA
-	hive     *hive
-	netStore *netStore
-	api      *Api
+	config   *Config                // swarm configuration
+	dpa      *DPA                   // distributed preimage archive
+	hive     *hive                  // the logistic manager
+	netStore *netStore              // dht storage logic
+	api      *Api                   // high level api layer (fs/manifest)
+	client   *httpclient.HTTPClient // bzz capable light http client
 }
 
-//
-func NewSwarm(id discover.NodeID, config *Config) (self *Swarm, proto p2p.Protocol, err error) {
+// creates a new swarm instance
+func NewSwarm(stack *node.ServiceContext, config *Config, swapEnabled bool) (self *Swarm, err error) {
 
-	self = &Swarm{
-		config: config,
+	if bytes.Equal(common.FromHex(config.PublicKey), zeroKey) {
+		return nil, fmt.Errorf("empty public key")
+	}
+	if bytes.Equal(common.FromHex(config.BzzKey), zeroKey) {
+		return nil, fmt.Errorf("empty bzz key")
 	}
 
-	self.hive, err = newHive(common.HexToHash(self.config.BzzKey), id, config.HiveParams)
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		return nil, fmt.Errorf("unable to find Ethereum service: %v", err)
+	}
+	self = &Swarm{
+		config: config,
+		client: ethereum.HTTPClient(),
+	}
+
+	self.hive, err = newHive(
+		common.HexToHash(self.config.BzzKey), // key to hive (kademlia base address)
+		config.HiveParams,                    // configuration parameters
+	)
 	if err != nil {
 		return
 	}
@@ -42,62 +65,75 @@ func NewSwarm(id discover.NodeID, config *Config) (self *Swarm, proto p2p.Protoc
 	}
 
 	self.dpa = newDPA(self.netStore, self.config.ChunkerParams)
+	backend := newEthApi(ethereum)
 
-	self.api = NewApi(self.dpa, self.config)
+	self.api = NewApi(self.dpa, ethreg.New(backend), self.config)
 
-	proto, err = BzzProtocol(self.netStore, self.config.Swap, self.config.SyncParams)
-	return
+	// set chequebook
+	if swapEnabled {
+		err = self.SetChequebook(backend)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to set swarm backend: %v", err)
+		}
+	}
+	return self, nil
 }
 
 /*
-Start is called when the ethereum stack is started
+Start is called when the stack is started
 - launches the dpa (listening for chunk store/retrieve requests)
 - launches the netStore (starts kademlia hive peer management)
 - starts an http server
 */
-func (self *Swarm) Start(client *httpclient.HTTPClient, listenAddr func() string, connectPeer func(string) error) {
+// implements the node.Service interface
+func (self *Swarm) Start(net *p2p.Server) error {
 	var err error
-	if self.netStore == nil {
-		err = fmt.Errorf("netStore is nil")
-	} else if connectPeer == nil {
-		err = fmt.Errorf("no connect peer function")
-	} else if bytes.Equal(common.FromHex(self.config.PublicKey), zeroKey) {
-		err = fmt.Errorf("empty public key")
-	} else if bytes.Equal(common.FromHex(self.config.BzzKey), zeroKey) {
-		err = fmt.Errorf("empty bzz key")
-	} else { // this is how we calculate the bzz address of the node
-
-		err = self.hive.start(listenAddr, connectPeer)
+	connectPeer := func(url string) error {
+		node, err := discover.ParseNode(url)
 		if err != nil {
-			glog.V(logger.Warn).Infof("[BZZ] Swarm hive could not be started: %v", err)
-		} else {
-			err = self.netStore.start()
-			if err != nil {
+			return fmt.Errorf("invalid node URL: %v", err)
+		}
+		net.AddPeer(node)
+		return nil
+	}
 
-				glog.V(logger.Info).Infof("[BZZ] Swarm netstore could not be started: %v", err)
-			} else {
-				glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %v", self.hive.addr)
-			}
+	err = self.hive.start(
+		discover.PubkeyID(&net.PrivateKey.PublicKey),
+		func() string { return net.ListenAddr },
+		connectPeer,
+	)
+	if err != nil {
+		glog.V(logger.Warn).Infof("[BZZ] Swarm hive could not be started: %v", err)
+	} else {
+		err = self.netStore.start()
+		if err != nil {
+			glog.V(logger.Info).Infof("[BZZ] Swarm netstore could not be started: %v", err)
+		} else {
+			glog.V(logger.Info).Infof("[BZZ] Swarm network started on bzz address: %v", self.hive.addr)
 		}
 	}
 
 	if err != nil {
-		glog.V(logger.Info).Infof("[BZZ] Swarm started started offline: %v", err)
+		glog.V(logger.Info).Infof("[BZZ] Swarm started offline: %v", err)
 	}
 
 	self.dpa.Start()
 
+	// start swarm http proxy server
 	if self.config.Port != "" {
 		go startHttpServer(self.api, self.config.Port)
 	}
-	client.RegisterScheme("bzz", &RoundTripper{
-		Port: self.ProxyPort(),
+	// register roundtripper (using proxy) as bzz scheme handler
+	// for the ethereum http client
+	self.client.RegisterScheme("bzz", &RoundTripper{
+		Port: self.config.Port,
 	})
-
+	return nil
 }
 
+// implements the node.Service interface
 // stops all component services.
-func (self *Swarm) Stop() {
+func (self *Swarm) Stop() error {
 	self.dpa.Stop()
 	self.netStore.stop()
 	self.hive.stop()
@@ -105,22 +141,23 @@ func (self *Swarm) Stop() {
 		ch.Stop()
 		ch.Save()
 	}
-	self.config.Save()
+	return self.config.Save()
+}
+
+// implements the node.Service interfacec
+func (self *Swarm) Protocols() []p2p.Protocol {
+	proto, err := BzzProtocol(self.netStore, self.config.Swap, self.config.SyncParams)
+	if err != nil {
+		return nil
+	}
+	return []p2p.Protocol{proto}
 }
 
 func (self *Swarm) Api() *Api {
 	return self.api
 }
 
-func (self *Swarm) ProxyPort() string {
-	return self.config.Port
-}
-
-func (self *Swarm) SetRegistrar(reg registrar.VersionedRegistrar) {
-	self.api.registrar = reg
-}
-
-// Backend interface implemented by xeth.XEth or JSON-IPC client
+// Backend interface implemented by eth or JSON-IPC client
 func (self *Swarm) SetChequebook(backend chequebook.Backend) (err error) {
 	done, err := self.config.Swap.setChequebook(self.config.Path, backend)
 	if err != nil {
@@ -157,7 +194,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 	}
 
 	self = &Swarm{
-		api:    NewApi(dpa, config),
+		api:    NewApi(dpa, nil, config),
 		config: config,
 	}
 
@@ -169,13 +206,13 @@ func newLocalDPA(datadir string) (*DPA, error) {
 
 	hash := makeHashFunc("SHA256")
 
-	dbStore, err := newDbStore(datadir, hash, 50000, 0)
+	dbStore, err := newDbStore(datadir, hash, singletonSwarmDbCapacity, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	return newDPA(&localStore{
-		newMemStore(dbStore, 500),
+		newMemStore(dbStore, singletonSwarmCacheCapacity),
 		dbStore,
 	}, NewChunkerParams()), nil
 }
