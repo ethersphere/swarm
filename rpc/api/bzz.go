@@ -64,7 +64,8 @@ func newSwarmOfflineError(method string) error {
 
 // create new bzzApi instance
 func NewBzzApi(stack *node.Node, codec codec.Codec) *bzzApi {
-	swarm := stack.Service("bzz").(*bzz.Swarm)
+	var swarm *bzz.Swarm
+	stack.Service(&swarm)
 	return &bzzApi{swarm, bzzMapping, codec.New(nil)}
 }
 

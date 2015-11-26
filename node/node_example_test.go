@@ -35,13 +35,8 @@ import (
 type SampleService struct{}
 
 func (s *SampleService) Protocols() []p2p.Protocol { return nil }
-<<<<<<< HEAD
-func (s *SampleService) Start() error              { fmt.Println("Sample service starting..."); return nil }
-func (s *SampleService) Stop() error               { fmt.Println("Sample service stopping..."); return nil }
-=======
 func (s *SampleService) Start(*p2p.Server) error   { fmt.Println("Service starting..."); return nil }
 func (s *SampleService) Stop() error               { fmt.Println("Service stopping..."); return nil }
->>>>>>> karalabe/customizable-protocol-stacks
 
 func ExampleUsage() {
 	// Create a network node to run protocols with the default values. The below list
@@ -71,7 +66,7 @@ func ExampleUsage() {
 	constructor := func(context *node.ServiceContext) (node.Service, error) {
 		return new(SampleService), nil
 	}
-	if err := stack.Register("my sample service", constructor); err != nil {
+	if err := stack.Register(constructor); err != nil {
 		log.Fatalf("Failed to register service: %v", err)
 	}
 	// Boot up the entire protocol stack, do a restart and terminate
@@ -85,15 +80,8 @@ func ExampleUsage() {
 		log.Fatalf("Failed to stop the protocol stack: %v", err)
 	}
 	// Output:
-<<<<<<< HEAD
-	// Sample service starting...
-	// Sample service stopping...
-	// Sample service starting...
-	// Sample service stopping...
-=======
 	// Service starting...
 	// Service stopping...
 	// Service starting...
 	// Service stopping...
->>>>>>> karalabe/customizable-protocol-stacks
 }

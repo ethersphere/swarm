@@ -33,7 +33,7 @@ type Swarm struct {
 }
 
 // creates a new swarm instance
-func NewSwarm(stack *node.ServiceContext, config *Config) (self *Swarm, err error) {
+func NewSwarm(stack *node.ServiceContext, config *Config, swapEnabled bool) (self *Swarm, err error) {
 
 	if bytes.Equal(common.FromHex(config.PublicKey), zeroKey) {
 		return nil, fmt.Errorf("empty public key")
@@ -42,9 +42,13 @@ func NewSwarm(stack *node.ServiceContext, config *Config) (self *Swarm, err erro
 		return nil, fmt.Errorf("empty bzz key")
 	}
 
+	var ethereum *eth.Ethereum
+	if err := stack.Service(&ethereum); err != nil {
+		return nil, fmt.Errorf("unable to find Ethereum service: %v", err)
+	}
 	self = &Swarm{
 		config: config,
-		client: stack.Service("eth").(*eth.Ethereum).HTTPClient(),
+		client: ethereum.HTTPClient(),
 	}
 
 	self.hive, err = newHive(
@@ -61,15 +65,16 @@ func NewSwarm(stack *node.ServiceContext, config *Config) (self *Swarm, err erro
 	}
 
 	self.dpa = newDPA(self.netStore, self.config.ChunkerParams)
-	ethereum := stack.Service("eth").(*eth.Ethereum)
 	backend := newEthApi(ethereum)
 
 	self.api = NewApi(self.dpa, ethreg.New(backend), self.config)
 
 	// set chequebook
-	err = self.SetChequebook(backend)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to set swarm backend: %v", err)
+	if swapEnabled {
+		err = self.SetChequebook(backend)
+		if err != nil {
+			return nil, fmt.Errorf("Unable to set swarm backend: %v", err)
+		}
 	}
 	return self, nil
 }

@@ -30,25 +30,25 @@ import (
 )
 
 var (
-	ErrDatadirUsed       = errors.New("datadir already used")
-	ErrNodeStopped       = errors.New("node not started")
-	ErrNodeRunning       = errors.New("node already running")
-	ErrServiceUnknown    = errors.New("service not registered")
-	ErrServiceRegistered = errors.New("service already registered")
+	ErrDatadirUsed    = errors.New("datadir already used")
+	ErrNodeStopped    = errors.New("node not started")
+	ErrNodeRunning    = errors.New("node already running")
+	ErrServiceUnknown = errors.New("unknown service")
 
 	datadirInUseErrnos = map[uint]bool{11: true, 32: true, 35: true}
 )
 
-// Node represents a P2P node into which arbitrary services might be registered.
+// Node represents a P2P node into which arbitrary (uniquely typed) services might
+// be registered.
 type Node struct {
-	datadir string                        // Path to the currently used data directory
-	config  *p2p.Server                   // Configuration of the underlying P2P networking layer
-	stack   map[string]ServiceConstructor // Protocol stack registered into this node
-	order   []string                      // Service construction order to handle dependencies
-	emux    *event.TypeMux                // Event multiplexer used between the services of a stack
+	datadir  string         // Path to the currently used data directory
+	eventmux *event.TypeMux // Event multiplexer used between the services of a stack
 
-	running  *p2p.Server        // Currently running P2P networking layer
-	services map[string]Service // Currently running services
+	serverConfig *p2p.Server // Configuration of the underlying P2P networking layer
+	server       *p2p.Server // Currently running P2P networking layer
+
+	serviceFuncs []ServiceConstructor     // Service constructors (in dependency order)
+	services     map[reflect.Type]Service // Currently running services
 
 	stop chan struct{} // Channel to wait for termination notifications
 	lock sync.RWMutex
@@ -69,7 +69,7 @@ func New(conf *Config) (*Node, error) {
 	}
 	return &Node{
 		datadir: conf.DataDir,
-		config: &p2p.Server{
+		serverConfig: &p2p.Server{
 			PrivateKey:      conf.NodeKey(),
 			Name:            conf.Name,
 			Discovery:       !conf.NoDiscovery,
@@ -84,52 +84,22 @@ func New(conf *Config) (*Node, error) {
 			MaxPeers:        conf.MaxPeers,
 			MaxPendingPeers: conf.MaxPendingPeers,
 		},
-		stack: make(map[string]ServiceConstructor),
-		order: []string{},
-		emux:  new(event.TypeMux),
+		serviceFuncs: []ServiceConstructor{},
+		eventmux:     new(event.TypeMux),
 	}, nil
 }
 
-// Register injects a new service into the node's stack.
-func (n *Node) Register(id string, constructor ServiceConstructor) error {
+// Register injects a new service into the node's stack. The service created by
+// the passed constructor must be unique in its type with regard to sibling ones.
+func (n *Node) Register(constructor ServiceConstructor) error {
 	n.lock.Lock()
 	defer n.lock.Unlock()
 
-	// Short circuit if the node is running or if the id is taken
-	if n.running != nil {
+	if n.server != nil {
 		return ErrNodeRunning
 	}
-	if _, ok := n.stack[id]; ok {
-		return ErrServiceRegistered
-	}
-	// Otherwise register the service and return
-	n.order = append(n.order, id)
-	n.stack[id] = constructor
 
-	return nil
-}
-
-// Unregister removes a service from a node's stack. If the node is currently
-// running, an error will be returned.
-func (n *Node) Unregister(id string) error {
-	n.lock.Lock()
-	defer n.lock.Unlock()
-
-	// Short circuit if the node is running, or if the service is unknown
-	if n.running != nil {
-		return ErrNodeRunning
-	}
-	if _, ok := n.stack[id]; !ok {
-		return ErrServiceUnknown
-	}
-	// Otherwise drop the service and return
-	delete(n.stack, id)
-	for i, service := range n.order {
-		if service == id {
-			n.order = append(n.order[:i], n.order[i+1:]...)
-			break
-		}
-	}
+	n.serviceFuncs = append(n.serviceFuncs, constructor)
 	return nil
 }
 
@@ -139,32 +109,34 @@ func (n *Node) Start() error {
 	defer n.lock.Unlock()
 
 	// Short circuit if the node's already running
-	if n.running != nil {
+	if n.server != nil {
 		return ErrNodeRunning
 	}
 	// Otherwise copy and specialize the P2P configuration
 	running := new(p2p.Server)
-	*running = *n.config
+	*running = *n.serverConfig
 
-	services := make(map[string]Service)
-	for _, id := range n.order {
-		constructor := n.stack[id]
-
+	services := make(map[reflect.Type]Service)
+	for _, constructor := range n.serviceFuncs {
 		// Create a new context for the particular service
 		ctx := &ServiceContext{
 			datadir:  n.datadir,
-			services: make(map[string]Service),
-			EventMux: n.emux,
+			services: make(map[reflect.Type]Service),
+			EventMux: n.eventmux,
 		}
-		for id, s := range services { // copy needed for threaded access
-			ctx.services[id] = s
+		for kind, s := range services { // copy needed for threaded access
+			ctx.services[kind] = s
 		}
 		// Construct and save the service
 		service, err := constructor(ctx)
 		if err != nil {
 			return err
 		}
-		services[id] = service
+		kind := reflect.TypeOf(service)
+		if _, exists := services[kind]; exists {
+			return &DuplicateServiceError{Kind: kind}
+		}
+		services[kind] = service
 	}
 	// Gather the protocols and start the freshly assembled P2P server
 	for _, service := range services {
@@ -177,23 +149,23 @@ func (n *Node) Start() error {
 		return err
 	}
 	// Start each of the services
-	started := []string{}
-	for id, service := range services {
+	started := []reflect.Type{}
+	for kind, service := range services {
 		// Start the next service, stopping all previous upon failure
 		if err := service.Start(running); err != nil {
-			for _, id := range started {
-				services[id].Stop()
+			for _, kind := range started {
+				services[kind].Stop()
 			}
 			running.Stop()
 
 			return err
 		}
 		// Mark the service started for potential cleanup
-		started = append(started, id)
+		started = append(started, kind)
 	}
 	// Finish initializing the startup
 	n.services = services
-	n.running = running
+	n.server = running
 	n.stop = make(chan struct{})
 
 	return nil
@@ -206,22 +178,22 @@ func (n *Node) Stop() error {
 	defer n.lock.Unlock()
 
 	// Short circuit if the node's not running
-	if n.running == nil {
+	if n.server == nil {
 		return ErrNodeStopped
 	}
 	// Otherwise terminate all the services and the P2P server too
 	failure := &StopError{
-		Services: make(map[string]error),
+		Services: make(map[reflect.Type]error),
 	}
-	for id, service := range n.services {
+	for kind, service := range n.services {
 		if err := service.Stop(); err != nil {
-			failure.Services[id] = err
+			failure.Services[kind] = err
 		}
 	}
-	n.running.Stop()
+	n.server.Stop()
 
 	n.services = nil
-	n.running = nil
+	n.server = nil
 	close(n.stop)
 
 	if len(failure.Services) > 0 {
@@ -234,7 +206,7 @@ func (n *Node) Stop() error {
 // at the time of invocation, the method immediately returns.
 func (n *Node) Wait() {
 	n.lock.RLock()
-	if n.running == nil {
+	if n.server == nil {
 		return
 	}
 	stop := n.stop
@@ -262,43 +234,24 @@ func (n *Node) Server() *p2p.Server {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
-	return n.running
+	return n.server
 }
 
-// Service retrieves a currently running service registered under a given id.
-func (n *Node) Service(id string) Service {
+// Service retrieves a currently running service registered of a specific type.
+func (n *Node) Service(service interface{}) error {
 	n.lock.RLock()
 	defer n.lock.RUnlock()
 
 	// Short circuit if the node's not running
-	if n.running == nil {
-		return nil
-	}
-	return n.services[id]
-}
-
-// SingletonService retrieves a currently running service using a specific type
-// implementing the Service interface. This is a utility function for scenarios
-// where it is known that only one instance of a given service type is running,
-// allowing to access services without needing to know their specific id with
-// which they were registered. Note, this method uses reflection, so do not run
-// in a tight loop.
-func (n *Node) SingletonService(service interface{}) (string, error) {
-	n.lock.RLock()
-	defer n.lock.RUnlock()
-
-	// Short circuit if the node's not running
-	if n.running == nil {
-		return "", ErrServiceUnknown
+	if n.server == nil {
+		return ErrNodeStopped
 	}
 	// Otherwise try to find the service to return
-	for id, running := range n.services {
-		if reflect.TypeOf(running) == reflect.ValueOf(service).Elem().Type() {
-			reflect.ValueOf(service).Elem().Set(reflect.ValueOf(running))
-			return id, nil
-		}
+	if running, ok := n.services[reflect.ValueOf(service).Elem().Type()]; ok {
+		reflect.ValueOf(service).Elem().Set(reflect.ValueOf(running))
+		return nil
 	}
-	return "", ErrServiceUnknown
+	return ErrServiceUnknown
 }
 
 // DataDir retrieves the current datadir used by the protocol stack.
@@ -309,5 +262,5 @@ func (n *Node) DataDir() string {
 // EventMux retrieves the event multiplexer used by all the network services in
 // the current protocol stack.
 func (n *Node) EventMux() *event.TypeMux {
-	return n.emux
+	return n.eventmux
 }

@@ -359,6 +359,10 @@ var (
 		Name:  "bzzconfig",
 		Usage: "Swarm config file path (datadir/bzz)",
 	}
+	SwarmSwapDisabled = cli.BoolFlag{
+		Name:  "bzznoswap",
+		Usage: "Swarm SWAP disabled (false)",
+	}
 	// ATM the url is left to the user and deployment to
 	JSpathFlag = cli.StringFlag{
 		Name:  "jspath",
@@ -753,16 +757,22 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	if err != nil {
 		Fatalf("Failed to create the protocol stack: %v", err)
 	}
-	if err := stack.Register("eth", func(ctx *node.ServiceContext) (node.Service, error) {
+
+	// eth.Ethereum: ethereum
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		return eth.New(ctx, ethConf)
 	}); err != nil {
 		Fatalf("Failed to register the Ethereum service: %v", err)
 	}
+
+	// Whisper
 	if shhEnable {
-		if err := stack.Register("shh", func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
+		if err := stack.Register(func(*node.ServiceContext) (node.Service, error) { return whisper.New(), nil }); err != nil {
 			Fatalf("Failed to register the Whisper service: %v", err)
 		}
 	}
+
+	// bzz.	Swarm
 	var bzzconfig *bzz.Config
 	hexaddr := ctx.GlobalString(SwarmAccountAddrFlag.Name)
 	if hexaddr != "" {
@@ -783,8 +793,9 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		if err != nil {
 			Fatalf("unable to configure swarm: %v", err)
 		}
-		if err := stack.Register("bzz", func(ctx *node.ServiceContext) (node.Service, error) {
-			return bzz.NewSwarm(ctx, bzzconfig)
+		swap := ctx.GlobalBool(SwarmSwapDisabled.Name)
+		if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+			return bzz.NewSwarm(ctx, bzzconfig, swap)
 		}); err != nil {
 			Fatalf("Failed to register the Swarm service: %v", err)
 		}
@@ -879,7 +890,11 @@ func StartIPC(stack *node.Node, ctx *cli.Context) error {
 	}
 
 	initializer := func(conn net.Conn) (comms.Stopper, shared.EthereumApi, error) {
-		fe := useragent.NewRemoteFrontend(conn, stack.Service("eth").(*eth.Ethereum).AccountManager())
+		var ethereum *eth.Ethereum
+		if err := stack.Service(&ethereum); err != nil {
+			return nil, nil, err
+		}
+		fe := useragent.NewRemoteFrontend(conn, ethereum.AccountManager())
 		xeth := xeth.New(stack, fe)
 		apis, err := api.ParseApiString(ctx.GlobalString(IPCApiFlag.Name), codec.JSON, xeth, stack)
 		if err != nil {

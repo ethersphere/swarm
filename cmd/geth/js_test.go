@@ -68,7 +68,7 @@ type testjethre struct {
 
 func (self *testjethre) UnlockAccount(acc []byte) bool {
 	var ethereum *eth.Ethereum
-	self.stack.SingletonService(&ethereum)
+	self.stack.Service(&ethereum)
 
 	err := ethereum.AccountManager().Unlock(common.BytesToAddress(acc), "")
 	if err != nil {
@@ -79,7 +79,7 @@ func (self *testjethre) UnlockAccount(acc []byte) bool {
 
 func (self *testjethre) ConfirmTransaction(tx string) bool {
 	var ethereum *eth.Ethereum
-	self.stack.SingletonService(&ethereum)
+	self.stack.Service(&ethereum)
 
 	if ethereum.NatSpec {
 		self.lastConfirm = natspec.GetNotice(self.xeth, tx, self.client)
@@ -91,7 +91,7 @@ func testJEthRE(t *testing.T) (string, *testjethre, *node.Node) {
 	return testREPL(t, nil)
 }
 
-func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *node.Node) {
+func testREPL(t *testing.T, config func(*node.Node)) (string, *testjethre, *node.Node) {
 	tmp, err := ioutil.TempDir("", "geth-test")
 	if err != nil {
 		t.Fatal(err)
@@ -107,18 +107,17 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 
 	db, _ := ethdb.NewMemDatabase()
 	core.WriteGenesisBlockForTesting(db, core.GenesisAccount{common.HexToAddress(testAddress), common.String2Big(testBalance)})
+	coinbase := common.HexToAddress(testAddress)
 
 	ethConf := &eth.Config{
 		TestGenesisState: db,
 		AccountManager:   accman,
 		DocRoot:          "/",
 		SolcPath:         testSolcPath,
+		Etherbase:        coinbase,
 		PowTest:          true,
 	}
-	if config != nil {
-		config(ethConf)
-	}
-	if err := stack.Register("ethereum", func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) { return eth.New(ctx, ethConf) }); err != nil {
 		t.Fatalf("failed to register ethereum protocol: %v", err)
 	}
 	// Initialize all the keys for testing
@@ -133,12 +132,18 @@ func testREPL(t *testing.T, config func(*eth.Config)) (string, *testjethre, *nod
 	if err := accman.Unlock(key.Address, ""); err != nil {
 		t.Fatal(err)
 	}
+
+	// tests can register services here
+	if config != nil {
+		config(stack)
+	}
+
 	// Start the node and assemble the REPL tester
 	if err := stack.Start(); err != nil {
 		t.Fatalf("failed to start test stack: %v", err)
 	}
 	var ethereum *eth.Ethereum
-	stack.SingletonService(&ethereum)
+	stack.Service(&ethereum)
 
 	assetPath := filepath.Join(os.Getenv("GOPATH"), "src", "github.com", "ethereum", "go-ethereum", "cmd", "mist", "assets", "ext")
 	client := comms.NewInProcClient(codec.JSON)
@@ -202,7 +207,7 @@ func TestBlockChain(t *testing.T) {
 	tmpfileq := strconv.Quote(tmpfile)
 
 	var ethereum *eth.Ethereum
-	node.SingletonService(&ethereum)
+	node.Service(&ethereum)
 	ethereum.BlockChain().Reset()
 
 	checkEvalJSON(t, repl, `admin.exportChain(`+tmpfileq+`)`, `true`)
@@ -267,10 +272,7 @@ func TestSignature(t *testing.T) {
 func TestContract(t *testing.T) {
 	t.Skip("contract testing is implemented with mining in ethash test mode. This takes about 7seconds to run. Unskip and run on demand")
 	coinbase := common.HexToAddress(testAddress)
-	tmp, repl, ethereum := testREPL(t, func(conf *eth.Config) {
-		conf.Etherbase = coinbase
-		conf.PowTest = true
-	})
+	tmp, repl, ethereum := testREPL(t, nil)
 	if err := ethereum.Start(); err != nil {
 		t.Errorf("error starting ethereum: %v", err)
 		return
@@ -436,7 +438,7 @@ multiply7 = Multiply7.at(contractaddress);
 
 func pendingTransactions(repl *testjethre, t *testing.T) (txc int64, err error) {
 	var ethereum *eth.Ethereum
-	repl.stack.SingletonService(&ethereum)
+	repl.stack.Service(&ethereum)
 
 	txs := ethereum.TxPool().GetTransactions()
 	return int64(len(txs)), nil
@@ -464,7 +466,7 @@ func processTxs(repl *testjethre, t *testing.T, expTxc int) bool {
 		return false
 	}
 	var ethereum *eth.Ethereum
-	repl.stack.SingletonService(&ethereum)
+	repl.stack.Service(&ethereum)
 
 	err = ethereum.StartMining(runtime.NumCPU(), "")
 	if err != nil {
