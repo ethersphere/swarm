@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/bzz"
+	bzzapi "github.com/ethereum/go-ethereum/bzz/api"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
@@ -773,7 +774,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 	}
 
 	// bzz.	Swarm
-	var bzzconfig *bzz.Config
+	var bzzconfig *bzzapi.Config
 	hexaddr := ctx.GlobalString(SwarmAccountAddrFlag.Name)
 	if hexaddr != "" {
 		swarmaccount := common.HexToAddress(hexaddr)
@@ -789,7 +790,7 @@ func MakeSystemNode(name, version string, extra []byte, ctx *cli.Context) *node.
 		if bzzdir == "" {
 			bzzdir = filepath.Join(datadir, "bzz")
 		}
-		bzzconfig, err = bzz.NewConfig(bzzdir, chbookaddr, prvkey)
+		bzzconfig, err = bzzapi.NewConfig(bzzdir, chbookaddr, prvkey)
 		if err != nil {
 			Fatalf("unable to configure swarm: %v", err)
 		}
