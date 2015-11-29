@@ -392,7 +392,7 @@ func (self *Api) Resolve(hostPort string) (contentHash storage.Key, err error) {
 	host := hostPort
 	if hashMatcher.MatchString(host) {
 		contentHash = storage.Key(common.Hex2Bytes(host))
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: host is a contentHash: '%v'", contentHash)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: host is a contentHash: '%v' == '%x'", contentHash)
 	} else {
 		if self.registrar != nil {
 			var hash common.Hash
@@ -402,7 +402,7 @@ func (self *Api) Resolve(hostPort string) (contentHash storage.Key, err error) {
 				host = parts[0]
 				version = common.Big(parts[1])
 			}
-			hostHash := common.BytesToHash(crypto.Sha3([]byte(host)))
+			hostHash := crypto.Sha3Hash([]byte(host))
 			hash, err = self.registrar.Resolver(version).HashToHash(hostHash)
 			if err != nil {
 				err = fmt.Errorf("unable to resolve '%s': %v", hostPort, err)

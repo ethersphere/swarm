@@ -130,7 +130,7 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 		return chunk, err
 	}
 	// no data and no request status
-	glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v not found locally. open new request")
+	glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v not found locally. open new request", key)
 	chunk = NewChunk(key, nil)
 	self.localStore.memStore.Put(chunk)
 	go self.cloud.Retrieve(chunk)

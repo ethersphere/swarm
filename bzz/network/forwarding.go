@@ -71,7 +71,10 @@ func (self *forwarder) Retrieve(chunk *storage.Chunk) {
 func (self *forwarder) Store(chunk *storage.Chunk) {
 	var n int
 	msg := &storeRequestMsgData{Chunk: chunk}
-	source := chunk.Source.(*peer)
+	var source *peer
+	if chunk.Source != nil {
+		source = chunk.Source.(*peer)
+	}
 	for _, p := range self.hive.getPeers(chunk.Key, 0) {
 		if source == nil || p.Addr() != source.Addr() {
 			n++
