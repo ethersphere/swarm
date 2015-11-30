@@ -263,6 +263,7 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
+		glog.V(logger.Debug).Infof("[BZZ] incoming unsynced keys msg: %s", req.String())
 		err := self.storage.HandleUnsyncedKeysMsg(&req, &peer{bzz: self})
 		if err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
@@ -277,6 +278,7 @@ func (self *bzz) handle() error {
 		if err := msg.Decode(&req); err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
+		glog.V(logger.Debug).Infof("[BZZ] incoming delivery request: %s", req.String())
 		err := self.storage.HandleDeliveryRequestMsg(&req, &peer{bzz: self})
 		if err != nil {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
