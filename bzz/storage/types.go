@@ -58,6 +58,27 @@ func (key Key) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// each chunk when first requested opens a record associated with the request
+// next time a request for the same chunk arrives, this record is updated
+// this request status keeps track of the request ID-s as well as the requesting
+// peers and has a channel that is closed when the chunk is retrieved. Multiple
+// local callers can wait on this channel (or combined with a timeout, block with a
+// select).
+type RequestStatus struct {
+	Key        Key
+	Source     Peer
+	C          chan bool
+	Requesters map[uint64][]interface{}
+}
+
+func newRequestStatus(key Key) *RequestStatus {
+	return &RequestStatus{
+		Key:        key,
+		Requesters: make(map[uint64][]interface{}),
+		C:          make(chan bool),
+	}
+}
+
 // Chunk also serves as a request object passed to ChunkStores
 // in case it is a retrieval request, Data is nil and Size is 0
 // Note that Size is not the size of the data chunk, which is Data.Size()
@@ -74,8 +95,8 @@ type Chunk struct {
 	dbStored chan bool       // never remove a chunk from memStore before it is written to dbStore
 }
 
-func NewChunk(key Key, p Peer) *Chunk {
-	return &Chunk{Key: key, Req: newRequestStatus(key, p)}
+func NewChunk(key Key, rs *RequestStatus) *Chunk {
+	return &Chunk{Key: key, Req: rs}
 }
 
 /*

@@ -73,28 +73,6 @@ var (
 	searchTimeout = 3 * time.Second
 )
 
-// each chunk when first requested opens a record associated with the request
-// next time a request for the same chunk arrives, this record is updated
-// this request status keeps track of the request ID-s as well as the requesting
-// peers and has a channel that is closed when the chunk is retrieved. Multiple
-// local callers can wait on this channel (or combined with a timeout, block with a
-// select).
-type RequestStatus struct {
-	Key        Key
-	Source     Peer
-	C          chan bool
-	Requesters map[uint64][]interface{}
-}
-
-func newRequestStatus(key Key, p Peer) *RequestStatus {
-	return &RequestStatus{
-		Key:        key,
-		Requesters: make(map[uint64][]interface{}),
-		C:          make(chan bool),
-		Source:     p,
-	}
-}
-
 // store logic common to local and network chunk store requests
 // ~ unsafe put in localdb no check if exists no extra copy no hash validation
 // the chunk is forced to propagate (Cloud.Store) even if locally found!
@@ -122,16 +100,16 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 	chunk, err := self.localStore.Get(key)
 	if err == nil {
 		if chunk.Req == nil {
-			glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v found locally")
+			glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v found locally", key)
 		} else {
-			glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v hit on an existing request")
+			glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v hit on an existing request", key)
 			// no need to launch again
 		}
 		return chunk, err
 	}
 	// no data and no request status
 	glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v not found locally. open new request", key)
-	chunk = NewChunk(key, nil)
+	chunk = NewChunk(key, newRequestStatus(key))
 	self.localStore.memStore.Put(chunk)
 	go self.cloud.Retrieve(chunk)
 	return chunk, nil
