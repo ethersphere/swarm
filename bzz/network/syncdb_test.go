@@ -52,6 +52,7 @@ func newTestSyncDb(priority, bufferSize int, dbdir string, t *testing.T) *testSy
 }
 
 func (self *testSyncDb) close() {
+	self.db.Close()
 	os.RemoveAll(self.dbdir)
 }
 
@@ -114,8 +115,8 @@ func TestSyncDb(t *testing.T) {
 	priority := High
 	bufferSize := 5
 	s := newTestSyncDb(priority, bufferSize, "", t)
-	defer s.stop()
 	defer s.close()
+	defer s.stop()
 
 	s.push(4)
 	s.expect(1, false)
@@ -147,6 +148,7 @@ func TestSaveSyncDb(t *testing.T) {
 	s := newTestSyncDb(priority, bufferSize, "", t)
 	s.push(amount)
 	s.stop()
+	s.db.Close()
 
 	s = newTestSyncDb(priority, bufferSize, s.dbdir, t)
 	s.expect(amount, true)
@@ -167,10 +169,11 @@ func TestSaveSyncDb(t *testing.T) {
 		}
 	}
 	s.stop()
+	s.db.Close()
 
 	s = newTestSyncDb(priority, bufferSize, s.dbdir, t)
-	defer s.stop()
 	defer s.close()
+	defer s.stop()
 
 	s.push(1)
 	s.expect(1, false)

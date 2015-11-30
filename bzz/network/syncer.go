@@ -301,6 +301,7 @@ func (self *syncer) stop() {
 	for _, db := range self.queues {
 		db.stop()
 	}
+	self.db.Close()
 }
 
 // rlp serialisable sync request

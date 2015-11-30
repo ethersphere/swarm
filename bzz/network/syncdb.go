@@ -23,6 +23,7 @@ it switches back to im-memory buffer.
 type syncDb struct {
 	start          []byte               // this syncdb starting index in requestdb
 	key            storage.Key          // remote peers address key
+	counterKey     []byte               // db key to persist counter
 	priority       uint                 // priotity High|Medium|Low
 	counter        uint64               // incrementing index to enforce order
 	buffer         chan interface{}     // incoming request channel
@@ -37,13 +38,17 @@ type syncDb struct {
 const dbBatchSize = 1000
 
 var (
-	counterKey = []byte{1}
+	counterKeyPrefix = byte(1)
 )
 
 // constructor needs a shared request db (leveldb)
 // priority is used in the index key
 // uses a buffer and a leveldb for persistent storage
 func newSyncDb(db *storage.LDBDatabase, key storage.Key, priority uint, bufferSize uint, deliver func(interface{}, chan bool) bool) *syncDb {
+	counterKey := make([]byte, 33)
+	counterKey[0] = counterKeyPrefix
+	copy(counterKey[1:], key)
+
 	data, err := db.Get(counterKey)
 	var counter uint64
 	if err == nil {
@@ -54,16 +59,17 @@ func newSyncDb(db *storage.LDBDatabase, key storage.Key, priority uint, bufferSi
 	copy(start[2:], key)
 
 	syncdb := &syncDb{
-		start:    start,
-		key:      key,
-		priority: priority,
-		counter:  counter,
-		buffer:   make(chan interface{}, bufferSize),
-		db:       db,
-		quit:     make(chan bool),
-		done:     make(chan bool),
-		save:     make(chan *syncDbEntry),
-		batch:    make(chan chan error),
+		start:      start,
+		key:        key,
+		priority:   priority,
+		counter:    counter,
+		counterKey: counterKey,
+		buffer:     make(chan interface{}, bufferSize),
+		db:         db,
+		quit:       make(chan bool),
+		done:       make(chan bool),
+		save:       make(chan *syncDbEntry),
+		batch:      make(chan chan error),
 	}
 	glog.V(logger.Debug).Infof("[BZZ] syncDb[%v] - initialised", priority)
 
@@ -178,12 +184,10 @@ LOOP:
 	}
 	errc := make(chan error)
 	// write last batch to db
+	self.db.Put(self.counterKey, storage.U64ToBytes(self.counter))
 	self.batch <- errc
 	close(self.save)
 	<-errc
-	// save db counter
-	self.db.Put(counterKey, storage.U64ToBytes(self.counter))
-	self.db.Close()
 	glog.V(logger.Info).Infof("[BZZ] syncDb[%v:%v]: saved %v keys (saved counter at %v)", self.key.Log(), self.priority, b, self.counter)
 	close(self.done)
 }
@@ -259,9 +263,12 @@ func (self *syncDb) iterate(fun func(interface{}, chan bool) bool) {
 	errc := make(chan error)
 
 	for round := 0; round == 0 || n > 0; round++ {
+		// request a new batch be written
 		self.batch <- errc
+		// wait for the write to finish
 		err, more = <-errc
 		if round > 0 && !more {
+			// the errc is closed if we got no more
 			break
 		}
 		if !more {
