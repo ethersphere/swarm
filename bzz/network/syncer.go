@@ -652,7 +652,11 @@ func (self *syncer) newStoreRequestMsgData(req interface{}) (*storeRequestMsgDat
 			}
 		}
 
-		sreq = &storeRequestMsgData{Id: id, Chunk: chunk}
+		sreq = &storeRequestMsgData{
+			Id:    id,
+			Key:   chunk.Key,
+			SData: chunk.SData,
+		}
 	}
 
 	return sreq, nil

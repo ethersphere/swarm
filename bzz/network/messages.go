@@ -60,9 +60,8 @@ func (self *statusMsgData) String() string {
  last row of the routing table)
 */
 type storeRequestMsgData struct {
-	// Key   storage.Key // hash of datasize | data
-	// SData []byte      // the actual chunk Data
-	*storage.Chunk
+	Key   storage.Key // hash of datasize | data
+	SData []byte      // the actual chunk Data
 	// optional
 	Id             uint64     // request ID. if delivery, the ID is retrieve request ID
 	requestTimeout *time.Time // expiry for forwarding - [not serialised][not currently used]

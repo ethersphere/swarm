@@ -70,7 +70,10 @@ func (self *forwarder) Retrieve(chunk *storage.Chunk) {
 // delivery queueing taken care of by syncer
 func (self *forwarder) Store(chunk *storage.Chunk) {
 	var n int
-	msg := &storeRequestMsgData{Chunk: chunk}
+	msg := &storeRequestMsgData{
+		Key:   chunk.Key,
+		SData: chunk.SData,
+	}
 	var source *peer
 	if chunk.Source != nil {
 		source = chunk.Source.(*peer)
@@ -89,7 +92,10 @@ func (self *forwarder) Deliver(chunk *storage.Chunk) {
 	// iterate over request entries
 	for id, requesters := range chunk.Req.Requesters {
 		counter := requesterCount
-		msg := &storeRequestMsgData{Chunk: chunk}
+		msg := &storeRequestMsgData{
+			Key:   chunk.Key,
+			SData: chunk.SData,
+		}
 		var n int
 		var req *retrieveRequestMsgData
 		// iterate over requesters with the same id

@@ -110,7 +110,7 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 	// update chunk with size and data
 	chunk.SData = req.SData
 	chunk.Size = int64(binary.LittleEndian.Uint64(req.SData[0:8]))
-	glog.V(logger.Detail).Infof("[BZZ] delivery of %p from %v", chunk, req.Source)
+	glog.V(logger.Detail).Infof("[BZZ] delivery of %p from %v", chunk, p)
 	chunk.Source = p
 	self.netStore.Put(chunk)
 }
@@ -138,7 +138,8 @@ func (self *Depo) HandleRetrieveRequestMsg(req *retrieveRequestMsgData, p *peer)
 		if req.MaxSize == 0 || int64(req.MaxSize) >= chunk.Size {
 			sreq := &storeRequestMsgData{
 				Id:             req.Id,
-				Chunk:          chunk,
+				Key:            chunk.Key,
+				SData:          chunk.SData,
 				requestTimeout: req.timeout, //
 			}
 			p.syncer.addRequest(sreq, DeliverReq)

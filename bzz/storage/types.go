@@ -64,9 +64,9 @@ func (key Key) UnmarshalJSON(value []byte) error {
 // but the size of the subtree encoded in the chunk
 // 0 if request, to be supplied by the dpa
 type Chunk struct {
+	Key      Key             // always
 	SData    []byte          // nil if request, to be supplied by dpa
 	Size     int64           // size of the data covered by the subtree encoded in this chunk
-	Key      Key             // always
 	Source   Peer            // peer
 	C        chan bool       // to signal data delivery by the dpa
 	Req      *RequestStatus  // request Status needed by netStore
