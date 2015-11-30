@@ -5,7 +5,7 @@ import (
 )
 
 func testMemStore(l int64, branches int64, t *testing.T) {
-	m := newMemStore(nil, defaultCacheCapacity)
+	m := NewMemStore(nil, defaultCacheCapacity)
 	testStore(m, l, branches, t)
 }
 
@@ -26,8 +26,7 @@ func TestMemStore2_100(t *testing.T) {
 }
 
 func TestMemStoreNotFound(t *testing.T) {
-	m := newMemStore(nil, defaultCacheCapacity)
-	zeroKey := make([]byte, 32)
+	m := NewMemStore(nil, defaultCacheCapacity)
 	_, err := m.Get(ZeroKey)
 	if err != notFound {
 		t.Errorf("Expected notFound, got %v", err)

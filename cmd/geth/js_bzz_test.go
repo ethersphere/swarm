@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/bzz"
+	"github.com/ethereum/go-ethereum/bzz/api"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
@@ -13,13 +14,13 @@ import (
 
 var port = 8500
 
-func bzzREPL(t *testing.T, configf func(*bzz.Config)) (string, string, *testjethre, *node.Node) {
+func bzzREPL(t *testing.T, configf func(*api.Config)) (string, string, *testjethre, *node.Node) {
 	prvKey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal("unable to generate key")
 	}
 	bzztmp, err := ioutil.TempDir("", "bzz-js-test")
-	config, err := bzz.NewConfig(bzztmp, common.Address{}, prvKey)
+	config, err := api.NewConfig(bzztmp, common.Address{}, prvKey)
 	if err != nil {
 		t.Fatal("unable to configure swarm")
 	}
@@ -36,7 +37,7 @@ func bzzREPL(t *testing.T, configf func(*bzz.Config)) (string, string, *testjeth
 	return bzztmp, tmp, repl, stack
 }
 
-func withREPL(t *testing.T, cf func(*bzz.Config), f func(repl *testjethre)) {
+func withREPL(t *testing.T, cf func(*api.Config), f func(repl *testjethre)) {
 	bzztmp, tmp, repl, stack := bzzREPL(t, cf)
 	defer stack.Stop()
 	defer os.RemoveAll(tmp)
@@ -46,7 +47,7 @@ func withREPL(t *testing.T, cf func(*bzz.Config), f func(repl *testjethre)) {
 
 func TestBzzPutGet(t *testing.T) {
 	withREPL(t,
-		func(c *bzz.Config) {
+		func(c *api.Config) {
 			c.Port = ""
 		}, func(repl *testjethre) {
 			if checkEvalJSON(t, repl, `hash = bzz.put("console.log(\"hello from console\")", "application/javascript")`, `"97f1b7c7ea12468fd37c262383b9aa862d0cfbc4fc7218652374679fc5cf40cd"`) != nil {
@@ -64,7 +65,6 @@ func TestBzzPutGet(t *testing.T) {
 // further http tests will need to make sure the correct server is running
 func TestHTTP(t *testing.T) {
 	withREPL(t, nil, func(repl *testjethre) {
-
 		if checkEvalJSON(t, repl, `hash = bzz.put("f42 = function() { return 42 }", "application/javascript")`, `"e6847876f00102441f850b2d438a06d10e3bf24e6a0a76d47b073a86c3c2f9ac"`) != nil {
 			return
 		}

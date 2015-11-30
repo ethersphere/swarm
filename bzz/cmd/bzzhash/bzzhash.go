@@ -3,10 +3,11 @@ package main
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/bzz"
 	"io"
 	"os"
 	"runtime"
+
+	"github.com/ethereum/go-ethereum/bzz/storage"
 )
 
 func main() {
@@ -24,7 +25,7 @@ func main() {
 
 	stat, _ := f.Stat()
 	sr := io.NewSectionReader(f, 0, stat.Size())
-	chunker := bzz.NewTreeChunker(bzz.NewChunkerParams())
+	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
 	hash := make([]byte, chunker.KeySize())
 	errC := chunker.Split(hash, sr, nil, nil)
 	err, ok := <-errC

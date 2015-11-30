@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/bzz/storage"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 )
@@ -22,12 +23,12 @@ var (
 
 func init() {
 	_, filename, _, _ := runtime.Caller(1)
-	testDir = path.Join(path.Dir(filename), "bzztest")
+	testDir = path.Join(path.Dir(filename), "../test")
 }
 
 func testApi() (api *Api, err error) {
 	os.RemoveAll(datadir)
-	dpa, err := newLocalDPA(datadir)
+	dpa, err := storage.NewLocalDPA(datadir)
 	if err != nil {
 		return
 	}

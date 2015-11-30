@@ -5,9 +5,9 @@ import (
 	"testing"
 )
 
-func initDbStore() (m *dbStore) {
+func initDbStore() (m *DbStore) {
 	os.RemoveAll("/tmp/bzz")
-	m, err := newDbStore("/tmp/bzz", makeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
+	m, err := NewDbStore("/tmp/bzz", MakeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
 	if err != nil {
 		panic("no dbStore")
 	}
@@ -43,7 +43,6 @@ func TestDbStore2_100_(t *testing.T) {
 func TestDbStoreNotFound(t *testing.T) {
 	m := initDbStore()
 	defer m.close()
-	zeroKey := make([]byte, 32)
 	_, err := m.Get(ZeroKey)
 	if err != notFound {
 		t.Errorf("Expected notFound, got %v", err)

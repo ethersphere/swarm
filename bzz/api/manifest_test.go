@@ -6,9 +6,11 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/bzz/storage"
 )
 
-func manifest(paths ...string) (manifestReader SectionReader) {
+func manifest(paths ...string) (manifestReader storage.SectionReader) {
 	var entries []string
 	for _, path := range paths {
 		entry := fmt.Sprintf(`{"path":"%s"}`, path)

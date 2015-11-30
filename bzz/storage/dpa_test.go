@@ -13,7 +13,7 @@ const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
 	os.RemoveAll("/tmp/bzz")
-	dbStore, err := NewDbStore("/tmp/bzz", makeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
+	dbStore, err := NewDbStore("/tmp/bzz", MakeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
 	dbStore.setCapacity(50000)
 	if err != nil {
 		t.Errorf("DB error: %v", err)
@@ -69,16 +69,16 @@ func TestDPArandom(t *testing.T) {
 
 func TestDPA_capacity(t *testing.T) {
 	os.RemoveAll("/tmp/bzz")
-	dbStore, err := NewDbStore("/tmp/bzz", makeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
+	dbStore, err := NewDbStore("/tmp/bzz", MakeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
 	if err != nil {
 		t.Errorf("DB error: %v", err)
 	}
 	memStore := NewMemStore(dbStore, defaultCacheCapacity)
-	localStore := &localStore{
+	localStore := &LocalStore{
 		memStore,
 		dbStore,
 	}
-	localStore.memStore.setCapacity(0)
+	memStore.setCapacity(0)
 	chunker := NewTreeChunker(NewChunkerParams())
 	dpa := &DPA{
 		Chunker:    chunker,
@@ -105,7 +105,7 @@ func TestDPA_capacity(t *testing.T) {
 		t.Errorf("Comparison error.")
 	}
 	// Clear memStore
-	localStore.memStore.setCapacity(0)
+	memStore.setCapacity(0)
 	// check whether it is, indeed, empty
 	dpa.ChunkStore = memStore
 	resultReader = dpa.Retrieve(key)

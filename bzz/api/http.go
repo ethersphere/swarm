@@ -7,9 +7,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
-	//"net/url"
 	"regexp"
-	"strings"
 	"sync"
 	"time"
 
@@ -19,15 +17,15 @@ import (
 )
 
 const (
-	rawType   = "application/octet-stream"
-	bzzPrefix = "/bzz:/"
+	rawType = "application/octet-stream"
 )
 
 var (
+	bzzPrefix       = regexp.MustCompile("^/+bzz:/+")
 	rawUrl          = regexp.MustCompile("^/+raw/*")
 	trailingSlashes = regexp.MustCompile("/+$")
-	// forever         = time.Unix(0, 0)
-	forever = time.Now()
+	// forever         = func() time.Time { return time.Unix(0, 0) }
+	forever = time.Now
 )
 
 type sequentialReader struct {
@@ -68,10 +66,8 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 	var raw bool
 
 	// HTTP-based URL protocol handler
-	if strings.HasPrefix(uri, bzzPrefix) {
-		uri = uri[len(bzzPrefix)-1 : len(uri)]
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: BZZ request URI: '%s'", uri)
-	}
+	uri = bzzPrefix.ReplaceAllString(uri, "")
+	glog.V(logger.Debug).Infof("[BZZ] Swarm: BZZ request URI: '%s'", uri)
 
 	path := rawUrl.ReplaceAllStringFunc(uri, func(string) string {
 		raw = true
@@ -161,7 +157,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			}
 
 			w.Header().Set("Content-Type", mimeType)
-			http.ServeContent(w, r, uri, forever, reader)
+			http.ServeContent(w, r, uri, forever(), reader)
 			glog.V(logger.Debug).Infof("[BZZ] Swarm: Serve raw content '%s' (%d bytes) as '%s'", uri, reader.Size(), mimeType)
 
 			// retrieve path via manifest
@@ -192,7 +188,7 @@ func handler(w http.ResponseWriter, r *http.Request, api *Api) {
 			}
 			glog.V(logger.Debug).Infof("[BZZ] Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, reader.Size(), mimeType, status)
 
-			http.ServeContent(w, r, path, forever, reader)
+			http.ServeContent(w, r, path, forever(), reader)
 
 		}
 	default:

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/bzz/storage"
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
@@ -31,7 +32,7 @@ func newTestSyncDb(priority, bufferSize int, dbdir string, t *testing.T) *testSy
 		}
 		dbdir = tmp
 	}
-	db, err := NewLDBDatabase(filepath.Join(dbdir, "requestdb"))
+	db, err := storage.NewLDBDatabase(filepath.Join(dbdir, "requestdb"))
 	if err != nil {
 		t.Fatalf("unable to create db: %v", err)
 	}
@@ -41,7 +42,7 @@ func newTestSyncDb(priority, bufferSize int, dbdir string, t *testing.T) *testSy
 		t:        t,
 	}
 	h := crypto.Sha3Hash([]byte{0})
-	key := Key(h[:])
+	key := storage.Key(h[:])
 	self.syncDb = newSyncDb(db, key, uint(priority), uint(bufferSize), self.deliver)
 	// kick off db iterator right away, if no items on db this will allow
 	// reading from the buffer
@@ -56,7 +57,7 @@ func (self *testSyncDb) close() {
 
 func (self *testSyncDb) push(n int) {
 	for i := 0; i < n; i++ {
-		self.buffer <- Key(crypto.Sha3([]byte{byte(self.c)}))
+		self.buffer <- storage.Key(crypto.Sha3([]byte{byte(self.c)}))
 		self.c++
 	}
 }

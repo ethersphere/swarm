@@ -132,12 +132,6 @@ func testREPL(t *testing.T, config func(*node.Node)) (string, *testjethre, *node
 	if err := accman.Unlock(key.Address, ""); err != nil {
 		t.Fatal(err)
 	}
-	// Start the node and assemble the REPL tester
-	if err := stack.Start(); err != nil {
-		t.Fatalf("failed to start test stack: %v", err)
-	}
-	var ethereum *eth.Ethereum
-	stack.Service(&ethereum)
 
 	// tests can register services here
 	if config != nil {
