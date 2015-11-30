@@ -197,6 +197,7 @@ func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk, err = self.netStore.Get(key)
 	// timeout := time.Now().Add(searchTimeout)
 	if chunk.SData != nil {
+		glog.V(logger.Detail).Infof("[BZZ] DPA.Get: %v found locally, %d bytes", key.Log(), len(chunk.SData))
 		return
 	}
 	// TODO: use self.timer time.Timer and reset with defer disableTimer
@@ -215,14 +216,14 @@ func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
 func (self *dpaChunkStore) Put(entry *Chunk) {
 	chunk, err := self.localStore.Get(entry.Key)
 	if err != nil {
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: new chunk. call netStore.Put")
+		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: %v new chunk. call netStore.Put", entry.Key.Log())
 		chunk = entry
 	} else if chunk.SData == nil {
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: request entry found")
+		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: %v request entry found", entry.Key.Log())
 		chunk.SData = entry.SData
 		chunk.Size = entry.Size
 	} else {
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: chunk already known")
+		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: %v chunk already known", entry.Key.Log())
 		return
 	}
 	// from this point on the storage logic is the same with network storage requests

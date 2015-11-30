@@ -62,7 +62,7 @@ func (self *Depo) HandleUnsyncedKeysMsg(req *unsyncedKeysMsgData, p *peer) error
 func (self *Depo) HandleDeliveryRequestMsg(req *deliveryRequestMsgData, p *peer) error {
 	deliver := req.Deliver
 	// queue the actual delivery of a chunk ()
-	glog.V(logger.Debug).Infof("[BZZ] Depo.HandleUnsyncedKeysMsg: received %v delivery requests", len(deliver))
+	glog.V(logger.Debug).Infof("[BZZ] Depo.HandleDeliveryRequestMsg: received %v delivery requests", len(deliver))
 	for _, sreq := range deliver {
 		// TODO: look up in cache here or in deliveries
 		// priorities are taken from the message so the remote party can
@@ -84,7 +84,7 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 	chunk, err := self.localStore.Get(req.Key)
 	switch {
 	case err != nil:
-		glog.V(logger.Detail).Infof("[BZZ] Depo.handleStoreRequest: %v not found locally. create new chunk/request")
+		glog.V(logger.Detail).Infof("[BZZ] Depo.handleStoreRequest: %v not found locally. create new chunk/request", req.Key)
 		// not found in memory cache, ie., a genuine store request
 		// create chunk
 		chunk = storage.NewChunk(req.Key, nil)
@@ -100,9 +100,10 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 			return
 		}
 		glog.V(logger.Detail).Infof("[BZZ] Depo.HandleStoreRequest: %v. request entry found", req)
+
+	default:
 		// data is found, store request ignored
 		// this should update access count?
-	default:
 		glog.V(logger.Detail).Infof("[BZZ] Depo.HandleStoreRequest: %v found locally. ignore.", req)
 		return
 	}

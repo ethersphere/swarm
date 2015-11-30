@@ -490,6 +490,7 @@ func (self *bzz) protoErrorDisconnect(err *errs.Error) {
 }
 
 func (self *bzz) send(msg uint64, data interface{}) error {
+	glog.V(logger.Debug).Infof("[BZZ] sending: %v to %v", data, self)
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {
 		self.Drop()
