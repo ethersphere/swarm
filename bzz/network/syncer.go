@@ -301,7 +301,6 @@ func (self *syncer) stop() {
 	for _, db := range self.queues {
 		db.stop()
 	}
-	self.db.Close()
 }
 
 // rlp serialisable sync request
@@ -410,6 +409,8 @@ LOOP:
 			// and the level has been drained we fill the batch with history
 			if !synced && uint(p) == histPrior {
 				// pull new history item
+				glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: reading history for %v", self.key.Log(), self.key)
+
 				req, more = <-self.history
 				if !more {
 					synced = true
@@ -418,16 +419,20 @@ LOOP:
 					self.keyCount++
 					history++
 				}
-				glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: (priority %v): %v (synced = %v) historical", self.key.Log(), p, req, synced)
+				glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: (priority %v) history item %v (synced = %v)", self.key.Log(), p, req, synced)
 			}
 		}
 
 		// still need reqs to fill the batch
-		if sreq, err := self.newSyncRequest(req, p); err == nil { // if histPrior = 1 and no history, then req can be nil
-			// extract key from req
-			glog.V(logger.Detail).Infof("[BZZ] syncer[%v] (priority %v): parsing request %v (synced = %v)", self.key.Log(), p, req, synced)
-			total++
-			unsynced = append(unsynced, sreq)
+		if req != nil {
+			if sreq, err := self.newSyncRequest(req, p); err == nil { // if histPrior = 1 and no history, then req can be nil
+				// extract key from req
+				glog.V(logger.Detail).Infof("[BZZ] syncer[%v] (priority %v): parsing request %v (synced = %v)", self.key.Log(), p, req, synced)
+				total++
+				unsynced = append(unsynced, sreq)
+			} else {
+				glog.V(logger.Warn).Infof("[BZZ] syncer[%v] (priority %v): parsing request %v (synced = %v failed: %v)", self.key.Log(), p, req, synced, err)
+			}
 		}
 
 		// send msg iff
@@ -456,15 +461,13 @@ LOOP:
 				case <-self.quit:
 					break LOOP
 				case <-timer:
-					timer = nil
-					go self.triggerUnsyncedKeys()
 				case <-self.unsyncedKeysRequest:
-					timer = nil
-					// triggers listening to new keys
-					if keys == nil { // very first initialisation
-						p = High
-						keys = self.keys[High]
-					}
+					glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: trigger: collecting unsynced keys", self.key.Log())
+				}
+				// triggers listening to new keys
+				if keys == nil { // very first initialisation
+					p = High
+					keys = self.keys[High]
 				}
 			}
 			wasSynced = synced
