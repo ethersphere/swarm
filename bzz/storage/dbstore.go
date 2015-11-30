@@ -277,13 +277,6 @@ func (s *DbStore) Put(chunk *Chunk) {
 
 	batch := new(leveldb.Batch)
 
-	s.entryCnt++
-	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
-	s.dataIdx++
-	batch.Put(keyDataIdx, U64ToBytes(s.dataIdx))
-	s.accessCnt++
-	batch.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
-
 	batch.Put(getDataKey(s.dataIdx), data)
 
 	index.Idx = s.dataIdx
@@ -291,6 +284,13 @@ func (s *DbStore) Put(chunk *Chunk) {
 
 	idata := encodeIndex(&index)
 	batch.Put(ikey, idata)
+
+	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
+	s.entryCnt++
+	batch.Put(keyDataIdx, U64ToBytes(s.dataIdx))
+	s.dataIdx++
+	batch.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
+	s.accessCnt++
 
 	s.db.Write(batch)
 	if chunk.dbStored != nil {
@@ -308,8 +308,8 @@ func (s *DbStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 
 	batch := new(leveldb.Batch)
 
-	s.accessCnt++
 	batch.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
+	s.accessCnt++
 	s.updateIndexAccess(index)
 	idata = encodeIndex(index)
 	batch.Put(ikey, idata)
@@ -433,9 +433,9 @@ func (self *dbSyncIterator) Next() (key Key) {
 		if dbkey[0] != 0 {
 			break
 		}
-		key = make([]byte, len(dbkey)-1)
-		copy(key, dbkey[1:])
-		if bytes.Compare(key, self.Stop) > 0 {
+		key = Key(make([]byte, len(dbkey)-1))
+		copy(key[:], dbkey[1:])
+		if bytes.Compare(key[:], self.Stop) > 0 {
 			break
 		}
 		var index dpaDBIndex
