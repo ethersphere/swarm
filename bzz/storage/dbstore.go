@@ -12,6 +12,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -296,6 +298,7 @@ func (s *DbStore) Put(chunk *Chunk) {
 	if chunk.dbStored != nil {
 		close(chunk.dbStored)
 	}
+	glog.V(logger.Detail).Infof("[BZZ] DbStore.Put: %v. db storage counter: %v ", chunk.Key.Log(), s.dataIdx)
 }
 
 // try to find index; if found, update access cnt and return true
