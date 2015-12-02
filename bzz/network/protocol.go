@@ -7,7 +7,7 @@ BZZ protocol handler is registered on the p2p server.
 
 The protocol takes care of actually communicating the bzz protocol
 * encoding and decoding requests for storage and retrieval
-* handling the protocol handshake
+* handling the s§protocol handshake
 * dispaching to netstore for handling the DHT logic
 * registering peers in the KΛÐΞMLIΛ table via the hive logistic manager
 * handling sync protocol messages via the syncer
@@ -191,7 +191,7 @@ func (self *bzz) Drop() {
 // one cycle of the main forever loop that handles and dispatches incoming messages
 func (self *bzz) handle() error {
 	msg, err := self.rw.ReadMsg()
-	glog.V(logger.Debug).Infof("[BZZ] Incoming MSG: %v", msg)
+	glog.V(logger.Debug).Infof("[BZZ] <- %v", msg)
 	if err != nil {
 		return err
 	}
@@ -269,7 +269,7 @@ func (self *bzz) handle() error {
 			return self.protoError(ErrDecode, "->msg %v: %v", msg, err)
 		}
 		// set peers state to persist
-		self.syncState = &req.State
+		self.syncState = req.State
 
 	case deliveryRequestMsg:
 		// response to syncKeysMsg hashes filtered not existing in db
@@ -357,11 +357,12 @@ func (self *bzz) handleStatus() (err error) {
 		}
 	}
 
-	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)\n", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
+	glog.V(logger.Info).Infof("[BZZ] Peer %08x is [bzz] capable (%d/%d)", self.remoteAddr.Addr[:4], status.Version, status.NetworkId)
 	self.hive.addPeer(&peer{bzz: self})
 
 	// hive sets syncstate so sync should start after node added
 	if self.syncEnabled {
+		glog.V(logger.Info).Infof("[BZZ] syncronisation request sent with %v", self.syncState)
 		self.syncRequest()
 	}
 	return nil
@@ -373,18 +374,22 @@ func (self *bzz) sync(state *syncState) error {
 		return self.protoError(ErrSync, "sync request can only be sent once")
 	}
 
+	cnt := self.dbAccess.counter()
 	remoteaddr := self.remoteAddr.Addr
 	start, stop := self.hive.kad.KeyRange(remoteaddr)
 	if state == nil {
-		state = newSyncState(start, stop, self.dbAccess.counter())
+		state = newSyncState(start, stop, cnt)
 		glog.V(logger.Warn).Infof("[BZZ] peer %08x provided no sync state, setting up full sync: %v\n", remoteaddr[:4], state)
+	} else {
+		state.SessionAt = cnt
 	}
 	var err error
 	self.syncer, err = newSyncer(
-		self.requestDb, storage.Key(remoteaddr[:]),
+		self.requestDb,
+		storage.Key(remoteaddr[:]),
 		self.dbAccess,
-		self.unsyncedKeys, self.deliveryRequest, self.store,
-		self.syncParams, *state,
+		self.unsyncedKeys, self.store,
+		self.syncParams, state,
 	)
 	if err != nil {
 		return self.protoError(ErrSync, "%v", err)
@@ -424,13 +429,11 @@ func (self *bzz) selfAddr() *peerAddr {
 // outgoing messages
 // send retrieveRequestMsg
 func (self *bzz) retrieve(req *retrieveRequestMsgData) error {
-	glog.V(logger.Debug).Infof("[BZZ] sending retrieve request: %v", req)
 	return self.send(retrieveRequestMsg, req)
 }
 
 // send storeRequestMsg
 func (self *bzz) store(req *storeRequestMsgData) error {
-	glog.V(logger.Debug).Infof("[BZZ] sending store request: %v", req)
 	return self.send(storeRequestMsg, req)
 }
 
@@ -450,7 +453,7 @@ func (self *bzz) deliveryRequest(reqs []*syncRequest) error {
 }
 
 // batch of syncRequests to send off
-func (self *bzz) unsyncedKeys(reqs []*syncRequest, state syncState) error {
+func (self *bzz) unsyncedKeys(reqs []*syncRequest, state *syncState) error {
 	req := &unsyncedKeysMsgData{
 		Unsynced: reqs,
 		State:    state,
@@ -466,13 +469,11 @@ func (self *bzz) Pay(units int, promise swap.Promise) {
 
 // send paymentMsg
 func (self *bzz) payment(req *paymentMsgData) error {
-	glog.V(logger.Debug).Infof("[BZZ] sending payment: %v", req)
 	return self.send(paymentMsg, req)
 }
 
 // sends peersMsg
 func (self *bzz) peers(req *peersMsgData) error {
-	glog.V(logger.Debug).Infof("[BZZ] sending peers: %v", req)
 	return self.send(peersMsg, req)
 }
 
@@ -490,7 +491,7 @@ func (self *bzz) protoErrorDisconnect(err *errs.Error) {
 }
 
 func (self *bzz) send(msg uint64, data interface{}) error {
-	glog.V(logger.Debug).Infof("[BZZ] sending: %v to %v", data, self)
+	glog.V(logger.Debug).Infof("[BZZ] -> %v: %v (%T) to %v", msg, data, data, self)
 	err := p2p.Send(self.rw, msg, data)
 	if err != nil {
 		self.Drop()
