@@ -52,9 +52,11 @@ func (key Key) MarshalJSON() (out []byte, err error) {
 	return []byte(`"` + key.String() + `"`), nil
 }
 
-func (key Key) UnmarshalJSON(value []byte) error {
-	b := common.HexToHash(string(value[1 : len(value)-1]))
-	copy(key[:], b[:])
+func (key *Key) UnmarshalJSON(value []byte) error {
+	s := string(value)
+	*key = make([]byte, 32)
+	h := common.Hex2Bytes(s[1 : len(s)-1])
+	copy(*key, h)
 	return nil
 }
 
