@@ -62,7 +62,7 @@ func NewSwarm(stack *node.ServiceContext, config *api.Config, swapEnabled bool) 
 	}
 	glog.V(logger.Debug).Infof("[BZZ] Set up local storage")
 
-	self.dbAccess = network.NewDbAccess(lstore.DbStore.(*storage.DbStore))
+	self.dbAccess = network.NewDbAccess(lstore)
 	glog.V(logger.Debug).Infof("[BZZ] Set up local db access (iterator/counter)")
 
 	// set up the kademlia hive
