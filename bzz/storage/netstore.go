@@ -79,6 +79,7 @@ var (
 // caller needs to make sure if that is wanted
 func (self *NetStore) Put(entry *Chunk) {
 	self.localStore.Put(entry)
+
 	// handle deliveries
 	if entry.Req != nil {
 		glog.V(logger.Detail).Infof("[BZZ] NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log())

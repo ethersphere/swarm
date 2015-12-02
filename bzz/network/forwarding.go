@@ -79,6 +79,8 @@ func (self *forwarder) Store(chunk *storage.Chunk) {
 		source = chunk.Source.(*peer)
 	}
 	for _, p := range self.hive.getPeers(chunk.Key, 0) {
+		glog.V(logger.Detail).Infof("[BZZ] %v %v", p, chunk)
+
 		if source == nil || p.Addr() != source.Addr() {
 			n++
 			Deliver(p, msg, PropagateReq)

@@ -392,7 +392,7 @@ func (self *Api) Resolve(hostPort string) (contentHash storage.Key, err error) {
 	host := hostPort
 	if hashMatcher.MatchString(host) {
 		contentHash = storage.Key(common.Hex2Bytes(host))
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: host is a contentHash: '%v' == '%x'", contentHash)
+		glog.V(logger.Debug).Infof("[BZZ] Swarm: host is a contentHash: '%v'", contentHash)
 	} else {
 		if self.registrar != nil {
 			var hash common.Hash

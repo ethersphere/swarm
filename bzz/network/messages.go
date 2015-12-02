@@ -270,11 +270,11 @@ At the same time responds with deliveries of the items.
 */
 type unsyncedKeysMsgData struct {
 	Unsynced []*syncRequest
-	State    syncState
+	State    *syncState
 }
 
 func (self *unsyncedKeysMsgData) String() string {
-	return fmt.Sprintf("sync: keys of %d new chunks (upto %v) => synced: %v", len(self.Unsynced), self.State)
+	return fmt.Sprintf("sync: keys of %d new chunks (state %v) => synced: %v", len(self.Unsynced), self.State, self.State.Synced)
 }
 
 /*
