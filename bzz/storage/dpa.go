@@ -183,12 +183,13 @@ func (self *DPA) storeLoop() {
 // access by calling network is blocking with a timeout
 
 type dpaChunkStore struct {
+	n          int
 	localStore ChunkStore
 	netStore   ChunkStore
 }
 
 func NewDpaChunkStore(localStore, netStore ChunkStore) *dpaChunkStore {
-	return &dpaChunkStore{localStore, netStore}
+	return &dpaChunkStore{0, localStore, netStore}
 }
 
 // Get is the entrypoint for local retrieve requests
@@ -227,5 +228,7 @@ func (self *dpaChunkStore) Put(entry *Chunk) {
 		return
 	}
 	// from this point on the storage logic is the same with network storage requests
+	glog.V(logger.Detail).Infof("[BZZ] DpaChunkStore.storeLoop %n %v", self.n, chunk.Key.Log())
+	self.n++
 	self.netStore.Put(chunk)
 }
