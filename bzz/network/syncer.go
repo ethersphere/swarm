@@ -39,7 +39,7 @@ const (
 )
 
 type syncState struct {
-	storage.DbSyncState //
+	*storage.DbSyncState //
 	// Start      Key    // lower limit of address space
 	// Stop       Key    // upper limit of address space
 	// First      uint64 // counter taken from last sync state
@@ -52,23 +52,24 @@ type syncState struct {
 }
 
 type DbAccess struct {
-	db *storage.DbStore
+	db  *storage.DbStore
+	loc *storage.LocalStore
 }
 
-func NewDbAccess(db *storage.DbStore) *DbAccess {
-	return &DbAccess{db}
+func NewDbAccess(loc *storage.LocalStore) *DbAccess {
+	return &DbAccess{loc.DbStore.(*storage.DbStore), loc}
 }
 
 func (self *DbAccess) get(key storage.Key) (*storage.Chunk, error) {
-	return self.db.Get(key)
+	return self.loc.Get(key)
 }
 
 func (self *DbAccess) counter() uint64 {
 	return self.db.Counter()
 }
 
-func (self *DbAccess) iterator(s syncState) keyIterator {
-	it, err := self.db.NewSyncIterator(s.DbSyncState)
+func (self *DbAccess) iterator(s *syncState) keyIterator {
+	it, err := self.db.NewSyncIterator(*s.DbSyncState)
 	if err != nil {
 		return nil
 	}
@@ -76,13 +77,21 @@ func (self *DbAccess) iterator(s syncState) keyIterator {
 }
 
 func (self syncState) String() string {
-	return fmt.Sprintf(
-		"addr: %v-%v, accessCount: %v-%v, session started at: %v, last seen at: %v, latest key: %v, synced: %v",
-		self.Start, self.Stop,
-		self.First, self.Last,
-		self.SessionAt, self.LastSeenAt,
-		self.Latest, self.Synced,
-	)
+	if self.Synced {
+		return fmt.Sprintf(
+			"session started at: %v, last seen at: %v, latest key: %v",
+			self.SessionAt, self.LastSeenAt,
+			self.Latest.Log(),
+		)
+	} else {
+		return fmt.Sprintf(
+			"address: %v-%v, index: %v-%v, session started at: %v, last seen at: %v, latest key: %v",
+			self.Start.Log(), self.Stop.Log(),
+			self.First, self.Last,
+			self.SessionAt, self.LastSeenAt,
+			self.Latest.Log(),
+		)
+	}
 }
 
 // syncer parameters (global, not peer specific)
@@ -118,8 +127,8 @@ type keyIterator interface {
 type syncer struct {
 	*SyncParams                               // sync parameters
 	key                       storage.Key     // remote peers address key
-	state                     syncState       // sync state for our dbStore
-	syncStates                chan syncState  // different stages of sync
+	state                     *syncState      // sync state for our dbStore
+	syncStates                chan *syncState // different stages of sync
 	unsyncedKeysRequest       chan bool       // trigger to send unsynced keys
 	keyCounts, deliveryCounts [priorities]int // counts
 	keyCount, deliveryCount   int             //
@@ -137,8 +146,8 @@ type syncer struct {
 	history       chan interface{}                      // db iterator channel
 
 	// bzz protocol instance outgoing message callbacks
-	unsyncedKeys func([]*syncRequest, syncState) error // send unsyncedKeysMsg
-	store        func(*storeRequestMsgData) error      // send storeRequestMsg
+	unsyncedKeys func([]*syncRequest, *syncState) error // send unsyncedKeysMsg
+	store        func(*storeRequestMsgData) error       // send storeRequestMsg
 }
 
 // a syncer instance is linked to each peer connection
@@ -146,11 +155,10 @@ type syncer struct {
 func newSyncer(
 	db *storage.LDBDatabase, remotekey storage.Key,
 	dbAccess *DbAccess,
-	unsyncedKeys func([]*syncRequest, syncState) error,
-	deliveryRequest func([]*syncRequest) error,
+	unsyncedKeys func([]*syncRequest, *syncState) error,
 	store func(*storeRequestMsgData) error,
 	params *SyncParams,
-	state syncState,
+	state *syncState,
 ) (*syncer, error) {
 
 	syncBufferSize := params.SyncBufferSize
@@ -159,7 +167,7 @@ func newSyncer(
 	self := &syncer{
 		key:                 remotekey,
 		dbAccess:            dbAccess,
-		syncStates:          make(chan syncState, 20),
+		syncStates:          make(chan *syncState, 20),
 		history:             make(chan interface{}),
 		unsyncedKeysRequest: make(chan bool, 1),
 		SyncParams:          params,
@@ -193,13 +201,16 @@ func newSyncer(
 // addresses and db count
 func newSyncState(start, stop kademlia.Address, count uint64) *syncState {
 	// inclusive keyrange boundaries for db iterator
-
+	last := count
+	if last > 0 {
+		last--
+	}
 	return &syncState{
-		DbSyncState: storage.DbSyncState{
+		DbSyncState: &storage.DbSyncState{
 			Start: storage.Key(start[:]),
 			Stop:  storage.Key(stop[:]),
 			First: 0,
-			Last:  count - 1,
+			Last:  last,
 		},
 		SessionAt: count,
 		synced:    make(chan bool),
@@ -256,15 +267,17 @@ func (self *syncer) sync() {
 		if self.state.Latest != nil && !storage.IsZeroKey(self.state.Latest) {
 			// 1. there is unfinished earlier sync
 			self.state.Start = self.state.Latest
+			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: start syncronising backlog (unfinished sync: %v", self.key.Log(), self.state)
 			self.syncStates <- self.state
 			self.wait()
 			if self.state.Last < self.state.SessionAt {
 				self.state.First = self.state.Last + 1
 			}
 		}
-		// 2. sync up to last disconnect
+		// 2. sync up to last disconnect1
 		if self.state.First < self.state.LastSeenAt {
 			self.state.Last = self.state.LastSeenAt - 1
+			glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: start syncronising history up till last disconnect at %v: %v", self.key.Log(), self.state.LastSeenAt, self.state)
 			self.syncStates <- self.state
 			self.wait()
 			self.state.First = self.state.LastSeenAt
@@ -274,6 +287,7 @@ func (self *syncer) sync() {
 	}
 	if self.state.First < self.state.SessionAt {
 		self.state.Last = self.state.SessionAt - 1
+		glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: start syncronising history since last disconnect at %v up until session start at %v: %v", self.key.Log(), self.state.LastSeenAt, self.state.SessionAt, self.state)
 
 		// 3. sync up to current session start
 		self.syncStates <- self.state
@@ -450,7 +464,8 @@ LOOP:
 				glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: session tally: keys: %v (%v), history: %v, total: %v", self.key.Log(), self.keyCounts, self.keyCount, history, total)
 				glog.V(logger.Debug).Infof("[BZZ] syncer[%v]: session tally: deliveries: %v (%v)", self.key.Log(), self.deliveryCounts, self.deliveryCount)
 				//  send the unsynced keys
-				err := self.unsyncedKeys(unsynced, self.state)
+				stateCopy := *self.state
+				err := self.unsyncedKeys(unsynced, &stateCopy)
 				if err != nil {
 					glog.V(logger.Warn).Infof("[BZZ] syncer[%v]: unable to send unsynced keys: %v", err)
 				}
@@ -462,7 +477,6 @@ LOOP:
 					break LOOP
 				case <-timer:
 				case <-self.unsyncedKeysRequest:
-					glog.V(logger.Detail).Infof("[BZZ] syncer[%v]: trigger: collecting unsynced keys", self.key.Log())
 				}
 				// triggers listening to new keys
 				if keys == nil { // very first initialisation
@@ -471,15 +485,15 @@ LOOP:
 				}
 			}
 			wasSynced = synced
-		} else {
-			// hop down one priority level, or start again
-			if p == Low {
-				p = High
-			} else {
-				p--
-			}
-			keys = self.keys[p]
+
 		}
+		// hop down one priority level, or start again
+		if p == Low {
+			p = High
+		} else {
+			p--
+		}
+		keys = self.keys[p]
 	}
 }
 
@@ -688,7 +702,9 @@ func parseRequest(req interface{}) (storage.Key, uint64, *storage.Chunk, *storeR
 		key = chunk.Key
 		id = generateId()
 
-	} else if sreq, ok = req.(*storeRequestMsgData); !ok {
+	} else if sreq, ok = req.(*storeRequestMsgData); ok {
+		key = sreq.Key
+	} else {
 		err = fmt.Errorf("type not allowed: %v (%T)", req, req)
 	}
 
