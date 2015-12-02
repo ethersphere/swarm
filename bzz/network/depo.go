@@ -35,21 +35,23 @@ func NewDepo(hash storage.Hasher, localStore, remoteStore storage.ChunkStore) *D
 func (self *Depo) HandleUnsyncedKeysMsg(req *unsyncedKeysMsgData, p *peer) error {
 	unsynced := req.Unsynced
 	var missing []*syncRequest
+	var chunk *storage.Chunk
 	var err error
 	for _, req := range unsynced {
 		// skip keys that are found,
-		_, err = self.localStore.Get(storage.Key(req.Key[:]))
-		if err != nil {
+		chunk, err = self.localStore.Get(storage.Key(req.Key[:]))
+		if err != nil || chunk.SData == nil {
 			missing = append(missing, req)
 		}
 	}
-	glog.V(logger.Debug).Infof("[BZZ] Depo.HandleUnsyncedKeysMsg: received %v unsynced keys: %v missing", len(unsynced), len(missing))
+	glog.V(logger.Debug).Infof("[BZZ] Depo.HandleUnsyncedKeysMsg: received %v unsynced keys: %v missing. new state: %v", len(unsynced), len(missing), req.State)
 	glog.V(logger.Detail).Infof("[BZZ] Depo.HandleUnsyncedKeysMsg: received %v", unsynced)
 	// send delivery request with missing keys
 	err = p.deliveryRequest(missing)
 	if err != nil {
 		return err
 	}
+	p.syncState = req.State
 	return nil
 }
 
@@ -62,7 +64,7 @@ func (self *Depo) HandleUnsyncedKeysMsg(req *unsyncedKeysMsgData, p *peer) error
 func (self *Depo) HandleDeliveryRequestMsg(req *deliveryRequestMsgData, p *peer) error {
 	deliver := req.Deliver
 	// queue the actual delivery of a chunk ()
-	glog.V(logger.Debug).Infof("[BZZ] Depo.HandleDeliveryRequestMsg: received %v delivery requests", len(deliver))
+	glog.V(logger.Detail).Infof("[BZZ] Depo.HandleDeliveryRequestMsg: received %v delivery requests: %v", len(deliver), deliver)
 	for _, sreq := range deliver {
 		// TODO: look up in cache here or in deliveries
 		// priorities are taken from the message so the remote party can
@@ -72,7 +74,7 @@ func (self *Depo) HandleDeliveryRequestMsg(req *deliveryRequestMsgData, p *peer)
 	}
 
 	// sends it out as unsyncedKeysMsg
-	p.syncer.triggerUnsyncedKeys()
+	// p.syncer.triggerUnsyncedKeys()
 	return nil
 }
 
