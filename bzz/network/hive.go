@@ -93,7 +93,10 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 	go self.pinger()
 	go func() {
 		// whenever pinged ask kademlia about most preferred peer
-		for _ = range self.ping {
+		for alive := range self.more {
+			if !alive {
+				return
+			}
 			node, proxLimit := self.kad.FindBest()
 			if node != nil && len(node.Url) > 0 {
 				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node.Url)
@@ -112,18 +115,10 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %v messenger bee %v", randAddr, peers[0])
 					peers[0].(*peer).retrieve(req)
 				}
-				if self.more == nil {
-					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz buzz need more bees")
-					self.more = make(chan bool)
-					go self.pinger()
-				}
-				self.more <- true
+				self.ping <- true
 				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
 			} else {
-				if self.more != nil {
-					close(self.more)
-					self.more = nil
-				}
+				self.ping <- false
 			}
 			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)\n%v", self.addr, self.kad.Count(), self.kad.DBCount(), self.kad)
 		}
@@ -134,19 +129,27 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 // pinger is awake until Kademlia Table is saturated
 // it restarts if the table becomes non-full again due to disconnections
 func (self *Hive) pinger() {
-	clock := time.NewTicker(time.Duration(self.callInterval))
+	var alarm <-chan time.Time
 	for {
 		select {
-		case <-clock.C:
+		case <-alarm:
 			if self.kad.DBCount() > 0 {
 				select {
-				case self.ping <- true:
+				case self.more <- true:
 				default:
 				}
 			}
-		case _, more := <-self.more:
-			if !more {
+		case need, alive := <-self.ping:
+			if !alive {
+				self.more <- false
 				return
+			}
+			if alarm == nil && need {
+				alarm = time.NewTicker(time.Duration(self.callInterval)).C
+			}
+			if alarm != nil && !need {
+				alarm = nil
+
 			}
 		}
 	}
@@ -155,11 +158,6 @@ func (self *Hive) pinger() {
 func (self *Hive) Stop() error {
 	// closing ping channel quits the updateloop
 	close(self.ping)
-	self.ping = nil
-	if self.more != nil {
-		close(self.more)
-		self.more = nil
-	}
 	return self.kad.Save(self.path, saveSync)
 }
 
@@ -174,8 +172,9 @@ func (self *Hive) addPeer(p *peer) {
 	// we do not record as request or forward it, just reply with peers
 	p.retrieve(&retrieveRequestMsgData{})
 	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: 'whatsup wheresdaparty' sent to %v", p)
-	if self.ping != nil {
-		self.ping <- true
+	select {
+	case self.more <- true:
+	default:
 	}
 }
 
@@ -183,8 +182,9 @@ func (self *Hive) addPeer(p *peer) {
 func (self *Hive) removePeer(p *peer) {
 	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: bee %v gone offline", p)
 	self.kad.Off(p, saveSync)
-	if self.ping != nil {
-		self.ping <- false
+	select {
+	case self.more <- true:
+	default:
 	}
 	if self.kad.Count() == 0 {
 		glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: empty, all bees gone", p)
@@ -257,11 +257,11 @@ func (self *peer) LastActive() time.Time {
 func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
 	if p, ok := node.(*peer); ok {
 		if record.Meta == nil {
-			glog.V(logger.Detail).Infof("no meta for node record %v", record)
+			glog.V(logger.Debug).Infof("no sync state for node record %v", record)
 			return nil
 		}
 		state, err := decodeSync(record.Meta)
-		glog.V(logger.Detail).Infof("meta for node record %v: %s -> %v", record, string(*(record.Meta)), state)
+		glog.V(logger.Debug).Infof("sync state for node record %v: %s -> %v", record, string(*(record.Meta)), state)
 		p.syncState = state
 		return err
 	}
