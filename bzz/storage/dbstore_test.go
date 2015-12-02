@@ -70,7 +70,7 @@ func TestDbStoreSyncIterator(t *testing.T) {
 		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
 		First: 2,
-		Last:  3,
+		Last:  4,
 	})
 	if err != nil {
 		t.Fatalf("unexpected error creating NewSyncIterator")
@@ -100,7 +100,7 @@ func TestDbStoreSyncIterator(t *testing.T) {
 		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("5000000000000000000000000000000000000000000000000000000000000000")),
 		First: 2,
-		Last:  3,
+		Last:  4,
 	})
 
 	res = nil
@@ -129,7 +129,7 @@ func TestDbStoreSyncIterator(t *testing.T) {
 		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
 		First: 2,
-		Last:  4,
+		Last:  5,
 	})
 	res = nil
 	for {
@@ -147,5 +147,26 @@ func TestDbStoreSyncIterator(t *testing.T) {
 	}
 	if !bytes.Equal(res[1][:], keys[3]) {
 		t.Fatalf("Expected %v chunk, got %v", keys[3], res[1])
+	}
+
+	it, err = m.NewSyncIterator(DbSyncState{
+		Start: Key(common.Hex2Bytes("2000000000000000000000000000000000000000000000000000000000000000")),
+		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
+		First: 2,
+		Last:  5,
+	})
+	res = nil
+	for {
+		chunk = it.Next()
+		if chunk == nil {
+			break
+		}
+		res = append(res, chunk)
+	}
+	if len(res) != 1 {
+		t.Fatalf("Expected 1 chunk, got %v", len(res))
+	}
+	if !bytes.Equal(res[0][:], keys[3]) {
+		t.Fatalf("Expected %v chunk, got %v", keys[3], res[0])
 	}
 }

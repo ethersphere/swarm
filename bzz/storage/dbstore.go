@@ -438,13 +438,17 @@ func (self *dbSyncIterator) Next() (key Key) {
 		}
 		key = Key(make([]byte, len(dbkey)-1))
 		copy(key[:], dbkey[1:])
+		if bytes.Compare(key[:], self.Start) <= 0 {
+			self.it.Next()
+			continue
+		}
 		if bytes.Compare(key[:], self.Stop) > 0 {
 			break
 		}
 		var index dpaDBIndex
 		decodeIndex(self.it.Value(), &index)
 		self.it.Next()
-		if (index.Idx >= self.First) && (index.Idx <= self.Last) {
+		if (index.Idx >= self.First) && (index.Idx < self.Last) {
 			return
 		}
 	}
