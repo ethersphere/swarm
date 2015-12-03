@@ -30,12 +30,12 @@ type Hive struct {
 	addr         kademlia.Address
 	kad          *kademlia.Kademlia
 	path         string
-	ping         chan bool
+	toggle       chan bool
 	more         chan bool
 }
 
 const (
-	callInterval = 1000000000
+	callInterval = 10000000000
 	bucketSize   = 3
 	maxProx      = 10
 	proxBinSize  = 8
@@ -80,7 +80,7 @@ func (self *Hive) Addr() kademlia.Address {
 // connectPeer is a function to connect to a peer based on its NodeID or enode URL
 // there are called on the p2p.Server which runs on the node
 func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPeer func(string) error) (err error) {
-	self.ping = make(chan bool)
+	self.toggle = make(chan bool)
 	self.more = make(chan bool)
 	self.id = id
 	self.listenAddr = listenAddr
@@ -90,11 +90,13 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 		err = nil
 	}
 	// this loop is doing bootstrapping and maintains a healthy table
-	go self.pinger()
+	go self.keepAlive()
 	go func() {
-		// whenever pinged ask kademlia about most preferred peer
+		// whenever toggled ask kademlia about most preferred peer
 		for alive := range self.more {
 			if !alive {
+				// receiving false closes the loop while allowing parallel routines
+				// to attempt to write to more (remove Peer when shutting down)
 				return
 			}
 			node, proxLimit := self.kad.FindBest()
@@ -115,10 +117,10 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %v messenger bee %v", randAddr, peers[0])
 					peers[0].(*peer).retrieve(req)
 				}
-				self.ping <- true
+				self.toggle <- true
 				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
 			} else {
-				self.ping <- false
+				self.toggle <- false
 			}
 			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)\n%v", self.addr, self.kad.Count(), self.kad.DBCount(), self.kad)
 		}
@@ -126,9 +128,12 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 	return
 }
 
-// pinger is awake until Kademlia Table is saturated
+// keepAlive is a forever loop
+// in its awake state it periodically triggers connection attempts
+// by writing to self.more until Kademlia Table is saturated
+// wake state is toggled by writing to self.toggle
 // it restarts if the table becomes non-full again due to disconnections
-func (self *Hive) pinger() {
+func (self *Hive) keepAlive() {
 	var alarm <-chan time.Time
 	for {
 		select {
@@ -139,7 +144,7 @@ func (self *Hive) pinger() {
 				default:
 				}
 			}
-		case need, alive := <-self.ping:
+		case need, alive := <-self.toggle:
 			if !alive {
 				self.more <- false
 				return
@@ -156,8 +161,8 @@ func (self *Hive) pinger() {
 }
 
 func (self *Hive) Stop() error {
-	// closing ping channel quits the updateloop
-	close(self.ping)
+	// closing toggle channel quits the updateloop
+	close(self.toggle)
 	return self.kad.Save(self.path, saveSync)
 }
 
@@ -276,6 +281,8 @@ func saveSync(record *kademlia.NodeRecord, node kademlia.Node) {
 			glog.V(logger.Warn).Infof("error saving sync state for %v: %v", node, err)
 			return
 		}
+		glog.V(logger.Warn).Infof("saving sync state for %v: %s", node, string(*meta))
+
 		record.Meta = meta
 	}
 }
