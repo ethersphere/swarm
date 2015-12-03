@@ -381,7 +381,12 @@ func (self *bzz) sync(state *syncState) error {
 		state = newSyncState(start, stop, cnt)
 		glog.V(logger.Warn).Infof("[BZZ] peer %08x provided no sync state, setting up full sync: %v\n", remoteaddr[:4], state)
 	} else {
+		state.synced = make(chan bool)
 		state.SessionAt = cnt
+		if storage.IsZeroKey(state.Stop) && state.Synced {
+			state.Start = storage.Key(start[:])
+			state.Stop = storage.Key(stop[:])
+		}
 	}
 	var err error
 	self.syncer, err = newSyncer(
