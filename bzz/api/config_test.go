@@ -22,7 +22,7 @@ const (
     "Hash": "SHA256",
     "JoinTimeout": 120,
     "SplitTimeout": 120,
-    "CallInterval": 1000000000,
+    "CallInterval": 10000000000,
     "KadDbPath": "TMPDIR/0d2f62485607cf38d9d795d93682a517661e513e/bzz-peers.json",
     "MaxProx": 10,
     "ProxBinSize": 8,
