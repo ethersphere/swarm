@@ -228,7 +228,7 @@ func (self *dpaChunkStore) Put(entry *Chunk) {
 		return
 	}
 	// from this point on the storage logic is the same with network storage requests
-	glog.V(logger.Detail).Infof("[BZZ] DpaChunkStore.storeLoop %n %v", self.n, chunk.Key.Log())
+	glog.V(logger.Detail).Infof("[BZZ] DPA.Put %v: %v", self.n, chunk.Key.Log())
 	self.n++
 	self.netStore.Put(chunk)
 }
