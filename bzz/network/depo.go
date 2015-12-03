@@ -74,7 +74,7 @@ func (self *Depo) HandleDeliveryRequestMsg(req *deliveryRequestMsgData, p *peer)
 	}
 
 	// sends it out as unsyncedKeysMsg
-	// p.syncer.triggerUnsyncedKeys()
+	p.syncer.sendUnsyncedKeys()
 	return nil
 }
 
