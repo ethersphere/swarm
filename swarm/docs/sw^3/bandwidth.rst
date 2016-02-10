@@ -97,7 +97,7 @@ Things can be improved if peers send some provable commitment to compensation di
 
 One particular implementation could use ethereum transactions directly within the bzz protocol. Unfortunately, barring basic verification, no guarantees can be gained from the raw transaction. Also, sending them to the network is not a viable way to cash the payment they represent: If the same address is used to send transaction to multiple peers that act independently, there is no guarantee that the transactions end up in the same block or follow exactly the nonce order. Therefore, besides insufficient balance, they may fail on incorrect nonce.
 
-Smart contracts, however, make it easy to implement more secure payment process.
+Smart contracts, however, make it easy to implement a more secure payment process.
 Instead of a simple account, the sender address holds a *chequebook contract*. This chequebook contract is similar to a wallet holding an ether balance for the owner and allows signed cheques to be cashed by the recipient (or anyone), who simply send a transaction with the cheque as data to the contract's *cash* method.
 
 ..  index::
@@ -115,7 +115,7 @@ Instead of a simple account, the sender address holds a *chequebook contract*. T
 the cheque is valid if:
 
 * the contract address matches the address on the cheque,
-* the cheque is signed by the owner (NodeId = public key sent in handshake)
+* the cheque is signed by the payer (NodeId = public key sent in handshake)
 * the signed data is a valid encoding of <contract address,beneficiary,amount>
 * the cumulative total amount is greater than in the previous cheque sent.
 
