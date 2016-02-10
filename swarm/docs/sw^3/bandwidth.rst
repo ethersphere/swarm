@@ -1,5 +1,5 @@
 ******************
-Incentivisation
+Incentivization
 ******************
 
 The objective of an :index:`incentive system` is to encourage cooperative behavior and discourage freeriding: the uncompensated depletion of limited resources. In the context of swarm, storage and bandwidth are the two most important limited resources.
@@ -16,7 +16,9 @@ The incentive strategy outlined here aspires to satisfy the following constraint
 Preliminaries
 =================
 
-The ultimate goal of swarm is that end users are served content in a safe and speedy fashion. The underlying unit of accounting must be a chunk since this is the delivery unit that is sourced from a single independent entity. We start from the simplest assumption that delivery of a chunk is a valueable service which is directly chargeable when a chunk is delivered to a node that sent a retrieve request.
+The ultimate goal of swarm is that end users are served content in a safe and speedy fashion. The underlying unit of accounting must be a uniformly sized chunk of data (henceforth, simply "chunk") since this is the delivery unit that is sourced from a single independent entity. We start from the simplest assumption that delivery of a chunk is a valueable service which is directly chargeable when a chunk is delivered to a node that sent a retrieve request.
+
+Swarm is organized as a content-addressed DHT, whereby the addresses of chunks are derived from their hash value and come from the same address space as those of participating nodes. Thus, the same distance metric can be applied between nodes, between chunks and between a node and a chunk.
 
 From a certain node's perspective, the probability of it being ever requested is proportional to the inverse of its distance from it (the distance, in turn, can be interpreted as the risk of it not being requested). In other words, following the underlying routing protocol by itself incentivises nodes to prefer chunks that are closer to their own address.
 
