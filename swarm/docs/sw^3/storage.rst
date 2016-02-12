@@ -37,6 +37,8 @@ Basics of storage incentivisation
 
 A long-term storage incentivisation scheme faces unique challenges. For example, unlike in the case of bandwidth incentives where retrievals are immediately accounted and settled, long-term storage guarantees are promisory in nature and deciding if the promise was kept can only be decided at the end of its validity. Loss of reputation is not an available deterrent against foul play in these instances: since new nodes need to be allowed to provide services right away, cheaters could just resort to new identities to sell (empty) storage promises.
 
+It is also worth emphasizing that the producer and the consumer of the information may not be the same entity and it is therefore important that failure to make good on the promise to deliver the stored content is penalized even when the unserved consumer was not party to the agreement to store and provide the requested content.
+
 ..  index::
   reputation
   punative measures
@@ -74,7 +76,7 @@ A *litigation* procedure necessitates that there are contractual agreements betw
    contract
    receipt
 
-The simplest solution to manage storage deals is using direct contracts between owner and storer. This can be implemented with storers returning **signed receipts of chunks they accept to store and owners paying for the receipts either directly or via escrow. These receipts are used to prove commitment in case of litigation. There are other more indirect variants of litigation which do not rely on owner and storer being in direct contractual agreement.
+The simplest solution to manage storage deals is using direct contracts between owner and storer. This can be implemented with storers returning **signed receipts of chunks they accept to store and owners paying for the receipts either directly or via escrow. These receipts are used to prove commitment in case of litigation. There are other more indirect variants of litigation which do not rely on owner and storer being in direct contractual agreement, which is the case if the eventual consumer is distinct from the storer and not known to them in advance.
 
 In what follows we will elaborate variations on such storage incentive schemes. Since the basic ingredients are the same, we proceed to describe them in turn, starting with 1) registration and deposit, followed by 2) storage receipts and finally 3) the challenge based litigation system.
 
