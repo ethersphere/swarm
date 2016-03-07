@@ -1,0 +1,43 @@
+\documentclass{standalone}
+\usepackage{tikz}
+\usetikzlibrary{graphs,graphdrawing,graphdrawing.trees}
+\begin{document}
+\begin{tikzpicture}
+  \begin{scope}%
+[every node/.style={draw,circle}]
+\graph [fresh nodes, math nodes] {
+  b -> {
+    c ->{
+      b -> {
+        "\Lambda", "\emptyset"
+      },
+      "\emptyset"
+    },
+    a -> {
+      b -> {
+        a -> {
+          "\Lambda", "\emptyset"
+        },
+        a -> {
+          M0/a -> {
+            "\Lambda",
+            c -> {
+              "\Lambda", "\emptyset"
+            }
+          },
+          "\emptyset"
+        }
+      },
+      c -> {
+        a -> {
+          (M0),
+          "\emptyset"
+        },
+        "\emptyset"
+      }
+    }
+  }
+};
+\end{scope}
+\end{tikzpicture}
+\end{document}

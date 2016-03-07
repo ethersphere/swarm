@@ -1,0 +1,20 @@
+\documentclass{article}
+
+\usepackage{tikz}
+\usetikzlibrary{graphs}
+
+\begin{document}
+    \tikz[baseline] \graph[grid placement, wrap after=2] {
+        000;
+        111;
+        011;
+        001;
+        110;
+        010;
+        101;
+        100;
+        000 -- {001, 010, 100};
+        111 -- {110, 101, 011};
+        110 -- {100, 010};
+    };
+\end{document}

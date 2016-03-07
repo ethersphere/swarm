@@ -1,0 +1,6124 @@
+{
+	"folder_history":
+	[
+		"/Users/tron/Work/ethereum/homestead-guide",
+		"/Users/tron/Work/jaak",
+		"/Users/tron/tmp/sync/00",
+		"/Users/tron/Work/nyim",
+		"/Users/tron/Work/ethereum",
+		"/Users/tron/Work/hunmorph",
+		"/Users/tron/Dropbox/Aboutme",
+		"/Users/tron/Work/gitbook",
+		"/Users/tron/Dropbox/content/notes/ethereum",
+		"/Users/tron/Dropbox/content/work/NYIM",
+		"/Applications/Skype.app",
+		"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum",
+		"/Users/tron/Work/ethereum/go/src/github.com/ethereum",
+		"/Users/tron/Work/ethereum/go-dpa",
+		"/Users/tron/Work/newshack",
+		"/Users/tron/Work/BBC/news-juicer-environments",
+		"/Users/tron/Work/BBC/news-juicer",
+		"/Users/tron/Dropbox/content",
+		"/Users/tron/Dropbox/share"
+	],
+	"last_version": 3103,
+	"last_window_id": 73,
+	"log_indexing": false,
+	"settings":
+	{
+		"new_window_height": 846.0,
+		"new_window_settings":
+		{
+			"auto_complete":
+			{
+				"selected_items":
+				[
+					[
+						"dumb",
+						"dumbtermHistory	struct ʈ"
+					],
+					[
+						"pass",
+						"passwordRepl	 Ɩ"
+					],
+					[
+						"R",
+						"ReplaceAllString	string ƒ"
+					],
+					[
+						"pas",
+						"passwordMatchRegexp	*regexp.Regexp ν"
+					],
+					[
+						"pa",
+						"paramsRegexp	 ν"
+					],
+					[
+						"Glo",
+						"GlobalString	string ƒ"
+					],
+					[
+						"Fa",
+						"Fatalf	 ƒ"
+					],
+					[
+						"key",
+						"keyAddr	common.Address ν"
+					],
+					[
+						"Re",
+						"Remove	error ƒ"
+					],
+					[
+						"filen",
+						"fileInfo	os.FileInfo ν"
+					],
+					[
+						"decryptK",
+						"decryptKeyV3	keyBytes []byte, keyId []byte, err error ƒ"
+					],
+					[
+						"No",
+						"ErrNotExist	error ν"
+					],
+					[
+						"ke",
+						"keyFilePath	string ν"
+					],
+					[
+						"sp",
+						"Sprintf	string ƒ"
+					],
+					[
+						"file",
+						"fileContent	[]byte ν"
+					],
+					[
+						"Mas",
+						"MarshalJSON	[]byte, error ƒ"
+					],
+					[
+						"Def",
+						"defaultGasPrice	*big.Int ν"
+					],
+					[
+						"p",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"fil",
+						"fileInfo	os.FileInfo ν"
+					],
+					[
+						"Ad",
+						"AddressFromHexOrIndex	address common.Address, err error ƒ"
+					],
+					[
+						"A",
+						"Addresses	addresses []common.Address, err error ƒ"
+					],
+					[
+						"time",
+						"timeout	time.Duration ν"
+					],
+					[
+						"Prin",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"P",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"listen",
+						"listenAddr"
+					],
+					[
+						"min",
+						"minProxLimit	int ν"
+					],
+					[
+						"af",
+						"after	time.Time ν"
+					],
+					[
+						"pro",
+						"proxLimit	int ν"
+					],
+					[
+						"N",
+						"Node	interface ¡"
+					],
+					[
+						"Un",
+						"UnixNano	int64 ƒ"
+					],
+					[
+						"pr",
+						"proxLimit	int ν"
+					],
+					[
+						"De",
+						"Detail	 Ɩ"
+					],
+					[
+						"ran",
+						"randAddr	kademlia.Address ν"
+					],
+					[
+						"pee",
+						"peerAddr	[]byte ν"
+					],
+					[
+						"n",
+						"netstore	*netStore ν"
+					],
+					[
+						"loca",
+						"localAddr	 ν"
+					],
+					[
+						"peer",
+						"peerAddr	struct ʈ"
+					],
+					[
+						"Byte",
+						"BytesToHash	common.Hash ƒ"
+					],
+					[
+						"has",
+						"hashOfNodeId	 ν"
+					],
+					[
+						"b",
+						"BucketSize	int ν"
+					],
+					[
+						"uni",
+						"UnixNano	int64 ƒ"
+					],
+					[
+						"nod",
+						"nodeIndex	map[Address]*NodeRecord ν"
+					],
+					[
+						"Spri",
+						"Sprintf	string ƒ"
+					],
+					[
+						"con",
+						"content_type"
+					],
+					[
+						"host",
+						"hostHash	common.Hash ν"
+					],
+					[
+						"url",
+						"setUrlHint"
+					],
+					[
+						"hash",
+						"hashRegAbi	string ν"
+					],
+					[
+						"HashRe",
+						"HashRegAddr	 ν"
+					],
+					[
+						"HashR",
+						"HashRegAddr	 ν"
+					],
+					[
+						"se",
+						"SetHashReg	err error ƒ"
+					],
+					[
+						"H",
+						"HexToAddress	common.Address ƒ"
+					],
+					[
+						"U",
+						"UrlHintAddr	 ν"
+					],
+					[
+						"co",
+						"common	 package ρ"
+					],
+					[
+						"name",
+						"nameHex	string ν"
+					],
+					[
+						"Url",
+						"UrlHintContractAddress	 ν"
+					],
+					[
+						"Hash",
+						"HashRegContractAddress	 ν"
+					],
+					[
+						"ru",
+						"runtime	 package ρ"
+					],
+					[
+						"code",
+						"codehash	common.Hash ν"
+					],
+					[
+						"IN",
+						"NewInt	*big.Int ƒ"
+					],
+					[
+						"S",
+						"Second	 Ɩ"
+					],
+					[
+						"Po",
+						"PowTest	bool ν"
+					],
+					[
+						"new",
+						"newTxc	int64 ν"
+					],
+					[
+						"test",
+						"testjethre	struct ʈ"
+					],
+					[
+						"fon",
+						"font-size"
+					],
+					[
+						"ba",
+						"background-color"
+					],
+					[
+						"ManifestT",
+						"manifestTrie	struct ʈ"
+					],
+					[
+						"Sp",
+						"Sprintf	string ƒ"
+					],
+					[
+						"New",
+						"NewReader	*bytes.Reader ƒ"
+					],
+					[
+						"RE",
+						"ReadAt	n int, err error ƒ"
+					],
+					[
+						"mat",
+						"matchingEntry	*manifestEntry ν"
+					],
+					[
+						"ent",
+						"entryPath	string ν"
+					],
+					[
+						"Ex",
+						"ExpandHomePath	path string ƒ"
+					],
+					[
+						"mani",
+						"manifestData	[]byte ν"
+					],
+					[
+						"Swarm",
+						"SwarmProxyPortFlag	cli.StringFlag ν"
+					],
+					[
+						"sta",
+						"startHttpServer	 ƒ"
+					],
+					[
+						"Par",
+						"ParseIP	net.IP ƒ"
+					],
+					[
+						"man",
+						"manifestEntry	struct ʈ"
+					],
+					[
+						"By",
+						"BytesToHash	common.Hash ƒ"
+					],
+					[
+						"StatusB",
+						"StatusBadRequest	 Ɩ"
+					],
+					[
+						"M",
+						"MatchString	bool ƒ"
+					],
+					[
+						"raw",
+						"rawManifestMatcher	*regexp.Regexp ν"
+					],
+					[
+						"re",
+						"resolveHost	contentHash Key, err error ƒ"
+					],
+					[
+						"conten",
+						"contentType	string ν"
+					],
+					[
+						"dpa",
+						"dpaLogger	*logger.Logger ν"
+					],
+					[
+						"B",
+						"BzzPort	string ν"
+					],
+					[
+						"Pa",
+						"Path	string ν"
+					],
+					[
+						"Req",
+						"requestStatus	struct ʈ"
+					],
+					[
+						"h",
+						"Hex	string ƒ"
+					],
+					[
+						"addr",
+						"addrHex	[]byte ν"
+					],
+					[
+						"u",
+						"urlHint	string ν"
+					],
+					[
+						"ha",
+						"hashReg	string ν"
+					],
+					[
+						"HexT",
+						"Hex2Bytes	[]byte ƒ"
+					],
+					[
+						"dag",
+						"dagFile	string ƒ"
+					],
+					[
+						"sto",
+						"StopAutoDAG	 ƒ"
+					],
+					[
+						"au",
+						"AutoDAGDir	string ν"
+					],
+					[
+						"ch",
+						"chainSub	*event.Subscription ν"
+					],
+					[
+						"ver",
+						"versionRE	*regexp.Regexp ν"
+					],
+					[
+						"str",
+						"strconv	 package ρ"
+					],
+					[
+						"c",
+						"Count	int ƒ"
+					],
+					[
+						"err",
+						"Errorf	 ƒ"
+					],
+					[
+						"Ma",
+						"MaxProx	int ν"
+					],
+					[
+						"ge",
+						"GetNode	func(int) ν"
+					],
+					[
+						"ret",
+						"retrieveRequestMsgData	struct ʈ"
+					],
+					[
+						"net",
+						"netStore	*bzz.NetStore ν"
+					],
+					[
+						"Node",
+						"NodeRecord	struct ʈ"
+					],
+					[
+						"lo",
+						"localStore	*localStore ν"
+					],
+					[
+						"req",
+						"requester	bool ν"
+					],
+					[
+						"St",
+						"storageTimeout	*time.Time ν"
+					],
+					[
+						"W",
+						"Warn	 Ɩ"
+					],
+					[
+						"In",
+						"Infof	 ƒ"
+					],
+					[
+						"dp",
+						"dpaLogger	*logger.Logger ν"
+					],
+					[
+						"Nod",
+						"NodeRecord	struct ʈ"
+					],
+					[
+						"k",
+						"Kademlia	struct ʈ"
+					],
+					[
+						"bu",
+						"buckets	[]*bucket ν"
+					],
+					[
+						"get",
+						"getPeerEntries	resp *peersMsgData, err error ƒ"
+					],
+					[
+						"hive",
+						"hivepath	string ν"
+					],
+					[
+						"add",
+						"address	Address ν"
+					],
+					[
+						"l",
+						"Logf	 ƒ"
+					],
+					[
+						"L",
+						"Logf	 ƒ"
+					],
+					[
+						"so",
+						"sortedByDistanceTo	bool ƒ"
+					],
+					[
+						"section",
+						"sectionids"
+					],
+					[
+						"sec",
+						"sectionids"
+					],
+					[
+						"page",
+						"pagecontent"
+					],
+					[
+						"sect",
+						"sections"
+					],
+					[
+						"ma",
+						"matchAny"
+					],
+					[
+						"sen",
+						"sendTransaction"
+					],
+					[
+						"contra",
+						"contractInfo"
+					],
+					[
+						"tesrj",
+						"testjethre	struct ʈ"
+					]
+				]
+			},
+			"build_system_choices":
+			[
+			],
+			"build_varint": "",
+			"command_palette":
+			{
+				"height": 347.0,
+				"last_filter": "Package Control: ",
+				"selected_items":
+				[
+					[
+						"Package Control: ",
+						"Package Control: Discover Packages"
+					]
+				],
+				"width": 467.0
+			},
+			"console":
+			{
+				"height": 126.0,
+				"history":
+				[
+					"import urllib.request,os,hashlib; h = '7183a2d3e96f11eeadd761d777e62404' + 'e330c659d4bb41d3bdf022e94cab3cd0'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) "
+				]
+			},
+			"distraction_free":
+			{
+				"menu_visible": true,
+				"show_minimap": false,
+				"show_open_files": false,
+				"show_tabs": false,
+				"side_bar_visible": false,
+				"status_bar_visible": false
+			},
+			"file_history":
+			[
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/exchanges.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/web3.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/glossary.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/foundation.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum/dapp-development.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/go-ethereum-wiki.rst/Frontier.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/frequently-asked-questions/frequently-asked-questions.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum/developing-on-ethereum.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum/developer-tools.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum/web3-base-layer-services.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/infrastructure.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/developers.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/mining.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions/contracts-and-transactions.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/community.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/introduction.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/the-homestead-release.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/what-is-ethereum.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/history-of-ethereum.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/ether.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions/account-types-gas-and-transactions.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/backup-import-accounts.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/main-wiki.rst/Serenity_Wishlist.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/main-wiki.rst/Security-Issue-Process.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/main-wiki.rst/Security-Categorization.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/main-wiki.rst/Natspec-Example.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/connecting-to-the-network.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/index.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/account-management.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ethereum-ecosystem.rst",
+				"/Users/tron/Work/ethereum/jeff-baby.sol",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/contributors.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ether.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/block-explorers.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/client-implementations.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ethereum-network-stats.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/mining-pools.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/base-layer-services.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/dapps.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ethereum-high-level-languages.rst",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/GoSublime/USAGE.md",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/disclaimer.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/using-ethereum-the-basics.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/about.rst",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/GoSublime/CHANGELOG.md",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/creating-an-account.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/installing-a-client.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/README.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/mining.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/index.rst",
+				"/Users/tron/Work/ethereum/doc/bzz/services/swear-swindle.rst",
+				"/Users/tron/Work/ethereum/frontier-guide/writing_contract.md",
+				"/Users/tron/Work/ethereum/homestead-guide/source/conf.py",
+				"/Users/tron/Work/ethereum/frontier-guide/TODO.md",
+				"/Users/tron/Work/ethereum/swarm/book/texi/architecture.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/introduction.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/.mailmap",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/related_projects.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/swarm.rst",
+				"/Users/tron/Work/ethereum/swarm/book/texi/specifications.texi",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/contents/intro.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/node/config.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/types.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/path.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/utils/flags.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/swarm.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/server.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/types.go",
+				"/Users/tron/Work/ethereum/swarm/book/texi/runninganode.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/common/kademlia/kademlia.go",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Preferences.sublime-settings",
+				"/Users/tron/Work/ethereum/go-ethereum/common/chequebook/cheque.go",
+				"/Users/tron/Work/ethereum/swarm/book/texi/incentivisation.texi",
+				"/Users/tron/Dropbox/content/notes/ethereum/dapps/joe.blockchainschool.md",
+				"/Users/tron/Work/ethereum/swarm/book/texi/swarm.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/usage.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/api.texi",
+				"/Users/tron/Work/ethereum/doc/bzz/namereg.bootsrap.js",
+				"/Users/tron/Work/ethereum/doc/bzz/namereg.natspec.testnet.js",
+				"/Users/tron/Work/ethereum/swarm/book/texi/about.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/installation.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/background.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/description_language.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texinfo.cheatsheet",
+				"/Users/tron/Work/ethereum/swarm/hunlex/about.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/vrindex.texi",
+				"/Users/tron/Work/ethereum/swarm/doc/incentives.md",
+				"/Users/tron/Work/ethereum/swarm/doc/forwarding.md",
+				"/Users/tron/Work/ethereum/swarm/doc/chunking.md",
+				"/Users/tron/Work/ethereum/doc/bzz/papers/beeline.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/troubleshooting.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/tags.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/related_software.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/command-line_control.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/flags.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/hunlex.texinfo",
+				"/Users/tron/Work/ethereum/swarm/TODO.md",
+				"/Users/tron/Work/ethereum/doc/bzz/Swarm.devcon.md",
+				"/Users/tron/Work/ethereum/doc/bzz/frontier.md",
+				"/Users/tron/Work/ethereum/doc/solidityInGeth.",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Colorsublime.sublime-settings",
+				"/Users/tron/Work/ethereum/swarm/book/texi/related_projects.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/backend.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/jeth.go",
+				"/Users/tron/Library/Preferences/com.googlecode.iterm2.plist",
+				"/Users/tron/Work/ethereum/go-ethereum/jsre/ethereum_js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/gasprice.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/miner.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/miner_args.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/chain_manager.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/genesis.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/ethtest/main.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/main.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/api.go",
+				"/Users/tron/Work/ethereum/go-ethereum/miner/miner.go",
+				"/Users/tron/Work/ethereum/go-ethereum/trie/cache.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rlp/decode_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/params/protocol_params.go",
+				"/Users/tron/Work/ethereum/bzz.demo/untitled",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/personal.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/personal_args.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/js_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/manager.go"
+			],
+			"find":
+			{
+				"height": 40.0
+			},
+			"find_in_files":
+			{
+				"height": 99.0,
+				"where_history":
+				[
+					""
+				]
+			},
+			"find_state":
+			{
+				"case_sensitive": true,
+				"find_history":
+				[
+					"`gitter",
+					"gitter",
+					"<<<",
+					"audit",
+					"unc",
+					". a",
+					"Account",
+					"gas",
+					"medi",
+					"gas",
+					"scripter",
+					"* ",
+					"dapp",
+					"logo",
+					"contents/",
+					"X",
+					"to X",
+					"directly contra",
+					"blockchai",
+					"litigation",
+					"math::",
+					"bidding",
+					"math",
+					"chain",
+					"n - ",
+					"n/",
+					"swarm contract",
+					"swarm con",
+					"twice",
+					"==============",
+					"====",
+					"homestead guide",
+					"[ ] ",
+					"address",
+					"length of add",
+					"address pre",
+					"[#] ",
+					"footno",
+					".. in",
+					"storing re",
+					"accounting",
+					"all",
+					"foot",
+					"will res",
+					".. code-block::",
+					"@item",
+					"@backslashchar{}",
+					"pair",
+					"@item",
+					"..in",
+					"..",
+					"node",
+					"@end example",
+					"@example",
+					"@ref",
+					"url",
+					"@command",
+					"@@",
+					"@vrindex",
+					"@cindex",
+					"@item",
+					"*",
+					"}",
+					"@",
+					"@math{",
+					"`{",
+					"@ref",
+					"@",
+					"@dfn{",
+					"node",
+					"@vrindex",
+					"@cindex",
+					"index",
+					"@emph{",
+					"@item",
+					"@end itemize",
+					"@itemize",
+					"@",
+					"@code{",
+					"@",
+					"@vrindex",
+					"@cindex",
+					"index",
+					"@cindex",
+					"@item",
+					"copy",
+					"Api",
+					"Apiw",
+					"Api",
+					"Apie",
+					"Api",
+					"version",
+					"e",
+					"version",
+					"smallquotation",
+					"example",
+					"@end deffn",
+					"@deffnx {} {}",
+					"@deffn {}",
+					"deploy",
+					"deploy a n",
+					"vrin",
+					"@19",
+					"tode",
+					"autoc",
+					"heart",
+					"ble form",
+					"@section",
+					"buyat",
+					"price",
+					"autoca",
+					"@command",
+					"_",
+					"draft",
+					"@deffn ",
+					"@deffn",
+					"@deffnx",
+					"pth",
+					"insu",
+					"keepin",
+					"normal",
+					"rece",
+					"nodek",
+					"public",
+					"history",
+					"0.",
+					"0.8",
+					"parseapist"
+				],
+				"highlight": true,
+				"in_selection": false,
+				"preserve_case": false,
+				"regex": false,
+				"replace_history":
+				[
+					"account",
+					"",
+					"SWEAR contract",
+					"Ethereum Homestead",
+					"",
+					"..  in",
+					".. code-block:: js",
+					"",
+					"\\",
+					"*",
+					".. in",
+					".. ",
+					"",
+					":ref:",
+					":command:",
+					"@",
+					"  ",
+					"*",
+					"`",
+					":math:`",
+					"`",
+					":ref:`",
+					":dfn:`",
+					"  ",
+					"*",
+					"",
+					"``",
+					"  ",
+					"*",
+					"example",
+					"smallquotation",
+					"quotation",
+					"@end defopt",
+					"",
+					"@defopt",
+					"@@19",
+					"@subsection",
+					"@deffn {} @code",
+					"@deffn {} ",
+					"@deffnx {} {} ",
+					"deffnx",
+					"addr",
+					"path",
+					"bin.",
+					"glog.V(logger.Debug).Infof",
+					".Addr",
+					"addr",
+					"addrK",
+					"AddrKey()",
+					"UndefinedValue",
+					".Registrar",
+					"Addr",
+					"Registrar",
+					"func (self *Resolver) ",
+					"",
+					"pos",
+					"request",
+					"reqestURL",
+					"url",
+					"self",
+					"uri",
+					"netStore",
+					"self.api",
+					" self.ds",
+					"* [ ]",
+					"\"",
+					"abiSignature(",
+					"abiSignature",
+					"EthashDir",
+					"epochLength",
+					"ProxBinSize",
+					"addresses",
+					"bzz.Net",
+					"NodeRecord",
+					"kad.",
+					"getNodesTest",
+					"log(",
+					"content += log(",
+					"\"",
+					"\\\"",
+					"//console",
+					".Info",
+					"Number",
+					"number",
+					"repl",
+					"repl.stateDb",
+					"repl.ethereum.ChainManager().State().Copy()",
+					"repl",
+					"repl.ethereum.StateDb()",
+					"repl.ethereum.StateDb",
+					"tmp, repl,",
+					"caddress",
+					"infoRoot",
+					"UrlHintContractAddress",
+					"UrlHint",
+					"HashReg",
+					"./leagues/3301/cicada/",
+					"$dd",
+					"glog.V(logger.Detail).Infof",
+					"bnode",
+					".f",
+					"Kademlia",
+					"bucket",
+					"nodes",
+					"Node",
+					"Address",
+					"Node",
+					"nodes",
+					".Addr",
+					"Entry",
+					"peers",
+					"xeth",
+					"backend",
+					"Etherbase",
+					"// dpaL",
+					"*common.Hash",
+					"dpaLog",
+					"common.Hash  ",
+					"common.Hash ",
+					"common",
+					"$id",
+					"return",
+					"nil, ",
+					"continue",
+					"0 *",
+					"StdLogS",
+					"common.Hash",
+					"n."
+				],
+				"reverse": false,
+				"show_context": true,
+				"use_buffer2": true,
+				"whole_word": false,
+				"wrap": true
+			},
+			"incremental_find":
+			{
+				"height": 31.0
+			},
+			"input":
+			{
+				"height": 37.0
+			},
+			"menu_visible": true,
+			"output.9o:///Users/tron/Work/ethereum/eth-go/ethp2p":
+			{
+				"height": 136.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/blockpool":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/bzz":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/natspec":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/registrar":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/eth":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/eth":
+			{
+				"height": 142.0
+			},
+			"output.GoSublime-main-output":
+			{
+				"height": 142.0
+			},
+			"output.MarGo-output":
+			{
+				"height": 136.0
+			},
+			"output.find_results":
+			{
+				"height": 0.0
+			},
+			"output.unsaved_changes":
+			{
+				"height": 136.0
+			},
+			"pinned_build_system": "",
+			"replace":
+			{
+				"height": 76.0
+			},
+			"save_all_on_build": true,
+			"select_file":
+			{
+				"height": 0.0,
+				"last_filter": "",
+				"selected_items":
+				[
+					[
+						"",
+						"backup/cli.repl/js_test.go"
+					]
+				],
+				"width": 0.0
+			},
+			"select_project":
+			{
+				"height": 0.0,
+				"last_filter": "",
+				"selected_items":
+				[
+				],
+				"width": 0.0
+			},
+			"select_symbol":
+			{
+				"height": 392.0,
+				"last_filter": "",
+				"selected_items":
+				[
+				],
+				"width": 944.0
+			},
+			"show_minimap": true,
+			"show_open_files": false,
+			"show_tabs": true,
+			"side_bar_visible": true,
+			"side_bar_width": 313.0,
+			"status_bar_visible": true,
+			"template_settings":
+			{
+			}
+		},
+		"new_window_width": 1387.0
+	},
+	"windows":
+	[
+		{
+			"auto_complete":
+			{
+				"selected_items":
+				[
+					[
+						"dumb",
+						"dumbtermHistory	struct ʈ"
+					],
+					[
+						"pass",
+						"passwordRepl	 Ɩ"
+					],
+					[
+						"R",
+						"ReplaceAllString	string ƒ"
+					],
+					[
+						"pas",
+						"passwordMatchRegexp	*regexp.Regexp ν"
+					],
+					[
+						"pa",
+						"paramsRegexp	 ν"
+					],
+					[
+						"Glo",
+						"GlobalString	string ƒ"
+					],
+					[
+						"Fa",
+						"Fatalf	 ƒ"
+					],
+					[
+						"key",
+						"keyAddr	common.Address ν"
+					],
+					[
+						"Re",
+						"Remove	error ƒ"
+					],
+					[
+						"filen",
+						"fileInfo	os.FileInfo ν"
+					],
+					[
+						"decryptK",
+						"decryptKeyV3	keyBytes []byte, keyId []byte, err error ƒ"
+					],
+					[
+						"No",
+						"ErrNotExist	error ν"
+					],
+					[
+						"ke",
+						"keyFilePath	string ν"
+					],
+					[
+						"sp",
+						"Sprintf	string ƒ"
+					],
+					[
+						"file",
+						"fileContent	[]byte ν"
+					],
+					[
+						"Mas",
+						"MarshalJSON	[]byte, error ƒ"
+					],
+					[
+						"Def",
+						"defaultGasPrice	*big.Int ν"
+					],
+					[
+						"p",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"fil",
+						"fileInfo	os.FileInfo ν"
+					],
+					[
+						"Ad",
+						"AddressFromHexOrIndex	address common.Address, err error ƒ"
+					],
+					[
+						"A",
+						"Addresses	addresses []common.Address, err error ƒ"
+					],
+					[
+						"time",
+						"timeout	time.Duration ν"
+					],
+					[
+						"Prin",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"P",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"listen",
+						"listenAddr"
+					],
+					[
+						"min",
+						"minProxLimit	int ν"
+					],
+					[
+						"af",
+						"after	time.Time ν"
+					],
+					[
+						"pro",
+						"proxLimit	int ν"
+					],
+					[
+						"N",
+						"Node	interface ¡"
+					],
+					[
+						"Un",
+						"UnixNano	int64 ƒ"
+					],
+					[
+						"pr",
+						"proxLimit	int ν"
+					],
+					[
+						"De",
+						"Detail	 Ɩ"
+					],
+					[
+						"ran",
+						"randAddr	kademlia.Address ν"
+					],
+					[
+						"pee",
+						"peerAddr	[]byte ν"
+					],
+					[
+						"n",
+						"netstore	*netStore ν"
+					],
+					[
+						"loca",
+						"localAddr	 ν"
+					],
+					[
+						"peer",
+						"peerAddr	struct ʈ"
+					],
+					[
+						"Byte",
+						"BytesToHash	common.Hash ƒ"
+					],
+					[
+						"has",
+						"hashOfNodeId	 ν"
+					],
+					[
+						"b",
+						"BucketSize	int ν"
+					],
+					[
+						"uni",
+						"UnixNano	int64 ƒ"
+					],
+					[
+						"nod",
+						"nodeIndex	map[Address]*NodeRecord ν"
+					],
+					[
+						"Spri",
+						"Sprintf	string ƒ"
+					],
+					[
+						"con",
+						"content_type"
+					],
+					[
+						"host",
+						"hostHash	common.Hash ν"
+					],
+					[
+						"url",
+						"setUrlHint"
+					],
+					[
+						"hash",
+						"hashRegAbi	string ν"
+					],
+					[
+						"HashRe",
+						"HashRegAddr	 ν"
+					],
+					[
+						"HashR",
+						"HashRegAddr	 ν"
+					],
+					[
+						"se",
+						"SetHashReg	err error ƒ"
+					],
+					[
+						"H",
+						"HexToAddress	common.Address ƒ"
+					],
+					[
+						"U",
+						"UrlHintAddr	 ν"
+					],
+					[
+						"co",
+						"common	 package ρ"
+					],
+					[
+						"name",
+						"nameHex	string ν"
+					],
+					[
+						"Url",
+						"UrlHintContractAddress	 ν"
+					],
+					[
+						"Hash",
+						"HashRegContractAddress	 ν"
+					],
+					[
+						"ru",
+						"runtime	 package ρ"
+					],
+					[
+						"code",
+						"codehash	common.Hash ν"
+					],
+					[
+						"IN",
+						"NewInt	*big.Int ƒ"
+					],
+					[
+						"S",
+						"Second	 Ɩ"
+					],
+					[
+						"Po",
+						"PowTest	bool ν"
+					],
+					[
+						"new",
+						"newTxc	int64 ν"
+					],
+					[
+						"test",
+						"testjethre	struct ʈ"
+					],
+					[
+						"fon",
+						"font-size"
+					],
+					[
+						"ba",
+						"background-color"
+					],
+					[
+						"ManifestT",
+						"manifestTrie	struct ʈ"
+					],
+					[
+						"Sp",
+						"Sprintf	string ƒ"
+					],
+					[
+						"New",
+						"NewReader	*bytes.Reader ƒ"
+					],
+					[
+						"RE",
+						"ReadAt	n int, err error ƒ"
+					],
+					[
+						"mat",
+						"matchingEntry	*manifestEntry ν"
+					],
+					[
+						"ent",
+						"entryPath	string ν"
+					],
+					[
+						"Ex",
+						"ExpandHomePath	path string ƒ"
+					],
+					[
+						"mani",
+						"manifestData	[]byte ν"
+					],
+					[
+						"Swarm",
+						"SwarmProxyPortFlag	cli.StringFlag ν"
+					],
+					[
+						"sta",
+						"startHttpServer	 ƒ"
+					],
+					[
+						"Par",
+						"ParseIP	net.IP ƒ"
+					],
+					[
+						"man",
+						"manifestEntry	struct ʈ"
+					],
+					[
+						"By",
+						"BytesToHash	common.Hash ƒ"
+					],
+					[
+						"StatusB",
+						"StatusBadRequest	 Ɩ"
+					],
+					[
+						"M",
+						"MatchString	bool ƒ"
+					],
+					[
+						"raw",
+						"rawManifestMatcher	*regexp.Regexp ν"
+					],
+					[
+						"re",
+						"resolveHost	contentHash Key, err error ƒ"
+					],
+					[
+						"conten",
+						"contentType	string ν"
+					],
+					[
+						"dpa",
+						"dpaLogger	*logger.Logger ν"
+					],
+					[
+						"B",
+						"BzzPort	string ν"
+					],
+					[
+						"Pa",
+						"Path	string ν"
+					],
+					[
+						"Req",
+						"requestStatus	struct ʈ"
+					],
+					[
+						"h",
+						"Hex	string ƒ"
+					],
+					[
+						"addr",
+						"addrHex	[]byte ν"
+					],
+					[
+						"u",
+						"urlHint	string ν"
+					],
+					[
+						"ha",
+						"hashReg	string ν"
+					],
+					[
+						"HexT",
+						"Hex2Bytes	[]byte ƒ"
+					],
+					[
+						"dag",
+						"dagFile	string ƒ"
+					],
+					[
+						"sto",
+						"StopAutoDAG	 ƒ"
+					],
+					[
+						"au",
+						"AutoDAGDir	string ν"
+					],
+					[
+						"ch",
+						"chainSub	*event.Subscription ν"
+					],
+					[
+						"ver",
+						"versionRE	*regexp.Regexp ν"
+					],
+					[
+						"str",
+						"strconv	 package ρ"
+					],
+					[
+						"c",
+						"Count	int ƒ"
+					],
+					[
+						"err",
+						"Errorf	 ƒ"
+					],
+					[
+						"Ma",
+						"MaxProx	int ν"
+					],
+					[
+						"ge",
+						"GetNode	func(int) ν"
+					],
+					[
+						"ret",
+						"retrieveRequestMsgData	struct ʈ"
+					],
+					[
+						"net",
+						"netStore	*bzz.NetStore ν"
+					],
+					[
+						"Node",
+						"NodeRecord	struct ʈ"
+					],
+					[
+						"lo",
+						"localStore	*localStore ν"
+					],
+					[
+						"req",
+						"requester	bool ν"
+					],
+					[
+						"St",
+						"storageTimeout	*time.Time ν"
+					],
+					[
+						"W",
+						"Warn	 Ɩ"
+					],
+					[
+						"In",
+						"Infof	 ƒ"
+					],
+					[
+						"dp",
+						"dpaLogger	*logger.Logger ν"
+					],
+					[
+						"Nod",
+						"NodeRecord	struct ʈ"
+					],
+					[
+						"k",
+						"Kademlia	struct ʈ"
+					],
+					[
+						"bu",
+						"buckets	[]*bucket ν"
+					],
+					[
+						"get",
+						"getPeerEntries	resp *peersMsgData, err error ƒ"
+					],
+					[
+						"hive",
+						"hivepath	string ν"
+					],
+					[
+						"add",
+						"address	Address ν"
+					],
+					[
+						"l",
+						"Logf	 ƒ"
+					],
+					[
+						"L",
+						"Logf	 ƒ"
+					],
+					[
+						"so",
+						"sortedByDistanceTo	bool ƒ"
+					],
+					[
+						"section",
+						"sectionids"
+					],
+					[
+						"sec",
+						"sectionids"
+					],
+					[
+						"page",
+						"pagecontent"
+					],
+					[
+						"sect",
+						"sections"
+					],
+					[
+						"ma",
+						"matchAny"
+					],
+					[
+						"sen",
+						"sendTransaction"
+					],
+					[
+						"contra",
+						"contractInfo"
+					],
+					[
+						"tesrj",
+						"testjethre	struct ʈ"
+					]
+				]
+			},
+			"buffers":
+			[
+				{
+					"file": "/Users/tron/Work/ethereum/frontier-guide/TODO.md",
+					"settings":
+					{
+						"buffer_size": 2127,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"contents": "issues VT\nhttps://github.com/ethereum/go-ethereum/issues/1330\n Make filter ids non numeric #1330 \n  [rpc] Additional `polarity` field in solidity logs #1339 \n accounts: unlock multiple accounts fails #1785 \n  accounts: unlock multiple accounts fails #1785 \n\n  https://github.com/ethereum/go-ethereum/issues/1820\n   eth.namereg and registries #1823 \n\n    crypto: KeyStore improvement ideas #1987 \n    https://github.com/ethereum/go-ethereum/issues/2100\n\n The filename of keys makes a difference as to whether or not they can be unlocked #2100 \n\n  Add admin command to disable/enable vmdebug from console #2124\n\n\n\nhttps://badges.gitter.im/ethereum/homestead-guide.svg",
+					"settings":
+					{
+						"buffer_size": 665,
+						"line_ending": "Unix",
+						"name": "issues VT"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/community.rst",
+					"settings":
+					{
+						"buffer_size": 6596,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/foundation.rst",
+					"settings":
+					{
+						"buffer_size": 2316,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/developers.rst",
+					"settings":
+					{
+						"buffer_size": 4459,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/infrastructure.rst",
+					"settings":
+					{
+						"buffer_size": 11772,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/introduction/the-homestead-release.rst",
+					"settings":
+					{
+						"buffer_size": 4433,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/ether.rst",
+					"settings":
+					{
+						"buffer_size": 4388,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions/contracts-and-transactions.rst",
+					"settings":
+					{
+						"buffer_size": 325,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions/account-types-gas-and-transactions.rst",
+					"settings":
+					{
+						"buffer_size": 8504,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/web3.rst",
+					"settings":
+					{
+						"buffer_size": 1422,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ethereum-ecosystem.rst",
+					"settings":
+					{
+						"buffer_size": 300,
+						"line_ending": "Unix"
+					}
+				}
+			],
+			"build_system": "",
+			"build_system_choices":
+			[
+			],
+			"build_varint": "",
+			"command_palette":
+			{
+				"height": 347.0,
+				"last_filter": "Package Control: ",
+				"selected_items":
+				[
+					[
+						"Package Control: ",
+						"Package Control: Discover Packages"
+					]
+				],
+				"width": 467.0
+			},
+			"console":
+			{
+				"height": 126.0,
+				"history":
+				[
+					"import urllib.request,os,hashlib; h = '7183a2d3e96f11eeadd761d777e62404' + 'e330c659d4bb41d3bdf022e94cab3cd0'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) "
+				]
+			},
+			"distraction_free":
+			{
+				"menu_visible": true,
+				"show_minimap": false,
+				"show_open_files": false,
+				"show_tabs": false,
+				"side_bar_visible": false,
+				"status_bar_visible": false
+			},
+			"expanded_folders":
+			[
+				"/Users/tron/Work/ethereum/homestead-guide",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/go-ethereum-wiki.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source",
+				"/Users/tron/Work/ethereum/homestead-guide/source/_templates",
+				"/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem",
+				"/Users/tron/Work/ethereum/homestead-guide/source/frequently-asked-questions",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics"
+			],
+			"file_history":
+			[
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/exchanges.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/web3.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/glossary.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/foundation.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum/dapp-development.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/go-ethereum-wiki.rst/Frontier.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/frequently-asked-questions/frequently-asked-questions.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum/developing-on-ethereum.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum/developer-tools.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/developing-on-ethereum/web3-base-layer-services.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/infrastructure.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/developers.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/mining.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions/contracts-and-transactions.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/community.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/introduction.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/the-homestead-release.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/what-is-ethereum.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/history-of-ethereum.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/ether.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions/account-types-gas-and-transactions.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/backup-import-accounts.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/main-wiki.rst/Serenity_Wishlist.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/main-wiki.rst/Security-Issue-Process.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/main-wiki.rst/Security-Categorization.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/old-docs-for-reference/main-wiki.rst/Natspec-Example.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/connecting-to-the-network.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/index.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/account-management.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ethereum-ecosystem.rst",
+				"/Users/tron/Work/ethereum/jeff-baby.sol",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/contributors.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ether.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/block-explorers.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/client-implementations.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ethereum-network-stats.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/mining-pools.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/base-layer-services.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/dapps.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ethereum-high-level-languages.rst",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/GoSublime/USAGE.md",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction/disclaimer.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/using-ethereum-the-basics.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/about.rst",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/GoSublime/CHANGELOG.md",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/creating-an-account.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/installing-a-client.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/README.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/mining.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/introduction.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/index.rst",
+				"/Users/tron/Work/ethereum/doc/bzz/services/swear-swindle.rst",
+				"/Users/tron/Work/ethereum/frontier-guide/writing_contract.md",
+				"/Users/tron/Work/ethereum/homestead-guide/source/conf.py",
+				"/Users/tron/Work/ethereum/frontier-guide/TODO.md",
+				"/Users/tron/Work/ethereum/swarm/book/texi/architecture.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/introduction.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/.mailmap",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/related_projects.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/swarm.rst",
+				"/Users/tron/Work/ethereum/swarm/book/texi/specifications.texi",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/contents/intro.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/node/config.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/types.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/path.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/utils/flags.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/swarm.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/server.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/types.go",
+				"/Users/tron/Work/ethereum/swarm/book/texi/runninganode.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/common/kademlia/kademlia.go",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Preferences.sublime-settings",
+				"/Users/tron/Work/ethereum/go-ethereum/common/chequebook/cheque.go",
+				"/Users/tron/Work/ethereum/swarm/book/texi/incentivisation.texi",
+				"/Users/tron/Dropbox/content/notes/ethereum/dapps/joe.blockchainschool.md",
+				"/Users/tron/Work/ethereum/swarm/book/texi/swarm.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/usage.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/api.texi",
+				"/Users/tron/Work/ethereum/doc/bzz/namereg.bootsrap.js",
+				"/Users/tron/Work/ethereum/doc/bzz/namereg.natspec.testnet.js",
+				"/Users/tron/Work/ethereum/swarm/book/texi/about.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/installation.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/background.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/description_language.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texinfo.cheatsheet",
+				"/Users/tron/Work/ethereum/swarm/hunlex/about.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/vrindex.texi",
+				"/Users/tron/Work/ethereum/swarm/doc/incentives.md",
+				"/Users/tron/Work/ethereum/swarm/doc/forwarding.md",
+				"/Users/tron/Work/ethereum/swarm/doc/chunking.md",
+				"/Users/tron/Work/ethereum/doc/bzz/papers/beeline.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/troubleshooting.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/tags.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/related_software.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/command-line_control.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/flags.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/hunlex.texinfo",
+				"/Users/tron/Work/ethereum/swarm/TODO.md",
+				"/Users/tron/Work/ethereum/doc/bzz/Swarm.devcon.md",
+				"/Users/tron/Work/ethereum/doc/bzz/frontier.md",
+				"/Users/tron/Work/ethereum/doc/solidityInGeth.",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Colorsublime.sublime-settings",
+				"/Users/tron/Work/ethereum/swarm/book/texi/related_projects.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/backend.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/jeth.go",
+				"/Users/tron/Library/Preferences/com.googlecode.iterm2.plist",
+				"/Users/tron/Work/ethereum/go-ethereum/jsre/ethereum_js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/gasprice.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/miner.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/miner_args.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/chain_manager.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/genesis.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/ethtest/main.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/main.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/api.go",
+				"/Users/tron/Work/ethereum/go-ethereum/miner/miner.go",
+				"/Users/tron/Work/ethereum/go-ethereum/trie/cache.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rlp/decode_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/params/protocol_params.go",
+				"/Users/tron/Work/ethereum/bzz.demo/untitled",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/personal.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/personal_args.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/js_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/manager.go"
+			],
+			"find":
+			{
+				"height": 40.0
+			},
+			"find_in_files":
+			{
+				"height": 99.0,
+				"where_history":
+				[
+					""
+				]
+			},
+			"find_state":
+			{
+				"case_sensitive": true,
+				"find_history":
+				[
+					"`gitter",
+					"gitter",
+					"<<<",
+					"audit",
+					"unc",
+					". a",
+					"Account",
+					"gas",
+					"medi",
+					"gas",
+					"scripter",
+					"* ",
+					"dapp",
+					"logo",
+					"contents/",
+					"X",
+					"to X",
+					"directly contra",
+					"blockchai",
+					"litigation",
+					"math::",
+					"bidding",
+					"math",
+					"chain",
+					"n - ",
+					"n/",
+					"swarm contract",
+					"swarm con",
+					"twice",
+					"==============",
+					"====",
+					"homestead guide",
+					"[ ] ",
+					"address",
+					"length of add",
+					"address pre",
+					"[#] ",
+					"footno",
+					".. in",
+					"storing re",
+					"accounting",
+					"all",
+					"foot",
+					"will res",
+					".. code-block::",
+					"@item",
+					"@backslashchar{}",
+					"pair",
+					"@item",
+					"..in",
+					"..",
+					"node",
+					"@end example",
+					"@example",
+					"@ref",
+					"url",
+					"@command",
+					"@@",
+					"@vrindex",
+					"@cindex",
+					"@item",
+					"*",
+					"}",
+					"@",
+					"@math{",
+					"`{",
+					"@ref",
+					"@",
+					"@dfn{",
+					"node",
+					"@vrindex",
+					"@cindex",
+					"index",
+					"@emph{",
+					"@item",
+					"@end itemize",
+					"@itemize",
+					"@",
+					"@code{",
+					"@",
+					"@vrindex",
+					"@cindex",
+					"index",
+					"@cindex",
+					"@item",
+					"copy",
+					"Api",
+					"Apiw",
+					"Api",
+					"Apie",
+					"Api",
+					"version",
+					"e",
+					"version",
+					"smallquotation",
+					"example",
+					"@end deffn",
+					"@deffnx {} {}",
+					"@deffn {}",
+					"deploy",
+					"deploy a n",
+					"vrin",
+					"@19",
+					"tode",
+					"autoc",
+					"heart",
+					"ble form",
+					"@section",
+					"buyat",
+					"price",
+					"autoca",
+					"@command",
+					"_",
+					"draft",
+					"@deffn ",
+					"@deffn",
+					"@deffnx",
+					"pth",
+					"insu",
+					"keepin",
+					"normal",
+					"rece",
+					"nodek",
+					"public",
+					"history",
+					"0.",
+					"0.8",
+					"parseapist"
+				],
+				"highlight": true,
+				"in_selection": false,
+				"preserve_case": false,
+				"regex": false,
+				"replace_history":
+				[
+					"account",
+					"",
+					"SWEAR contract",
+					"Ethereum Homestead",
+					"",
+					"..  in",
+					".. code-block:: js",
+					"",
+					"\\",
+					"*",
+					".. in",
+					".. ",
+					"",
+					":ref:",
+					":command:",
+					"@",
+					"  ",
+					"*",
+					"`",
+					":math:`",
+					"`",
+					":ref:`",
+					":dfn:`",
+					"  ",
+					"*",
+					"",
+					"``",
+					"  ",
+					"*",
+					"example",
+					"smallquotation",
+					"quotation",
+					"@end defopt",
+					"",
+					"@defopt",
+					"@@19",
+					"@subsection",
+					"@deffn {} @code",
+					"@deffn {} ",
+					"@deffnx {} {} ",
+					"deffnx",
+					"addr",
+					"path",
+					"bin.",
+					"glog.V(logger.Debug).Infof",
+					".Addr",
+					"addr",
+					"addrK",
+					"AddrKey()",
+					"UndefinedValue",
+					".Registrar",
+					"Addr",
+					"Registrar",
+					"func (self *Resolver) ",
+					"",
+					"pos",
+					"request",
+					"reqestURL",
+					"url",
+					"self",
+					"uri",
+					"netStore",
+					"self.api",
+					" self.ds",
+					"* [ ]",
+					"\"",
+					"abiSignature(",
+					"abiSignature",
+					"EthashDir",
+					"epochLength",
+					"ProxBinSize",
+					"addresses",
+					"bzz.Net",
+					"NodeRecord",
+					"kad.",
+					"getNodesTest",
+					"log(",
+					"content += log(",
+					"\"",
+					"\\\"",
+					"//console",
+					".Info",
+					"Number",
+					"number",
+					"repl",
+					"repl.stateDb",
+					"repl.ethereum.ChainManager().State().Copy()",
+					"repl",
+					"repl.ethereum.StateDb()",
+					"repl.ethereum.StateDb",
+					"tmp, repl,",
+					"caddress",
+					"infoRoot",
+					"UrlHintContractAddress",
+					"UrlHint",
+					"HashReg",
+					"./leagues/3301/cicada/",
+					"$dd",
+					"glog.V(logger.Detail).Infof",
+					"bnode",
+					".f",
+					"Kademlia",
+					"bucket",
+					"nodes",
+					"Node",
+					"Address",
+					"Node",
+					"nodes",
+					".Addr",
+					"Entry",
+					"peers",
+					"xeth",
+					"backend",
+					"Etherbase",
+					"// dpaL",
+					"*common.Hash",
+					"dpaLog",
+					"common.Hash  ",
+					"common.Hash ",
+					"common",
+					"$id",
+					"return",
+					"nil, ",
+					"continue",
+					"0 *",
+					"StdLogS",
+					"common.Hash",
+					"n."
+				],
+				"reverse": false,
+				"show_context": true,
+				"use_buffer2": true,
+				"whole_word": false,
+				"wrap": true
+			},
+			"folders":
+			[
+				{
+					"path": "/Users/tron/Work/ethereum/homestead-guide"
+				}
+			],
+			"groups":
+			[
+				{
+					"selected": 6,
+					"sheets":
+					[
+						{
+							"buffer": 0,
+							"file": "/Users/tron/Work/ethereum/frontier-guide/TODO.md",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 2127,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										1918,
+										1997
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/MarkdownEditing/Markdown.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 491.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 11,
+							"type": "text"
+						},
+						{
+							"buffer": 1,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 665,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										286,
+										286
+									]
+								],
+								"settings":
+								{
+									"auto_name": "issues VT",
+									"syntax": "Packages/Text/Plain text.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 10,
+							"type": "text"
+						},
+						{
+							"buffer": 2,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/community.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 6596,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										5179,
+										5186
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 1483.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 7,
+							"type": "text"
+						},
+						{
+							"buffer": 3,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/foundation.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 2316,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										1191,
+										1191
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 6,
+							"type": "text"
+						},
+						{
+							"buffer": 4,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/developers.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 4459,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										179,
+										179
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 1,
+							"type": "text"
+						},
+						{
+							"buffer": 5,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/infrastructure.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 11772,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										11772,
+										11772
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 3228.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 5,
+							"type": "text"
+						},
+						{
+							"buffer": 6,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/introduction/the-homestead-release.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 4433,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										3840,
+										3840
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 71.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 0,
+							"type": "text"
+						},
+						{
+							"buffer": 7,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/using-ethereum-the-basics/ether.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 4388,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										443,
+										443
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 8,
+							"type": "text"
+						},
+						{
+							"buffer": 8,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions/contracts-and-transactions.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 325,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										0,
+										0
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 9,
+							"type": "text"
+						},
+						{
+							"buffer": 9,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/contracts-and-transactions/account-types-gas-and-transactions.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 8504,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										118,
+										118
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 1970.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 3,
+							"type": "text"
+						},
+						{
+							"buffer": 10,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/web3.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 1422,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										1026,
+										1026
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 4,
+							"type": "text"
+						},
+						{
+							"buffer": 11,
+							"file": "/Users/tron/Work/ethereum/homestead-guide/source/ethereum-ecosystem/ethereum-ecosystem.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 300,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										269,
+										269
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 2,
+							"type": "text"
+						}
+					]
+				}
+			],
+			"incremental_find":
+			{
+				"height": 31.0
+			},
+			"input":
+			{
+				"height": 37.0
+			},
+			"layout":
+			{
+				"cells":
+				[
+					[
+						0,
+						0,
+						1,
+						1
+					]
+				],
+				"cols":
+				[
+					0.0,
+					1.0
+				],
+				"rows":
+				[
+					0.0,
+					1.0
+				]
+			},
+			"menu_visible": true,
+			"output.9o:///Users/tron/Work/ethereum/eth-go/ethp2p":
+			{
+				"height": 136.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/blockpool":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/bzz":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/natspec":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/registrar":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/eth":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/eth":
+			{
+				"height": 142.0
+			},
+			"output.GoSublime-main-output":
+			{
+				"height": 142.0
+			},
+			"output.MarGo-output":
+			{
+				"height": 136.0
+			},
+			"output.find_results":
+			{
+				"height": 0.0
+			},
+			"output.unsaved_changes":
+			{
+				"height": 136.0
+			},
+			"pinned_build_system": "",
+			"position": "0 50 9 1387 868 0 0 1440 877 ",
+			"project": "",
+			"replace":
+			{
+				"height": 76.0
+			},
+			"save_all_on_build": true,
+			"select_file":
+			{
+				"height": 0.0,
+				"last_filter": "",
+				"selected_items":
+				[
+					[
+						"",
+						"backup/cli.repl/js_test.go"
+					]
+				],
+				"width": 0.0
+			},
+			"select_project":
+			{
+				"height": 0.0,
+				"last_filter": "",
+				"selected_items":
+				[
+				],
+				"width": 0.0
+			},
+			"select_symbol":
+			{
+				"height": 392.0,
+				"last_filter": "",
+				"selected_items":
+				[
+				],
+				"width": 944.0
+			},
+			"selected_group": 0,
+			"settings":
+			{
+			},
+			"show_minimap": true,
+			"show_open_files": false,
+			"show_tabs": true,
+			"side_bar_visible": true,
+			"side_bar_width": 313.0,
+			"status_bar_visible": true,
+			"template_settings":
+			{
+			},
+			"window_id": 72,
+			"workspace_name": ""
+		},
+		{
+			"auto_complete":
+			{
+				"selected_items":
+				[
+					[
+						"don",
+						"download"
+					],
+					[
+						"cod",
+						"codeHash	common.Hash ν"
+					],
+					[
+						"net",
+						"network_id"
+					],
+					[
+						"SW",
+						"SWARM_BIN"
+					],
+					[
+						"FILE_",
+						"FILE_00"
+					],
+					[
+						"b",
+						"blockWrite	bool ν"
+					],
+					[
+						"Con",
+						"Control	struct ʈ"
+					],
+					[
+						"Sy",
+						"SyncPriorities	[]uint ν"
+					],
+					[
+						"Hex",
+						"HexToAddress	common.Address ƒ"
+					],
+					[
+						"in",
+						"Infof	 ƒ"
+					],
+					[
+						"Glo",
+						"GlobalString	string ƒ"
+					],
+					[
+						"t",
+						"TempDir	string ƒ"
+					],
+					[
+						"F",
+						"Fatalf	 ƒ"
+					],
+					[
+						"chec",
+						"checkResponse	 ƒ"
+					],
+					[
+						"exp",
+						"expResponse	*testResponse ƒ"
+					],
+					[
+						"Re",
+						"Response	struct ʈ"
+					],
+					[
+						"read",
+						"reader	storage.SectionReader ν"
+					],
+					[
+						"By",
+						"BytesToHash	common.Hash ƒ"
+					],
+					[
+						"Ch",
+						"Chequebook	struct ʈ"
+					],
+					[
+						"d",
+						"delivered	[][]byte ν"
+					],
+					[
+						"T",
+						"TempDir	string ƒ"
+					],
+					[
+						"Va",
+						"Value	[]byte ƒ"
+					],
+					[
+						"count",
+						"counterValue	[]byte ν"
+					],
+					[
+						"va",
+						"Value	[]byte ƒ"
+					],
+					[
+						"Pu",
+						"PutUint64	 ƒ"
+					],
+					[
+						"bu",
+						"buffer	chan interface{} ν"
+					],
+					[
+						"l",
+						"Logf	 ƒ"
+					],
+					[
+						"B",
+						"BZZKEY00"
+					],
+					[
+						"syn",
+						"syncStates	chan *syncState ν"
+					],
+					[
+						"S",
+						"Synced	bool ν"
+					],
+					[
+						"new",
+						"newSyncState	*syncState ƒ"
+					],
+					[
+						"stor",
+						"storage	 package ρ"
+					],
+					[
+						"hi",
+						"histPrior	uint ν"
+					],
+					[
+						"de",
+						"deliveryRequest	chan bool ν"
+					],
+					[
+						"syncR",
+						"syncRequest	struct ʈ"
+					],
+					[
+						"prio",
+						"priority	int ν"
+					],
+					[
+						"un",
+						"unsyncedKeysRequest	chan bool ν"
+					],
+					[
+						"sy",
+						"syncStates	chan *syncState ν"
+					],
+					[
+						"ke",
+						"keys	[]chan interface{} ν"
+					],
+					[
+						"St",
+						"state	*syncState ν"
+					],
+					[
+						"Pr",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"DB",
+						"DbSyncState	struct ʈ"
+					],
+					[
+						"s",
+						"State	*syncState ν"
+					],
+					[
+						"sta",
+						"stateCopy	 ν"
+					],
+					[
+						"la",
+						"LastSeenAt	uint64 ν"
+					],
+					[
+						"st",
+						"storeQ	[3]chan *storeRequestMsgData ν"
+					],
+					[
+						"deliver",
+						"deliveries	[]chan *storeRequestMsgData ν"
+					],
+					[
+						"M",
+						"MakeHashFunc	storage.Hasher ƒ"
+					],
+					[
+						"pr",
+						"priority	uint ν"
+					],
+					[
+						"et",
+						"ethApi	struct ʈ"
+					],
+					[
+						"Deli",
+						"DeliverReq	 Ɩ"
+					],
+					[
+						"Syn",
+						"SyncReq	 Ɩ"
+					],
+					[
+						"for",
+						"forwarder	struct ʈ"
+					],
+					[
+						"delive",
+						"deliveryRequestMsgData	struct ʈ"
+					],
+					[
+						"uns",
+						"unsyncedKeysMsgData	struct ʈ"
+					],
+					[
+						"dpa",
+						"dpaChunkStore	struct ʈ"
+					],
+					[
+						"dp",
+						"dpaChunkStore	struct ʈ"
+					],
+					[
+						"db",
+						"dbAccess	*dbAccess ν"
+					],
+					[
+						"Chun",
+						"ChunkStore	interface ¡"
+					],
+					[
+						"Chunk",
+						"ChunkStore	interface ¡"
+					],
+					[
+						"ret",
+						"retrieveRequestMsgData	struct ʈ"
+					],
+					[
+						"storeRequestM",
+						"storeRequestMsgData	struct ʈ"
+					],
+					[
+						"has",
+						"HasHexPrefix	bool ƒ"
+					],
+					[
+						"requ",
+						"requestDb"
+					],
+					[
+						"lig",
+						"lightKDFFlag"
+					],
+					[
+						"te",
+						"testing"
+					],
+					[
+						"L",
+						"ListenAddr"
+					],
+					[
+						"test",
+						"testSyncer"
+					],
+					[
+						"Pri",
+						"Printf"
+					],
+					[
+						"acc",
+						"accountManager"
+					],
+					[
+						"Et",
+						"Ethereum"
+					],
+					[
+						"H",
+						"HttpClient"
+					],
+					[
+						"li",
+						"listenAddr"
+					],
+					[
+						"eth",
+						"ethApi"
+					],
+					[
+						"conn",
+						"connectPeer"
+					],
+					[
+						"err",
+						"Errorf"
+					],
+					[
+						"GetBlo",
+						"GetBlockReceipts"
+					],
+					[
+						"req",
+						"requestTimeout"
+					],
+					[
+						"pe",
+						"peerSet"
+					],
+					[
+						"syncd",
+						"syncDbEntry	struct ʈ"
+					],
+					[
+						"deliv",
+						"deliverC	chan bool ν"
+					],
+					[
+						"c",
+						"Close	 ƒ"
+					],
+					[
+						"del",
+						"deliverC	chan bool ν"
+					],
+					[
+						"deli",
+						"delivered	[]interface{} ν"
+					],
+					[
+						"newsy",
+						"newSyncDb	*syncDb ƒ"
+					],
+					[
+						"R",
+						"RemoveAll	error ƒ"
+					],
+					[
+						"so",
+						"storeRequestMsgData	struct ʈ"
+					],
+					[
+						"syncRe",
+						"syncRequestMsg	 Ɩ"
+					],
+					[
+						"dec",
+						"decodeSync	*syncState ƒ"
+					],
+					[
+						"P",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"fat",
+						"Fatalf	 ƒ"
+					],
+					[
+						"p",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"con",
+						"connRetryExp	 Ɩ"
+					],
+					[
+						"Kad",
+						"KadParams	struct ʈ"
+					],
+					[
+						"kd",
+						"Kademlia	struct ʈ"
+					],
+					[
+						"New",
+						"NewKadParams	*KadParams ƒ"
+					],
+					[
+						"No",
+						"Now	time.Time ƒ"
+					],
+					[
+						"Ti",
+						"Time	struct ʈ"
+					],
+					[
+						"ini",
+						"initialRetryInterval	time.Duration ν"
+					],
+					[
+						"K",
+						"Kademlia	struct ʈ"
+					],
+					[
+						"Pro",
+						"ProxBinSize	int ν"
+					],
+					[
+						"Sp",
+						"Sprintf	string ƒ"
+					],
+					[
+						"Kadd",
+						"KadDb	struct ʈ"
+					],
+					[
+						"kad",
+						"kadDb	struct ʈ"
+					],
+					[
+						"n",
+						"NodeRecord	struct ʈ"
+					],
+					[
+						"Node",
+						"NodeRecord	struct ʈ"
+					],
+					[
+						"buck",
+						"bucketSize	 Ɩ"
+					],
+					[
+						"addre",
+						"Address	common.Hash ʈ"
+					],
+					[
+						"tran",
+						"transbytea	byte ν"
+					],
+					[
+						"transb",
+						"transbyteb	byte ν"
+					],
+					[
+						"Last",
+						"LastSeenAt	uint64 ν"
+					],
+					[
+						"sync",
+						"syncState	struct ʈ"
+					],
+					[
+						"newSy",
+						"newSyncRequest	*syncRequest ƒ"
+					],
+					[
+						"sto",
+						"store	func(*storeRequestMsgData) error ν"
+					],
+					[
+						"h",
+						"hive	*hive ν"
+					],
+					[
+						"syncer",
+						"syncer	struct ʈ"
+					],
+					[
+						"syncb",
+						"syncBufferSize	uint ν"
+					],
+					[
+						"sa",
+						"saveStoreRequest	 ƒ"
+					],
+					[
+						"syncP",
+						"SyncPriorities	[]uint ν"
+					],
+					[
+						"store",
+						"storeRequestMsgData	struct ʈ"
+					],
+					[
+						"A",
+						"peerAddr	*peerAddr ƒ"
+					],
+					[
+						"Se",
+						"Sells	bool ν"
+					],
+					[
+						"lo",
+						"localStore	*localStore ν"
+					],
+					[
+						"netst",
+						"netstore	*netStore ν"
+					],
+					[
+						"He",
+						"HexToHash	common.Hash ƒ"
+					],
+					[
+						"Tim",
+						"Time	struct ʈ"
+					],
+					[
+						"nr",
+						"NewTimer	*time.Timer ƒ"
+					],
+					[
+						"def",
+						"defaultConfig	 Ɩ"
+					]
+				]
+			},
+			"buffers":
+			[
+				{
+					"file": "/Users/tron/Dropbox/content/notes/ethereum/bzz/swarm.demo.2015-12-18.md",
+					"settings":
+					{
+						"buffer_size": 4906,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/api/testapi.go",
+					"settings":
+					{
+						"buffer_size": 314,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/test/syncing/02.sh",
+					"settings":
+					{
+						"buffer_size": 458,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"contents": "#!/bin/bash\necho \"TEST swap/00:\"\necho \" two nodes that do not sync and do not have any funds\"\necho \" cannot retrieve content from each other\"\n\ndir=`dirname $0`\nsource $dir/../../cmd/swarm/test.sh\n\nFILE_00=/tmp/1K.0\nrandomfile 1 > $FILE_00\nls -l $FILE_00\nmininginterval=50\nkey=/tmp/key\n\nswarm init 2\nsleep $wait\nswarm attach 00 -exec \"'bzz.noSync(true)'\"\nswarm attach 01 -exec \"'bzz.noSync(true)'\"\nswarm up 00 $FILE_00|tail -n1 > $key\nswarm needs 00 $key $FILE_00\nswarm needs 01 $key $FILE_00 | tail -1| grep -ql \"PASS\" && echo \"FAIL\" || echo \"PASS <3\"\n\nFILE_01=/tmp/1K.1\nrandomfile 1 > $FILE_01\nswarm up 01 $FILE_01|tail -1 > $key\nswarm needs 01 $key $FILE_01\nswarm needs 00 $key $FILE_01 | tail -1| grep -ql \"PASS\" && echo \"FAIL\" || echo \"PASS <3\"\n\nswarm stop all",
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/test/swap/00.sh",
+					"file_size": 764,
+					"file_write_time": 130995451790000000,
+					"settings":
+					{
+						"buffer_size": 764,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/test/swap/01.sh",
+					"settings":
+					{
+						"buffer_size": 1036,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/network/protocol.go",
+					"settings":
+					{
+						"buffer_size": 16477,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/network/hive.go",
+					"settings":
+					{
+						"buffer_size": 10082,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/test.sh",
+					"settings":
+					{
+						"buffer_size": 585,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"contents": "swap, swear and swindle: the components of the storage and bandwidth incentivisation\n\nSword swarm on-demand retrieval daemon \nthe swarm backed light client\nhttps://gist.github.com/zelig/aa6eb43615e12d834d9f\n\nswarm db\n\nswarm FS\n\nIPES                                                                                \n\nfull archival with historical DNS\n\n\n\n",
+					"settings":
+					{
+						"buffer_size": 351,
+						"line_ending": "Unix",
+						"name": "swap, swear and swindle: the components of the sto"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/swarm.sh",
+					"settings":
+					{
+						"buffer_size": 6207,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/swarm.go",
+					"settings":
+					{
+						"buffer_size": 8642,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/rpc/javascript.go",
+					"settings":
+					{
+						"buffer_size": 11816,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/netstatconf.sh",
+					"settings":
+					{
+						"buffer_size": 1333,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/network/syncer.go",
+					"settings":
+					{
+						"buffer_size": 24816,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Dropbox/content/notes/ethereum/bzz/gcloud.md",
+					"settings":
+					{
+						"buffer_size": 347,
+						"line_ending": "Unix",
+						"name": "gcloud swarm"
+					}
+				},
+				{
+					"contents": "netstats integration for swarm \n\nsyncer test\n\nmore scripted tests\n\nforwarding test\ndepo test\n\nhttps://github.com/ethereum/go-ethereum/labels/swarm\n\nswarm site dapp\n\nchequebook \ndropbox\nArchHive\nSwarm DNS\n\nseries of blogposts\n\n/Users/tron/Work/ethereum/go-ethereum/geth --datadir=/Users/tron/leagues/swarm//32200/data/00   --identity=00 --bzzaccount=0c7659a863a27f71e2dc4513448054ad3b0ef992 --bzzport=8600   --port=31100   --unlock=0c7659a863a27f71e2dc4513448054ad3b0ef992  --password=<(echo -n 00)   --rpc --r  pcport=8200 --rpccorsdomain='*' --networkid 32200 --vmodule=netstore=6,depo=6,forwarding=6,hive=5,dpa=6,dpa=6,http=6,sy ncb=6,syncer=6,protocol=6,swap=6,chequebook=6 --verbosity=5 --vmdebug=false --maxpeers=20 --dev --shh=false --nodiscover --ipcexp   2| tee /Users/tron/leagues/swarm//32200/log/00.log > /Users/tron/leagues/swarm//32200/log/00.2015151216-040450.log &  # comment out if you pipe it to a tty etc.\n\n\n\nBZZKEY00=0x5c6332e46a095feb9da1ed9803af2fa425f96aa6\n./geth --datadir ~/tmp/sync/00 --bzzaccount \"$BZZKEY00\" --unlock 0 --password <(echo bzz) --nodiscover --networkid 322 --port 30300 --vmodule syncer=6,syncdb=6 --maxpeers 20 --dev --vmdebug=false --verbosity 3 console 2> sync00.log\n  a\nBZZKEY01=0x7dafa7436cba4b5b94a0452557b20b01d23bdc05\n./geth --datadir ~/tmp/sync/01 --bzzaccount \"$BZZKEY01\" --unlock 0 --password <(echo bzz) --nodiscover --networkid 322 --port 30301 --vmodule syncer=6,syncdb=6 --maxpeers 20 --dev --vmdebug=false --verbosity 3 console 2> sync01.log\n\napplicative transactional manifest updates\n\nmake http server stoppable (for testing)\n\ndb cleanup should preserve unforwarded entries within the storage radius\n\nsyncing history should proceed in bands of reverse chronology so that b acklog is always oldest content\n\nr-kademlia lookup with beeline delivery \n\nswarm is silly world of acronyms revealing mnemonics\n\nroadmap \n- multiprotocol test on 1\n- network testing\n- sword: blockchain on swarm ODR implementation \n- interplanetary elastic swarm integration \n- r-kademlia lookup with beeline delivery \n- swell: suck up beeline delivery only if it warrants storage\n- swear: registry and deposit handling\n- swindler: swarm integrated defense and litigation engine\n\nDepart decentralised preimage archive tools\nDPA  Distributed Preimage Archive\nDepo Decentralised Preimage Object \nDepo \n\n\n  deliveryRequest func([]*syncRequest) error // signal unsynced keys\n",
+					"settings":
+					{
+						"buffer_size": 2402,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"contents": "kademlia papers\n\nhttp://web.archive.org/web/20030917013432/http://kademlia.scs.cs.nyu.edu/kpos.pdf\nhttp://pdos.csail.mit.edu/~petar/papers/maymounkov-kademlia-lncs.pdf\nhttp://xlattice.sourceforge.net/components/protocol/kademlia/specs.html\n\nKaleidoscope: Adding Colors to Kademlia IEEE P2P 2013 (cache friendly lookup for kademlia)\nhttp://www.cs.technion.ac.il/~gilga/P2P2013_49.pdf\n\nhttp://www.cs.helsinki.fi/u/jakangas/MLDHT/\n\nCai, X. S.; Devroye, L. (2013). \"A Probabilistic Analysis of Kademlia Networks\". Lecture Notes in Computer Science 8283. p. 711. doi:10.1007/978-3-642-45030-3_66. ISBN 978-3-642-45029-7.\n\nTonika 5ttt\nElectric routing and concurrent flow cutting\nJonathan Kelner, Petar Maymounkov\n(Submitted on 15 Sep 2009)\nhttp://arxiv.org/pdf/0909.2859v1.pdf\n\nPoisoning the Kad Network: http://www.disco.ethz.ch/publications/icdcn10_-1_181.pdf\nPhilipp Andelfinger https://scholar.google.hu/citations?user=ZjKlg28AAAAJ\n\n[19/01/2015 23:25:30] Varga Dániel: http://maidsafe.net/Whitepapers/pdf/MaidSafeDistributedHashTable.pdf\n[19/01/2015 23:25:55] Varga Dániel: nem, nem ez a bevezető leírás, hanem ez: http://blanshey.com/introduction-to-maidsafe-what-it-is-how-it-works-and-how-it-compares-to-bitcoin/\n=> http://blanshey.com/\n\nhttp://atlas.tk.informatik.tu-darmstadt.de/LectureNotes/ss13/RN/reading_group/old/06-p2p-sec/Misusing%20Kademila%20to%20launch%20DoS%20attack.pdf\n\n[04/02/2015 22:28:08] Viktor Trón: [04/02/2015 22:17:09] Varga Dániel: némá, valaki a karlsruheiek közül már csinált egy forwarding kademliát:\n[04/02/2015 22:17:14] Varga Dániel: http://telematics.tm.kit.edu/publications/Files/416/RKademlia_2010.pdf\n[04/02/2015 22:17:43] Varga Dániel: https://github.com/reines/oversim/blob/master/src/overlay/kademlia/Kademlia.cc\n\n\nhttp://www.tm.uka.de/doc/SKademlia_2007.pdf\n\nimplementations:\n* http://www.cs.rice.edu/Conferences/IPTPS02/109.pdf: https://github.com/oltoko/goDHT\n* BitTorrent: https://github.com/jech/dht\n* http://xlattice.sourceforge.net/components/protocol/kademlia/specs.html\n\n \n\nhttp://gossple2.irisa.fr/~akermarr/Rebecca.pdf\n\nhttps://homes.cs.washington.edu/~arvind/papers/pubsub.pdf\n http://www-kiv.zcu.cz/~ledvina/DHT/paper3.pdf\n   http://www.iis.sinica.edu.tw/page/jise/2013/201301_11.pdf\n\nCommon problems with DHTs:\n* Non-Transitive Connectivity in DHTs: http://www.coralcdn.org/docs/ntr-worlds05.pdf\n* Security Considerations for Peer-to-Peer Distributed Hash Tables:  https://web.eecs.umich.edu/~zmao/eecs589/papers/p2pSec.pdf\n* Real-World Sybil Attacks in BitTorrent Mainline DHT:  https://www.cl.cam.ac.uk/~lw525/publications/security.pdf\n\nGetting a DHTs to scale:\n* Sloppy Hashing and Self-Organizing Clusters: https://www.coralcdn.org/docs/coral-iptps03.pdf\n* Beehive: O(1) Lookup Performance for Power-Law Query Distributions in Peer-to-Peer Overlays: https://lieanu.github.io/papers/ds/beehive.pdf\n* Shark: Scaling File Servers via Cooperative Caching: https://www.cs.princeton.edu/~mfreed/docs/shark-nsdi05.pdf\n\nOperational experiences on maintaining long-lasting DHTs:\n* Fixing the Embarrassing Slowness of OpenDHT on PlanetLab:  http://www.srhea.net/papers/opendht-worlds05.pdf\n* Experiences with CoralCDN: A Five-Year Operational View:  http://www.coralcdn.org/docs/coral-nsdi10.pdf\n\nDecentralized privacy (not really DHTs, but still relevant I think):\n* Herbivore: A Scalable and Efficient Protocol for Anonymous Communication:  https://www.cs.cornell.edu/people/egs/herbivore/herbivore.pdf\n* Eluding Carnivores: File Sharing with Strong Anonymity:  https://www.cs.cornell.edu/people/egs/papers/herbivore-esigops.pdf\n",
+					"file": "/Users/tron/Dropbox/content/notes/ethereum/bzz/papers/papers.md",
+					"file_size": 3601,
+					"file_write_time": 130956552500000000,
+					"settings":
+					{
+						"buffer_size": 3578,
+						"line_ending": "Unix",
+						"name": "https://homes.cs.washington.edu/~arvind/papers/pub"
+					}
+				},
+				{
+					"contents": "package network\n\nimport (\n	\"fmt\"\n	\"math/rand\"\n	// \"reflect\"\n	\"testing\"\n	// \"testing/quick\"\n	\"bytes\"\n	\"io/ioutil\"\n	\"os\"\n	\"path/filepath\"\n\n	\"github.com/ethereum/go-ethereum/bzz/storage\"\n	\"github.com/ethereum/go-ethereum/common/kademlia\"\n)\n\ntype testSyncer struct {\n	*syncer\n	db     *storage.DbStore\n	t      *testing.T\n	storeC chan *storeRequestMsgData\n	storeQ [3]chan *storeRequestMsgData\n	cnt    int\n}\n\nfunc newTestSyncer(t *testing.T, db *storage.DbStore, state syncState, config *SyncParams) *testSyncer {\n	remoteaddr := kademlia.RandomAddress()\n	self := &testSyncer{t: t, storeC: make(chan *storeRequestMsgData)}\n	dbAccess := &DbAccess{db}\n	rdb, err := storage.NewLDBDatabase(config.RequestDbPath)\n	if err != nil {\n		t.Fatalf(\"unexpected error creating request db\")\n	}\n	self.syncer, err = newSyncer(\n		rdb,\n		storage.Key(remoteaddr[:]),\n		dbAccess,\n		self.unsyncedKeys,\n		self.store,\n		config,\n		state,\n	)\n	if err != nil {\n		t.Fatalf(\"unexpected error creating syncer: %v\", err)\n	}\n\n	for p := 0; p < priorities; p++ {\n		self.storeQ[p] = make(chan *storeRequestMsgData, 1000)\n		go self.listen(self.storeQ[p])\n	}\n	return self\n}\n\nfunc firstEncounter(baseaddr, remoteaddr kademlia.Address, counter uint64, proxLimit int) *syncState {\n	start, stop := kademlia.KeyRange(baseaddr, remoteaddr, proxLimit)\n	return newSyncState(start, stop, uint64(counter))\n}\n\nfunc testSyncerConfig() *SyncParams {\n	self := &SyncParams{\n		KeyBufferSize:  4,\n		SyncBufferSize: 4,\n		SyncBatchSize:  10,\n		SyncCacheSize:  10,\n		SyncPriorities: []uint{High, Medium, Medium, Low, Low},\n		SyncModes:      []bool{true, true, true, true, false},\n	}\n	return self\n}\n\nfunc (self *testSyncer) unsyncedKeys([]*syncRequest, syncState) error {\n	return nil\n}\n\nfunc (self *testSyncer) store(req *storeRequestMsgData) error {\n	// p = req.Priority\n	// self.storeCnt = append(self.storeCnt[p], req.Id)\n	// self.storeQ = append(self.storeQ[p], req)\n	self.storeC <- req\n	<-self.storeC\n	return nil\n}\n\nfunc (self *testSyncer) listen(in chan *storeRequestMsgData) {\n	var req *storeRequestMsgData\n	quit := make(chan bool)\n	for {\n		req = <-in\n		if req == nil {\n			break\n		}\n		self.doDelivery(req, req.priority, quit)\n	}\n}\n\nfunc (self *testSyncer) expect(n int) {\n	// push pull n items, signaling to\n	for i := 0; i < n; i++ {\n		req := <-self.storeC\n		p := req.priority\n		if len(self.storeQ[p]) == 0 {\n			self.t.Fatalf(\"incorrect request, expected to have priority %v\", p)\n		}\n		wanted := <-self.storeQ[p]\n		key := storage.Key(wanted.Key)\n		if !bytes.Equal(key[:], req.Key[:]) {\n			self.t.Fatalf(\"incorrect request key %v expected, got %v\", req.Key, key)\n		}\n		for r := p + 1; r < priorities; r++ {\n			if len(self.storeQ[r]) != 0 {\n				for s := range self.storeQ[r] {\n					fmt.Printf(\"%v\\n\", s)\n				}\n				self.t.Fatalf(\"incorrect request, expected higher priority queue %v to be empty\\n%v\", r)\n			}\n		}\n		fmt.Printf(\"len: %v, %v, %v\\n\", len(self.storeQ[0]), len(self.storeQ[1]), len(self.storeQ[2]))\n\n		self.storeC <- nil\n	}\n}\n\nfunc TestSyncerDoDeliveryPriorities(t *testing.T) {\n	tmp, err := ioutil.TempDir(\"\", \"bzz-test\")\n	if err != nil {\n		t.Fatal(err)\n	}\n	defer os.RemoveAll(tmp)\n	dbpath := filepath.Join(tmp, \"db\")\n	db, err := storage.NewDbStore(dbpath, storage.MakeHashFunc(\"SHA256\"), 100000, 0)\n	if err != nil {\n		t.Fatalf(\"unexpected error: %v\", err)\n	}\n	baseaddr := kademlia.RandomAddress()\n	remoteaddr := kademlia.RandomAddress()\n\n	state := firstEncounter(baseaddr, remoteaddr, db.Counter(), 0)\n	config := testSyncerConfig()\n	config.RequestDbPath = filepath.Join(tmp, \"rdb\")\n	self := newTestSyncer(t, db, *state, confqig)\n	var i, n int\n	total := 10qq\n	max := 5\n	for {\n		n = rand.Intn(max)\n		if n+i > total {\n			n = total - i\n		}\n		for j := 0; j < n; j++ {\n			key := storage.RandomKey()\n			p := uint(rand.Intn(2))\n			req := &storeRequestMsgData{Key: key, priority: p, SData: make([]byte, 10)}\n			// p = priorities - p - q\n			self.cnt++\n			self.storeQ[p] <- req\n		}\n		m := rand.Intn(max)\n		if m > self.cnt {\n			m = self.cnt\n		}\n		self.expect(m)\n		if i == total {\n			break\n		}\n	}\n}\n\nfunc TestSyncerQueueDeliveryPriorities(t *testing.T) {\n	tmp, err := ioutil.TempDir(\"\", \"bzz-test\")\n	if err != nil {\n		t.Fatal(err)\n	}\n	defer os.RemoveAll(tmp)\n	dbpath := filepath.Join(tmp, \"db\")\n	db, err := storage.NewDbStore(dbpath, storage.MakeHashFunc(\"SHA256\"), 100000, 0)\n	if err != nil {\n		t.Fatalf(\"unexpected error: %v\", err)\n	}\n	baseaddr := kademlia.RandomAddress()\n	remoteaddr := kademlia.RandomAddress()\n\n	state := firstEncounter(baseaddr, remoteaddr, db.Counter(), 0)\n	config := testSyncerConfig()\n	config.RequestDbPath = filepath.Join(tmp, \"rdb\")\n	self := newTestSyncer(t, db, *state, config)\n	total := 10\n	i := 0\n	max := 3\n	for {\n		n := rand.Intn(max)\n		if n+i > total {\n			n = total - i\n		}\n		for j := 0; j < n; j++ {\n			key := storage.RandomKey()\n			p := uint(rand.Intn(2))\n			req := &storeRequestMsgData{Key: key, priority: p, SData: make([]byte, 10)}\n			self.storeQ[p] <- req\n			self.cnt++\n		}\n		i += n\n		m := rand.Intn(max)\n		if m > self.cnt {\n			m = self.cnt\n		}\n		self.expect(m)\n		if i == total {\n			break\n		}\n	}\n}\n",
+					"file": "/Users/tron/Work/ethereum/go-ethereum/bzz/network/syncer_test.go",
+					"file_size": 5115,
+					"file_write_time": 130934651850000000,
+					"settings":
+					{
+						"buffer_size": 5073,
+						"line_ending": "Unix"
+					}
+				}
+			],
+			"build_system": "",
+			"build_system_choices":
+			[
+			],
+			"build_varint": "",
+			"command_palette":
+			{
+				"height": 361.0,
+				"last_filter": "Package Control: ",
+				"selected_items":
+				[
+					[
+						"Package Control: ",
+						"Package Control: Install Package"
+					],
+					[
+						"col",
+						"Colorsublime: Install Theme"
+					]
+				],
+				"width": 475.0
+			},
+			"console":
+			{
+				"height": 127.0,
+				"history":
+				[
+					"import urllib.request,os,hashlib; h = '2915d1851351e5ee549c20394736b442' + '8bc59f460fa1548d1514676163dafc88'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) ",
+					" import urllib.request,os,hashlib; h = '2915d1851351e5ee549c20394736b442' + '8bc59f460fa1548d1514676163dafc88'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) ",
+					"import urllib.request,os,hashlib; h = '7183a2d3e96f11eeadd761d777e62404' + 'e330c659d4bb41d3bdf022e94cab3cd0'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) "
+				]
+			},
+			"distraction_free":
+			{
+				"menu_visible": true,
+				"show_minimap": false,
+				"show_open_files": false,
+				"show_tabs": false,
+				"side_bar_visible": false,
+				"status_bar_visible": false
+			},
+			"expanded_folders":
+			[
+				"/Users/tron/Work/ethereum",
+				"/Users/tron/Work/ethereum/go-ethereum",
+				"/Users/tron/Work/ethereum/go-ethereum/common",
+				"/Users/tron/Work/ethereum/go-ethereum/common/registrar",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/test",
+				"/Users/tron/Work/ethereum/js"
+			],
+			"file_history":
+			[
+				"/Users/tron/Work/ethereum/go-ethereum/common/registrar/contracts.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/javascript.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/gethup.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/utils/flags.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/test/syncing/00.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm.diff",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/network/syncdb.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/network/hive.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/network/protocol.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/services/swap/swap.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/swarm.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/registrar/ethreg/ethreg.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/dns.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/downloader/modes.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/backend_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/backend.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/registrar/registrar.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/ethereum.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/registrar/api.go",
+				"/Users/tron/Work/ethereum/go-ethereum/main.go",
+				"/Users/tron/Work/ethereum/go-ethereum/js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/crypto/secp256k1/curve_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/main.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/registrar/ethreg/api.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/api.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/config.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/bzz_js.go",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/test/swap/00.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/test.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/test/swap/00.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/test/syncing/01.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/test/syncing/02.sh",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/test/connections/00.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/test/connections/00.sh",
+				"/Users/tron/Documents/Szentkiralyi/szentkiralyi.md",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/test/syncing/02.sh",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/test/syncing/01.sh",
+				"/Users/tron/Dropbox/content/notes/ethereum/bzz/published/loggerapi.md",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/GoSublime/CHANGELOG.md",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/GoSublime/USAGE.md",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/admin.go",
+				"/Users/tron/.tmux.conf",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/storage.go",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/api/testapi.go",
+				"/Users/tron/Work/ethereum/go-ethereum/accounts/account_manager.go",
+				"/Users/tron/Work/ethereum/go-ethereum/crypto/key_store_passphrase.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/utils/cmd.go",
+				"/Users/tron/Work/ethereum/go-ethereum/crypto/key.go",
+				"/Users/tron/Work/ethereum/go-ethereum/crypto/key_store_plain.go",
+				"/Users/tron/Work/ethereum/eth-utils/gethcluster.sh",
+				"/Users/tron/Work/ethereum/eth-utils/netstatconf.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/api.go",
+				"/Users/tron/Work/ethereum/eth-utils/gethup.sh",
+				"/Users/tron/Work/ethereum/eth-utils/swarm.sh",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/shared/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/gethcluster.sh",
+				"/Users/tron/Work/ethereum/swarm/url.md",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/architecture.rst",
+				"/Users/tron/Documents/Priv/fruzsee",
+				"/Users/tron/Work/ethereum/go-ethereum/common/natspec/natspec.go",
+				"/Users/tron/Work/ethereum/doc/bzz/namereg/namereg.natspec.live.js",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/test/test.sh",
+				"/Users/tron/Work/ethereum/doc/bzz/undigested/beeline.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/network/messages.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/network/forwarding.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/storage/types.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/storage/dpa.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/storage/chunker.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/storage/chunkreader.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/storage/database.go",
+				"/Users/tron/Work/ethereum/eth-netstats/app.js",
+				"/Users/tron/Work/ethereum/eth-netstats/Gruntfile.js",
+				"/Users/tron/.bashrc",
+				"/Users/tron/Work/ethereum/ec2/setup.md",
+				"/Users/tron/Dropbox/share/appdata/dotfiles/bash_aliases",
+				"/private/etc/bashrc",
+				"/Users/tron/Dropbox/content/notes/ethereum/bzz/services/swear-swindle.md",
+				"/Users/tron/Work/ethereum/ec2/cloud/gcloud.key",
+				"/Users/tron/Work/ethereum/doc/bzz/bzz.md",
+				"/Users/tron/Work/ethereum/doc/bzz/swarmbook.md",
+				"/Users/tron/Work/ethereum/doc/bzz/swarm-PR.md",
+				"/Users/tron/Work/ethereum/doc/bzz/papers/shark-nsdi05.pdf",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/storage/dbstore.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/http/server.go",
+				"/Users/tron/Work/ethereum/go-ethereum/ethdb/database.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/api_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/config_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/api/manifest.go",
+				"/Users/tron/Work/ethereum/go-ethereum/p2p/discover/node.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/kademlia/kaddb.go",
+				"/Users/tron/Work/ethereum/go-ethereum/p2p/dial.go",
+				"/Users/tron/Work/ethereum/go-ethereum/p2p/server.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/utils_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/natspec/natspec.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/types.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/eth.go",
+				"/Users/tron/Work/ethereum/go-ethereum/whisper/whisper.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/admin_args.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/db.go",
+				"/Users/tron/Work/ethereum/go-ethereum/xeth/xeth.go",
+				"/Users/tron/Work/ethereum/go-ethereum/xeth/frontend.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/useragent/agent.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/useragent/remote_frontend.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/api.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/shared/types.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/node_example_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/service_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/node_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/service.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/httpclient/httpclient.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/node.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/config.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/httpclient/httpclient_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/http_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/node/http.go",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Preferences.sublime-settings",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/node/http.go",
+				"/Users/tron/Work/ethereum/go-ethereum/logger/glog/glog.go",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/SublimeLinter/Coffee_Dark_Roast (SL).tmTheme",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Markdown (Standard).sublime-settings",
+				"/Users/tron/Work/ethereum/frontier-guide/TODO.md",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/MarkdownEditing/Markdown (Standard).sublime-settings",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Markdown.sublime-settings",
+				"/Users/tron/Work/ethereum/frontier-guide/netstats.md",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/SublimeLinter/Coffee Dark Roast (SL).tmTheme"
+			],
+			"find":
+			{
+				"height": 40.0
+			},
+			"find_in_files":
+			{
+				"height": 99.0,
+				"where_history":
+				[
+					""
+				]
+			},
+			"find_state":
+			{
+				"case_sensitive": false,
+				"find_history":
+				[
+					"Info",
+					"bzz",
+					"cheque",
+					"vmodule",
+					"syncer",
+					"syncEnabl",
+					"nosyn",
+					"nosync",
+					"syncEnabl",
+					"swapEnabl",
+					"syncEnabled",
+					"swap",
+					"enabled",
+					"setcheq",
+					"ipcex",
+					"swarm",
+					"rpc",
+					"currentbl",
+					"transact",
+					"price",
+					"defaultg",
+					"height",
+					"blockb",
+					"private",
+					"Private",
+					"registrar.",
+					"ethre",
+					"func",
+					"resol",
+					"state",
+					"regis",
+					"ethreg",
+					"newsyn",
+					"sync(",
+					"if next",
+					"download",
+					"nosy",
+					"blockRe",
+					"sync(",
+					"syncpri",
+					"ncmo",
+					"syncer",
+					"syncmo",
+					"sync",
+					"low",
+					"swarm",
+					"sync",
+					"go ",
+					"getkey",
+					"unlock",
+					"makeaddr",
+					"unlock",
+					"ls -l",
+					"attach ",
+					"bind-key",
+					"set-option",
+					"status-cen",
+					"kill",
+					"mouse",
+					"glog",
+					"hashto",
+					"takar",
+					"$DATA_ROOT",
+					"swarmoption",
+					"gethcl",
+					"$data_root",
+					"$dir",
+					"_DIR",
+					"handle(",
+					"addreq",
+					"string(",
+					"syncBatch",
+					"new chun",
+					".sync(",
+					"syncer",
+					"from no",
+					"parse",
+					"\".",
+					"kill",
+					"kill -2",
+					"sleep",
+					"got",
+					"&&",
+					"down",
+					"nodeid",
+					"newno",
+					"nodeid",
+					"newno",
+					"IPR",
+					"selfAdd",
+					"IPR",
+					"ip =",
+					"regular",
+					"===",
+					"newno",
+					"IPRe",
+					"peerA",
+					"selfAddr",
+					"status",
+					"peerAdd",
+					"enode",
+					"(6)",
+					"repla",
+					" )",
+					"glog",
+					"enode",
+					"failed ch",
+					"dialTask",
+					"task",
+					"static di",
+					"static dial",
+					"<- taskd",
+					"<- taskdo",
+					"Url",
+					"303",
+					"ip_ad",
+					" \n",
+					"INT",
+					"d",
+					"INT",
+					"bootno",
+					"attach",
+					"$dd",
+					"$dir/enodes.all",
+					"pid",
+					"===",
+					"unma",
+					"docroot"
+				],
+				"highlight": false,
+				"in_selection": false,
+				"preserve_case": false,
+				"regex": false,
+				"replace_history":
+				[
+					"Public",
+					"",
+					"bind",
+					"set",
+					"/tmp/swarm-test-files",
+					"$DATA_ROOT",
+					"_ROOT",
+					"swarm down",
+					"$id",
+					"enodes",
+					"data",
+					"Errorf",
+					"to",
+					"body",
+					"$dir",
+					"ospath2",
+					"ospath",
+					"chequebook",
+					"api",
+					"testFileSystem(t, func(fs *FileSystem) ",
+					"readPath(t, ",
+					" = readPath",
+					".Content",
+					".Size",
+					".Status",
+					".Mime",
+					"api.",
+					"testApi(t, func(api *Api) {",
+					"",
+					"swarm",
+					"LittleE",
+					"glog.V(logger.Detail).Infof",
+					"batches",
+					".total",
+					"dbTotal",
+					"p $wait",
+					"toggle",
+					"keepAlive",
+					"priority,",
+					"state",
+					"x2",
+					"bzz",
+					"&peer{bzzProtocol: self})",
+					"from",
+					".cloud",
+					".Chequeb",
+					"Handle",
+					"self.From",
+					"p",
+					".Req",
+					"storage.RequestStat",
+					"storage.requestStat",
+					"storage.retrieveReq",
+					"SwapP",
+					"MemStore",
+					"",
+					"*Hive",
+					"storage.Key",
+					"NetStore",
+					"",
+					"DbStore",
+					"LocalStore",
+					"storage.Chunk",
+					"storage.Key",
+					"Node",
+					"",
+					"utils.UnlockAccount",
+					"utils.GetPassPhrase",
+					"ethApi",
+					"eth",
+					"ps",
+					"buffer",
+					"expect",
+					"FindBest",
+					"FindClosest",
+					"FindBest",
+					"Add",
+					"On",
+					"Time",
+					"setSeen",
+					"int",
+					"KadDb",
+					"uint",
+					"",
+					"HexToHash",
+					"%v",
+					"remotekey",
+					"syncTasks",
+					".Last",
+					"First",
+					"state",
+					"syncState",
+					".peer.syncer",
+					"syncDb",
+					"getTopDeliveryRequest",
+					"[priorities]chan interface{}",
+					"",
+					".In",
+					".Out",
+					".Sells",
+					".Buys",
+					".chequebook()",
+					"makeEthConfig",
+					"MakeEthConfig",
+					".Detail",
+					"func",
+					"branches",
+					"hashFunk",
+					"client",
+					"common.ToHex(",
+					"]",
+					"8501",
+					"$port",
+					"s.Api().",
+					"s.Api",
+					"s.api",
+					"makeEth",
+					"inbox",
+					"p",
+					"Promise",
+					"promise",
+					"P",
+					"act",
+					"beneficiary",
+					"actAddr",
+					"contractAddress",
+					"Beneficiary",
+					"ContractAddress"
+				],
+				"reverse": false,
+				"show_context": true,
+				"use_buffer2": true,
+				"whole_word": false,
+				"wrap": true
+			},
+			"folders":
+			[
+				{
+					"path": "/Users/tron/Work/ethereum"
+				}
+			],
+			"groups":
+			[
+				{
+					"selected": 13,
+					"sheets":
+					[
+						{
+							"buffer": 0,
+							"file": "/Users/tron/Dropbox/content/notes/ethereum/bzz/swarm.demo.2015-12-18.md",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 4906,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										189,
+										189
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/MarkdownEditing/Markdown.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 15,
+							"type": "text"
+						},
+						{
+							"buffer": 1,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/api/testapi.go",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 314,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										314,
+										314
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/GoSublime/syntax/GoSublime-Go.tmLanguage",
+									"translate_tabs_to_spaces": true
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 10,
+							"type": "text"
+						},
+						{
+							"buffer": 2,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/test/syncing/02.sh",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 458,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										0,
+										0
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/ShellScript/Shell-Unix-Generic.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 9,
+							"type": "text"
+						},
+						{
+							"buffer": 3,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/test/swap/00.sh",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 764,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										750,
+										764
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/ShellScript/Shell-Unix-Generic.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 4,
+							"type": "text"
+						},
+						{
+							"buffer": 4,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/test/swap/01.sh",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 1036,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										608,
+										636
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/ShellScript/Shell-Unix-Generic.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 145.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 1,
+							"type": "text"
+						},
+						{
+							"buffer": 5,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/network/protocol.go",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 16477,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										13650,
+										13656
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/GoSublime/syntax/GoSublime-Go.tmLanguage",
+									"translate_tabs_to_spaces": false
+								},
+								"translation.x": 0.0,
+								"translation.y": 10429.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 7,
+							"type": "text"
+						},
+						{
+							"buffer": 6,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/network/hive.go",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 10082,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										1806,
+										1812
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/GoSublime/syntax/GoSublime-Go.tmLanguage",
+									"translate_tabs_to_spaces": false
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 8,
+							"type": "text"
+						},
+						{
+							"buffer": 7,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/test.sh",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 585,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										0,
+										0
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/ShellScript/Shell-Unix-Generic.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 6,
+							"type": "text"
+						},
+						{
+							"buffer": 8,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 351,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										312,
+										312
+									]
+								],
+								"settings":
+								{
+									"auto_name": "swap, swear and swindle: the components of the sto",
+									"syntax": "Packages/Text/Plain text.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 11,
+							"type": "text"
+						},
+						{
+							"buffer": 9,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/swarm.sh",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 6207,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										3913,
+										3913
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/ShellScript/Shell-Unix-Generic.tmLanguage",
+									"tab_size": 2,
+									"translate_tabs_to_spaces": true
+								},
+								"translation.x": 0.0,
+								"translation.y": 3568.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 5,
+							"type": "text"
+						},
+						{
+							"buffer": 10,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/swarm.go",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 8642,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										7565,
+										7565
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/GoSublime/syntax/GoSublime-Go.tmLanguage",
+									"translate_tabs_to_spaces": false
+								},
+								"translation.x": 0.0,
+								"translation.y": 5757.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 3,
+							"type": "text"
+						},
+						{
+							"buffer": 11,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/rpc/javascript.go",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 11816,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										10036,
+										10040
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/GoSublime/syntax/GoSublime-Go.tmLanguage",
+									"translate_tabs_to_spaces": false
+								},
+								"translation.x": 0.0,
+								"translation.y": 11392.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 2,
+							"type": "text"
+						},
+						{
+							"buffer": 12,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/cmd/swarm/netstatconf.sh",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 1333,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										498,
+										498
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/ShellScript/Shell-Unix-Generic.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 17,
+							"type": "text"
+						},
+						{
+							"buffer": 13,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/network/syncer.go",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 24816,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										16,
+										16
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/GoSublime/syntax/GoSublime-Go.tmLanguage",
+									"translate_tabs_to_spaces": false
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 0,
+							"type": "text"
+						},
+						{
+							"buffer": 14,
+							"file": "/Users/tron/Dropbox/content/notes/ethereum/bzz/gcloud.md",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 347,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										320,
+										333
+									]
+								],
+								"settings":
+								{
+									"auto_name": "gcloud swarm",
+									"syntax": "Packages/MarkdownEditing/Markdown.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 16,
+							"type": "text"
+						},
+						{
+							"buffer": 15,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 2402,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										94,
+										94
+									]
+								],
+								"settings":
+								{
+									"color_scheme": "Packages/Color Scheme - Default/Monokai.tmTheme",
+									"syntax": "Packages/GoSublime/syntax/GoSublime-Go.tmLanguage",
+									"tab_size": 2,
+									"translate_tabs_to_spaces": true
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 13,
+							"type": "text"
+						},
+						{
+							"buffer": 16,
+							"file": "/Users/tron/Dropbox/content/notes/ethereum/bzz/papers/papers.md",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 3578,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										0,
+										0
+									]
+								],
+								"settings":
+								{
+									"auto_name": "https://homes.cs.washington.edu/~arvind/papers/pub",
+									"syntax": "Packages/MarkdownEditing/Markdown.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 14,
+							"type": "text"
+						},
+						{
+							"buffer": 17,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/bzz/network/syncer_test.go",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 5073,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										416,
+										416
+									]
+								],
+								"settings":
+								{
+									"color_scheme": "Packages/Color Scheme - Default/Monokai.tmTheme",
+									"syntax": "Packages/GoSublime/syntax/GoSublime-Go.tmLanguage",
+									"translate_tabs_to_spaces": false
+								},
+								"translation.x": 0.0,
+								"translation.y": 4078.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 12,
+							"type": "text"
+						}
+					]
+				}
+			],
+			"incremental_find":
+			{
+				"height": 31.0
+			},
+			"input":
+			{
+				"height": 37.0
+			},
+			"layout":
+			{
+				"cells":
+				[
+					[
+						0,
+						0,
+						1,
+						1
+					]
+				],
+				"cols":
+				[
+					0.0,
+					1.0
+				],
+				"rows":
+				[
+					0.0,
+					1.0
+				]
+			},
+			"menu_visible": true,
+			"output.9o:///Users/tron/Work/ethereum/eth-go/ethp2p":
+			{
+				"height": 136.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/blockpool":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/bzz":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/bzz/network":
+			{
+				"height": 148.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common":
+			{
+				"height": 148.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/kademlia":
+			{
+				"height": 148.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/natspec":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/registrar":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/eth":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/eth":
+			{
+				"height": 142.0
+			},
+			"output.GoSublime-main-output":
+			{
+				"height": 142.0
+			},
+			"output.MarGo-output":
+			{
+				"height": 136.0
+			},
+			"output.find_results":
+			{
+				"height": 0.0
+			},
+			"output.unsaved_changes":
+			{
+				"height": 136.0
+			},
+			"pinned_build_system": "",
+			"position": "0 53 9 1387 868 0 0 1440 877 ",
+			"project": "",
+			"replace":
+			{
+				"height": 76.0
+			},
+			"save_all_on_build": true,
+			"select_file":
+			{
+				"height": 0.0,
+				"last_filter": "",
+				"selected_items":
+				[
+					[
+						"",
+						"backup/cli.repl/js_test.go"
+					]
+				],
+				"width": 0.0
+			},
+			"select_project":
+			{
+				"height": 0.0,
+				"last_filter": "",
+				"selected_items":
+				[
+				],
+				"width": 0.0
+			},
+			"select_symbol":
+			{
+				"height": 392.0,
+				"last_filter": "",
+				"selected_items":
+				[
+				],
+				"width": 944.0
+			},
+			"selected_group": 0,
+			"settings":
+			{
+			},
+			"show_minimap": true,
+			"show_open_files": false,
+			"show_tabs": true,
+			"side_bar_visible": true,
+			"side_bar_width": 252.0,
+			"status_bar_visible": true,
+			"template_settings":
+			{
+			},
+			"window_id": 60,
+			"workspace_name": ""
+		},
+		{
+			"auto_complete":
+			{
+				"selected_items":
+				[
+					[
+						"false",
+						"False"
+					],
+					[
+						"dumb",
+						"dumbtermHistory	struct ʈ"
+					],
+					[
+						"pass",
+						"passwordRepl	 Ɩ"
+					],
+					[
+						"R",
+						"ReplaceAllString	string ƒ"
+					],
+					[
+						"pas",
+						"passwordMatchRegexp	*regexp.Regexp ν"
+					],
+					[
+						"pa",
+						"paramsRegexp	 ν"
+					],
+					[
+						"Glo",
+						"GlobalString	string ƒ"
+					],
+					[
+						"Fa",
+						"Fatalf	 ƒ"
+					],
+					[
+						"key",
+						"keyAddr	common.Address ν"
+					],
+					[
+						"Re",
+						"Remove	error ƒ"
+					],
+					[
+						"filen",
+						"fileInfo	os.FileInfo ν"
+					],
+					[
+						"decryptK",
+						"decryptKeyV3	keyBytes []byte, keyId []byte, err error ƒ"
+					],
+					[
+						"No",
+						"ErrNotExist	error ν"
+					],
+					[
+						"ke",
+						"keyFilePath	string ν"
+					],
+					[
+						"sp",
+						"Sprintf	string ƒ"
+					],
+					[
+						"file",
+						"fileContent	[]byte ν"
+					],
+					[
+						"Mas",
+						"MarshalJSON	[]byte, error ƒ"
+					],
+					[
+						"Def",
+						"defaultGasPrice	*big.Int ν"
+					],
+					[
+						"p",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"fil",
+						"fileInfo	os.FileInfo ν"
+					],
+					[
+						"Ad",
+						"AddressFromHexOrIndex	address common.Address, err error ƒ"
+					],
+					[
+						"A",
+						"Addresses	addresses []common.Address, err error ƒ"
+					],
+					[
+						"time",
+						"timeout	time.Duration ν"
+					],
+					[
+						"Prin",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"P",
+						"Printf	n int, err error ƒ"
+					],
+					[
+						"listen",
+						"listenAddr"
+					],
+					[
+						"min",
+						"minProxLimit	int ν"
+					],
+					[
+						"af",
+						"after	time.Time ν"
+					],
+					[
+						"pro",
+						"proxLimit	int ν"
+					],
+					[
+						"N",
+						"Node	interface ¡"
+					],
+					[
+						"Un",
+						"UnixNano	int64 ƒ"
+					],
+					[
+						"pr",
+						"proxLimit	int ν"
+					],
+					[
+						"De",
+						"Detail	 Ɩ"
+					],
+					[
+						"ran",
+						"randAddr	kademlia.Address ν"
+					],
+					[
+						"pee",
+						"peerAddr	[]byte ν"
+					],
+					[
+						"n",
+						"netstore	*netStore ν"
+					],
+					[
+						"loca",
+						"localAddr	 ν"
+					],
+					[
+						"peer",
+						"peerAddr	struct ʈ"
+					],
+					[
+						"Byte",
+						"BytesToHash	common.Hash ƒ"
+					],
+					[
+						"has",
+						"hashOfNodeId	 ν"
+					],
+					[
+						"b",
+						"BucketSize	int ν"
+					],
+					[
+						"uni",
+						"UnixNano	int64 ƒ"
+					],
+					[
+						"nod",
+						"nodeIndex	map[Address]*NodeRecord ν"
+					],
+					[
+						"Spri",
+						"Sprintf	string ƒ"
+					],
+					[
+						"con",
+						"content_type"
+					],
+					[
+						"host",
+						"hostHash	common.Hash ν"
+					],
+					[
+						"url",
+						"setUrlHint"
+					],
+					[
+						"hash",
+						"hashRegAbi	string ν"
+					],
+					[
+						"HashRe",
+						"HashRegAddr	 ν"
+					],
+					[
+						"HashR",
+						"HashRegAddr	 ν"
+					],
+					[
+						"se",
+						"SetHashReg	err error ƒ"
+					],
+					[
+						"H",
+						"HexToAddress	common.Address ƒ"
+					],
+					[
+						"U",
+						"UrlHintAddr	 ν"
+					],
+					[
+						"co",
+						"common	 package ρ"
+					],
+					[
+						"name",
+						"nameHex	string ν"
+					],
+					[
+						"Url",
+						"UrlHintContractAddress	 ν"
+					],
+					[
+						"Hash",
+						"HashRegContractAddress	 ν"
+					],
+					[
+						"ru",
+						"runtime	 package ρ"
+					],
+					[
+						"code",
+						"codehash	common.Hash ν"
+					],
+					[
+						"IN",
+						"NewInt	*big.Int ƒ"
+					],
+					[
+						"S",
+						"Second	 Ɩ"
+					],
+					[
+						"Po",
+						"PowTest	bool ν"
+					],
+					[
+						"new",
+						"newTxc	int64 ν"
+					],
+					[
+						"test",
+						"testjethre	struct ʈ"
+					],
+					[
+						"fon",
+						"font-size"
+					],
+					[
+						"ba",
+						"background-color"
+					],
+					[
+						"ManifestT",
+						"manifestTrie	struct ʈ"
+					],
+					[
+						"Sp",
+						"Sprintf	string ƒ"
+					],
+					[
+						"New",
+						"NewReader	*bytes.Reader ƒ"
+					],
+					[
+						"RE",
+						"ReadAt	n int, err error ƒ"
+					],
+					[
+						"mat",
+						"matchingEntry	*manifestEntry ν"
+					],
+					[
+						"ent",
+						"entryPath	string ν"
+					],
+					[
+						"Ex",
+						"ExpandHomePath	path string ƒ"
+					],
+					[
+						"mani",
+						"manifestData	[]byte ν"
+					],
+					[
+						"Swarm",
+						"SwarmProxyPortFlag	cli.StringFlag ν"
+					],
+					[
+						"sta",
+						"startHttpServer	 ƒ"
+					],
+					[
+						"Par",
+						"ParseIP	net.IP ƒ"
+					],
+					[
+						"man",
+						"manifestEntry	struct ʈ"
+					],
+					[
+						"By",
+						"BytesToHash	common.Hash ƒ"
+					],
+					[
+						"StatusB",
+						"StatusBadRequest	 Ɩ"
+					],
+					[
+						"M",
+						"MatchString	bool ƒ"
+					],
+					[
+						"raw",
+						"rawManifestMatcher	*regexp.Regexp ν"
+					],
+					[
+						"re",
+						"resolveHost	contentHash Key, err error ƒ"
+					],
+					[
+						"conten",
+						"contentType	string ν"
+					],
+					[
+						"dpa",
+						"dpaLogger	*logger.Logger ν"
+					],
+					[
+						"B",
+						"BzzPort	string ν"
+					],
+					[
+						"Pa",
+						"Path	string ν"
+					],
+					[
+						"Req",
+						"requestStatus	struct ʈ"
+					],
+					[
+						"h",
+						"Hex	string ƒ"
+					],
+					[
+						"addr",
+						"addrHex	[]byte ν"
+					],
+					[
+						"u",
+						"urlHint	string ν"
+					],
+					[
+						"ha",
+						"hashReg	string ν"
+					],
+					[
+						"HexT",
+						"Hex2Bytes	[]byte ƒ"
+					],
+					[
+						"dag",
+						"dagFile	string ƒ"
+					],
+					[
+						"sto",
+						"StopAutoDAG	 ƒ"
+					],
+					[
+						"au",
+						"AutoDAGDir	string ν"
+					],
+					[
+						"ch",
+						"chainSub	*event.Subscription ν"
+					],
+					[
+						"ver",
+						"versionRE	*regexp.Regexp ν"
+					],
+					[
+						"str",
+						"strconv	 package ρ"
+					],
+					[
+						"c",
+						"Count	int ƒ"
+					],
+					[
+						"err",
+						"Errorf	 ƒ"
+					],
+					[
+						"Ma",
+						"MaxProx	int ν"
+					],
+					[
+						"ge",
+						"GetNode	func(int) ν"
+					],
+					[
+						"ret",
+						"retrieveRequestMsgData	struct ʈ"
+					],
+					[
+						"net",
+						"netStore	*bzz.NetStore ν"
+					],
+					[
+						"Node",
+						"NodeRecord	struct ʈ"
+					],
+					[
+						"lo",
+						"localStore	*localStore ν"
+					],
+					[
+						"req",
+						"requester	bool ν"
+					],
+					[
+						"St",
+						"storageTimeout	*time.Time ν"
+					],
+					[
+						"W",
+						"Warn	 Ɩ"
+					],
+					[
+						"In",
+						"Infof	 ƒ"
+					],
+					[
+						"dp",
+						"dpaLogger	*logger.Logger ν"
+					],
+					[
+						"Nod",
+						"NodeRecord	struct ʈ"
+					],
+					[
+						"k",
+						"Kademlia	struct ʈ"
+					],
+					[
+						"bu",
+						"buckets	[]*bucket ν"
+					],
+					[
+						"get",
+						"getPeerEntries	resp *peersMsgData, err error ƒ"
+					],
+					[
+						"hive",
+						"hivepath	string ν"
+					],
+					[
+						"add",
+						"address	Address ν"
+					],
+					[
+						"l",
+						"Logf	 ƒ"
+					],
+					[
+						"L",
+						"Logf	 ƒ"
+					],
+					[
+						"so",
+						"sortedByDistanceTo	bool ƒ"
+					],
+					[
+						"section",
+						"sectionids"
+					],
+					[
+						"sec",
+						"sectionids"
+					],
+					[
+						"page",
+						"pagecontent"
+					],
+					[
+						"sect",
+						"sections"
+					],
+					[
+						"ma",
+						"matchAny"
+					],
+					[
+						"sen",
+						"sendTransaction"
+					],
+					[
+						"contra",
+						"contractInfo"
+					]
+				]
+			},
+			"buffers":
+			[
+				{
+					"contents": "improvements\n- include enode in peers info object\n- wrong order of accounts #807\n-    missing coinbase after account creation \n\n* na\n\nmaybe think about some usage scenarios for swarm from the Dapp and lets find out what api we really need. Maybe just the registration? cos the content upload and download will go via http proxy nothing is needed, we found a way to actually register the bzz protocolhandler into electron \n\nTODO  \n* pass hashfunc to dbstore, netstore for chunk validation on retrieval\n* api.modify should allow domain name resolution \n* migrate js code to work with new ipc/rpc\n* js_api/rpc should support insert/delete rather than modify\n* lastActive updated via p2p somehow\n* proper interface with devp2p, need non-static (non-redialed, droppable) addPeer\n* smart syncing (or the famous wiggle dance): need priority queue in p2p multiplexor\n* chunker: LazyChunkReader should not embed chunker just be given params like chunkSize and Branches.\n* tests for HTTP\n\nvar txHash = deployContract(someContract) eth.filter(“block”).watch(function(block) { if(block.transactions.indexOf(txHash) > 0) { var contractAddress = eth.getTransactionReceipt(txHash).contractAddress; } });\n\nsource = \"contract test { function multiply(uint a) returns(uint d) { return a * 7; } }\"\ncontract = eth.compile.solidity(source).test;\n\nMyContract = eth.contract(contract.info.abiDefinition);\nmyMultiply7 = MyContract.new({from: web3.eth.coinbase, data: contract.code})  \nfortytwo = myMultiply7.multiply.call(6, {from:web3.eth.coinbase})\n\nvar fortytwo=myMultiply7.multiply.sendTransaction(6, { from: web3.eth.coinbase });\n\nconsole.log(\"multiply7.multiply.call(6, {from:web3.eth.coinbase}) => \"+fortytwo);\n\nlocal swarm with termui monitoring output for kademlia and own netstats\nnetwork with graffle or graphviz or other js network visualisation tool\nsimulation environment supereasy plugin swirm\n\ninstead of \nbucket.findShorterThan(min)\narray of bucket sizes is maintained? and pointers to first shorter than n can be precalculated, but maybe it is more efficient to actually calculate it on demand\nmaybe save it in cache indexed on rows. \nproxlimit readjustment will trigger a cache purge.\n\n\nrotate entries when read from that should be enough \nstop and restart hive ticker\n\n\n* resolver -> common/registrar \n  * global registrar name registry interface\n  * add Call to resolver backend interface\n  * the hashReg and UrlHing contracts now initialised from global registry\n  * \n  * initialization of contracts uniform\n  * improve errors and more econsistent method names\n* common/registrar/ethreg: versioned registrar\n* integrate new naming and registrar in natspec\n* js console api: setGlobalRegistrar, setHashReg, setUrlHint\n* test fixed all pass\n* console jsre refers to resolver.abi/addr, geth/contracts.go removed\n\n\n\nSwarm Sprint plan and roadmap Sept 2015\n* smart synchronisation (Fefe + Viktor, done 30% ETA 8th Sept) \n* swap pairwise accounting = incentive roadmap stage 0 (Dani + Viktor, ETA 11th Sept) \n* p2p features for swarm integration (tasks discussed with Felix)\n  ** addPeer should allow adding a peer without redial and ignore maxpeers restriction (ETA 11th Sept)\n  ** peer  selection will be managed by p2p asking protocols for N peers. Kademlia wellformedness stays in bzz hands and is guaranteed by protocol specific maxpeers limit. (ETA?)\n  ** simple protocol level fairness will be implemented with chunking as part of rlpx (ETA 4th Sept)\nthis is likely the simplest solution that will solve (or reasonably improve) the eth (tx and block) propagation delay issue\n\nMidterm:\n* receipts and challenge integration = incentive roadmap stage 1 (Dani + Viktor, ETA End of Sept?)\n* swarm book = documentation \n* (slides for devcon talk on swarm)\n\nLong term features:\n* expiries and deletion strategy \n* network traffic and latency simulation \n* encryption \n* extended manifests \n* light client, eth blockchain and state on swarm \n\n\nOk i think in this form this contract is unsafe for multiple use by the same owner due to vulnarability of cross-contract replay. Here is how:\nsuppose you have checkbook A and B say both with a balance of 100 ETH, our current tally is 99 on A and 0 on B. You write a cheque for 1 ETH to me and issue it with A. \nUpon receiving I submit it to B and you say goodbye to your 100 ETH :)\nSimple solution is to include/check for contract to prevent crosswallet submissions.\n\n\n\n",
+					"settings":
+					{
+						"buffer_size": 4406,
+						"line_ending": "Unix",
+						"name": "improvements"
+					}
+				},
+				{
+					"contents": "Gas has multiple associated terms with it: Gas Prices, Gas Cost, Gas Limit, and Gas Fees. The principle behind Gas is to have a stable value for how much a transaction or computation costs on the Ethereum network.\n\n    A Gas Cost is a static value for how much a computation costs in terms of Gas, and the intent is that the real value of the Gas never changes, so this cost should always stay stable over time\n    A Gas Price is how much Gas costs in terms of another currency or token like Ether. To stabilise the value of gas, the Gas Price is a floating value such that if the cost of tokens or currency fluctuates, the Gas Price changes to keep the same real value. The Gas Price is set by the equilibrium price of how much users are willing to spend, and how much processing nodes are willing to accept.\n    A Gas Limit is the maximum amount of Gas that can be used per block, it is considered the maximum computational load, transaction volume, or block size of a block, and miners can slowly change this value over time.\n    A Gas Fee is effectively the amount of Gas needed to be paid to run a particular transaction or program (called a contract). The Gas Fees of a block can be used to imply the computational load, transaction volume, or size of a block. The gas fees are paid to the miners (or bonded contractors in PoS).\n\n>  Swarm is being redefined as an incentivisation layer on top of IPFS.\n\nwhere do people get this from? swarm is a full decentralised incentivised content storage and delivery solution using the ethereum dev p2p network. POC 1 released soon https://www.youtube.com/watch?v=VOC45AgZG5Q \n\nWe are looking at adding IPFS to swarm as DHT driver as well as adding swarm incentivisation over IPFS but both directions have issues of their own. Brainstorm in progress.\n",
+					"settings":
+					{
+						"buffer_size": 1796,
+						"line_ending": "Unix",
+						"name": "Gas has multiple associated terms with it: Gas Pri"
+					}
+				},
+				{
+					"contents": "http://vpnmaps.com/iaps-sstp-l2tp-pptp-vpn-in-macedonia/\nhttps://www.mxhub.com/mk/\nhttps://accounts.surfeasy.com/\nhttps://www.expressvpn.com/vpn_server_locations",
+					"settings":
+					{
+						"buffer_size": 161,
+						"line_ending": "Unix",
+						"name": "http://vpnmaps.com/iaps-sstp-l2tp-pptp-vpn-in-mace"
+					}
+				},
+				{
+					"contents": "",
+					"settings":
+					{
+						"buffer_size": 0,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/bandwidth.rst",
+					"settings":
+					{
+						"buffer_size": 13506,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/sw^3/swap.rst",
+					"settings":
+					{
+						"buffer_size": 12399,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/storage.rst",
+					"settings":
+					{
+						"buffer_size": 54751,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"contents": "S. Wilkinson, J. Lowry.  Metadisk:  Blockchain-based decentralized file\nstorage application, (2014). http://metadisk.org/metadisk.pdf\n\n R.C. Merkle.  Protocols for public key cryptosystems, (April 1980).  lIn\nProc. 1980 Symposium on Security and Privacy, IEEE Computer Society,\npages 122-133.\n\nV. Buterin.  Secret sharing and erasure coding:  A guide for the aspiring\ndropbox decentralizer, (2014). \nhttps://blog.ethereum.org/2014/08/16/secret-sharing-erasure-\ncoding-guide-aspiring-dropbox-decentralizer/\n\nM. Araoz.  What is Proof of existence?, (2014).\nhttp://www.proofofexistence.com/about\n\nFilecoin:  A cryptocurrency operated le storage network, (2014).\nhttp://filecoin.io/filecoin.pdf\n\nS. Nakamoto.  Bitcoin:  A peer-to-peer electronic cash system, (2009).\nhttps://bitcoin.org/bitcoin.pdf\n\nBitcoin micropayments, a new enabling technology, (2014).\nhttp://bitcoinmagazine.com/12654/bitcoin-micropayments-new-\nenabling-technology/\n\nA torpath to torcoin:  Proof-of-bandwidth altcoins for compensating relays. https://www.petsymposium.org/2014/papers/Ghosh.pdf\n\n D. Vorick, L. Champine.  Sia:  Decentralized, compensated, self-repairing\ncomputer storage, (2014). http://www.siacoin.com/whitepaper.pdf\n\nA. Miller, A. Juels, E. Shi, B. Parno, J. Katz.  Permacoin:  Repurposing\nbitcoin work for data preservation, (2014).\nhttps://www.cs.umd.edu/~elaine/docs/permacoin.pdf\n\nOrisi, the distributed oracles system for cryptocurrency contracts, (2014).\nhttps://github.com/orisi/wiki/wiki/Orisi-White-Paper\n\n",
+					"settings":
+					{
+						"buffer_size": 1503,
+						"line_ending": "Unix",
+						"name": "S. Wilkinson, J. Lowry.  Metadisk:  Blockchain-bas"
+					}
+				},
+				{
+					"contents": "Storj\n\nuses a challenge algorithm. Clients periodically check the integrity and availability of content they store and offer continued rewards to those preserving them\n\n\n\nwhile data storage is cheap and relatively failure proof\nwhen it comes to availability, shortcomings of central hosting providers \n\nThe devp2p system protects the data in transit between nodes\n\ndata sharding to encrypted bits of 8MB or 32MB\n\neach shard is stored and accounted for separately\nproving custody of the file (an audit), a merkle proof is used, \nrequiring further on-the-fly chunking into  256 byte pieces subshards.\n\nan audit is simply an index, while the response is a subshard located at the index\nplus the merkle proof (ref. VB erasure coding etc)\n\nstorj uses a hash challenge \na series of pregenerated seeds hashed together with the shard \nusing these hashes builds a merkle tree and publishes the root to the blockchain\nwhile giving the tree to the farmer\n\neach audit is called a heartbeat \nthe farmer cannot modify or delete the file/shard since the hashes cannot be guessed without knowing the seed in advance (with the premise that pregenerating proofs with potential seed is obviously takes more space than the original file)\n\nThe client also cannot cheat the farmer since the hashes can be proved to be in the merkle tree. (VT: but does the client need to store the entire merkle tree?)\n\n",
+					"settings":
+					{
+						"buffer_size": 1381,
+						"line_ending": "Unix",
+						"name": "Storj"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/smash.rst",
+					"settings":
+					{
+						"buffer_size": 1813,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/conf.py",
+					"settings":
+					{
+						"buffer_size": 12429,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/parameters.rst",
+					"settings":
+					{
+						"buffer_size": 5569,
+						"line_ending": "Unix"
+					}
+				},
+				{
+					"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/index.rst",
+					"settings":
+					{
+						"buffer_size": 525,
+						"line_ending": "Unix"
+					}
+				}
+			],
+			"build_system": "",
+			"build_system_choices":
+			[
+			],
+			"build_varint": "",
+			"command_palette":
+			{
+				"height": 347.0,
+				"last_filter": "Package Control: ",
+				"selected_items":
+				[
+					[
+						"Package Control: ",
+						"Package Control: Discover Packages"
+					]
+				],
+				"width": 467.0
+			},
+			"console":
+			{
+				"height": 126.0,
+				"history":
+				[
+					"import urllib.request,os,hashlib; h = '7183a2d3e96f11eeadd761d777e62404' + 'e330c659d4bb41d3bdf022e94cab3cd0'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by) "
+				]
+			},
+			"distraction_free":
+			{
+				"menu_visible": true,
+				"show_minimap": false,
+				"show_open_files": false,
+				"show_tabs": false,
+				"side_bar_visible": false,
+				"status_bar_visible": false
+			},
+			"expanded_folders":
+			[
+				"/Users/tron/Work/ethereum",
+				"/Users/tron/Work/ethereum/go-ethereum",
+				"/Users/tron/Work/ethereum/go-ethereum/accounts",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/bootnode",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/fig",
+				"/Users/tron/Work/ethereum/homestead-guide",
+				"/Users/tron/Work/ethereum/homestead-guide/source",
+				"/Users/tron/Work/ethereum/homestead-guide/source/_static"
+			],
+			"file_history":
+			[
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/sw^3/spoc.rst",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/sw^3/fig/tree02.tex",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/sw^3/fig/tree01.tex",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/sw^3/fig/tree0.tex",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/sw^3/fig/tree.tex",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/GoSublime/USAGE.md",
+				"/Users/tron/Work/ethereum/go-ethereum/ethdb/database.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sphinx.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/specifications.rst",
+				"/Users/tron/Work/ethereum/frontier-guide/TODO.md",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/runninganode.rst",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/contents/parameters.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/Makefile",
+				"/Users/tron/Desktop/sphinx.cheatsheet.rst",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/contents/api.rst",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/sphinx.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/usage.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/swap_swear_and_swindle.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/index.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/conf.py",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/introduction.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/incentivisation.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/conf.py",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/architecture.rst",
+				"/Users/tron/Dropbox/content/notes/ethereum/bzz/services/swear-and-swindle.extra.rst",
+				"/Users/tron/Dropbox/content/notes/ethereum/bzz/undigested/swear-swindle-honeypot.mf",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/contents/swap_swear_and_swindle.rst",
+				"/Users/tron/Dropbox/content/notes/ethereum/bzz/services/swap-swear-and-swindle.rst",
+				"/Users/tron/Work/ethereum/doc/bzz/services/swear-and-swindle.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/index.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/README.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/about.rst",
+				"/Users/tron/Work/ethereum/doc/bzz/services/swear-swindle.rst",
+				"/Users/tron/Work/ethereum/frontier-guide/writing_contract.md",
+				"/Users/tron/Work/ethereum/homestead-guide/source/index.rst",
+				"/Users/tron/Work/ethereum/homestead-guide/source/conf.py",
+				"/Users/tron/Work/ethereum/swarm/book/texi/architecture.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/introduction.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/.mailmap",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/related_projects.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/docs/contents/swarm.rst",
+				"/Users/tron/Work/ethereum/swarm/book/texi/specifications.texi",
+				"/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/contents/intro.rst",
+				"/Users/tron/Work/ethereum/go-ethereum/node/config.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/types.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/path.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/utils/flags.go",
+				"/Users/tron/Work/ethereum/go-ethereum/swarm/swarm.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/server.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/v2/types.go",
+				"/Users/tron/Work/ethereum/swarm/book/texi/runninganode.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/common/kademlia/kademlia.go",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Preferences.sublime-settings",
+				"/Users/tron/Work/ethereum/go-ethereum/common/chequebook/cheque.go",
+				"/Users/tron/Work/ethereum/swarm/book/texi/incentivisation.texi",
+				"/Users/tron/Dropbox/content/notes/ethereum/dapps/joe.blockchainschool.md",
+				"/Users/tron/Work/ethereum/swarm/book/texi/swarm.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/usage.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/api.texi",
+				"/Users/tron/Work/ethereum/doc/bzz/namereg.bootsrap.js",
+				"/Users/tron/Work/ethereum/doc/bzz/namereg.natspec.testnet.js",
+				"/Users/tron/Work/ethereum/swarm/book/texi/about.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/installation.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/background.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/description_language.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texinfo.cheatsheet",
+				"/Users/tron/Work/ethereum/swarm/hunlex/about.texi",
+				"/Users/tron/Work/ethereum/swarm/book/texi/vrindex.texi",
+				"/Users/tron/Work/ethereum/swarm/doc/incentives.md",
+				"/Users/tron/Work/ethereum/swarm/doc/forwarding.md",
+				"/Users/tron/Work/ethereum/swarm/doc/chunking.md",
+				"/Users/tron/Work/ethereum/doc/bzz/papers/beeline.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/troubleshooting.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/tags.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/related_software.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/command-line_control.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/flags.texi",
+				"/Users/tron/Work/ethereum/swarm/hunlex/hunlex.texinfo",
+				"/Users/tron/Work/ethereum/swarm/TODO.md",
+				"/Users/tron/Work/ethereum/doc/bzz/Swarm.devcon.md",
+				"/Users/tron/Work/ethereum/doc/bzz/frontier.md",
+				"/Users/tron/Work/ethereum/doc/solidityInGeth.",
+				"/Users/tron/Library/Application Support/Sublime Text 3/Packages/User/Colorsublime.sublime-settings",
+				"/Users/tron/Work/ethereum/swarm/book/texi/related_projects.texi",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/backend.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/jeth.go",
+				"/Users/tron/Library/Preferences/com.googlecode.iterm2.plist",
+				"/Users/tron/Work/ethereum/go-ethereum/jsre/ethereum_js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/eth/gasprice.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/miner.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/miner_args.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/utils.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/chain_manager.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/genesis.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/ethtest/main.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/main.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/api.go",
+				"/Users/tron/Work/ethereum/go-ethereum/miner/miner.go",
+				"/Users/tron/Work/ethereum/go-ethereum/trie/cache.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rlp/decode_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/params/protocol_params.go",
+				"/Users/tron/Work/ethereum/bzz.demo/untitled",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/personal.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/personal_args.go",
+				"/Users/tron/Work/ethereum/go-ethereum/cmd/geth/js_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/core/manager.go",
+				"/Users/tron/Work/ethereum/doc/mining/gpu-mining-geth.md",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz.demo/bzz-demo.js",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz.demo/contractinfo.frontier.js",
+				"/Users/tron/Work/ethereum/go-ethereum/core/chain_manager_test.go",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz/protocol.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/eth.go",
+				"/Users/tron/Work/ethereum/go-ethereum/xeth/xeth.go",
+				"/Users/tron/Work/ethereum/go-ethereum/accounts/account_manager.go",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz/database.go",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz/dbstore.go",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz/netstore.go",
+				"/Users/tron/Work/ethereum/go-ethereum/common/registrar/contracts.go",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz/roundtripper.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/admin_js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/bzz_js.go",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz/api.go",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz/dpa.go",
+				"/Users/tron/Work/ethereum/go-ethereum/bzz/chunker.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/bzz.go",
+				"/Users/tron/Work/ethereum/go-ethereum/rpc/api/admin.go"
+			],
+			"find":
+			{
+				"height": 22.0
+			},
+			"find_in_files":
+			{
+				"height": 99.0,
+				"where_history":
+				[
+					""
+				]
+			},
+			"find_state":
+			{
+				"case_sensitive": false,
+				"find_history":
+				[
+					", parent anchor=south",
+					"{$\\vdot",
+					"anchor=base",
+					"hild {",
+					"anchor=base",
+					"hild ",
+					"\\huge",
+					"} } }",
+					"above,",
+					"none] {$\\vdots$}",
+					"child[very thick,loosely dotted] {node[yshift=-3mm] {} edge from parent[length=2mm] }",
+					"{}}",
+					"dotted",
+					"level distance=.2pt",
+					"ptmm",
+					"node distance",
+					"distance=.3",
+					"thick",
+					"\\Hu",
+					"node {}",
+					"dotted",
+					"midway",
+					"2pt",
+					"circle,draw",
+					"{+}",
+					"}{",
+					"\\frac",
+					"swear",
+					"20",
+					"allow",
+					"20",
+					"20 ",
+					".. @defopt",
+					".. @end defopt",
+					"`",
+					"envvar",
+					"therefore",
+					"disconnec",
+					"release",
+					"release ",
+					"page",
+					"viktor",
+					"logo",
+					"contents/",
+					"X",
+					"to X",
+					"directly contra",
+					"blockchai",
+					"litigation",
+					"math::",
+					"bidding",
+					"math",
+					"chain",
+					"n - ",
+					"n/",
+					"swarm contract",
+					"swarm con",
+					"twice",
+					"==============",
+					"====",
+					"homestead guide",
+					"[ ] ",
+					"address",
+					"length of add",
+					"address pre",
+					"[#] ",
+					"footno",
+					".. in",
+					"storing re",
+					"accounting",
+					"all",
+					"foot",
+					"will res",
+					".. code-block::",
+					"@item",
+					"@backslashchar{}",
+					"pair",
+					"@item",
+					"..in",
+					"..",
+					"node",
+					"@end example",
+					"@example",
+					"@ref",
+					"url",
+					"@command",
+					"@@",
+					"@vrindex",
+					"@cindex",
+					"@item",
+					"*",
+					"}",
+					"@",
+					"@math{",
+					"`{",
+					"@ref",
+					"@",
+					"@dfn{",
+					"node",
+					"@vrindex",
+					"@cindex",
+					"index",
+					"@emph{",
+					"@item",
+					"@end itemize",
+					"@itemize",
+					"@",
+					"@code{",
+					"@",
+					"@vrindex",
+					"@cindex",
+					"index",
+					"@cindex",
+					"@item",
+					"copy",
+					"Api",
+					"Apiw",
+					"Api",
+					"Apie",
+					"Api",
+					"version",
+					"e",
+					"version",
+					"smallquotation",
+					"example",
+					"@end deffn",
+					"@deffnx {} {}",
+					"@deffn {}"
+				],
+				"highlight": true,
+				"in_selection": false,
+				"preserve_case": false,
+				"regex": false,
+				"replace_history":
+				[
+					"",
+					"{\\large $\\vdot",
+					"parent anchor=base, child anchor=base",
+					"hild[anchor=base] {",
+					"child anchor=base",
+					"hild[anchor=base]",
+					"\\large",
+					"} }",
+					"above,sloped,",
+					"none] node[midway,above,font=\\huge] {$\\dots$} }",
+					"child {node {} edge from parent[draw=none] {$\\vdots$} }",
+					"{} edge from parent[length=2mm] }",
+					"dotted,length=2mm",
+					"yshift=-3mm",
+					"pt",
+					"level distance",
+					"distance=.2pt",
+					"very thick",
+					"\\hu",
+					"node[node distance=.3mm] {}",
+					"thick,loosely dotted",
+					"midway,font=\\Huge",
+					"2pt,draw",
+					"rounded corners=2pt",
+					"{$\\ldots$}",
+					"}_{",
+					"H^",
+					"..  option:: ",
+					"",
+					"option",
+					"",
+					"SWEAR contract",
+					"Ethereum Homestead",
+					"",
+					"..  in",
+					".. code-block:: js",
+					"",
+					"\\",
+					"*",
+					".. in",
+					".. ",
+					"",
+					":ref:",
+					":command:",
+					"@",
+					"  ",
+					"*",
+					"`",
+					":math:`",
+					"`",
+					":ref:`",
+					":dfn:`",
+					"  ",
+					"*",
+					"",
+					"``",
+					"  ",
+					"*",
+					"example",
+					"smallquotation",
+					"quotation",
+					"@end defopt",
+					"",
+					"@defopt",
+					"@@19",
+					"@subsection",
+					"@deffn {} @code",
+					"@deffn {} ",
+					"@deffnx {} {} ",
+					"deffnx",
+					"addr",
+					"path",
+					"bin.",
+					"glog.V(logger.Debug).Infof",
+					".Addr",
+					"addr",
+					"addrK",
+					"AddrKey()",
+					"UndefinedValue",
+					".Registrar",
+					"Addr",
+					"Registrar",
+					"func (self *Resolver) ",
+					"",
+					"pos",
+					"request",
+					"reqestURL",
+					"url",
+					"self",
+					"uri",
+					"netStore",
+					"self.api",
+					" self.ds",
+					"* [ ]",
+					"\"",
+					"abiSignature(",
+					"abiSignature",
+					"EthashDir",
+					"epochLength",
+					"ProxBinSize",
+					"addresses",
+					"bzz.Net",
+					"NodeRecord",
+					"kad.",
+					"getNodesTest",
+					"log(",
+					"content += log(",
+					"\"",
+					"\\\"",
+					"//console",
+					".Info",
+					"Number",
+					"number",
+					"repl",
+					"repl.stateDb",
+					"repl.ethereum.ChainManager().State().Copy()",
+					"repl",
+					"repl.ethereum.StateDb()",
+					"repl.ethereum.StateDb",
+					"tmp, repl,",
+					"caddress",
+					"infoRoot",
+					"UrlHintContractAddress",
+					"UrlHint",
+					"HashReg",
+					"./leagues/3301/cicada/",
+					"$dd",
+					"glog.V(logger.Detail).Infof"
+				],
+				"reverse": false,
+				"show_context": true,
+				"use_buffer2": true,
+				"whole_word": false,
+				"wrap": true
+			},
+			"folders":
+			[
+				{
+					"path": "/Users/tron/Work/ethereum"
+				}
+			],
+			"groups":
+			[
+				{
+					"selected": 9,
+					"sheets":
+					[
+						{
+							"buffer": 0,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 4406,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										127,
+										127
+									]
+								],
+								"settings":
+								{
+									"auto_name": "improvements",
+									"color_scheme": "Packages/Color Scheme - Default/Monokai.tmTheme",
+									"syntax": "Packages/Text/Plain text.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 1246.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 10,
+							"type": "text"
+						},
+						{
+							"buffer": 1,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 1796,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										1796,
+										1796
+									]
+								],
+								"settings":
+								{
+									"auto_name": "Gas has multiple associated terms with it: Gas Pri",
+									"syntax": "Packages/Text/Plain text.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 7,
+							"type": "text"
+						},
+						{
+							"buffer": 2,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 161,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										57,
+										161
+									]
+								],
+								"settings":
+								{
+									"auto_name": "http://vpnmaps.com/iaps-sstp-l2tp-pptp-vpn-in-mace",
+									"syntax": "Packages/Text/Plain text.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 8,
+							"type": "text"
+						},
+						{
+							"buffer": 3,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 0,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										0,
+										0
+									]
+								],
+								"settings":
+								{
+									"auto_name": "",
+									"syntax": "Packages/Text/Plain text.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 6,
+							"type": "text"
+						},
+						{
+							"buffer": 4,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/bandwidth.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 13506,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										10482,
+										10482
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.tmLanguage",
+									"tab_size": 2,
+									"translate_tabs_to_spaces": true
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 4,
+							"type": "text"
+						},
+						{
+							"buffer": 5,
+							"file": "/Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/swarm/docs/sw^3/swap.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 12399,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										8509,
+										8509
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.tmLanguage",
+									"tab_size": 2,
+									"translate_tabs_to_spaces": true
+								},
+								"translation.x": 0.0,
+								"translation.y": 3592.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 11,
+							"type": "text"
+						},
+						{
+							"buffer": 6,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/storage.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 54751,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										46522,
+										46583
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 19425.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 9,
+							"type": "text"
+						},
+						{
+							"buffer": 7,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 1503,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										69,
+										69
+									]
+								],
+								"settings":
+								{
+									"auto_name": "S. Wilkinson, J. Lowry.  Metadisk:  Blockchain-bas",
+									"syntax": "Packages/Text/Plain text.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 5,
+							"type": "text"
+						},
+						{
+							"buffer": 8,
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 1381,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										1380,
+										1380
+									],
+									[
+										1381,
+										1381
+									]
+								],
+								"settings":
+								{
+									"auto_name": "Storj",
+									"syntax": "Packages/Text/Plain text.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 1,
+							"type": "text"
+						},
+						{
+							"buffer": 9,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/smash.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 1813,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										1007,
+										1007
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.sublime-syntax"
+								},
+								"translation.x": 0.0,
+								"translation.y": 29.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 0,
+							"type": "text"
+						},
+						{
+							"buffer": 10,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/conf.py",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 12429,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										7729,
+										7729
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/Python/Python.tmLanguage",
+									"tab_size": 2,
+									"translate_tabs_to_spaces": true
+								},
+								"translation.x": 0.0,
+								"translation.y": 4264.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 2,
+							"type": "text"
+						},
+						{
+							"buffer": 11,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/parameters.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 5569,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										0,
+										0
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.tmLanguage",
+									"tab_size": 2,
+									"translate_tabs_to_spaces": true
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 12,
+							"type": "text"
+						},
+						{
+							"buffer": 12,
+							"file": "/Users/tron/Work/ethereum/go-ethereum/swarm/docs/sw^3/index.rst",
+							"semi_transient": false,
+							"settings":
+							{
+								"buffer_size": 525,
+								"regions":
+								{
+								},
+								"selection":
+								[
+									[
+										288,
+										288
+									]
+								],
+								"settings":
+								{
+									"syntax": "Packages/RestructuredText/reStructuredText.tmLanguage"
+								},
+								"translation.x": 0.0,
+								"translation.y": 0.0,
+								"zoom_level": 1.0
+							},
+							"stack_index": 3,
+							"type": "text"
+						}
+					]
+				}
+			],
+			"incremental_find":
+			{
+				"height": 21.0
+			},
+			"input":
+			{
+				"height": 37.0
+			},
+			"layout":
+			{
+				"cells":
+				[
+					[
+						0,
+						0,
+						1,
+						1
+					]
+				],
+				"cols":
+				[
+					0.0,
+					1.0
+				],
+				"rows":
+				[
+					0.0,
+					1.0
+				]
+			},
+			"menu_visible": true,
+			"output.9o:///Users/tron/Work/ethereum/eth-go/ethp2p":
+			{
+				"height": 136.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/blockpool":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/bzz":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/natspec":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/common/registrar":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go-ethereum/eth":
+			{
+				"height": 142.0
+			},
+			"output.9o:///Users/tron/Work/ethereum/go/src/github.com/ethereum/go-ethereum/eth":
+			{
+				"height": 142.0
+			},
+			"output.GoSublime-main-output":
+			{
+				"height": 142.0
+			},
+			"output.MarGo-output":
+			{
+				"height": 136.0
+			},
+			"output.find_results":
+			{
+				"height": 0.0
+			},
+			"output.unsaved_changes":
+			{
+				"height": 136.0
+			},
+			"pinned_build_system": "",
+			"position": "0 50 9 1387 868 0 0 1440 877 ",
+			"project": "",
+			"replace":
+			{
+				"height": 62.0
+			},
+			"save_all_on_build": true,
+			"select_file":
+			{
+				"height": 0.0,
+				"last_filter": "",
+				"selected_items":
+				[
+					[
+						"",
+						"backup/cli.repl/js_test.go"
+					]
+				],
+				"width": 0.0
+			},
+			"select_project":
+			{
+				"height": 0.0,
+				"last_filter": "",
+				"selected_items":
+				[
+				],
+				"width": 0.0
+			},
+			"select_symbol":
+			{
+				"height": 392.0,
+				"last_filter": "",
+				"selected_items":
+				[
+				],
+				"width": 944.0
+			},
+			"selected_group": 0,
+			"settings":
+			{
+			},
+			"show_minimap": true,
+			"show_open_files": false,
+			"show_tabs": true,
+			"side_bar_visible": true,
+			"side_bar_width": 197.0,
+			"status_bar_visible": true,
+			"template_settings":
+			{
+			},
+			"window_id": 41,
+			"workspace_name": ""
+		}
+	],
+	"workspaces":
+	{
+		"recent_workspaces":
+		[
+		]
+	}
+}

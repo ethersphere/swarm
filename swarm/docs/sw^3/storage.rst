@@ -311,7 +311,6 @@ After the initial distribution, it is up to individual nodes to trickle down the
 
 The insight here is that once the owner has the receipt to initiate litigation and the chunk reached its proximate nodes delays (due to the double signing constraint) when adapting to network growth are perfectly acceptable.
 
-
 Pricing, deposit, accounting
 =============================
 
@@ -361,6 +360,99 @@ As a consequence, all payment or accounting for storage promises can be done exa
 However, unlike in the case of retrieval, storage receipts represent an insurance of sorts and therefore their pricing is important. There is no sense in which chunk storage can be traded service for service one for one.
 
 However, their price can always be expressed in terms of chunk retrievals, so SWAP can simply handle their accounting in a trivial way.
+
+Owner-side handling of storage redundancy
+==============================================================================
+
+In the previous sections we established that replication-based redundancy can only
+work under serious restrictions. A variable deposit scheme leads to difficult accounting anomalies and at best workable in the initial round of syncing when after uploading the chunk reaches the closest node. If the network grows the same problems emerge with splitting the offered receipt price among peers. On top of this replication is limited by the size of proximate bins. Keeping the most proximate bin above a minimal size to be able to satisfy all storage requests also puts extra processing burden on nodes.
+
+Luckily, there is an entirely different approach which makes it possible to delegate arbitrary security to the owner. The idea is that redundancy is encoded in the document structure before its chunks are uploaded. For instance the simplest method of guarateeing redundancy of a file is to chunk the file into chunks that are one byte shorter than the normal chunksize and add a nonce byte to each chunk. This guarantees that each chunk is different and as a consequence all chunks of the modified file is different. When joining the last byte of each chunk is ignored so all variants map to the same original.
+Assuming all chunks of the original file are different this yields a potential  :math:`256^x` equivalent replicas the owner can upload.
+
+Note also that if we replicate a chunk only at its neighbourhood, but that particular chunk is crucial in the reconstruction of the content, the swarm is much more vulnerable to chunk loss or latency due to attacks. This is because if the storers of the replicas are close, inflitrating in the storers' neighbourhood can be done with as many nodes as chunk type (as opposed to as many as chunk replicas). If there is a measure to protect against sybil attacks this brings down the cost by a factor of n where n is the number of replicas.
+
+Luckily there are a lot more economical ways to encode a file redundantly.
+
+Importantly however, we do not want to replace local replication completely. Although the cloud industry is trying very hard to get away from the explicit x-fold redundancy model because it is very wasteful and incurs high costs – erasure coding can guarantee the same level of security using only a fraction of the storage space. However, in a data center redundancy is interpreted in the context of hard drives whose failure rates are low, independent and predictable and their connectivity is almost guaranteed at highest possible speed due to proximity. In a peer-to-peer network scenario however, nodes could disappear much more frequently than hard drives fail. In the beginning,  we may expect larger than n replicas of chunks, but as the swarm grows and storage space is filling up, redundancy will drop automatically. Erasure coding is then the best way to ensure file availability. Incidentally, redundant coding offers further benefits of increased resilience and ways to speed up retrieval.
+
+In what follows we spell out our proposal to introduce a per-level m-of-n Cauchy-Reed-Solomon erasure code into the swarm trie.
+
+The Cauchy-Reed-Solomon (henceforth CRS) scheme is a systemic erasure codes capable of implementing a scheme whereby any :math:`m` out of :math:`n` fix-sized pieces are able to reconstruct the original data blob of size :math:`m` pieces with storage overhead of :math:`n-m`.[#]_ Once we got the :math:`m` pieces of the original blob, CRS scheme provides a method to inflate it to size :math:`n` by supplementing :math:`n-m` so called parity pieces. With that done, assuming `p` is the probability of losing one piece, if all :math:`n` pieces are independently stored, the probability of loosing the original content is :math:`p^{n-m+1}` exponential while extra storage is linear. These properties are preserved if we apply the coding to every level of a swarm trie.
+
+.. rubric:: There are open source libraries to do Reed Solomon or Cauchy-Reed Solomon encoding. See https://www.usenix.org/legacy/event/fast09/tech/full_papers/plank/plank_html/, https://www.backblaze.com/blog/reed-solomon/, http://rscode.sourceforge.net/
+
+The chunker algorithm would proceed the following way when splitting the document:
+
+0. Set input to the data blob.
+1. Read the input 4096 byte chunks at a time. Count the chunks by incrementing :math:`i`
+  IF fewer than 4096 bytes are left in the file, fill up the last fraction to 4096
+2. Repeat 1 until there's no more data or :math:`i%m=0`
+3. If there is no more data add padding of :math:`j` chunks such that :math:`i+j%m=0`.
+3. use the CRS scheme on the last :math:`m` chunks to produce :math:`128-m` parity chunks resulting in a total of 128 chunks.
+4. Record the hashes of the 128 chunks cocatenated to result in the next 4096 byte chunk of the next level.
+5. If there is more data repeat 1. otherwise
+6. If the next level data blob is of size larger than 4096, set the input to this and  repeat from 1.
+7. Otherwise remember the blob as  the root chunk
+
+The swarm trie also includes a file-size integer I believe. I do not think this is necessary; it should only be necessary to supply a filesize int along with the root hash. This then allows everyone to calculate what the Cauchy-Reed-Solomon redundancy coding is at every node and also which nodes are original file data and which are parity data.
+
+Benefits of CRS merkle trie
+====================================
+
+All chunks are created equal
+------------------------------
+A trie encoded as suggested above has the same (*) redundancy at every node. This means that chunks nearer to the root are no longer more important than chunks near the file. Every node as an m-of-128 redundancy level and no chunk after the root chunk is more important than any other chunk.
+
+(*) If the filesize is not a specific multiple of 4096 bytes, then the last chunk at every level will actually have a higher redundancy even than the rest.
+
+Self healing
+---------------------------
+
+Any(!) client downloading a file from the swarm can detect if a chunk has been lost. The client can reconstruct the file from the parity data (or reconstruct the parity data from the file) and re-sync this data into the swarm. That way, even if a large fraction of the swarm is wiped out simultaneously, this process should allow an organic healing process to occur and it is encouraged that the default client behavior should be to repair any damage detected.
+
+Improving latecy of retrievals
+---------------------------------------------
+
+Alpha is the name Kademlia gives to the number of peers in a Kademlia bin that are queried simultaneously during a lookup. The original Kademlia paper sets alpha=3. This is impractical for Swarm because the peers do not report back with new addresses as they would do in pure Kademlia but instead forward all queries to their peers. Swarm is coded in this way to make use of semi-stable longer-term ethp2p connections. Setting alpha to anything greater than 1 thus increases the amount of network traffic substantially – setting up an exponential cascade of forwarded lookups.
+[ Lookups would cause an exponentially growing cascade at first but it would soon collapse back down onto the target of the lookup. ]
+However, setting alpha=1 has its own downsides. For starters, lookups can stall if they are forwarded to a dead node and even if all nodes are live, there could be large delays before a query is complete. The practice of setting alpha=2 in swarm is designed to speed up file retrieval and clients are configured to accept chunks from the first/fastest forwarding connection to be established.
+In an erasure coded setting we can in a sense have a best of both worlds. The default behavior should be the set alpha=1 i.e. to query one peer only for each chunk lookup, but crucially, to issue a lookup request not just for the data chunks but for the parity chunks as well. The client then could accept the first m of every 128 chunks queried to get some of the same benefits of faster retrieval that redundant lookups provide without a whole exponential cascade.
+
+Improving resilience in case of non-saturated Kademlia table
+-----------------------------------------------------------------
+
+Earlier version
+
+Not all chunks (in the Merkle Trie) are created equal
+------------------------------------------------------
+
+When we encode a file in Swarmz, the chunks that represent nodes near the root of the tree are in some sense more important than the nodes nearer to the file layer. More specifically, if the root chunk is lost, then the entire file is lost; if one of the following chunks on the next level is lost, then 1/128 of the file is lost and so on.
+In many cases this distinction may seem unimportant. For example, if the file uploaded is compressed then every chunk is as important to me as any other because with even one chunk missing one is unable to uncompress the file. Ultimately we want every chunk to be equally important to any other chunk.
+
+
+Loss-tolerant Merkle Trees
+----------------------------------------------------------
+
+Recall that each node (except possibly the last one on each level) has 128 children each of which represent the root hash of a subtree or, at the last level, represent a 4096 byte span of the file. Let us now suppose that we divide our file into 100 equally sized pieces, and then add 28 more parity check pieces using a Reed-Solomon code so that now any 100 of the 128 pieces are sufficient to reconstruct the file. On the next level up the chunks are composed of the hashes of their first hunder data chunks and the 28 hashes of the parity chunks. Let's take the first 100 of these and add 28 parity chunks such that each 100 of the resultig chunks can reconstruct the origial 100 chunks. And so on every level.
+In terms of availability, every subtree is equally important to every other subtree at this level. The resulting data structure is not balanced tree since on every level :math:`i` the last 28 chunks are parity leaf chunks while the first 100 are branching nodes encoding a subtree of depth :math:`i-1` redundanly.
+
+In practice of course, data chunks are still prefered over the parity chunks in order to avoid CPU overhead in reconstruction. This data structure has preserved its merkle properties and can be used for partial integrity check.
+
+
+The effect of the encoding on Insurance Pricing
+--------------------------------------------------
+
+Using erasure codes in this way allows us to do away with our previous redundancy pricing model. We can posit that any chunk must be stored at the threeclosest nodes. Multiple copies exist not only for redundancy purposes but also to make sure that retrieval succeds. Beyond that, if a user requires a higher level of insurance that their file will remain available, the user may set the parameters of the erasure code (that was the 100 in the example above). In this way, a lower number means more security but also means a larger file size and more chunks and thus a higher insurance cost.
+
+
+The effect of the encoding on retrieval pricing and storage incentives
+-------------------------------------------------------------------------
+
+A problem that immediately presents itself is the following: if nodes are compensated only for serving chunks, then less popular chunks are less profitable and more likely to be deleted; therefore, if users only download the 100 data chunks and never request the parity chunks, then these are more likely to get deleted and ultimately not be available when they are finally needed.
+
+Another approach would be to use non-systemic coding. Recall that a systemic code is one in which the data remains in tact and we add extra parity data whereas in a non-systemic code we replace all data with parity date such that (in our example) all 128 pieces are really created equal. While the symmetry of this approach is appealing, this leads to forced decoding and thus to a high CPU usage and it also prevents us from streaming files from the swarm. Since we anticipate that streaming will be a common usage, we cannot choose any non-systemic code and would have to find/choose codes that are streamable.
+
 
 Optimising storage of receipts
 =====================================

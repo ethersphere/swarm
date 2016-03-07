@@ -1,0 +1,174 @@
+\documentclass[border=2pt,draw]{standalone}
+\usepackage{tikz}
+\usetikzlibrary{fit}
+\begin{document}
+
+\tikzset{
+level/.style={
+  sibling distance={(width("$H^126$")+4pt)},
+  level distance=15mm,
+  line width=.5pt,
+},
+mtnode/.style={
+  minimum width={width("$H^126$")+2pt},
+  minimum height={.7cm},
+  inner sep=2pt,
+  outer sep=2pt,
+  rectangle,
+  rounded corners=1pt,
+  draw,
+},
+% edge from parent/.style={draw=none},
+mtedge/.style={grow=down,draw=none,<-, edge from parent/.style={draw}},
+link/.style={draw=none, edge from parent/.style={draw=none}},
+mtedgeadj/.style={mtedge, shorten >=10pt  },
+mpedge/.style={mtedge, line width=.7pt,densely dashed},
+ellip/.style={draw,loosely dotted, shorten >=5mm, thick,<-, edge from parent/.style={draw}},
+bubble/.style={minimum height={1cm}, draw=none, align=center},
+data/.style={mtnode, fill=gray!50},
+mppath/.style={mtnode,dashed,line width=.7pt,fill=gray!30},
+mpext/.style={mtnode,line width=.7pt,fill=gray!40},
+mpdata/.style={data,line width=.7pt,fill=gray!70},
+mpdataext/.style={data,line width=.7pt,fill=gray!80},
+}
+
+\begin{tikzpicture}
+                  % level 7
+\node[mtnode] (root) {$H^7_0$}
+                  % level 6
+  child[<-,grow=right,level distance=3cm] { node[bubble] (ash) {audit secret}  }
+  % child[link,grow=left,level distance=5cm] { node[bubble] (ash) {audit secret}  }
+  child { node[mppath] (6-0) {$H^6_0$}   % 0
+                  % level 5
+    child { node[mppath] (5-0) {$H^5_0$}          % 0
+      % child[mpedge]
+                  % level 4
+                  % mppath goes the other way
+      child { node[mpext] (4-0) {$H^4_0$}
+        % % child[mtedgeadj]
+                  % level 3
+        child { node[mtnode] (3-0) {$H^3_0$}
+              % level 2
+          child { node[mtnode] (2-0) {$H^2_0$}
+                % level 1
+            child { node[mtnode] (1-0) {$H^1_0$}
+                % level 0
+              child { node[mtnode] (0-0) {$H^0_0$}
+                % data level
+                child[mtedge] { node[data] (c-0) {$c_0$} }
+              }
+              % % child[mtedgeadj]
+              child { node[mtnode] (0-1) {$H^0_1$}
+                % data level
+                child[mtedge] { node[data] (c-1) {$c_1$} }
+              }
+                % level 0
+            }
+                % level 1
+            % child[mtedgeadj]
+            child { node[mtnode] {$H^1_{1}$} child[ellip] }
+          }
+                % level 2
+          % child[mtedgeadj]
+          child { node[mtnode] {$H^2_{1}$} child[ellip] }
+        }
+                % level 3
+        % child[mtedgeadj]
+        child { node[mtnode] {$H^3_{1}$} child[ellip] }
+      }
+                % level 4
+      child[missing]
+      child[missing]
+      child { node[mppath] (4-1) {$H^4_1$}                 % 1
+                % level 3
+        child { node[mpext] (3-4) {$H^3_4$} child[ellip] }
+        % child[mpedge]
+        child { node[mppath] (3-5) {$H^3_5$}  % 1
+                % level 2
+          % child[mpedge]
+          child { node[mppath] (2-10) {$H^2_{10}$}           % 0
+                % level 1
+            child { node[mpext] (1-21) {$H^1_{21}$} child[ellip] }
+            % child[mpedge]
+            child { node[mppath] (1-22) {$H^1_{22}$}         % 1
+                % level 0
+              child { node[mppath] (0-42) {$H^0_{42}$}       % 0
+                % data level
+                child[mtedge] { node[mpdata] (c-42) {$c_{42}$} }    % <- pivot
+              }
+                % level 0
+              % child[mpedge]
+              child { node[mpext] (0-43) {$H^0_{43}$}
+                % data level
+                child[mtedge] { node[mpdataext] (c-43) {$c_{43}$} }    % <- neighbo
+              }
+                % level 0
+            }
+                % level 1
+          }
+                % level 2
+          % child[mpedge]
+          child { node[mpext] (2-11) {$H^2_{11}$} child[ellip] }
+        }
+                % level 3
+        % child[missing]
+      }
+                % level 4
+    }
+                % level 5
+    child[missing]
+    % child[mpedge]
+    child[missing]
+    child { node[mpext] (5-1) {$H^5_1$} child[ellip] }
+  }
+                % level 6
+  child[missing]
+  child[missing]
+  % child[mtedgeadj]
+  child[missing]
+  child  { node[mpext] (6-1) {$H^6_1$}
+                % level 5
+    child { node[mtnode] (5-2) {$H^5_2$} child[ellip] }
+    child[missing]
+    % child[mtedgeadj]
+    child { node[mtnode] (5-3) {$H^5_3$}
+                % level 4
+      child { node[mtnode] {$H^4_{6}$} child[ellip] }
+      % child[mtedgeadj]
+      child { node[mtnode] (4-7) {$H^4_7$}
+                % level 3
+        child { node[mtnode] {$H^3_{14}$} child[ellip] }
+        % child[mtedgeadj]
+        child { node[mtnode] (3-15) {$H^3_{15}$}
+                % level 2
+          child { node[mtnode] {$H^3_{30}$} child[ellip] }
+          % child[mtedgeadj]
+          child { node[mtnode] (2-31) {$H^2_{31}$}
+                % level 1
+            child { node[mtnode] {$H^1_{62}$} child[ellip] }
+            % child[mtedgeadj] {node {}}
+            child { node[mtnode] (1-63) {$H^1_{63}$}
+                % level 0
+              child { node[mtnode] (0-126) {$H^0_{126}$}
+                child[mtedge] { node[data] (c-126) {$c_{126}$} }
+              }
+              % child[mtedgeadj]
+              child { node[mtnode] (0-127) {$H^0_{127}$}
+                child[mtedge] { node[data] (c-127) {$c_{127}$} }
+              }
+                % 0
+            }
+                % 1
+          }
+                % 2
+        }
+                % 3
+      }
+                % 4
+    }
+               % 5
+  }
+               % 6
+ ;
+\end{tikzpicture}
+\end{document}
