@@ -287,19 +287,19 @@ This type is expected to be used very rarely, since the only way they come about
 Repeatability and file-level audits
 ====================================
 
-In this secion we expose the problem of scalability with repeated audits of fixed sized chunks, then show that the solution lies in finding larger structures than the chunk which are to be audited simultaneously so storage critical audit masks can be reused without comporomising security. Incidentally, this same method offers a systemic and rather intuitive way of auditing documents and document collections (the units that are semantic to the users). We propose an algorithm to recursively generate seeds for the successive chunks of a larger collection and provide a partial secret verification scheme that offers error detection and efficient backtracking to identify missing chunks.
+In this secion we expose the problem of scalability that comes with repeated audits of fixed sized chunks. We show that the solution lies in finding larger structures than the chunk which are to be audited directly, essentially auditing many chunks simultaneously.  We do this in a way that storage critical audit masks can be reused without comporomising security. Incidentally, this same method offers a systemic and rather intuitive way of auditing documents and document collections (the units that are semantic to the users). We propose an algorithm to recursively generate seeds for the successive chunks of a larger collection and provide a partial secret verification scheme that offers error detection and efficient backtracking to identify missing chunks.
 This *collection-level recursive audit secret hash* (CRASH) will provide the basis for collective iterative auditing, an efficient automated integrity protection system for the swarm.
 
 The problem of scaling audit repeatability with fixed chunks
 --------------------------------------------------------------
 
-The choice of :math:`r` has an impact on the length of the merkle proofs which are needed for MASH-proofs. More importantly, though, since someone needs to remember the masks, this scheme has a fix absolute storage overhead that is independent of the size of the pieces we prove the storage of. Since it is not realistic to require more than 5-10% administrative storage overhead even for very long storage periods, larger :math:`r` values only scale if the same seeds can guard the integrity of larger data.
+The choice of the repeatability parameter :math:`r` has an impact on the length of the merkle proofs which are needed for MASH-proofs. More importantly, though, since someone needs to remember the masks, this scheme has a fix absolute storage overhead that is independent of the size of the pieces we prove the storage of. Since it is not realistic to require more than 5-10% administrative storage overhead even for very long storage periods, larger :math:`r` values only scale if the same seeds can guard the integrity of larger data.
 
 In particular, take the example of a standard swarm chunk size of 4096 bytes (:math:`m=12`) and
 assuming standard Keccak 256bit Sha3 hash we have :math:`h=5, d=7`.
-Given the MASH-base length of :math:`2^{r+h}`, 128 independent audits incurs a 100% storage overhead. Instead for a chunk :math:`r=0,1,2,3,4` seem realistic choices for :math:`r=0.8,1.6,3.125,6.3,12.5\%` storage overhead, respectively.
+Given the MASH-base length of :math:`2^{r+h}`, 128 independent audits incurs a 100% storage overhead. Instead for a chunk :math:`r=0,1,2,3,4` seem realistic choices, yielding a storage overhead of :math:`0.8,1.6,3.125,6.3,12.5\%` respectively.
 
-Ultimately, repeatability order should reflect the TTL (time to live = storage period) of the request, therefore *audit repeatability and fix chunk size cannot scale unless we compensate for the overhead by reusing seeds over several chunks*.
+Ultimately, repeatability order should reflect the TTL (time to live = storage period) of the request, therefore *audit repeatability and fixed chunk-size cannot scale unless we compensate for the overhead by reusing seeds over several chunks*.
 This problem does not occur with Storj since the shards can be sufficiently big, however with swarm, the base unit of contracting is the chunk.
 The insight here is that we can reuse the same seed over several chunks if and only if we query the integrity of those chunks at the same time.
 
@@ -320,9 +320,9 @@ First we define a strict ordering on all chunks in a document collection as foll
 2. Let :math:`\Pi(M) \subseteq \Dom(M)` be the set of unique paths in the manifest such that if several paths point to the same document take the first one in the order.
 
 ..  math::
-    \pi \in \Pi(M) \defequiv \nexists \pi\prime \text{\ such that}\ M(\pi) = M(\pi\prime) \text{\ and\ } \pi\prime < \pi
+    \pi \in \Pi(M) \defequiv \pi\in\Dom(M) \textnormal{ and }\nexists \pi^{\prime} \text{\ such that}\ M(\pi) = M(\pi^{\prime}) \text{\ and\ } \pi^{\prime} < \pi
 
-3. This defines a unique set of documents and a strict ordering over documents.
+This defines a unique set of documents and a strict ordering over documents.
 
 
 For each document, take the chunk tree of a document as defined by the swarm hash chunker. See :numref:`figure %s <fig:swarmhash>`.
@@ -330,8 +330,8 @@ For each document, take the chunk tree of a document as defined by the swarm has
 1. Let :math:`\triangle(\node)` be the set of all nodes in the subtree encoded in :math:`\node`. Now define  a strict ordering of nodes in the chunk tree for document :math:`\doc`.
 
 ..  math::
-    \node <_\doc \node\prime \defequiv \begin{cases}
-    \node \in \triangle(\node\prime), & \text{or}\\
+    \node <_\doc \node^{\prime} \defequiv \begin{cases}
+    \node \in \triangle(\node^{\prime}), & \text{or}\\
     \exists \node_t\ \text{such that}\
     \exists \node_n, \node_m, i, j, \text{and}\ \node_t \ \text{\ such that}\\
     \ \Hash(\node_n) = \Segment{\node_t}{i}\text{\ and}\\
@@ -339,20 +339,20 @@ For each document, take the chunk tree of a document as defined by the swarm has
     \ i < j
     \end{cases}
 
-2. Combine this ordering of nodes and the ordering of uniq paths in the manifest, extend the ordering of nodes over the entire document collection as follows:
+2. Combine this ordering of nodes and the ordering of unique paths in the manifest, extend the ordering of nodes over the entire document collection as follows:
 
 
 ..  math::
-    \node <_M \node\prime \defequiv \begin{cases}
-    \node <_\doc \node\prime, & \text{if}\ \exists \doc\text{\ such that}\ \node, \node\prime \in \triangle(\doc) \text{or}\\
-    \doc <_M \doc\prime, & \text{if}\ \exists \doc, \doc\prime\text{\ such that}\ \node \in \triangle(\doc)\text{ and\ } \node\prime \in \triangle(\doc\prime)
+    \node <_M \node^{\prime} \defequiv \begin{cases}
+    \node <_\doc \node^{\prime}, & \text{if}\ \exists \doc\text{\ such that}\ \node, \node^{\prime} \in \triangle(\doc) \text{or}\\
+    \doc <_M \doc^{\prime}, & \text{if}\ \exists \doc, \doc\prime\text{\ such that}\ \node \in \triangle(\doc)\text{ and\ } \node^{\prime} \in \triangle(\doc^{\prime})
     \end{cases}
 
 3. Now define the set of unique nodes :math:`\Complement(M)` of the document collection.
 
 ..  math::
-    \node\in \Complement(M) \defequiv \nexists \node\prime \text{\ such that}\
-    \SwarmHash(\node) = \SwarmHash(\node\prime) \text{\ and\ } \node\prime <_M \node
+    \node\in \Complement(M) \defequiv \nexists \node^{\prime} \text{\ such that}\
+    \SwarmHash(\node) = \SwarmHash(\node^{\prime}) \text{\ and\ } \node^{\prime} <_M \node
 
 ..  _fig:swarmhash::
 
@@ -364,14 +364,14 @@ For each document, take the chunk tree of a document as defined by the swarm has
 
 The resulting ordered set of chunks will be used to define the collection-level recursive audit secret hash.
 
-1. Let :math:`M` be the manifest of a document collection and :math:`\Complement(M) = \{\chunk_0, \chunk_1, \dots\chunk_n\}` be the set of unique chunks such that :math:`\chunk_i<\chunk_j` for all :math:`0<=i<j<=n`.  The last chunk :math:`\chunk_n` is the root chunk of the manifest.
+1. Let :math:`M` be the manifest of a document collection and :math:`\Complement(M) = \{\chunk_0, \chunk_1, \dots\chunk_n\}` be the set of unique chunks such that :math:`\chunk_i<\chunk_j` for all :math:`0 \leq i < j \leq n`.  The last chunk :math:`\chunk_n` is the root chunk of the manifest.
 2. Let :math:`\seed` be the seed for :math:`M`.
 3. Define the audit secret hash function for :math:`M` and and index as
 
 ..  math::
     \CRASH(M, \seed, i) \defeq \begin{cases}
     \ASH(\chunk_0, \seed), & \text{if}\ i=0\\
-    \ASH(\chunk_i, \Hash(\ASH(M, \seed, i-1)\concat\seed)), & \text{othersiwe}
+    \ASH(\chunk_i, \Hash(\ASH(M, \seed, i-1)\concat\seed)), & \text{otherwise}
     \end{cases}
 
 4. The collection-level recursive audit secret hash for :math:`M` is defined as
@@ -379,15 +379,15 @@ The resulting ordered set of chunks will be used to define the collection-level 
 ..  math::
     \CRASH(M, \seed) \defeq \CRASH(M, \seed, n)
 
-In practice given a collection the owner wants to store, the secrets can be efficiently generated at the time the files are chunked. As the chunks are uploaded, and guardian addresses and their receipts are stored in a structure parallel to the chunktree anyway. In addition to that
+In practice given a collection the owner wants to store, the secrets can be efficiently generated at the time the files are chunked. As the chunks are uploaded, and guardian addresses and their receipts are stored in a structure parallel to the chunktree anyway. 
 
-This pattern can be applied to document collections covering entire sites or filesystem directories and therefore scale very well.
+This pattern can be applied to document collections covering entire sites or filesystem directories and therefore scales very well.
 Given the swarm parameters of :math:`m=12, h=5`, for a TTL requiring repeatability order :math:`r` (for :math:`2^r` independent audits without ever seeing the files again), the minimum data size to achieve a desired maximum storage overhead ratio :math:`k` is :math:`k\cdot 2^{r+5}`
 Setting `r=128`, so the masks fit into one chunk, a 20-chunk file (80KB) would allow :math:`128` independent audits with a 5% storage overhead.
 
 This audit will not reveal the actual secret to the individual storers of chunks, therefore it can never be used to prove to third parties that a challenge is invalid. For the same reason it is not used for public litigation.
 
-If we know nothing about the individual secrets used in the recursive formula, and we use ASH challenges to obtain :math:`\CRASH(M, \seed, i)`, the correctness of the secret is only verifiable after we calculate :math:`\CRASH(M, \seed)` and check it against the mask. Requiring ASH proofs directly, on the other hand, would incur
+If we know nothing about the individual secrets used in the recursive formula, and we use ASH challenges to obtain :math:`\CRASH(M, \seed, i)`, the correctness of the secret is only verifiable after we calculate the final :math:`\CRASH(M, \seed)` and check it against the mask. If it does not match, we have no way of identifying at what index the error occurred. Requiring ASH proofs directly at every index, on the other hand, would incur
 an order of magnitude more network traffic. However, a reasonable middle ground is possible.
 
 The insight here is that we can use partial verification on the individual secrets.
@@ -434,7 +434,7 @@ This indexing scheme allows owners to generate a seed needed for an audit for an
 ..  rubric:: Footnotes
 ..  [#] The base of this log would set the clock tick for automated audits, making it a system constant will allow predictable audit traffic estimates given the size of the swarm.
 
-Incidentally, this allows the owner to calculate the index of the previous seed used for the collection from the current time and time of the receipt, so there is no need to keep an cursor to avoid repeated audits with the same seed. For non-automated audits on chunks are expected to occur infrequently and since they count as anomalies, they are likely to be recorded for reasons of reputation etc.
+Incidentally, this allows the owner to calculate the index of the previous seed used for the collection from the current time and time of the receipt, so repeated audits with the same seed can be avoided without the need to keep a cursor. Non-automated audits on chunks are expected to occur infrequently and since they count as anomalies, they are likely to be recorded for reasons of reputation etc.
 
 SWINDLE
 =======================
