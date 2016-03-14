@@ -444,14 +444,14 @@ SWINDLE (SWarm INsurance Driven Litigation Engine) is the part of the bzz protoc
 Prerequisites for insured storage
 --------------------------------------------------
 
-When a store request for an insured chunk is sent, the owner must include the smash chunk hash, as well as the MASH root and sign it together with the swarm hash of the chunk [#]_ . The chunk hash is needed to verify positive ASH proofs, while the MASH is needed to verify MASH proofs. Both are needed in order to provide negative proofs against an auditor sending frivolous audit requests.
+Suppose an owner of a chunk wishes to have it stored and insured. The owner communicates directly with a registered peer who will act as "guardian" of this insired chunk. When a store request for an insured chunk is sent from the owner to the guardian, the owner must include the smash chunk hash, as well as the MASH root and sign it together with the swarm hash of the chunk. The chunk hash is needed to verify positive ASH proofs, while the MASH is needed to verify MASH proofs. Both are needed in order to provide negative proofs against an auditor sending frivolous audit requests.
 
-..  rubric:: Footnotes
-..  [#] Instead of calculating and including the smash chunk hash separately from the swarm hash, we could simply use the smash hash (root binary merkle tree over 32 byte sequences) as the chunk hash in the swarm chunker. The smash hash involves 255 hashing operations as opposed to the single one of the swarm hash, therefore, extensive benchmarks are needed before we pursue this option.
+Remember, the "swarm hash" used to identify a chunk in the swarm is simply its hash, while the "chunk hash" from the ASH proofs is the merkle root of a binary tree that treats the chunk as :math:`n` segments of size :math:`2^h` (in our case 128 segments of 32 bytes). Both are calculated directly from the chunk itself but they are distinct and serve different purposes.
+The question arises why we do not combine these two. In particular instead of calculating and including the smash chunk hash separately from the swarm hash, we could simply use the smash hash (the root of the binary merkle tree over 32 byte sequences) as the chunk hash in the swarm chunker; i.e. use the chunk hash as the swarm ID of a chunk. However, the smash chunk hash involves 255 hashing operations as opposed to the single one of the swarm hash, therefore, extensive benchmarks are needed before we pursue this option.
 
 When the store request is accepted by the guardian, they provide the owner with a receipt consisting of the store request signed by the author and counter-signed by the guardian. SWINDLE uses a court-case like system of public litigation on the blockchain, so the signatures are important in order for smart contracts to verify if a challenge is valid.
 
-After the author generates the MASH tree, they have two options. One is to keep it with the chunk hash. This allows the author to launch and verify simple audit requests responded to by the relevant audit secret hash (ASH) value. If they choose not to store the MASH, they only need to record the MASH root with the chunk and send off the masked audit secret hashes along with the store request. This enables owners to obtain proofs of custody without having any parts of the data whatsoever beyond the chunk hash and the signature of the receipt.
+After the owner generates the MASH tree, they have two options. One is to remember it and store it along with the chunk hash. This allows them to launch and verify simple audit requests which are responded to by the relevant audit secret hash (ASH) value, and check that the hash of the ASH matches the enrty in the MASH tree. The other option is not to store the MASH tree, but only to remember the MASH root. They would send off the MASH tree (or simply just the masked audit secret hashes) along with the store request. This enables owners to obtain proofs of custody without having any parts of the data whatsoever beyond the chunk hash, the MASH root and the signature of the receipt.
 
 Even though querying a particular chunk is allowed and can be done manually, the automated audit and litigation process of SWINDLE start with audits on document collections and/or files instead.
 
@@ -460,58 +460,73 @@ Let us assume that all chunks have been stored and the owner obtained a receipt 
 Document- or collection-level auditing and litigation
 --------------------------------------------------------------------
 
-1. The owner identifies a batch to store and have all its chunks sent and receipted.
+It is expected that auditing should happen not at the chunk-by-chunk level, but at a file or file-collection level that is semantic for the end users. The basic process for this is the following.
 
-2. Stored in parallel structure are the guardians receipts.
+1. The owner identifies a batch of chunks (document or collection of documents) to store. The owner submits store requests for each chunk and collects receipts from the respective guardians. receipted.
 
-3. The owner generates the base seeds for the manifest, then calculates the secrets and builds the MASH tree from the masked audit secrets [#]_ .
+2. The owner stores all the guardians receipts in a paralel structure.
+
+3. The owner generates the base seeds to be used for auditing all the files listed in the manifest and then precalculates the secrets. The owner masks the audit secret hashes by hashing them and proceeds to build the MASH tree [#]_ .
 
 ..  rubric:: Footnotes
-..  [#] IO and memory allocation being the main bottleneck, the secrets for all seeds are best calculated with a single chunking iteration.
+..  [#] Implementation note: IO and memory allocation being the main bottleneck, the secrets for all seeds are best calculated with a single chunking iteration.
 
-4. Stored in another parallel structure are the smash hashes belonging to the chunks.
+4. The owner calculates all the smash hashes belonging to the chunks and records them in a paralel structure.
 
-5. Stored in another parallel structure are the uniqueness bits belonging to the chunks. This extra bit is needed to ensure each chunk is checked only once for each collection.
+5. Finally, the owner records a uniqueness bit for each chunk. Since it it possible that the same chunk appears multiple times in a document collection, and since we want to avoid uneccessary repeated audits for such chunks, we must store one extra bit of information - this is the uniqueness bit belonging to each chunk in the collection.
 
-6. The guardian data, the smash hashes and the MASH-base are stored in the swarm (the structure is linked in a manifest).
+6. The owner then stores the accumulated guardian data, the smash chunk hashes and the MASH-tree (or just the MASH-es -- the masked audit secret hashes) in the swarm. The structure is linked in a manifest.
 
-7. The audit request for the document or collection is a signed tuple consisting of the swarm root hashes of (1) the document/collection, (2) the guardian receipts, (3) the MASH base and (4) the smash chunk hashes (5) the uniquness bits, (6) the partial verification masks. In addition it includes (8) the MASH root, (9) the base seed for this  audit, (10) the MASH index (unless derivable from the seed) and possibly (11) a common TTL (storage period).
+After this preparation is complete, an auditor may now perform an audit on this collection. In order to begin, the auditor must send out an "audit request":
 
-6. The owner sends an audit request addressed by the swarm hash.
+7. The audit request for the document or collection is a signed tuple consisting of (FIXME -- needs elaboration and cleaning up FIXME) the swarm root hashes of (1) the document/collection, (2) the guardian receipts, (3) the MASH-es and (4) the smash chunk hashes (5) the uniquness bits, (6) the partial verification masks. In addition it includes (8) the MASH-es, (9) the base seed for this  audit, (10) the MASH index (unless derivable from the seed) and possibly (11) a common TTL (storage period).
 
-The automated audit process works as follows:
+8. Audit request are sent out addressed by the swarm hash. (FIXME what's "the" swarm hash? hash of what? context! FIXME)
 
-1. Anyone that have the chunk can act as the main auditor and start kicking off the recursive collective audit.
-2. The auditor retrieves the other supporting structures (guardian data, smashhashes and MASH-base, partial verification masks).
+Auditing an entire document collection requires audits of many chunks. Once the audit is initiated by an auditor it proceed automatically until it is complete or an error is found. 
+
+Initiating the automated audit proces:
+
+1. Anyone that has the chunk (FIXME which "the chunk"? FIXME) can act as the main auditor and start kicking off the recursive collective audit.
+2. The auditor retrieves the other supporting structures (guardian data, smash chunk hashes and the MASH-es, partial verification masks). (FIXME Do I know what partial verification masks are? FIXME)
 3. The auditor starts by verifying the MASH root and the signature and checks the integrity of the support data.
+
+I fall the data checks out, the audidor may then send out the audit request
 
 The automated collective audit process works as follows:
 
-1. Auditor launches the collection/file audit, using a chunk ordering defined on the document/collection.
-2. The auditor sends off audit requests of the simple type which are similar to retrieval requests except that it has to be responded to only by proximate storers and instead of sending the chunk, storers calculate the secret and respond with that.
-3. These storers do the same as the main auditor and recursively spawn audit requests on the subtree defined by the successive hash segments of the chunk they store.
-4. Storers of leaf chunks simply respond with the secret.
-5. Upon receiving the secret for a chunk, the auditor checks  the error detection code,  and generates the next seed to send as part of the audit of the next subtree addressed by the following hash segment.
-6. After all subtree secrets are received, intermediate nodes calculate the audit secret and hash it together with the secret of their own chunk. They respond to their parent auditor with this secret.
-7. If everybody responds and the secret matches the  repective mask, then the audit is successful.  If the main auditor knows the mask, it responds to the owner with a MASH proof of the secret.
+1. The auditor launches the collection/file audit, using a chunk ordering defined on the document/collection. (FIXME a little more info please, what does this mean in practice? Is this a comment about which address to send the request to, or is there more to it? FIXME)
+2. The auditor sends off audit requests of the simple type. These requests are similar to retrieval requests except that they have to be responded to only by proximate storers and instead of sending the chunk itself, the storers calculate the audit secret hash (ASH) and respond with that.
+3. These storers that have just gotten audited are either storers of a data chunk (leaves), or they are storers of an intermediate chunk in the swarm tree. Recall that in the latter case, their chunk represents 128 swarm hash segments spanning a subtree of the swarm tree. They proceed in the same fashion as the main auditor and recursively spawn audit requests on the subtree defined by the successive hash segments one at a time.
+4. Storers of leaf chunks simply respond with the audit secret hash.
+5. (FIXME. This needs to be explained better. Every ASH contains an error detection code? no. SO what exactly is checked and by whom? "The ASH response contains an error detection code as explained on page REF. Upon receiving the ASH response ....) Upon receiving the secret for a chunk, the auditor checks the error detection code. If no error is detected, the auditor generates the next seed needed  for the audit of the next subtree addressed by the following hash segment.
+6. After all subtree secrets (FIXME secrets == ASH in this context?) are received by the storers of intermediate chunks, they calculate the audit secret (FIXME which "the audit secret"?) and hash it together with the secret (FIXME which "the secret"?) of their own chunk. They respond to their parent auditor with this secret.
+7. If everybody responds to the audit and if the final secret ASH) matches the repective mask (MASH), then the audit is successful. At this point the main auditor can send a MASH proof to the owner (or any interested party in posession of the MASH root), proving a successful audit.
 8. The owner verifies the MASH proof against the MASH root and if it checks out, they can fairly certain their collection is preserved and retrievable in the swarm.
 
-During simple audit, audit requests are shouted out in the ether and the swarm forwards them all the way to a storer node (peers most proximate to chunk address). Responses travel back to parent auditors the same way.
+FIXME
+Ok so I put a lot of "fixme" comments in the above segment because there are a number of things that are vague and prone to being misunderstood. If you coul help me flesh them out, that would be great. After that I'd probably want to rearrange the points a little because the recursion looks a little garbled.
+FIXME
 
-If during the audit process there is no response about a chunk, the guardian of the chunk is looked up and is sent an ASH-proof request. If the ASH-proof request returns a response, the ASH is recalculated. If not responded to, litigation starts by the auditor sending the ASH-proof challenge to the blockchain. From here on the standard deadline for refutation starts. The exact procedure is discussed in :cite:`ethersphere2016sw3`.
+Notes on the auditing process
 
-If auditor has all the values but finds the audit secret does not match the mask, it needs to find the culprit. This is carried out by sending out successive ASH-proof challenges to the guardians [#]_ .
+During simple audit, audit requests are broadcast from a node to its peers in the swarm and the swarm collectively forwards them all the way to a storer nodes (i.e. the peers most proximate to chunk address). Responses travel back to parent auditors the same way.
+
+If at any time during the audit process there is no response about a chunk, the guardian of that chunk is looked up by the responsible auditor and is sent an ASH-proof request. Upon receiving a repsonse to the ASH-proof request, the auditor recalculates the ASH and verifies the proof. If there is no response, litigation starts: the auditor sends the ASH-proof challenge to the blockchain accusing the guardian of having lost the chunk in question. From here on the standard deadline for refutation starts. The exact procedure is discussed in :cite:`ethersphere2016sw3`.
+
+If the auditor has all the values (FIXME which values, which audidor? FIXME) but finds the audit secret does not match the mask, it needs to find the culprit. This is carried out by sending out successive ASH-proof challenges to the guardians [#]_ .
 
 If all nodes respond with the ASH secret, the auditor is able to calculate the CRASH secret for the entire collection and check it against the MASH. The MASH proof is sent to the owner or initiator.
+(FIXME how does this relate to point 8 above? FIXME)
 
-In the abnormal case when an error is detected, it is not entirely clear how to follow up.
-Luckily due to the iterative error coding scheme used, the probabilities of the past chunks to be implicated has a negative exponential distribution as a function of their recency.
-As a consequence the strategy to proceed backwards to check these chunks for proof of custody is sound and efficient. We use an ASH-proof challenge that requires the peer to provide a merkle proof used to validate both the original chunk as well as the audit secret. If the node fails to respond with a correct ASH proof, the trial period finishes and litigation on the blockchain starts. The node carrying out this partial audit feed sback the information about the error to their parent auditor. Thus the peers know not to pursue litigation.
+In the rare case when an error is detected, it is not immediately clear who the culprit is.
+Luckily due to the iterative error coding scheme used, once an error occurs the probability of it staying undetected falls exponentially. Therefore the culprit is most likely to be among the most recently audited chunks.
+As a consequence of this, the best strategy is to proceed backwards and check the most recently audited chunks directly for proof of custody using an ASH-proof challenge. Recall that the ASH proof requires the peer to provide a merkle proof used to validate both the original chunk as well as the audit secret. If a node responds with a correct ASH proof, the previous chunk is queried. Once node fails to respond with a correct ASH proof we have found the culprit and litigation on the blockchain begins. The node carrying out this (partial) audit feeds back the information about the error to their parent auditor. Thus the peers know not to pursue litigation (FIXME who doesn't litigate against whom? FIXME).
 
-During this auditing procedure, the intermediate nodes were not only needed for the audit itself but also serve to address the audit requests for the subtrees of the tree node encoded in the chunk. If the entire audit combining the secrets is carried out by one peer, chunks for each intermediate tree node will need to be retrieved to route audit requests for subtrees. Collective auditing has the immediate benefit that no intermediate chunks ever need to be actually retrieved, because the audit of subtrees are carried out by peers that store the chunk [#]_ .
+Note that in our recursive auditing scheme, the intermediate (non leaf) nodes were not only audited themselves, but they also served to initiate audits on the subtrees encoded in their chunk. This offers great efficiency gains becasue if the entire audit were to be carried out by just one peer, then chunks for each intermediate node would need to be retrieved in order for the auditor to initiate audit requests for subtrees. Collective auditing has the immediate benefit that no intermediate chunks ever need to be actually retrieved, because the audit of subtrees are carried out by peers that store the chunk [#]_ .
 
 ..  rubric:: Footnotes
-..  [#] We need to ensure that peers that get involved in the colllective audit get forwarded all the relevant data, i.e., the partial verification mask bits, the guardians addresses belonging to the substructure to be audited, the smash chunk hashes of chunks in the subtree and the uniqueness bits.
+..  [#] We need to ensure that peers that get involved in the collective audit get forwarded all the relevant data, i.e., the partial verification mask bits, the guardians addresses belonging to the substructure to be audited, the smash chunk hashes of chunks in the subtree and the uniqueness bits.
 
 Ensuring correct syncing and distribution
 -----------------------------------------------------------
