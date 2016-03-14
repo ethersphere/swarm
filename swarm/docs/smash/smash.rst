@@ -447,11 +447,11 @@ Prerequisites for insured storage
 Suppose an owner of a chunk wishes to have it stored and insured. The owner communicates directly with a registered peer who will act as "guardian" of this insired chunk. When a store request for an insured chunk is sent from the owner to the guardian, the owner must include the smash chunk hash, as well as the MASH root and sign it together with the swarm hash of the chunk. The chunk hash is needed to verify positive ASH proofs, while the MASH is needed to verify MASH proofs. Both are needed in order to provide negative proofs against an auditor sending frivolous audit requests.
 
 Remember, the "swarm hash" used to identify a chunk in the swarm is simply its hash, while the "chunk hash" from the ASH proofs is the merkle root of a binary tree that treats the chunk as :math:`n` segments of size :math:`2^h` (in our case 128 segments of 32 bytes). Both are calculated directly from the chunk itself but they are distinct and serve different purposes.
-The question arises why we do not combine these two. In particular instead of calculating and including the smash chunk hash separately from the swarm hash, we could simply use the smash hash (the root of the binary merkle tree over 32 byte sequences) as the chunk hash in the swarm chunker; i.e. use the chunk hash as the swarm ID of a chunk. However, the smash chunk hash involves 255 hashing operations as opposed to the single one of the swarm hash, therefore, extensive benchmarks are needed before we pursue this option.
+The question arises why we do not combine these two. In particular instead of calculating and including the smash chunk hash separately from the swarm hash, we could simply use the smash chunk hash (the root of the binary merkle tree over 32 byte sequences) instead of the swarm hash in the swarm chunker; i.e. use the chunk hash as the swarm ID of a chunk. However, the smash chunk hash involves 255 hashing operations as opposed to the single one of the swarm hash, therefore, extensive benchmarks are needed before we pursue this option.
 
 When the store request is accepted by the guardian, they provide the owner with a receipt consisting of the store request signed by the author and counter-signed by the guardian. SWINDLE uses a court-case like system of public litigation on the blockchain, so the signatures are important in order for smart contracts to verify if a challenge is valid.
 
-After the owner generates the MASH tree, they have two options. One is to remember it and store it along with the chunk hash. This allows them to launch and verify simple audit requests which are responded to by the relevant audit secret hash (ASH) value, and check that the hash of the ASH matches the enrty in the MASH tree. The other option is not to store the MASH tree, but only to remember the MASH root. They would send off the MASH tree (or simply just the masked audit secret hashes) along with the store request. This enables owners to obtain proofs of custody without having any parts of the data whatsoever beyond the chunk hash, the MASH root and the signature of the receipt.
+After the owner generates the MASH tree, they have two options. One is to remember it and store it along with the chunk hash. This allows them to launch and verify simple audit requests which are responded to by the relevant audit secret hash (ASH) value, and check that the hash of the ASH matches the entry in the MASH tree. The other option is not to store the MASH tree, but only to remember the MASH root. They would send off the MASH tree (or simply just the masked audit secret hashes) along with the store request. This enables owners to obtain proofs of custody without having any parts of the data whatsoever beyond the chunk hash, the MASH root and the signature of the receipt.
 
 Even though querying a particular chunk is allowed and can be done manually, the automated audit and litigation process of SWINDLE start with audits on document collections and/or files instead.
 
@@ -462,7 +462,7 @@ Document- or collection-level auditing and litigation
 
 It is expected that auditing should happen not at the chunk-by-chunk level, but at a file or file-collection level that is semantic for the end users. The basic process for this is the following.
 
-1. The owner identifies a batch of chunks (document or collection of documents) to store. The owner submits store requests for each chunk and collects receipts from the respective guardians. receipted.
+1. The owner identifies a batch of chunks (document or collection of documents) to store. The owner submits store requests for each chunk and collects receipts from the respective guardians.
 
 2. The owner stores all the guardians receipts in a paralel structure.
 
@@ -491,7 +491,7 @@ Initiating the automated audit proces:
 2. The auditor retrieves the other supporting structures (guardian data, smash chunk hashes and the MASH-es, partial verification masks). (FIXME Do I know what partial verification masks are? FIXME)
 3. The auditor starts by verifying the MASH root and the signature and checks the integrity of the support data.
 
-I fall the data checks out, the audidor may then send out the audit request
+If all the data checks out, the audidor may then send out the audit request
 
 The automated collective audit process works as follows:
 
