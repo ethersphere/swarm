@@ -7,10 +7,6 @@
 Welcome to the swarm documentation!
 ===================================
 
-..  raw:: latex
-
-..     \newpage
-
 .. Contents:
 
 .. toctree::
@@ -20,7 +16,6 @@ Welcome to the swarm documentation!
 
 
 .. raw:: latex
-
    \newpage
 
 .. Indices and tables

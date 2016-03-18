@@ -133,14 +133,15 @@ We can define the audit secret hash as the merkle root of the chunk with the mod
 ..  math::
     \ASH(\chunk, \seed) \defeq \MerkleRoot(\ModSegments(\chunk, \seed))
 
-..  _fig:chunkproof:
+..  _chunkproof:
 
 ..  figure:: fig/chunkproof.pdf
     :align: center
     :alt: binary merkle proof for chunk
     :figclass: align-center
 
-    The figure represents the Merkle tree for a chunk (:math:`H^\lambda_i\defeq\MerkleHash(\chunk, \level, i)`). Shaded in grey in the middle is the Merkle proof for index :math:`42` (7-bit binary represetation is ``0011010``). The proof can be verified knowing only the data segments at the given index :math:`j`=42 and its sister segment (next segment if index is even, previous if odd), plus sister hashes at each level as indicated.
+    The figure represents the Merkle tree for a chunk
+    (:math:`H^\lambda_i\defeq\MerkleHash(\chunk, \level, i)`). Shaded in grey in the middle is the Merkle proof for index :math:`42` (7-bit binary represetation is ``0011010``). The proof can be verified knowing only the data segments at the given index :math:`j=42` and its sister segment (next segment if index is even, previous if odd), plus sister hashes at each level as indicated.
 
 
 As the other segments (:math:`\segment_{i}; i\neq j`) did not change, if one knows the merkle proof belonging to segment :math:`j` of the original chunk then, given the seed, the modified merkle proof can simply be recalculated
@@ -207,10 +208,12 @@ FIXME: note about why we need to use actual segments for the merkle tree and why
 Masked audit secret hash (MASH) tree
 -----------------------------------------
 
-Now we turn to the formal definition of the masked audit secret hash tree. This is relevant for repeatable audits without remembering the secrets themselves. The basic idea is to store all the masked secrets in a merkle tree (MASH tree) and to remember only the root of this tree (MASH root). A successful response to a challenge contains a not just the secret, but also the merkle proof from the secret to the MASH root. 
+Now we turn to the formal definition of the masked audit secret hash tree. This is relevant for repeatable audits without remembering the secrets themselves. The basic idea is to store all the masked secrets in a merkle tree (MASH tree) and to remember only the root of this tree (MASH root). A successful response to a challenge contains a not just the secret, but also the merkle proof from the secret to the MASH root.
 
 Assume that we have :math:`k=2^r` audit seeds :math:`\seed_0, \dots \seed_{k-1}` specific to a chunk. Each audit seed allows nodes to launch an independent challenge to the swarm and check that the associated data is preserved. We define :math:`r` as the *repeatability order of the audit*.
-Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows (see :numref:`figure %s <fig:mashproof>`):
+Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows:
+
+..  (see :numref:`figure %s <fig:mashproof>`)
 
 1. Given a chunk and the :math:`n` audit seeds, calculate the corresponding audit secrets.
 2. Given the :math:`n` audit secrets, construct :math:`n` masked audit secrets by taking their hash (MASH).
@@ -271,23 +274,21 @@ This type is expected to be used very rarely, since the only way they come about
 
 FIXME this figure / table is not shoing up in the compiled PDF FIXME
 
-..  fig:response-types::
+..  _fig:response-types:
 
-..  figure::
+..  table::  Challenges and responses: types of challenges, their input and the response storers can give. The first two types of challenge make no claim as to whether the auditor knows the secret. The MASH proof challenge presupposes the storer knows the mask. The storer always responds with the MASH proof, if they find that the mask matches they also include the audit secret hash in their response, otherwise they submit an ASH proof (from which the audit secret can be derived).
 
     +---------------+------------------------+------------------+------------------------------+
     | challenge     |            input       |storer  knows     |response                      |
     +===============+========================+==================+==============================+
     |   ASH         |chunk hash, seed        |                  |audit secret hash             |
-    +---------------+                        |                  +------------------------------|
+    +---------------+                        |                  +------------------------------+
     |   ASH proof   |                        |                  |chunk segment, ASH proof      |
-    +---------------+------------------------+------------------+------------------------------|
+    +---------------+------------------------+------------------+------------------------------+
     |   MASH proof  |chunk hash, seed,       | mask ok          |audit secret hash, MASH proof |
-    |               |MASH-root               +------------------+------------------------------|
+    |               |MASH-root               +------------------+------------------------------+
     |               |                        | mask not ok      |ASH proof, MASH proof         |
     +---------------+------------------------+------------------+------------------------------+
-
-    Types of challenges, their input and the response storers can give. The first two types of challenge make no claim as to whether the auditor knows the secret. The MASH proof challenge presupposes the storer knows the mask. The storer always responds with the MASH proof, if they find that the mask matches they also include the audit secret hash in their response, otherwise they submit an ASH proof (from which the audit secret can be derived).
 
 
 Repeatability and file-level audits
@@ -360,7 +361,7 @@ For each document, take the chunk tree of a document as defined by the swarm has
     \node\in \Complement(M) \defequiv \nexists \node^{\prime} \text{\ such that}\
     \SwarmHash(\node) = \SwarmHash(\node^{\prime}) \text{\ and\ } \node^{\prime} <_M \node
 
-..  _fig:swarmhash::
+..  _fig:swarmhash:
 
 ..  figure:: fig/bzzhash.pdf
     :alt: swarm-hash
@@ -601,3 +602,8 @@ We outlined an auditing and litigation protocol which
 
 .. bibliography:: smash.bib
    :cited:
+   :style: plain
+
+.. apalike not available so boring
+
+

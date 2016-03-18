@@ -30,8 +30,8 @@ import shlex
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.todo',
+    # 'sphinx.ext.intersphinx',
+    # 'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
     # 'sphinxcontrib.numref',
@@ -303,9 +303,11 @@ latex_elements = {
 }
 
 latex_docclass = {
-  'howto': 'scrartcl'
+  'howto': 'article'
+  # 'howto': 'scrartcl'
 }
 
+numfig = 1
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
