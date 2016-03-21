@@ -70,8 +70,6 @@ So given a chunk :math:`{\chunk}`, a seed :math:`{\seed}`, we construct the secr
 
 1. First we make sure all chunks are the same size by padding shorter chunks as necessary. If chunk :math:`{\minichunk}` is shorter than the predefined maximum chunk size (:math:`\MaxChunkSize=2^m`) then we append to it some padding to make the length of resulting data blob (:math:`{\Pad}({\minichunk})`) the smallest power of 2. In particular appending hashes until the length exceeds the first power of two and then finally we truncate  [#]_ .
 
-FIXME: fix this definition
-
 ..  rubric:: Footnotes
 .. [#] :math:`\concat` stands for concatenation, and the notation :math:`x[i:j]` stands for the byteslice  :math:`x[i]\concat x[1]\concat \dotsb \concat x[j-1]` where :math:`x[i]` is the :math:`i^\mathrm{th}` byte of :math:`x`. :math:`\Hash` stands for a hash function of choice. To help readability, the variable :math:`\chunk` always stands for a chunk of data, :math:`\segment` for a segment of a chunk, :math:`\level` for levels of merkle trees, :math:`\seed` for seed.
 
@@ -81,7 +79,14 @@ FIXME: fix this definition
     \Pad(\chunk, \seed, i-1) \concat \Hash(\Pad(\chunk, \seed, i-1)\concat\seed), & \text{otherwise}
     \end{cases}
 
-    \Pad(\minichunk) \defeq \Pad(\minichunk, \seed, i)[0:\MaxChunkSize] \text{\ where}
+Then we define the padded chunk as
+
+..  math::
+    \Pad(\minichunk) \defeq \Pad(\minichunk, \seed, i)[0:\MaxChunkSize]
+
+where :math:`i` is chosen as the smallest index such that
+
+..  math::
 
     \Length{(\minichunk)} + i\cdot \HashSize >= \MaxChunkSize
 
