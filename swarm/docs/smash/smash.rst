@@ -187,7 +187,7 @@ Now, given :math:`j, \Segment{\chunk}{j}` and :math:`\PH_0, \dots, \PH_{\depth-1
     \DHash_\depth(\CH_{\level-1}, \PH_{\level-1}, \level-1), & \text{otherwise}
     \end{cases}
 
-Given a Merkle proof then,  both the chunk hash and the audit hash can be verified. For the latter the auditor simply plugs in the salted segment (segment :math:`j` hashed together with the seed) and calculates the audit secret hash as the root using the same side hashes as the original proof (:numref:`figure %s <fig:ashproof>`).
+Given a Merkle proof then,  both the chunk hash and the audit hash can be verified. For the latter the auditor simply plugs in the salted segment (segment :math:`j` hashed together with the seed) and calculates the audit secret hash as the root using the same side hashes as the original proof (:numref:`Figure %s <fig:ashproof>`).
 
 ..  math::
     \AH_\level(\chunk, \seed) = \begin{cases}
@@ -200,7 +200,7 @@ and
 ..    math::
 	\ASH(\chunk, \seed)=\AH_\depth(\chunk, \seed)
 
-..  _fig::
+..  _fig:ashproof:
 
 ..  figure:: fig/ashproof.pdf
     :align: center
@@ -218,9 +218,7 @@ Masked audit secret hash (MASH) tree
 Now we turn to the formal definition of the masked audit secret hash tree. This is relevant for repeatable audits without remembering the secrets themselves. The basic idea is to store all the masked secrets in a merkle tree (MASH tree) and to remember only the root of this tree (MASH root). A successful response to a challenge contains a not just the secret, but also the merkle proof from the secret to the MASH root.
 
 Assume that we have :math:`k=2^r` audit seeds :math:`\seed_0, \dots \seed_{k-1}` specific to a chunk. Each audit seed allows nodes to launch an independent challenge to the swarm and check that the associated data is preserved. We define :math:`r` as the *repeatability order of the audit*.
-Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows:
-
-..  (see :numref:`figure %s <fig:mashproof>`)
+Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows: 
 
 1. Given a chunk and the :math:`n` audit seeds, calculate the corresponding audit secrets.
 2. Given the :math:`n` audit secrets, construct :math:`n` masked audit secrets by taking their hash (MASH).
