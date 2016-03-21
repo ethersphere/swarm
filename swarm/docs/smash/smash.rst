@@ -279,23 +279,12 @@ To clarify: if a storer submits a secret whose hash does not match the audit mas
 This proof is also used in conjunction with the MASH proof to prove to a third party that a challenge was invalid.
 This type is expected to be used very rarely, since the only way they come about is if auditors are sending frivolous false seeds or are publishing incorrect masks, which they are disincentivised to do.
 
-FIXME this figure / table is not showing up in the compiled PDF FIXME
-
 ..  _fig:response-types:
 
-..  table::  Challenges and responses: types of challenges, their input and the response storers can give. The first two types of challenge make no claim as to whether the auditor knows the secret. The MASH proof challenge presupposes the storer knows the mask. The storer always responds with the MASH proof, if they find that the mask matches they also include the audit secret hash in their response, otherwise they submit an ASH proof (from which the audit secret can be derived).
+..  figure:: fig/response-types.pdf
 
-    +---------------+------------------------+------------------+------------------------------+
-    | challenge     |            input       |storer  knows     |response                      |
-    +===============+========================+==================+==============================+
-    |   ASH         |chunk hash, seed        |                  |audit secret hash             |
-    +---------------+                        |                  +------------------------------+
-    |   ASH proof   |                        |                  |chunk segment, ASH proof      |
-    +---------------+------------------------+------------------+------------------------------+
-    |MASH proof     |  chunk hash, seed,     |mask ok           |audit secret hash, MASH proof |
-    |               |  MASH-root             +------------------+------------------------------+
-    |               |                        |mask not ok       |ASH proof, MASH proof         |
-    +---------------+------------------------+------------------+------------------------------+
+  Challenges and responses: types of challenges, their input and the response storers can give. The first two types of challenge make no claim as to whether the auditor knows the secret. The MASH proof challenge presupposes the storer knows the mask. The storer always responds with the MASH proof, if they find that the mask matches they also include the audit secret hash in their response, otherwise they submit an ASH proof (from which the audit secret can be derived).
+
 
 
 Repeatability and file-level audits
