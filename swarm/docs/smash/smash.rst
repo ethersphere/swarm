@@ -209,7 +209,7 @@ and
 
     Given a chunk hash, a seed, and the index, the audit secret hash for :math:`{\ASH(\chunk, \seed, j)}` can be calculated and verified using only the Merkle proof for the segment at the index. The left hand side is the merkle structure of the original segmented chunk, the right hand side represents the corresponding merkle proof for the audit secret.
 
-If an auditor maliciously published a false ASH, then a storer would find that the ASH they calculated does not match the published one. In this case it is important that the storer can prove that they are innocent - that it is the published ASH that is fraudulent. The merkle proof of the segmented chunk proves that they really are storing the chunk and the corresponding ASH proof proves that the ASH they calculated is the correct one.
+If an auditor maliciously published a false ASH, then a storer would find that the ASH they calculated does not match the published one. In this case it is important that the storer can prove that they are innocent - that it is the published ASH that is fraudulent. The merkle proof of the segmented chunk (:numref:`Figure %s <fig:ashproof>`) proves that they really are storing the chunk and the corresponding ASH proof proves that the ASH they calculated is the correct one.
 
 
 Masked audit secret hash (MASH) tree
