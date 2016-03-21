@@ -111,7 +111,7 @@ We introduce the following notation to project a chunk to its :math:`j^\mathrm{t
 3. Now calculate the modified version of the data. Take the :math:`j^\mathrm{th}` segment of the chunk and replace it with a modified segment that is the original segment hashed with the seed appended:
 
 ..  math::
-    \ModSegments(\chunk, \seed) \defeq \Segment{\chunk}{0:j-1} \concat \Hash(\Segment{\chunk}{j}\concat\seed) \concat \Segment{\chunk}{j+1:n-1}
+    \ModSegments(\chunk, \seed) \defeq \Segment{\chunk}{0:j-1} \concat \Hash(\segment_j\concat\seed) \concat \Segment{\chunk}{j+1:n-1}
 
 where
 
@@ -119,6 +119,8 @@ where
     j=\seed \mod 2^\depth
 
 4. Build up a binary Merkle tree over the segments. Since the number of segments is a power of 2, the resulting tree is regular and balanced. Calculate the merkle root of this merkle tree to arrive at the audit secret.
+
+We define the tree in this way to ensure that calculating the audit secret hash requires you to have the chunk itself and also that malicious users cannot cheat the audit by precalculating the tree and forgetting the chunk.
 
 Let us now fix notation for the hashes in a generic regular binary merkle tree. Leaf nodes are at :math:`\level=0`, non-leaf nodes at :math:`\level \geq 1`.
 
@@ -198,16 +200,16 @@ and
 ..    math::
 	\ASH(\chunk, \seed)=\AH_\depth(\chunk, \seed)
 
-..  _fig:ashproof:
+..  _fig::
 
 ..  figure:: fig/ashproof.pdf
     :align: center
     :alt: calculating and verifying the audit secret hash given the Merkle proof
     :figclass: align-center
 
-    (FIXME change chunk hash to smash chunk hash in diagram FIXME) Given a chunk hash, a seed, and the index, the audit secret hash for :math:`{\ASH(\chunk, \seed, j)}` can be calculated verified using only the Merkle proof for the segment at the index. The left hand side is the merkle structure of the original segmented chunk, the right hand side represents the corresponding merkle proof for the audit secret.
+    Given a chunk hash, a seed, and the index, the audit secret hash for :math:`{\ASH(\chunk, \seed, j)}` can be calculated and verified using only the Merkle proof for the segment at the index. The left hand side is the merkle structure of the original segmented chunk, the right hand side represents the corresponding merkle proof for the audit secret.
 
-FIXME: note about why we need to use actual segments for the merkle tree and why we need the merkle proof for the secret
+If an auditor maliciously published a false ASH, then a storer would find that the ASH they calculated does not match the published one. In this case it is important that the storer can prove that they are innocent - that it is the published ASH that is fraudulent. The merkle proof of the segmented chunk proves that they really are storing the chunk and the corresponding ASH proof proves that the ASH they calculated is the correct one.
 
 
 Masked audit secret hash (MASH) tree
@@ -277,7 +279,7 @@ To clarify: if a storer submits a secret whose hash does not match the audit mas
 This proof is also used in conjunction with the MASH proof to prove to a third party that a challenge was invalid.
 This type is expected to be used very rarely, since the only way they come about is if auditors are sending frivolous false seeds or are publishing incorrect masks, which they are disincentivised to do.
 
-FIXME this figure / table is not shoing up in the compiled PDF FIXME
+FIXME this figure / table is not showing up in the compiled PDF FIXME
 
 ..  _fig:response-types:
 

@@ -37,7 +37,7 @@ mpdataext/.style={data,line width=.7pt,fill=gray!80},
 \node[mppath] (root) {$\mathit{CH}_7$}
                   % level 6
   child[grow=left,level distance=3cm] { node {} edge from parent[draw=none] }
-  child[<-,grow=right,level distance=3cm] { node[bubble] {chunk hash}  }
+  child[<-,grow=right,level distance=3cm] { node[bubble] {smash chunk hash}  }
   child { node[mppath] (6-0) {$\mathit{CH}_6$}   % 0
                   % level 5
     child { node[mppath] (5-0) {$\mathit{CH}_5$}          % 0
@@ -91,7 +91,7 @@ mpdataext/.style={data,line width=.7pt,fill=gray!80},
 \node[mppath] (root) {$\mathit{AH}_7$}
                   % level 6
   child[grow=left,level distance=3cm] { node {} edge from parent[draw=none] }
-  child[<-,grow=right,level distance=3cm] { node[bubble] (ash) {audit secret} }
+  child[<-,grow=right,level distance=3cm] { node[bubble] (ash) {audit secret hash} }
   child { node[mppath] (6-0) {$\mathit{AH}_6$}   % 0
                   % level 5
     child { node[mppath] (5-0) {$\mathit{AH}_5$}          % 0
