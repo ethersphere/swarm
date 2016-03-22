@@ -234,7 +234,7 @@ peer/protocol instance when the node is registered by hive as online{
 */
 
 type syncRequestMsgData struct {
-	SyncState *syncState `rlp:nil`
+	SyncState *syncState `rlp:"nil"	`
 }
 
 func (self *syncRequestMsgData) String() string {
