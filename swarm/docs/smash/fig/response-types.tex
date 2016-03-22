@@ -1,0 +1,19 @@
+\documentclass{standalone}
+%\documentclass[a4paper,10pt]{scrartcl}
+
+\usepackage[utf8]{inputenc}
+
+
+\begin{document}
+\begin{tabular}{|l|l|l|l|}
+\hline
+ \textbf{challenge} & \textbf{input} & \textbf{storer knows} & \textbf{response} \\ \hline \hline
+ ASH & smash chunk hash, seed & & audit secret hash \\ \cline{1-1} \cline {4-4}
+ ASH proof & & & chunk segment, ASH proof \\ \hline
+ Mash proof & smash chunk hash, seed, & mask ok & audit secret hash, MASH proof \\ \cline{3-4}
+  & MASH-root & mask not ok & ASH proof, MASH proof \\
+  \hline
+\end{tabular} 
+
+
+\end{document}

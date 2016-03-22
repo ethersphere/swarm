@@ -70,8 +70,6 @@ So given a chunk :math:`{\chunk}`, a seed :math:`{\seed}`, we construct the secr
 
 1. First we make sure all chunks are the same size by padding shorter chunks as necessary. If chunk :math:`{\minichunk}` is shorter than the predefined maximum chunk size (:math:`\MaxChunkSize=2^m`) then we append to it some padding to make the length of resulting data blob (:math:`{\Pad}({\minichunk})`) the smallest power of 2. In particular appending hashes until the length exceeds the first power of two and then finally we truncate  [#]_ .
 
-FIXME: fix this definition
-
 ..  rubric:: Footnotes
 .. [#] :math:`\concat` stands for concatenation, and the notation :math:`x[i:j]` stands for the byteslice  :math:`x[i]\concat x[1]\concat \dotsb \concat x[j-1]` where :math:`x[i]` is the :math:`i^\mathrm{th}` byte of :math:`x`. :math:`\Hash` stands for a hash function of choice. To help readability, the variable :math:`\chunk` always stands for a chunk of data, :math:`\segment` for a segment of a chunk, :math:`\level` for levels of merkle trees, :math:`\seed` for seed.
 
@@ -81,7 +79,14 @@ FIXME: fix this definition
     \Pad(\chunk, \seed, i-1) \concat \Hash(\Pad(\chunk, \seed, i-1)\concat\seed), & \text{otherwise}
     \end{cases}
 
-    \Pad(\minichunk) \defeq \Pad(\minichunk, \seed, i)[0:\MaxChunkSize] \text{\ where}
+Then we define the padded chunk as
+
+..  math::
+    \Pad(\minichunk) \defeq \Pad(\minichunk, \seed, i)[0:\MaxChunkSize]
+
+where :math:`i` is chosen as the smallest index such that
+
+..  math::
 
     \Length{(\minichunk)} + i\cdot \HashSize >= \MaxChunkSize
 
@@ -106,7 +111,7 @@ We introduce the following notation to project a chunk to its :math:`j^\mathrm{t
 3. Now calculate the modified version of the data. Take the :math:`j^\mathrm{th}` segment of the chunk and replace it with a modified segment that is the original segment hashed with the seed appended:
 
 ..  math::
-    \ModSegments(\chunk, \seed) \defeq \Segment{\chunk}{0:j-1} \concat \Hash(\Segment{\chunk}{j}\concat\seed) \concat \Segment{\chunk}{j+1:n-1}
+    \ModSegments(\chunk, \seed) \defeq \Segment{\chunk}{0:j-1} \concat \Hash(\segment_j\concat\seed) \concat \Segment{\chunk}{j+1:n-1}
 
 where
 
@@ -114,6 +119,8 @@ where
     j=\seed \mod 2^\depth
 
 4. Build up a binary Merkle tree over the segments. Since the number of segments is a power of 2, the resulting tree is regular and balanced. Calculate the merkle root of this merkle tree to arrive at the audit secret.
+
+We define the tree in this way to ensure that calculating the audit secret hash requires you to have the chunk itself and also that malicious users cannot cheat the audit by precalculating the tree and forgetting the chunk.
 
 Let us now fix notation for the hashes in a generic regular binary merkle tree. Leaf nodes are at :math:`\level=0`, non-leaf nodes at :math:`\level \geq 1`.
 
@@ -180,7 +187,7 @@ Now, given :math:`j, \Segment{\chunk}{j}` and :math:`\PH_0, \dots, \PH_{\depth-1
     \DHash_\depth(\CH_{\level-1}, \PH_{\level-1}, \level-1), & \text{otherwise}
     \end{cases}
 
-Given a Merkle proof then,  both the chunk hash and the audit hash can be verified. For the latter the auditor simply plugs in the salted segment (segment :math:`j` hashed together with the seed) and calculates the audit secret hash as the root using the same side hashes as the original proof (:numref:`figure %s <fig:ashproof>`).
+Given a Merkle proof then,  both the chunk hash and the audit hash can be verified. For the latter the auditor simply plugs in the salted segment (segment :math:`j` hashed together with the seed) and calculates the audit secret hash as the root using the same side hashes as the original proof (:numref:`Figure %s <fig:ashproof>`).
 
 ..  math::
     \AH_\level(\chunk, \seed) = \begin{cases}
@@ -200,9 +207,9 @@ and
     :alt: calculating and verifying the audit secret hash given the Merkle proof
     :figclass: align-center
 
-    (FIXME change chunk hash to smash chunk hash in diagram FIXME) Given a chunk hash, a seed, and the index, the audit secret hash for :math:`{\ASH(\chunk, \seed, j)}` can be calculated verified using only the Merkle proof for the segment at the index. The left hand side is the merkle structure of the original segmented chunk, the right hand side represents the corresponding merkle proof for the audit secret.
+    Given a chunk hash, a seed, and the index, the audit secret hash for :math:`{\ASH(\chunk, \seed, j)}` can be calculated and verified using only the Merkle proof for the segment at the index. The left hand side is the merkle structure of the original segmented chunk, the right hand side represents the corresponding merkle proof for the audit secret.
 
-FIXME: note about why we need to use actual segments for the merkle tree and why we need the merkle proof for the secret
+If an auditor maliciously published a false ASH, then a storer would find that the ASH they calculated does not match the published one. In this case it is important that the storer can prove that they are innocent - that it is the published ASH that is fraudulent. The merkle proof of the segmented chunk (:numref:`Figure %s <fig:ashproof>`) proves that they really are storing the chunk and the corresponding ASH proof proves that the ASH they calculated is the correct one.
 
 
 Masked audit secret hash (MASH) tree
@@ -211,9 +218,7 @@ Masked audit secret hash (MASH) tree
 Now we turn to the formal definition of the masked audit secret hash tree. This is relevant for repeatable audits without remembering the secrets themselves. The basic idea is to store all the masked secrets in a merkle tree (MASH tree) and to remember only the root of this tree (MASH root). A successful response to a challenge contains a not just the secret, but also the merkle proof from the secret to the MASH root.
 
 Assume that we have :math:`k=2^r` audit seeds :math:`\seed_0, \dots \seed_{k-1}` specific to a chunk. Each audit seed allows nodes to launch an independent challenge to the swarm and check that the associated data is preserved. We define :math:`r` as the *repeatability order of the audit*.
-Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows:
-
-..  (see :numref:`figure %s <fig:mashproof>`)
+Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows: 
 
 1. Given a chunk and the :math:`n` audit seeds, calculate the corresponding audit secrets.
 2. Given the :math:`n` audit secrets, construct :math:`n` masked audit secrets by taking their hash (MASH).
@@ -272,23 +277,12 @@ To clarify: if a storer submits a secret whose hash does not match the audit mas
 This proof is also used in conjunction with the MASH proof to prove to a third party that a challenge was invalid.
 This type is expected to be used very rarely, since the only way they come about is if auditors are sending frivolous false seeds or are publishing incorrect masks, which they are disincentivised to do.
 
-FIXME this figure / table is not shoing up in the compiled PDF FIXME
-
 ..  _fig:response-types:
 
-..  table::  Challenges and responses: types of challenges, their input and the response storers can give. The first two types of challenge make no claim as to whether the auditor knows the secret. The MASH proof challenge presupposes the storer knows the mask. The storer always responds with the MASH proof, if they find that the mask matches they also include the audit secret hash in their response, otherwise they submit an ASH proof (from which the audit secret can be derived).
+..  figure:: fig/response-types.pdf
 
-    +---------------+------------------------+------------------+------------------------------+
-    | challenge     |            input       |storer  knows     |response                      |
-    +===============+========================+==================+==============================+
-    |   ASH         |chunk hash, seed        |                  |audit secret hash             |
-    +---------------+                        |                  +------------------------------+
-    |   ASH proof   |                        |                  |chunk segment, ASH proof      |
-    +---------------+------------------------+------------------+------------------------------+
-    |   MASH proof  |chunk hash, seed,       | mask ok          |audit secret hash, MASH proof |
-    |               |MASH-root               +------------------+------------------------------+
-    |               |                        | mask not ok      |ASH proof, MASH proof         |
-    +---------------+------------------------+------------------+------------------------------+
+  Challenges and responses: types of challenges, their input and the response storers can give. The first two types of challenge make no claim as to whether the auditor knows the secret. The MASH proof challenge presupposes the storer knows the mask. The storer always responds with the MASH proof, if they find that the mask matches they also include the audit secret hash in their response, otherwise they submit an ASH proof (from which the audit secret can be derived).
+
 
 
 Repeatability and file-level audits
@@ -467,22 +461,22 @@ Document- or collection-level auditing and litigation
 
 It is expected that auditing should happen not at the chunk-by-chunk level, but at a file or file-collection level that is semantic for the end users. The basic process for this is the following.
 
-1. The owner identifies a batch of chunks (document or collection of documents that contains files to be retrieved at similar very low frequences and stored for the same period) to store. The owner submits store requests for each chunk and collects receipts from the respective guardians.
+- The owner identifies a batch of chunks (document or collection of documents that contains files to be retrieved at similar very low frequences and stored for the same period) to store. The owner submits store requests for each chunk and collects receipts from the respective guardians.
 
-2. The owner stores all the guardians' receipts in a parallel structure.
+- The owner stores all the guardians' receipts in a parallel structure.
 
-3. The owner generates the base seeds to be used for auditing all the files listed in the manifest and then precalculates the secrets. The owner masks the audit secret hashes by hashing them and proceeds to build the MASH tree [#]_ .
+- The owner generates the base seeds to be used for auditing all the files listed in the manifest and then precalculates the secrets. The owner masks the audit secret hashes by hashing them and proceeds to build the MASH tree [#]_ .
 
 ..  rubric:: Footnotes
 ..  [#] Implementation note: IO and memory allocation being the main bottleneck, the secrets for all seeds are best calculated with a single chunking iteration.
 
-3. Along the way, the owner records the partial verification bits for each intermediate CRASH secret.
+- Along the way, the owner records the partial verification bits for each intermediate CRASH secret.
 
-4. The owner calculates all the smash chunk hashes belonging to the chunks and records them in a parallel structure.
+- The owner calculates all the smash chunk hashes belonging to the chunks and records them in a parallel structure.
 
-5. Finally, the owner records a *uniqueness bit* for each chunk. Since it it possible that the same chunk appears multiple times in a document collection, and since we want to avoid uneccessary repeated audits for such chunks, we must store one extra bit of information - this is the uniqueness bit belonging to each chunk in the collection.
+- Finally, the owner records a *uniqueness bit* for each chunk. Since it it possible that the same chunk appears multiple times in a document collection, and since we want to avoid uneccessary repeated audits for such chunks, we must store one extra bit of information - this is the uniqueness bit belonging to each chunk in the collection.
 
-6. Once all these have been assembled, the owner can put them in a manifest.
+- Once all these have been assembled, the owner can put them in a manifest.
 Let us assume that all chunks have been stored and the owner obtained a receipt for each from the respective guardians. Once a document collection is assembled, the manifest describing the collection is created. This *collection audit manifest* will contain all the metadata needed for auditing and litigation, notably:
 
     1. the guardian receipts of all the unique chunks,
@@ -510,48 +504,47 @@ If any of the metadata is not available at the time of the audit, the main audit
 
 **Initiating the automated audit process:**
 
-I-1. Anyone that has the collection audit manifest can act as the main auditor and start off the recursive collective audit procedure.
+1. Anyone that has the collection audit manifest can act as the main auditor and start off the recursive collective audit procedure.
 
-I-2. The main auditor retrieves the supporting structures (guardian data, smash chunk hashes, partial verification bits, uniqueness bits and the MASH-es).
+2. The main auditor retrieves the supporting structures (guardian data, smash chunk hashes, partial verification bits, uniqueness bits and the MASH-es).
 
-I-3. The auditor starts by verifying the MASH root and the signature and checks the integrity of the support data.
+3. The auditor starts by verifying the MASH root and the signature and checks the integrity of the support data.
 
-I-4. If all the data checks out, the main auditor then sends out the audit request to the top chunk (hashing to the collection swarm root hash) of the collection.
+4. If all the data checks out, the main auditor then sends out the audit request to the top chunk (hashing to the collection swarm root hash) of the collection.
 
 Recall that a chunk encodes a subtree, in particular a non-leaf chunk consists of 128 swarm hash segments. These are the hashes of chunks on the lower level of the chunk tree, each in turn encoding their subtree. In the initial round (and the only one in case of success) the audit involves sending out audit requests of the simple type. These requests are similar to retrieval requests except that in their response, proximate storers do not send back the chunk itself but instead they calculate the audit secret hash (ASH) and respond with that. Thus during simple audit, audit requests are broadcast from a node to its peers in the swarm and the swarm collectively forwards them all the way to storer nodes (i.e. the peers most proximate to chunk address). Responses travel back to parent auditors the same way.
 
-The **automated collective audit process** works as follows.
+After the audit has been initiated, the **automated collective audit process** proceeds as follows.
 
-A-1. The main auditor launches the collection/file audit. This means they send an audit request for the chunks represented by the hash segments in their own chunk one at a time proceeding from left to right skipping chunks that occurred before in the collection (as per the respective uniqueness bit).
+5. The main auditor launches the collection/file audit. This means they send an audit request for the chunks represented by the hash segments in their own chunk one at a time proceeding from left to right skipping chunks that occurred before in the collection (as per the respective uniqueness bit).
 
-A-2. These audit requests for a chunk are addressed by the swarm hash of the chunk, and get forwarded in the usual way to end up at a storer node proximate to the chunk in question.
+6. These audit requests for a chunk are addressed by the swarm hash of the chunk, and get forwarded in the usual way to end up at a storer node proximate to the chunk in question.
 
 In order to accelerate the process we make sure that peers that get involved in the collective audit get forwarded all the relevant data they need:
 
-A-3. In addition to the audit request as specified above the parent auditors send the partial verification bits and uniqueness bits relevant to the subtree audited by the child auditor.
+7. In addition to the audit request as specified above the parent auditors send the partial verification bits and uniqueness bits relevant to the subtree audited by the child auditor.
 
 These storers that have just received an audit request are either storers of a data chunk (leaves), or they are storers of an intermediate chunk in the swarm tree just like their parent auditor.
 
-A-3. Storers of an intermediate chunk proceed in the same fashion as the top auditor and recursively spawn audit requests on the chunk/subtree defined by the successive hash segments of their chunk one at a time.
+8. Storers of an intermediate chunk proceed in the same fashion as the top auditor and recursively spawn audit requests on the chunk/subtree defined by the successive hash segments of their chunk one at a time.
 
-A-4. Storers of leaf chunks simply calculate the audit secret hash for their chunk using the seed they received and return that if the partial verification bits match. If they do not match then something went wrong and they respond with a complete ASH proof instead.
+9. Storers of leaf chunks simply calculate the audit secret hash for their chunk using the seed they received and return that if the partial verification bits match. If they do not match then something went wrong and they respond with a complete ASH proof instead.
 
-A-5. Upon receiving the secret for a chunk (the simple ASH response) represented by a hash segment of their own chunk, the auditor also checks the secret against the corresponding partial verification mask. If no error is detected, the auditor generates the next seed needed for the audit of the next subtree addressed by the following hash segment. If errors are detected, the auditor starts backtracking to find the source -- see point A-10.
+10. Upon receiving the secret for a chunk (the simple ASH response) represented by a hash segment of their own chunk, the auditor also checks the secret against the corresponding partial verification mask. If no error is detected, the auditor generates the next seed needed for the audit of the next subtree addressed by the following hash segment. If errors are detected, the auditor starts backtracking to find the source -- see point 15.
 
-A-6. After all subtree secrets are covered, i.e., the ASH for (the chunk hashing to) the rightmost hash segment is received, the auditor then uses the next seed to calculate their own ASH i.e. the secret for their own chunk. They check their verification bits and if that matches they respond to their parent auditor with this secret. If it does not match they know an error occured before, so they start backtracking to find the source -- see point A-10.
+11. After all subtree secrets are covered, i.e., the ASH for (the chunk hashing to) the rightmost hash segment is received, the auditor then uses the next seed to calculate their own ASH i.e. the secret for their own chunk. They check their verification bits and if that matches they respond to their parent auditor with this secret. If it does not match they know an error occured before, so they start backtracking to find the source -- see point 15.
 
 It is easy to see that this process follows the order defined in the previous section, and therefore the last secret calculated by the top auditor is the collection-level recursive audit secret (CRASH) for the collection in question.
 
-A-7. If everybody responds to the audit and if the final secret (CRASH) matches the respective mask (MASH), then the audit is successful. At this point the main auditor can send a MASH proof to any interested party, proving a successful audit.
+12. If everybody responds to the audit and if the final secret (CRASH) matches the respective mask (MASH), then the audit is successful. At this point the main auditor can send a MASH proof to any interested party, proving a successful audit.
 
-A-8. Whoever is interested can verify the MASH proof against the MASH root and if it checks out, they can be fairly certain the collection is preserved in full integrity and promptly retrievable in the swarm.
+13. Whoever is interested can verify the MASH proof against the MASH root and if it checks out, they can be fairly certain the collection is preserved in full integrity and promptly retrievable in the swarm.
 
 **Failure:**
 
-A-9. If at any time during the audit process there is no response to an audit request about a chunk, the guardian of that chunk is looked up by the responsible auditor and is sent an ASH-proof request. Upon receiving a repsonse to the ASH-proof request, the auditor verifies the proof and calculates the ASH secret and proceeds according to A-1--A-8. If there is no response, the audit is escalated and litigation on the blockchain starts: the auditor sends the ASH-proof challenge to the blockchain accusing the guardian of having lost the chunk in question. From here on the standard deadline for refutation starts. The exact procedure is discussed in :cite:`ethersphere2016sw3`.
+14. If at any time during the audit process there is no response to an audit request about a chunk, the guardian of that chunk is looked up by the responsible auditor and is sent an ASH-proof request. Upon receiving a repsonse to the ASH-proof request, the auditor verifies the proof and calculates the ASH secret and proceeds according to A-1--A-8. If there is no response, the audit is escalated and litigation on the blockchain starts: the auditor sends the ASH-proof challenge to the blockchain accusing the guardian of having lost the chunk in question. From here on the standard deadline for refutation starts. The exact procedure is discussed in :cite:`ethersphere2016sw3`.
 
-A-10. Errors are detected in two ways: either an intermediate auditor finds that one of their children returned an audit secret that does not match the verification bits, or the main auditor finds that the final secret does not match the respective MASH. When this happens we need to find the culprit, i.e., the node that lost the chunk. This is done by sending out successive ASH-proof challenges.
-Luckily, due to the iterative error coding scheme used (in which one segment's ASH is the input to the seed of the next challenge), once an error occurs the probability of it staying undetected falls exponentially. Therefore the culprit is most likely to be among the most recently audited chunks.
+15. Errors are detected in two ways: either an intermediate auditor finds that one of their children returned an audit secret that does not match the verification bits, or the main auditor finds that the final secret does not match the respective MASH. When this happens we need to find the culprit, i.e., the node that lost the chunk. This is done by sending out successive ASH-proof challenges. Luckily, due to the iterative error coding scheme used (in which one segment's ASH is the input to the seed of the next challenge), once an error occurs the probability of it staying undetected falls exponentially. Therefore the culprit is most likely to be among the most recently audited chunks.
 
 As a consequence of this, the best strategy is to proceed backwards and check the most recently audited chunks directly for proof of custody using an ASH-proof challenge. Recall that the ASH proof requires the peer to provide a merkle proof that is then used to validate both the original chunk as well as the audit secret. If a node responds with a correct ASH proof, the previous chunk is queried. Once a node fails to respond with a correct ASH proof we have found the culprit. If a culprit is found, the audit is escalated and litigation on the blockchain begins. The node carrying out this (partial) audit feeds back the information about the error to their parent auditor. Thus the peers know not to pursue litigation themselves against their child auditor [#]_ .
 
