@@ -224,7 +224,7 @@ func decodeSync(meta *json.RawMessage) (*syncState, error) {
 	if len(data) == 0 {
 		return nil, fmt.Errorf("unable to deserialise sync state from <nil>")
 	}
-	state := &syncState{}
+	state := &syncState{DbSyncState: &storage.DbSyncState{}}
 	err := json.Unmarshal(data, state)
 	return state, err
 }
