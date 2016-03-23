@@ -385,6 +385,7 @@ func (self *bzz) sync(state *syncState) error {
 	// an explicitly received nil syncstate disables syncronisation
 	if state == nil {
 		self.syncEnabled = false
+		state = &syncState{DbSyncState: &storage.DbSyncState{}, Synced: true}
 	} else {
 		state.synced = make(chan bool)
 		state.SessionAt = cnt
