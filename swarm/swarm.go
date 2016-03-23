@@ -224,7 +224,7 @@ func (self *Swarm) SetChequebook(backend chequebook.Backend) (err error) {
 	go func() {
 		ok := <-done
 		if ok {
-			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract)
+			glog.V(logger.Info).Infof("[BZZ] Swarm: new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex())
 			self.config.Save()
 			self.hive.DropAll()
 		}

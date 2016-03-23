@@ -39,13 +39,37 @@ Backend is the interface for that
 */
 
 const (
-	gasToCash     = "2000000"   // gas cost of a cash transaction using chequebook
-	getSentAbiPre = "d75d691d"  // sent amount accessor in the chequebook contract
-	cashAbiPre    = "fbf788d6"  // abi preamble signature for cash method of the chequebook
-	queryInterval = 15000000000 // 15 seconds
+	gasToCash     = "2000000"  // gas cost of a cash transaction using chequebook
+	getSentAbiPre = "d75d691d" // sent amount accessor in the chequebook contract
+	cashAbiPre    = "fbf788d6" // abi preamble signature for cash method of the chequebook
 	deployGas     = "3000000"
-	// confirmationInterval = 3 * 10 * *11 // 5 minutes
 )
+
+const (
+	receiptQueryInterval    = 10000000000 // 10 sec
+	deployRetryInterval     = 5000000000  // 	5 sec
+	confirmationInterval    = 60000000000 // 62 sec
+	maxReceiptQueryAttempts = 5
+	maxDeployAttempts       = 100
+)
+
+type DeployOptions struct {
+	ReceiptQueryInterval    time.Duration
+	DeployRetryInterval     time.Duration
+	ConfirmationInterval    time.Duration
+	MaxReceiptQueryAttempts int
+	MaxDeployAttempts       int
+}
+
+func DefaultDeployOptions() *DeployOptions {
+	return &DeployOptions{
+		receiptQueryInterval,
+		deployRetryInterval,
+		confirmationInterval,
+		maxReceiptQueryAttempts,
+		maxDeployAttempts,
+	}
+}
 
 // Backend is the interface to interact with the Ethereum blockchain
 // implemented by xeth.XEth
@@ -96,47 +120,65 @@ type Chequebook struct {
 	buffer    *big.Int // buffer to keep on top of balance for fork protection
 }
 
-func Deploy(owner common.Address, backend Backend, amount *big.Int, confirmationInterval, timeout time.Duration) (contract common.Address, err error) {
+func Deploy(owner common.Address, backend Backend, amount *big.Int, opt *DeployOptions) (contract common.Address, err error) {
 	if (owner == common.Address{}) {
 		return contract, fmt.Errorf("invalid owner %v. Owner needed to deploy chequebook contract: %v", owner.Hex(), err)
 	}
 
-	txhash, err := backend.Transact(owner.Hex(), "", "", amount.String(), deployGas, "", ContractCode)
-	if err != nil {
-		return contract, fmt.Errorf("unable to send chequebook creation transaction: %v", err)
-	}
+	deployRetryTimer := time.NewTimer(0).C
+	var receiptQueryTimer <-chan time.Time
+	var deployRetries, receiptQueries int
+	var txhash string
 
-	timer := time.NewTimer(timeout).C
-	ticker := time.NewTicker(queryInterval).C
-OUT:
+DEPLOY:
 	for {
 		select {
-
-		case <-timer:
-			if ticker == nil {
-				// ticker is nil, receipt was found and confirmation interval passed
-				err = Validate(contract, backend)
-				if err != nil {
-					return contract, fmt.Errorf("invalid contract at %v after %v: %v", contract.Hex(), confirmationInterval, err)
-				}
-				break OUT
+		case <-deployRetryTimer:
+			deployRetries++
+			if deployRetries == opt.MaxDeployAttempts {
+				return contract, fmt.Errorf("deployment failed...giving up after %v attempts", opt.MaxDeployAttempts)
 			}
-			// ticker is non-nil meaning receipt not found yet
-			return contract, fmt.Errorf("chequebook deployment timed out in %v", timeout)
+			txhash, err = backend.Transact(owner.Hex(), "", "", amount.String(), deployGas, "", ContractCode)
+			if err != nil {
+				glog.V(logger.Warn).Infof("[CHEQUEBOOK] deployment failed: %v (attempt %v)", err, deployRetries)
+				deployRetryTimer = time.NewTimer(opt.DeployRetryInterval).C
+				continue DEPLOY
+			}
 
-		case <-ticker:
+			deployRetryTimer = nil
+			receiptQueryTimer = time.NewTimer(0).C
+
+		case <-receiptQueryTimer:
 			receipt := backend.GetTxReceipt(common.HexToHash(txhash))
-			if receipt != nil {
-				contract = receipt.ContractAddress
-				glog.V(logger.Detail).Infof("[CHEQUEBOOK] chequebook deployed at %v (owner: %v)", contract.Hex(), owner.Hex())
-				timer = time.NewTimer(confirmationInterval).C
-				ticker = nil
-			} else {
-				glog.V(logger.Detail).Infof("[CHEQUEBOOK] check if chequebook deployed (txhash: %v)", txhash)
+			receiptQueries++
+			if receipt == nil {
+				if receiptQueries == opt.MaxReceiptQueryAttempts {
+					glog.V(logger.Warn).Infof("[CHEQUEBOOK] attempt %s deployment failed. Given up after %v attempts", opt.MaxReceiptQueryAttempts)
+
+					deployRetryTimer = time.NewTimer(opt.DeployRetryInterval).C
+					receiptQueryTimer = nil
+					continue DEPLOY
+
+				}
+				glog.V(logger.Detail).Infof("[CHEQUEBOOK] new checkbook contract (txhash: %v) not yet mined... checking in %v", txhash, opt.ReceiptQueryInterval)
+				receiptQueryTimer = time.NewTimer(opt.ReceiptQueryInterval).C
+				continue DEPLOY
 			}
 
-		}
-	}
+			contract = receipt.ContractAddress
+			glog.V(logger.Detail).Infof("[CHEQUEBOOK] new chequebook contract mined at %v (owner: %v)", contract.Hex(), owner.Hex())
+			<-time.NewTimer(opt.ConfirmationInterval).C
+			err = Validate(contract, backend)
+			if err != nil {
+				glog.V(logger.Warn).Infof("[CHEQUEBOOK] invalid contract at %v after %v: %v", contract.Hex(), confirmationInterval, err)
+				deployRetryTimer = time.NewTimer(opt.DeployRetryInterval).C
+				receiptQueryTimer = nil
+				continue DEPLOY
+			}
+			break DEPLOY
+
+		} // select
+	} // for
 	return contract, nil
 }
 

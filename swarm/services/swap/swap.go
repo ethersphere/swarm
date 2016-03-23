@@ -34,11 +34,6 @@ var (
 	payAt                = 100                         // threshold that triggers payment request (units)
 	dropAt               = 10000                       // threshold that triggers disconnect (units)
 
-	maxRetries = 5
-)
-
-var (
-	retryInterval = 10 * time.Second
 )
 
 type SwapParams struct {
@@ -173,11 +168,6 @@ func (self *SwapParams) SetKey(prvkey *ecdsa.PrivateKey) {
 	self.publicKey = &prvkey.PublicKey
 }
 
-const (
-	confirmationInterval = 60000000000
-	timeout              = 30000000000 // 30 sec
-)
-
 // setChequebook(path, backend) wraps the
 // chequebook initialiser and sets up autoDeposit to cover spending.
 func (self *SwapParams) SetChequebook(path string, backend chequebook.Backend) (done chan bool, err error) {
@@ -205,39 +195,24 @@ func (self *SwapParams) SetChequebook(path string, backend chequebook.Backend) (
 }
 
 func (self *SwapParams) deployChequebook(owner common.Address, path string, done chan bool) {
-	var timer = time.NewTimer(0).C
-	retries := 0
-	var err error
+
+	glog.V(logger.Info).Infof("[BZZ] SWAP Deploying new chequebook (owner: %v)", owner.Hex())
 	var valid bool
-OUT:
-	for {
-		select {
-		case <-timer:
-			// this is blocking
-			glog.V(logger.Info).Infof("[BZZ] SWAP Deploying new chequebook (owner: %v)", owner.Hex())
-			var contract common.Address
-			contract, err = chequebook.Deploy(owner, self.backend, self.AutoDepositBuffer, confirmationInterval, timeout)
-			if err != nil {
-				glog.V(logger.Info).Infof("[BZZ] SWAP unable to deploy new chequebook: %v...retrying in %v", err, retryInterval)
-				if retries >= maxRetries {
-					glog.V(logger.Info).Infof("[BZZ] SWAP unable to deploy new chequebook: giving up after %v retries", retries)
-					break OUT
-				}
-				retries++
-				timer = time.NewTicker(retryInterval).C
-			} else {
-				// need to save config at this point
-				self.lock.Lock()
-				self.Contract = contract
-				err = self.newChequebookFromContract(path, self.backend)
-				if err != nil {
-					glog.V(logger.Info).Infof("[BZZ] SWAP error initialising cheque book (owner: %v)", owner.Hex())
-				}
-				self.lock.Unlock()
-				valid = true
-				break OUT
-			}
-		}
+	contract, err := chequebook.Deploy(owner, self.backend, self.AutoDepositBuffer, chequebook.DefaultDeployOptions())
+	if err != nil {
+		glog.V(logger.Error).Infof("[BZZ] SWAP unable to deploy new chequebook: %v", err)
+	}
+
+	// need to save config at this point
+	self.lock.Lock()
+	self.Contract = contract
+	err = self.newChequebookFromContract(path, self.backend)
+	self.lock.Unlock()
+	if err != nil {
+		glog.V(logger.Warn).Infof("[BZZ] SWAP error initialising cheque book (owner: %v): %v", owner.Hex(), err)
+	} else {
+		valid = true
+		glog.V(logger.Info).Infof("[BZZ] SWAP new chequebook deployed at %v (owner: %v)", contract.Hex(), owner.Hex())
 	}
 	done <- valid
 	close(done)
