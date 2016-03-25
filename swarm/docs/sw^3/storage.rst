@@ -85,7 +85,7 @@ Let us start from some reasonable usage requirements:
 * there needs to be a reasonable market mechanism to match demand and supply
 * there needs to be a litigation system where storers can be charged for not keeping their promise
 
-Owners' risk preference consists in the time period covered as well as a preference for the :dfn:`degrees of redundancy` or certainty. These preferences should be specified on a per-chunk basis and they should be completely flexible on the protocol level.
+An Owner's risk preference consists of the time period covered as well as on the :dfn:`degrees of redundancy` or certainty. These preferences should be specified on a per-chunk basis and they should be completely flexible on the protocol level.
 
 The total amount of deposit that nodes risk losing in case the chunk is lost could also be variable. Degrees of redundancy could be approximated by the total amount of deposit storers stake: in this approximation two nodes standing to lose 50 each if a chunk is lost provide as much security as five nodes each standing to lose 20. In this kind of network, the security deposit is therefore a variable amount that each node advertises. Variants of this deposit scheme are discussed below.
 
@@ -375,7 +375,7 @@ The receipt(s) that the owner gets from their connected peer can be used in a ch
 When it comes to litigation, we play a blame game; challenged nodes defend themselves not necessarily by presenting the chunk (or proof of custody), but by presenting a receipt for said chunk issued by a registered node closer to the chunk address. Thus litigation will involve a chain of challenges with receipts pointing from owner via forwarding nodes all the way to the storer who must then present the chunk or be punished.
 
 The litigation is thus a recursive process where one way for a node to refute a challenge is to shift responsibility and implicate another node to be the culprit.
-The idea is that contracts are local between connected peers and blame is shifted along the same route that the chunk was forwarded.
+The idea is that contracts are local between connected peers and blame is shifted along the same route that the chunk was forwarded on.
 
 The challenge is constituted in submitting a receipt for the chunk signed by a node. (Once again everybody having a receipt is able to litigate).
 Litigation starts with a node submitting a receipt for the chunk that is not found.
