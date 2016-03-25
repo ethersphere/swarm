@@ -85,7 +85,7 @@ Let us start from some reasonable usage requirements:
 * there needs to be a reasonable market mechanism to match demand and supply
 * there needs to be a litigation system where storers can be charged for not keeping their promise
 
-Owners' risk preference consist in the time period covered as well as a preference for the :dfn:`degrees of redundancy` or certainty. These preferences should be specified on a per-chunk basis and they should be completely flexible on the protocol level.
+Owners' risk preference consists in the time period covered as well as a preference for the :dfn:`degrees of redundancy` or certainty. These preferences should be specified on a per-chunk basis and they should be completely flexible on the protocol level.
 
 The total amount of deposit that nodes risk losing in case the chunk is lost could also be variable. Degrees of redundancy could be approximated by the total amount of deposit storers stake: in this approximation two nodes standing to lose 50 each if a chunk is lost provide as much security as five nodes each standing to lose 20. In this kind of network, the security deposit is therefore a variable amount that each node advertises. Variants of this deposit scheme are discussed below.
 
@@ -110,7 +110,7 @@ In what follows we will elaborate variations on such storage incentive schemes. 
 Owner-side handling of storage redundancy
 ==============================================================================
 
-First we show how delegate arbitrary security to the owner. This is important since this entails that the degree of redundancy does not need to be among the parameters handled by store requests, pricing or litigation. The idea is that redundancy is encoded in the document structure before its chunks are uploaded. For instance the simplest method of guarateeing redundancy of a file is to split the file into chunks that are one byte shorter than the normal chunksize and add a nonce byte to each chunk. This guarantees that each chunk is different and as a consequence all chunks of the modified file are different. When joining the last byte of each chunk is ignored so all variants map to the same original.
+First we show how to delegate arbitrary security to the owner. This is important since this entails that the degree of redundancy does not need to be among the parameters handled by store requests, pricing or litigation. The idea is that redundancy is encoded in the document structure before its chunks are uploaded. For instance the simplest method of guarateeing redundancy of a file is to split the file into chunks that are one byte shorter than the normal chunksize and add a nonce byte to each chunk. This guarantees that each chunk is different and as a consequence all chunks of the modified file are different. When joining the last byte of each chunk is ignored so all variants map to the same original.
 Assuming all chunks of the original file are different this yields a potential  :math:`256^x` equivalent replicas the owner can upload [#]_ .
 
 ..  rubric:: Footnotes
@@ -121,8 +121,8 @@ Luckily there are a lot more economical ways to encode a file redundantly. In wh
 Loss-tolerant Merkle Trees
 ----------------------------------------------------------
 
-Recall that each node (except possibly the last one on each level) has 128 children each of which represent the root hash of a subtree or, at the last level, represent a 4096 byte span of the file. Let us now suppose that we divide our file into 100 equally sized pieces, and then add 28 more parity check pieces using a Reed-Solomon code so that now any 100 of the 128 pieces are sufficient to reconstruct the file. On the next level up the chunks are composed of the hashes of their first hunder data chunks and the 28 hashes of the parity chunks. Let's take the first 100 of these and add 28 parity chunks such that each 100 of the resulting chunks can reconstruct the origial 100 chunks. And so on every level.
-In terms of availability, every subtree is equally important to every other subtree at this level. The resulting data structure is not balanced tree since on every level :math:`i` the last 28 chunks are parity leaf chunks while the first 100 are branching nodes encoding a subtree of depth :math:`i-1` redundanly.
+Recall that each node (except possibly the last one on each level) has 128 children each of which represent the root hash of a subtree or, at the last level, represent a 4096 byte span of the file. Let us now suppose that we divide our file into 100 equally sized pieces, and then add 28 more parity check pieces using a Reed-Solomon code so that now any 100 of the 128 pieces are sufficient to reconstruct the file. On the next level up the chunks are composed of the hashes of their first hundered data chunks and the 28 hashes of the parity chunks. Let's take the first 100 of these and add an additional 28 parity chunks to those such that any 100 of the resulting 128 chunks are sufficient to reconstruct the origial 100 chunks. And so on on every level.
+In terms of availability, every subtree is equally important to every other subtree at this level. The resulting data structure is not a balanced tree since on every level :math:`i` the last 28 chunks are parity leaf chunks while the first 100 are branching nodes encoding a subtree of depth :math:`i-1` redundantly.
 
 In practice of course, data chunks are still prefered over the parity chunks in order to avoid CPU overhead in reconstruction. This data structure has preserved its merkle properties and can be used for partial integrity check.
 
@@ -223,13 +223,13 @@ Forwarding chunks
 
 In normal swarm operation, chunks are worth storing because of the possibility that they can be profitably "sold" by serving retrieve requests in the future. The probability of retrieve requests for a particular chunk depends on the chunk's popularity and also, crucially, on the proximity to the node's address.
 
-Nodes are expected to forward all chunks to nodes whose address is closer to the chunk. This is the normal syncing protocol. It is compatible with the pay-for-retrieval incentivisation: once a retrieve request reaches a node, the node will either sell the chunk (if it has it) or it will pass on the retrieve request to a closer node. There is no financial loss from syncing chunks to closer nodes because once a retrieve request reaches a closer node, it will not be passed back out, it will only be passed closer. In other words, syncing only serves those retrieve requests that the node would never have profited from anyway and thus in causes no financial harm due to lost revenue.
+Nodes are expected to forward all chunks to nodes whose address is closer to the chunk. This is the normal syncing protocol. It is compatible with the pay-for-retrieval incentivisation: once a retrieve request reaches a node, the node will either sell the chunk (if it has it) or it will pass on the retrieve request to a closer node. There is no financial loss from syncing chunks to closer nodes because once a retrieve request reaches a closer node, it will not be passed back out, it will only be passed closer. In other words, syncing only serves those retrieve requests that the node would never have profited from anyway and thus it causes no financial harm due to lost revenue.
 
 ..  index:: syncing
 
 For insured chunks, a similar logic applies - more so even because there is a positive incentive to sync. If a chunk does not reach its closest nodes in the swarm before someone issues a retrieval request, then the chances of the lookup failing increase and with it the chances of the chunk being reported as lost. The resulting litigation as discussed below poses a burden on all swarm nodes that have ever issued a receipt for the chunk and therefore incentivises nodes to do timely forwarding. The audit process described in :cite:`tronetal2016smash` provides additional guarantees that chunks are forwarded all the way to the proximate nodes.
 
-Swarm assumes that nodes are content agnostic, i.e., whether a node accepts a new chunk for storage should depend only on their storage capacity. Registered nodes have the option to indicate that they are full capacity. This effectively means they are temporarily not able to issue receipts so in the eyes of connected peers they will act as unregistered. As a result, when syncing to registered nodes, we do not take no for an answer: all chunks sent to a registered node can be considered receipted. If the node already has the chunk (received it earlier from another peer), the receipt is not paid for.
+Swarm assumes that nodes are content agnostic, i.e., whether a node accepts a new chunk for storage should depend only on their storage capacity. Registered nodes have the option to indicate that they are at full capacity. This effectively means they are temporarily not able to issue receipts so in the eyes of connected peers they will act as unregistered. As a result, when syncing to registered nodes, we do not take no for an answer: all chunks sent to a registered node can be considered receipted. If the node already has the chunk (received it earlier from another peer), the receipt is not paid for.
 As we show later the protocol for issuing of receipts can be made part of the syncing protocol.
 
 Litigation on loss of content (SWINDLE)
@@ -264,12 +264,12 @@ The last point above is designed to disincentivise frivolous litigation, i.e., b
 
 ..  index:: DoS
 
-A challenge is open for a fixed amount of time, the end of which essentially is the deadline to refute the challenge. The challenge is refuted if the chunk is presented (additional ways are discussed below). Refutation of a challenge is easy to validate by the contract since it only involves checking that the hash of the presented chunk matches the receipt. This challenge scheme is the simplest way (i) for the defendants to refute the challenge as well as (ii) to make the actual data available for the nodes that needs it.
+A challenge is open for a fixed amount of time, the end of which essentially is the deadline to refute the challenge. The challenge is refuted if the chunk is presented (additional ways are discussed below). Refutation of a challenge is easy to validate by the contract since it only involves checking that the hash of the presented chunk matches the receipt. This challenge scheme is the simplest way (i) for the defendants to refute the challenge as well as (ii) to make the actual data available for the nodes that need it.
 
-In normal operation, litigation should be so rare that it may be necessary to introduce a practice of random :dfn:`*auditing*` to test nodes' compliance with distribution rules. In such cases the challenge can carry a flag which when set would indicate that providing the actual chunk, (ii) above, is unnecessary. In order to reduce network traffic, in such cases presenting the chunk can be replaced by providing a *proof of custody*. Registered nodes could be obligated to publish random challenges regularly. Note that in order not to burden the live chain, this could happen offline and they would only make it to the blockchain if foul play is proved.
+In normal operation, litigation should be so rare that it may be necessary to introduce a practice of random :dfn:`*auditing*` to test nodes' compliance with distribution rules. In such cases the challenge can carry a flag which when set would indicate that providing the actual chunk, (ii) above, is unnecessary. In order to reduce network traffic, in such cases presenting the chunk can be replaced by providing a *proof of custody*. Registered nodes could be obligated to publish random challenges regularly. Note that in order not to burden the live chain, this could happen off-chain and they would only make it to the blockchain if foul play is proved.
 
 Conversely, if such auditing is a regular automated process, then litigation will typically be initiated as part of escalating a failed audit.
-:cite:`ethersphere2016smash` describes such just such an audit protocol using the smash proof of custody construct.
+:cite:`ethersphere2016smash` describes such just such an audit protocol using the SMASH proof-of-custody construct.
 
 The outcome of a challenge
 -------------------------------------
@@ -301,10 +301,10 @@ Punishment can entail :dfn:`*suspension*`, meaning a node found guilty is no lon
 Below we propose a system where nodes lose only part of their deposit for each chunk lost and only in case of deliberate cheating do they lose their entire deposit and get suspended.
 
 If refutation of litigation is found to be common enough, sending transactions is not desirable since it is bloating the blockchain.
-The audit challenges using the smash proof of custody described in :cite:`ethersphere2016smash` enable us to improve on this and make litigation a two step process. Upon finding a missing chunk, the litigation is started by the challenger sending an audit request [#]_ .
+The audit challenges using the SMASH proof-of-custody described in :cite:`ethersphere2016smash` enable us to improve on this and make litigation a two step process. Upon finding a missing chunk, the litigation is started by the challenger sending an audit request [#]_ .
 
 ..  rubric:: Footnotes
-.. [#] See :cite:`ethersphere2016smash` for the explanation of particular audit types. In fact any audit challenge when fail should be escalated to the blockchain. The smash smart contract provides an interface to check validity of audit requests (as challenges) and verify the various response types (as refutations).
+.. [#] See :cite:`ethersphere2016smash` for the explanation of particular audit types. In fact any audit challenge should be escalated to the blockchain upon failure. The smash smart contract provides an interface to check validity of audit requests (as challenges) and verify the various response types (as refutations).
 
 Multiple receipts - multiple defendants
 ----------------------------------------
@@ -375,13 +375,13 @@ The receipt(s) that the owner gets from their connected peer can be used in a ch
 When it comes to litigation, we play a blame game; challenged nodes defend themselves not necessarily by presenting the chunk (or proof of custody), but by presenting a receipt for said chunk issued by a registered node closer to the chunk address. Thus litigation will involve a chain of challenges with receipts pointing from owner via forwarding nodes all the way to the storer who must then present the chunk or be punished.
 
 The litigation is thus a recursive process where one way for a node to refute a challenge is to shift responsibility and implicate another node to be the culprit.
-The idea is that contracts are local between connected peers and blame is shifted along the same route as what the chunk travels.
+The idea is that contracts are local between connected peers and blame is shifted along the same route that the chunk was forwarded.
 
 The challenge is constituted in submitting a receipt for the chunk signed by a node. (Once again everybody having a receipt is able to litigate).
 Litigation starts with a node submitting a receipt for the chunk that is not found.
 This will likely be the receipt(s) that the owner received directly from the guardian. The node implicated can refute the challenge by sending either the direct refutation (audit response or the chunk itself depending on the size and stage) to the blockchain as explained above or sending a receipt for the chunk signed by another node. This receipt needs to be issued by a node closer to the target. Additionally we stipulate that the redundancy requirement expressed by total deposit staked should also be preserved. In other words, if a node is accused with a receipt with deposit value of X, it needs to provide valid receipts from closer nodes with deposit totalling X or more. These validations are easy to carry out, so verification of chained challenges is perfectly feasible to add to the smart contract.
 
-If a node is unable to produce either the refutation or the receipts, it is considered a proof that the node had the chunk, should have kept it but deleted it. This process will end up blaming a single node for the loss. If syncronisation was correctly followed and all the nodes forwarding kept their receipt, the node that is accused eventually is the node that was closest to the chunk to be stored when they received the request. We call these landing nodes :dfn:`custodian`.
+If a node is unable to produce either the refutation or the receipts, it is considered a proof that the node had the chunk, should have kept it but deleted it. This process will end up blaming a single node for the loss. If syncronisation was correctly followed and all the nodes forwarding kept their receipt, the node that is accused eventually is the node that was closest to the chunk to be stored when they received the request. We call this landing node the :dfn:`custodian` of the chunk.
 
 Local replication
 ----------------------------------
@@ -392,9 +392,9 @@ In order to guarantee robust operation, we need to require several replicas of e
 The simplest way we find is to delegate this task to the custodian. Upon receiving receipts, the custodian needs to collect receipts from the two closest registered peers. We simply introduce this stronger criteria on the audits: responses are expected to come from custodians.
 When a node receives a store request, they are either  intermediate nodes (i.e., they have a registered peer that is closer to the chunk than they are) or custodians. If they are intermediate they are supposed to forward the request and have a receipt so they can point fingers to their neighbour when it comes to litigation. If they are custodians themselves, they need to get receipts from two extra registered nodes in their proximate bin.
 
-As per the syncing protocol then the custodian indicates to a node that they are chosen as fellow custodians. If they respond with the receipt,  the custodian keeps it for the litigation. If they refuse to sign, they need to provide evidence that they know 1 or 2 registered nodes that are closer to the chunk than they are, not counting the custodian themselves. This should be a peer suggestion to the custodian and expected to happen only if the node is newly online. To prevent frivolous refusals, the cocustodian is expected to provide a signed and timestamped peer message they sent to that peer when it comes to litigation. If the cocustodian fails to obtain the receipt from their peer, it is considered a protocol breach and the cocustodian needs to disconnect which will make them real cocustodians so they need to respond with a receipt.
+As per the syncing protocol then the custodian indicates to a node that they are chosen as fellow custodians. If they respond with the receipt,  the custodian keeps it for the litigation. If they refuse to sign, they need to provide evidence that they know 1 or 2 registered nodes that are closer to the chunk than they are, not counting the custodian themselves. This should be a peer suggestion to the custodian and expected to happen only if the node is newly online. To prevent frivolous refusals, the co-custodian is expected to provide a signed and timestamped peer message they sent to that peer when it comes to litigation. If the co-custodian fails to obtain the receipt from their peer, it is considered a protocol breach and the co-custodian needs to disconnect which will make them real co-custodians so they need to respond with a receipt.
 
-If the peer chosen as cocustodian does not give a receipt but fails to respond with a peer suggestion, it is considered a protocol breach and the peer is disconnected.
+If the peer chosen as co-custodian does not give a receipt but fails to respond with a peer suggestion, it is considered a protocol breach and the peer is disconnected.
 
 In order to be safe the custodian needs to have the 2 receipts, therefore it is important that each node maintains a proximate bin that contains at least 5 registered nodes. This number is also important in situations when the network grows.
 
@@ -403,7 +403,7 @@ Growing and shrinking network
 
 For rubust resilient operation, it is crucial that retrieval is sound even when the network shrinks or grows.
 
-When the network grows, it can happen that a custodian finds a node closer to its chunk. This means they need to forward the original store request, the moment they obtain a receipt they can use in finger pointing, they cease to be custodians and the ball is on the new custodians court. When a node ceases to be custodian, they send their receipt to the cocustodians who are freed from their duty also.
+When the network grows, it can happen that a custodian finds a node closer to its chunk. This means they need to forward the original store request, the moment they obtain a receipt they can use in finger pointing, they cease to be custodians and the ball is in the new custodians' court. When a node ceases to be custodian, they send their receipt to the co-custodians who are freed from their duty also.
 
 
 

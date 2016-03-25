@@ -43,7 +43,7 @@ Each swarm node keeps a tally of offered and received services with each peer. I
 
 Each chunk delivery on the peer connection is accounted and exhcanged at a rate of one to one. On top of this, there is a possibility to compensate for services with ether (or other blockchain token) at a price agreed on in advance. Receiving payment should be accounted for equivalent service rendered, using the price offered.
 
-In the ideal scenario of compliant use, the balane is kept around zero.
+In the ideal scenario of compliant use, the balance is kept around zero.
 When the mutual balance on a given connection is tilted in favour of one peer, that peer should be compensated in order to bring the balance back to zero. If the balance tilts heavily in the other direction, the peer should be throttled and eventually choked and disconnected. In practice, it is sufficient to implement disconnects of heavily indebted nodes.
 
 In stage one, therefore, we introduce two parameters that represent thresholds that trigger actions when the tally reached them.
@@ -135,13 +135,13 @@ Charging for Retrieval
 When a retrieve request is received the peer responds with delivery if the preimage chunk is found or a peers message if further search is initiated [#]_.
 
 .. rubric:: Footnotes
-.. [#] Each of these provides a valuable service to the initiator and therefore is charged on them. Due to their size in bytes, a peers message is roughly two orders of magnitude cheaper than delivery of the chunk payload. This should be reflected in their respective accounting weight but this would complicate things unduely. As long as each retrieval request triggers a chargeable response, accounting is sufficient to prevent denial of service attacks: when a node is spammed with retrieve requests (querying either existing or non-existing content) it is charged for each response so network integrity is protected by the fact that the attacker can only ever freeride for upto a value of *Disconnect limit*.
+.. [#] Each of these provides a valuable service to the initiator and therefore is charged on them. Due to their size in bytes, a peers message is roughly two orders of magnitude cheaper than delivery of the chunk payload. This should be reflected in their respective accounting weight but this would complicate things unduely. As long as each retrieval request triggers a chargeable response, accounting is sufficient to prevent denial of service attacks: when a node is spammed with retrieve requests (querying either existing or non-existing content) it is charged for each response so network integrity is protected by the fact that the attacker can only ever freeride until the *Disconnect limit* is reached.
 
 ..  index:: :abbr:`DoS (denial of service attack)`
 
 As a simplification, we assume that requesters credit their peers only upon first successful delivery, while nodes receiving the request charge for their forwarding effort right away. This keeps a perfect balance if each retrieve request results in successful retrieval or the ratio of failed requests is similar for the two peers (and have small variance accomodated by the disconnect threshold). In cases that this balance is genuinely skewed, one node must be requesting non-existing chunks or the other peer has inadequate connections or bandwidth resulting in its inability to deliver the requested existing chunks. Both situations warrant disconnection.
 
-By default nodes will store all chunks forwarded as the response to a retrieve requests.
+By default nodes will store all chunks forwarded as the response to a retrieve request.
 These lookup results are worth storing because repeated requests for the same chunk can be served from the node's local storage without the need to "purchase" the chunk again from others. This strategy implicitly takes care of auto-scaling the network. Chunks originating from retrieval traffic will fill up the local storage adjusting redundancy to use maximum dedicated disk/memory capacity of all nodes. A preference to store frequently retrieved chunks results in higher redundancy aligning with more current usage. All else being equal, the more redundant a chunk, the fewer forwarding hops are expected for their retrieval, thereby reducing expected latency as well as network traffic for popular content.
 
 
