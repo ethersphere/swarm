@@ -7,9 +7,8 @@
 Welcome to the swarm documentation!
 ===================================
 
-.. .. raw:: latex
-
-..     \newpage
+.. raw:: latex
+   \newpage
 
 .. Contents:
 

@@ -30,11 +30,9 @@ import shlex
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.intersphinx',
-    'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
-    # 'sphinxcontrib.httpdomain',
+    'sphinxcontrib.bibtex',
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -239,18 +237,21 @@ latex_elements = {
 'fontpkg': '',
 'tableofcontents': '\\tableofcontents',
 'maketitle': '\
-\\renewcommand{\\releasename}{\large\sc ethersphere orange paper -- draft version}\
-\\subtitle{incentive system for swarm}\
-\\date{\large licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
-\\release{\\today}\
-\\title{swap, swear and swindle\\\\{incentive system for swarm}}\
+\\definecolor{orange}{rgb}{1.0, 0.49, 0.0}''\\definecolor{orange}{rgb}{1.0, 0.55, 0.0}\
+\\renewcommand{\\releasename}{\\huge\\scshape incentive system for swarm}\
+\\date{\\large\\rm draft version Mar 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 1}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
+\\release{}\
+\\title{swap, swear and swindle}\
+\\enlargethispage{.5cm}\
 \\maketitle\\newpage'
 }
 
+
 latex_docclass = {
-  'howto': 'scrartcl'
+  'howto': 'article'
 }
 
+numfig = 1
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
