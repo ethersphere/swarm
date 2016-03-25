@@ -218,7 +218,7 @@ Masked audit secret hash (MASH) tree
 Now we turn to the formal definition of the masked audit secret hash tree. This is relevant for repeatable audits without remembering the secrets themselves. The basic idea is to store all the masked secrets in a merkle tree (MASH tree) and to remember only the root of this tree (MASH root). A successful response to a challenge contains a not just the secret, but also the merkle proof from the secret to the MASH root.
 
 Assume that we have :math:`k=2^r` audit seeds :math:`\seed_0, \dots \seed_{k-1}` specific to a chunk. Each audit seed allows nodes to launch an independent challenge to the swarm and check that the associated data is preserved. We define :math:`r` as the *repeatability order of the audit*.
-Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows: 
+Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows:
 
 1. Given a chunk and the :math:`n` audit seeds, calculate the corresponding audit secrets.
 2. Given the :math:`n` audit secrets, construct :math:`n` masked audit secrets by taking their hash (MASH).

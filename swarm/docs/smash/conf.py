@@ -56,7 +56,7 @@ master_doc = 'index'
 project = u'swarm'
 # copyright = u'2016, ΞTHΞЯSPHΞЯΞ'
 copyright = u'2016, ΞTHΞRSPHΞRΞ'
-author = u'viktor trón'
+author = u'viktor trón, aron fischer, daniel varga'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -314,7 +314,7 @@ numfig = 1
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
   (master_doc, 'smash.tex', u'',
-   u'viktor trón',  'howto'),
+   u'viktor trón, aron fischer, daniel varga',  'howto'),
    # u'viktor trón', 'manual'),
 ]
 

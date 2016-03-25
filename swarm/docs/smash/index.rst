@@ -16,7 +16,7 @@ Welcome to the swarm documentation!
 
 
 .. raw:: latex
-   \newpage
+  \newpage
 
 .. Indices and tables
 .. ==================
