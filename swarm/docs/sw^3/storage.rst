@@ -30,6 +30,7 @@ Filecoin's proof of work is defined to include proof that the miner possesses a 
 Using a strong proof of retrievability scheme, IPFS ensures that winning miner had relevant data. As miners compete, they find their chances of winning will be proportional to the percentage of the existing storage units they actually store. This is because the missing ones need to be retrieved from other nodes and thus delaying nodes chance to respond.
 
 We see a whole range of issues with this particular approach:
+
 * it is not clear that network latency cannot be masked by the parallel calculation of the ordinary proof of work component in the algorithm
 * if the set of chunks are not selected differently for each node, mining will resemble a DDOS on nodes that actually store the data needed for the round.
 * even if the selection of data to prove varies depending on the miner, normal operation incurs huge network traffic
@@ -48,7 +49,7 @@ To summarise, we consider positive incentivisation in itself insufficient for en
 Compensation for storage and guarantees for long-term data preservation
 ========================================================================
 
-While Swarm's core storage component is analogous to traditional DHTs both in terms of network topology and routing used in retrieval, it uses the narrowest interpretation of immutable content addressed archive. Instead of just metadata about the whereabouts of the the addressed content, the proximate nodes actually store the data itself.
+While Swarm's core storage component is analogous to traditional DHTs both in terms of network topology and routing used in retrieval, it uses the narrowest interpretation of immutable content addressed archive. Instead of just metadata about the whereabouts of the addressed content, the proximate nodes actually store the data itself.
 When a new chunk enters the swarm storage network, it is propagated from node to node via a process called 'syncing'. The goal is for chunks to end up at nodes whose address is closest to the chunk hash. This way chunks can be located later for retrieval using kademlia key-based routing.
 
 ..  index::
@@ -71,12 +72,12 @@ A long-term storage incentivisation scheme faces unique challenges. For example,
 
 Instead, we need punitive measures to ensure compliance with storage promises. These will work using a :dfn:`deposit system`. Nodes wanting to sell promisory storage guarantees should have a *stake verified and locked-in* at the time of making their promise. This implies  that nodes must be *registered* in advance with a contract and put up a security deposit.
 
-Following :dfn:`registration`, a node may sell storage promises covering the time period for which their funds are locked. While their registration is active, if they are found to have lost a chunk that was covered by their promise, they stand to loose (part of) their deposit.
+Following :dfn:`registration`, a node may sell storage promises covering the time period for which their funds are locked. While their registration is active, if they are found to have lost a chunk that was covered by their promise, they stand to loose their deposit.
 
 Requirements
 -------------
 
-In this context, :dfn:`*owner*` refers to the originator of a chunk (the one that uploads a document to the swarm), while :dfn:`storer` refers to a swarm node that actually stores the given chunk.
+In this context, :dfn:`owner` refers to the originator of a chunk (the one that uploads a document to the swarm), while :dfn:`storer` refers to a swarm node that actually stores the given chunk.
 
 Let us start from some reasonable usage requirements:
 
@@ -86,8 +87,6 @@ Let us start from some reasonable usage requirements:
 * there needs to be a litigation system where storers can be charged for not keeping their promise
 
 An Owner's risk preference consists of the time period covered as well as on the :dfn:`degrees of redundancy` or certainty. These preferences should be specified on a per-chunk basis and they should be completely flexible on the protocol level.
-
-The total amount of deposit that nodes risk losing in case the chunk is lost could also be variable. Degrees of redundancy could be approximated by the total amount of deposit storers stake: in this approximation two nodes standing to lose 50 each if a chunk is lost provide as much security as five nodes each standing to lose 20. In this kind of network, the security deposit is therefore a variable amount that each node advertises. Variants of this deposit scheme are discussed below.
 
 Satisfying storers' risk preferences means that they have ways to express their certainty of preserving what they store and factor that in their pricing. Some nodes may not wish to provide storage guarantees that are too long term while others cannot afford to stake too big of a deposit. This differentiates nodes in their competition for service provision.
 
