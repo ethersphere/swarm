@@ -1,0 +1,20 @@
+\documentclass{standalone}
+%\documentclass[a4paper,10pt]{scrartcl}
+
+\usepackage[utf8]{inputenc}
+\usepackage{tikz}
+\usetikzlibrary{fit}
+
+\begin{document}
+
+\begin{tikzpicture}
+\node at (0,1) {Chunk:};
+\node[draw,dashed] (h1) at (2,1) {$h_1$};
+\node[draw,dashed] (h2) at (3,1) {$h_2$};
+\node[draw,dashed] (h3) at (4,1) {$h_3$};
+\node (dots) at (6,1) {$\cdots$};
+\node[draw,dashed] (h128) at (8,1) {$h_{128}$};
+\node[draw,fit=(h1) (h2) (h3) (dots) (h128)]{};
+\end{tikzpicture}
+
+\end{document}
