@@ -16,6 +16,7 @@ Welcome to the swarm documentation!
    :maxdepth: 4
 
    bandwidth
+   erasure
    storage
    swap
    parameters
