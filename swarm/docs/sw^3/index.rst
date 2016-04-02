@@ -15,8 +15,8 @@ Welcome to the swarm documentation!
 .. toctree::
    :maxdepth: 4
 
+
    bandwidth
-   erasure
    storage
    swap
    parameters

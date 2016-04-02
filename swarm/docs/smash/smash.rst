@@ -106,6 +106,7 @@ We introduce the following notation to project a chunk to its :math:`j^\mathrm{t
 ..  math::
     \Segment{\chunk}{j} \defeq \segment_j
 
+..  math::
     \Segment{\chunk}{j:k} \defeq \segment_j\concat\segment_{j+1}\concat \dots\concat \segment_{k}
 
 3. Now calculate the modified version of the data. Take the :math:`j^\mathrm{th}` segment of the chunk and replace it with a modified segment that is the original segment hashed with the seed appended:
@@ -551,7 +552,7 @@ As a consequence of this, the best strategy is to proceed backwards and check th
 ..  rubric:: Footnotes
 ..  [#] In order to protect against offending nodes to simply responding with frivolous litigation notices, the notice needs to contain a transaction hash for the challenge sent to the blockchain. This way parent auditors can rest assured the audit is indeed escalated.
 
-Note that in our recursive auditing scheme, the intermediate (non leaf) nodes were not only audited themselves, but they also served to initiate audits on the subtrees encoded in their chunk. This offers great efficiency gains because if the entire audit were to be carried out by just one peer, then chunks for each intermediate node would need to be retrieved in order for the main auditor to initiate all the audit requests for subtrees. Collective auditing has the immediate benefit that no intermediate chunks ever need to be actually retrieved, because the audit of subtrees are carried out by peers that store the chunk.
+Note that in our recursive auditing scheme, the intermediate (non leaf) nodes were not only audited themselves, but they also served to initiate audits on the subtrees encoded in their chunk. This offers great efficiency gains becausfe if the entire audit were to be carried out by just one peer, then chunks for each intermediate node would need to be retrieved in order for the main auditor to initiate all the audit requests for subtrees. Collective auditing has the immediate benefit that no intermediate chunks ever need to be actually retrieved, because the audit of subtrees are carried out by peers that store the chunk.
 
 Ensuring correct syncing and distribution
 ------------------------------------------------------------

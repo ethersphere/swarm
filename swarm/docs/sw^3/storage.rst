@@ -2,7 +2,8 @@
 Storage incentives
 ******************************
 
-..  index:: litigation
+..  index::
+  litigation
 
 ..  index::
    challenge
@@ -77,7 +78,7 @@ Following :dfn:`registration`, a node may sell storage promises covering the tim
 Requirements
 -------------
 
-In this context, :dfn:`owner` refers to the originator of a chunk (the one that uploads a document to the swarm), while :dfn:`storer` refers to a swarm node that actually stores the given chunk.
+In this context, :dfn:`owner` refers to the originator of a chunk (the one that uploads a document to the swarm), while :dfn:`storer` refers to a swarm node that actually stores the given chunk.`
 
 Let us start from some reasonable usage requirements:
 
@@ -86,7 +87,7 @@ Let us start from some reasonable usage requirements:
 * there needs to be a reasonable market mechanism to match demand and supply
 * there needs to be a litigation system where storers can be charged for not keeping their promise
 
-An Owner's risk preference consists of the time period covered as well as on the :dfn:`degrees of redundancy` or certainty. These preferences should be specified on a per-chunk basis and they should be completely flexible on the protocol level.
+Owners' risk preference consist in the time period covered as well as a preference for the :dfn:`degrees of redundancy` or certainty. These preferences should be specified on a per-chunk basis and they should be completely flexible on the protocol level.
 
 Satisfying storers' risk preferences means that they have ways to express their certainty of preserving what they store and factor that in their pricing. Some nodes may not wish to provide storage guarantees that are too long term while others cannot afford to stake too big of a deposit. This differentiates nodes in their competition for service provision.
 
@@ -109,21 +110,161 @@ In what follows we will elaborate variations on such storage incentive schemes. 
 Owner-side handling of storage redundancy
 ==============================================================================
 
-First we show how to delegate arbitrary security to the owner. This is important since this entails that the degree of redundancy does not need to be among the parameters handled by store requests, pricing or litigation. The idea is that redundancy is encoded in the document structure before its chunks are uploaded. For instance the simplest method of guarateeing redundancy of a file is to split the file into chunks that are one byte shorter than the normal chunksize and add a nonce byte to each chunk. This guarantees that each chunk is different and as a consequence all chunks of the modified file are different. When joining the last byte of each chunk is ignored so all variants map to the same original.
+First we show how delegate arbitrary security to the owner. This is important since this entails that the degree of redundancy does not need to be among the parameters handled by store requests, pricing or litigation. The idea is that redundancy is encoded in the document structure before its chunks are uploaded. For instance the simplest method of guarateeing redundancy of a file is to split the file into chunks that are one byte shorter than the normal chunksize and add a nonce byte to each chunk. This guarantees that each chunk is different and as a consequence all chunks of the modified file are different. When joining the last byte of each chunk is ignored so all variants map to the same original.
 Assuming all chunks of the original file are different this yields a potential  :math:`256^x` equivalent replicas the owner can upload [#]_ .
 
 ..  rubric:: Footnotes
 .. [#] We also explored the possibility that degree of redundancy is subsumed under local replication. Local replicas are instances of a chunk stored by nodes in a close neighbourhood. If that particular chunk is crucial in the reconstruction of the content, the swarm is much more vulnerable to chunk loss or latency due to attacks. This is because if the storers of the replicas are close, inflitrating in the storers' neighbourhood can be done with as many nodes as chunk type (as opposed to as many as chunk replicas). If there is cost to sybil attacks this brings down the cost by a factor of n where n is the number of replicas. We concluded that local replication is important for resilience in case of intermittend node dropouts, however, inferior to other solutions to express security level as expressed by the owner.
 
-Luckily there are a lot more economical ways to encode a file redundantly. In particular the erasure coded, loss tolerant merkle tree, discussed in the previous section, allows the user to choose their own level of guaranteed data redundancy and security.
+Luckily there are a lot more economical ways to encode a file redundantly. In what follows we spell out our proposal to introduce a scheme for loss tolerant swarm hash.
 
-From here on we assume that the user applied CRS encoding when splitting their content and therefore expressed their desired degree of redundancy in the CRS parameters, the price of which they pay in terms of the increased number of chunks they need to pay storage for without adding complexity to the storage distribution and pricing.
 
+Loss-tolerant Merkle Trees and Erasure Codes
+-------------------------------------------------
+
+Recall that the basic data structure in swarm is that of a tree with 32 bytes at the nodes and 128 children per node. Each node represents the root hash of a subtree or, at the last level, the hash of a 4096 byte span (one chunk) of the file. Generically we may think of each chunk as consisting of 128 hashes:
+
+..  _fig:chunk:
+
+..  figure:: fig/chunk.pdf
+    :align: center
+    :alt: A chunk consisting of 128 hashes
+    :figclass: align-center
+
+    A chunk consists of 4096 bytes of the file or a sequence of 128 subtree hashes.
+
+while in the tree structure, the 32 bytes stored at the node represent the hash of the 128 children.
+
+..  _fig:treebasic:
+
+..  figure:: fig/treebasic.pdf
+
+    :align: center
+    :alt: a generic node in the tree has 128 children
+    :figclass: align-center
+
+  A generic node in the tree has 128 childern.
+
+Recall also that during normal swarm lookups, a swarm client performs a lookup for a hash value and receives a chunk in return. This chunk in turn constitutes another 128 hashes to be looked up in return for another 128 hashes and so on until the chunks received belong to the actual file. Here is a schematic: (:numref:`Figure %s <fig:tree2>`):
+
+..  _fig:tree2:
+
+..  figure:: fig/tree2.pdf
+
+    :align: center
+    :alt: the swarm tree
+    :figclass: align-center
+
+    The swarm tree broken into chunks.
+
+
+Erasure coding the Swarm Tree
+===================================
+
+We propose using a Cauchy-Reed-Solomon (henceforth CRS) scheme to encode redundancy directly into the swarm tree. The CRS scheme is a systemic erasure code capable of implementing a scheme whereby any :math:`m` out of :math:`n` fix-sized pieces are sufficient to reconstruct the original data blob of size :math:`m` pieces with storage overhead of :math:`n-m` [#]_ .
+
+.. rubric:: Footnotes
+.. [#] There are open source libraries to do Reed Solomon or Cauchy-Reed-Solomon coding. See https://www.usenix.org/legacy/event/fast09/tech/full_papers/plank/plank_html/, https://www.backblaze.com/blog/reed-solomon/, http://rscode.sourceforge.net/.
+
+Once we have the :math:`m` pieces of the original blob, CRS scheme provides a method to inflate it to size :math:`n`  by supplementing :math:`n-m` so called parity pieces. With that done, assuming :math:`p` is the probability of losing one piece, if all :math:`n` pieces are independently stored, the probability of loosing the original content is :math:`p^{n-m+1}` exponential while extra storage is linear. These properties are preserved if we apply the coding to every level of a swarm chunk tree.
+
+Assuming we fix :math:`n=128` the branching factor of the swarm hash (chunker).
+The chunker algorithm would proceed the following way when splitting the document:
+
+ 1. Set input to the data blob.
+ 2. Read the input 4096 byte chunks at a time. Count the chunks by incrementing :math:`i`.
+  IF fewer than 4096 bytes are left in the file, fill up the last fraction to 4096
+ 3. Repeat 1 until there's no more data or :math:`i \equiv 0` mod :math:`m`
+ 4. If there is no more data add padding of :math:`j` chunks such that :math:`i+j \equiv 0` mod :math:`m`.
+ 5. use the CRS scheme on the last :math:`m` chunks to produce :math:`128-m` parity chunks resulting in a total of 128 chunks.
+ 6. Record the hashes of the 128 chunks concatenated to result in the next 4096 byte chunk of the next level.
+ 7. If there is more data repeat 1. otherwise
+ 8. If the next level data blob is of size larger than 4096, set the input to this and  repeat from 1.
+ 9. Otherwise remember the blob as the root chunk
+
+
+Let us now suppose that we divide our file into 100 equally sized pieces, and then add 28
+more parity check pieces using a Reed-Solomon code so that now any 100 of the 128 pieces are
+sufficient to reconstruct the file. On the next level up the chunks are composed of the hashes of
+their first hundered data chunks and the 28 hashes of the parity chunks. Let’s take the first 100
+of these and add an additional 28 parity chunks to those such that any 100 of the resulting 128
+chunks are sufficient to reconstruct the origial 100 chunks. And so on on every level. In terms of
+availability, every subtree is equally important to every other subtree at this level. The resulting
+data structure is not a balanced tree since on every level i the last 28 chunks are parity leaf
+chunks while the first 100 are branching nodes encoding a subtree of depth :math:`i-1` redundantly.
+Then a typical piece of our tree would look like this: (:numref:`Figure %s <fig:tree-with-erasure>`)
+
+..  _fig:tree-with-erasure:
+
+..  figure:: fig/tree-with-erasure.pdf
+
+    :align: center
+    :alt: the swarm tree with erasure coding
+    :figclass: align-center
+
+    The swarm tree with extra parity chunks. Chunks :math:`p^{101}` through :math:`p^{128}` are parity data for chunks :math:`h^1_1 - h^1_{128}` through :math:`h^{100}_1  - h^{100}_{128}`.
+
+
+
+
+Two things to note
+
+ * This pattern repeats itself all the way down the tree. Thus hashes :math:`h^1_{101}` through :math:`h^1_{128}` point to parity data for chunks pointed to by :math:`h^1_1` through :math:`h^1_{100}`.
+ * Parity chunks :math:`p^i` do not have children and so the tree structure does not have uniform depth.
+
+The special case of the last chunks in each row
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+If the size of the file is not a multiple of 4096 bytes, then it cannot be evenly divided into chunks. The current strategy is to simply fill up the last incomplete chunk to fill 4096 bytes. The next step in the encoding process is to add the parity chunks. We choose some erasure coding redundancy parameters (for example 100-of-128) and we process the file 100 chunks at a time, encoding to 128 each time.
+
+If the number of file chunks is not divisible by 100, then we cannot proceed with the last batch in the same way as the others. We propose that we encode the remaining chunks with an erasure code that guarantees at least the same level of security as the others. Note that it is not as simple as choosing the same redundancy. For example a 50-of-100 encoding is much more secure against file loss than a 1-of-2 encoding even though the redundancy is 100% in both cases. Overcompensating, we could say that there should always be the same number of parity chunks (eg. 28) even when there are fewer (than 100) data chunks so that we alwasy end up with m-of-m+28. We repeat this procedure in every row in the tree.
+
+However it is not possible to use our m-of-n scheme on a single chunk (m=1) because it would amount to n copies of the same chunk. The problem of course is that any number of copies of the same chunk all have the same hash and are therefore indistinguishable in the swarm. Thus when there is only a single chunk left over at some level of the tree, we'd have to apply some transformation to it to obtain a second (but different) copy before we could generate more parity chunks.
+
+In particular this is always the case for the root chunk. To illustrate why this is critically important, consider the following. The root hash points to the root chunk. If this root chunk is lost, then the file is not retrievable from the swarm even if all other data is present. Thus we must find an additional method of securing and accessing the information stored in the root chunk.
+
+Whenever a single chunk is left over (m=1) we propose the following procedure.
+
+ 1. If the chunk is smaller than 4096 bytes, we use diferential padding to make n different 4096-byte chunks containing the data.
+ 2. If the chunk is full size we apply n different reversible permutations to get n different copies. For example we could use cyclic permutations [#]_ .
+
+.. rubric:: Footnotes
+.. [#] Alternatively, we could formally differentiate the chunks using the filesize data. In swarm, each 4096 byte chunk is actually stored together with 8 bytes of meta information - currently only storing the size of the subtree encoded by the chunk. It is plausible for a future implementation of swarm to use 1 byte of meta-information in order to differentiate multiple copies of the same data.
+
+
+Benefits of CRS merkle tree
+=============================
+
+This per-level m-of-n Cauchy-Reed-Solomon erasure code introduced into the swarm chunk tree does not only ensure file availability, but also offers further benefits of increased resilience and ways to speed up retrieval.
+
+All chunks are created equal
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+A tree encoded as suggested above has the same redundancy at every node [#]_.
+
+.. rubric:: Footnotes
+.. [#] If the filesize is not a specific multiple of 4096 bytes, then the last chunk at every level will actually have a higher redundancy even than the rest.
+
+This means that chunks nearer to the root are no longer more important than chunks near the file. Every node has an m-of-128 redundancy level and no chunk after the root chunk is more important than any other chunk.
+A problem that immediately presents itself is the following: if nodes are compensated only for serving chunks, then less popular chunks are less profitable and more likely to be deleted; therefore, if users only download the 100 data chunks and never request the parity chunks, then these are more likely to get deleted and ultimately not be available when they are finally needed.
+Another approach would be to use non-systemic coding. A systemic code is one in which the data remains intact and we add extra parity data whereas in a non-systemic code we replace all data with parity data such that (in our example) all 128 pieces are really created equal. While the symmetry of this approach is appealing, this leads to forced decoding and thus to a high CPU usage even in normal operation and it also prevents us from streaming files from the swarm.
+Luckily the problem is solved by the automated audit scheme which audits the integrity of all chunks and does not distinguish between data or parity chunks.
+
+Self healing
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Any client downloading a file from the swarm can detect if a chunk has been lost. The client can reconstruct the file from the parity data (or reconstruct the parity data from the file) and resync this data into the swarm. That way, even if a large fraction of the swarm is wiped out simultaneously, this process should allow an organic healing process to occur and it is encouraged that the default client behavior should be to repair any damage detected.
+
+Improving latecy of retrievals
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Alpha is the name the original Kademlia gives to the number of peers in a Kademlia bin that are queried simultaneously during a lookup. The original Kademlia paper sets alpha=3. This is impractical for Swarm because the peers do not report back with new addresses as they would do in pure Kademlia but instead forward all queries to their peers. Swarm is coded in this way to make use of semi-stable longer-term devp2p connections. Setting alpha to anything greater than 1 thus increases the amount of network traffic substantially – setting up an exponential cascade of forwarded lookups (but it would soon collapse back down onto the target of the lookup).
+However, setting alpha=1 has its own downsides. For instance, lookups can stall if they are forwarded to a dead node and even if all nodes are live, there could be large delays before a query is complete. The practice of setting alpha=2 in swarm is designed to speed up file retrieval and clients are configured to accept chunks from the first/fastest forwarding connection to be established.
+In an erasure coded setting we can in a sense have a best of both worlds. The default behavior should be to set alpha=1 i.e. to query one peer only for each chunk lookup, but crucially, to issue a lookup request not just for the data chunks but for the parity chunks as well. The client then could accept the first m of every 128 chunks queried to get some of the same benefits of faster retrieval that redundant lookups provide without a whole exponential cascade.
 
 Registration and deposit (SWEAR)
 =================================
 
-..   index:: :abbr:`SWEAR Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration`
+.. index:: :abbr:`SWEAR Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration`
 
 
 In order to sell promises of long-term storage, nodes must first register via a contract on the blockchain we call the *SWEAR* contract (Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration).
@@ -131,7 +272,8 @@ The SWEAR contract allows nodes to register their public key to become accountab
 Registration is valid only for a set period, at the end of which a swarm node is entitled to their deposit.
 Users of Swarm should be able to count on the loss of deposit as a disincentive against foul play as long as enrolled status is granted. As a result the deposit must not be refunded before the registration expires.
 
-..  index:: registration
+..  index::
+   registration
    receipt
 
 Registration in swarm is not compulsory, it is only necessary if the node wishes to sell promises of storage. Nodes that only charge for retrieval can operate unregistered. The incentive to register and sign promises is that they can be sold for profit. When a peer connection is established, the contract state is queried to check if the remote peer is a registered node. Only registered nodes are allowed to issue valid receipts and charge for storage.
@@ -153,13 +295,13 @@ Forwarding chunks
 
 In normal swarm operation, chunks are worth storing because of the possibility that they can be profitably "sold" by serving retrieve requests in the future. The probability of retrieve requests for a particular chunk depends on the chunk's popularity and also, crucially, on the proximity to the node's address.
 
-Nodes are expected to forward all chunks to nodes whose address is closer to the chunk. This is the normal syncing protocol. It is compatible with the pay-for-retrieval incentivisation: once a retrieve request reaches a node, the node will either sell the chunk (if it has it) or it will pass on the retrieve request to a closer node. There is no financial loss from syncing chunks to closer nodes because once a retrieve request reaches a closer node, it will not be passed back out, it will only be passed closer. In other words, syncing only serves those retrieve requests that the node would never have profited from anyway and thus it causes no financial harm due to lost revenue.
+Nodes are expected to forward all chunks to nodes whose address is closer to the chunk. This is the normal syncing protocol. It is compatible with the pay-for-retrieval incentivisation: once a retrieve request reaches a node, the node will either sell the chunk (if it has it) or it will pass on the retrieve request to a closer node. There is no financial loss from syncing chunks to closer nodes because once a retrieve request reaches a closer node, it will not be passed back out, it will only be passed closer. In other words, syncing only serves those retrieve requests that the node would never have profited from anyway and thus in causes no financial harm due to lost revenue.
 
 ..  index:: syncing
 
 For insured chunks, a similar logic applies - more so even because there is a positive incentive to sync. If a chunk does not reach its closest nodes in the swarm before someone issues a retrieval request, then the chances of the lookup failing increase and with it the chances of the chunk being reported as lost. The resulting litigation as discussed below poses a burden on all swarm nodes that have ever issued a receipt for the chunk and therefore incentivises nodes to do timely forwarding. The audit process described in :cite:`tronetal2016smash` provides additional guarantees that chunks are forwarded all the way to the proximate nodes.
 
-Swarm assumes that nodes are content agnostic, i.e., whether a node accepts a new chunk for storage should depend only on their storage capacity. Registered nodes have the option to indicate that they are at full capacity. This effectively means they are temporarily not able to issue receipts so in the eyes of connected peers they will act as unregistered. As a result, when syncing to registered nodes, we do not take no for an answer: all chunks sent to a registered node can be considered receipted. If the node already has the chunk (received it earlier from another peer), the receipt is not paid for.
+Swarm assumes that nodes are content agnostic, i.e., whether a node accepts a new chunk for storage should depend only on their storage capacity. Registered nodes have the option to indicate that they are full capacity. This effectively means they are temporarily not able to issue receipts so in the eyes of connected peers they will act as unregistered. As a result, when syncing to registered nodes, we do not take no for an answer: all chunks sent to a registered node can be considered receipted. If the node already has the chunk (received it earlier from another peer), the receipt is not paid for.
 As we show later the protocol for issuing of receipts can be made part of the syncing protocol.
 
 Litigation on loss of content (SWINDLE)
@@ -194,12 +336,12 @@ The last point above is designed to disincentivise frivolous litigation, i.e., b
 
 ..  index:: DoS
 
-A challenge is open for a fixed amount of time, the end of which essentially is the deadline to refute the challenge. The challenge is refuted if the chunk is presented (additional ways are discussed below). Refutation of a challenge is easy to validate by the contract since it only involves checking that the hash of the presented chunk matches the receipt. This challenge scheme is the simplest way (i) for the defendants to refute the challenge as well as (ii) to make the actual data available for the nodes that need it.
+A challenge is open for a fixed amount of time, the end of which essentially is the deadline to refute the challenge. The challenge is refuted if the chunk is presented (additional ways are discussed below). Refutation of a challenge is easy to validate by the contract since it only involves checking that the hash of the presented chunk matches the receipt. This challenge scheme is the simplest way (i) for the defendants to refute the challenge as well as (ii) to make the actual data available for the nodes that needs it.
 
-In normal operation, litigation should be so rare that it may be necessary to introduce a practice of random :dfn:`*auditing*` to test nodes' compliance with distribution rules. In such cases the challenge can carry a flag which when set would indicate that providing the actual chunk, (ii) above, is unnecessary. In order to reduce network traffic, in such cases presenting the chunk can be replaced by providing a *proof of custody*. Registered nodes could be obligated to publish random challenges regularly. Note that in order not to burden the live chain, this could happen off-chain and they would only make it to the blockchain if foul play is proved.
+In normal operation, litigation should be so rare that it may be necessary to introduce a practice of random :dfn:`*auditing*` to test nodes' compliance with distribution rules. In such cases the challenge can carry a flag which when set would indicate that providing the actual chunk, (ii) above, is unnecessary. In order to reduce network traffic, in such cases presenting the chunk can be replaced by providing a *proof of custody*. Registered nodes could be obligated to publish random challenges regularly. Note that in order not to burden the live chain, this could happen offline and they would only make it to the blockchain if foul play is proved.
 
 Conversely, if such auditing is a regular automated process, then litigation will typically be initiated as part of escalating a failed audit.
-:cite:`ethersphere2016smash` describes such just such an audit protocol using the SMASH proof-of-custody construct.
+:cite:`ethersphere2016smash` describes such just such an audit protocol using the smash proof of custody construct.
 
 The outcome of a challenge
 -------------------------------------
@@ -231,10 +373,10 @@ Punishment can entail :dfn:`*suspension*`, meaning a node found guilty is no lon
 Below we propose a system where nodes lose only part of their deposit for each chunk lost and only in case of deliberate cheating do they lose their entire deposit and get suspended.
 
 If refutation of litigation is found to be common enough, sending transactions is not desirable since it is bloating the blockchain.
-The audit challenges using the SMASH proof-of-custody described in :cite:`ethersphere2016smash` enable us to improve on this and make litigation a two step process. Upon finding a missing chunk, the litigation is started by the challenger sending an audit request [#]_ .
+The audit challenges using the smash proof of custody described in :cite:`ethersphere2016smash` enable us to improve on this and make litigation a two step process. Upon finding a missing chunk, the litigation is started by the challenger sending an audit request [#]_ .
 
 ..  rubric:: Footnotes
-.. [#] See :cite:`ethersphere2016smash` for the explanation of particular audit types. In fact any audit challenge should be escalated to the blockchain upon failure. The smash smart contract provides an interface to check validity of audit requests (as challenges) and verify the various response types (as refutations).
+.. [#] See :cite:`ethersphere2016smash` for the explanation of particular audit types. In fact any audit challenge when fail should be escalated to the blockchain. The smash smart contract provides an interface to check validity of audit requests (as challenges) and verify the various response types (as refutations).
 
 Multiple receipts - multiple defendants
 ----------------------------------------
@@ -247,7 +389,7 @@ Redundancy and multiple receipts
 ------------------------------------
 
 Owners express their preference for storage period and for degree of redundancy/certainty.
-As for storage period, the base unit used will be a :dfn:`*swarm epoch*`. The swarm epoch is the minimum interval a swarm node can register for.
+As for storage period, the base unit used will be a :dfn:`swarm epoch`. The swarm epoch is the minimum interval a swarm node can register for.
 
 To quantify redundancy level, a node specifies a total (minimum) amount of deposit that is to be at stake.  Customers (chunk owners or users) express this risk preference by collecting more than one receipt.
 
@@ -305,13 +447,13 @@ The receipt(s) that the owner gets from their connected peer can be used in a ch
 When it comes to litigation, we play a blame game; challenged nodes defend themselves not necessarily by presenting the chunk (or proof of custody), but by presenting a receipt for said chunk issued by a registered node closer to the chunk address. Thus litigation will involve a chain of challenges with receipts pointing from owner via forwarding nodes all the way to the storer who must then present the chunk or be punished.
 
 The litigation is thus a recursive process where one way for a node to refute a challenge is to shift responsibility and implicate another node to be the culprit.
-The idea is that contracts are local between connected peers and blame is shifted along the same route that the chunk was forwarded on.
+The idea is that contracts are local between connected peers and blame is shifted along the same route as what the chunk travels.
 
 The challenge is constituted in submitting a receipt for the chunk signed by a node. (Once again everybody having a receipt is able to litigate).
 Litigation starts with a node submitting a receipt for the chunk that is not found.
 This will likely be the receipt(s) that the owner received directly from the guardian. The node implicated can refute the challenge by sending either the direct refutation (audit response or the chunk itself depending on the size and stage) to the blockchain as explained above or sending a receipt for the chunk signed by another node. This receipt needs to be issued by a node closer to the target. Additionally we stipulate that the redundancy requirement expressed by total deposit staked should also be preserved. In other words, if a node is accused with a receipt with deposit value of X, it needs to provide valid receipts from closer nodes with deposit totalling X or more. These validations are easy to carry out, so verification of chained challenges is perfectly feasible to add to the smart contract.
 
-If a node is unable to produce either the refutation or the receipts, it is considered a proof that the node had the chunk, should have kept it but deleted it. This process will end up blaming a single node for the loss. If syncronisation was correctly followed and all the nodes forwarding kept their receipt, the node that is accused eventually is the node that was closest to the chunk to be stored when they received the request. We call this landing node the :dfn:`custodian` of the chunk.
+If a node is unable to produce either the refutation or the receipts, it is considered a proof that the node had the chunk, should have kept it but deleted it. This process will end up blaming a single node for the loss. If syncronisation was correctly followed and all the nodes forwarding kept their receipt, the node that is accused eventually is the node that was closest to the chunk to be stored when they received the request. We call these landing nodes :dfn:`custodian`.
 
 Local replication
 ----------------------------------
@@ -322,9 +464,9 @@ In order to guarantee robust operation, we need to require several replicas of e
 The simplest way we find is to delegate this task to the custodian. Upon receiving receipts, the custodian needs to collect receipts from the two closest registered peers. We simply introduce this stronger criteria on the audits: responses are expected to come from custodians.
 When a node receives a store request, they are either  intermediate nodes (i.e., they have a registered peer that is closer to the chunk than they are) or custodians. If they are intermediate they are supposed to forward the request and have a receipt so they can point fingers to their neighbour when it comes to litigation. If they are custodians themselves, they need to get receipts from two extra registered nodes in their proximate bin.
 
-As per the syncing protocol then the custodian indicates to a node that they are chosen as fellow custodians. If they respond with the receipt,  the custodian keeps it for the litigation. If they refuse to sign, they need to provide evidence that they know 1 or 2 registered nodes that are closer to the chunk than they are, not counting the custodian themselves. This should be a peer suggestion to the custodian and expected to happen only if the node is newly online. To prevent frivolous refusals, the co-custodian is expected to provide a signed and timestamped peer message they sent to that peer when it comes to litigation. If the co-custodian fails to obtain the receipt from their peer, it is considered a protocol breach and the co-custodian needs to disconnect which will make them real co-custodians so they need to respond with a receipt.
+As per the syncing protocol then the custodian indicates to a node that they are chosen as fellow custodians. If they respond with the receipt,  the custodian keeps it for the litigation. If they refuse to sign, they need to provide evidence that they know 1 or 2 registered nodes that are closer to the chunk than they are, not counting the custodian themselves. This should be a peer suggestion to the custodian and expected to happen only if the node is newly online. To prevent frivolous refusals, the cocustodian is expected to provide a signed and timestamped peer message they sent to that peer when it comes to litigation. If the cocustodian fails to obtain the receipt from their peer, it is considered a protocol breach and the cocustodian needs to disconnect which will make them real cocustodians so they need to respond with a receipt.
 
-If the peer chosen as co-custodian does not give a receipt but fails to respond with a peer suggestion, it is considered a protocol breach and the peer is disconnected.
+If the peer chosen as cocustodian does not give a receipt but fails to respond with a peer suggestion, it is considered a protocol breach and the peer is disconnected.
 
 In order to be safe the custodian needs to have the 2 receipts, therefore it is important that each node maintains a proximate bin that contains at least 5 registered nodes. This number is also important in situations when the network grows.
 
@@ -333,7 +475,7 @@ Growing and shrinking network
 
 For rubust resilient operation, it is crucial that retrieval is sound even when the network shrinks or grows.
 
-When the network grows, it can happen that a custodian finds a node closer to its chunk. This means they need to forward the original store request, the moment they obtain a receipt they can use in finger pointing, they cease to be custodians and the ball is in the new custodians' court. When a node ceases to be custodian, they send their receipt to the co-custodians who are freed from their duty also.
+When the network grows, it can happen that a custodian finds a node closer to its chunk. This means they need to forward the original store request, the moment they obtain a receipt they can use in finger pointing, they cease to be custodians and the ball is on the new custodians court. When a node ceases to be custodian, they send their receipt to the cocustodians who are freed from their duty also.
 
 
 
