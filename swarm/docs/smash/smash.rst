@@ -54,7 +54,7 @@ In the remainder of this section we formalise this approach.
 Calculating the audit secret
 --------------------------------------------------
 
-The simplest non-reversible way to derive a secret from a seed and a chunk is to hash the entire chunk with the seed appended. Assume third parties have a way to verify that the secret given by the challengee is correct and conclude that the storer has custody of the data. But what do they conclude if the owner and storer disagree on the secret? In this case, an explicit proof is needed to show that the seed and the data derive a secret (not) matching the mask.
+The simplest non-reversible way to derive a secret from a seed and a chunk is to hash the entire chunk with the seed prepended. Assume third parties have a way to verify that the secret given by the challengee is correct and conclude that the storer has custody of the data. But what do they conclude if the owner and storer disagree on the secret? In this case, an explicit proof is needed to show that the seed and the data derive a secret (not) matching the mask.
 
 The relevant insight here is that we pick a merkle proof of the data chunk (:math:`\chunk`) based on the seed (:math:`\seed`) and an index (:math:`j`) specifying a particlar segment of the chunk, and manipulate only that to result in the *audit secret hash* (:math:`{\ASH}(\chunk, \seed, j)`). By doing this we allow explicit proofs whose length is logarithmic in the chunk size.
 
