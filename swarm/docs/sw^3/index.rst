@@ -15,6 +15,7 @@ Welcome to the swarm documentation!
 .. toctree::
    :maxdepth: 4
 
+   history
    bandwidth
    erasure
    storage
