@@ -25,27 +25,27 @@ Positive collective incentivisation
 
 Storage incentives refer to the ability of a system to encourage/enforce preservation of content,
 especially if the user explicitly requires that.
-IPFS offers an interesting solution. Nodes participating in its network also mine
-on their own altchain called filecoin (:cite:`filecoin2014`).
+Filecoin (:cite:`filecoin2014`), an incentivised p2p storage network using IPFS (:cite:`ipfs2014`)offers an interesting solution. Nodes participating in its network also mine
+on the filecoin blockchain.
 Filecoin's proof of work is defined to include proof that the miner possesses a set of randomly chosen units of storage depending on the parent block.
-Using a strong proof of retrievability scheme, IPFS ensures that winning miner had relevant data. As miners compete, they find their chances of winning will be proportional to the percentage of the existing storage units they actually store. This is because the missing ones need to be retrieved from other nodes and thus delaying nodes chance to respond.
+Using a strong proof of retrievability scheme, Filecoin ensures that the winning miner had relevant data. As miners compete, they will find that their chances of winning will be proportional to the percentage of the existing storage units they actually store. This is because the missing ones need to be retrieved from other nodes and thus delaying nodes chance to respond.
 
 We see a whole range of issues with this particular approach:
 
-* it is not clear that network latency cannot be masked by the parallel calculation of the ordinary proof of work component in the algorithm
-* if the set of chunks are not selected differently for each node, mining will resemble a DDOS on nodes that actually store the data needed for the round.
-* even if the selection of data to prove varies depending on the miner, normal operation incurs huge network traffic
-* as the network grows the expected proportion of the data that needs to be retrieved increases. In fact given a practical maximum limit on a node's storage capacity, this proportion reaches a ceiling. If that happens miners will end up effectively competing on bandwidth
-* in order to check proof of retrievability responses as part of block validation, existing data needs to be recorded on the blockchain. This leads to excessive use of the blockchain as the network grows and is unlikely to scale.
-* competing miners working on the same task mean redundant use of resources
+* It is not clear that network latency cannot be masked by the parallel calculation of the ordinary proof of work component in the algorithm.
+* If the set of chunks are not selected differently for each node, mining will resemble a DDOS on nodes that actually store the data needed for the round.
+* Even if the selection of data to prove varies depending on the miner, normal operation incurs huge network traffic.
+* As the network grows, the expected proportion of the data that needs to be retrieved increases. In fact given a practical maximum limit on a node's storage capacity, this proportion reaches a ceiling. If that happens miners will end up effectively competing on bandwidth.
+* In order to check proof of retrievability responses as part of block validation, existing data needs to be recorded on the blockchain. This leads to excessive use of the blockchain as the network grows and is unlikely to scale.
+* Competing miners working on the same task mean redundant use of resources.
 * If content is known to be popular, checking their integrity is spurious. But if choice of storage data to audit for the next block is truely random, there is no distinction between rarely accessed content and popular ones stored by many nodes resulting in wasted resouces.
 * Similarly, users originating the content have also no way to indicate directly that some documents are important and not to be lost, while other temporary or derived data they can afford to lose.
 
-Due to excessive use of blockchain and generated network traffic, these issues make the approach suspect, at best hugely wasteful, at worst infeasible on the large scale.
+Due to excessive use of blockchain and generated network traffic, these issues make the approach suspect: at best hugely wasteful, at worst infeasible on the large scale.
 
-More importantly, however, IPFS provides only a scheme to collectively incentivise the network to store content. This brings in a 'tragedy of the commons' problem in that losing any particular data will have no negative consequence to any one storer node. This lack of individual accountability means the solution is rather limited as a security measure against lost content.
+More importantly, however, Filecoin provides only a scheme to collectively incentivise the network to store content. This brings in a 'tragedy of the commons' problem in that losing any particular data will have no negative consequence to any one storer node. This lack of individual accountability means the solution is rather limited as a security measure against lost content.
 
-To summarise, we consider positive incentivisation in itself insufficient for ensured archival. In addition to that collective positive incentivisation implemented by competitive proof of retrievability mining is wasteful in terms of network traffic, computational resources as well as blockchain storage. In the subsequent sections we will introduce a very different approach.
+To summarise, we consider positive incentivisation in itself insufficient for ensured archival. In addition to that collective positive incentivisation implemented by competitive proof of retrievability mining is wasteful in terms of network traffic, computational resources as well as blockchain storage. In the subsequent sections we will introduce a different approach.
 
 Compensation for storage and guarantees for long-term data preservation
 ========================================================================
@@ -59,12 +59,12 @@ When a new chunk enters the swarm storage network, it is propagated from node to
 
 The primary incentive mechanism in swarm is compensation for retrieval where nodes are rewarded for successfully serving a chunk. This reward mechanism has the added benefit of ensuring that the popular content becomes widely distributed (by profit maximising storage nodes serving popular content they get queried for) and as a result retrieval latency is descreased.
 
-The flipside of using this incentive only is that chunks that are rarely retrieved may end up lost. If a chunk is not being accessed for a long time, then as a result of limited storage capacity it will eventually end up garbage collected to make room for new arrivals. In order for the swarm to guarantee long-term availability, the incentive system needs to make sure that additional revenue is generated for chunks that would otherwise be deleted. In other words, unpopular chunks that do not generate sufficient profit from retrievals should compensate the nodes that store them for their opportunities forgone.
+The flipside of using only this incentive on it own is that chunks that are rarely retrieved may end up lost. If a chunk is not being accessed for a long time, then as a result of limited storage capacity it will eventually end up garbage collected to make room for new arrivals. In order for the swarm to guarantee long-term availability, the incentive system needs to make sure that additional revenue is generated for chunks that would otherwise be deleted. In other words, unpopular chunks that do not generate sufficient profit from retrievals should compensate the nodes that store them for their opportunities forgone.
 
 Basics of storage incentivisation
 ------------------------------------------------
 
-A long-term storage incentivisation scheme faces unique challenges. For example, unlike in the case of bandwidth incentives where retrievals are immediately accounted and settled, long-term storage guarantees are promisory in nature and deciding if the promise was kept can only be decided at the end of its validity. Loss of reputation is not an available deterrent against foul play in these instances: since new nodes need to be allowed to provide services right away, cheaters could just resort to new identities to sell (empty) storage promises.
+A long-term storage incentivisation scheme faces unique challenges. For example, unlike in the case of bandwidth incentives where retrievals are immediately accounted and settled, long-term storage guarantees are promisory in nature and deciding if the promise was kept can only be decided at the end of its validity. Loss of reputation is not an available deterrent against foul play in these instances: since new nodes need to be allowed to provide services right away, cheaters could just resort to new identities and keep selling (empty) storage promises.
 
 ..  index::
   reputation
@@ -85,6 +85,7 @@ Let us start from some reasonable usage requirements:
 * owners need to express their risk preference when submitting to storage
 * storers need to express their risk preference when committing to storage
 * there needs to be a reasonable market mechanism to match demand and supply
+* there needs to be guarantees  for the owner that its content is securely stored
 * there needs to be a litigation system where storers can be charged for not keeping their promise
 
 Owners' risk preference consist in the time period covered as well as a preference for the :dfn:`degrees of redundancy` or certainty. These preferences should be specified on a per-chunk basis and they should be completely flexible on the protocol level.
@@ -110,19 +111,19 @@ In what follows we will elaborate variations on such storage incentive schemes. 
 Owner-side handling of storage redundancy
 ==============================================================================
 
-First we show how delegate arbitrary security to the owner. This is important since this entails that the degree of redundancy does not need to be among the parameters handled by store requests, pricing or litigation. The idea is that redundancy is encoded in the document structure before its chunks are uploaded. For instance the simplest method of guarateeing redundancy of a file is to split the file into chunks that are one byte shorter than the normal chunksize and add a nonce byte to each chunk. This guarantees that each chunk is different and as a consequence all chunks of the modified file are different. When joining the last byte of each chunk is ignored so all variants map to the same original.
-Assuming all chunks of the original file are different this yields a potential  :math:`256^x` equivalent replicas the owner can upload [#]_ .
+First we show how to delegate arbitrary security to the owner. This is important since this entails that the degree of redundancy does not need to be among the parameters handled by store requests, pricing or litigation. The idea is that redundancy is encoded in the document structure before its chunks are uploaded. For instance the simplest method of guarateeing redundancy of a file is to split the file into chunks that are one byte shorter than the normal chunksize and add a nonce byte to each chunk. This guarantees that each chunk is different and as a consequence all chunks of the modified file are different. When joining the last byte of each chunk is ignored so all variants map to the same original.
+This yields a potential :math:`256` equivalent replicas of each chunk for the owner to upload (and up to :math:`256^x` different root hashes) [#]_ .
 
 ..  rubric:: Footnotes
-.. [#] We also explored the possibility that degree of redundancy is subsumed under local replication. Local replicas are instances of a chunk stored by nodes in a close neighbourhood. If that particular chunk is crucial in the reconstruction of the content, the swarm is much more vulnerable to chunk loss or latency due to attacks. This is because if the storers of the replicas are close, inflitrating in the storers' neighbourhood can be done with as many nodes as chunk type (as opposed to as many as chunk replicas). If there is cost to sybil attacks this brings down the cost by a factor of n where n is the number of replicas. We concluded that local replication is important for resilience in case of intermittend node dropouts, however, inferior to other solutions to express security level as expressed by the owner.
+.. [#] We also explored the possibility that degree of redundancy is subsumed under local replication. Local replicas are instances of a chunk stored by nodes in a close neighbourhood. If that particular chunk is crucial in the reconstruction of the content, the swarm is much more vulnerable to chunk loss or latency due to attacks. This is because if the storers of the replicas are close, inflitrating in the storers' neighbourhood can be done with as many nodes as chunk type (as opposed to as many as chunk replicas). If there is cost to sybil attacks this brings down the cost by a factor of n where n is the number of replicas. We concluded that local replication is important for resilience in case of intermittend node dropouts, however, inferior to other solutions at implementing levels of security.
 
-Luckily there are a lot more economical ways to encode a file redundantly. In what follows we spell out our proposal to introduce a scheme for loss tolerant swarm hash.
+Luckily there are a lot more economical ways to encode a file redundantly. In what follows we spell out our proposal to introduce a scheme for a *loss tolerant swarm hash*.
 
 
 Loss-tolerant Merkle Trees and Erasure Codes
 -------------------------------------------------
 
-Recall that the basic data structure in swarm is that of a tree with 32 bytes at the nodes and 128 children per node. Each node represents the root hash of a subtree or, at the last level, the hash of a 4096 byte span (one chunk) of the file. Generically we may think of each chunk as consisting of 128 hashes:
+Recall that the basic data structure in swarm is that of a tree with 32 bytes at the nodes and 128 children per node. 32 bytes is the size of the hash function used, the branching factor is configurable. Each node represents the root hash of a subtree or, at the last level, the hash of a 4096 byte span (one chunk) of the file. Generically we may think of each chunk as consisting of 128 hashes:
 
 ..  _fig:chunk:
 
@@ -145,7 +146,7 @@ while in the tree structure, the 32 bytes stored at the node represent the hash 
 
   A generic node in the tree has 128 childern.
 
-Recall also that during normal swarm lookups, a swarm client performs a lookup for a hash value and receives a chunk in return. This chunk in turn constitutes another 128 hashes to be looked up in return for another 128 hashes and so on until the chunks received belong to the actual file. Here is a schematic: (:numref:`Figure %s <fig:tree2>`):
+Recall also that during normal swarm lookups, a swarm client performs a lookup for a hash value and receives a chunk in return. This chunk in turn constitutes another 128 hashes to be looked up in return for another 128 hashes and so on until the chunks received belong to the actual document. Here is a schematic: (:numref:`Figure %s <fig:tree2>`):
 
 ..  _fig:tree2:
 
@@ -155,33 +156,28 @@ Recall also that during normal swarm lookups, a swarm client performs a lookup f
     :alt: the swarm tree
     :figclass: align-center
 
-    The swarm tree broken into chunks.
+    The swarm tree is the data structure encoding how a document is split into chunks.
 
 
-Erasure coding the Swarm Tree
-===================================
-
-We propose using a Cauchy-Reed-Solomon (henceforth CRS) scheme to encode redundancy directly into the swarm tree. The CRS scheme is a systemic erasure code capable of implementing a scheme whereby any :math:`m` out of :math:`n` fix-sized pieces are sufficient to reconstruct the original data blob of size :math:`m` pieces with storage overhead of :math:`n-m` [#]_ .
+We propose using a Cauchy-Reed-Solomon (henceforth CRS) scheme to encode redundancy directly into the swarm tree. The CRS scheme is a systemic erasure code which applied to a data blob of size :math:`m` fixed-size pieces, produces :math:`k` extra pieces (so called *parity pieces*) of the same size in such a way that any :math:`m` out of :math:`n=m+k` fix-sized pieces are sufficient to reconstruct the original blob with storage overhead of :math:`\frac{k}{m}` [#]_ .
 
 .. rubric:: Footnotes
 .. [#] There are open source libraries to do Reed Solomon or Cauchy-Reed-Solomon coding. See https://www.usenix.org/legacy/event/fast09/tech/full_papers/plank/plank_html/, https://www.backblaze.com/blog/reed-solomon/, http://rscode.sourceforge.net/.
 
-Once we have the :math:`m` pieces of the original blob, CRS scheme provides a method to inflate it to size :math:`n`  by supplementing :math:`n-m` so called parity pieces. With that done, assuming :math:`p` is the probability of losing one piece, if all :math:`n` pieces are independently stored, the probability of loosing the original content is :math:`p^{n-m+1}` exponential while extra storage is linear. These properties are preserved if we apply the coding to every level of a swarm chunk tree.
+Assuming :math:`p` is the probability of losing one piece, if all :math:`n` pieces are independently stored, the probability of loosing the original content is :math:`p^{n-m+1}` which is exponential while extra storage is linear. These properties are preserved if we apply the coding to every level of a swarm chunk tree.
 
-Assuming we fix :math:`n=128` the branching factor of the swarm hash (chunker).
-The chunker algorithm would proceed the following way when splitting the document:
+The chunker algorithm using :math:`m\text{-out-of-}n` CRS coding would proceed the following way when splitting the document:
 
  1. Set input to the data blob.
- 2. Read the input 4096 byte chunks at a time. Count the chunks by incrementing :math:`i`.
-  IF fewer than 4096 bytes are left in the file, fill up the last fraction to 4096
- 3. Repeat 1 until there's no more data or :math:`i \equiv 0` mod :math:`m`
- 4. If there is no more data add padding of :math:`j` chunks such that :math:`i+j \equiv 0` mod :math:`m`.
+ 2. Read the input one chunk (fixed 4096 bytes) at a time. Count the chunks by incrementing :math:`i`. The last chunk read may be shorter.
+ 3. Repeat 2 until there's no more data or :math:`i \equiv 0` mod :math:`m`
  5. use the CRS scheme on the last :math:`m` chunks to produce :math:`128-m` parity chunks resulting in a total of 128 chunks.
  6. Record the hashes of the 128 chunks concatenated to result in the next 4096 byte chunk of the next level.
  7. If there is more data repeat 1. otherwise
  8. If the next level data blob is of size larger than 4096, set the input to this and  repeat from 1.
  9. Otherwise remember the blob as the root chunk
 
+Assuming we fix the branching factor of the swarm hash (chunker) as :math:`n=128`.
 
 Let us now suppose that we divide our file into 100 equally sized pieces, and then add 28
 more parity check pieces using a Reed-Solomon code so that now any 100 of the 128 pieces are

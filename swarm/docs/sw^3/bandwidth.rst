@@ -20,7 +20,7 @@ The ultimate goal of swarm is that end users are served content in a safe and sp
 
 Swarm is organized as a content-addressed DHT, whereby the addresses of chunks are derived from their hash value and come from the same address space as those of participating nodes. Thus, the same distance metric can be applied between nodes, between chunks and between a node and a chunk.
 
-From a certain node's perspective, the probability of it being ever requested is proportional to the inverse of its distance from it (the distance, in turn, can be interpreted as the risk of it not being requested). In other words, following the underlying routing protocol by itself incentivises nodes to prefer chunks that are closer to their own address.
+From a certain node's perspective, the probability of a given chunk being ever requested is proportional to the inverse of its distance from it (the distance, in turn, can be interpreted as the risk of it not being requested). In other words, following the underlying routing protocol by itself incentivises nodes to prefer chunks that are closer to their own address.
 
 In the first iteration, we further assume that nodes have no preference as to which chunks to store other than their access count which is a reasonable predictor of their profitability. As a corollary, this entails that store requests are accepted by nodes irrespective of the chunk they try to store.
 
@@ -35,7 +35,7 @@ This is done with the :dfn:`Swarm Accounting Protocol` (:abbr:`SWAP (Swarm Accou
 Triggers for payment and disconnect
 -------------------------------------
 
-Each swarm node keeps a tally of offered and received services with each peer. In the simplest form, the service is the delivery of a chunk or more generally an attempt to serve a retrieve request, see later. We use the number of chunks requested and retrieved as a discreet integer unit of accounting. The tally is independently maintained on both ends of each direct connection in the peer-to-peer network for both self and the remote peer. Since disconnects can be arbitrary, it is not necessary to communicate and consent on the exact pairwise balances.
+Each swarm node keeps a tally of offered and received services with each peer. In the simplest form, the service is the delivery of a chunk or more generally an attempt to serve a retrieve request, see later. We use the number of chunks requested and retrieved as a discrete integer unit of accounting. The tally is independently maintained on both ends of each direct connection in the peer-to-peer network for both self and the remote peer. Since disconnects can be arbitrary, it is not necessary to communicate and consent on the exact pairwise balances.
 
 ..  index::
     disconnection
@@ -119,7 +119,7 @@ the cheque is valid if:
 * the signed data is a valid encoding of <contract address,beneficiary,amount>
 * the cumulative total amount is greater than in the previous cheque sent.
 
-Receiver may only keep the last cheque received from each peer and periodically cash it by sending it to the chequebook contract: a scheme that allows trusted peers to save on transaction costs.
+Receiver may keep only the last cheque received from each peer and periodically cash it by sending it to the chequebook contract: a scheme that allows trusted peers to save on transaction costs.
 
 Peers watch their receiving address and account all payments from the peer's chequebook and when they are considered confirmed, the tally is adjusted.
 The long term use of a chequebook provides a credit history, use without failure (bounced cheques) constitues proof of compliance. Using the cumulative volume on the chequebook to quantify reliability renders chequebooks a proper *reputation system*.
