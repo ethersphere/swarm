@@ -70,8 +70,7 @@ proved beyond doubt that using the hitherto massively underutilized
 upstream bandwidth of regular end-users, they could get the same kind of
 availability and bandwidth for their content as that provided by big
 corporations with data centers attached to the fattest pipes of the
-internet's backbone. What's more, this could be achieved at a fraction of the cost. I particular, users retained a lot more control and freedom over their data.
-Finally, this mode of data distribution proved to be remarkably resilient even in the face of powerful and well-funded entities extending great efforts to shut it down.
+internet's backbone. What's more, this could be achieved at a fraction of the cost. In particular, users retained a lot more control and freedom over their data. Finally, this mode of data distribution proved to be remarkably resilient even in the face of powerful and well-funded entities extending great efforts to shut it down.
 
 On the other hand, even the most evolved mode of P2P file sharing, which
 is trackerless Bittorrent, is just that: file sharing. It is, for
@@ -118,7 +117,7 @@ The most immediately apparent novelty is perhaps the highly Web-compatible URL-b
 improved, making it possible to search for any part of any file (called
 *chunk*). It has also been made very flexible and pluggable in order to work with any kind of storage backend, be it a laptop with intermittent wifi, or a sophisticated HA cluster in a fiber-optic connected datacenter.
 
-A further important innovation is that IPFS has icentivisation factored out into pluggable modules. Modules such as bitswap for example establish that it is in the interest of greedy downloaders to balance the load they impose on other nodes, or that it is any nodes interest to host popular content. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
+A further important innovation is that IPFS has incentivisation factored out into pluggable modules. Modules such as bitswap for example establish that it is in the interest of greedy downloaders to balance the load they impose on other nodes, and also that it is in every node's interest to host popular content. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
 
 
 ..
@@ -134,7 +133,7 @@ What is still missing from the above picture, is the possibility to rent out
 large amounts of disk space to those willing to pay for it, irrespective
 of the popularity of their content; and conversely there is also way to deploy your  interactive dynamic content to stored in IPFS - "upload and disappear". The solution for this is at the core of IPFS' business model: a special cryptocurrency called *filecoin*, which can be earned (mined) through replicating other people's content and spent on having one's content replicated.
 
-From the perspective of the content creator, "upload and forget" goes as
+From the perspective of the content creator, "upload and disappear" goes as
 follows: they first have to host their own content as an IPFS node and then they
 insert a special transaction into the filecoin blockchain offering a
 mining reward for those who replicate it. Then they wait until someone
