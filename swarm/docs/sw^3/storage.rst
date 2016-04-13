@@ -1,5 +1,5 @@
 ******************************
-Storage incentives
+Storage Incentives
 ******************************
 
 ..  index::
@@ -125,7 +125,7 @@ In what follows we will elaborate on a class of incentive schemes we call *swap,
 * swear: nodes registered on the swarm network are accountable and stand to lose their deposit if they are found to violate the rules of the swarm in an on-chain litigation process.
 * swindle: a scheme to pool resources to enforce adherence to the rules, by regular auditing, policing, and eventually conscientious litigation.
 
-Since the basic ingredients are the same, we proceed to describe them in turn, starting with 1) user-side handling of redundancy, 2) registration and deposit, followed by 3) storage receipts and finally 4) the challenge based litigation system.
+Security begins at home and so the first step in securing data begins with the owner; this is the topic of the following section. Then in Section :ref:Swear: we describe how to hand over custoty of your data to registered nodes in the swarm subject to an insurance contract before finally turning, in Section :ref:Swindle: to how such insurance is enforced by the ethereum smart contract based litigation system (SWINDLE).
 
 Owner-side handling of storage redundancy
 ==============================================================================
@@ -264,13 +264,13 @@ Improving latecy of retrievals
 
   In an erasure coded setting we can in a sense have a best of both worlds. Issueing a lookup request not just for the data chunks but for the parity chunks, the client could accept the first :math:`m` of every 128 chunks queried to get some of the same benefits of faster retrieval that redundant lookups provide without a whole exponential cascade.
 
-Registration and deposit (SWEAR)
-=================================
+Registred Nodes and Insured Storage (SWEAR)
+===================================================
 
 .. index:: :abbr:`SWEAR Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration`
 
-
-In order to sell promises of long-term storage, nodes must first register via a contract on the blockchain we call the *SWEAR* contract (Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration).
+Once the owner has prepared their data they upload the chunks to the swarm where they are replicated and stored. To decrease the risk that the data will be lost, the owner may purchase storage promises from other nodes as a form of insurance.
+Before a node can sell these promises of long-term storage however, it must first register via a contract on the blockchain we call the *SWEAR* contract (Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration).
 The SWEAR contract allows nodes to register their public key to become accountable participants in the swarm by putting up a deposit. Registration is done by sending the deposit to the SWEAR contract, which serves as colleteral if terms that registered nodes 'swear' to keep are violated (i.e., nodes do not keep their promise to store).
 Registration is valid only for a set period, at the end of which a swarm node is entitled to their deposit.
 Users of Swarm should be able to count on the loss of deposit as a disincentive against foul play as long as enrolled status is granted. As a result the deposit must not be refunded before the registration expires.
@@ -378,7 +378,7 @@ A priori this only works, however, in the simplest system in which the owner nee
 Receipt forwarding or chained challenges
 ===========================================
 
-In this section we zoom in on the swapping and elaborate how owners initiate storage requests, how chunks find there storers and how information is passed around between peers so that it creates an incentive compatible resilient system with last resort litigation.
+In this section we zoom in on the swapping and elaborate how owners initiate storage requests, how chunks find their storers and how information is passed around between peers so that it creates an incentive compatible resilient system with last resort litigation.
 
 Forwarding chunks
 ----------------------

@@ -74,8 +74,8 @@ proved beyond doubt that using the hitherto massively underutilized
 upstream bandwidth of regular end-users, they could get the same kind of
 availability and bandwidth for their content as that provided by big
 corporations with data centers attached to the fattest pipes of the
-internet's backbone. What's more, this could be achieved at a fraction of the cost. In particular, users retained a lot more control and freedom over their data.
-Finally, this mode of data distribution proved to be remarkably resilient even in the face of powerful and well-funded entities extending great efforts to shut it down.
+internet's backbone. What's more, this could be achieved at a fraction of the cost. In particular, users retained a lot more control and freedom over their data. Finally, this mode of data distribution proved to be remarkably resilient even in the face of powerful and well-funded entities extending great efforts to shut it down.
+
 
 On the other hand, even the most evolved mode of P2P file sharing, which
 is trackerless Bittorrent, is just that: file sharing. It is, for
@@ -116,12 +116,12 @@ Towards Web 3.0: IPFS
 -----------------------------
 
 In order to enable responsive distributed web applications (called Dapps
-in Web 3.0 communities), IPFS had to introduces a few major improvements over
+in Web 3.0 communities), IPFS had to introduce a few major improvements over
 Bittorrent. The most immediately apparent novelty is perhaps the highly web-compatible URL-based retrieval. In addition, the directory (also organized as a DHT) has been vastly
 improved, making it possible to search for any part of any file (called
 *chunk*). It has also been made very flexible and pluggable in order to work with any kind of storage backend, be it a laptop with intermittent wifi, or a sophisticated HA cluster in a fiber-optic connected datacenter.
 
-A further important innovation is that IPFS has incentivisation factored out into pluggable modules. Modules such as bitswap for example establish that it is in the interest of greedy downloaders to balance the load they impose on other nodes, or that it is any nodes interest to host popular content. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
+A further important innovation is that IPFS has incentivisation factored out into pluggable modules. Modules such as bitswap for example establish that it is in the interest of greedy downloaders to balance the load they impose on other nodes, and also that it is in every node's interest to host popular content. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
 
 
 ..
@@ -133,9 +133,21 @@ A further important innovation is that IPFS has incentivisation factored out int
 ..
   While there is not much to gain for the user by choking uploads, or falsely advertizing content, without bitswap there is not much penalty for it either. However, bitswap incentivizes the hosting of popular content, since the constraint of swapped bits coming from the same piece of content are gone in IPFS. If you host popular content, bitswap-guarded nodes will be nice to you. There aren't that many of them, though. In this early stage of abundance, while supplied disk and bandwidth vastly outstrip demand, the system works fine as it is. If bottlenecks emerge either due to increased use or malicious intent, bitswap can be expected to become more popular as a security measure against widespread freeriding. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
 
-What is still missing from the above picture, is the possibility to rent out
+What is still missing from the above incentive system, is the possibility to rent out
 large amounts of disk space to those willing to pay for it, irrespective
-of the popularity of their content; and conversely there is also way to deploy your  interactive dynamic content to be stored in the cloud - "upload and disappear".
+of the popularity of their content; and conversely there is also way to deploy your interactive dynamic content to be stored in the cloud - "upload and disappear".
 
+The objective of any :index:`incentive system` for p2p content distribution is to encourage cooperative behavior and discourage freeriding: the uncompensated depletion of limited resources.
+In what follows we present our current thinking for a comprehensive incentive system for swarm implemented through a smart contract. The incentive system leverages the ethereum infrastructure and the underlying value asset, :index:`Ether`.
+
+The incentive strategy outlined here aspires to satisfy the following constraints:
+
+* It is in the node's interest irrespective of whether other nodes follow it or not.
+* It makes it expensive to hog other nodes' resources.
+* It does not impose unreasonable overhead.
+* It plays nice with "naive" nodes.
+* It rewards those that play nice, including those following this strategy.
+
+In the context of swarm, storage and bandwidth are the two most important limited resources and this is reflected in our incentive scheme. The incentives for bandwith use are designed to achieve speedy and reliable data provision while the storage incentives are designed to ensure long term data preservation, ideally solving the "upload and disappear" problem. In the following section we introduce the basic functioning of the swarm incentive system and the Swarm Accounting Protocol (SWAP) which handles compensation for bandwidth use in realtime. In Section :ref:`storage incentives` we turn to the problem of data preservation and offer a solution.
 
 

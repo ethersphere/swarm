@@ -1,20 +1,6 @@
 ************************
-Incentivization in Swarm
+Bandwidth Incentives
 ************************
-
-The objective of an :index:`incentive system` is to encourage cooperative behavior and discourage freeriding: the uncompensated depletion of limited resources. In the context of swarm, storage and bandwidth are the two most important limited resources.
-In what follows we present our current thinking for a comprehensive incentive system for swarm implemented through a smart contract. The incentive system leverages the ethereum infrastructure and the underlying value asset, :index:`Ether`.
-
-The incentive strategy outlined here aspires to satisfy the following constraints:
-
-* It is in the node's interest irrespective of whether other nodes follow it or not.
-* It makes it expensive to hog other nodes' resources.
-* It does not impose unreasonable overhead.
-* It plays nice with "naive" nodes.
-* It rewards those that play nice, including those following this strategy.
-
-Preliminaries
-=================
 
 The ultimate goal of swarm is that end users are served content in a safe and speedy fashion. The underlying unit of accounting must be a uniformly sized chunk of data (henceforth, simply "chunk") since this is the delivery unit that is sourced from a single independent entity. We start from the simplest assumption that delivery of a chunk is a valueable service which is directly chargeable when a chunk is delivered to a node that sent a retrieve request.
 
@@ -145,5 +131,5 @@ By default nodes will store all chunks forwarded as the response to a retrieve r
 These lookup results are worth storing because repeated requests for the same chunk can be served from the node's local storage without the need to "purchase" the chunk again from others. This strategy implicitly takes care of auto-scaling the network. Chunks originating from retrieval traffic will fill up the local storage adjusting redundancy to use maximum dedicated disk/memory capacity of all nodes. A preference to store frequently retrieved chunks results in higher redundancy aligning with more current usage. All else being equal, the more redundant a chunk, the fewer forwarding hops are expected for their retrieval, thereby reducing expected latency as well as network traffic for popular content.
 
 
-Whereas retrieval compensation may prove sufficient for keeping the network in a relatively healthy state in terms of latency, from a resilience point of view, more work is needed. We may need additional redundancy to be resilient against partial network outages and we need extra incentives to ensure long-term availablilty of content even when it is accessed rarely. In the following two sections we discuss these problems in turn.
+Whereas retrieval compensation may prove sufficient for keeping the network in a relatively healthy state in terms of latency, from a resilience point of view, more work is needed. We may need additional redundancy to be resilient against partial network outages and we need extra incentives to ensure long-term availablilty of content even when it is accessed rarely. In the following section we address these concerns.
 
