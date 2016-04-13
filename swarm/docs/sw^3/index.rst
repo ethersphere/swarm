@@ -15,7 +15,7 @@ Welcome to the swarm documentation!
 .. toctree::
    :maxdepth: 4
 
-
+   history
    bandwidth
    storage
    swap

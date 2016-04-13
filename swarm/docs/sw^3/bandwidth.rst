@@ -1,6 +1,6 @@
-******************
-Incentivization
-******************
+************************
+Incentivization in Swarm
+************************
 
 The objective of an :index:`incentive system` is to encourage cooperative behavior and discourage freeriding: the uncompensated depletion of limited resources. In the context of swarm, storage and bandwidth are the two most important limited resources.
 In what follows we present our current thinking for a comprehensive incentive system for swarm implemented through a smart contract. The incentive system leverages the ethereum infrastructure and the underlying value asset, :index:`Ether`.
