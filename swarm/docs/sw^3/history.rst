@@ -1,4 +1,10 @@
-If swarm is to become widely used as a storage layer for interactive web 3.0 applications, it must satisfy some key requirements. For example the swarm has show dynamic scalability, i.e. it must adapt to sudden surges in popular demand. At the same time it must preserve more niche content and ensure its availablility. In this document we aim to present an incentive structure for nodes in the swarm, carefully crafted to ensure that the swarm display the desired qualities. In order to appreciate which problems we are trying to solve, a little history is useful.
+*******************************
+Web Hosting and Incentivization
+*******************************
+
+If swarm is to become widely used as a storage layer for interactive Web 3.0 applications, it must satisfy some key requirements. The swarm has show dynamic scalability, i.e. it must adapt to sudden surges in popular demand, and at the same time the swarm must also preserve niche content and ensure its availablility. In this document we aim to present an incentive structure for nodes in the swarm, carefully crafted to ensure that the swarm exhibits these desired qualities. 
+
+In order to both appreciate the problems we are trying to solve and understand the demands we make on the swarm, a little history is useful.
 
 **Historical Overview**
 
@@ -9,6 +15,8 @@ costs are still not zero and their allocation heavily influences who
 gets to publish what and who gets to enjoy what. Putting aside the --
 otherwise very important -- question of search and content promotion,
 this paper focuses on the issues of bandwidth and storage.
+
+**Web 1.0**
 
 In the times of Web 1.0, in order to have your content accessible by the
 whole world, you'd typically fire up a web server or use some web
@@ -23,7 +31,9 @@ to the point of making your content essentially unavailable for the
 majority of your audience. If you wanted to stay popular, you had to
 invest in HA clusters and fat pipes and with the growth of your
 popularity, your costs grew, without any obvious way to cover them.
-There were very few practical ways to let (let alone *make*) your audience share the burden of information dissemination directly. The common wisdom at the time was that it would be ISP's that would come to the rescue, since in the early days of the
+There were very few practical ways to let (let alone *make*) your audience share the burden of information dissemination directly. 
+
+The common wisdom at the time was that it would be ISP's that would come to the rescue, since in the early days of the
 Web revolution, bargaining about peering arrangements between ISP's
 involved arguments about where providers and where consumers are and
 which ISP is making money from the other's network. Indeed, when there
@@ -37,6 +47,8 @@ of SYN packet counters. Blogs catering to a niche audience had no way of
 competing and were generally left out in the cold. Note, however, that
 back then, creator-publishers typically owned their content.
 
+**Web 2.0**
+
 The transition to Web 2.0 changed much of that. Context-sensitive
 targeted advertizing offered a Faustian bargain to content producers. As
 in "We give you scalable hosting that would cope with any traffic your
@@ -48,6 +60,8 @@ it (since we are big sitting ducks ripe for extortion) and we may even
 report on you, for the same reason." Thus, millions of small content
 producers created immense value for a very few corporations, getting
 only peanuts (typically, free hosting) in exchange. 
+
+**P2P**
 
 At the same time, however, the P2P revolution was gathering pace. Actually, P2P traffic
 very soon took over the majority of packets flowing through the pipes,
@@ -72,8 +86,8 @@ censorship-resistant way of sharing and even collectively creating
 
 **The Economics of Bittorrent and its Limits**
 
-The basic idea behind Bittorrent is worthy of an economic Nobel-prize:
-if many clients want to download the same content from you, give them
+The genious of Bittorrent lies in its clever resource optimisation:
+If many clients want to download the same content from you, give them
 different parts of it and let them swap the missing parts between one
 another in a tit-for-tat fashion. This way, the upstream bandwidth use
 of a content hoster (*seeder* in Bittorrent parlance) is roughly the same, no matter how many clients want to download it simultaneously. This solves the most painful issue of the
@@ -88,12 +102,8 @@ all the other parts, with a very small overhead.
 This beautifully simple approach has three main shortcomings, somewhat
 related:
 
-* There are no built-in incentives to seed downloaded content. In particular, one cannot exchange the upstream bandwidth provided by seeding one content for downstream
-bandwidth required for downloading some other content. Effectively,
-upstream bandwidth provided by seeding somebody else's content is not
-directly rewarded in any way.
-* Typically, downloads start slowly and with delay. Clients that are further ahead in downloading have much more to offer to and much less to demand from newcomers. This results in bittorrent downloads starting as a trickle before turning into a full-blown torrent of bits. This severely limits the use of bittorrent in responsive
-interactive applications.
+* There are no built-in incentives to seed downloaded content. In particular, one cannot exchange the upstream bandwidth provided by seeding one content for downstream bandwidth required for downloading some other content. Effectively, upstream bandwidth provided by seeding somebody else's content is not directly rewarded in any way.
+* Typically, downloads start slowly and with delay. Clients that are further ahead in downloading have much more to offer to and much less to demand from newcomers. This results in bittorrent downloads starting as a trickle before turning into a full-blown torrent of bits. This severely limits the use of bittorrent in responsive interactive applications. 
 * Small chunks of data can only be shared in the context of the larger file that they are part of. We find peers sharing the content we seek by querying the Distributed Hash Table (DHT) for said file. Thus a peer sharing only part of a file needs to know what that file is in order to be found in the DHT, and conversely, if the peer doesn't know that the data chunks belong some file the peer will not be found by users seeking that file. This commonly happens for example when the same chunks of data appear verbatim in multiple files. Also, unless their objective is simply to get the missing parts of a file from their peers, nodes are not rewarded for their sharing efforts (storage and bandwidth), just like seeders.
 
 
