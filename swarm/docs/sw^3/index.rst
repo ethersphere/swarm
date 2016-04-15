@@ -15,11 +15,13 @@ Welcome to the swarm documentation!
 .. toctree::
    :maxdepth: 4
 
+   abstract
    history
    bandwidth
    storage
    swap
    parameters
+
 
 
 .. Indices and tables

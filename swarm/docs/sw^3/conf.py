@@ -239,7 +239,7 @@ latex_elements = {
 'maketitle': '\
 \\definecolor{orange}{rgb}{1.0, 0.49, 0.0}''\\definecolor{orange}{rgb}{1.0, 0.55, 0.0}\
 \\renewcommand{\\releasename}{\\huge\\scshape incentive system for swarm}\
-\\date{\\large\\rm draft version Mar 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 1}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
+\\date{\\large\\rm draft version Apr 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 1}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
 \\release{}\
 \\title{swap, swear and swindle}\
 \\enlargethispage{.5cm}\

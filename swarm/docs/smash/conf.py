@@ -295,7 +295,7 @@ latex_elements = {
 'maketitle': '\
 \\definecolor{orange}{rgb}{1.0, 0.49, 0.0}''\\definecolor{orange}{rgb}{1.0, 0.55, 0.0}\
 \\renewcommand{\\releasename}{\\huge\\scshape auditable storage for swarm\\\\secured by masked audit secret hash}\
-\\date{\\large\\rm draft version Mar 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 2}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
+\\date{\\large\\rm draft version Aprw 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 2}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
 \\release{}\
 \\title{smash-proof}\
 \\enlargethispage{.5cm}\

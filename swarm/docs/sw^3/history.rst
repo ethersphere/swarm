@@ -2,20 +2,14 @@
 Web Hosting and Incentivization
 *******************************
 
-If swarm is to become widely used as a storage layer for interactive Web 3.0 applications, it must satisfy some key requirements. The swarm has to show dynamic scalability, i.e. it must adapt to sudden surges in popular demand, and at the same time the swarm must also preserve niche content and ensure its availablility. In this document we aim to present an incentive structure for nodes in the swarm, carefully crafted to ensure that the swarm exhibits these desired qualities.
 
 In order to both appreciate the problems we are trying to solve and understand the demands we make on the swarm, a little history is useful.
-
-Historical Overview
-==============================================
 
 While the Internet in general and the World Wide Web in particular
 dramatically reduced the costs of disseminating information, putting
 (almost) a publisher's power at (almost) every user's fingertips, these
 costs are still not zero and their allocation heavily influences who
-gets to publish what and who gets to enjoy what. Putting aside the --
-otherwise very important -- question of search and content promotion,
-this paper focuses on the issues of bandwidth and storage.
+gets to publish what and who gets to enjoy what.
 
 Web 1.0
 -------------------
@@ -64,7 +58,7 @@ report on you, for the same reason. Thus, millions of small content
 producers created immense value for a very few corporations, getting
 only peanuts (typically, free hosting) in exchange.
 
-P2P
+Peer-to-peer networks
 ----------------------
 
 At the same time, however, the P2P revolution was gathering pace. Actually, P2P traffic
@@ -78,8 +72,8 @@ internet's backbone. What's more, this could be achieved at a fraction of the co
 
 
 On the other hand, even the most evolved mode of P2P file sharing, which
-is trackerless Bittorrent, is just that: file sharing. It is, for
-reasons discussed later in the this paper, not suitable for providing the
+is trackerless Bittorrent, is just that: file sharing. It is
+not suitable for providing the
 kind of interactive, responsive experience that people came to expect
 from web-applications on Web 2.0. Simply sharing upstream bandwidth and
 hard-drive space and a tiny amount of computing power without proper
@@ -88,7 +82,7 @@ However, if you add to the mix a few more emergent technologies -- most importan
 censorship-resistant way of sharing and even collectively creating
 *interactive* content, while retaining full control over it. The price is surpisingly low and mostly consists of the resourses supplied by the super-computer (by yesteryear's standards) that you already own or can rent for peanuts.
 
-The Economics of Bittorrent and its Limits
+The economics of bittorrent and its limits
 ----------------------------------------------------
 
 The genious of Bittorrent lies in its clever resource optimisation:
@@ -115,9 +109,9 @@ related:
 Towards Web 3.0: IPFS
 -----------------------------
 
-In order to enable responsive distributed web applications (called Dapps
-in Web 3.0 communities), IPFS had to introduce a few major improvements over
-Bittorrent. The most immediately apparent novelty is perhaps the highly web-compatible URL-based retrieval. In addition, the directory (also organized as a DHT) has been vastly
+In order to enable responsive distributed web applications (called dapps
+in Web 3.0 communities), IPFS (:cite:`ipfs2014`) had to introduce a few major improvements over
+Bittorrent. The most immediately apparent novelty is the highly web-compatible URL-based retrieval. In addition, the directory (also organized as a DHT) has been vastly
 improved, making it possible to search for any part of any file (called
 *chunk*). It has also been made very flexible and pluggable in order to work with any kind of storage backend, be it a laptop with intermittent wifi, or a sophisticated HA cluster in a fiber-optic connected datacenter.
 
@@ -138,7 +132,7 @@ large amounts of disk space to those willing to pay for it, irrespective
 of the popularity of their content; and conversely there is also way to deploy your interactive dynamic content to be stored in the cloud - "upload and disappear".
 
 The objective of any :index:`incentive system` for p2p content distribution is to encourage cooperative behavior and discourage freeriding: the uncompensated depletion of limited resources.
-In what follows we present our current thinking for a comprehensive incentive system for swarm implemented through a smart contract. The incentive system leverages the ethereum infrastructure and the underlying value asset, :index:`Ether`.
+In what follows we present our current thinking for a comprehensive incentive system for swarm implemented through a suite of smart contracts. The incentive system leverages the ethereum infrastructure and the underlying value asset, :index:`Ether`.
 
 The incentive strategy outlined here aspires to satisfy the following constraints:
 

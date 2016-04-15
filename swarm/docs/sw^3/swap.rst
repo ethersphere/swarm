@@ -9,7 +9,9 @@ SWAP is the abbreviation for the *Swarm Accounting Protocol*. It is the protocol
    incentivisation
    micropayments
 
+
 There are three levels of SWAP:
+
 * ``Swap^1``: Swarm Accounting Protocol
 * ``Swap^2``: Swarm Accounting Protocol with Swift Automatic  Payment
 * ``Swap^3``: Swarm Accounting Protocol with Swift Automatic  Payments  and Debt Swap
