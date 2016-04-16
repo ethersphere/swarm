@@ -368,9 +368,7 @@ The audit challenges using the smash proof of custody described in :cite:`ethers
 ..  rubric:: Footnotes
 .. [#] See :cite:`ethersphere2016smash` for the explanation of particular audit types. In fact any audit challenge when fail should be escalated to the blockchain. The smash smart contract provides an interface to check validity of audit requests (as challenges) and verify the various response types (as refutations).
 
-Playing nice is further incentivized if a challenge is allowed to extend the risk of loss to all nodes that have given a promise to store the lost chunk. This means that when one storer is challenged, all nodes that have outstanding receipts covering the (allegedly) lost chunk stand to lose their deposit.
-
-The SWEAR contract comes with an accessor for checking that a given chunk has been reported lost, so that holders of receipts by other swarm nodes can punish them as well for losing the chunk, which, in turn, incentivizes whoever may hold the chunk to present it (and thus refute the challenge) even if they are not the named defendant first accused.
+Playing nice is further incentivized if a challenge is allowed to extend the risk of loss to all nodes that have given a promise to store the lost chunk. This means that when one storer is challenged, all nodes that have outstanding receipts covering the (allegedly) lost chunk stand to lose their deposit. Holders of receipts by other swarm nodes can punish them as well for losing the chunk, which, in turn, incentivizes whoever may hold the chunk to present it (and thus refute the challenge) even if they are not the named defendant first accused.
 
 Owners express their preference for storage period.
 As for storage period, the base unit used will be a :dfn:`swarm epoch`. The swarm epoch is the minimum interval a swarm node can register for.
@@ -561,6 +559,6 @@ We presented a technique of erasure coding applicable to the swarm hash tree, wh
 
 
 
-.. bibliography:: sw^3.bib
+.. bibliography:: ../refs.bib
    :cited:
    :style: alpha
