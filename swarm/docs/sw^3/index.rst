@@ -19,15 +19,3 @@ Welcome to the swarm documentation!
    history
    bandwidth
    storage
-   swap
-   parameters
-
-
-
-.. Indices and tables
-.. ==================
-
-.. * :ref:`genindex`
-.. * :ref:`modindex`
-.. * :ref:`search`
-

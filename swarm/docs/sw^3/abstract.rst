@@ -5,9 +5,9 @@
 
    Swarm is a distributed storage platform and content distribution service, a native base layer service of the ethereum web 3 stack. The primary objective of Swarm is to provide a sufficiently decentralized and redundant store of Ethereum's public record, in particular to store and distribute Đapp code and data as well as block chain data. From an economic point of view, it allows participants to efficiently pool their storage and bandwidth resources in order to provide the aforementioned services to all participants.
 
-   The objective is to peer-to-peer storage and serving solution that is DDOS-resistant, zero-downtime, fault-tolerant and censorship-resistant as well as self-sustaining due to a built-in incentive system.
+   The objective is a peer-to-peer storage and serving solution that is DDOS-resistant, zero-downtime, fault-tolerant and censorship-resistant as well as self-sustaining due to a built-in incentive system.
 
-   As storage layer for interactive Web 3.0 applications and blockchains, the swarm must satisfy some key requirements. The swarm has to show dynamic scalability, i.e. it must adapt to sudden surges in popular demand, and at the same time the swarm must also preserve niche content and ensure its availablility. In this document we aim to present an incentive structure for nodes in the swarm, that is in alignment with and conducive to these requirements. Putting aside the -- otherwise very important -- question of search and content promotion,this paper focuses on the issues of bandwidth and storage.
+   As storage layer for interactive Web 3.0 applications and blockchains, the swarm must satisfy some key requirements. The swarm has to show dynamic scalability, i.e. it must adapt to sudden surges in popular demand, and at the same time the swarm must also preserve niche content and ensure its availablility. In this document we aim to present an incentive structure for nodes in the swarm, that is in alignment with and conducive to these requirements. Putting aside the -- otherwise very important -- question of search and content promotion, this paper focuses on the issues of bandwidth and storage.
 
 
 .. rubric:: Footnotes

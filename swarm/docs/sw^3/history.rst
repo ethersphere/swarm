@@ -37,8 +37,8 @@ was a sharp disbalance between originators of TCP connection requests
 (i.e. SYN packets), it was customary for the originator ISP to pay the
 recipient ISP, which made the latter somewhat incentivized to help
 hosters of popular content. In practice, however, this incentive
-structure usually resulted in putting a free **pr0n** or
-**warez** server in the server room to tilt the scales
+structure usually resulted in putting a free *pr0n* or
+*warez* server in the server room to tilt the scales
 of SYN packet counters. Blogs catering to a niche audience had no way of
 competing and were generally left out in the cold. Note, however, that
 back then, creator-publishers typically owned their content.
@@ -53,9 +53,9 @@ audience throws at it, but you give us substantial control over your
 content; we are going to track each member of your audience and learn --
 and own -- as much of their personal data as we can, we are going to
 pick who can and who cannot see it, we are going to proactively censor
-it (since we are big sitting ducks ripe for extortion) and we may even
+it and we may even
 report on you, for the same reason. Thus, millions of small content
-producers created immense value for a very few corporations, getting
+producers created immense value for very few corporations, getting
 only peanuts (typically, free hosting) in exchange.
 
 Peer-to-peer networks
@@ -75,7 +75,7 @@ On the other hand, even the most evolved mode of P2P file sharing, which
 is trackerless Bittorrent, is just that: file sharing. It is
 not suitable for providing the
 kind of interactive, responsive experience that people came to expect
-from web-applications on Web 2.0. Simply sharing upstream bandwidth and
+from web applications on Web 2.0. Simply sharing upstream bandwidth and
 hard-drive space and a tiny amount of computing power without proper
 accounting and indexing only gets you so far.
 However, if you add to the mix a few more emergent technologies -- most importantly the blockchain -- you get what we believe to deserve the Web 3.0 moniker: a decentralized,
@@ -89,7 +89,7 @@ The genious of Bittorrent lies in its clever resource optimisation:
 If many clients want to download the same content from you, give them
 different parts of it and let them swap the missing parts between one
 another in a tit-for-tat fashion. This way, the upstream bandwidth use
-of a content hoster (*seeder* in Bittorrent parlance) is roughly the same, no matter how many clients want to download it simultaneously. This solves the most painful issue of the
+of a content hoster (:dfn:`seeder` in Bittorrent parlance) is roughly the same, no matter how many clients want to download it simultaneously. This solves the most painful issue of the
 ancient HTTP underpinning the World Wide Web.
 
 Cheating (i.e. feeding your peers with garbage) is discouraged by the
@@ -110,8 +110,7 @@ Towards Web 3.0: IPFS
 -----------------------------
 
 In order to enable responsive distributed web applications (called dapps
-in Web 3.0 communities), IPFS (:cite:`ipfs2014`) had to introduce a few major improvements over
-Bittorrent. The most immediately apparent novelty is the highly web-compatible URL-based retrieval. In addition, the directory (also organized as a DHT) has been vastly
+in Web 3.0 communities), :dfn:`IPFS` (:cite:`ipfs2014`) had to introduce a few major improvements over Bittorrent. The most immediately apparent novelty is the highly web-compatible URL-based retrieval. In addition, the directory (also organized as a DHT) has been vastly
 improved, making it possible to search for any part of any file (called
 *chunk*). It has also been made very flexible and pluggable in order to work with any kind of storage backend, be it a laptop with intermittent wifi, or a sophisticated HA cluster in a fiber-optic connected datacenter.
 
@@ -129,7 +128,7 @@ A further important innovation is that IPFS has incentivisation factored out int
 
 What is still missing from the above incentive system, is the possibility to rent out
 large amounts of disk space to those willing to pay for it, irrespective
-of the popularity of their content; and conversely there is also way to deploy your interactive dynamic content to be stored in the cloud - "upload and disappear".
+of the popularity of their content; and conversely there is also way to deploy your interactive dynamic content to be stored in the cloud - ":dfn:`upload and disappear`".
 
 The objective of any :index:`incentive system` for p2p content distribution is to encourage cooperative behavior and discourage freeriding: the uncompensated depletion of limited resources.
 In what follows we present our current thinking for a comprehensive incentive system for swarm implemented through a suite of smart contracts. The incentive system leverages the ethereum infrastructure and the underlying value asset, :index:`Ether`.

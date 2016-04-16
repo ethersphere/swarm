@@ -37,7 +37,7 @@ especially if the user explicitly requires that in the fashion of 'upload and di
     their course of action is to submit further transactions, offering more
     reward, until someone finally does.
 
-Filecoin (:cite:`filecoin2014`), an incentivised p2p storage network using IPFS (:cite:`ipfs2014`)offers an interesting solution. Nodes participating in its network also mine
+:dfn:`Filecoin` (:cite:`filecoin2014`), an incentivised p2p storage network using IPFS (:cite:`ipfs2014`)offers an interesting solution. Nodes participating in its network also mine
 on the filecoin blockchain. Filecoin can be earned (mined) through replicating other people's content and spent on having one's content replicated.
 Filecoin's proof of work is defined to include proof that the miner possesses a set of randomly chosen units of storage depending on the parent block.
 Using a strong proof of retrievability scheme, Filecoin ensures that the winning miner had relevant data. As miners compete, they will find that their chances of winning will be proportional to the percentage of the existing storage units they actually store. This is because the missing ones need to be retrieved from other nodes and thus delaying nodes chance to respond.
@@ -83,7 +83,7 @@ A long-term storage incentivisation scheme faces unique challenges. For example,
   punative measures
   deposit
 
-Instead, we need punitive measures to ensure compliance with storage promises. These will work using a :dfn:`deposit system`. Nodes wanting to sell promisory storage guarantees should have a *stake verified and locked-in* at the time of making their promise. This implies  that nodes must be *registered* in advance with a contract and put up a security deposit.
+Instead, we need punitive measures to ensure compliance with storage promises. These will work using a :dfn:`deposit system`. Nodes wanting to sell promisory storage guarantees should have a *stake verified and locked-in* at the time of making their promise. This implies  that nodes must be *registered* in advance with a contract and put up a :dfn:`security deposit`.
 
 Following :dfn:`registration`, a node may sell storage promises covering the time period for which their funds are locked. While their registration is active, if they are found to have lost a chunk that was covered by their promise, they stand to loose their deposit.
 
@@ -104,7 +104,7 @@ Owners' risk preference consist in the time period covered as well as a preferen
 
 Satisfying storers' risk preferences means that they have ways to express their certainty of preserving what they store and factor that in their pricing. Some nodes may not wish to provide storage guarantees that are too long term while others cannot afford to stake too big of a deposit. This differentiates nodes in their competition for service provision.
 
-A *market mechanism* means there is flexible price negotation or discovery or automatic feedback loops that tend to respond to changes in supply and demand.
+A *market mechanism* means there is flexible :dfn:`price negotation` or discovery or automatic feedback loops that tend to respond to changes in supply and demand.
 
 ..  index:: litigation
 
@@ -116,36 +116,37 @@ It is also worth emphasizing that the producer and the consumer of the informati
    contract
    receipt
 
-The simplest solution to manage storage deals is using direct contracts between owner and storer. This can be implemented with storers returning *signed receipts* of chunks they accept to store and owners paying for the receipts either directly or via escrow.
+The simplest solution to manage storage deals is using direct contracts between owner and storer. This can be implemented with storers returning :dfn:`signed receipts` of chunks they accept to store and owners paying for the receipts either directly or via escrow.
 In the latter case, storer only gets awarded the locked funds if they provide proof that the chunk they stored is valid. Such delayed payment solutions would enable operation entirely without litigation. The receipts collected can used to prove commitment in case of litigation. There are other more indirect variants of litigation which do not rely on owner and storer being in direct contractual agreement, which is the case if the eventual consumer is distinct from the storer and not known to them in advance.
 
-In what follows we will elaborate on a class of incentive schemes we call *swap, swear and swindle* due to the basic components:
+In what follows we will elaborate on a class of incentive schemes we call :dfn:`swap, swear and swindle` due to the basic components:
 
-swap
-  Nodes are in semipermanent long term contact with their registered peers. Along these connection the peers transact by swapping various pieces of information to do syncing, receipting, price negotiation and offchain payments.
+:dfn:`swap`
+  Nodes are in semipermanent long term contact with their registered peers. Along these connections the peers are swapping various pieces of information relating to syncing, receipting, price negotiation, auditing and offchain payments.
 
-swear
+:dfn:`swear`
   Nodes registered on the swarm network are accountable and stand to lose their deposit if they are found to violate the rules of the swarm in an on-chain litigation process.
 
-swindle
+:dfn:`swindle`
    A scheme to pool resources to enforce adherence to the rules, by regular auditing, policing, and eventually conscientious litigation.
 
 ..  swindle
 
+As we go along, these names will reveal their secondary meanings.
 
-Security begins at home and so the first step in securing data begins with the owner; this is the topic of the following section. Then in Section :ref:`sec:swear` we describe how to hand over custody of your data to registered nodes in the swarm subject to an insurance contract. Finally, in Section :ref:`sec:swindle:`, we turn to how such insurance is enforced by the ethereum smart contract based litigation system (SWINDLE).
+Security begins at home and so the first step in securing data begins with the owner; this is the topic of the following section. Then in section :ref:`sec:swear` we describe how the owner hands over custody of their data to registered nodes in the swarm subject to an insurance contract. Finally, in section :ref:`sec:swindle:`, we turn to how such insurance is enforced by the ethereum smart contract based litigation system (SWINDLE).
 
 Owner-side handling of storage redundancy
 ==============================================================================
 
-First we show how to delegate setting arbitrary levels of storage security to the owner. The idea is that redundancy is encoded in the document structure before its chunks are uploaded.
+First we show how to delegate setting arbitrary :dfn:`levels of storage security` to the owner. The idea is that :dfn:`redundancy` is encoded in the document structure before its chunks are uploaded.
 This is important since this entails that the degree of redundancy does not need to be among the parameters handled by store requests, pricing or litigation.
 
 A simplistic method of guarateeing redundancy of a file is to split the file into chunks that are one byte shorter than the normal chunksize and add a nonce byte to each chunk. This guarantees that each chunk is different and as a consequence all chunks of the modified file are different. When joining the last byte of each chunk is ignored so all variants map to the same original.
 This yields a potential :math:`256` equivalent replicas of each chunk for the owner to upload (and up to :math:`256^x` different root hashes) [#]_ .
 
 ..  rubric:: Footnotes
-.. [#] We also explored the possibility that degree of redundancy is subsumed under local replication. Local replicas are instances of a chunk stored by nodes in a close neighbourhood. If that particular chunk is crucial in the reconstruction of the content, the swarm is much more vulnerable to chunk loss or latency due to attacks. This is because if the storers of the replicas are close, inflitrating in the storers' neighbourhood can be done with as many nodes as chunk type (as opposed to as many as chunk replicas). If there is cost to sybil attacks this brings down the cost by a factor of n where n is the number of replicas. We concluded that local replication is important for resilience in case of intermittent node dropouts, however, inferior to other solutions at implementing levels of security.
+.. [#] We also explored the possibility that degree of redundancy is subsumed under local replication (section :ref:`sec:localreplication`). Local replicas are instances of a chunk stored by nodes in a close neighbourhood. If that particular chunk is crucial in the reconstruction of the content, the swarm is much more vulnerable to chunk loss or latency due to attacks. This is because if the storers of the replicas are close, inflitrating in the storers' neighbourhood can be done with as many nodes as chunk type (as opposed to as many as chunk replicas). If there is cost to sybil attacks this brings down the cost by a factor of n where n is the number of replicas. We concluded that local replication is important for resilience in case of intermittent node dropouts, however, inferior to other solutions at implementing levels of security.
 
 Luckily there are a lot more economical ways to encode data redundantly. In what follows we spell out our proposal to introduce a scheme for a *loss tolerant swarm hash*.
 
@@ -153,7 +154,7 @@ Luckily there are a lot more economical ways to encode data redundantly. In what
 Loss-tolerant Merkle Trees and Erasure Codes
 -------------------------------------------------
 
-Recall that the basic data structure in swarm is a merkle tree. Assuming :math:`h` the size of the hash output of the hash function used in bytes, :math:`b` is the branching factor. Each node represents the root hash of a subtree or, at the last level, the hash of a :math:`b*h` long span (one chunk) of the file. Generically we may think of each chunk as consisting of :math:`b` hashes:
+Recall that the basic data structure in swarm is a :dfn:`merkle tree`. Assuming :math:`h` the size of the hash output of the hash function used in bytes, :math:`b` is the branching factor. Each node represents the root hash of a subtree or, at the last level, the hash of a :math:`b*h` long span (one chunk) of the file. Generically we may think of each chunk as consisting of :math:`b` hashes:
 
 ..  _fig:chunk:
 
@@ -191,14 +192,14 @@ Recall also that during normal swarm lookups, a swarm client performs a lookup f
 ..  index::
 
 
-We propose using a Cauchy-Reed-Solomon (henceforth CRS) scheme to encode redundancy directly into the swarm tree. The CRS scheme [#]_  is a :dfn:`systemic erasure code` which applied to a data blob of :math:`m` fixed-size pieces, produces :math:`k` extra pieces (so called *parity pieces*) of the same size in such a way that any :math:`m` out of :math:`n=m+k` fix-sized pieces are to reconstruct the original blob with storage overhead of :math:`\frac{k}{m}`.
+We propose using a Cauchy-Reed-Solomon (henceforth :abbr:`CRS (Cauchy-Reed-Solomon)`) scheme to encode redundancy directly into the swarm tree. The :dfn:`CRS scheme` [#]_  is a :dfn:`systemic erasure code` which applied to a data blob of :math:`m` fixed-size pieces, produces :math:`k` extra pieces (so called :dfn:`parity pieces`) of the same size in such a way that any :math:`m` out of :math:`n=m+k` fix-sized pieces are to reconstruct the original blob with storage overhead of :math:`\frac{k}{m}`.
 
 .. rubric:: Footnotes
 .. [#] There are open source libraries that implement Reed Solomon or Cauchy-Reed-Solomon coding. See https://www.usenix.org/legacy/event/fast09/tech/full_papers/plank/plank_html/, https://www.backblaze.com/blog/reed-solomon/, http://rscode.sourceforge.net/.
 
 Assuming :math:`p` is the probability of losing one piece, if all :math:`n` pieces are independently stored, the probability of loosing the original content is :math:`p^{n-m+1}` which is exponential while extra storage is linear. These properties are preserved if we apply the coding to every level of a swarm chunk tree.
 
-The chunker algorithm using :math:`mc` CRS coding would proceed the following way when splitting the document:
+The :dfn:`chunker` algorithm using :math:`mc` CRS coding would proceed the following way when splitting the document:
 
  1. Set input to the data blob.
  2. Read the input one chunk (say fixed 4096 bytes) at a time. Count the chunks by incrementing :math:`i`. The last chunk read may be shorter.
@@ -209,7 +210,7 @@ The chunker algorithm using :math:`mc` CRS coding would proceed the following wa
  8. If the next level data blob has more than one chunk, set the input to this and  repeat from 2.
  9. Otherwise remember the blob as the root chunk.
 
-Assuming we fix the branching factor of the swarm hash (chunker) as :math:`n=128` and :math:`h=32` as the size of the SHA3 Keccak hash. This gives us a chunk size of :math:`4096` bytes.
+Assuming we fix the branching factor of the swarm hash (chunker) as :math:`n=128` and :math:`h=32` as the size of the :dfn:`SHA3 Keccak hash`. This gives us a chunk size of :math:`4096` bytes.
 
 Let us now suppose that we start splitting out inpuy document data into chunks, and after each :math:`m` chunks then add :math:`k=n-m` parity check pieces using a Reed-Solomon code so that now any :math:`m\text{-out-of-}n` chunks are
 sufficient to reconstruct the document. On the next level up the chunks are composed of the hashes of the :math:`m`  data chunks and the :math:`k` hashes of the parity chunks. Let’s take the first :math:`m`
@@ -268,21 +269,22 @@ Self healing
   Any client downloading a file from the swarm can detect if a chunk has been lost. The client can reconstruct the file from the parity data (or reconstruct the parity data from the file) and resync this data into the swarm. That way, even if a large fraction of the swarm is wiped out simultaneously, this process should allow an organic healing process to occur and it is encouraged that the default client behavior should be to repair any damage detected.
 
 Improving latecy of retrievals
-  Alpha is the name the original Kademlia gives to the number of peers in a Kademlia bin that are queried simultaneously during a lookup. The original Kademlia paper sets alpha=3. This is impractical for Swarm because the peers do not report back with new addresses as they would do in pure Kademlia but instead forward all queries to their peers. Swarm is coded in this way to make use of semi-stable longer-term devp2p connections. Setting alpha to anything greater than 1 thus increases the amount of network traffic substantially – setting up an exponential cascade of forwarded lookups (but it would soon collapse back down onto the target of the lookup).
+  Alpha is the name the original :dfn:`Kademlia` (:cite:`kademlia`) gives to the number of peers in a Kademlia bin that are queried simultaneously during a lookup. The original Kademlia paper sets alpha=3. This is impractical for Swarm because the peers do not report back with new addresses as they would do in pure Kademlia but instead forward all queries to their peers. Swarm is coded in this way to make use of semi-stable longer-term devp2p connections. Setting alpha to anything greater than 1 thus increases the amount of network traffic substantially – setting up an exponential cascade of forwarded lookups (but it would soon collapse back down onto the target of the lookup).
 
   However, setting alpha=1 has its own downsides. For instance, lookups can stall if they are forwarded to a dead node and even if all nodes are live, there could be large delays before a query is complete.
 
   In an erasure coded setting we can in a sense have a best of both worlds. Issueing a lookup request not just for the data chunks but for the parity chunks, the client could accept the first :math:`m` of every 128 chunks queried to get some of the same benefits of faster retrieval that redundant lookups provide without a whole exponential cascade.
 
+..  sec:swear:
+
 Registered nodes and Ensured archival (SWEAR)
 ===================================================
 
-.. index:: :abbr:`SWEAR Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration`
 
 Once the owner has prepared their data they upload the chunks to the swarm where they are replicated and stored. To decrease the risk that the data will be lost, the owner may purchase storage promises from other nodes as a form of insurance.
-Before a node can sell these promises of long-term storage however, it must first register via a contract on the blockchain we call the *SWEAR* contract (Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration).
-The SWEAR contract allows nodes to register their public key to become accountable participants in the swarm by putting up a deposit. Registration is done by sending the deposit to the SWEAR contract, which serves as colleteral if terms that registered nodes 'swear' to keep are violated (i.e., nodes do not keep their promise to store).
-Registration is valid only for a set period, at the end of which a swarm node is entitled to their deposit.
+Before a node can sell these promises of long-term storage however, it must first register via a contract on the blockchain we call the :dfn:`SWEAR` (Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration) contract.
+The :abbr:`SWEAR (Secure Ways of Ensuring ARchival)` contract allows nodes to register their public key to become accountable participants in the swarm by putting up a deposit. Registration is done by sending the deposit to the SWEAR contract, which serves as colleteral if terms that registered nodes 'swear' to keep are violated (i.e., nodes do not keep their promise to store).
+:dfn:`Registration` is valid only for a set period, at the end of which a swarm node is entitled to their deposit.
 Users of Swarm should be able to count on the loss of deposit as a disincentive against foul play as long as enrolled status is granted. As a result the deposit must not be refunded before the registration expires.
 
 ..  index::
@@ -291,22 +293,19 @@ Users of Swarm should be able to count on the loss of deposit as a disincentive 
 
 Registration in swarm is not compulsory, it is only necessary if the node wishes to sell promises of storage. Nodes that only charge for retrieval can operate unregistered. The incentive to register and sign promises is that they can be sold for profit. When a peer connection is established, the contract state is queried to check if the remote peer is a registered node. Only registered nodes are allowed to issue valid receipts and charge for storage.
 
-When a registered node receives a request to store a chunk, it can acknowledge accepting it with a signed receipt. It is these signed receipts that are used to enforce penalties for loss of content through the SWEAR contract. Because of the locked collateral backing them, the receipts  can be viewed as secured promises for storing and serving a particular chunk up until a particular date. It is these receipts that are sold to nodes initiating requests.
+When a registered node receives a request to store a chunk, it can acknowledge accepting it with a signed receipt. It is these signed receipts that are used to enforce penalties for loss of content through the :abbr:`SWEAR (SWarm Enforcement and Registration)` contract. Because of the locked collateral backing them, the receipts  can be viewed as secured promises for storing and serving a particular chunk up until a particular date. It is these receipts that are sold to nodes initiating requests.
 In some schemes the issuer of a receipt can in turn buy further promises from other nodes pontentially leading to a chain of local contracts.
 
 If on litigation it turns out that a chunk (covered by a promise) was lost, the deposit must be at least partly burned. Note that this is necessary because if penalites were paid out as compensation to holders of receipts of lost chunks, it would provide an avenue of early exit for a registered node by "losing" bogus chunks deposited by colluding users. Since users of Swarm are interested in their information being reliably stored, their primary incentive for keeping the receipts is to keep the Swarm motivated, not the potential for compensation.
 If deposits are substantial, we can get away with paying out compensation for initiating litigation, however we must have the majority (say 95%) of the deposit burned in order to make sure the easy exit route remains closed.
 
-The SWEAR contract handles all registration and deposit issues. It provides a method to pay the deposit and register the node's public key. An accessor is available for checking that a node is registered.
-
-.. The corresponding solidity code: https://github.com/ethereum/tree/swarm/swarm/services/swear/swear.sol.
+..  sec:swindle:
 
 Litigation on loss of content (SWINDLE)
 ========================================
 
-..  index:: :abbr:`SWINDLE = SWarm INsurance Driven Litigation Engine`
+If a node fails to observe the rules of the swarm they 'swear' to keep, the punative measures need to be enforced which is preceded by a litigation procedure. The implementation of this process is called :abbr:`SWINDLE (SWarm INsurance Driven Litigation Engine)`.
 
-If a node fails to observe the rules of the swarm they 'swear' to keep, the punative measures need to be enforced which is preceded by a litigation procedure. The implementation of this process is called SWINDLE = SWarm INsurance Driven Litigation Engine.
 
 Submitting a challenge
 ------------------------------
@@ -316,10 +315,10 @@ Submitting a challenge
   challenge
   refutation
 
-Nodes provide signed receipts for stored chunks which they are allowed to charge arbitrary amounts for. The pricing and deposit model is discussed in detail below. If a promise is not kept and a chunk is not found in the swarm anyone can report the loss by putting up a :dfn:`challenge`. The response to a challenge is a :dfn:`refutation`. Validity of the challenge as well as its refutation need to be easily verifyable by the contract.
+Nodes provide signed receipts for stored chunks which they are allowed to charge arbitrary amounts for. The pricing and deposit model is discussed in detail in section :ref:`sec:accounting`. If a promise is not kept and a chunk is not found in the swarm anyone can report the loss by putting up a :dfn:`challenge`. The response to a challenge is a :dfn:`refutation`. Validity of the challenge as well as its refutation need to be easily verifyable by the contract.
 For now, we can just assume that the litigation is started by the challenge after a user attempts to retrieve insured content and fails to find a chunk. Litigation will be discussed below in the wider context of regular integrity audits of content in the swarm.
 
-The challenge takes the form of a transaction sent to the SWEAR contract in which the challenger presents the receipt(s) of the lost chunk. Any node is allowed to send a challenge for a chunk as long as they have a valid receipt for it (not necessarily issued to them).
+The challenge takes the form of a transaction sent to the :dfn:`SWINDLE` (SWarm INsurance Driven Litigation Engine) relevant swarm contract in which the challenger presents the receipt(s) of the lost chunk. Any node is allowed to send a challenge for a chunk as long as they have a valid receipt for it (not necessarily issued to them).
 
 This is analogous to a court case in which the issuers of the receipts are the defendants who are guilty until proven innocent. Similarly to a court procedure public litigation on the blockchain should be a last resort when the rules are abused despite the deterrents and positive incentives.
 
@@ -329,14 +328,14 @@ The same transaction also sends a deposit covering the upload of a chunk. The co
 * the expiry date of the receipt has not passed
 * sufficient funds are sent alongside to compensate the peer for uploading the chunk in case of a refuted challenge
 
-The last point above is designed to disincentivise frivolous litigation, i.e., bombarding the blockchain with bogus challanges potentially causing a DoS attack.
+The last point above is designed to disincentivise frivolous litigation, i.e., bombarding the blockchain with bogus challenges potentially causing a :dfn:`DoS attack`.
 
 ..  index:: DoS
 
 A challenge is open for a fixed amount of time, the end of which essentially is the deadline to refute the challenge. The challenge is refuted if the chunk is presented (additional ways are discussed below). Refutation of a challenge is easy to validate by the contract since it only involves checking that the hash of the presented chunk matches the receipt. This challenge scheme is the simplest way (i) for the defendants to refute the challenge as well as (ii) to make the actual data available for the nodes that needs it.
 
-In normal operation, litigation should be so rare that it may be necessary to introduce a practice of regular :dfn:`audits` to test nodes' compliance with distribution rules. In such cases the challenge can carry a flag which when set would indicate that providing the actual chunk, (ii) above, is unnecessary. In order to reduce network traffic, in such cases presenting the chunk can be replaced by providing a *proof of custody*. Note that in order not to burden the live chain, audits could happen off chain and they would only make it to the blockchain if foul play is detected. Conversely, if such auditing is a regular automated process, then litigation will typically be initiated as part of escalating a failed audit.
-:cite:`ethersphere2016smash` describes such just such an audit protocol using the smash proof of custody construct.
+In normal operation, litigation should be so rare that it may be necessary to introduce a practice of regular :dfn:`audits` to test nodes' compliance with distribution rules. In such cases the challenge can carry a flag which when set would indicate that providing the actual chunk, (ii) above, is unnecessary. In order to reduce network traffic, in such cases presenting the chunk can be replaced by providing a :dfn:`proof of custody`. Note that in order not to burden the live chain, audits could happen off chain and they would only make it to the blockchain if foul play is detected. Conversely, if such auditing is a regular automated process, then litigation will typically be initiated as part of escalating a failed audit.
+:cite:`ethersphere2016smash` describes such an audit protocol using the smash proof of custody construct.
 
 The outcome of a challenge
 -------------------------------------
@@ -386,14 +385,15 @@ A priori this only works, however, in the simplest system in which the owner nee
 Publicly accessible receipts and consumer driven litigation
 ------------------------------------------------------------
 
-End-users that store important information in the swarm have an obvious interest in keeping the receipt available for "litigation". The storage space required for storing a receipt is a sizable fraction of that used for storing the information itself, so end users can reduce their storage requirement further by storing the receipts in Swarm as well. Doing this recursively would result in end users only having to store a single receipt, the root receipt, yet being able to penalize quite a few Swarm nodes, in case only a small part of their stored information is lost.
+End-users that store important information in the swarm have an obvious interest in keeping the receipt available for litigation. The storage space required for storing a receipt is a sizable fraction of that used for storing the information itself, so end users can reduce their storage requirement further by storing the receipts in Swarm as well. Doing this recursively would result in end users only having to store a single receipt, the root receipt, yet being able to penalize quite a few Swarm nodes, in case only a small part of their stored information is lost.
 
 A typical usecase is when content producers would like to make sure their content is available. This is supported by implementing the process of collecting receipts and putting them together in a format which allows for the easy pairing of chunks and receipts for an entire document. Storing this document-level receipt collection in the swarm has a non-trivial added benefit. If such a pairing is public and accessible, then consumers/downloaders (not only creators/uploaders) of content are able to litigate in case a chunk is missing. On the other hand, if the likely outcome of this process is punishment for the false promise (burning the deposit), motivation to litigate for any particular bit lost is slim.
 
-This pattern can be further extended to apply to a document collection (Dapp/website level). Here all document-level root receipts (of the sort just discussed) can simply be included as metadata in the manifest entry for the document alongside its root hash. Therefore a manifest file itself can store its own warranty.
-The question arises what happens if the hash of this entire collection is not found, if this is a possibility then all the effort in insuring the chunks was futile.
-One proposal is to introduce a special content addressed storage, whereby litigation information (notably guardian address) is stored at an address derivable from the swarm hash. This would make litigation on the chunk level independent of document-level structures and would allow any third party to initiate audits and litigation against a loss chunk knowing only the hash. It is unclear whether this solves anything because if a chunk is not found due to it not being retrieved, it is quite likely that the receipt is deleted too. The first bit flipped would guarantee that the receipt is stored at an opposite end of the swarm. The rest of the bits could be those of the hash of the swarm hash.
+This pattern can be further extended to apply to a document collection (dapp/website level). Here all document-level root receipts (of the sort just discussed) can simply be included as metadata in the manifest entry for the document alongside its root hash. Therefore a manifest file itself can store its own warranty.
+The question arises what happens if the hash of this entire collection is not found, if this is a possibility then all the effort in insuring the chunks was futile [#]_ .
 
+.. rubric:: Footnotes
+.. [#] One proposal is to introduce a special content addressed storage, whereby litigation information (notably the receipt from the guardian) is stored at an address derivable from the swarm hash. The address would be derived from the hash by flipping its first bit which would guarantee that the receipt is stored at an opposite end of the swarm. This would make litigation on the chunk level independent of document-level structures and would allow any third party to initiate audits and litigation against a loss chunk knowing only the hash. It is unclear whether this would work though: if a chunk is not found due to it not having been retrieved for some time, chances are high that the receipt has also not been accessed and has been deleted too.
 
 Receipt forwarding or chained challenges
 ===========================================
@@ -405,19 +405,27 @@ Forwarding chunks
 
 ..  index:: retrieve request
 
-In normal swarm operation, chunks are worth storing because of the possibility that they can be profitably "sold" by serving retrieve requests in the future. The probability of retrieve requests for a particular chunk depends on the chunk's popularity and also, crucially, on the proximity to the node's address.
+In normal swarm operation, chunks are worth storing because of the possibility that they can be profitably sold by serving retrieve requests in the future. The probability of retrieve requests for a particular chunk depends on the chunk's popularity and also, crucially, on the proximity to the node's address.
 
-Nodes are expected to forward all chunks to nodes whose address is closer to the chunk. This is the normal syncing protocol. It is compatible with the pay-for-retrieval incentivisation: once a retrieve request reaches a node, the node will either sell the chunk (if it has it) or it will pass on the retrieve request to a closer node. There is no financial loss from syncing chunks to closer nodes because once a retrieve request reaches a closer node, it will not be passed back out, it will only be passed closer. In other words, syncing only serves those retrieve requests that the node would never have profited from anyway and thus it causes no financial harm due to lost revenue.
+Nodes are expected to forward all chunks to nodes whose address is closer to the chunk. This :dfn:`forwarding` is the normal syncing protocol. It is compatible with the pay-for-retrieval incentivisation: once a retrieve request reaches a node, the node will either sell the chunk (if it has it) or it will pass on the retrieve request to a closer node. There is no financial loss from syncing chunks to closer nodes because once a retrieve request reaches a closer node, it will not be passed back out, it will only be passed closer. In other words, syncing only serves those retrieve requests that the node would never have profited from anyway and thus it causes no financial harm due to lost revenue.
 
 ..  index:: syncing
 
 For insured chunks, a similar logic applies - even more sos because there is a positive incentive to sync. If a chunk does not reach its closest nodes in the swarm before someone issues a retrieval request, then the chances of the lookup failing increase and with it the chances of the chunk being reported as lost. The resulting litigation as discussed below poses a burden on all swarm nodes that have ever issued a receipt for the chunk and therefore incentivises nodes to do timely forwarding. The audit process described in :cite:`tronetal2016smash` provides additional guarantees that chunks are forwarded all the way to the proximate nodes.
 
 Swarm assumes that nodes are content agnostic, i.e., whether a node accepts a new chunk for storage should depend only on their storage capacity [#]_ . Registered nodes have the option to indicate that they are full capacity. This effectively means they are temporarily not able to issue receipts so in the eyes of connected peers they will act as unregistered. As a result, when syncing to registered nodes, we do not take no for an answer: all chunks legitimately sent to a registered node can be considered receipted. If the node already has the chunk (received it earlier from another peer), the receipt is not paid for.
-As we show later the protocol for issuing receipts can be made part of the syncing protocol.
+
+The purpose of the receipt is to prove that a node closer to the target chunk than the node itself received the chunk and will either store it or forward it.
+This is exactly what synchronisation does, therefore, proving (in)correct synchronisation is
+a potential substitute for receipt based litigation.
+If we further stipulate that registered nodes need to sign sync state and able to prove a particular chunk was part of the synced batch, we can get away without storing individual receipts altogether and implement the persistence of receipts as part of the chunkstore mechanism on the one hand and the passing of receipts as part of the syncing mechanism on the other.
+
+An advantage of using sync state as receipt is that when litigation takes place, one can point fingers to a node which already had the chunk at the time of syncing as long as it is registered.
+
+
 
 .. rubric:: Footnotes
-.. [#] We will use a double masking techique as a basic measure for plausible deniability.
+.. [#] We will use a double masking techique as a basic measure to ensure plausible deniability.
 
 Collecting storer receipts and direct contracts
 -------------------------------------------------
@@ -475,28 +483,37 @@ If a node is unable to produce either the refutation or the receipts, it is cons
 
 When the network grows, it can happen that a custodian finds a new registered node closer to its chunk. This means they need to forward the original store request, the moment they obtain a receipt they can use it in finger pointing, they cease to be custodians and the ball is in the new custodian's court.
 
-Local replication
-----------------------------------
+.. _sec:localreplication
 
-As discussed above owners can manage the desired security level by using erasure coding with arbitrary degree of redundancy. However, it still makes sense to require that more than one node actually store the chunk. Although the cloud industry is trying to get away from the explicit x-fold redundancy model because it is very wasteful and incurs high costs – erasure coding can guarantee the same level of security using only a fraction of the storage space. However, in a data center, redundancy is interpreted in the context of hard drives whose failure rates are low, independent and predictable and their connectivity is almost guaranteed at highest possible speed due to proximity. In a peer-to-peer network scenario, nodes could disappear much more frequently than hard drives fail. In order to guarantee robust operation, we need to require several local replicas of each chunk (commonly 3, see :cite:`wilkinson2014metadisk`). Since the syncing protocol already provides replication across the proximate bin, regular resyncing of the chunk   be smayufficient to ensure availability in case the custodian drops off. If this proves too weak in practice we may require the custodian to get receipts from two proximate peers who act as cocustodians. The added benefit of this extra complexity is unclear.
+Multiple receipts and local replication
+----------------------------------------------
+
+As discussed above owners can manage the desired security level by using erasure coding with arbitrary degree of redundancy. However, it still makes sense to require that more than one node actually store the chunk. Although the cloud industry is trying to get away from the explicit x-fold redundancy model because it is very wasteful and incurs high costs – erasure coding can guarantee the same level of security using only a fraction of the storage space. However, in a data center, redundancy is interpreted in the context of hard drives whose failure rates are low, independent and predictable and their connectivity is almost guaranteed at highest possible speed due to proximity. In a peer-to-peer network scenario, nodes could disappear much more frequently than hard drives fail. In order to guarantee robust operation, we need to require several local replicas of each chunk (commonly 3, see :cite:`wilkinson2014metadisk`). Since the syncing protocol already provides replication across the proximate bin, regular resyncing of the chunk may be sufficient to ensure availability in case the custodian drops off. If this proves too weak in practice we may require the custodian to get receipts from two proximate peers who act as cocustodians. The added benefit of this extra complexity is unclear.
 
 
+.. _sec:accounting:
 
 Pricing, deposit, accounting
 =============================
 
+In this section we explore the pricing, accounting and settlement of storage services.
+We conclude that the fully featured version of the SWAP protocol is ideal to manage both
+unregistered use as well as registered use, delayed as well as immediate payments.
 
 Pricing
 ----------------
 
-We posited in the introduction that registered nodes should be allowed to compete on quality of service and factor their certainty of storage in their prices. Market pricing of storage is all the more important once we realise that unlike gas, system-wide fixed storage price is neither easy nor necessary.
+We posited in the introduction that registered nodes should be allowed to compete in quality of service and factor their certainty of storage in their prices. Market pricing of storage is all the more important once we realise that unlike gas, system-wide fixed storage price is neither easy nor necessary.
 
-Gas is the accounting unit of computation on the ethereum blockchain, it is paid in as ether sent with the transaction and paid out in ether to the miner as part of the protocol.
+:dfn:`Gas` is the accounting unit of computation on the ethereum blockchain, it is paid in as ether sent with the transaction and paid out in ether to the miner as part of the protocol.
 The actual price of gas for a block is fixed system-wide yet it is dictated by the market. It needs to be fixed since accounting for computation needs to be identical across all nodes of the network. It still can be dictated by the market since the miners the providers of the service gas is supposed to pay for, have a way to 'vote' on it. Miners of a block can change the gas price (based on how full the block is) [#]_ . Also such a mechanism of voting by service providers is not available. Note that in principle there is some information on the blockchain which could be used to inform prices: the number of (successful) litigations. If there is an increase in the percentage of litigations (number of proven charges normalised by the number of registered nodes), that is indication that system capacity is lower than the demand, therefore prices need to rise.
-The other direction, however, when prices need to decrease has no such indicator: due to the floor effect of no litigation (quite expected normal operation), information on the blockchain is inconsequential as to whether the storage is overpriced. Hence we conclude, fixed pricing of storage, is not viable without central authority or trusted third parties. Instead we assume that storage price is negotiated between peers, accepting the handshake and establishing a connection implicitly constitutes an arrangement.
+The other direction, however, when prices need to decrease has no such indicator: due to the floor effect of no litigation (quite expected normal operation), information on the blockchain is inconsequential as to whether the storage is overpriced.
 
 .. rubric:: Footnotes
 .. [#] To mitigate against extreme price volatilty, one can regulate the price by introducing restrictions on rate of change (absolute upper limit of percentage of change allowed from block to block).
+
+Hence we conclude that fixed pricing of storage is not viable without central authority or trusted third parties. Instead we assume that storage price is negotiated between peers and accepting the protocol handshake and establishing the swarm connection implicitly constitutes an arrangement.
+
 
 Deposit
 ---------------------
@@ -504,65 +521,49 @@ Deposit
 Another important decision is whether maximum deposits staked for a single chunk should vary independently of price. It is hard to conceptualise what this would mean in the first place. Assume that nodes' deposit varies and affects the probability that they are chosen as storers: a peer is chosen whose deposit is higher out of two advertising the same price. In this case, the nodes have an incentive to up the ante, and start a bidding war. In case of normal operation, this bidding would not be measuring confidence in quality of service but would simply reflect wealth.
 We conclude that prices should be variable and entirely up to the node, but higher confidence or certainty should also be reflected directly in the amount of deposit they stake: deposit staked per chunk should be a constant multiple of the price.
 
-Assuming  :math:`s` is a system-wide security constant dictating the ratio between price and deposit staked in case of loss, for an advertised price of :math:`p`, the minimum deposit [#]_ is :math:`d=s\cdot p`. Price per chunk per epoch is freely configurable and dictated by supply and demand in the free market.
+Assuming  :math:`s` is a system-wide security constant dictating the ratio between price and deposit staked in case of loss, for an advertised price of :math:`p`, the minimum deposit [#]_ is :math:`d=s\cdot p`. Price per chunk per epoch is freely configurable and dictated by supply and demand in the free market. Nodes are free to follow any price oracle or form cartels agreeing on price.
 
 .. rubric:: Footnotes
 .. [#] Although it never matters if the deposit is above the minimum, but it can happen that a peer wants to lower their price without liquidating their funds in anticipation of an opportunity to raise prices in the future.
 
 
-
 Accounting and settlement
 ------------------------------
 
-In the context of contractual agreements, forwarding of a chunk is equivalent to subcontracting for service provision that has a price. Since receipts are promises about the future, it is not in the interest of the buyer to pay before the promise is proved to have been kept. However, delayed payments without locked funds, storers are vulnerable to non-payment.
+In the context of contractual agreements, forwarding of a chunk is equivalent to subcontracting for service provision that has a price. Since receipts are promises about the future, it is not in the interest of the buyer to pay before the promise is proved to have been kept. However, delayed payments without locked funds leave storers vulnerable to non-payment.
 
-In order to lock funds nodes could use an escrow contract on the blockchain, however, burdening the blockchain with pairwise accounting is unnecessary. With a *two-way payment channel*, the parties can safely lock parts of their balance as well as do accounting off chain. Note that locking is not possible if we use SWAP only.
+In order to lock funds nodes could use an escrow contract on the blockchain, however, burdening the blockchain with pairwise accounting is unnecessary. With a :dfn:`two-way payment channel`, the parties can safely lock parts of their balance as well as do accounting off chain.
 
 .. index:: payment channel
 
 Advance payments (i.e., payment settled at the time of contracting, not after the storage period ends) on the other hand, leave the buyers vulnerable to cheating.
 Without limiting the total value of receipts that nodes can sell, a malicious node can collect more than their deposit and disappear. Though forfeiting their deposit, they walk away with a profit even though they broke their promise. Given a network size and a relatively steady demand for insured storage (in chunk epoch), the deposit could be set sufficiently high so this attack is no longer economical [#]_ .
 
-
 .. rubric:: Footnotes
 .. [#] This could be further improved by enforcing a fixed maximum total value of receipts one node can issue. Without central registry, we need to rely on the receipts. We stipulate that receipts issued by storers contain their cumulative volume of receipted promises (counted in chunk-epoch). They would also report that number to the blockchain every epoch and keep it under a threshold. The node is incentivised to underreport this number but that can be detected and punished (any node who received a higher number, sends their receipt to the blockchain). Likewise, it can also be detected if the node issued two subsequent receipts with non-increasing ranges, hence the current volume can be considered trusted. In the special case that each chunk is insured for the same length period, the current value of insured storage (counted in chunk-epochs) can be calculated since volume = cumulative volume - cumulative expired volume. Thanks to Nick Johnson for proposing this idea.
 
 Another idea is to allow payment by installments, which would similarly keep the total income under a threshold. However, this means that the validity of a receipt can no longer be established, since non-payment of any of the obligations would void the contract.
 
-If we can lock the total amount payable for the entire storage period, then
-secure delayed payment is acceptable as immediate settlement.
-Payment in installments possible and advantages
-automated escrow Release of funds tied to successful audit
-has the potential of using a system without depositing (positive only)
-automated regular release of partial funds shorter payout cycles mean increased liquidity,
+We can combine the best of both worlds. On the one hand we can lock the total price of storing a chunk for the entire storage period, and tie the release of funds to an escrow condition, eliminates the non-payment attack.
+As long as funds are locked and the escrow condition is acceptable for the storer, the settlement is immediate and they can safely issue a receipt for the entire storage period.
+Since payment is delayed it is no longer possible to collect funds before the work is complete, which eliminates a :dfn:`collect-and-run attack` entirely.
+Release of locked funds in installments can be tied to audits via the escrow release conditions, i.e., the installment is released on the condition that the node provides a proof of custody.
 
-Integration
----------------------
-
-With the design proposed here we established an implicit insurance system where:
-
-* All costs and obligations can be settled between connected peers.
-* Signed promises (commitments that can be used to initiate litigation) are available as immediate responses to store requests (syncing) and their validity is guaaranteed for the entire storage period.
-* The amount can be released in installments on the condition that the node provides a proof of custody.
-* Secured delayed payment with automated escrow is making collect-and-run attack impossible.
-
-The enhanced version of the SWAP chequebook is a perfect candidate for implementing these features.
-The handshake based price checking is analogous to what we use for retrieval prices.
-
-The purpose of the receipt is to prove that a node closer to the target chunk than the node itself received the chunk and will either store it or forward it.
-This is exactly what synchronisation does, therefore, proving (in)correct synchronisation is
-a potential substitute for receipt based litigation.
-
-If we stipulate that registered nodes need to sign sync state and able to prove a particular chunk was part of the synced batch, we can get away without storing individual receipts altogether and implement the persistence of receipts as part of the chunkstore mechanism on the one hand and the passing of receipts as part of the syncing mechanism on the other.
-
-An advantage of using sync tokens as receipts is that when litigation takes place, one can point fingers to a node which already had the chunk at the time of syncing.
-
+The enhanced version of the SWAP protocol uses a fully-fledged state-channel/payment channel beside the chequebook and is a perfect candidate for implementing these features.
+The blockchain implementation and configuration of the payment channel, registration and litigation is discussed in a separate paper.
 
 *************************
 Conclusion
 *************************
 
+This paper explored ways of incentivising smooth operation in a peer to peer document storage and content delivery system and honed in on a particular proposal for swarm, an ethereum base layer service.
+Our approach uses SWAP, the Swarm Accounting Protocol to do pairwise accounting of micropayments relevant in charging for bandwidth. The channel allows swapping service for service  in chunk retrieval and allows joining the network without funds. A chequebook contract is used to issue cheques as instruments of delayed payments, which can be cashed by the counterparty at any point to redeem promised funds as long as the sender is solvent.
+Data preservation in long term storage is incentivised on an individual level both by compensation as well as penalty in case of chunk loss. The loss of insured tokens is a major offence punishable by suspension of account and forfeiture of application-global deposit.
+Various ways of escrow conditions on the release of funds are able to capture quite a few usecases including pay in installments depending on successful audit. Swarm secures storage with proof of custody audits, valid audits can be tied to escrow conditions of delayed payments. Combine it with locked funds, immediate settlement and receipting, ad it offers the upload and disappear mode of operandi.
+We presented a technique of erasure coding applicable to the swarm hash tree, which makes it possible for clients to manage the level of storage security and redundancy within their own remit.
+
+
 
 .. bibliography:: sw^3.bib
    :cited:
-   :style: plain
+   :style: alpha

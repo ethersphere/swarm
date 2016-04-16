@@ -177,7 +177,7 @@ html_static_path = ['_static']
 html_domain_indices = False
 
 # If false, no index is generated.
-#html_use_index = True
+html_use_index = False
 
 # If true, the index is split into individual pages for each letter.
 #html_split_index = False
@@ -269,6 +269,8 @@ latex_logo = "swarm-logo.jpg"
 # For "manual" documents, if this is true, then toplevel headings are parts,
 # not chapters.
 #latex_use_parts = False
+
+latex_use_index = False
 
 # If true, show page references after internal links.
 #latex_show_pagerefs = False
