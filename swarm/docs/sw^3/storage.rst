@@ -475,6 +475,22 @@ This will likely be the receipt(s) that the owner received directly from the gua
 .. [#] There is no measure to prevent double receipting, i.e., the same node can sell storage insurance about the same chunks to different parties.
 
 If a node is unable to produce either the refutation or the receipts, it is considered a proof that the node had the chunk, should have kept it but deleted it. This process will end up blaming a single node for the loss. We call these landing nodes :dfn:`custodians`. If syncronisation was correctly followed and all the nodes forwarding kept their receipt, then eventually the blame will point to the node that was closest to the chunk to be stored at the time the request was received.
+if an audit request for a a chunk is not responded to, the audit request is delegated to the guardian, and travels the same trajectory as that the original store request. Analogously, if
+a chunk is not found and the case is escalated to litigation on the blockchain, then finger pointing will also follow the same path (see :numref:`Figure %s <fig:forwarding>`) [#]_ .
+
+.. rubric:: Footnotes
+.. [#] In the latter case the transaction is more metaphorical, finger pointing is mediated by state changes in the blockchain: when a node gets notified of a challenge (via a log event) they are sending in their receipts as a refutation.
+
+
+..  _fig:forwarding:
+
+..  figure:: fig/forwarding.pdf
+    :align: center
+    :alt: chain of local peer to peer interactions
+    :figclass: align-center
+
+    The chain edges represent local transactions between connected peers. In normal operation (left side) these transactions involve the farther nodes (1) sending store request (2) receiving delivery request (3) sending payment (4) receiving a receipt. On the right side, following a failed lookup (middle), the guardian is sent an audit/request and the edges correspond to audit requests forwarded to the peer that the node originally got the receipt from. Analogously when a case is escalated to litigation on the blockchain, the chain of challenges follow the same trajectory.
+
 
 When the network grows, it can happen that a custodian finds a new registered node closer to its chunk. This means they need to forward the original store request, the moment they obtain a receipt they can use it in finger pointing, they cease to be custodians and the ball is in the new custodian's court.
 
