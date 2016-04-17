@@ -15,8 +15,8 @@
 %   (node1.west) edge[pil, <-, bend left=45] node[left=3pt] {finger point} (guardian.south)
 ;
 
-  
-\node[punkt, text width=6em] (pseudo) at (3.4,-8.8) {closest node};  
+
+\node[punkt, text width=6em] (pseudo) at (6.4,-11.8) {closest node};
 %
 % \node[node] (node2) at (4,-3) {node}
 %   (node2.east) edge[pil, <-, dashed, bend right=45] node[right=1pt] {finger point} (node1.-60);
@@ -24,8 +24,8 @@
 \node[punkt] (retriever) at (10,-1) {retriever}
   edge[pil, ->, bend right=10] node[left=1pt]{retrieval} node[right=1pt]{ request} (node3);
 % \node[punkt] (pseudo) at (3.4,-8.8) {closest node};
-\node[punkt] (custodian) at (2.5,-6) {custodian}
-(custodian.-15) edge[pil,dashed, bend left=30, <->] node[auto]{
+\node[punkt] (custodian) at (5.5,-9) {custodian}
+(custodian.-15) edge[pil,dashed, bend left=30, <->] node[right]{
   \begin{tabular}{c}missing\\ link\end{tabular}
   }(pseudo)
 %   (node4.west) edge[pil,dashed] (custodian)
@@ -38,18 +38,18 @@
   (node4.south) edge[pil, ->, bend left=45] node[left=3pt]{failed}node[right=1pt]{ retrieval}(pseudo.east)
   (node4.north) edge[pil,<-,dashed, bend left=15] node[auto]{forwarding}(node3);
 
-% \node (chunklabel) at (3.5,-4) {chunk address};  
+% \node (chunklabel) at (3.5,-4) {chunk address};
 % \node (chunk) at (4.2,-5.5) {$\bullet$}
-%  edge[pil, <-] (chunklabel.south);  
+%  edge[pil, <-] (chunklabel.south);
 % \node[draw, shape=circle, dotted, minimum size=6.5cm] at (chunk) {};
 
 % \node at (5.5,-4.5) {most proximate};
 
-\node (chunklabel) at (1,-7) {chunk address};  
-\node (chunk) at (3,-8) {$\bullet$}
+\node (chunklabel) at (4,-10) {chunk address};
+\node (chunk) at (6,-11) {$\bullet$}
  edge[pil, <-] (chunklabel.south east)
- 
- ;  
+
+ ;
 
 
 
