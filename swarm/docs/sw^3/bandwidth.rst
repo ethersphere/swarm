@@ -2,11 +2,11 @@
 Bandwidth Incentives
 ************************
 
-The ultimate goal of swarm is that end users are served content in a safe and speedy fashion. The underlying unit of accounting must be a uniformly sized chunk of data (henceforth, simply :dfn:`chunk`) since this is the delivery unit that is sourced from a single independent entity. We start from the simplest assumption that delivery of a chunk is a valueable service which is directly chargeable when a chunk is delivered to a node that sent a retrieve request.
+The ultimate goal of swarm is that end users are served content in a safe and speedy fashion. The underlying unit of accounting must be a uniformly sized chunk of data (henceforth, simply :dfn:`chunk`) since this is the delivery unit that is sourced from a single independent entity. We start from the simplest assumption that delivery of a chunk is a valuable service which is directly chargeable when a chunk is delivered to a node that sent a retrieve request.
 
 Swarm is organized as a :dfn:`content-addressed chunkstore`, whereby the addresses of chunks are derived from their hash value and come from the same address space as those of participating nodes. Thus, the same distance metric can be applied between nodes, between chunks and between a node and a chunk.
 
-From a certain node's perspective, the probability of a given chunk being ever requested is proportional to the inverse of its distance from it (the distance, in turn, can be interpreted as the risk of it not being requested). In other words, following the underlying routing protocol by itself incentivises nodes to prefer chunks that are closer to their own address.
+From the perspective of any individual node, the probability of a given chunk being ever requested is proportional to the inverse of its distance from it (the distance, in turn, can be interpreted as the risk of it not being requested). In other words, following the underlying routing protocol by itself incentivises nodes to prefer chunks that are closer to their own address.
 
 In the first iteration, we further assume that nodes have no preference as to which chunks to store other than their access count which is a reasonable predictor of their profitability. As a corollary, this entails that store requests are accepted by nodes irrespective of the chunk they try to store.
 
@@ -106,8 +106,8 @@ The long term use of a chequebook provides a credit history, use without failure
 ..  index::
   reputation system
 
-:dfn:`SWAP` can also use a fully featured :dfn:`payment channel` as mode of payment. A SWAP payment channel is an agreement between two peers to maintain an etherbalance for pairwise accounting. This allows for secure offchain transactions and delayed updates where the release of locked funds is potentially contrained by escrow conditions. The channel contract can be extended to accept cheques.
-Both the chequebook and channel contracts have withdrawal rules where the release of funds is authorized only after a successful freeze period during which the counterparty can prove that the state on the blockchain is not uptodate. The details of SWAP and the channel contract will be published in a separate paper (:cite:`ethersphere2016swap`).
+:dfn:`SWAP` can also use a fully featured :dfn:`payment channel` as mode of payment. A SWAP payment channel is an agreement between two peers to maintain an ether balance for pairwise accounting. This allows for secure offchain transactions and delayed updates where the release of locked funds is potentially contrained by escrow conditions. The channel contract can be extended to accept cheques.
+Both the chequebook and channel contracts have withdrawal rules where the release of funds is authorized only after a successful freeze period during which the counterparty can update the state on the blockchain with the last consensus. The details of SWAP and the channel contract will be published in a separate paper (:cite:`ethersphere2016swap`).
 
 
 

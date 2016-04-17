@@ -1,3 +1,5 @@
+.. _sec:storage:
+
 ******************************
 Storage Incentives
 ******************************
@@ -59,8 +61,9 @@ More importantly, however, Filecoin provides only a scheme to collectively incen
 
 To summarise, we consider positive incentivisation in itself insufficient for ensured archival. In addition to that collective positive incentivisation implemented by competitive proof of retrievability mining is wasteful in terms of network traffic, computational resources as well as blockchain storage. In the subsequent sections we will introduce a different approach.
 
+
 Compensation for storage and guarantees for long-term data preservation
-========================================================================
+===========================================================================
 
 While Swarm's core storage component is analogous to traditional DHTs both in terms of network topology and routing used in retrieval, it uses the narrowest interpretation of immutable content addressed archive. Instead of just metadata about the whereabouts of the addressed content, the proximate nodes actually store the data itself.
 When a new chunk enters the swarm storage network, it is propagated from node to node via a process called 'syncing'. The goal is for chunks to end up at nodes whose address is closest to the chunk hash. This way chunks can be located later for retrieval using kademlia key-based routing.
@@ -73,9 +76,6 @@ The primary incentive mechanism in swarm is compensation for retrieval where nod
 
 The flipside of using only this incentive on it own is that chunks that are rarely retrieved may end up lost. If a chunk is not being accessed for a long time, then as a result of limited storage capacity it will eventually end up garbage collected to make room for new arrivals. In order for the swarm to guarantee long-term availability, the incentive system needs to make sure that additional revenue is generated for chunks that would otherwise be deleted. In other words, unpopular chunks that do not generate sufficient profit from retrievals should compensate the nodes that store them for their opportunities forgone.
 
-Basics of storage incentivisation
-------------------------------------------------
-
 A long-term storage incentivisation scheme faces unique challenges. For example, unlike in the case of bandwidth incentives where retrievals are immediately accounted and settled, long-term storage guarantees are promisory in nature and deciding if the promise was kept can only be decided at the end of its validity. Loss of reputation is not an available deterrent against foul play in these instances: since new nodes need to be allowed to provide services right away, cheaters could just resort to new identities and keep selling (empty) storage promises.
 
 ..  index::
@@ -87,12 +87,9 @@ Instead, we need punitive measures to ensure compliance with storage promises. T
 
 Following :dfn:`registration`, a node may sell storage promises covering the time period for which their funds are locked. While their registration is active, if they are found to have lost a chunk that was covered by their promise, they stand to loose their deposit.
 
-Requirements
--------------
-
 In this context, :dfn:`owner` refers to the originator of a chunk (the one that uploads a document to the swarm), while :dfn:`storer` refers to a swarm node that actually stores the given chunk.
 
- Let us start from some reasonable usage requirements:
+ Let us start from some reasonable guiding principles:
 
 * owners need to express their risk preference when submitting to storage
 * storers need to express their risk preference when committing to storage
