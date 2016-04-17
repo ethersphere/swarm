@@ -15,15 +15,15 @@
 \node[node, below=of rog] (node1) {node}
   (node1.west) edge[pil, <-, bend left=45] node[left=5pt] {\begin{tabular}{r}finger point /\\\quad audit request\end{tabular}} (guardian.south);
 
-  
-\node[punkt, text width=6em] (pseudo) at (3.4,-8.8) {closest node};  
+
+\node[punkt, text width=6em] (pseudo) at (3.4,-8.8) {closest node};
 %
 \node[node] (node2) at (4,-3) {node}
   (node2.north east) edge[pil, <-, dashed, bend right=45] node[right=-12pt] {
   \begin{tabular}{r}finger point /\\\quad audit request\end{tabular}
   } (node1.south east);
 % \node[node] (node3) at (9,-4) {node};
-\node[punkt] (retriever) at (10,-1) {retriever}
+\node[punkt] (retriever) at (4.5,2) {retriever}
 %   edge[pil, ->, bend right=10] node[left=1pt]{retrieval} node[right=1pt]{ request} (node3)
   ;
 % \node[punkt] (pseudo) at (3.4,-8.8) {closest node};
@@ -41,19 +41,19 @@
 %   (node4.south) edge[pil, ->, bend left=45] node[left=3pt]{failed}node[right=1pt]{ retrieval}(pseudo.east)
 %   (node4.north) edge[pil,<-,dashed, bend left=15] node[auto]{forwarding}(node3);
 
-% \node (chunklabel) at (3.5,-4) {chunk address};  
+% \node (chunklabel) at (3.5,-4) {chunk address};
 % \node (chunk) at (4.2,-5.5) {$\bullet$}
-%  edge[pil, <-] (chunklabel.south);  
+%  edge[pil, <-] (chunklabel.south);
 % \node[draw, shape=circle, dotted, minimum size=6.5cm] at (chunk) {};
 
 % \node at (5.5,-4.5) {most proximate};
 
-\node (chunklabel) at (1,-7) {chunk address};  
+\node (chunklabel) at (1,-7) {chunk address};
 \node (chunk) at (3,-8) {$\bullet$}
  edge[pil, <-] (chunklabel.south east)
- (retriever.west) edge[pil, ->, bend right=15] node[above=2pt]{accusation} (guardian)
- 
- 
- ;  
+ (retriever.west) edge[pil, ->, bend right=15] node[left=4pt]{accusation} (guardian)
+
+
+ ;
 
 \end{tikzpicture}

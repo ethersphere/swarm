@@ -1,7 +1,7 @@
 
 \documentclass{standalone}
 \usepackage{tikz}
-\usetikzlibrary{arrows,positioning} 
+\usetikzlibrary{arrows,positioning}
 \tikzset{
     %Define standard arrow tip
     >=stealth',
@@ -23,7 +23,7 @@
     node/.style={
            rectangle,
            rounded corners,
-           draw=black, 
+           draw=black,
            text width=4.5em,
            minimum height=2em,
            text centered,
@@ -34,19 +34,19 @@
            thick,
            shorten <=2pt,
            shorten >=2pt,}
-every node/.style={align=center}           
+every node/.style={align=center}
 }
 
 \begin{document}
 
 \begin{tikzpicture}
-% \node[scale=0.25] at (0,0) {
+% \node at (0,0) {
 % \input{normalops.tex}
 % };
-\node[scale=0.25] at (0,0) {
+\node[scale=0.8] at (-2,0) {
 \input{failedretrieve.tex}
 };
-\node[scale=0.25] at (3.5,0) {
+\node[scale=0.8] at (5,0) {
 \input{accuse.tex}
 };
 \end{tikzpicture}
