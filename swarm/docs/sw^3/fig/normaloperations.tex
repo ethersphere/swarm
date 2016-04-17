@@ -1,0 +1,53 @@
+
+\documentclass{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows,positioning} 
+\tikzset{
+    %Define standard arrow tip
+    >=stealth',
+    %Define style for boxes
+    punkt/.style={
+           rectangle,
+           rounded corners,
+           draw=black, thick,
+           text width=4.5em,
+           minimum height=2em,
+           text centered},
+    node/.style={
+           rectangle,
+           rounded corners,
+           draw=black, thin,
+           text width=3.5em,
+           minimum height=2em,
+           text centered},
+    node/.style={
+           rectangle,
+           rounded corners,
+           draw=black, 
+           text width=4.5em,
+           minimum height=2em,
+           text centered,
+           fill={rgb:black,1;white,3}},
+    % Define arrow style
+    pil/.style={
+           ->,
+           thick,
+           shorten <=2pt,
+           shorten >=2pt,}
+every node/.style={align=center}           
+}
+
+\begin{document}
+
+\begin{tikzpicture}
+\node[scale=0.25] at (0,0) {
+\input{normalops.tex}
+};
+% \node[scale=0.25] at (3,0) {
+% \input{failedretrieve.tex}
+% };
+% \node[scale=0.25] at (6,0) {
+% \input{accuse.tex}
+% };
+\end{tikzpicture}
+\end{document}
