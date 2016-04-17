@@ -479,7 +479,7 @@ if an audit request for a a chunk is not responded to, the audit request is dele
 a chunk is not found and the case is escalated to litigation on the blockchain, then finger pointing will also follow the same path (see :numref:`Figure %s <fig:forwarding>`) [#]_ .
 
 .. rubric:: Footnotes
-.. [#] In the latter case the transaction is more metaphorical, finger pointing is mediated by state changes in the blockchain: when a node gets notified of a challenge (via a log event) they are sending in their receipts as a refutation.
+.. [#] In the latter case the transaction is more metaphorical, finger pointing is mediated by state changes in the blockchain: when a node gets notified of a challenge (via a log event) they are sending in their receipts as a refutation and as a result the new closer node gets challenged.
 
 
 ..  _fig:forwarding:
