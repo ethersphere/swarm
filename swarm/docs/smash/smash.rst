@@ -594,9 +594,9 @@ We outlined an auditing and litigation protocol which
 * helps nodes identify greedy peers that do not forward chunks
 * offer a way to repair improper syncronisation state
 
-.. bibliography:: smash.bib
+.. bibliography:: ../refs.bib
    :cited:
-   :style: plain
+   :style: alpha
 
 .. apalike not available so boring
 
