@@ -108,7 +108,7 @@ The long term use of a chequebook provides a credit history, use without failure
 ..  index::
   reputation system
 
-:dfn:`SWAP` can also use a fully featured :dfn:`payment channel` as mode of payment. A SWAP payment channel is an agreement between two peers to maintain an ether balance for pairwise accounting. This allows for secure offchain transactions and delayed updates where the release of locked funds is potentially contrained by escrow conditions. The channel contract can be extended to accept cheques.
+:dfn:`SWAP` can also use a fully featured :dfn:`payment channel` as mode of payment. A SWAP payment channel is an agreement between two peers to maintain an ether balance for pairwise accounting. This allows for secure offchain transactions and delayed updates where the release of locked funds is potentially constrained by escrow conditions. The channel contract can be extended to accept cheques.
 Both the chequebook and channel contracts have withdrawal rules where the release of funds is authorized only after a successful freeze period during which the counterparty can update the state on the blockchain with the last consensus. The details of SWAP and the channel contract will be published in a separate paper (:cite:`ethersphere2016swap`).
 
 

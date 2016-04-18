@@ -209,7 +209,7 @@ The :dfn:`chunker` algorithm using :math:`mc` CRS coding would proceed the follo
 
 Assuming we fix the branching factor of the swarm hash (chunker) as :math:`n=128` and :math:`h=32` as the size of the :dfn:`SHA3 Keccak hash`. This gives us a chunk size of :math:`4096` bytes.
 
-Let us now suppose that we start splitting out inpuy document data into chunks, and after each :math:`m` chunks then add :math:`k=n-m` parity check pieces using a Reed-Solomon code so that now any :math:`m\text{-out-of-}n` chunks are
+Let us now suppose that we start splitting out input document data into chunks, and after each :math:`m` chunks then add :math:`k=n-m` parity check pieces using a Reed-Solomon code so that now any :math:`m\text{-out-of-}n` chunks are
 sufficient to reconstruct the document. On the next level up the chunks are composed of the hashes of the :math:`m`  data chunks and the :math:`k` hashes of the parity chunks. Let’s take the first :math:`m`
 of these and add an additional :math:`k` parity chunks to those such that any :math:`m` of the resulting :math:`n`
 chunks are sufficient to reconstruct the origial :math:`m` chunks. And so on and on every level. In terms of
@@ -226,12 +226,12 @@ A typical piece of our tree would look like this: (:numref:`Figure %s <fig:tree-
     :alt: the swarm tree with erasure coding
     :figclass: align-center
 
-    The swarm tree with extra parity chunks using 100 out of 128 CRS code. Chunks :math:`p^{101}` through :math:`p^{128}` are parity data for chunks :math:`h^1_1 - h^1_{128}` through :math:`h^{100}_1  - h^{100}_{128}`.
+    The swarm tree with extra parity chunks using :math:`m` out of 128 CRS code. Chunks :math:`p^{m+1}` through :math:`p^{128}` are parity data for chunks :math:`h^1_1 - h^1_{128}` through :math:`h^{m}_1  - h^{m}_{128}`.
 
 
 Two things to note
 
- * This pattern repeats itself all the way down the tree. Thus hashes :math:`h^1_{101}` through :math:`h^1_{128}` point to parity data for chunks pointed to by :math:`h^1_1` through :math:`h^1_{100}`.
+ * This pattern repeats itself all the way down the tree. Thus hashes :math:`h^1_{m+1}` through :math:`h^1_{128}` point to parity data for chunks pointed to by :math:`h^1_1` through :math:`h^1_{m}`.
  * Parity chunks :math:`p^i` do not have children and so the tree structure does not have uniform depth.
 
 The special case of the last chunks in each row
