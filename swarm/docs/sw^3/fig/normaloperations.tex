@@ -41,13 +41,37 @@ every node/.style={align=center}
 
 \begin{tikzpicture}
 \node at (0,0) {
-\input{normalops.tex}
+\begin{tikzpicture}[node distance=1cm, auto,]
+
+
+%owner
+\node[punkt] at (-2,0) (owner) {owner};
+
+%guardian, arrow from owner
+\node[punkt, right=2cm of owner] (guardian) {guardian}
+  edge[pil, <-] node[auto] {\begin{tabular}{c}\small{store} \\\small{request}\end{tabular}} (owner);
+
+%node after guardian - arrow to node
+\node[right=2cm of guardian] (rog) {};
+\node[node, below=of rog] (node1) {node}
+  edge[pil, <-, bend right=30] node[right=3pt] {forwarding} (guardian.east);
+
+%
+\node[node] (node2) at (4,-3) {node}
+  (node2.east) edge[pil, <-, dashed, bend right=45] node[right=1pt] {forwarding} (node1.-60);
+\node[node] (node3) at (9,-4) {node};
+\node[punkt] (retriever) at (10,-1) {retriever}
+  edge[pil, ->, bend right=10] node[left=1pt]{retrieval} node[right=1pt]{ request} (node3);
+\node[punkt] (custodian) at (2.5,-6) {custodian}
+  (custodian.west) edge[pil, <-, bend left=70] node[auto]{forwarding} (node2.west);
+\node[node] (node4) at (8,-6) {node}
+  (node4.south west) edge[pil, ->, bend left=45] node[above=1pt]{retrieval}(custodian.south east)
+  (node4.north) edge[pil,<-,dashed, bend left=15] node[auto]{forwarding}(node3);
+
+\node (chunklabel) at (3.5,-4) {chunk address};
+\node (chunk) at (4.2,-5.5) {$\bullet$}
+ edge[pil, <-] (chunklabel.south);
+\end{tikzpicture}
 };
-% \node[scale=0.25] at (3,0) {
-% \input{failedretrieve.tex}
-% };
-% \node[scale=0.25] at (6,0) {
-% \input{accuse.tex}
-% };
 \end{tikzpicture}
 \end{document}

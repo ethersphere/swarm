@@ -131,7 +131,7 @@ In what follows we will elaborate on a class of incentive schemes we call :dfn:`
 
 As we go along, these names will reveal their secondary meanings.
 
-Security begins at home and so the first step in securing data begins with the owner; this is the topic of the following section. Then in section :ref:`sec:swear` we describe how the owner hands over custody of their data to registered nodes in the swarm subject to an insurance contract. Finally, in section :ref:`sec:swindle:`, we turn to how such insurance is enforced by the ethereum smart contract based litigation system (SWINDLE).
+Security begins at home and so the first step in securing data begins with the owner; this is the topic of the following section. Then in section :ref:`sec:swear` we describe how the owner hands over custody of their data to registered nodes in the swarm subject to an insurance contract. Finally, in section :ref:`sec:swindle`, we turn to how such insurance is enforced by the ethereum smart contract based litigation system (SWINDLE).
 
 Owner-side handling of storage redundancy
 ==============================================================================
@@ -201,11 +201,11 @@ The :dfn:`chunker` algorithm using :math:`mc` CRS coding would proceed the follo
  1. Set input to the data blob.
  2. Read the input one chunk (say fixed 4096 bytes) at a time. Count the chunks by incrementing :math:`i`. The last chunk read may be shorter.
  3. Repeat 2 until there's no more data or :math:`i \equiv 0` mod :math:`m`
- 5. use the CRS scheme on the last :math:`i \mod\ m` chunks to produce :math:`k` parity chunks resulting in a total of :math:`n \leq m+k` chunks.
- 6. Calculate the hashes of all the these chunks and concatenate then to result in the next chunk (of size :math:`i\mod m` of the next level. Record this chunk as the next
- 7. If there is more data repeat 2. otherwise
- 8. If the next level data blob has more than one chunk, set the input to this and  repeat from 2.
- 9. Otherwise remember the blob as the root chunk.
+ 4. use the CRS scheme on the last :math:`i \mod\ m` chunks to produce :math:`k` parity chunks resulting in a total of :math:`n \leq m+k` chunks.
+ . Calculate the hashes of all the these chunks and concatenate then to result in the next chunk (of size :math:`i\mod m` of the next level. Record this chunk as the next
+ 6. If there is more data repeat 2. otherwise
+ 7. If the next level data blob has more than one chunk, set the input to this and  repeat from 2.
+ 8. Otherwise remember the blob as the root chunk.
 
 Assuming we fix the branching factor of the swarm hash (chunker) as :math:`n=128` and :math:`h=32` as the size of the :dfn:`SHA3 Keccak hash`. This gives us a chunk size of :math:`4096` bytes.
 
@@ -266,20 +266,20 @@ Self healing
   Any client downloading a file from the swarm can detect if a chunk has been lost. The client can reconstruct the file from the parity data (or reconstruct the parity data from the file) and resync this data into the swarm. That way, even if a large fraction of the swarm is wiped out simultaneously, this process should allow an organic healing process to occur and it is encouraged that the default client behavior should be to repair any damage detected.
 
 Improving latecy of retrievals
-  Alpha is the name the original :dfn:`Kademlia` (:cite:`kademlia`) gives to the number of peers in a Kademlia bin that are queried simultaneously during a lookup. The original Kademlia paper sets alpha=3. This is impractical for Swarm because the peers do not report back with new addresses as they would do in pure Kademlia but instead forward all queries to their peers. Swarm is coded in this way to make use of semi-stable longer-term devp2p connections. Setting alpha to anything greater than 1 thus increases the amount of network traffic substantially – setting up an exponential cascade of forwarded lookups (but it would soon collapse back down onto the target of the lookup).
+  Alpha is the name the original :dfn:`Kademlia` (:cite:`maymounkov2002kademlia`) gives to the number of peers in a Kademlia bin that are queried simultaneously during a lookup. The original Kademlia paper sets alpha=3. This is impractical for Swarm because the peers do not report back with new addresses as they would do in pure Kademlia but instead forward all queries to their peers. Swarm is coded in this way to make use of semi-stable longer-term devp2p connections. Setting alpha to anything greater than 1 thus increases the amount of network traffic substantially – setting up an exponential cascade of forwarded lookups (but it would soon collapse back down onto the target of the lookup).
 
   However, setting alpha=1 has its own downsides. For instance, lookups can stall if they are forwarded to a dead node and even if all nodes are live, there could be large delays before a query is complete.
 
   In an erasure coded setting we can in a sense have a best of both worlds. Issueing a lookup request not just for the data chunks but for the parity chunks, the client could accept the first :math:`m` of every 128 chunks queried to get some of the same benefits of faster retrieval that redundant lookups provide without a whole exponential cascade.
 
-..  sec:swear:
+..  _sec:swear:
 
-Registered nodes and Ensured archival (SWEAR)
+Registered nodes and Ensured ARchival (SWEAR)
 ===================================================
 
 
 Once the owner has prepared their data they upload the chunks to the swarm where they are replicated and stored. To decrease the risk that the data will be lost, the owner may purchase storage promises from other nodes as a form of insurance.
-Before a node can sell these promises of long-term storage however, it must first register via a contract on the blockchain we call the :dfn:`SWEAR` (Secure Ways of Ensuring ARchival or SWarm Enforcement and Registration) contract.
+Before a node can sell these promises of long-term storage however, it must first register via a contract on the blockchain we call the :dfn:`SWEAR` (Secure Ways of Ensuring ARchival or SWarm Enforcement And Registration) contract.
 The :abbr:`SWEAR (Secure Ways of Ensuring ARchival)` contract allows nodes to register their public key to become accountable participants in the swarm by putting up a deposit. Registration is done by sending the deposit to the SWEAR contract, which serves as colleteral if terms that registered nodes 'swear' to keep are violated (i.e., nodes do not keep their promise to store).
 :dfn:`Registration` is valid only for a set period, at the end of which a swarm node is entitled to their deposit.
 Users of Swarm should be able to count on the loss of deposit as a disincentive against foul play as long as enrolled status is granted. As a result the deposit must not be refunded before the registration expires.
@@ -290,13 +290,13 @@ Users of Swarm should be able to count on the loss of deposit as a disincentive 
 
 Registration in swarm is not compulsory, it is only necessary if the node wishes to sell promises of storage. Nodes that only charge for retrieval can operate unregistered. The incentive to register and sign promises is that they can be sold for profit. When a peer connection is established, the contract state is queried to check if the remote peer is a registered node. Only registered nodes are allowed to issue valid receipts and charge for storage.
 
-When a registered node receives a request to store a chunk, it can acknowledge accepting it with a signed receipt. It is these signed receipts that are used to enforce penalties for loss of content through the :abbr:`SWEAR (SWarm Enforcement and Registration)` contract. Because of the locked collateral backing them, the receipts  can be viewed as secured promises for storing and serving a particular chunk up until a particular date. It is these receipts that are sold to nodes initiating requests.
+When a registered node receives a request to store a chunk, it can acknowledge accepting it with a signed receipt. It is these signed receipts that are used to enforce penalties for loss of content through the :abbr:`SWEAR (SWarm Enforcement And Registration)` contract. Because of the locked collateral backing them, the receipts  can be viewed as secured promises for storing and serving a particular chunk up until a particular date. It is these receipts that are sold to nodes initiating requests.
 In some schemes the issuer of a receipt can in turn buy further promises from other nodes pontentially leading to a chain of local contracts.
 
 If on litigation it turns out that a chunk (covered by a promise) was lost, the deposit must be at least partly burned. Note that this is necessary because if penalites were paid out as compensation to holders of receipts of lost chunks, it would provide an avenue of early exit for a registered node by "losing" bogus chunks deposited by colluding users. Since users of Swarm are interested in their information being reliably stored, their primary incentive for keeping the receipts is to keep the Swarm motivated, not the potential for compensation.
 If deposits are substantial, we can get away with paying out compensation for initiating litigation, however we must have the majority (say 95%) of the deposit burned in order to make sure the easy exit route remains closed.
 
-..  sec:swindle:
+..  _sec:swindle:
 
 Litigation on loss of content (SWINDLE)
 ========================================
@@ -489,7 +489,7 @@ a chunk is not found and the case is escalated to litigation on the blockchain, 
     :alt: chain of local peer to peer interactions
     :figclass: align-center
 
-    The arrows represent local transactions between connected peers. In normal operation these transactions involve the farther nodes (1) sending store request (2) receiving delivery request (3) sending payment (4) receiving a receipt.
+    The arrows represent local transactions between connected peers. In normal operation these transactions involve the farther nodes (1) sending store request (2) receiving delivery request (3) sending chunk (4) sending payment (5) receiving a receipt.
 
 ..  _fig:failure-and-audit:
 

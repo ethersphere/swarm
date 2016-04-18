@@ -11,4 +11,4 @@
 
 
 .. rubric:: Footnotes
-.. [#] The authors are indebted to Gavid Wood, Vitalik Buterin and Jeffrey Wilcke for their daring  vision of the next generation internet and for their original concepts of web 3 and swarm. We thank Nick Johnson and Andras Kornai for their meticulous review of this paper.
+.. [#] The authors are indebted to Gavin Wood, Vitalik Buterin and Jeffrey Wilcke for their daring  vision of the next generation internet and for their original concepts of web 3 and swarm. We thank Vitalik Buterin, Nick Johnson and Andras Kornai for their meticulous review of this paper.

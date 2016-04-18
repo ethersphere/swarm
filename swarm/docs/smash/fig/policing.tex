@@ -1,0 +1,71 @@
+
+\documentclass{standalone}
+\usepackage{tikz}
+\usetikzlibrary{arrows,positioning}
+\tikzset{
+    %Define standard arrow tip
+    >=stealth',
+    %Define style for boxes
+    punkt/.style={
+           rectangle,
+           rounded corners,
+           draw=black, thick,
+           text width=4.5em,
+           minimum height=2em,
+           text centered},
+    node/.style={
+           rectangle,
+           rounded corners,
+           draw=black, thin,
+           text width=3.5em,
+           minimum height=2em,
+           text centered},
+    node/.style={
+           rectangle,
+           rounded corners,
+           draw=black,
+           text width=4.5em,
+           minimum height=2em,
+           text centered,
+           fill={rgb:black,1;white,3}},
+    % Define arrow style
+    pil/.style={
+           ->,
+           thick,
+           shorten <=2pt,
+           shorten >=2pt,}
+every node/.style={align=center}
+}
+
+\begin{document}
+
+\begin{tikzpicture}
+\node[scale=0.8] at (0,0) {
+\begin{tikzpicture}[node distance=1cm, auto,]
+\node[node] (node3) at (-5,-3.5) {node};
+\node[punkt] (auditor) at (-2,-1) {auditor}
+  (auditor.west) edge[pil, ->, bend right=45] node[auto] {challenge}  (node3.north);
+\node[node] (node4) at (-5,-6)   {node}
+  (node4.north) edge[pil,<-,dashed, bend left=15] node[auto]{forwarding}(node3);
+\node[punkt] (guardian) at (5, -4) {guardian};
+%node after guardian - arrow to node
+\node[node] (node1) at (2, -1) {node}
+  (node1.east) edge[pil, <-, bend left=40] node[left=5pt] {challenge} (guardian.north);
+\node[punkt, text width=6em] (pseudo) at (-1,-9) {closest node};
+%
+\node[node] (node2) at (2,-3.5) {node}
+  (node2.west) edge[pil, <-, dashed, bend left=90   ] node[right=-12pt] {challenge} (node1.west);
+\node[punkt] (custodian) at (-1,-6) {custodian}
+(custodian.south) edge[pil,dashed, bend left=10, <->] node[left=3pt]{
+  \begin{tabular}{c}missing\\ link\end{tabular}
+  }(pseudo.north)
+  (custodian.east) edge[pil, <-, bend right=45] node[right]{challenge} (node2.south);
+\node (chunklabel) at (2,-7) {chunk address};
+\node (chunk) at (1,-8) {$\bullet$}
+ edge[pil, <-] (chunklabel.south)
+ (pseudo.east) edge[pil, ->, bend right=45] node[right=4pt]{challenge} (guardian.south)
+  (node4.south) edge[pil, ->, bend right=45] node[left=3pt]{failed}  node[right=1pt]{ audit} (pseudo.west);
+\end{tikzpicture}
+};
+\end{tikzpicture}
+\end{document}

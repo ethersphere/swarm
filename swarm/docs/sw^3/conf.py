@@ -230,6 +230,7 @@ latex_elements = {
 # Additional stuff for the LaTeX preamble.
 'preamble': '\\setcounter{secnumdepth}{5}',
 
+'printindex': '',
 # Latex figure (float) alignment
 #'figure_align': 'htbp',
 'fncychap': '',

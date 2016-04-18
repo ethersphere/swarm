@@ -216,7 +216,7 @@ If an auditor maliciously published a false ASH, then a storer would find that t
 Masked audit secret hash (MASH) tree
 -----------------------------------------
 
-Now we turn to the formal definition of the masked audit secret hash tree. This is relevant for repeatable audits without remembering the secrets themselves. The basic idea is to store all the masked secrets in a merkle tree (MASH tree) and to remember only the root of this tree (MASH root). A successful response to a challenge contains a not just the secret, but also the merkle proof from the secret to the MASH root.
+Now we turn to the formal definition of the masked audit secret hash tree. This is relevant for repeatable audits without remembering the secrets themselves. The basic idea is to store all the masked secrets in a merkle tree (MASH tree) and to remember only the root of this tree (MASH root). A successful response to a challenge contains not just the secret, but also the merkle proof from the secret to the MASH root.
 
 Assume that we have :math:`k=2^r` audit seeds :math:`\seed_0, \dots \seed_{k-1}` specific to a chunk. Each audit seed allows nodes to launch an independent challenge to the swarm and check that the associated data is preserved. We define :math:`r` as the *repeatability order of the audit*.
 Using the audit seeds and the chunk one can construct a *masked audit secret hash tree* (MASH tree) as follows:
@@ -446,7 +446,7 @@ SWINDLE (SWarm INsurance Driven Litigation Engine) is the part of the bzz protoc
 Prerequisites for insured storage
 --------------------------------------------------
 
-Suppose an owner of a chunk wishes to have it stored and insured. The owner communicates directly with a registered peer who will act as "guardian" of this insured chunk. When a store request for an insured chunk is sent from the owner to the guardian, the owner must include the smash chunk hash, as well as the MASH root and sign it together with the swarm hash of the chunk. The smash chunk hash is needed to verify positive ASH proofs, while the MASH root is needed to verify MASH proofs. Both are needed in order to provide negative proofs against an auditor sending frivolous audit requests.
+Suppose an owner of a chunk wishes to have it stored and insured. The owner communicates directly with a registered peer who will act as :dfn:`guardian` of this insured chunk. When a store request for an insured chunk is sent from the owner to the guardian, the owner must include the smash chunk hash, as well as the MASH root and sign it together with the swarm hash of the chunk. The smash chunk hash is needed to verify positive ASH proofs, while the MASH root is needed to verify MASH proofs. Both are needed in order to provide negative proofs against an auditor sending frivolous audit requests.
 
 Remember, the "swarm hash" used to identify a chunk in the swarm is simply its hash, while the "smash chunk hash" from the ASH proofs is the merkle root of a binary tree that treats the chunk as :math:`n` segments of size :math:`2^h` (in our case 128 segments of 32 bytes). Both are calculated directly from the chunk itself but they are distinct and serve different purposes.
 The question arises why we do not combine these two. In particular, we could simply use the smash chunk hash (the root of the binary merkle tree over 32 byte sequences) instead of the simple swarm hash in the swarm chunker. This would have the benefit that smash chunk hashes would not need to be stored separately as part of the audit metadata. However, the smash chunk hash involves 255 hashing operations as opposed to the single one of the swarm hash, therefore, extensive benchmarks are needed before we pursue this option.
@@ -513,9 +513,20 @@ If any of the metadata is not available at the time of the audit, the main audit
 
 4. If all the data checks out, the main auditor then sends out the audit request to the top chunk (hashing to the collection swarm root hash) of the collection.
 
-Recall that a chunk encodes a subtree, in particular a non-leaf chunk consists of 128 swarm hash segments. These are the hashes of chunks on the lower level of the chunk tree, each in turn encoding their subtree. In the initial round (and the only one in case of success) the audit involves sending out audit requests of the simple type. These requests are similar to retrieval requests except that in their response, proximate storers do not send back the chunk itself but instead they calculate the audit secret hash (ASH) and respond with that. Thus during simple audit, audit requests are broadcast from a node to its peers in the swarm and the swarm collectively forwards them all the way to storer nodes (i.e. the peers most proximate to chunk address). Responses travel back to parent auditors the same way.
+Recall that a chunk encodes a subtree, in particular a non-leaf chunk consists of 128 swarm hash segments. These are the hashes of chunks on the lower level of the chunk tree, each in turn encoding their subtree. In the initial round (and the only one in case of success) the audit involves sending out audit requests of the simple type. These requests are similar to retrieval requests except that in their response, proximate storers do not send back the chunk itself but instead they calculate the audit secret hash (ASH) and respond with that. Thus during simple audit, audit requests are broadcast from a node to its peers in the swarm and the swarm collectively forwards them all the way to storer nodes (i.e. the peers most proximate to chunk address). Responses travel back to parent auditors the same way (see :numref:`Figure %s <fig:crash>`).
 
-After the audit has been initiated, the **automated collective audit process** proceeds as follows.
+
+
+..  _fig:crash:
+
+..  figure:: fig/crash.pdf
+    :align: center
+    :alt: audit
+    :figclass: align-center
+
+    The arrows represent local transactions between connected peers. After the audit
+
+After the audit has been initiated, the *automated collective audit process* proceeds as follows.
 
 5. The main auditor launches the collection/file audit. This means they send an audit request for the chunks represented by the hash segments in their own chunk one at a time proceeding from left to right skipping chunks that occurred before in the collection (as per the respective uniqueness bit).
 
@@ -560,12 +571,22 @@ Ensuring correct syncing and distribution
 As it turns out, collective auditing has great advantages in policing correct synchronisation.
 As a result of recursive audits, when audit responses are retrieved, the audit requests come from nodes independent of the owner. This helps nodes to identify neighbours that refused to sync. If an audit request reaches a node that is most proximate to the target chunk, the node recognizes that it is a chunk that it was  supposed to receive while syncing with one of its peers. If it did not, then it sends an  audit request to the chunk's guardian and feedback to its parent auditor.
 
-This can be thought of as a  warning to the guardian. If they still keep the chunk to themselves, they will lose their deposit as a result of litigation.
-Even if they are innocent, they are motivated to forward since that is cheaper still than litigation. Therefore they will forward the audit request to  their appropriate online peer towards the node they had originally forwarded it to. If all nodes delegate and forward, the proximate node will eventually receive the chunk.
+This can be thought of as a  warning to the guardian (or in fact the node that acts as custodian). If they still keep the chunk to themselves, they will lose money their deposit as a result of litigation.
+Even if they are innocent, they are motivated to forward since that is cheaper still than litigation. Therefore they will forward the audit request to  their appropriate online peer towards the node they had originally forwarded it to. If all nodes delegate and forward, the proximate node will eventually receive the chunk (see :numref:`Figure %s <fig:policing>`.
 Interestingly, this situation could also happen as a  result of network growth and  latency. We conclude that SWINDLE recursive auditing can repair retrievability [#]_ .
 
-..  rubric:: Footnotes
-..  [#] Note that adaptation to network  growth and shrinking is taken care of by the syncing protocol. However if network connections are saturated and/or nodes have not yet heard of each other it could happen that they are genuine yet appear not synchronized. We restrict these cases to the case when the offending node issues a proof that they believed to be the most proximate one to the target.
+.. rubric:: Footnotes
+.. [#] Note that adaptation to network  growth and shrinking is taken care of by the syncing protocol. However if network connections are saturated and/or nodes have not yet heard of each other it could happen that they are genuine yet appear not synchronized. We restrict these cases to the case when the offending node issues a proof that they believed to be the most proximate one to the target.
+
+
+..  _fig:policing:
+
+..  figure:: fig/policing.pdf
+    :align: center
+    :alt: repair retrievability with audit
+    :figclass: align-center
+
+    The arrows represent local transactions between connected peers. After the audit reaches the closest node and the chunk is not found, the closest node challenges the guardian who in turn challenges the node it originally bought a receipt from, and so on until the challenge lands on the current custodian who now has the chance to connect to the node closest to the chunk address or at least a registered node closer.
 
 If the proximate node gets the chunk, it calculates the audit secret and the audit can continue. If there is a delay longer than the timeout, the audit concludes and litigation starts. Note that litigation is only possible as long as the initiator includes the address of the real proximate node.
 If such an address is not provided, an offending node further out claiming to be proximate cannot be  prosecuted.
