@@ -557,20 +557,20 @@ In order to lock funds nodes could use an escrow contract on the blockchain, how
 .. index:: payment channel
 
 Advance payments (i.e., payment settled at the time of contracting, not after the storage period ends) on the other hand, leave the buyers vulnerable to cheating.
-Without limiting the total value of receipts that nodes can sell, a malicious node can collect more than their deposit and disappear. Though forfeiting their deposit, they walk away with a profit even though they broke their promise. Given a network size and a relatively steady demand for insured storage (in chunk epoch), the deposit could be set sufficiently high so this attack is no longer economical [#]_ .
+Without limiting the total value of receipts that nodes can sell, a malicious node can collect more than their deposit and disappear. Having forfeited their deposit, they still walk away with a profit even though they broke their promise. Given a network size and a relatively steady demand for insured storage (in chunk epoch), the deposit could be set sufficiently high so this attack is no longer economical [#]_ .
 
 .. rubric:: Footnotes
 .. [#] This could be further improved by enforcing a fixed maximum total value of receipts one node can issue. Without central registry, we need to rely on the receipts. We stipulate that receipts issued by storers contain their cumulative volume of receipted promises (counted in chunk-epoch). They would also report that number to the blockchain every epoch and keep it under a threshold. The node is incentivised to underreport this number but that can be detected and punished (any node who received a higher number, sends their receipt to the blockchain). Likewise, it can also be detected if the node issued two subsequent receipts with non-increasing ranges, hence the current volume can be considered trusted. In the special case that each chunk is insured for the same length period, the current value of insured storage (counted in chunk-epochs) can be calculated since volume = cumulative volume - cumulative expired volume. Thanks to Nick Johnson for proposing this idea.
 
 Another idea is to allow payment by installments, which would similarly keep the total income under a threshold. However, this means that the validity of a receipt can no longer be established, since non-payment of any of the obligations would void the contract.
 
-We can combine the best of both worlds. On the one hand we can lock the total price of storing a chunk for the entire storage period, and tie the release of funds to an escrow condition, eliminates the non-payment attack.
+We can combine the best of both worlds. On the one hand we can lock the total price of storing a chunk for the entire storage period, and tie the release of funds to an escrow condition. This eliminates the storer's distrust due to potential insolvency of the cheque's issuer.
 As long as funds are locked and the escrow condition is acceptable for the storer, the settlement is immediate and they can safely issue a receipt for the entire storage period.
 Since payment is delayed it is no longer possible to collect funds before the work is complete, which eliminates a :dfn:`collect-and-run attack` entirely.
 Release of locked funds in installments can be tied to audits via the escrow release conditions, i.e., the installment is released on the condition that the node provides a proof of custody.
 
 The enhanced version of the SWAP protocol uses a fully-fledged state-channel/payment channel beside the chequebook and is a perfect candidate for implementing these features.
-The blockchain implementation and configuration of the payment channel, registration and litigation is discussed in a separate paper.
+The blockchain implementation and configuration of the payment channel, registration and litigation is discussed in a forthcoming paper (:cite:`ethersphere2016swap`).
 
 *************************
 Conclusion
