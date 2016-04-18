@@ -93,7 +93,7 @@ of a content hoster (:dfn:`seeder` in Bittorrent parlance) is roughly the same, 
 ancient HTTP underpinning the World Wide Web.
 
 Cheating (i.e. feeding your peers with garbage) is discouraged by the
-use of *Merkle hashing*, whereby a package offered
+use of :dfn:`hierarchical piecewise hashing`, whereby a package offered
 for download is identified by a single short hash, and any part can be
 cryptographically proven to be a specific part of the package without
 all the other parts, with a very small overhead.
@@ -106,7 +106,7 @@ related:
 * Small chunks of data can only be shared in the context of the larger file that they are part of. We find peers sharing the content we seek by querying the Distributed Hash Table (DHT) for said file. Thus a peer sharing only part of a file needs to know what that file is in order to be found in the DHT, and conversely, if the peer doesn't know that the data chunks belong some file the peer will not be found by users seeking that file. This commonly happens for example when the same chunks of data appear verbatim in multiple files. Also, unless their objective is simply to get the missing parts of a file from their peers, nodes are not rewarded for their sharing efforts (storage and bandwidth), just like seeders.
 
 
-Towards Web 3.0: IPFS
+Towards Web 3.0
 -----------------------------
 
 In order to enable responsive distributed web applications (called dapps
@@ -125,6 +125,9 @@ A further important innovation is that IPFS has incentivisation factored out int
 
 ..
   While there is not much to gain for the user by choking uploads, or falsely advertizing content, without bitswap there is not much penalty for it either. However, bitswap incentivizes the hosting of popular content, since the constraint of swapped bits coming from the same piece of content are gone in IPFS. If you host popular content, bitswap-guarded nodes will be nice to you. There aren't that many of them, though. In this early stage of abundance, while supplied disk and bandwidth vastly outstrip demand, the system works fine as it is. If bottlenecks emerge either due to increased use or malicious intent, bitswap can be expected to become more popular as a security measure against widespread freeriding. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
+
+The same problem with lack of incentives is apparent in various other projects such as zeronet, i2p or MAIDSAFE.
+Incentivization for distributed document storage is still a relatively new research field. Especially in the light of the blockchain. The Tor network has seen suggestions (:cite:`jansen2014onions`, :cite:`ghoshetal2014tor`) but these schemes are largely academic, they are not built in at the heart of the underlying system. Bitcoin has also been repurposed to drive other systems like Permacoin (:cite:`miller2014permacoin`) or Sia (:cite:`vorick2014sia`), some use their own blockchain, altcoin such as Metadisk (:cite:`wilkinson2014metadisk`) for Storj (:cite:`wilkinsonetal2014storj`) or Filecoin (:cite:`filecoin2014`) for IPFS :cite:`ipfs2014`.
 
 What is still missing from the above incentive system, is the possibility to rent out
 large amounts of disk space to those willing to pay for it, irrespective

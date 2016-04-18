@@ -189,10 +189,10 @@ Recall also that during normal swarm lookups, a swarm client performs a lookup f
 ..  index::
 
 
-We propose using a Cauchy-Reed-Solomon (henceforth :abbr:`CRS (Cauchy-Reed-Solomon)`) scheme to encode redundancy directly into the swarm tree. The :dfn:`CRS scheme` [#]_  is a :dfn:`systemic erasure code` which applied to a data blob of :math:`m` fixed-size pieces, produces :math:`k` extra pieces (so called :dfn:`parity pieces`) of the same size in such a way that any :math:`m` out of :math:`n=m+k` fix-sized pieces are to reconstruct the original blob with storage overhead of :math:`\frac{k}{m}`.
+We propose using a Cauchy-Reed-Solomon (henceforth :abbr:`CRS (Cauchy-Reed-Solomon)`, see :cite:`lubyetal1995CRS`, :cite:`plank2006optimizing`) scheme to encode redundancy directly into the swarm tree. The :dfn:`CRS scheme` [#]_  is a :dfn:`systemic erasure code` (:cite:`buterin2014erasure`) which applied to a data blob of :math:`m` fixed-size pieces, produces :math:`k` extra pieces (so called :dfn:`parity pieces`) of the same size in such a way that any :math:`m` out of :math:`n=m+k` fix-sized pieces are to reconstruct the original blob with storage overhead of :math:`\frac{k}{m}`.
 
 .. rubric:: Footnotes
-.. [#] There are open source libraries that implement Reed Solomon or Cauchy-Reed-Solomon coding. See https://www.usenix.org/legacy/event/fast09/tech/full_papers/plank/plank_html/, https://www.backblaze.com/blog/reed-solomon/, http://rscode.sourceforge.net/.
+.. [#] There are open source libraries that implement Reed Solomon or Cauchy-Reed-Solomon coding. See :cite:`plank2009performance` for a thorough comparison.
 
 Assuming :math:`p` is the probability of losing one piece, if all :math:`n` pieces are independently stored, the probability of loosing the original content is :math:`p^{n-m+1}` which is exponential while extra storage is linear. These properties are preserved if we apply the coding to every level of a swarm chunk tree.
 

@@ -10,6 +10,8 @@ From the perspective of any individual node, the probability of a given chunk be
 
 In the first iteration, we further assume that nodes have no preference as to which chunks to store other than their access count which is a reasonable predictor of their profitability. As a corollary, this entails that store requests are accepted by nodes irrespective of the chunk they try to store.
 
+
+
 Accounting
 ===============
 
