@@ -42,25 +42,7 @@ especially if the user explicitly requires that in the fashion of 'upload and di
 :dfn:`Filecoin` (:cite:`filecoin2014`), an incentivised p2p storage network using IPFS (:cite:`ipfs2014`)offers an interesting solution. Nodes participating in its network also mine
 on the filecoin blockchain. Filecoin can be earned (mined) through replicating other people's content and spent on having one's content replicated.
 Filecoin's proof of work is defined to include proof that the miner possesses a set of randomly chosen units of storage depending on the parent block.
-Using a strong proof of retrievability scheme, Filecoin ensures that the winning miner had relevant data. As miners compete, they will find that their chances of winning will be proportional to the percentage of the existing storage units they actually store. This is because the missing ones need to be retrieved from other nodes and thus delaying nodes chance to respond.
-
-We see a whole range of issues with this particular approach:
-
-* It is not clear that network latency cannot be masked by the parallel calculation of the ordinary proof of work component in the algorithm.
-* If the set of chunks are not selected differently for each node, mining will resemble a DDOS on nodes that actually store the data needed for the round.
-* Even if the selection of data to prove varies depending on the miner, normal operation incurs huge network traffic.
-* As the network grows, the expected proportion of the data that needs to be retrieved increases. In fact given a practical maximum limit on a node's storage capacity, this proportion reaches a ceiling. If that happens miners will end up effectively competing on bandwidth.
-* In order to check proof of retrievability responses as part of block validation, existing data needs to be recorded on the blockchain. This leads to excessive use of the blockchain as the network grows and is unlikely to scale.
-* Competing miners working on the same task mean redundant use of resources.
-* If content is known to be popular, checking their integrity is spurious. But if choice of storage data to audit for the next block is truely random, there is no distinction between rarely accessed content and popular ones stored by many nodes resulting in wasted resouces.
-* Similarly, users originating the content have also no way to indicate directly that some documents are important and not to be lost, while other temporary or derived data they can afford to lose.
-
-Due to excessive use of blockchain and generated network traffic, these issues make the approach suspect: at best hugely wasteful, at worst infeasible on the large scale.
-
-More importantly, however, Filecoin provides only a scheme to collectively incentivise the network to store content. This brings in a 'tragedy of the commons' problem in that losing any particular data will have no negative consequence to any one storer node. This lack of individual accountability means the solution is rather limited as a security measure against lost content.
-
-To summarise, we consider positive incentivisation in itself insufficient for ensured archival. In addition to that collective positive incentivisation implemented by competitive proof of retrievability mining is wasteful in terms of network traffic, computational resources as well as blockchain storage. In the subsequent sections we will introduce a different approach.
-
+Using a strong proof of retrievability scheme, Filecoin ensures that the winning miner had relevant data. As miners compete, they will find that their chances of winning will be proportional to the percentage of the existing storage units they actually store. This is because the missing ones need to be retrieved from other nodes, which is hopelessly slow for the purpose of mining.
 
 Compensation for storage and guarantees for long-term data preservation
 ===========================================================================
