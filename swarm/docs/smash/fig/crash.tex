@@ -1,6 +1,6 @@
 \documentclass[border=2pt,draw]{standalone}
 \usepackage{tikz}
-\usetikzlibrary{fit,arrows,positioning}
+\usetikzlibrary{fit,arrows,positioning,backgrounds}
 \tikzset{
 level/.style={
 sibling distance={width("HHHHH$H^{n-2}_{I(n-2)+1}$")+10pt},
@@ -31,25 +31,29 @@ every node/.style={align=center}
 \begin{tikzpicture}[level/.style={sibling distance=45mm, line width=0.7pt, level distance=40mm},
 ]
 \node [draw=none] (root) {}
-  child {node [data] (h0) {$H^{i}_{0}$} edge from parent[draw=none]
+  child {node [data,fill=white] (h0) {$H^{i}_{0}$} edge from parent[draw=none]
     child[mtedge] { node[data,fill=gray!30] (c0) {$c^{i-1}_{0}$}}
   }
-  child {node [data] (h1) {$H^{i}_{1}$} edge from parent[draw=none]
+  child {node [data,fill=white] (h1) {$H^{i}_{1}$} edge from parent[draw=none]
     child[mtedge] { node[data,fill=gray!30] (c1) {$c^{i-1}_{1}$}}
   }
-  child {node [data] (h2) {$H^{i}_{2}$} edge from parent[draw=none]
+  child {node [data,fill=white] (h2) {$H^{i}_{2}$} edge from parent[draw=none]
     child[mtedge] { node[data,fill=gray!30] (c2) {$c^{i-1}_{2}$}}
   }
-  child[missing]{node { $c^{i}_{0}$}}
-  child {node [data] (hn) {$H^{i}_{R(i)}$} edge from parent[draw=none]
+  child[missing]
+  child {node [data,fill=white] (hn) {$H^{i}_{R(i)}$} edge from parent[draw=none]
     child[mtedge] { node[data,fill=gray!30] (cn) {$c^{i-1}_{R(i)}$}}
   }
 ;
+\node[left=of h0] (cc) {$c^{i}_{0}$\ \ \ \ (auditor)};
 \node[left=2cm of h0] (hl0) {};
 \node[left=2cm of h1] (hl1) {};
 \node[left=2cm of h2] (hl2) {};
 \node[left=2cm of hn] (hln) {};
 
+\begin{pgfonlayer}{background}
+\node[data, fill=gray!30, minimum height=1.6cm, line width=.9pt, fit=(cc) (hn)] (c) {};
+\end{pgfonlayer}
 
 \node[data,above=4cm of hl0,fill=gray!30] (b0) {$s^{i-1}_{0}$};
 \node[data,above=4cm of hl1] (b1) {$s^{i-1}_{1}$};
@@ -60,40 +64,44 @@ every node/.style={align=center}
 % \node[data,right=1cm] (bi) {$\varepsilon^{i-1}_{1}$};
 \node[data,above=1.5cm of h0] (e0) {$\varepsilon^{i-1}_{0}$};
 \node[data,above=1.5cm of h1] (e1) {$\varepsilon^{i-1}_{1}$};
-\node[data,above=1.5cm of h2] (e2) {$\varepsilon^{i-1}_{2}$};
+\node[data,line width=1pt,above=1.5cm of h2,fill=gray!50] (e2) {$\varepsilon^{i-1}_{2}$};
 \node[data,above=1.5cm of hn] (en) {$\varepsilon^{i-1}_{R(i)}$};
 \node[data,right=4cm of en] (en1) {$\varepsilon^{i-1}_{R(i)+1}$};
 
-\node[data,above=2.5cm of root,fill=gray!30] (au)  {parent auditor};
-\node[left=2cm of b0]{seeds};
-\node[left=4cm of e0]{validation};
-\node[left=3.5cm of h0]{chunk level $i$};
+\node[data,above=2.5cm of root,fill=gray!30] (au)  {$c^{i+1}_{0}$ (parent auditor)};
+{\Large
+\node[left=2.8cm of b0]{seeds};
+\node[left=4.5cm of e0]{validation};
+\node[left=3.8cm of h0]{chunk level $i$};
 \node[left=3cm of c0]{chunk level $i-1$};
-\node[left=10.5cm of au]{chunk level $i+1$};
+}
+\node[left=10.8cm of au]{\Large chunk level $i+1$}
+  (b0.south) edge[pil, ->, bend right=20] node[fill=white,above=2cm] (ch0) {challenge} (c0.north west)
+  (c0.north east) edge[pil, ->, bend right=25] node[fill=white,below=1.5cm] (r0) {response} (e0.south east)
+  (e0.north) edge[pil, ->, bend left=20] node[fill=white,above=10pt] {} (b1.west)
+  (b1.south) edge[pil, ->, bend right=20] node[fill=white,above=2cm] (ch1) {challenge} (c1.north west)
+  (c1.north east) edge[pil, ->, bend right=25] node[fill=white,below=1.5cm] (r1) {response} (e1.south east)
+  (e1.north) edge[pil, ->, bend left=20] node[fill=white,above=10pt] {} (b2.west)
+  (b2.south) edge[pil, ->, bend right=20] node[fill=white,above=2cm] (ch2) {challenge} (c2.north west)
+  (c2.north east) edge[pil, ->, bend right=25] node[fill=white,below=1.5cm] (r2) {response} (e2.south east)
+  (c1.east) edge[pil, <-, line width=1.3pt, densely dashed, bend left=0] node[fill=white,above=2.3cm] (cherr) {} (e2.south)
+  (au.south) edge[pil, <-, line width=1.3pt, densely dashed] node[fill=white,above=0.5cm] (cherr2) {notification} (e2.north)
+  (e2.north east) edge[pil,dashed, ->, bend left=20] node[fill=white,below=0pt] {continued audit} (bn.west)
+  (bn.south) edge[pil, ->, bend right=20] node[fill=white,above=2cm] (chn) {challenge} (cn.north west)
+  (cn.north east) edge[pil, ->, bend right=25] node[fill=white,below=1.5cm] (rn) {response} (en.south east)
+  (en.north) edge[pil, ->, bend left=20] node {} (bn1.west)
+  (bn1.south) edge[pil, ->, bend left=20] node[fill=white,above=2.2pt] (chn) {challenge} (c.east)
+  (c.east) edge[pil, ->, bend right=25] node[fill=white] (rn) {response} (en1.south)
+  (en1.north) edge[pil, ->, bend left=20] node {} (bn2.south)
+  (au.west) edge[pil, ->, bend right=10] node[fill=white] {challenge} (b0.north east)
+  (au.east) edge[pil, <-, bend left=10] node[fill=white] {response} (bn2.north west)
+;
+\node [right=3cm of cherr] {backtrack}
 
 \path (h2) -- (hn) node [midway,font=\large] {$\ldots$};
 \path (c2) -- (cn) node [midway,font=\large] {$\ldots$};
 \path (e2) -- (en) node [midway,font=\large] {$\ldots$};
 
-\node[data, minimum height=1.6cm, fit=(h0) (hn)] (c) {}
-  (b0.south) edge[pil, ->, bend right=20] node[fill=white,below=2cm] (ch0) {challenge} (c0.north west)
-  (c0.north east) edge[pil, ->, bend right=25] node[fill=white,below=1.5cm] (r0) {response} (e0.south east)
-  (e0.north) edge[pil, ->, bend left=20] node[fill=white,above=10pt] {} (b1.west)
-  (b1.south) edge[pil, ->, bend right=20] node[fill=white,below=1.5cm] (ch1) {challenge} (c1.north west)
-  (c1.north east) edge[pil, ->, bend right=25] node[fill=white,below=1.5cm] (r1) {response} (e1.south east)
-  (e1.north) edge[pil, ->, bend left=20] node[fill=white,above=10pt] {} (b2.west)
-  (b2.south) edge[pil, ->, bend right=20] node[fill=white,below=1.5cm] (ch2) {challenge} (c2.north west)
-  (c2.north east) edge[pil, ->, bend right=25] node[fill=white,below=1.5cm] (r2) {response} (e2.south east)
-  (e2.north) edge[pil,dashed, ->, bend left=20] node[fill=white,above=10pt] {} (bn.west)
-(bn.south) edge[pil, ->, bend right=20] node[fill=white,below=1.5cm] (chn) {challenge} (cn.north west)
-  (cn.north east) edge[pil, ->, bend right=25] node[fill=white,below=1.5cm] (rn) {response} (en.south east)
-  (en.north) edge[pil, ->, bend left=20] node {} (bn1.west)
-(bn1.south) edge[pil, ->, bend left=20] node[fill=white] (chn) {challenge} (c.east)
-  (c.east) edge[pil, ->, bend right=25] node[fill=white] (rn) {response} (en1.south)
-  (en1.north) edge[pil, ->, bend left=20] node {} (bn2.south)
-  (au.west) edge[pil, ->, bend right=10] node[fill=white] {challenge} (b0.north east)
-  (au.east) edge[pil, ->, bend left=10] node[fill=white] {response} (bn2.north west)
-;
 \end{tikzpicture}
 
 \end{document}
