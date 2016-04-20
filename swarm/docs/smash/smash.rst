@@ -57,14 +57,17 @@ In the remainder of this section we formalise this approach. In the context of s
 :dfn:`storer`
     node that accepted a store request and stores the content
 
-:dfn:`auditor`
-    node that initiates an audit by sending an audit request
-
 :dfn:`guardian`
     the first node to accept a store request of a chunk/
 
 :dfn:`custodian`
     node that has no online peer that is closer to a chunk address
+
+:dfn:`auditor`
+    node that initiates an audit by sending an audit request
+
+:dfn:`insurer`
+    node that is commissioned by an owner to launch audit requests on their behalf
 
 Calculating the audit secret
 --------------------------------------------------
@@ -503,7 +506,11 @@ Let us assume that all chunks have been stored and the owner obtained a receipt 
     4. the partial verification bits (the last two bits of the expected intermediate secrets) and
     5. the MASH-es.
 
-This audit manifest is a special structure that is sold to auditors who are obligated to store the metadata and be prepared to receive audit requests from the owner at any time. An audit request will reveal a seed with the help of which the contracted auditor can launch an audit.
+This audit manifest is a special structure that is sold to insurers who are obligated to store the metadata and be prepared to receive seeds from the owner at any time to initiate audit requests on the owners behalf. Alternatively insurers can take on the entire task of issuing seeds [#]_  .
+
+.. rubric:: Footnotes
+.. [#] This can be done trustlessly if insurer generates masks for the seeds themselves and publishes them (put it on the blockchain, or just publishes their own valid receipt). If the seed is leaked before it is due, or not relealed when it is due, the insurer stands to lose their deposit and compensate the owner. To catch the insurer caching results on their own beforehand, they need to collect signed audit responses from all nodes to show the nodes have seen the seed. Nodes are rewarded of they report leaked seeds. Therefore the auditor can cheat the audit only if they collude with the custodians of each chunk in the collection in advance, and precalculate their secrets. By keeping the reward for leaking significantly higher than what the insurer can afford as bribe will make this line of attack uneconomical.
+
 
 The :dfn:`audit request` for the document or collection is a tuple consisting of
 
@@ -533,7 +540,6 @@ If any of the metadata is not available at the time of the audit, the main audit
 Recall that a chunk encodes a subtree, in particular a non-leaf chunk consists of 128 swarm hash segments. These are the hashes of chunks on the lower level of the chunk tree, each in turn encoding their subtree. In the initial round (and the only one in case of success) the audit involves sending out audit requests of the simple type. These requests are similar to retrieval requests except that in their response, proximate storers do not send back the chunk itself but instead they calculate the audit secret hash (ASH) and respond with that. Thus during simple audit, audit requests are broadcast from a node to its peers in the swarm and the swarm collectively forwards them all the way to storer nodes (i.e. the peers most proximate to chunk address). Responses travel back to parent auditors the same way (see :numref:`Figure %s <fig:crash>`).
 
 
-
 ..  _fig:crash:
 
 ..  figure:: fig/crash.pdf
@@ -541,7 +547,8 @@ Recall that a chunk encodes a subtree, in particular a non-leaf chunk consists o
     :alt: audit
     :figclass: align-center
 
-    The arrows represent local transactions between connected peers. After the audit
+    This figure zooms in on a chunk in a chunk tree of a document. The chunks represent their custodian nodes that act as auditors of the subtree their chunk encodes. The arrows represent the flow of information in the successive steps of calculating CRASH. The custodian of the non-leaf chunk receives a seed and iterates over the hashes of its chunk. It initiates a recursive audit challenge on their immediate child nodes. After receiving the response from the chunk's custodian, they perform validation against the error bits and calculate the next seed they then send on to the next child. In case the validation fails, the node backtracks and escalates the audit  to ASH proof challenge    (dashed lines). After piping the seed through the children's audits, it performs a self-challenge as if it was a leaf chunk and sends back the resulting audit secret to their parent auditor.
+
 
 After the audit has been initiated, the *automated collective audit process* proceeds as follows.
 
@@ -577,10 +584,10 @@ It is easy to see that this process follows the order defined in the previous se
 
 As a consequence of this, the best strategy is to proceed backwards and check the most recently audited chunks directly for proof of custody using an ASH proof challenge. Recall that the ASH proof requires the peer to provide a Merkle proof that is then used to validate both the original chunk as well as the audit secret. If a node responds with a correct ASH proof, the previous chunk is queried. Once a node fails to respond with a correct ASH proof we have found the culprit. If a culprit is found, the audit is escalated and litigation on the blockchain begins. The node carrying out this (partial) audit feeds back the information about the error to their parent auditor. Thus the peers know not to pursue litigation themselves against their child auditor [#]_ .
 
-..  rubric:: Footnotes
-..  [#] In order to protect against offending nodes to simply responding with frivolous litigation notices, the notice needs to contain a transaction hash for the challenge sent to the blockchain. This way parent auditors can rest assured the audit is indeed escalated.
+.. rubric:: Footnotes
+.. [#] In order to protect against offending nodes to simply responding with frivolous litigation notices, the notice needs to contain a transaction hash for the challenge sent to the blockchain. This way parent auditors can rest assured the audit is indeed escalated.
 
-Note that in our recursive auditing scheme, the intermediate (non leaf) nodes were not only audited themselves, but they also served to initiate audits on the subtrees encoded in their chunk. This offers great efficiency gains becausfe if the entire audit were to be carried out by just one peer, then chunks for each intermediate node would need to be retrieved in order for the main auditor to initiate all the audit requests for subtrees. Collective auditing has the immediate benefit that no intermediate chunks ever need to be actually retrieved, because the audit of subtrees are carried out by peers that store the chunk.
+Note that in our recursive auditing scheme, the intermediate (non leaf) nodes were not only audited themselves, but they also served to initiate audits on the subtrees encoded in their chunk. This offers great efficiency gains because if the entire audit were to be carried out by just one peer, then chunks for each intermediate node would need to be retrieved in order for the main auditor to initiate all the audit requests for subtrees. Collective auditing has the immediate benefit that no intermediate chunks ever need to be actually retrieved, because the audit of subtrees are carried out by peers that store the chunk. This means a successful audit require only one challenge-response message roundtrip per node involved.
 
 Ensuring correct syncing and distribution
 ------------------------------------------------------------
@@ -612,12 +619,12 @@ If such an address is not provided, an offending node further out claiming to be
 Conclusion
 =============
 
-In this paper we presented a simple proof of custody formula inspired by the Wilkinson--Buterik proof of storage used by Storj :cite:`wilkinsonetal2014storj`. We specified an auditing and litigation scheme that has ideal properties to secure the swarm against chunk loss.
+In this paper we presented a simple proof of custody formula inspired by the Wilkinson--Buterik proof of storage used by Storj (:cite:`wilkinsonetal2014storj`). The formula offers 3 different types of challenge that auditors can use in different stages. We specified an auditing and litigation scheme that has ideal properties to secure the swarm against chunk loss.
 
 SMASH proofs offer integrity checking for chunks as well as for documents and document collections that
 
 * allows storers to initiate and control audits without storing any information other than the swarm hash of the chunk;
-* allows owners to outsource auditing without revealing future seeds;
+* allows owners to outsource auditing without a trusted third party allow;
 * it provides a seed generation algorithm for securing large document collections with a single audit secret so it scales for both storage and bandwidth;
 * the successive seeds contain error detection which makes it very efficient to find offending nodes without remembering the (masked) secret for each chunk;
 * allows easy verification by third parties like smart contracts to serve as evidence  when it comes to litigation on the blockchain;
