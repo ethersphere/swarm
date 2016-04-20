@@ -490,7 +490,16 @@ When the network grows, it can happen that a custodian finds a new registered no
 Multiple receipts and local replication
 ----------------------------------------------
 
-As discussed above owners can manage the desired security level by using erasure coding with arbitrary degree of redundancy. However, it still makes sense to require that more than one node actually store the chunk. Although the cloud industry is trying to get away from the explicit x-fold redundancy model because it is very wasteful and incurs high costs – erasure coding can guarantee the same level of security using only a fraction of the storage space. However, in a data center, redundancy is interpreted in the context of hard drives whose failure rates are low, independent and predictable and their connectivity is almost guaranteed at highest possible speed due to proximity. In a peer-to-peer network scenario, nodes could disappear much more frequently than hard drives fail. In order to guarantee robust operation, we need to require several local replicas of each chunk (commonly 3, see :cite:`wilkinson2014metadisk`). Since the syncing protocol already provides replication across the proximate bin, regular resyncing of the chunk may be sufficient to ensure availability in case the custodian drops off. If this proves too weak in practice we may require the custodian to get receipts from two proximate peers who act as cocustodians. The added benefit of this extra complexity is unclear.
+As discussed above, owners can manage the desired security level by using erasure coding with arbitrary degree of redundancy. However, 
+it still makes sense to require that more than one node actually store the chunk. Although the cloud industry is trying to get away 
+from the explicit x-fold redundancy model because it is very wasteful and incurs high costs – erasure coding can guarantee the same 
+level of security using only a fraction of the storage space. However, in a data center, redundancy is interpreted in the context of 
+hard drives whose failure rates are low, independent and predictable and their connectivity is almost guaranteed at highest possible 
+speed due to proximity. In a peer-to-peer network scenario, nodes could disappear much more frequently than hard drives fail. In order 
+to guarantee robust operation, we need to require several local replicas of each chunk (commonly 3, see :cite:`wilkinson2014metadisk`). 
+Since the syncing protocol already provides replication across the proximate bin, regular resyncing of the chunk may be sufficient to 
+ensure availability in case the custodian drops off. If this proves too weak in practice we may require the custodian to get receipts 
+from two proximate peers who act as cocustodians. The added benefit of this extra complexity is unclear.
 
 
 .. _sec:accounting:
