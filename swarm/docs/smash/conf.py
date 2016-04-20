@@ -232,6 +232,8 @@ latex_elements = {
 
 # Additional stuff for the LaTeX preamble.
 'preamble': '\\setcounter{secnumdepth}{5}\
+\\pagestyle{plain}\
+\\pagenumbering{arabic}\
    \\usepackage{color}\
   \\usepackage{amsmath}\
   \\usepackage{stmaryrd}\

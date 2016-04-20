@@ -228,7 +228,10 @@ latex_elements = {
 'pointsize': '11pt',
 
 # Additional stuff for the LaTeX preamble.
-'preamble': '\\setcounter{secnumdepth}{5}',
+'preamble': '\\setcounter{secnumdepth}{5}\
+\\pagestyle{plain}\
+\\pagenumbering{arabic}\
+',
 
 'printindex': '',
 # Latex figure (float) alignment
