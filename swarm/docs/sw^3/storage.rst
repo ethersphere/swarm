@@ -547,12 +547,24 @@ Without limiting the total value of receipts that nodes can sell, a malicious no
 Another idea is to allow payment by installments, which would similarly keep the total income under a threshold. However, this means that the validity of a receipt can no longer be established, since non-payment of any of the obligations would void the contract.
 
 We can combine the best of both worlds. On the one hand we can lock the total price of storing a chunk for the entire storage period, and tie the release of funds to an escrow condition. This eliminates the storer's distrust due to potential insolvency of the cheque's issuer.
-As long as funds are locked and the escrow condition is acceptable for the storer, the settlement is immediate and they can safely issue a receipt for the entire storage period.
+As long as funds are locked and the escrow condition is acceptable for the storer, the settlement is immediate and the storer (guardian, forwarder, custodian) party can safely issue a receipt for the entire storage period.
 Since payment is delayed it is no longer possible to collect funds before the work is complete, which eliminates a :dfn:`collect-and-run attack` entirely.
 Release of locked funds in installments can be tied to audits via the escrow release conditions, i.e., the installment is released on the condition that the node provides a proof of custody.
 
 The enhanced version of the SWAP protocol uses a fully-fledged state-channel/payment channel beside the chequebook and is a perfect candidate for implementing these features.
 The blockchain implementation and configuration of the payment channel, registration and litigation is discussed in a forthcoming paper (:cite:`ethersphere2016swap`).
+
+To conclude the section on storage incentives we summarize the various modes of operation particpants may choose to demand and supply content availability.
+
+The owner does not need to be a registered, guardians, auditors, forwarders and custodians do.
+On all levels (chunk, document, collection), an owner can choose to take on the role of auditor and (therefore no need for guardian) and store whatever metadata they need for the proof of custody. If the content is of public (dis)interest, the owner can publish the receipt with the content hash so that third party consumers can litigate in case of chunk loss. Owners may wish to preserve content for long periods of time without retrieving the content but for reasons of increased liquidity allow the storer to withdraw in installments. Similarly, if an owner wishes to renew a storage agreement after it  expired, payout needs to happen without the owner wanting to see the data.
+To prevent collect-and-run storers, all these cases payout need to be tied to proof of custody as an escrow condition. Simple merkle proof challenge is available, infinitely repeatable, only needs to remember the root hash and are logarithmic in network traffic.
+Auditing with simple Merkle proofs is not outsourceable in the strict sense, if the owner want to upload and disappear, the only way the auditor can prove the audits retrospectively to the owner is by recording them on the blockchain. If repeated this ends up paying at least twice the price of storage on the blockchain losing on transaction costs as well on the way.
+The solution is to pregenerate seeds and precalculate a secret some irreversible function of the seed and the proof of custody.
+The network traffic can be reduced to constant per chunk at the cost of storing precalculated audit secrets.
+The secrets can be forgotten if their hashes are remembered, these can be published so third parties  can verify audits. Owners can outsource the storage of these masked secrets safely, notably to storers themselves who can conversely prove to the owner their secret is correct. This use trades  storage for network traffic, but since each new audit requires constant storage, it does not scale for fixed chunks. Owners can mitigate this by packaging entire collections under the same seeds and calculate single secrets, this way any storage period can be covered by any desired rate of audit as long as there is enough documents assemled. More realistically,  owners can hand over an arbitrary sized collection (or document or chunk) to third party insurers who aggregate them, generate seeds, conduct audits and prove to the owner the integrity of their content according to the agreement. See :cite:`ethersphere2016smash` for details about the audit schemes.
+
+This is where we stand at the moment. If this line withstands expert scrutiny, in a forthcoming publication (:cite:`ethersphere2016swap`) we hope to put together the pieces of this puzzle and offer a formal specification of the above modes of operation backed up with smart contracts providing accounting and finance (swap), registration and deposit handling (swear) and auditing, litigation and defence (swindle).
 
 *************************
 Conclusion
