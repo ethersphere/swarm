@@ -172,7 +172,7 @@ while in the tree structure, the 32 bytes stored at the node represent the hash 
     :alt: a generic node in the tree has 128 children
     :figclass: align-center
 
-  A generic node in the tree has 128 childern.
+  A generic node in the tree has 128 children.
 
 Recall also that during normal swarm lookups, a swarm client performs a lookup for a hash value and receives a chunk in return. This chunk in turn constitutes another 128 hashes to be looked up in return for another 128 hashes and so on until the chunks received belong to the actual document. Here is a schematic: (:numref:`Figure %s <fig:tree2>`):
 
@@ -256,11 +256,11 @@ Benefits of CRS merkle tree
 This per-level :math:`m\text{-out-of-}n` Cauchy-Reed-Solomon erasure code once introduced into the swarm chunk tree does not only ensure file availability, but also offers further benefits of increased resilience and ways to speed up retrieval.
 
 All chunks are created equal
-  A tree encoded as suggested above has the same redundancy at every node [#]_. This means that chunks nearer to the root are no longer more important than chunks closer to the leaf nodes. Every node has an m-of-128 redundancy level and no chunk after the root chunk is more important than any other chunk [#]_ . Luckily the problem is solved by the automated audit scheme which audits the integrity of all chunks and does not distinguish between data or parity chunks.
+  A tree encoded as suggested above has the same redundancy at every node [#]_. This means that chunks nearer to the root are no longer more important than chunks closer to the leaf nodes. Every node has an m-of-128 redundancy level and no chunk after the root chunk is more important than any other chunk [#]_ .
 
 .. rubric:: Footnotes
 .. [#] If the filesize is not a multiple of 4096 bytes, then the last chunk at every level will actually have a higher redundancy even than the rest.
-.. [#] If nodes are compensated only for serving chunks, then less popular chunks are less profitable and more likely to be deleted; therefore, if users only download the data chunks and never request the parity chunks, then these are more likely to get deleted and ultimately not be available when they are finally needed. Another approach would be to use non-systemic coding. A systemic code is one in which the data remains intact and we add extra parity data whereas in a non-systemic code we replace all data with parity data such that (in our example) all 128 pieces are really created equal. While the symmetry of the non-systemic approach is appealing, it leads to forced decoding and thus to a high CPU usage even in normal operation. Moreover it breaks random access property of the chunk tree making it impossible to stream media files from the swarm.
+.. [#] If nodes are compensated only for serving chunks, then less popular chunks are less profitable and more likely to be deleted; therefore, if users only download the data chunks and never request the parity chunks, then these are more likely to get deleted and ultimately not be available when they are finally needed. Another approach would be to use non-systemic coding. A systemic code is one in which the data remains intact and we add extra parity data whereas in a non-systemic code we replace all data with parity data such that (in our example) all 128 pieces are really created equal. While the symmetry of the non-systemic approach is appealing, it leads to forced decoding and thus to a high CPU usage even in normal operation. Moreover it breaks random access property of the chunk tree making it impossible to stream media files from the swarm. Luckily the problem is solved by the automated audit scheme which audits the integrity of all chunks and does not distinguish between data or parity chunks.
 
 Self healing
   Any client downloading a file from the swarm can detect if a chunk has been lost. The client can reconstruct the file from the parity data (or reconstruct the parity data from the file) and resync this data into the swarm. That way, even if a large fraction of the swarm is wiped out simultaneously, this process should allow an organic healing process to occur and it is encouraged that the default client behavior should be to repair any damage detected.

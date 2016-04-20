@@ -593,14 +593,14 @@ Ensuring correct syncing and distribution
 ------------------------------------------------------------
 
 As it turns out, collective auditing has great advantages in policing correct syncronisation.
-As a result of recursive audits, when audit responses are retrieved, the audit requests come from nodes independent of the owner. This helps nodes to identify neighbours that refused to sync. If an audit request reaches a node that is most proximate to the target chunk, the node recognizes that it is a chunk that it was  supposed to receive while syncing with one of its peers. If it did not, then it sends an  audit request to the chunk's guardian and feedback to its parent auditor.
+As a result of recursive audits, when audit responses are retrieved, the audit requests come from nodes independent of the owner. This helps nodes identify neighbours that refused to sync. If an audit request reaches a node that is most proximate to the target chunk, the node recognizes that it is a chunk that it was  supposed to receive while syncing with one of its peers. If it did not, then it sends an  audit request to the chunk's guardian and feedback to its parent auditor (see :numref:`Figure %s <fig:policing>`).
 
-This can be thought of as a  warning to the guardian (or in fact the node that acts as custodian). If they still keep the chunk to themselves, they will lose money their deposit as a result of litigation.
-Even if they are innocent, they are motivated to forward since that is cheaper still than litigation. Therefore they will forward the audit request to  their appropriate online peer towards the node they had originally forwarded it to. If all nodes delegate and forward, the proximate node will eventually receive the chunk (see :numref:`Figure %s <fig:policing>`.
+This can be thought of as a  warning to the guardian (or in fact the node that acts as custodian). If they still keep the chunk to themselves, they will lose money as a result of litigation.
+Even if they are innocent, they are motivated to forward since that is cheaper still than litigation. Therefore they will forward the audit request to  their appropriate online peer towards the node that they had forwarded the original store request to. If all nodes delegate and forward, the proximate node will eventually receive the chunk and can act as  custodian.
 Interestingly, this situation could also happen as a  result of network growth and  latency. We conclude that SWINDLE recursive auditing can repair retrievability [#]_ .
 
 .. rubric:: Footnotes
-.. [#] Note that adaptation to network  growth and shrinking is taken care of by the syncing protocol. However if network connections are saturated and/or nodes have not yet heard of each other it could happen that they are genuine yet appear not synchronized. We restrict these cases to the case when the offending node issues a proof that they believed to be the most proximate one to the target.
+.. [#] Note that adaptation to network  growth and shrinking is taken care of by the syncing protocol. However if network connections are saturated and/or nodes have not yet heard of each other it could happen that they are genuine yet appear not syncronized.
 
 
 ..  _fig:policing:
@@ -610,11 +610,11 @@ Interestingly, this situation could also happen as a  result of network growth a
     :alt: repair retrievability with audit
     :figclass: align-center
 
-    The arrows represent local transactions between connected peers. After the audit reaches the closest node and the chunk is not found, the closest node challenges the guardian who in turn challenges the node it originally bought a receipt from, and so on until the challenge lands on the current custodian who now has the chance to connect to the node closest to the chunk address or at least a registered node closer.
+    The arrows represent local transactions between connected peers. After the audit reaches the closest node and the chunk is not found, the closest node challenges the guardian who in turn challenges the node it originally bought a receipt from, and so on until the challenge lands on the current custodian who now has the chance to connect to the node that is actually closest to the chunk address (or at least closer).
 
-If the proximate node gets the chunk, it calculates the audit secret and the audit can continue. If there is a delay longer than the timeout, the audit concludes and litigation starts. Note that litigation is only possible as long as the initiator includes the address of the real proximate node.
-If such an address is not provided, an offending node further out claiming to be proximate cannot be  prosecuted.
+If the proximate node gets the chunk, it calculates the audit secret and the audit can continue. If there is a delay longer than the timeout, the audit concludes and litigation starts against the impostor custodian. The initiator includes the address of the known closer node without which an offending node further out claiming to be righful custodian cannot be  prosecuted.
 
+The collective audit can also be used to repair chunks in erasure coded collections, this is not primarily about reporting aid to balance out lost reliability for large files
 
 Conclusion
 =============
@@ -624,7 +624,7 @@ In this paper we presented a simple proof of custody formula inspired by the Wil
 SMASH proofs offer integrity checking for chunks as well as for documents and document collections that
 
 * allows storers to initiate and control audits without storing any information other than the swarm hash of the chunk;
-* allows owners to outsource auditing without a trusted third party allow;
+* allows owners to outsource auditing without a trusted third party;
 * it provides a seed generation algorithm for securing large document collections with a single audit secret so it scales for both storage and bandwidth;
 * the successive seeds contain error detection which makes it very efficient to find offending nodes without remembering the (masked) secret for each chunk;
 * allows easy verification by third parties like smart contracts to serve as evidence  when it comes to litigation on the blockchain;
