@@ -1,3 +1,5 @@
+.. _sec:bandwidth:
+
 ************************
 Bandwidth Incentives
 ************************
@@ -109,7 +111,7 @@ The long term use of a chequebook provides a credit history, use without failure
   reputation system
 
 :dfn:`SWAP` can also use a fully featured :dfn:`payment channel` as mode of payment. A SWAP payment channel is an agreement between two peers to maintain an ether balance for pairwise accounting. This allows for secure offchain transactions and delayed updates where the release of locked funds is potentially constrained by escrow conditions. The channel contract can be extended to accept cheques.
-Both the chequebook and channel contracts have withdrawal rules where the release of funds is authorized only after a successful freeze period during which the counterparty can update the state on the blockchain with the last consensus. The details of SWAP and the channel contract will be published in a separate paper (:cite:`ethersphere2016swap`).
+Both the chequebook and channel contracts have withdrawal rules where the release of funds is authorized only after a successful freeze period during which the counterparty can update the state on the blockchain with the last consensus. The details of SWAP and the channel contract will be published in a separate paper (:cite:t:`ethersphere2016swap`).
 
 
 
@@ -123,5 +125,5 @@ As a simplification, we assume that requesters credit their peers only upon firs
 By default nodes will store all chunks forwarded as the response to a retrieve request.
 These lookup results are worth storing because repeated requests for the same chunk can be served from the node's local storage without the need to "purchase" the chunk again from others. This strategy implicitly takes care of auto-scaling the network. Chunks originating from retrieval traffic will fill up the local storage adjusting redundancy to use maximum dedicated disk/memory capacity of all nodes. A preference to store frequently retrieved chunks results in higher redundancy aligning with more current usage. All else being equal, the more redundant a chunk, the fewer forwarding hops are expected for their retrieval, thereby reducing expected :dfn:`latency` as well as network traffic for popular content.
 
-Whereas retrieval compensation may prove sufficient for keeping the network in a relatively healthy state in terms of latency, from a resilience point of view, more work is needed. We may need additional redundancy to be resilient against partial network outages and we need extra incentives to ensure long-term availablilty of content even when it is accessed rarely. In the following sections we address these concerns.
+Whereas retrieval compensation may prove sufficient for keeping the network in a relatively healthy state in terms of latency, from a resilience point of view, more work is needed. We may need additional redundancy to be resilient against partial network outages and we need extra incentives to ensure long-term availablilty of content even when it is accessed rarely. In the following section we address these concerns.
 

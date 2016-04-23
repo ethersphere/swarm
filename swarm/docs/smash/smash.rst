@@ -7,14 +7,13 @@
     \newpage
 
 
-
 Introduction
 =========================================
 
 Proof of custody [#]_ is a construct that proves to an auditor that a storer has custody of data without the auditor having it. Such constructs can be used to audit the integrity of remotely stored documents trustlessly. In the context of a distributed file storage system, proof of custody schemes need to consider both storage and network communication overhead and offer flexible trade-offs between security and cost.
 
-..  rubric:: Footnotes
-..  [#] proof of existence, proof of storage, proof of resource, proof of retrievability
+.. rubric:: Footnotes
+.. [#] profof of existence, proof of storage, proof of resource, proof of retrievability
 
 In the specific context of swarm, we need to make sure we have a scheme that best adapts to
 
@@ -27,7 +26,7 @@ In the specific context of swarm, we need to make sure we have a scheme that bes
 * existing escalation to retributive measures: litigation on the ethereum blockchain
 
 
-The proof of custody scheme proposed here draws on earlier work based on well understood basic cryptography (:cite:`shacham2013compact`, :cite:`bowers2009proofs`), but in light of the above considerations a novel approach was warranted.
+The proof of custody scheme proposed here draws on earlier work based on well understood basic cryptography (:cite:`shacham2013compact`, :cite:`bowers2009proofs`), but in light of the above considerations a novel approach was warranted. In what follows we spell out a proof of custody scheme and present audit schemes that use variants of the scheme depending on
 
 Auditing chunks with pregenerated secrets
 ============================================
@@ -578,7 +577,7 @@ It is easy to see that this process follows the order defined in the previous se
 
 **Failure:**
 
-14. If at any time during the audit process there is no response to an audit request about a chunk, the guardian of that chunk is looked up by the responsible auditor and is sent an Ash proof request. Upon receiving a repsonse to the ASH proof request, the auditor verifies the proof and calculates the ASH secret and proceeds according to A-1--A-8. If there is no response, the audit is escalated and litigation on the blockchain starts: the auditor sends the ASH proof challenge to the blockchain accusing the guardian of having lost the chunk in question. From here on the standard deadline for refutation starts. The exact procedure is discussed in :cite:`ethersphere2016sw3`.
+14. If at any time during the audit process there is no response to an audit request about a chunk, the guardian of that chunk is looked up by the responsible auditor and is sent an Ash proof request. Upon receiving a repsonse to the ASH proof request, the auditor verifies the proof and calculates the ASH secret and proceeds according to steps 1--8. If there is no response, the audit is escalated and litigation on the blockchain starts: the auditor sends the ASH proof challenge to the blockchain accusing the guardian of having lost the chunk in question. From here on the standard deadline for refutation starts. The exact procedure is discussed in :cite:`ethersphere2016sw3`.
 
 15. Errors are detected in two ways: either an intermediate auditor finds that one of their children returned an audit secret that does not match the verification bits, or the main auditor finds that the final secret does not match the respective MASH. When this happens we need to find the culprit, i.e., the node that lost the chunk. This is done by sending out successive ASH proof challenges. Luckily, due to the iterative error coding scheme used (in which one segment's ASH is the input to the seed of the next challenge), once an error occurs the probability of it staying undetected falls exponentially. Therefore the culprit is most likely to be among the most recently audited chunks.
 
@@ -619,7 +618,7 @@ The collective audit can also be used to repair chunks in erasure coded collecti
 Conclusion
 =============
 
-In this paper we presented a simple proof of custody formula inspired by the Wilkinson--Buterik proof of storage used by Storj (:cite:`wilkinsonetal2014storj`). The formula offers 3 different types of challenge that auditors can use in different stages. We specified an auditing and litigation scheme that has ideal properties to secure the swarm against chunk loss.
+In this paper we presented a simple proof of custody formula inspired by the Wilkinson--Buterik proof of storage used by Storj (:cite:`wilkinsonetal2014storj`). The formula offers 3 different types of challenge that auditors can use in different stages. We specified an auditing and litigation scheme that has ideal properties to secure the swarm against chunk loss (:cite:`wilkinsonetal2014storj`).
 
 SMASH proofs offer integrity checking for chunks as well as for documents and document collections that
 
@@ -639,10 +638,6 @@ We outlined an auditing and litigation protocol which
 * helps nodes identify greedy peers that do not forward chunks;
 * offer a way to repair improper syncronisation state.
 
+
 .. bibliography:: ../refs.bib
-   :cited:
-   :style: alpha
-
-.. apalike not available so boring
-
-
+   :style:  plain

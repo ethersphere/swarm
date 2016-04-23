@@ -19,3 +19,5 @@ Welcome to the swarm documentation!
    history
    bandwidth
    storage
+   glossary
+
