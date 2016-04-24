@@ -236,7 +236,6 @@ latex_elements = {
 # Additional stuff for the LaTeX preamble.
 'preamble': '\\setcounter{secnumdepth}{5}\
 \\pagestyle{plain}\
-\\usepackage[utf8]{inputenc}\
 \\pagenumbering{arabic}\
 ',
 
