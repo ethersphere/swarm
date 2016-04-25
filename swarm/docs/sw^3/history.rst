@@ -149,6 +149,6 @@ The incentive strategy outlined here aspires to satisfy the following constraint
 * It plays nice with "naive" nodes.
 * It rewards those that play nice, including those following this strategy.
 
-In the context of swarm, storage and bandwidth are the two most important limited resources and this is reflected in our incentive scheme. The incentives for bandwith use are designed to achieve speedy and reliable data provision while the storage incentives are designed to ensure long term data preservation, ideally solving the "upload and disappear" problem. In the following section we introduce the basic functioning of the swarm incentive system and the Swarm Accounting Protocol (SWAP) which handles compensation for bandwidth use in realtime. In Section :ref:`sec:storage` we turn to the problem of data preservation and offer a solution.
+In the context of swarm, storage and bandwidth are the two most important limited resources and this is reflected in our incentive scheme. The incentives for bandwith use are designed to achieve speedy and reliable data provision while the storage incentives are designed to ensure long term data preservation, ideally solving the "upload and disappear" problem. In the following section we introduce the basic functioning of the swarm incentive system and the Swarm Accounting Protocol (SWAP) which handles compensation for bandwidth use in realtime. In  :ref:`Section 3 ƒ<sec:storage>` we turn to the problem of data preservation and offer a solution.
 
 

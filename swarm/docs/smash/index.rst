@@ -18,10 +18,3 @@ Welcome to the swarm documentation!
 .. raw:: latex
   \newpage
 
-.. Indices and tables
-.. ==================
-
-.. * :ref:`genindex`
-.. * :ref:`modindex`
-.. * :ref:`search`
-

@@ -19,7 +19,9 @@ import shlex
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-#sys.path.insert(0, os.path.abspath('.'))
+# sys.path.insert(0, os.path.abspath('../'))
+# sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), '..'))
+# sys.path.append(os.path.join(os.path.abspath(os.path.dirname(__file__)), '../sphinxtr/extensions'))
 
 # -- General configuration ------------------------------------------------
 
@@ -34,6 +36,10 @@ extensions = [
     'sphinx.ext.ifconfig',
     'sphinxcontrib.bibtex',
 ]
+
+natbib = {
+  "file": "refs.bib"
+}
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -256,6 +262,7 @@ latex_docclass = {
 }
 
 numfig = 1
+# numsec = 1
 
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,

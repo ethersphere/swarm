@@ -30,13 +30,16 @@ import shlex
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    # 'sphinx.ext.intersphinx',
-    # 'sphinx.ext.todo',
     'sphinx.ext.mathjax',
     'sphinx.ext.ifconfig',
-    # 'sphinxcontrib.numref',
     'sphinxcontrib.bibtex',
 ]
+
+
+natbib = {
+  "file": "refs.bib"
+}
+
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -56,7 +59,7 @@ master_doc = 'index'
 project = u'swarm'
 # copyright = u'2016, ΞTHΞЯSPHΞЯΞ'
 copyright = u'2016, ΞTHΞRSPHΞRΞ'
-author = u'viktor trón, aron fischer, daniel varga'
+author = u'viktor trón, aron fischer'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -233,15 +236,15 @@ latex_elements = {
 # Additional stuff for the LaTeX preamble.
 'preamble': '\\setcounter{secnumdepth}{5}\
 \\pagestyle{plain}\
+\\usepackage[utf8]{inputenc}\
 \\pagenumbering{arabic}\
-   \\usepackage{color}\
+  \\usepackage{color}\
   \\usepackage{amsmath}\
   \\usepackage{stmaryrd}\
   \\newcommand\\concat{\\mathbin{\\|}}\
   \\newcommand\\defeq{\\stackrel{\\text{\\tiny def}}{=}}\
   \\newcommand\\defequiv{\\stackrel{\\text{\\tiny def}}{\\Leftrightarrow}}\
     \\newcommand\\chunk{c}\
-    \\newcommand\\nexists{\\not\\exists}\
     \\newcommand\\segment{\\sigma}\
     \\newcommand\\level{\\lambda}\
     \\newcommand\\node{\\nu}\
@@ -297,7 +300,7 @@ latex_elements = {
 'maketitle': '\
 \\definecolor{orange}{rgb}{1.0, 0.49, 0.0}''\\definecolor{orange}{rgb}{1.0, 0.55, 0.0}\
 \\renewcommand{\\releasename}{\\huge\\scshape auditable storage for swarm\\\\secured by masked audit secret hash}\
-\\date{\\large\\rm draft version Aprw 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 2}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
+\\date{\\large\\rm draft version Apr 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 2}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
 \\release{}\
 \\title{smash-proof}\
 \\enlargethispage{.5cm}\
@@ -316,7 +319,7 @@ numfig = 1
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
   (master_doc, 'smash.tex', u'',
-   u'viktor trón, aron fischer, daniel varga',  'howto'),
+   u'viktor trón, aron fischer',  'howto'),
    # u'viktor trón', 'manual'),
 ]
 
