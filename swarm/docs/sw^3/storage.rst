@@ -60,6 +60,30 @@ The flipside of using only this incentive on it own is that chunks that are rare
 
 A long-term storage incentivisation scheme faces unique challenges. For example, unlike in the case of bandwidth incentives where retrievals are immediately accounted and settled, long-term storage guarantees are promisory in nature and deciding if the promise was kept can only be decided at the end of its validity. Loss of reputation is not an available deterrent against foul play in these instances: since new nodes need to be allowed to provide services right away, cheaters could just resort to new identities and keep selling (empty) storage promises.
 
+In the context of an owner paying one or more entities for long-term storage of data where losing even a small part of it renders it 
+useless, but large enough for it not to be practical to regularly verify the availability of every bit, particual attention is required 
+in the design of the incentive system to make the failure to store every last bit unprofitable. In the typical case, the storer 
+receives some payment upon successfully passing a probabilistic audit. Such audits are structured in such a way that the storer always 
+passes the audit, if she indeed has the entire data set, but there is also some non-zero probability of passing the audit if some data 
+is lost. This probability, of course, depends on what data is lost, but in any design there is a maximum to it, typically attained by 
+losing some very small portion of data. In case of systems that break up the date into chunks with a fixed maximum size, the probability 
+of passing the audit with incomplete data is maximized in the case when only one chunk is lost.
+
+Let us denote this maximum probability by :math:`p`. To keep failure to store all data unprofitable, the expected payout :math:`E` of subjecting 
+oneself to an audit should be negative, if the probability of failure is greater or equal to :math:`1 - p`. Formally: :math:`E = pR - (1-p)P < 0` 
+where :math:`R` is the reward for passing the audit and :math:`P` is the penalty for failing it. This yields the following important constraint on 
+the relative amounts of reward and penalty: :math:`P > pR/(1 - p)`. If this constraint is not met, storers doing a less than perfect --
+and thus unacceptable -- job can still be profitable, resulting in misaligned incentives.
+
+In the simplest case, the audit is a securely randomized spot check of having one random chunk of data in custody, with the proof of
+custody being the chunk itself. If the data consists of :math:`n` chunks, the probability of passing the audit with one chunk missing
+:math:`p = (n - 1)/n`. This yields :math:`P > (n - 1)R`. For different audits, :math:`p` is calculated differently.
+
+Thus, in order to pay :math:`R` for a successful audit, the auditor (be it the owner, a third party or even a smart contract) needs to verify
+whether or not the storer has comitted to losing at least :math:`P` in case of failure before the audit.
+
+
+
 ..  index::
   reputation
   punative measures
