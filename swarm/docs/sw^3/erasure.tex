@@ -35,21 +35,22 @@ While eliminating unessessary replication is a desireable feature in a storage n
 
 \section{Erasure codes}
 
-Erasure codes set out to solve the problem of making sure data is available even if parts of the system are faulty. In particular, how to constuct storage schemes (data encoding and distribution) that solves this problem efficiently.  The problem is framed in the context of ensuring an expected probability of data retrivability under the model expressing the fault conditions in some subsystem.
+Erasure codes are commonly used to ensure that data is available even if parts of the storage system are faulty. In particular they allow us to constuct storage schemes (data encoding and distribution) that solves this problem more efficiently than simple replication.  The problem is framed in the context of guaranteeing some probability that the data is retrievable given some model expressing the expected fault conditions in the storage subsystems.
 Coding theory in practice is often concerned with RAID-s and computer hardware architecture synchronising disks for resilient datacentre storage.
-Erasure codes in particular see the problem as how to encode the data into shards distributed across $n$ disks so that data is retrievable in full integrity in the face of a particular probability that one disk is faulty.
-Similarly in the context of a distributed chunkstore, the problem can be recouched as  the question how to encode the data into chunks distributed across the nodes in the network so that the entire data is retrievable in full integrity in the face of a particular probability that one chunk missing (fixed-sized chunks which are either completely lost or completely undamaged). Since the content storage is organised based on hashes in the address space
-and actually held by custodian nodes randomly distributed in the same address space, we are safe to assume that the allocation of source is independent of all the other nodes and data. This assures that recovering a chunk at any point can practically be thought of as failing with equal and independent probability.
+Erasure codes in particular see the problem as how to encode data into shards distributed across $n$ disks so that the data is fully retrievable in the face of a particular probability that one disk is faulty.
+Similarly in the context of a distributed chunkstore, the problem can be recouched as the question how to encode the data into chunks distributed across the nodes in the network so that the entire data is retrievable in the face of a particular probability that one chunk is missing\footnote{The distributed chunkstore model uses fixed-sized chunks which are either completely lost or completely undamaged). Since the swarm content storage uses the hashes of chunks as their addresses, and since the chunks are stored by custodian nodes that are randomly distributed in the same address space, we are safe to assume that the storage allocation is independent of all the other nodes and data. This assures that recovering a chunk at any point can practically be thought of as failing with equal and independent probability.
 
 
-The Cauchy-Reed-Solomon erasure code (henceforth CRS, \cite{lubyetal1995CRS}, \cite{plank2006optimizing}) is a \emph{systemic erasure code} which applied to a data blob of $m$ fixed-size pieces, produces $k$ extra pieces (so called \emph{parity pieces}) of the same size in such a way that any $m$ out of $n=m+k$ fix-sized pieces are to reconstruct the original blob with storage overhead of $\frac{k}{m}$.%
+The Cauchy-Reed-Solomon erasure code (henceforth CRS, \cite{lubyetal1995CRS}, \cite{plank2006optimizing}) is a \emph{systemic erasure code} which applied to a data blob of $m$ fixed-size pieces, produces $k$ extra pieces (so called \emph{parity pieces}) of the same size in such a way that any $m$ out of $n=m+k$ fix-sized pieces are to enough to reconstruct the original blob. The storage overhead is therefore given by $\frac{k}{m}$.%
 %
 \footnote{%
 There are open source libraries that implement Reed Solomon or Cauchy-Reed-Solomon coding. See \cite{plank2009performance} for a thorough comparison.}
 
-Assuming $p$ is the probability of losing one piece, if all $n$ pieces are independently stored, the probability of losing the original content is $p^{n-m+1}$ which is exponential while extra storage is linear.
+%
+% formula for probability of loss.
+%
 
-Both the encoding and the decoding of CRS codes takes $O(mk)$ time, where $n$ is the number of data chunks, $k$ is the number of additional chunks as well as the maximum number of chunks that can be lost without losing decodeability. If $k$ is defined as a given fraction of $m$, which is necessary for guaranteeing a certain probability of retrievability under the condition of a fixed probability $p$ of losing a single chunk, the time complexity of CRS codes becomes $O(n^2)$, which is utterly unacceptable for large files.
+Both the encoding and the decoding of CRS codes takes $O(mk)$ time, where $n$ is the number of data chunks, $k$ is the number of additional chunks as well as the maximum number of chunks that can be lost without losing decodeability. If $k$ is defined as a given fraction of $m$, which is necessary for guaranteeing a certain probability of retrievability under the condition of a fixed probability $p$ of losing a single chunk, the time complexity of CRS codes becomes $O(n^2)$, which is utterly unacceptable for large files. %large files = large n only when chunk size is fixed.
 
 \section{The swarm chunk tree}
 
