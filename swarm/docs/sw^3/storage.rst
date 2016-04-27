@@ -22,8 +22,10 @@ Storage Incentives
   disconnection
   pair: receipt; storage
 
-Positive collective incentivisation
-==================================================
+
+Compensation for storage and guarantees for long-term data preservation
+===========================================================================
+
 
 Storage incentives refer to the ability of a system to encourage/enforce preservation of content,
 especially if the user explicitly requires that in the fashion of 'upload and disappear' discussed in the introduction.
@@ -42,10 +44,16 @@ especially if the user explicitly requires that in the fashion of 'upload and di
 :dfn:`Filecoin` (:cite:`filecoin2014`), an incentivised p2p storage network using IPFS (:cite:`ipfs2014`) offers an interesting solution. Nodes participating in its network also mine
 on the filecoin blockchain. Filecoin can be earned (mined) through replicating other people's content and spent on having one's content replicated.
 Filecoin's proof of work is defined to include proof that the miner possesses a set of randomly chosen units of storage depending on the parent block.
-Using a strong proof of retrievability scheme, Filecoin ensures that the winning miner had relevant data. As miners compete, they will find that their chances of winning will be proportional to the percentage of the existing storage units they actually store. This is because the missing ones need to be retrieved from other nodes, which is hopelessly slow for the purpose of mining.
+Using a strong proof of retrievability scheme, Filecoin ensures that the winning miner had relevant data. As miners compete, they will find that their chances of winning will be proportional to the percentage of the existing storage units they actually store. This is because the more missing ones need to be retrieved from other nodes, and the more their response is delayed, decreasing their chance to win the block.
 
-Compensation for storage and guarantees for long-term data preservation
-===========================================================================
+With this scheme, Filecoin provides positive incentvisation on a collective level. Such a system is suspect to a 'tragedy of the commons' problem in that losing any particular data will have no negative consequence to any one storer node. This lack of individual accountability means the solution is rather limited as a security measure against lost content.
+
+On top of this collective positive incentvisation implemented by competitive proof of retrievability mining is wasteful in terms of network traffic, computational resources as well as blockchain storage [#]_ and therefore unlikely to scale well. In what follows we will pursue a different approach.
+
+
+..  rubric:: Footnotes
+.. [#] If the set of chunks are not selected differently for each node, mining will resemble a DDOS on nodes that actually store the data needed for the round. Given an upper bound on nodes' storage capacity, the expected proportion of the data that needs to be retrieved increases as the network grows. This causes miners to end up competing on bandwidth. Due to competitive mining, nodes perform the same computations wasting resources. If content is known to be popular (replicated in multiple copies) or temporary (the owner can afford to lose it), checking their integrity is spurious. Without this distinction, mining is wastful even if it is non-redundant across nodes. Finally, in order to check proof of retrievability responses as part of block validation, existing data needs to be recorded on the blockchain.
+
 
 While Swarm's core storage component is analogous to traditional :abbr:`DHTs (distributed hash tables)` both in terms of network topology and routing used in retrieval, it uses the narrowest interpretation of immutable content addressed archive. Instead of just metadata about the whereabouts of the addressed content, the proximate nodes actually store the data itself.
 When a new chunk enters the swarm storage network, it is propagated from node to node via a process called :dfn:`syncing`. The goal is for chunks to end up at nodes whose address is closest to the chunk hash. This way chunks can be located later for retrieval using kademlia key-based routing (:cite:`maymounkov2002kademlia`).
@@ -60,18 +68,18 @@ The flipside of using only this incentive on it own is that chunks that are rare
 
 A long-term storage incentivisation scheme faces unique challenges. For example, unlike in the case of bandwidth incentives where retrievals are immediately accounted and settled, long-term storage guarantees are promisory in nature and deciding if the promise was kept can only be decided at the end of its validity. Loss of reputation is not an available deterrent against foul play in these instances: since new nodes need to be allowed to provide services right away, cheaters could just resort to new identities and keep selling (empty) storage promises.
 
-In the context of an owner paying one or more entities for long-term storage of data where losing even a small part of it renders it 
-useless, but large enough for it not to be practical to regularly verify the availability of every bit, particual attention is required 
-in the design of the incentive system to make the failure to store every last bit unprofitable. In the typical case, the storer 
-receives some payment upon successfully passing a probabilistic audit. Such audits are structured in such a way that the storer always 
-passes the audit, if she indeed has the entire data set, but there is also some non-zero probability of passing the audit if some data 
-is lost. This probability, of course, depends on what data is lost, but in any design there is a maximum to it, typically attained by 
-losing some very small portion of data. In case of systems that break up the date into chunks with a fixed maximum size, the probability 
+In the context of an owner paying one or more entities for long-term storage of data where losing even a small part of it renders it
+useless, but large enough for it not to be practical to regularly verify the availability of every bit, particual attention is required
+in the design of the incentive system to make the failure to store every last bit unprofitable. In the typical case, the storer
+receives some payment upon successfully passing a probabilistic audit. Such audits are structured in such a way that the storer always
+passes the audit, if she indeed has the entire data set, but there is also some non-zero probability of passing the audit if some data
+is lost. This probability, of course, depends on what data is lost, but in any design there is a maximum to it, typically attained by
+losing some very small portion of data. In case of systems that break up the date into chunks with a fixed maximum size, the probability
 of passing the audit with incomplete data is maximized in the case when only one chunk is lost.
 
-Let us denote this maximum probability by :math:`p`. To keep failure to store all data unprofitable, the expected payout :math:`E` of subjecting 
-oneself to an audit should be negative, if the probability of failure is greater or equal to :math:`1 - p`. Formally: :math:`E = pR - (1-p)P < 0` 
-where :math:`R` is the reward for passing the audit and :math:`P` is the penalty for failing it. This yields the following important constraint on 
+Let us denote this maximum probability by :math:`p`. To keep failure to store all data unprofitable, the expected payout :math:`E` of subjecting
+oneself to an audit should be negative, if the probability of failure is greater or equal to :math:`1 - p`. Formally: :math:`E = pR - (1-p)P < 0`
+where :math:`R` is the reward for passing the audit and :math:`P` is the penalty for failing it. This yields the following important constraint on
 the relative amounts of reward and penalty: :math:`P > pR/(1 - p)`. If this constraint is not met, storers doing a less than perfect --
 and thus unacceptable -- job can still be profitable, resulting in misaligned incentives.
 
@@ -255,10 +263,7 @@ Benefits of CRS merkle tree
 ------------------------------------
 
 Assuming :math:`p` is the probability of losing one piece, if all :math:`n` pieces are independently stored, the probability of loosing the original content is :math:`p^{n-m+1}` which is exponential while extra storage is linear. These properties are preserved if we apply the coding to every level of a swarm chunk tree. Fixing both the branching factor :math:`b` (essentially chunk size) as well as redundancy :math:`m`, we can keep the decoding overhead (quadratic in file size) a constant, which means processing can scale (being linear in the number of nodes, i.e., file size  (logarithmic with parallelisation). Very importantly, however, this causes the reliability to exponentially converge to zero, defeating the purpose of using erasure codes.
-This loss of reliability, however, can be overcome by conducting regular :math:`audit and repair` checks (:cite:`ethersphere2016smash`) which provide exponential increase in reliability using loglinear resources. We are currently looking at this :dfn:`divide and conquer` approach to the scaling of erasure codes, the results will be published in a forthcoming paper.
-
-
-This per-level :math:`m\text{-out-of-}n` Cauchy-Reed-Solomon erasure code once introduced into the swarm chunk tree does not only ensure file availability, but also offers further benefits of increased resilience and ways to speed up retrieval.
+This loss of reliability, however, can be overcome by conducting regular :math:`audit and repair` checks (:cite:`ethersphere2016smash`) which provide exponential increase in reliability using loglinear resources. We are currently looking at this :dfn:`divide and conquer` approach to the scaling of erasure codes, the ref chunk tree does not only ensure file availability, but also offers further benefits of increased resilience and ways to speed up retrieval.
 
 All chunks are created equal
 ++++++++++++++++++++++++++++++++++
@@ -519,15 +524,15 @@ When the network grows, it can happen that a custodian finds a new registered no
 Multiple receipts and local replication
 ----------------------------------------------
 
-As discussed above, owners can manage the desired security level by using erasure coding with arbitrary degree of redundancy. However, 
-it still makes sense to require that more than one node actually store the chunk. Although the cloud industry is trying to get away 
-from the explicit x-fold redundancy model because it is very wasteful and incurs high costs – erasure coding can guarantee the same 
-level of security using only a fraction of the storage space. However, in a data center, redundancy is interpreted in the context of 
-hard drives whose failure rates are low, independent and predictable and their connectivity is almost guaranteed at highest possible 
-speed due to proximity. In a peer-to-peer network scenario, nodes could disappear much more frequently than hard drives fail. In order 
-to guarantee robust operation, we need to require several local replicas of each chunk (commonly 3, see :cite:`wilkinson2014metadisk`). 
-Since the syncing protocol already provides replication across the proximate bin, regular resyncing of the chunk may be sufficient to 
-ensure availability in case the custodian drops off. If this proves too weak in practice we may require the custodian to get receipts 
+As discussed above, owners can manage the desired security level by using erasure coding with arbitrary degree of redundancy. However,
+it still makes sense to require that more than one node actually store the chunk. Although the cloud industry is trying to get away
+from the explicit x-fold redundancy model because it is very wasteful and incurs high costs – erasure coding can guarantee the same
+level of security using only a fraction of the storage space. However, in a data center, redundancy is interpreted in the context of
+hard drives whose failure rates are low, independent and predictable and their connectivity is almost guaranteed at highest possible
+speed due to proximity. In a peer-to-peer network scenario, nodes could disappear much more frequently than hard drives fail. In order
+to guarantee robust operation, we need to require several local replicas of each chunk (commonly 3, see :cite:`wilkinson2014metadisk`).
+Since the syncing protocol already provides replication across the proximate bin, regular resyncing of the chunk may be sufficient to
+ensure availability in case the custodian drops off. If this proves too weak in practice we may require the custodian to get receipts
 from two proximate peers who act as cocustodians. The added benefit of this extra complexity is unclear.
 
 

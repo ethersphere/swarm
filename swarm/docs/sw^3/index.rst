@@ -13,7 +13,7 @@ Welcome to the swarm documentation!
 .. Contents:
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 3
 
    abstract
    history
