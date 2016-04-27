@@ -109,10 +109,15 @@ related:
 Towards Web 3.0
 -----------------------------
 
-In order to enable responsive distributed web applications (called dapps
-in Web 3.0 communities), :dfn:`IPFS` (:cite:`ipfs2014`) had to introduce a few major improvements over Bittorrent. The most immediately apparent novelty is the highly web-compatible URL-based retrieval. In addition, the directory (also organized as a DHT) has been vastly
-improved, making it possible to search for any part of any file (called
-*chunk*). It has also been made very flexible and pluggable in order to work with any kind of storage backend, be it a laptop with intermittent wifi, or a sophisticated HA cluster in a fiber-optic connected datacenter.
+The straightforward approach of using bittorrent as a distribution mechanism for web content has been successfully implemented by
+:dfn:`Zeronet`. However, because of the aforementioned issues with bittorrent, Zeronet fails to provide the same kind of responsive 
+experience that users of web services came to expect.
+
+In order to enable responsive distributed web applications (called dapps in Web 3.0 communities), :dfn:`IPFS` (:cite:`ipfs2014`) had to 
+introduce a few major improvements over Bittorrent. The most immediately apparent novelty is the highly web-compatible URL-based 
+retrieval. In addition, the directory (also organized as a DHT) has been vastly improved, making it possible to search for any part of 
+any file (called *chunk*). It has also been made very flexible and pluggable in order to work with any kind of storage backend, be it a 
+laptop with intermittent wifi, or a sophisticated HA cluster in a fiber-optic connected datacenter.
 
 A further important innovation is that IPFS has incentivisation factored out into pluggable modules. Modules such as bitswap for example establish that it is in the interest of greedy downloaders to balance the load they impose on other nodes, and also that it is in every node's interest to host popular content. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
 
@@ -126,7 +131,7 @@ A further important innovation is that IPFS has incentivisation factored out int
 ..
   While there is not much to gain for the user by choking uploads, or falsely advertizing content, without bitswap there is not much penalty for it either. However, bitswap incentivizes the hosting of popular content, since the constraint of swapped bits coming from the same piece of content are gone in IPFS. If you host popular content, bitswap-guarded nodes will be nice to you. There aren't that many of them, though. In this early stage of abundance, while supplied disk and bandwidth vastly outstrip demand, the system works fine as it is. If bottlenecks emerge either due to increased use or malicious intent, bitswap can be expected to become more popular as a security measure against widespread freeriding. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
 
-The same problem with lack of incentives is apparent in various other projects such as zeronet, i2p or MAIDSAFE.
+The same problem with lack of incentives is apparent in various other projects such as zeronet or MAIDSAFE.
 Incentivization for distributed document storage is still a relatively new research field. Especially in the light of the blockchain. The Tor network has seen suggestions (:cite:`jansen2014onions`, :cite:`ghoshetal2014tor`) but these schemes are largely academic, they are not built in at the heart of the underlying system. Bitcoin has also been repurposed to drive other systems like Permacoin (:cite:`miller2014permacoin`) or Sia (:cite:`vorick2014sia`), some use their own blockchain, altcoin such as Metadisk (:cite:`wilkinson2014metadisk`) for Storj (:cite:`wilkinsonetal2014storj`) or Filecoin (:cite:`filecoin2014`) for IPFS :cite:`ipfs2014`.
 
 What is still missing from the above incentive system, is the possibility to rent out
