@@ -103,20 +103,20 @@ related:
 
 * There are no built-in incentives to seed downloaded content. In particular, one cannot exchange the upstream bandwidth provided by seeding one content for downstream bandwidth required for downloading some other content. Effectively, upstream bandwidth provided by seeding somebody else's content is not directly rewarded in any way.
 * Typically, downloads start slowly and with delay. Clients that are further ahead in downloading have much more to offer to and much less to demand from newcomers. This results in bittorrent downloads starting as a trickle before turning into a full-blown torrent of bits. This severely limits the use of bittorrent in responsive interactive applications.
-* Small chunks of data can only be shared in the context of the larger file that they are part of. We find peers sharing the content we seek by querying the Distributed Hash Table (DHT) for said file. Thus a peer sharing only part of a file needs to know what that file is in order to be found in the DHT, and conversely, if the peer doesn't know that the data chunks belong some file the peer will not be found by users seeking that file. This commonly happens for example when the same chunks of data appear verbatim in multiple files. Also, unless their objective is simply to get the missing parts of a file from their peers, nodes are not rewarded for their sharing efforts (storage and bandwidth), just like seeders.
+* Small chunks of data can only be shared in the context of the larger file that they are part of. We find peers sharing the content we seek by querying the Distributed Hash Table (DHT) for said file. Thus a peer sharing only part of a file needs to know what that file is in order to be found in the DHT, and conversely, if the peer doesn't know that the data chunks belong to some file the peer will not be found by users seeking that file. This commonly happens for example when the same chunks of data appear verbatim in multiple files. Also, unless their objective is simply to get the missing parts of a file from their peers, nodes are not rewarded for their sharing efforts (storage and bandwidth), just like seeders.
 
 
 Towards Web 3.0
 -----------------------------
 
 The straightforward approach of using bittorrent as a distribution mechanism for web content has been successfully implemented by
-:dfn:`Zeronet`. However, because of the aforementioned issues with bittorrent, Zeronet fails to provide the same kind of responsive 
+:dfn:`Zeronet`. However, because of the aforementioned issues with bittorrent, Zeronet fails to provide the same kind of responsive
 experience that users of web services came to expect.
 
-In order to enable responsive distributed web applications (called dapps in Web 3.0 communities), :dfn:`IPFS` (:cite:`ipfs2014`) had to 
-introduce a few major improvements over Bittorrent. The most immediately apparent novelty is the highly web-compatible URL-based 
-retrieval. In addition, the directory (also organized as a DHT) has been vastly improved, making it possible to search for any part of 
-any file (called *chunk*). It has also been made very flexible and pluggable in order to work with any kind of storage backend, be it a 
+In order to enable responsive distributed web applications (called dapps in Web 3.0 communities), :dfn:`IPFS` (:cite:`ipfs2014`) had to
+introduce a few major improvements over Bittorrent. The most immediately apparent novelty is the highly web-compatible URL-based
+retrieval. In addition, the directory (also organized as a DHT) has been vastly improved, making it possible to search for any part of
+any file (called *chunk*). It has also been made very flexible and pluggable in order to work with any kind of storage backend, be it a
 laptop with intermittent wifi, or a sophisticated HA cluster in a fiber-optic connected datacenter.
 
 A further important innovation is that IPFS has incentivisation factored out into pluggable modules. Modules such as bitswap for example establish that it is in the interest of greedy downloaders to balance the load they impose on other nodes, and also that it is in every node's interest to host popular content. Bitswap or no bitswap, IPFS largely solves the problem of content consumers helping shouldering the costs of information dissemination.
@@ -136,7 +136,7 @@ Incentivization for distributed document storage is still a relatively new resea
 
 What is still missing from the above incentive system, is the possibility to rent out
 large amounts of disk space to those willing to pay for it, irrespective
-of the popularity of their content; and conversely there is also way to deploy your interactive dynamic content to be stored in the cloud - ":dfn:`upload and disappear`".
+of the popularity of their content; and conversely there is also a way to deploy your interactive dynamic content to be stored in the cloud - ":dfn:`upload and disappear`".
 
 The objective of any :index:`incentive system` for p2p content distribution is to encourage cooperative behavior and discourage freeriding: the uncompensated depletion of limited resources.
 In what follows we present our current thinking for a comprehensive incentive system for swarm implemented through a suite of smart contracts. The incentive system leverages the ethereum infrastructure and the underlying value asset, :index:`Ether`.
@@ -149,6 +149,6 @@ The incentive strategy outlined here aspires to satisfy the following constraint
 * It plays nice with "naive" nodes.
 * It rewards those that play nice, including those following this strategy.
 
-In the context of swarm, storage and bandwidth are the two most important limited resources and this is reflected in our incentive scheme. The incentives for bandwith use are designed to achieve speedy and reliable data provision while the storage incentives are designed to ensure long term data preservation, ideally solving the "upload and disappear" problem. In the following section we introduce the basic functioning of the swarm incentive system and the Swarm Accounting Protocol (SWAP) which handles compensation for bandwidth use in realtime. In  :ref:`Section 3 ƒ<sec:storage>` we turn to the problem of data preservation and offer a solution.
+In the context of swarm, storage and bandwidth are the two most important limited resources and this is reflected in our incentive scheme. The incentives for bandwith use are designed to achieve speedy and reliable data provision while the storage incentives are designed to ensure long term data preservation, ideally solving the "upload and disappear" problem. In :ref:`Section 3 <sec:bandwidth>` we introduce the basic functioning of the swarm incentive system and describe the Swarm Accounting Protocol (SWAP) which handles compensation for bandwidth use in realtime. In  :ref:`Section 3 <sec:storage>` we turn to the problem of data preservation and offer a solution.
 
 

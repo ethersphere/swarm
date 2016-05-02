@@ -8,7 +8,7 @@
    Users of swarm need make sure their content is preserved, even when it is rarely accessed. This kind of ensured archival necessitate integrity audits of documents and data collections without transferring the data itself. We present a family of proofs of custody that has properties ideal to serve these needs and allows flexible trade-offs in terms of compactness, repeatability, third party provability and outsourceability for the various scenarios in which audits are used.
 
 .. rubric:: Footnotes
-.. [#] The authors are indebted to Gavin Wood, Vitalik Buterin and Jeffrey Wilcke for their daring  vision of the next generation internet and for their original concepts of web 3 and swarm. We thank Vitalik Buterin, Nick Johnson, Daniel Varga for their comments and suggestions. Their names here by no  means imply endorsement. All errors are ours.
+.. [#] The authors are indebted to Gavin Wood, Vitalik Buterin and Jeffrey Wilcke for their daring  vision of the next generation internet and for their original concepts of web 3 and swarm. We thank Vitalik Buterin, Dániel Varga, Anish Mohammed, Martin Becze, Christian Reitwiessner and Dániel A. Nagy for their comments and suggestions. Their names here by no  means imply endorsement. All errors are ours.
 
 
 Introduction

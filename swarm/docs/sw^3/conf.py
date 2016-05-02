@@ -59,7 +59,7 @@ master_doc = 'index'
 project = u'swarm'
 # copyright = u'2016, ΞTHΞЯSPHΞЯΞ'
 copyright = u'2016, ΞTHΞRSPHΞRΞ'
-author = u'viktor trón, áron fischer, dániel a. nagy, zsolt felföldi'
+author = u'viktor trón, áron fischer, dániel a. nagy, zsolt felföldi, nick johnson'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
@@ -249,7 +249,7 @@ latex_elements = {
 'maketitle': '\
 \\definecolor{orange}{rgb}{1.0, 0.49, 0.0}''\\definecolor{orange}{rgb}{1.0, 0.55, 0.0}\
 \\renewcommand{\\releasename}{\\huge\\scshape incentive system for swarm}\
-\\date{\\large\\rm draft version Apr 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 1}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
+\\date{\\large\\rm draft version May 2016\\\\{\color{orange} {\\bfseries\\scshape ethersphere orange papers 1}}\\\\ licensed under the Creative Commons Attribution License http://creativecommons.org/licenses/by/2.0/}\
 \\release{}\
 \\title{swap, swear and swindle}\
 \\enlargethispage{.5cm}\
@@ -269,7 +269,7 @@ numfig = 1
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
   (master_doc, 'sw^3.tex', u'swap, swear and swindle',
-   u'viktor trón, aron fischer, dániel a. nagy, zsolt felföldi',  'howto'),
+   u'viktor trón, aron fischer, dániel a. nagy, zsolt felföldi, nick johnson',  'howto'),
    # u'viktor trón, aron fischer, dániel a. nagy, zsolt felföldi', 'manual'),
 ]
 
