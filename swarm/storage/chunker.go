@@ -104,9 +104,12 @@ func (self *Chunk) String() string {
 // - the size (of the subtree encoded in the Chunk)
 // - the Chunk, ie. the contents read from the input reader
 func (self *TreeChunker) Hash(input []byte) []byte {
-	hasher := self.hashFunc()
-	hasher.Write(input)
-	return hasher.Sum(nil)
+	// old linear hash
+	//	hasher := self.hashFunc()
+	//	hasher.Write(input)
+	//	return hasher.Sum(nil)
+	// new Merkle hash
+	return BinaryMerkle(input, self.hashFunc)
 }
 
 func (self *TreeChunker) Split(key Key, data SectionReader, chunkC chan *Chunk, swg *sync.WaitGroup) (errC chan error) {
