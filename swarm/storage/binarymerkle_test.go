@@ -40,3 +40,31 @@ func TestEmptyChunk(t *testing.T) {
 		t.Errorf("Expected: %x", expected)
 	}
 }
+
+// tests the hashing of a chunk containing 96 (=32+64) zeroes
+func Test96ZeroesChunk(t *testing.T) {
+	// obtained from
+	// ((echo -en '\0140' ; head -c39 /dev/zero )|
+	// openssl sha256 -binary ; head -c64 /dev/zero |
+	// openssl sha256 -binary)|sha256sum
+	expected := []byte{
+		0xeb, 0xfb, 0x09, 0xe6, 0xcf, 0xc9, 0x90, 0x46, 0x6b, 0x23, 0xeb, 0x54,
+		0xd4, 0x86, 0xf6, 0xfb, 0x23, 0xbd, 0x5d, 0x12, 0x71, 0x6e, 0xe7, 0x3b,
+		0xb5, 0x2c, 0xec, 0x91, 0x39, 0x58, 0x6e, 0x1e,
+	}
+	empty := []byte{
+		0x60, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	}
+	hasher := MakeHashFunc(NewChunkerParams().Hash)
+	hash := BinaryMerkle(empty, hasher)
+	t.Logf("96 zeroes chunk hash: %x", hash)
+	if !bytes.Equal(hash, expected) {
+		t.Errorf("Expected: %x", expected)
+	}
+}
