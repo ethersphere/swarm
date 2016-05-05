@@ -5,7 +5,7 @@
 
    Swarm is a distributed storage platform and content distribution service, a native base layer service of the Ethereum web 3 stack.    The goal is a peer-to-peer serverless hosting, storage and serving solution that is DDOS-resistant, has zero-downtime, is fault-tolerant and censorship-resistant as well as  self-sustaining due to a built-in incentive system.
 
-   Users of swarm need make sure their content is preserved, even when it is rarely accessed. This kind of ensured archival necessitate integrity audits of documents and data collections without transferring the data itself. We present a family of proofs of custody that has properties ideal to serve these needs and allows flexible trade-offs in terms of compactness, repeatability, third party provability and outsourceability for the various scenarios in which audits are used.
+   Users of swarm need make sure their content is preserved, even when it is rarely accessed. This kind of ensured archival necessitates integrity audits of documents and data collections without transferring the data itself. We present a family of proofs of custody that has properties ideal to serve these needs and allows flexible trade-offs in terms of compactness, repeatability, third party provability and outsourceability for the various scenarios in which audits are used.
 
 .. rubric:: Footnotes
 .. [#] The authors are indebted to Gavin Wood, Vitalik Buterin and Jeffrey Wilcke for their daring  vision of the next generation internet and for their original concepts of web 3 and swarm. We thank Vitalik Buterin, Dániel Varga, Anish Mohammed, Martin Becze, Christian Reitwiessner and Dániel A. Nagy for their comments and suggestions. Their names here by no  means imply endorsement. All errors are ours.
@@ -30,7 +30,47 @@ In the specific context of swarm, we need to make sure we have a scheme that bes
 * existing escalation to retributive measures: litigation on the ethereum blockchain
 
 
-The proof of custody scheme proposed here draws on earlier work based on well understood basic cryptography (:cite:`shacham2013compact`, :cite:`bowers2009proofs`), but in light of the above considerations a novel approach was warranted (inspired by :cite:`wilkinsonetal2014storj` and :cite:`buterin2014erasure`).
+The proof of custody schemes proposed here draws on earlier work based on well understood basic cryptography (:cite:`shacham2013compact`, :cite:`bowers2009proofs`), but in light of the above considerations a novel approach was warranted (inspired by :cite:`wilkinsonetal2014storj` and :cite:`buterin2014erasure`).
+
+Chunk and collection auditing with merkle proofs
+================================================
+First, we define a simple protocol, the Merkle Audit Protocol for proving custody of both individual chunks, and larger collections, using merkle hash trees.
+
+Auditing chunks with merkle proofs
+----------------------------------
+First, a chunk's :dfn:`Merkle hash` is constructed by recursively hashing pairs of elements, starting with leaf nodes, which we will refer to as :dfn:`segments`, of length equal to the hash algorithm used, in this case 256 bits. The root of this binary tree is the :dfn:`Merkle root`, and is the primary identifier for this chunk. Knowledge of the merkle root is sufficient to both retrieve the file, and to issue audit requests and validate their responses. Since the merkle tree will be large, we do not expect nodes to store it; instead, it can be recalculated on demand.
+
+When someone - the original storer, or any other party with knowledge of the merkle root - wants to issue an audit request, they first generate a random number between 0 and the number of segments in the chunk, minus one. They send the merkle root and this randomly generated segment ID to the party storing the chunk.
+
+A response to an audit request consists of the requested segment, plus a merkle proof demonstrating that the segment represents the requested part of the chunk. A merkle proof is constructed by returning the sibling of each node in the path through the merkle tree from the leaf (the segment) to the merkle root. The requesting party can validate a merkle proof by repeatedly hashing the current state with the sibling node at each level of the tree; the segment index provides sufficient knowledge to ascertain whether the sibling node is a left or right node. Once this procedure completes, the root hash obtained thus can be compared to the already known merkle root; a match constitutes a proof that the returned segment is indeed the requested one, and thus that the audited node had it in its posession at the time of the request.
+
+The size of an audit response is bounded by :math:`O(log2 n)`, where n is the number of segments in a chunk. For common parameters n=128, this results in merkle proofs containing 6 hashes. In addition to the segment itself, this is 224 bytes. For larger chunks, for instance with n=32768, proofs are 14 hashes, or 480 bytes including the segment data.
+
+On its own, a single audit request only demonstrates custodianship of a single segment of the chunk. If a node is storing a fraction of the chunk, p, the probability of their being able to answer a single randomly selected audit is also p. However, repeated, independently randomized audits - either simultaneously, or issued incrementally over a period of time - reduce this possibility to :math:`p^\n`, where n is the number of audit requests issued. The probability of passing 20 audits despite only holding 90% of the file, for instance, is :math:`0.9^\20=0.122`, or 12.2%. By structuring the penalties for noncompliance appropriately, it is easy to ensure that less than total storage is a net loss for the storer.
+
+Auditing large files with merkle proofs
+---------------------------------------
+Auditing individual chunks is of limited utility without some means of doing lightweight auditing of files that exceed a single chunk in size. Here, we define an extension of the Merkle Audit Protocol for multi-chunk files and for collections.
+
+Files larger than a single chunk are stored as follows: The file is broken up into chunk-sized segments, and the merkle root for each is calculated as described above. These root hashes are concatenated together, and form second-level chunks, and the merkle hashes of each are calculated by following the same procedure. Note that the result of computing the merkle hash over a second-level chunk is exactly the same as the result of extending a single merkle hash calculation to all the chunks it references. This both provides an unbroken chain of proof using a simple hashing procedure, and requires no knowledge of this system from the individual storing nodes.
+
+This procedure is repeated recursively until the whole file has been processed, generating a series of leaf chunks, intermediate chunks, and a single root hash for the whole file.
+
+The audit procedure for a large file then proceeds in exactly the same fashion as auditing an individual chunk, only the issuer of the audit picks a segment to audit from the entire file. This audit can be accomplished in stages, by performing audits on the intermediate chunks in order to obtain the validated hashes for chunks lower in the tree, and so forth to the leaf chunks.
+
+The same probability guarantees from the individual chunk audit apply to collections, but it is possible to obtain better assurances of retrievability in the face of nodes that may store most but not all of the file. To achieve this, all the children of each node in the chunk hierarchy are first erasure coded using a systemic erasure code. Supposing we use an 96-of-128 erasure code, meaning that we break the original file up into 96 blocks, and generate 32 check blocks, storing all 128 blocks. Any 96 of these are sufficient to reconstruct the original file. In this case, we only require 75% of the encoded data to be retained for successful reconstruction; the same 10 audits give us :math:`0.75^\10=0.0032` assurance that this is the case.
+
+With erasure coding, we can also compute the likelihood of successful reconstruction given a probability of individual chunks being lost; this is given by the continued sum of the Binomial distribution, :math:`P(X>32)~B(128, p)`, where p is the probability of individual chunk loss; if we assume a probability 0.1 of chunks being lost, this gives a total probability of failure of approximately 2.8e-7. It's critical to note, however, that this assumes chunk losses are independent and random; in the case where many chunks from the same erasure code are stored on a single node, or on related nodes in the same geographical or political area, this may not be the case.
+
+Auditing multi-file collections with merkle proofs
+--------------------------------------------------
+Finally, we extend the Merkle Audit Protocol to collections of files. Assume a collection is defined, minimally, as a series of (merkle root, file length) tuples. In practice, collections will have manifests with more metadata than this - for instance, a human-readable filename, but it is easy to construct a list of such tuples from the richer stored metadata, and as we will demonstrate, doing so permits generating more compact audit proofs that do not include the manifest itself.
+
+Now, we can construct a merkle tree over this canonical list of hashes and lengths. By storing the length as an integer of size equal to the hash length, the leaf nodes of the merkle tree are alternating hash and length values. Call the root of this merkle tree the :dfn:`audit root`. The audit root can then be stored in the manifest file for this collection.
+
+To generate a random audit for a collection, a node with knowledge of the collection's root hash can first fetch the manifest, and then using the list of file lengths, select a chunk to audit from the whole collection uniformly at random. The audit is then submitted recursively as described above.
+
+Finally, an audit proof for a participant with no knowledge of the manifest itself besides the audit root can be provided by concatenating a merkle proof of the hash and length from the canonical list with the hash and length themselves, and finally with the merkle proof calculated for the selected segment of the selected file.
 
 Auditing chunks with pregenerated secrets
 ============================================
