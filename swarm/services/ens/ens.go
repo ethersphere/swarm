@@ -8,8 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/services/ens/contract"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -20,24 +18,28 @@ var qtypeChash = [32]byte{ 0x43, 0x48, 0x41, 0x53, 0x48}
 // swarm domain name registry and resolver
 // the ENS instance can be directly wrapped in rpc.Api
 type ENS struct {
-	session *contract.ResolverSession
-	contractBackend bind.ContractBackend
+	transactOpts *bind.TransactOpts;
+	contractBackend bind.ContractBackend;
+	rootAddress common.Address;
 }
 
-// NewENS creates a proxy instance wrapping the abigen interface to the ENS contract
-// using the transaction options passed as first argument, it sets up a session
 func NewENS(transactOpts *bind.TransactOpts, contractAddr common.Address, contractBackend bind.ContractBackend) *ENS {
-	ens, err := contract.NewResolver(contractAddr, contractBackend)
-	if err != nil {
-		glog.V(logger.Debug).Infof("error setting up name server on %v, skipping: %v", contractAddr.Hex(), err)
-	}
 	return &ENS{
-		&contract.ResolverSession{
-			Contract:     ens,
-			TransactOpts: *transactOpts,
-		},
-		contractBackend,
+		transactOpts: transactOpts,
+		contractBackend: contractBackend,
+		rootAddress: contractAddr,
 	}
+}
+
+func (self *ENS) newResolver(contractAddr common.Address) (*contract.ResolverSession, error) {
+	resolver, err := contract.NewResolver(contractAddr, self.contractBackend)
+	if err != nil {
+		return nil, err
+	}
+	return &contract.ResolverSession{
+		Contract: resolver,
+		TransactOpts: *self.transactOpts,
+	}, nil
 }
 
 // resolve is a non-tranasctional call, returns hash as storage.Key
@@ -47,28 +49,47 @@ func (self *ENS) Resolve(hostPort string) (storage.Key, error) {
 	if len(parts) > 1 && parts[1] != "" {
 		host = parts[0]
 	}
-	return self.resolveName(host)
+	return self.resolveName(self.rootAddress, host)
 }
 
-func (self *ENS) resolveName(host string) (storage.Key, error) {
+func (self *ENS) findResolver(rootAddress common.Address, host string) (*contract.ResolverSession, [12]byte, error) {
+	var nodeId [12]byte
+
+	resolver, err := self.newResolver(rootAddress)
+	if err != nil {
+		return nil, [12]byte{}, err
+	}
+
 	labels := strings.Split(host, ".")
-	resolver := self
-	var nodeId [12]byte;
 
 	for i := len(labels) - 1; i >= 0; i-- {
 		hash := crypto.Sha3Hash([]byte(labels[i]))
-		ret, err := resolver.session.FindResolver(nodeId, hash)
+		ret, err := resolver.FindResolver(nodeId, hash)
 		if err != nil {
-			return nil, fmt.Errorf("error resolving label '%v' of '%v': %v", labels[i], host, err)
+			err = fmt.Errorf("error resolving label '%v' of '%v': %v", labels[i], host, err)
+			return nil, [12]byte{}, err
 		}
 		if ret.Rcode != 0 {
-			return nil, fmt.Errorf("error resolving label '%v' of '%v': got response code %v", labels[i], host, ret.Rcode)
+			err = fmt.Errorf("error resolving label '%v' of '%v': got response code %v", labels[i], host, ret.Rcode)
+			return nil, [12]byte{}, err
 		}
 		nodeId = ret.Rnode;
-		resolver = NewENS(&resolver.session.TransactOpts, ret.Raddress, resolver.contractBackend)
+		resolver, err = self.newResolver(ret.Raddress)
+		if err != nil {
+			return nil, [12]byte{}, err
+		}
 	}
 
-	ret, err := resolver.session.Resolve(nodeId, qtypeChash, 0)
+	return resolver, nodeId, nil
+}
+
+func (self *ENS) resolveName(rootAddress common.Address, host string) (storage.Key, error) {
+	resolver, nodeId, err := self.findResolver(rootAddress, host)
+	if err != nil {
+		return nil, err
+	}
+
+	ret, err := resolver.Resolve(nodeId, qtypeChash, 0)
 	if err != nil {
 		return nil, fmt.Errorf("error looking up RR on '%v': %v", host, err)
 	}
@@ -77,3 +98,5 @@ func (self *ENS) resolveName(host string) (storage.Key, error) {
 	}
 	return storage.Key(ret.Data[:]), nil
 }
+
+
