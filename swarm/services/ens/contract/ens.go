@@ -13,7 +13,7 @@ import (
 )
 
 // ResolverABI is the input ABI used to generate the binding from.
-const ResolverABI = `[{"constant":false,"inputs":[{"name":"name","type":"bytes32[]"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"name":"setPrivateRR","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"id","type":"bytes32"}],"name":"getExtended","outputs":[{"name":"data","type":"bytes"}],"type":"function"},{"constant":false,"inputs":[{"name":"name","type":"bytes32[]"}],"name":"deletePrivateRR","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"nodeId","type":"bytes12"},{"name":"qtype","type":"bytes32"},{"name":"index","type":"uint16"}],"name":"resolve","outputs":[{"name":"rcode","type":"uint16"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"type":"function"},{"constant":false,"inputs":[{"name":"name","type":"string"}],"name":"deleteRR","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"mayUpdate","outputs":[{"name":"","type":"bool"}],"type":"function"},{"constant":true,"inputs":[{"name":"nodeId","type":"bytes12"},{"name":"label","type":"bytes32"}],"name":"findResolver","outputs":[{"name":"rcode","type":"uint16"},{"name":"ttl","type":"uint32"},{"name":"rnode","type":"bytes12"},{"name":"raddress","type":"address"}],"type":"function"},{"constant":false,"inputs":[{"name":"name","type":"string"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"name":"setRR","outputs":[],"type":"function"}]`
+const ResolverABI = `[{"constant":false,"inputs":[{"name":"rootNodeId","type":"bytes12"},{"name":"name","type":"bytes32[]"}],"name":"deletePrivateRR","outputs":[],"type":"function"},{"constant":true,"inputs":[],"name":"isPersonalResolver","outputs":[{"name":"","type":"bool"}],"type":"function"},{"constant":false,"inputs":[{"name":"label","type":"bytes32"},{"name":"newOwner","type":"address"}],"name":"setOwner","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"id","type":"bytes32"}],"name":"getExtended","outputs":[{"name":"data","type":"bytes"}],"type":"function"},{"constant":false,"inputs":[{"name":"rootNodeId","type":"bytes12"},{"name":"name","type":"string"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"name":"setRR","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"rootNodeId","type":"bytes12"},{"name":"name","type":"bytes32[]"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"name":"setPrivateRR","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"nodeId","type":"bytes12"},{"name":"qtype","type":"bytes32"},{"name":"index","type":"uint16"}],"name":"resolve","outputs":[{"name":"rcode","type":"uint16"},{"name":"rtype","type":"bytes16"},{"name":"ttl","type":"uint32"},{"name":"len","type":"uint16"},{"name":"data","type":"bytes32"}],"type":"function"},{"constant":false,"inputs":[{"name":"label","type":"bytes32"},{"name":"resolver","type":"address"},{"name":"nodeId","type":"bytes12"}],"name":"register","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"label","type":"bytes32"},{"name":"resolver","type":"address"},{"name":"nodeId","type":"bytes12"}],"name":"setResolver","outputs":[],"type":"function"},{"constant":false,"inputs":[{"name":"rootNodeId","type":"bytes12"},{"name":"name","type":"string"}],"name":"deleteRR","outputs":[],"type":"function"},{"constant":true,"inputs":[{"name":"label","type":"bytes32"}],"name":"getOwner","outputs":[{"name":"","type":"address"}],"type":"function"},{"constant":true,"inputs":[{"name":"nodeId","type":"bytes12"},{"name":"label","type":"bytes32"}],"name":"findResolver","outputs":[{"name":"rcode","type":"uint16"},{"name":"ttl","type":"uint32"},{"name":"rnode","type":"bytes12"},{"name":"raddress","type":"address"}],"type":"function"}]`
 
 // ResolverBin is the compiled bytecode used for deploying new contracts.
 const ResolverBin = `0x`
@@ -228,30 +228,56 @@ func (_Resolver *ResolverCallerSession) GetExtended(id [32]byte) ([]byte, error)
 	return _Resolver.Contract.GetExtended(&_Resolver.CallOpts, id)
 }
 
-// MayUpdate is a free data retrieval call binding the contract method 0xe8c70084.
+// GetOwner is a free data retrieval call binding the contract method 0xdeb931a2.
 //
-// Solidity: function mayUpdate() constant returns(bool)
-func (_Resolver *ResolverCaller) MayUpdate(opts *bind.CallOpts) (bool, error) {
+// Solidity: function getOwner(label bytes32) constant returns(address)
+func (_Resolver *ResolverCaller) GetOwner(opts *bind.CallOpts, label [32]byte) (common.Address, error) {
+	var (
+		ret0 = new(common.Address)
+	)
+	out := ret0
+	err := _Resolver.contract.Call(opts, out, "getOwner", label)
+	return *ret0, err
+}
+
+// GetOwner is a free data retrieval call binding the contract method 0xdeb931a2.
+//
+// Solidity: function getOwner(label bytes32) constant returns(address)
+func (_Resolver *ResolverSession) GetOwner(label [32]byte) (common.Address, error) {
+	return _Resolver.Contract.GetOwner(&_Resolver.CallOpts, label)
+}
+
+// GetOwner is a free data retrieval call binding the contract method 0xdeb931a2.
+//
+// Solidity: function getOwner(label bytes32) constant returns(address)
+func (_Resolver *ResolverCallerSession) GetOwner(label [32]byte) (common.Address, error) {
+	return _Resolver.Contract.GetOwner(&_Resolver.CallOpts, label)
+}
+
+// IsPersonalResolver is a free data retrieval call binding the contract method 0x3f5665e7.
+//
+// Solidity: function isPersonalResolver() constant returns(bool)
+func (_Resolver *ResolverCaller) IsPersonalResolver(opts *bind.CallOpts) (bool, error) {
 	var (
 		ret0 = new(bool)
 	)
 	out := ret0
-	err := _Resolver.contract.Call(opts, out, "mayUpdate")
+	err := _Resolver.contract.Call(opts, out, "isPersonalResolver")
 	return *ret0, err
 }
 
-// MayUpdate is a free data retrieval call binding the contract method 0xe8c70084.
+// IsPersonalResolver is a free data retrieval call binding the contract method 0x3f5665e7.
 //
-// Solidity: function mayUpdate() constant returns(bool)
-func (_Resolver *ResolverSession) MayUpdate() (bool, error) {
-	return _Resolver.Contract.MayUpdate(&_Resolver.CallOpts)
+// Solidity: function isPersonalResolver() constant returns(bool)
+func (_Resolver *ResolverSession) IsPersonalResolver() (bool, error) {
+	return _Resolver.Contract.IsPersonalResolver(&_Resolver.CallOpts)
 }
 
-// MayUpdate is a free data retrieval call binding the contract method 0xe8c70084.
+// IsPersonalResolver is a free data retrieval call binding the contract method 0x3f5665e7.
 //
-// Solidity: function mayUpdate() constant returns(bool)
-func (_Resolver *ResolverCallerSession) MayUpdate() (bool, error) {
-	return _Resolver.Contract.MayUpdate(&_Resolver.CallOpts)
+// Solidity: function isPersonalResolver() constant returns(bool)
+func (_Resolver *ResolverCallerSession) IsPersonalResolver() (bool, error) {
+	return _Resolver.Contract.IsPersonalResolver(&_Resolver.CallOpts)
 }
 
 // Resolve is a free data retrieval call binding the contract method 0xa16fdafa.
@@ -302,86 +328,149 @@ func (_Resolver *ResolverCallerSession) Resolve(nodeId [12]byte, qtype [32]byte,
 	return _Resolver.Contract.Resolve(&_Resolver.CallOpts, nodeId, qtype, index)
 }
 
-// DeletePrivateRR is a paid mutator transaction binding the contract method 0x89c0d9ef.
+// DeletePrivateRR is a paid mutator transaction binding the contract method 0x1b370194.
 //
-// Solidity: function deletePrivateRR(name bytes32[]) returns()
-func (_Resolver *ResolverTransactor) DeletePrivateRR(opts *bind.TransactOpts, name [][32]byte) (*types.Transaction, error) {
-	return _Resolver.contract.Transact(opts, "deletePrivateRR", name)
+// Solidity: function deletePrivateRR(rootNodeId bytes12, name bytes32[]) returns()
+func (_Resolver *ResolverTransactor) DeletePrivateRR(opts *bind.TransactOpts, rootNodeId [12]byte, name [][32]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "deletePrivateRR", rootNodeId, name)
 }
 
-// DeletePrivateRR is a paid mutator transaction binding the contract method 0x89c0d9ef.
+// DeletePrivateRR is a paid mutator transaction binding the contract method 0x1b370194.
 //
-// Solidity: function deletePrivateRR(name bytes32[]) returns()
-func (_Resolver *ResolverSession) DeletePrivateRR(name [][32]byte) (*types.Transaction, error) {
-	return _Resolver.Contract.DeletePrivateRR(&_Resolver.TransactOpts, name)
+// Solidity: function deletePrivateRR(rootNodeId bytes12, name bytes32[]) returns()
+func (_Resolver *ResolverSession) DeletePrivateRR(rootNodeId [12]byte, name [][32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.DeletePrivateRR(&_Resolver.TransactOpts, rootNodeId, name)
 }
 
-// DeletePrivateRR is a paid mutator transaction binding the contract method 0x89c0d9ef.
+// DeletePrivateRR is a paid mutator transaction binding the contract method 0x1b370194.
 //
-// Solidity: function deletePrivateRR(name bytes32[]) returns()
-func (_Resolver *ResolverTransactorSession) DeletePrivateRR(name [][32]byte) (*types.Transaction, error) {
-	return _Resolver.Contract.DeletePrivateRR(&_Resolver.TransactOpts, name)
+// Solidity: function deletePrivateRR(rootNodeId bytes12, name bytes32[]) returns()
+func (_Resolver *ResolverTransactorSession) DeletePrivateRR(rootNodeId [12]byte, name [][32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.DeletePrivateRR(&_Resolver.TransactOpts, rootNodeId, name)
 }
 
-// DeleteRR is a paid mutator transaction binding the contract method 0xaceafcc4.
+// DeleteRR is a paid mutator transaction binding the contract method 0xbc06183d.
 //
-// Solidity: function deleteRR(name string) returns()
-func (_Resolver *ResolverTransactor) DeleteRR(opts *bind.TransactOpts, name string) (*types.Transaction, error) {
-	return _Resolver.contract.Transact(opts, "deleteRR", name)
+// Solidity: function deleteRR(rootNodeId bytes12, name string) returns()
+func (_Resolver *ResolverTransactor) DeleteRR(opts *bind.TransactOpts, rootNodeId [12]byte, name string) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "deleteRR", rootNodeId, name)
 }
 
-// DeleteRR is a paid mutator transaction binding the contract method 0xaceafcc4.
+// DeleteRR is a paid mutator transaction binding the contract method 0xbc06183d.
 //
-// Solidity: function deleteRR(name string) returns()
-func (_Resolver *ResolverSession) DeleteRR(name string) (*types.Transaction, error) {
-	return _Resolver.Contract.DeleteRR(&_Resolver.TransactOpts, name)
+// Solidity: function deleteRR(rootNodeId bytes12, name string) returns()
+func (_Resolver *ResolverSession) DeleteRR(rootNodeId [12]byte, name string) (*types.Transaction, error) {
+	return _Resolver.Contract.DeleteRR(&_Resolver.TransactOpts, rootNodeId, name)
 }
 
-// DeleteRR is a paid mutator transaction binding the contract method 0xaceafcc4.
+// DeleteRR is a paid mutator transaction binding the contract method 0xbc06183d.
 //
-// Solidity: function deleteRR(name string) returns()
-func (_Resolver *ResolverTransactorSession) DeleteRR(name string) (*types.Transaction, error) {
-	return _Resolver.Contract.DeleteRR(&_Resolver.TransactOpts, name)
+// Solidity: function deleteRR(rootNodeId bytes12, name string) returns()
+func (_Resolver *ResolverTransactorSession) DeleteRR(rootNodeId [12]byte, name string) (*types.Transaction, error) {
+	return _Resolver.Contract.DeleteRR(&_Resolver.TransactOpts, rootNodeId, name)
 }
 
-// SetPrivateRR is a paid mutator transaction binding the contract method 0x60ae74ae.
+// Register is a paid mutator transaction binding the contract method 0xa1f8f8f0.
 //
-// Solidity: function setPrivateRR(name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
-func (_Resolver *ResolverTransactor) SetPrivateRR(opts *bind.TransactOpts, name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
-	return _Resolver.contract.Transact(opts, "setPrivateRR", name, rtype, ttl, len, data)
+// Solidity: function register(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverTransactor) Register(opts *bind.TransactOpts, label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "register", label, resolver, nodeId)
 }
 
-// SetPrivateRR is a paid mutator transaction binding the contract method 0x60ae74ae.
+// Register is a paid mutator transaction binding the contract method 0xa1f8f8f0.
 //
-// Solidity: function setPrivateRR(name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
-func (_Resolver *ResolverSession) SetPrivateRR(name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
-	return _Resolver.Contract.SetPrivateRR(&_Resolver.TransactOpts, name, rtype, ttl, len, data)
+// Solidity: function register(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverSession) Register(label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.Register(&_Resolver.TransactOpts, label, resolver, nodeId)
 }
 
-// SetPrivateRR is a paid mutator transaction binding the contract method 0x60ae74ae.
+// Register is a paid mutator transaction binding the contract method 0xa1f8f8f0.
 //
-// Solidity: function setPrivateRR(name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
-func (_Resolver *ResolverTransactorSession) SetPrivateRR(name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
-	return _Resolver.Contract.SetPrivateRR(&_Resolver.TransactOpts, name, rtype, ttl, len, data)
+// Solidity: function register(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverTransactorSession) Register(label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.Register(&_Resolver.TransactOpts, label, resolver, nodeId)
 }
 
-// SetRR is a paid mutator transaction binding the contract method 0xef32ac57.
+// SetOwner is a paid mutator transaction binding the contract method 0x5b0fc9c3.
 //
-// Solidity: function setRR(name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
-func (_Resolver *ResolverTransactor) SetRR(opts *bind.TransactOpts, name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
-	return _Resolver.contract.Transact(opts, "setRR", name, rtype, ttl, len, data)
+// Solidity: function setOwner(label bytes32, newOwner address) returns()
+func (_Resolver *ResolverTransactor) SetOwner(opts *bind.TransactOpts, label [32]byte, newOwner common.Address) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "setOwner", label, newOwner)
 }
 
-// SetRR is a paid mutator transaction binding the contract method 0xef32ac57.
+// SetOwner is a paid mutator transaction binding the contract method 0x5b0fc9c3.
 //
-// Solidity: function setRR(name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
-func (_Resolver *ResolverSession) SetRR(name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
-	return _Resolver.Contract.SetRR(&_Resolver.TransactOpts, name, rtype, ttl, len, data)
+// Solidity: function setOwner(label bytes32, newOwner address) returns()
+func (_Resolver *ResolverSession) SetOwner(label [32]byte, newOwner common.Address) (*types.Transaction, error) {
+	return _Resolver.Contract.SetOwner(&_Resolver.TransactOpts, label, newOwner)
 }
 
-// SetRR is a paid mutator transaction binding the contract method 0xef32ac57.
+// SetOwner is a paid mutator transaction binding the contract method 0x5b0fc9c3.
 //
-// Solidity: function setRR(name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
-func (_Resolver *ResolverTransactorSession) SetRR(name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
-	return _Resolver.Contract.SetRR(&_Resolver.TransactOpts, name, rtype, ttl, len, data)
+// Solidity: function setOwner(label bytes32, newOwner address) returns()
+func (_Resolver *ResolverTransactorSession) SetOwner(label [32]byte, newOwner common.Address) (*types.Transaction, error) {
+	return _Resolver.Contract.SetOwner(&_Resolver.TransactOpts, label, newOwner)
+}
+
+// SetPrivateRR is a paid mutator transaction binding the contract method 0x91c8e7b9.
+//
+// Solidity: function setPrivateRR(rootNodeId bytes12, name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverTransactor) SetPrivateRR(opts *bind.TransactOpts, rootNodeId [12]byte, name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "setPrivateRR", rootNodeId, name, rtype, ttl, len, data)
+}
+
+// SetPrivateRR is a paid mutator transaction binding the contract method 0x91c8e7b9.
+//
+// Solidity: function setPrivateRR(rootNodeId bytes12, name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverSession) SetPrivateRR(rootNodeId [12]byte, name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetPrivateRR(&_Resolver.TransactOpts, rootNodeId, name, rtype, ttl, len, data)
+}
+
+// SetPrivateRR is a paid mutator transaction binding the contract method 0x91c8e7b9.
+//
+// Solidity: function setPrivateRR(rootNodeId bytes12, name bytes32[], rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverTransactorSession) SetPrivateRR(rootNodeId [12]byte, name [][32]byte, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetPrivateRR(&_Resolver.TransactOpts, rootNodeId, name, rtype, ttl, len, data)
+}
+
+// SetRR is a paid mutator transaction binding the contract method 0x8bba944d.
+//
+// Solidity: function setRR(rootNodeId bytes12, name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverTransactor) SetRR(opts *bind.TransactOpts, rootNodeId [12]byte, name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "setRR", rootNodeId, name, rtype, ttl, len, data)
+}
+
+// SetRR is a paid mutator transaction binding the contract method 0x8bba944d.
+//
+// Solidity: function setRR(rootNodeId bytes12, name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverSession) SetRR(rootNodeId [12]byte, name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetRR(&_Resolver.TransactOpts, rootNodeId, name, rtype, ttl, len, data)
+}
+
+// SetRR is a paid mutator transaction binding the contract method 0x8bba944d.
+//
+// Solidity: function setRR(rootNodeId bytes12, name string, rtype bytes16, ttl uint32, len uint16, data bytes32) returns()
+func (_Resolver *ResolverTransactorSession) SetRR(rootNodeId [12]byte, name string, rtype [16]byte, ttl uint32, len uint16, data [32]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetRR(&_Resolver.TransactOpts, rootNodeId, name, rtype, ttl, len, data)
+}
+
+// SetResolver is a paid mutator transaction binding the contract method 0xa9f2a1b2.
+//
+// Solidity: function setResolver(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverTransactor) SetResolver(opts *bind.TransactOpts, label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.contract.Transact(opts, "setResolver", label, resolver, nodeId)
+}
+
+// SetResolver is a paid mutator transaction binding the contract method 0xa9f2a1b2.
+//
+// Solidity: function setResolver(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverSession) SetResolver(label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetResolver(&_Resolver.TransactOpts, label, resolver, nodeId)
+}
+
+// SetResolver is a paid mutator transaction binding the contract method 0xa9f2a1b2.
+//
+// Solidity: function setResolver(label bytes32, resolver address, nodeId bytes12) returns()
+func (_Resolver *ResolverTransactorSession) SetResolver(label [32]byte, resolver common.Address, nodeId [12]byte) (*types.Transaction, error) {
+	return _Resolver.Contract.SetResolver(&_Resolver.TransactOpts, label, resolver, nodeId)
 }

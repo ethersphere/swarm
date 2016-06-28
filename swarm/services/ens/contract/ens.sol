@@ -24,9 +24,8 @@ contract Resolver {
     function deletePrivateRR(bytes12 rootNodeId, bytes32[] name);
 
     // These methods are implemented by open registrar implementations.
-    function register(bytes32 label);
     function register(bytes32 label, address resolver, bytes12 nodeId);
-    function transfer(bytes32 label, address newOwner);
+    function setOwner(bytes32 label, address newOwner);
     function setResolver(bytes32 label, address resolver, bytes12 nodeId);
     function getOwner(bytes32 label) constant returns (address);
 }

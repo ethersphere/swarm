@@ -1,3 +1,4 @@
+//go:generate abigen --sol contract/ens.sol	--pkg contract --out contract/ens.go
 package ens
 
 import (
@@ -7,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/services/ens/contract"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -14,6 +16,7 @@ import (
 
 var domainAndVersion = regexp.MustCompile("[@:;,]+")
 var qtypeChash = [32]byte{ 0x43, 0x48, 0x41, 0x53, 0x48}
+var rtypeChash = [16]byte{ 0x43, 0x48, 0x41, 0x53, 0x48}
 
 // swarm domain name registry and resolver
 // the ENS instance can be directly wrapped in rpc.Api
@@ -52,29 +55,42 @@ func (self *ENS) Resolve(hostPort string) (storage.Key, error) {
 	return self.resolveName(self.rootAddress, host)
 }
 
-func (self *ENS) findResolver(rootAddress common.Address, host string) (*contract.ResolverSession, [12]byte, error) {
-	var nodeId [12]byte
-
-	resolver, err := self.newResolver(rootAddress)
+func (self *ENS) nextResolver(resolver *contract.ResolverSession, nodeId [12]byte, label string) (*contract.ResolverSession, [12]byte, error) {
+	hash := crypto.Sha3Hash([]byte(label))
+	ret, err := resolver.FindResolver(nodeId, hash)
+	if err != nil {
+		err = fmt.Errorf("error resolving label '%v': %v", label, err)
+		return nil, [12]byte{}, err
+	}
+	if ret.Rcode != 0 {
+		err = fmt.Errorf("error resolving label '%v': got response code %v", label, ret.Rcode)
+		return nil, [12]byte{}, err
+	}
+	nodeId = ret.Rnode;
+	resolver, err = self.newResolver(ret.Raddress)
 	if err != nil {
 		return nil, [12]byte{}, err
 	}
 
+	return resolver, nodeId, nil
+}
+
+func (self *ENS) findResolver(rootAddress common.Address, host string) (*contract.ResolverSession, [12]byte, error) {
+	resolver, err := self.newResolver(self.rootAddress)
+	if err != nil {
+		return nil, [12]byte{}, err
+	}
+
+	if len(host) == 0 {
+		return resolver, [12]byte{}, nil
+	}
+
 	labels := strings.Split(host, ".")
 
+	var nodeId [12]byte
 	for i := len(labels) - 1; i >= 0; i-- {
-		hash := crypto.Sha3Hash([]byte(labels[i]))
-		ret, err := resolver.FindResolver(nodeId, hash)
-		if err != nil {
-			err = fmt.Errorf("error resolving label '%v' of '%v': %v", labels[i], host, err)
-			return nil, [12]byte{}, err
-		}
-		if ret.Rcode != 0 {
-			err = fmt.Errorf("error resolving label '%v' of '%v': got response code %v", labels[i], host, ret.Rcode)
-			return nil, [12]byte{}, err
-		}
-		nodeId = ret.Rnode;
-		resolver, err = self.newResolver(ret.Raddress)
+		var err error
+		resolver, nodeId, err = self.nextResolver(resolver, nodeId, labels[i])
 		if err != nil {
 			return nil, [12]byte{}, err
 		}
@@ -99,4 +115,71 @@ func (self *ENS) resolveName(rootAddress common.Address, host string) (storage.K
 	return storage.Key(ret.Data[:]), nil
 }
 
+/**
+ * Registers a new domain name for the caller, making them the owner of the new name.
+ */
+func (self *ENS) Register(name string, resolverAddress common.Address) (*types.Transaction, error) {
+	// Find the resolver that we should register with (the one that controls the parent domain)
+	parts := strings.SplitN(name, ".", 2)
 
+	baseName := ""
+	if len(parts) > 1 {
+		baseName = parts[1]
+	}
+
+	resolver, nodeId, err := self.findResolver(self.rootAddress, baseName)
+	if err != nil {
+		return nil, err
+	}
+	if nodeId != [12]byte{} {
+		return nil, fmt.Errorf("cannot register domains on %v: not a root node", baseName)
+	}
+
+	// Send it a register transaction
+	hash := crypto.Sha3Hash([]byte(parts[0]))
+	return resolver.Register(hash, resolverAddress, [12]byte{})
+}
+
+/**
+ * Steps through name components until it finds a PersonalResolver contract.
+ * Returns the resolver, the node ID, and the remaining name components.
+ */
+func (self *ENS) findPersonalResolver(name string) (*contract.ResolverSession, [12]byte, string, error) {
+	var nodeId [12]byte
+
+	resolver, err := self.newResolver(self.rootAddress)
+	if err != nil {
+		return nil, [12]byte{}, "", err
+	}
+
+	labels := strings.Split(name, ".")
+
+	for i := len(labels) - 1; i >= 0; i-- {
+		if personal, _ := resolver.IsPersonalResolver(); personal {
+			return resolver, nodeId, strings.Join(labels[0:i + 1], "."), nil
+		}
+
+		resolver, nodeId, err = self.nextResolver(resolver, nodeId, labels[i])
+		if err != nil {
+			return nil, [12]byte{}, "", err
+		}
+	}
+
+	if personal, _ := resolver.IsPersonalResolver(); !personal {
+		return nil, [12]byte{}, "", fmt.Errorf("Personal resolver not found in any name component")
+	} else {
+		return resolver, nodeId, "", nil
+	}
+}
+
+/**
+ * Sets the content hash associated with a name.
+ */
+func (self *ENS) SetContentHash(name string, hash common.Hash) (*types.Transaction, error) {
+	resolver, nodeId, name, err := self.findPersonalResolver(name)
+	if err != nil {
+		return nil, err
+	}
+
+	return resolver.SetRR(nodeId, name, rtypeChash, 3600, 20, [32]byte(hash))
+}

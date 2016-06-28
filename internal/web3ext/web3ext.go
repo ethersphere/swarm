@@ -121,6 +121,12 @@ web3._extend({
 			inputFormatter: [null, null]
 		}),
 		new web3._extend.Method({
+			name: 'setContentHash',
+			call: 'ens_setContentHash',
+			params: 2,
+			inputFormatter: [null, null]
+		}),
+		new web3._extend.Method({
 			name: 'resolve',
 			call: 'ens_resolve',
 			params: 1,
