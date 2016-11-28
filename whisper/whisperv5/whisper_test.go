@@ -70,7 +70,7 @@ func TestWhisperBasic(x *testing.T) {
 		x.Errorf("failed RequestHistoricMessages.")
 		return
 	}
-	err = w.SendP2PMessage(peerID, nil)
+	err = w.SendPP2Message(peerID, nil)
 	if err == nil {
 		x.Errorf("failed SendP2PMessage.")
 		return
