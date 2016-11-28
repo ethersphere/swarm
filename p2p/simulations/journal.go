@@ -14,9 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
-// Journal is an instance of a guaranteed no-loss subscription using event.TypeMux
-// Network components POST events to the TypeMux, which then is read by the journal
-// Each journal belongs to a subscription
+// Journal is an instance of a guaranteed no-loss subscription to network related events
+// (using event.TypeMux). Network components POST events to the TypeMux, which then is
+// read by the journal. Each journal belongs to a subscription.
 type Journal struct {
 	Id      string
 	lock    sync.Mutex
@@ -48,7 +48,6 @@ func (self *Journal) Subscribe(eventer *event.TypeMux, types ...interface{}) {
 		for {
 			select {
 			case ev := <-sub.Chan():
-				glog.V(6).Infof("append ev %v", ev)
 				self.append(ev)
 			case <-self.quitc:
 				return
@@ -115,7 +114,6 @@ func (self *Journal) NewEntries() int {
 
 func (self *Journal) WaitEntries(n int) {
 	for self.NewEntries() < n {
-		glog.V(6).Infof(".")
 		time.Sleep(10 * time.Millisecond)
 	}
 }
@@ -123,10 +121,8 @@ func (self *Journal) WaitEntries(n int) {
 func (self *Journal) Read(f func(*event.Event) bool) (read int) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	glog.V(6).Infof("read out of %v", len(self.Events))
 	ok := true
 	for self.cursor < len(self.Events) && ok {
-		glog.V(6).Infof("read %v", read)
 		read++
 		ok = f(self.Events[self.cursor])
 		self.cursor++
@@ -280,7 +276,7 @@ func NewMockersController(eventer *event.TypeMux) Controller {
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 					conf := msg.(*MockerConfig)
 					if conf.NodeCount == 0 {
-						conf.NodeCount = 40
+						conf.NodeCount = 100
 					}
 					ids := RandomNodeIds(conf.NodeCount)
 					if conf.UpdateInterval == 0 {
@@ -338,32 +334,6 @@ func NewMockerController(conf *MockerConfig, ticker *time.Ticker) Controller {
 // then update logs can be compressed (toonly one state transition per affected node)
 // epoch, epochcount
 
-type Delta struct {
-	Up   int
-	Down int
-}
-
-func oneOutOf(n int) int {
-	t := rand.Intn(n)
-	if t == 0 {
-		return 1
-	}
-	return 0
-}
-
-func deltas(i int) (d []*Delta) {
-	if i == 0 {
-		return []*Delta{
-			&Delta{10, 0},
-			&Delta{20, 0},
-		}
-	}
-	return []*Delta{
-		&Delta{oneOutOf(10), oneOutOf(10)},
-		&Delta{oneOutOf(2), oneOutOf(2)},
-	}
-}
-
 func ConnLabel(source, target *adapters.NodeId) string {
 	var first, second *adapters.NodeId
 	if bytes.Compare(source.Bytes(), target.Bytes()) > 0 {
@@ -381,29 +351,49 @@ func ConnLabel(source, target *adapters.NodeId) string {
 // The journal using the eventer can then be read to visualise or
 // drive connections
 func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, ticker <-chan time.Time) {
-	// ids := RandomNodeIds(100)
+
 	var onNodes []*Node
 	offNodes := ids
+	onConnsMap := make(map[string]int)
 	var onConns []*Conn
-
-	n := 0
+	connsMap := make(map[string]int)
+	var conns []*Conn
+	// ids := RandomNodeIds(100)
+	switchonRate := 5
+	dropoutRate := 100
+	newConnCount := 1 // new connection per node per tick
+	connFailRate := 100
+	disconnRate := 100 // fraction of all connections
+	nodesTarget := len(ids) / 2
+	degreeTarget := 8
+	convergenceRate := 5
+	rounds := 0
 	for _ = range ticker {
-		ds := deltas(n)
-		for i := 0; len(offNodes) > 0 && i < ds[0].Up; i++ {
-			c := rand.Intn(len(offNodes))
-			sn := &Node{Id: offNodes[c]}
-			err := eventer.Post(&NodeEvent{
-				Type:   "node",
-				Action: "up",
-				node:   sn,
-			})
-			if err != nil {
-				panic(err.Error())
+		glog.V(6).Infof("rates: %v/%v, %v (%v/%v)", switchonRate, dropoutRate, newConnCount, connFailRate, disconnRate)
+		// here switchon rate will depend
+		nodesUp := len(offNodes) / switchonRate
+		missing := nodesTarget - len(onNodes)
+		if missing > 0 {
+			if nodesUp < missing {
+				nodesUp += (missing-nodesUp)/convergenceRate + 1
 			}
-			onNodes = append(onNodes, sn)
-			offNodes = append(offNodes[0:c], offNodes[c+1:]...)
 		}
-		for i := 0; len(onNodes) > 0 && i < ds[0].Down; i++ {
+
+		nodesDown := len(onNodes) / dropoutRate
+
+		connsUp := len(onNodes) * newConnCount
+		connsUp = connsUp - connsUp/connFailRate
+		missing = nodesTarget*degreeTarget/2 - len(onConns)
+		if missing < connsUp {
+			connsUp = missing
+			if connsUp < 0 {
+				connsUp = 0
+			}
+		}
+		connsDown := len(onConns) / disconnRate
+		glog.V(6).Infof("Nodes Up: %v, Down: %v [ON: %v/%v]\nConns Up: %v, Down: %v [ON: %v/%v(%v)]", nodesUp, nodesDown, len(onNodes), len(onNodes)+len(offNodes), connsUp, connsDown, len(onConns), len(conns)-len(onConns), len(conns))
+
+		for i := 0; len(onNodes) > 0 && i < nodesDown; i++ {
 			c := rand.Intn(len(onNodes))
 			sn := onNodes[c]
 			err := eventer.Post(&NodeEvent{
@@ -417,17 +407,57 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, ticker <-chan ti
 			onNodes = append(onNodes[0:c], onNodes[c+1:]...)
 			offNodes = append(offNodes, sn.Id)
 		}
-		for i := 0; len(onNodes) > 1 && i < ds[1].Up; i++ {
-			caller := onNodes[rand.Intn(len(onNodes))].Id
-			callee := onNodes[rand.Intn(len(onNodes))].Id
-			if bytes.Compare(caller.Bytes(), callee.Bytes()) >= 0 {
+		for i := 0; len(offNodes) > 0 && i < nodesUp; i++ {
+			c := rand.Intn(len(offNodes))
+			sn := &Node{Id: offNodes[c]}
+			err := eventer.Post(&NodeEvent{
+				Type:   "node",
+				Action: "up",
+				node:   sn,
+			})
+			if err != nil {
+				panic(err.Error())
+			}
+			onNodes = append(onNodes, sn)
+			offNodes = append(offNodes[0:c], offNodes[c+1:]...)
+		}
+		var found bool
+		var sc *Conn
+		for i := 0; len(onNodes) > 1 && i < connsUp; i++ {
+			sc = nil
+			n := rand.Intn(len(onNodes) - 1)
+			m := n + 1 + rand.Intn(len(onNodes)-n-1)
+			for i := m; i < len(onNodes); i++ {
+				lab := ConnLabel(onNodes[n].Id, onNodes[i].Id)
+				var j int
+				j, found = onConnsMap[lab]
+				if found {
+					continue
+				}
+				j, found = connsMap[lab]
+				if found {
+					sc = conns[j]
+					break
+				}
+				caller := onNodes[n].Id
+				callee := onNodes[i].Id
+
+				sc := &Conn{
+					One:   caller,
+					Other: callee,
+				}
+				connsMap[lab] = len(conns)
+				conns = append(conns, sc)
+				break
+			}
+
+			if sc == nil {
 				i--
 				continue
 			}
-			sc := &Conn{
-				One:   caller,
-				Other: callee,
-			}
+			lab := ConnLabel(sc.One, sc.Other)
+			onConnsMap[lab] = len(onConns)
+			onConns = append(onConns, sc)
 			err := eventer.Post(&ConnEvent{
 				Type:   "conn",
 				Action: "up",
@@ -436,21 +466,23 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, ticker <-chan ti
 			if err != nil {
 				panic(err.Error())
 			}
-			onConns = append(onConns, sc)
 		}
-		for i := 0; len(onConns) > 0 && i < ds[1].Down; i++ {
+
+		for i := 0; len(onConns) > 0 && i < connsDown; i++ {
 			c := rand.Intn(len(onConns))
+			conn := onConns[c]
+			onConns = append(onConns[0:c], onConns[c+1:]...)
+			lab := ConnLabel(conn.One, conn.Other)
+			delete(onConnsMap, lab)
 			err := eventer.Post(&ConnEvent{
 				Type:   "conn",
 				Action: "down",
-				conn:   onConns[c],
+				conn:   conn,
 			})
 			if err != nil {
 				panic(err.Error())
 			}
-			onConns = append(onConns[0:c], onConns[c+1:]...)
 		}
-		n++
+		rounds++
 	}
-
 }

@@ -4,7 +4,6 @@ import (
 	// "fmt"
 
 	"github.com/ethereum/go-ethereum/event"
-	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 // TODO: to implement cytoscape global behav
@@ -40,7 +39,6 @@ func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
 	update := func(e *event.Event) bool {
 		entry := e.Data
 		var action string
-		glog.V(6).Infof("journal entry of %v: %v", e.Time, entry)
 		if ev, ok := entry.(*NodeEvent); ok {
 			el = &CyElement{Group: "nodes", Data: &CyData{Id: ev.node.Id.Label()}}
 			action = ev.Action

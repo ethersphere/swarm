@@ -28,18 +28,10 @@ import (
 // SendMsg(p2p.MsgWriter, uint64, interface{}) error
 // ReadMsg(p2p.MsgReader) (p2p.Msg, error)
 
-// peer sesssion test
+// peer session test
 // ExpectMsg(p2p.MsgReader, uint64, interface{}) error
 // SendMsg(p2p.MsgWriter, uint64, interface{}) error
 type SimPipe struct{}
-
-func (*SimPipe) NewPipe() (p2p.MsgReadWriter, p2p.MsgReadWriter) {
-	return p2p.MsgPipe()
-}
-
-func (*SimPipe) ClosePipe(rw p2p.MsgReadWriter) {
-	rw.(*p2p.MsgPipeRW).Close()
-}
 
 func (*SimPipe) SendMsg(w p2p.MsgWriter, code uint64, msg interface{}) error {
 	return p2p.Send(w, code, msg)

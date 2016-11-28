@@ -15,7 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
-type returnHandler func(io.Reader) (io.ReadSeeker, error)
+type returnHandler func(body io.Reader) (resp io.ReadSeeker, err error)
 
 type ResourceHandler struct {
 	Handle func(interface{}, *ResourceController) (interface{}, error)
@@ -106,14 +106,14 @@ func (self *ResourceController) Handle(method string) (returnHandler, error) {
 	if h == nil {
 		return nil, fmt.Errorf("allowed methods: %v", self.methods)
 	}
-	glog.V(6).Infof("get handler callback for method %v", method)
+	// glog.V(6).Infof("get handler callback for method %v", method)
 	rh := func(r io.Reader) (io.ReadSeeker, error) {
 		input, err := ioutil.ReadAll(r)
 		if err != nil {
-			glog.V(6).Infof("reading json body: %v", err)
+			// glog.V(6).Infof("reading json body: %v", err)
 			return nil, err
 		}
-		glog.V(6).Infof("decode json request body")
+		// glog.V(6).Infof("decode json request body")
 		var arg interface{}
 		if len(input) == 0 {
 			input = []byte("{}")
@@ -128,7 +128,6 @@ func (self *ResourceController) Handle(method string) (returnHandler, error) {
 			}
 			arg = req.Interface()
 		}
-		glog.V(6).Infof("calling handler")
 		res, err := h.Handle(arg, self)
 		if err != nil {
 			return nil, err
@@ -143,7 +142,6 @@ func (self *ResourceController) Resource(id string) (Controller, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	c, ok := self.controllers[id]
-	glog.V(6).Infof("resource for id %v", id)
 	if !ok {
 		return nil, fmt.Errorf("not found")
 	}
