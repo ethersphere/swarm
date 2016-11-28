@@ -1,3 +1,8 @@
+// +build none
+
+// You can run this simulation using
+//
+//    go run ./swarm/network/simulations/overlay.go
 package main
 
 import (
@@ -14,14 +19,14 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
-// Network extends simulations.Network with hives for each noded
+// Network extends simulations.Network with hives for each node.
 type Network struct {
 	*simulations.Network
 	hives     []*network.Hive
 	messenger *adapters.SimPipe
 }
 
-// SimNode extends simulations.Node
+// SimNode is the adapter used by Swarm simulations.
 type SimNode struct {
 	hive *network.Hive
 	adapters.NodeAdapter
@@ -49,6 +54,7 @@ func (self *SimNode) Stop() error {
 	return nil
 }
 
+// NewSimNode creates adapters for nodes in the simulation.
 func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
 	id := conf.Id
 	na := adapters.NewSimNode(id, self.Network, self.messenger)

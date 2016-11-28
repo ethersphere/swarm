@@ -30,7 +30,6 @@ func newPeer(rw p2p.MsgReadWriter) *Peer {
 		RW:     rw,
 		Errc:   make(chan error, 1),
 		Flushc: make(chan bool),
-		Onc:    make(chan bool),
 	}
 }
 
@@ -38,15 +37,13 @@ type Peer struct {
 	RW     p2p.MsgReadWriter
 	Errc   chan error
 	Flushc chan bool
-	Onc    chan bool
 }
 
 // Network interface to retrieve protocol runner to launch upon peer
 // connection
 type Network interface {
 	GetNodeAdapter(id *NodeId) NodeAdapter
-	Connect(*NodeId, *NodeId, bool) error
-	Disconnect(*NodeId, *NodeId, bool) error
+	Reporter
 }
 
 // SimNode is the network adapter that
@@ -63,8 +60,6 @@ type SimNode struct {
 func (self *SimNode) Messenger() Messenger {
 	return self.messenger
 }
-
-type ProtoCall func(*p2p.Peer, p2p.MsgReadWriter) error
 
 func NewSimNode(id *NodeId, n Network, m Messenger) *SimNode {
 	return &SimNode{
@@ -129,15 +124,13 @@ func (self *SimNode) Disconnect(rid []byte) error {
 	if peer == nil || peer.RW == nil {
 		return fmt.Errorf("already disconnected")
 	}
-	self.messenger.ClosePipe(peer.RW)
+	peer.RW.(*p2p.MsgPipeRW).Close()
 	peer.RW = nil
-	na := self.network.GetNodeAdapter(id)
-	peer = na.(*SimNode).GetPeer(self.Id)
-	peer.RW = nil
-	self.network.Disconnect(self.Id, id, false)
-
+	// na := self.network.GetNodeAdapter(id)
+	// peer = na.(*SimNode).GetPeer(self.Id)
+	// peer.RW = nil
 	glog.V(6).Infof("dropped peer %v", id)
-	return nil
+	return self.network.DidDisconnect(self.Id, id)
 }
 
 func (self *SimNode) Connect(rid []byte) error {
@@ -148,33 +141,40 @@ func (self *SimNode) Connect(rid []byte) error {
 	if na == nil {
 		return fmt.Errorf("node adapter for %v is missing", id)
 	}
-	rw, rrw := self.messenger.NewPipe()
+	rw, rrw := p2p.MsgPipe()
+	runc := make(chan bool)
+	defer close(runc)
 	// run protocol on remote node with self as peer
-	// peer := p2p.NewPeer(self.Id.NodeID, Name(self.Id.Bytes()), []p2p.Cap{})
-	na.RunProtocol(self.Id, rrw, rw)
+
+	err := na.(*SimNode).runProtocol(self.Id, rrw, rw, runc)
+	if err != nil {
+		return fmt.Errorf("cannot run protocol (%v -> %v) %v", self.Id, id, err)
+	}
 	// run protocol on remote node with self as peer
-	self.RunProtocol(id, rw, rrw)
-	self.network.Connect(self.Id, id, false)
+	err = self.runProtocol(id, rw, rrw, runc)
+	if err != nil {
+		return fmt.Errorf("cannot run protocol (%v -> %v): %v", id, self.Id, err)
+	}
+	self.network.DidConnect(self.Id, id)
 	return nil
 }
 
-func (self *SimNode) RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter) error {
+func (self *SimNode) runProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, runc chan bool) error {
 	if self.Run == nil {
 		glog.V(6).Infof("no protocol starting on peer %v (connection with %v)", self.Id, id)
 		return nil
 	}
 	glog.V(6).Infof("protocol starting on peer %v (connection with %v)", self.Id, id)
-	glog.V(6).Infof("adapter connect %v to peer %v, setting pipe", self.Id, id)
 	peer := self.getPeer(id)
 	if peer != nil && peer.RW != nil {
-		glog.V(6).Infof("already connecting %v to peer %v", self.Id, id)
-		return fmt.Errorf("already connecting %v to peer %v", self.Id, id)
+		return fmt.Errorf("already connected %v to peer %v", self.Id, id)
 	}
 	peer = self.setPeer(id, rrw)
 	p := p2p.NewPeer(id.NodeID, Name(id.Bytes()), []p2p.Cap{})
 	go func() {
 		err := self.Run(p, rw)
 		glog.V(6).Infof("protocol quit on peer %v (connection with %v broken)", self.Id, id)
+		<-runc
 		self.Disconnect(id.Bytes())
 		peer.Errc <- err
 	}()

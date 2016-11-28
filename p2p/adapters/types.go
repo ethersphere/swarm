@@ -38,6 +38,8 @@ func NewNodeIdFromHex(s string) *NodeId {
 	return &NodeId{id}
 }
 
+type ProtoCall func(*p2p.Peer, p2p.MsgReadWriter) error
+
 func (self *NodeId) Bytes() []byte {
 	return self.NodeID[:]
 }
@@ -63,8 +65,6 @@ func (self *NodeId) Label() string {
 type Messenger interface {
 	SendMsg(p2p.MsgWriter, uint64, interface{}) error
 	ReadMsg(p2p.MsgReader) (p2p.Msg, error)
-	NewPipe() (p2p.MsgReadWriter, p2p.MsgReadWriter)
-	ClosePipe(rw p2p.MsgReadWriter)
 }
 
 type NodeAdapter interface {
@@ -74,10 +74,14 @@ type NodeAdapter interface {
 	LocalAddr() []byte
 	ParseAddr([]byte, string) ([]byte, error)
 	Messenger() Messenger
-	RunProtocol(*NodeId, p2p.MsgReadWriter, p2p.MsgReadWriter) error
 }
 
 type StartAdapter interface {
 	Start() error
 	Stop() error
+}
+
+type Reporter interface {
+	DidConnect(*NodeId, *NodeId) error
+	DidDisconnect(*NodeId, *NodeId) error
 }

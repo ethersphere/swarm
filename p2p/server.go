@@ -144,8 +144,10 @@ type Server struct {
 
 	// Hooks for testing. These are useful because we can inhibit
 	// the whole protocol stack.
-	newTransport func(net.Conn) transport
-	newPeerHook  func(*Peer)
+	newTransport    func(net.Conn) transport
+	newPeerHook     func(*Peer)
+	PeerConnHook    func(*Peer)
+	PeerDisconnHook func(*Peer)
 
 	lock    sync.Mutex // protects running
 	running bool
@@ -747,6 +749,9 @@ func (srv *Server) runPeer(p *Peer) {
 	if srv.newPeerHook != nil {
 		srv.newPeerHook(p)
 	}
+	if srv.PeerConnHook != nil {
+		srv.PeerConnHook(p)
+	}
 	discreason := p.run()
 	// Note: run waits for existing peers to be sent on srv.delpeer
 	// before returning, so this send should not select on srv.quit.
@@ -757,6 +762,9 @@ func (srv *Server) runPeer(p *Peer) {
 		RemoteId:       p.ID().String(),
 		NumConnections: srv.PeerCount(),
 	})
+	if srv.PeerDisconnHook != nil {
+		srv.PeerDisconnHook(p)
+	}
 }
 
 // NodeInfo represents a short summary of the information known about the host.

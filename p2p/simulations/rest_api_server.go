@@ -2,7 +2,7 @@ package simulations
 
 import (
 	"fmt"
-	"io/ioutil"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -23,7 +23,12 @@ func StartRestApiServer(port string, c Controller) {
 	serveMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		handle(w, r, c)
 	})
-	go http.ListenAndServe(":"+port, serveMux)
+	fd, err := net.Listen("tcp", ":"+port)
+	if err != nil {
+		glog.Errorf("Can't listen on :%s: %v", port, err)
+		return
+	}
+	go http.Serve(fd, serveMux)
 	glog.V(logger.Info).Infof("Swarm Network Controller HTTP server started on localhost:%s", port)
 }
 
@@ -40,7 +45,6 @@ func handle(w http.ResponseWriter, r *http.Request, c Controller) {
 		if len(id) == 0 {
 			continue
 		}
-		glog.V(6).Infof("server: resolving to controller for resource id '%v'", id)
 		c, err = c.Resource(id)
 		if err != nil {
 			http.Error(w, fmt.Sprintf("resource %v not found", id), http.StatusNotFound)
@@ -52,14 +56,13 @@ func handle(w http.ResponseWriter, r *http.Request, c Controller) {
 		http.Error(w, fmt.Sprintf("method %v not allowed (%v)", r.Method, err), http.StatusMethodNotAllowed)
 		return
 	}
-	glog.V(6).Infof("server: calling controller handler on body")
 	// on return we close the request Body so we assume it is read synchronously
 	response, err := handler(r.Body)
-	var resp []byte
-	if response != nil {
-		resp, err = ioutil.ReadAll(response)
-	}
-	glog.V(6).Infof("server: called controller handler on body, response:  %v", string(resp))
+	// var resp []byte
+	// if response != nil {
+	// 	resp, err = ioutil.ReadAll(response)
+	// }
+	// glog.V(6).Infof("server: called controller handler on body, response:  %v", string(resp))
 	if err != nil {
 		http.Error(w, fmt.Sprintf("handler error: %v", err), http.StatusBadRequest)
 		return

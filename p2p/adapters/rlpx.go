@@ -27,11 +27,38 @@ import (
 // devp2p RLPx underlay support
 
 type RLPx struct {
+	id   *NodeId
 	net  *p2p.Server
 	addr []byte
+	m    Messenger
+	r    Reporter
 }
 
-type RLPxMessenger struct{}
+type RLPxMessenger struct {
+}
+
+func NewRLPx(addr []byte, srv *p2p.Server, m Messenger) *RLPx {
+	if m == nil {
+		m = &RLPxMessenger{}
+	}
+	return &RLPx{
+		net:  srv,
+		addr: addr,
+		m:    m,
+	}
+}
+
+func NewReportingRLPx(addr []byte, srv *p2p.Server, m Messenger, r Reporter) *RLPx {
+	rlpx := NewRLPx(addr, srv, m)
+	rlpx.r = r
+	srv.PeerConnHook = func(p *p2p.Peer) {
+		r.DidConnect(rlpx.id, &NodeId{p.ID()})
+	}
+	srv.PeerDisconnHook = func(p *p2p.Peer) {
+		r.DidDisconnect(rlpx.id, &NodeId{p.ID()})
+	}
+	return rlpx
+}
 
 func (*RLPxMessenger) SendMsg(w p2p.MsgWriter, code uint64, msg interface{}) error {
 	return p2p.Send(w, code, msg)
@@ -45,10 +72,6 @@ func (self *RLPx) LocalAddr() []byte {
 	return self.addr
 }
 
-// func (self *RLPx) NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, ct *protocols.CodeMap) *protocols.Peer {
-// 	return protocols.NewPeer(p, rw, ct, self, func() {})
-// }
-
 func (self *RLPx) Connect(enode []byte) error {
 	// TCP/UDP node address encoded with enode url scheme
 	// <node-id>@<ip-address>:<tcp-port>(?udp=<udp-port>)
@@ -60,8 +83,13 @@ func (self *RLPx) Connect(enode []byte) error {
 	return nil
 }
 
-func (self *RLPx) Disconnect(p *p2p.Peer, rw p2p.MsgReadWriter) {
+func (self *RLPx) Messenger() Messenger {
+	return self.m
+}
+
+func (self *RLPx) Disconnect(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	p.Disconnect(p2p.DiscSubprotocolError)
+	return nil
 }
 
 // ParseAddr take two arguments, advertised in handshake and the one set on the peer struct

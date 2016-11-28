@@ -1,3 +1,29 @@
+// Package simulations simulates p2p networks.
+//
+// Network
+//  - has nodes
+//  - has connections
+//  - has triggers (input eventer, triggers things like start and stop of nodes, connecting them)
+//  - has output eventer, where stuff that happens during simulation is sent
+//  - the adapter of new nodes is assigned by the Node Adapter Function.
+//
+// Sources of Trigger events
+// - UI (click of button)
+// - Journal (replay captured events)
+// - Mocker (generate random events)
+//
+// Adapters
+// - each node has an adapter
+// - contains methods to connect to another node using the same adapter type
+// - models communication too (sending and receiving messages)
+//
+// REST API
+// - Session Controller: handles Networks
+// - Network Controller
+//   - handles one Network
+//   - has sub controller for triggering events
+//   - get output events
+//
 package simulations
 
 import (
@@ -24,7 +50,10 @@ type NetworkConfig struct {
 var ConnectivityEvents = []interface{}{&NodeEvent{}, &ConnEvent{}}
 
 // NewNetworkController creates a ResourceController responding to GET and DELETE methods
-// it embeds a mockers controller, a journalplayer, node and connection contollers
+// it embeds a mockers controller, a journal player, node and connection contollers.
+//
+// Events from the eventer go into the provided journal. The content of the journal can be
+// accessed through the HTTP API.
 func NewNetworkController(conf *NetworkConfig, eventer *event.TypeMux, journal *Journal) Controller {
 	self := NewResourceContoller(
 		&ResourceHandlers{
@@ -94,6 +123,7 @@ func (self *Network) SetNaf(naf func(*NodeConfig) adapters.NodeAdapter) {
 	self.naf = naf
 }
 
+// Events returns the output eventer of the Network.
 func (self *Network) Events() *event.TypeMux {
 	return self.events
 }
@@ -314,7 +344,7 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 // Connect(i, j) attempts to connect nodes i and j (args given as nodeId)
 // calling the node's nodadapters Connect method
 // connection is established (as if) the first node dials out to the other
-func (self *Network) Connect(oneId, otherId *adapters.NodeId, connect bool) error {
+func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
 	conn, err := self.GetOrCreateConn(oneId, otherId)
 	if err != nil {
 		return err
@@ -335,20 +365,16 @@ func (self *Network) Connect(oneId, otherId *adapters.NodeId, connect bool) erro
 	// any other way of connection (like peerpool) will need to call back
 	// to this method with connect = false to avoid infinite recursion
 	// this is not relevant for nodes starting up (which can only be externally triggered)
-	if connect {
-		if rev {
-			err = conn.other.na.Connect(oneId.Bytes())
-		} else {
-			err = conn.one.na.Connect(otherId.Bytes())
-		}
-		if err != nil {
-			return err
-		}
+	if rev {
+		err = conn.other.na.Connect(oneId.Bytes())
+	} else {
+		err = conn.one.na.Connect(otherId.Bytes())
 	}
-	conn.Up = true
-	// connection event posted
-	self.events.Post(conn.event(true, rev))
+	if err != nil {
+		return err
+	}
 	return nil
+	// return self.DidConnect(oneId, otherId)
 }
 
 // Disconnect(i, j) attempts to disconnect nodes i and j (args given as nodeId)
@@ -381,9 +407,36 @@ func (self *Network) Disconnect(oneId, otherId *adapters.NodeId, disconnect bool
 			return err
 		}
 	}
-	conn.Reverse = rev
+	return nil
+	// return self.DidDisconnect(oneId, otherId)
+}
+
+func (self *Network) DidConnect(one, other *adapters.NodeId) error {
+	conn := self.GetConn(one, other)
+	if conn == nil {
+		return fmt.Errorf("connection between %v and %v does not exist", one, other)
+	}
+	if conn.Up {
+		return fmt.Errorf("%v and %v already connected", one, other)
+	}
+	conn.Reverse = conn.One.NodeID != one.NodeID
+	conn.Up = true
+	// connection event posted
+	self.events.Post(conn.event(true, conn.Reverse))
+	return nil
+}
+
+func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
+	conn := self.GetConn(one, other)
+	if conn == nil {
+		return fmt.Errorf("connection between %v and %v does not exist", one, other)
+	}
+	if !conn.Up {
+		return fmt.Errorf("%v and %v already disconnected", one, other)
+	}
+	conn.Reverse = conn.One.NodeID != one.NodeID
 	conn.Up = false
-	self.events.Post(conn.event(false, rev))
+	self.events.Post(conn.event(false, conn.Reverse))
 	return nil
 }
 
