@@ -27,6 +27,20 @@ Specific META files are:
 3. `go install -v cmd/geth`
 4. In **$GODIR** make sure that a symlink path `github.com/ethereum/go-ethereum`  points to the root of repo (because of import paths)
 
+## RUNNING
+ 
+In terminal 1: 
+
+`META --metaaccount foo --maxpeers 5 --datadir /tmp/metafoo --verbosity 6`
+
+In terminal 2:
+
+`META --metacccount bar --maxpeers 5 --datadir /tmp/metabar --verbosity 6 --port 31667`
+
+In terminal 3:
+
+`geth attach /tmp/metafoo/META.ipc` or  `geth attach /tmp/metabar/META.ipc`, depending on which node you want to talk to.
+
 ## FUNCTIONALITY
 
 The client has all the base functionality of a vanilla geth client (for example port can be set with `--port`) - `geth attach <path-to-ipc>` and see modules motd for details.
@@ -37,11 +51,11 @@ Currently it forces you to specify the bogus param `--metaaccount`, all others m
 
 Listens, dials and is protocol-ready.
 
-Try `admin.addPeer("enode....")` with two nodes set up (the other different `--port and --datadir`  of course), the sender running `--verbosity 6`, see log output).
+Try `admin.addPeer(<enode of the other>)` (Maybe host part needs to be changed to `127.0.0.1`) in console with two nodes set up and see what happens in the log.
 
 ### PROTOCOL
 
-Not yet implemented (not even handshake)
+Initializes and registers upon connection (performs p2p node handshake), but "language" itself not yet implemented.
 
 ### RPC
 
