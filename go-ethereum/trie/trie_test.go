@@ -21,8 +21,11 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io/ioutil"
+	"math/rand"
 	"os"
+	"reflect"
 	"testing"
+	"testing/quick"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common"
@@ -76,8 +79,6 @@ func TestMissingNode(t *testing.T) {
 	updateString(trie, "123456", "asdfasdfasdfasdfasdfasdfasdfasdf")
 	root, _ := trie.Commit()
 
-	ClearGlobalCache()
-
 	trie, _ = New(root, db)
 	_, err := trie.TryGet([]byte("120000"))
 	if err != nil {
@@ -109,7 +110,6 @@ func TestMissingNode(t *testing.T) {
 	}
 
 	db.Delete(common.FromHex("e1d943cc8f061a0c0b98162830b970395ac9315654824bf21b73b891365262f9"))
-	ClearGlobalCache()
 
 	trie, _ = New(root, db)
 	_, err = trie.TryGet([]byte("120000"))
@@ -295,63 +295,9 @@ func TestReplication(t *testing.T) {
 	for _, val := range vals2 {
 		updateString(trie2, val.k, val.v)
 	}
-	if trie2.Hash() != exp {
+	if hash := trie2.Hash(); hash != exp {
 		t.Errorf("root failure. expected %x got %x", exp, hash)
 	}
-}
-
-func paranoiaCheck(t1 *Trie) (bool, *Trie) {
-	t2 := new(Trie)
-	it := NewIterator(t1)
-	for it.Next() {
-		t2.Update(it.Key, it.Value)
-	}
-	return t2.Hash() == t1.Hash(), t2
-}
-
-func TestParanoia(t *testing.T) {
-	t.Skip()
-	trie := newEmpty()
-
-	vals := []struct{ k, v string }{
-		{"do", "verb"},
-		{"ether", "wookiedoo"},
-		{"horse", "stallion"},
-		{"shaman", "horse"},
-		{"doge", "coin"},
-		{"ether", ""},
-		{"dog", "puppy"},
-		{"shaman", ""},
-		{"somethingveryoddindeedthis is", "myothernodedata"},
-	}
-	for _, val := range vals {
-		updateString(trie, val.k, val.v)
-	}
-	trie.Commit()
-
-	ok, t2 := paranoiaCheck(trie)
-	if !ok {
-		t.Errorf("trie paranoia check failed %x %x", trie.Hash(), t2.Hash())
-	}
-}
-
-// Not an actual test
-func TestOutput(t *testing.T) {
-	t.Skip()
-
-	base := "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	trie := newEmpty()
-	for i := 0; i < 50; i++ {
-		updateString(trie, fmt.Sprintf("%s%d", base, i), "valueeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
-	}
-	fmt.Println("############################## FULL ################################")
-	fmt.Println(trie.root)
-
-	trie.Commit()
-	fmt.Println("############################## SMALL ################################")
-	trie2, _ := New(trie.Hash(), trie.db)
-	getString(trie2, base+"20")
-	fmt.Println(trie2.root)
 }
 
 func TestLargeValue(t *testing.T) {
@@ -359,44 +305,208 @@ func TestLargeValue(t *testing.T) {
 	trie.Update([]byte("key1"), []byte{99, 99, 99, 99})
 	trie.Update([]byte("key2"), bytes.Repeat([]byte{1}, 32))
 	trie.Hash()
-
 }
 
-type kv struct {
-	k, v []byte
-	t    bool
+type countingDB struct {
+	Database
+	gets map[string]int
 }
 
-func TestLargeData(t *testing.T) {
+func (db *countingDB) Get(key []byte) ([]byte, error) {
+	db.gets[string(key)]++
+	return db.Database.Get(key)
+}
+
+// TestCacheUnload checks that decoded nodes are unloaded after a
+// certain number of commit operations.
+func TestCacheUnload(t *testing.T) {
+	// Create test trie with two branches.
 	trie := newEmpty()
-	vals := make(map[string]*kv)
+	key1 := "---------------------------------"
+	key2 := "---some other branch"
+	updateString(trie, key1, "this is the branch of key1.")
+	updateString(trie, key2, "this is the branch of key2.")
+	root, _ := trie.Commit()
 
-	for i := byte(0); i < 255; i++ {
-		value := &kv{common.LeftPadBytes([]byte{i}, 32), []byte{i}, false}
-		value2 := &kv{common.LeftPadBytes([]byte{10, i}, 32), []byte{i}, false}
-		trie.Update(value.k, value.v)
-		trie.Update(value2.k, value2.v)
-		vals[string(value.k)] = value
-		vals[string(value2.k)] = value2
+	// Commit the trie repeatedly and access key1.
+	// The branch containing it is loaded from DB exactly two times:
+	// in the 0th and 6th iteration.
+	db := &countingDB{Database: trie.db, gets: make(map[string]int)}
+	trie, _ = New(root, db)
+	trie.SetCacheLimit(5)
+	for i := 0; i < 12; i++ {
+		getString(trie, key1)
+		trie.Commit()
 	}
 
-	it := NewIterator(trie)
-	for it.Next() {
-		vals[string(it.Key)].t = true
-	}
-
-	var untouched []*kv
-	for _, value := range vals {
-		if !value.t {
-			untouched = append(untouched, value)
+	// Check that it got loaded two times.
+	for dbkey, count := range db.gets {
+		if count != 2 {
+			t.Errorf("db key %x loaded %d times, want %d times", []byte(dbkey), count, 2)
 		}
 	}
+}
 
-	if len(untouched) > 0 {
-		t.Errorf("Missed %d nodes", len(untouched))
-		for _, value := range untouched {
-			t.Error(value)
+// randTest performs random trie operations.
+// Instances of this test are created by Generate.
+type randTest []randTestStep
+
+type randTestStep struct {
+	op    int
+	key   []byte // for opUpdate, opDelete, opGet
+	value []byte // for opUpdate
+}
+
+const (
+	opUpdate = iota
+	opDelete
+	opGet
+	opCommit
+	opHash
+	opReset
+	opItercheckhash
+	opCheckCacheInvariant
+	opMax // boundary value, not an actual op
+)
+
+func (randTest) Generate(r *rand.Rand, size int) reflect.Value {
+	var allKeys [][]byte
+	genKey := func() []byte {
+		if len(allKeys) < 2 || r.Intn(100) < 10 {
+			// new key
+			key := make([]byte, r.Intn(50))
+			randRead(r, key)
+			allKeys = append(allKeys, key)
+			return key
 		}
+		// use existing key
+		return allKeys[r.Intn(len(allKeys))]
+	}
+
+	var steps randTest
+	for i := 0; i < size; i++ {
+		step := randTestStep{op: r.Intn(opMax)}
+		switch step.op {
+		case opUpdate:
+			step.key = genKey()
+			step.value = make([]byte, 8)
+			binary.BigEndian.PutUint64(step.value, uint64(i))
+		case opGet, opDelete:
+			step.key = genKey()
+		}
+		steps = append(steps, step)
+	}
+	return reflect.ValueOf(steps)
+}
+
+// rand.Rand provides a Read method in Go 1.7 and later, but
+// we can't use it yet.
+func randRead(r *rand.Rand, b []byte) {
+	pos := 0
+	val := 0
+	for n := 0; n < len(b); n++ {
+		if pos == 0 {
+			val = r.Int()
+			pos = 7
+		}
+		b[n] = byte(val)
+		val >>= 8
+		pos--
+	}
+}
+
+func runRandTest(rt randTest) bool {
+	db, _ := ethdb.NewMemDatabase()
+	tr, _ := New(common.Hash{}, db)
+	values := make(map[string]string) // tracks content of the trie
+
+	for _, step := range rt {
+		switch step.op {
+		case opUpdate:
+			tr.Update(step.key, step.value)
+			values[string(step.key)] = string(step.value)
+		case opDelete:
+			tr.Delete(step.key)
+			delete(values, string(step.key))
+		case opGet:
+			v := tr.Get(step.key)
+			want := values[string(step.key)]
+			if string(v) != want {
+				fmt.Printf("mismatch for key 0x%x, got 0x%x want 0x%x", step.key, v, want)
+				return false
+			}
+		case opCommit:
+			if _, err := tr.Commit(); err != nil {
+				panic(err)
+			}
+		case opHash:
+			tr.Hash()
+		case opReset:
+			hash, err := tr.Commit()
+			if err != nil {
+				panic(err)
+			}
+			newtr, err := New(hash, db)
+			if err != nil {
+				panic(err)
+			}
+			tr = newtr
+		case opItercheckhash:
+			checktr, _ := New(common.Hash{}, nil)
+			it := tr.Iterator()
+			for it.Next() {
+				checktr.Update(it.Key, it.Value)
+			}
+			if tr.Hash() != checktr.Hash() {
+				fmt.Println("hashes not equal")
+				return false
+			}
+		case opCheckCacheInvariant:
+			return checkCacheInvariant(tr.root, nil, tr.cachegen, false, 0)
+		}
+	}
+	return true
+}
+
+func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool, depth int) bool {
+	var children []node
+	var flag nodeFlag
+	switch n := n.(type) {
+	case *shortNode:
+		flag = n.flags
+		children = []node{n.Val}
+	case *fullNode:
+		flag = n.flags
+		children = n.Children[:]
+	default:
+		return true
+	}
+
+	showerror := func() {
+		fmt.Printf("at depth %d node %s", depth, spew.Sdump(n))
+		fmt.Printf("parent: %s", spew.Sdump(parent))
+	}
+	if flag.gen > parentCachegen {
+		fmt.Printf("cache invariant violation: %d > %d\n", flag.gen, parentCachegen)
+		showerror()
+		return false
+	}
+	if depth > 0 && !parentDirty && flag.dirty {
+		fmt.Printf("cache invariant violation: child is dirty but parent isn't\n")
+		showerror()
+		return false
+	}
+	for _, child := range children {
+		if !checkCacheInvariant(child, n, flag.gen, flag.dirty, depth+1) {
+			return false
+		}
+	}
+	return true
+}
+
+func TestRandom(t *testing.T) {
+	if err := quick.Check(runRandTest, nil); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -412,8 +522,7 @@ const benchElemCount = 20000
 func benchGet(b *testing.B, commit bool) {
 	trie := new(Trie)
 	if commit {
-		dir, tmpdb := tempDB()
-		defer os.RemoveAll(dir)
+		_, tmpdb := tempDB()
 		trie, _ = New(common.Hash{}, tmpdb)
 	}
 	k := make([]byte, 32)
@@ -429,6 +538,13 @@ func benchGet(b *testing.B, commit bool) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		trie.Get(k)
+	}
+	b.StopTimer()
+
+	if commit {
+		ldb := trie.db.(*ethdb.LDBDatabase)
+		ldb.Close()
+		os.RemoveAll(ldb.Path())
 	}
 }
 

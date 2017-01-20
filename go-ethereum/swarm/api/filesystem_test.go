@@ -1,23 +1,31 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
+	"bytes"
 	"io/ioutil"
 	"os"
-	"path"
-	"runtime"
+	"path/filepath"
+	"sync"
 	"testing"
 )
 
-var (
-	testDir         string
-	testDownloadDir string
-)
-
-func init() {
-	_, filename, _, _ := runtime.Caller(1)
-	testDir = path.Join(path.Dir(filename), "../test")
-	testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
-}
+var testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
 
 func testFileSystem(t *testing.T, f func(*FileSystem)) {
 	testApi(t, func(api *Api) {
@@ -26,9 +34,9 @@ func testFileSystem(t *testing.T, f func(*FileSystem)) {
 }
 
 func readPath(t *testing.T, parts ...string) string {
-	// func readPath(t *testing.T, parts ...string) []byte {
-	file := path.Join(parts...)
+	file := filepath.Join(parts...)
 	content, err := ioutil.ReadFile(file)
+
 	if err != nil {
 		t.Fatalf("unexpected error reading '%v': %v", file, err)
 	}
@@ -36,35 +44,28 @@ func readPath(t *testing.T, parts ...string) string {
 }
 
 func TestApiDirUpload0(t *testing.T) {
-	// t.Skip("FIXME")
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
-		bzzhash, err := fs.Upload(path.Join(testDir, "test0"), "")
+		bzzhash, err := fs.Upload(filepath.Join("testdata", "test0"), "")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-
-		content := readPath(t, testDir, "test0", "index.html")
+		content := readPath(t, "testdata", "test0", "index.html")
 		resp := testGet(t, api, bzzhash+"/index.html")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
-		content = readPath(t, testDir, "test0", "index.css")
+		content = readPath(t, "testdata", "test0", "index.css")
 		resp = testGet(t, api, bzzhash+"/index.css")
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
-
-		content = readPath(t, testDir, "test0", "img", "logo.png")
-		resp = testGet(t, api, bzzhash+"/img/logo.png")
-		exp = expResponse(content, "image/png", 0)
 
 		_, _, _, err = api.Get(bzzhash, true)
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
 		}
 
-		downloadDir := path.Join(testDownloadDir, "test0")
-		os.RemoveAll(downloadDir)
+		downloadDir := filepath.Join(testDownloadDir, "test0")
 		defer os.RemoveAll(downloadDir)
 		err = fs.Download(bzzhash, downloadDir)
 		if err != nil {
@@ -77,15 +78,13 @@ func TestApiDirUpload0(t *testing.T) {
 		if bzzhash != newbzzhash {
 			t.Fatalf("download %v reuploaded has incorrect hash, expected %v, got %v", downloadDir, bzzhash, newbzzhash)
 		}
-
 	})
 }
 
 func TestApiDirUploadModify(t *testing.T) {
-	// t.Skip("FIXME")
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
-		bzzhash, err := fs.Upload(path.Join(testDir, "test0"), "")
+		bzzhash, err := fs.Upload(filepath.Join("testdata", "test0"), "")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -96,18 +95,30 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash+"/index2.html", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8", true)
+		index, err := ioutil.ReadFile(filepath.Join("testdata", "test0", "index.html"))
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash, err = api.Modify(bzzhash+"/img/logo.png", "9ea1f60ebd80786d6005f6b256376bdb494a82496cd86fe8c307cdfb23c99e71", "text/html; charset=utf-8", true)
+		wg := &sync.WaitGroup{}
+		hash, err := api.Store(bytes.NewReader(index), int64(len(index)), wg)
+		wg.Wait()
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		bzzhash, err = api.Modify(bzzhash+"/index2.html", hash.Hex(), "text/html; charset=utf-8", true)
+		if err != nil {
+			t.Errorf("unexpected error: %v", err)
+			return
+		}
+		bzzhash, err = api.Modify(bzzhash+"/img/logo.png", hash.Hex(), "text/html; charset=utf-8", true)
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
 
-		content := readPath(t, testDir, "test0", "index.html")
+		content := readPath(t, "testdata", "test0", "index.html")
 		resp := testGet(t, api, bzzhash+"/index2.html")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
@@ -116,7 +127,7 @@ func TestApiDirUploadModify(t *testing.T) {
 		exp = expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
 
-		content = readPath(t, testDir, "test0", "index.css")
+		content = readPath(t, "testdata", "test0", "index.css")
 		resp = testGet(t, api, bzzhash+"/index.css")
 		exp = expResponse(content, "text/css", 0)
 
@@ -130,13 +141,13 @@ func TestApiDirUploadModify(t *testing.T) {
 func TestApiDirUploadWithRootFile(t *testing.T) {
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
-		bzzhash, err := fs.Upload(path.Join(testDir, "test0"), "index.html")
+		bzzhash, err := fs.Upload(filepath.Join("testdata", "test0"), "index.html")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
 
-		content := readPath(t, testDir, "test0", "index.html")
+		content := readPath(t, "testdata", "test0", "index.html")
 		resp := testGet(t, api, bzzhash)
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
@@ -146,13 +157,13 @@ func TestApiDirUploadWithRootFile(t *testing.T) {
 func TestApiFileUpload(t *testing.T) {
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
-		bzzhash, err := fs.Upload(path.Join(testDir, "test0", "index.html"), "")
+		bzzhash, err := fs.Upload(filepath.Join("testdata", "test0", "index.html"), "")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
 
-		content := readPath(t, testDir, "test0", "index.html")
+		content := readPath(t, "testdata", "test0", "index.html")
 		resp := testGet(t, api, bzzhash+"/index.html")
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)
@@ -162,13 +173,13 @@ func TestApiFileUpload(t *testing.T) {
 func TestApiFileUploadWithRootFile(t *testing.T) {
 	testFileSystem(t, func(fs *FileSystem) {
 		api := fs.api
-		bzzhash, err := fs.Upload(path.Join(testDir, "test0", "index.html"), "index.html")
+		bzzhash, err := fs.Upload(filepath.Join("testdata", "test0", "index.html"), "index.html")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
 
-		content := readPath(t, testDir, "test0", "index.html")
+		content := readPath(t, "testdata", "test0", "index.html")
 		resp := testGet(t, api, bzzhash)
 		exp := expResponse(content, "text/html; charset=utf-8", 0)
 		checkResponse(t, resp, exp)

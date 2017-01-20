@@ -1,24 +1,43 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package storage
 
 import (
 	"bytes"
-	"os"
+	"io/ioutil"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
 )
 
-func initDbStore() (m *DbStore) {
-	os.RemoveAll("/tmp/bzz")
-	m, err := NewDbStore("/tmp/bzz", MakeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
+func initDbStore(t *testing.T) *DbStore {
+	dir, err := ioutil.TempDir("", "bzz-storage-test")
 	if err != nil {
-		panic("no dbStore")
+		t.Fatal(err)
 	}
-	return
+	m, err := NewDbStore(dir, MakeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
+	if err != nil {
+		t.Fatal("can't create store:", err)
+	}
+	return m
 }
 
 func testDbStore(l int64, branches int64, t *testing.T) {
-	m := initDbStore()
+	m := initDbStore(t)
 	defer m.close()
 	testStore(m, l, branches, t)
 }
@@ -44,7 +63,7 @@ func TestDbStore2_100_(t *testing.T) {
 }
 
 func TestDbStoreNotFound(t *testing.T) {
-	m := initDbStore()
+	m := initDbStore(t)
 	defer m.close()
 	_, err := m.Get(ZeroKey)
 	if err != notFound {
@@ -53,7 +72,7 @@ func TestDbStoreNotFound(t *testing.T) {
 }
 
 func TestDbStoreSyncIterator(t *testing.T) {
-	m := initDbStore()
+	m := initDbStore(t)
 	defer m.close()
 	keys := []Key{
 		Key(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000000")),

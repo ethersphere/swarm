@@ -1,3 +1,19 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package storage
 
 import (
@@ -82,15 +98,16 @@ func (self *NetStore) Put(entry *Chunk) {
 
 	// handle deliveries
 	if entry.Req != nil {
-		glog.V(logger.Detail).Infof("[BZZ] NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log())
+		glog.V(logger.Detail).Infof("NetStore.Put: localStore.Put %v hit existing request...delivering", entry.Key.Log())
 		// closing C singals to other routines (local requests)
 		// that the chunk is has been retrieved
 		close(entry.Req.C)
 		// deliver the chunk to requesters upstream
-		self.cloud.Deliver(entry)
+		go self.cloud.Deliver(entry)
 	} else {
-		glog.V(logger.Detail).Infof("[BZZ] NetStore.Put: localStore.Put %v stored locally", entry.Key.Log())
+		glog.V(logger.Detail).Infof("NetStore.Put: localStore.Put %v stored locally", entry.Key.Log())
 		// handle propagating store requests
+		// go self.cloud.Store(entry)
 		go self.cloud.Store(entry)
 	}
 }
@@ -101,15 +118,15 @@ func (self *NetStore) Get(key Key) (*Chunk, error) {
 	chunk, err := self.localStore.Get(key)
 	if err == nil {
 		if chunk.Req == nil {
-			glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v found locally", key)
+			glog.V(logger.Detail).Infof("NetStore.Get: %v found locally", key)
 		} else {
-			glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v hit on an existing request", key)
+			glog.V(logger.Detail).Infof("NetStore.Get: %v hit on an existing request", key)
 			// no need to launch again
 		}
 		return chunk, err
 	}
 	// no data and no request status
-	glog.V(logger.Detail).Infof("[BZZ] NetStore.Get: %v not found locally. open new request", key)
+	glog.V(logger.Detail).Infof("NetStore.Get: %v not found locally. open new request", key)
 	chunk = NewChunk(key, newRequestStatus(key))
 	self.localStore.memStore.Put(chunk)
 	go self.cloud.Retrieve(chunk)

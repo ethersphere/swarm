@@ -77,7 +77,7 @@ func (abi ABI) Pack(name string, args ...interface{}) ([]byte, error) {
 	return append(method.Id(), arguments...), nil
 }
 
-// toGoSliceType prses the input and casts it to the proper slice defined by the ABI
+// toGoSliceType parses the input and casts it to the proper slice defined by the ABI
 // argument in T.
 func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	index := i * 32
@@ -98,28 +98,46 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 	case HashTy: // hash must be of slice hash
 		refSlice = reflect.ValueOf([]common.Hash(nil))
 	case FixedBytesTy:
-		refSlice = reflect.ValueOf([]byte(nil))
+		refSlice = reflect.ValueOf([][]byte(nil))
 	default: // no other types are supported
 		return nil, fmt.Errorf("abi: unsupported slice type %v", elem.T)
 	}
-	// get the offset which determines the start of this array ...
-	offset := int(common.BytesToBig(output[index : index+32]).Uint64())
-	if offset+32 > len(output) {
-		return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
+
+	var slice []byte
+	var size int
+	var offset int
+	if t.Type.IsSlice {
+
+		// get the offset which determines the start of this array ...
+		offset = int(common.BytesToBig(output[index : index+32]).Uint64())
+		if offset+32 > len(output) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go slice: offset %d would go over slice boundary (len=%d)", len(output), offset+32)
+		}
+
+		slice = output[offset:]
+		// ... starting with the size of the array in elements ...
+		size = int(common.BytesToBig(slice[:32]).Uint64())
+		slice = slice[32:]
+		// ... and make sure that we've at the very least the amount of bytes
+		// available in the buffer.
+		if size*32 > len(slice) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
+		}
+
+		// reslice to match the required size
+		slice = slice[:(size * 32)]
+	} else if t.Type.IsArray {
+		//get the number of elements in the array
+		size = t.Type.SliceSize
+
+		//check to make sure array size matches up
+		if index+32*size > len(output) {
+			return nil, fmt.Errorf("abi: cannot marshal in to go array: offset %d would go over slice boundary (len=%d)", len(output), index+32*size)
+		}
+		//slice is there for a fixed amount of times
+		slice = output[index : index+size*32]
 	}
 
-	slice := output[offset:]
-	// ... starting with the size of the array in elements ...
-	size := int(common.BytesToBig(slice[:32]).Uint64())
-	slice = slice[32:]
-	// ... and make sure that we've at the very least the amount of bytes
-	// available in the buffer.
-	if size*32 > len(slice) {
-		return nil, fmt.Errorf("abi: cannot marshal in to go slice: insufficient size output %d require %d", len(output), offset+32+size*32)
-	}
-
-	// reslice to match the required size
-	slice = slice[:(size * 32)]
 	for i := 0; i < size; i++ {
 		var (
 			inter        interface{}             // interface type
@@ -136,6 +154,8 @@ func toGoSlice(i int, t Argument, output []byte) (interface{}, error) {
 			inter = common.BytesToAddress(returnOutput)
 		case HashTy:
 			inter = common.BytesToHash(returnOutput)
+		case FixedBytesTy:
+			inter = returnOutput
 		}
 		// append the item to our reflect slice
 		refSlice = reflect.Append(refSlice, reflect.ValueOf(inter))
@@ -238,8 +258,16 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		return fmt.Errorf("abi: unmarshalling empty output")
 	}
 
-	value := reflect.ValueOf(v).Elem()
-	typ := value.Type()
+	// make sure the passed value is a pointer
+	valueOf := reflect.ValueOf(v)
+	if reflect.Ptr != valueOf.Kind() {
+		return fmt.Errorf("abi: Unpack(non-pointer %T)", v)
+	}
+
+	var (
+		value = valueOf.Elem()
+		typ   = value.Type()
+	)
 
 	if len(method.Outputs) > 1 {
 		switch value.Kind() {
@@ -268,6 +296,25 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 				return fmt.Errorf("abi: cannot marshal tuple in to slice %T (only []interface{} is supported)", v)
 			}
 
+			// if the slice already contains values, set those instead of the interface slice itself.
+			if value.Len() > 0 {
+				if len(method.Outputs) > value.Len() {
+					return fmt.Errorf("abi: cannot marshal in to slices of unequal size (require: %v, got: %v)", len(method.Outputs), value.Len())
+				}
+
+				for i := 0; i < len(method.Outputs); i++ {
+					marshalledValue, err := toGoType(i, method.Outputs[i], output)
+					if err != nil {
+						return err
+					}
+					reflectValue := reflect.ValueOf(marshalledValue)
+					if err := set(value.Index(i).Elem(), reflectValue, method.Outputs[i]); err != nil {
+						return err
+					}
+				}
+				return nil
+			}
+
 			// create a new slice and start appending the unmarshalled
 			// values to the new interface slice.
 			z := reflect.MakeSlice(typ, 0, len(method.Outputs))
@@ -293,34 +340,6 @@ func (abi ABI) Unpack(v interface{}, name string, output []byte) error {
 		}
 	}
 
-	return nil
-}
-
-// set attempts to assign src to dst by either setting, copying or otherwise.
-//
-// set is a bit more lenient when it comes to assignment and doesn't force an as
-// strict ruleset as bare `reflect` does.
-func set(dst, src reflect.Value, output Argument) error {
-	dstType := dst.Type()
-	srcType := src.Type()
-
-	switch {
-	case dstType.AssignableTo(src.Type()):
-		dst.Set(src)
-	case dstType.Kind() == reflect.Array && srcType.Kind() == reflect.Slice:
-		if !dstType.Elem().AssignableTo(r_byte) {
-			return fmt.Errorf("abi: cannot unmarshal %v in to array of elem %v", src.Type(), dstType.Elem())
-		}
-
-		if dst.Len() < output.Type.SliceSize {
-			return fmt.Errorf("abi: cannot unmarshal src (len=%d) in to dst (len=%d)", output.Type.SliceSize, dst.Len())
-		}
-		reflect.Copy(dst, src)
-	case dstType.Kind() == reflect.Interface:
-		dst.Set(src)
-	default:
-		return fmt.Errorf("abi: cannot unmarshal %v in to %v", src.Type(), dst.Type())
-	}
 	return nil
 }
 

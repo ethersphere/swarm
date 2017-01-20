@@ -1,3 +1,19 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
@@ -8,15 +24,20 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 )
 
 const (
 	port = "8500"
+)
+
+//  by default ens root is  north internal
+var (
+	toyNetEnsRoot = common.HexToAddress("0xd344889e0be3e9ef6c26b0f60ef66a32e83c1b69")
 )
 
 // separate bzz directories
@@ -32,14 +53,15 @@ type Config struct {
 	Port      string
 	PublicKey string
 	BzzKey    string
+	EnsRoot   common.Address
+	NetworkId uint64
 }
 
 // config is agnostic to where private key is coming from
 // so managing accounts is outside swarm and left to wrappers
-func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (self *Config, err error) {
-
+func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, networkId uint64) (self *Config, err error) {
 	address := crypto.PubkeyToAddress(prvKey.PublicKey) // default beneficiary address
-	dirpath := filepath.Join(path, common.Bytes2Hex(address.Bytes()))
+	dirpath := filepath.Join(path, "bzz-"+common.Bytes2Hex(address.Bytes()))
 	err = os.MkdirAll(dirpath, os.ModePerm)
 	if err != nil {
 		return
@@ -60,6 +82,8 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		Swap:          swap.DefaultSwapParams(contract, prvKey),
 		PublicKey:     pubkeyhex,
 		BzzKey:        keyhex,
+		EnsRoot:       toyNetEnsRoot,
+		NetworkId:     networkId,
 	}
 	data, err = ioutil.ReadFile(confpath)
 	if err != nil {
@@ -87,6 +111,10 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey) (
 		return nil, fmt.Errorf("bzz key does not match the one in the config file %v != %v", keyhex, self.BzzKey)
 	}
 	self.Swap.SetKey(prvKey)
+
+	if (self.EnsRoot == common.Address{}) {
+		self.EnsRoot = toyNetEnsRoot
+	}
 
 	return
 }

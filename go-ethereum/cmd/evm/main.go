@@ -19,24 +19,30 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
 	"math/big"
 	"os"
 	"runtime"
 	"time"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
+	"gopkg.in/urfave/cli.v1"
 )
 
+var gitCommit = "" // Git SHA1 commit hash of the release (set via linker flags)
+
 var (
-	app       *cli.App
+	app = utils.NewApp(gitCommit, "the evm command line interface")
+
 	DebugFlag = cli.BoolFlag{
 		Name:  "debug",
 		Usage: "output full trace logs",
@@ -52,6 +58,10 @@ var (
 	CodeFlag = cli.StringFlag{
 		Name:  "code",
 		Usage: "EVM code",
+	}
+	CodeFileFlag = cli.StringFlag{
+		Name:  "codefile",
+		Usage: "file containing EVM code",
 	}
 	GasFlag = cli.StringFlag{
 		Name:  "gas",
@@ -84,17 +94,22 @@ var (
 		Name:  "verbosity",
 		Usage: "sets the verbosity level",
 	}
+	CreateFlag = cli.BoolFlag{
+		Name:  "create",
+		Usage: "indicates the action should be create rather than call",
+	}
 )
 
 func init() {
-	app = utils.NewApp("0.2", "the evm command line interface")
 	app.Flags = []cli.Flag{
+		CreateFlag,
 		DebugFlag,
 		VerbosityFlag,
 		ForceJitFlag,
 		DisableJitFlag,
 		SysStatFlag,
 		CodeFlag,
+		CodeFileFlag,
 		GasFlag,
 		PriceFlag,
 		ValueFlag,
@@ -104,37 +119,82 @@ func init() {
 	app.Action = run
 }
 
-func run(ctx *cli.Context) {
+func run(ctx *cli.Context) error {
 	glog.SetToStderr(true)
 	glog.SetV(ctx.GlobalInt(VerbosityFlag.Name))
 
 	db, _ := ethdb.NewMemDatabase()
 	statedb, _ := state.New(common.Hash{}, db)
 	sender := statedb.CreateAccount(common.StringToAddress("sender"))
-	receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
-	receiver.SetCode(common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name)))
+
+	logger := vm.NewStructLogger(nil)
 
 	vmenv := NewEnv(statedb, common.StringToAddress("evmuser"), common.Big(ctx.GlobalString(ValueFlag.Name)), vm.Config{
 		Debug:     ctx.GlobalBool(DebugFlag.Name),
 		ForceJit:  ctx.GlobalBool(ForceJitFlag.Name),
 		EnableJit: !ctx.GlobalBool(DisableJitFlag.Name),
+		Tracer:    logger,
 	})
 
 	tstart := time.Now()
-	ret, e := vmenv.Call(
-		sender,
-		receiver.Address(),
-		common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)),
-		common.Big(ctx.GlobalString(GasFlag.Name)),
-		common.Big(ctx.GlobalString(PriceFlag.Name)),
-		common.Big(ctx.GlobalString(ValueFlag.Name)),
+
+	var (
+		code []byte
+		ret  []byte
+		err  error
 	)
+
+	if ctx.GlobalString(CodeFlag.Name) != "" {
+		code = common.Hex2Bytes(ctx.GlobalString(CodeFlag.Name))
+	} else {
+		var hexcode []byte
+		if ctx.GlobalString(CodeFileFlag.Name) != "" {
+			var err error
+			hexcode, err = ioutil.ReadFile(ctx.GlobalString(CodeFileFlag.Name))
+			if err != nil {
+				fmt.Printf("Could not load code from file: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			var err error
+			hexcode, err = ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				fmt.Printf("Could not load code from stdin: %v\n", err)
+				os.Exit(1)
+			}
+		}
+		code = common.Hex2Bytes(string(hexcode[:]))
+	}
+
+	if ctx.GlobalBool(CreateFlag.Name) {
+		input := append(code, common.Hex2Bytes(ctx.GlobalString(InputFlag.Name))...)
+		ret, _, err = vmenv.Create(
+			sender,
+			input,
+			common.Big(ctx.GlobalString(GasFlag.Name)),
+			common.Big(ctx.GlobalString(PriceFlag.Name)),
+			common.Big(ctx.GlobalString(ValueFlag.Name)),
+		)
+	} else {
+		receiver := statedb.CreateAccount(common.StringToAddress("receiver"))
+
+		receiver.SetCode(crypto.Keccak256Hash(code), code)
+		ret, err = vmenv.Call(
+			sender,
+			receiver.Address(),
+			common.Hex2Bytes(ctx.GlobalString(InputFlag.Name)),
+			common.Big(ctx.GlobalString(GasFlag.Name)),
+			common.Big(ctx.GlobalString(PriceFlag.Name)),
+			common.Big(ctx.GlobalString(ValueFlag.Name)),
+		)
+	}
 	vmdone := time.Since(tstart)
 
 	if ctx.GlobalBool(DumpFlag.Name) {
+		statedb.Commit(true)
 		fmt.Println(string(statedb.Dump()))
 	}
-	vm.StdErrFormat(vmenv.StructLogs())
+	vm.StdErrFormat(logger.StructLogs())
 
 	if ctx.GlobalBool(SysStatFlag.Name) {
 		var mem runtime.MemStats
@@ -150,10 +210,11 @@ num gc:     %d
 	}
 
 	fmt.Printf("OUT: 0x%x", ret)
-	if e != nil {
-		fmt.Printf(" error: %v", e)
+	if err != nil {
+		fmt.Printf(" error: %v", err)
 	}
 	fmt.Println()
+	return nil
 }
 
 func main() {
@@ -185,44 +246,40 @@ func NewEnv(state *state.StateDB, transactor common.Address, value *big.Int, cfg
 		value:      value,
 		time:       big.NewInt(time.Now().Unix()),
 	}
-	cfg.Logger.Collector = env
 
 	env.evm = vm.New(env, cfg)
 	return env
 }
 
-// ruleSet implements vm.RuleSet and will always default to the homestead rule set.
+// ruleSet implements vm.ChainConfig and will always default to the homestead rule set.
 type ruleSet struct{}
 
 func (ruleSet) IsHomestead(*big.Int) bool { return true }
+func (ruleSet) GasTable(*big.Int) params.GasTable {
+	return params.GasTableHomesteadGasRepriceFork
+}
 
-func (self *VMEnv) RuleSet() vm.RuleSet        { return ruleSet{} }
-func (self *VMEnv) Vm() vm.Vm                  { return self.evm }
-func (self *VMEnv) Db() vm.Database            { return self.state }
-func (self *VMEnv) MakeSnapshot() vm.Database  { return self.state.Copy() }
-func (self *VMEnv) SetSnapshot(db vm.Database) { self.state.Set(db.(*state.StateDB)) }
-func (self *VMEnv) Origin() common.Address     { return *self.transactor }
-func (self *VMEnv) BlockNumber() *big.Int      { return common.Big0 }
-func (self *VMEnv) Coinbase() common.Address   { return *self.transactor }
-func (self *VMEnv) Time() *big.Int             { return self.time }
-func (self *VMEnv) Difficulty() *big.Int       { return common.Big1 }
-func (self *VMEnv) BlockHash() []byte          { return make([]byte, 32) }
-func (self *VMEnv) Value() *big.Int            { return self.value }
-func (self *VMEnv) GasLimit() *big.Int         { return big.NewInt(1000000000) }
-func (self *VMEnv) VmType() vm.Type            { return vm.StdVmTy }
-func (self *VMEnv) Depth() int                 { return 0 }
-func (self *VMEnv) SetDepth(i int)             { self.depth = i }
+func (self *VMEnv) ChainConfig() *params.ChainConfig { return params.TestChainConfig }
+func (self *VMEnv) Vm() vm.Vm                        { return self.evm }
+func (self *VMEnv) Db() vm.Database                  { return self.state }
+func (self *VMEnv) SnapshotDatabase() int            { return self.state.Snapshot() }
+func (self *VMEnv) RevertToSnapshot(snap int)        { self.state.RevertToSnapshot(snap) }
+func (self *VMEnv) Origin() common.Address           { return *self.transactor }
+func (self *VMEnv) BlockNumber() *big.Int            { return common.Big0 }
+func (self *VMEnv) Coinbase() common.Address         { return *self.transactor }
+func (self *VMEnv) Time() *big.Int                   { return self.time }
+func (self *VMEnv) Difficulty() *big.Int             { return common.Big1 }
+func (self *VMEnv) BlockHash() []byte                { return make([]byte, 32) }
+func (self *VMEnv) Value() *big.Int                  { return self.value }
+func (self *VMEnv) GasLimit() *big.Int               { return big.NewInt(1000000000) }
+func (self *VMEnv) VmType() vm.Type                  { return vm.StdVmTy }
+func (self *VMEnv) Depth() int                       { return 0 }
+func (self *VMEnv) SetDepth(i int)                   { self.depth = i }
 func (self *VMEnv) GetHash(n uint64) common.Hash {
 	if self.block.Number().Cmp(big.NewInt(int64(n))) == 0 {
 		return self.block.Hash()
 	}
 	return common.Hash{}
-}
-func (self *VMEnv) AddStructLog(log vm.StructLog) {
-	self.logs = append(self.logs, log)
-}
-func (self *VMEnv) StructLogs() []vm.StructLog {
-	return self.logs
 }
 func (self *VMEnv) AddLog(log *vm.Log) {
 	self.state.AddLog(log)

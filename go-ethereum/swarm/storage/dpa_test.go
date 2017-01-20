@@ -1,3 +1,19 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package storage
 
 import (
@@ -12,12 +28,8 @@ import (
 const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
-	os.RemoveAll("/tmp/bzz")
-	dbStore, err := NewDbStore("/tmp/bzz", MakeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
+	dbStore := initDbStore(t)
 	dbStore.setCapacity(50000)
-	if err != nil {
-		t.Errorf("DB error: %v", err)
-	}
 	memStore := NewMemStore(dbStore, defaultCacheCapacity)
 	localStore := &LocalStore{
 		memStore,
@@ -29,9 +41,12 @@ func TestDPArandom(t *testing.T) {
 		ChunkStore: localStore,
 	}
 	dpa.Start()
-	reader, slice := testDataReader(testDataSize)
+	defer dpa.Stop()
+	defer os.RemoveAll("/tmp/bzz")
+
+	reader, slice := testDataReaderAndSlice(testDataSize)
 	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, wg)
+	key, err := dpa.Store(reader, testDataSize, wg, nil)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
@@ -68,11 +83,7 @@ func TestDPArandom(t *testing.T) {
 }
 
 func TestDPA_capacity(t *testing.T) {
-	os.RemoveAll("/tmp/bzz")
-	dbStore, err := NewDbStore("/tmp/bzz", MakeHashFunc(defaultHash), defaultDbCapacity, defaultRadius)
-	if err != nil {
-		t.Errorf("DB error: %v", err)
-	}
+	dbStore := initDbStore(t)
 	memStore := NewMemStore(dbStore, defaultCacheCapacity)
 	localStore := &LocalStore{
 		memStore,
@@ -85,9 +96,9 @@ func TestDPA_capacity(t *testing.T) {
 		ChunkStore: localStore,
 	}
 	dpa.Start()
-	reader, slice := testDataReader(testDataSize)
+	reader, slice := testDataReaderAndSlice(testDataSize)
 	wg := &sync.WaitGroup{}
-	key, err := dpa.Store(reader, wg)
+	key, err := dpa.Store(reader, testDataSize, wg, nil)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
@@ -111,7 +122,7 @@ func TestDPA_capacity(t *testing.T) {
 	resultReader = dpa.Retrieve(key)
 	n, err = resultReader.ReadAt(resultSlice, 0)
 	if err == nil {
-		t.Errorf("Was able to read %d bytes from an empty memStore.")
+		t.Errorf("Was able to read %d bytes from an empty memStore.", len(slice))
 	}
 	// check how it works with localStore
 	dpa.ChunkStore = localStore

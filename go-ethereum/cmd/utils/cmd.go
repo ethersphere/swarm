@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"regexp"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -52,10 +53,16 @@ func openLogFile(Datadir string, filename string) *os.File {
 // is redirected to a different file.
 func Fatalf(format string, args ...interface{}) {
 	w := io.MultiWriter(os.Stdout, os.Stderr)
-	outf, _ := os.Stdout.Stat()
-	errf, _ := os.Stderr.Stat()
-	if outf != nil && errf != nil && os.SameFile(outf, errf) {
-		w = os.Stderr
+	if runtime.GOOS == "windows" {
+		// The SameFile check below doesn't work on Windows.
+		// stdout is unlikely to get redirected though, so just print there.
+		w = os.Stdout
+	} else {
+		outf, _ := os.Stdout.Stat()
+		errf, _ := os.Stderr.Stat()
+		if outf != nil && errf != nil && os.SameFile(outf, errf) {
+			w = os.Stderr
+		}
 	}
 	fmt.Fprintf(w, "Fatal: "+format+"\n", args...)
 	logger.Flush()
@@ -73,15 +80,13 @@ func StartNode(stack *node.Node) {
 		<-sigc
 		glog.V(logger.Info).Infoln("Got interrupt, shutting down...")
 		go stack.Stop()
-		logger.Flush()
 		for i := 10; i > 0; i-- {
 			<-sigc
 			if i > 1 {
-				glog.V(logger.Info).Infoln("Already shutting down, please be patient.")
-				glog.V(logger.Info).Infoln("Interrupt", i-1, "more times to induce panic.")
+				glog.V(logger.Info).Infof("Already shutting down, interrupt %d more times for panic.", i-1)
 			}
 		}
-		glog.V(logger.Error).Infof("Force quitting: this might not end so well.")
+		debug.Exit() // ensure trace and CPU profile data is flushed.
 		debug.LoudPanic("boom")
 	}()
 }
@@ -122,7 +127,7 @@ func ImportChain(chain *core.BlockChain, fn string) error {
 		}
 	}
 
-	glog.Infoln("Importing blockchain", fn)
+	glog.Infoln("Importing blockchain ", fn)
 	fh, err := os.Open(fn)
 	if err != nil {
 		return err
@@ -184,7 +189,7 @@ func hasAllBlocks(chain *core.BlockChain, bs []*types.Block) bool {
 }
 
 func ExportChain(blockchain *core.BlockChain, fn string) error {
-	glog.Infoln("Exporting blockchain to", fn)
+	glog.Infoln("Exporting blockchain to ", fn)
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, os.ModePerm)
 	if err != nil {
 		return err
@@ -193,12 +198,12 @@ func ExportChain(blockchain *core.BlockChain, fn string) error {
 	if err := blockchain.Export(fh); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to", fn)
+	glog.Infoln("Exported blockchain to ", fn)
 	return nil
 }
 
 func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, last uint64) error {
-	glog.Infoln("Exporting blockchain to", fn)
+	glog.Infoln("Exporting blockchain to ", fn)
 	// TODO verify mode perms
 	fh, err := os.OpenFile(fn, os.O_CREATE|os.O_APPEND|os.O_WRONLY, os.ModePerm)
 	if err != nil {
@@ -208,6 +213,6 @@ func ExportAppendChain(blockchain *core.BlockChain, fn string, first uint64, las
 	if err := blockchain.ExportN(fh, first, last); err != nil {
 		return err
 	}
-	glog.Infoln("Exported blockchain to", fn)
+	glog.Infoln("Exported blockchain to ", fn)
 	return nil
 }

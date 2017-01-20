@@ -24,7 +24,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/codegangsta/cli"
+	"gopkg.in/urfave/cli.v1"
 )
 
 // Custom type which is registered in the flags library which cli uses for
@@ -39,7 +39,7 @@ func (self *DirectoryString) String() string {
 }
 
 func (self *DirectoryString) Set(value string) error {
-	self.Value = ExpandPath(value)
+	self.Value = expandPath(value)
 	return nil
 }
 
@@ -135,11 +135,21 @@ func (self *DirectoryFlag) Set(value string) {
 // 2. expands embedded environment variables
 // 3. cleans the path, e.g. /a/b/../c -> /a/c
 // Note, it has limitations, e.g. ~someuser/tmp will not be expanded
-func ExpandPath(p string) string {
+func expandPath(p string) string {
 	if strings.HasPrefix(p, "~/") || strings.HasPrefix(p, "~\\") {
-		if user, err := user.Current(); err == nil {
-			p = user.HomeDir + p[1:]
+		if home := homeDir(); home != "" {
+			p = home + p[1:]
 		}
 	}
 	return path.Clean(os.ExpandEnv(p))
+}
+
+func homeDir() string {
+	if home := os.Getenv("HOME"); home != "" {
+		return home
+	}
+	if usr, err := user.Current(); err == nil {
+		return usr.HomeDir
+	}
+	return ""
 }

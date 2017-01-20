@@ -1,11 +1,29 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package api
 
 import (
-	// "bytes"
+	"io"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -27,7 +45,7 @@ func testApi(t *testing.T, f func(*Api)) {
 }
 
 type testResponse struct {
-	reader storage.SectionReader
+	reader storage.LazySectionReader
 	*Response
 }
 
@@ -46,18 +64,19 @@ func checkResponse(t *testing.T, resp *testResponse, exp *Response) {
 		content := make([]byte, resp.Size)
 		read, _ := resp.reader.Read(content)
 		if int64(read) != exp.Size {
-			t.Errorf("incorrect content length. expected '%s...', got '%s...'", read, exp.Size)
+			t.Errorf("incorrect content length. expected '%d...', got '%d...'", read, exp.Size)
 		}
 		resp.Content = string(content)
 	}
 	if resp.Content != exp.Content {
-		// if !bytes.Equal(resp.Content, exp.Content) {
+		// if !bytes.Equal(resp.Content, exp.Content)
 		t.Errorf("incorrect content. expected '%s...', got '%s...'", string(exp.Content), string(resp.Content))
 	}
 }
 
 // func expResponse(content []byte, mimeType string, status int) *Response {
 func expResponse(content string, mimeType string, status int) *Response {
+	glog.V(logger.Detail).Infof("expected content (%v): %v ", len(content), content)
 	return &Response{mimeType, status, int64(len(content)), content}
 }
 
@@ -67,7 +86,19 @@ func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	return &testResponse{reader, &Response{mimeType, status, reader.Size(), ""}}
+	quitC := make(chan bool)
+	size, err := reader.Size(quitC)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	glog.V(logger.Detail).Infof("reader size: %v ", size)
+	s := make([]byte, size)
+	_, err = reader.Read(s)
+	if err != io.EOF {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	reader.Seek(0, 0)
+	return &testResponse{reader, &Response{mimeType, status, size, string(s)}}
 	// return &testResponse{reader, &Response{mimeType, status, reader.Size(), nil}}
 }
 

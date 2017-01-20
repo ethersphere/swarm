@@ -54,16 +54,13 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 		acc.nonce = uint64(42 * i)
 
 		if i%3 == 0 {
-			obj.SetCode([]byte{i, i, i, i, i})
+			obj.SetCode(crypto.Keccak256Hash([]byte{i, i, i, i, i}), []byte{i, i, i, i, i})
 			acc.code = []byte{i, i, i, i, i}
 		}
-		state.UpdateStateObject(obj)
+		state.updateStateObject(obj)
 		accounts = append(accounts, acc)
 	}
-	root, _ := state.Commit()
-
-	// Remove any potentially cached data from the test state creation
-	trie.ClearGlobalCache()
+	root, _ := state.Commit(false)
 
 	// Return the generated state
 	return db, root, accounts
@@ -72,9 +69,6 @@ func makeTestState() (ethdb.Database, common.Hash, []*testAccount) {
 // checkStateAccounts cross references a reconstructed state with an expected
 // account array.
 func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accounts []*testAccount) {
-	// Remove any potentially cached data from the state synchronisation
-	trie.ClearGlobalCache()
-
 	// Check root availability and state contents
 	state, err := New(root, db)
 	if err != nil {
@@ -98,9 +92,6 @@ func checkStateAccounts(t *testing.T, db ethdb.Database, root common.Hash, accou
 
 // checkStateConsistency checks that all nodes in a state trie are indeed present.
 func checkStateConsistency(db ethdb.Database, root common.Hash) error {
-	// Remove any potentially cached data from the test state creation or previous checks
-	trie.ClearGlobalCache()
-
 	// Create and iterate a state trie rooted in a sub-node
 	if _, err := db.Get(root.Bytes()); err != nil {
 		return nil // Consider a non existent state consistent
@@ -147,7 +138,7 @@ func testIterativeStateSync(t *testing.T, batch int) {
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[:0], sched.Missing(batch)...)
@@ -177,7 +168,7 @@ func TestIterativeDelayedStateSync(t *testing.T) {
 			}
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = append(queue[len(results):], sched.Missing(0)...)
@@ -215,7 +206,7 @@ func testIterativeRandomStateSync(t *testing.T, batch int) {
 			results = append(results, trie.SyncResult{Hash: hash, Data: data})
 		}
 		// Feed the retrieved results back and queue new tasks
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		queue = make(map[common.Hash]struct{})
@@ -258,7 +249,7 @@ func TestIterativeRandomDelayedStateSync(t *testing.T) {
 			}
 		}
 		// Feed the retrieved results back and queue new tasks
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		for _, hash := range sched.Missing(0) {
@@ -292,7 +283,7 @@ func TestIncompleteStateSync(t *testing.T) {
 			results[i] = trie.SyncResult{Hash: hash, Data: data}
 		}
 		// Process each of the state nodes
-		if index, err := sched.Process(results); err != nil {
+		if _, index, err := sched.Process(results); err != nil {
 			t.Fatalf("failed to process result #%d: %v", index, err)
 		}
 		for _, result := range results {

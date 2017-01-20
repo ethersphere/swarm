@@ -289,6 +289,37 @@ func TestSimpleMethodUnpack(t *testing.T) {
 	}
 }
 
+func TestUnpackSetInterfaceSlice(t *testing.T) {
+	var (
+		var1 = new(uint8)
+		var2 = new(uint8)
+	)
+	out := []interface{}{var1, var2}
+	abi, err := JSON(strings.NewReader(`[{"type":"function", "name":"ints", "outputs":[{"type":"uint8"}, {"type":"uint8"}]}]`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	marshalledReturn := append(pad([]byte{1}, 32, true), pad([]byte{2}, 32, true)...)
+	err = abi.Unpack(&out, "ints", marshalledReturn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *var1 != 1 {
+		t.Error("expected var1 to be 1, got", *var1)
+	}
+	if *var2 != 2 {
+		t.Error("expected var2 to be 2, got", *var2)
+	}
+
+	out = []interface{}{var1}
+	err = abi.Unpack(&out, "ints", marshalledReturn)
+
+	expErr := "abi: cannot marshal in to slices of unequal size (require: 2, got: 1)"
+	if err == nil || err.Error() != expErr {
+		t.Error("expected err:", expErr, "Got:", err)
+	}
+}
+
 func TestPack(t *testing.T) {
 	for i, test := range []struct {
 		typ string
@@ -326,8 +357,6 @@ func TestMethodPack(t *testing.T) {
 	}
 
 	sig := abi.Methods["slice"].Id()
-	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 
@@ -375,8 +404,6 @@ func TestMethodPack(t *testing.T) {
 	}
 
 	sig = abi.Methods["slice256"].Id()
-	sig = append(sig, common.LeftPadBytes([]byte{32}, 32)...)
-	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{1}, 32)...)
 	sig = append(sig, common.LeftPadBytes([]byte{2}, 32)...)
 
@@ -900,6 +927,7 @@ func TestUnmarshal(t *testing.T) {
 	{ "name" : "bytes", "constant" : false, "outputs": [ { "type": "bytes" } ] },
 	{ "name" : "fixed", "constant" : false, "outputs": [ { "type": "bytes32" } ] },
 	{ "name" : "multi", "constant" : false, "outputs": [ { "type": "bytes" }, { "type": "bytes" } ] },
+	{ "name" : "intArraySingle", "constant" : false, "outputs": [ { "type": "uint256[3]" } ] },
 	{ "name" : "addressSliceSingle", "constant" : false, "outputs": [ { "type": "address[]" } ] },
 	{ "name" : "addressSliceDouble", "constant" : false, "outputs": [ { "name": "a", "type": "address[]" }, { "name": "b", "type": "address[]" } ] },
 	{ "name" : "mixedBytes", "constant" : true, "outputs": [ { "name": "a", "type": "bytes" }, { "name": "b", "type": "bytes32" } ] }]`
@@ -1052,6 +1080,26 @@ func TestUnmarshal(t *testing.T) {
 		t.Errorf("expected %x, got %x", fixed, out[1])
 	}
 
+	buff.Reset()
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000001"))
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000002"))
+	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000003"))
+	// marshal int array
+	var intArray [3]*big.Int
+	err = abi.Unpack(&intArray, "intArraySingle", buff.Bytes())
+	if err != nil {
+		t.Error(err)
+	}
+	var testAgainstIntArray [3]*big.Int
+	testAgainstIntArray[0] = big.NewInt(1)
+	testAgainstIntArray[1] = big.NewInt(2)
+	testAgainstIntArray[2] = big.NewInt(3)
+
+	for i, Int := range intArray {
+		if Int.Cmp(testAgainstIntArray[i]) != 0 {
+			t.Errorf("expected %v, got %v", testAgainstIntArray[i], Int)
+		}
+	}
 	// marshal address slice
 	buff.Reset()
 	buff.Write(common.Hex2Bytes("0000000000000000000000000000000000000000000000000000000000000020")) // offset

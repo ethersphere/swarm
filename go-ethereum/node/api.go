@@ -58,6 +58,22 @@ func (api *PrivateAdminAPI) AddPeer(url string) (bool, error) {
 	return true, nil
 }
 
+// RemovePeer disconnects from a a remote node if the connection exists
+func (api *PrivateAdminAPI) RemovePeer(url string) (bool, error) {
+	// Make sure the server is running, fail otherwise
+	server := api.node.Server()
+	if server == nil {
+		return false, ErrNodeStopped
+	}
+	// Try to remove the url as a static peer and return
+	node, err := discover.ParseNode(url)
+	if err != nil {
+		return false, fmt.Errorf("invalid enode: %v", err)
+	}
+	server.RemovePeer(node)
+	return true, nil
+}
+
 // StartRPC starts the HTTP RPC API server.
 func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *string, apis *string) (bool, error) {
 	api.node.lock.Lock()
@@ -68,13 +84,17 @@ func (api *PrivateAdminAPI) StartRPC(host *string, port *rpc.HexNumber, cors *st
 	}
 
 	if host == nil {
-		host = &api.node.httpHost
+		h := DefaultHTTPHost
+		if api.node.config.HTTPHost != "" {
+			h = api.node.config.HTTPHost
+		}
+		host = &h
 	}
 	if port == nil {
-		port = rpc.NewHexNumber(api.node.httpPort)
+		port = rpc.NewHexNumber(api.node.config.HTTPPort)
 	}
 	if cors == nil {
-		cors = &api.node.httpCors
+		cors = &api.node.config.HTTPCors
 	}
 
 	modules := api.node.httpWhitelist
@@ -113,16 +133,20 @@ func (api *PrivateAdminAPI) StartWS(host *string, port *rpc.HexNumber, allowedOr
 	}
 
 	if host == nil {
-		host = &api.node.wsHost
+		h := DefaultWSHost
+		if api.node.config.WSHost != "" {
+			h = api.node.config.WSHost
+		}
+		host = &h
 	}
 	if port == nil {
-		port = rpc.NewHexNumber(api.node.wsPort)
+		port = rpc.NewHexNumber(api.node.config.WSPort)
 	}
 	if allowedOrigins == nil {
-		allowedOrigins = &api.node.wsOrigins
+		allowedOrigins = &api.node.config.WSOrigins
 	}
 
-	modules := api.node.wsWhitelist
+	modules := api.node.config.WSModules
 	if apis != nil {
 		modules = nil
 		for _, m := range strings.Split(*apis, ",") {

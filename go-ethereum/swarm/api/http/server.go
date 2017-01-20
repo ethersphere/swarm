@@ -1,3 +1,19 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 /*
 A simple http server interface to Swarm
 */
@@ -25,6 +41,7 @@ var (
 	// accepted protocols: bzz (traditional), bzzi (immutable) and bzzr (raw)
 	bzzPrefix       = regexp.MustCompile("^/+bzz[ir]?:/+")
 	trailingSlashes = regexp.MustCompile("/+$")
+	rootDocumentUri = regexp.MustCompile("^/+bzz[i]?:/+[^/]+$")
 	// forever         = func() time.Time { return time.Unix(0, 0) }
 	forever = time.Now
 )
@@ -48,7 +65,7 @@ func StartHttpServer(api *api.Api, port string) {
 		handler(w, r, api)
 	})
 	go http.ListenAndServe(":"+port, serveMux)
-	glog.V(logger.Info).Infof("[BZZ] Swarm HTTP proxy started on localhost:%s", port)
+	glog.V(logger.Info).Infof("Swarm HTTP proxy started on localhost:%s", port)
 }
 
 func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
@@ -62,13 +79,13 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 	//			return
 	//		}
 	//	}
-	glog.V(logger.Debug).Infof("[BZZ] Swarm: HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
+	glog.V(logger.Debug).Infof("HTTP %s request URL: '%s', Host: '%s', Path: '%s', Referer: '%s', Accept: '%s'", r.Method, r.RequestURI, requestURL.Host, requestURL.Path, r.Referer(), r.Header.Get("Accept"))
 	uri := requestURL.Path
 	var raw, nameresolver bool
 	var proto string
 
 	// HTTP-based URL protocol handler
-	glog.V(logger.Debug).Infof("[BZZ] Swarm: BZZ request URI: '%s'", uri)
+	glog.V(logger.Debug).Infof("BZZ request URI: '%s'", uri)
 
 	path := bzzPrefix.ReplaceAllStringFunc(uri, func(p string) string {
 		proto = p
@@ -86,8 +103,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			return
 		}
 	}
-	raw = proto[1:5] == "bzzr"
-	nameresolver = proto[1:5] != "bzzi"
+	if len(proto) > 4 {
+		raw = proto[1:5] == "bzzr"
+		nameresolver = proto[1:5] != "bzzi"
+	}
 
 	glog.V(logger.Debug).Infof(
 		"[BZZ] Swarm: %s request over protocol %s '%s' received.",
@@ -96,12 +115,13 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 	switch {
 	case r.Method == "POST" || r.Method == "PUT":
-		key, err := a.Store(io.NewSectionReader(&sequentialReader{
-			reader: r.Body,
-			ahead:  make(map[int64]chan bool),
-		}, 0, r.ContentLength), nil)
+		if r.Header.Get("content-length") == "" {
+			http.Error(w, "Missing Content-Length header in request.", http.StatusBadRequest)
+			return
+		}
+		key, err := a.Store(io.LimitReader(r.Body, r.ContentLength), r.ContentLength, nil)
 		if err == nil {
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Content for %v stored", key.Log())
+			glog.V(logger.Debug).Infof("Content for %v stored", key.Log())
 		} else {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -123,10 +143,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 				path = api.RegularSlashes(path)
 				mime := r.Header.Get("Content-Type")
 				// TODO proper root hash separation
-				glog.V(logger.Debug).Infof("[BZZ] Modify '%s' to store %v as '%s'.", path, key.Log(), mime)
+				glog.V(logger.Debug).Infof("Modify '%s' to store %v as '%s'.", path, key.Log(), mime)
 				newKey, err := a.Modify(path, common.Bytes2Hex(key), mime, nameresolver)
 				if err == nil {
-					glog.V(logger.Debug).Infof("[BZZ] Swarm replaced manifest by '%s'", newKey)
+					glog.V(logger.Debug).Infof("Swarm replaced manifest by '%s'", newKey)
 					w.Header().Set("Content-Type", "text/plain")
 					http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(newKey)))
 				} else {
@@ -141,10 +161,10 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			return
 		} else {
 			path = api.RegularSlashes(path)
-			glog.V(logger.Debug).Infof("[BZZ] Delete '%s'.", path)
+			glog.V(logger.Debug).Infof("Delete '%s'.", path)
 			newKey, err := a.Modify(path, "", "", nameresolver)
 			if err == nil {
-				glog.V(logger.Debug).Infof("[BZZ] Swarm replaced manifest by '%s'", newKey)
+				glog.V(logger.Debug).Infof("Swarm replaced manifest by '%s'", newKey)
 				w.Header().Set("Content-Type", "text/plain")
 				http.ServeContent(w, r, "", time.Now(), bytes.NewReader([]byte(newKey)))
 			} else {
@@ -158,14 +178,16 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			// resolving host
 			key, err := a.Resolve(path, nameresolver)
 			if err != nil {
-				glog.V(logger.Error).Infof("[BZZ] Swarm: %v", err)
+				glog.V(logger.Error).Infof("%v", err)
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
 
 			// retrieving content
 			reader := a.Retrieve(key)
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Reading %d bytes.", reader.Size())
+			quitC := make(chan bool)
+			size, err := reader.Size(quitC)
+			glog.V(logger.Debug).Infof("Reading %d bytes.", size)
 
 			// setting mime type
 			qv := requestURL.Query()
@@ -176,26 +198,28 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 
 			w.Header().Set("Content-Type", mimeType)
 			http.ServeContent(w, r, uri, forever(), reader)
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Serve raw content '%s' (%d bytes) as '%s'", uri, reader.Size(), mimeType)
+			glog.V(logger.Debug).Infof("Serve raw content '%s' (%d bytes) as '%s'", uri, size, mimeType)
 
 			// retrieve path via manifest
 		} else {
-
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Structured GET request '%s' received.", uri)
-
+			glog.V(logger.Debug).Infof("Structured GET request '%s' received.", uri)
+			// add trailing slash, if missing
+			if rootDocumentUri.MatchString(uri) {
+				http.Redirect(w, r, path+"/", http.StatusFound)
+				return
+			}
 			reader, mimeType, status, err := a.Get(path, nameresolver)
 			if err != nil {
 				if _, ok := err.(api.ErrResolve); ok {
-					glog.V(logger.Debug).Infof("[BZZ] Swarm: %v", err)
+					glog.V(logger.Debug).Infof("%v", err)
 					status = http.StatusBadRequest
 				} else {
-					glog.V(logger.Debug).Infof("[BZZ] Swarm: error retrieving '%s': %v", uri, err)
+					glog.V(logger.Debug).Infof("error retrieving '%s': %v", uri, err)
 					status = http.StatusNotFound
 				}
 				http.Error(w, err.Error(), status)
 				return
 			}
-
 			// set mime type and status headers
 			w.Header().Set("Content-Type", mimeType)
 			if status > 0 {
@@ -203,7 +227,9 @@ func handler(w http.ResponseWriter, r *http.Request, a *api.Api) {
 			} else {
 				status = 200
 			}
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: Served '%s' (%d bytes) as '%s' (status code: %v)", uri, reader.Size(), mimeType, status)
+			quitC := make(chan bool)
+			size, err := reader.Size(quitC)
+			glog.V(logger.Debug).Infof("Served '%s' (%d bytes) as '%s' (status code: %v)", uri, size, mimeType, status)
 
 			http.ServeContent(w, r, path, forever(), reader)
 
@@ -217,12 +243,12 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	self.lock.Lock()
 	// assert self.pos <= off
 	if self.pos > off {
-		glog.V(logger.Error).Infof("[BZZ] Swarm: non-sequential read attempted from sequentialReader; %d > %d",
+		glog.V(logger.Error).Infof("non-sequential read attempted from sequentialReader; %d > %d",
 			self.pos, off)
 		panic("Non-sequential read attempt")
 	}
 	if self.pos != off {
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: deferred read in POST at position %d, offset %d.",
+		glog.V(logger.Debug).Infof("deferred read in POST at position %d, offset %d.",
 			self.pos, off)
 		wait := make(chan bool)
 		self.ahead[off] = wait
@@ -239,10 +265,10 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	for localPos < len(target) {
 		n, err = self.reader.Read(target[localPos:])
 		localPos += n
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: Read %d bytes into buffer size %d from POST, error %v.",
+		glog.V(logger.Debug).Infof("Read %d bytes into buffer size %d from POST, error %v.",
 			n, len(target), err)
 		if err != nil {
-			glog.V(logger.Debug).Infof("[BZZ] Swarm: POST stream's reading terminated with %v.", err)
+			glog.V(logger.Debug).Infof("POST stream's reading terminated with %v.", err)
 			for i := range self.ahead {
 				self.ahead[i] <- true
 				delete(self.ahead, i)
@@ -254,7 +280,7 @@ func (self *sequentialReader) ReadAt(target []byte, off int64) (n int, err error
 	}
 	wait := self.ahead[self.pos]
 	if wait != nil {
-		glog.V(logger.Debug).Infof("[BZZ] Swarm: deferred read in POST at position %d triggered.",
+		glog.V(logger.Debug).Infof("deferred read in POST at position %d triggered.",
 			self.pos)
 		delete(self.ahead, self.pos)
 		close(wait)

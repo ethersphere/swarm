@@ -27,7 +27,22 @@ var Modules = map[string]string{
 	"net":        Net_JS,
 	"bzz":        Bzz_JS,
 	"chequebook": Chequebook_JS,
+	"mw":	Mw_JS,
 }
+
+const Mw_JS = `
+	web3._extend({
+	property: 'mw',
+	methods:
+	[
+		new web3._extend.Method({
+			name: 'infoo',
+			call: 'mw_infoo',
+			params: 0,
+		})
+	]
+});
+`
 
 const Personal_JS = `
 web3._extend({

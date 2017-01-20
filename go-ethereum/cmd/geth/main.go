@@ -4,7 +4,7 @@
 // go-ethereum is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later	 version.
+// (at your option) any later version.
 //
 // go-ethereum is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -18,23 +18,23 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"io/ioutil"
 	"os"
-	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/ethash"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/console"
+	"github.com/ethereum/go-ethereum/contracts/release"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
-	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -42,32 +42,27 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"gopkg.in/urfave/cli.v1"
 )
 
 const (
-	ClientIdentifier = "Geth"
-	Version          = "1.5.0-unstable"
-	VersionMajor     = 1
-	VersionMinor     = 5
-	VersionPatch     = 0
+	clientIdentifier = "geth" // Client identifier to advertise over the network
 )
 
 var (
-	gitCommit       string // set via linker flagg
-	nodeNameVersion string
-	app             *cli.App
+	// Git SHA1 commit hash of the release (set via linker flags)
+	gitCommit = ""
+	// Ethereum address of the Geth release oracle.
+	relOracle = common.HexToAddress("0xfa7b9770ca4cb04296cac84f37736d4041251cdf")
+	// The app that holds all commands and flags.
+	app = utils.NewApp(gitCommit, "the go-ethereum command line interface")
 )
 
 func init() {
-	if gitCommit == "" {
-		nodeNameVersion = Version
-	} else {
-		nodeNameVersion = Version + "-" + gitCommit[:8]
-	}
-
-	app = utils.NewApp(Version, "the go-ethereum command line interface")
+	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
+	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
 	app.Commands = []cli.Command{
 		importCommand,
 		exportCommand,
@@ -77,10 +72,15 @@ func init() {
 		monitorCommand,
 		accountCommand,
 		walletCommand,
+		consoleCommand,
+		attachCommand,
+		javascriptCommand,
 		{
-			Action: makedag,
-			Name:   "makedag",
-			Usage:  "generate ethash dag (for testing)",
+			Action:    makedag,
+			Name:      "makedag",
+			Usage:     "Generate ethash DAG (for testing)",
+			ArgsUsage: "<blockNum> <outputDir>",
+			Category:  "MISCELLANEOUS COMMANDS",
 			Description: `
 The makedag command generates an ethash DAG in /tmp/dag.
 
@@ -89,68 +89,33 @@ Regular users do not need to execute it.
 `,
 		},
 		{
-			Action: gpuinfo,
-			Name:   "gpuinfo",
-			Usage:  "gpuinfo",
-			Description: `
-Prints OpenCL device info for all found GPUs.
-`,
-		},
-		{
-			Action: gpubench,
-			Name:   "gpubench",
-			Usage:  "benchmark GPU",
-			Description: `
-Runs quick benchmark on first GPU found.
-`,
-		},
-		{
-			Action: version,
-			Name:   "version",
-			Usage:  "print ethereum version numbers",
+			Action:    version,
+			Name:      "version",
+			Usage:     "Print version numbers",
+			ArgsUsage: " ",
+			Category:  "MISCELLANEOUS COMMANDS",
 			Description: `
 The output of this command is supposed to be machine-readable.
 `,
 		},
 		{
-			Action: initGenesis,
-			Name:   "init",
-			Usage:  "bootstraps and initialises a new genesis block (JSON)",
+			Action:    initGenesis,
+			Name:      "init",
+			Usage:     "Bootstrap and initialize a new genesis block",
+			ArgsUsage: "<genesisPath>",
+			Category:  "BLOCKCHAIN COMMANDS",
 			Description: `
-The init command initialises a new genesis block and definition for the network.
+The init command initializes a new genesis block and definition for the network.
 This is a destructive action and changes the network in which you will be
 participating.
 `,
 		},
 		{
-			Action: console,
-			Name:   "console",
-			Usage:  `Geth Console: interactive JavaScript environment`,
-			Description: `
-The Geth console is an interactive shell for the JavaScript runtime environment
-which exposes a node admin interface as well as the Ðapp JavaScript API.
-See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
-`,
-		},
-		{
-			Action: attach,
-			Name:   "attach",
-			Usage:  `Geth Console: interactive JavaScript environment (connect to node)`,
-			Description: `
-		The Geth console is an interactive shell for the JavaScript runtime environment
-		which exposes a node admin interface as well as the Ðapp JavaScript API.
-		See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console.
-		This command allows to open a console on a running geth node.
-		`,
-		},
-		{
-			Action: execScripts,
-			Name:   "js",
-			Usage:  `executes the given JavaScript files in the Geth JavaScript VM`,
-			Description: `
-The JavaScript VM exposes a node admin interface as well as the Ðapp
-JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Console
-`,
+			Action:    license,
+			Name:      "license",
+			Usage:     "Display license information",
+			ArgsUsage: " ",
+			Category:  "MISCELLANEOUS COMMANDS",
 		},
 	}
 
@@ -158,29 +123,34 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IdentityFlag,
 		utils.UnlockedAccountFlag,
 		utils.PasswordFileFlag,
-		utils.GenesisFileFlag,
 		utils.BootnodesFlag,
 		utils.DataDirFlag,
 		utils.KeyStoreDirFlag,
-		utils.BlockchainVersionFlag,
 		utils.OlympicFlag,
 		utils.FastSyncFlag,
-		utils.CacheFlag,
+		utils.LightModeFlag,
+		utils.LightServFlag,
+		utils.LightPeersFlag,
 		utils.LightKDFFlag,
+		utils.CacheFlag,
+		utils.TrieCacheGenFlag,
 		utils.JSpathFlag,
 		utils.ListenPortFlag,
 		utils.MaxPeersFlag,
 		utils.MaxPendingPeersFlag,
 		utils.EtherbaseFlag,
 		utils.GasPriceFlag,
+		utils.SupportDAOFork,
+		utils.OpposeDAOFork,
 		utils.MinerThreadsFlag,
 		utils.MiningEnabledFlag,
-		utils.MiningGPUFlag,
 		utils.AutoDAGFlag,
 		utils.TargetGasLimitFlag,
 		utils.NATFlag,
 		utils.NatspecEnabledFlag,
 		utils.NoDiscoverFlag,
+		utils.DiscoveryV5Flag,
+		utils.NetrestrictFlag,
 		utils.NodeKeyFileFlag,
 		utils.NodeKeyHexFlag,
 		utils.RPCEnabledFlag,
@@ -196,14 +166,8 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.IPCApiFlag,
 		utils.IPCPathFlag,
 		utils.ExecFlag,
-		utils.PreLoadJSFlag,
+		utils.PreloadJSFlag,
 		utils.WhisperEnabledFlag,
-		utils.SwarmConfigPathFlag,
-		utils.SwarmSwapDisabled,
-		utils.SwarmSyncDisabled,
-		utils.SwarmPortFlag,
-		utils.SwarmAccountAddrFlag,
-		utils.ChequebookAddrFlag,
 		utils.DevModeFlag,
 		utils.TestNetFlag,
 		utils.VMForceJitFlag,
@@ -211,6 +175,7 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		utils.VMEnableJitFlag,
 		utils.NetworkIdFlag,
 		utils.RPCCORSDomainFlag,
+		utils.EthStatsURLFlag,
 		utils.MetricsEnabledFlag,
 		utils.FakePoWFlag,
 		utils.SolcPathFlag,
@@ -232,20 +197,20 @@ JavaScript API. See https://github.com/ethereum/go-ethereum/wiki/Javascipt-Conso
 		// Start system runtime metrics collection
 		go metrics.CollectProcessMetrics(3 * time.Second)
 
+		// This should be the only place where reporting is enabled
+		// because it is not intended to run while testing.
+		// In addition to this check, bad block reports are sent only
+		// for chains with the main network genesis block and network id 1.
+		eth.EnableBadBlockReporting = true
+
 		utils.SetupNetwork(ctx)
-
-		// Deprecation warning.
-		if ctx.GlobalIsSet(utils.GenesisFileFlag.Name) {
-			common.PrintDepricationWarning("--genesis is deprecated. Switch to use 'geth init /path/to/file'")
-		}
-
 		return nil
 	}
 
 	app.After = func(ctx *cli.Context) error {
 		logger.Flush()
 		debug.Exit()
-		utils.Stdin.Close() // Resets terminal mode.
+		console.Stdin.Close() // Resets terminal mode.
 		return nil
 	}
 }
@@ -257,178 +222,97 @@ func main() {
 	}
 }
 
-func makeDefaultExtra() []byte {
-	var clientInfo = struct {
-		Version   uint
-		Name      string
-		GoVersion string
-		Os        string
-	}{uint(VersionMajor<<16 | VersionMinor<<8 | VersionPatch), ClientIdentifier, runtime.Version(), runtime.GOOS}
-	extra, err := rlp.EncodeToBytes(clientInfo)
-	if err != nil {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
-	}
-
-	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
-		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
-		glog.V(logger.Debug).Infof("extra: %x\n", extra)
-		return nil
-	}
-	return extra
-}
-
 // geth is the main entry point into the system if no special subcommand is ran.
 // It creates a default node based on the command line arguments and runs it in
 // blocking mode, waiting for it to be shut down.
-func geth(ctx *cli.Context) {
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
+func geth(ctx *cli.Context) error {
+	node := makeFullNode(ctx)
 	startNode(ctx, node)
 	node.Wait()
-}
-
-// attach will connect to a running geth instance attaching a JavaScript console and to it.
-func attach(ctx *cli.Context) {
-	// attach to a running geth instance
-	client, err := utils.NewRemoteRPCClient(ctx)
-	if err != nil {
-		utils.Fatalf("Unable to attach to geth: %v", err)
-	}
-
-	repl := newLightweightJSRE(
-		ctx.GlobalString(utils.JSpathFlag.Name),
-		client,
-		ctx.GlobalString(utils.DataDirFlag.Name),
-		true,
-	)
-
-	// preload user defined JS files into the console
-	err = repl.preloadJSFiles(ctx)
-	if err != nil {
-		utils.Fatalf("unable to preload JS file %v", err)
-	}
-
-	// in case the exec flag holds a JS statement execute it and return
-	if ctx.GlobalString(utils.ExecFlag.Name) != "" {
-		repl.batch(ctx.GlobalString(utils.ExecFlag.Name))
-	} else {
-		repl.welcome()
-		repl.interactive()
-	}
+	return nil
 }
 
 // initGenesis will initialise the given JSON format genesis file and writes it as
 // the zero'd block (i.e. genesis) or will fail hard if it can't succeed.
-func initGenesis(ctx *cli.Context) {
+func initGenesis(ctx *cli.Context) error {
 	genesisPath := ctx.Args().First()
 	if len(genesisPath) == 0 {
 		utils.Fatalf("must supply path to genesis JSON file")
 	}
 
-	chainDb, err := ethdb.NewLDBDatabase(filepath.Join(utils.MustMakeDataDir(ctx), "chaindata"), 0, 0)
-	if err != nil {
-		utils.Fatalf("could not open database: %v", err)
-	}
+	stack := makeFullNode(ctx)
+	chaindb := utils.MakeChainDatabase(ctx, stack)
 
 	genesisFile, err := os.Open(genesisPath)
 	if err != nil {
 		utils.Fatalf("failed to read genesis file: %v", err)
 	}
 
-	block, err := core.WriteGenesisBlock(chainDb, genesisFile)
+	block, err := core.WriteGenesisBlock(chaindb, genesisFile)
 	if err != nil {
 		utils.Fatalf("failed to write genesis block: %v", err)
 	}
 	glog.V(logger.Info).Infof("successfully wrote genesis block and/or chain rule set: %x", block.Hash())
+	return nil
 }
 
-// console starts a new geth node, attaching a JavaScript console to it at the
-// same time.
-func console(ctx *cli.Context) {
-	// Create and start the node based on the CLI flags
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
-
-	startNode(ctx, node)
-
-	// Attach to the newly started node, and either execute script or become interactive
-	client, err := node.Attach()
+func makeFullNode(ctx *cli.Context) *node.Node {
+	// Create the default extradata and construct the base node
+	var clientInfo = struct {
+		Version   uint
+		Name      string
+		GoVersion string
+		Os        string
+	}{uint(params.VersionMajor<<16 | params.VersionMinor<<8 | params.VersionPatch), clientIdentifier, runtime.Version(), runtime.GOOS}
+	extra, err := rlp.EncodeToBytes(clientInfo)
 	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+		glog.V(logger.Warn).Infoln("error setting canonical miner information:", err)
 	}
-	repl := newJSRE(node,
-		ctx.GlobalString(utils.JSpathFlag.Name),
-		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		client, true)
-
-	// preload user defined JS files into the console
-	err = repl.preloadJSFiles(ctx)
-	if err != nil {
-		utils.Fatalf("%v", err)
+	if uint64(len(extra)) > params.MaximumExtraDataSize.Uint64() {
+		glog.V(logger.Warn).Infoln("error setting canonical miner information: extra exceeds", params.MaximumExtraDataSize)
+		glog.V(logger.Debug).Infof("extra: %x\n", extra)
+		extra = nil
 	}
+	stack := utils.MakeNode(ctx, clientIdentifier, gitCommit)
+	utils.RegisterEthService(ctx, stack, extra)
 
-	// in case the exec flag holds a JS statement execute it and return
-	if script := ctx.GlobalString(utils.ExecFlag.Name); script != "" {
-		repl.batch(script)
-	} else {
-		repl.welcome()
-		repl.interactive()
+	// Whisper must be explicitly enabled, but is auto-enabled in --dev mode.
+	shhEnabled := ctx.GlobalBool(utils.WhisperEnabledFlag.Name)
+	shhAutoEnabled := !ctx.GlobalIsSet(utils.WhisperEnabledFlag.Name) && ctx.GlobalIsSet(utils.DevModeFlag.Name)
+	if shhEnabled || shhAutoEnabled {
+		utils.RegisterShhService(stack)
 	}
-	node.Stop()
-}
-
-// execScripts starts a new geth node based on the CLI flags, and executes each
-// of the JavaScript files specified as command arguments.
-func execScripts(ctx *cli.Context) {
-	// Create and start the node based on the CLI flags
-	node := utils.MakeSystemNode(ClientIdentifier, nodeNameVersion, makeDefaultExtra(), ctx)
-	startNode(ctx, node)
-	defer node.Stop()
-
-	// Attach to the newly started node and execute the given scripts
-	client, err := node.Attach()
-	if err != nil {
-		utils.Fatalf("Failed to attach to the inproc geth: %v", err)
+	// Add the Ethereum Stats daemon if requested
+	if url := ctx.GlobalString(utils.EthStatsURLFlag.Name); url != "" {
+		utils.RegisterEthStatsService(stack, url)
 	}
-	repl := newJSRE(node,
-		ctx.GlobalString(utils.JSpathFlag.Name),
-		ctx.GlobalString(utils.RPCCORSDomainFlag.Name),
-		client, false)
-
-	// Run all given files.
-	for _, file := range ctx.Args() {
-		if err = repl.re.Exec(file); err != nil {
-			break
+	// Add the release oracle service so it boots along with node.
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		config := release.Config{
+			Oracle: relOracle,
+			Major:  uint32(params.VersionMajor),
+			Minor:  uint32(params.VersionMinor),
+			Patch:  uint32(params.VersionPatch),
 		}
+		commit, _ := hex.DecodeString(gitCommit)
+		copy(config.Commit[:], commit)
+		return release.NewReleaseService(ctx, config)
+	}); err != nil {
+		utils.Fatalf("Failed to register the Geth release oracle service: %v", err)
 	}
-	if err != nil {
-		utils.Fatalf("JavaScript Error: %v", jsErrorString(err))
-	}
-	// JS files loaded successfully.
-	// Wait for pending callbacks, but stop for Ctrl-C.
-	abort := make(chan os.Signal, 1)
-	signal.Notify(abort, os.Interrupt)
-	go func() {
-		<-abort
-		repl.re.Stop(false)
-	}()
-	repl.re.Stop(true)
+	return stack
 }
 
-// startNode unlocks any requested accounts the boots up the system node
-// starts all registered protocols and
-// starts the RPC/IPC interfaces and the
+// startNode boots up the system node and all registered protocols, after which
+// it unlocks any requested accounts, and starts the RPC/IPC interfaces and the
 // miner.
 func startNode(ctx *cli.Context, stack *node.Node) {
 	// Start up the node itself
 	utils.StartNode(stack)
 
 	// Unlock any account specifically requested
-	var ethereum *eth.Ethereum
-	if err := stack.Service(&ethereum); err != nil {
-		utils.Fatalf("ethereum service not running: %v", err)
-	}
-	accman := ethereum.AccountManager()
+	accman := stack.AccountManager()
 	passwords := utils.MakePasswordList(ctx)
-
 	accounts := strings.Split(ctx.GlobalString(utils.UnlockedAccountFlag.Name), ",")
 	for i, account := range accounts {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
@@ -437,85 +321,17 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	}
 	// Start auxiliary services if enabled
 	if ctx.GlobalBool(utils.MiningEnabledFlag.Name) {
-		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name), ctx.GlobalString(utils.MiningGPUFlag.Name)); err != nil {
+		var ethereum *eth.Ethereum
+		if err := stack.Service(&ethereum); err != nil {
+			utils.Fatalf("ethereum service not running: %v", err)
+		}
+		if err := ethereum.StartMining(ctx.GlobalInt(utils.MinerThreadsFlag.Name)); err != nil {
 			utils.Fatalf("Failed to start mining: %v", err)
 		}
 	}
 }
 
-func accountList(ctx *cli.Context) {
-	accman := utils.MakeAccountManager(ctx)
-	accts, err := accman.Accounts()
-	if err != nil {
-		utils.Fatalf("Could not list accounts: %v", err)
-	}
-	for i, acct := range accts {
-		fmt.Printf("Account #%d: %x\n", i, acct)
-	}
-}
-
-// accountCreate creates a new account into the keystore defined by the CLI flags.
-func accountCreate(ctx *cli.Context) {
-	accman := utils.MakeAccountManager(ctx)
-	password := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-
-	account, err := accman.NewAccount(password)
-	if err != nil {
-		utils.Fatalf("Failed to create account: %v", err)
-	}
-	fmt.Printf("Address: %x\n", account)
-}
-
-// accountUpdate transitions an account from a previous format to the current
-// one, also providing the possibility to change the pass-phrase.
-func accountUpdate(ctx *cli.Context) {
-	if len(ctx.Args()) == 0 {
-		utils.Fatalf("No accounts specified to update")
-	}
-	accman := utils.MakeAccountManager(ctx)
-
-	account, oldPassword := utils.UnlockAccount(ctx, accman, ctx.Args().First(), 0, nil)
-	newPassword := utils.GetPassPhrase("Please give a new password. Do not forget this password.", true, 0, nil)
-	if err := accman.Update(account, oldPassword, newPassword); err != nil {
-		utils.Fatalf("Could not update the account: %v", err)
-	}
-}
-
-func importWallet(ctx *cli.Context) {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
-	}
-	keyJson, err := ioutil.ReadFile(keyfile)
-	if err != nil {
-		utils.Fatalf("Could not read wallet file: %v", err)
-	}
-
-	accman := utils.MakeAccountManager(ctx)
-	passphrase := utils.GetPassPhrase("", false, 0, utils.MakePasswordList(ctx))
-
-	acct, err := accman.ImportPreSaleKey(keyJson, passphrase)
-	if err != nil {
-		utils.Fatalf("Could not create the account: %v", err)
-	}
-	fmt.Printf("Address: %x\n", acct)
-}
-
-func accountImport(ctx *cli.Context) {
-	keyfile := ctx.Args().First()
-	if len(keyfile) == 0 {
-		utils.Fatalf("keyfile must be given as argument")
-	}
-	accman := utils.MakeAccountManager(ctx)
-	passphrase := utils.GetPassPhrase("Your new account is locked with a password. Please give a password. Do not forget this password.", true, 0, utils.MakePasswordList(ctx))
-	acct, err := accman.Import(keyfile, passphrase)
-	if err != nil {
-		utils.Fatalf("Could not create the account: %v", err)
-	}
-	fmt.Printf("Address: %x\n", acct)
-}
-
-func makedag(ctx *cli.Context) {
+func makedag(ctx *cli.Context) error {
 	args := ctx.Args()
 	wrongArgs := func() {
 		utils.Fatalf(`Usage: geth makedag <block number> <outputdir>`)
@@ -542,41 +358,37 @@ func makedag(ctx *cli.Context) {
 	default:
 		wrongArgs()
 	}
+	return nil
 }
 
-func gpuinfo(ctx *cli.Context) {
-	eth.PrintOpenCLDevices()
-}
-
-func gpubench(ctx *cli.Context) {
-	args := ctx.Args()
-	wrongArgs := func() {
-		utils.Fatalf(`Usage: geth gpubench <gpu number>`)
-	}
-	switch {
-	case len(args) == 1:
-		n, err := strconv.ParseUint(args[0], 0, 64)
-		if err != nil {
-			wrongArgs()
-		}
-		eth.GPUBench(n)
-	case len(args) == 0:
-		eth.GPUBench(0)
-	default:
-		wrongArgs()
-	}
-}
-
-func version(c *cli.Context) {
-	fmt.Println(ClientIdentifier)
-	fmt.Println("Version:", Version)
+func version(ctx *cli.Context) error {
+	fmt.Println(strings.Title(clientIdentifier))
+	fmt.Println("Version:", params.Version)
 	if gitCommit != "" {
 		fmt.Println("Git Commit:", gitCommit)
 	}
 	fmt.Println("Protocol Versions:", eth.ProtocolVersions)
-	fmt.Println("Network Id:", c.GlobalInt(utils.NetworkIdFlag.Name))
+	fmt.Println("Network Id:", ctx.GlobalInt(utils.NetworkIdFlag.Name))
 	fmt.Println("Go Version:", runtime.Version())
 	fmt.Println("OS:", runtime.GOOS)
 	fmt.Printf("GOPATH=%s\n", os.Getenv("GOPATH"))
 	fmt.Printf("GOROOT=%s\n", runtime.GOROOT())
+	return nil
+}
+
+func license(_ *cli.Context) error {
+	fmt.Println(`Geth is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+Geth is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with geth. If not, see <http://www.gnu.org/licenses/>.
+`)
+	return nil
 }

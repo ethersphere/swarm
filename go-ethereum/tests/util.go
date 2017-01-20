@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -103,17 +104,25 @@ func (self Log) Topics() [][]byte {
 	return t
 }
 
-func StateObjectFromAccount(db ethdb.Database, addr string, account Account) *state.StateObject {
-	obj := state.NewStateObject(common.HexToAddress(addr), db)
-	obj.SetBalance(common.Big(account.Balance))
+func makePreState(db ethdb.Database, accounts map[string]Account) *state.StateDB {
+	statedb, _ := state.New(common.Hash{}, db)
+	for addr, account := range accounts {
+		insertAccount(statedb, addr, account)
+	}
+	return statedb
+}
 
+func insertAccount(state *state.StateDB, saddr string, account Account) {
 	if common.IsHex(account.Code) {
 		account.Code = account.Code[2:]
 	}
-	obj.SetCode(common.Hex2Bytes(account.Code))
-	obj.SetNonce(common.Big(account.Nonce).Uint64())
-
-	return obj
+	addr := common.HexToAddress(saddr)
+	state.SetCode(addr, common.Hex2Bytes(account.Code))
+	state.SetNonce(addr, common.Big(account.Nonce).Uint64())
+	state.SetBalance(addr, common.Big(account.Balance))
+	for a, v := range account.Storage {
+		state.SetState(addr, common.HexToHash(a), common.HexToHash(v))
+	}
 }
 
 type VmEnv struct {
@@ -139,16 +148,8 @@ type VmTest struct {
 	PostStateRoot string
 }
 
-type RuleSet struct {
-	HomesteadBlock *big.Int
-}
-
-func (r RuleSet) IsHomestead(n *big.Int) bool {
-	return n.Cmp(r.HomesteadBlock) >= 0
-}
-
 type Env struct {
-	ruleSet      RuleSet
+	chainConfig  *params.ChainConfig
 	depth        int
 	state        *state.StateDB
 	skipTransfer bool
@@ -164,31 +165,21 @@ type Env struct {
 	difficulty *big.Int
 	gasLimit   *big.Int
 
-	logs []vm.StructLog
-
 	vmTest bool
 
 	evm *vm.EVM
 }
 
-func NewEnv(ruleSet RuleSet, state *state.StateDB) *Env {
+func NewEnv(chainConfig *params.ChainConfig, state *state.StateDB) *Env {
 	env := &Env{
-		ruleSet: ruleSet,
-		state:   state,
+		chainConfig: chainConfig,
+		state:       state,
 	}
 	return env
 }
 
-func (self *Env) StructLogs() []vm.StructLog {
-	return self.logs
-}
-
-func (self *Env) AddStructLog(log vm.StructLog) {
-	self.logs = append(self.logs, log)
-}
-
-func NewEnvFromMap(ruleSet RuleSet, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
-	env := NewEnv(ruleSet, state)
+func NewEnvFromMap(chainConfig *params.ChainConfig, state *state.StateDB, envValues map[string]string, exeValues map[string]string) *Env {
+	env := NewEnv(chainConfig, state)
 
 	env.origin = common.HexToAddress(exeValues["caller"])
 	env.parent = common.HexToHash(envValues["previousHash"])
@@ -207,16 +198,16 @@ func NewEnvFromMap(ruleSet RuleSet, state *state.StateDB, envValues map[string]s
 	return env
 }
 
-func (self *Env) RuleSet() vm.RuleSet      { return self.ruleSet }
-func (self *Env) Vm() vm.Vm                { return self.evm }
-func (self *Env) Origin() common.Address   { return self.origin }
-func (self *Env) BlockNumber() *big.Int    { return self.number }
-func (self *Env) Coinbase() common.Address { return self.coinbase }
-func (self *Env) Time() *big.Int           { return self.time }
-func (self *Env) Difficulty() *big.Int     { return self.difficulty }
-func (self *Env) Db() vm.Database          { return self.state }
-func (self *Env) GasLimit() *big.Int       { return self.gasLimit }
-func (self *Env) VmType() vm.Type          { return vm.StdVmTy }
+func (self *Env) ChainConfig() *params.ChainConfig { return self.chainConfig }
+func (self *Env) Vm() vm.Vm                        { return self.evm }
+func (self *Env) Origin() common.Address           { return self.origin }
+func (self *Env) BlockNumber() *big.Int            { return self.number }
+func (self *Env) Coinbase() common.Address         { return self.coinbase }
+func (self *Env) Time() *big.Int                   { return self.time }
+func (self *Env) Difficulty() *big.Int             { return self.difficulty }
+func (self *Env) Db() vm.Database                  { return self.state }
+func (self *Env) GasLimit() *big.Int               { return self.gasLimit }
+func (self *Env) VmType() vm.Type                  { return vm.StdVmTy }
 func (self *Env) GetHash(n uint64) common.Hash {
 	return common.BytesToHash(crypto.Keccak256([]byte(big.NewInt(int64(n)).String())))
 }
@@ -235,11 +226,11 @@ func (self *Env) CanTransfer(from common.Address, balance *big.Int) bool {
 
 	return self.state.GetBalance(from).Cmp(balance) >= 0
 }
-func (self *Env) MakeSnapshot() vm.Database {
-	return self.state.Copy()
+func (self *Env) SnapshotDatabase() int {
+	return self.state.Snapshot()
 }
-func (self *Env) SetSnapshot(copy vm.Database) {
-	self.state.Set(copy.(*state.StateDB))
+func (self *Env) RevertToSnapshot(snapshot int) {
+	self.state.RevertToSnapshot(snapshot)
 }
 
 func (self *Env) Transfer(from, to vm.Account, amount *big.Int) {
@@ -291,25 +282,3 @@ func (self *Env) Create(caller vm.ContractRef, data []byte, gas, price, value *b
 		return core.Create(self, caller, data, gas, price, value)
 	}
 }
-
-type Message struct {
-	from              common.Address
-	to                *common.Address
-	value, gas, price *big.Int
-	data              []byte
-	nonce             uint64
-}
-
-func NewMessage(from common.Address, to *common.Address, data []byte, value, gas, price *big.Int, nonce uint64) Message {
-	return Message{from, to, value, gas, price, data, nonce}
-}
-
-func (self Message) Hash() []byte                          { return nil }
-func (self Message) From() (common.Address, error)         { return self.from, nil }
-func (self Message) FromFrontier() (common.Address, error) { return self.from, nil }
-func (self Message) To() *common.Address                   { return self.to }
-func (self Message) GasPrice() *big.Int                    { return self.price }
-func (self Message) Gas() *big.Int                         { return self.gas }
-func (self Message) Value() *big.Int                       { return self.value }
-func (self Message) Nonce() uint64                         { return self.nonce }
-func (self Message) Data() []byte                          { return self.data }

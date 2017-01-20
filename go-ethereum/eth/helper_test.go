@@ -23,6 +23,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"math/big"
+	"sort"
 	"sync"
 	"testing"
 
@@ -34,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/params"
 )
 
 var (
@@ -53,15 +55,15 @@ func newTestProtocolManager(fastSync bool, blocks int, generator func(int, *core
 		pow           = new(core.FakePow)
 		db, _         = ethdb.NewMemDatabase()
 		genesis       = core.WriteGenesisBlockForTesting(db, testBank)
-		chainConfig   = &core.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
+		chainConfig   = &params.ChainConfig{HomesteadBlock: big.NewInt(0)} // homestead set to 0 because of chain maker
 		blockchain, _ = core.NewBlockChain(db, chainConfig, pow, evmux)
 	)
-	chain, _ := core.GenerateChain(genesis, db, blocks, generator)
+	chain, _ := core.GenerateChain(chainConfig, genesis, db, blocks, generator)
 	if _, err := blockchain.InsertChain(chain); err != nil {
 		panic(err)
 	}
 
-	pm, err := NewProtocolManager(chainConfig, fastSync, NetworkId, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
+	pm, err := NewProtocolManager(chainConfig, fastSync, NetworkId, 1000, evmux, &testTxPool{added: newtx}, pow, blockchain, db)
 	if err != nil {
 		return nil, err
 	}
@@ -89,9 +91,9 @@ type testTxPool struct {
 	lock sync.RWMutex // Protects the transaction pool
 }
 
-// AddTransactions appends a batch of transactions to the pool, and notifies any
+// AddBatch appends a batch of transactions to the pool, and notifies any
 // listeners if the addition channel is non nil
-func (p *testTxPool) AddTransactions(txs []*types.Transaction) {
+func (p *testTxPool) AddBatch(txs []*types.Transaction) {
 	p.lock.Lock()
 	defer p.lock.Unlock()
 
@@ -101,21 +103,26 @@ func (p *testTxPool) AddTransactions(txs []*types.Transaction) {
 	}
 }
 
-// GetTransactions returns all the transactions known to the pool
-func (p *testTxPool) GetTransactions() types.Transactions {
+// Pending returns all the transactions known to the pool
+func (p *testTxPool) Pending() map[common.Address]types.Transactions {
 	p.lock.RLock()
 	defer p.lock.RUnlock()
 
-	txs := make([]*types.Transaction, len(p.pool))
-	copy(txs, p.pool)
-
-	return txs
+	batches := make(map[common.Address]types.Transactions)
+	for _, tx := range p.pool {
+		from, _ := types.Sender(types.HomesteadSigner{}, tx)
+		batches[from] = append(batches[from], tx)
+	}
+	for _, batch := range batches {
+		sort.Sort(types.TxByNonce(batch))
+	}
+	return batches
 }
 
 // newTestTransaction create a new dummy transaction.
 func newTestTransaction(from *ecdsa.PrivateKey, nonce uint64, datasize int) *types.Transaction {
 	tx := types.NewTransaction(nonce, common.Address{}, big.NewInt(0), big.NewInt(100000), big.NewInt(0), make([]byte, datasize))
-	tx, _ = tx.SignECDSA(from)
+	tx, _ = tx.SignECDSA(types.HomesteadSigner{}, from)
 	return tx
 }
 
@@ -140,14 +147,14 @@ func newTestPeer(name string, version int, pm *ProtocolManager, shake bool) (*te
 	// Start the peer on a new thread
 	errc := make(chan error, 1)
 	go func() {
-		pm.newPeerCh <- peer
-		errc <- pm.handle(peer)
+		select {
+		case pm.newPeerCh <- peer:
+			errc <- pm.handle(peer)
+		case <-pm.quitSync:
+			errc <- p2p.DiscQuitting
+		}
 	}()
-	tp := &testPeer{
-		app:  app,
-		net:  net,
-		peer: peer,
-	}
+	tp := &testPeer{app: app, net: net, peer: peer}
 	// Execute any implicitly requested handshakes and return
 	if shake {
 		td, head, genesis := pm.blockchain.Status()

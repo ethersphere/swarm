@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
+	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 
@@ -36,18 +37,18 @@ import (
 
 var OpenFileLimit = 64
 
-// cacheRatio specifies how the total alloted cache is distributed between the
+// cacheRatio specifies how the total allotted cache is distributed between the
 // various system databases.
 var cacheRatio = map[string]float64{
-	"dapp":      0.0,
-	"chaindata": 1.0,
+	"chaindata":      1.0,
+	"lightchaindata": 1.0,
 }
 
-// handleRatio specifies how the total alloted file descriptors is distributed
+// handleRatio specifies how the total allotted file descriptors is distributed
 // between the various system databases.
 var handleRatio = map[string]float64{
-	"dapp":      0.0,
-	"chaindata": 1.0,
+	"chaindata":      1.0,
+	"lightchaindata": 1.0,
 }
 
 type LDBDatabase struct {
@@ -79,13 +80,14 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 	if handles < 16 {
 		handles = 16
 	}
-	glog.V(logger.Info).Infof("Alloted %dMB cache and %d file handles to %s", cache, handles, file)
+	glog.V(logger.Info).Infof("Allotted %dMB cache and %d file handles to %s", cache, handles, file)
 
 	// Open the db and recover any potential corruptions
 	db, err := leveldb.OpenFile(file, &opt.Options{
 		OpenFilesCacheCapacity: handles,
 		BlockCacheCapacity:     cache / 2 * opt.MiB,
 		WriteBuffer:            cache / 4 * opt.MiB, // Two of these are used internally
+		Filter:                 filter.NewBloomFilter(10),
 	})
 	if _, corrupted := err.(*errors.ErrCorrupted); corrupted {
 		db, err = leveldb.RecoverFile(file, nil)
@@ -98,6 +100,11 @@ func NewLDBDatabase(file string, cache int, handles int) (*LDBDatabase, error) {
 		fn: file,
 		db: db,
 	}, nil
+}
+
+// Path returns the path to the database directory.
+func (db *LDBDatabase) Path() string {
+	return db.fn
 }
 
 // Put puts the given key / value to the queue

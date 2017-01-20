@@ -21,14 +21,16 @@ package main
 import (
 	"io"
 
-	"github.com/codegangsta/cli"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/internal/debug"
+	"gopkg.in/urfave/cli.v1"
 )
 
 // AppHelpTemplate is the test template for the default, global app help topic.
 var AppHelpTemplate = `NAME:
    {{.App.Name}} - {{.App.Usage}}
+
+   Copyright 2013-2016 The go-ethereum Authors
 
 USAGE:
    {{.App.HelpName}} [options]{{if .App.Commands}} command [command options]{{end}} {{if .App.ArgsUsage}}{{.App.ArgsUsage}}{{else}}[arguments...]{{end}}
@@ -68,12 +70,19 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.OlympicFlag,
 			utils.TestNetFlag,
 			utils.DevModeFlag,
-			utils.GenesisFileFlag,
 			utils.IdentityFlag,
 			utils.FastSyncFlag,
+			utils.LightModeFlag,
+			utils.LightServFlag,
+			utils.LightPeersFlag,
 			utils.LightKDFFlag,
+		},
+	},
+	{
+		Name: "PERFORMANCE TUNING",
+		Flags: []cli.Flag{
 			utils.CacheFlag,
-			utils.BlockchainVersionFlag,
+			utils.TrieCacheGenFlag,
 		},
 	},
 	{
@@ -101,7 +110,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.RPCCORSDomainFlag,
 			utils.JSpathFlag,
 			utils.ExecFlag,
-			utils.PreLoadJSFlag,
+			utils.PreloadJSFlag,
 		},
 	},
 	{
@@ -113,6 +122,7 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.MaxPendingPeersFlag,
 			utils.NATFlag,
 			utils.NoDiscoverFlag,
+			utils.DiscoveryV5Flag,
 			utils.NodeKeyFileFlag,
 			utils.NodeKeyHexFlag,
 		},
@@ -122,7 +132,6 @@ var AppHelpFlagGroups = []flagGroup{
 		Flags: []cli.Flag{
 			utils.MiningEnabledFlag,
 			utils.MinerThreadsFlag,
-			utils.MiningGPUFlag,
 			utils.AutoDAGFlag,
 			utils.EtherbaseFlag,
 			utils.TargetGasLimitFlag,
@@ -152,6 +161,7 @@ var AppHelpFlagGroups = []flagGroup{
 	{
 		Name: "LOGGING AND DEBUGGING",
 		Flags: append([]cli.Flag{
+			utils.EthStatsURLFlag,
 			utils.MetricsEnabledFlag,
 			utils.FakePoWFlag,
 		}, debug.Flags...),

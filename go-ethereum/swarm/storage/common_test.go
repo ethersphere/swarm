@@ -1,7 +1,25 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package storage
 
 import (
+	"bytes"
 	"crypto/rand"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -10,61 +28,62 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-func testDataReader(l int) (r *ChunkReader, slice []byte) {
+type brokenLimitedReader struct {
+	lr    io.Reader
+	errAt int
+	off   int
+	size  int
+}
+
+func brokenLimitReader(data io.Reader, size int, errAt int) *brokenLimitedReader {
+	return &brokenLimitedReader{
+		lr:    data,
+		errAt: errAt,
+		size:  size,
+	}
+}
+
+func testDataReader(l int) (r io.Reader) {
+	return io.LimitReader(rand.Reader, int64(l))
+}
+
+func (self *brokenLimitedReader) Read(buf []byte) (int, error) {
+	if self.off+len(buf) > self.errAt {
+		return 0, fmt.Errorf("Broken reader")
+	}
+	self.off += len(buf)
+	return self.lr.Read(buf)
+}
+
+func testDataReaderAndSlice(l int) (r io.Reader, slice []byte) {
 	slice = make([]byte, l)
 	if _, err := rand.Read(slice); err != nil {
 		panic("rand error")
 	}
-	r = NewChunkReaderFromBytes(slice)
-	return
-}
-
-func randomChunks(l int64, branches int64, chunkC chan *Chunk) (key Key, errC chan error) {
-	chunker := NewTreeChunker(&ChunkerParams{
-		Branches:     branches,
-		Hash:         defaultHash,
-		SplitTimeout: splitTimeout,
-	})
-	key = make([]byte, 32)
-	b := make([]byte, l)
-	_, err := rand.Read(b)
-	if err != nil {
-		panic("no rand")
-	}
-	wg := &sync.WaitGroup{}
-	errC = chunker.Split(key, NewChunkReaderFromBytes(b), chunkC, wg)
-	wg.Wait()
+	r = io.LimitReader(bytes.NewReader(slice), int64(l))
 	return
 }
 
 func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
 
 	chunkC := make(chan *Chunk)
-	key, errC := randomChunks(l, branches, chunkC)
-
-SPLIT:
-	for {
-		select {
-		case chunk := <-chunkC:
+	go func() {
+		for chunk := range chunkC {
 			m.Put(chunk)
-		case err, ok := <-errC:
-			if err != nil {
-				t.Errorf("Chunker error: %v", err)
-				return
-			}
-			if !ok {
-				break SPLIT
+			if chunk.wg != nil {
+				chunk.wg.Done()
 			}
 		}
-	}
+	}()
 	chunker := NewTreeChunker(&ChunkerParams{
-		Branches:     branches,
-		Hash:         defaultHash,
-		SplitTimeout: splitTimeout,
+		Branches: branches,
+		Hash:     defaultHash,
 	})
+	swg := &sync.WaitGroup{}
+	key, err := chunker.Split(rand.Reader, l, chunkC, swg, nil)
+	swg.Wait()
+	close(chunkC)
 	chunkC = make(chan *Chunk)
-	var r SectionReader
-	r = chunker.Join(key, chunkC)
 
 	quit := make(chan bool)
 
@@ -73,22 +92,26 @@ SPLIT:
 			go func(chunk *Chunk) {
 				storedChunk, err := m.Get(chunk.Key)
 				if err == notFound {
-					glog.V(logger.Detail).Infof("[BZZ] chunk '%x' not found", chunk.Key)
+					glog.V(logger.Detail).Infof("chunk '%v' not found", chunk.Key.Log())
 				} else if err != nil {
-					glog.V(logger.Detail).Infof("[BZZ] error retrieving chunk %x: %v", chunk.Key, err)
+					glog.V(logger.Detail).Infof("error retrieving chunk %v: %v", chunk.Key.Log(), err)
 				} else {
 					chunk.SData = storedChunk.SData
+					chunk.Size = storedChunk.Size
 				}
-				glog.V(logger.Detail).Infof("[BZZ] chunk '%x' not found", chunk.Key[:4])
+				glog.V(logger.Detail).Infof("chunk '%v' not found", chunk.Key.Log())
 				close(chunk.C)
 			}(ch)
 		}
+		close(quit)
 	}()
+	r := chunker.Join(key, chunkC)
 
 	b := make([]byte, l)
 	n, err := r.ReadAt(b, 0)
 	if err != io.EOF {
-		t.Errorf("read error (%v/%v) %v", n, l, err)
-		close(quit)
+		t.Fatalf("read error (%v/%v) %v", n, l, err)
 	}
+	close(chunkC)
+	<-quit
 }

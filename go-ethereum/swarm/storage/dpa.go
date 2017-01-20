@@ -1,7 +1,24 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package storage
 
 import (
 	"errors"
+	"io"
 	"sync"
 	"time"
 
@@ -26,6 +43,8 @@ const (
 	retrieveChanCapacity        = 100
 	singletonSwarmDbCapacity    = 50000
 	singletonSwarmCacheCapacity = 500
+	maxStoreProcesses           = 8
+	maxRetrieveProcesses        = 8
 )
 
 var (
@@ -72,33 +91,14 @@ func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
 // FS-aware API and httpaccess
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
-func (self *DPA) Retrieve(key Key) SectionReader {
+func (self *DPA) Retrieve(key Key) LazySectionReader {
 	return self.Chunker.Join(key, self.retrieveC)
 }
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data SectionReader, wg *sync.WaitGroup) (key Key, err error) {
-	key = make([]byte, self.Chunker.KeySize())
-	errC := self.Chunker.Split(key, data, self.storeC, wg)
-
-SPLIT:
-	for {
-		select {
-		case err, ok := <-errC:
-			if err != nil {
-				glog.V(logger.Error).Infof("[BZZ] chunker split error: %v", err)
-			}
-			if !ok {
-				break SPLIT
-			}
-
-		case <-self.quitC:
-			break SPLIT
-		}
-	}
-	return
-
+func (self *DPA) Store(data io.Reader, size int64, swg *sync.WaitGroup, wwg *sync.WaitGroup) (key Key, err error) {
+	return self.Chunker.Split(data, size, self.storeC, swg, wwg)
 }
 
 func (self *DPA) Start() {
@@ -108,6 +108,8 @@ func (self *DPA) Start() {
 		return
 	}
 	self.running = true
+	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
+	self.storeC = make(chan *Chunk, storeChanCapacity)
 	self.quitC = make(chan bool)
 	self.storeLoop()
 	self.retrieveLoop()
@@ -126,55 +128,58 @@ func (self *DPA) Stop() {
 // retrieveLoop dispatches the parallel chunk retrieval requests received on the
 // retrieve channel to its ChunkStore  (NetStore or LocalStore)
 func (self *DPA) retrieveLoop() {
-	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
-
-	go func() {
-	RETRIEVE:
-		for ch := range self.retrieveC {
-
-			go func(chunk *Chunk) {
-				glog.V(logger.Detail).Infof("[BZZ] dpa: retrieve loop : chunk %v", chunk.Key.Log())
-				storedChunk, err := self.Get(chunk.Key)
-				if err == notFound {
-					glog.V(logger.Detail).Infof("[BZZ] chunk %v not found", chunk.Key.Log())
-				} else if err != nil {
-					glog.V(logger.Detail).Infof("[BZZ] error retrieving chunk %v: %v", chunk.Key.Log(), err)
-				} else {
-					chunk.SData = storedChunk.SData
-					chunk.Size = storedChunk.Size
-				}
-				close(chunk.C)
-			}(ch)
-			select {
-			case <-self.quitC:
-				break RETRIEVE
-			default:
-			}
-		}
-	}()
+	for i := 0; i < maxRetrieveProcesses; i++ {
+		go self.retrieveWorker()
+	}
+	glog.V(logger.Detail).Infof("dpa: retrieve loop spawning %v workers", maxRetrieveProcesses)
 }
 
-// storeLoop dispatches the parallel chunk store requests received on the
-// store channel to its ChunkStore (NetStore or LocalStore)
-func (self *DPA) storeLoop() {
-	self.storeC = make(chan *Chunk)
-	go func() {
-	STORE:
-		for ch := range self.storeC {
-			go func(chunk *Chunk) {
-				self.Put(chunk)
-				if chunk.wg != nil {
-					glog.V(logger.Detail).Infof("[BZZ] DPA.storeLoop %v", chunk.Key.Log())
-					chunk.wg.Done()
-				}
-			}(ch)
-			select {
-			case <-self.quitC:
-				break STORE
-			default:
-			}
+func (self *DPA) retrieveWorker() {
+	for chunk := range self.retrieveC {
+		glog.V(logger.Detail).Infof("dpa: retrieve loop : chunk %v", chunk.Key.Log())
+		storedChunk, err := self.Get(chunk.Key)
+		if err == notFound {
+			glog.V(logger.Detail).Infof("chunk %v not found", chunk.Key.Log())
+		} else if err != nil {
+			glog.V(logger.Detail).Infof("error retrieving chunk %v: %v", chunk.Key.Log(), err)
+		} else {
+			chunk.SData = storedChunk.SData
+			chunk.Size = storedChunk.Size
 		}
-	}()
+		close(chunk.C)
+
+		select {
+		case <-self.quitC:
+			return
+		default:
+		}
+	}
+}
+
+// storeLoop dispatches the parallel chunk store request processors
+// received on the store channel to its ChunkStore (NetStore or LocalStore)
+func (self *DPA) storeLoop() {
+	for i := 0; i < maxStoreProcesses; i++ {
+		go self.storeWorker()
+	}
+	glog.V(logger.Detail).Infof("dpa: store spawning %v workers", maxStoreProcesses)
+}
+
+func (self *DPA) storeWorker() {
+
+	for chunk := range self.storeC {
+		self.Put(chunk)
+		if chunk.wg != nil {
+			glog.V(logger.Detail).Infof("dpa: store processor %v", chunk.Key.Log())
+			chunk.wg.Done()
+
+		}
+		select {
+		case <-self.quitC:
+			return
+		default:
+		}
+	}
 }
 
 // DpaChunkStore implements the ChunkStore interface,
@@ -198,17 +203,17 @@ func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
 	chunk, err = self.netStore.Get(key)
 	// timeout := time.Now().Add(searchTimeout)
 	if chunk.SData != nil {
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Get: %v found locally, %d bytes", key.Log(), len(chunk.SData))
+		glog.V(logger.Detail).Infof("DPA.Get: %v found locally, %d bytes", key.Log(), len(chunk.SData))
 		return
 	}
 	// TODO: use self.timer time.Timer and reset with defer disableTimer
 	timer := time.After(searchTimeout)
 	select {
 	case <-timer:
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Get: %v request time out ", key.Log())
+		glog.V(logger.Detail).Infof("DPA.Get: %v request time out ", key.Log())
 		err = notFound
 	case <-chunk.Req.C:
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Get: %v retrieved, %d bytes (%p)", key.Log(), len(chunk.SData), chunk)
+		glog.V(logger.Detail).Infof("DPA.Get: %v retrieved, %d bytes (%p)", key.Log(), len(chunk.SData), chunk)
 	}
 	return
 }
@@ -217,18 +222,18 @@ func (self *dpaChunkStore) Get(key Key) (chunk *Chunk, err error) {
 func (self *dpaChunkStore) Put(entry *Chunk) {
 	chunk, err := self.localStore.Get(entry.Key)
 	if err != nil {
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: %v new chunk. call netStore.Put", entry.Key.Log())
+		glog.V(logger.Detail).Infof("DPA.Put: %v new chunk. call netStore.Put", entry.Key.Log())
 		chunk = entry
 	} else if chunk.SData == nil {
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: %v request entry found", entry.Key.Log())
+		glog.V(logger.Detail).Infof("DPA.Put: %v request entry found", entry.Key.Log())
 		chunk.SData = entry.SData
 		chunk.Size = entry.Size
 	} else {
-		glog.V(logger.Detail).Infof("[BZZ] DPA.Put: %v chunk already known", entry.Key.Log())
+		glog.V(logger.Detail).Infof("DPA.Put: %v chunk already known", entry.Key.Log())
 		return
 	}
 	// from this point on the storage logic is the same with network storage requests
-	glog.V(logger.Detail).Infof("[BZZ] DPA.Put %v: %v", self.n, chunk.Key.Log())
+	glog.V(logger.Detail).Infof("DPA.Put %v: %v", self.n, chunk.Key.Log())
 	self.n++
 	self.netStore.Put(chunk)
 }

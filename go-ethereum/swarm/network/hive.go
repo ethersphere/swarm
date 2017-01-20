@@ -1,155 +1,214 @@
+// Copyright 2016 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package network
 
 import (
 	"fmt"
-	"math/rand"
-	"path/filepath"
+	// "math/rand"
+	// "sort"
+	"bytes"
+	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/kademlia"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// Hive is the logistic manager of the swarm
-// it uses a generic kademlia nodetable to find best peer list
-// for any target
-// this is used by the netstore to search for content in the swarm
-// the bzz protocol peersMsgData exchange is relayed to Kademlia
-// for db storage and filtering
-// connections and disconnections are reported and relayed
-// to keep the nodetable uptodate
+/*
+Hive is the logistic manager of the swarm
+it uses an Overlay Topology driver (e.g., generic kademlia nodetable)
+to find best peer list for any target
+this is used by the netstore to search for content in the swarm
 
+It handles the bzz protocol getPeersMsg peersMsg exchange
+and relay the peer request process to the Overlay module
+
+peer connections and disconnections are reported and registered
+to keep the nodetable uptodate
+*/
+type Overlay interface {
+	Register(NodeAddr) error
+	On(Node) (Node, error)
+	Off(Node)
+
+	EachNode([]byte, int, func(Node) bool)
+	EachNodeAddr([]byte, int, func(NodeAddr) bool)
+
+	SuggestNodeAddr() NodeAddr
+	SuggestOrder() int
+
+	Info() string
+}
+
+// Hive implements the PeerPool interface
 type Hive struct {
-	listenAddr   func() string
-	callInterval uint64
-	id           discover.NodeID
-	addr         kademlia.Address
-	kad          *kademlia.Kademlia
-	path         string
-	toggle       chan bool
-	more         chan bool
+	*HiveParams // settings
+	Overlay     // the overlay topology driver
+	peers       map[discover.NodeID]Node
 
-	// for testing only
-	swapEnabled bool
-	syncEnabled bool
-	blockRead   bool
-	blockWrite  bool
+	lock   sync.Mutex
+	quit   chan bool
+	toggle chan bool
+	more   chan bool
 }
 
 const (
-	callInterval = 10000000000
-	bucketSize   = 3
-	maxProx      = 10
-	proxBinSize  = 8
+	peersBroadcastSetSize = 1
+	maxPeersPerRequest    = 5
+	callInterval          = 3000000000
 )
 
 type HiveParams struct {
-	CallInterval uint64
-	KadDbPath    string
-	*kademlia.KadParams
+	PeersBroadcastSetSize uint
+	MaxPeersPerRequest    uint
+	CallInterval          uint64
 }
 
-func NewHiveParams(path string) *HiveParams {
-	kad := kademlia.NewKadParams()
-	kad.BucketSize = bucketSize
-	kad.MaxProx = maxProx
-	kad.ProxBinSize = proxBinSize
-
+func NewHiveParams() *HiveParams {
 	return &HiveParams{
-		CallInterval: callInterval,
-		KadDbPath:    filepath.Join(path, "bzz-peers.json"),
-		KadParams:    kad,
+		PeersBroadcastSetSize: peersBroadcastSetSize,
+		MaxPeersPerRequest:    maxPeersPerRequest,
+		CallInterval:          callInterval,
 	}
 }
 
-func NewHive(addr common.Hash, params *HiveParams, swapEnabled, syncEnabled bool) *Hive {
-	kad := kademlia.New(kademlia.Address(addr), params.KadParams)
+// Hive constructor embeds both arguments
+// HiveParams config parameters
+// Overlay Topology Driver Interface
+func NewHive(params *HiveParams, overlay Overlay) *Hive {
 	return &Hive{
-		callInterval: params.CallInterval,
-		kad:          kad,
-		addr:         kad.Addr(),
-		path:         params.KadDbPath,
-		swapEnabled:  swapEnabled,
-		syncEnabled:  syncEnabled,
+		HiveParams: params,
+		Overlay:    overlay,
+		peers:      make(map[discover.NodeID]Node),
 	}
 }
 
-func (self *Hive) SyncEnabled(on bool) {
-	self.syncEnabled = on
+// messages that hive regusters handles for
+var HiveMsgs = []interface{}{
+	&getPeersMsg{},
+	&peersMsg{},
 }
 
-func (self *Hive) SwapEnabled(on bool) {
-	self.swapEnabled = on
+/*
+peersMsg is the message to pass peer information
+It is always a response to a peersRequestMsg
+
+The encoding of a peer is identical to that in the devp2p base protocol peers
+messages: [IP, Port, NodeID]
+note that a node's DPA address is not the NodeID but the hash of the NodeID.
+
+To mitigate against spurious peers messages, requests should be remembered
+and correctness of responses should be checked
+
+If the proxBin of peers in the response is incorrect the sender should be
+disconnected
+*/
+type peersMsg struct {
+	Peers []*peerAddr
 }
 
-func (self *Hive) BlockNetworkRead(on bool) {
-	self.blockRead = on
+func (self peersMsg) String() string {
+	return fmt.Sprintf("%T: %v", self, self.Peers)
 }
 
-func (self *Hive) BlockNetworkWrite(on bool) {
-	self.blockWrite = on
+// getPeersMsg is sent to (random) peers to request (Max) peers of a specific order
+type getPeersMsg struct {
+	Order uint
+	Max   uint
 }
 
-// public accessor to the hive base address
-func (self *Hive) Addr() kademlia.Address {
-	return self.addr
+func (self getPeersMsg) String() string {
+	return fmt.Sprintf("%T: accept max %v peers of PO%03d", self, self.Max, self.Order)
 }
 
 // Start receives network info only at startup
 // listedAddr is a function to retrieve listening address to advertise to peers
 // connectPeer is a function to connect to a peer based on its NodeID or enode URL
+// af() returns an arbitrary ticker channel
 // there are called on the p2p.Server which runs on the node
-func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPeer func(string) error) (err error) {
+func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Time) (err error) {
+
 	self.toggle = make(chan bool)
 	self.more = make(chan bool)
-	self.id = id
-	self.listenAddr = listenAddr
-	err = self.kad.Load(self.path, nil)
-	if err != nil {
-		glog.V(logger.Warn).Infof("[BZZ] KΛÐΞMLIΛ Warning: error reading kaddb '%s' (skipping): %v", self.path, err)
-		err = nil
-	}
+	self.quit = make(chan bool)
+	order := -1
+	glog.V(logger.Detail).Infof("hive started")
 	// this loop is doing bootstrapping and maintains a healthy table
-	go self.keepAlive()
+	go self.keepAlive(af)
 	go func() {
-		// whenever toggled ask kademlia about most preferred peer
-		for alive := range self.more {
-			if !alive {
+		// each iteration, ask kademlia about most preferred peer
+		for more := range self.more {
+			if !more {
 				// receiving false closes the loop while allowing parallel routines
 				// to attempt to write to more (remove Peer when shutting down)
 				return
 			}
-			node, proxLimit := self.kad.FindBest()
-			if node != nil && len(node.Url) > 0 {
-				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call for bee %v", node.Url)
-				// enode or any lower level connection address is unnecessary in future
-				// discovery table is used to look it up.
-				connectPeer(node.Url)
-			} else if proxLimit > -1 {
-				// a random peer is taken from the table
-				peers := self.kad.FindClosest(kademlia.RandomAddressAt(self.addr, rand.Intn(self.kad.MaxProx)), 1)
-				if len(peers) > 0 {
-					// a random address at prox bin 0 is sent for lookup
-					randAddr := kademlia.RandomAddressAt(self.addr, proxLimit)
-					req := &retrieveRequestMsgData{
-						Key: storage.Key(randAddr[:]),
-					}
-					glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: call any bee in area %v messenger bee %v", randAddr, peers[0])
-					peers[0].(*peer).retrieve(req)
+			glog.V(logger.Detail).Infof("hive delegate to overlay driver: suggest addr to connect to")
+			addr := self.SuggestNodeAddr()
+
+			if addr != nil {
+				glog.V(logger.Detail).Infof("========> connect to bee %v", addr)
+				err := connectPeer(NodeId(addr).NodeID.String())
+				if err != nil {
+					glog.V(logger.Detail).Infof("===X====> connect to bee %v failed: %v", addr, err)
+
 				}
-				self.toggle <- true
-				glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: buzz kept alive")
-			} else {
-				self.toggle <- false
 			}
-			glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: queen's address: %v, population: %d (%d)\n%v", self.addr, self.kad.Count(), self.kad.DBCount(), self.kad)
+			glog.V(logger.Detail).Infof("hive delegate to overlay driver: suggest order for getPeersMsg")
+			order = self.SuggestOrder()
+			req := &getPeersMsg{
+				Order: uint(order),
+				Max:   self.MaxPeersPerRequest,
+			}
+			var i uint
+			var err error
+			glog.V(logger.Debug).Infof("requesting bees of PO%03d from %v (each max %v)", order, self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
+			self.EachNode(nil, order, func(n Node) bool {
+				glog.V(logger.Debug).Infof("%T sent to %v", req, n.ID())
+				err = n.Send(req)
+				if err == nil {
+					i++
+					if i >= self.PeersBroadcastSetSize {
+						return false
+					}
+				}
+				return true
+			})
+			glog.V(logger.Debug).Infof("sent %T to %d/%d peers", req, i, self.PeersBroadcastSetSize)
+			// only switch off if full
+			var need bool
+			if order < 256 || addr != nil {
+				need = true
+			}
+			select {
+			case self.toggle <- need:
+				glog.V(logger.Debug).Infof("keep hive alive: %v", need)
+			case <-self.quit:
+				return
+			}
 		}
+		glog.V(logger.Debug).Infof("%v", self.Info())
 	}()
 	return
+}
+
+func (self *Hive) ticker() <-chan time.Time {
+	return time.NewTicker(time.Duration(self.CallInterval)).C
 }
 
 // keepAlive is a forever loop
@@ -157,190 +216,154 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 // by writing to self.more until Kademlia Table is saturated
 // wake state is toggled by writing to self.toggle
 // it restarts if the table becomes non-full again due to disconnections
-func (self *Hive) keepAlive() {
-	alarm := time.NewTicker(time.Duration(self.callInterval)).C
+func (self *Hive) keepAlive(af func() <-chan time.Time) {
+	glog.V(logger.Debug).Infof("keep alive loop started")
+	alarm := af()
 	for {
 		select {
 		case <-alarm:
-			if self.kad.DBCount() > 0 {
-				select {
-				case self.more <- true:
-				default:
-				}
-			}
-		case need, alive := <-self.toggle:
-			if !alive {
-				self.more <- false
-				return
-			}
+			glog.V(logger.Debug).Infof("wake up: make hive alive")
+			self.wake()
+		case need := <-self.toggle:
 			if alarm == nil && need {
-				alarm = time.NewTicker(time.Duration(self.callInterval)).C
+				alarm = af()
 			}
+			// if hive saturated, no more peers asked
 			if alarm != nil && !need {
 				alarm = nil
-
 			}
-		}
-	}
-}
-
-func (self *Hive) Stop() error {
-	// closing toggle channel quits the updateloop
-	close(self.toggle)
-	return self.kad.Save(self.path, saveSync)
-}
-
-// called at the end of a successful protocol handshake
-func (self *Hive) addPeer(p *peer) {
-	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: hi new bee %v", p)
-	self.kad.On(p, loadSync)
-	// self lookup (can be encoded as nil/zero key since peers addr known) + no id ()
-	// the most common way of saying hi in bzz is initiation of gossip
-	// let me know about anyone new from my hood , here is the storageradius
-	// to send the 6 byte self lookup
-	// we do not record as request or forward it, just reply with peers
-	p.retrieve(&retrieveRequestMsgData{})
-	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: 'whatsup wheresdaparty' sent to %v", p)
-	select {
-	case self.more <- true:
-	default:
-	}
-}
-
-// called after peer disconnected
-func (self *Hive) removePeer(p *peer) {
-	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: bee %v gone offline", p)
-	self.kad.Off(p, saveSync)
-	select {
-	case self.more <- true:
-	default:
-	}
-	if self.kad.Count() == 0 {
-		glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: empty, all bees gone", p)
-	}
-}
-
-// Retrieve a list of live peers that are closer to target than us
-func (self *Hive) getPeers(target storage.Key, max int) (peers []*peer) {
-	var addr kademlia.Address
-	copy(addr[:], target[:])
-	for _, node := range self.kad.FindClosest(addr, max) {
-		peers = append(peers, node.(*peer))
-	}
-	return
-}
-
-// disconnects all the peers
-func (self *Hive) DropAll() {
-	glog.V(logger.Detail).Infof("[BZZ] KΛÐΞMLIΛ hive: dropping all bees")
-	for _, node := range self.kad.FindClosest(kademlia.Address{}, 0) {
-		node.Drop()
-	}
-}
-
-// contructor for kademlia.NodeRecord based on peer address alone
-// TODO: should go away and only addr passed to kademlia
-func newNodeRecord(addr *peerAddr) *kademlia.NodeRecord {
-	now := kademlia.Time(time.Now())
-	return &kademlia.NodeRecord{
-		Addr:  addr.Addr,
-		Url:   addr.String(),
-		Seen:  now,
-		After: now,
-	}
-}
-
-// called by the protocol when receiving peerset (for target address)
-// peersMsgData is converted to a slice of NodeRecords for Kademlia
-// this is to store all thats needed
-func (self *Hive) HandlePeersMsg(req *peersMsgData, from *peer) {
-	var nrs []*kademlia.NodeRecord
-	for _, p := range req.Peers {
-		nrs = append(nrs, newNodeRecord(p))
-	}
-	self.kad.Add(nrs)
-}
-
-// peer wraps the protocol instance to represent a connected peer
-// it implements kademlia.Node interface
-type peer struct {
-	*bzz // protocol instance running on peer connection
-}
-
-// protocol instance implements kademlia.Node interface (embedded peer)
-func (self *peer) Addr() kademlia.Address {
-	return self.remoteAddr.Addr
-}
-
-func (self *peer) Url() string {
-	return self.remoteAddr.String()
-}
-
-// TODO take into account traffic
-func (self *peer) LastActive() time.Time {
-	return time.Now()
-}
-
-// reads the serialised form of sync state persisted as the 'Meta' attribute
-// and sets the decoded syncState on the online node
-func loadSync(record *kademlia.NodeRecord, node kademlia.Node) error {
-	if p, ok := node.(*peer); ok {
-		if record.Meta == nil {
-			glog.V(logger.Debug).Infof("no sync state for node record %v", record)
-			return nil
-		}
-		state, err := decodeSync(record.Meta)
-		glog.V(logger.Debug).Infof("sync state for node record %v: %s -> %v", record, string(*(record.Meta)), state)
-		p.syncState = state
-		return err
-	}
-	return fmt.Errorf("invalid type")
-}
-
-// callback when saving a sync state
-func saveSync(record *kademlia.NodeRecord, node kademlia.Node) {
-	if p, ok := node.(*peer); ok {
-		meta, err := encodeSync(p.syncState)
-		if err != nil {
-			glog.V(logger.Warn).Infof("error saving sync state for %v: %v", node, err)
+		case <-self.quit:
 			return
 		}
-		glog.V(logger.Warn).Infof("saving sync state for %v: %s", node, string(*meta))
-
-		record.Meta = meta
 	}
 }
 
-// the immediate response to a retrieve request,
-// sends relevant peer data given by the kademlia hive to the requester
-// TODO: remember peers sent for duration of the session, only new peers sent
-func (self *Hive) peers(req *retrieveRequestMsgData) {
-	// FIXME: should check req.MaxPeers but then should not default to zero or make sure we set it when sending retrieveRequests
-	// we might need chunk.req to cache relevant peers response,
-	// hive change would expire it
-	if req != nil && req.MaxPeers >= 0 {
-		var addrs []*peerAddr
-		if req.timeout == nil || time.Now().Before(*(req.timeout)) {
-			key := req.Key
-			// self lookup from remote peer
-			if storage.IsZeroKey(key) {
-				addr := req.from.Addr()
-				key = storage.Key(addr[:])
-				req.Key = nil
-			}
-			// get peer addresses from hive
-			for _, peer := range self.getPeers(key, int(req.MaxPeers)) {
-				addrs = append(addrs, peer.remoteAddr)
-			}
-			glog.V(logger.Detail).Infof("[BZZ] Hive sending %d peer addresses to %v. req.Id: %v, req.Key: %x", len(addrs), req.from, req.Id, req.Key.Log())
+func (self *Hive) Stop() {
+	// closing toggle channel quits the updateloop
+	close(self.quit)
+}
 
-			peersData := &peersMsgData{
-				Peers: addrs,
-				Key:   req.Key,
-				Id:    req.Id,
-			}
-			peersData.setTimeout(req.timeout)
-			req.from.peers(peersData)
-		}
+func (self *Hive) wake() {
+	select {
+	case self.more <- true:
+		glog.V(logger.Debug).Infof("hive woken up")
+	case <-self.quit:
+	default:
+		glog.V(logger.Debug).Infof("hive already awake")
 	}
+}
+
+// func (self *Hive) anyN(n int, peers []Node) []Node {
+// 	self.lock.Lock()
+// 	defer self.lock.Unlock()
+// 	pick := rand.Perm(len(peers))
+// 	sort.Ints(pick)
+// 	var nodes []Node
+// 	j := 0
+// 	i := 0
+// 	for i, node := range peers {
+// 		if i == pick[j] {
+// 			j++
+// 			nodes = append(nodes, node)
+// 			if j == n {
+// 				break
+// 			}
+// 		}
+// 	}
+// 	return nodes
+// }
+
+// Add is called at the end of a successful protocol handshake to register a peer onlune
+func (self *Hive) Add(p Node) error {
+	defer self.wake()
+	glog.V(logger.Detail).Infof("add new bee %v", p)
+	drop, err := self.On(p)
+	if err != nil {
+		return err
+	}
+	if drop != nil {
+		drop.Drop()
+		return nil
+	}
+
+	self.lock.Lock()
+	self.peers[p.ID()] = p
+	self.lock.Unlock()
+
+	p.Register(&peersMsg{}, self.handlePeersMsg(p))
+	p.Register(&getPeersMsg{}, self.handleGetPeersMsg(p))
+
+	return nil
+}
+
+// Remove called after peer is disconnected
+func (self *Hive) Remove(p Node) {
+	defer self.wake()
+	glog.V(logger.Debug).Infof("remove bee %v", p)
+	self.Off(p)
+	self.lock.Lock()
+	delete(self.peers, p.ID())
+	self.lock.Unlock()
+}
+
+// func (self *Hive) Get(n string) Node {
+// 	return Node(self.peers[n])
+// }
+
+// handlePeersMsg called by the protocol when receiving peerset (for target address)
+// list of nodes ([]NodeAddr in peersMsg is added to the overlay db
+func (self *Hive) handlePeersMsg(p Node) func(interface{}) error {
+	return func(msg interface{}) error {
+		// wake up the hive on news of new arrival
+		defer self.wake()
+		// register all addresses
+		var err error
+		req := msg.(*peersMsg)
+		for _, p := range req.Peers {
+			err = self.Register(p)
+			// TODO: these are known to our peer, so do not resend during the session
+		}
+		// FIXME: only the last error is returned
+		return err
+	}
+}
+
+// HandleGetPeersMsg called by the protocol when receiving peerset (for target address)
+// peersMsgData is converted to a slice of NodeRecords for Kademlia
+// this is to store all thats needed
+func (self *Hive) handleGetPeersMsg(p Node) func(interface{}) error {
+	return func(msg interface{}) error {
+		req := msg.(*getPeersMsg)
+		var peers []*peerAddr
+		self.EachNode(p.OverlayAddr(), int(req.Order), func(n Node) bool {
+			if bytes.Compare(n.OverlayAddr(), p.OverlayAddr()) != 0 {
+				peers = append(peers, &peerAddr{n.OverlayAddr(), n.UnderlayAddr()})
+			}
+			return len(peers) < int(req.Max)
+		})
+
+		resp := &peersMsg{
+			Peers: peers,
+		}
+		err := p.Send(resp)
+		if err != nil {
+			return err
+		}
+		return nil
+	}
+}
+
+func (self *Hive) PeerInfo(id discover.NodeID) interface{} {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	p, ok := self.peers[id]
+	if !ok {
+		return nil
+	}
+	return interface{}(&peerAddr{p.OverlayAddr(), p.UnderlayAddr()})
+}
+
+func HexToBytes(s string) []byte {
+	id := discover.MustHexID(s)
+	return id[:]
 }
