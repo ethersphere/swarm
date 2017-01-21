@@ -8,8 +8,6 @@ import (
 	
 	//"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/logger"
-	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	//"github.com/ethereum/go-ethereum/p2p/adapters"
@@ -19,6 +17,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	
 	//httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/logger"
+	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
 
@@ -29,6 +29,8 @@ type META struct {
 	config      *METAapi.Config            // meta configuration
 	api         *METAapi.Api               // high level api layer 
 	privateKey  *ecdsa.PrivateKey
+	//server		*p2p.Server					// temporary pointer to server		
+	protopeers	*network.PeerCollection				// protocol access to sending through peers, exposes the Messenger
 }
 
 type METAAPI struct {
@@ -62,11 +64,8 @@ func NewMETA(ctx *node.ServiceContext, config *METAapi.Config) (self *META, err 
 
 	self.api = METAapi.NewApi()
 	
-	// set up high level api
-	// we probably need this, but comment out for now
-	// seems to have to do with contracts
-	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
-
+	self.protopeers = &network.PeerCollection{}
+	
 	return self, nil
 }
 
@@ -106,12 +105,18 @@ func (self *META) APIs() []rpc.API {
 			Service:   METAapi.NewInfo(self.config),
 			Public:    true,
 		},
+		{
+			Namespace: "mw",
+			Version:   "0.1",
+			Service:   METAapi.NewParrotNode(self.protopeers),
+			Public:    true,
+		},
 	}
 }
 
 func (self *META) Protocols() []p2p.Protocol {
 	wg := sync.WaitGroup{}
-	return []p2p.Protocol{p2p.Protocol(network.METAProtocol(&wg))}
+	return []p2p.Protocol{p2p.Protocol(network.METAProtocol(self.protopeers, &wg))}
 }
 
 // API reflection for RPC (?)

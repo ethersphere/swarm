@@ -31,11 +31,11 @@ Specific META files are:
  
 In terminal 1: 
 
-`META --metaaccount foo --maxpeers 5 --datadir /tmp/metafoo --verbosity 6`
+`META --metaaccount foo --maxpeers 5 --datadir /tmp/metafoo --verbosity 5`
 
 In terminal 2:
 
-`META --metacccount bar --maxpeers 5 --datadir /tmp/metabar --verbosity 6 --port 31667`
+`META --metacccount bar --maxpeers 5 --datadir /tmp/metabar --verbosity 5 --port 31667`
 
 In terminal 3:
 
@@ -49,21 +49,34 @@ Currently it forces you to specify the bogus param `--metaaccount`, all others m
 
 ### Node TCP API
 
-Listens, dials and is protocol-ready.
-
-Try `admin.addPeer(<enode of the other>)` (Maybe host part needs to be changed to `127.0.0.1`) in console with two nodes set up and see what happens in the log.
+Listens and dials. Peer connect must be made manually.
 
 ### PROTOCOL
 
-Initializes and registers upon connection (performs p2p node handshake), but "language" itself not yet implemented.
+Initializes and registers upon connection.
+
+One test protocol structure `Hellofirstnodemsg` is implemented:
+
+```
+type Hellofirstnodemsg struct {
+	Pmsg string
+	Sub protocols.Peer
+}
+```
 
 ### RPC
 
-RPC only implements one API item, defined in `META/api/api.go` - `*Info.Infoo()`, which returns an object with `META/api.Config` settings
+RPC implements two API items (see `META/api/api.go`:
+
+- `*Info.Infoo()`: merely returns an object with `META/api.Config` settings
+- `*ParrotNode.Hellofirstnode(<string>)`: Sends **<string>** packed into `Hellofirstnodemsg` protocol structure to first connected Peer, returns success/fail. 
 
 ### JS CLI
 
-Added module **mw** which currently only has one method, `mw.infoo()`, which returns the object returned by the aforementioned RPC call.
+Added module **mw** which has two methods:
+
+- `mw.infoo()` mapped to RPC `*Info.Infoo()` 
+- `mv.hello(<string>)` mapped to RPC `*ParrotNode.Hellofirstnode()`
 
 ## ISSUES
 
@@ -84,11 +97,12 @@ META is build on [https://github.com/ethersphere/go-ethereum](https://github.com
 
 ### 0.1
 
-1. Implement protocol handshake, so that two separately running nodes can connect.
-2. Implement handshake and simple demo protocol content: A simple instruction can be sent via **console**, which is sent to a peer, which then replies and whose output is echoed to **console**.
-3. Same as above, but with several listening peers responding
-4. Same as above, but some peers implement different protocols, or different versions of protocol, and hence should not respond.
-5. Deploy on test net with simulations and visualizations
+1. ~~Implement protocol handshake, so that two separately running nodes can connect.~~
+2. ~~Implement handshake and simple demo protocol content: A simple instruction can be sent via **console**, which is sent to a peer.~~
+3. Same as above, but receiving peer replies and whose output is echoed to **console**.
+4. Same as above, but with several listening peers responding
+5. Same as above, but some peers implement different protocols, or different versions of protocol, and hence should not respond.
+6. Deploy on test net with simulations and visualizations
 
 ### 0.2
 

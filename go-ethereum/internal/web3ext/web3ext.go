@@ -38,8 +38,14 @@ const Mw_JS = `
 		new web3._extend.Method({
 			name: 'infoo',
 			call: 'mw_infoo',
-			params: 0,
+			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'hello',
+			call: 'mw_hellofirstnode',
+			params: 1,
 		})
+		
 	]
 });
 `
