@@ -99,7 +99,7 @@ META is build on [https://github.com/ethersphere/go-ethereum](https://github.com
 
 1. ~~Implement protocol handshake, so that two separately running nodes can connect.~~
 2. ~~Implement handshake and simple demo protocol content: A simple instruction can be sent via **console**, which is sent to a peer.~~
-3. Same as above, but receiving peer replies and whose output is echoed to **console**.
+3. Same as above, ~~but receiving peer replies~~ and whose output is echoed to **console**.
 4. Same as above, but with several listening peers responding
 5. Same as above, but some peers implement different protocols, or different versions of protocol, and hence should not respond.
 6. Deploy on test net with simulations and visualizations
