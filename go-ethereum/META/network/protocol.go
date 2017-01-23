@@ -61,7 +61,12 @@ func METAProtocol(protopeers *PeerCollection, wg *sync.WaitGroup) p2p.Protocol {
 		
 		peer.Register(&Hellofirstnodemsg{}, func(msg interface{}) error {
 			glog.V(logger.Debug).Infof("hellofirstnode got something")
-			peer.Send("yo")
+			
+			hm := msg.(*Hellofirstnodemsg)
+			if hm.Pmsg != "yoyo" {
+				hm := &Hellofirstnodemsg{Pmsg: "yoyo", Sub: *peer}
+				peer.Send(hm)
+			}
 			return nil
 		})
 
