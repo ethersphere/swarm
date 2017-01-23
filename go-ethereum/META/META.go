@@ -31,6 +31,7 @@ type META struct {
 	privateKey  *ecdsa.PrivateKey
 	//server		*p2p.Server					// temporary pointer to server		
 	protopeers	*network.PeerCollection				// protocol access to sending through peers, exposes the Messenger
+	consolechan chan string
 }
 
 type METAAPI struct {
@@ -65,6 +66,8 @@ func NewMETA(ctx *node.ServiceContext, config *METAapi.Config) (self *META, err 
 	self.api = METAapi.NewApi()
 	
 	self.protopeers = &network.PeerCollection{}
+	
+	self.consolechan = make(chan string)
 	
 	return self, nil
 }
@@ -108,7 +111,7 @@ func (self *META) APIs() []rpc.API {
 		{
 			Namespace: "mw",
 			Version:   "0.1",
-			Service:   METAapi.NewParrotNode(self.protopeers),
+			Service:   METAapi.NewParrotNode(self.protopeers, self.consolechan),
 			Public:    true,
 		},
 	}
@@ -116,7 +119,7 @@ func (self *META) APIs() []rpc.API {
 
 func (self *META) Protocols() []p2p.Protocol {
 	wg := sync.WaitGroup{}
-	return []p2p.Protocol{p2p.Protocol(network.METAProtocol(self.protopeers, &wg))}
+	return []p2p.Protocol{p2p.Protocol(network.METAProtocol(self.protopeers, &wg, self.consolechan))}
 }
 
 // API reflection for RPC (?)

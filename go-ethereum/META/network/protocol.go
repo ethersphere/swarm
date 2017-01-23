@@ -1,6 +1,7 @@
 package network 
 
 import (
+	"fmt"
 	"sync"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -43,7 +44,7 @@ type Hellofirstnodemsg struct {
 
 //func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.NodeAdapter) adapters.ProtoCall {
 
-func METAProtocol(protopeers *PeerCollection, wg *sync.WaitGroup) p2p.Protocol {
+func METAProtocol(protopeers *PeerCollection, wg *sync.WaitGroup, consolechan chan string) p2p.Protocol {
 
 //func META(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, m adapters.Messenger, ct *protocols.CodeMap, services func(Node) error) *p2p.Protocol {
 	// handle handshake
@@ -66,6 +67,9 @@ func METAProtocol(protopeers *PeerCollection, wg *sync.WaitGroup) p2p.Protocol {
 			if hm.Pmsg != "yoyo" {
 				hm := &Hellofirstnodemsg{Pmsg: "yoyo", Sub: *peer}
 				peer.Send(hm)
+				
+			} else {
+				consolechan <- fmt.Sprintf("output as promised: %v", hm)
 			}
 			return nil
 		})
