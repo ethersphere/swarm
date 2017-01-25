@@ -31,7 +31,7 @@ Specific META files are:
  
 In terminal 1: 
 
-`META --metaaccount foo --maxpeers 5 --datadir /tmp/metafoo --verbosity 5`
+`META --metaaccount foo --maxpeers 5 --datadir /tmp/meta-0 --verbosity 5`
 
 In terminal 2:
 
@@ -41,7 +41,7 @@ In terminal 2:
 
 In last terminal:
 
-`geth attach /tmp/metafoo/META.ipc` or  `geth attach /tmp/metabar/META.ipc`, depending on which node you want to talk to.
+`geth attach /tmp/meta-#/META.ipc`, depending on which node # you want to talk to.
 
 ## FUNCTIONALITY
 
