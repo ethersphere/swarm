@@ -3,77 +3,105 @@ package network
 import (
 	"fmt"
 	"sync"
+	"time"
+	
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	//"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/adapters"
 	
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	
 )
 
 const (
-	ProtocolName       = "mw"
+	ProtocolPrefix     = "mw"
 	Version            = 0x000001
 	NetworkId          = 1666 
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
 )
 
+const (
+	MessageRequest = iota
+	MessageReply
+)
 
-func METACodeMap(msgs ...interface{}) *protocols.CodeMap {
-	ct := protocols.NewCodeMap(ProtocolName, Version, ProtocolMaxMsgSize)
-	//ct.Register(&METAHandshake{})
+func METACodeMap1(msgs ...interface{}) *protocols.CodeMap {
+	ct := protocols.NewCodeMap(ProtocolPrefix + "1", Version, ProtocolMaxMsgSize)
 	ct.Register(msgs...)
 	return ct
 }
 
-type METAMessenger struct {
-}
-
-func (METAMessenger) SendMsg(w p2p.MsgWriter, code uint64, msg interface{}) error {
-	return p2p.Send(w, code, msg)
-}
-
-func (METAMessenger) ReadMsg(r p2p.MsgReader) (p2p.Msg, error) {
-	return r.ReadMsg()
+/***
+ * \todo implement module handshake demo
+ */
+func METACodeMap2(msgs ...interface{}) *protocols.CodeMap {
+	ct := protocols.NewCodeMap(ProtocolPrefix + "2", Version, ProtocolMaxMsgSize)
+	ct.Register(msgs...)
+	return ct
 }
 
 type Hellofirstnodemsg struct {
+	Type uint
 	Pmsg string
-	Sub protocols.Peer
+	Now time.Time
 }
 
-//func newProtocol(pp *p2ptest.TestPeerPool, wg *sync.WaitGroup) func(adapters.NodeAdapter) adapters.ProtoCall {
+type Helloallnodemsg struct {
+	Type uint
+	Pmsg string
+}
 
-func METAProtocol(protopeers *PeerCollection, wg *sync.WaitGroup, consolechan chan string) p2p.Protocol {
+type Whoareyoumsg struct {
+	Who *p2p.Peer
+}
 
-//func META(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, m adapters.Messenger, ct *protocols.CodeMap, services func(Node) error) *p2p.Protocol {
-	// handle handshake
-	
-	ct := METACodeMap(&Hellofirstnodemsg{})
+func METAProtocol1(protopeers *PeerCollection, wg *sync.WaitGroup, consolechan chan string) p2p.Protocol {
 
-	m := METAMessenger{}
+	ct := METACodeMap1(&Hellofirstnodemsg{}, &Helloallnodemsg{})
+
+	m := adapters.RLPxMessenger{}
 	
 	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		
+		glog.V(logger.Debug).Infof("Registering protocol 1 for peer %v", p.ID().String())
 		
 		if wg != nil {
 			wg.Add(1)
 		}
 		peer := protocols.NewPeer(p, rw, ct, m, func() { })
 		
+		
 		peer.Register(&Hellofirstnodemsg{}, func(msg interface{}) error {
-			glog.V(logger.Debug).Infof("hellofirstnode got something")
 			
 			hm := msg.(*Hellofirstnodemsg)
-			if hm.Pmsg != "yoyo" {
-				hm := &Hellofirstnodemsg{Pmsg: "yoyo", Sub: *peer}
+			if hm.Type == MessageRequest  {
+				hm := &Hellofirstnodemsg{Type: MessageReply, Pmsg: "received!", Now: time.Now()}
 				peer.Send(hm)
-				
 			} else {
-				consolechan <- fmt.Sprintf("output as promised: %v", hm)
+				consolechan <- fmt.Sprintf("peer %v received %v", peer.ID().String(), hm.Pmsg)
 			}
 			return nil
 		})
-
+		
+		peer.Register(&Helloallnodemsg{}, func(msg interface{}) error {
+			hm := msg.(*Helloallnodemsg)
+			glog.V(logger.Debug).Infof("peerindex of %v has answersbroadcast %v", p.ID().String(), protopeers.Peers[PeerIndex[peer]].Answersbroadcast)
+			if protopeers.Peers[PeerIndex[peer]].Answersbroadcast != true { // get peer in collection by peer pointer address
+				consolechan <- ""
+				return nil
+			}
+			
+			if hm.Type == MessageRequest  {
+				hm := &Helloallnodemsg{Type: MessageReply, Pmsg: "received!"}
+				peer.Send(hm)
+			} else {
+				consolechan <- fmt.Sprintf("peer %v received %v", peer.ID().String(), hm.Pmsg)
+			}
+			
+			return nil
+		})
+		
 		protopeers.Add(peer)
 		
 		err := peer.Run()
@@ -84,7 +112,43 @@ func METAProtocol(protopeers *PeerCollection, wg *sync.WaitGroup, consolechan ch
 	}		
 	
 	return p2p.Protocol{
-		Name:     ProtocolName,
+		Name:     ProtocolPrefix + "1",
+		Version:  Version,
+		Length:   ct.Length(),
+		Run:      run,
+	}
+}
+
+func METAProtocol2(protopeers *PeerCollection) p2p.Protocol {
+
+	ct := METACodeMap2(&Whoareyoumsg{})
+
+	m := adapters.RLPxMessenger{}
+	
+	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		
+		glog.V(logger.Debug).Infof("Registering protocol 2 for peer %v", p.ID().String())
+		
+		peer := protocols.NewPeer(p, rw, ct, m, func() { })
+		
+		peer.Register(&Whoareyoumsg{}, func(msg interface{}) error {
+			hm := msg.(*Whoareyoumsg)
+			if hm.Who == nil {
+				hm = &Whoareyou{Who: p}
+				peer.Send(hm)
+			}
+			return nil
+		})
+		
+		protopeers.Add(peer)
+		
+		err := peer.Run()
+
+		return err
+	}		
+	
+	return p2p.Protocol{
+		Name:     ProtocolPrefix + "2",
 		Version:  Version,
 		Length:   ct.Length(),
 		Run:      run,

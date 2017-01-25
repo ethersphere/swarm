@@ -42,7 +42,22 @@ const Mw_JS = `
 		}),
 		new web3._extend.Method({
 			name: 'hello',
-			call: 'mw_hellofirstnode',
+			call: 'mw_hellonode',
+			params: 2,
+		}),
+		new web3._extend.Method({
+			name: 'helloall',
+			call: 'mw_helloallnode',
+			params: 1,
+		}),
+		new web3._extend.Method({
+			name: 'nodebc',
+			call: 'mw_peerbroadcast',
+			params: 2,
+		}),
+		new web3._extend.Method({
+			name: 'who',
+			call: 'mw_whoareyou',
 			params: 1,
 		})
 		

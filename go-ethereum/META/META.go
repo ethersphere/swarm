@@ -21,9 +21,6 @@ import (
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
-
-
-
 // the meta stack
 type META struct {
 	config      *METAapi.Config            // meta configuration
@@ -65,7 +62,7 @@ func NewMETA(ctx *node.ServiceContext, config *METAapi.Config) (self *META, err 
 
 	self.api = METAapi.NewApi()
 	
-	self.protopeers = &network.PeerCollection{}
+	self.protopeers = network.NewPeerCollection()
 	
 	self.consolechan = make(chan string)
 	
@@ -114,12 +111,33 @@ func (self *META) APIs() []rpc.API {
 			Service:   METAapi.NewParrotNode(self.protopeers, self.consolechan),
 			Public:    true,
 		},
+		{
+			Namespace: "mw",
+			Version:   "0.1",
+			Service:   METAapi.NewParrotCrowd(self.protopeers, self.consolechan),
+			Public:    true,
+		},
+		{
+			Namespace: "mw",
+			Version:   "0.1",
+			Service:   METAapi.NewPeerBroadcastSwitch(self.protopeers),
+			Public:    true,
+		},
+		{
+			Namespace: "mw",
+			Version:   "0.1",
+			Service:   METAapi.NewWhoAreYou(self.protopeers),
+			Public:    true,
+		},
 	}
 }
 
 func (self *META) Protocols() []p2p.Protocol {
 	wg := sync.WaitGroup{}
-	return []p2p.Protocol{p2p.Protocol(network.METAProtocol(self.protopeers, &wg, self.consolechan))}
+	return []p2p.Protocol{
+		p2p.Protocol(network.METAProtocol1(self.protopeers, &wg, self.consolechan)),
+		p2p.Protocol(network.METAProtocol2(self.protopeers)),
+	}
 }
 
 // API reflection for RPC (?)

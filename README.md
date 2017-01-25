@@ -35,48 +35,60 @@ In terminal 1:
 
 In terminal 2:
 
-`META --metacccount bar --maxpeers 5 --datadir /tmp/metabar --verbosity 5 --port 31667`
+`META --metacccount bar --maxpeers 5 --datadir /tmp/meta-1 --verbosity 5 --port 31667`
 
-In terminal 3:
+(repeat the above for as many peers as you like, incrementing datadir name and port number accordingly)
+
+In last terminal:
 
 `geth attach /tmp/metafoo/META.ipc` or  `geth attach /tmp/metabar/META.ipc`, depending on which node you want to talk to.
 
 ## FUNCTIONALITY
 
-The client has all the base functionality of a vanilla geth client (for example port can be set with `--port`) - `geth attach <path-to-ipc>` and see modules motd for details.
+The client has all the base functionality of a vanilla geth client (for example port can be set with `--port`) - `geth attach <path-to-ipc>` and see modules init output for details.
 
-Currently it forces you to specify the bogus param `--metaaccount`, all others metioned in `cmd/META/main.go` are optional.
+Currently it forces you to specify the bogus param `--metaaccount`, all others metioned in `cmd/META/main.go` are optional (but unique params are necessary when using more than one node, see "RUNNING" above)
 
-### Node TCP API
+### TCP LAYER
 
 Listens and dials. Peer connect must be made manually.
+
+Upon connecting, the peer will be added to a pool of peers, contained in `PeerCollection` (see `META/network/peercollection.go`)
 
 ### PROTOCOL
 
 Initializes and registers upon connection.
 
-One test protocol structure `Hellofirstnodemsg` is implemented:
+There are three protocol message structs in two different protocol instances registered;
 
-```
-type Hellofirstnodemsg struct {
-	Pmsg string
-	Sub protocols.Peer
-}
-```
+- Protocol 1: `Hellofirstnodemsg` and `Helloallnodemsg`
+- Protocol 2: `Whoareyoumsg`
+
+Upon manually adding a peer through geth console, the two different protocols will be mapped to two different instances of `p2p/protocols.Peer,` thus occupying two different slots in the `PeerCollection`
 
 ### RPC
 
-RPC implements two API items (see `META/api/api.go`:
+RPC implements five API items (see `META/api/api.go`):
 
-- `*Info.Infoo()`: merely returns an object with `META/api.Config` settings
-- `*ParrotNode.Hellofirstnode(<string>)`: Sends **<string>** packed into `Hellofirstnodemsg` protocol structure to first connected Peer, returns success/fail. 
+- Protocol 1:
+  * `*Info.Infoo()`: merely returns an object with `META/api.Config` settings
+  * `*ParrotNode.Hellofirstnode(<int>, <string>)`: Sends **<string>** packed into `Hellofirstnodemsg` protocol structure the Peer with index <int> in the `PeerCollection`, returns success/fail. 
+  * `*PeerBroadcastSwitch.Peerbroadcast(<int>, <bool>)`: Sets whether (**<bool>**) the peer index **<int>** in `PeerCollection` should reply to broadcasts or not
+  * `*ParrotCrowd.Helloallnode(<string>)`: Sends  **<string>** to all connected peers. Peers who are set to reply to broadcasts will reply.
+
+- Protocol 2:
+  * `*WhoAreYou`.Whoareyou(<int>)`: Peer index **<int>** in `PeerCollection` will merely answer with itself as message body
 
 ### JS CLI
 
 Added module **mw** which has two methods:
 
-- `mw.infoo()` mapped to RPC `*Info.Infoo()` 
-- `mv.hello(<string>)` mapped to RPC `*ParrotNode.Hellofirstnode()`
+- `mw.infoo()` => RPC `*Info.Infoo()` 
+- `mw.hello(<int>, <string>)` => RPC `*ParrotNode.Hellofirstnode()`
+- `mw.helloall(<string>)` => RPC `*Parrotcrowd.Helloallnode()`
+- `mw.nodebc(<int>, <bool>)` => RPC `*PeerBroadcastSwitch.Peerbroadcast()`
+- `mw.who(<int>)` => RPC `*WhoAreYou.Whoareyou()`
+
 
 ## ISSUES
 
@@ -100,8 +112,8 @@ META is build on [https://github.com/ethersphere/go-ethereum](https://github.com
 1. ~~Implement protocol handshake, so that two separately running nodes can connect.~~
 2. ~~Implement handshake and simple demo protocol content: A simple instruction can be sent via **console**, which is sent to a peer.~~
 3. ~~Same as above, but receiving peer replies and whose output is echoed to **console**.~~
-4. Same as above, but with several listening peers responding
-5. Same as above, but some peers implement different protocols, or different versions of protocol, and hence should not respond.
+4. ~~Same as above, but with several listening peers responding~~
+5. ~~Same as above, but some peers implement different protocols, or different versions of protocol, and hence should not respond.~~
 6. Deploy on test net with simulations and visualizations
 
 ### 0.2
