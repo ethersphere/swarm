@@ -94,6 +94,7 @@ Added module **mw** which has two methods:
 
 ...besides the fact that the META implementation is still at alpha stage at best;
 
+- The broadcast method will also send to any peers implementing protocol 2, in which case an error message will be reported (at best, or crash at worst)
 - Current go-ethereum implementation forces modules specifications for the geth client to be hardcoded in `/internal/web3ext/web3ext.go`, forcing adjustments to the ethereum repo itself
 - go-package `gopkg.in/urfave/cli.v1` conflicts with existing version in vendor folder in ethereum repo, making it impossible to have code importing this package outside of the repo dir structure.
 
