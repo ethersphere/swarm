@@ -1,125 +1,280 @@
-# meta-wire
+## Ethereum Go
 
-The MΞTA protocol sandbox
+Official golang implementation of the Ethereum protocol.
 
-## OVERVIEW
+[![API Reference](
+https://camo.githubusercontent.com/915b7be44ada53c290eb157634330494ebe3e30a/68747470733a2f2f676f646f632e6f72672f6769746875622e636f6d2f676f6c616e672f6764646f3f7374617475732e737667
+)](https://godoc.org/github.com/ethereum/go-ethereum)
+[![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethereum/go-ethereum?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-The boilerplate code of this POC is based on code the swarm api and cmd implementations.
+Automated builds are available for stable releases and the unstable master branch.
+Binary archives are published at https://geth.ethereum.org/downloads/.
 
-The object of this phase of the project is to get an Proof-of-concept p2p implementation of **meta-wire** using the same stack and interfaces as eth/swarm, in order to:
+## Building the source
 
-- enforce protocol type, structure and version between peers
-- issue commands through peer using console (IPC, geth attach)
-- interface with storage for retrieval of data
-- rudimentary data search engine using swarm
+For prerequisites and detailed build instructions please read the
+[Installation Instructions](https://github.com/ethereum/go-ethereum/wiki/Building-Ethereum)
+on the wiki.
 
-## CONTENTS
+Building geth requires both a Go and a C compiler.
+You can install them using your favourite package manager.
+Once the dependencies are installed, run
 
-Specific META files are:
+    make geth
 
-- All files in /META
-- All files in /cmd/META
+or, to build the full suite of utilities:
 
-## INSTALL
+    make all
 
-1. (might have to go get something, not sure, you'll find out)
-2. `go install -v cmd/META`
-3. `go install -v cmd/geth`
-4. In **$GODIR** make sure that a symlink path `github.com/ethereum/go-ethereum`  points to the root of repo (because of import paths)
+## Executables
 
-## RUNNING
- 
-In terminal 1: 
+The go-ethereum project comes with several wrappers/executables found in the `cmd` directory.
 
-`META --metaaccount foo --maxpeers 5 --datadir /tmp/meta-0 --verbosity 5`
+| Command    | Description |
+|:----------:|-------------|
+| **`geth`** | Our main Ethereum CLI client. It is the entry point into the Ethereum network (main-, test- or private net), capable of running as a full node (default) archive node (retaining all historical state) or a light node (retrieving data live). It can be used by other processes as a gateway into the Ethereum network via JSON RPC endpoints exposed on top of HTTP, WebSocket and/or IPC transports. `geth --help` and the [CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options) for command line options |
+| `abigen` | Source code generator to convert Ethereum contract definitions into easy to use, compile-time type-safe Go packages. It operates on plain [Ethereum contract ABIs](https://github.com/ethereum/wiki/wiki/Ethereum-Contract-ABI) with expanded functionality if the contract bytecode is also available. However it also accepts Solidity source files, making development much more streamlined. Please see our [Native DApps](https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts) wiki page for details. |
+| `bootnode` | Stripped down version of our Ethereum client implementation that only takes part in the network node discovery protocol, but does not run any of the higher level application protocols. It can be used as a lightweight bootstrap node to aid in finding peers in private networks. |
+| `disasm` | Bytecode disassembler to convert EVM (Ethereum Virtual Machine) bytecode into more user friendly assembly-like opcodes (e.g. `echo "6001" | disasm`). For details on the individual opcodes, please see pages 22-30 of the [Ethereum Yellow Paper](http://gavwood.com/paper.pdf). |
+| `evm` | Developer utility version of the EVM (Ethereum Virtual Machine) that is capable of running bytecode snippets within a configurable environment and execution mode. Its purpose is to allow insolated, fine-grained debugging of EVM opcodes (e.g. `evm --code 60ff60ff --debug`). |
+| `gethrpctest` | Developer utility tool to support our [ethereum/rpc-test](https://github.com/ethereum/rpc-tests) test suite which validates baseline conformity to the [Ethereum JSON RPC](https://github.com/ethereum/wiki/wiki/JSON-RPC) specs. Please see the [test suite's readme](https://github.com/ethereum/rpc-tests/blob/master/README.md) for details. |
+| `rlpdump` | Developer utility tool to convert binary RLP ([Recursive Length Prefix](https://github.com/ethereum/wiki/wiki/RLP)) dumps (data encoding used by the Ethereum protocol both network as well as consensus wise) to user friendlier hierarchical representation (e.g. `rlpdump --hex CE0183FFFFFFC4C304050583616263`). |
+| `bzzd`    | swarm daemon. This is the entrypoint for the swarm network. `bzzd --help` for command line options. See https://swarm-guide.readthedocs.io for swarm documentation. |
+| `bzzup`   | swarm command line file uploader. `bzzup --help` for command line options |
+| `bzzhash`   | command to calculate the swarm hash of a file or directory. `bzzhash --help` for command line options |
 
-In terminal 2:
+## Running geth
 
-`META --metacccount bar --maxpeers 5 --datadir /tmp/meta-1 --verbosity 5 --port 31667`
+Going through all the possible command line flags is out of scope here (please consult our
+[CLI Wiki page](https://github.com/ethereum/go-ethereum/wiki/Command-Line-Options)), but we've
+enumerated a few common parameter combos to get you up to speed quickly on how you can run your
+own Geth instance.
 
-(repeat the above for as many peers as you like, incrementing datadir name and port number accordingly)
+### Full node on the main Ethereum network
 
-In last terminal:
+By far the most common scenario is people wanting to simply interact with the Ethereum network:
+create accounts; transfer funds; deploy and interact with contracts. For this particular use-case
+the user doesn't care about years-old historical data, so we can fast-sync quickly to the current
+state of the network. To do so:
 
-`geth attach /tmp/meta-#/META.ipc`, depending on which node # you want to talk to.
+```
+$ geth --fast --cache=512 console
+```
 
-## FUNCTIONALITY
+This command will:
 
-The client has all the base functionality of a vanilla geth client (for example port can be set with `--port`) - `geth attach <path-to-ipc>` and see modules init output for details.
+ * Start geth in fast sync mode (`--fast`), causing it to download more data in exchange for avoiding
+   processing the entire history of the Ethereum network, which is very CPU intensive.
+ * Bump the memory allowance of the database to 512MB (`--cache=512`), which can help significantly in
+   sync times especially for HDD users. This flag is optional and you can set it as high or as low as
+   you'd like, though we'd recommend the 512MB - 2GB range.
+ * Start up Geth's built-in interactive [JavaScript console](https://github.com/ethereum/go-ethereum/wiki/JavaScript-Console),
+   (via the trailing `console` subcommand) through which you can invoke all official [`web3` methods](https://github.com/ethereum/wiki/wiki/JavaScript-API)
+   as well as Geth's own [management APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs).
+   This too is optional and if you leave it out you can always attach to an already running Geth instance
+   with `geth --attach`.
 
-Currently it forces you to specify the bogus param `--metaaccount`, all others metioned in `cmd/META/main.go` are optional (but unique params are necessary when using more than one node, see "RUNNING" above)
+### Full node on the Ethereum test network
 
-### TCP LAYER
+Transitioning towards developers, if you'd like to play around with creating Ethereum contracts, you
+almost certainly would like to do that without any real money involved until you get the hang of the
+entire system. In other words, instead of attaching to the main network, you want to join the **test**
+network with your node, which is fully equivalent to the main network, but with play-Ether only.
 
-Listens and dials. Peer connect must be made manually.
+```
+$ geth --testnet --fast --cache=512 console
+```
 
-Upon connecting, the peer will be added to a pool of peers, contained in `PeerCollection` (see `META/network/peercollection.go`)
+The `--fast`, `--cache` flags and `console` subcommand have the exact same meaning as above and they
+are equially useful on the testnet too. Please see above for their explanations if you've skipped to
+here.
 
-### PROTOCOL
+Specifying the `--testnet` flag however will reconfigure your Geth instance a bit:
 
-Initializes and registers upon connection.
+ * Instead of using the default data directory (`~/.ethereum` on Linux for example), Geth will nest
+   itself one level deeper into a `testnet` subfolder (`~/.ethereum/testnet` on Linux).
+ * Instead of connecting the main Ethereum network, the client will connect to the test network,
+   which uses different P2P bootnodes, different network IDs and genesis states.
 
-There are three protocol message structs in two different protocol instances registered;
+*Note: Although there are some internal protective measures to prevent transactions from crossing
+over between the main network and test network (different starting nonces), you should make sure to
+always use separate accounts for play-money and real-money. Unless you manually move accounts, Geth
+will by default correctly separate the two networks and will not make any accounts available between
+them.*
 
-- Protocol 1: `Hellofirstnodemsg` and `Helloallnodemsg`
-- Protocol 2: `Whoareyoumsg`
+#### Docker quick start
 
-Upon manually adding a peer through geth console, the two different protocols will be mapped to two different instances of `p2p/protocols.Peer,` thus occupying two different slots in the `PeerCollection`
+One of the quickest ways to get Ethereum up and running on your machine is by using Docker:
 
-### RPC
+```
+docker run -d --name ethereum-node -v /Users/alice/ethereum:/root \
+           -p 8545:8545 -p 30303:30303 \
+           ethereum/client-go --fast --cache=512
+```
 
-RPC implements five API items (see `META/api/api.go`):
+This will start geth in fast sync mode with a DB memory allowance of 512MB just as the above command does.  It will also create a persistent volume in your home directory for saving your blockchain as well as map the default ports. There is also an `alpine` tag available for a slim version of the image.
 
-- Protocol 1:
-  * `*Info.Infoo()`: merely returns an object with `META/api.Config` settings
-  * `*ParrotNode.Hellofirstnode(<int>, <string>)`: Sends **<string>** packed into `Hellofirstnodemsg` protocol structure the Peer with index <int> in the `PeerCollection`, returns success/fail. 
-  * `*PeerBroadcastSwitch.Peerbroadcast(<int>, <bool>)`: Sets whether (**<bool>**) the peer index **<int>** in `PeerCollection` should reply to broadcasts or not
-  * `*ParrotCrowd.Helloallnode(<string>)`: Sends  **<string>** to all connected peers. Peers who are set to reply to broadcasts will reply.
+### Programatically interfacing Geth nodes
 
-- Protocol 2:
-  * `*WhoAreYou`.Whoareyou(<int>)`: Peer index **<int>** in `PeerCollection` will merely answer with itself as message body
+As a developer, sooner rather than later you'll want to start interacting with Geth and the Ethereum
+network via your own programs and not manually through the console. To aid this, Geth has built in
+support for a JSON-RPC based APIs ([standard APIs](https://github.com/ethereum/wiki/wiki/JSON-RPC) and
+[Geth specific APIs](https://github.com/ethereum/go-ethereum/wiki/Management-APIs)). These can be
+exposed via HTTP, WebSockets and IPC (unix sockets on unix based platroms, and named pipes on Windows).
 
-### JS CLI
+The IPC interface is enabled by default and exposes all the APIs supported by Geth, whereas the HTTP
+and WS interfaces need to manually be enabled and only expose a subset of APIs due to security reasons.
+These can be turned on/off and configured as you'd expect.
 
-Added module **mw** which has two methods:
+HTTP based JSON-RPC API options:
 
-- `mw.infoo()` => RPC `*Info.Infoo()` 
-- `mw.hello(<int>, <string>)` => RPC `*ParrotNode.Hellofirstnode()`
-- `mw.helloall(<string>)` => RPC `*Parrotcrowd.Helloallnode()`
-- `mw.nodebc(<int>, <bool>)` => RPC `*PeerBroadcastSwitch.Peerbroadcast()`
-- `mw.who(<int>)` => RPC `*WhoAreYou.Whoareyou()`
+  * `--rpc` Enable the HTTP-RPC server
+  * `--rpcaddr` HTTP-RPC server listening interface (default: "localhost")
+  * `--rpcport` HTTP-RPC server listening port (default: 8545)
+  * `--rpcapi` API's offered over the HTTP-RPC interface (default: "eth,net,web3")
+  * `--rpccorsdomain` Comma separated list of domains from which to accept cross origin requests (browser enforced)
+  * `--ws` Enable the WS-RPC server
+  * `--wsaddr` WS-RPC server listening interface (default: "localhost")
+  * `--wsport` WS-RPC server listening port (default: 8546)
+  * `--wsapi` API's offered over the WS-RPC interface (default: "eth,net,web3")
+  * `--wsorigins` Origins from which to accept websockets requests
+  * `--ipcdisable` Disable the IPC-RPC server
+  * `--ipcapi` API's offered over the IPC-RPC interface (default: "admin,debug,eth,miner,net,personal,shh,txpool,web3")
+  * `--ipcpath` Filename for IPC socket/pipe within the datadir (explicit paths escape it)
 
+You'll need to use your own programming environments' capabilities (libraries, tools, etc) to connect
+via HTTP, WS or IPC to a Geth node configured with the above flags and you'll need to speak [JSON-RPC](http://www.jsonrpc.org/specification)
+on all transports. You can reuse the same connection for multiple requests!
 
-## ISSUES
+**Note: Please understand the security implications of opening up an HTTP/WS based transport before
+doing so! Hackers on the internet are actively trying to subvert Ethereum nodes with exposed APIs!
+Further, all browser tabs can access locally running webservers, so malicious webpages could try to
+subvert locally available APIs!**
 
-...besides the fact that the META implementation is still at alpha stage at best;
+### Operating a private network
 
-- The broadcast method will also send to any peers implementing protocol 2, in which case an error message will be reported (at best, or crash at worst)
-- Current go-ethereum implementation forces modules specifications for the geth client to be hardcoded in `/internal/web3ext/web3ext.go`, forcing adjustments to the ethereum repo itself
-- go-package `gopkg.in/urfave/cli.v1` conflicts with existing version in vendor folder in ethereum repo, making it impossible to have code importing this package outside of the repo dir structure.
+Maintaining your own private network is more involved as a lot of configurations taken for granted in
+the official networks need to be manually set up.
 
-## VERSION
+#### Defining the private genesis state
 
-Current version is **v0.1.0**
+First, you'll need to create the genesis state of your networks, which all nodes need to be aware of
+and agree upon. This consists of a small JSON file (e.g. call it `genesis.json`):
 
-META is build on [https://github.com/ethersphere/go-ethereum](https://github.com/ethersphere/go-ethereum) repo, branch *network-testing-framework*
+```json
+{
+  "alloc"      : {},
+  "coinbase"   : "0x0000000000000000000000000000000000000000",
+  "difficulty" : "0x20000",
+  "extraData"  : "",
+  "gasLimit"   : "0x2fefd8",
+  "nonce"      : "0x0000000000000042",
+  "mixhash"    : "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "parentHash" : "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "timestamp"  : "0x00"
+}
+```
 
-## ROADMAP
+The above fields should be fine for most purposes, although we'd recommend changing the `nonce` to
+some random value so you prevent unknown remote nodes from being able to connect to you. If you'd
+like to pre-fund some accounts for easier testing, you can populate the `alloc` field with account
+configs:
 
-*proposed*
+```json
+"alloc": {
+  "0x0000000000000000000000000000000000000001": {"balance": "111111111"},
+  "0x0000000000000000000000000000000000000002": {"balance": "222222222"}
+}
+```
 
-### 0.1
+With the genesis state defined in the above JSON file, you'll need to initialize **every** Geth node
+with it prior to starting it up to ensure all blockchain parameters are correctly set:
 
-1. ~~Implement protocol handshake, so that two separately running nodes can connect.~~
-2. ~~Implement handshake and simple demo protocol content: A simple instruction can be sent via **console**, which is sent to a peer.~~
-3. ~~Same as above, but receiving peer replies and whose output is echoed to **console**.~~
-4. ~~Same as above, but with several listening peers responding~~
-5. ~~Same as above, but some peers implement different protocols, or different versions of protocol, and hence should not respond.~~
-6. Deploy on test net with simulations and visualizations
+```
+$ geth init path/to/genesis.json
+```
 
-### 0.2
+#### Creating the rendezvous point
 
-1. Implement swarm protocol and/or peer alongside META, local storage
-2. Implement pss, protocol over bzz. (This point to be embellished and elaborated)
-3. Same as 1. amd 2. above but using testnet
+With all nodes that you want to run initialized to the desired genesis state, you'll need to start a
+bootstrap node that others can use to find each other in your network and/or over the internet. The
+clean way is to configure and run a dedicated bootnode:
 
+```
+$ bootnode --genkey=boot.key
+$ bootnode --nodekey=boot.key
+```
+
+With the bootnode online, it will display an [`enode` URL](https://github.com/ethereum/wiki/wiki/enode-url-format)
+that other nodes can use to connect to it and exchange peer information. Make sure to replace the
+displayed IP address information (most probably `[::]`) with your externally accessible IP to get the
+actual `enode` URL.
+
+*Note: You could also use a full fledged Geth node as a bootnode, but it's the less recommended way.*
+
+#### Starting up your member nodes
+
+With the bootnode operational and externally reachable (you can try `telnet <ip> <port>` to ensure
+it's indeed reachable), start every subsequent Geth node pointed to the bootnode for peer discovery
+via the `--bootnodes` flag. It will probably also be desirable to keep the data directory of your
+private network separated, so do also specify a custom `--datadir` flag.
+
+```
+$ geth --datadir=path/to/custom/data/folder --bootnodes=<bootnode-enode-url-from-above>
+```
+
+*Note: Since your network will be completely cut off from the main and test networks, you'll also
+need to configure a miner to process transactions and create new blocks for you.*
+
+#### Running a private miner
+
+Mining on the public Ethereum network is a complex task as it's only feasible using GPUs, requiring
+an OpenCL or CUDA enabled `ethminer` instance. For information on such a setup, please consult the
+[EtherMining subreddit](https://www.reddit.com/r/EtherMining/) and the [Genoil miner](https://github.com/Genoil/cpp-ethereum)
+repository.
+
+In a private network setting however, a single CPU miner instance is more than enough for practical
+purposes as it can produce a stable stream of blocks at the correct intervals without needing heavy
+resources (consider running on a single thread, no need for multiple ones either). To start a Geth
+instance for mining, run it with all your usual flags, extended by:
+
+```
+$ geth <usual-flags> --mine --minerthreads=1 --etherbase=0x0000000000000000000000000000000000000000
+```
+
+Which will start mining bocks and transactions on a single CPU thread, crediting all proceedings to
+the account specified by `--etherbase`. You can further tune the mining by changing the default gas
+limit blocks converge to (`--targetgaslimit`) and the price transactions are accepted at (`--gasprice`).
+
+## Contribution
+
+Thank you for considering to help out with the source code! We welcome contributions from
+anyone on the internet, and are grateful for even the smallest of fixes!
+
+If you'd like to contribute to go-ethereum, please fork, fix, commit and send a pull request
+for the maintainers to review and merge into the main code base. If you wish to submit more
+complex changes though, please check up with the core devs first on [our gitter channel](https://gitter.im/ethereum/go-ethereum)
+to ensure those changes are in line with the general philosophy of the project and/or get some
+early feedback which can make both your efforts much lighter as well as our review and merge
+procedures quick and simple.
+
+Please make sure your contributions adhere to our coding guidelines:
+
+ * Code must adhere to the official Go [formatting](https://golang.org/doc/effective_go.html#formatting) guidelines (i.e. uses [gofmt](https://golang.org/cmd/gofmt/)).
+ * Code must be documented adhering to the official Go [commentary](https://golang.org/doc/effective_go.html#commentary) guidelines.
+ * Pull requests need to be based on and opened against the `master` branch.
+ * Commit messages should be prefixed with the package(s) they modify.
+   * E.g. "eth, rpc: make trace configs optional"
+
+Please see the [Developers' Guide](https://github.com/ethereum/go-ethereum/wiki/Developers'-Guide)
+for more details on configuring your environment, managing project dependencies and testing procedures.
+
+## License
+
+The go-ethereum library (i.e. all code outside of the `cmd` directory) is licensed under the
+[GNU Lesser General Public License v3.0](https://www.gnu.org/licenses/lgpl-3.0.en.html), also
+included in our repository in the `COPYING.LESSER` file.
+
+The go-ethereum binaries (i.e. all code inside of the `cmd` directory) is licensed under the
+[GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html), also included
+in our repository in the `COPYING` file.
