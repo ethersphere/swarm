@@ -25,7 +25,6 @@ Specific META files are:
 1. (might have to go get something, not sure, you'll find out)
 2. `go install -v cmd/META`
 3. `go install -v cmd/geth`
-4. In **$GODIR** make sure that a symlink path `github.com/ethereum/go-ethereum`  points to the root of repo (because of import paths)
 
 ## RUNNING
  
@@ -59,42 +58,44 @@ Upon connecting, the peer will be added to a pool of peers, contained in `PeerCo
 
 Initializes and registers upon connection.
 
-There are three protocol message structs in two different protocol instances registered;
+There is only one protocol message struct registered, which sends a notification of the following form:
 
-- Protocol 1: `Hellofirstnodemsg` and `Helloallnodemsg`
-- Protocol 2: `Whoareyoumsg`
+```
+type METAAssetNotification struct {
+	Typ uint8 // enum of type of notification, see below
+	Bzz storage.Key // swarm address; SHA-3 hash
+	Exp []byte // expiry timestamp, binary marshalled time struct
+}
+```
+
+where Typ is defined as:
+
+```
+var METAAssetType = map[uint8]string{
+	ERN: "Eletronic Release Notification",
+	DSR: "Digital Sales Report",
+	MLC: "Music Licensing Company",
+}
+```
+|
 
 Upon manually adding a peer through geth console, the two different protocols will be mapped to two different instances of `p2p/protocols.Peer,` thus occupying two different slots in the `PeerCollection`
 
 ### RPC
 
-RPC implements five API items (see `META/api/api.go`):
-
-- Protocol 1:
-  * `*Info.Infoo()`: merely returns an object with `META/api.Config` settings
-  * `*ParrotNode.Hellofirstnode(<int>, <string>)`: Sends **<string>** packed into `Hellofirstnodemsg` protocol structure the Peer with index <int> in the `PeerCollection`, returns success/fail. 
-  * `*PeerBroadcastSwitch.Peerbroadcast(<int>, <bool>)`: Sets whether (**<bool>**) the peer index **<int>** in `PeerCollection` should reply to broadcasts or not
-  * `*ParrotCrowd.Helloallnode(<string>)`: Sends  **<string>** to all connected peers. Peers who are set to reply to broadcasts will reply.
-
-- Protocol 2:
-  * `*WhoAreYou`.Whoareyou(<int>)`: Peer index **<int>** in `PeerCollection` will merely answer with itself as message body
+RPC implements one API item `*ZeroKeyBroadcast.Sendzeronotification(<int>)` for sending a zero swarm hash with an expire time in as a specifiable assettype to all connected peers (see `META/api/api.go`):
 
 ### JS CLI
 
-Added module **mw** which has two methods:
+Added module **mw** which has one method:
 
-- `mw.infoo()` => RPC `*Info.Infoo()` 
-- `mw.hello(<int>, <string>)` => RPC `*ParrotNode.Hellofirstnode()`
-- `mw.helloall(<string>)` => RPC `*Parrotcrowd.Helloallnode()`
-- `mw.nodebc(<int>, <bool>)` => RPC `*PeerBroadcastSwitch.Peerbroadcast()`
-- `mw.who(<int>)` => RPC `*WhoAreYou.Whoareyou()`
 
+- `mw.sendzero(<int>)` => RPC `*ZeroKeyBroadcast.Sendzeronotification(<int>)`
 
 ## ISSUES
 
 ...besides the fact that the META implementation is still at alpha stage at best;
 
-- The broadcast method will also send to any peers implementing protocol 2, in which case an error message will be reported (at best, or crash at worst)
 - Current go-ethereum implementation forces modules specifications for the geth client to be hardcoded in `/internal/web3ext/web3ext.go`, forcing adjustments to the ethereum repo itself
 - go-package `gopkg.in/urfave/cli.v1` conflicts with existing version in vendor folder in ethereum repo, making it impossible to have code importing this package outside of the repo dir structure.
 
@@ -108,7 +109,7 @@ META is build on [https://github.com/ethersphere/go-ethereum](https://github.com
 
 *proposed*
 
-### 0.1
+### 0.1 - Protocol primitives
 
 1. ~~Implement protocol handshake, so that two separately running nodes can connect.~~
 2. ~~Implement handshake and simple demo protocol content: A simple instruction can be sent via **console**, which is sent to a peer.~~
@@ -117,9 +118,20 @@ META is build on [https://github.com/ethersphere/go-ethereum](https://github.com
 5. ~~Same as above, but some peers implement different protocols, or different versions of protocol, and hence should not respond.~~
 6. Deploy on test net with simulations and visualizations
 
-### 0.2
+### 0.2 - Swarm integration, basic
 
-1. Implement swarm protocol and/or peer alongside META, local storage
-2. Implement pss, protocol over bzz. (This point to be embellished and elaborated)
-3. Same as 1. amd 2. above but using testnet
+1. Using LOCALSTORE, set up daemon watching root hash of swarm manifest to be monitored (eq. "guardian silo"), and who is triggered by changes
+2. Establish queueing system of changes to be passed on from daemon triggered by changes to broadcasting metawire node
+3. Same as 2. but using NETSTORE (and DBSTORE?)
+
+### 0.3 - Access
+
+1. Implement subscription methods in RPC and protocol
+2. Set up peer whitelists/blacklists system for subscription
+3. ...
+
+### 0.4 - Advanced node communication
+
+[...] Implement pss, protocol over bzz. (This point to be embellished and elaborated)
+
 
