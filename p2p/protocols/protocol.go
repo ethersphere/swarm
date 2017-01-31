@@ -153,6 +153,27 @@ func (self *CodeMap) Register(msgs ...interface{}) {
 	}
 }
 
+
+func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap) *p2p.Protocol {
+	
+	r := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+		
+		m := na.Messenger(rw)
+		
+		peer := NewPeer(p, ct, m, func() {})
+		
+		return run(peer)
+		
+	}
+	
+	return &p2p.Protocol{
+		Name:     protocolname,
+		Version:  protocolversion,
+		Length:	  ct.Length(),
+		Run:      r,
+	}
+}
+
 // A Peer represents a remote peer or protocol instance that is running on a peer connection with
 // a remote peer
 type Peer struct {
@@ -168,12 +189,11 @@ type Peer struct {
 // this constructor is called by the p2p.Protocol#Run function
 // the first two arguments are comming the arguments passed to p2p.Protocol.Run function
 // the third argument is the CodeMap describing the protocol messages and options
-func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, ct *CodeMap, m adapters.Messenger, disconn func()) *Peer {
+func NewPeer(p *p2p.Peer, ct *CodeMap, m adapters.Messenger, disconn func()) *Peer {
 	return &Peer{
 		ct:         ct,
 		m:          m,
 		Peer:       p,
-		rw:         rw,
 		handlers:   make(map[reflect.Type][]func(interface{}) error),
 		disconnect: disconn,
 	}
@@ -231,7 +251,7 @@ func (self *Peer) Send(msg interface{}) error {
 		return errorf(ErrInvalidMsgType, "%v", typ)
 	}
 	glog.V(logger.Debug).Infof("=> %v %v (%d)", msg, typ, code)
-	err := self.m.SendMsg(self.rw, uint64(code), msg)
+	err := self.m.SendMsg(uint64(code), msg)
 	if err != nil {
 		self.Drop()
 		return errorf(ErrWrite, "(msg code: %v): %v", code, err)
@@ -245,7 +265,7 @@ func (self *Peer) Send(msg interface{}) error {
 // checks message size, out-of-range message codes, handles decoding with reflection,
 // call handlers as callback onside
 func (self *Peer) handleIncoming() (interface{}, error) {
-	msg, err := self.m.ReadMsg(self.rw)
+	msg, err := self.m.ReadMsg()
 	if err != nil {
 		return nil, err
 	}

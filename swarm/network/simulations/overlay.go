@@ -13,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
@@ -23,7 +24,7 @@ import (
 type Network struct {
 	*simulations.Network
 	hives     []*network.Hive
-	messenger *adapters.SimPipe
+	messenger func(p2p.MsgReadWriter) adapters.Messenger
 }
 
 // SimNode is the adapter used by Swarm simulations.
@@ -54,6 +55,10 @@ func (self *SimNode) Stop() error {
 	return nil
 }
 
+func (self *SimNode) RunProtocol(id *adapters.NodeId, rw, rrw p2p.MsgReadWriter, runc chan bool) error {
+	return self.NodeAdapter.(adapters.ProtocolRunner).RunProtocol(id, rw, rrw, runc)
+}
+
 // NewSimNode creates adapters for nodes in the simulation.
 func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
 	id := conf.Id
@@ -64,14 +69,14 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	self.hives = append(self.hives, pp)                // remember hive
 	// bzz protocol Run function. messaging through SimPipe
 	ct := network.BzzCodeMap(network.HiveMsgs...) // bzz protocol code map
-	na.Run = network.Bzz(addr.OverlayAddr(), pp, na, &adapters.SimPipe{}, ct, nil).Run
-	return &SimNode{
+	na.Run = network.Bzz(addr.OverlayAddr(), pp, na, ct, nil).Run
+	return adapters.NodeAdapter(&SimNode{
 		hive:        pp,
 		NodeAdapter: na,
-	}
+	})
 }
 
-func NewNetwork(network *simulations.Network, messenger *adapters.SimPipe) *Network {
+func NewNetwork(network *simulations.Network, messenger func(p2p.MsgReadWriter) adapters.Messenger) *Network {
 	n := &Network{
 		// hives:
 		Network:   network,
@@ -91,7 +96,7 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 			Create: &simulations.ResourceHandler{
 				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
 					conf := msg.(*simulations.NetworkConfig)
-					messenger := &adapters.SimPipe{}
+					messenger := adapters.NewSimPipe
 					net := simulations.NewNetwork(nil, &event.TypeMux{})
 					ppnet := NewNetwork(net, messenger)
 					c := simulations.NewNetworkController(conf, net.Events(), simulations.NewJournal())

@@ -86,9 +86,44 @@ func BzzCodeMap(msgs ...interface{}) *protocols.CodeMap {
 	return ct
 }
 
+func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, ct *protocols.CodeMap, services func(Node) error) *p2p.Protocol {
+	run := func(p *protocols.Peer) error {
+		addr := &peerAddr{localAddr, na.LocalAddr()}
+
+		bee := &bzz{Peer: p, hive: hive, network: na, localAddr: addr}
+		// protocol handshake and its validation
+		// sets remote peer address
+		err := bee.bzzHandshake()
+		if err != nil {
+			glog.V(6).Infof("handshake error in peer %v: %v", bee.ID(), err)
+			return err
+		}
+
+		// mount external service models on the peer connection (swap, sync)
+		if services != nil {
+			err = services(bee)
+			if err != nil {
+				glog.V(6).Infof("protocol service error for peer %v: %v", bee.ID(), err)
+				return err
+			}
+		}
+
+		err = hive.Add(bee)
+		if err != nil {
+			glog.V(6).Infof("failed to add peer '%v' to hive: %v", bee.ID(), err)
+			return err
+		}
+
+		defer hive.Remove(bee)
+		return bee.Run()
+	}
+	
+	return protocols.NewProtocol(ProtocolName, Version, run, na, ct)
+}
+
 // Bzz is the protocol constructor
 // returns p2p.Protocol that is to be offered by the node.Service
-func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, m adapters.Messenger, ct *protocols.CodeMap, services func(Node) error) *p2p.Protocol {
+/*func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, m adapters.Messenger, ct *protocols.CodeMap, services func(Node) error) *p2p.Protocol {
 	// handle handshake
 
 	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
@@ -144,6 +179,7 @@ func Bzz(localAddr []byte, hive PeerPool, na adapters.NodeAdapter, m adapters.Me
 		PeerInfo: peerInfo,
 	}
 }
+*/
 
 /*
  Handshake

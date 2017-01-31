@@ -63,8 +63,9 @@ func (self *NodeId) Label() string {
 }
 
 type Messenger interface {
-	SendMsg(p2p.MsgWriter, uint64, interface{}) error
-	ReadMsg(p2p.MsgReader) (p2p.Msg, error)
+	SendMsg(uint64, interface{}) error
+	ReadMsg() (p2p.Msg, error)
+	Close()
 }
 
 type NodeAdapter interface {
@@ -73,7 +74,12 @@ type NodeAdapter interface {
 	// Disconnect(*p2p.Peer, p2p.MsgReadWriter)
 	LocalAddr() []byte
 	ParseAddr([]byte, string) ([]byte, error)
-	Messenger() Messenger
+	// Messenger() Messenger  <<<... old version
+	Messenger(p2p.MsgReadWriter) Messenger
+}
+
+type ProtocolRunner interface {
+	RunProtocol(id *NodeId, rw, rrw p2p.MsgReadWriter, runc chan bool) error
 }
 
 type StartAdapter interface {
