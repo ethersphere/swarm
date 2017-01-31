@@ -109,14 +109,17 @@ META is build on [https://github.com/ethersphere/go-ethereum](https://github.com
 
 *proposed*
 
-### 0.1 - Protocol primitives
+### 0.1 - Protocol primitives and simulations
 
 1. ~~Implement protocol handshake, so that two separately running nodes can connect.~~
 2. ~~Implement handshake and simple demo protocol content: A simple instruction can be sent via **console**, which is sent to a peer.~~
 3. ~~Same as above, but receiving peer replies and whose output is echoed to **console**.~~
 4. ~~Same as above, but with several listening peers responding~~
 5. ~~Same as above, but some peers implement different protocols, or different versions of protocol, and hence should not respond.~~
-6. Deploy on test net with simulations and visualizations
+6. Adapt ready made swarm simulation to meta, POC one node to one node connect
+7: Demonstrate visual simulation of 10-20 nodes, serialized circular, last to first
+8: Same as 7, but connection lines show different colors depending on type of protocol message sent
+9: Hover tooltips showing peer summary information
 
 ### 0.2 - Swarm integration, basic
 
