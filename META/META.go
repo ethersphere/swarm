@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
-	//"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	METAapi "github.com/ethereum/go-ethereum/META/api"
 	"github.com/ethereum/go-ethereum/META/network"
@@ -26,7 +26,7 @@ type META struct {
 	config      *METAapi.Config            // meta configuration
 	api         *METAapi.Api               // high level api layer 
 	privateKey  *ecdsa.PrivateKey
-	//server		*p2p.Server					// temporary pointer to server		
+	server		*p2p.Server					// temporary pointer to server		
 	protopeers	*network.PeerCollection				// protocol access to sending through peers, exposes the Messenger
 	//consolechan chan string
 }
@@ -84,6 +84,7 @@ func (self *META) Start(net *p2p.Server) error {
 		return nil
 	}*/
 
+	self.server = net
 	glog.V(logger.Warn).Infof("Starting META service")
 
 	return nil
@@ -108,14 +109,14 @@ func (self *META) APIs() []rpc.API {
 	}
 }
 
+// rlpx does not resolve to nodeadapter
 func (self *META) Protocols() []p2p.Protocol {
 	wg := sync.WaitGroup{}
+	m := adapters.NewRLPxMessenger
+	na := adapters.NewRLPx([]byte{}, self.server, m)
+
 	return []p2p.Protocol{
-		p2p.Protocol(network.METAProtocol(self.protopeers, &wg)),
+		//p2p.Protocol(network.METAProtocol(self.protopeers, &wg)),
+		p2p.Protocol(network.METAProtocol(self.protopeers, na, &wg)),
 	}
 }
-
-// API reflection for RPC (?)
-
-
-

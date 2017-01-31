@@ -16,7 +16,7 @@ import (
 
 const (
 	ProtocolName     = "mw"
-	Version            = 0x000002
+	ProtocolVersion  = 0x000002
 	NetworkId          = 1666 
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
 )
@@ -43,7 +43,7 @@ var METAAssetType = map[uint8]string{
 }
 
 func METACodeMap(msgs ...interface{}) *protocols.CodeMap {
-	ct := protocols.NewCodeMap(ProtocolName, Version, ProtocolMaxMsgSize)
+	ct := protocols.NewCodeMap(ProtocolName, ProtocolVersion, ProtocolMaxMsgSize)
 	ct.Register(msgs...)
 	return ct
 }
@@ -53,19 +53,15 @@ type METAAssetNotification struct {
 	Exp []byte // byte marshalled time
 }
 
-func METAProtocol(protopeers *PeerCollection, wg *sync.WaitGroup) p2p.Protocol {
+func METAProtocol(protopeers *PeerCollection, na adapters.NodeAdapter, wg *sync.WaitGroup) p2p.Protocol {
 
 	ct := METACodeMap(&METAAssetNotification{})
-
-	m := adapters.RLPxMessenger{}
 	
-	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	run := func(peer *protocols.Peer) error {
 		
 		if wg != nil {
 			wg.Add(1)
 		}
-		peer := protocols.NewPeer(p, rw, ct, m, func() { })
-		
 		
 		peer.Register(&METAAssetNotification{}, func(msg interface{}) error {
 			hm := msg.(*METAAssetNotification)	
@@ -82,10 +78,6 @@ func METAProtocol(protopeers *PeerCollection, wg *sync.WaitGroup) p2p.Protocol {
 		return err
 	}		
 	
-	return p2p.Protocol{
-		Name:     ProtocolName,
-		Version:  Version,
-		Length:   ct.Length(),
-		Run:      run,
-	}
+	p := protocols.NewProtocol(ProtocolName, ProtocolVersion, run, na, ct)
+	return *p
 }

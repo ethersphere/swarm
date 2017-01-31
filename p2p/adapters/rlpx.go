@@ -19,6 +19,7 @@ package adapters
 import (
 	"fmt"
 	"net"
+	//"encoding/binary"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -93,8 +94,11 @@ func (self *RLPx) Messenger(rw p2p.MsgReadWriter) Messenger {
 	return self.m(rw)
 }
 
-func (self *RLPx) Disconnect(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-	p.Disconnect(p2p.DiscSubprotocolError)
+//func (self *RLPx) Disconnect(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (self *RLPx) Disconnect(b []byte) error {
+	//p.Disconnect(p2p.DiscSubprotocolError)
+	//d, _ := binary.Uvarint(b)
+	//p.Disconnect(p2p.DiscReason(d))
 	return nil
 }
 

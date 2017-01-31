@@ -178,10 +178,6 @@ func (n *Node) Start() error {
 	// Otherwise copy and specialize the P2P configuration
 	services := make(map[reflect.Type]Service)
 	for _, constructor := range n.serviceFuncs {
-<<<<<<< HEAD
-		glog.V(logger.Detail).Infof("service constructpr %v ", constructor)
-=======
->>>>>>> p2prwfix
 		// Create a new context for the particular service
 		ctx := &ServiceContext{
 			config:         n.config,
