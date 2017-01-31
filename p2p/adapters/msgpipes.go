@@ -31,6 +31,7 @@ import (
 // peer session test
 // ExpectMsg(p2p.MsgReader, uint64, interface{}) error
 // SendMsg(p2p.MsgWriter, uint64, interface{}) error
+<<<<<<< HEAD
 type SimPipe struct{}
 
 func (*SimPipe) SendMsg(w p2p.MsgWriter, code uint64, msg interface{}) error {
@@ -47,4 +48,32 @@ func (*SimPipe) TriggerMsg(w p2p.MsgWriter, code uint64, msg interface{}) error 
 
 func (*SimPipe) ExpectMsg(r p2p.MsgReader, code uint64, msg interface{}) error {
 	return p2p.ExpectMsg(r, code, msg)
+=======
+type SimPipe struct{
+	rw p2p.MsgReadWriter
+}
+
+func (self *SimPipe) SendMsg(code uint64, msg interface{}) error {
+	return p2p.Send(self.rw, code, msg)
+}
+
+func (self *SimPipe) ReadMsg() (p2p.Msg, error) {
+	return self.rw.ReadMsg()
+}
+
+func (self *SimPipe) TriggerMsg(code uint64, msg interface{}) error {
+	return p2p.Send(self.rw, code, msg)
+}
+
+func (self *SimPipe) ExpectMsg(code uint64, msg interface{}) error {
+	return p2p.ExpectMsg(self.rw, code, msg)
+}
+
+func (self *SimPipe) Close() {
+	self.rw.(*p2p.MsgPipeRW).Close()
+}
+
+func NewSimPipe(rw p2p.MsgReadWriter) Messenger {
+	return Messenger(&SimPipe{rw})
+>>>>>>> p2prwfix
 }

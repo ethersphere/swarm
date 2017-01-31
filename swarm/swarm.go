@@ -217,7 +217,7 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 }
 
 // implements node.Service
-// Apis returns the RPC Api descriptors the META implementation offers
+// Apis returns the RPC Api descriptors the Swarm implementation offers
 func (self *Swarm) APIs() []rpc.API {
 	return []rpc.API{
 		// public APIs

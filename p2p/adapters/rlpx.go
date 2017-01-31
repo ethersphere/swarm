@@ -30,17 +30,32 @@ type RLPx struct {
 	id   *NodeId
 	net  *p2p.Server
 	addr []byte
+<<<<<<< HEAD
 	m    Messenger
+=======
+	m    func(p2p.MsgReadWriter) Messenger
+>>>>>>> p2prwfix
 	r    Reporter
 }
 
 type RLPxMessenger struct {
+<<<<<<< HEAD
 }
 
 func NewRLPx(addr []byte, srv *p2p.Server, m Messenger) *RLPx {
 	if m == nil {
 		m = &RLPxMessenger{}
 	}
+=======
+	rw p2p.MsgReadWriter
+}
+
+func NewRLPxMessenger(rw p2p.MsgReadWriter) Messenger {
+	return Messenger(&RLPxMessenger{rw: rw})
+}
+
+func NewRLPx(addr []byte, srv *p2p.Server, m func(p2p.MsgReadWriter) Messenger) *RLPx {
+>>>>>>> p2prwfix
 	return &RLPx{
 		net:  srv,
 		addr: addr,
@@ -48,7 +63,11 @@ func NewRLPx(addr []byte, srv *p2p.Server, m Messenger) *RLPx {
 	}
 }
 
+<<<<<<< HEAD
 func NewReportingRLPx(addr []byte, srv *p2p.Server, m Messenger, r Reporter) *RLPx {
+=======
+func NewReportingRLPx(addr []byte, srv *p2p.Server, m func(p2p.MsgReadWriter) Messenger, r Reporter) *RLPx {
+>>>>>>> p2prwfix
 	rlpx := NewRLPx(addr, srv, m)
 	rlpx.r = r
 	srv.PeerConnHook = func(p *p2p.Peer) {
@@ -60,12 +79,25 @@ func NewReportingRLPx(addr []byte, srv *p2p.Server, m Messenger, r Reporter) *RL
 	return rlpx
 }
 
+<<<<<<< HEAD
 func (RLPxMessenger) SendMsg(w p2p.MsgWriter, code uint64, msg interface{}) error {
 	return p2p.Send(w, code, msg)
 }
 
 func (RLPxMessenger) ReadMsg(r p2p.MsgReader) (p2p.Msg, error) {
 	return r.ReadMsg()
+=======
+func (self *RLPxMessenger) SendMsg(code uint64, msg interface{}) error {
+	return p2p.Send(self.rw, code, msg)
+}
+
+func (self *RLPxMessenger) ReadMsg() (p2p.Msg, error) {
+	return self.rw.ReadMsg()
+}
+
+func (self *RLPxMessenger) Close() {
+	
+>>>>>>> p2prwfix
 }
 
 func (self *RLPx) LocalAddr() []byte {
@@ -83,8 +115,13 @@ func (self *RLPx) Connect(enode []byte) error {
 	return nil
 }
 
+<<<<<<< HEAD
 func (self *RLPx) Messenger() Messenger {
 	return self.m
+=======
+func (self *RLPx) Messenger(rw p2p.MsgReadWriter) Messenger {
+	return self.m(rw)
+>>>>>>> p2prwfix
 }
 
 func (self *RLPx) Disconnect(p *p2p.Peer, rw p2p.MsgReadWriter) error {
