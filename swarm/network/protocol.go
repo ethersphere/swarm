@@ -64,7 +64,7 @@ type Node interface {
 
 	Send(interface{}) error                             // can send messages
 	Drop()                                              // disconnect this peer
-	Register(interface{}, func(interface{}) error) uint // register message-handler callbacks
+	Register(interface{}, func(interface{}) error) uint64 // register message-handler callbacks
 }
 
 // PeerPool is the interface for the connectivity manager
