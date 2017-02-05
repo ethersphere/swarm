@@ -31,10 +31,13 @@ type NetworkList struct {
 	Available []*Network
 }
 
+type NodeResult struct {
+	Nodes []*simulations.Node	
+}
+
 type NodeIF struct {
 	One uint
 	Other uint
-	Nodes []*simulations.Node
 	MessageType uint8
 }
 
@@ -159,7 +162,8 @@ func main() {
 					t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
 					networks = t_network.(*NetworkList)
 					
-					return NodeIF{Nodes: networks.Current.Nodes}, nil
+					//return &NodeResult{Nodes: networks.Current.Nodes}, nil
+					return &NodeResult{Nodes: networks.Current.Nodes}, nil
 				},
 				Type: reflect.TypeOf(&NodeIF{}), // this is input not output param structure
 			},
@@ -177,13 +181,13 @@ func main() {
 						if networks.Current.Start(onenode.Id) != nil {
 							networks.Current.Stop(onenode.Id)	
 						}
-						return &NodeIF{Nodes: []*simulations.Node{onenode}}, nil
+						return &NodeResult{Nodes: []*simulations.Node{onenode}}, nil
 						//return &struct{Result string}{Result: fmt.Sprintf("%v", onenode)}, nil
 					} else {
 						othernode = networks.Current.Nodes[args.Other - 1]
 						if (args.MessageType == 0) {
 							networks.Current.Connect(onenode.Id, othernode.Id)
-							return &NodeIF{Nodes: []*simulations.Node{onenode, othernode}}, nil
+							return &NodeResult{Nodes: []*simulations.Node{onenode, othernode}}, nil
 							//return &struct{Result string}{Result: fmt.Sprintf("%v -> %v", othernode)}, nil
 						} else {
 							return &struct{}{}, nil // should have sent protocol message to peer, but don't know how to yet
