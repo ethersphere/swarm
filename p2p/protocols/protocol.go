@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
 // error codes used by this  protocol scheme
@@ -156,23 +157,18 @@ func (self *CodeMap) Register(msgs ...interface{}) {
 // a remote peer
 type Peer struct {
 	ct         *CodeMap                                   // CodeMap for the protocol
-	m          Messenger                                  // defines senf and receive
+	m          adapters.Messenger                         // defines senf and receive
 	*p2p.Peer                                             // the p2p.Peer object representing the remote
 	rw         p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
 	handlers   map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
 	disconnect func()                                     // Disconnect function set differently for testing
 }
 
-type Messenger interface {
-	SendMsg(p2p.MsgWriter, uint64, interface{}) error
-	ReadMsg(p2p.MsgReader) (p2p.Msg, error)
-}
-
 // NewPeer returns a new peer
 // this constructor is called by the p2p.Protocol#Run function
 // the first two arguments are comming the arguments passed to p2p.Protocol.Run function
 // the third argument is the CodeMap describing the protocol messages and options
-func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, ct *CodeMap, m Messenger, disconn func()) *Peer {
+func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, ct *CodeMap, m adapters.Messenger, disconn func()) *Peer {
 	return &Peer{
 		ct:         ct,
 		m:          m,
