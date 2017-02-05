@@ -10,13 +10,15 @@ import (
 	"reflect"
 	"runtime"
 	"sync"
-	//"time"
+	"time"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	METAnetwork "github.com/ethereum/go-ethereum/META/network"
 )
@@ -38,23 +40,18 @@ type NodeResult struct {
 type NodeIF struct {
 	One uint
 	Other uint
-	MessageType uint8
+	AssetType uint8
 }
 
 type Network struct {
 	*simulations.Network
-	//protopeers *METAnetwork.PeerCollection
 	messenger func(p2p.MsgReadWriter) adapters.Messenger
 	Id string
+	Ct *protocols.CodeMap
 }
 
 func (self *Network) String() string {
 	return self.Id
-}
-
-type SimNode struct {
-	adapters.NodeAdapter
-	protopeers *METAnetwork.PeerCollection 
 }
 
 func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
@@ -62,8 +59,8 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 	id := conf.Id
 	na := adapters.NewSimNode(id, self.Network, self.messenger)
 	pp := METAnetwork.NewPeerCollection()
-	na.Run = METAnetwork.METAProtocol(pp, na, &wg).Run
-	return adapters.NodeAdapter(&SimNode{na, pp})
+	na.Run = METAnetwork.METAProtocol(pp, self.Ct, na, &wg).Run
+	return na
 }
 
 func NewNetwork(network *simulations.Network, messenger func(p2p.MsgReadWriter) adapters.Messenger, id string) *Network {
@@ -72,8 +69,8 @@ func NewNetwork(network *simulations.Network, messenger func(p2p.MsgReadWriter) 
 		Network:   network,
 		messenger: messenger,
 		Id: id,
+		Ct: METAnetwork.NewMETACodeMap(&METAnetwork.METAAssetNotification{}),
 	}
-
 	n.SetNaf(n.NewSimNode)
 	return n
 }
@@ -174,18 +171,16 @@ func main() {
 							networks.Current.Stop(onenode.Id)	
 						}
 						return &NodeResult{Nodes: []*simulations.Node{onenode}}, nil
-						//return &struct{Result string}{Result: fmt.Sprintf("%v", onenode)}, nil
 					} else {
 						othernode = networks.Current.Nodes[args.Other - 1]
-						if (args.MessageType == 0) {
+						if (args.AssetType == 0) {
 							networks.Current.Connect(onenode.Id, othernode.Id)
 							return &NodeResult{Nodes: []*simulations.Node{onenode, othernode}}, nil
-							//return &struct{Result string}{Result: fmt.Sprintf("%v -> %v", othernode)}, nil
 						} else {
-							sendernode := networks.Current.GetNode(onenode.Id)
-							sendernodeassimnode := sendernode.(*SimNode)
-							receivernodesenderrepr := sendernode.(*SimNode).protopeers.GetById(othernode.Id)
-							receivernodesenderrepr.Send(blabala)
+							expire,_ := time.Now().Add(METAnetwork.METADefaultExpireDuration).MarshalBinary()
+							protomsg := &METAnetwork.METAAssetNotification{Typ: args.AssetType - 1, Bzz: storage.ZeroKey, Exp: expire}
+							ma := networks.Current.GetNodeAdapter(onenode.Id).(*adapters.SimNode).GetPeer(othernode.Id)
+							ma.SendMsg(uint64(networks.Current.Ct.GetCode(protomsg)), protomsg) // %) - also not good that sendmsg needs uint64 while Codemap.messages maps uint ??
 							return &struct{}{}, nil // should have sent protocol message to peer, but don't know how to yet
 						}
 					}

@@ -114,9 +114,10 @@ func (self *META) Protocols() []p2p.Protocol {
 	wg := sync.WaitGroup{}
 	m := adapters.NewRLPxMessenger
 	na := adapters.NewRLPx([]byte{}, self.server, m)
-
+	ct := network.NewMETACodeMap(&network.METAAssetNotification{})
+	
 	return []p2p.Protocol{
 		//p2p.Protocol(network.METAProtocol(self.protopeers, &wg)),
-		p2p.Protocol(network.METAProtocol(self.protopeers, na, &wg)),
+		p2p.Protocol(network.METAProtocol(self.protopeers, ct, na, &wg)),
 	}
 }

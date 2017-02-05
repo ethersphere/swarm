@@ -42,21 +42,20 @@ var METAAssetType = map[uint8]string{
 	MLC: "Music Licensing Company",
 }
 
-func METACodeMap(msgs ...interface{}) *protocols.CodeMap {
+func NewMETACodeMap(msgs ...interface{}) *protocols.CodeMap {
 	ct := protocols.NewCodeMap(ProtocolName, ProtocolVersion, ProtocolMaxMsgSize)
 	ct.Register(msgs...)
 	return ct
 }
+
 type METAAssetNotification struct {
 	Typ uint8
 	Bzz storage.Key // this has no set length? Can it be both sha-3 and sha-256?
 	Exp []byte // byte marshalled time
 }
 
-func METAProtocol(protopeers *PeerCollection, na adapters.NodeAdapter, wg *sync.WaitGroup) p2p.Protocol {
+func METAProtocol(protopeers *PeerCollection, ct *protocols.CodeMap, na adapters.NodeAdapter, wg *sync.WaitGroup) p2p.Protocol {
 
-	ct := METACodeMap(&METAAssetNotification{})
-	
 	run := func(peer *protocols.Peer) error {
 		
 		if wg != nil {

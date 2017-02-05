@@ -41,9 +41,12 @@ Content-Length: 20
 
 {"One":1,"Other":2}
 
-GET /node/ HTTP/1.0
+PUT /node/ HTTP/1.0
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 34
 
-GET / HTTP/1.0
+{"One":1,"Other":2,"AssetType":2}
+
 ```
 
 ## Test run output
@@ -62,86 +65,63 @@ Content-Length: 30
 
 {"Id":"abcde","NodeAmount":5}
 
-POST /node/ HTTP/1.0
-Connection: keep-alive
-
-POST /node/ HTTP/1.0
-Connection: keep-alive
-
-POST /node/ HTTP/1.0
-Connection: keep-alive
 HTTP/1.0 200 OK
 Accept-Ranges: bytes
 Access-Control-Allow-Origin: *
 Content-Length: 2
 Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:39:26 GMT
-Date: Sat, 04 Feb 2017 23:39:26 GMT
+Last-Modified: Sun, 05 Feb 2017 13:03:42 GMT
+Date: Sun, 05 Feb 2017 13:03:42 GMT
 Connection: keep-alive
 
-{}HTTP/1.0 200 OK
-Accept-Ranges: bytes
-Access-Control-Allow-Origin: *
-Content-Length: 142
-Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:39:26 GMT
-Date: Sat, 04 Feb 2017 23:39:26 GMT
+{}
+
+POST /node/ HTTP/1.0
 Connection: keep-alive
 
-{
-  "Id": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c"
-}HTTP/1.0 200 OK
-Accept-Ranges: bytes
-Access-Control-Allow-Origin: *
-Content-Length: 142
-Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:39:26 GMT
-Date: Sat, 04 Feb 2017 23:39:26 GMT
-Connection: keep-alive
-
-{
-  "Id": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d"
-}
 HTTP/1.0 200 OK
 Accept-Ranges: bytes
 Access-Control-Allow-Origin: *
 Content-Length: 142
 Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:39:28 GMT
-Date: Sat, 04 Feb 2017 23:39:28 GMT
+Last-Modified: Sun, 05 Feb 2017 13:03:42 GMT
+Date: Sun, 05 Feb 2017 13:03:42 GMT
 Connection: keep-alive
 
 {
-  "Id": "b7cbcbf614ddd8ecc08b33c92d02e1566eb822d6a4bdc4ac7ed0c7f17b5db30a7745dba509e157dc6a60e108f871c8064dbbde8249ad84d32642e2a554705dce"
+  "Id": "0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2"
 }
-GET /node/ HTTP/1.0
+
+POST /node/ HTTP/1.0
+Connection: keep-alive
 
 HTTP/1.0 200 OK
 Accept-Ranges: bytes
 Access-Control-Allow-Origin: *
-Content-Length: 590
+Content-Length: 142
 Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:39:36 GMT
-Date: Sat, 04 Feb 2017 23:39:36 GMT
+Last-Modified: Sun, 05 Feb 2017 13:03:43 GMT
+Date: Sun, 05 Feb 2017 13:03:43 GMT
+Connection: keep-alive
 
 {
-  "One": 0,
-  "Other": 0,
-  "Nodes": [
-    {
-      "id": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c",
-      "Up": false
-    },
-    {
-      "id": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d",
-      "Up": false
-    },
-    {
-      "id": "b7cbcbf614ddd8ecc08b33c92d02e1566eb822d6a4bdc4ac7ed0c7f17b5db30a7745dba509e157dc6a60e108f871c8064dbbde8249ad84d32642e2a554705dce",
-      "Up": false
-    }
-  ],
-  "MessageType": 0
+  "Id": "d2d95817f7b35ee4314c03f7f1faa5ca723043e76fcc08dbe6b2289a304bc8c4de72b6330bec0ed2c6757600e9d48b43e6ce58416877ad7382a3695549eedf27"
+}
+
+POST /node/ HTTP/1.0
+Connection: keep-alive
+
+HTTP/1.0 200 OK
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: *
+Content-Length: 142
+Content-Type: text/json
+Last-Modified: Sun, 05 Feb 2017 13:03:42 GMT
+Date: Sun, 05 Feb 2017 13:03:42 GMT
+Connection: keep-alive
+
+{
+  "Id": "0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641"
 }
 
 PUT /node/ HTTP/1.0
@@ -149,24 +129,22 @@ Content-Type: application/x-www-form-urlencoded
 Content-Length: 20
 
 {"One":1,"Other":0}
+
 HTTP/1.0 200 OK
 Accept-Ranges: bytes
 Access-Control-Allow-Origin: *
-Content-Length: 239
+Content-Length: 193
 Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:39:44 GMT
-Date: Sat, 04 Feb 2017 23:39:44 GMT
+Last-Modified: Sun, 05 Feb 2017 13:03:51 GMT
+Date: Sun, 05 Feb 2017 13:03:51 GMT
 
 {
-  "One": 0,
-  "Other": 0,
   "Nodes": [
     {
-      "id": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c",
+      "id": "0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2",
       "Up": true
     }
-  ],
-  "MessageType": 0
+  ]
 }
 
 PUT /node/ HTTP/1.0
@@ -174,24 +152,22 @@ Content-Type: application/x-www-form-urlencoded
 Content-Length: 20
 
 {"One":2,"Other":0}
+
 HTTP/1.0 200 OK
 Accept-Ranges: bytes
 Access-Control-Allow-Origin: *
-Content-Length: 239
+Content-Length: 193
 Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:39:52 GMT
-Date: Sat, 04 Feb 2017 23:39:52 GMT
+Last-Modified: Sun, 05 Feb 2017 13:03:57 GMT
+Date: Sun, 05 Feb 2017 13:03:57 GMT
 
 {
-  "One": 0,
-  "Other": 0,
   "Nodes": [
     {
-      "id": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d",
+      "id": "0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641",
       "Up": true
     }
-  ],
-  "MessageType": 0
+  ]
 }
 
 PUT /node/ HTTP/1.0
@@ -199,158 +175,80 @@ Content-Type: application/x-www-form-urlencoded
 Content-Length: 20
 
 {"One":1,"Other":2}
+
 HTTP/1.0 200 OK
 Accept-Ranges: bytes
 Access-Control-Allow-Origin: *
-Content-Length: 413
+Content-Length: 367
 Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:39:56 GMT
-Date: Sat, 04 Feb 2017 23:39:56 GMT
+Last-Modified: Sun, 05 Feb 2017 13:04:06 GMT
+Date: Sun, 05 Feb 2017 13:04:06 GMT
 
 {
-  "One": 0,
-  "Other": 0,
   "Nodes": [
     {
-      "id": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c",
+      "id": "0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2",
       "Up": true
     },
     {
-      "id": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d",
+      "id": "0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641",
       "Up": true
-    }
-  ],
-  "MessageType": 0
-}
-
-GET /node/ HTTP/1.0
-
-HTTP/1.0 200 OK
-Accept-Ranges: bytes
-Access-Control-Allow-Origin: *
-Content-Length: 588
-Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:40:04 GMT
-Date: Sat, 04 Feb 2017 23:40:04 GMT
-
-{
-  "One": 0,
-  "Other": 0,
-  "Nodes": [
-    {
-      "id": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c",
-      "Up": true
-    },
-    {
-      "id": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d",
-      "Up": true
-    },
-    {
-      "id": "b7cbcbf614ddd8ecc08b33c92d02e1566eb822d6a4bdc4ac7ed0c7f17b5db30a7745dba509e157dc6a60e108f871c8064dbbde8249ad84d32642e2a554705dce",
-      "Up": false
-    }
-  ],
-  "MessageType": 0
-}
-
-GET / HTTP/1.0
-
-HTTP/1.0 200 OK
-Accept-Ranges: bytes
-Access-Control-Allow-Origin: *
-Content-Length: 2032
-Content-Type: text/json
-Last-Modified: Sat, 04 Feb 2017 23:41:47 GMT
-Date: Sat, 04 Feb 2017 23:41:47 GMT
-
-{
-  "Current": {
-    "nodes": [
-      {
-        "id": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c",
-        "Up": true
-      },
-      {
-        "id": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d",
-        "Up": true
-      },
-      {
-        "id": "b7cbcbf614ddd8ecc08b33c92d02e1566eb822d6a4bdc4ac7ed0c7f17b5db30a7745dba509e157dc6a60e108f871c8064dbbde8249ad84d32642e2a554705dce",
-        "Up": false
-      }
-    ],
-    "conns": [
-      {
-        "one": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c",
-        "other": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d",
-        "up": true,
-        "reverse": false
-      }
-    ],
-    "Id": "abcde"
-  },
-  "Available": [
-    {
-      "nodes": [
-        {
-          "id": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c",
-          "Up": true
-        },
-        {
-          "id": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d",
-          "Up": true
-        },
-        {
-          "id": "b7cbcbf614ddd8ecc08b33c92d02e1566eb822d6a4bdc4ac7ed0c7f17b5db30a7745dba509e157dc6a60e108f871c8064dbbde8249ad84d32642e2a554705dce",
-          "Up": false
-        }
-      ],
-      "conns": [
-        {
-          "one": "107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c",
-          "other": "1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d",
-          "up": true,
-          "reverse": false
-        }
-      ],
-      "Id": "abcde"
     }
   ]
 }
+
+PUT /node/ HTTP/1.0
+Content-Type: application/x-www-form-urlencoded
+Content-Length: 34
+
+{"One":1,"Other":2,"AssetType":2}
+HTTP/1.0 200 OK
+Accept-Ranges: bytes
+Access-Control-Allow-Origin: *
+Content-Length: 2
+Content-Type: text/json
+Last-Modified: Sun, 05 Feb 2017 13:06:54 GMT
+Date: Sun, 05 Feb 2017 13:06:54 GMT
+
+{}
+
 ```
 
 ### backend log
 
 ```
-lash@cantando ~/programming/projects/go/src/github.com/ethereum/go-ethereum/META/network/simulations $ ./overlay_meta 
-I0205 00:39:14.754043 p2p/simulations/rest_api_server.go:32] Swarm Network Controller HTTP server started on localhost:8888
-I0205 00:39:26.629383 p2p/simulations/rest_api_server.go:37] HTTP POST request URL: '/', Host: '', Path: '/', Referer: '', Accept: ''
-I0205 00:39:26.629667 p2p/simulations/journal.go:44] subscribe
-I0205 00:39:26.629775 META/network/simulations/overlay_meta.go:98] new network controller on abcde
-I0205 00:39:26.630202 p2p/simulations/rest_api_server.go:37] HTTP POST request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
-I0205 00:39:26.631208 p2p/simulations/network.go:252] node 107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c created
-I0205 00:39:26.631496 META/network/simulations/overlay_meta.go:149] added node 107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c to network abcde
-I0205 00:39:26.631935 p2p/simulations/rest_api_server.go:37] HTTP POST request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
-I0205 00:39:26.633206 p2p/simulations/network.go:252] node 1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d created
-I0205 00:39:26.633268 META/network/simulations/overlay_meta.go:149] added node 1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d to network abcde
-I0205 00:39:28.316419 p2p/simulations/rest_api_server.go:37] HTTP POST request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
-I0205 00:39:28.317340 p2p/simulations/network.go:252] node b7cbcbf614ddd8ecc08b33c92d02e1566eb822d6a4bdc4ac7ed0c7f17b5db30a7745dba509e157dc6a60e108f871c8064dbbde8249ad84d32642e2a554705dce created
-I0205 00:39:28.317389 META/network/simulations/overlay_meta.go:149] added node b7cbcbf614ddd8ecc08b33c92d02e1566eb822d6a4bdc4ac7ed0c7f17b5db30a7745dba509e157dc6a60e108f871c8064dbbde8249ad84d32642e2a554705dce to network abcde
-I0205 00:39:36.028265 p2p/simulations/rest_api_server.go:37] HTTP GET request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
-I0205 00:39:44.879905 p2p/simulations/rest_api_server.go:37] HTTP PUT request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
-I0205 00:39:44.880125 p2p/simulations/network.go:300] starting node 107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c: false adapter &{{{0 0} 0 0 0 0} 107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c 0xc8201257a0 0x4b1510 map[] [] 0x67c220}
-I0205 00:39:44.880480 p2p/simulations/network.go:309] started node 107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c: true
-I0205 00:39:52.566399 p2p/simulations/rest_api_server.go:37] HTTP PUT request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
-I0205 00:39:52.566646 p2p/simulations/network.go:300] starting node 1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d: false adapter &{{{0 0} 0 0 0 0} 1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d 0xc8201257a0 0x4b1510 map[] [] 0x67c220}
-I0205 00:39:52.568356 p2p/simulations/network.go:309] started node 1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d: true
-I0205 00:39:56.852092 p2p/simulations/rest_api_server.go:37] HTTP PUT request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
-I0205 00:39:56.852395 p2p/adapters/inproc.go:168] protocol starting on peer 1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d (connection with 107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c)
-I0205 00:39:56.852494 p2p/adapters/inproc.go:168] protocol starting on peer 107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c (connection with 1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d)
-I0205 00:39:56.852934 p2p/protocols/protocol.go:216] registered handle for &{0 0000000000000000000000000000000000000000000000000000000000000000 []} *network.METAAssetNotification
-I0205 00:39:56.853133 META/network/peercollection.go:33] protopeers now has added peers 107e06849ed26d0e8bbb0e8f74bdfbef03bb3cf6aadb945dbcd110f40f29adad9d5ab0434d413b84208b1ee89226446dffcf83db46dc69fe0dabf82f2f44750c, total 1
-I0205 00:39:56.853205 p2p/protocols/protocol.go:216] registered handle for &{0 0000000000000000000000000000000000000000000000000000000000000000 []} *network.METAAssetNotification
-I0205 00:39:56.853405 META/network/peercollection.go:33] protopeers now has added peers 1120437f6b1b5d1220d94a151cc74fc017ba281105b9616f3fce909c4f4551bba6139a53d6dcdbd73adbd7b3439ad722f33cfb6c6485f3cbe5a5e8be5c82e26d, total 2
-I0205 00:40:04.595836 p2p/simulations/rest_api_server.go:37] HTTP GET request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
-I0205 00:41:47.091392 p2p/simulations/rest_api_server.go:37] HTTP GET request URL: '/', Host: '', Path: '/', Referer: '', Accept: ''
+$ ./overlay_meta 
+I0205 14:00:54.750586 p2p/simulations/rest_api_server.go:32] Swarm Network Controller HTTP server started on localhost:8888
+I0205 14:03:42.337560 p2p/simulations/rest_api_server.go:37] HTTP POST request URL: '/', Host: '', Path: '/', Referer: '', Accept: ''
+I0205 14:03:42.337753 p2p/simulations/journal.go:44] subscribe
+I0205 14:03:42.337808 META/network/simulations/overlay_meta.go:94] new network controller on abcde
+I0205 14:03:42.338041 p2p/simulations/rest_api_server.go:37] HTTP POST request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
+I0205 14:03:42.338483 p2p/simulations/network.go:252] node 0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2 created
+I0205 14:03:42.338600 META/network/simulations/overlay_meta.go:144] added node 0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2 to network abcde
+I0205 14:03:42.338762 p2p/simulations/rest_api_server.go:37] HTTP POST request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
+I0205 14:03:42.339333 p2p/simulations/network.go:252] node 0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641 created
+I0205 14:03:42.339358 META/network/simulations/overlay_meta.go:144] added node 0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641 to network abcde
+I0205 14:03:43.247640 p2p/simulations/rest_api_server.go:37] HTTP POST request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
+I0205 14:03:43.247935 p2p/simulations/network.go:252] node d2d95817f7b35ee4314c03f7f1faa5ca723043e76fcc08dbe6b2289a304bc8c4de72b6330bec0ed2c6757600e9d48b43e6ce58416877ad7382a3695549eedf27 created
+I0205 14:03:43.247960 META/network/simulations/overlay_meta.go:144] added node d2d95817f7b35ee4314c03f7f1faa5ca723043e76fcc08dbe6b2289a304bc8c4de72b6330bec0ed2c6757600e9d48b43e6ce58416877ad7382a3695549eedf27 to network abcde
+I0205 14:03:51.049100 p2p/simulations/rest_api_server.go:37] HTTP PUT request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
+I0205 14:03:51.049199 p2p/simulations/network.go:300] starting node 0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2: false adapter &{{{0 0} 0 0 0 0} 0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2 0xc8201b40e0 0x4cc2c0 map[] [] 0x4c8ad0}
+I0205 14:03:51.049309 p2p/simulations/network.go:309] started node 0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2: true
+I0205 14:03:57.599120 p2p/simulations/rest_api_server.go:37] HTTP PUT request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
+I0205 14:03:57.599274 p2p/simulations/network.go:300] starting node 0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641: false adapter &{{{0 0} 0 0 0 0} 0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641 0xc8201b40e0 0x4cc2c0 map[] [] 0x4c8ad0}
+I0205 14:03:57.600676 p2p/simulations/network.go:309] started node 0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641: true
+I0205 14:04:06.486407 p2p/simulations/rest_api_server.go:37] HTTP PUT request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
+I0205 14:04:06.486646 p2p/adapters/inproc.go:168] protocol starting on peer 0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641 (connection with 0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2)
+I0205 14:04:06.486729 p2p/adapters/inproc.go:168] protocol starting on peer 0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2 (connection with 0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641)
+I0205 14:04:06.487006 p2p/protocols/protocol.go:220] registered handle for &{0 0000000000000000000000000000000000000000000000000000000000000000 []} *network.METAAssetNotification
+I0205 14:04:06.488182 META/network/peercollection.go:33] protopeers now has added peers 0970496a2e447d44d2bbead9c13e1e40cff26daf83bbfe3e77e7da7b33d8ae23f8f6e108eb4316e445d8c3f8a043085c600baabab6de354f15a193c808bf87e2, total 1
+I0205 14:04:06.487123 p2p/protocols/protocol.go:220] registered handle for &{0 0000000000000000000000000000000000000000000000000000000000000000 []} *network.METAAssetNotification
+I0205 14:04:06.488218 META/network/peercollection.go:33] protopeers now has added peers 0a1a1728adc16733fab5201fd510570d8ecc755ca50e3fa63bc90f8fd08a450d2379f10f2824fae4ecbd1d2c4cac96233ee09ca1ab0d787256b82bef74ab9641, total 1
+I0205 14:06:53.050568 p2p/simulations/rest_api_server.go:37] HTTP PUT request URL: '/node/', Host: '', Path: '/node/', Referer: '', Accept: ''
+I0205 14:06:54.318200 p2p/protocols/protocol.go:276] <= msg #0 (51 bytes)
+I0205 14:06:54.318270 p2p/protocols/protocol.go:298] <= &{1 0000000000000000000000000000000000000000000000000000000000000000 [1 0 0 0 14 208 41 96 190 18 246 86 6 0 60]} *network.METAAssetNotification (0)
+I0205 14:06:54.318299 p2p/protocols/protocol.go:311] handler 0 for *network.METAAssetNotification
+I0205 14:06:54.318309 META/network/protocol.go:67] Peer received asset notification Digital Sales Report
+
 ```
 

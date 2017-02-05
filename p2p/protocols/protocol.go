@@ -33,10 +33,10 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
 // error codes used by this  protocol scheme
@@ -115,11 +115,15 @@ func errorf(code int, format string, params ...interface{}) *Error {
 // listing the message codes and types etc
 // and further metadata about the protocol
 type CodeMap struct {
-	Name       string                // name of the protocol
-	Version    uint                  // version
-	MaxMsgSize int                   // max length of message payload size
-	codes      []reflect.Type        // index of codes to msg types - to create zero values
-	messages   map[reflect.Type]uint // index of types to codes, for sending by type
+	Name       string                  // name of the protocol
+	Version    uint                    // version
+	MaxMsgSize int                     // max length of message payload size
+	codes      []reflect.Type          // index of codes to msg types - to create zero values
+	messages   map[reflect.Type]uint64 // index of types to codes, for sending by type
+}
+
+func (self *CodeMap) GetCode(msg interface{}) uint64 {
+	return self.messages[reflect.TypeOf(msg)]
 }
 
 func NewCodeMap(name string, version uint, maxMsgSize int, msgs ...interface{}) *CodeMap {
@@ -127,7 +131,7 @@ func NewCodeMap(name string, version uint, maxMsgSize int, msgs ...interface{}) 
 		Name:       name,
 		Version:    version,
 		MaxMsgSize: maxMsgSize,
-		messages:   make(map[reflect.Type]uint),
+		messages:   make(map[reflect.Type]uint64),
 	}
 	self.Register(msgs...)
 	return self
@@ -138,7 +142,7 @@ func (self *CodeMap) Length() uint64 {
 }
 
 func (self *CodeMap) Register(msgs ...interface{}) {
-	code := uint(len(self.codes))
+	code := uint64(len(self.codes))
 	for _, msg := range msgs {
 		typ := reflect.TypeOf(msg)
 		_, found := self.messages[typ]
@@ -153,24 +157,23 @@ func (self *CodeMap) Register(msgs ...interface{}) {
 	}
 }
 
-
 func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) error, na adapters.NodeAdapter, ct *CodeMap) *p2p.Protocol {
-	
+
 	r := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-		
+
 		m := na.Messenger(rw)
-		
+
 		peer := NewPeer(p, ct, m, func() {})
-		
+
 		return run(peer)
-		
+
 	}
-	
+
 	return &p2p.Protocol{
-		Name:     protocolname,
-		Version:  protocolversion,
-		Length:	  ct.Length(),
-		Run:      r,
+		Name:    protocolname,
+		Version: protocolversion,
+		Length:  ct.Length(),
+		Run:     r,
 	}
 }
 
@@ -178,7 +181,7 @@ func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) erro
 // a remote peer
 type Peer struct {
 	ct         *CodeMap                                   // CodeMap for the protocol
-	m          adapters.Messenger                                  // defines senf and receive
+	m          adapters.Messenger                         // defines senf and receive
 	*p2p.Peer                                             // the p2p.Peer object representing the remote
 	rw         p2p.MsgReadWriter                          // p2p.MsgReadWriter to send messages to and read messages from
 	handlers   map[reflect.Type][]func(interface{}) error //  message type -> message handler callback(s) map
@@ -207,7 +210,7 @@ func NewPeer(p *p2p.Peer, ct *CodeMap, m adapters.Messenger, disconn func()) *Pe
 // handlers are assumed to be static across handshake renegotiations
 // i.e., a service instance either handles a message or not (irrespective of the handshake)
 // it panics if the message type is not defined in the CodeMap
-func (self *Peer) Register(msg interface{}, handler func(interface{}) error) uint {
+func (self *Peer) Register(msg interface{}, handler func(interface{}) error) uint64 {
 	typ := reflect.TypeOf(msg)
 	code, found := self.ct.messages[typ]
 	if !found {
