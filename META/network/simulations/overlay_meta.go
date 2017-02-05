@@ -113,7 +113,6 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
 					return networks, nil
 				},
-				Type: reflect.TypeOf(&NetworkList{}),
 			},
 			// DELETE /
 			Destroy: &simulations.ResourceHandler{
@@ -154,7 +153,6 @@ func main() {
 					return &simulations.NodeConfig{Id: nodeid}, nil
 					
 				},
-				Type: reflect.TypeOf(&simulations.NodeConfig{}),
 			},
 			Retrieve: &simulations.ResourceHandler{
 				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
@@ -162,10 +160,8 @@ func main() {
 					t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
 					networks = t_network.(*NetworkList)
 					
-					//return &NodeResult{Nodes: networks.Current.Nodes}, nil
 					return &NodeResult{Nodes: networks.Current.Nodes}, nil
 				},
-				Type: reflect.TypeOf(&NodeIF{}), // this is input not output param structure
 			},
 			Update: &simulations.ResourceHandler{
 				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
