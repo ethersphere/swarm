@@ -2,7 +2,7 @@
 
 // You can run this simulation using
 //
-//    go run ./swarm/network/simulations/overlay.go
+//    go run ./META/network/simulations/overlay.go
 package main
 
 import (
@@ -41,10 +41,9 @@ type NodeIF struct {
 	MessageType uint8
 }
 
-// Network extends simulations.Network with hives for each node.
 type Network struct {
 	*simulations.Network
-	protopeers *METAnetwork.PeerCollection
+	//protopeers *METAnetwork.PeerCollection
 	messenger func(p2p.MsgReadWriter) adapters.Messenger
 	Id string
 }
@@ -53,19 +52,18 @@ func (self *Network) String() string {
 	return self.Id
 }
 
-// SimNode is the adapter used by Swarm simulations.
 type SimNode struct {
 	adapters.NodeAdapter
-	protopeers METAnetwork.PeerCollection 
+	protopeers *METAnetwork.PeerCollection 
 }
 
-// NewSimNode creates adapters for nodes in the simulation.
 func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
 	wg := sync.WaitGroup{}
 	id := conf.Id
 	na := adapters.NewSimNode(id, self.Network, self.messenger)
-	na.Run = METAnetwork.METAProtocol(self.protopeers, na, &wg).Run
-	return na
+	pp := METAnetwork.NewPeerCollection()
+	na.Run = METAnetwork.METAProtocol(pp, na, &wg).Run
+	return adapters.NodeAdapter(&SimNode{na, pp})
 }
 
 func NewNetwork(network *simulations.Network, messenger func(p2p.MsgReadWriter) adapters.Messenger, id string) *Network {
@@ -75,13 +73,11 @@ func NewNetwork(network *simulations.Network, messenger func(p2p.MsgReadWriter) 
 		messenger: messenger,
 		Id: id,
 	}
-	n.protopeers = METAnetwork.NewPeerCollection()
+
 	n.SetNaf(n.NewSimNode)
 	return n
 }
 
-// NewSessionController sits as the top-most controller for this simulation
-// creates an inprocess simulation of basic node running their own bzz+hive
 func NewSessionController() (*simulations.ResourceController, chan bool) {
 	networks := &NetworkList{}
 	quitc := make(chan bool)
@@ -186,6 +182,10 @@ func main() {
 							return &NodeResult{Nodes: []*simulations.Node{onenode, othernode}}, nil
 							//return &struct{Result string}{Result: fmt.Sprintf("%v -> %v", othernode)}, nil
 						} else {
+							sendernode := networks.Current.GetNode(onenode.Id)
+							sendernodeassimnode := sendernode.(*SimNode)
+							receivernodesenderrepr := sendernode.(*SimNode).protopeers.GetById(othernode.Id)
+							receivernodesenderrepr.Send(blabala)
 							return &struct{}{}, nil // should have sent protocol message to peer, but don't know how to yet
 						}
 					}
