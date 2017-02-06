@@ -164,7 +164,12 @@ func NewProtocol(protocolname string, protocolversion uint, run func(*Peer) erro
 
 		m := na.Messenger(rw)
 
-		peer := NewPeer(p, ct, m, func() {})
+		disc := func() {
+			id := p.ID()
+			na.Disconnect(id[:])
+		}
+
+		peer := NewPeer(p, ct, m, disc)
 
 		return run(peer)
 
