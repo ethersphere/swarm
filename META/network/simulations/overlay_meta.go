@@ -87,7 +87,8 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 					messenger := adapters.NewSimPipe
 					net := simulations.NewNetwork(nil, &event.TypeMux{})
 					ppnet := NewNetwork(net, messenger, conf.Id)
-					c := simulations.NewNetworkController(conf.NetworkConfig, net.Events(), simulations.NewJournal())
+					journal := simulations.NewJournal()
+					c := simulations.NewNetworkController(conf.NetworkConfig, net.Events(), journal)
 					if len(conf.Id) == 0 {
 						conf.Id = fmt.Sprintf("%d", 0)
 					}
@@ -97,6 +98,90 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 					}
 					networks.Available = append(networks.Available, ppnet)
 					networks.Current = ppnet
+					
+					c.SetResource("debug", simulations.NewResourceContoller(
+						&simulations.ResourceHandlers{
+							Create: &simulations.ResourceHandler{
+								Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
+									journaldump := []string{}
+									eventfmt := func(e *event.Event) bool {
+										journaldump = append(journaldump, fmt.Sprintf("%v", e))
+										return true
+									}
+									journal.Read(eventfmt)
+									return struct{Results []string}{Results: journaldump,}, nil
+								},
+							},
+						},
+					))
+					
+					c.SetResource("node", simulations.NewResourceContoller(
+						&simulations.ResourceHandlers{
+							Create: &simulations.ResourceHandler{
+								Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
+									//var networks *NetworkList
+									var nodeid *adapters.NodeId
+									
+									//t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
+									//networks = t_network.(*NetworkList)
+									nodeid = p2ptest.RandomNodeId()
+									
+									//networks.Current.NewNode(&simulations.NodeConfig{Id: nodeid})
+									ppnet.NewNode(&simulations.NodeConfig{Id: nodeid})
+									glog.V(6).Infof("added node %v to network %v", nodeid, ppnet)
+									
+									return &simulations.NodeConfig{Id: nodeid}, nil
+									
+								},
+							},
+							Retrieve: &simulations.ResourceHandler{
+								Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
+									//var networks *NetworkList
+									//t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
+									//networks = t_network.(*NetworkList)
+									
+									//return &NodeResult{Nodes: networks.Current.Nodes}, nil
+									return &NodeResult{Nodes: ppnet.Nodes}, nil
+								},
+							},
+							Update: &simulations.ResourceHandler{
+								Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
+									//var networks *NetworkList
+									var othernode *simulations.Node
+									//t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
+									//networks = t_network.(*NetworkList)
+									
+									args := msg.(*NodeIF)
+									//onenode := networks.Current.Nodes[args.One - 1]
+									onenode := ppnet.Nodes[args.One - 1]
+									
+									if args.Other == 0 {
+										//if networks.Current.Start(onenode.Id) != nil {
+										//	networks.Current.Stop(onenode.Id)	
+										if ppnet.Start(onenode.Id) != nil {
+											ppnet.Stop(onenode.Id)	
+										}
+										return &NodeResult{Nodes: []*simulations.Node{onenode}}, nil
+									} else {
+										//othernode = networks.Current.Nodes[args.Other - 1]
+										othernode = ppnet.Nodes[args.Other - 1]
+										if (args.AssetType == 0) {
+											//networks.Current.Connect(onenode.Id, othernode.Id)
+											ppnet.Connect(onenode.Id, othernode.Id)
+											return &NodeResult{Nodes: []*simulations.Node{onenode, othernode}}, nil
+										} else {
+											expire,_ := time.Now().Add(METAnetwork.METADefaultExpireDuration).MarshalBinary()
+											protomsg := &METAnetwork.METAAssetNotification{Typ: args.AssetType - 1, Bzz: storage.ZeroKey, Exp: expire}
+											networks.Current.Send(onenode.Id, othernode.Id, uint64(networks.Current.Ct.GetCode(protomsg)), protomsg) // %) - also not good that sendmsg needs uint64 while Codemap.messages maps uint ??
+											ppnet.Send(onenode.Id, othernode.Id, uint64(networks.Current.Ct.GetCode(protomsg)), protomsg) // %) - also not good that sendmsg needs uint64 while Codemap.messages maps uint ??
+											return &struct{}{}, nil // should have sent protocol message to peer, but don't know how to yet
+										}
+									}
+								},
+								Type: reflect.TypeOf(&NodeIF{}), // this is input not output param structure
+							},
+						},
+					))
 					return struct{}{}, nil
 				},
 				Type: reflect.TypeOf(&NetworkConfig{}),
@@ -128,67 +213,6 @@ func main() {
 
 	c, quitc := NewSessionController()
 	
-	// this needs to be moved to sub of networkcontroller
-	c.SetResource("node", simulations.NewResourceContoller(
-		&simulations.ResourceHandlers{
-			Create: &simulations.ResourceHandler{
-				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					var networks *NetworkList
-					var nodeid *adapters.NodeId
-					
-					t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
-					networks = t_network.(*NetworkList)
-					nodeid = p2ptest.RandomNodeId()
-					
-					networks.Current.NewNode(&simulations.NodeConfig{Id: nodeid})
-					glog.V(6).Infof("added node %v to network %v", nodeid, networks.Current)
-					
-					return &simulations.NodeConfig{Id: nodeid}, nil
-					
-				},
-			},
-			Retrieve: &simulations.ResourceHandler{
-				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					var networks *NetworkList
-					t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
-					networks = t_network.(*NetworkList)
-					
-					return &NodeResult{Nodes: networks.Current.Nodes}, nil
-				},
-			},
-			Update: &simulations.ResourceHandler{
-				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					var networks *NetworkList
-					var othernode *simulations.Node
-					t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
-					networks = t_network.(*NetworkList)
-					
-					args := msg.(*NodeIF)
-					onenode := networks.Current.Nodes[args.One - 1]
-					
-					if args.Other == 0 {
-						if networks.Current.Start(onenode.Id) != nil {
-							networks.Current.Stop(onenode.Id)	
-						}
-						return &NodeResult{Nodes: []*simulations.Node{onenode}}, nil
-					} else {
-						othernode = networks.Current.Nodes[args.Other - 1]
-						if (args.AssetType == 0) {
-							networks.Current.Connect(onenode.Id, othernode.Id)
-							return &NodeResult{Nodes: []*simulations.Node{onenode, othernode}}, nil
-						} else {
-							expire,_ := time.Now().Add(METAnetwork.METADefaultExpireDuration).MarshalBinary()
-							protomsg := &METAnetwork.METAAssetNotification{Typ: args.AssetType - 1, Bzz: storage.ZeroKey, Exp: expire}
-							ma := networks.Current.GetNodeAdapter(onenode.Id).(*adapters.SimNode).GetPeer(othernode.Id)
-							ma.SendMsg(uint64(networks.Current.Ct.GetCode(protomsg)), protomsg) // %) - also not good that sendmsg needs uint64 while Codemap.messages maps uint ??
-							return &struct{}{}, nil // should have sent protocol message to peer, but don't know how to yet
-						}
-					}
-				},
-				Type: reflect.TypeOf(&NodeIF{}), // this is input not output param structure
-			},
-		},
-	))
 	simulations.StartRestApiServer("8888", c)
 	// wait until server shuts down
 	<-quitc
