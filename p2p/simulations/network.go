@@ -32,6 +32,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
@@ -66,16 +67,17 @@ func NewNetworkController(conf *NetworkConfig, eventer *event.TypeMux, journal *
 			// GET /<networkId>/
 			Retrieve: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					glog.V(6).Infof("msg: %v", msg)
+					glog.V(logger.Debug).Infof("msg: %v", msg)
 					cyConfig, ok := msg.(*CyConfig)
 					if ok {
+						glog.V(logger.Warn).Infof("journal: %v", journal)
 						return UpdateCy(cyConfig, journal)
 					}
 					snapshotConfig, ok := msg.(*SnapshotConfig)
 					if ok {
 						return Snapshot(snapshotConfig, journal)
 					}
-					return nil, fmt.Errorf("invalId json body: must be CyConfig or SnapshotConfig")
+					return nil, fmt.Errorf("invalid json body: must be CyConfig or SnapshotConfig")
 				},
 				Type: reflect.TypeOf(&CyConfig{}),
 			},
@@ -102,14 +104,14 @@ func NewNetworkController(conf *NetworkConfig, eventer *event.TypeMux, journal *
 // messaging is implemented in the particular NodeAdapter interface
 type Network struct {
 	// input trigger events and other events
-	triggers *event.TypeMux // event triggers
-	events   *event.TypeMux // events
-	lock     sync.RWMutex
-	nodeMap  map[discover.NodeID]int
-	connMap  map[string]int
-	Nodes    []*Node `json:"nodes"`
-	Conns    []*Conn `json:"conns"`
-	messenger	func(p2p.MsgReadWriter) adapters.Messenger
+	triggers  *event.TypeMux // event triggers
+	events    *event.TypeMux // events
+	lock      sync.RWMutex
+	nodeMap   map[discover.NodeID]int
+	connMap   map[string]int
+	Nodes     []*Node `json:"nodes"`
+	Conns     []*Conn `json:"conns"`
+	messenger func(p2p.MsgReadWriter) adapters.Messenger
 	//
 	// adapters.Messenger
 	// node adapter function that creates the node model for
@@ -119,10 +121,10 @@ type Network struct {
 
 func NewNetwork(triggers, events *event.TypeMux) *Network {
 	return &Network{
-		triggers: triggers,
-		events:   events,
-		nodeMap:  make(map[discover.NodeID]int),
-		connMap:  make(map[string]int),
+		triggers:  triggers,
+		events:    events,
+		nodeMap:   make(map[discover.NodeID]int),
+		connMap:   make(map[string]int),
 		messenger: adapters.NewSimPipe,
 	}
 }
@@ -231,7 +233,7 @@ func (self *Conn) event(up, rev bool) *ConnEvent {
 type Msg struct {
 	One   *adapters.NodeId `json:"one"`
 	Other *adapters.NodeId `json:"other"`
-	Code  uint64		   `json:"conn"`
+	Code  uint64           `json:"conn"`
 }
 
 func (self *Msg) String() string {
@@ -242,8 +244,8 @@ func (self *Msg) event() *MsgEvent {
 	return &MsgEvent{
 		Action: "up",
 		//Type:   fmt.Sprintf("%d", self.Code),
-		Type:   "msg",
-		msg:    self,
+		Type: "msg",
+		msg:  self,
 	}
 }
 
@@ -286,7 +288,7 @@ func (self *Network) NewNode(conf *NodeConfig) error {
 		na:     na,
 	}
 	self.Nodes = append(self.Nodes, node)
-	glog.V(6).Infof("node %v created", id)
+	glog.V(logger.Detail).Infof("node %v created", id)
 	return nil
 }
 
@@ -340,7 +342,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 	if node.Up {
 		return fmt.Errorf("node %v already up", id)
 	}
-	glog.V(6).Infof("starting node %v: %v adapter %v", id, node.Up, node.Adapter())
+	glog.V(logger.Detail).Infof("starting node %v: %v adapter %v", id, node.Up, node.Adapter())
 	sa, ok := node.Adapter().(adapters.StartAdapter)
 	if ok {
 		err := sa.Start()
@@ -349,7 +351,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 		}
 	}
 	node.Up = true
-	glog.V(6).Infof("started node %v: %v", id, node.Up)
+	glog.V(logger.Detail).Infof("started node %v: %v", id, node.Up)
 
 	self.events.Post(&NodeEvent{
 		Action: "up",
@@ -491,7 +493,7 @@ func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64,
 		Code:  msgcode,
 	}
 	//self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
-	self.events.Post(msg.event())                                                                // should also include send status maybe
+	self.events.Post(msg.event()) // should also include send status maybe
 }
 
 // GetNodeAdapter(id) returns the NodeAdapter for node with id
