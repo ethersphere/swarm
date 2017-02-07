@@ -237,8 +237,8 @@ func (self *Msg) String() string {
 
 func (self *Msg) event() *MsgEvent {
 	return &MsgEvent{
-		Action: fmt.Sprintf("%d", self.Code),
-		Type:   "msg",
+		Action: "msg",
+		Type:   fmt.Sprintf("%d", self.Code),
 		msg:    self,
 	}
 }
