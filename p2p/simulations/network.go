@@ -37,6 +37,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
+type NetworkQuery struct {
+	Type string
+}
+
 type NetworkConfig struct {
 	// Type   NetworkType
 	// Config json.RawMessage // type-specific configs
@@ -233,8 +237,8 @@ func (self *Msg) String() string {
 
 func (self *Msg) event() *MsgEvent {
 	return &MsgEvent{
-		Action: fmt.Sprintf("%d", self.Code),
-		Type:   "msg",
+		Action: "msg",
+		Type:   fmt.Sprintf("%d", self.Code),
 		msg:    self,
 	}
 }

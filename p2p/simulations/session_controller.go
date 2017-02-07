@@ -47,7 +47,14 @@ func (self *ResourceHandlers) handler(method string) *ResourceHandler {
 		h = self.Update
 	case "DELETE":
 		h = self.Destroy
+	case "OPTIONS":
+		h = &ResourceHandler{
+			Handle: func(msg interface{}, c *ResourceController) (interface{}, error) {
+				return struct{}{}, nil
+			},
+		}
 	}
+
 	return h
 }
 
