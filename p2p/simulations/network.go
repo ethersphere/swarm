@@ -33,6 +33,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/logger/glog"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -108,6 +109,7 @@ type Network struct {
 	connMap  map[string]int
 	Nodes    []*Node `json:"nodes"`
 	Conns    []*Conn `json:"conns"`
+	messenger	func(p2p.MsgReadWriter) adapters.Messenger
 	//
 	// adapters.Messenger
 	// node adapter function that creates the node model for
@@ -121,6 +123,7 @@ func NewNetwork(triggers, events *event.TypeMux) *Network {
 		events:   events,
 		nodeMap:  make(map[discover.NodeID]int),
 		connMap:  make(map[string]int),
+		messenger: adapters.NewSimPipe,
 	}
 }
 
@@ -285,6 +288,13 @@ func (self *Network) NewNode(conf *NodeConfig) error {
 	self.Nodes = append(self.Nodes, node)
 	glog.V(6).Infof("node %v created", id)
 	return nil
+}
+
+func (self *Network) NewGenericSimNode(conf *NodeConfig) adapters.NodeAdapter {
+	id := conf.Id
+	na := adapters.NewSimNode(id, self, self.messenger)
+	return na
+	
 }
 
 // newConn adds a new connection to the network
@@ -481,7 +491,7 @@ func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64,
 		Other: receiverid,
 		Code:  msgcode,
 	}
-	self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
+	//self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
 	self.events.Post(msg.event())                                                                // should also include send status maybe
 }
 
