@@ -26,7 +26,55 @@ func TestMETASession(t *testing.T) {
 	c := http.Client{}
 	
 	reqs := []sessionrequest{
+		sessionrequest{method: "POST", url: "/", payload: &struct{Id string}{Id: "testnet"},},
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},	
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},	
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},	
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},	
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},	
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},	
+		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},	
 		
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 1},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 2},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 3},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 4},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 5},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 6},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 7},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 8},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 9},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint}{One: 10},},
+		
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 1, Other: 2,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 2, Other: 3,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 3, Other: 4,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 4, Other: 5,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 5, Other: 6,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 6, Other: 7,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 7, Other: 8,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 8, Other: 9,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 9, Other: 10,},},
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint}{One: 10, Other: 1,},},
+		
+		sessionrequest{method: "PUT", url: "/testnet/node/", payload: &struct{One uint
+Other uint
+AssetType uint}{One: 1, Other: 2, AssetType: 1}},
+			
+		/*
 		sessionrequest{method: "POST", url: "/", payload: &struct{Id string}{Id: "testnet"},},
 		
 		sessionrequest{method: "POST", url: "/testnet/node/", payload: nil,},
@@ -49,7 +97,9 @@ func TestMETASession(t *testing.T) {
 			AssetType uint8}{One: 1, Other: 2, AssetType: 1},},
 		
 		sessionrequest{method: "POST", url: "/testnet/debug/", payload: nil,},
-
+		*/
+		
+		sessionrequest{method: "POST", url: "/testnet/debug/", payload: nil,},
 	}
 	
 	for _, req := range reqs {
