@@ -122,8 +122,9 @@ type CodeMap struct {
 	messages   map[reflect.Type]uint64 // index of types to codes, for sending by type
 }
 
-func (self *CodeMap) GetCode(msg interface{}) uint64 {
-	return self.messages[reflect.TypeOf(msg)]
+func (self *CodeMap) GetCode(msg interface{}) (uint64, bool) {
+	code, found := self.messages[reflect.TypeOf(msg)]
+	return code, found
 }
 
 func NewCodeMap(name string, version uint, maxMsgSize int, msgs ...interface{}) *CodeMap {
@@ -248,12 +249,11 @@ func (self *Peer) Drop() {
 // this low level call will be wrapped by libraries providing routed or broadcast sends
 // but often just used to forward and push messages to directly connected peers
 func (self *Peer) Send(msg interface{}) error {
-	typ := reflect.TypeOf(msg)
-	code, found := self.ct.messages[typ]
+	code, found := self.ct.GetCode(msg)
 	if !found {
-		return errorf(ErrInvalidMsgType, "%v", typ)
+		return errorf(ErrInvalidMsgType, "%v", code)
 	}
-	glog.V(logger.Debug).Infof("=> %v %v (%d)", msg, typ, code)
+	glog.V(logger.Debug).Infof("=> %v (%d)", msg, code)
 	err := self.m.SendMsg(uint64(code), msg)
 	if err != nil {
 		self.Drop()

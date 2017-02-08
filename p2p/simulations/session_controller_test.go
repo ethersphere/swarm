@@ -161,7 +161,8 @@ func TestUpdate(t *testing.T) {
       "group": "nodes"
     }
   ],
-  "remove": []
+  "remove": [],
+  "message": []
 }`
 	resp := testResponse(t, "GET", url(port, "0"), bytes.NewReader([]byte("{}")))
 	if string(resp) != exp {

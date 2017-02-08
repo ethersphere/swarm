@@ -231,7 +231,7 @@ func (self *Conn) event(up, rev bool) *ConnEvent {
 type Msg struct {
 	One   *adapters.NodeId `json:"one"`
 	Other *adapters.NodeId `json:"other"`
-	Code  uint64
+	Code  uint64		   `json:"conn"`
 }
 
 func (self *Msg) String() string {
@@ -294,7 +294,6 @@ func (self *Network) NewGenericSimNode(conf *NodeConfig) adapters.NodeAdapter {
 	id := conf.Id
 	na := adapters.NewSimNode(id, self, self.messenger)
 	return na
-	
 }
 
 // newConn adds a new connection to the network
