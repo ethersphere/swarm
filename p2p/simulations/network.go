@@ -175,7 +175,7 @@ func (self *NodeEvent) String() string {
 }
 
 func (self *MsgEvent) String() string {
-	return fmt.Sprintf("<Action: %v, Type: %v, From: %v>\n", self.Action, self.Type, self.msg)
+	return fmt.Sprintf("<Action: %v, Type: %v, Data: %v>\n", self.Action, self.Type, self.msg)
 }
 
 func (self *Node) event(up bool) *NodeEvent {
@@ -237,8 +237,9 @@ func (self *Msg) String() string {
 
 func (self *Msg) event() *MsgEvent {
 	return &MsgEvent{
-		Action: "msg",
-		Type:   fmt.Sprintf("%d", self.Code),
+		Action: "up",
+		//Type:   fmt.Sprintf("%d", self.Code),
+		Type:   "msg",
 		msg:    self,
 	}
 }

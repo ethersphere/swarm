@@ -30,7 +30,7 @@ type CyElement struct {
 type CyUpdate struct {
 	Add     []*CyElement `json:"add"`
 	Remove  []string     `json:"remove"`
-	Message []string
+	Message []string	 `json:"message"`
 }
 
 func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
@@ -44,6 +44,14 @@ func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
 		if ev, ok := entry.(*NodeEvent); ok {
 			el = &CyElement{Group: "nodes", Data: &CyData{Id: ev.node.Id.Label()}}
 			action = ev.Action
+		} else if ev, ok := entry.(*MsgEvent); ok {
+			msg := ev.msg
+			id := ConnLabel(msg.One, msg.Other)
+			var source, target string
+			source = msg.One.Label()
+			target = msg.Other.Label()
+			el = &CyElement{Group: "msgs", Data: &CyData{Id: id, Source: source, Target: target}}
+			action = ev.Action
 		} else if ev, ok := entry.(*ConnEvent); ok {
 			// mutually exclusive directed edge (caller -> callee)
 			conn := ev.conn
@@ -56,14 +64,6 @@ func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
 				source = conn.One.Label()
 				target = conn.Other.Label()
 			}
-			el = &CyElement{Group: "edges", Data: &CyData{Id: id, Source: source, Target: target}}
-			action = ev.Action
-		} else if ev, ok := entry.(*MsgEvent); ok {
-			msg := ev.msg
-			id := ConnLabel(msg.One, msg.Other)
-			var source, target string
-			source = msg.One.Label()
-			target = msg.Other.Label()
 			el = &CyElement{Group: "edges", Data: &CyData{Id: id, Source: source, Target: target}}
 			action = ev.Action
 		} else {
