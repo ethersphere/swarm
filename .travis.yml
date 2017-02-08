@@ -13,15 +13,15 @@ matrix:
       go: 1.6.2
     - os: linux
       dist: trusty
-      go: 1.7
+      go: 1.7.4
     - os: osx
-      go: 1.7
+      go: 1.7.4
 
     # This builder does the Ubuntu PPA and Linux Azure uploads
     - os: linux
       dist: trusty
       sudo: required
-      go: 1.7
+      go: 1.7.4
       env:
         - ubuntu-ppa
         - azure-linux
@@ -55,7 +55,7 @@ matrix:
 
     # This builder does the OSX Azure, Android Maven and Azure and iOS CocoaPods and Azure uploads
     - os: osx
-      go: 1.7
+      go: 1.7.4
       env:
         - azure-osx
         - mobile
@@ -65,10 +65,11 @@ matrix:
 
         # Build the Android archive and upload it to Maven Central and Azure
         - brew update
-        - brew install android-sdk maven gpg
+        - travis_wait 60 brew install android-sdk android-ndk maven gpg
         - alias gpg="gpg2"
 
         - export ANDROID_HOME=/usr/local/opt/android-sdk
+        - export ANDROID_NDK=/usr/local/opt/android-ndk
         - echo "y" | android update sdk --no-ui --filter `android list sdk | grep "SDK Platform Android" | grep -E 'API 15|API 19|API 24' | awk '{print $1}' | cut -d '-' -f 1 | tr '\n' ','`
 
         - go run build/ci.go aar -signer ANDROID_SIGNING_KEY -deploy https://oss.sonatype.org -upload gethstore/builds
@@ -90,7 +91,7 @@ install:
   - go get golang.org/x/tools/cmd/cover
 script:
   - go run build/ci.go install
-  - go run build/ci.go test -coverage -vet
+  - go run build/ci.go test -coverage -vet -misspell
 
 notifications:
   webhooks:

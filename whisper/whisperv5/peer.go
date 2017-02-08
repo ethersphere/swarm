@@ -148,7 +148,7 @@ func (peer *Peer) expire() {
 		return true
 	})
 	// Dump all known but unavailable
-	for hash, _ := range unmark {
+	for hash := range unmark {
 		peer.known.Remove(hash)
 	}
 }
@@ -164,6 +164,9 @@ func (p *Peer) broadcast() error {
 			transmit = append(transmit, envelope)
 			p.mark(envelope)
 		}
+	}
+	if len(transmit) == 0 {
+		return nil
 	}
 	// Transmit the unknown batch (potentially empty)
 	if err := p2p.Send(p.ws, messagesCode, transmit); err != nil {

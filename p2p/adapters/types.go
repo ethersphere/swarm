@@ -17,6 +17,7 @@
 package adapters
 
 import (
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
@@ -90,4 +91,24 @@ type StartAdapter interface {
 type Reporter interface {
 	DidConnect(*NodeId, *NodeId) error
 	DidDisconnect(*NodeId, *NodeId) error
+}
+
+
+func RandomNodeId() *NodeId {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic("unable to generate key")
+	}
+	var id discover.NodeID
+	pubkey := crypto.FromECDSAPub(&key.PublicKey)
+	copy(id[:], pubkey[1:])
+	return &NodeId{id}
+}
+
+func RandomNodeIds(n int) []*NodeId {
+	var ids []*NodeId
+	for i := 0; i < n; i++ {
+		ids = append(ids, RandomNodeId())
+	}
+	return ids
 }
