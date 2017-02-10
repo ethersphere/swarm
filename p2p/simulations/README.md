@@ -36,7 +36,7 @@ All Controllers should implement interface `Controller` defined in `rest_api_ser
 
 *(Destroy handlers are deliberately not mentioned here)*
 
-The ResourceController residing directly below the SessionController is available at entrypoint "/" in HTTP requests.
+The `ResourceController` residing directly below the SessionController is available at entrypoint "/" in HTTP requests.
 
 
 In the generic architecture in `session_controller.go` the `NewNetworkController()` call implements an entrypoint accessible by the networkname passed to it through the NetworkConfig input struct. Thus:
@@ -54,7 +54,7 @@ will create an endpoint `/foobar` in which the handlers of the "NetworkControlle
 ### NETWORK CONTROLLER
 
 
-The network controller currently only implements an graph describing events since last equivalent call.
+The "NetworkController" currently only implements an graph describing events since last equivalent call. This graph can in turned be used by a layer the monitors, visualizes, reports etc...
 
 ### NODE CONTROLLER
 
