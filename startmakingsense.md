@@ -2,6 +2,13 @@
 
 ## TYPES
 
+### QUERY
+
+0. MATCH_REQUEST (Does this exist, I don't have a clue) 
+1. MATCH_RESPONSE (I say this is what you're looking for)
+2. MATCH_CONFLICT (you're lying...?)
+3.
+
 ### ANNOUNCEMENT
 
 0. Custom
