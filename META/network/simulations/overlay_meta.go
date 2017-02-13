@@ -173,7 +173,8 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 											expire,_ := time.Now().Add(METAnetwork.METADefaultExpireDuration).MarshalBinary()
 											protomsg := &METAnetwork.METAAssetNotification{Typ: args.AssetType - 1, Bzz: storage.ZeroKey, Exp: expire}
 											//networks.Current.Send(onenode.Id, othernode.Id, uint64(networks.Current.Ct.GetCode(protomsg)), protomsg) // %) - also not good that sendmsg needs uint64 while Codemap.messages maps uint ??
-											ppnet.Send(onenode.Id, othernode.Id, uint64(networks.Current.Ct.GetCode(protomsg)), protomsg) // %) - also not good that sendmsg needs uint64 while Codemap.messages maps uint ??
+											code, _ := ppnet.Ct.GetCode(protomsg)
+											ppnet.Send(onenode.Id, othernode.Id, code, protomsg) // %) - also not good that sendmsg needs uint64 while Codemap.messages maps uint ??
 											return &struct{}{}, nil // should have sent protocol message to peer, but don't know how to yet
 										}
 									}
