@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"runtime"
 	"strings"
+	"syscall"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
@@ -89,6 +90,14 @@ func StartNode(stack *node.Node) {
 		}
 		debug.Exit() // ensure trace and CPU profile data is flushed.
 		debug.LoudPanic("boom")
+	}()
+	go func() {
+		sigc := make(chan os.Signal, 1)
+		signal.Notify(sigc, syscall.SIGTERM)
+		defer signal.Stop(sigc)
+		<-sigc
+		glog.V(logger.Info).Infoln("Got sigterm, shutting down...")
+		stack.Stop()
 	}()
 }
 
