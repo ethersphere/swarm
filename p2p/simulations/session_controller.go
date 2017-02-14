@@ -11,6 +11,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
@@ -99,7 +100,7 @@ func NewSessionController() (*ResourceController, chan bool) {
 					if len(conf.Id) == 0 {
 						conf.Id = fmt.Sprintf("%d", parent.id)
 					}
-					glog.V(6).Infof("new network controller on %v", conf.Id)
+					glog.V(logger.Debug).Infof("new network controller on %v", conf.Id)
 					if parent != nil {
 						parent.SetResource(conf.Id, m)
 					}
@@ -165,7 +166,7 @@ func NewSessionController() (*ResourceController, chan bool) {
 
 			Destroy: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					glog.V(6).Infof("destroy handler called")
+					glog.V(logger.Debug).Infof("destroy handler called")
 					// this can quit the entire app (shut down the backend server)
 					quitc <- true
 					return empty, nil

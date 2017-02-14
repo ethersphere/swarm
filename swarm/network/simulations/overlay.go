@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
@@ -34,7 +35,7 @@ type SimNode struct {
 
 // the hive update ticker for hive
 func af() <-chan time.Time {
-	return time.NewTicker(5 * time.Second).C
+	return time.NewTicker(1 * time.Second).C
 }
 
 // Start() starts up the hive
@@ -101,15 +102,15 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 					if len(conf.Id) == 0 {
 						conf.Id = fmt.Sprintf("%d", 0)
 					}
-					glog.V(6).Infof("new network controller on %v", conf.Id)
+					glog.V(logger.Debug).Infof("new network controller on %v", conf.Id)
 					if parent != nil {
 						parent.SetResource(conf.Id, c)
 					}
-					ids := p2ptest.RandomNodeIds(10)
+					ids := p2ptest.RandomNodeIds(5)
 					for _, id := range ids {
 						ppnet.NewNode(&simulations.NodeConfig{Id: id})
 						ppnet.Start(id)
-						glog.V(6).Infof("node %v starting up", id)
+						glog.V(logger.Debug).Infof("node %v starting up", id)
 					}
 					// the nodes only know about their 2 neighbours (cyclically)
 					for i, _ := range ids {
@@ -131,7 +132,7 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 			// DELETE /
 			Destroy: &simulations.ResourceHandler{
 				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					glog.V(6).Infof("destroy handler called")
+					glog.V(logger.Debug).Infof("destroy handler called")
 					// this can quit the entire app (shut down the backend server)
 					quitc <- true
 					return struct{}{}, nil
@@ -144,7 +145,7 @@ func NewSessionController() (*simulations.ResourceController, chan bool) {
 // var server
 func main() {
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	glog.SetV(6)
+	glog.SetV(logger.Debug)
 	glog.SetToStderr(true)
 
 	c, quitc := NewSessionController()

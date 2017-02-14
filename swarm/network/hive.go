@@ -148,7 +148,7 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 	self.toggle = make(chan bool)
 	self.more = make(chan bool)
 	self.quit = make(chan bool)
-	glog.V(logger.Detail).Infof("hive started")
+	glog.V(logger.Debug).Infof("hive started")
 	// this loop is doing bootstrapping and maintains a healthy table
 	go self.keepAlive(af)
 	go func() {
@@ -176,7 +176,7 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 				}
 				var i uint
 				var err error
-				glog.V(logger.Debug).Infof("requesting bees of PO%03d from %v (each max %v)", order, self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
+				glog.V(logger.Detail).Infof("requesting bees of PO%03d from %v (each max %v)", order, self.PeersBroadcastSetSize, self.MaxPeersPerRequest)
 				self.EachLivePeer(nil, order, func(n Peer) bool {
 					glog.V(logger.Detail).Infof("%T sent to %v", req, n.ID())
 					err = n.Send(req)
@@ -188,18 +188,18 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 					}
 					return true
 				})
-				glog.V(logger.Debug).Infof("sent %T to %d/%d peers", req, i, self.PeersBroadcastSetSize)
+				glog.V(logger.Detail).Infof("sent %T to %d/%d peers", req, i, self.PeersBroadcastSetSize)
 			}
 			glog.V(5).Infof("%v", self)
 
 			select {
 			case self.toggle <- want:
-				glog.V(logger.Debug).Infof("keep hive alive: %v", want)
+				glog.V(logger.Detail).Infof("keep hive alive: %v", want)
 			case <-self.quit:
 				return
 			}
 		}
-		glog.V(logger.Detail).Infof("%v", self)
+		glog.V(logger.Warn).Infof("%v", self
 	}()
 	return
 }
@@ -214,12 +214,12 @@ func (self *Hive) ticker() <-chan time.Time {
 // wake state is toggled by writing to self.toggle
 // it restarts if the table becomes non-full again due to disconnections
 func (self *Hive) keepAlive(af func() <-chan time.Time) {
-	glog.V(logger.Debug).Infof("keep alive loop started")
+	glog.V(logger.Detail).Infof("keep alive loop started")
 	alarm := af()
 	for {
 		select {
 		case <-alarm:
-			glog.V(logger.Debug).Infof("wake up: make hive alive")
+			glog.V(logger.Detail).Infof("wake up: make hive alive")
 			self.wake()
 		case need := <-self.toggle:
 			if alarm == nil && need {
@@ -243,10 +243,10 @@ func (self *Hive) Stop() {
 func (self *Hive) wake() {
 	select {
 	case self.more <- true:
-		glog.V(logger.Debug).Infof("hive woken up")
+		glog.V(logger.Detail).Infof("hive woken up")
 	case <-self.quit:
 	default:
-		glog.V(logger.Debug).Infof("hive already awake")
+		glog.V(logger.Detail).Infof("hive already awake")
 	}
 }
 
@@ -254,7 +254,7 @@ func (self *Hive) wake() {
 // to register a connected (live) peer
 func (self *Hive) Add(p Peer) error {
 	defer self.wake()
-	glog.V(logger.Detail).Infof("add new bee %v", p)
+	glog.V(logger.Debug).Infof("to add new bee %v", p)
 	self.On(p)
 
 	self.lock.Lock()
