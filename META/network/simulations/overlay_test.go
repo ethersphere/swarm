@@ -50,7 +50,7 @@ func TestMETATmpName(t *testing.T) {
 	tmpnameupdateone := &METANameRegisterIF {
 		Squealernode: 1,
 		Victimnode: hex.EncodeToString((*((*[discover.NodeIDBits / 8]byte)(unsafe.Pointer(adapters.RandomNodeId()))))[:]),
-		Name: "fingered",
+		Name: "foo",
 		Swarmhash: hashit.Sum(bytes.NewBufferString(stronetohash).Bytes()),
 	}
 
@@ -60,7 +60,7 @@ func TestMETATmpName(t *testing.T) {
 	tmpnameupdatetwo := &METANameRegisterIF {
 		Squealernode: 1,
 		Victimnode: hex.EncodeToString((*((*[discover.NodeIDBits / 8]byte)(unsafe.Pointer(adapters.RandomNodeId()))))[:]),
-		Name: "fingered",
+		Name: "bar",
 		Swarmhash: hashit.Sum(bytes.NewBufferString(strtwotohash).Bytes()),
 	}
 	

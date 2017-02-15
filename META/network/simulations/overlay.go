@@ -236,9 +236,25 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 							Retrieve: &p2psimulations.ResourceHandler{
 								Handle: func(msg interface{}, parent *p2psimulations.ResourceController) (interface{}, error) {
 									
-									list := &struct{Names [][2]string}{} // making manual list because serialization of response from map doesn't seem to be implemented
-									args,ok := msg.(*METANameListIF)
+									list := []struct{Name string
+										Node string
+										Swarmhash string}{} // making manual list because serialization of response from map doesn't seem to be implemented
 									
+									for k, v := range METAnetwork.METATmpSwarmRegistryLookup {
+										entry := struct{Name string
+											Node string
+											Swarmhash string
+										}{
+											Name: k,
+											Node: v[0],
+											Swarmhash: v[1],
+										}
+										list = append(list, entry)
+									}
+									
+									//args,ok := msg.(*METANameListIF)
+									
+									/*
 									if ok {
 										if args.Reverse {
 											//return &struct{List map[*storage.Key]*adapters.NodeId}{List: METAnetwork.METATmpSwarmRegistryLookupReverse}, nil
@@ -253,7 +269,7 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 									for k, v := range METAnetwork.METATmpSwarmRegistryLookup {
 										list.Names = append(list.Names, [2]string{fmt.Sprintf("%v",k),fmt.Sprintf("%v",v)})
 									}
-									
+									*/
 									return list, nil
 									
 								}, 

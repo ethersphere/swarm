@@ -41,10 +41,11 @@ func METAProtocol(protopeers *PeerCollection, ct *protocols.CodeMap, na adapters
 		
 		peer.Register(&METATmpName{}, func(msg interface{}) error {
 			t := msg.(*METATmpName)	
+			METATmpSwarmRegistryLookup[t.Name] = [2]string{fmt.Sprintf("%v",t.Node), fmt.Sprintf("%v",t.Swarmhash)}
 			// get duplicates when using pointer, even if the pointer is to an element in a persistent array, why?
 			// cant use storage.Key as map key, why?
-			METATmpSwarmRegistryLookup[t.Node] = fmt.Sprintf("%v",t.Swarmhash)
-			METATmpSwarmRegistryLookupReverse[fmt.Sprintf("%v",t.Swarmhash)] = t.Node
+			//METATmpSwarmRegistryLookup[t.Node] = fmt.Sprintf("%v",t.Swarmhash)
+			//METATmpSwarmRegistryLookupReverse[fmt.Sprintf("%v",t.Swarmhash)] = t.Node
 			/*
 			METATmpSwarmRegistryKeys = append(METATmpSwarmRegistryKeys, t.Swarmhash)
 			swarmhashp := &METATmpSwarmRegistryKeys[len(METATmpSwarmRegistryKeys)-1]
