@@ -202,6 +202,15 @@ Removes a path from the manifest
 Cleans database of corrupted entries.
 `,
 		},
+		{
+			Action:    import_ldb,
+			Name:      "import",
+			Usage:     "Imports chunks from one datastore to another",
+			ArgsUsage: "<source-datadir> [source-bzzaccount]",
+			Description: `
+Imports chunks from one datastore to another
+`,
+		},
 	}
 
 	app.Flags = []cli.Flag{

@@ -14,26 +14,4 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package main
-
-import (
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"gopkg.in/urfave/cli.v1"
-)
-
-func cleandb(ctx *cli.Context) {
-	args := ctx.Args()
-	if len(args) != 1 {
-		utils.Fatalf("Need path to chunks database as the first and only argument")
-	}
-
-	chunkDbPath := args[0]
-	hash := storage.MakeHashFunc("SHA3")
-	//dbStore, err := storage.NewDbStore(chunkDbPath, hash, 10000000, tmpKeyToUint8)
-	dbStore, err := storage.NewDbStore(chunkDbPath, hash, 10000000, func(storage.Key) uint8 { return 0 })
-	if err != nil {
-		utils.Fatalf("Cannot initialise dbstore: %v", err)
-	}
-	dbStore.Cleanup()
-}
+package storage

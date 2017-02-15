@@ -63,7 +63,7 @@ func TestBzzrGetPath(t *testing.T) {
 		Radius:        0,
 	}
 
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc("SHA3"), storeparams)
+	localStore, err := storage.NewLocalStore(storage.MakeHashFunc("SHA3"), storeparams, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
