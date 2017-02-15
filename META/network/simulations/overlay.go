@@ -41,11 +41,15 @@ type NodeIF struct {
 	Other uint
 }
 
-type METANameIF struct {
+type METANameRegisterIF struct {
 	Squealernode uint
 	Victimnode string
 	Name string
 	Swarmhash storage.Key
+}
+
+type METANameListIF struct {
+	Reverse bool
 }
 
 type Network struct {
@@ -53,7 +57,7 @@ type Network struct {
 	messenger func(p2p.MsgReadWriter) adapters.Messenger
 	Id string
 	Ct *protocols.CodeMap
-	Peers *METAnetwork.PeerCollection
+	Peers map[*adapters.NodeId]*METAnetwork.PeerCollection
 }
 
 func (self *Network) String() string {
@@ -64,8 +68,9 @@ func (self *Network) NewSimNode(conf *p2psimulations.NodeConfig) adapters.NodeAd
 	wg := sync.WaitGroup{}
 	id := conf.Id
 	na := adapters.NewSimNode(id, self.Network, self.messenger)
-	self.Peers = METAnetwork.NewPeerCollection()
-	na.Run = METAnetwork.METAProtocol(self.Peers, self.Ct, na, &wg).Run
+	pp := METAnetwork.NewPeerCollection()
+	na.Run = METAnetwork.METAProtocol(pp, self.Ct, na, &wg).Run
+	self.Peers[na.Id] = pp
 	return na
 }
 
@@ -76,6 +81,7 @@ func NewNetwork(network *p2psimulations.Network, messenger func(p2p.MsgReadWrite
 		messenger: messenger,
 		Id: id,
 		Ct: METAnetwork.NewMETACodeMap(&METAnetwork.METATmpName{}),
+		Peers: make(map[*adapters.NodeId]*METAnetwork.PeerCollection),
 	}
 	n.SetNaf(n.NewSimNode)
 	return n
@@ -88,7 +94,7 @@ func (self *Network) Broadcast(senderid *adapters.NodeId, protomsg interface{}) 
 		Code:  12345, // TODO get this from lookup msg structure somehow
 	}
 
-	for _,peer := range self.Peers.Peers {
+	for _,peer := range self.Peers[senderid].Peers {
 		peer.Send(protomsg)
 		a:= &adapters.NodeId{
 			peer.ID(),
@@ -205,7 +211,7 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 							Create: &p2psimulations.ResourceHandler{
 								Handle: func(msg interface{}, parent *p2psimulations.ResourceController) (interface{}, error) {
 									
-									args,ok := msg.(*METANameIF)
+									args,ok := msg.(*METANameRegisterIF)
 									onenode := ppnet.Nodes[args.Squealernode - 1]
 									//othernode := ppnet.Nodes[1]
 									
@@ -225,7 +231,33 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 									}
 									return &struct{}{}, nil
 								},
-								Type: reflect.TypeOf(&METANameIF{}), 
+								Type: reflect.TypeOf(&METANameRegisterIF{}), 
+							},
+							Retrieve: &p2psimulations.ResourceHandler{
+								Handle: func(msg interface{}, parent *p2psimulations.ResourceController) (interface{}, error) {
+									
+									list := &struct{Names [][2]string}{} // making manual list because serialization of response from map doesn't seem to be implemented
+									args,ok := msg.(*METANameListIF)
+									
+									if ok {
+										if args.Reverse {
+											//return &struct{List map[*storage.Key]*adapters.NodeId}{List: METAnetwork.METATmpSwarmRegistryLookupReverse}, nil
+											for k, v := range METAnetwork.METATmpSwarmRegistryLookupReverse {
+												list.Names = append(list.Names, [2]string{fmt.Sprintf("%v",k),fmt.Sprintf("%v",v)})
+											}
+											return list, nil
+										}
+									}
+									
+									//return &struct{List map[*adapters.NodeId]*storage.Key}{List: METAnetwork.METATmpSwarmRegistryLookup}, nil
+									for k, v := range METAnetwork.METATmpSwarmRegistryLookup {
+										list.Names = append(list.Names, [2]string{fmt.Sprintf("%v",k),fmt.Sprintf("%v",v)})
+									}
+									
+									return list, nil
+									
+								}, 
+								Type: reflect.TypeOf(&METANameListIF{}), 
 							},
 						},
 					))

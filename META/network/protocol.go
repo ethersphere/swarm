@@ -2,12 +2,11 @@ package network
 
 import (
 	"sync"
-	//"time"
+	"fmt"
 	
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
-	//"github.com/ethereum/go-ethereum/swarm/storage"
 	
 	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
@@ -41,9 +40,17 @@ func METAProtocol(protopeers *PeerCollection, ct *protocols.CodeMap, na adapters
 		}
 		
 		peer.Register(&METATmpName{}, func(msg interface{}) error {
-			glog.V(logger.Debug).Infof("Beforeparse")
 			t := msg.(*METATmpName)	
-			glog.V(logger.Debug).Infof("Peer received tmpname name '%s'", t.Name)
+			// get duplicates when using pointer, even if the pointer is to an element in a persistent array, why?
+			// cant use storage.Key as map key, why?
+			METATmpSwarmRegistryLookup[t.Node] = fmt.Sprintf("%v",t.Swarmhash)
+			METATmpSwarmRegistryLookupReverse[fmt.Sprintf("%v",t.Swarmhash)] = t.Node
+			/*
+			METATmpSwarmRegistryKeys = append(METATmpSwarmRegistryKeys, t.Swarmhash)
+			swarmhashp := &METATmpSwarmRegistryKeys[len(METATmpSwarmRegistryKeys)-1]
+			METATmpSwarmRegistryLookup[t.Node] = *swarmhashp
+			METATmpSwarmRegistryLookupReverse[*swarmhashp] = t.Node
+			*/ 
 			return nil
 		})
 		

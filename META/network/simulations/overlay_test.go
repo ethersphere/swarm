@@ -36,38 +36,60 @@ type sessionrequest struct {
 func TestMETATmpName(t *testing.T) {
 	hostport := "http://127.0.0.1:8888"
 	c := http.Client{}
-	strtohash := "fingered"
-	strlengthtohash := make([]byte, 8)
-	binary.LittleEndian.PutUint64(strlengthtohash, uint64(len(strtohash)))
-	
-	bytestohash := [][]byte{
-		strlengthtohash,
-		bytes.NewBufferString(strtohash).Bytes(),
-	}
-	concatbytestohash := bytes.Join(bytestohash, nil)
-	
-	t.Logf("concatbytes %v", concatbytestohash)
+	stronetohash := "foo"
+	strtwotohash := "bar"
+	stronelengthtohash := make([]byte, 8)
+	strtwolengthtohash := make([]byte, 8)
+	binary.LittleEndian.PutUint64(stronelengthtohash, uint64(len(stronetohash)))
+	binary.LittleEndian.PutUint64(strtwolengthtohash, uint64(len(strtwotohash)))
 	
 	networkname := "meta"
 	hashit := storage.MakeHashFunc("SHA3")()
+	hashit.Write(stronelengthtohash)
 	
-	
-	tmpnameupdate := &METANameIF {
+	tmpnameupdateone := &METANameRegisterIF {
 		Squealernode: 1,
 		Victimnode: hex.EncodeToString((*((*[discover.NodeIDBits / 8]byte)(unsafe.Pointer(adapters.RandomNodeId()))))[:]),
 		Name: "fingered",
-		Swarmhash: hashit.Sum(concatbytestohash),
+		Swarmhash: hashit.Sum(bytes.NewBufferString(stronetohash).Bytes()),
+	}
+
+	hashit.Reset()
+	hashit.Write(strtwolengthtohash)
+
+	tmpnameupdatetwo := &METANameRegisterIF {
+		Squealernode: 1,
+		Victimnode: hex.EncodeToString((*((*[discover.NodeIDBits / 8]byte)(unsafe.Pointer(adapters.RandomNodeId()))))[:]),
+		Name: "fingered",
+		Swarmhash: hashit.Sum(bytes.NewBufferString(strtwotohash).Bytes()),
+	}
+	
+	tmpnamelist := &METANameListIF {
+		Reverse: false,
+	}
+	
+	tmpnamelistreverse := &METANameListIF {
+		Reverse: true,
 	}
 	
 	reqs := []sessionrequest{
 		sessionrequest{method: "POST", url: "/", payload: &struct{Id string}{Id: networkname},},
 		sessionrequest{method: "POST", url: "/" + networkname + "/node/", payload: nil,},
 		sessionrequest{method: "POST", url: "/" + networkname + "/node/", payload: nil,},
+		sessionrequest{method: "POST", url: "/" + networkname + "/node/", payload: nil,},
 		sessionrequest{method: "PUT", url: "/" + networkname + "/node/", payload: &struct{One uint}{One: 1},},
 		sessionrequest{method: "PUT", url: "/" + networkname + "/node/", payload: &struct{One uint}{One: 2},},
+		sessionrequest{method: "PUT", url: "/" + networkname + "/node/", payload: &struct{One uint}{One: 3},},
 		sessionrequest{method: "PUT", url: "/" + networkname + "/node/", payload: &struct{One uint
 Other uint}{One: 1, Other: 2,},},
-		sessionrequest{method: "POST", url: "/" + networkname + "/node/tmpname/", payload: tmpnameupdate,},
+		sessionrequest{method: "PUT", url: "/" + networkname + "/node/", payload: &struct{One uint
+Other uint}{One: 1, Other: 3,},},
+		sessionrequest{method: "POST", url: "/" + networkname + "/node/tmpname/", payload: tmpnameupdateone,},
+		sessionrequest{method: "GET", url: "/" + networkname + "/node/tmpname/", payload: tmpnamelist,},
+		sessionrequest{method: "GET", url: "/" + networkname + "/node/tmpname/", payload: tmpnamelistreverse,},
+		sessionrequest{method: "POST", url: "/" + networkname + "/node/tmpname/", payload: tmpnameupdatetwo,},
+		sessionrequest{method: "GET", url: "/" + networkname + "/node/tmpname/", payload: tmpnamelist,},
+		sessionrequest{method: "GET", url: "/" + networkname + "/node/tmpname/", payload: tmpnamelistreverse,},
 	}
 	
 	playReqs(t, reqs, hostport, c)

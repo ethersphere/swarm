@@ -6,8 +6,17 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
+/*
 type METATmpName struct {
 	METAHeader
+	Name string
+	Swarmhash storage.Key
+	Node adapters.NodeId
+}
+*/
+
+type METATmpName struct {
+	*METAEnvelope
 	Name string
 	Swarmhash storage.Key
 	Node adapters.NodeId
@@ -15,13 +24,13 @@ type METATmpName struct {
 
 func NewMETATmpName() (mtn *METATmpName) {
 	mtn = &METATmpName{
-		METAHeader: NewMETAEnvelope(),
+		METAEnvelope: NewMETAEnvelope(),
 		Node: adapters.NodeId{},
 	}
 	return
 }
 
 func (mtn *METATmpName) AsString() string {
-	return fmt.Sprintf("METATmpName '%s' is node pointing to swarmhash '%v'", mtn.Name, mtn.Swarmhash) 
+	return fmt.Sprintf("METATmpName '%s' is node '%v' pointing to swarmhash '%v'", mtn.Name, mtn.Node, mtn.Swarmhash) 
 }
 
