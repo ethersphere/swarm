@@ -10,6 +10,15 @@ func init() {
 	
 }
 
+func TestNewMETATmpPayload(t *testing.T) {
+	a := NewMETATmpPayload()
+	a.Add(5, "testiubsegseg", &struct{
+		Id uint
+		Name string
+	}{Id: 12345, Name: "Foobar",})
+	t.Logf("%v", a)
+}
+
 func TestNewMETAAnnounce(t *testing.T) {
 	a := NewMETAAnnounce()
 	
@@ -24,7 +33,7 @@ func TestNewMETATmpName(t *testing.T) {
 	
 	a.SetUuid(0x12345678)
 	a.SetCommand(META_CUSTOM)
-	a.Swarm = storage.ZeroKey
+	a.Swarmhash = storage.ZeroKey
 	a.Name = "schmardian"
 	t.Logf("%v\n", a)
 }

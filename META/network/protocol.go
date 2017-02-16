@@ -39,28 +39,29 @@ func METAProtocol(protopeers *PeerCollection, ct *protocols.CodeMap, na adapters
 			wg.Add(1)
 		}
 		
-		peer.Register(&METATmpName{}, func(msg interface{}) error {
-			t := msg.(*METATmpName)	
-			METATmpSwarmRegistryLookup[t.Name] = [2]string{fmt.Sprintf("%v",t.Node), fmt.Sprintf("%v",t.Swarmhash)}
-			// get duplicates when using pointer, even if the pointer is to an element in a persistent array, why?
-			// cant use storage.Key as map key, why?
-			//METATmpSwarmRegistryLookup[t.Node] = fmt.Sprintf("%v",t.Swarmhash)
-			//METATmpSwarmRegistryLookupReverse[fmt.Sprintf("%v",t.Swarmhash)] = t.Node
-			/*
-			METATmpSwarmRegistryKeys = append(METATmpSwarmRegistryKeys, t.Swarmhash)
-			swarmhashp := &METATmpSwarmRegistryKeys[len(METATmpSwarmRegistryKeys)-1]
-			METATmpSwarmRegistryLookup[t.Node] = *swarmhashp
-			METATmpSwarmRegistryLookupReverse[*swarmhashp] = t.Node
-			*/ 
+		peer.Register(&METAAnnounce{}, func(msg interface{}) error {
+			hm := msg.(*METAAnnounce)	
+			glog.V(logger.Debug).Infof("Peer received announce", hm)
+			glog.V(logger.Debug).Infof("Command: %v", hm.GetCommand())
+			glog.V(logger.Debug).Infof("Uuid: %v", hm.GetUuid())
+			for i, p := range hm.Payload {
+				glog.V(logger.Debug).Infof("Payload #%d type %d length %d:", i, p.GetType(), p.Length())
+				for ii := 0; ii < p.Length(); ii++ {
+					label, data := p.GetRawEntry(ii)
+					//glog.V(logger.Debug).Infof("- Entry #%d Label %s Data %v:", ii, p.Label[ii], p.Data[ii])
+					glog.V(logger.Debug).Infof("- Entry #%d Label %s Data %v:", ii, label, data)
+				}
+			}
 			return nil
 		})
 		
-		/*peer.Register(&METAAssetNotification{}, func(msg interface{}) error {
-			hm := msg.(*METAAssetNotification)	
-			glog.V(logger.Debug).Infof("Peer received asset notification %v", METAAssetType[hm.Typ])
+		peer.Register(&METATmpName{}, func(msg interface{}) error {
+			t := msg.(*METATmpName)	
+			METATmpSwarmRegistryLookup[t.Name] = [2]string{fmt.Sprintf("%v",t.Node), fmt.Sprintf("%v",t.Swarmhash)}
 			return nil
-		})*/
+		})
 		
+	
 		protopeers.Add(peer)
 		
 		err := peer.Run()

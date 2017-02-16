@@ -490,7 +490,7 @@ func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64,
 		Other: receiverid,
 		Code:  msgcode,
 	}
-	//self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
+	self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
 	self.events.Post(msg.event())                                                                // should also include send status maybe
 }
 

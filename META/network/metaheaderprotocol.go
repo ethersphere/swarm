@@ -8,16 +8,6 @@ const (
 	META_CUSTOM = iota
 )
 
-const (
-	_ = iota
-	META_DATA_AUTHID
-	META_DATA_WORK
-	META_DATA_ARTIST
-	META_DATA_MEDIA
-	META_DATA_LICENCE
-	META_DATA_USAGE
-)
-
 type METAHeader interface {
 	GetUuid() uint64
 	SetUuid(uint64)
@@ -26,29 +16,29 @@ type METAHeader interface {
 }
 
 type METAEnvelope struct {
-	command uint8
-	uuid []byte
+	Command uint8
+	Uuid []byte
 }
 
 func NewMETAEnvelope() *METAEnvelope {
 	return &METAEnvelope{
-		command: 0,
-		uuid: make([]byte, 8),
+		Command: 0,
+		Uuid: make([]byte, 8),
 	}
 }
 
 func (mh *METAEnvelope) SetUuid(u uint64) {
-	binary.LittleEndian.PutUint64(mh.uuid, uint64(u))
+	binary.LittleEndian.PutUint64(mh.Uuid, uint64(u))
 }
 
 func (mh *METAEnvelope) GetUuid() uint64 {
-	return binary.LittleEndian.Uint64(mh.uuid)
+	return binary.LittleEndian.Uint64(mh.Uuid)
 }
 
 func (mh *METAEnvelope) SetCommand(u uint8) {
-	mh.command = u
+	mh.Command = u
 }
 
 func (mh *METAEnvelope) GetCommand() uint8 {
-	return mh.command
+	return mh.Command
 }

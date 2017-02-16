@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"reflect"
 	"sync"
+	"bytes"
+	"encoding/binary"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/event"
 	//"github.com/ethereum/go-ethereum/logger"
@@ -41,11 +44,27 @@ type NodeIF struct {
 	Other uint
 }
 
+type NodeTmpSendSimpleMsgIF struct {
+	One uint
+	Other uint
+	Uuid uint64
+	Protocol string
+	Command uint8
+	Payload []METAPayloadIF
+}
+
 type METANameRegisterIF struct {
 	Squealernode uint
 	Victimnode string
 	Name string
 	Swarmhash storage.Key
+}
+
+type METAPayloadIF struct {
+	Type uint8
+	Label string
+	Numeric bool
+	Data string
 }
 
 type METANameListIF struct {
@@ -80,7 +99,7 @@ func NewNetwork(network *p2psimulations.Network, messenger func(p2p.MsgReadWrite
 		Network:   network,
 		messenger: messenger,
 		Id: id,
-		Ct: METAnetwork.NewMETACodeMap(&METAnetwork.METATmpName{}),
+		Ct: METAnetwork.NewMETACodeMap(&METAnetwork.METAAnnounce{}, &METAnetwork.METATmpName{}),
 		Peers: make(map[*adapters.NodeId]*METAnetwork.PeerCollection),
 	}
 	n.SetNaf(n.NewSimNode)
@@ -150,14 +169,10 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 						&p2psimulations.ResourceHandlers{
 							Create: &p2psimulations.ResourceHandler{
 								Handle: func(msg interface{}, parent *p2psimulations.ResourceController) (interface{}, error) {
-									//var networks *NetworkList
 									var nodeid *adapters.NodeId
 									
-									//t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
-									//networks = t_network.(*NetworkList)
 									nodeid = p2ptest.RandomNodeId()
 									
-									//networks.Current.NewNode(&p2psimulations.NodeConfig{Id: nodeid})
 									ppnet.NewNode(&p2psimulations.NodeConfig{Id: nodeid})
 									glog.V(6).Infof("added node %v to network %v", nodeid, ppnet)
 									
@@ -167,23 +182,14 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 							},
 							Retrieve: &p2psimulations.ResourceHandler{
 								Handle: func(msg interface{}, parent *p2psimulations.ResourceController) (interface{}, error) {
-									//var networks *NetworkList
-									//t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
-									//networks = t_network.(*NetworkList)
-									
-									//return &NodeResult{Nodes: networks.Current.Nodes}, nil
 									return &NodeResult{Nodes: ppnet.Nodes}, nil
 								},
 							},
 							Update: &p2psimulations.ResourceHandler{
 								Handle: func(msg interface{}, parent *p2psimulations.ResourceController) (interface{}, error) {
-									//var networks *NetworkList
 									var othernode *p2psimulations.Node
-									//t_network, _ := c.Retrieve.Handle(nil, nil) // parent is the sessioncontroller
-									//networks = t_network.(*NetworkList)
 									
 									args := msg.(*NodeIF)
-									//onenode := networks.Current.Nodes[args.One - 1]
 									onenode := ppnet.Nodes[args.One - 1]
 									
 									if args.Other == 0 {
@@ -210,25 +216,30 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 						&p2psimulations.ResourceHandlers{
 							Create: &p2psimulations.ResourceHandler{
 								Handle: func(msg interface{}, parent *p2psimulations.ResourceController) (interface{}, error) {
-									
+								
 									args,ok := msg.(*METANameRegisterIF)
 									onenode := ppnet.Nodes[args.Squealernode - 1]
-									//othernode := ppnet.Nodes[1]
 									
 									if ok {							
 										if storage.IsZeroKey(args.Swarmhash) { // inputcheck
 											glog.V(6).Infof("Name/swarm update update needs swarm hash. dude")
 											return &struct{}{}, nil
 										}
-										//squealer := ppnet.Nodes[args.Squealernode - 1]
 										protomsg := METAnetwork.NewMETATmpName()
 										protomsg.Swarmhash = args.Swarmhash
 										protomsg.Name = args.Name
 										protomsg.Node = *adapters.NewNodeIdFromHex(args.Victimnode)
-										//protomsg.Node = othernode.Id
-										glog.V(6).Infof("Broadcasting update: %v", protomsg)
+										// update local registry
+										METAnetwork.METATmpSwarmRegistryLookup[protomsg.Name] = [2]string{fmt.Sprintf("%v",protomsg.Node), fmt.Sprintf("%v",protomsg.Swarmhash)}
+										// then pass on to the others
 										ppnet.Broadcast(onenode.Id, protomsg)
+										
+										return &struct{}{}, nil
+										
+										
 									}
+									
+									
 									return &struct{}{}, nil
 								},
 								Type: reflect.TypeOf(&METANameRegisterIF{}), 
@@ -252,28 +263,55 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 										list = append(list, entry)
 									}
 									
-									//args,ok := msg.(*METANameListIF)
 									
-									/*
-									if ok {
-										if args.Reverse {
-											//return &struct{List map[*storage.Key]*adapters.NodeId}{List: METAnetwork.METATmpSwarmRegistryLookupReverse}, nil
-											for k, v := range METAnetwork.METATmpSwarmRegistryLookupReverse {
-												list.Names = append(list.Names, [2]string{fmt.Sprintf("%v",k),fmt.Sprintf("%v",v)})
-											}
-											return list, nil
-										}
-									}
-									
-									//return &struct{List map[*adapters.NodeId]*storage.Key}{List: METAnetwork.METATmpSwarmRegistryLookup}, nil
-									for k, v := range METAnetwork.METATmpSwarmRegistryLookup {
-										list.Names = append(list.Names, [2]string{fmt.Sprintf("%v",k),fmt.Sprintf("%v",v)})
-									}
-									*/
 									return list, nil
 									
 								}, 
 								Type: reflect.TypeOf(&METANameListIF{}), 
+							},
+						},
+					))
+					
+					nodecontroller.SetResource("msg", p2psimulations.NewResourceContoller (
+						&p2psimulations.ResourceHandlers{
+							Create: &p2psimulations.ResourceHandler{
+								Handle: func(msg interface{}, parent *p2psimulations.ResourceController) (interface{}, error) {
+								
+									args, ok := msg.(*NodeTmpSendSimpleMsgIF)
+									
+									if ok {
+										onenode := ppnet.Nodes[args.One - 1]
+										othernode := ppnet.Nodes[args.Other - 1]
+										
+										switch args.Protocol {
+											case "METAAnnounce":
+																						
+												announce := METAnetwork.NewMETAAnnounce()
+												announce.SetCommand(args.Command)
+												announce.SetUuid(args.Uuid)
+												
+												for _,pl := range args.Payload {
+													var data []byte
+													if pl.Numeric {
+														data = make([]byte, 8)
+														i,_ := strconv.ParseInt(pl.Data, 10, 8)
+														glog.V(6).Infof("data is numeric ParseInt '%s' => %v", pl.Data, i)
+														binary.PutVarint(data, int64(i))
+													} else {
+														data = bytes.NewBufferString(pl.Data).Bytes()
+													}
+													
+													announce.AddPayload(pl.Type) 
+													announce.Payload[0].Add(pl.Label, data)
+												}
+												
+												ppnet.Send(onenode.Id, othernode.Id, 0, announce) //GetNode(onenode.Id).na.(*adapters.SimNode).GetPeer(othernode.Id).SendMsg(0, protomsg)
+										}
+									}
+									
+									return &struct{}{}, nil
+								},
+								Type: reflect.TypeOf(&NodeTmpSendSimpleMsgIF{}), 
 							},
 						},
 					))

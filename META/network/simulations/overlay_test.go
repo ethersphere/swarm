@@ -9,18 +9,24 @@ import (
 	"encoding/json"
 	"encoding/binary"
 	"io/ioutil"
+	"time"
 	
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
-	
+
+
+	METAnetwork "github.com/ethereum/go-ethereum/META/network"
 	//"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 )
 
+var bodyout bool
+
 func init() {
 	glog.SetV(6)
 	glog.SetToStderr(true)
+	bodyout = false
 }
 
 type sessionrequestpayload interface {
@@ -32,10 +38,56 @@ type sessionrequest struct {
 	payload sessionrequestpayload
 }
 
+func TestMETASendMsg(t *testing.T) {
+	hostport := "http://127.0.0.1:8888"
+	c := http.Client{}
+	networkname := "meta"
+
+	testmsg := &NodeTmpSendSimpleMsgIF{
+		One: 1,
+		Other: 2,
+		Protocol: "METAAnnounce",
+		Command: METAnetwork.META_ANNOUNCE_RENDERING_PERSISTENT,
+		Uuid: uint64(time.Now().Unix()),
+		Payload: []METAPayloadIF{
+			METAPayloadIF{
+				Type: METAnetwork.META_DATA_USAGE,
+				Label: "play",
+				Numeric: true,
+				Data: "1",
+			},
+			METAPayloadIF{
+				Type: METAnetwork.META_DATA_AUTHID,
+				Label: "ISRC",
+				Numeric: false,
+				Data: "DE-0123-ABC",
+			},
+			
+		},
+	}
+	
+	t.Logf("sending proto %v", testmsg)
+	
+	reqs := []sessionrequest{
+		sessionrequest{method: "POST", url: "/", payload: &struct{Id string}{Id: networkname},},
+		sessionrequest{method: "POST", url: "/" + networkname + "/node/", payload: nil,},
+		sessionrequest{method: "POST", url: "/" + networkname + "/node/", payload: nil,},
+		sessionrequest{method: "PUT", url: "/" + networkname + "/node/", payload: &struct{One uint}{One: 1},},
+		sessionrequest{method: "PUT", url: "/" + networkname + "/node/", payload: &struct{One uint}{One: 2},},
+		sessionrequest{method: "PUT", url: "/" + networkname + "/node/", payload: &struct{One uint
+Other uint}{One: 1, Other: 2,},},
+		sessionrequest{method: "POST", url: "/" + networkname + "/node/msg/", payload: testmsg,},
+		
+	}
+	
+	playReqs(t, reqs, hostport, c)
+}
 
 func TestMETATmpName(t *testing.T) {
 	hostport := "http://127.0.0.1:8888"
 	c := http.Client{}
+	networkname := "meta"
+	
 	stronetohash := "foo"
 	strtwotohash := "bar"
 	stronelengthtohash := make([]byte, 8)
@@ -43,7 +95,6 @@ func TestMETATmpName(t *testing.T) {
 	binary.LittleEndian.PutUint64(stronelengthtohash, uint64(len(stronetohash)))
 	binary.LittleEndian.PutUint64(strtwolengthtohash, uint64(len(strtwotohash)))
 	
-	networkname := "meta"
 	hashit := storage.MakeHashFunc("SHA3")()
 	hashit.Write(stronelengthtohash)
 	
@@ -203,8 +254,9 @@ func playReqs(t *testing.T, reqs []sessionrequest, hostport string, c http.Clien
 		} 
 		
 		rbody, err := ioutil.ReadAll(hresp.Body)
-		
-		t.Logf("***** SENT '%s %s'\n***** GOT:\n\n%s\n\n", req.method, req.url, rbody)
+		if bodyout {
+			t.Logf("***** SENT '%s %s'\n***** GOT:\n\n%s\n\n", req.method, req.url, rbody)
+		}
 		
 		hresp.Body.Close()
 	}

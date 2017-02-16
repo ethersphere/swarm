@@ -6,15 +6,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
 
-/*
-type METATmpName struct {
-	METAHeader
-	Name string
-	Swarmhash storage.Key
-	Node adapters.NodeId
-}
-*/
-
 type METATmpName struct {
 	*METAEnvelope
 	Name string
