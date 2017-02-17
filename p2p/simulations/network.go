@@ -485,13 +485,17 @@ func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
 
 // Send(senderid, receiverid) sends a message from one node to another
 func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64, protomsg interface{}) {
+	self.GetNode(senderid).na.(*adapters.SimNode).Send(receiverid, msgcode, protomsg) // phew!
+}
+
+func (self *Network) DidSend(senderid, receiverid *adapters.NodeId, msgcode uint64, protomsg interface{}) error {
 	msg := &Msg{
 		One:   senderid,
 		Other: receiverid,
 		Code:  msgcode,
 	}
-	self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
-	self.events.Post(msg.event())                                                                // should also include send status maybe
+	self.events.Post(msg.event())
+	return nil
 }
 
 // GetNodeAdapter(id) returns the NodeAdapter for node with id

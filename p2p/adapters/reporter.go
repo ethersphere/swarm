@@ -39,6 +39,10 @@ func (self *RemoteReporter) DidDisconnect(source, target *NodeId) {
 	self.post(true)
 }
 
+func (self *RemoteReporter) DidSend(source, target *NodeId, codemsg uint64, msg interface{}) {
+	self.post(true)
+}
+
 func (self *RemoteReporter) post(interface{}) {
 
 }

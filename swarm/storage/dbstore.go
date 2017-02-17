@@ -283,6 +283,21 @@ func (s *DbStore) Put(chunk *Chunk) {
 		if chunk.dbStored != nil {
 			close(chunk.dbStored)
 		}
+		data, err := s.db.Get(getDataKey(index.Idx))
+		if err != nil {
+			return
+		}
+
+		hasher := s.hashfunc()
+		hasher.Write(data)
+		hash := hasher.Sum(nil)
+		if !bytes.Equal(hash, chunk.Key[:]) {
+			dumpstring := fmt.Sprintf("hashes dont match, dude key %x hash %x", chunk.Key[:], hash)
+			panic(dumpstring)
+			/*s.db.Delete(getDataKey(index.Idx))
+			err = fmt.Errorf("invalid chunk. hash=%x, key=%v", hash, key[:])
+			return*/
+		}
 		return // already exists, only update access
 	}
 
@@ -355,6 +370,8 @@ func (s *DbStore) Get(key Key) (chunk *Chunk, err error) {
 		hasher.Write(data)
 		hash := hasher.Sum(nil)
 		if !bytes.Equal(hash, key) {
+			dumpstring := fmt.Sprintf("hashes dont match, dude key %x hash %x", key, hash)
+			panic(dumpstring)
 			s.db.Delete(getDataKey(index.Idx))
 			err = fmt.Errorf("invalid chunk. hash=%x, key=%v", hash, key[:])
 			return
@@ -408,7 +425,7 @@ func (s *DbStore) getEntryCnt() uint64 {
 	return s.entryCnt
 }
 
-func (s *DbStore) close() {
+func (s *DbStore) Close() {
 	s.db.Close()
 }
 
