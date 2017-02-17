@@ -176,8 +176,14 @@ func NewSessionController() (*p2psimulations.ResourceController, chan bool) {
 									ppnet.NewNode(&p2psimulations.NodeConfig{Id: nodeid})
 									glog.V(6).Infof("added node %v to network %v", nodeid, ppnet)
 									
-									return &p2psimulations.NodeConfig{Id: nodeid}, nil
-									
+									//return &p2psimulations.NodeConfig{Id: nodeid}, nil
+									return &struct{
+										Id *adapters.NodeId
+										Index int
+									}{
+										Id: nodeid,
+										Index: len(ppnet.Nodes),
+									}, nil
 								},
 							},
 							Retrieve: &p2psimulations.ResourceHandler{

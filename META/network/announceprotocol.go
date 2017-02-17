@@ -29,3 +29,7 @@ func (ma *METAAnnounce) AddPayload(payloadtype uint8) error {
 	ma.Payload = append(ma.Payload, payload)
 	return nil
 }
+
+func (ma *METAAnnounce) String() string {
+	return ma.Payload[0].String()
+}

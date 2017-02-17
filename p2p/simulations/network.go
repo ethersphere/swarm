@@ -494,7 +494,7 @@ func (self *Network) DidSend(senderid, receiverid *adapters.NodeId, msgcode uint
 		One:   senderid,
 		Other: receiverid,
 		Code:  msgcode,
-		Summary: fmt.Sprintf("%v", protomsg),
+		Summary: fmt.Sprintf("%s", protomsg),
 	}
 	self.events.Post(msg.event())
 	return nil

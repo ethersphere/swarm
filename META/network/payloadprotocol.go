@@ -55,5 +55,5 @@ func (mtp *METAPayload) GetRawEntry(i int) (string, []byte) {
 }
 
 func (mtp *METAPayload) String() string {
-	return fmt.Sprintf("containing: %s", strings.Join(mtp.Label,","))
+	return fmt.Sprintf("type: %d,%s", mtp.Type, strings.Join(mtp.Label,","))
 }

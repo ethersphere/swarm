@@ -15,7 +15,7 @@ type CyData struct {
 	Source string `json:"source,omitempty"`
 	Target string `json:"target,omitempty"`
 	Up     bool   `json:"up"`
-	Comment string `json:"comment"`
+	Data interface{} `json:"extra"`
 }
 
 type CyElement struct {
@@ -51,7 +51,10 @@ func UpdateCy(conf *CyConfig, j *Journal) (*CyUpdate, error) {
 			var source, target string
 			source = msg.One.Label()
 			target = msg.Other.Label()
-			el = &CyElement{Group: "msgs", Data: &CyData{Id: id, Source: source, Target: target, Comment: msg.Summary}}
+			el = &CyElement{Group: "msgs", Data: &CyData{Id: id, Source: source, Target: target, Data: &struct{
+				Code uint64
+				Summary string
+				}{Code: msg.Code, Summary: msg.Summary}}}
 			action = ev.Action
 		} else if ev, ok := entry.(*ConnEvent); ok {
 			// mutually exclusive directed edge (caller -> callee)

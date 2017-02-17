@@ -27,7 +27,7 @@ func NewPeerCollection() *PeerCollection {
 }
 
 func (self *PeerCollection) Add(p *protocols.Peer) error {
-
+	
 	self.Peers = append(self.Peers, &METAPeer{Peer: p, Answersbroadcast: true})
 	PeerIndex[p] = len(self.Peers) - 1
 	glog.V(logger.Debug).Infof("protopeers now has added peers %v, total %v", self.Peers[len(self.Peers) - 1].ID().String(), len(self.Peers))
