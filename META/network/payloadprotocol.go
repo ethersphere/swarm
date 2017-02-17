@@ -1,5 +1,10 @@
 package network
 
+import (
+	"fmt"
+	"strings"
+)
+
 const (
 	_ = iota
 	META_DATA_AUTHID
@@ -47,4 +52,8 @@ func (mtp *METAPayload) GetRawEntry(i int) (string, []byte) {
 		return "", []byte{}
 	}
 	return mtp.Label[i], mtp.Data[i]
+}
+
+func (mtp *METAPayload) String() string {
+	return fmt.Sprintf("containing: %s", strings.Join(mtp.Label,","))
 }

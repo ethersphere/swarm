@@ -232,6 +232,7 @@ type Msg struct {
 	One   *adapters.NodeId `json:"one"`
 	Other *adapters.NodeId `json:"other"`
 	Code  uint64		   `json:"conn"`
+	Summary string			`json:"summary"`
 }
 
 func (self *Msg) String() string {
@@ -493,6 +494,7 @@ func (self *Network) DidSend(senderid, receiverid *adapters.NodeId, msgcode uint
 		One:   senderid,
 		Other: receiverid,
 		Code:  msgcode,
+		Summary: fmt.Sprintf("%v", protomsg),
 	}
 	self.events.Post(msg.event())
 	return nil

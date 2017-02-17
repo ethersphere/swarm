@@ -26,7 +26,7 @@ var bodyout bool
 func init() {
 	glog.SetV(6)
 	glog.SetToStderr(true)
-	bodyout = false
+	bodyout = true
 }
 
 type sessionrequestpayload interface {
@@ -104,6 +104,9 @@ func TestMETATmpName(t *testing.T) {
 		Name: "foo",
 		Swarmhash: hashit.Sum(bytes.NewBufferString(stronetohash).Bytes()),
 	}
+	
+	t.Logf("victim: %v", tmpnameupdateone.Victimnode)
+	t.Logf("Swarmhash: %v", tmpnameupdateone.Swarmhash)
 
 	hashit.Reset()
 	hashit.Write(strtwolengthtohash)
