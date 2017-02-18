@@ -105,7 +105,6 @@ func NewSessionController() (*ResourceController, chan bool) {
 						parent.SetResource(conf.Id, m)
 					}
 					parent.id++
-
 					m.SetResource("debug", NewResourceContoller(
 						&ResourceHandlers{
 							Create: &ResourceHandler{
@@ -121,7 +120,6 @@ func NewSessionController() (*ResourceController, chan bool) {
 							},
 						},
 					))
-
 					m.SetResource("node", NewResourceContoller(
 						&ResourceHandlers{
 							Create: &ResourceHandler{
@@ -139,7 +137,6 @@ func NewSessionController() (*ResourceController, chan bool) {
 							Update: &ResourceHandler{
 								Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 									var othernode *Node
-
 									args := msg.(*NodeIF)
 									onenode := net.Nodes[args.One-1]
 
@@ -158,7 +155,6 @@ func NewSessionController() (*ResourceController, chan bool) {
 							},
 						},
 					))
-
 					return empty, nil
 				},
 				Type: reflect.TypeOf(&NetworkConfig{}),

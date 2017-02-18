@@ -72,7 +72,6 @@ func (self *RLPxMessenger) ReadMsg() (p2p.Msg, error) {
 }
 
 func (self *RLPxMessenger) Close() {
-
 }
 
 func (self *RLPx) LocalAddr() []byte {
