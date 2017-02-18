@@ -67,7 +67,7 @@ func NewNetworkController(conf *NetworkConfig, eventer *event.TypeMux, journal *
 			// GET /<networkId>/
 			Retrieve: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
-					glog.V(logger.Debug).Infof("msg: %v", msg)
+					glog.V(logger.Detail).Infof("msg: %v", msg)
 					cyConfig, ok := msg.(*CyConfig)
 					if ok {
 						glog.V(logger.Warn).Infof("journal: %v", journal)
@@ -91,6 +91,8 @@ func NewNetworkController(conf *NetworkConfig, eventer *event.TypeMux, journal *
 		},
 	)
 	// subscribe to all event entries (generated)
+	glog.V(logger.Info).Infof("subscribe to journal")
+
 	journal.Subscribe(eventer, ConnectivityEvents...)
 	// self.SetResource("nodes", NewNodesController(eventer))
 	// self.SetResource("connections", NewConnectionsController(eventer))
@@ -327,12 +329,6 @@ func (self *Conn) nodesUp() error {
 	return nil
 }
 
-// sa := node.Adapter()
-// err := sa.Stop()
-// if err != nil {
-// 	return err
-// }
-
 // Start(id) starts up the node (relevant only for instance with own p2p or remote)
 func (self *Network) Start(id *adapters.NodeId) error {
 	node := self.GetNode(id)
@@ -351,7 +347,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 		}
 	}
 	node.Up = true
-	glog.V(logger.Detail).Infof("started node %v: %v", id, node.Up)
+	glog.V(logger.Info).Infof("started node %v: %v", id, node.Up)
 
 	self.events.Post(&NodeEvent{
 		Action: "up",
@@ -378,6 +374,8 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 		}
 	}
 	node.Up = false
+	glog.V(logger.Info).Infof("stop node %v: %v", id, node.Up)
+
 	self.events.Post(&NodeEvent{
 		Action: "down",
 		Type:   "node",

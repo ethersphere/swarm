@@ -190,7 +190,7 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 				})
 				glog.V(logger.Detail).Infof("sent %T to %d/%d peers", req, i, self.PeersBroadcastSetSize)
 			}
-			glog.V(5).Infof("%v", self)
+			glog.V(logger.Info).Infof("%v", self)
 
 			select {
 			case self.toggle <- want:
@@ -199,7 +199,7 @@ func (self *Hive) Start(connectPeer func(string) error, af func() <-chan time.Ti
 				return
 			}
 		}
-		glog.V(logger.Warn).Infof("%v", self
+		glog.V(logger.Warn).Infof("%v", self)
 	}()
 	return
 }

@@ -96,11 +96,11 @@ func NewSessionController() (*ResourceController, chan bool) {
 					journal := NewJournal()
 					net := NewNetwork(nil, &event.TypeMux{})
 					net.SetNaf(net.NewGenericSimNode)
+					glog.V(logger.Info).Infof("new network controller on %v", conf.Id)
 					m := NewNetworkController(conf, net.Events(), journal)
 					if len(conf.Id) == 0 {
 						conf.Id = fmt.Sprintf("%d", parent.id)
 					}
-					glog.V(logger.Debug).Infof("new network controller on %v", conf.Id)
 					if parent != nil {
 						parent.SetResource(conf.Id, m)
 					}

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/event"
+	"github.com/ethereum/go-ethereum/logger"
 	"github.com/ethereum/go-ethereum/logger/glog"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 )
@@ -41,7 +42,7 @@ func NewJournal() *Journal {
 // used for journalling history of a network
 // the goroutine terminates when the journal is closed
 func (self *Journal) Subscribe(eventer *event.TypeMux, types ...interface{}) {
-	glog.V(6).Infof("subscribe")
+	glog.V(logger.Info).Infof("subscribe")
 	sub := eventer.Subscribe(types...)
 	go func() {
 		defer sub.Unsubscribe()
