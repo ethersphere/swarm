@@ -91,8 +91,8 @@ type StartAdapter interface {
 type Reporter interface {
 	DidConnect(*NodeId, *NodeId) error
 	DidDisconnect(*NodeId, *NodeId) error
+	DidSend(*NodeId, *NodeId, uint64, interface{}) error
 }
-
 
 func RandomNodeId() *NodeId {
 	key, err := crypto.GenerateKey()

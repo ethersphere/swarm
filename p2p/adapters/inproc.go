@@ -71,6 +71,11 @@ func NewSimNode(id *NodeId, n Network, m func(p2p.MsgReadWriter) Messenger) *Sim
 	}
 }
 
+func (self *SimNode) Send(receiverid *NodeId, msgcode uint64, protomsg interface{}) {
+	self.GetPeer(receiverid).SendMsg(msgcode, protomsg)
+	self.network.DidSend(self.Id, receiverid, msgcode, protomsg)
+}
+
 func (self *SimNode) LocalAddr() []byte {
 	return self.Id.Bytes()
 }

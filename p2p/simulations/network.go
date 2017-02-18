@@ -92,7 +92,6 @@ func NewNetworkController(conf *NetworkConfig, eventer *event.TypeMux, journal *
 	)
 	// subscribe to all event entries (generated)
 	glog.V(logger.Info).Infof("subscribe to journal")
-
 	journal.Subscribe(eventer, ConnectivityEvents...)
 	// self.SetResource("nodes", NewNodesController(eventer))
 	// self.SetResource("connections", NewConnectionsController(eventer))
@@ -233,9 +232,10 @@ func (self *Conn) event(up, rev bool) *ConnEvent {
 }
 
 type Msg struct {
-	One   *adapters.NodeId `json:"one"`
-	Other *adapters.NodeId `json:"other"`
-	Code  uint64           `json:"conn"`
+	One     *adapters.NodeId `json:"one"`
+	Other   *adapters.NodeId `json:"other"`
+	Code    uint64           `json:"conn"`
+	Summary string           `json:"summary"`
 }
 
 func (self *Msg) String() string {
@@ -245,9 +245,8 @@ func (self *Msg) String() string {
 func (self *Msg) event() *MsgEvent {
 	return &MsgEvent{
 		Action: "up",
-		//Type:   fmt.Sprintf("%d", self.Code),
-		Type: "msg",
-		msg:  self,
+		Type:   "msg",
+		msg:    self,
 	}
 }
 
@@ -348,7 +347,6 @@ func (self *Network) Start(id *adapters.NodeId) error {
 	}
 	node.Up = true
 	glog.V(logger.Info).Infof("started node %v: %v", id, node.Up)
-
 	self.events.Post(&NodeEvent{
 		Action: "up",
 		Type:   "node",
@@ -375,7 +373,6 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 	}
 	node.Up = false
 	glog.V(logger.Info).Infof("stop node %v: %v", id, node.Up)
-
 	self.events.Post(&NodeEvent{
 		Action: "down",
 		Type:   "node",
@@ -485,13 +482,18 @@ func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
 
 // Send(senderid, receiverid) sends a message from one node to another
 func (self *Network) Send(senderid, receiverid *adapters.NodeId, msgcode uint64, protomsg interface{}) {
+	self.GetNode(senderid).na.(*adapters.SimNode).Send(receiverid, msgcode, protomsg) // phew!
+}
+
+func (self *Network) DidSend(senderid, receiverid *adapters.NodeId, msgcode uint64, protomsg interface{}) error {
 	msg := &Msg{
-		One:   senderid,
-		Other: receiverid,
-		Code:  msgcode,
+		One:     senderid,
+		Other:   receiverid,
+		Code:    msgcode,
+		Summary: fmt.Sprintf("%s", protomsg),
 	}
-	//self.GetNode(senderid).na.(*adapters.SimNode).GetPeer(receiverid).SendMsg(msgcode, protomsg) // phew!
-	self.events.Post(msg.event()) // should also include send status maybe
+	self.events.Post(msg.event())
+	return nil
 }
 
 // GetNodeAdapter(id) returns the NodeAdapter for node with id
