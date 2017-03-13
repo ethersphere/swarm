@@ -35,13 +35,16 @@ func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id *adapters.NodeId) []p2ptest
 }
 
 
-func newBzzTester(t *testing.T, addr *peerAddr, pp *Hive, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
+func newBzzTester(t *testing.T, addr *peerAddr, pp *p2ptest.TestPeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
 	if ct == nil {
 		ct = BzzCodeMap()
 	}
 	extraservices := func(p Peer) error {
 		pp.Add(p)
-		p.Register(&protocols.Disconnect{}, func(e interface{}) error { pp.Remove(p) })
+		p.DisconnectHook(func(e interface{}) error {
+			pp.Remove(p)
+			return nil
+		})
 		
 		if services != nil {
 			err := services(p)
@@ -53,7 +56,7 @@ func newBzzTester(t *testing.T, addr *peerAddr, pp *Hive, ct *protocols.CodeMap,
 	}
 	
 	protocall := func (na adapters.NodeAdapter) adapters.ProtoCall {
-		protocol := Bzz(addr.OverlayAddr(), pp, na, ct, extraservices, nil, nil)	
+		protocol := Bzz(addr.OverlayAddr(), na, ct, extraservices, nil, nil)	
 		return protocol.Run
 	}
 	
@@ -162,7 +165,7 @@ func TestBzzPeerPoolRemove(t *testing.T) {
 	s.runHandshakes()
 
 	id := s.Ids[0]
-	pp.Get(id).Drop()
+	pp.Get(id).Drop(nil)
 	s.TestDisconnected(&p2ptest.Disconnect{id, fmt.Errorf("p2p: read or write on closed message pipe")})
 	if pp.Has(id) {
 		t.Fatalf("peer '%v' not removed: %v", id, pp)
@@ -180,7 +183,7 @@ func TestBzzPeerPoolBothAddRemove(t *testing.T) {
 		t.Fatalf("peer '%v' not added: %v", id, pp)
 	}
 
-	pp.Get(id).Drop()
+	pp.Get(id).Drop(nil)
 	s.TestDisconnected(&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("p2p: read or write on closed message pipe")})
 	if pp.Has(id) {
 		t.Fatalf("peer '%v' not removed: %v", id, pp)
