@@ -34,10 +34,41 @@ func bzzHandshakeExchange(lhs, rhs *bzzHandshake, id *adapters.NodeId) []p2ptest
 	}
 }
 
-func newBzzTester(t *testing.T, addr *peerAddr, pp *p2ptest.TestPeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
+func newBzzBaseTester(t *testing.T, n int, addr *peerAddr, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
 	if ct == nil {
 		ct = BzzCodeMap()
 	}
+
+	flushc := make(map[string]chan bool)
+
+	connectHook := func(p *protocols.Peer) {
+		close(flushc[p.ID().String()])
+	}
+	protocall := func(na adapters.NodeAdapter) adapters.ProtoCall {
+		protocol := Bzz(addr.OverlayAddr(), na, ct, services, nil, nil, connectHook)
+		return protocol.Run
+	}
+
+	s := p2ptest.NewProtocolTester(t, NodeId(addr), n, protocall)
+
+	for _, id := range s.Ids {
+		flushc[id.String()] = make(chan bool)
+	}
+	return &bzzTester{
+		addr:            addr,
+		flushc:          flushc,
+		ExchangeSession: s,
+	}
+}
+
+type bzzTester struct {
+	*p2ptest.ExchangeSession
+	flushc map[string]chan bool
+	addr   *peerAddr
+}
+
+func newBzzTester(t *testing.T, n int, addr *peerAddr, pp *p2ptest.TestPeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
+
 	extraservices := func(p Peer) error {
 		pp.Add(p)
 		p.DisconnectHook(func(e interface{}) error {
@@ -53,25 +84,7 @@ func newBzzTester(t *testing.T, addr *peerAddr, pp *p2ptest.TestPeerPool, ct *pr
 		}
 		return nil
 	}
-
-	protocall := func(na adapters.NodeAdapter) adapters.ProtoCall {
-		protocol := Bzz(addr.OverlayAddr(), na, ct, extraservices, nil, nil)
-		return protocol.Run
-	}
-
-	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, protocall)
-
-	return &bzzTester{
-		addr: addr,
-		// flushCode:       4,
-		ExchangeSession: s,
-	}
-}
-
-type bzzTester struct {
-	*p2ptest.ExchangeSession
-	// flushCode int
-	addr *peerAddr
+	return newBzzBaseTester(t, n, addr, ct, extraservices)
 }
 
 // should test handshakes in one exchange? parallelisation
@@ -85,21 +98,19 @@ func (s *bzzTester) testHandshake(lhs, rhs *bzzHandshake, disconnects ...*p2ptes
 	} else {
 		peers = []*adapters.NodeId{id}
 	}
-	s.TestConnected(peers...)
 	s.TestExchanges(bzzHandshakeExchange(lhs, rhs, id)...)
 	s.TestDisconnected(disconnects...)
 }
-
-// func (s *bzzTester) flush(ids ...*adapters.NodeId) {
-// 	s.Flush(s.flushCode, ids...)
-// }
 
 func (s *bzzTester) runHandshakes(ids ...*adapters.NodeId) {
 	if len(ids) == 0 {
 		ids = s.Ids
 	}
 	for _, id := range ids {
-		s.testHandshake(correctBzzHandshake(s.addr), correctBzzHandshake(NewPeerAddrFromNodeId(id)))
+		go func() {
+			<-s.flushc[id.String()]
+			s.testHandshake(correctBzzHandshake(s.addr), correctBzzHandshake(NewPeerAddrFromNodeId(id)))
+		}()
 	}
 
 }
@@ -108,25 +119,10 @@ func correctBzzHandshake(addr *peerAddr) *bzzHandshake {
 	return &bzzHandshake{0, 322, addr}
 }
 
-func newBzzTester(t *testing.T, addr *peerAddr, pp PeerPool, ct *protocols.CodeMap, services func(Peer) error) *bzzTester {
-
-	extraservices := func(p Peer) error {
-		pp.Add(p)
-		p.Register(&protocols.Disconnect{}, func(e interface{}) error { pp.Remove(p) })
-		return services(p)
-	}
-	s := p2ptest.NewProtocolTester(t, NodeId(addr), 1, newTestBzzProtocol(addr, pp, ct, extraservices))
-	return &bzzTester{
-		addr: addr,
-		// flushCode:       4,
-		ExchangeSession: s,
-	}
-}
-
 func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
-	s := newBzzTester(t, addr, pp, nil, nil)
+	s := newBzzTester(t, 1, addr, pp, nil, nil)
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
@@ -138,7 +134,7 @@ func TestBzzHandshakeNetworkIdMismatch(t *testing.T) {
 func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
-	s := newBzzTester(t, addr, pp, nil, nil)
+	s := newBzzTester(t, 1, addr, pp, nil, nil)
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
@@ -150,7 +146,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 func TestBzzHandshakeSuccess(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
-	s := newBzzTester(t, addr, pp, nil, nil)
+	s := newBzzTester(t, 1, addr, pp, nil, nil)
 	id := s.Ids[0]
 	s.testHandshake(
 		correctBzzHandshake(addr),
@@ -161,12 +157,11 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 func TestBzzPeerPoolAdd(t *testing.T) {
 	pp := p2ptest.NewTestPeerPool()
 	addr := RandomAddr()
-	s := newBzzTester(t, addr, pp, nil, nil)
+	s := newBzzTester(t, 1, addr, pp, nil, nil)
 
 	id := s.Ids[0]
 	glog.V(6).Infof("handshake with %v", id)
 	s.runHandshakes()
-	// s.TestConnected()
 	if !pp.Has(id) {
 		t.Fatalf("peer '%v' not added: %v", id, pp)
 	}
@@ -175,7 +170,7 @@ func TestBzzPeerPoolAdd(t *testing.T) {
 func TestBzzPeerPoolRemove(t *testing.T) {
 	addr := RandomAddr()
 	pp := p2ptest.NewTestPeerPool()
-	s := newBzzTester(t, addr, pp, nil, nil)
+	s := newBzzTester(t, 1, addr, pp, nil, nil)
 	s.runHandshakes()
 
 	id := s.Ids[0]
@@ -189,7 +184,7 @@ func TestBzzPeerPoolRemove(t *testing.T) {
 func TestBzzPeerPoolBothAddRemove(t *testing.T) {
 	addr := RandomAddr()
 	pp := p2ptest.NewTestPeerPool()
-	s := newBzzTester(t, addr, pp, nil, nil)
+	s := newBzzTester(t, 1, addr, pp, nil, nil)
 	s.runHandshakes()
 
 	id := s.Ids[0]
@@ -207,7 +202,7 @@ func TestBzzPeerPoolBothAddRemove(t *testing.T) {
 func TestBzzPeerPoolNotAdd(t *testing.T) {
 	addr := RandomAddr()
 	pp := p2ptest.NewTestPeerPool()
-	s := newBzzTester(t, addr, pp, nil, nil)
+	s := newBzzTester(t, 1, addr, pp, nil, nil)
 
 	id := s.Ids[0]
 	s.testHandshake(correctBzzHandshake(addr), &bzzHandshake{0, 321, NewPeerAddrFromNodeId(id)}, &p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("network id mismatch 321 (!= 322)")})
