@@ -81,9 +81,11 @@ func NewLocalDPA(datadir string) (*DPA, error) {
 
 func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
 	chunker := NewTreeChunker(params)
+	pyramidChunker := NewPyramid(params)
 	return &DPA{
-		Chunker:    chunker,
-		ChunkStore: store,
+		Chunker:        chunker,
+		PyramidChunker: pyramidChunker,
+		ChunkStore:     store,
 	}
 }
 
@@ -98,6 +100,9 @@ func (self *DPA) Retrieve(key Key) LazySectionReader {
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
 func (self *DPA) Store(data io.Reader, size int64, swg *sync.WaitGroup, wwg *sync.WaitGroup) (key Key, err error) {
+  if size < 1 {
+    return self.PyramidChunker.Split(data, -1, self.storeC, swg, wwg)
+  }
 	return self.Chunker.Split(data, size, self.storeC, swg, wwg)
 }
 

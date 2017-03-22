@@ -79,16 +79,16 @@ func NewPyramidChunker(params *ChunkerParams) (self *PyramidChunker) {
 
 func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk, swg, wwg *sync.WaitGroup) (Key, error) {
 
-	chunks := (size + self.chunkSize - 1) / self.chunkSize
-	depth := int(math.Ceil(math.Log(float64(chunks))/math.Log(float64(self.branches)))) + 1
+	//chunks := (size + self.chunkSize - 1) / self.chunkSize
+	//depth := int(math.Ceil(math.Log(float64(chunks))/math.Log(float64(self.branches)))) + 1
 
-	results := Tree{
-		Chunks: chunks,
-		Levels: make([]map[int64]*Node, depth),
-	}
-	for i := 0; i < depth; i++ {
-		results.Levels[i] = make(map[int64]*Node)
-	}
+  //results := Tree{
+	//	Chunks: chunks,
+	//	Levels: make([]map[int64]*Node, depth),
+	//}
+  //for i := 0; i < depth; i++ {
+	//	results.Levels[i] = make(map[int64]*Node)
+	//}
 	// Create a pool of workers to crunch through the file
 	tasks := make(chan *Task, 2*processors)
 	pend := new(sync.WaitGroup)
@@ -103,7 +103,7 @@ func (self *PyramidChunker) Split(data io.Reader, size int64, chunkC chan *Chunk
 		buffer := make([]byte, self.chunkSize+8)
 		n, err := data.Read(buffer[8:])
 		read += n
-		last := int64(read) == size || err == io.ErrUnexpectedEOF || err == io.EOF
+		last := err == io.ErrUnexpectedEOF || err == io.EOF
 		if err != nil && !last {
 			close(abortC)
 			break
@@ -133,7 +133,7 @@ func (self *PyramidChunker) processor(pend, swg *sync.WaitGroup, tasks chan *Tas
 	// Start processing leaf chunks ad infinitum
 	hasher := self.hashFunc()
 	for task := range tasks {
-		depth, pow := len(results.Levels)-1, self.branches
+		//depth, pow := len(results.Levels)-1, self.branches
 		size := task.Size
 		data := task.Data
 		var node *Node
