@@ -77,6 +77,9 @@ type DbStore struct {
 	lock     sync.Mutex
 }
 
+// TODO: Instead of passing the distance function, just pass the address from which distances are calculated
+// to avoid the appearance of a pluggable distance metric and opportunities of bugs associated with providing
+// a function diferent from the one that is actually used.
 func NewDbStore(path string, hash Hasher, capacity uint64, po func(Key) uint8) (*DbStore, error) {
 
 	db, err := NewLDBDatabase(path)
