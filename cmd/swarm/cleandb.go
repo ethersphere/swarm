@@ -31,6 +31,7 @@ func cleandb(ctx *cli.Context) {
 	chunkDbPath := args[0]
 	hash := storage.MakeHashFunc("SHA3")
 	//dbStore, err := storage.NewDbStore(chunkDbPath, hash, 10000000, tmpKeyToUint8)
+	// TODO: this 0-returning function below is dangerous and probably wrong.
 	dbStore, err := storage.NewDbStore(chunkDbPath, hash, 10000000, func(storage.Key) uint8 { return 0 })
 	if err != nil {
 		utils.Fatalf("Cannot initialise dbstore: %v", err)
