@@ -49,12 +49,13 @@ const (
 )
 
 var (
-	keyOldData   = byte(1)
-	keyAccessCnt = []byte{2}
-	keyEntryCnt  = []byte{3}
-	keyDataIdx   = []byte{4}
-	keyGCPos     = []byte{5}
-	keyData      = byte(6)
+	keyOldData     = byte(1)
+	keyAccessCnt   = []byte{2}
+	keyEntryCnt    = []byte{3}
+	keyDataIdx     = []byte{4}
+	keyGCPos       = []byte{5}
+	keyData        = byte(6)
+	keyDistanceCnt = byte(7)
 )
 
 type gcItem struct {
@@ -68,6 +69,7 @@ type DbStore struct {
 
 	// this should be stored in db, accessed transactionally
 	entryCnt, accessCnt, dataIdx, capacity uint64
+	bucketCnt                              []byte
 
 	gcPos, gcStartPos []byte
 	gcArray           []*gcItem
@@ -101,6 +103,13 @@ func NewDbStore(path string, hash Hasher, capacity uint64, po func(Key) uint8) (
 
 	data, _ := s.db.Get(keyEntryCnt)
 	s.entryCnt = BytesToU64(data)
+	s.bucketCnt = make([]uint64, 0x100)
+	for i := 0; i < 0x100; i++ {
+		k := make([]byte, 2)
+		k[0] = keyDistanceCnt
+		k[1] = i
+		s.bucketCnt[i] = s.db.Get(k)
+	}
 	data, _ = s.db.Get(keyAccessCnt)
 	//s.accessCnt = BytesToU64(data)
 	if len(data) == 8 {
@@ -342,14 +351,24 @@ func (s *DbStore) ReIndex() {
 		hash := hasher.Sum(nil)
 
 		newKey := make([]byte, 10)
+		oldCntKey := make([]byte, 2)
+		newCntKey := make([]byte, 2)
+		oldCntKey[0] = keyDistanceCnt
+		newCntKey[0] = keyDistanceCnt
 		key[0] = keyData
 		key[1] = byte(s.po(Key(key[1:])))
+		oldCntKey[1] = key[1]
+		newCntKey[1] = byte(s.po(Key(newKey[1:])))
 		copy(newKey[2:], key[1:])
 		newValue := append(hash, data...)
 
 		batch := new(leveldb.Batch)
 		batch.Delete(key)
+		s.bucketCnt[oldCntKey[1]]--
+		batch.Put(oldCntKey, U64ToBytes(s.bucketCnt[oldCntKey[1]]))
 		batch.Put(newKey, newValue)
+		s.bucketCnt[newCntKey[1]]++
+		batch.Put(newCntKey, U64ToBytes(s.bucketCnt[newCntKey[1]]))
 		s.db.Write(batch)
 		it.Next()
 	}
@@ -362,7 +381,12 @@ func (s *DbStore) delete(idx uint64, idxKey []byte, po uint8) {
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx, po))
 	s.entryCnt--
+	s.bucketCnt[po]--
+	cntKey := make([]byte, 2)
+	cntKey[0] = keyDistanceCnt
+	cntKey[1] = po
 	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
+	batch.Put(cntKey, U64ToBytes(s.bucketCnt[po]))
 	s.db.Write(batch)
 }
 
@@ -401,7 +425,8 @@ func (s *DbStore) Put(chunk *Chunk) {
 
 	batch := new(leveldb.Batch)
 
-	t_datakey := getDataKey(s.dataIdx, s.po(chunk.Key))
+	po := s.po(chunk.Key)
+	t_datakey := getDataKey(s.dataIdx, po)
 	batch.Put(t_datakey, data)
 	log.Trace(fmt.Sprintf("batch put: dataidx %v prox %v chunkkey %v datakey %v data %v", s.dataIdx, s.po(chunk.Key), hex.EncodeToString(chunk.Key), t_datakey, hex.EncodeToString(data[0:64])))
 
@@ -419,6 +444,12 @@ func (s *DbStore) Put(chunk *Chunk) {
 	binary.LittleEndian.PutUint64(accesscnt, s.accessCnt)
 	batch.Put(keyAccessCnt, accesscnt)
 	s.accessCnt++
+
+	s.bucketCnt[po]++
+	cntKey := make([]byte, 2)
+	cntKey[0] = keyDistanceCnt
+	cntKey[1] = po
+	batch.Put(cntKey, U64ToBytes(s.bucketCnt[po]))
 
 	s.db.Write(batch)
 	if chunk.dbStored != nil {
