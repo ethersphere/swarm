@@ -1,9 +1,11 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
@@ -18,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/adapters"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
@@ -171,8 +174,10 @@ func TestPssCache(t *testing.T) {
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	oaddr, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
 	uaddr, _ := hex.DecodeString("101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f")
+	proofbytes := []byte{241, 172, 117, 105, 88, 154, 82, 33, 176, 188, 91, 244, 245, 85, 86, 16, 120, 232, 70, 45, 182, 188, 99, 103, 157, 3, 202, 121, 252, 21, 129, 22}
+	
 	ps := makePss(oaddr)
-	pp := NewPssParams()
+	pp := NewPssParams(nil)
 	topic, _ := MakeTopic(protocolName, protocolVersion)
 	data := []byte("foo")
 	fwdaddr := RandomAddr()
@@ -198,11 +203,17 @@ func TestPssCache(t *testing.T) {
 	}
 	msgtwo.SetRecipient(to)
 
-	digest := ps.hashMsg(msg)
-	digesttwo := ps.hashMsg(msgtwo)
-
-	if digest != 3595343914 {
-		t.Fatalf("digest - got: %d, expected: %d", digest, 3595343914)
+	digest, err := ps.storeMsg(msg)
+	if err != nil {
+		t.Fatalf("could not store cache msgone: %v", err)
+	}
+	digesttwo, err := ps.storeMsg(msgtwo)
+	if err != nil {
+		t.Fatalf("could not store cache msgtwo: %v", err)
+	}
+	
+	if !bytes.Equal(digest[:], proofbytes) {
+		t.Fatalf("digest - got: %x, expected: %x", digest, proofbytes)
 	}
 
 	if digest == digesttwo {
@@ -262,12 +273,6 @@ func TestPssRegisterHandler(t *testing.T) {
 	err = ps.Register(topic, func(msg []byte, p *p2p.Peer, sender []byte) error { return nil })
 	if err != nil {
 		t.Fatalf("couldnt register protocol 'foo' v 42: %v", err)
-	}
-
-	topic, _ = MakeTopic(protocolName, protocolVersion)
-	err = ps.Register(topic, func(msg []byte, p *p2p.Peer, sender []byte) error { return nil })
-	if err == nil {
-		t.Fatalf("register protocol 'abc..789' v 65536 should have failed")
 	}
 }
 
@@ -1011,10 +1016,34 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, simnet
 }
 
 func makePss(addr []byte) *Pss {
+	
+	// set up storage
+	cachedir, err := ioutil.TempDir("", "pss-cache")
+	if err != nil {
+		log.Error("create pss cache tmpdir failed", "error", err)
+		os.Exit(1)
+	}
+	
+	dpa, err := storage.NewLocalDPA(cachedir)
+	if err != nil {
+		log.Error("local dpa creation failed", "error", err)
+		os.Exit(1)
+	}
+	
+	/*chunkerparams := storage.NewChunkerParams()
+	storeparams := storage.NewStoreParams(cachedir)
+	hash := storage.MakeHashFunc(chunkerParams.Hash)
+
+	self.lstore, err = storage.NewLocalStore(hash, storeparams)
+	if err != nil {
+		log.Error("localstore creation failed", "error", err)
+		os.Exit(1)
+	}*/
+	
 	kp := NewKadParams()
 	kp.MinProxBinSize = 3
 
-	pp := NewPssParams()
+	pp := NewPssParams(dpa)
 
 	overlay := NewKademlia(addr, kp)
 	ps := NewPss(overlay, pp)
