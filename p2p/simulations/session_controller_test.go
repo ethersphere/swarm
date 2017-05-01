@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
@@ -131,7 +132,7 @@ func TestUpdate(t *testing.T) {
 		Id:      "0",
 		Backend: false,
 	}
-	mc := NewNetworkController(NewNetwork(conf), nil)
+	mc := NewNetworkController(NewNetwork(conf), nil, nil)
 	controller.SetResource(conf.Id, mc)
 	exp := `{
   "add": [
@@ -160,14 +161,23 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+func createConfigFromId(id *adapters.NodeId) *NodeConfig {
+	key, err := crypto.GenerateKey()
+	if err != nil {
+		panic("unable to generate key")
+	}
+	return &NodeConfig{
+		Id:         id,
+		PrivateKey: key,
+	}
+}
+
 func mockNewNodes(eventer *event.TypeMux, ids []*adapters.NodeId) {
 	log.Trace("mock starting")
 	for _, id := range ids {
 		log.Trace(fmt.Sprintf("mock adding node %v", id))
-		eventer.Post(&NodeEvent{
-			Action: "up",
-			Type:   "node",
-			node:   &Node{Id: id, config: &NodeConfig{Id: id}},
-		})
+		conf := createConfigFromId(id)
+		node := &Node{NodeConfig: *conf, Up: true}
+		eventer.Post(node.EmitEvent(LiveEvent))
 	}
 }

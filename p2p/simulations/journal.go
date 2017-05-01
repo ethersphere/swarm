@@ -40,7 +40,7 @@ func NewJournal() *Journal {
 // used for journalling history of a network
 // the goroutine terminates when the journal is closed
 func (self *Journal) Subscribe(eventer *event.TypeMux, types ...interface{}) {
-	log.Info("subscribe")
+	log.Info("journal subscribe")
 	sub := eventer.Subscribe(types...)
 	go func() {
 		defer sub.Unsubscribe()

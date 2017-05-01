@@ -14,11 +14,15 @@ func testEvents(intervals ...int) (events []*event.TypeMuxEvent) {
 	t := time.Now()
 	for _, interval := range intervals {
 		t = t.Add(time.Duration(interval) * time.Millisecond)
+    conf := RandomNodeConfig()
 		events = append(events, &event.TypeMuxEvent{
 			Time: t,
 			Data: interface{}(&NodeEvent{
-				Type:   "node",
-				Action: "down",
+        Node: &Node{
+          NodeConfig: *conf,
+          Up: true,
+        },
+        Up: true,
 			}),
 		})
 	}
@@ -70,7 +74,7 @@ func testIDs() (ids []*adapters.NodeId) {
 func testJournal(ids []*adapters.NodeId) *Journal {
 	eventer := &event.TypeMux{}
 	journal := NewJournal()
-	journal.Subscribe(eventer, ConnectivityEvents...)
+	journal.Subscribe(eventer, ConnectivityAllEvents...)
 	mockNewNodes(eventer, ids)
 	journal.WaitEntries(len(ids))
 	return journal
@@ -80,7 +84,7 @@ func TestSubscribe(t *testing.T) {
 	ids := testIDs()
 	journal := testJournal(ids)
 	for i, ev := range journal.Events {
-		id := ev.Data.(*NodeEvent).node.Id
+		id := ev.Data.(*NodeEvent).Node.Id
 		if id != ids[i] {
 			t.Fatalf("incorrect id: expected %v, got %v", id, ids[i])
 		}
@@ -118,7 +122,7 @@ func TestReplay(t *testing.T) {
 	eventer := &event.TypeMux{}
 
 	journal := NewJournal()
-	journal.Subscribe(eventer, ConnectivityEvents...)
+	journal.Subscribe(eventer, ConnectivityAllEvents...)
 
 	Replay(0, jo, eventer)
 	for i, ev := range jo.Events {
