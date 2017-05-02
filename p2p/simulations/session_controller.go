@@ -83,22 +83,31 @@ func NewResourceContoller(c *ResourceHandlers) *ResourceController {
 
 var empty = struct{}{}
 
-func DefaultNet(conf *NetworkConfig) (NetworkControl, *ResourceController) {
+func DefaultNet(conf *NetworkConfig) *NetworkHook {
 	net := NewNetwork(conf)
-	return NetworkControl(net), NewNodesController(net)
+	c := NewNodesController(net)
+	return &NetworkHook{
+		NetworkControl:  net,
+		NodesController: c,
+		UpdateHandler:   nil,
+	}
 }
 
-func NewSessionController(nethook func(*NetworkConfig) (NetworkControl, *ResourceController)) (*ResourceController, chan bool) {
+func NewSessionController(nethook func(*NetworkConfig) *NetworkHook) (*ResourceController, chan bool) {
 	quitc := make(chan bool)
+
 	return NewResourceContoller(
 		&ResourceHandlers{
 
 			Create: &ResourceHandler{
 				Handle: func(msg interface{}, parent *ResourceController) (interface{}, error) {
 					conf := msg.(*NetworkConfig)
-					netC, nodesC := nethook(conf)
+					hook := nethook(conf)
+					netC := hook.NetworkControl
+					nodesC := hook.NodesController
+					updateH := hook.UpdateHandler
 					log.Info(fmt.Sprintf("new network controller on %v", conf.Id))
-					m := NewNetworkController(netC, nodesC)
+					m := NewNetworkController(netC, nodesC, updateH)
 					if parent != nil {
 						parent.SetResource(conf.Id, m)
 					}
