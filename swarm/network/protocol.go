@@ -187,7 +187,12 @@ func (self *bzzPeer) bzzHandshake() error {
 		return err
 	}
 
-	rhs := hs.(*bzzHandshake)
+	rhs, ok := hs.(*bzzHandshake)
+	if !ok {
+		err := fmt.Sprintf("handshake failed, type assertion failed: %v", hs)
+		log.Error(err)
+		return fmt.Errorf(err)
+	}
 	self.peerAddr = rhs.Addr
 	err = checkBzzHandshake(rhs)
 	if err != nil {
