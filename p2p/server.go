@@ -135,6 +135,10 @@ type Config struct {
 
 	// If NoDial is true, the server will not dial any peers.
 	NoDial bool `toml:",omitempty"`
+
+	// If EnableMsgEvents is set then the server will emit PeerEvents
+	// whenever a message is sent to or received from a peer
+	EnableMsgEvents bool
 }
 
 type Server interface {
@@ -567,6 +571,11 @@ running:
 			if err == nil {
 				// The handshakes are done and it passed all checks.
 				p := newPeer(c, srv.Protocols)
+				// If message events are enabled, pass the peerFeed
+				// to the peer
+				if srv.EnableMsgEvents {
+					p.events = &srv.peerFeed
+				}
 				name := truncateName(c.name)
 				log.Debug("Adding p2p peer", "id", c.id, "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
 				peers[c.id] = p
@@ -779,11 +788,22 @@ func (srv *server) runPeer(p *Peer) {
 		srv.newPeerHook(p)
 	}
 
-	// broadcast peer add / drop events
-	srv.peerFeed.Send(&PeerEvent{Type: PeerEventTypeAdd, Peer: p.ID()})
-	defer srv.peerFeed.Send(&PeerEvent{Type: PeerEventTypeDrop, Peer: p.ID()})
+	// broadcast peer add
+	srv.peerFeed.Send(&PeerEvent{
+		Type: PeerEventTypeAdd,
+		Peer: p.ID(),
+	})
 
+	// run the protocol
 	remoteRequested, err := p.run()
+
+	// broadcast peer drop
+	srv.peerFeed.Send(&PeerEvent{
+		Type:  PeerEventTypeDrop,
+		Peer:  p.ID(),
+		Error: err.Error(),
+	})
+
 	// Note: run waits for existing peers to be sent on srv.delpeer
 	// before returning, so this send should not select on srv.quit.
 	srv.delpeer <- peerDrop{p, err, remoteRequested}
