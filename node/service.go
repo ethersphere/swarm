@@ -91,4 +91,7 @@ type Service interface {
 	// Stop terminates all goroutines belonging to the service, blocking until they
 	// are all terminated.
 	Stop() error
+
+	// Returns info for the Node
+	Info() string 
 }

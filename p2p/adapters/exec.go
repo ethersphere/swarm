@@ -344,6 +344,10 @@ func (p *PeerAPI) Stop() error {
 	return nil
 }
 
+func (p *PeerAPI) Info() string {
+  return ""
+}
+
 // PeerEvents creates an RPC sunscription which receives peer events from the
 // underlying p2p.Server
 func (p *PeerAPI) PeerEvents(ctx context.Context) (*rpc.Subscription, error) {

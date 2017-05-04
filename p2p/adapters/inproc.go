@@ -84,6 +84,10 @@ func NewSimNode(id *NodeId, svc node.Service, n Network) *SimNode {
 	}
 }
 
+func (self *SimNode) Info() string {
+  return self.service.Info()
+}
+
 // Addr returns the node's address
 func (self *SimNode) Addr() []byte {
 	return []byte(self.Node().String())

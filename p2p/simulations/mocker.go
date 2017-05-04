@@ -59,6 +59,12 @@ func NewMockerController(conf *MockerConfig) Controller {
 	return self
 }
 
+type MockerScenario int
+
+const (
+  DefaultScenario MockerScenario = iota
+)
+
 type MockerConfig struct {
 	Id              string
 	NodeCount       int
@@ -72,6 +78,7 @@ type MockerConfig struct {
 	DegreeTarget    int // number of connections per peer to converge on
 	ConvergenceRate int // speed of convergence
 	ticker          *time.Ticker
+  Scenario        MockerScenario
 }
 
 func DefaultMockerConfig() *MockerConfig {
@@ -87,6 +94,7 @@ func DefaultMockerConfig() *MockerConfig {
 		NodesTarget:     50,
 		DegreeTarget:    8,
 		ConvergenceRate: 5,
+    Scenario:        DefaultScenario,
 	}
 }
 
@@ -243,4 +251,85 @@ func MockEvents(eventer *event.TypeMux, ids []*adapters.NodeId, conf *MockerConf
 		}
 		rounds++
 	}
+}
+
+type NodeMocker struct {
+  *Network
+  ids []*adapters.NodeId
+  running bool
+  stopSim chan bool
+  simSetup func(ids []*adapters.NodeId)
+}
+
+func NewNodeMocker(net *Network) *NodeMocker {
+  return &NodeMocker{
+    Network: net,
+    stopSim: make(chan bool),
+    running: false,
+  }
+}
+
+func (self *NodeMocker) CreateMockNodes(nodecount int) []*adapters.NodeId {
+
+	ids := make([]*adapters.NodeId, nodecount)
+
+	for i := 0; i < nodecount; i++ {
+		conf, err := self.Network.NewNode()
+		if err != nil {
+			panic(err.Error())
+		}
+		ids[i] = conf.Id
+	}
+  self.ids = ids
+  return ids
+}
+
+func (self *NodeMocker) RunSimulation() {
+  if self.running {
+    self.stopSim <- true
+    self.running = false
+  } else {
+    conf := self.Network.Config().DefaultMockerConfig
+    //currently overkill as only DefaultScenario is defined
+    //in the future, by changing the config one could run different scenarios
+    //"flaky nodes", "fast up/down", "stable network", etc.
+    switch conf.Scenario {
+    case DefaultScenario: self.runDefaultScenario()
+    default: self.runDefaultScenario()
+    }
+  }
+}
+
+func (self *NodeMocker) runDefaultScenario() {
+  conf := self.Config().DefaultMockerConfig
+	go func() {
+		for _, id := range self.ids {
+			n := rand.Intn(conf.UpdateInterval)
+			time.Sleep(time.Duration(n) * time.Millisecond)
+			log.Debug(fmt.Sprintf("node %v starting up", id))
+			self.Network.Start(id)
+		}
+	}()
+
+	for i, id := range self.ids {
+		n := conf.UpdateInterval + i*1000
+		go func(id *adapters.NodeId) {
+			for {
+				select {
+				case <-self.stopSim:
+					return
+				default:
+					time.Sleep(time.Duration(n) * time.Millisecond)
+					log.Debug(fmt.Sprintf("node %v shutting down", id))
+					self.Network.Stop(id)
+					n = 2000
+					time.Sleep(time.Duration(n) * time.Millisecond)
+					log.Debug(fmt.Sprintf("node %v starting up", id))
+					self.Network.Start(id)
+					n = 5000
+				}
+			}
+		}(id)
+	}
+
 }

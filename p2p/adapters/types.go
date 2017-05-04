@@ -68,6 +68,7 @@ type NodeAdapter interface {
 	Client() (*rpc.Client, error)
 	Start() error
 	Stop() error
+	Info() string 
 }
 
 type ProtocolRunner interface {

@@ -14,7 +14,9 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/adapters"
+	"github.com/ethereum/go-ethereum/rpc"
 )
 
 /***
@@ -27,12 +29,27 @@ const (
 
 var quitc chan bool
 var controller *ResourceController
+var netctrl *Network 
 
 func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
-	controller, quitc = NewSessionController(DefaultNet)
+  conf := &NetworkConfig {
+    Id: "0",
+		Backend: false,
+	  DefaultMockerConfig: DefaultMockerConfig(),
+  }
+  netctrl = NewNetwork(conf)
+  netctrl.SetNaf(naf)
+  netctrl.SetInit(func(ids []*adapters.NodeId) {})
+	controller, quitc = RunDefaultNet(netctrl)
 	StartRestApiServer(port, controller)
+}
+
+func naf(conf *NodeConfig) adapters.NodeAdapter {
+  id := conf.Id
+  node := &testnode{}
+	return adapters.NewSimNode(id, node, netctrl)
 }
 
 func url(port, path string) string {
@@ -128,12 +145,8 @@ func testResponse(t *testing.T, method, addr string, r io.ReadSeeker) []byte {
 
 func TestUpdate(t *testing.T) {
 	t.Skip("...")
-	conf := &NetworkConfig{
-		Id:      "0",
-		Backend: false,
-	}
-	mc := NewNetworkController(NewNetwork(conf), nil, nil)
-	controller.SetResource(conf.Id, mc)
+	mc := NewNetworkController(netctrl)
+	controller.SetResource(netctrl.Config().Id, mc)
 	exp := `{
   "add": [
     {
@@ -180,4 +193,28 @@ func mockNewNodes(eventer *event.TypeMux, ids []*adapters.NodeId) {
 		node := &Node{NodeConfig: *conf, Up: true}
 		eventer.Post(node.EmitEvent(LiveEvent))
 	}
+}
+
+type testnode struct {
+	run func(*p2p.Peer, p2p.MsgReadWriter) error
+}
+
+func (n *testnode) Protocols() []p2p.Protocol {
+	return []p2p.Protocol{{Run: n.run}}
+}
+
+func (n *testnode) APIs() []rpc.API {
+  return nil
+}
+
+func (n *testnode) Start(server p2p.Server) error {
+  return nil
+}
+
+func (n *testnode) Stop() error {
+  return nil
+}
+
+func (n *testnode) Info() string {
+  return "" 
 }

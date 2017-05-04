@@ -7,9 +7,7 @@ package main
 
 import (
 	"fmt"
-	"math/rand"
 	"os"
-	"reflect"
 	"runtime"
 	"time"
 
@@ -23,14 +21,10 @@ import (
 )
 
 // Network extends simulations.Network with hives for each node.
-type Network struct {
+type SimNetwork struct {
 	*simulations.Network
-	hives map[discover.NodeID]*network.Hive
+  hives map[discover.NodeID]*network.Hive
 }
-
-var net *Network
-var simRunning bool
-var stopSim chan bool
 
 // SimNode is the adapter used by Swarm simulations.
 type SimNode struct {
@@ -43,6 +37,10 @@ func (s *SimNode) Protocols() []p2p.Protocol {
 }
 
 func (s *SimNode) APIs() []rpc.API {
+	return nil
+}
+
+func (s *SimNode) Addr() []byte {
 	return nil
 }
 
@@ -64,8 +62,12 @@ func (self *SimNode) Stop() error {
 	return nil
 }
 
+func (self *SimNode) Info() string {
+  return self.hive.String()
+}
+
 // NewSimNode creates adapters for nodes in the simulation.
-func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
+func (self *SimNetwork) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapter {
 	id := conf.Id
 	addr := network.NewPeerAddrFromNodeId(id)
 	kp := network.NewKadParams()
@@ -100,119 +102,10 @@ func (self *Network) NewSimNode(conf *simulations.NodeConfig) adapters.NodeAdapt
 		protocol: network.Bzz(addr.OverlayAddr(), addr.UnderlayAddr(), ct, services, nil, nil),
 	}
 	return adapters.NewSimNode(id, node, self.Network)
-
 }
 
-func NewNetwork(net *simulations.Network) *Network {
-	n := &Network{
-		Network: net,
-		hives:   make(map[discover.NodeID]*network.Hive),
-	}
-	n.SetNaf(n.NewSimNode)
-	return n
-}
 
-var ids []*adapters.NodeId
-
-func setupUpdateHandler() *simulations.ResourceHandler {
-	updateHandler := &simulations.ResourceHandler{
-		Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-			if simRunning {
-				stopSim <- false
-				simRunning = false
-			} else {
-				go runSim(stopSim)
-				simRunning = true
-			}
-			return struct{}{}, nil
-		},
-		Type: reflect.TypeOf(&simulations.NetworkConfig{}),
-	}
-
-	return updateHandler
-}
-
-func setupNetworkControl(conf *simulations.NetworkConfig) {
-	//setup conf
-	conf.DefaultMockerConfig = simulations.DefaultMockerConfig()
-	conf.DefaultMockerConfig.SwitchonRate = 100
-	conf.DefaultMockerConfig.NodesTarget = 15
-	conf.DefaultMockerConfig.NewConnCount = 1
-	conf.DefaultMockerConfig.DegreeTarget = 0
-	conf.Id = "0"
-	conf.Backend = true
-
-	net = NewNetwork(simulations.NewNetwork(conf))
-
-	setupSim()
-}
-
-func setupNodesController() *simulations.ResourceController {
-	nodesController := simulations.NewResourceContoller(
-		&simulations.ResourceHandlers{
-			//GET /<networkId>/nodes  -- returns all nodes' kademlia table
-			Retrieve: &simulations.ResourceHandler{
-				Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-					var results []string
-					for _, id := range ids {
-						pp := net.hives[id.NodeID]
-						results = append(results, pp.String())
-					}
-					return results, nil
-				},
-				//Type: reflect.TypeOf([]string{}), // this is input not output param structure
-			},
-		})
-	for _, id := range ids {
-		idc := simulations.NewResourceContoller(
-			&simulations.ResourceHandlers{
-				//GET /<networkId>/nodes/<nodeId>  -- returns <nodeId>'s kademlia table
-				Retrieve: &simulations.ResourceHandler{
-					Handle: func(msg interface{}, parent *simulations.ResourceController) (interface{}, error) {
-						pp := net.hives[id.NodeID]
-						if pp != nil {
-							return pp.String(), nil
-						}
-						//this shouldn't happen anymore, but just in case
-						return nil, fmt.Errorf("Node not found")
-					},
-					//Type: reflect.TypeOf([]string{}), // this is input not output param structure
-				},
-			})
-		nodesController.SetResource(id.String(), idc)
-	}
-
-	return nodesController
-}
-
-func NewNetworkHook(conf *simulations.NetworkConfig) *simulations.NetworkHook {
-	setupNetworkControl(conf)
-	c := setupNodesController()
-	u := setupUpdateHandler()
-
-	return &simulations.NetworkHook{
-		NetworkControl:  net,
-		NodesController: c,
-		UpdateHandler:   u,
-	}
-}
-
-func nethook(conf *simulations.NetworkConfig) *simulations.NetworkHook {
-	return NewNetworkHook(conf)
-}
-
-func setupSim() {
-	//create sim nodes
-	ids = make([]*adapters.NodeId, 10)
-
-	for i := 0; i < 10; i++ {
-		conf, err := net.NewNode()
-		if err != nil {
-			panic(err.Error())
-		}
-		ids[i] = conf.Id
-	}
-
+func (self *SimNetwork) simSetup(ids []*adapters.NodeId) {
 	for i, id := range ids {
 		var peerId *adapters.NodeId
 		if i == 0 {
@@ -220,48 +113,39 @@ func setupSim() {
 		} else {
 			peerId = ids[i-1]
 		}
-		err := net.hives[id.NodeID].Register(network.NewPeerAddrFromNodeId(peerId))
+		err := self.hives[id.NodeID].Register(network.NewPeerAddrFromNodeId(peerId))
 		if err != nil {
 			panic(err.Error())
 		}
 	}
 }
 
-func runSim(stopSim chan bool) {
-	go func() {
-		for _, id := range ids {
-			n := rand.Intn(1000)
-			time.Sleep(time.Duration(n) * time.Millisecond)
-			log.Debug(fmt.Sprintf("node %v starting up", id))
-			net.Start(id)
-			// time.Sleep(1000 * time.Millisecond)
-			// net.Stop(id)
-		}
-	}()
+func SetupNewNetwork() *simulations.Network {
+  conf := createNetworkConfig()
+  sim := &SimNetwork{
+    Network: simulations.NewNetwork(conf),
+    hives:   make(map[discover.NodeID]*network.Hive),
+  }
+	sim.Network.SetNaf(sim.NewSimNode)
+  sim.Network.SetInit(sim.simSetup)
+  return sim.Network
+}
 
-	for i, id := range ids {
-		n := 3000 + i*1000
-		go func(id *adapters.NodeId) {
-			for {
-				select {
-				case <-stopSim:
-					return
-				default:
-					// n := rand.Intn(5000)
-					// n := 3000
-					time.Sleep(time.Duration(n) * time.Millisecond)
-					log.Debug(fmt.Sprintf("node %v shutting down", id))
-					net.Stop(id)
-					// n = rand.Intn(5000)
-					n = 2000
-					time.Sleep(time.Duration(n) * time.Millisecond)
-					log.Debug(fmt.Sprintf("node %v starting up", id))
-					net.Start(id)
-					n = 5000
-				}
-			}
-		}(id)
-	}
+
+func createNetworkConfig() *simulations.NetworkConfig {
+	//setup conf
+  conf := &simulations.NetworkConfig{}
+	conf.DefaultMockerConfig = simulations.DefaultMockerConfig()
+	conf.DefaultMockerConfig.NodeCount      = 10
+	conf.DefaultMockerConfig.SwitchonRate   = 100
+	conf.DefaultMockerConfig.NodesTarget    = 15
+	conf.DefaultMockerConfig.NewConnCount   = 1
+	conf.DefaultMockerConfig.DegreeTarget   = 0
+	conf.DefaultMockerConfig.UpdateInterval = 2000
+	conf.Id = "0"
+	conf.Backend = true
+
+  return conf
 }
 
 // var server
@@ -270,8 +154,8 @@ func main() {
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 
-	stopSim = make(chan bool)
-	c, quitc := simulations.NewSessionController(nethook)
+	net := SetupNewNetwork()
+	c, quitc := simulations.RunDefaultNet(net)
 
 	simulations.StartRestApiServer("8888", c)
 	// wait until server shuts down
