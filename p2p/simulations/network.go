@@ -184,7 +184,7 @@ const (
 )
 
 type EventEmitter interface {
-	EmitEvent()
+	EmitEvent(eventyType EventType, Up bool)
 }
 
 type LiveEventer interface {
@@ -275,10 +275,10 @@ func (self *MsgEvent) String() string {
 	return fmt.Sprintf("<Msg: %v>\n", self.Message)
 }
 
-func (self *Node) EmitEvent(eventType EventType) interface{} {
+func (self *Node) EmitEvent(eventType EventType, up bool) interface{} {
 	evt := &NodeEvent{
 		Node: self,
-		Up:   self.Up,
+		Up:   up,
 	}
 	if eventType == ControlEvent {
 		return &NodeControlEvent{
@@ -289,10 +289,10 @@ func (self *Node) EmitEvent(eventType EventType) interface{} {
 	}
 }
 
-func (self *Conn) EmitEvent(eventType EventType) interface{} {
+func (self *Conn) EmitEvent(eventType EventType, up bool) interface{} {
 	evt := &ConnEvent{
 		Connection: self,
-		Up:         self.Up,
+		Up:         up,
 		Reverse:    self.Reverse,
 	}
 
@@ -418,7 +418,7 @@ func (self *Network) Start(id *adapters.NodeId) error {
 	node.Up = true
 	log.Info(fmt.Sprintf("started node %v: %v", id, node.Up))
 
-	self.events.Post(node.EmitEvent(ControlEvent))
+	self.events.Post(node.EmitEvent(ControlEvent, true))
 
 	// subscribe to peer events
 	client, err := node.Client()
@@ -485,7 +485,7 @@ func (self *Network) Stop(id *adapters.NodeId) error {
 	node.Up = false
 	log.Info(fmt.Sprintf("stop node %v: %v", id, node.Up))
 
-	self.events.Post(node.EmitEvent(ControlEvent))
+	self.events.Post(node.EmitEvent(ControlEvent, false))
 	return nil
 }
 
@@ -526,7 +526,7 @@ func (self *Network) Connect(oneId, otherId *adapters.NodeId) error {
 	if err != nil {
 		return err
 	}
-	self.events.Post(conn.EmitEvent(ControlEvent))
+	self.events.Post(conn.EmitEvent(ControlEvent, true))
 	return client.Call(nil, "admin_addPeer", string(addr))
 }
 
@@ -560,7 +560,7 @@ func (self *Network) Disconnect(oneId, otherId *adapters.NodeId) error {
 	if err != nil {
 		return err
 	}
-	self.events.Post(conn.EmitEvent(ControlEvent))
+	self.events.Post(conn.EmitEvent(ControlEvent, false))
 	return client.Call(nil, "admin_removePeer", string(addr))
 }
 
@@ -575,7 +575,7 @@ func (self *Network) DidConnect(one, other *adapters.NodeId) error {
 	conn.Reverse = conn.One.NodeID != one.NodeID
 	conn.Up = true
 	// connection event posted
-	self.events.Post(conn.EmitEvent(LiveEvent))
+	self.events.Post(conn.EmitEvent(LiveEvent, true))
 	return nil
 }
 
@@ -589,7 +589,7 @@ func (self *Network) DidDisconnect(one, other *adapters.NodeId) error {
 	}
 	conn.Reverse = conn.One.NodeID != one.NodeID
 	conn.Up = false
-	self.events.Post(conn.EmitEvent(LiveEvent))
+	self.events.Post(conn.EmitEvent(LiveEvent, false))
 	return nil
 }
 

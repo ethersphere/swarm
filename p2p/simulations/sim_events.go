@@ -97,12 +97,14 @@ func NewSimUpdate(e *event.TypeMuxEvent) (*SimUpdate, error) {
 			control = false
 		}
 		// mutually exclusive directed edge (caller -> callee)
-		id := ConnLabel(conn.One, conn.Other)
-		var source, target string
+		//id := ConnLabel(conn.One, conn.Other)
+		var source, target, id string
 		if conn.Reverse {
+      id = ConnLabel(conn.Other, conn.One)
 			source = conn.Other.String()
 			target = conn.One.String()
 		} else {
+      id = ConnLabel(conn.One, conn.Other)
 			source = conn.One.String()
 			target = conn.Other.String()
 		}
