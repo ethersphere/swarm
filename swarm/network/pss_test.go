@@ -1,9 +1,11 @@
 package network
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
+	"io/ioutil"
 	"math/rand"
 	"net"
 	"net/http"
@@ -20,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -158,8 +161,10 @@ func TestPssCache(t *testing.T) {
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	oaddr, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
 	uaddr, _ := hex.DecodeString("101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f")
+	proofbytes := []byte{241, 172, 117, 105, 88, 154, 82, 33, 176, 188, 91, 244, 245, 85, 86, 16, 120, 232, 70, 45, 182, 188, 99, 103, 157, 3, 202, 121, 252, 21, 129, 22}
+	
 	ps := makePss(oaddr)
-	pp := NewPssParams()
+	pp := NewPssParams(nil)
 	topic, _ := MakeTopic(protocolName, protocolVersion)
 	data := []byte("foo")
 	fwdaddr := RandomAddr()
@@ -185,11 +190,17 @@ func TestPssCache(t *testing.T) {
 	}
 	msgtwo.SetRecipient(to)
 
-	digest := ps.hashMsg(msg)
-	digesttwo := ps.hashMsg(msgtwo)
-
-	if digest != 3595343914 {
-		t.Fatalf("digest - got: %d, expected: %d", digest, 3595343914)
+	digest, err := ps.storeMsg(msg)
+	if err != nil {
+		t.Fatalf("could not store cache msgone: %v", err)
+	}
+	digesttwo, err := ps.storeMsg(msgtwo)
+	if err != nil {
+		t.Fatalf("could not store cache msgtwo: %v", err)
+	}
+	
+	if !bytes.Equal(digest[:], proofbytes) {
+		t.Fatalf("digest - got: %x, expected: %x", digest, proofbytes)
 	}
 
 	if digest == digesttwo {
@@ -258,6 +269,10 @@ func TestPssRegisterHandler(t *testing.T) {
 	}
 }
 
+func TestPssFullRandom1_10_2(t *testing.T) {
+	testPssFullRandom(t, 1, 10, 2)
+}
+
 func TestPssFullRandom10_10_5(t *testing.T) {
 	testPssFullRandom(t, 10, 10, 5)
 }
@@ -299,6 +314,14 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 	var timeout time.Duration
 	var cancel context.CancelFunc
 
+	if numnodes < 3 {
+		t.Fatalf("Test only with minimum 3 nodes")
+	}
+	
+	if numfullnodes < 2 {
+		t.Fatalf("Test only with minimum 2 full pss-nodes")
+	}
+	
 	fullnodes := []*adapters.NodeId{}
 	sends := []int{}                                       // sender/receiver ids array indices pairs
 	expectnodes := make(map[*adapters.NodeId]int)          // how many messages we're expecting on each respective node
@@ -323,7 +346,30 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 				fullnodes = append(fullnodes, id)
 			}
 		}
-		for i, id := range ids {
+		
+		// ensure that we always have fullnodes on opposite sides of the initial connect string
+		// shuffle ids except first and last
+		swap := ids[len(ids) - 1]
+		ids[len(ids) - 1] = ids[1]
+		ids[1] = swap
+		
+		last := 0
+		for _, n := range rand.Perm(len(ids) - 2) {
+			peerId := ids[n + 1]
+			nodeId := ids[last]
+			if err := net.Connect(nodeId, peerId); err != nil {
+				log.Trace(fmt.Sprintf("connect %x to \"last\" %x", common.ByteLabel(nodeId.Bytes()), common.ByteLabel(peerId.Bytes())))
+				return err	
+			}
+			last = n + 1
+		}
+		
+		if err := net.Connect(ids[last], ids[len(ids) - 1]); err != nil {
+			log.Trace(fmt.Sprintf("connect %x to \"last\" %x", common.ByteLabel(ids[last].Bytes()), common.ByteLabel(ids[len(ids) - 1].Bytes())))
+			return err	
+		}
+			
+		/*for i, id := range ids {
 			var peerId *adapters.NodeId
 			if i != 0 {
 				peerId = ids[i-1]
@@ -331,7 +377,7 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 					return err
 				}
 			}
-		}
+		}*/
 		return nil
 	}
 	check = func(ctx context.Context, id *adapters.NodeId) (bool, error) {
@@ -351,7 +397,7 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 		return true, nil
 	}
 
-	timeout = 10 * time.Second
+	timeout = 1 * time.Second
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 
 	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -451,7 +497,7 @@ func testPssFullRandom(t *testing.T, numsends int, numnodes int, numfullnodes in
 		return true, nil
 	}
 
-	timeout = 10 * time.Second
+	timeout = 1 * time.Second
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
@@ -992,10 +1038,26 @@ func newPssSimulationTester(t *testing.T, numnodes int, numfullnodes int, trigge
 }
 
 func makePss(addr []byte) *Pss {
+	
+	// set up storage
+	cachedir, err := ioutil.TempDir("", "pss-cache")
+	if err != nil {
+		log.Error("create pss cache tmpdir failed", "error", err)
+		os.Exit(1)
+	}
+	
+	dpa, err := storage.NewLocalDPA(cachedir)
+	if err != nil {
+		log.Error("local dpa creation failed", "error", err)
+		os.Exit(1)
+	}
+	// cannot use pyramidchunker as it still lacks join
+	// dpa.Chunker = storage.NewPyramidChunker(storage.NewChunkerParams())
+	
 	kp := NewKadParams()
 	kp.MinProxBinSize = 3
 
-	pp := NewPssParams()
+	pp := NewPssParams(dpa)
 
 	overlay := NewKademlia(addr, kp)
 	ps := NewPss(overlay, pp)
