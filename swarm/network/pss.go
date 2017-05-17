@@ -25,7 +25,7 @@ const (
 	TopicResolverLength         = 8
 	PssPeerCapacity             = 256
 	PssPeerTopicDefaultCapacity = 8
-	digestLength                = 64
+	digestLength                = 32
 	digestCapacity              = 256
 	defaultDigestCacheTTL       = time.Second
 	pingTopicName               = "pss"
@@ -41,12 +41,14 @@ var (
 // Defines params for Pss
 type PssParams struct {
 	Cachettl time.Duration
+	dpa      *storage.DPA
 }
 
 // Initializes default params for Pss
-func NewPssParams() *PssParams {
+func NewPssParams(dpa *storage.DPA) *PssParams {
 	return &PssParams{
 		Cachettl: defaultDigestCacheTTL,
+		dpa:      dpa,
 	}
 }
 
@@ -83,6 +85,16 @@ type pssEnvelope struct {
 	SenderUAddr []byte
 }
 
+func (self *pssEnvelope) serialize() []byte {
+	buf := bytes.NewBuffer(nil)
+	buf.Write(self.Topic[:])
+	buf.Write(self.Payload)
+	buf.Write(self.SenderOAddr)
+	buf.Write(self.SenderUAddr)
+	return buf.Bytes()
+}
+
+
 // Pre-Whisper placeholder
 type pssPayload struct {
 	Code       uint64
@@ -103,7 +115,8 @@ type pssCacheEntry struct {
 type PssTopic [TopicLength]byte
 
 // Pre-Whisper placeholder
-type pssDigest uint32
+//type pssDigest uint32
+type pssDigest [digestLength]byte
 
 // pss provides sending messages to nodes without having to be directly connected to them.
 //
@@ -127,10 +140,26 @@ type Pss struct {
 	events   map[PssTopic]*event.Feed                           // subscriptions for each topic
 	fwdcache map[pssDigest]pssCacheEntry                        // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
 	cachettl time.Duration                                      // how long to keep messages in fwdcache
-	hasher   func(string) storage.Hasher                        // hasher to digest message to cache
+	//hasher   func(string) storage.Hasher                        // hasher to digest message to cache
+	dpa  *storage.DPA 											// need to store for mailbox / cache
 	lock     sync.Mutex
 }
 
+func (self *Pss) storeMsg(msg *PssMsg) (pssDigest, error) {
+	swg := &sync.WaitGroup{}
+	wwg := &sync.WaitGroup{}
+	buf := bytes.NewReader(msg.Payload.serialize())
+	key, err := self.dpa.Store(buf, int64(buf.Len()), swg, wwg)
+	if err != nil {
+		log.Warn("Could not store in swarm", "err", err)
+		return pssDigest{}, err
+	}
+	log.Trace("Stored msg in swarm", "key", key)
+	digest := pssDigest{}
+	copy(digest[:], key[:digestLength])
+	return digest, nil
+}
+/*
 func (self *Pss) hashMsg(msg *PssMsg) pssDigest {
 	hasher := self.hasher("SHA3")()
 	hasher.Reset()
@@ -142,10 +171,10 @@ func (self *Pss) hashMsg(msg *PssMsg) pssDigest {
 	b := hasher.Sum([]byte{})
 	return pssDigest(binary.BigEndian.Uint32(b))
 }
+*/
 
 // Creates a new Pss instance. A node should only need one of these
 //
-// TODO error check overlay integrity
 func NewPss(k Overlay, params *PssParams) *Pss {
 	return &Pss{
 		Overlay: k,
@@ -155,8 +184,14 @@ func NewPss(k Overlay, params *PssParams) *Pss {
 		events:   make(map[PssTopic]*event.Feed),
 		fwdcache: make(map[pssDigest]pssCacheEntry),
 		cachettl: params.Cachettl,
-		hasher:   storage.MakeHashFunc,
+		dpa:      params.dpa,
+		//hasher:   storage.MakeHashFunc,
 	}
+}
+
+// convenience function for accessing the overlay base addr of the pss
+func (self *Pss) GetBaseAddr() []byte {
+	return self.Overlay.GetAddr().OverlayAddr()
 }
 
 // enables to set address of node, to avoid backwards forwarding
@@ -164,7 +199,11 @@ func NewPss(k Overlay, params *PssParams) *Pss {
 // currently not in use as forwarder address is not known in the handler function hooked to the pss dispatcher.
 // it is included as a courtesy to custom transport layers that may want to implement this
 func (self *Pss) AddToCache(addr []byte, msg *PssMsg) error {
-	digest := self.hashMsg(msg)
+	//digest := self.hashMsg(msg)
+	digest, err := self.storeMsg(msg)
+	if err != nil {
+		return err
+	}
 	return self.addFwdCacheSender(addr, digest)
 }
 
@@ -325,7 +364,11 @@ func (self *Pss) Forward(msg *PssMsg) error {
 		return errorForwardToSelf
 	}
 
-	digest := self.hashMsg(msg)
+	//digest := self.hashMsg(msg)
+	digest, err := self.storeMsg(msg)
+	if err != nil {
+		log.Warn(fmt.Sprintf("could not store message %v to cache: %v", msg, err))
+	}
 
 	if self.checkFwdCache(nil, digest) {
 		log.Trace(fmt.Sprintf("pss relay block-cache match: FROM %x TO %x", common.ByteLabel(self.Overlay.GetAddr().OverlayAddr()), common.ByteLabel(msg.GetRecipient())))

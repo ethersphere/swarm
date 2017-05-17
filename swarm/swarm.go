@@ -187,14 +187,14 @@ func (self *Swarm) Start(net p2p.Server) error {
 	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.GetAddr()))
 
 	if self.pssEnabled {
-		pssparams := network.NewPssParams()
+		pssparams := network.NewPssParams(self.dpa)
 		self.pss = network.NewPss(self.hive.Overlay, pssparams)
 
 		// for testing purposes, shold be removed in production environment!!
 		pingtopic, _ := network.MakeTopic("pss", 1)
 		self.pss.Register(pingtopic, self.pss.GetPingHandler())
 
-		log.Debug("Pss started: %v", self.pss)
+		log.Info(fmt.Sprintf("Pss started on overlay address %x", self.pss.GetBaseAddr()))
 	}
 
 	self.dpa.Start()

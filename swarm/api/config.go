@@ -77,7 +77,7 @@ func NewConfig(path string, contract common.Address, prvKey *ecdsa.PrivateKey, n
 		HiveParams:    network.NewHiveParams(),
 		ChunkerParams: storage.NewChunkerParams(),
 		StoreParams:   storage.NewStoreParams(dirpath),
-		PssParams:	   network.NewPssParams(),
+		PssParams:	   network.NewPssParams(nil),
 		Port:          port,
 		Path:          dirpath,
 		Swap:          swap.DefaultSwapParams(contract, prvKey),
