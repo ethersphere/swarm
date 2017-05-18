@@ -118,11 +118,11 @@ var (
 		Usage: "force mime type",
 	}
 	PssEnabledFlag = cli.BoolFlag{
-		Name: "pss",
+		Name:  "pss",
 		Usage: "Enable pss (message passing over swarm)",
 	}
 	PssPortFlag = cli.IntFlag{
-		Name: "pssport",
+		Name:  "pssport",
 		Usage: fmt.Sprintf("Websockets port for pss (default %d)", node.DefaultWSPort),
 	}
 	CorsStringFlag = cli.StringFlag{
@@ -308,7 +308,7 @@ func bzzd(ctx *cli.Context) error {
 	cfg := defaultNodeConfig
 	if ctx.GlobalIsSet(PssEnabledFlag.Name) {
 		cfg.WSHost = "127.0.0.1"
-		cfg.WSModules = []string{"eth","pss"}
+		cfg.WSModules = []string{"eth", "pss"}
 		cfg.WSOrigins = []string{"*"}
 		if ctx.GlobalIsSet(PssPortFlag.Name) {
 			cfg.WSPort = ctx.GlobalInt(PssPortFlag.Name)
@@ -366,25 +366,36 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
 	pssEnabled := ctx.GlobalBool(PssEnabledFlag.Name)
-	
+
 	ethapi := ctx.GlobalString(EthAPIFlag.Name)
 	cors := ctx.GlobalString(CorsStringFlag.Name)
 
-	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		var client *ethclient.Client
-		if len(ethapi) > 0 {
-			client, err = ethclient.Dial(ethapi)
-			if err != nil {
-				utils.Fatalf("Can't connect: %v", err)
-			}
-		} else {
-			swapEnabled = false
+	var client *ethclient.Client
+	if len(ethapi) > 0 {
+		client, err = ethclient.Dial(ethapi)
+		if err != nil {
+			utils.Fatalf("Can't connect: %v", err)
 		}
-		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors, pssEnabled)
+	} else {
+		swapEnabled = false
 	}
-	if err := stack.Register(boot); err != nil {
+
+	var svcs []node.Service
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		svcs, err = swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors, pssEnabled)
+		if err != nil {
+			return nil, err
+		}
+		return svcs[0], nil
+	}); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)
 	}
+	if err := stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		return svcs[1], nil
+	}); err != nil {
+		utils.Fatalf("Failed to register the PSS service: %v", err)
+	}
+
 }
 
 func getAccount(ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
