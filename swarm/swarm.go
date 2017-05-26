@@ -21,7 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"time"
+	//"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -31,14 +31,15 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/rpc"
+	//"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	//"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
+	//httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/pss"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // the swarm stack
@@ -55,7 +56,8 @@ type Swarm struct {
 	corsString  string
 	swapEnabled bool
 	pssEnabled  bool
-	pss         *network.Pss
+	bzz         *network.Bzz
+	pss         *pss.Pss
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 }
@@ -76,7 +78,8 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool, cors string, pssEnabled bool) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool, cors string, pssEnabled bool) ([]node.Service, error) {
+	var err error
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -84,7 +87,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		return nil, fmt.Errorf("empty bzz key")
 	}
 
-	self = &Swarm{
+	self := &Swarm{
 		config:      config,
 		swapEnabled: swapEnabled,
 		backend:     backend,
@@ -97,23 +100,21 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
 	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams)
 	if err != nil {
-		return
+		return nil, err
 	}
 
 	log.Debug("Set up local db access (iterator/counter)")
 
 	kp := network.NewKadParams()
+	to := network.NewKademlia(common.FromHex(config.BzzKey), kp)
 
-	to := network.NewKademlia(
-		common.FromHex(config.BzzKey),
-		kp,
-	)
-	// set up the kademlia hive
-	self.hive = network.NewHive(
-		config.HiveParams, // configuration parameters
-		to,
-	)
-	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
+	hp := network.NewHiveParams()
+	bzzconfig := &network.BzzConfig{
+		OverlayAddr:  to.BaseAddr(),
+		UnderlayAddr: common.FromHex(config.PublicKey),
+		HiveParams:   hp,
+	}
+	self.bzz = network.NewBzz(bzzconfig, to, adapters.NewSimStateStore())
 
 	// setup cloud storage internal access layer
 	self.storage = storage.NewNetStore(hash, self.lstore, nil, config.StoreParams)
@@ -148,7 +149,13 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("-> Initializing Fuse file system")
 
-	return self, nil
+	// PSS
+	if pssEnabled {
+		pssp := pss.NewPssParams()
+		self.pss = pss.NewPss(to, self.dpa, pssp)
+	}
+
+	return []node.Service{self.bzz, self.pss}, nil
 }
 
 /*
@@ -162,7 +169,7 @@ Start is called when the stack is started
 * TODO: start subservices like sword, swear, swarmdns
 */
 // implements the node.Service interface
-func (self *Swarm) Start(net *p2p.Server) error {
+/*func (self *Swarm) Start(net *p2p.Server) error {
 	// set chequebook
 	if self.swapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
@@ -179,24 +186,10 @@ func (self *Swarm) Start(net *p2p.Server) error {
 
 	self.hive.Start(
 		net,
-		func() <-chan time.Time {
-			return time.NewTicker(time.Second).C
-		},
 		nil,
 	)
 
 	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.BaseAddr()))
-
-	if self.pssEnabled {
-		pssparams := network.NewPssParams()
-		self.pss = network.NewPss(self.hive.Overlay, pssparams)
-
-		// for testing purposes, shold be removed in production environment!!
-		pingtopic, _ := network.MakeTopic("pss", 1)
-		self.pss.Register(pingtopic, self.pss.GetPingHandler())
-
-		log.Debug("Pss started: %v", self.pss)
-	}
 
 	self.dpa.Start()
 	log.Debug(fmt.Sprintf("Swarm DPA started"))
@@ -217,11 +210,11 @@ func (self *Swarm) Start(net *p2p.Server) error {
 	}
 
 	return nil
-}
+}*/
 
 // implements the node.Service interface
 // stops all component services.
-func (self *Swarm) Stop() error {
+/*func (self *Swarm) Stop() error {
 	self.dpa.Stop()
 	self.hive.Stop()
 	if ch := self.config.Swap.Chequebook(); ch != nil {
@@ -234,15 +227,10 @@ func (self *Swarm) Stop() error {
 	}
 	self.sfs.Stop()
 	return self.config.Save()
-}
+}*/
 
 // implements the node.Service interface
-func (self *Swarm) Protocols() []p2p.Protocol {
-	ct := network.BzzCodeMap()
-	if self.pssEnabled {
-		ct.Register(1, &network.PssMsg{})
-	}
-	ct.Register(2, network.DiscoveryMsgs...)
+/*func (self *Swarm) Protocols() []p2p.Protocol {
 
 	// srv := func(p network.Peer) error {
 	// 	if self.pssEnabled {
@@ -284,11 +272,11 @@ func (self *Swarm) Protocols() []p2p.Protocol {
 	)
 
 	return []p2p.Protocol{*proto}
-}
+}*/
 
 // implements node.Service
 // Apis returns the RPC Api descriptors the Swarm implementation offers
-func (self *Swarm) APIs() []rpc.API {
+/*func (self *Swarm) APIs() []rpc.API {
 
 	apis := []rpc.API{
 		// public APIs
@@ -334,21 +322,12 @@ func (self *Swarm) APIs() []rpc.API {
 		// {Namespace, Version, api.NewAdmin(self), false},
 	}
 
-	if self.pssEnabled {
-		apis = append(apis, rpc.API{
-			Namespace: "eth",
-			Version:   "0.1/pss",
-			Service:   network.NewPssApi(self.pss),
-			Public:    true,
-		})
-	}
-
 	return apis
 }
 
 func (self *Swarm) Api() *api.Api {
 	return self.api
-}
+}*/
 
 // SetChequebook ensures that the local checquebook is set up on chain.
 func (self *Swarm) SetChequebook(ctx context.Context) error {
