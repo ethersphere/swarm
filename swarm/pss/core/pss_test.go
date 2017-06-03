@@ -1,4 +1,4 @@
-package pss
+package core
 
 import (
 	"bytes"
@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
 const (
@@ -43,27 +44,27 @@ func TestPssCache(t *testing.T) {
 	oaddr, _ := hex.DecodeString("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
 	//uaddr, _ := hex.DecodeString("101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f")
 	//proofbytes := []byte{241, 172, 117, 105, 88, 154, 82, 33, 176, 188, 91, 244, 245, 85, 86, 16, 120, 232, 70, 45, 182, 188, 99, 103, 157, 3, 202, 121, 252, 21, 129, 22}
-	proofbytes, _ := hex.DecodeString("ad312dca94df401555cfdeb85a6a1f87fb8f240f08dc36af246bd9d4d41efd89")
+	proofbytes, _ := hex.DecodeString("822fff7527f7ae630c1224921e50a7ca1b27324f00f3966623bd503780c7ab33")
 	ps := newTestPss(oaddr)
-	pp := NewPssParams()
+	pp := pss.NewPssParams()
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	fwdaddr := network.RandomAddr()
-	msg := &PssMsg{
-		Payload: &PssEnvelope{
+	msg := &pss.PssMsg{
+		Payload: &pss.PssEnvelope{
 			TTL:     0,
 			From:    oaddr,
-			Topic:   pssPingTopic,
+			Topic:   pss.PssPingTopic,
 			Payload: data,
 		},
 		To: to,
 	}
 
-	msgtwo := &PssMsg{
-		Payload: &PssEnvelope{
+	msgtwo := &pss.PssMsg{
+		Payload: &pss.PssEnvelope{
 			TTL:     0,
 			From:    oaddr,
-			Topic:   pssPingTopic,
+			Topic:   pss.PssPingTopic,
 			Payload: datatwo,
 		},
 		To: to,
@@ -135,8 +136,8 @@ func TestPssRegisterHandler(t *testing.T) {
 	ps := newTestPss(addr.OAddr)
 	from := network.RandomAddr()
 	payload := []byte("payload")
-	topic := NewTopic(pssSpec.Name, int(pssSpec.Version))
-	wrongtopic := NewTopic("foo", 42)
+	topic := pss.NewTopic(pssSpec.Name, int(pssSpec.Version))
+	wrongtopic := pss.NewTopic("foo", 42)
 	checkMsg := func(msg []byte, p *p2p.Peer, sender []byte) error {
 		if !bytes.Equal(from.OAddr, sender) {
 			return fmt.Errorf("sender mismatch. expected %x, got %x", from.OAddr, sender)
@@ -147,13 +148,13 @@ func TestPssRegisterHandler(t *testing.T) {
 		return nil
 	}
 	deregister := ps.Register(&topic, checkMsg)
-	pssmsg := &PssMsg{Payload: NewPssEnvelope(from.OAddr, topic, payload)}
+	pssmsg := &pss.PssMsg{Payload: pss.NewPssEnvelope(from.OAddr, topic, payload)}
 	err = ps.Process(pssmsg)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var i int
-	err = ps.Process(&PssMsg{Payload: NewPssEnvelope(from.OAddr, wrongtopic, payload)})
+	err = ps.Process(&pss.PssMsg{Payload: pss.NewPssEnvelope(from.OAddr, wrongtopic, payload)})
 	expErr := ""
 	if err == nil || err.Error() == expErr {
 		t.Fatalf("unhandled topic expected '%v', got '%v'", expErr, err)
@@ -168,7 +169,7 @@ func TestPssRegisterHandler(t *testing.T) {
 	}
 	deregister()
 	deregister2()
-	err = ps.Process(&PssMsg{Payload: NewPssEnvelope(from.OAddr, topic, payload)})
+	err = ps.Process(&pss.PssMsg{Payload: pss.NewPssEnvelope(from.OAddr, topic, payload)})
 	expErr = ""
 	if err == nil || err.Error() == expErr {
 		t.Fatalf("reregister handler expected %v, got %v", expErr, err)
@@ -182,11 +183,11 @@ func TestPssSimpleLinear(t *testing.T) {
 	_ = p2ptest.NewTestPeerPool()
 	ps := newTestPss(addr.Over())
 
-	ping := &pssPing{
-		quitC: make(chan struct{}),
+	ping := &pss.PssPing{
+		QuitC: make(chan struct{}),
 	}
 
-	err = RegisterPssProtocol(ps, &pssPingTopic, pssPingProtocol, newPssPingProtocol(ping.pssPingHandler))
+	err = RegisterPssProtocol(ps, &pss.PssPingTopic, pss.PssPingProtocol, pss.NewPssPingProtocol(ping.PssPingHandler))
 
 	if err != nil {
 		t.Fatalf("Failed to register virtual protocol in pss: %v", err)
@@ -194,7 +195,7 @@ func TestPssSimpleLinear(t *testing.T) {
 	run := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		id := p.ID()
 		pp := protocols.NewPeer(p, rw, pssSpec)
-		bp := &testPssPeer{
+		bp := &testPssOverlayConn{
 			Peer: pp,
 			addr: network.ToOverlayAddr(id[:]),
 		}
@@ -208,7 +209,7 @@ func TestPssSimpleLinear(t *testing.T) {
 
 	pt := p2ptest.NewProtocolTester(t, nodeconfig.ID, 2, run)
 
-	msg := newPssPingMsg(ps, network.ToOverlayAddr(pt.IDs[0].Bytes()), pssPingProtocol, pssPingTopic, []byte{1, 2, 3})
+	msg := pss.NewPssPingMsg(ps, network.ToOverlayAddr(pt.IDs[0].Bytes()), pss.PssPingProtocol, pss.PssPingTopic, []byte{1, 2, 3})
 
 	exchange := p2ptest.Exchange{
 		Expects: []p2ptest.Expect{
@@ -312,10 +313,10 @@ func testPssFullRandom(t *testing.T, adapter adapters.NodeAdapter, nodecount int
 				if bytes.Equal(fullpeers[fpeeridx], network.ToOverlayAddr(fid.Bytes())) {
 					fpeeridx++
 				}
-				msg := pssPingMsg{Created: time.Now()}
-				code, _ := pssPingProtocol.GetCode(&pssPingMsg{})
-				pmsg, _ := newProtocolMsg(code, msg)
-				client.CallContext(context.Background(), nil, "pss_sendRaw", pssPingTopic, PssAPIMsg{
+				msg := pss.PssPingMsg{Created: time.Now()}
+				code, _ := pss.PssPingProtocol.GetCode(&pss.PssPingMsg{})
+				pmsg, _ := pss.NewProtocolMsg(code, msg)
+				client.CallContext(context.Background(), nil, "pss_sendRaw", pss.PssPingTopic, pss.PssAPIMsg{
 					Addr: fullpeers[fpeeridx],
 					Msg:  pmsg,
 				})
@@ -399,8 +400,8 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
 
-	msgevents := make(chan PssAPIMsg)
-	msgsub, err := client.Subscribe(context.Background(), "pss", msgevents, "newMsg", pssPingTopic)
+	msgevents := make(chan pss.PssAPIMsg)
+	msgsub, err := client.Subscribe(context.Background(), "pss", msgevents, "newMsg", pss.PssPingTopic)
 	if err != nil {
 		return fmt.Errorf("error getting peer events for node %v: %s", id, err)
 	}
@@ -465,13 +466,13 @@ func newServices() adapters.Services {
 				return nil
 			}
 
-			pssp := NewPssParams()
+			pssp := pss.NewPssParams()
 			ps := NewPss(kademlia(id), dpa, pssp)
 
-			ping := &pssPing{
-				quitC: make(chan struct{}),
+			ping := &pss.PssPing{
+				QuitC: make(chan struct{}),
 			}
-			err = RegisterPssProtocol(ps, &pssPingTopic, pssPingProtocol, newPssPingProtocol(ping.pssPingHandler))
+			err = RegisterPssProtocol(ps, &pss.PssPingTopic, pss.PssPingProtocol, pss.NewPssPingProtocol(ping.PssPingHandler))
 			if err != nil {
 				log.Error("Couldnt register pss protocol", "err", err)
 				os.Exit(1)
@@ -489,6 +490,56 @@ func newServices() adapters.Services {
 			return network.NewBzz(config, kademlia(id), stateStore)
 		},
 	}
+}
+
+func newTestPss(addr []byte) *Pss {	
+	if addr == nil {
+		addr = network.RandomAddr().OAddr
+	}
+	
+	// set up storage
+	cachedir, err := ioutil.TempDir("", "pss-cache")
+	if err != nil {
+		log.Error("create pss cache tmpdir failed", "error", err)
+		os.Exit(1)
+	}
+	dpa, err := storage.NewLocalDPA(cachedir)
+	if err != nil {
+		log.Error("local dpa creation failed", "error", err)
+		os.Exit(1)
+	}
+	
+	// set up routing
+	kp := network.NewKadParams()
+	kp.MinProxBinSize = 3
+
+	// create pss
+	pp := pss.NewPssParams()
+
+	overlay := network.NewKademlia(addr, kp)
+	ps := NewPss(overlay, dpa, pp)
+
+	return ps
+}
+
+type testPssOverlayConn struct {
+	*protocols.Peer
+	addr []byte
+}
+
+func (self *testPssOverlayConn) Address() []byte {
+	return self.addr
+}
+
+func (self *testPssOverlayConn) Off() network.OverlayAddr {
+	return self
+}
+
+func (self *testPssOverlayConn) Drop(err error) {
+}
+
+func (self *testPssOverlayConn) Update(o network.OverlayAddr) network.OverlayAddr {
+	return self
 }
 
 /*
@@ -1373,7 +1424,7 @@ func makePss(addr []byte) *Pss {
 	kp := network.NewKadParams()
 	kp.MinProxBinSize = 3
 
-	pp := NewPssParams()
+	pp := pss.NewPssParams()
 
 	overlay := network.NewKademlia(addr, kp)
 	ps := NewPss(overlay, dpa, pp)

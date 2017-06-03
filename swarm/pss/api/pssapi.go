@@ -7,27 +7,21 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
 // PssAPI is the RPC API module for Pss
 type PssAPI struct {
-	*Pss
+	pss.PssAdapter
 }
 
 // NewPssAPI constructs a PssAPI instance
-func NewPssAPI(ps *Pss) *PssAPI {
-	return &PssAPI{Pss: ps}
-}
-
-// PssAPIMsg is the type for messages, it extends the rlp encoded protocol Msg
-// with the Sender's overlay address
-type PssAPIMsg struct {
-	Msg  []byte
-	Addr []byte
+func NewPssAPI(ps pss.PssAdapter) *PssAPI {
+	return &PssAPI{PssAdapter: ps}
 }
 
 // NewMsg API endpoint creates an RPC subscription
-func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscription, error) {
+func (pssapi *PssAPI) NewMsg(ctx context.Context, topic pss.PssTopic) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
@@ -35,7 +29,7 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 
 	psssub := notifier.CreateSubscription()
 	handler := func(msg []byte, p *p2p.Peer, from []byte) error {
-		apimsg := &PssAPIMsg{
+		apimsg := &pss.PssAPIMsg{
 			Msg:  msg,
 			Addr: from,
 		}
@@ -44,7 +38,7 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 		}
 		return nil
 	}
-	deregf := pssapi.Pss.Register(&topic, handler)
+	deregf := pssapi.PssAdapter.Register(&topic, handler)
 
 	go func() {
 		defer deregf()
@@ -61,8 +55,8 @@ func (pssapi *PssAPI) NewMsg(ctx context.Context, topic PssTopic) (*rpc.Subscrip
 }
 
 // SendRaw sends the message (serialized into byte slice) to a peer with topic
-func (pssapi *PssAPI) SendRaw(topic PssTopic, msg PssAPIMsg) error {
-	err := pssapi.Pss.Send(msg.Addr, topic, msg.Msg)
+func (pssapi *PssAPI) SendRaw(topic pss.PssTopic, msg pss.PssAPIMsg) error {
+	err := pssapi.PssAdapter.Send(msg.Addr, topic, msg.Msg)
 	if err != nil {
 		return fmt.Errorf("send error: %v", err)
 	}
@@ -72,5 +66,5 @@ func (pssapi *PssAPI) SendRaw(topic PssTopic, msg PssAPIMsg) error {
 // BaseAddr gets our own overlayaddress
 func (pssapi *PssAPI) BaseAddr() ([]byte, error) {
 	log.Warn("inside baseaddr")
-	return pssapi.Pss.Overlay.BaseAddr(), nil
+	return pssapi.PssAdapter.BaseAddr(), nil
 }
