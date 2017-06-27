@@ -121,9 +121,9 @@ var (
 		Name:  "pss",
 		Usage: "Enable pss (message passing over swarm)",
 	}
-	NoDiscoveryFlag = cli.BoolFlag{
-		Name:  "nodiscovery",
-		Usage: "Disables peers discovery mechanism",
+	DiscoveryEnabledFlag = cli.BoolFlag{
+		Name:  "discovery",
+		Usage: "Enable discovery",
 	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
@@ -270,7 +270,7 @@ Cleans database of corrupted entries.
 		SwarmUploadMimeType,
 		// pss flags
 		PssEnabledFlag,
-		NoDiscoveryFlag,
+		DiscoveryEnabledFlag,
 	}
 	rpcFlags := []cli.Flag{
 		utils.WSEnabledFlag,
@@ -366,10 +366,10 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if len(bzzport) > 0 {
 		bzzconfig.Port = bzzport
 	}
-	bzzconfig.HiveParams.Discovery = !ctx.GlobalBool(NoDiscoveryFlag.Name)
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
 	pssEnabled := ctx.GlobalBool(PssEnabledFlag.Name)
+	discoveryEnabled := ctx.GlobalBool(DiscoveryEnabledFlag.Name)
 
 	ethapi := ctx.GlobalString(EthAPIFlag.Name)
 	cors := ctx.GlobalString(CorsStringFlag.Name)
@@ -384,7 +384,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 		} else {
 			swapEnabled = false
 		}
-		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors, pssEnabled)
+		return swarm.NewSwarm(ctx, client, bzzconfig, swapEnabled, syncEnabled, cors, pssEnabled, discoveryEnabled)
 	}
 	if err := stack.Register(boot); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)

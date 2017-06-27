@@ -76,7 +76,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool, cors string, pssEnabled bool) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, swapEnabled, syncEnabled bool, cors string, pssEnabled bool, discoveryEnable bool) (self *Swarm, err error) {
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -106,6 +106,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		common.FromHex(config.BzzKey),
 		kp,
 	)
+
+	config.HiveParams.Discovery = discoveryEnable
 
 	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
 	addr := network.NewAddrFromNodeID(nodeid)
