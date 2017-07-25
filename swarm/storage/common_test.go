@@ -68,9 +68,18 @@ func testStore(m ChunkStore, l int64, branches int64, t *testing.T) {
 	chunkC := make(chan *Chunk)
 	go func() {
 		for chunk := range chunkC {
+			wg := chunk.wg
 			m.Put(chunk)
-			if chunk.wg != nil {
-				chunk.wg.Done()
+			c := chunk.dbStored
+			if wg != nil {
+				if c != nil {
+					go func() {
+						<-c
+						wg.Done()
+					}()
+				} else {
+					wg.Done()
+				}
 			}
 		}
 	}()

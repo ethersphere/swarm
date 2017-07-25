@@ -19,10 +19,16 @@ package storage
 import (
 	"bytes"
 	"io/ioutil"
+	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/log"
 )
+
+func init() {
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlError, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+}
 
 func initDbStore(t *testing.T) *DbStore {
 	dir, err := ioutil.TempDir("", "bzz-storage-test")
@@ -83,11 +89,15 @@ func TestDbStoreSyncIterator(t *testing.T) {
 		Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
 	}
 	for _, key := range keys {
-		m.Put(NewChunk(key, nil))
+		chunk := NewChunk(key, nil)
+		m.Put(chunk)
+		<-chunk.dbStored
 	}
 	it, err := m.NewSyncIterator(DbSyncState{
-		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
+		// [200..,400..] closed interval
+		Start: Key(common.Hex2Bytes("2000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
+		// [2,4) right open interval
 		First: 2,
 		Last:  4,
 	})
@@ -107,8 +117,8 @@ func TestDbStoreSyncIterator(t *testing.T) {
 	if len(res) != 1 {
 		t.Fatalf("Expected 1 chunk, got %v: %v", len(res), res)
 	}
-	if !bytes.Equal(res[0][:], keys[3]) {
-		t.Fatalf("Expected %v chunk, got %v", keys[3], res[0])
+	if !bytes.Equal(res[0][:], keys[1]) {
+		t.Fatalf("Expected %v chunk, got %v", keys[1], res[0])
 	}
 
 	if err != nil {
@@ -118,8 +128,8 @@ func TestDbStoreSyncIterator(t *testing.T) {
 	it, err = m.NewSyncIterator(DbSyncState{
 		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("5000000000000000000000000000000000000000000000000000000000000000")),
-		First: 2,
-		Last:  4,
+		First: 3,
+		Last:  5,
 	})
 
 	res = nil
@@ -147,8 +157,8 @@ func TestDbStoreSyncIterator(t *testing.T) {
 	it, _ = m.NewSyncIterator(DbSyncState{
 		Start: Key(common.Hex2Bytes("1000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
-		First: 2,
-		Last:  5,
+		First: 3,
+		Last:  6,
 	})
 	res = nil
 	for {
@@ -171,7 +181,7 @@ func TestDbStoreSyncIterator(t *testing.T) {
 	it, _ = m.NewSyncIterator(DbSyncState{
 		Start: Key(common.Hex2Bytes("2000000000000000000000000000000000000000000000000000000000000000")),
 		Stop:  Key(common.Hex2Bytes("4000000000000000000000000000000000000000000000000000000000000000")),
-		First: 2,
+		First: 3,
 		Last:  5,
 	})
 	res = nil

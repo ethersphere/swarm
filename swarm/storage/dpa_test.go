@@ -45,12 +45,14 @@ func TestDPArandom(t *testing.T) {
 	defer os.RemoveAll("/tmp/bzz")
 
 	reader, slice := testDataReaderAndSlice(testDataSize)
+
 	wg := &sync.WaitGroup{}
 	key, err := dpa.Store(reader, testDataSize, wg, nil)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
 	wg.Wait()
+
 	resultReader := dpa.Retrieve(key)
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)

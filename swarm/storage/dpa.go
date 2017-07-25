@@ -122,6 +122,7 @@ func (self *DPA) Stop() {
 		return
 	}
 	self.running = false
+	self.Close()
 	close(self.quitC)
 }
 
@@ -169,10 +170,17 @@ func (self *DPA) storeWorker() {
 
 	for chunk := range self.storeC {
 		self.Put(chunk)
-		if chunk.wg != nil {
-			log.Trace(fmt.Sprintf("dpa: store processor %v", chunk.Key.Log()))
-			chunk.wg.Done()
-
+		wg := chunk.wg
+		c := chunk.dbStored
+		if wg != nil {
+			if c != nil {
+				go func() {
+					<-c
+					wg.Done()
+				}()
+			} else {
+				wg.Done()
+			}
 		}
 		select {
 		case <-self.quitC:
@@ -240,5 +248,7 @@ func (self *dpaChunkStore) Put(entry *Chunk) {
 
 // Close chunk store
 func (self *dpaChunkStore) Close() {
+	self.localStore.Close()
+	self.netStore.Close()
 	return
 }

@@ -256,7 +256,6 @@ func (self *Kademlia) FindClosest(target Address, max int) []Node {
 	po := self.proximityBin(target)
 	index := po
 	step := 1
-	log.Trace(fmt.Sprintf("serving %v nodes at %v (PO%02d)", max, index, po))
 
 	// if max is set to 0, just want a full bucket, dynamic number
 	min := max
@@ -275,7 +274,6 @@ func (self *Kademlia) FindClosest(target Address, max int) []Node {
 			n++
 		}
 		// terminate if index reached the bottom or enough peers > min
-		log.Trace(fmt.Sprintf("add %v -> %v (PO%02d, PO%03d)", len(self.buckets[index]), n, index, po))
 		if n >= min && (step < 0 || max == 0) {
 			break
 		}
@@ -286,7 +284,6 @@ func (self *Kademlia) FindClosest(target Address, max int) []Node {
 		}
 		index += step
 	}
-	log.Trace(fmt.Sprintf("serve %d (<=%d) nodes for target lookup %v (PO%03d)", n, max, target, po))
 	return r.nodes
 }
 

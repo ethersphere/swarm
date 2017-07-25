@@ -42,17 +42,23 @@ func NewLocalStore(hash Hasher, params *StoreParams) (*LocalStore, error) {
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
-	chunk.dbStored = make(chan bool)
 	self.memStore.Put(chunk)
-	if chunk.wg != nil {
-		chunk.wg.Add(1)
+	wg := chunk.wg
+	if wg != nil {
+		wg.Add(1)
 	}
-	go func() {
-		self.DbStore.Put(chunk)
-		if chunk.wg != nil {
-			chunk.wg.Done()
+	self.DbStore.Put(chunk)
+	if wg != nil {
+		c := chunk.dbStored
+		if c != nil {
+			go func() {
+				<-c
+				wg.Done()
+			}()
+		} else {
+			wg.Done()
 		}
-	}()
+	}
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores
