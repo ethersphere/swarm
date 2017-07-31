@@ -251,7 +251,7 @@ func (ec *Client) SyncProgress(ctx context.Context) (*ethereum.SyncProgress, err
 // SubscribeNewHead subscribes to notifications about the current blockchain head
 // on the given channel.
 func (ec *Client) SubscribeNewHead(ctx context.Context, ch chan<- *types.Header) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "newHeads", map[string]struct{}{})
+	return ec.c.Subscribe(ctx, "eth", ch, "newHeads", map[string]struct{}{})
 }
 
 // State Access
@@ -299,7 +299,7 @@ func (ec *Client) FilterLogs(ctx context.Context, q ethereum.FilterQuery) ([]typ
 
 // SubscribeFilterLogs subscribes to the results of a streaming filter query.
 func (ec *Client) SubscribeFilterLogs(ctx context.Context, q ethereum.FilterQuery, ch chan<- types.Log) (ethereum.Subscription, error) {
-	return ec.c.EthSubscribe(ctx, ch, "logs", toFilterArg(q))
+	return ec.c.Subscribe(ctx, "eth", ch, "logs", toFilterArg(q))
 }
 
 func toFilterArg(q ethereum.FilterQuery) interface{} {
