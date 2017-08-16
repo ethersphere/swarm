@@ -208,11 +208,7 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-<<<<<<< HEAD
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-=======
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
->>>>>>> 43df0be... swarm/network: discovery test health check fix and temp debug code
 
 	s := NewSimulation()
 	services := adapters.Services{

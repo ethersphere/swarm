@@ -74,7 +74,7 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 		ID:             "0",
 		DefaultService: serviceName,
 	})
-	// defer net.Shutdown()
+	defer net.Shutdown()
 	trigger := make(chan discover.NodeID)
 	ids := make([]discover.NodeID, *nodeCount)
 	for i := 0; i < *nodeCount; i++ {
@@ -203,9 +203,7 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 		for {
 			select {
 			case <-events:
-				log.Debug("trigger peer event")
 				trigger <- id
-				log.Debug("trigger triggered")
 			case err := <-sub.Err():
 				if err != nil {
 					log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
@@ -231,7 +229,7 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	kad := network.NewKademlia(addr.Over(), kp)
 
 	hp := network.NewHiveParams()
-	hp.KeepAliveInterval = 500 * time.Millisecond
+	hp.KeepAliveInterval = 50 * time.Millisecond
 
 	config := &network.BzzConfig{
 		OverlayAddr:  addr.Over(),
