@@ -18,6 +18,8 @@ package whisperv5
 
 import (
 	"bytes"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"crypto/sha256"
@@ -759,6 +761,59 @@ func validatePrivateKey(k *ecdsa.PrivateKey) bool {
 // ValidateSymmetricKey returns false if the key contains all zeros
 func validateSymmetricKey(k []byte) bool {
 	return len(k) > 0 && !containsOnlyZeros(k)
+}
+
+// Encrypts the passed content with a given symmetric key
+func EncryptSymmetric(key []byte, content []byte) (encrypted []byte, nonce []byte, err error) {
+	if !validateSymmetricKey(key) {
+		return nil, nil, errors.New("invalid key provided for symmetric encryption")
+	}
+
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, nil, err
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// never use more than 2^32 random nonces with a given key
+	nonce = make([]byte, aesgcm.NonceSize())
+	_, err = crand.Read(nonce)
+	if err != nil {
+		return nil, nil, err
+	} else if !validateSymmetricKey(nonce) {
+		return nil, nil, errors.New("crypto/rand failed to generate nonce")
+	}
+
+	//return aesgcm.Seal(nil, nonce, content, nil), nil
+
+	log.Debug("before encrypt", "content", content, "nonce", nonce)
+	encrypted = aesgcm.Seal(nil, nonce, content, nil)
+	log.Debug("after encrypt", "content", content, "nonce", nonce)
+	return encrypted, nonce, nil
+}
+
+// Decrypts the passed content with a given symmetric key
+func DecryptSymmetric(key []byte, nonce []byte, content []byte) ([]byte, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+	aesgcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return nil, err
+	}
+	if len(nonce) != aesgcm.NonceSize() {
+		log.Error("decrypting the message", "AES nonce size", len(nonce))
+		return nil, errors.New("wrong AES nonce size")
+	}
+	decrypted, err := aesgcm.Open(nil, nonce, content, nil)
+	if err != nil {
+		return nil, err
+	}
+	return decrypted, nil
 }
 
 // containsOnlyZeros checks if the data contain only zeros.

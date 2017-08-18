@@ -19,8 +19,6 @@
 package whisperv5
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/ecdsa"
 	crand "crypto/rand"
 	"encoding/binary"
@@ -196,30 +194,12 @@ func (msg *SentMessage) encryptAsymmetric(key *ecdsa.PublicKey) error {
 
 // encryptSymmetric encrypts a message with a topic key, using AES-GCM-256.
 // nonce size should be 12 bytes (see cipher.gcmStandardNonceSize).
-func (msg *SentMessage) encryptSymmetric(key []byte) (nonce []byte, err error) {
-	if !validateSymmetricKey(key) {
-		return nil, errors.New("invalid key provided for symmetric encryption")
-	}
-
-	block, err := aes.NewCipher(key)
+func (msg *SentMessage) encryptSymmetric(key []byte) ([]byte, error) {
+	content, nonce, err := EncryptSymmetric(key, msg.Raw)
 	if err != nil {
 		return nil, err
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	// never use more than 2^32 random nonces with a given key
-	nonce = make([]byte, aesgcm.NonceSize())
-	_, err = crand.Read(nonce)
-	if err != nil {
-		return nil, err
-	} else if !validateSymmetricKey(nonce) {
-		return nil, errors.New("crypto/rand failed to generate nonce")
-	}
-
-	msg.Raw = aesgcm.Seal(nil, nonce, msg.Raw, nil)
+	msg.Raw = content
 	return nonce, nil
 }
 
@@ -258,23 +238,11 @@ func (msg *SentMessage) Wrap(options *MessageParams) (envelope *Envelope, err er
 // decryptSymmetric decrypts a message with a topic key, using AES-GCM-256.
 // nonce size should be 12 bytes (see cipher.gcmStandardNonceSize).
 func (msg *ReceivedMessage) decryptSymmetric(key []byte, nonce []byte) error {
-	block, err := aes.NewCipher(key)
+	content, err := DecryptSymmetric(key, nonce, msg.Raw)
 	if err != nil {
 		return err
 	}
-	aesgcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return err
-	}
-	if len(nonce) != aesgcm.NonceSize() {
-		log.Error("decrypting the message", "AES nonce size", len(nonce))
-		return errors.New("wrong AES nonce size")
-	}
-	decrypted, err := aesgcm.Open(nil, nonce, msg.Raw, nil)
-	if err != nil {
-		return err
-	}
-	msg.Raw = decrypted
+	msg.Raw = content
 	return nil
 }
 

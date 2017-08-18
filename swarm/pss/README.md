@@ -1,14 +1,12 @@
 # Postal Service over Swarm
 
-pss provides devp2p functionality for swarm nodes without the need for a direct tcp connection between them.
+pss provides messaging functionality for swarm nodes without the need for a direct tcp connection between them.
 
-It uses swarm kademlia routing to send and receive messages. Routing is deterministic and will seek the shortest route available on the network.
+It uses swarm kademlia routing to send and receive messages. Routing is deterministic and will seek the shortest route available on the network based on the information made available to it.
 
 Messages are encapsulated in a devp2p message structure `PssMsg`. These capsules are forwarded from node to node using ordinary tcp devp2p until it reaches it's destination. The destination address is hinted in `PssMsg.To`
 
 The content of a PssMsg can be anything at all, down to a simple, non-descript byte-slices. But convenience methods are made available to implement devp2p protocol functionality on top of it.
-
-In its final implementation, pss is intended to become "shh over bzz,"  that is; "whisper over swarm." Specifically, this means that the emphemeral encryption envelopes of whisper will be used to obfuscate the correspondance. Ideally, the unencrypted content of the PssMsg will only contain a part of the address of the recipient, where the final recipient is the one who matches this partial address *and* successfully can encrypt the message.
 
 For the current state and roadmap of pss development please see https://github.com/ethersphere/swarm/wiki/swarm-dev-progress.
 
@@ -16,129 +14,25 @@ Please report issues on https://github.com/ethersphere/go-ethereum
 
 Feel free to ask questions in https://gitter.im/ethersphere/pss
 
-## TL;DR IMPLEMENTATION
+## STATUS OF THIS DOCUMENT
 
-Most developers will most probably want to use the protocol-wrapping convenience client in swarm/pss/client. Documentation and a minimal code example for the latter is found in the package documentation. The pss API can of course also be used directly. The client implementation provides a clear illustration of its intended usage.
+`pss` is under active development, and the first implementation is yet to be merged to the Ethereum main branch. Expect things to change.
 
-pss implements the node.Service interface. This means that the API methods will be auto-magically exposed to any RPC layer the node activates. In particular, pss provides subscription to incoming messages using the go-ethereum rpc websocket layer. 	
+## TOPICS
 
-The important API methods are:
-- Receive() - start a subscription to receive new incoming messages matching specific "topics"
-- Send() - send content over pss to a specified recipient
+Pure pss is protocol agnostic. Instead it uses the notion of Topic. This is NOT the "subject" of a message, in terms of an email-messages, for example. Instead this type is used to internally register handlers for messages matching respective Topics.
 
+Topic in this context virtually mean anything; protocols, chatrooms, or social media groups.
 
-## LOWLEVEL IMPLEMENTATION
-
-code speaks louder than words:
-  
-     import (
-     	"io/ioutil"
-     	"os"
-     	"github.com/ethereum/go-ethereum/p2p"
-     	"github.com/ethereum/go-ethereum/log"
-     	"github.com/ethereum/go-ethereum/swarm/pss"
-     	"github.com/ethereum/go-ethereum/swarm/network"
-     	"github.com/ethereum/go-ethereum/swarm/storage"
-     )
-     
-     var (
-     	righttopic = pss.NewTopic("foo", 4)
-     	wrongtopic = pss.NewTopic("bar", 2)
-     )
-    
-     // if you want to see what's going on 
-     func init() {
-     	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-     	hf := log.LvlFilterHandler(log.LvlTrace, hs)
-     	h := log.CallerFileHandler(hf)
-     	log.Root().SetHandler(h)
-     }
-     
-     
-     // Pss.Handler type
-     func handler(msg []byte, p *p2p.Peer, from []byte) error {
-     	log.Debug("received", "msg", msg, "from", from, "forwarder", p.ID())
-     	return nil
-     }
-     
-     func implementation() {
-     
-		// bogus addresses for illustration purposes
-		meaddr := network.RandomAddr()
-		toaddr := network.RandomAddr()
-		fwdaddr := network.RandomAddr()
-	   
-		// new kademlia for routing
-		kp := network.NewKadParams()
-		to := network.NewKademlia(meaddr.Over(), kp)
-	   
-		// new (local) storage for cache
-		cachedir, err := ioutil.TempDir("", "pss-cache")
-		if err != nil {
-			panic("overlay")
-		}
-		dpa, err := storage.NewLocalDPA(cachedir)
-		if err != nil {
-			panic("storage")
-		}
-	   
-		// setup pss
-		psp := pss.NewPssParams(false)
-		ps := pss.NewPss(to, dpa, psp)
-	   
-		// does nothing but please include it
-		ps.Start(nil)
-	   
-		dereg := ps.Register(&righttopic, handler)
-	   
-		// in its simplest form a message is just a byteslice
-		payload := []byte("foobar")
-	   
-		// send a raw message
-		err = ps.SendRaw(toaddr.Over(), righttopic, payload)
-		log.Error("Fails. Not connect, so nothing in kademlia. But it illustrates the point.", "err", err)
-	   
-		// forward a full message
-		envfwd := pss.NewEnvelope(fwdaddr.Over(), righttopic, payload)
-		msgfwd := &pss.PssMsg{
-			To: toaddr.Over(),
-			Payload: envfwd,
-		}
-		err = ps.Forward(msgfwd)
-		log.Error("Also fails, same reason. I wish, I wish, I wish there was somebody out there.", "err", err)
-	   
-		// process an incoming message
-		// (this is the first step after the devp2p PssMsg message handler)
-		envme := pss.NewEnvelope(toaddr.Over(), righttopic, payload)
-		msgme := &pss.PssMsg{
-			To: meaddr.Over(),
-			Payload: envme,
-		}
-		err = ps.Process(msgme)
-		if err == nil {
-			log.Info("this works :)")
-		}
-	   
-		// if we don't have a registered topic it fails
-		dereg() // remove the previously registered topic-handler link
-		ps.Process(msgme)
-		log.Error("It fails as we expected", "err", err)
-	   
-		// does nothing but please include it
-		ps.Stop()
-    }
-
-## MESSAGE STRUCTURE
-
-NOTE! This part is subject to change. In particular the envelope structure will be re-implemented using whisper.
+## MESSAGES
 
 A pss message has the following layers:
 
 - PssMsg
-   Contains (eventually only part of) recipient address, and (eventually) encrypted Envelope. 
+   Contains a recipient address hint and the Envelope.
 
 - Envelope
-   Currently rlp-encoded. Contains the Payload, along with sender address, topic and expiry information.
+   Same as whisperv5.Envelope
 
 - Payload
    Byte-slice of arbitrary data
@@ -146,17 +40,85 @@ A pss message has the following layers:
 - ProtocolMsg
    An optional convenience structure for implementation of devp2p protocols. Contains Code, Size and Payload analogous to the p2p.Msg structure, where the payload is a rlp-encoded byteslice. For transport, this struct is serialized and used as the "payload" above.
 
-## TOPICS AND PROTOCOLS
+### EXCHANGE
 
-Pure pss is protocol agnostic. Instead it uses the notion of Topic. This is NOT the "subject" of a message. Instead this type is used to internally register handlers for messages matching respective Topics.
+Message exchange in `pss` requires end-to-end encryption. It implements both asymmetric and symmetric encryption schemes. 
 
-Topic in this context virtually mean anything; protocols, chatrooms, or social media groups.
+The end recipient of a message is defined as the node that can successfully decrypt that message using stored keys.
 
-When implementing devp2p protocols, topics are direct mappings to protocols name and version. The pss package provides the PssProtocol convenience structure, and a generic Handler that can be passed to Pss.Register. This makes it possible to use the same message handler code  for pss that are used for direct connected peers.
+Messages are filtered using topics. Only incoming messages matches topic filters will be passed to underlying message handlers.
+
+Address hinting can be used to make message routing more or less directional. See ROUTING below.
+
+### ENCRYPTION
+
+Asymmetric message exchange in theory only requires the peer's public key and a topic to be sent. The public key is derived from the private key passed to the `pss` constructor. There is no PKI functionality in pss. Thus public keys must be looked up externally and must be explicitly stored in the pss instance using the API method `SetPeerPublicKey()`. 
+
+Symmetric message exchange in `pss` is available through a handshake-mechanism on the API level (see HANDSHAKE below). Symmetric keys may also be set explicitly, using the API call `SetPeerSymmetricKey()`. When set explicitly, symmetric key expiry may be set arbitrarily. Adding the symmetric key to the collection of symmetric keys used for decryption is optional.
+
+Symmetric keys are stored using `whisperv5` as backend.
+
+It is assumed that the less resource-demanding symmetric encryption will be preferred over asymmetric encryption for normal message traffic, at least if the volume of messages is significant. 
+
+### DECRYPTION
+
+When processing an incoming message, `pss` detects whether it is encrypted symmetrically or asymmetrically.
+
+When decrypting symmetrically, `pss` iterates through all stored keys, and attempts to decrypt with each key in order. The cache will only store a certain amount of keys, and the iterator will return keys in the order of most recently used key first. (Garbage collection of keys abandoned by cache storage is not yet implemented).
 
 ## CONNECTIONS 
 
-A "connection" in pss is a purely virtual construct. There is no mechanisms in place to ensure that the remote peer actually is there. In fact, "adding" a peer involves merely the node's opinion that the peer is there. It may issue messages to that remote peer to a directly connected peer, which in turn passes it on. But if it is not present on the network - or if there is no route to it - the message will never reach its destination through mere forwarding.
+A "connection" in pss is a purely virtual construct. There are no mechanisms in place to ensure that the remote peer actually is present and listening. In fact, "adding" a peer involves merely a node's opinion that the peer is there. It may issue messages to that remote peer to a directly connected peer, which in turn passes it on. But if it is not present on the network - or if there is no route to it - the message will never reach its destination through mere forwarding. It may be argued that `pss` to a certain degree adopts the behavior of the `UDP` protocol.
+
+Internally `pss` the most primitive notion of "connection" is adding a peer's public key together with a topic in a keypool. In addition this method takes an address hint as parameters. The topic must be a valid whisper topic. The address hint is used for routing (see ROUTING below), and the value set will be used for all ensuing communcations using this public key / topic combination.
+
+### HANDSHAKE
+
+`pss` implements a handshake algorithm akin to `ssh`, where a special message structure is used to encapsulate the keys to be exchanged. This can be invoked using the API method `Handshake()`. The method takes topic and address hint as arguments.
+
+The handshake creates two separate symmetric keys, one for outgoing and one for incoming traffic. Symmetric keys have expiry times, and an expired symmetric key invalidates the handshake. Handshakes may be initiated at any time for any peer, regardless of expiry.
+
+Internally the handshake is performed as follows:
+
+* **Public key** of peer is added with originator's API call `SetPeerPublicKey()`
+* originator's API call `Handshake()` is executed with the peer's **public key**.
+* `pss` generates and stores a random symmetric key using whisper backend
+* the unencrypted symmetric key is wrapped in a `pssKeyMsg` struct
+* `pssKeyMsg` struct is sent asymmetrically to peer.
+* peer decodes the pss message and detects a `pssKeyMsg`
+* peer adds the symmetric key to its keypool, with the address byteslice provided in the `pssKeyMsg`
+* peer generates and stores a random symmetric key using whisper backend.
+* peer pairs the generated and received symmetric keys in an internal keypair index. (from now on peer considers this handshake as completed)
+* peer encrypts the generated symmetric key
+* the encrypted symmetric key is wrapped in a `pssKeyMsg` struct
+* `pssKeyMsg` struct is sent asymmetrically to originator.
+* originator decodes the pss message and detects a `pssKeyMsg`
+* originator attempts to decrypt the received symmetric key by iterating through its stored symmetric keys
+* originator adds the decrypted symmetric key to its keypool, with the address byteslice provided in the `pssKeyMsg`
+* originator pairs the received symmetric key with the symmetric key used to encrypt it in an internal keypair index
+* handshake is complete
+
+## ROUTING 
+
+(please refer to swarm kademlia routing for an explanation of the routing algorithm used for pss)
+
+`pss` uses *address hinting* for routing. The address hint is an arbitrary-length MSB byte slice of the peer's swarm overlay address. It can be the whole address, part of the address, or even an empty byte slice. The slice will be matched to the MSB slice of the same length of all devp2p peers in the routing stage.
+
+If an empty byte slice is passed, all devp2p peers will match the address hint, and the message will be forwarded to everyone. This is equivalent to `whisper` routing, and makes it theoretically impossible to use traffic analysis based on who messages are forwarded to.
+
+## CACHING
+
+pss implements a simple caching mechanism, using the swarm DPA for storage of the messages and generation of the digest keys used in the cache table. The caching is intended to alleviate the following:
+
+- save messages so that they can be delivered later if the recipient was not online at the time of sending.
+
+- drop an identical message to the same recipient if received within a given time interval
+
+- prevent backwards routing of messages
+
+the latter may occur if only one entry is in the receiving node's kademlia. In this case the forwarder will be provided as the "nearest node" to the final recipient. The cache keeps the address of who the message was forwarded from, and if the cache lookup matches, the message will be dropped.
+
+## USING PSS AS DEVP2P
 
 When implementing the devp2p protocol stack, the "adding" of a remote peer is a prerequisite for the side actually initiating the protocol communication. Adding a peer in effect "runs" the protocol on that peer, and adds an internal mapping between a topic and that peer. It also enables sending and receiving messages using the main io-construct in devp2p - the p2p.MsgReadWriter.
 
@@ -170,16 +132,7 @@ An incoming connection is nothing more than an actual PssMsg appearing with a ce
 
 If it is a "new" connection, the protocol will be "run" on the remote peer, in the same manner as if it was pre-emptively added.
 
-## ROUTING AND CACHING
+### TOPICS IN DEVP2P
 
-(please refer to swarm kademlia routing for an explanation of the routing algorithm used for pss)
+When implementing devp2p protocols, topics are direct mappings to protocols name and version. The pss package provides the PssProtocol convenience structure, and a generic Handler that can be passed to Pss.Register. This makes it possible to use the same message handler code  for pss that are used for direct connected peers.
 
-pss implements a simple caching mechanism, using the swarm DPA for storage of the messages and generation of the digest keys used in the cache table. The caching is intended to alleviate the following:
-
-- save messages so that they can be delivered later if the recipient was not online at the time of sending.
-
-- drop an identical message to the same recipient if received within a given time interval
-
-- prevent backwards routing of messages
-
-the latter may occur if only one entry is in the receiving node's kademlia. In this case the forwarder will be provided as the "nearest node" to the final recipient. The cache keeps the address of who the message was forwarded from, and if the cache lookup matches, the message will be dropped.

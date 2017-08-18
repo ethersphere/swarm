@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -21,6 +23,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/pot"
+	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
@@ -66,6 +69,75 @@ func init() {
 
 	w = whisper.New()
 	wapi = whisper.NewPublicWhisperAPI(w)
+}
+
+func TestCache(t *testing.T) {
+	var err error
+	var potaddr pot.Address
+	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
+	keys, err := wapi.NewKeyPair()
+	privkey, err := w.GetPrivateKey(keys)
+
+	ps := NewTestPss(privkey, nil)
+	pp := NewPssParams(privkey)
+	data := []byte("foo")
+	datatwo := []byte("bar")
+	fwdaddr := network.RandomAddr()
+	copy(potaddr[:], fwdaddr.Over())
+	wparams := &whisper.MessageParams{
+		TTL:      DefaultTTL,
+		Src:      privkey,
+		Dst:      &privkey.PublicKey,
+		Topic:    PingTopic,
+		WorkTime: defaultWhisperWorkTime,
+		PoW:      defaultWhisperPoW,
+		Payload:  data,
+	}
+	woutmsg, err := whisper.NewSentMessage(wparams)
+	env, err := woutmsg.Wrap(wparams)
+	msg := &PssMsg{
+		Payload: env,
+		To:      to,
+	}
+	wparams.Payload = datatwo
+	woutmsg, err = whisper.NewSentMessage(wparams)
+	envtwo, err := woutmsg.Wrap(wparams)
+	msgtwo := &PssMsg{
+		Payload: envtwo,
+		To:      to,
+	}
+
+	digest, err := ps.storeMsg(msg)
+	if err != nil {
+		t.Fatalf("could not store cache msgone: %v", err)
+	}
+	digesttwo, err := ps.storeMsg(msgtwo)
+	if err != nil {
+		t.Fatalf("could not store cache msgtwo: %v", err)
+	}
+
+	if digest == digesttwo {
+		t.Fatalf("different msgs return same hash: %d", digesttwo)
+	}
+
+	// check the cache
+	err = ps.addFwdCache(digest)
+	if err != nil {
+		t.Fatalf("write to pss expire cache failed: %v", err)
+	}
+
+	if !ps.checkFwdCache(nil, digest) {
+		t.Fatalf("message %v should have EXPIRE record in cache but checkCache returned false", msg)
+	}
+
+	if ps.checkFwdCache(nil, digesttwo) {
+		t.Fatalf("message %v should NOT have EXPIRE record in cache but checkCache returned true", msgtwo)
+	}
+
+	time.Sleep(pp.CacheTTL)
+	if ps.checkFwdCache(nil, digest) {
+		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
+	}
 }
 
 func TestAddressMatch(t *testing.T) {
@@ -143,14 +215,14 @@ func TestKeys(t *testing.T) {
 	addr := network.RandomAddr().Over()
 	outkey := network.RandomAddr().Over()
 	topic := whisper.BytesToTopic([]byte("foo:42"))
-	ps.SetPeerPublicKey(pot.NewAddressFromBytes(addr), topic, &theirprivkey.PublicKey)
-	outkeyid, err := ps.SetOutgoingSymmetricKey(pot.NewAddressFromBytes(addr), topic, outkey)
+	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topic, addr)
+	outkeyid, err := ps.SetSymmetricKey(outkey, topic, addr, 0, false)
 	if err != nil {
 		t.Fatalf("failed to set 'our' outgoing symmetric key")
 	}
 
 	// make a symmetric key that we will send to peer for encrypting messages to us
-	inkeyid, err := ps.GenerateIncomingSymmetricKey(pot.NewAddressFromBytes(addr), topic)
+	inkeyid, err := ps.generateSymmetricKey(topic, addr, time.Second, true)
 	if err != nil {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
@@ -172,61 +244,30 @@ func TestKeys(t *testing.T) {
 	t.Logf("symin: %v", inkey)
 
 	// check that the key is stored in the peerpool
-	var potaddr pot.Address
-	copy(potaddr[:], addr)
-	psp := ps.peerPool[potaddr][topic]
-	t.Logf("peer:\nrw: %v\npubkey: %v\nrecvsymkey: %v\nsendsymkey: %v\nsymkeyexp: %v", psp.rw, psp.pubkey, psp.recvsymkey, psp.sendsymkey, psp.symkeyexpires)
+	//psp := ps.symKeyPool[inkeyid][topic]
 }
 
+// asymmetrical key exchange between two directly connected peers
+// full address, partial address (8 bytes) and empty address
 func TestKeysExchange(t *testing.T) {
 
 	// set up two nodes directly connected
 	// (we are not testing pss routing here)
 	topic := whisper.BytesToTopic([]byte("foo:42"))
-	adapter := adapters.NewSimAdapter(services)
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: "bzz",
-	})
-	lnode, err := net.NewNodeWithConfig(&adapters.NodeConfig{
-		Services: []string{"bzz", "pss"},
-	})
+	hextopic := fmt.Sprintf("%x", topic)
+
+	clients, err := setupNetwork(2)
 	if err != nil {
-		t.Fatalf("error creating node 1: %v", err)
+		t.Fatal(err)
 	}
-	rnode, err := net.NewNodeWithConfig(&adapters.NodeConfig{
-		Services: []string{"bzz", "pss"},
-	})
-	if err != nil {
-		t.Fatalf("error creating node 2: %v", err)
-	}
-	err = net.Start(lnode.ID())
-	if err != nil {
-		t.Fatalf("error starting node 1: %v", err)
-	}
-	err = net.Start(rnode.ID())
-	if err != nil {
-		t.Fatalf("error starting node 2: %v", err)
-	}
-	err = net.Connect(lnode.ID(), rnode.ID())
-	if err != nil {
-		t.Fatalf("error connecting nodes: %v", err)
-	}
-	lclient, err := lnode.Client()
-	if err != nil {
-		t.Fatalf("create node 1 rpc client fail: %v", err)
-	}
-	rclient, err := rnode.Client()
-	if err != nil {
-		t.Fatalf("create node 2 rpc client fail: %v", err)
-	}
+
 	loaddr := make([]byte, 32)
-	err = lclient.Call(&loaddr, "pss_baseAddr")
+	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
 	roaddr := make([]byte, 32)
-	err = rclient.Call(&roaddr, "pss_baseAddr")
+	err = clients[1].Call(&roaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
@@ -234,231 +275,328 @@ func TestKeysExchange(t *testing.T) {
 	// retrieve public key from pss instance
 	// set this public key reciprocally
 	lpubkey := make([]byte, 32)
-	err = lclient.Call(&lpubkey, "pss_getPublicKey")
+	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
 	}
 	rpubkey := make([]byte, 32)
-	err = rclient.Call(&rpubkey, "pss_getPublicKey")
+	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
 	}
 
-	time.Sleep(time.Second) // replace with hive healthy code
+	time.Sleep(time.Millisecond * 500) // replace with hive healthy code
 
+	var addrs [2][]byte
+	var rkeysold []string
+
+	for i := 0; i < 3; i++ {
+
+		switch i {
+		case 1:
+			addrs[0] = loaddr[:8]
+			addrs[1] = roaddr[:8]
+			log.Info("Test partial address", "laddr", addrs[0], "raddr", addrs[1])
+			break
+		case 2:
+			addrs[0] = []byte{}
+			addrs[1] = []byte{}
+			log.Info("Test empty address")
+			break
+		default:
+			addrs[0] = loaddr
+			addrs[1] = roaddr
+			log.Info("Test full address", "laddr", addrs[0], "raddr", addrs[1])
+		}
+
+		err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, addrs[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, addrs[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// use api test method for generating and sending incoming symkey
+		// the peer should save it, then generate and send back its own
+		var symkeyid string
+		err = clients[0].Call(&symkeyid, "pss_handshake", common.ToHex(rpubkey), hextopic, addrs[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Millisecond * 2000) // wait for handshake complete, replace with sim expect logic
+
+		// after the exchange, the key for receiving on node 1
+		// should be the same as sending on node 2, and vice versa
+		// check node 1 first
+		lrecvkey := make([]byte, defaultSymKeyLength)
+		err = clients[0].Call(&lrecvkey, "psstest_getSymKey", symkeyid)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		lsendkey := make([]byte, defaultSymKeyLength)
+		err = clients[0].Call(&symkeyid, "pss_matchSymKey", symkeyid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = clients[0].Call(&lsendkey, "psstest_getSymKey", symkeyid)
+
+		// then check node 2
+		var rkeys []string
+		var rkeysnew []string
+		var rkeysbytes [2][]byte
+		err = clients[1].Call(&rkeys, "psstest_getSymKeys")
+		if err != nil {
+			t.Fatal(err)
+		} else if len(rkeys) < i+1 {
+			t.Fatalf("Wrong symkey count: Expected %d, got %d", i+1, len(rkeys))
+		}
+	nextkey:
+		for i := 0; i < len(rkeys); i++ {
+			for j := 0; j < len(rkeysold); j++ {
+				if rkeys[i] == rkeysold[j] {
+					continue nextkey
+				}
+			}
+			rkeysnew = append(rkeysnew, rkeys[i])
+			rkeysold = append(rkeysold, rkeys[i])
+		}
+		err = clients[1].Call(&rkeysbytes[0], "psstest_getSymKey", rkeysnew[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = clients[1].Call(&symkeyid, "pss_matchSymKey", rkeysnew[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = clients[1].Call(&rkeysbytes[1], "psstest_getSymKey", symkeyid)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// check if they match
+		// we do not know in which order they come from node 2 so we need to check both combinations
+		if bytes.Equal(lrecvkey, rkeysbytes[1]) {
+			if !bytes.Equal(lsendkey, rkeysbytes[0]) {
+				t.Fatalf("Node 2 receive key does not match node 1 send key: %x != %x", rkeysbytes[0], lsendkey)
+			}
+		} else if bytes.Equal(lrecvkey, rkeysbytes[0]) {
+			if !bytes.Equal(lsendkey, rkeysbytes[1]) {
+				t.Fatalf("Node 2 receive key does not match node 1 send key: %x != %x", rkeysbytes[1], lsendkey)
+			}
+		} else {
+			t.Fatalf("Node 1 receive key does not match any node 1 key: %x != %x | %x", lrecvkey, rkeysbytes[0], rkeysbytes[1])
+		}
+		t.Logf("#%d: left: %x / %x, right %x / %x", i, lrecvkey, lsendkey, rkeysbytes[0], rkeysbytes[1])
+	}
+}
+
+// send symmetrically encrypted message between two directly connected peers
+func TestSymSend(t *testing.T) {
+
+	topic := whisper.BytesToTopic([]byte("foo:42"))
 	hextopic := fmt.Sprintf("%x", topic)
+
+	clients, err := setupNetwork(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	loaddr := make([]byte, 32)
+	err = clients[0].Call(&loaddr, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
+	}
+	roaddr := make([]byte, 32)
+	err = clients[1].Call(&roaddr, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
+	}
+
+	time.Sleep(time.Millisecond * 500)
+
+	var addrs [2][]byte
+
+	// at this point we've verified that symkeys are saved and match on each peer
+	// now try sending symmetrically encrypted message, both directions
 	lmsgC := make(chan APIMsg)
 	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	lsub, err := lclient.Subscribe(lctx, "pss", lmsgC, "receive", hextopic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", hextopic)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	rsub, err := rclient.Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
+	log.Trace("rsub", "id", rsub)
+	defer rsub.Unsubscribe()
+	for i := 0; i < 3; i++ {
+		switch i {
+		case 1:
+			addrs[0] = loaddr[:8]
+			addrs[1] = roaddr[:8]
+			log.Info("Test partial address", "laddr", addrs[0], "raddr", addrs[1])
+			break
+		case 2:
+			addrs[0] = []byte{}
+			addrs[1] = []byte{}
+			log.Info("Test empty address")
+			break
+		default:
+			addrs[0] = loaddr
+			addrs[1] = roaddr
+			log.Info("Test full address", "laddr", addrs[0], "raddr", addrs[1])
+		}
+
+		lrecvkey := network.RandomAddr().Over()
+		rrecvkey := network.RandomAddr().Over()
+		var lkeyids [2]string
+		var rkeyids [2]string
+
+		err = clients[0].Call(&lkeyids, "psstest_setSymKeys", lrecvkey, rrecvkey, hextopic, roaddr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = clients[1].Call(&rkeyids, "psstest_setSymKeys", rrecvkey, lrecvkey, hextopic, loaddr)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		lmsg := []byte("plugh")
+		err = clients[1].Call(nil, "pss_sendSym", rkeyids[0], hextopic, lmsg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case recvmsg := <-lmsgC:
+			if !bytes.Equal(recvmsg.Msg, lmsg) {
+				t.Fatalf("node 1 received payload mismatch: expected %v, got %v", lmsg, recvmsg)
+			}
+		case cerr := <-lctx.Done():
+			t.Fatalf("test message timed out: %v", cerr)
+		}
+		rmsg := []byte("xyzzy")
+		err = clients[0].Call(nil, "pss_sendSym", lkeyids[0], hextopic, rmsg)
+		if err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case recvmsg := <-rmsgC:
+			if !bytes.Equal(recvmsg.Msg, rmsg) {
+				t.Fatalf("node 2 received payload mismatch: expected %v, got %v", rmsg, recvmsg.Msg)
+			}
+		case cerr := <-rctx.Done():
+			t.Fatalf("test message timed out: %v", cerr)
+		}
+	}
+}
+
+// send asymmetrically encrypted message between two directly connected peers
+func TestAsymSend(t *testing.T) {
+	topic := whisper.BytesToTopic([]byte("foo:42"))
+	hextopic := fmt.Sprintf("%x", topic)
+
+	clients, err := setupNetwork(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Millisecond * 250)
+
+	loaddr := make([]byte, 32)
+	err = clients[0].Call(&loaddr, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
+	}
+	roaddr := make([]byte, 32)
+	err = clients[1].Call(&roaddr, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
+	}
+
+	// retrieve public key from pss instance
+	// set this public key reciprocally
+	lpubkey := make([]byte, 32)
+	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
+	if err != nil {
+		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
+	}
+	rpubkey := make([]byte, 32)
+	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
+	if err != nil {
+		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
+	}
+
+	time.Sleep(time.Millisecond * 500) // replace with hive healthy code
+
+	var addrs [2][]byte
+
+	lmsgC := make(chan APIMsg)
+	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", hextopic)
+	log.Trace("lsub", "id", lsub)
+	defer lsub.Unsubscribe()
+	rmsgC := make(chan APIMsg)
+	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
-	err = lclient.Call(nil, "pss_setPeerPublicKey", roaddr, hextopic, rpubkey)
-	err = rclient.Call(nil, "pss_setPeerPublicKey", loaddr, hextopic, lpubkey)
-
-	// use api test method for generating and sending incoming symkey
-	// the peer should save it, then generate and send back its own
-	var symkeyid string
-	err = lclient.Call(&symkeyid, "pss_handshake", roaddr, hextopic, 8)
-	if err != nil {
-		t.Fatal(err)
-	}
-	time.Sleep(time.Second * 2) // replace with sim expect logic
-
-	// after the exchange, the key for receiving on node 1
-	// should be the same as sending on node 2, and vice versa
-	tmpbytes := make([]byte, defaultSymKeyLength*2)
-	lrecvkey := make([]byte, defaultSymKeyLength)
-	lsendkey := make([]byte, defaultSymKeyLength)
-	err = lclient.Call(&tmpbytes, "psstest_getSymKeys", roaddr, hextopic)
-	if err != nil {
-		t.Fatal(err)
-	}
-	copy(lrecvkey, tmpbytes[:defaultSymKeyLength])
-	copy(lsendkey, tmpbytes[defaultSymKeyLength:])
-	rrecvkey := make([]byte, defaultSymKeyLength)
-	rsendkey := make([]byte, defaultSymKeyLength)
-	err = rclient.Call(&tmpbytes, "psstest_getSymKeys", loaddr, hextopic)
-	if err != nil {
-		t.Fatal(err)
-	}
-	copy(rrecvkey, tmpbytes[:defaultSymKeyLength])
-	copy(rsendkey, tmpbytes[defaultSymKeyLength:])
-	if !bytes.Equal(rrecvkey, lsendkey) {
-		t.Fatalf("node 2 receive symkey does not match node 1 send symkey: %x != %x", rrecvkey, lsendkey)
-	}
-	if !bytes.Equal(lrecvkey, rsendkey) {
-		t.Fatalf("node 2 send symkey does not match node 1 receive symkey: %x != %x", rsendkey, lrecvkey)
-	}
-
-	// at this point we've verified that symkeys are saved and match on each peer
-	// now try sending symmetrically encrypted message, both directions
-	apimsg := APIMsg{
-		Msg:  []byte("plugh"),
-		Addr: loaddr,
-	}
-	err = rclient.Call(nil, "pss_sendSym", hextopic, apimsg, 8)
-	if err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case recvmsg := <-lmsgC:
-		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
-			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg)
+	for i := 0; i < 3; i++ {
+		switch i {
+		case 1:
+			addrs[0] = loaddr[:8]
+			addrs[1] = roaddr[:8]
+			log.Info("Test partial address", "laddr", addrs[0], "raddr", addrs[1])
+			break
+		case 2:
+			addrs[0] = []byte{}
+			addrs[1] = []byte{}
+			log.Info("Test empty address")
+			break
+		default:
+			addrs[0] = loaddr
+			addrs[1] = roaddr
+			log.Info("Test full address", "laddr", addrs[0], "raddr", addrs[1])
 		}
-	case cerr := <-lctx.Done():
-		t.Fatalf("test message timed out: %v", cerr)
-	}
-	apimsg = APIMsg{
-		Msg:  []byte("xyzzy"),
-		Addr: roaddr,
-	}
-	err = lclient.Call(nil, "pss_sendSym", hextopic, apimsg, 8)
-	if err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case recvmsg := <-rmsgC:
-		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
-			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
+		err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, addrs[1])
+		if err != nil {
+			t.Fatal(err)
 		}
-	case cerr := <-rctx.Done():
-		t.Fatalf("test message timed out: %v", cerr)
-	}
-
-	// then try asymmetric, both directions
-	err = lclient.Call(nil, "pss_sendAsym", hextopic, apimsg, 8)
-	if err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case recvmsg := <-rmsgC:
-		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
-			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
+		err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, addrs[0])
+		if err != nil {
+			t.Fatal(err)
 		}
-	case cerr := <-rctx.Done():
-		t.Fatalf("test message timed out: %v", cerr)
-	}
-	apimsg = APIMsg{
-		Msg:  []byte("plugh"),
-		Addr: loaddr,
-	}
-	err = rclient.Call(nil, "pss_sendAsym", hextopic, apimsg, 8)
-	if err != nil {
-		t.Fatal(err)
-	}
-	select {
-	case recvmsg := <-lmsgC:
-		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
-			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg)
+
+		rmsg := []byte("xyzzy")
+		err = clients[0].Call(nil, "pss_sendAsym", common.ToHex(rpubkey), hextopic, rmsg)
+		if err != nil {
+			t.Fatal(err)
 		}
-	case cerr := <-lctx.Done():
-		t.Fatalf("test message timed out: %v", cerr)
-	}
-
-	// then try dark asymmetric, both directions
-	err = rclient.Call(nil, "pss_sendAsym", hextopic, apimsg, 0)
-	if err != nil {
-		t.Fatalf("send fail: %v", err)
-	}
-	select {
-	case recvmsg := <-lmsgC:
-		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
-			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg)
+		select {
+		case recvmsg := <-rmsgC:
+			if !bytes.Equal(recvmsg.Msg, rmsg) {
+				t.Fatalf("node 2 received payload mismatch: expected %v, got %v", rmsg, recvmsg.Msg)
+			}
+		case cerr := <-rctx.Done():
+			t.Fatalf("test message timed out: %v", cerr)
 		}
-	case cerr := <-lctx.Done():
-		t.Fatalf("test message timed out: %v", cerr)
-	}
-	apimsg = APIMsg{
-		Msg:  []byte("xyzzy"),
-		Addr: roaddr,
-	}
-	err = lclient.Call(nil, "pss_sendAsym", hextopic, apimsg, 0)
-	if err != nil {
-		t.Fatalf("send fail: %v", err)
-	}
-	select {
-	case recvmsg := <-rmsgC:
-		if !bytes.Equal(recvmsg.Msg, apimsg.Msg) {
-			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", apimsg.Msg, recvmsg.Msg)
+		lmsg := []byte("plugh")
+		err = clients[1].Call(nil, "pss_sendAsym", common.ToHex(lpubkey), hextopic, lmsg)
+		if err != nil {
+			t.Fatal(err)
 		}
-	case cerr := <-rctx.Done():
-		t.Fatalf("test message timed out: %v", cerr)
-	}
-
-}
-
-func TestCache(t *testing.T) {
-	var err error
-	var potaddr pot.Address
-	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
-	keys, err := wapi.NewKeyPair()
-	privkey, err := w.GetPrivateKey(keys)
-
-	ps := NewTestPss(privkey, nil)
-	pp := NewPssParams(privkey)
-	data := []byte("foo")
-	datatwo := []byte("bar")
-	fwdaddr := network.RandomAddr()
-	copy(potaddr[:], fwdaddr.Over())
-	wparams := &whisper.MessageParams{
-		TTL:      DefaultTTL,
-		Src:      privkey,
-		Dst:      &privkey.PublicKey,
-		Topic:    PingTopic,
-		WorkTime: defaultWhisperWorkTime,
-		PoW:      defaultWhisperPoW,
-		Payload:  data,
-	}
-	woutmsg, err := whisper.NewSentMessage(wparams)
-	env, err := woutmsg.Wrap(wparams)
-	msg := &PssMsg{
-		Payload: env,
-		To:      to,
-	}
-	wparams.Payload = datatwo
-	woutmsg, err = whisper.NewSentMessage(wparams)
-	envtwo, err := woutmsg.Wrap(wparams)
-	msgtwo := &PssMsg{
-		Payload: envtwo,
-		To:      to,
-	}
-
-	digest, err := ps.storeMsg(msg)
-	if err != nil {
-		t.Fatalf("could not store cache msgone: %v", err)
-	}
-	digesttwo, err := ps.storeMsg(msgtwo)
-	if err != nil {
-		t.Fatalf("could not store cache msgtwo: %v", err)
-	}
-
-	if digest == digesttwo {
-		t.Fatalf("different msgs return same hash: %d", digesttwo)
-	}
-
-	// check the cache
-	err = ps.addFwdCache(digest)
-	if err != nil {
-		t.Fatalf("write to pss expire cache failed: %v", err)
-	}
-
-	if !ps.checkFwdCache(nil, digest) {
-		t.Fatalf("message %v should have EXPIRE record in cache but checkCache returned false", msg)
-	}
-
-	if ps.checkFwdCache(nil, digesttwo) {
-		t.Fatalf("message %v should NOT have EXPIRE record in cache but checkCache returned true", msgtwo)
-	}
-
-	time.Sleep(pp.Cachettl)
-	if ps.checkFwdCache(nil, digest) {
-		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
+		select {
+		case recvmsg := <-lmsgC:
+			if !bytes.Equal(recvmsg.Msg, lmsg) {
+				t.Fatalf("node 1 received payload mismatch: expected %v, got %v", lmsg, recvmsg.Msg)
+			}
+		case cerr := <-lctx.Done():
+			t.Fatalf("test message timed out: %v", cerr)
+		}
 	}
 }
 
@@ -471,7 +609,6 @@ func BenchmarkSymkeySend(b *testing.B) {
 }
 
 func benchmarkSymKeySend(b *testing.B) {
-	var potaddr pot.Address
 	msgsizestring := strings.Split(b.Name(), "/")
 	if len(msgsizestring) != 2 {
 		b.Fatalf("benchmark called without msgsize param")
@@ -487,8 +624,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	rand.Read(msg)
 	topic := whisper.BytesToTopic([]byte("foo"))
 	to := network.RandomAddr().Over()
-	copy(potaddr[:], to)
-	symkeyid, err := ps.GenerateIncomingSymmetricKey(potaddr, topic)
+	symkeyid, err := ps.generateSymmetricKey(topic, to, time.Second, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
@@ -496,11 +632,11 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not retreive symkey: %v", err)
 	}
-	ps.SetOutgoingSymmetricKey(potaddr, topic, symkey)
+	ps.SetSymmetricKey(symkey, topic, to, 0, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ps.SendSym(to, topic, msg, 8)
+		ps.SendSym(symkeyid, topic, msg)
 	}
 }
 
@@ -513,7 +649,6 @@ func BenchmarkAsymkeySend(b *testing.B) {
 }
 
 func benchmarkAsymKeySend(b *testing.B) {
-	var potaddr pot.Address
 	msgsizestring := strings.Split(b.Name(), "/")
 	if len(msgsizestring) != 2 {
 		b.Fatalf("benchmark called without msgsize param")
@@ -529,11 +664,10 @@ func benchmarkAsymKeySend(b *testing.B) {
 	rand.Read(msg)
 	topic := whisper.BytesToTopic([]byte("foo"))
 	to := network.RandomAddr().Over()
-	copy(potaddr[:], to)
-	ps.SetPeerPublicKey(potaddr, topic, &privkey.PublicKey)
+	ps.SetPeerPublicKey(&privkey.PublicKey, topic, to)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		ps.SendAsym(to, topic, msg, 8)
+		ps.SendAsym(common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey)), topic, msg)
 	}
 }
 func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
@@ -562,7 +696,6 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 			b.Fatalf("benchmark called with invalid cachesize '%s': %v", keycountstring[2], err)
 		}
 	}
-	potaddr := make([]pot.Address, keycount)
 	pssmsgs := make([]*PssMsg, 0, keycount)
 	var keyid string
 	keys, err := wapi.NewKeyPair()
@@ -574,8 +707,8 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 	topic := whisper.BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
-		copy(potaddr[i][:], network.RandomAddr().Over())
-		keyid, err = ps.GenerateIncomingSymmetricKey(potaddr[i], topic)
+		to := network.RandomAddr().Over()
+		keyid, err = ps.generateSymmetricKey(topic, to, time.Second, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -600,17 +733,17 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		if err != nil {
 			b.Fatalf("could not generate whisper envelope: %v", err)
 		}
-		ps.Register(&topic, func(msg []byte, p *p2p.Peer, addr []byte) error {
+		ps.Register(&topic, func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 			return nil
 		})
 		pssmsgs = append(pssmsgs, &PssMsg{
-			To:      potaddr[i][:],
+			To:      to,
 			Payload: env,
 		})
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := ps.Process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1])
+		err := ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1])
 		if err != nil {
 			b.Fatalf("pss processing failed: %v", err)
 		}
@@ -643,7 +776,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 			b.Fatalf("benchmark called with invalid cachesize '%s': %v", keycountstring[2], err)
 		}
 	}
-	potaddr := make([]pot.Address, keycount)
+	addr := make([]PssAddress, keycount)
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
@@ -653,8 +786,8 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	}
 	topic := whisper.BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
-		copy(potaddr[i][:], network.RandomAddr().Over())
-		keyid, err = ps.GenerateIncomingSymmetricKey(potaddr[i], topic)
+		addr[i] = network.RandomAddr().Over()
+		keyid, err = ps.generateSymmetricKey(topic, addr[i], time.Second, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -681,19 +814,58 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not generate whisper envelope: %v", err)
 	}
-	ps.Register(&topic, func(msg []byte, p *p2p.Peer, addr []byte) error {
+	ps.Register(&topic, func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 		return nil
 	})
 	pssmsg := &PssMsg{
-		To:      potaddr[len(potaddr)-1][:],
+		To:      addr[len(addr)-1][:],
 		Payload: env,
 	}
 	for i := 0; i < b.N; i++ {
-		err := ps.Process(pssmsg)
+		err := ps.process(pssmsg)
 		if err != nil {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
+}
+
+func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
+	nodes := make([]*simulations.Node, numnodes)
+	clients = make([]*rpc.Client, numnodes)
+	if numnodes < 2 {
+		return nil, fmt.Errorf("Minimum two nodes in network")
+	}
+	adapter := adapters.NewSimAdapter(services)
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		ID:             "0",
+		DefaultService: "bzz",
+	})
+	for i := 0; i < numnodes; i++ {
+		nodes[i], err = net.NewNodeWithConfig(&adapters.NodeConfig{
+			Services: []string{"bzz", "pss"},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("error creating node 1: %v", err)
+		}
+		err = net.Start(nodes[i].ID())
+		if err != nil {
+			return nil, fmt.Errorf("error starting node 1: %v", err)
+		}
+		if i > 0 {
+			err = net.Connect(nodes[i].ID(), nodes[i-1].ID())
+			if err != nil {
+				return nil, fmt.Errorf("error connecting nodes: %v", err)
+			}
+		}
+		clients[i], err = nodes[i].Client()
+		if err != nil {
+			return nil, fmt.Errorf("create node 1 rpc client fail: %v", err)
+		}
+	}
+	if numnodes > 2 {
+		err = net.Connect(nodes[0].ID(), nodes[len(nodes)-1].ID())
+	}
+	return clients, nil
 }
 
 func newServices() adapters.Services {
@@ -734,7 +906,11 @@ func newServices() adapters.Services {
 			ping := &Ping{
 				C: make(chan struct{}),
 			}
-			ps.Register(&PingTopic, RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler), false, 8).Handle)
+			pp, err := RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler), 0x02)
+			if err != nil {
+				return nil, err
+			}
+			ps.Register(&PingTopic, pp.Handle)
 			if err != nil {
 				log.Error("Couldnt register pss protocol", "err", err)
 				os.Exit(1)
