@@ -22,12 +22,19 @@ type PingMsg struct {
 }
 
 type Ping struct {
-	C chan struct{}
+	pong bool
+	OutC chan struct{}
+	InC  chan struct{}
 }
 
 func (self *Ping) PingHandler(msg interface{}) error {
-	log.Warn("got ping", "msg", msg)
-	self.C <- struct{}{}
+	log.Debug("got ping", "msg", msg)
+	if self.InC != nil {
+		self.InC <- struct{}{}
+	}
+	if self.pong {
+		self.OutC <- struct{}{}
+	}
 	return nil
 }
 
@@ -43,15 +50,24 @@ var PingProtocol = &protocols.Spec{
 
 var PingTopic = whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", PingProtocol.Name, PingProtocol.Version)))
 
-func NewPingProtocol(handler func(interface{}) error) *p2p.Protocol {
+func NewPingProtocol(pingC chan struct{}, handler func(interface{}) error) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    PingProtocol.Name,
 		Version: PingProtocol.Version,
 		Length:  uint64(PingProtocol.MaxMsgSize),
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+			quitC := make(chan struct{})
 			pp := protocols.NewPeer(p, rw, PingProtocol)
 			log.Trace(fmt.Sprintf("running pss vprotocol on peer %v", p))
+			go func() {
+				select {
+				case <-pingC:
+					pp.Send(&PingMsg{})
+				case <-quitC:
+				}
+			}()
 			err := pp.Run(handler)
+			quitC <- struct{}{}
 			return err
 		},
 	}

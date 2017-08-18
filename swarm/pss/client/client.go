@@ -2,15 +2,18 @@ package client
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/pss"
@@ -18,17 +21,21 @@ import (
 )
 
 const (
-	inboxCapacity  = 3000
-	outboxCapacity = 100
-	addrLen        = common.HashLength
+	inboxCapacity         = 3000
+	outboxCapacity        = 100
+	addrLen               = common.HashLength
+	handshakeRetryTimeout = 10000
+	handshakeRetryCount   = 3
 )
+
+var ()
 
 // After a successful connection with Client.Start, BaseAddr contains the swarm overlay address of the pss node
 type Client struct {
 	BaseAddr []byte
 
 	// peers
-	peerPool map[whisper.TopicType]map[pot.Address]*pssRPCRW
+	peerPool map[whisper.TopicType]map[string]*pssRPCRW
 	protos   map[whisper.TopicType]*p2p.Protocol
 
 	// rpc connections
@@ -46,17 +53,27 @@ type Client struct {
 // implements p2p.MsgReadWriter
 type pssRPCRW struct {
 	*Client
-	topic *whisper.TopicType
-	msgC  chan []byte
-	addr  pot.Address
+	topic    *whisper.TopicType
+	msgC     chan []byte
+	addr     pss.PssAddress
+	pubKey   string
+	symKey   string
+	lastSeen time.Time
 }
 
-func (self *Client) newpssRPCRW(addr pot.Address, topic *whisper.TopicType) *pssRPCRW {
+func (self *Client) newpssRPCRW(pubkey *ecdsa.PublicKey, addr pss.PssAddress, topic *whisper.TopicType) *pssRPCRW {
+	hextopic := fmt.Sprintf("%x", *topic)
+	pubkeybytes := crypto.FromECDSAPub(pubkey)
+	err := self.rpc.Call(nil, "pss_setPeerPublicKey", pubkeybytes, hextopic, addr)
+	if err != nil {
+		return nil
+	}
 	return &pssRPCRW{
 		Client: self,
 		topic:  topic,
 		msgC:   make(chan []byte),
 		addr:   addr,
+		pubKey: common.ToHex(pubkeybytes),
 	}
 }
 
@@ -71,6 +88,7 @@ func (rw *pssRPCRW) ReadMsg() (p2p.Msg, error) {
 	return pmsg, nil
 }
 
+// Will renew handshake if symkey does not exist / is expired
 func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	log.Trace("got writemsg pssclient", "msg", msg)
 	rlpdata := make([]byte, msg.Size)
@@ -83,12 +101,47 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	if err != nil {
 		return err
 	}
+	for i := 0; i < handshakeRetryCount; i++ {
+		if rw.Handshake() == nil {
+			hextopic := fmt.Sprintf("%x", *rw.topic)
+			return rw.Client.rpc.Call(nil, "pss_sendSym", rw.symKey, hextopic, pmsg)
+		}
+		time.Sleep(time.Millisecond * handshakeRetryTimeout)
+	}
+	return errors.New("pss handshake failed")
+}
 
-	return rw.Client.rpc.Call(nil, "pss_send", rw.topic, pss.APIMsg{
-		Addr: rw.addr.Bytes(),
-		Msg:  pmsg,
-	})
+// Manage underlying symkey handshakes
+//
+// If a valid handshake already exists, no action is performed and nil error is returned
+//
+// since we force synchronous handshake, peer must actually respond before write can be performed
+func (rw *pssRPCRW) Handshake() error {
+	hextopic := fmt.Sprintf("%x", *rw.topic)
+	if rw.symKey != "" {
+		var symkey []byte
+		var status int
+		err := rw.Client.rpc.Call(&symkey, "pss_getSymKey", rw.symKey)
+		if err != nil {
+			return err
+		}
+		err = rw.Client.rpc.Call(&status, "pss_symStatus", symkey, hextopic)
+		if err != nil {
+			return err
+		}
+		if status == pss.SYMSTATUS_OK {
+			return nil
+		}
+	}
 
+	var symkeys [2]string
+	err := rw.Client.rpc.Call(&symkeys, "pss_handshake", rw.pubKey, hextopic, rw.addr, true)
+	if err != nil {
+		return err
+	}
+	rw.symKey = symkeys[0]
+
+	return nil
 }
 
 func NewClient(rpcurl string) (*Client, error) {
@@ -120,7 +173,7 @@ func newClient() (client *Client) {
 	client = &Client{
 		msgC:     make(chan pss.APIMsg),
 		quitC:    make(chan struct{}),
-		peerPool: make(map[whisper.TopicType]map[pot.Address]*pssRPCRW),
+		peerPool: make(map[whisper.TopicType]map[string]*pssRPCRW),
 		protos:   make(map[whisper.TopicType]*p2p.Protocol),
 	}
 	return
@@ -131,11 +184,14 @@ func newClient() (client *Client) {
 // uses normal devp2p Send and incoming message handler routines from the p2p/protocols package
 //
 // when an incoming message is received from a peer that is not yet known to the client, this peer object is instantiated, and the protocol is run on it.
+//
+// TODO: less crude check limiting to sym msgs only
 func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
+	hextopic := fmt.Sprintf("%x", topic)
 	msgC := make(chan pss.APIMsg)
-	self.peerPool[topic] = make(map[pot.Address]*pssRPCRW)
-	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topic)
+	self.peerPool[topic] = make(map[string]*pssRPCRW)
+	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", hextopic)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
@@ -146,16 +202,42 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 		for {
 			select {
 			case msg := <-msgC:
-				var addr pot.Address
-				copy(addr[:], msg.Addr)
-				if self.peerPool[topic][addr] == nil {
-					self.peerPool[topic][addr] = self.newpssRPCRW(addr, &topic)
+				// we only allow sym msgs here
+				if msg.Asymmetric {
+					continue
+				}
+				// we get passed the symkeyid
+				// need the symkey itself to resolve to peer's pubkey
+				var symkey []byte
+				err = self.rpc.Call(&symkey, "pss_getSymKey", msg.Key)
+				if err != nil {
+					log.Warn("Received API msg with invalid symkey id", "symkey id", msg.Key)
+					continue
+				}
+				var pubkeyid string
+				err = self.rpc.Call(&pubkeyid, "pss_getPublicKeyFromSymmetricKey", symkey)
+				if err != nil || pubkeyid == "" {
+					log.Trace("proto err or no pubkey", "err", err, "symkey", symkey)
+					continue
+				}
+				// if we don't have the peer on this protocol already, create it
+				// this is more or less the same as AddPssPeer, less the handshake initiation
+				if self.peerPool[topic][pubkeyid] == nil {
+					var addr pss.PssAddress
+					err := self.rpc.Call(&addr, "pss_getAddress", hextopic, false, msg.Key)
+					if err != nil {
+						log.Trace("no addr")
+						continue
+					}
+					rw := self.newpssRPCRW(crypto.ToECDSAPub(common.FromHex(pubkeyid)), addr, &topic)
+					rw.symKey = msg.Key
+					self.peerPool[topic][pubkeyid] = rw
 					nid, _ := discover.HexID("0x00")
 					p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
-					go proto.Run(p, self.peerPool[topic][addr])
+					go proto.Run(p, self.peerPool[topic][pubkeyid])
 				}
 				go func() {
-					self.peerPool[topic][addr].msgC <- msg.Msg
+					self.peerPool[topic][pubkeyid].msgC <- msg.Msg
 				}()
 			case <-self.quitC:
 				return
@@ -173,24 +255,35 @@ func (self *Client) Stop() error {
 }
 
 // Preemptively add a remote pss peer
-func (self *Client) AddPssPeer(addr pot.Address, spec *protocols.Spec) {
-	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
+func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocols.Spec) error {
+	pubkeyid := common.ToHex(crypto.FromECDSAPub(key))
+	topic := ProtocolTopic(spec)
 	if self.peerPool[topic] == nil {
-		log.Error("addpeer on unset topic")
-		return
+		return errors.New("addpeer on unset topic")
 	}
-	if self.peerPool[topic][addr] == nil {
-		self.peerPool[topic][addr] = self.newpssRPCRW(addr, &topic)
+	if self.peerPool[topic][pubkeyid] == nil {
+		rw := self.newpssRPCRW(key, addr, &topic)
+		err := rw.Handshake()
+		if err != nil {
+			return err
+		}
+		self.peerPool[topic][pubkeyid] = rw
 		nid, _ := discover.HexID("0x00")
 		p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
-		go self.protos[topic].Run(p, self.peerPool[topic][addr])
+		go self.protos[topic].Run(p, self.peerPool[topic][pubkeyid])
 	}
+	return nil
 }
 
 // Remove a remote pss peer
 //
 // Note this doesn't actually currently drop the peer, but only remmoves the reference from the client's peer lookup table
-func (self *Client) RemovePssPeer(addr pot.Address, spec *protocols.Spec) {
-	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
-	delete(self.peerPool[topic], addr)
+func (self *Client) RemovePssPeer(pubkeyid string, spec *protocols.Spec) {
+	topic := ProtocolTopic(spec)
+	delete(self.peerPool[topic], pubkeyid)
+}
+
+// Uniform translation of protocol specifiers to topic
+func ProtocolTopic(spec *protocols.Spec) whisper.TopicType {
+	return whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
 }
