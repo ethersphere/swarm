@@ -107,8 +107,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		kp,
 	)
 
-	config.HiveParams.Discovery = true
-
 	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
 	addr := network.NewAddrFromNodeID(nodeid)
 	bzzconfig := &network.BzzConfig{

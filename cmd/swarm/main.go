@@ -121,6 +121,10 @@ var (
 		Name:  "pss",
 		Usage: "Enable pss (message passing over swarm)",
 	}
+	NoDiscoveryFlag = cli.BoolFlag{
+		Name:  "nodiscovery",
+		Usage: "Disables peers discovery mechanism",
+	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
 		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
@@ -266,6 +270,7 @@ Cleans database of corrupted entries.
 		SwarmUploadMimeType,
 		// pss flags
 		PssEnabledFlag,
+		NoDiscoveryFlag,
 	}
 	rpcFlags := []cli.Flag{
 		utils.WSEnabledFlag,
@@ -361,6 +366,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	if len(bzzport) > 0 {
 		bzzconfig.Port = bzzport
 	}
+	bzzconfig.HiveParams.Discovery = !ctx.GlobalBool(NoDiscoveryFlag.Name)
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
 	pssEnabled := ctx.GlobalBool(PssEnabledFlag.Name)
