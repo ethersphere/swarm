@@ -107,7 +107,15 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 		}
 		return nil
 	}
-	nnmap := network.NewPeerPot(testMinProxBinSize, ids...)
+	var addrs [][]byte
+	for _, id := range ids {
+		node := net.GetNode(id)
+		if node == nil {
+			continue
+		}
+		addrs = append(addrs, network.ToOverlayAddr(id.Bytes()))
+	}
+	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -124,9 +132,10 @@ func testDiscoverySimulation(t *testing.T, adapter adapters.NodeAdapter) {
 			return false, fmt.Errorf("error getting node client: %s", err)
 		}
 		var healthy bool
-		if err := client.Call(&healthy, "hive_healthy", nnmap[id]); err != nil {
+		if err := client.Call(&healthy, "hive_healthy", ppmap[id]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
+		log.Debug(fmt.Sprintf("node %4s healthy: %v", id, healthy))
 		return healthy, nil
 	}
 
@@ -222,11 +231,12 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	kp.MinBinSize = 1
 	kp.MaxRetries = 1000
 	kp.RetryExponent = 2
-	kp.RetryInterval = 1000000
+	kp.RetryInterval = 1000000000
+	kp.HealthCheck = true
 	kad := network.NewKademlia(addr.Over(), kp)
 
 	hp := network.NewHiveParams()
-	hp.KeepAliveInterval = time.Second
+	hp.KeepAliveInterval = 50 * time.Millisecond
 
 	config := &network.BzzConfig{
 		OverlayAddr:  addr.Over(),

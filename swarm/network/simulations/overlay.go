@@ -61,7 +61,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	kad.Prune(ticker.C)
 	hp := network.NewHiveParams()
 	hp.Discovery = !*noDiscovery
-	hp.KeepAliveInterval = 3 * time.Second
+	hp.KeepAliveInterval = 300 * time.Millisecond
 
 	config := &network.BzzConfig{
 		OverlayAddr:  addr.Over(),
@@ -112,9 +112,9 @@ func setupMocker(net *simulations.Network) []discover.NodeID {
 		if err := net.Start(id); err != nil {
 			panic(err.Error())
 		}
-		log.Debug(fmt.Sprintf("node %v starting up", id))
 	}
 	for i, id := range ids {
+		log.Trace(fmt.Sprintf("setup mocker: register a peer on node %x", id[:4]))
 		var peerID discover.NodeID
 		if i == 0 {
 			peerID = ids[len(ids)-1]
@@ -126,6 +126,7 @@ func setupMocker(net *simulations.Network) []discover.NodeID {
 			defer close(ch)
 			ch <- network.NewAddrFromNodeID(peerID)
 		}()
+		log.Trace(fmt.Sprintf("%x registers peer %x", id[:4], peerID[:4]))
 		if err := net.GetNode(id).Node.(*adapters.SimNode).Services()[0].(*network.Bzz).Hive.Register(ch); err != nil {
 			panic(err.Error())
 		}
@@ -207,7 +208,7 @@ func main() {
 
 	runtime.GOMAXPROCS(runtime.NumCPU())
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.LvlTrace, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 
 	s := NewSimulation()
 	services := adapters.Services{

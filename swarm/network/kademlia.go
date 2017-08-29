@@ -53,14 +53,15 @@ var pof = pot.DefaultPof(256)
 // KadParams holds the config params for Kademlia
 type KadParams struct {
 	// adjustable parameters
-	MaxProxDisplay int // number of rows the table shows
-	MinProxBinSize int // nearest neighbour core minimum cardinality
-	MinBinSize     int // minimum number of peers in a row
-	MaxBinSize     int // maximum number of peers in a row before pruning
-	RetryInterval  int // initial interval before a peer is first redialed
-	RetryExponent  int // exponent to multiply retry intervals with
-	MaxRetries     int // maximum number of redial attempts
-	PruneInterval  int // interval between peer pruning cycles
+	MaxProxDisplay int  // number of rows the table shows
+	MinProxBinSize int  // nearest neighbour core minimum cardinality
+	MinBinSize     int  // minimum number of peers in a row
+	MaxBinSize     int  // maximum number of peers in a row before pruning
+	RetryInterval  int  // initial interval before a peer is first redialed
+	RetryExponent  int  // exponent to multiply retry intervals with
+	MaxRetries     int  // maximum number of redial attempts
+	PruneInterval  int  // interval between peer pruning cycles
+	HealthCheck    bool // whether kademlia On should signal completion
 }
 
 // NewKadParams returns a params struct with default values
@@ -74,6 +75,8 @@ func NewKadParams() *KadParams {
 		RetryInterval: 420000000,
 		MaxRetries:    42,
 		RetryExponent: 2,
+		PruneInterval: 0, // TODO:
+		HealthCheck:   false,
 	}
 }
 
@@ -85,6 +88,7 @@ type Kademlia struct {
 	addrs        *pot.Pot // pots container for known peer addresses
 	conns        *pot.Pot // pots container for live peer connections
 	currentDepth uint8    // stores the last calculated depth
+	events       chan struct{}
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -94,11 +98,16 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	if params == nil {
 		params = NewKadParams()
 	}
+	var events chan struct{}
+	if params.HealthCheck {
+		events = make(chan struct{}, 1000)
+	}
 	return &Kademlia{
 		base:      addr,
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
 		conns:     pot.NewPot(nil, 0),
+		events:    events,
 	}
 }
 
@@ -177,17 +186,18 @@ func (e *entry) conn() OverlayConn {
 // Register enters each OverlayAddr as kademlia peer record into the
 // database of known peer addresses
 func (k *Kademlia) Register(peers chan OverlayAddr) error {
-
 	np := pot.NewPot(nil, 0)
 	for p := range peers {
-		// error if k received, peer should know better
+		// error if self received, peer should know better
 		if bytes.Equal(p.Address(), k.base) {
-			return fmt.Errorf("add peers: %x is k", k.base)
+			return fmt.Errorf("add peers: %x is self", k.base)
 		}
 		np, _, _ = pot.Add(np, newEntry(p), pof)
 	}
 	var com int
+	log.Trace(fmt.Sprintf("%x registering peers", k.BaseAddr()[:4]))
 	k.lock.Lock()
+	log.Trace(fmt.Sprintf("%x got lock", k.BaseAddr()[:4]))
 	defer k.lock.Unlock()
 	k.addrs, com = pot.Union(k.addrs, np, pof)
 	log.Trace(fmt.Sprintf("%x merged %v peers, %v known, total: %v", k.BaseAddr()[:4], np.Size(), com, k.addrs.Size()))
@@ -197,8 +207,8 @@ func (k *Kademlia) Register(peers chan OverlayAddr) error {
 // SuggestPeer returns a known peer for the lowest proximity bin for the
 // lowest bincount below depth
 // naturally if there is an empty row it returns a peer for that
-//
 func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
+	log.Trace(fmt.Sprintf("%x registering peers", k.BaseAddr()[:4]))
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	minsize := k.MinBinSize
@@ -211,15 +221,14 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 			return false
 		}
 		a = k.callable(val)
-		log.Trace(fmt.Sprintf("%x candidate nearest neighbour at %v: %v (%v)", k.BaseAddr()[:4], val.(*entry), a, po))
 		ppo = po
 		return a == nil
 	})
 	if a != nil {
-		log.Trace(fmt.Sprintf("%x candidate nearest neighbour found: %v (%v)", k.BaseAddr()[:4], a, ppo))
+		log.Trace(fmt.Sprintf("%08x candidate nearest neighbour found: %v (%v)", k.BaseAddr()[:4], a, ppo))
 		return a, 0, false
 	}
-	log.Trace(fmt.Sprintf("%x no candidate nearest neighbours to connect to (Depth: %v, minProxSize: %v) %#v", k.BaseAddr()[:4], depth, k.MinProxBinSize, a))
+	log.Trace(fmt.Sprintf("%08x no candidate nearest neighbours to connect to (Depth: %v, minProxSize: %v) %#v", k.BaseAddr()[:4], depth, k.MinProxBinSize, a))
 
 	var bpo []int
 	prev := -1
@@ -235,32 +244,24 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		}
 		return size > 0 && po < depth
 	})
-	// all buckets are full
-	// minsize == k.MinBinSize
+	// all buckets are full, ie., minsize == k.MinBinSize
 	if len(bpo) == 0 {
-		log.Debug(fmt.Sprintf("%x: all bins saturated", k.BaseAddr()[:4]))
+		log.Debug(fmt.Sprintf("%08x: all bins saturated", k.BaseAddr()[:4]))
 		return nil, 0, false
 	}
 	// as long as we got candidate peers to connect to
 	// dont ask for new peers (want = false)
 	// try to select a candidate peer
 	// find the first callable peer
-	i := 0
 	nxt := bpo[0]
-	k.addrs.EachBin(k.base, pof, nxt, func(po, size int, f func(func(pot.Val, int) bool) bool) bool {
-		// for each bin we find callable candidate peers
-		if i >= depth {
+	k.addrs.EachBin(k.base, pof, nxt, func(po, _ int, f func(func(pot.Val, int) bool) bool) bool {
+		// for each bin (up until depth) we find callable candidate peers
+		if po >= depth {
 			return false
 		}
-		if po == nxt {
-			i++
-			if i < len(bpo) {
-				nxt = bpo[i]
-			}
-		}
-		f(func(val pot.Val, j int) bool {
+		f(func(val pot.Val, _ int) bool {
 			a = k.callable(val)
-			return a == nil && i < len(bpo) && po <= depth
+			return a == nil
 		})
 		return false
 	})
@@ -268,6 +269,7 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 	if a != nil {
 		return a, 0, false
 	}
+	// no candidate peer found, request for the short bin
 	return a, nxt, true
 }
 
@@ -293,11 +295,27 @@ func (k *Kademlia) On(p OverlayConn) {
 			return e
 		})
 	}
+	if k.HealthCheck {
+		timeout := time.NewTimer(3 * time.Second)
+		select {
+		case k.events <- struct{}{}:
+		case <-timeout.C:
+			panic(fmt.Sprintf("%x timed out on waiting for connection event", k.BaseAddr()[:4]))
+		}
+	}
+	go k.notify(p)
+}
+
+// notify notifies the newly added peer about nearest neighbour requests
+// and sends the peer to those nodes subscribed to the bin the peer is in
+// sends the peer its own depth if it has changed since
+func (k *Kademlia) notify(p OverlayConn) {
+	k.lock.RLock()
+	defer k.lock.RUnlock()
 	np, ok := p.(Notifier)
 	if !ok {
 		return
 	}
-
 	depth := uint8(k.depth())
 	var depthChanged bool
 	if depth != k.currentDepth {
@@ -305,7 +323,7 @@ func (k *Kademlia) On(p OverlayConn) {
 		k.currentDepth = depth
 	}
 
-	go np.NotifyDepth(depth)
+	np.NotifyDepth(depth)
 	f := func(val pot.Val, po int) {
 		dp := val.(*entry).OverlayPeer.(Notifier)
 		dp.NotifyPeer(p.Off(), uint8(po))
@@ -315,7 +333,8 @@ func (k *Kademlia) On(p OverlayConn) {
 			log.Trace(fmt.Sprintf("peer %v notified of new depth %v", dp, depth))
 		}
 	}
-	k.conns.EachNeighbourAsync(e, pof, 1024, 255, f, false)
+
+	k.conns.EachNeighbourAsync(p, pof, 1024, 255, f, false)
 }
 
 // Off removes a peer from among live peers
@@ -405,6 +424,7 @@ func (k *Kademlia) depth() (depth int) {
 func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	e := val.(*entry)
 	// not callable if peer is live or exceeded maxRetries
+	// log.Trace(fmt.Sprintf("%08x peer %#v (%T)", k.BaseAddr()[:4], e.OverlayPeer, e.OverlayPeer))
 	if e.conn() != nil || e.retries > k.MaxRetries {
 		log.Trace(fmt.Sprintf("peer %v (%T) not callable", e, e.OverlayPeer))
 		return nil
@@ -513,12 +533,13 @@ func (k *Kademlia) String() string {
 // the bin is reduced to MinBinSize peers thus leaving slots to newly
 // connecting peers
 func (k *Kademlia) Prune(c <-chan time.Time) {
-	k.lock.RLock()
-	defer k.lock.RUnlock()
 	go func() {
 		for range c {
+			k.lock.RLock()
+			conns := k.conns
+			k.lock.RUnlock()
 			total := 0
-			k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(pot.Val, int) bool) bool) bool {
+			conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(pot.Val, int) bool) bool) bool {
 				extra := size - k.MinBinSize
 				if size > k.MaxBinSize {
 					n := 0
@@ -536,71 +557,127 @@ func (k *Kademlia) Prune(c <-chan time.Time) {
 	}()
 }
 
+// PeerPot keeps info about expected nearest neighbours and empty bins
+// used for testing only
+type PeerPot struct {
+	NNSet     [][]byte
+	EmptyBins []int
+}
+
 // NewPeerPot just creates a new pot record OverlayAddr
-func NewPeerPot(kadMinProxSize int, ids ...discover.NodeID) map[discover.NodeID][][]byte {
+func NewPeerPot(kadMinProxSize int, ids []discover.NodeID, addrs [][]byte) map[discover.NodeID]*PeerPot {
 	// create a table of all nodes for health check
 	np := pot.NewPot(nil, 0)
-	for _, id := range ids {
-		o := ToOverlayAddr(id.Bytes())
-		np, _, _ = pot.Add(np, o, pof)
+	for _, addr := range addrs {
+		np, _, _ = pot.Add(np, addr, pof)
 	}
-	nnmap := make(map[discover.NodeID][][]byte)
+	ppmap := make(map[discover.NodeID]*PeerPot)
 
-	for _, id := range ids {
-		pl := 0
+	for i, id := range ids {
+		pl := 256
+		prev := 256
+		var emptyBins []int
 		var nns [][]byte
-		np.EachNeighbour(id.Bytes(), pof, func(val pot.Val, po int) bool {
-			// a := val.(pot.BytesAddress).Address()
-			// nns = append(nns, a)
+		np.EachNeighbour(addrs[i], pof, func(val pot.Val, po int) bool {
 			a := val.([]byte)
-			nns = append(nns, a)
-			if len(nns) >= kadMinProxSize {
-				pl = po
+			if po == 256 {
+				return true
 			}
-			return pl == 0 || pl == po
+			if pl == 256 || pl == po {
+				nns = append(nns, a)
+			}
+			if pl == 256 && len(nns) >= kadMinProxSize {
+				pl = po
+				prev = po
+			}
+			if prev < pl {
+				for j := prev; j > po; j-- {
+					emptyBins = append(emptyBins, j)
+				}
+			}
+			prev = po - 1
+			return true
 		})
-		nnmap[id] = nns
+		for j := prev; j >= 0; j-- {
+			emptyBins = append(emptyBins, j)
+		}
+		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], logNNS(nns)))
+		ppmap[id] = &PeerPot{nns, emptyBins}
 	}
-	return nnmap
+	return ppmap
 }
 
-// FirstEmptyBin returns the farthest proximity order (int) that has no peer records
-func (k *Kademlia) firstEmptyBin() (i int) {
-	i = -1
-	k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
-		if po > i+1 {
-			i = po
-			return false
+func (k *Kademlia) full(emptyBins []int) (full bool) {
+	prev := 0
+	e := len(emptyBins)
+	k.conns.EachBin(k.base, pof, 0, func(po, _ int, _ func(func(val pot.Val, i int) bool) bool) bool {
+		for i := prev; e > 0 && i < po; i++ {
+			e--
+			if emptyBins[e] != i {
+				log.Trace(fmt.Sprintf("%08x po: %d, i: %d, e: %d, emptybins: %v", k.BaseAddr()[:4], po, i, e, logEmptyBins(emptyBins)))
+				if emptyBins[e] < i {
+					panic("incorrect peerpot")
+				}
+				return false
+			}
 		}
-		i = po
+		prev = po + 1
 		return true
 	})
-	return i
+	return e == 0
 }
 
-// Full returns a bool if the kademlia table is healthy and complete
-func (k *Kademlia) full() bool {
-	return k.firstEmptyBin() >= k.depth()
-}
-
-// Healthy reports the health state of the kademlia connectivity
-func (k *Kademlia) Healthy(peers [][]byte) bool {
-	k.lock.RLock()
-	defer k.lock.RUnlock()
-	return k.gotNearestNeighbours(peers) && k.full()
-}
-
-func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (got bool) {
+func (k *Kademlia) gotNearestNeighbours(peers [][]byte) bool {
 	pm := make(map[string]bool)
-	for _, p := range peers {
-		pm[string(p)] = true
-	}
+
 	k.eachConn(nil, 255, func(p OverlayConn, po int, nn bool) bool {
 		if !nn {
 			return false
 		}
-		_, got = pm[string(p.Address())]
-		return got
+		pk := fmt.Sprintf("%x", p.Address())
+		pm[pk] = true
+		return true
 	})
-	return got
+	log.Trace(fmt.Sprintf("%08x: NNSet: %d", k.BaseAddr()[:4], len(pm)))
+	for _, p := range peers {
+		pk := fmt.Sprintf("%x", p)
+		if !pm[pk] {
+			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", k.BaseAddr()[:4], pk))
+			return false
+		}
+	}
+	return true
+}
+
+// Healthy reports the health state of the kademlia connectivity
+func (k *Kademlia) Healthy(pp *PeerPot) bool {
+	log.Trace(fmt.Sprintf("%08x: healthy?", k.BaseAddr()[:4]))
+	if k.HealthCheck {
+		<-k.events
+	}
+	k.lock.RLock()
+	defer k.lock.RUnlock()
+	gotnn := k.gotNearestNeighbours(pp.NNSet)
+	full := k.full(pp.EmptyBins)
+	if !gotnn || !full {
+		log.Trace(fmt.Sprintf("%08x: NNSet: %s, EmptyBins: %s", k.BaseAddr()[:4], logNNS(pp.NNSet), logEmptyBins(pp.EmptyBins)))
+	}
+	log.Trace(fmt.Sprintf("%08x: healthy: %v && %v", k.BaseAddr()[:4], gotnn, full))
+	return gotnn && full
+}
+
+func logNNS(nns [][]byte) string {
+	var nnsa []string
+	for _, nn := range nns {
+		nnsa = append(nnsa, fmt.Sprintf("%08x", nn[:4]))
+	}
+	return strings.Join(nnsa, ", ")
+}
+
+func logEmptyBins(ebs []int) string {
+	var ebss []string
+	for _, eb := range ebs {
+		ebss = append(ebss, fmt.Sprintf("%d", eb))
+	}
+	return strings.Join(ebss, ", ")
 }
