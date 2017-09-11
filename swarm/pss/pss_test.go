@@ -22,7 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -34,15 +33,21 @@ const (
 	bzzServiceName = "bzz"
 )
 
+type protoCtrl struct {
+	C        chan struct{}
+	protocol *PssProtocol
+	run      func(*p2p.Peer, p2p.MsgReadWriter) error
+}
+
 var (
 	snapshotfile   string
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 	debugflag      = flag.Bool("v", false, "verbose")
 	w              *whisper.Whisper
 	wapi           *whisper.PublicWhisperAPI
-
 	// custom logging
-	psslogmain log.Logger
+	psslogmain   log.Logger
+	pssprotocols map[string]*protoCtrl
 )
 
 var services = newServices()
@@ -69,11 +74,13 @@ func init() {
 
 	w = whisper.New()
 	wapi = whisper.NewPublicWhisperAPI(w)
+
+	pssprotocols = make(map[string]*protoCtrl)
 }
 
+// test if we can insert into cache, match items with cache and cache expiry
 func TestCache(t *testing.T) {
 	var err error
-	var potaddr pot.Address
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
@@ -82,8 +89,6 @@ func TestCache(t *testing.T) {
 	pp := NewPssParams(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
-	fwdaddr := network.RandomAddr()
-	copy(potaddr[:], fwdaddr.Over())
 	wparams := &whisper.MessageParams{
 		TTL:      DefaultTTL,
 		Src:      privkey,
@@ -289,10 +294,15 @@ func TestKeysExchange(t *testing.T) {
 
 	var addrs [2][]byte
 	var rkeysold []string
+	synchs := false
 
-	for i := 0; i < 3; i++ {
-
-		switch i {
+	for i := 0; i < 6; i++ {
+		// the second iteration blocks until handshake response is received
+		if i == 3 {
+			synchs = true
+		}
+		imod := i % 3
+		switch imod {
 		case 1:
 			addrs[0] = loaddr[:8]
 			addrs[1] = roaddr[:8]
@@ -320,33 +330,41 @@ func TestKeysExchange(t *testing.T) {
 
 		// use api test method for generating and sending incoming symkey
 		// the peer should save it, then generate and send back its own
-		var symkeyid string
-		err = clients[0].Call(&symkeyid, "pss_handshake", common.ToHex(rpubkey), hextopic, addrs[1])
+		var symkeys [2]string
+		err = clients[0].Call(&symkeys, "pss_handshake", common.ToHex(rpubkey), hextopic, addrs[1], synchs)
 		if err != nil {
 			t.Fatal(err)
 		}
-		time.Sleep(time.Millisecond * 2000) // wait for handshake complete, replace with sim expect logic
+		if synchs {
+			log.Debug("sync handshake response", "recvkey", symkeys[0], "sendkey", symkeys[1])
+		} else {
+			time.Sleep(time.Millisecond * 2000) // wait for handshake complete, replace with sim expect logic
+		}
 
 		// after the exchange, the key for receiving on node 1
 		// should be the same as sending on node 2, and vice versa
 		// check node 1 first
 		lrecvkey := make([]byte, defaultSymKeyLength)
-		err = clients[0].Call(&lrecvkey, "psstest_getSymKey", symkeyid)
+		err = clients[0].Call(&lrecvkey, "pss_getSymKey", symkeys[0])
 		if err != nil {
 			t.Fatal(err)
 		}
-
+		var lsendkeyid string
 		lsendkey := make([]byte, defaultSymKeyLength)
-		err = clients[0].Call(&symkeyid, "pss_matchSymKey", symkeyid)
+		err = clients[0].Call(&lsendkeyid, "pss_matchSymKey", symkeys[0])
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = clients[0].Call(&lsendkey, "psstest_getSymKey", symkeyid)
+		if synchs && lsendkeyid != symkeys[1] {
+			t.Fatalf("Sync handshake response symkey does not match matchKey API call: %s != %s", symkeys[1], lsendkeyid)
+		}
+		err = clients[0].Call(&lsendkey, "pss_getSymKey", lsendkeyid)
 
 		// then check node 2
 		var rkeys []string
 		var rkeysnew []string
 		var rkeysbytes [2][]byte
+		var rsendkeyid string
 		err = clients[1].Call(&rkeys, "psstest_getSymKeys")
 		if err != nil {
 			t.Fatal(err)
@@ -363,16 +381,15 @@ func TestKeysExchange(t *testing.T) {
 			rkeysnew = append(rkeysnew, rkeys[i])
 			rkeysold = append(rkeysold, rkeys[i])
 		}
-		err = clients[1].Call(&rkeysbytes[0], "psstest_getSymKey", rkeysnew[0])
+		err = clients[1].Call(&rkeysbytes[0], "pss_getSymKey", rkeysnew[0])
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = clients[1].Call(&symkeyid, "pss_matchSymKey", rkeysnew[0])
+		err = clients[1].Call(&rsendkeyid, "pss_matchSymKey", rkeysnew[0])
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		err = clients[1].Call(&rkeysbytes[1], "psstest_getSymKey", symkeyid)
+		err = clients[1].Call(&rkeysbytes[1], "pss_getSymKey", rsendkeyid)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -390,7 +407,24 @@ func TestKeysExchange(t *testing.T) {
 		} else {
 			t.Fatalf("Node 1 receive key does not match any node 1 key: %x != %x | %x", lrecvkey, rkeysbytes[0], rkeysbytes[1])
 		}
-		t.Logf("#%d: left: %x / %x, right %x / %x", i, lrecvkey, lsendkey, rkeysbytes[0], rkeysbytes[1])
+		var xrpubkeyid string
+		var xlpubkeyid string
+		err = clients[0].Call(&xrpubkeyid, "pss_getPublicKeyFromSymmetricKey", lsendkeyid)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = clients[1].Call(&xlpubkeyid, "pss_getPublicKeyFromSymmetricKey", rkeysnew[0])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if xlpubkeyid == "" {
+			err = clients[1].Call(&xlpubkeyid, "pss_getPublicKeyFromSymmetricKey", rkeysnew[1])
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		t.Logf("#%d syms: left: %x / %x, right %x / %x", i, lrecvkey, lsendkey, rkeysbytes[0], rkeysbytes[1])
+		t.Logf("#%d pubs: left: %x / %s, right %x / %s", i, lpubkey, xlpubkeyid, rpubkey, xrpubkeyid)
 	}
 }
 
@@ -597,6 +631,85 @@ func TestAsymSend(t *testing.T) {
 		case cerr := <-lctx.Done():
 			t.Fatalf("test message timed out: %v", cerr)
 		}
+	}
+}
+
+func TestProtocol(t *testing.T) {
+	hextopic := fmt.Sprintf("%x", PingTopic)
+	clients, err := setupNetwork(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Millisecond * 250)
+
+	loaddr := make([]byte, 32)
+	err = clients[0].Call(&loaddr, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
+	}
+	roaddr := make([]byte, 32)
+	err = clients[1].Call(&roaddr, "pss_baseAddr")
+	if err != nil {
+		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
+	}
+	lnodeinfo := &p2p.NodeInfo{}
+	err = clients[0].Call(&lnodeinfo, "admin_nodeInfo")
+	if err != nil {
+		t.Fatalf("rpc nodeinfo node 11 fail: %v", err)
+	}
+
+	// retrieve public key from pss instance
+	// set this public key reciprocally
+	lpubkey := make([]byte, 32)
+	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
+	if err != nil {
+		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
+	}
+	rpubkey := make([]byte, 32)
+	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
+	if err != nil {
+		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
+	}
+
+	time.Sleep(time.Millisecond * 500) // replace with hive healthy code
+
+	lmsgC := make(chan APIMsg)
+	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", hextopic)
+	log.Trace("lsub", "id", lsub)
+	defer lsub.Unsubscribe()
+	rmsgC := make(chan APIMsg)
+	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
+	log.Trace("rsub", "id", rsub)
+	defer rsub.Unsubscribe()
+
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, roaddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, loaddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
+	p := p2p.NewPeer(nid, fmt.Sprintf("%x", loaddr), []p2p.Cap{})
+	pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, common.ToHex(rpubkey))
+
+	pssprotocols[lnodeinfo.ID].C <- struct{}{}
+	select {
+	case <-lmsgC:
+		log.Debug("lnode got pong")
+	case cerr := <-lctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+	select {
+	case <-rmsgC:
+		log.Debug("rnode got pong")
+	case cerr := <-lctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
 	}
 }
 
@@ -864,6 +977,9 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	}
 	if numnodes > 2 {
 		err = net.Connect(nodes[0].ID(), nodes[len(nodes)-1].ID())
+		if err != nil {
+			return nil, fmt.Errorf("error connecting first and last nodes")
+		}
 	}
 	return clients, nil
 }
@@ -904,9 +1020,11 @@ func newServices() adapters.Services {
 			ps := NewPss(pskad, dpa, pssp)
 
 			ping := &Ping{
-				C: make(chan struct{}),
+				OutC: make(chan struct{}),
+				pong: true,
 			}
-			pp, err := RegisterPssProtocol(ps, &PingTopic, PingProtocol, NewPingProtocol(ping.PingHandler), 0x02)
+			p2pp := NewPingProtocol(ping.OutC, ping.PingHandler)
+			pp, err := RegisterPssProtocol(ps, &PingTopic, PingProtocol, p2pp, &PssProtocolOptions{Asymmetric: true})
 			if err != nil {
 				return nil, err
 			}
@@ -915,7 +1033,11 @@ func newServices() adapters.Services {
 				log.Error("Couldnt register pss protocol", "err", err)
 				os.Exit(1)
 			}
-
+			pssprotocols[ctx.Config.ID.String()] = &protoCtrl{
+				C:        ping.OutC,
+				protocol: pp,
+				run:      p2pp.Run,
+			}
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {

@@ -46,7 +46,7 @@ Message exchange in `pss` requires end-to-end encryption. It implements both asy
 
 The end recipient of a message is defined as the node that can successfully decrypt that message using stored keys.
 
-Messages are filtered using topics. Only incoming messages matches topic filters will be passed to underlying message handlers.
+Messages are filtered using topics. Only incoming messages that match topic filters will be passed to underlying message handlers.
 
 Address hinting can be used to make message routing more or less directional. See ROUTING below.
 
@@ -70,7 +70,7 @@ When decrypting symmetrically, `pss` iterates through all stored keys, and attem
 
 A "connection" in pss is a purely virtual construct. There are no mechanisms in place to ensure that the remote peer actually is present and listening. In fact, "adding" a peer involves merely a node's opinion that the peer is there. It may issue messages to that remote peer to a directly connected peer, which in turn passes it on. But if it is not present on the network - or if there is no route to it - the message will never reach its destination through mere forwarding. It may be argued that `pss` to a certain degree adopts the behavior of the `UDP` protocol.
 
-Internally `pss` the most primitive notion of "connection" is adding a peer's public key together with a topic in a keypool. In addition this method takes an address hint as parameters. The topic must be a valid whisper topic. The address hint is used for routing (see ROUTING below), and the value set will be used for all ensuing communcations using this public key / topic combination.
+Internally `pss` the most primitive notion of "connection" is adding a peer's public key together with a topic in a keypool. This method takes an address hint as parameter. The topic must be a valid whisper topic. The address hint is used for routing (see ROUTING below), and the value set will be used for all ensuing communcations using this public key / topic combination.
 
 ### HANDSHAKE
 
@@ -106,6 +106,8 @@ Internally the handshake is performed as follows:
 
 If an empty byte slice is passed, all devp2p peers will match the address hint, and the message will be forwarded to everyone. This is equivalent to `whisper` routing, and makes it theoretically impossible to use traffic analysis based on who messages are forwarded to.
 
+A node will also forward to everyone if the address hint provided is in its proximity bin, both to provide saturation to increase chances of delivery, and also for recipient obfuscation to thwart traffic analysis attacks. The recipient node(s) will always forward to all its peers.
+
 ## CACHING
 
 pss implements a simple caching mechanism, using the swarm DPA for storage of the messages and generation of the digest keys used in the cache table. The caching is intended to alleviate the following:
@@ -116,7 +118,7 @@ pss implements a simple caching mechanism, using the swarm DPA for storage of th
 
 - prevent backwards routing of messages
 
-the latter may occur if only one entry is in the receiving node's kademlia. In this case the forwarder will be provided as the "nearest node" to the final recipient. The cache keeps the address of who the message was forwarded from, and if the cache lookup matches, the message will be dropped.
+the latter may occur if only one entry is in the receiving node's kademlia, or if the proximity of the current node recipient hinted by the address is so close that the message will be forwarded to everyone. In these cases the forwarder will be provided as the "nearest node" to the final recipient. The cache keeps the address of who the message was forwarded from, and if the cache lookup matches, the message will be dropped.
 
 ## USING PSS AS DEVP2P
 
@@ -130,9 +132,9 @@ An incoming connection is nothing more than an actual PssMsg appearing with a ce
 
 - The pss node never received a PssMsg from this remote peer with this specific Topic before.
 
-If it is a "new" connection, the protocol will be "run" on the remote peer, in the same manner as if it was pre-emptively added.
+If it is a "new" connection, the protocol will be "run" on the remote peer, as if the peer was added via the API. 
 
 ### TOPICS IN DEVP2P
 
-When implementing devp2p protocols, topics are direct mappings to protocols name and version. The pss package provides the PssProtocol convenience structure, and a generic Handler that can be passed to Pss.Register. This makes it possible to use the same message handler code  for pss that are used for direct connected peers.
+When implementing devp2p protocols, topics are derived from protocols' name and version. The pss package provides the PssProtocol convenience structure, and a generic Handler that can be passed to Pss.Register. This makes it possible to use the same message handler code for pss that is used for directly connected peers in devp2p.
 

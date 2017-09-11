@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+// Protocol options
+type PssProtocolOptions struct {
+	Asymmetric bool
+	Symmetric  bool
+}
+
 // protocol specification of the pss capsule
 var pssSpec = &protocols.Spec{
 	Name:       "pss",
@@ -64,8 +70,6 @@ func (prw PssReadWriter) injectMsg(msg p2p.Msg) error {
 	return nil
 }
 
-// For devp2p protocol integration only.
-//
 // Convenience object for passing messages in and out of the p2p layer
 type PssProtocol struct {
 	*Pss
@@ -74,16 +78,13 @@ type PssProtocol struct {
 	spec         *protocols.Spec
 	pubKeyRWPool map[string]p2p.MsgReadWriter
 	symKeyRWPool map[string]p2p.MsgReadWriter
-	flags        byte
+	Asymmetric   bool
+	Symmetric    bool
 }
 
-// For devp2p protocol integration only.
-//
 // Maps a Topic to a devp2p protocol.
-//
-// flags: 0x01 = asymmetric messaging enabled, 0x02 symmetric messaging enabled
-func RegisterPssProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec, targetprotocol *p2p.Protocol, flags byte) (*PssProtocol, error) {
-	if flags&0x03 == 0 {
+func RegisterPssProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *PssProtocolOptions) (*PssProtocol, error) {
+	if !options.Asymmetric && !options.Symmetric {
 		return nil, fmt.Errorf("specify at least one of asymmetric or symmetric messaging mode")
 	}
 	pp := &PssProtocol{
@@ -93,44 +94,29 @@ func RegisterPssProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec
 		spec:         spec,
 		pubKeyRWPool: make(map[string]p2p.MsgReadWriter),
 		symKeyRWPool: make(map[string]p2p.MsgReadWriter),
-		flags:        flags,
+		Asymmetric:   options.Asymmetric,
+		Symmetric:    options.Symmetric,
 	}
 	return pp, nil
 }
 
-func (self *PssProtocol) isAsymmetric() bool {
-	return self.flags&0x01 != 0
-}
-
-func (self *PssProtocol) isSymmetric() bool {
-	return self.flags&0x02 != 0
-}
-
-// For devp2p protocol integration only.
-//
-// BROKEN! Implementation for pubkey lookup must be implemented
-//
 // Generic handler for initiating devp2p-like protocol connections
 //
 // This handler should be passed to Pss.Register with the associated topic.
+//
+// TODO: Implementation for pubkey lookup must be implemented
 func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 	var vrw *PssReadWriter
-	if self.isAsymmetric() != asymmetric && self.isSymmetric() == !asymmetric {
+	if self.Asymmetric != asymmetric && self.Symmetric == !asymmetric {
 		return fmt.Errorf("invalid protocol encryption")
-	} else if (!self.isActiveSymKeyProtocol(keyid, *self.topic) && !asymmetric) || (!self.isActiveAsymKeyProtocol(keyid, *self.topic) && asymmetric) {
-		rw := &PssReadWriter{
-			Pss:   self.Pss,
-			rw:    make(chan p2p.Msg),
-			spec:  self.spec,
-			topic: self.topic,
-			key:   keyid,
+	} else if (!self.isActiveSymKey(keyid, *self.topic) && !asymmetric) ||
+		(!self.isActiveAsymKey(keyid, *self.topic) && asymmetric) {
+
+		rw, err := self.AddPeer(p, self.proto.Run, *self.topic, asymmetric, keyid)
+		if err != nil {
+			return err
 		}
-		if asymmetric {
-			rw.sendFunc = self.Pss.SendAsym
-		} else {
-			rw.sendFunc = self.Pss.SendSym
-		}
-		self.AddPeer(p, self.proto.Run, *self.topic, rw, asymmetric, keyid)
+		vrw = rw.(*PssReadWriter)
 	}
 
 	pmsg, err := ToP2pMsg(msg)
@@ -147,11 +133,11 @@ func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid 
 	return nil
 }
 
-func (self *PssProtocol) isActiveSymKeyProtocol(key string, topic whisper.TopicType) bool {
+func (self *PssProtocol) isActiveSymKey(key string, topic whisper.TopicType) bool {
 	return self.symKeyRWPool[key] != nil
 }
 
-func (self *PssProtocol) isActiveAsymKeyProtocol(key string, topic whisper.TopicType) bool {
+func (self *PssProtocol) isActiveAsymKey(key string, topic whisper.TopicType) bool {
 	return self.pubKeyRWPool[key] != nil
 }
 
@@ -172,24 +158,34 @@ func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 	}, nil
 }
 
-// For devp2p protocol integration only. Analogous to an outgoing devp2p connection.
-//
 // Links a remote peer and Topic to a dedicated p2p.MsgReadWriter in the pss peerpool, and runs the specificed protocol using these resources.
 //
 // The effect is that now we have a "virtual" protocol running on an artificial p2p.Peer, which can be looked up and piped to through Pss using swarm overlay address and topic
 //
 // The peer's encryption keys must be added separately.
-func (self *PssProtocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic whisper.TopicType, rw p2p.MsgReadWriter, asymmetric bool, key string) error {
+func (self *PssProtocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic whisper.TopicType, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
 	self.Pss.lock.Lock()
 	defer self.Pss.lock.Unlock()
+	rw := &PssReadWriter{
+		Pss:   self.Pss,
+		rw:    make(chan p2p.Msg),
+		spec:  self.spec,
+		topic: self.topic,
+		key:   key,
+	}
 	if asymmetric {
-		if _, ok := self.Pss.pubKeyPool[key]; ok == false {
-			return fmt.Errorf("asym key does not exist: %s", key)
+		rw.sendFunc = self.Pss.SendAsym
+	} else {
+		rw.sendFunc = self.Pss.SendSym
+	}
+	if asymmetric {
+		if _, ok := self.Pss.pubKeyPool[key]; !ok {
+			return nil, fmt.Errorf("asym key does not exist: %s", key)
 		}
 		self.pubKeyRWPool[key] = rw
 	} else {
-		if _, ok := self.Pss.symKeyPool[key]; ok == false {
-			return fmt.Errorf("symkey does not exist: %s", key)
+		if _, ok := self.Pss.symKeyPool[key]; !ok {
+			return nil, fmt.Errorf("symkey does not exist: %s", key)
 		}
 		self.symKeyRWPool[key] = rw
 	}
@@ -197,5 +193,5 @@ func (self *PssProtocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWri
 		err := run(p, rw)
 		log.Warn(fmt.Sprintf("pss vprotocol quit on addr %v topic %v: %v", topic, err))
 	}()
-	return nil
+	return rw, nil
 }
