@@ -27,7 +27,7 @@ var pssSpec = &protocols.Spec{
 	},
 }
 
-// Bridges pss send/receive with devp2p protocol send/receive
+// PssReadWriter bridges pss send/receive with devp2p protocol send/receive
 //
 // Implements p2p.MsgReadWriter
 type PssReadWriter struct {
@@ -41,14 +41,14 @@ type PssReadWriter struct {
 }
 
 // Implements p2p.MsgReader
-func (prw PssReadWriter) ReadMsg() (p2p.Msg, error) {
+func (prw *PssReadWriter) ReadMsg() (p2p.Msg, error) {
 	msg := <-prw.rw
 	log.Trace(fmt.Sprintf("pssrw readmsg: %v", msg))
 	return msg, nil
 }
 
 // Implements p2p.MsgWriter
-func (prw PssReadWriter) WriteMsg(msg p2p.Msg) error {
+func (prw *PssReadWriter) WriteMsg(msg p2p.Msg) error {
 	log.Trace("pssrw writemsg", "msg", msg)
 	rlpdata := make([]byte, msg.Size)
 	msg.Payload.Read(rlpdata)
@@ -64,7 +64,7 @@ func (prw PssReadWriter) WriteMsg(msg p2p.Msg) error {
 }
 
 // Injects a p2p.Msg into the MsgReadWriter, so that it appears on the associated p2p.MsgReader
-func (prw PssReadWriter) injectMsg(msg p2p.Msg) error {
+func (prw *PssReadWriter) injectMsg(msg p2p.Msg) error {
 	log.Trace(fmt.Sprintf("pssrw injectmsg: %v", msg))
 	prw.rw <- msg
 	return nil
