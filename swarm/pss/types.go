@@ -1,68 +1,21 @@
 package pss
 
 import (
-	"crypto/ecdsa"
 	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/rlp"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 const (
-	defaultSymKeyCacheCapacity = 512
-	defaultDigestCacheTTL      = time.Second
+	DefaultTTL = 6000
 )
-
-// Pss configuration parameters
-type PssParams struct {
-	CacheTTL            time.Duration
-	privateKey          *ecdsa.PrivateKey
-	SymKeyCacheCapacity int
-}
-
-// Sane defaults for Pss
-func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
-	return &PssParams{
-		CacheTTL:            defaultDigestCacheTTL,
-		privateKey:          privatekey,
-		SymKeyCacheCapacity: defaultSymKeyCacheCapacity,
-	}
-}
 
 // variable length address
 type PssAddress []byte
-
-// abstraction to enable access to p2p.protocols.Peer.Send
-type senderPeer interface {
-	ID() discover.NodeID
-	Address() []byte
-	Send(interface{}) error
-}
-
-// used to encapsulate symkey in asymmetric key exchange
-// if nonce is not nil. the message is symmetrically encrypted
-// an encrypted keymsg is a response to an exchange request,
-// where the key in the request is used to encrypt the response
-type pssKeyMsg struct {
-	From  []byte
-	Key   []byte
-	Nonce []byte
-}
-
-type pssPeer struct {
-	rw      p2p.MsgReadWriter
-	address PssAddress
-	expires time.Time
-}
-
-type pssCacheEntry struct {
-	expiresAt    time.Time
-	receivedFrom []byte
-}
 
 type pssDigest [digestLength]byte
 

@@ -3,7 +3,9 @@ package pss
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
+	"io"
 	"sync"
 	"time"
 
@@ -23,49 +25,100 @@ import (
 
 // TODO: proper padding generation for messages
 const (
-	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
-	DefaultTTL                 = 6000
-	defaultSymKeyExpiry        = 1000 * 60 * 60 * 6
-	defaultSymKeyRequestExpiry = 5000
-	defaultWhisperWorkTime     = 3
-	defaultWhisperPoW          = 0.0000000001
-	defaultMaxMsgSize          = 1024 * 1024
-	defaultSymKeyLength        = 32
-)
-
-const (
-	SYMSTATUS_OK = iota
-	SYMSTATUS_NONE
-	SYMSTATUS_PENDING
-	SYMSTATUS_EXPIRED
+	defaultDigestCacheTTL       = time.Second
+	defaultSymKeyCacheCapacity  = 512
+	digestLength                = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
+	defaultSymKeyBufferCapacity = 6
+	defaultSymKeySendLimit      = 30
+	defaultSymKeyRequestExpiry  = 5000
+	defaultWhisperWorkTime      = 3
+	defaultWhisperPoW           = 0.0000000001
+	defaultMaxMsgSize           = 1024 * 1024
+	defaultSymKeyLength         = 32
 )
 
 var (
-	symKeyRequestExpiry = time.Millisecond * defaultSymKeyRequestExpiry
-	symKeyExpiry        = time.Millisecond * defaultSymKeyExpiry
-	addressLength       = len(pot.Address{})
+	addressLength = len(pot.Address{})
 )
+
+// used to encapsulate symkey in asymmetric key exchange
+// if nonce is not nil. the message is symmetrically encrypted
+// an encrypted keymsg is a response to an exchange request,
+// where the key in the request is used to encrypt the response
+type pssKeyMsg struct {
+	From         []byte
+	Limit        uint16
+	Nonce        []byte
+	Keys         []byte
+	KeyLength    uint8
+	RequestCount uint8
+}
+
+type pssCacheEntry struct {
+	expiresAt    time.Time
+	receivedFrom []byte
+}
+
+// abstraction to enable access to p2p.protocols.Peer.Send
+type senderPeer interface {
+	ID() discover.NodeID
+	Address() []byte
+	Send(interface{}) error
+}
+
+type pssPeer struct {
+	sendLimit uint16
+	sendCount uint16
+	address   PssAddress
+}
+
+// Pss configuration parameters
+type PssParams struct {
+	CacheTTL             time.Duration
+	privateKey           *ecdsa.PrivateKey
+	SymKeyRequestExpiry  time.Duration
+	SymKeyCacheCapacity  int
+	SymKeyBufferCapacity int
+	SymKeySendLimit      uint16
+}
+
+// Sane defaults for Pss
+func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
+	return &PssParams{
+		CacheTTL:             defaultDigestCacheTTL,
+		privateKey:           privatekey,
+		SymKeyCacheCapacity:  defaultSymKeyCacheCapacity,
+		SymKeyRequestExpiry:  time.Millisecond * defaultSymKeyRequestExpiry,
+		SymKeySendLimit:      defaultSymKeySendLimit,
+		SymKeyBufferCapacity: defaultSymKeyBufferCapacity,
+	}
+}
 
 // Toplevel pss object, takes care of message sending, receiving, decryption and encryption, message handler dispatchers and message forwarding.
 //
 // Implements node.Service
 type Pss struct {
-	network.Overlay                                             // we can get the overlayaddress from this
-	fwdPool           map[discover.NodeID]*protocols.Peer       // keep track of all peers sitting on the pssmsg routing layer
-	pubKeyPool        map[string]map[whisper.TopicType]*pssPeer // mapping of hex public keys to peer address and rw
-	symKeyPool        map[string]map[whisper.TopicType]*pssPeer // mapping of symkeyids to peer address and rw
-	handlers          map[whisper.TopicType]map[*Handler]bool   // topic and version based pss payload handlers
-	fwdcache          map[pssDigest]pssCacheEntry               // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	cachettl          time.Duration                             // how long to keep messages in fwdcache
-	lock              sync.Mutex
-	dpa               *storage.DPA
-	privateKey        *ecdsa.PrivateKey
-	w                 *whisper.Whisper
-	symKeyPairIndex   map[string]*string     // look up matching symkeys for handshake
-	symKeyPairPubKey  map[string]string      // look up matching pubkey for handshake send symkey
-	symKeyCache       []*string              // fast lookup of recently used symkeys; last used is on top of stack
-	symKeyCacheCursor int                    // modular cursor pointing to last used, wraps on symKeyCache array
-	handshakeC        map[string]chan string // adds a channel to report when a handshake succeeds
+	network.Overlay                                                // we can get the overlayaddress from this
+	fwdPool              map[discover.NodeID]*protocols.Peer       // keep track of all peers sitting on the pssmsg routing layer
+	pubKeyPool           map[string]map[whisper.TopicType]*pssPeer // mapping of hex public keys to peer address. We use string because we need unified interface to pass key to registered handlers
+	symKeyPool           map[string]*pssPeer                       // mapping of symkeyids to peer address and rw
+	handlers             map[whisper.TopicType]map[*Handler]bool   // topic and version based pss payload handlers
+	fwdcache             map[pssDigest]pssCacheEntry               // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	cachettl             time.Duration                             // how long to keep messages in fwdcache
+	lock                 sync.Mutex
+	dpa                  *storage.DPA
+	privateKey           *ecdsa.PrivateKey
+	w                    *whisper.Whisper
+	symKeyPubKeyIndex    map[string]string // look up matching pubkey for handshake send symkey
+	pubKeySymKeyIndex    map[string]map[whisper.TopicType][]*string
+	pubKeyIndex          map[string]*ecdsa.PublicKey
+	symKeyCache          []*string                // fast lookup of recently used symkeys; last used is on top of stack
+	symKeyCacheCursor    int                      // modular cursor pointing to last used, wraps on symKeyCache array
+	handshakeC           map[string]chan []string // adds a channel to report when a handshake succeeds
+	symKeyCacheCapacity  int
+	symKeyRequestExpiry  time.Duration
+	symKeySendLimit      uint16
+	symKeyBufferCapacity int
 }
 
 func (self *Pss) String() string {
@@ -77,20 +130,25 @@ func (self *Pss) String() string {
 // Needs a swarm network overlay, a DPA storage for message cache storage.
 func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 	return &Pss{
-		Overlay:          k,
-		fwdPool:          make(map[discover.NodeID]*protocols.Peer),
-		symKeyPool:       make(map[string]map[whisper.TopicType]*pssPeer),
-		pubKeyPool:       make(map[string]map[whisper.TopicType]*pssPeer),
-		handlers:         make(map[whisper.TopicType]map[*Handler]bool),
-		fwdcache:         make(map[pssDigest]pssCacheEntry),
-		cachettl:         params.CacheTTL,
-		dpa:              dpa,
-		privateKey:       params.privateKey,
-		w:                whisper.New(),
-		symKeyPairIndex:  make(map[string]*string),
-		symKeyPairPubKey: make(map[string]string),
-		symKeyCache:      make([]*string, params.SymKeyCacheCapacity),
-		handshakeC:       make(map[string]chan string),
+		Overlay:              k,
+		fwdPool:              make(map[discover.NodeID]*protocols.Peer),
+		symKeyPool:           make(map[string]*pssPeer),
+		pubKeyPool:           make(map[string]map[whisper.TopicType]*pssPeer),
+		handlers:             make(map[whisper.TopicType]map[*Handler]bool),
+		fwdcache:             make(map[pssDigest]pssCacheEntry),
+		cachettl:             params.CacheTTL,
+		dpa:                  dpa,
+		privateKey:           params.privateKey,
+		w:                    whisper.New(),
+		symKeyPubKeyIndex:    make(map[string]string),
+		pubKeySymKeyIndex:    make(map[string]map[whisper.TopicType][]*string),
+		pubKeyIndex:          make(map[string]*ecdsa.PublicKey),
+		symKeyCache:          make([]*string, params.SymKeyCacheCapacity),
+		handshakeC:           make(map[string]chan []string),
+		symKeyCacheCapacity:  params.SymKeyCacheCapacity,
+		symKeyRequestExpiry:  params.SymKeyRequestExpiry,
+		symKeySendLimit:      params.SymKeySendLimit,
+		symKeyBufferCapacity: params.SymKeyBufferCapacity,
 	}
 }
 
@@ -142,13 +200,13 @@ func (self *Pss) APIs() []rpc.API {
 	apis := []rpc.API{
 		rpc.API{
 			Namespace: "pss",
-			Version:   "0.1",
+			Version:   "0.2",
 			Service:   NewAPI(self),
 			Public:    true,
 		},
 		rpc.API{
 			Namespace: "psstest",
-			Version:   "0.1",
+			Version:   "0.2",
 			Service:   NewAPITest(self),
 			Public:    false,
 		},
@@ -192,63 +250,95 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic whisper.TopicTy
 		address: address,
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(pubkey))
+	self.pubKeyIndex[pubkeyid] = pubkey
 	if _, ok := self.pubKeyPool[pubkeyid]; ok == false {
 		self.pubKeyPool[pubkeyid] = make(map[whisper.TopicType]*pssPeer)
 	}
 	self.pubKeyPool[pubkeyid][topic] = psp
 }
 
-// Get a Public Key from id
-func (self *Pss) GetPeerPublicKey(pubkeyid string, topic whisper.TopicType) (*ecdsa.PublicKey, *pssPeer) {
-	pubkey := crypto.ToECDSAPub(common.FromHex(pubkeyid))
-	if pubkey.X == nil {
-		return nil, nil
-	}
-	return pubkey, self.pubKeyPool[pubkeyid][topic]
-}
-
 // Automatically generate a new symkey for a topic and address hint
-func (self *Pss) generateSymmetricKey(topic whisper.TopicType, address PssAddress, expires time.Duration, addToCache bool) (string, error) {
+func (self *Pss) generateSymmetricKey(topic whisper.TopicType, address PssAddress, sendlimit uint16, addToCache bool) (string, error) {
 	keyid, err := self.w.GenerateSymKey()
 	if err != nil {
 		return "", err
 	}
-	self.addSymmetricKeyToPool(keyid, topic, address, expires, addToCache)
+	self.addSymmetricKeyToPool(keyid, topic, address, sendlimit, addToCache)
 	return keyid, nil
 }
 
 // Manually set a new symkey for a topic and address hint
 //
 // If addtocache is set to true, the key will be added to the collection of keys used to attempt incoming message decryption
-func (self *Pss) SetSymmetricKey(key []byte, topic whisper.TopicType, address PssAddress, expires time.Duration, addtocache bool) (string, error) {
+func (self *Pss) SetSymmetricKey(key []byte, topic whisper.TopicType, address PssAddress, sendlimit uint16, addtocache bool) (string, error) {
 	keyid, err := self.w.AddSymKeyDirect(key)
 	if err != nil {
 		return "", err
 	}
-	self.addSymmetricKeyToPool(keyid, topic, address, expires, addtocache)
+	self.addSymmetricKeyToPool(keyid, topic, address, sendlimit, addtocache)
 	return keyid, nil
 }
 
 // adds a symmetric key to the pss key pool, and optionally adds the key to the collection of keys used to attempt incoming message decryption
-func (self *Pss) addSymmetricKeyToPool(keyid string, topic whisper.TopicType, address PssAddress, expires time.Duration, addtocache bool) {
+func (self *Pss) addSymmetricKeyToPool(keyid string, topic whisper.TopicType, address PssAddress, sendlimit uint16, addtocache bool) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	var psp *pssPeer
-	if expires == 0 {
-		expires = symKeyExpiry
+	if sendlimit == 0 {
+		sendlimit = self.symKeySendLimit
 	}
 	if _, ok := self.symKeyPool[keyid]; ok == false {
-		self.symKeyPool[keyid] = make(map[whisper.TopicType]*pssPeer)
-		psp = &pssPeer{}
-		self.symKeyPool[keyid][topic] = psp
+		self.symKeyPool[keyid] = &pssPeer{}
 	}
-	psp = self.symKeyPool[keyid][topic]
-	psp.expires = time.Now().Add(expires)
+	psp := self.symKeyPool[keyid]
+	psp.sendLimit = sendlimit
 	psp.address = address
 	if addtocache {
 		self.symKeyCacheCursor++
 		self.symKeyCache[self.symKeyCacheCursor%cap(self.symKeyCache)] = &keyid
 	}
+}
+
+//
+func (self *Pss) getSymmetricKeyBuffer(pubkeyid string, topic *whisper.TopicType) (symkeyids []string, remaining []uint16) {
+	if _, ok := self.pubKeySymKeyIndex[pubkeyid]; !ok {
+		return
+	}
+	for _, symkeyid := range self.pubKeySymKeyIndex[pubkeyid][*topic] {
+		capacity, _ := self.getSymmetricKeyCapacity(*symkeyid)
+		if capacity == 0 {
+			continue
+		}
+		symkeyids = append(symkeyids, *symkeyid)
+		remaining = append(remaining, capacity)
+	}
+	return
+}
+
+//
+func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
+	capacity, err := self.getSymmetricKeyCapacity(symkeyid)
+	if err != nil {
+		return nil, err
+	}
+	if capacity == 0 {
+		return nil, errors.New("expired")
+	}
+	symkey, err := self.w.GetSymKey(symkeyid)
+	if err != nil {
+		return nil, err
+	}
+	return symkey, nil
+}
+
+func (self *Pss) getSymmetricKeyCapacity(symkeyid string) (uint16, error) {
+	if _, ok := self.symKeyPool[symkeyid]; !ok {
+		return 0, errors.New(fmt.Sprintf("Invalid symkeyid", "id", symkeyid))
+	}
+	capacity := self.symKeyPool[symkeyid].sendLimit - self.symKeyPool[symkeyid].sendCount
+	if capacity == 0 {
+		delete(self.symKeyPool, symkeyid)
+	}
+	return capacity, nil
 }
 
 // add a message to the cache
@@ -351,23 +441,25 @@ func (self *Pss) process(pssmsg *PssMsg) error {
 		if err != nil {
 			return err
 		}
-		from = self.symKeyPool[keyid][envelope.Topic].address
+		from = self.symKeyPool[keyid].address
 	} else {
 		// check if message can be decrypted asymmetrically
 		// if it cannot, we let it fall through
 		asymmetric = true
-		var pubkey []byte
-		recvmsg, pubkey, err = self.processAsym(envelope)
+		recvmsg, keyid, err = self.processAsym(envelope)
 
 		if err == nil {
 			// check if message decodes to a psskeymsg
 			// if no let it pass through
 			// TODO: handshake initiation flood guard
-			keyid = common.ToHex(pubkey)
 			keymsg := &pssKeyMsg{}
 			err = rlp.DecodeBytes(recvmsg.Payload, keymsg)
 			if err == nil {
-				return self.handleKey(pubkey, envelope, keymsg)
+				err := self.handleKey(keyid, envelope, keymsg)
+				if err != nil {
+					log.Error("handlekey fail", "error", err)
+				}
+				return err
 			}
 			from = self.pubKeyPool[keyid][envelope.Topic].address
 		}
@@ -430,7 +522,7 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 		if !recvmsg.Validate() {
 			return nil, "", fmt.Errorf("symmetrically encrypted message has invalid signature or is corrupt")
 		}
-		from := self.symKeyPool[*symkeyid][envelope.Topic].address
+		from := self.symKeyPool[*symkeyid].address
 		self.symKeyCacheCursor++
 		self.symKeyCache[self.symKeyCacheCursor%cap(self.symKeyCache)] = symkeyid
 		log.Debug("successfully decrypted symmetrically encrypted pss message", "symkeys tried", i, "from", from, "symkey cache insert", self.symKeyCacheCursor%cap(self.symKeyCache))
@@ -444,19 +536,19 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 // encapsulating the decrypted message, and the byte representation of
 // the pubkey used to decrypt the message, the latter revealing the sender
 // fails if decryption of message fails, or if the message is corrupted
-func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, []byte, error) {
+func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, error) {
 	recvmsg, err := envelope.OpenAsymmetric(self.privateKey)
 	if err != nil {
-		return nil, nil, fmt.Errorf("asym default decrypt of pss msg failed: %v", "err", err)
+		return nil, "", fmt.Errorf("asym default decrypt of pss msg failed: %v", "err", err)
 	}
 	// check signature (if signed), strip padding
 	if !recvmsg.Validate() {
-		return nil, nil, fmt.Errorf("invalid message")
+		return nil, "", fmt.Errorf("invalid message")
 	}
-	pubkey := crypto.FromECDSAPub(recvmsg.Src)
-	from := self.pubKeyPool[common.ToHex(pubkey)][envelope.Topic].address
-	log.Debug("successfully decrypted asymmetrically encrypted pss message", "from", from, "pubkey", pubkey)
-	return recvmsg, pubkey, nil
+	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
+	from := self.pubKeyPool[pubkeyid][envelope.Topic].address
+	log.Debug("successfully decrypted asymmetrically encrypted pss message", "from", from, "pubkeyid", pubkeyid)
+	return recvmsg, pubkeyid, nil
 }
 
 // generate and send symkey to peer using asym send (handshake)
@@ -466,128 +558,143 @@ func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessa
 // the method fails if symkey could not be generated, if an unknown
 // symkeyid was passed, if symmetric encryption of the key transfer
 // fails, or if the key transfer rlp encoding or send fails
-func (self *Pss) sendKey(pubkey []byte, topic *whisper.TopicType, symkeyid string, to PssAddress) (string, error) {
-	var nonce []byte
-	recvkeyid, err := self.generateSymmetricKey(*topic, to, symKeyRequestExpiry, true)
-	log.Trace("sending our symkey", "pubkey", pubkey, "symkey", recvkeyid)
-	if err != nil {
-		return "", fmt.Errorf("set receive symkey fail (addr %x pubkey %x topic %x): %v", to, pubkey, topic, err)
+//func (self *Pss) sendKey(pubkeyid string, topic *whisper.TopicType, keycount int, msglimit uint16, symkeyid string, to PssAddress) ([]string, error) {
+func (self *Pss) sendKey(pubkeyid string, topic *whisper.TopicType, keycount uint8, msglimit uint16, to PssAddress) ([]string, error) {
+	//var nonce []byte
+	recvkeys := make([]byte, keycount*defaultSymKeyLength)
+	recvkeyids := make([]string, keycount)
+
+	_, counts := self.getSymmetricKeyBuffer(pubkeyid, topic)
+	requestcount := uint8(self.symKeyBufferCapacity - len(counts))
+
+	if requestcount == 0 && len(counts) == 0 {
+		return []string{}, nil
 	}
-	recvkey, err := self.w.GetSymKey(recvkeyid)
-	if err != nil {
-		return "", fmt.Errorf("get generated outgoing symkey fail (addr %x pubkey %x topic %x): %v", to, pubkey, topic, err)
-	}
-	if symkeyid != "" {
-		symkey, err := self.w.GetSymKey(symkeyid)
+
+	for i := 0; i < len(recvkeyids); i++ {
+		var err error
+		recvkeyids[i], err = self.generateSymmetricKey(*topic, to, msglimit, true)
 		if err != nil {
-			return "", fmt.Errorf("Invalid symkey for key transfer: %s", symkeyid)
+			return []string{}, fmt.Errorf("set receive symkey fail (addr %x pubkey %x topic %x): %v", to, pubkeyid, topic, err)
 		}
-		log.Debug("before encrypt", "key", recvkey)
-		recvkey, nonce, err = whisper.EncryptSymmetric(symkey, recvkey)
-		log.Debug("after encrypt", "key", recvkey)
+		recvkey, err := self.w.GetSymKey(recvkeyids[i])
 		if err != nil {
-			return "", fmt.Errorf("Symkey transfer encrypt fail: %v", err)
+			return []string{}, fmt.Errorf("get generated outgoing symkey fail (addr %x pubkey %x topic %x): %v", to, pubkeyid, topic, err)
 		}
+		offset := i * defaultSymKeyLength
+		copy(recvkeys[offset:offset+defaultSymKeyLength], recvkey)
 	}
+
+	// check if we are to encrypt the keys before sending
+	// this counts as one symkey use
+	//	if symkeyid != "" {
+	//		symkey, err := self.GetSymmetricKey(symkeyid)
+	//		if err != nil {
+	//			return []string{}, err
+	//		}
+	//		recvkeys, nonce, err = whisper.EncryptSymmetric(symkey, recvkeys)
+	//		if err != nil {
+	//			return []string{}, fmt.Errorf("Symkey transfer encrypt fail: %v", err)
+	//		}
+	//		self.symKeyPool[symkeyid].sendCount++
+	//	}
+
+	// we are done. Encode and send the message
 	recvkeymsg := &pssKeyMsg{
-		From:  self.BaseAddr(),
-		Key:   recvkey,
-		Nonce: nonce,
+		From:      self.BaseAddr(),
+		Keys:      recvkeys,
+		KeyLength: defaultSymKeyLength,
+		//Nonce:        nonce,
+		RequestCount: requestcount,
+		Limit:        self.symKeySendLimit,
 	}
+	log.Trace("sending our symkeys", "pubkey", pubkeyid, "symkeys", recvkeyids, "limit", self.symKeySendLimit, "requestcount", requestcount, "keycount", len(recvkeys))
 	recvkeybytes, err := rlp.EncodeToBytes(recvkeymsg)
 	if err != nil {
-		return "", fmt.Errorf("rlp keymsg encode fail: %v", err)
+		return []string{}, fmt.Errorf("rlp keymsg encode fail: %v", err)
 	}
 	// if the send fails it means this public key is not registered for this particular address AND topic
-	err = self.SendAsym(common.ToHex(pubkey), *topic, recvkeybytes)
+	err = self.SendAsym(pubkeyid, *topic, recvkeybytes)
 	if err != nil {
-		return "", fmt.Errorf("Send symkey failed: %v", err)
+		return []string{}, fmt.Errorf("Send symkey failed: %v", err)
 	}
-	return recvkeyid, nil
+	return recvkeyids, nil
 }
 
 // handles an incoming keymsg
 // fails if send of a keymsg response fails, or if whisper symkey store fails
-func (self *Pss) handleKey(pubkey []byte, envelope *whisper.Envelope, keymsg *pssKeyMsg) error {
-	if len(keymsg.Nonce) == 0 {
-		// check if the key in the keymsg is symmetrically encrypted
-		// if it's not, this is a handshake initiation
-		log.Trace("have handshake request", "from", keymsg.From)
-		// TODO: need to handle / check for expired keys also here
-		sendsymkeyid, err := self.SetSymmetricKey(keymsg.Key, envelope.Topic, keymsg.From, 0, false)
+func (self *Pss) handleKey(pubkeyid string, envelope *whisper.Envelope, keymsg *pssKeyMsg) error {
+	// peer request for keys
+	if keymsg.RequestCount > 0 {
+		log.Trace("have handshake request", "from", keymsg.From, "count", keymsg.RequestCount)
+		// we don't need to remember the key ids here
+		//_, err := self.sendKey(pubkeyid, &envelope.Topic, keymsg.RequestCount, self.symKeySendLimit, sendsymkeyid, keymsg.From)
+		_, err := self.sendKey(pubkeyid, &envelope.Topic, keymsg.RequestCount, self.symKeySendLimit, keymsg.From)
 		if err != nil {
 			return err
 		}
-		// reply with an encrypted secret so that it can tell that we received its key
-		// the encrypted secret will be our key encrypted with its key
-		recvsymkeyid, err := self.sendKey(pubkey, &envelope.Topic, sendsymkeyid, keymsg.From)
-		if err != nil {
-			return err
-		}
-		// the key we received is paired with the key we sent
-		// at this point the key combination is considered a valid
-		// handshake by the responding node.
-		// i.e. we do not wait for additional confirmation from the peer
-		self.symKeyPairIndex[recvsymkeyid] = &sendsymkeyid
-		self.symKeyPairIndex[sendsymkeyid] = &recvsymkeyid
-		recvsymkey, err := self.w.GetSymKey(recvsymkeyid)
-		if err != nil {
-			return err
-		}
-		pubkeyid := common.ToHex(pubkey)
-		self.symKeyPairPubKey[common.ToHex(recvsymkey)] = pubkeyid
-		log.Trace("added handshake request mapping", "pubkey", pubkeyid, "symkey", common.ToHex(recvsymkey))
-		log.Trace("added handshake request key", "recvkeyid", recvsymkeyid, "sendkeyid", sendsymkeyid, "pubkey", pubkeyid)
-		return nil
 	}
 
-	log.Trace("have handshake response", "from", keymsg.From)
-	// if not, try to decrypt the message payload with the symkeys on file
-	// if it decrypts it should contain a keymsg
-	// if yes, this is a handshake response
-	for i := self.symKeyCacheCursor; i > self.symKeyCacheCursor-cap(self.symKeyCache) && i > 0; i-- {
-		recvsymkeyid := self.symKeyCache[i%cap(self.symKeyCache)]
-		recvsymkey, err := self.w.GetSymKey(*recvsymkeyid)
-		if err != nil {
-			continue
+	// new keys from peer
+	if len(keymsg.Keys) > 0 {
+		var sendsymkeys []byte
+		if _, ok := self.pubKeySymKeyIndex[pubkeyid]; !ok {
+			self.pubKeySymKeyIndex[pubkeyid] = make(map[whisper.TopicType][]*string)
 		}
-		sendsymkey, err := whisper.DecryptSymmetric(recvsymkey, keymsg.Nonce, keymsg.Key)
-		if err == nil {
-			log.Trace("decrypted response", "msg", sendsymkey)
-			sendsymkeyid, err := self.SetSymmetricKey(sendsymkey, envelope.Topic, keymsg.From, 0, false)
-			if err != nil {
-				return err
+		// if encrypted
+		//		if len(keymsg.Nonce) > 0 {
+		//			var recvsymkeyid string
+		//
+		//			for i := self.symKeyCacheCursor; i > self.symKeyCacheCursor-cap(self.symKeyCache) && i > 0; i-- {
+		//				symkeyid := self.symKeyCache[i%cap(self.symKeyCache)]
+		//				symkey, err := self.w.GetSymKey(symkeyid)
+		//				log.Trace("attempting symmetric decrypt", "symkeyid", symkeyid)
+		//				if self.symKeyPool[symkeyid].sendLimit-self.symKeyPool[symkeyid].sendCount > 0 {
+		//					recvsymkey, err := self.w.GetSymKey(*id)
+		//					sendkeys, err := whisper.DecryptSymmetric(recvsymkey, keymsg.Nonce, keymsg.Keys)
+		//					if err != nil {
+		//						return err
+		//					}
+		//				}
+		//			}
+		//		} else {
+		sendsymkeys = keymsg.Keys
+		//		}
+
+		log.Trace("have handshake response", "from", keymsg.From, "count", uint8(len(keymsg.Keys))/keymsg.KeyLength)
+
+		if len(sendsymkeys) > 0 {
+			var sendsymkeyids []string
+			sendsymkey := make([]byte, keymsg.KeyLength)
+			buf := bytes.NewReader(sendsymkeys)
+			for {
+				count, err := buf.Read(sendsymkey)
+				if count == 0 || err == io.EOF {
+					break
+				}
+				sendsymkeyid, err := self.SetSymmetricKey(sendsymkey, envelope.Topic, keymsg.From, keymsg.Limit, false)
+				self.pubKeySymKeyIndex[pubkeyid][envelope.Topic] = append(self.pubKeySymKeyIndex[pubkeyid][envelope.Topic], &sendsymkeyid)
+				self.symKeyPubKeyIndex[sendsymkeyid] = pubkeyid
+				sendsymkeyids = append(sendsymkeyids, sendsymkeyid)
 			}
-			// the key we received is paired with the key we used to decrypt the message
-			// at this point the key combination is considered a valid
-			// handshake by the originally requesting node
-			self.symKeyPool[*recvsymkeyid][envelope.Topic].expires = time.Unix(defaultSymKeyExpiry, 0)
-			self.symKeyPairIndex[*recvsymkeyid] = &sendsymkeyid
-			self.symKeyPairIndex[sendsymkeyid] = recvsymkeyid
-			pubkeyid := common.ToHex(pubkey)
-			self.symKeyPairPubKey[common.ToHex(recvsymkey)] = pubkeyid
-			if _, ok := self.handshakeC[pubkeyid]; ok {
-				self.alertHandshake(pubkeyid, sendsymkeyid)
-			}
-			log.Trace("added handshake mapping", "pubkey", pubkeyid, "symkey", common.ToHex(recvsymkey))
-			log.Trace("added handshake response key", "recvkeyid", *recvsymkeyid, "sendkeyid", sendsymkeyid, "pubkey", pubkeyid)
+			self.alertHandshake(pubkeyid, sendsymkeyids)
 		}
 	}
 
 	return nil
 }
 
-func (self *Pss) alertHandshake(pubkey string, symkey string) chan string {
-	if _, ok := self.handshakeC[pubkey]; !ok {
-		self.handshakeC[pubkey] = make(chan string)
+func (self *Pss) alertHandshake(pubkeyid string, symkeys []string) chan []string {
+	if _, ok := self.handshakeC[pubkeyid]; !ok {
+		self.handshakeC[pubkeyid] = make(chan []string)
 	}
-	if symkey != "" {
-		self.handshakeC[pubkey] <- symkey
-		close(self.handshakeC[pubkey])
-		delete(self.handshakeC, pubkey)
+	if len(symkeys) > 0 {
+		self.handshakeC[pubkeyid] <- symkeys
+		close(self.handshakeC[pubkeyid])
+		delete(self.handshakeC, pubkeyid)
 		return nil
 	}
-	return self.handshakeC[pubkey]
+	return self.handshakeC[pubkeyid]
 }
 
 // Prepares a msg for sending with symmetric encryption
@@ -596,16 +703,16 @@ func (self *Pss) alertHandshake(pubkey string, symkey string) chan string {
 // symkeyid is not part of an unexpired pair of symkeys
 // established by a mutual sendKey combination (pss.sendKey)
 func (self *Pss) SendSym(symkeyid string, topic whisper.TopicType, msg []byte) error {
-	psp := self.symKeyPool[symkeyid][topic]
-	sendsymkeyid := self.symKeyPairIndex[symkeyid]
-	if sendsymkeyid == nil {
-		return fmt.Errorf("missing matching send symkey")
-	}
-	symkey, err := self.w.GetSymKey(*sendsymkeyid)
+	symkey, err := self.GetSymmetricKey(symkeyid)
 	if err != nil {
-		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
+		return errors.New(fmt.Sprintf("missing valid send symkey %s: %v", symkeyid, err))
 	}
-	return self.send(psp.address, topic, msg, false, symkey)
+	psp := self.symKeyPool[symkeyid]
+	err = self.send(psp.address, topic, msg, false, symkey)
+	if err == nil {
+		self.symKeyPool[symkeyid].sendCount++
+	}
+	return err
 }
 
 // Prepares a msg for sending with asymmetric encryption
@@ -613,10 +720,11 @@ func (self *Pss) SendSym(symkeyid string, topic whisper.TopicType, msg []byte) e
 // Fails if the pubkey hex representation passed does not
 // match any saved pubkeys
 func (self *Pss) SendAsym(pubkeyid string, topic whisper.TopicType, msg []byte) error {
-	pubkey, psp := self.GetPeerPublicKey(pubkeyid, topic)
+	pubkey := self.pubKeyIndex[pubkeyid]
 	if pubkey == nil {
 		return fmt.Errorf("Invalid public key id %x", pubkey)
 	}
+	psp := self.pubKeyPool[pubkeyid][topic]
 	return self.send(psp.address, topic, msg, true, common.FromHex(pubkeyid))
 }
 
@@ -744,28 +852,4 @@ func (self *Pss) isSelfRecipient(msg *PssMsg) bool {
 func (self *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
 	local := self.Overlay.BaseAddr()
 	return bytes.Equal(msg.To[:], local[:len(msg.To)])
-}
-
-// todo: maybe not enough to check that the symkey id strings are empty
-func (self *Pss) SymStatus(symkeyid string, topic whisper.TopicType) int {
-	if _, ok := self.symKeyPool[symkeyid]; ok == false {
-		return SYMSTATUS_NONE
-	}
-	psp := self.symKeyPool[symkeyid][topic]
-	if psp.expires.Before(time.Now()) {
-		return SYMSTATUS_EXPIRED
-	}
-	rsymkeyid, ok := self.symKeyPairIndex[symkeyid]
-	if ok == false {
-		return SYMSTATUS_NONE
-	}
-	if symkeyid != *self.symKeyPairIndex[*rsymkeyid] {
-		return SYMSTATUS_PENDING
-	}
-	return SYMSTATUS_OK
-}
-
-// get public key of peer from symkey peer sent message with
-func (self *Pss) GetPublicKeyFromSymmetricKey(symkey []byte) string {
-	return self.symKeyPairPubKey[common.ToHex(symkey)]
 }
