@@ -305,21 +305,168 @@ func TestKeysExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	var symkeys [2][]string
-	err = clients[0].Call(&symkeys, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Logf("%d %v", len(symkeys[0]), symkeys[0])
-	t.Logf("%d %v", len(symkeys[1]), symkeys[1])
-
-	var lsymkeys []string
-	err = clients[0].Call(&lsymkeys, "pss_getSymmetricKeys", common.ToHex(rpubkey), hextopic)
+	var hsendsymkeyids []string
+	err = clients[0].Call(&hsendsymkeyids, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Logf("%d %v", len(lsymkeys), lsymkeys)
+	time.Sleep(time.Second)
+	var lsendsymkeyids []string
+	err = clients[0].Call(&lsendsymkeyids, "pss_getSymmetricKeys", common.ToHex(rpubkey), hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	m := 0
+	for _, hid := range hsendsymkeyids {
+		for _, lid := range lsendsymkeyids {
+			if lid == hid {
+				m++
+			}
+		}
+	}
+	if m != defaultSymKeyBufferCapacity {
+		t.Fatalf("buffer size mismatch, expected %d, have %d: %v", defaultSymKeyBufferCapacity, m, lsendsymkeyids)
+	}
+
+	var rsendsymkeyids []string
+	err = clients[1].Call(&rsendsymkeyids, "pss_getSymmetricKeys", common.ToHex(lpubkey), hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var lsendsymkeys [][]byte
+	for _, id := range lsendsymkeyids {
+		var key []byte
+		err = clients[0].Call(&key, "psstest_getSymKey", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lsendsymkeys = append(lsendsymkeys, key)
+	}
+	var rsendsymkeys [][]byte
+	for _, id := range rsendsymkeyids {
+		var key []byte
+		err = clients[1].Call(&key, "psstest_getSymKey", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsendsymkeys = append(rsendsymkeys, key)
+	}
+	var lsymkeyids []string
+	err = clients[0].Call(&lsymkeyids, "psstest_dumpSymKeys", common.ToHex(rpubkey), hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lsymkeys [][]byte
+	for _, id := range lsymkeyids {
+		var key []byte
+		err = clients[0].Call(&key, "psstest_getSymKey", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		lsymkeys = append(lsymkeys, key)
+	}
+	var rsymkeyids []string
+	err = clients[1].Call(&rsymkeyids, "psstest_dumpSymKeys", common.ToHex(lpubkey), hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var rsymkeys [][]byte
+	for _, id := range rsymkeyids {
+		var key []byte
+		err = clients[1].Call(&key, "psstest_getSymKey", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rsymkeys = append(rsymkeys, key)
+	}
+
+	var lrecvsymkeys [][]byte
+louter:
+	for _, key := range lsymkeys {
+		for _, sendkey := range lsendsymkeys {
+			if bytes.Equal(key, sendkey) {
+				continue louter
+			}
+		}
+		lrecvsymkeys = append(lrecvsymkeys, key)
+	}
+	var rrecvsymkeys [][]byte
+router:
+	for _, key := range rsymkeys {
+		for _, sendkey := range rsendsymkeys {
+			if bytes.Equal(key, sendkey) {
+				continue router
+			}
+		}
+		rrecvsymkeys = append(rrecvsymkeys, key)
+	}
+	m = 0
+	for _, lkey := range lrecvsymkeys {
+		for _, rkey := range rsendsymkeys {
+			if bytes.Equal(lkey, rkey) {
+				m++
+			}
+		}
+	}
+	if m != defaultSymKeyBufferCapacity {
+		t.Fatalf("left recv buffer does not match right send buffer, expected %d, have %d", defaultSymKeyBufferCapacity, m)
+	}
+
+	m = 0
+	for _, lkey := range lsendsymkeys {
+		for _, rkey := range rrecvsymkeys {
+			if bytes.Equal(lkey, rkey) {
+				m++
+			}
+		}
+	}
+	if m != defaultSymKeyBufferCapacity {
+		t.Fatalf("left send buffer does not match right recv buffer, expected %d, have %d", defaultSymKeyBufferCapacity, m)
+	}
+
+	var moresymkeys []string
+	err = clients[0].Call(&moresymkeys, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, true)
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	err = clients[0].Call(nil, "psstest_depleteSymKey", lsendsymkeyids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = clients[0].Call(nil, "psstest_depleteSymKey", lsendsymkeyids[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = clients[0].Call(&moresymkeys, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Second)
+	var lnewsendsymkeyids []string
+	err = clients[0].Call(&lnewsendsymkeyids, "pss_getSymmetricKeys", common.ToHex(rpubkey), hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = 0
+	for _, id := range lnewsendsymkeyids {
+		var key []byte
+		err = clients[0].Call(&key, "psstest_getSymKey", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, oldkey := range lsendsymkeys {
+			if bytes.Equal(oldkey, key) {
+				m++
+			}
+		}
+	}
+	if m != defaultSymKeyBufferCapacity-2 {
+		t.Fatalf("Left buffer mismatch after re-handshake, expected %d different keys in batch, have %d", defaultSymKeyBufferCapacity-2, m)
+	}
 
 	//	for i := 0; i < 6; i++ {
 	//		// the second iteration blocks until handshake response is received

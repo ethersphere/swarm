@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"io"
 	"sync"
 	"time"
 
@@ -567,7 +566,7 @@ func (self *Pss) sendKey(pubkeyid string, topic *whisper.TopicType, keycount uin
 	_, counts := self.getSymmetricKeyBuffer(pubkeyid, topic)
 	requestcount := uint8(self.symKeyBufferCapacity - len(counts))
 
-	if requestcount == 0 && len(counts) == 0 {
+	if requestcount == 0 && len(counts) == 0 && keycount == 0 {
 		return []string{}, nil
 	}
 
@@ -624,20 +623,8 @@ func (self *Pss) sendKey(pubkeyid string, topic *whisper.TopicType, keycount uin
 // handles an incoming keymsg
 // fails if send of a keymsg response fails, or if whisper symkey store fails
 func (self *Pss) handleKey(pubkeyid string, envelope *whisper.Envelope, keymsg *pssKeyMsg) error {
-	// peer request for keys
-	if keymsg.RequestCount > 0 {
-		log.Trace("have handshake request", "from", keymsg.From, "count", keymsg.RequestCount)
-		// we don't need to remember the key ids here
-		//_, err := self.sendKey(pubkeyid, &envelope.Topic, keymsg.RequestCount, self.symKeySendLimit, sendsymkeyid, keymsg.From)
-		_, err := self.sendKey(pubkeyid, &envelope.Topic, keymsg.RequestCount, self.symKeySendLimit, keymsg.From)
-		if err != nil {
-			return err
-		}
-	}
-
 	// new keys from peer
 	if len(keymsg.Keys) > 0 {
-		var sendsymkeys []byte
 		if _, ok := self.pubKeySymKeyIndex[pubkeyid]; !ok {
 			self.pubKeySymKeyIndex[pubkeyid] = make(map[whisper.TopicType][]*string)
 		}
@@ -658,26 +645,37 @@ func (self *Pss) handleKey(pubkeyid string, envelope *whisper.Envelope, keymsg *
 		//				}
 		//			}
 		//		} else {
-		sendsymkeys = keymsg.Keys
+		//			sendsymkeys = keymsg.Keys
 		//		}
 
 		log.Trace("have handshake response", "from", keymsg.From, "count", uint8(len(keymsg.Keys))/keymsg.KeyLength)
 
-		if len(sendsymkeys) > 0 {
-			var sendsymkeyids []string
+		var sendsymkeyids []string
+		for i := 0; i < len(keymsg.Keys); i += int(keymsg.KeyLength) {
 			sendsymkey := make([]byte, keymsg.KeyLength)
-			buf := bytes.NewReader(sendsymkeys)
-			for {
-				count, err := buf.Read(sendsymkey)
-				if count == 0 || err == io.EOF {
-					break
-				}
-				sendsymkeyid, err := self.SetSymmetricKey(sendsymkey, envelope.Topic, keymsg.From, keymsg.Limit, false)
-				self.pubKeySymKeyIndex[pubkeyid][envelope.Topic] = append(self.pubKeySymKeyIndex[pubkeyid][envelope.Topic], &sendsymkeyid)
-				self.symKeyPubKeyIndex[sendsymkeyid] = pubkeyid
-				sendsymkeyids = append(sendsymkeyids, sendsymkeyid)
+			copy(sendsymkey, keymsg.Keys[i:i+int(keymsg.KeyLength)])
+			sendsymkeyid, err := self.SetSymmetricKey(sendsymkey, envelope.Topic, keymsg.From, keymsg.Limit, false)
+			if err != nil {
+
+				return err
 			}
+			self.pubKeySymKeyIndex[pubkeyid][envelope.Topic] = append(self.pubKeySymKeyIndex[pubkeyid][envelope.Topic], &sendsymkeyid)
+			self.symKeyPubKeyIndex[sendsymkeyid] = pubkeyid
+			sendsymkeyids = append(sendsymkeyids, sendsymkeyid)
+		}
+		if len(sendsymkeyids) > 0 {
 			self.alertHandshake(pubkeyid, sendsymkeyids)
+		}
+	}
+
+	// peer request for keys
+	if keymsg.RequestCount > 0 {
+		log.Trace("have handshake request", "from", keymsg.From, "count", keymsg.RequestCount)
+		// we don't need to remember the key ids here
+		//_, err := self.sendKey(pubkeyid, &envelope.Topic, keymsg.RequestCount, self.symKeySendLimit, sendsymkeyid, keymsg.From)
+		_, err := self.sendKey(pubkeyid, &envelope.Topic, keymsg.RequestCount, self.symKeySendLimit, keymsg.From)
+		if err != nil {
+			return err
 		}
 	}
 
@@ -685,14 +683,18 @@ func (self *Pss) handleKey(pubkeyid string, envelope *whisper.Envelope, keymsg *
 }
 
 func (self *Pss) alertHandshake(pubkeyid string, symkeys []string) chan []string {
-	if _, ok := self.handshakeC[pubkeyid]; !ok {
-		self.handshakeC[pubkeyid] = make(chan []string)
-	}
+
 	if len(symkeys) > 0 {
-		self.handshakeC[pubkeyid] <- symkeys
-		close(self.handshakeC[pubkeyid])
-		delete(self.handshakeC, pubkeyid)
+		if _, ok := self.handshakeC[pubkeyid]; ok {
+			self.handshakeC[pubkeyid] <- symkeys
+			close(self.handshakeC[pubkeyid])
+			delete(self.handshakeC, pubkeyid)
+		}
 		return nil
+	} else {
+		if _, ok := self.handshakeC[pubkeyid]; !ok {
+			self.handshakeC[pubkeyid] = make(chan []string)
+		}
 	}
 	return self.handshakeC[pubkeyid]
 }
