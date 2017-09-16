@@ -57,7 +57,6 @@ type pssRPCRW struct {
 	msgC     chan []byte
 	addr     pss.PssAddress
 	pubKey   string
-	symKey   string
 	lastSeen time.Time
 }
 
@@ -101,14 +100,23 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	if err != nil {
 		return err
 	}
-	for i := 0; i < handshakeRetryCount; i++ {
-		if rw.Handshake() == nil {
-			hextopic := fmt.Sprintf("%x", *rw.topic)
-			return rw.Client.rpc.Call(nil, "pss_sendSym", rw.symKey, hextopic, pmsg)
-		}
-		time.Sleep(time.Millisecond * handshakeRetryTimeout)
+	var symkeyids []string
+	hextopic := fmt.Sprintf("%x", *rw.topic)
+	err = rw.Client.rpc.Call(&symkeyids, "pss_getSymmetricKeys", rw.pubKey, hextopic)
+	if err != nil {
+		return err
 	}
-	return errors.New("pss handshake failed")
+	if len(symkeyids) == 0 {
+		err := rw.Handshake()
+		if err != nil {
+			return err
+		}
+		err = rw.Client.rpc.Call(&symkeyids, "pss_getSymmetricKeys", rw.pubKey, hextopic)
+		if err != nil {
+			return err
+		}
+	}
+	return rw.Client.rpc.Call(nil, "pss_sendSym", symkeyids[0], hextopic, pmsg)
 }
 
 // Manage underlying symkey handshakes
@@ -118,29 +126,11 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 // since we force synchronous handshake, peer must actually respond before write can be performed
 func (rw *pssRPCRW) Handshake() error {
 	hextopic := fmt.Sprintf("%x", *rw.topic)
-	if rw.symKey != "" {
-		var symkey []byte
-		var status int
-		err := rw.Client.rpc.Call(&symkey, "pss_getSymKey", rw.symKey)
-		if err != nil {
-			return err
-		}
-		err = rw.Client.rpc.Call(&status, "pss_symStatus", symkey, hextopic)
-		if err != nil {
-			return err
-		}
-		if status == pss.SYMSTATUS_OK {
-			return nil
-		}
-	}
-
-	var symkeys [2]string
+	var symkeys []string
 	err := rw.Client.rpc.Call(&symkeys, "pss_handshake", rw.pubKey, hextopic, rw.addr, true)
 	if err != nil {
 		return err
 	}
-	rw.symKey = symkeys[0]
-
 	return nil
 }
 
@@ -208,16 +198,10 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 				}
 				// we get passed the symkeyid
 				// need the symkey itself to resolve to peer's pubkey
-				var symkey []byte
-				err = self.rpc.Call(&symkey, "pss_getSymKey", msg.Key)
-				if err != nil {
-					log.Warn("Received API msg with invalid symkey id", "symkey id", msg.Key)
-					continue
-				}
 				var pubkeyid string
-				err = self.rpc.Call(&pubkeyid, "pss_getPublicKeyFromSymmetricKey", symkey)
+				err = self.rpc.Call(&pubkeyid, "pss_getPublicKeyFromSymmetricKey", msg.Key)
 				if err != nil || pubkeyid == "" {
-					log.Trace("proto err or no pubkey", "err", err, "symkey", symkey)
+					log.Trace("proto err or no pubkey", "err", err, "symkeyid", msg.Key)
 					continue
 				}
 				// if we don't have the peer on this protocol already, create it
@@ -230,7 +214,6 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 						continue
 					}
 					rw := self.newpssRPCRW(crypto.ToECDSAPub(common.FromHex(pubkeyid)), addr, &topic)
-					rw.symKey = msg.Key
 					self.peerPool[topic][pubkeyid] = rw
 					nid, _ := discover.HexID("0x00")
 					p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})

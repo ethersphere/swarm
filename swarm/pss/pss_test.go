@@ -145,6 +145,7 @@ func TestCache(t *testing.T) {
 	}
 }
 
+// matching of address hints; whether a message could be or is for the node
 func TestAddressMatch(t *testing.T) {
 
 	localaddr := network.RandomAddr().Over()
@@ -192,10 +193,7 @@ func TestAddressMatch(t *testing.T) {
 	}
 }
 
-// tests:
-// sets public key for peer
-// set an outgoing symmetric key for peer
-// generate own symmetric key for incoming message from peer
+// set and generate pubkeys and symkeys
 func TestKeys(t *testing.T) {
 	// make our key and init pss with it
 	ourkeys, err := wapi.NewKeyPair()
@@ -254,7 +252,19 @@ func TestKeys(t *testing.T) {
 
 // asymmetrical key exchange between two directly connected peers
 // full address, partial address (8 bytes) and empty address
-func TestKeysExchange(t *testing.T) {
+func TestHandshake(t *testing.T) {
+	t.Run("32", testHandshake)
+	t.Run("8", testHandshake)
+	t.Run("0", testHandshake)
+}
+
+func testHandshake(t *testing.T) {
+
+	// how much of the address we will use
+	var addrsize int64
+	var err error
+	addrsizestring := strings.Split(t.Name(), "/")
+	addrsize, _ = strconv.ParseInt(addrsizestring[1], 10, 0)
 
 	// set up two nodes directly connected
 	// (we are not testing pss routing here)
@@ -266,16 +276,19 @@ func TestKeysExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loaddr := make([]byte, 32)
+	var loaddr []byte
 	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
-	roaddr := make([]byte, 32)
+	loaddr = loaddr[:addrsize]
+	var roaddr []byte
 	err = clients[1].Call(&roaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
+	roaddr = roaddr[:addrsize]
+	log.Debug("addresses", "left", loaddr, "right", roaddr)
 
 	// retrieve public key from pss instance
 	// set this public key reciprocally
@@ -292,10 +305,7 @@ func TestKeysExchange(t *testing.T) {
 
 	time.Sleep(time.Millisecond * 1000) // replace with hive healthy code
 
-	//	var addrs [2][]byte
-	//	var rkeysold []string
-	//	synchs := false
-	//
+	// give each node its peer's public key
 	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, roaddr)
 	if err != nil {
 		t.Fatal(err)
@@ -305,19 +315,27 @@ func TestKeysExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// perform the handshake
+	// after this each side will have defaultSymKeyBufferCapacity symkeys each for in- and outgoing messages:
+	// L -> request 6 keys -> R
+	// L <- send 6 keys, request 6 keys <- R
+	// L -> send 6 keys -> R
+	// the call will fill the array with symkeys L needs for sending to R
 	var hsendsymkeyids []string
 	err = clients[0].Call(&hsendsymkeyids, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// make sure the r-node gets its keys
 	time.Sleep(time.Second)
+
+	// check if we have 6 outgoing keys stored, and they match what was received from R
 	var lsendsymkeyids []string
 	err = clients[0].Call(&lsendsymkeyids, "pss_getSymmetricKeys", common.ToHex(rpubkey), hextopic)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	m := 0
 	for _, hid := range hsendsymkeyids {
 		for _, lid := range lsendsymkeyids {
@@ -330,16 +348,18 @@ func TestKeysExchange(t *testing.T) {
 		t.Fatalf("buffer size mismatch, expected %d, have %d: %v", defaultSymKeyBufferCapacity, m, lsendsymkeyids)
 	}
 
+	// check if in- and outgoing keys on l-node and r-node match up and are in opposite categories (l recv = r send, l send = r recv)
 	var rsendsymkeyids []string
 	err = clients[1].Call(&rsendsymkeyids, "pss_getSymmetricKeys", common.ToHex(lpubkey), hextopic)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	// get outgoing symkeys in byte form from both sides
 	var lsendsymkeys [][]byte
 	for _, id := range lsendsymkeyids {
 		var key []byte
-		err = clients[0].Call(&key, "psstest_getSymKey", id)
+		err = clients[0].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -348,12 +368,14 @@ func TestKeysExchange(t *testing.T) {
 	var rsendsymkeys [][]byte
 	for _, id := range rsendsymkeyids {
 		var key []byte
-		err = clients[1].Call(&key, "psstest_getSymKey", id)
+		err = clients[1].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
 		rsendsymkeys = append(rsendsymkeys, key)
 	}
+
+	// get ALL symkeys in byte form from both sides
 	var lsymkeyids []string
 	err = clients[0].Call(&lsymkeyids, "psstest_dumpSymKeys", common.ToHex(rpubkey), hextopic)
 	if err != nil {
@@ -362,7 +384,7 @@ func TestKeysExchange(t *testing.T) {
 	var lsymkeys [][]byte
 	for _, id := range lsymkeyids {
 		var key []byte
-		err = clients[0].Call(&key, "psstest_getSymKey", id)
+		err = clients[0].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -376,13 +398,14 @@ func TestKeysExchange(t *testing.T) {
 	var rsymkeys [][]byte
 	for _, id := range rsymkeyids {
 		var key []byte
-		err = clients[1].Call(&key, "psstest_getSymKey", id)
+		err = clients[1].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
 		rsymkeys = append(rsymkeys, key)
 	}
 
+	// filter out the recv keys on both sides
 	var lrecvsymkeys [][]byte
 louter:
 	for _, key := range lsymkeys {
@@ -427,24 +450,25 @@ router:
 		t.Fatalf("left send buffer does not match right recv buffer, expected %d, have %d", defaultSymKeyBufferCapacity, m)
 	}
 
+	// verify can't initiate handshake when buffer is full
 	var moresymkeys []string
 	err = clients[0].Call(&moresymkeys, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, true)
 	if err == nil {
-		t.Fatal("expected error")
+		t.Fatal("expected handshake to fail due to full buffer but no error returned")
 	}
-	err = clients[0].Call(nil, "psstest_depleteSymKey", lsendsymkeyids[0])
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = clients[0].Call(nil, "psstest_depleteSymKey", lsendsymkeyids[1])
-	if err != nil {
-		t.Fatal(err)
+
+	// expire two keys from left, reinitiate handshake
+	// afterwards two of the keys should be different than the ones we stored before
+	for i := 0; i < 2; i++ {
+		err = clients[0].Call(nil, "psstest_depleteSymKey", lsendsymkeyids[i])
+		if err != nil {
+			t.Fatal(err)
+		}
 	}
 	err = clients[0].Call(&moresymkeys, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	time.Sleep(time.Second)
 	var lnewsendsymkeyids []string
 	err = clients[0].Call(&lnewsendsymkeyids, "pss_getSymmetricKeys", common.ToHex(rpubkey), hextopic)
@@ -454,7 +478,7 @@ router:
 	m = 0
 	for _, id := range lnewsendsymkeyids {
 		var key []byte
-		err = clients[0].Call(&key, "psstest_getSymKey", id)
+		err = clients[0].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -468,140 +492,72 @@ router:
 		t.Fatalf("Left buffer mismatch after re-handshake, expected %d different keys in batch, have %d", defaultSymKeyBufferCapacity-2, m)
 	}
 
-	//	for i := 0; i < 6; i++ {
-	//		// the second iteration blocks until handshake response is received
-	//		if i == 3 {
-	//			synchs = true
-	//		}
-	//		imod := i % 3
-	//		switch imod {
-	//		case 1:
-	//			addrs[0] = loaddr[:8]
-	//			addrs[1] = roaddr[:8]
-	//			log.Info("Test partial address", "laddr", addrs[0], "raddr", addrs[1])
-	//			break
-	//		case 2:
-	//			addrs[0] = []byte{}
-	//			addrs[1] = []byte{}
-	//			log.Info("Test empty address")
-	//			break
-	//		default:
-	//			addrs[0] = loaddr
-	//			addrs[1] = roaddr
-	//			log.Info("Test full address", "laddr", addrs[0], "raddr", addrs[1])
-	//		}
-	//
-	//		err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, addrs[1])
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, addrs[0])
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//
-	//		// use api test method for generating and sending incoming symkey
-	//		// the peer should save it, then generate and send back its own
-	//		var symkeys [2]string
-	//		err = clients[0].Call(&symkeys, "pss_handshake", common.ToHex(rpubkey), hextopic, addrs[1], synchs)
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		if synchs {
-	//			log.Debug("sync handshake response", "recvkey", symkeys[0], "sendkey", symkeys[1])
-	//		} else {
-	//			time.Sleep(time.Millisecond * 2000) // wait for handshake complete, replace with sim expect logic
-	//		}
-	//
-	//		// after the exchange, the key for receiving on node 1
-	//		// should be the same as sending on node 2, and vice versa
-	//		// check node 1 first
-	//		lrecvkey := make([]byte, defaultSymKeyLength)
-	//		err = clients[0].Call(&lrecvkey, "pss_getSymKey", symkeys[0])
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		var lsendkeyid string
-	//		lsendkey := make([]byte, defaultSymKeyLength)
-	//		err = clients[0].Call(&lsendkeyid, "pss_matchSymKey", symkeys[0])
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		if synchs && lsendkeyid != symkeys[1] {
-	//			t.Fatalf("Sync handshake response symkey does not match matchKey API call: %s != %s", symkeys[1], lsendkeyid)
-	//		}
-	//		err = clients[0].Call(&lsendkey, "pss_getSymKey", lsendkeyid)
-	//
-	//		// then check node 2
-	//		var rkeys []string
-	//		var rkeysnew []string
-	//		var rkeysbytes [2][]byte
-	//		var rsendkeyid string
-	//		err = clients[1].Call(&rkeys, "psstest_getSymKeys")
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		} else if len(rkeys) < i+1 {
-	//			t.Fatalf("Wrong symkey count: Expected %d, got %d", i+1, len(rkeys))
-	//		}
-	//	nextkey:
-	//		for i := 0; i < len(rkeys); i++ {
-	//			for j := 0; j < len(rkeysold); j++ {
-	//				if rkeys[i] == rkeysold[j] {
-	//					continue nextkey
-	//				}
-	//			}
-	//			rkeysnew = append(rkeysnew, rkeys[i])
-	//			rkeysold = append(rkeysold, rkeys[i])
-	//		}
-	//		err = clients[1].Call(&rkeysbytes[0], "pss_getSymKey", rkeysnew[0])
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		err = clients[1].Call(&rsendkeyid, "pss_matchSymKey", rkeysnew[0])
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		err = clients[1].Call(&rkeysbytes[1], "pss_getSymKey", rsendkeyid)
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//
-	//		// check if they match
-	//		// we do not know in which order they come from node 2 so we need to check both combinations
-	//		if bytes.Equal(lrecvkey, rkeysbytes[1]) {
-	//			if !bytes.Equal(lsendkey, rkeysbytes[0]) {
-	//				t.Fatalf("Node 2 receive key does not match node 1 send key: %x != %x", rkeysbytes[0], lsendkey)
-	//			}
-	//		} else if bytes.Equal(lrecvkey, rkeysbytes[0]) {
-	//			if !bytes.Equal(lsendkey, rkeysbytes[1]) {
-	//				t.Fatalf("Node 2 receive key does not match node 1 send key: %x != %x", rkeysbytes[1], lsendkey)
-	//			}
-	//		} else {
-	//			t.Fatalf("Node 1 receive key does not match any node 1 key: %x != %x | %x", lrecvkey, rkeysbytes[0], rkeysbytes[1])
-	//		}
-	//		var xrpubkeyid string
-	//		var xlpubkeyid string
-	//		err = clients[0].Call(&xrpubkeyid, "pss_getPublicKeyFromSymmetricKey", lsendkeyid)
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		err = clients[1].Call(&xlpubkeyid, "pss_getPublicKeyFromSymmetricKey", rkeysnew[0])
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//		if xlpubkeyid == "" {
-	//			err = clients[1].Call(&xlpubkeyid, "pss_getPublicKeyFromSymmetricKey", rkeysnew[1])
-	//			if err != nil {
-	//				t.Fatal(err)
-	//			}
-	//		}
-	//		t.Logf("#%d syms: left: %x / %x, right %x / %x", i, lrecvkey, lsendkey, rkeysbytes[0], rkeysbytes[1])
-	//		t.Logf("#%d pubs: left: %x / %s, right %x / %s", i, lpubkey, xlpubkeyid, rpubkey, xrpubkeyid)
-	//	}
+	// expire two keys from both sides, reinitiate handshake
+	// same difference as before, but now on both sides
+	for i := 0; i < 2; i++ {
+		err = clients[0].Call(nil, "psstest_depleteSymKey", lnewsendsymkeyids[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = clients[1].Call(nil, "psstest_depleteSymKey", rsendsymkeyids[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	err = clients[0].Call(&moresymkeys, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second)
+	var rnewsendsymkeyids []string
+	err = clients[1].Call(&rnewsendsymkeyids, "pss_getSymmetricKeys", common.ToHex(lpubkey), hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m = 0
+	for _, id := range rnewsendsymkeyids {
+		var key []byte
+		err = clients[1].Call(&key, "pss_getSymmetricKey", id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, oldkey := range rsendsymkeys {
+			if bytes.Equal(oldkey, key) {
+				m++
+			}
+		}
+	}
+	if m != defaultSymKeyBufferCapacity-2 {
+		t.Fatalf("Right buffer mismatch after re-handshake, expected %d different keys in batch, have %d", defaultSymKeyBufferCapacity-2, m)
+	}
+
+	// expire one symkey, and attempt to send with it. should fail
+	err = clients[1].Call(nil, "psstest_depleteSymKey", rnewsendsymkeyids[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = clients[1].Call(nil, "pss_sendSym", rnewsendsymkeyids[0], hextopic, []byte("foo"))
+	if err == nil {
+		t.Fatal("expected sym send fail on depleted key, but got no error")
+	}
 }
 
 // send symmetrically encrypted message between two directly connected peers
 func TestSymSend(t *testing.T) {
+	t.Run("32", testSymSend)
+	t.Run("8", testSymSend)
+	t.Run("0", testSymSend)
+}
+
+func testSymSend(t *testing.T) {
+
+	// address hint size
+	var addrsize int64
+	var err error
+	paramstring := strings.Split(t.Name(), "/")
+	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
+	log.Info("sym send test", "addrsize", addrsize)
 
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	hextopic := fmt.Sprintf("%x", topic)
@@ -611,20 +567,33 @@ func TestSymSend(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	loaddr := make([]byte, 32)
+	loaddr := make([]byte, addrsize)
 	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
-	roaddr := make([]byte, 32)
+	loaddr = loaddr[:addrsize]
+	roaddr := make([]byte, addrsize)
 	err = clients[1].Call(&roaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
+	roaddr = roaddr[:addrsize]
+
+	// retrieve public key from pss instance
+	// set this public key reciprocally
+	lpubkey := make([]byte, 32)
+	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
+	if err != nil {
+		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
+	}
+	rpubkey := make([]byte, 32)
+	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
+	if err != nil {
+		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
+	}
 
 	time.Sleep(time.Millisecond * 500)
-
-	var addrs [2][]byte
 
 	// at this point we've verified that symkeys are saved and match on each peer
 	// now try sending symmetrically encrypted message, both directions
@@ -638,70 +607,69 @@ func TestSymSend(t *testing.T) {
 	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
-	for i := 0; i < 3; i++ {
-		switch i {
-		case 1:
-			addrs[0] = loaddr[:8]
-			addrs[1] = roaddr[:8]
-			log.Info("Test partial address", "laddr", addrs[0], "raddr", addrs[1])
-			break
-		case 2:
-			addrs[0] = []byte{}
-			addrs[1] = []byte{}
-			log.Info("Test empty address")
-			break
-		default:
-			addrs[0] = loaddr
-			addrs[1] = roaddr
-			log.Info("Test full address", "laddr", addrs[0], "raddr", addrs[1])
-		}
 
-		lrecvkey := network.RandomAddr().Over()
-		rrecvkey := network.RandomAddr().Over()
-		var lkeyids [2]string
-		var rkeyids [2]string
+	lrecvkey := network.RandomAddr().Over()
+	rrecvkey := network.RandomAddr().Over()
 
-		err = clients[0].Call(&lkeyids, "psstest_setSymKeys", lrecvkey, rrecvkey, hextopic, roaddr)
-		if err != nil {
-			t.Fatal(err)
-		}
+	var lkeyids [2]string
+	var rkeyids [2]string
 
-		err = clients[1].Call(&rkeyids, "psstest_setSymKeys", rrecvkey, lrecvkey, hextopic, loaddr)
-		if err != nil {
-			t.Fatal(err)
-		}
+	// manually set reciprocal symkeys
+	err = clients[0].Call(&lkeyids, "psstest_setSymKeys", common.ToHex(rpubkey), lrecvkey, rrecvkey, defaultSymKeySendLimit, hextopic, roaddr)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		lmsg := []byte("plugh")
-		err = clients[1].Call(nil, "pss_sendSym", rkeyids[0], hextopic, lmsg)
-		if err != nil {
-			t.Fatal(err)
+	err = clients[1].Call(&rkeyids, "psstest_setSymKeys", common.ToHex(lpubkey), rrecvkey, lrecvkey, defaultSymKeySendLimit, hextopic, loaddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// send and verify delivery
+	lmsg := []byte("plugh")
+	err = clients[1].Call(nil, "pss_sendSym", rkeyids[1], hextopic, lmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case recvmsg := <-lmsgC:
+		if !bytes.Equal(recvmsg.Msg, lmsg) {
+			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", lmsg, recvmsg)
 		}
-		select {
-		case recvmsg := <-lmsgC:
-			if !bytes.Equal(recvmsg.Msg, lmsg) {
-				t.Fatalf("node 1 received payload mismatch: expected %v, got %v", lmsg, recvmsg)
-			}
-		case cerr := <-lctx.Done():
-			t.Fatalf("test message timed out: %v", cerr)
+	case cerr := <-lctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+	rmsg := []byte("xyzzy")
+	err = clients[0].Call(nil, "pss_sendSym", lkeyids[1], hextopic, rmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case recvmsg := <-rmsgC:
+		if !bytes.Equal(recvmsg.Msg, rmsg) {
+			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", rmsg, recvmsg.Msg)
 		}
-		rmsg := []byte("xyzzy")
-		err = clients[0].Call(nil, "pss_sendSym", lkeyids[0], hextopic, rmsg)
-		if err != nil {
-			t.Fatal(err)
-		}
-		select {
-		case recvmsg := <-rmsgC:
-			if !bytes.Equal(recvmsg.Msg, rmsg) {
-				t.Fatalf("node 2 received payload mismatch: expected %v, got %v", rmsg, recvmsg.Msg)
-			}
-		case cerr := <-rctx.Done():
-			t.Fatalf("test message timed out: %v", cerr)
-		}
+	case cerr := <-rctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
 	}
 }
 
 // send asymmetrically encrypted message between two directly connected peers
 func TestAsymSend(t *testing.T) {
+	t.Run("32", testAsymSend)
+	t.Run("8", testAsymSend)
+	t.Run("0", testAsymSend)
+}
+
+func testAsymSend(t *testing.T) {
+
+	// address hint size
+	var addrsize int64
+	var err error
+	paramstring := strings.Split(t.Name(), "/")
+	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
+	log.Info("asym send test", "addrsize", addrsize)
+
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	hextopic := fmt.Sprintf("%x", topic)
 
@@ -717,11 +685,13 @@ func TestAsymSend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
+	loaddr = loaddr[:addrsize]
 	roaddr := make([]byte, 32)
 	err = clients[1].Call(&roaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
+	roaddr = roaddr[:addrsize]
 
 	// retrieve public key from pss instance
 	// set this public key reciprocally
@@ -751,88 +721,85 @@ func TestAsymSend(t *testing.T) {
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
-	for i := 0; i < 3; i++ {
-		switch i {
-		case 1:
-			addrs[0] = loaddr[:8]
-			addrs[1] = roaddr[:8]
-			log.Info("Test partial address", "laddr", addrs[0], "raddr", addrs[1])
-			break
-		case 2:
-			addrs[0] = []byte{}
-			addrs[1] = []byte{}
-			log.Info("Test empty address")
-			break
-		default:
-			addrs[0] = loaddr
-			addrs[1] = roaddr
-			log.Info("Test full address", "laddr", addrs[0], "raddr", addrs[1])
-		}
-		err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, addrs[1])
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, addrs[0])
-		if err != nil {
-			t.Fatal(err)
-		}
+	// store reciprocal public keys
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, addrs[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, addrs[0])
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		rmsg := []byte("xyzzy")
-		err = clients[0].Call(nil, "pss_sendAsym", common.ToHex(rpubkey), hextopic, rmsg)
-		if err != nil {
-			t.Fatal(err)
+	// send and verify delivery
+	rmsg := []byte("xyzzy")
+	err = clients[0].Call(nil, "pss_sendAsym", common.ToHex(rpubkey), hextopic, rmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case recvmsg := <-rmsgC:
+		if !bytes.Equal(recvmsg.Msg, rmsg) {
+			t.Fatalf("node 2 received payload mismatch: expected %v, got %v", rmsg, recvmsg.Msg)
 		}
-		select {
-		case recvmsg := <-rmsgC:
-			if !bytes.Equal(recvmsg.Msg, rmsg) {
-				t.Fatalf("node 2 received payload mismatch: expected %v, got %v", rmsg, recvmsg.Msg)
-			}
-		case cerr := <-rctx.Done():
-			t.Fatalf("test message timed out: %v", cerr)
+	case cerr := <-rctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+	lmsg := []byte("plugh")
+	err = clients[1].Call(nil, "pss_sendAsym", common.ToHex(lpubkey), hextopic, lmsg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case recvmsg := <-lmsgC:
+		if !bytes.Equal(recvmsg.Msg, lmsg) {
+			t.Fatalf("node 1 received payload mismatch: expected %v, got %v", lmsg, recvmsg.Msg)
 		}
-		lmsg := []byte("plugh")
-		err = clients[1].Call(nil, "pss_sendAsym", common.ToHex(lpubkey), hextopic, lmsg)
-		if err != nil {
-			t.Fatal(err)
-		}
-		select {
-		case recvmsg := <-lmsgC:
-			if !bytes.Equal(recvmsg.Msg, lmsg) {
-				t.Fatalf("node 1 received payload mismatch: expected %v, got %v", lmsg, recvmsg.Msg)
-			}
-		case cerr := <-lctx.Done():
-			t.Fatalf("test message timed out: %v", cerr)
-		}
+	case cerr := <-lctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
 	}
 }
 
+// simple ping pong protocol test for the pss devp2p emulation
 func TestProtocol(t *testing.T) {
+	t.Run("32", testProtocol)
+	t.Run("8", testProtocol)
+	t.Run("0", testProtocol)
+}
+
+func testProtocol(t *testing.T) {
+
+	// address hint size
+	var addrsize int64
+	var err error
+	paramstring := strings.Split(t.Name(), "/")
+	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
+	log.Info("protocol test", "addrsize", addrsize)
+
 	hextopic := fmt.Sprintf("%x", PingTopic)
 	clients, err := setupNetwork(2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	time.Sleep(time.Millisecond * 250)
-
-	loaddr := make([]byte, 32)
+	var loaddr []byte
 	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
-	roaddr := make([]byte, 32)
+	loaddr = loaddr[:addrsize]
+	var roaddr []byte
 	err = clients[1].Call(&roaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
+	roaddr = roaddr[:addrsize]
 	lnodeinfo := &p2p.NodeInfo{}
 	err = clients[0].Call(&lnodeinfo, "admin_nodeInfo")
 	if err != nil {
 		t.Fatalf("rpc nodeinfo node 11 fail: %v", err)
 	}
 
-	// retrieve public key from pss instance
-	// set this public key reciprocally
 	lpubkey := make([]byte, 32)
 	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
 	if err != nil {
@@ -857,6 +824,7 @@ func TestProtocol(t *testing.T) {
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
+	// set reciprocal public keys
 	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, roaddr)
 	if err != nil {
 		t.Fatal(err)
@@ -866,25 +834,28 @@ func TestProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// add right peer's public key as protocol peer on left
 	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
 	p := p2p.NewPeer(nid, fmt.Sprintf("%x", loaddr), []p2p.Cap{})
 	pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, common.ToHex(rpubkey))
 
+	// sends ping asym, checks delivery
 	pssprotocols[lnodeinfo.ID].C <- struct{}{}
 	select {
 	case <-lmsgC:
-		log.Debug("lnode got pong")
+		log.Debug("lnode ok")
 	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
 	select {
 	case <-rmsgC:
-		log.Debug("rnode got pong")
+		log.Debug("rnode ok")
 	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
 }
 
+// symmetric send performance with varying message sizes
 func BenchmarkSymkeySend(b *testing.B) {
 	b.Run(fmt.Sprintf("%d", 256), benchmarkSymKeySend)
 	b.Run(fmt.Sprintf("%d", 1024), benchmarkSymKeySend)
@@ -925,6 +896,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	}
 }
 
+// asymmetric send performance with varying message sizes
 func BenchmarkAsymkeySend(b *testing.B) {
 	b.Run(fmt.Sprintf("%d", 256), benchmarkAsymKeySend)
 	b.Run(fmt.Sprintf("%d", 1024), benchmarkAsymKeySend)
@@ -964,6 +936,7 @@ func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 }
 
+// decrypt performance using symkey cache, worst case
 func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	keycountstring := strings.Split(b.Name(), "/")
 	cachesize := int64(0)
@@ -1043,6 +1016,7 @@ func BenchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	}
 }
 
+// decrypt performance using symkey cache, best case
 func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	var keyid string
 	var ps *Pss
@@ -1114,6 +1088,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	}
 }
 
+// setup simulated network and connect nodes in circle
 func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	nodes := make([]*simulations.Node, numnodes)
 	clients = make([]*rpc.Client, numnodes)

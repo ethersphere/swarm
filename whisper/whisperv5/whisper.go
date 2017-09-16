@@ -789,9 +789,7 @@ func EncryptSymmetric(key []byte, content []byte) (encrypted []byte, nonce []byt
 
 	//return aesgcm.Seal(nil, nonce, content, nil), nil
 
-	log.Debug("before encrypt", "content", content, "nonce", nonce)
 	encrypted = aesgcm.Seal(nil, nonce, content, nil)
-	log.Debug("after encrypt", "content", content, "nonce", nonce)
 	return encrypted, nonce, nil
 }
 

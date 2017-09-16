@@ -45,6 +45,7 @@ var (
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
+	sendLimit    = 256
 )
 
 var services = newServices()
@@ -157,152 +158,6 @@ func TestHandshake(t *testing.T) {
 	log.Warn("ok")
 }
 
-//func TestRunProtocol(t *testing.T) {
-//	quitC := make(chan struct{})
-//	ps := pss.NewTestPss(nil)
-//	ping := &pss.Ping{
-//		C: make(chan struct{}),
-//	}
-//	proto := newProtocol(ping)
-//	_, err := baseTester(t, proto, ps, nil, quitC)
-//	if err != nil {
-//		t.Fatalf(err.Error())
-//	}
-//	quitC <- struct{}{}
-//}
-//
-//func TestIncoming(t *testing.T) {
-//	t.Skip("pssclient is broken, needs whisper integration")
-//	quitC := make(chan struct{})
-//	ps := pss.NewTestPss(nil)
-//	ctx, _ := context.WithTimeout(context.Background(), time.Second*5)
-//	var addr []byte
-//	ping := &pss.Ping{
-//		C: make(chan struct{}),
-//	}
-//	proto := newProtocol(ping)
-//	client, err := baseTester(t, proto, ps, ctx, quitC)
-//	if err != nil {
-//		t.Fatalf(err.Error())
-//	}
-//
-//	client.rpc.Call(&addr, "psstest_baseAddr")
-//
-//	code, _ := pss.PingProtocol.GetCode(&pss.PingMsg{})
-//	rlpbundle, err := pss.NewProtocolMsg(code, &pss.PingMsg{
-//		Created: time.Now(),
-//	})
-//	if err != nil {
-//		t.Fatalf("couldn't make pssmsg: %v", err)
-//	}
-//
-//	_ = rlpbundle
-//	pssenv := &whisper.Envelope{}
-//	pssmsg := pss.PssMsg{
-//		To:      addr,
-//		Payload: pssenv,
-//	}
-//
-//	ps.Process(&pssmsg)
-//
-//	<-ping.C
-//
-//	quitC <- struct{}{}
-//}
-//
-//func TestOutgoing(t *testing.T) {
-//	t.Skip("pssclient is broken, needs whisper integration")
-//	quitC := make(chan struct{})
-//	ps := pss.NewTestPss(nil)
-//	ctx, _ := context.WithTimeout(context.Background(), time.Millisecond*250)
-//	var addr []byte
-//	var potaddr pot.Address
-//
-//	ping := &pss.Ping{
-//		C: make(chan struct{}),
-//	}
-//	proto := newProtocol(ping)
-//	client, err := baseTester(t, proto, ps, ctx, quitC)
-//	if err != nil {
-//		t.Fatalf(err.Error())
-//	}
-//
-//	client.rpc.Call(&addr, "psstest_baseAddr")
-//	copy(potaddr[:], addr)
-//
-//	msg := &pss.PingMsg{
-//		Created: time.Now(),
-//	}
-//	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", pss.PingProtocol.Name, pss.PingProtocol.Version)))
-//	client.AddPssPeer(potaddr, pss.PingProtocol)
-//	nid, _ := discover.HexID("0x00")
-//	p := p2p.NewPeer(nid, fmt.Sprintf("%v", potaddr), []p2p.Cap{})
-//	pp := protocols.NewPeer(p, client.peerPool[topic][potaddr], pss.PingProtocol)
-//	pp.Send(msg)
-//	<-ping.C
-//	quitC <- struct{}{}
-//}
-//
-//func baseTester(t *testing.T, proto *p2p.Protocol, ps *pss.Pss, ctx context.Context, quitC chan struct{}) (*Client, error) {
-//	var err error
-//
-//	client := newTestclient(t, quitC)
-//
-//	err = client.RunProtocol(context.Background(), proto)
-//
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	return client, nil
-//}
-//
-//func newProtocol(ping *pss.Ping) *p2p.Protocol {
-//
-//	return &p2p.Protocol{
-//		Name:    pss.PingProtocol.Name,
-//		Version: pss.PingProtocol.Version,
-//		Length:  1,
-//		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
-//			pp := protocols.NewPeer(p, rw, pss.PingProtocol)
-//			pp.Run(ping.PingHandler)
-//			return nil
-//		},
-//	}
-//}
-//
-//
-//func newTestclient(t *testing.T, quitC chan struct{}) *Client {
-//
-//	ps := pss.NewTestPss(nil)
-//	srv := rpc.NewServer()
-//	srv.RegisterName("pss", pss.NewAPI(ps))
-//	srv.RegisterName("psstest", pss.NewAPITest(ps))
-//	ws := srv.WebsocketHandler([]string{"*"})
-//	uri := fmt.Sprintf("%s:%d", "localhost", 8546)
-//
-//	sock, err := net.Listen("tcp", uri)
-//	if err != nil {
-//		t.Fatalf("Tcp (recv) on %s failed: %v", uri, err)
-//	}
-//
-//	go func() {
-//		http.Serve(sock, ws)
-//	}()
-//
-//	go func() {
-//		<-quitC
-//		sock.Close()
-//	}()
-//
-//	pssclient, err := NewClient("ws://localhost:8546")
-//	if err != nil {
-//		t.Fatalf(err.Error())
-//	}
-//
-//	return pssclient
-//}
-
 func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	nodes := make([]*simulations.Node, numnodes)
 	clients = make([]*rpc.Client, numnodes)
@@ -377,6 +232,7 @@ func newServices() adapters.Services {
 			keys, err := wapi.NewKeyPair()
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := pss.NewPssParams(privkey)
+			pssp.SymKeySendLimit = sendLimit
 			pskad := kademlia(ctx.Config.ID)
 			ps := pss.NewPss(pskad, dpa, pssp)
 
