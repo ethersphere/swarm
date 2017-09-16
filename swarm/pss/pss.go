@@ -316,7 +316,7 @@ func (self *Pss) getSymmetricKeyBuffer(pubkeyid string, topic *whisper.TopicType
 		return
 	}
 	for _, symkeyid := range self.pubKeySymKeyIndex[pubkeyid][*topic] {
-		capacity, _ := self.getSymmetricKeyCapacity(*symkeyid)
+		capacity, _ := self.GetSymmetricKeyCapacity(*symkeyid)
 		if capacity == 0 {
 			continue
 		}
@@ -330,7 +330,7 @@ func (self *Pss) getSymmetricKeyBuffer(pubkeyid string, topic *whisper.TopicType
 //
 // Expired symkeys will not be returned
 func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
-	capacity, err := self.getSymmetricKeyCapacity(symkeyid)
+	capacity, err := self.GetSymmetricKeyCapacity(symkeyid)
 	if err != nil {
 		return nil, err
 	}
@@ -346,7 +346,7 @@ func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
 
 // checks if symkey is valid for more messages.
 // if not, the symkey will be instantly garbage collected.
-func (self *Pss) getSymmetricKeyCapacity(symkeyid string) (uint16, error) {
+func (self *Pss) GetSymmetricKeyCapacity(symkeyid string) (uint16, error) {
 	if _, ok := self.symKeyPool[symkeyid]; !ok {
 		return 0, errors.New(fmt.Sprintf("Invalid symkeyid %s", symkeyid))
 	}
@@ -803,7 +803,7 @@ func (self *Pss) forward(msg *PssMsg) error {
 			log.Warn(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
 			return true
 		}
-		log.Debug(fmt.Sprintf("%v: successfully forwarded", sendMsg))
+		log.Trace(fmt.Sprintf("%v: successfully forwarded", sendMsg))
 		sent++
 		// continue forwarding if:
 		// - if the peer is end recipient but the full address has not been disclosed

@@ -32,7 +32,7 @@ const (
 )
 
 type protoCtrl struct {
-	C        chan struct{}
+	C        chan bool
 	protocol *pss.PssProtocol
 	run      func(*p2p.Peer, p2p.MsgReadWriter) error
 }
@@ -45,7 +45,7 @@ var (
 	// custom logging
 	psslogmain   log.Logger
 	pssprotocols map[string]*protoCtrl
-	sendLimit    = 256
+	sendLimit    = uint16(256)
 )
 
 var services = newServices()
@@ -76,6 +76,7 @@ func init() {
 }
 
 func TestHandshake(t *testing.T) {
+	sendLimit = 3
 	topic := ProtocolTopic(pss.PingProtocol)
 	hextopic := fmt.Sprintf("%x", topic)
 
@@ -93,12 +94,14 @@ func TestHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 	lpssping := &pss.Ping{
-		OutC: make(chan struct{}),
-		InC:  make(chan struct{}),
+		OutC: make(chan bool),
+		InC:  make(chan bool),
+		Pong: true,
 	}
 	rpssping := &pss.Ping{
-		OutC: make(chan struct{}),
-		InC:  make(chan struct{}),
+		OutC: make(chan bool),
+		InC:  make(chan bool),
+		Pong: true,
 	}
 	lproto := pss.NewPingProtocol(lpssping.OutC, lpssping.PingHandler)
 	rproto := pss.NewPingProtocol(rpssping.OutC, rpssping.PingHandler)
@@ -152,10 +155,12 @@ func TestHandshake(t *testing.T) {
 
 	time.Sleep(time.Second)
 
-	lpssping.OutC <- struct{}{}
-
-	<-rpssping.InC
-	log.Warn("ok")
+	for i := uint16(0); i <= sendLimit; i++ {
+		lpssping.OutC <- false
+		got := <-rpssping.InC
+		log.Warn("ok", "idx", i, "got", got)
+		time.Sleep(time.Second)
+	}
 }
 
 func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
@@ -235,26 +240,6 @@ func newServices() adapters.Services {
 			pssp.SymKeySendLimit = sendLimit
 			pskad := kademlia(ctx.Config.ID)
 			ps := pss.NewPss(pskad, dpa, pssp)
-
-			ping := &pss.Ping{
-				OutC: make(chan struct{}),
-				InC:  make(chan struct{}),
-			}
-			p2pp := pss.NewPingProtocol(ping.OutC, ping.PingHandler)
-			pp, err := pss.RegisterPssProtocol(ps, &pss.PingTopic, pss.PingProtocol, p2pp, &pss.PssProtocolOptions{Asymmetric: true})
-			if err != nil {
-				return nil, err
-			}
-			ps.Register(&pss.PingTopic, pp.Handle)
-			if err != nil {
-				log.Error("Couldnt register pss protocol", "err", err)
-				os.Exit(1)
-			}
-			pssprotocols[ctx.Config.ID.String()] = &protoCtrl{
-				C:        ping.OutC,
-				protocol: pp,
-				run:      p2pp.Run,
-			}
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {

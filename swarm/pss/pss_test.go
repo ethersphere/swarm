@@ -34,7 +34,7 @@ const (
 )
 
 type protoCtrl struct {
-	C        chan struct{}
+	C        chan bool
 	protocol *PssProtocol
 	run      func(*p2p.Peer, p2p.MsgReadWriter) error
 }
@@ -840,7 +840,7 @@ func testProtocol(t *testing.T) {
 	pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, common.ToHex(rpubkey))
 
 	// sends ping asym, checks delivery
-	pssprotocols[lnodeinfo.ID].C <- struct{}{}
+	pssprotocols[lnodeinfo.ID].C <- false
 	select {
 	case <-lmsgC:
 		log.Debug("lnode ok")
@@ -853,6 +853,22 @@ func testProtocol(t *testing.T) {
 	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
+
+	// sends ping asym, checks delivery
+	pssprotocols[lnodeinfo.ID].C <- false
+	select {
+	case <-lmsgC:
+		log.Debug("lnode ok")
+	case cerr := <-lctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+	select {
+	case <-rmsgC:
+		log.Debug("rnode ok")
+	case cerr := <-lctx.Done():
+		t.Fatalf("test message timed out: %v", cerr)
+	}
+
 }
 
 // symmetric send performance with varying message sizes
@@ -1167,8 +1183,8 @@ func newServices() adapters.Services {
 			ps := NewPss(pskad, dpa, pssp)
 
 			ping := &Ping{
-				OutC: make(chan struct{}),
-				pong: true,
+				OutC: make(chan bool),
+				Pong: true,
 			}
 			p2pp := NewPingProtocol(ping.OutC, ping.PingHandler)
 			pp, err := RegisterPssProtocol(ps, &PingTopic, PingProtocol, p2pp, &PssProtocolOptions{Asymmetric: true})

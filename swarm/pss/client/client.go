@@ -24,7 +24,7 @@ const (
 	inboxCapacity         = 3000
 	outboxCapacity        = 100
 	addrLen               = common.HashLength
-	handshakeRetryTimeout = 10000
+	handshakeRetryTimeout = 5000
 	handshakeRetryCount   = 3
 )
 
@@ -53,10 +53,11 @@ type Client struct {
 // implements p2p.MsgReadWriter
 type pssRPCRW struct {
 	*Client
-	topic    *whisper.TopicType
+	hextopic string
 	msgC     chan []byte
 	addr     pss.PssAddress
-	pubKey   string
+	pubKeyId string
+	symKeyId *string
 	lastSeen time.Time
 }
 
@@ -68,11 +69,11 @@ func (self *Client) newpssRPCRW(pubkey *ecdsa.PublicKey, addr pss.PssAddress, to
 		return nil
 	}
 	return &pssRPCRW{
-		Client: self,
-		topic:  topic,
-		msgC:   make(chan []byte),
-		addr:   addr,
-		pubKey: common.ToHex(pubkeybytes),
+		Client:   self,
+		hextopic: hextopic,
+		msgC:     make(chan []byte),
+		addr:     addr,
+		pubKeyId: common.ToHex(pubkeybytes),
 	}
 }
 
@@ -100,23 +101,42 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	if err != nil {
 		return err
 	}
-	var symkeyids []string
-	hextopic := fmt.Sprintf("%x", *rw.topic)
-	err = rw.Client.rpc.Call(&symkeyids, "pss_getSymmetricKeys", rw.pubKey, hextopic)
-	if err != nil {
-		return err
-	}
-	if len(symkeyids) == 0 {
-		err := rw.Handshake()
-		if err != nil {
-			return err
-		}
-		err = rw.Client.rpc.Call(&symkeyids, "pss_getSymmetricKeys", rw.pubKey, hextopic)
+
+	// If we have a pointer, check if it is expired
+	var symkeycap int16
+	if rw.symKeyId != nil {
+		err = rw.Client.rpc.Call(&symkeycap, "pss_getSymmetricKeyCapacity", *rw.symKeyId)
 		if err != nil {
 			return err
 		}
 	}
-	return rw.Client.rpc.Call(nil, "pss_sendSym", symkeyids[0], hextopic, pmsg)
+
+	if symkeycap == 0 {
+		// The key has expired. Check if we have more in the buffer
+		var symkeyids []string
+		err = rw.Client.rpc.Call(&symkeyids, "pss_getSymmetricKeys", rw.pubKeyId, rw.hextopic)
+		if err != nil {
+			return err
+		}
+		// set the rw's point to the next key in the buffer
+		var retries int
+		var sync bool
+		if len(symkeyids) > 0 {
+			rw.symKeyId = &symkeyids[0]
+		} else {
+			retries = handshakeRetryCount
+			sync = true
+		}
+		// initiate handshake
+		keyid, err := rw.handshake(retries, sync)
+		if err != nil {
+			return err
+		}
+		if len(symkeyids) == 0 {
+			rw.symKeyId = &keyid
+		}
+	}
+	return rw.Client.rpc.Call(nil, "pss_sendSym", *rw.symKeyId, rw.hextopic, pmsg)
 }
 
 // Manage underlying symkey handshakes
@@ -124,14 +144,28 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 // If a valid handshake already exists, no action is performed and nil error is returned
 //
 // since we force synchronous handshake, peer must actually respond before write can be performed
-func (rw *pssRPCRW) Handshake() error {
-	hextopic := fmt.Sprintf("%x", *rw.topic)
-	var symkeys []string
-	err := rw.Client.rpc.Call(&symkeys, "pss_handshake", rw.pubKey, hextopic, rw.addr, true)
-	if err != nil {
-		return err
+func (rw *pssRPCRW) handshake(retries int, sync bool) (string, error) {
+
+	var symkeyids []string
+	var i int
+	// request new keys
+	// if the key buffer was depleted, make this as a blocking call and try several times before giving up
+	for i = 0; i < 1+retries; i++ {
+		log.Debug("handshake attempt pssrpcrw", "pubkeyid", rw.pubKeyId, "topic", rw.hextopic, "sync", sync)
+		err := rw.Client.rpc.Call(&symkeyids, "pss_handshake", rw.pubKeyId, rw.hextopic, rw.addr, sync)
+		if err == nil {
+			var keyid string
+			if sync {
+				keyid = symkeyids[0]
+			}
+			return keyid, nil
+		}
+		if i-1+retries > 1 {
+			time.Sleep(time.Millisecond * handshakeRetryTimeout)
+		}
 	}
-	return nil
+
+	return "", errors.New(fmt.Sprintf("handshake failed after %d attempts", i))
 }
 
 func NewClient(rpcurl string) (*Client, error) {
@@ -246,7 +280,8 @@ func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocol
 	}
 	if self.peerPool[topic][pubkeyid] == nil {
 		rw := self.newpssRPCRW(key, addr, &topic)
-		err := rw.Handshake()
+		symkeyid, err := rw.handshake(handshakeRetryCount, true)
+		rw.symKeyId = &symkeyid
 		if err != nil {
 			return err
 		}

@@ -2,6 +2,7 @@ package pss
 
 import (
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -19,21 +20,27 @@ import (
 
 type PingMsg struct {
 	Created time.Time
+	Pong    bool
 }
 
 type Ping struct {
-	pong bool
-	OutC chan struct{}
-	InC  chan struct{}
+	Pong bool
+	OutC chan bool
+	InC  chan bool
 }
 
 func (self *Ping) PingHandler(msg interface{}) error {
-	log.Debug("got ping", "msg", msg)
-	if self.InC != nil {
-		self.InC <- struct{}{}
+	var pingmsg *PingMsg
+	var ok bool
+	if pingmsg, ok = msg.(*PingMsg); !ok {
+		return errors.New("invalid msg")
 	}
-	if self.pong {
-		self.OutC <- struct{}{}
+	log.Debug("ping handler", "msg", pingmsg, "outc", self.OutC)
+	if self.InC != nil {
+		self.InC <- pingmsg.Pong
+	}
+	if self.Pong && !pingmsg.Pong {
+		self.OutC <- true
 	}
 	return nil
 }
@@ -50,7 +57,7 @@ var PingProtocol = &protocols.Spec{
 
 var PingTopic = whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", PingProtocol.Name, PingProtocol.Version)))
 
-func NewPingProtocol(pingC chan struct{}, handler func(interface{}) error) *p2p.Protocol {
+func NewPingProtocol(pingC chan bool, handler func(interface{}) error) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    PingProtocol.Name,
 		Version: PingProtocol.Version,
@@ -58,12 +65,17 @@ func NewPingProtocol(pingC chan struct{}, handler func(interface{}) error) *p2p.
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 			quitC := make(chan struct{})
 			pp := protocols.NewPeer(p, rw, PingProtocol)
-			log.Trace(fmt.Sprintf("running pss vprotocol on peer %v", p))
+			log.Trace(fmt.Sprintf("running pss vprotocol on peer %v", p, "outc", pingC))
 			go func() {
-				select {
-				case <-pingC:
-					pp.Send(&PingMsg{})
-				case <-quitC:
+				for {
+					select {
+					case ispong := <-pingC:
+						pp.Send(&PingMsg{
+							Created: time.Now(),
+							Pong:    ispong,
+						})
+					case <-quitC:
+					}
 				}
 			}()
 			err := pp.Run(handler)

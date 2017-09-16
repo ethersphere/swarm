@@ -129,7 +129,6 @@ func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid 
 		vrw = self.symKeyRWPool[keyid].(*PssReadWriter)
 	}
 	vrw.injectMsg(pmsg)
-
 	return nil
 }
 
