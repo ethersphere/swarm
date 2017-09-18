@@ -34,6 +34,7 @@ const (
 	defaultWhisperPoW           = 0.0000000001
 	defaultMaxMsgSize           = 1024 * 1024
 	defaultSymKeyLength         = 32
+	defaultCleanInterval        = 1000 * 60 * 10
 )
 
 var (
@@ -131,6 +132,7 @@ type Pss struct {
 	symKeyRequestExpiry  time.Duration            // max wait time to receive a response to a handshake symkey request
 	symKeySendLimit      uint16                   // amount of messages a symkey is valid for
 	symKeyBufferCapacity int                      // amount of hanshake-negotiated outgoing symkeys kept simultaneously
+	quitC                chan struct{}
 }
 
 func (self *Pss) String() string {
@@ -161,6 +163,7 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		symKeyRequestExpiry:  params.SymKeyRequestExpiry,
 		symKeySendLimit:      params.SymKeySendLimit,
 		symKeyBufferCapacity: params.SymKeyBufferCapacity,
+		quitC:                make(chan struct{}),
 	}
 }
 
@@ -176,11 +179,21 @@ func (self *Pss) PublicKey() ecdsa.PublicKey {
 
 // For node.Service implementation. Does nothing for now, but should be included in the code for backwards compatibility.
 func (self *Pss) Start(srv *p2p.Server) error {
+	go func() {
+		tickC := time.Tick(defaultCleanInterval)
+		select {
+		case <-tickC:
+			self.cleanSymmetricKeys()
+		case <-self.quitC:
+			log.Info("pss shutting down")
+		}
+	}()
 	return nil
 }
 
 // For node.Service implementation. Does nothing for now, but should be included in the code for backwards compatibility.
 func (self *Pss) Stop() error {
+	close(self.quitC)
 	return nil
 }
 
@@ -270,29 +283,29 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic whisper.TopicTy
 }
 
 // Automatically generate a new symkey for a topic and address hint
-func (self *Pss) generateSymmetricKey(topic whisper.TopicType, address PssAddress, sendlimit uint16, addToCache bool) (string, error) {
+func (self *Pss) generateSymmetricKey(address PssAddress, sendlimit uint16, addToCache bool) (string, error) {
 	keyid, err := self.w.GenerateSymKey()
 	if err != nil {
 		return "", err
 	}
-	self.addSymmetricKeyToPool(keyid, topic, address, sendlimit, addToCache)
+	self.addSymmetricKeyToPool(keyid, address, sendlimit, addToCache)
 	return keyid, nil
 }
 
 // Manually set a new symkey for a topic and address hint
 //
 // If addtocache is set to true, the key will be added to the collection of keys used to attempt incoming message decryption
-func (self *Pss) SetSymmetricKey(key []byte, topic whisper.TopicType, address PssAddress, sendlimit uint16, addtocache bool) (string, error) {
+func (self *Pss) SetSymmetricKey(key []byte, address PssAddress, sendlimit uint16, addtocache bool) (string, error) {
 	keyid, err := self.w.AddSymKeyDirect(key)
 	if err != nil {
 		return "", err
 	}
-	self.addSymmetricKeyToPool(keyid, topic, address, sendlimit, addtocache)
+	self.addSymmetricKeyToPool(keyid, address, sendlimit, addtocache)
 	return keyid, nil
 }
 
 // adds a symmetric key to the pss key pool, and optionally adds the key to the collection of keys used to attempt incoming message decryption
-func (self *Pss) addSymmetricKeyToPool(keyid string, topic whisper.TopicType, address PssAddress, sendlimit uint16, addtocache bool) {
+func (self *Pss) addSymmetricKeyToPool(keyid string, address PssAddress, sendlimit uint16, addtocache bool) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if sendlimit == 0 {
@@ -308,6 +321,7 @@ func (self *Pss) addSymmetricKeyToPool(keyid string, topic whisper.TopicType, ad
 		self.symKeyCacheCursor++
 		self.symKeyCache[self.symKeyCacheCursor%cap(self.symKeyCache)] = &keyid
 	}
+	log.Trace("added symkey", "symkeyid", keyid, "address", address, "sendlimit", sendlimit, "cache", addtocache)
 }
 
 // returns all symkeys that are active for respective public keys after handshake exchange
@@ -355,6 +369,50 @@ func (self *Pss) GetSymmetricKeyCapacity(symkeyid string) (uint16, error) {
 		delete(self.symKeyPool, symkeyid)
 	}
 	return capacity, nil
+}
+
+// symkey garbage collection
+func (self *Pss) cleanSymmetricKeys() {
+	var expiredkeyids []string
+	for keyid, psp := range self.symKeyPool {
+		var match bool
+		if psp.sendLimit <= psp.sendCount {
+			log.Trace("cleanup expired symkey", "id", keyid)
+			expiredkeyids = append(expiredkeyids, keyid)
+			continue
+		} else {
+			for _, cacheid := range self.symKeyCache {
+				if *cacheid == keyid {
+					match = true
+					log.Trace("cleanup cache match", "id", keyid)
+				}
+			}
+		}
+		if match == false {
+			expiredkeyids = append(expiredkeyids, keyid)
+		}
+	}
+	for _, keyid := range expiredkeyids {
+		self.lock.Lock()
+		delete(self.symKeyPubKeyIndex, keyid)
+		self.lock.Unlock()
+		for _, topicmap := range self.pubKeySymKeyIndex {
+			for _, indexkeys := range topicmap {
+				for i, indexkeyid := range indexkeys {
+					if *indexkeyid == keyid {
+						self.lock.Lock()
+						indexkeys[i] = indexkeys[len(indexkeys)-1]
+						indexkeys = indexkeys[:len(indexkeys)-1]
+						self.lock.Unlock()
+					}
+				}
+			}
+		}
+		self.lock.Lock()
+		delete(self.symKeyPool, keyid)
+		self.lock.Unlock()
+		log.Debug("symkey deleted", "symkey", keyid)
+	}
 }
 
 // add a message to the cache
@@ -591,7 +649,7 @@ func (self *Pss) sendKey(pubkeyid string, topic *whisper.TopicType, keycount uin
 	// generate new keys to send
 	for i := 0; i < len(recvkeyids); i++ {
 		var err error
-		recvkeyids[i], err = self.generateSymmetricKey(*topic, to, msglimit, true)
+		recvkeyids[i], err = self.generateSymmetricKey(to, msglimit, true)
 		if err != nil {
 			return []string{}, fmt.Errorf("set receive symkey fail (addr %x pubkey %x topic %x): %v", to, pubkeyid, topic, err)
 		}
@@ -642,7 +700,7 @@ func (self *Pss) handleKey(pubkeyid string, envelope *whisper.Envelope, keymsg *
 		for i := 0; i < len(keymsg.Keys); i += int(keymsg.KeyLength) {
 			sendsymkey := make([]byte, keymsg.KeyLength)
 			copy(sendsymkey, keymsg.Keys[i:i+int(keymsg.KeyLength)])
-			sendsymkeyid, err := self.SetSymmetricKey(sendsymkey, envelope.Topic, keymsg.From, keymsg.Limit, false)
+			sendsymkeyid, err := self.SetSymmetricKey(sendsymkey, keymsg.From, keymsg.Limit, false)
 			if err != nil {
 				return err
 			}

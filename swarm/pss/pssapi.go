@@ -154,6 +154,11 @@ func (pssapi *API) GetPublicKeyFromSymmetricKey(symkeyid string) (string, error)
 	return pssapi.Pss.symKeyPubKeyIndex[symkeyid], nil
 }
 
+// Manually remove a symmetric key
+func (pssapi *API) DeleteSymmetricKey(symkeyid string) {
+
+}
+
 // PssAPITest are temporary API calls for development use only
 type APITest struct {
 	*Pss

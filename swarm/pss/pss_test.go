@@ -3,6 +3,7 @@ package pss
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"flag"
 	"fmt"
@@ -84,8 +85,10 @@ func TestCache(t *testing.T) {
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
-
-	ps := NewTestPss(privkey, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := newTestPss(privkey, nil)
 	pp := NewPssParams(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
@@ -142,6 +145,40 @@ func TestCache(t *testing.T) {
 	time.Sleep(pp.CacheTTL)
 	if ps.checkFwdCache(nil, digest) {
 		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
+	}
+}
+
+func TestCleanup(t *testing.T) {
+	keys, err := wapi.NewKeyPair()
+	privkey, err := w.GetPrivateKey(keys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pp := NewPssParams(nil)
+	pp.SymKeyCacheCapacity = 2
+	ps := newTestPss(privkey, pp)
+
+	var firstsymkeyid *string
+	for i := 0; i < ps.symKeyCacheCapacity+1; i++ {
+		symkey := network.RandomAddr().Over()
+		symkeyid, err := ps.SetSymmetricKey(symkey, []byte{}, defaultSymKeySendLimit, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if i == 0 {
+			firstsymkeyid = &symkeyid
+		}
+	}
+	beforekeycount := len(ps.symKeyPool)
+	ps.cleanSymmetricKeys()
+	afterkeycount := len(ps.symKeyPool)
+	if beforekeycount == afterkeycount {
+		t.Fatalf("keycount before and after clean is same: expected %d, got %d", beforekeycount-1, afterkeycount)
+	}
+	for keyid, _ := range ps.symKeyPool {
+		if keyid == *firstsymkeyid {
+			t.Fatalf("key %s found in pool but should have been deleted", keyid)
+		}
 	}
 }
 
@@ -212,20 +249,20 @@ func TestKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve 'their' private key")
 	}
-	ps := NewTestPss(ourprivkey, nil)
+	ps := newTestPss(ourprivkey, nil)
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := network.RandomAddr().Over()
 	outkey := network.RandomAddr().Over()
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topic, addr)
-	outkeyid, err := ps.SetSymmetricKey(outkey, topic, addr, 0, false)
+	outkeyid, err := ps.SetSymmetricKey(outkey, addr, 0, false)
 	if err != nil {
 		t.Fatalf("failed to set 'our' outgoing symmetric key")
 	}
 
 	// make a symmetric key that we will send to peer for encrypting messages to us
-	inkeyid, err := ps.generateSymmetricKey(topic, addr, defaultSymKeySendLimit, true)
+	inkeyid, err := ps.generateSymmetricKey(addr, defaultSymKeySendLimit, true)
 	if err != nil {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
@@ -891,12 +928,12 @@ func benchmarkSymKeySend(b *testing.B) {
 	}
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
-	ps := NewTestPss(privkey, nil)
+	ps := newTestPss(privkey, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
 	topic := whisper.BytesToTopic([]byte("foo"))
 	to := network.RandomAddr().Over()
-	symkeyid, err := ps.generateSymmetricKey(topic, to, defaultSymKeySendLimit, true)
+	symkeyid, err := ps.generateSymmetricKey(to, defaultSymKeySendLimit, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
@@ -904,7 +941,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not retreive symkey: %v", err)
 	}
-	ps.SetSymmetricKey(symkey, topic, to, 0, false)
+	ps.SetSymmetricKey(symkey, to, 0, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -932,7 +969,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	}
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
-	ps := NewTestPss(privkey, nil)
+	ps := newTestPss(privkey, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
 	topic := whisper.BytesToTopic([]byte("foo"))
@@ -975,14 +1012,14 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
-		ps = NewTestPss(privkey, &PssParams{SymKeyCacheCapacity: int(cachesize)})
+		ps = newTestPss(privkey, &PssParams{SymKeyCacheCapacity: int(cachesize)})
 	} else {
-		ps = NewTestPss(privkey, nil)
+		ps = newTestPss(privkey, nil)
 	}
 	topic := whisper.BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		to := network.RandomAddr().Over()
-		keyid, err = ps.generateSymmetricKey(topic, to, defaultSymKeySendLimit, true)
+		keyid, err = ps.generateSymmetricKey(to, defaultSymKeySendLimit, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -1055,14 +1092,14 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	keys, err := wapi.NewKeyPair()
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
-		ps = NewTestPss(privkey, &PssParams{SymKeyCacheCapacity: int(cachesize)})
+		ps = newTestPss(privkey, &PssParams{SymKeyCacheCapacity: int(cachesize)})
 	} else {
-		ps = NewTestPss(privkey, nil)
+		ps = newTestPss(privkey, nil)
 	}
 	topic := whisper.BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		addr[i] = network.RandomAddr().Over()
-		keyid, err = ps.generateSymmetricKey(topic, addr[i], defaultSymKeySendLimit, true)
+		keyid, err = ps.generateSymmetricKey(addr[i], defaultSymKeySendLimit, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -1215,4 +1252,38 @@ func newServices() adapters.Services {
 			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore), nil
 		},
 	}
+}
+
+func newTestPss(privkey *ecdsa.PrivateKey, ppextra *PssParams) *Pss {
+
+	var nid discover.NodeID
+	copy(nid[:], crypto.FromECDSAPub(&privkey.PublicKey))
+	addr := network.NewAddrFromNodeID(nid)
+
+	// set up storage
+	cachedir, err := ioutil.TempDir("", "pss-cache")
+	if err != nil {
+		log.Error("create pss cache tmpdir failed", "error", err)
+		os.Exit(1)
+	}
+	dpa, err := storage.NewLocalDPA(cachedir)
+	if err != nil {
+		log.Error("local dpa creation failed", "error", err)
+		os.Exit(1)
+	}
+
+	// set up routing
+	kp := network.NewKadParams()
+	kp.MinProxBinSize = 3
+
+	// create pss
+	pp := NewPssParams(privkey)
+	if ppextra != nil {
+		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
+	}
+
+	overlay := network.NewKademlia(addr.Over(), kp)
+	ps := NewPss(overlay, dpa, pp)
+
+	return ps
 }

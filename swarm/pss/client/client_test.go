@@ -75,6 +75,7 @@ func init() {
 	pssprotocols = make(map[string]*protoCtrl)
 }
 
+// ping pong exchange across one expired symkey
 func TestHandshake(t *testing.T) {
 	sendLimit = 3
 	topic := ProtocolTopic(pss.PingProtocol)

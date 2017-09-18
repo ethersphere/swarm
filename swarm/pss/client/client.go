@@ -88,7 +88,15 @@ func (rw *pssRPCRW) ReadMsg() (p2p.Msg, error) {
 	return pmsg, nil
 }
 
-// Will renew handshake if symkey does not exist / is expired
+// if current symkey (pointed to by rw.symKeyId) is expired,
+// pointer is changed to next in buffer
+// then new is requested through handshake
+// if buffer is empty, handshake request blocks until return
+// after which pointer is changed to first new key in buffer
+// will fail if:
+// - any api calls fail
+// - handshake retries are exhausted without reply,
+// - send fails
 func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	log.Trace("got writemsg pssclient", "msg", msg)
 	rlpdata := make([]byte, msg.Size)
@@ -139,11 +147,8 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	return rw.Client.rpc.Call(nil, "pss_sendSym", *rw.symKeyId, rw.hextopic, pmsg)
 }
 
-// Manage underlying symkey handshakes
-//
-// If a valid handshake already exists, no action is performed and nil error is returned
-//
-// since we force synchronous handshake, peer must actually respond before write can be performed
+// retry and synchronicity wrapper for handshake api call
+// returns first new symkeyid upon successful execution
 func (rw *pssRPCRW) handshake(retries int, sync bool) (string, error) {
 
 	var symkeyids []string
@@ -204,12 +209,11 @@ func newClient() (client *Client) {
 }
 
 // Mounts a new devp2p protcool on the pss connection
+//
 // the protocol is aliased as a "pss topic"
 // uses normal devp2p Send and incoming message handler routines from the p2p/protocols package
 //
 // when an incoming message is received from a peer that is not yet known to the client, this peer object is instantiated, and the protocol is run on it.
-//
-// TODO: less crude check limiting to sym msgs only
 func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
 	hextopic := fmt.Sprintf("%x", topic)

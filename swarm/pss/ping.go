@@ -1,32 +1,25 @@
 package pss
 
 import (
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
-	"io/ioutil"
-	"os"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/swarm/network"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 type PingMsg struct {
 	Created time.Time
-	Pong    bool
+	Pong    bool // set if message is pong reply
 }
 
 type Ping struct {
-	Pong bool
-	OutC chan bool
-	InC  chan bool
+	Pong bool      // toggle pong reply upon ping receive
+	OutC chan bool // trigger ping
+	InC  chan bool // optional, report back to calling code
 }
 
 func (self *Ping) PingHandler(msg interface{}) error {
@@ -83,38 +76,4 @@ func NewPingProtocol(pingC chan bool, handler func(interface{}) error) *p2p.Prot
 			return err
 		},
 	}
-}
-
-func NewTestPss(privkey *ecdsa.PrivateKey, ppextra *PssParams) *Pss {
-
-	var nid discover.NodeID
-	copy(nid[:], crypto.FromECDSAPub(&privkey.PublicKey))
-	addr := network.NewAddrFromNodeID(nid)
-
-	// set up storage
-	cachedir, err := ioutil.TempDir("", "pss-cache")
-	if err != nil {
-		log.Error("create pss cache tmpdir failed", "error", err)
-		os.Exit(1)
-	}
-	dpa, err := storage.NewLocalDPA(cachedir)
-	if err != nil {
-		log.Error("local dpa creation failed", "error", err)
-		os.Exit(1)
-	}
-
-	// set up routing
-	kp := network.NewKadParams()
-	kp.MinProxBinSize = 3
-
-	// create pss
-	pp := NewPssParams(privkey)
-	if ppextra != nil {
-		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
-	}
-
-	overlay := network.NewKademlia(addr.Over(), kp)
-	ps := NewPss(overlay, dpa, pp)
-
-	return ps
 }
