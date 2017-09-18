@@ -519,7 +519,10 @@ running:
 			// ephemeral static peer list. Add it to the dialer,
 			// it will keep the node connected.
 			log.Debug("Adding static node", "node", n)
-			dialstate.addStatic(n)
+			// FIXME: this is a hack, redial does not work
+			// in simulations if addstatic is used
+			// dialstate.addStatic(n)
+			queuedTasks = append(queuedTasks, &dialTask{flags: staticDialedConn, dest: n})
 		case n := <-srv.removestatic:
 			// This channel is used by RemovePeer to send a
 			// disconnect request to a peer and begin the
