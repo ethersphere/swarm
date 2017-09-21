@@ -87,10 +87,6 @@ func main() {
 		DefaultService: "overlay",
 	})
 
-	nodeCount := 30
-	log.Info("starting simulation node runner on 0.0.0.0:8889...")
-	go simulations.NewNodeRunner(network, "probabilistic", nodeCount)
-
 	log.Info("starting simulation server on 0.0.0.0:8888...")
 	http.ListenAndServe(":8888", simulations.NewServer(network))
 }

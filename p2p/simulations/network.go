@@ -505,6 +505,8 @@ func (self *Network) Shutdown() {
 //Reset resets all network properties:
 //emtpies the nodes and the connection list
 func (self *Network) Reset() {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	for k := range self.nodeMap {
 		delete(self.nodeMap, k)
 	}
@@ -678,6 +680,12 @@ func (self *Network) Load(snap *Snapshot) error {
 		}
 	}
 	for _, conn := range snap.Conns {
+
+		if !self.GetNode(conn.One).Up || !self.GetNode(conn.Other).Up {
+			//in this case, at least one of the nodes of a connection is not up,
+			//so it would result in the snapshot `Load` to fail
+			continue
+		}
 		if err := self.Connect(conn.One, conn.Other); err != nil {
 			return err
 		}
