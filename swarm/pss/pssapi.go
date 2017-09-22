@@ -2,7 +2,6 @@ package pss
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -93,70 +92,17 @@ func (pssapi *API) GetPublicKey() []byte {
 
 // Set Public key to associate with a particular Pss peer
 func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic whisper.TopicType, addr PssAddress) error {
-	pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, addr)
+	pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
 	return nil
 }
 
 // Get address hint for topic and key combination
 func (pssapi *API) GetAddress(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
 	if asymmetric {
-		return pssapi.Pss.pubKeyPool[key][topic].address, nil
+		return *pssapi.Pss.pubKeyPool[key][topic].address, nil
 	} else {
-		return pssapi.Pss.symKeyPool[key].address, nil
+		return *pssapi.Pss.symKeyPool[key][topic].address, nil
 	}
-}
-
-// Initiate a handshake with a peer for a specific topic.
-//
-// Will request new symkeys from the peer to fill up the buffer allowance of outgoing symkeys,
-// If the peer's buffer also isn't full, it will respond with keys and request keys from the node, which will be automatically sent.
-//
-// The symkeys will be stored with the address hint specified in the "to" parameter
-//
-// If the "sync" parameter is set, the call will block until they are received or the request times out.
-//
-// will fail if buffer is already full, if handshake request cannot be sent, or by timeout if "sync" is set
-func (pssapi *API) Handshake(pubkeyid string, topic whisper.TopicType, to PssAddress, sync bool) ([]string, error) {
-	var err error
-	var hsc chan []string
-	var keys []string
-	_, counts := pssapi.Pss.getSymmetricKeyBuffer(pubkeyid, &topic)
-	requestcount := uint8(pssapi.Pss.symKeyBufferCapacity - len(counts))
-	if requestcount == 0 {
-		return keys, errors.New("Symkey buffer is full")
-	}
-	if sync {
-		hsc = pssapi.Pss.alertHandshake(pubkeyid, []string{})
-	}
-	_, err = pssapi.sendKey(pubkeyid, &topic, 0, pssapi.Pss.symKeySendLimit, to)
-	if err != nil {
-		return []string{}, err
-	}
-	if sync {
-		ctx, _ := context.WithTimeout(context.Background(), pssapi.Pss.symKeyRequestExpiry)
-		select {
-		case keys = <-hsc:
-			log.Trace("sync handshake response receive", "key", keys)
-		case <-ctx.Done():
-			return []string{}, errors.New("timeout")
-		}
-	}
-	return keys, nil
-}
-
-// Get all outgoing symkeys valid for a particular pubkey and topic
-func (pssapi *API) GetSymmetricKeys(pubkeyid string, topic whisper.TopicType) ([]string, error) {
-	keys, _ := pssapi.Pss.getSymmetricKeyBuffer(pubkeyid, &topic)
-	return keys, nil
-}
-
-func (pssapi *API) GetPublicKeyFromSymmetricKey(symkeyid string) (string, error) {
-	return pssapi.Pss.symKeyPubKeyIndex[symkeyid], nil
-}
-
-// Manually remove a symmetric key
-func (pssapi *API) DeleteSymmetricKey(symkeyid string) {
-
 }
 
 // PssAPITest are temporary API calls for development use only
@@ -168,47 +114,16 @@ func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
-// force expiry of a symkey
-func (self *APITest) DepleteSymKey(symkeyid string) error {
-	if _, ok := self.Pss.symKeyPool[symkeyid]; !ok {
-		return errors.New(fmt.Sprintf("invalid symkey %s", symkeyid))
-	}
-	self.Pss.symKeyPool[symkeyid].sendCount = self.Pss.symKeyPool[symkeyid].sendLimit
-	return nil
-}
-
-// get all valid in- and outgoing symkeys for a pubkey and topic
-func (self *APITest) DumpSymKeys(pubkeyid string, topic whisper.TopicType) (ids []string, err error) {
-	for id, psp := range self.Pss.symKeyPool {
-		if psp.sendLimit > psp.sendCount {
-			ids = append(ids, id)
-		}
-	}
-	return
-}
-
-// manually set in- and outgoing pair of symkeys
-// mimics state after symkey exchange handshake
-func (self *APITest) SetSymKeys(pubkeyid string, recvkey []byte, sendkey []byte, sendlimit uint16, topic whisper.TopicType, addr PssAddress) (keyids [2]string, err error) {
-	keyids[0], err = self.w.AddSymKeyDirect(recvkey)
+func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic whisper.TopicType, to []byte) ([2]string, error) {
+	addr := make(PssAddress, 32)
+	copy(addr[:], to)
+	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &addr, limit, true)
 	if err != nil {
 		return [2]string{}, err
 	}
-	keyids[1], err = self.w.AddSymKeyDirect(sendkey)
+	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &addr, limit, false)
 	if err != nil {
 		return [2]string{}, err
 	}
-	log.Debug("manual sumkey add", "recv", keyids[0], "send", keyids[1])
-	self.Pss.symKeyPool[keyids[0]] = &pssPeer{}
-	self.Pss.symKeyPool[keyids[0]].address = addr
-	self.Pss.symKeyPool[keyids[1]] = &pssPeer{}
-	self.Pss.symKeyPool[keyids[1]].address = addr
-	self.Pss.symKeyPool[keyids[1]].sendLimit = sendlimit
-	if _, ok := self.Pss.pubKeySymKeyIndex[pubkeyid]; !ok {
-		self.Pss.pubKeySymKeyIndex[pubkeyid] = make(map[whisper.TopicType][]*string)
-	}
-	self.Pss.pubKeySymKeyIndex[pubkeyid][topic] = append(self.Pss.pubKeySymKeyIndex[pubkeyid][topic], &keyids[1])
-	self.Pss.symKeyCacheCursor++
-	self.Pss.symKeyCache[self.Pss.symKeyCacheCursor%len(self.Pss.symKeyCache)] = &keyids[0]
-	return keyids, nil
+	return [2]string{recvsymkeyid, sendsymkeyid}, nil
 }
