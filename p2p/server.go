@@ -198,6 +198,7 @@ type conn struct {
 	transport
 	flags connFlag
 	cont  chan error      // The run loop uses cont to signal errors to SetupConn.
+	self  discover.NodeID // the host ID for logging in multinode simulation
 	id    discover.NodeID // valid after the encryption handshake
 	caps  []Cap           // valid after the protocol handshake
 	name  string          // valid after the protocol handshake
@@ -484,12 +485,13 @@ func (srv *Server) run(dialstate dialer) {
 			}
 		}
 	}
+	clog := log.New("self", srv.Self().ID)
 	// starts until max number of active tasks is satisfied
 	startTasks := func(ts []task) (rest []task) {
 		i := 0
 		for ; len(runningTasks) < maxActiveDialTasks && i < len(ts); i++ {
 			t := ts[i]
-			log.Trace("New dial task", "task", t)
+			clog.Trace("New dial task", "task", t)
 			go func() { t.Do(srv); taskdone <- t }()
 			runningTasks = append(runningTasks, t)
 		}
@@ -518,12 +520,15 @@ running:
 			// ephemeral static peer list. Add it to the dialer,
 			// it will keep the node connected.
 			log.Debug("Adding static node", "node", n)
-			dialstate.addStatic(n)
+			// FIXME: this is a hack, redial does not work
+			// in simulations if addstatic is used
+			// dialstate.addStatic(n)
+			queuedTasks = append(queuedTasks, &dialTask{flags: staticDialedConn, dest: n})
 		case n := <-srv.removestatic:
 			// This channel is used by RemovePeer to send a
 			// disconnect request to a peer and begin the
 			// stop keeping the node connected
-			log.Debug("Removing static node", "node", n)
+			clog.Debug("Removing static node", "node", n)
 			dialstate.removeStatic(n)
 			if p, ok := peers[n.ID]; ok {
 				p.Disconnect(DiscRequested)
@@ -536,7 +541,7 @@ running:
 			// A task got done. Tell dialstate about it so it
 			// can update its state and remove it from the active
 			// tasks list.
-			log.Trace("Dial task done", "task", t)
+			clog.Trace("Dial task done", "task", t)
 			dialstate.taskDone(t, time.Now())
 			delTask(t)
 		case c := <-srv.posthandshake:
@@ -565,7 +570,7 @@ running:
 					p.events = &srv.peerFeed
 				}
 				name := truncateName(c.name)
-				log.Debug("Adding p2p peer", "id", c.id, "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
+				clog.Debug("Adding p2p peer", "name", name, "addr", c.fd.RemoteAddr(), "peers", len(peers)+1)
 				peers[c.id] = p
 				go srv.runPeer(p)
 			}
@@ -698,55 +703,65 @@ func (srv *Server) listenLoop() {
 // SetupConn runs the handshakes and attempts to add the connection
 // as a peer. It returns when the connection has been added as a peer
 // or the handshakes have failed.
-func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) {
+func (srv *Server) SetupConn(fd net.Conn, flags connFlag, dialDest *discover.Node) error {
+	self := srv.Self()
+	if self == nil {
+		return errors.New("shutdown")
+	}
+	c := &conn{self: srv.Self().ID, fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
+	err := srv.setupConn(c, flags, dialDest)
+	if err != nil {
+		c.close(err)
+		log.Trace("Setting up connection failed", "self", c.self, "id", c.id, "err", err)
+	}
+	return err
+}
+
+func (srv *Server) setupConn(c *conn, flags connFlag, dialDest *discover.Node) error {
 	// Prevent leftover pending conns from entering the handshake.
 	srv.lock.Lock()
 	running := srv.running
 	srv.lock.Unlock()
-	c := &conn{fd: fd, transport: srv.newTransport(fd), flags: flags, cont: make(chan error)}
 	if !running {
-		c.close(errServerStopped)
-		return
+		return errServerStopped
 	}
+	clog := log.New("self", c.self, "id", c.id, "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	// Run the encryption handshake.
 	var err error
 	if c.id, err = c.doEncHandshake(srv.PrivateKey, dialDest); err != nil {
-		log.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
-		c.close(err)
-		return
+		clog.Trace("Failed RLPx handshake", "addr", c.fd.RemoteAddr(), "conn", c.flags, "err", err)
+		return err
 	}
-	clog := log.New("id", c.id, "addr", c.fd.RemoteAddr(), "conn", c.flags)
 	// For dialed connections, check that the remote public key matches.
 	if dialDest != nil && c.id != dialDest.ID {
-		c.close(DiscUnexpectedIdentity)
 		clog.Trace("Dialed identity mismatch", "want", c, dialDest.ID)
-		return
+		return DiscUnexpectedIdentity
 	}
-	if err := srv.checkpoint(c, srv.posthandshake); err != nil {
+	err = srv.checkpoint(c, srv.posthandshake)
+	if err != nil {
 		clog.Trace("Rejected peer before protocol handshake", "err", err)
-		c.close(err)
-		return
+		return err
 	}
 	// Run the protocol handshake
 	phs, err := c.doProtoHandshake(srv.ourHandshake)
 	if err != nil {
 		clog.Trace("Failed proto handshake", "err", err)
-		c.close(err)
-		return
+		return err
 	}
 	if phs.ID != c.id {
 		clog.Trace("Wrong devp2p handshake identity", "err", phs.ID)
-		c.close(DiscUnexpectedIdentity)
-		return
+		return DiscUnexpectedIdentity
 	}
 	c.caps, c.name = phs.Caps, phs.Name
-	if err := srv.checkpoint(c, srv.addpeer); err != nil {
+	err = srv.checkpoint(c, srv.addpeer)
+	if err != nil {
 		clog.Trace("Rejected peer", "err", err)
-		c.close(err)
-		return
+		return err
 	}
 	// If the checks completed successfully, runPeer has now been
 	// launched by run.
+	clog.Trace("connection set up", "err", err, "inbound", dialDest == nil)
+	return nil
 }
 
 func truncateName(s string) string {
