@@ -69,17 +69,6 @@ func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.S
 	return psssub, nil
 }
 
-// Sends the message wrapped in APIMsg through pss using symmetric encryption
-//
-// The method will pass on the error received from pss. It will fail if no public key for the Pss peer has been added
-// The addresslength parameter decides how many bytes of the address to reveal it transit. -1 equals showing all. 0 means show none.
-//func (pssapi *API) SendAsym(key string, topic whisper.TopicType, msg []byte) error {
-//	return pssapi.Pss.SendAsym(key, topic, msg)
-//}
-
-// BaseAddr returns the local swarm overlay address of the Pss node
-//
-// Note that the overlay address is NOT inferable. To really know the node's overlay address it must reveal it itself.
 func (pssapi *API) BaseAddr() ([]byte, error) {
 	return pssapi.Pss.BaseAddr(), nil
 }

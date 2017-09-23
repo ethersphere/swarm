@@ -24,7 +24,7 @@ const (
 	inboxCapacity         = 3000
 	outboxCapacity        = 100
 	addrLen               = common.HashLength
-	handshakeRetryTimeout = 5000
+	handshakeRetryTimeout = 1000
 	handshakeRetryCount   = 3
 )
 
@@ -122,7 +122,7 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	if symkeycap == 0 {
 		// The key has expired. Check if we have more in the buffer
 		var symkeyids []string
-		err = rw.Client.rpc.Call(&symkeyids, "pss_getSymmetricKeys", rw.pubKeyId, rw.hextopic)
+		err = rw.Client.rpc.Call(&symkeyids, "pss_getHandshakeKeys", rw.pubKeyId, rw.hextopic, false, true)
 		if err != nil {
 			return err
 		}
@@ -136,7 +136,7 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 			sync = true
 		}
 		// initiate handshake
-		keyid, err := rw.handshake(retries, sync)
+		keyid, err := rw.handshake(retries, sync, false)
 		if err != nil {
 			return err
 		}
@@ -149,7 +149,7 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 
 // retry and synchronicity wrapper for handshake api call
 // returns first new symkeyid upon successful execution
-func (rw *pssRPCRW) handshake(retries int, sync bool) (string, error) {
+func (rw *pssRPCRW) handshake(retries int, sync bool, flush bool) (string, error) {
 
 	var symkeyids []string
 	var i int
@@ -157,7 +157,7 @@ func (rw *pssRPCRW) handshake(retries int, sync bool) (string, error) {
 	// if the key buffer was depleted, make this as a blocking call and try several times before giving up
 	for i = 0; i < 1+retries; i++ {
 		log.Debug("handshake attempt pssrpcrw", "pubkeyid", rw.pubKeyId, "topic", rw.hextopic, "sync", sync)
-		err := rw.Client.rpc.Call(&symkeyids, "pss_handshake", rw.pubKeyId, rw.hextopic, rw.addr, sync)
+		err := rw.Client.rpc.Call(&symkeyids, "pss_handshake", rw.pubKeyId, rw.hextopic, rw.addr, sync, flush)
 		if err == nil {
 			var keyid string
 			if sync {
@@ -284,7 +284,7 @@ func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocol
 	}
 	if self.peerPool[topic][pubkeyid] == nil {
 		rw := self.newpssRPCRW(key, addr, &topic)
-		symkeyid, err := rw.handshake(handshakeRetryCount, true)
+		symkeyid, err := rw.handshake(handshakeRetryCount, true, true)
 		rw.symKeyId = &symkeyid
 		if err != nil {
 			return err
