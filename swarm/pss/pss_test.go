@@ -171,16 +171,21 @@ func TestCleanup(t *testing.T) {
 			firstsymkeyid = &symkeyid
 		}
 	}
+
 	beforekeycount := len(ps.symKeyPool)
 	ps.clean()
-	afterkeycount := len(ps.symKeyPool)
+	afterkeycount := 0
+	for keyid, keytopics := range ps.symKeyPool {
+		if keytopics[topic] != nil {
+			if keyid == *firstsymkeyid {
+
+				t.Fatalf("key %s found in pool but should have been deleted", keyid)
+			}
+			afterkeycount++
+		}
+	}
 	if beforekeycount == afterkeycount {
 		t.Fatalf("keycount before and after clean is same: expected %d, got %d", beforekeycount-1, afterkeycount)
-	}
-	for keyid, _ := range ps.symKeyPool {
-		if keyid == *firstsymkeyid {
-			t.Fatalf("key %s found in pool but should have been deleted", keyid)
-		}
 	}
 }
 
@@ -655,6 +660,11 @@ func testSymSend(t *testing.T) {
 	var rkeyids [2]string
 
 	// manually set reciprocal symkeys
+	err = clients[0].Call(&lkeyids, "psstest_setSymKeys", common.ToHex(rpubkey), lrecvkey, rrecvkey, defaultSymKeySendLimit, hextopic, roaddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	err = clients[0].Call(&lkeyids, "psstest_setSymKeys", common.ToHex(rpubkey), lrecvkey, rrecvkey, defaultSymKeySendLimit, hextopic, roaddr)
 	if err != nil {
 		t.Fatal(err)

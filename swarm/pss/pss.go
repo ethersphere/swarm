@@ -296,46 +296,27 @@ func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
 
 // symkey garbage collection
 func (self *Pss) clean() {
-	//	var expiredkeyids []string
-	//	for keyid, psp := range self.symKeyPool {
-	//		var match bool
-	//		if psp.sendLimit <= psp.sendCount {
-	//			log.Trace("cleanup expired symkey", "id", keyid)
-	//			expiredkeyids = append(expiredkeyids, keyid)
-	//			continue
-	//		} else {
-	//			for _, cacheid := range self.symKeyCache {
-	//				if *cacheid == keyid {
-	//					match = true
-	//					log.Trace("cleanup cache match", "id", keyid)
-	//				}
-	//			}
-	//		}
-	//		if match == false {
-	//			expiredkeyids = append(expiredkeyids, keyid)
-	//		}
-	//	}
-	//	for _, keyid := range expiredkeyids {
-	//		self.lock.Lock()
-	//		delete(self.symKeyPubKeyIndex, keyid)
-	//		self.lock.Unlock()
-	//		for _, topicmap := range self.pubKeySymKeyIndex {
-	//			for _, indexkeys := range topicmap {
-	//				for i, indexkeyid := range indexkeys {
-	//					if *indexkeyid == keyid {
-	//						self.lock.Lock()
-	//						indexkeys[i] = indexkeys[len(indexkeys)-1]
-	//						indexkeys = indexkeys[:len(indexkeys)-1]
-	//						self.lock.Unlock()
-	//					}
-	//				}
-	//			}
-	//		}
-	//		self.lock.Lock()
-	//		delete(self.symKeyPool, keyid)
-	//		self.lock.Unlock()
-	//		log.Debug("symkey deleted", "symkey", keyid)
-	//	}
+	for keyid, peertopics := range self.symKeyPool {
+		var expiredtopics []whisper.TopicType
+		for topic, psp := range peertopics {
+			var match bool
+			if psp.protected {
+				continue
+			}
+			for _, cacheid := range self.symKeyCache {
+				if *cacheid == keyid {
+					match = true
+				}
+			}
+			if match == false {
+				expiredtopics = append(expiredtopics, topic)
+			}
+		}
+		for _, topic := range expiredtopics {
+			delete(self.symKeyPool[keyid], topic)
+			log.Trace("symkey cleanup deletion", "symkeyid", keyid, "topic", topic, "val", self.symKeyPool[keyid])
+		}
+	}
 }
 
 // add a message to the cache

@@ -115,7 +115,7 @@ func NewAPITest(ps *Pss) *APITest {
 }
 
 func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic whisper.TopicType, to []byte) ([2]string, error) {
-	addr := make(PssAddress, 32)
+	addr := make(PssAddress, len(to))
 	copy(addr[:], to)
 	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &addr, limit, true)
 	if err != nil {
