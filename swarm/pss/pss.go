@@ -81,6 +81,7 @@ type Pss struct {
 	privateKey      *ecdsa.PrivateKey
 	dpa             *storage.DPA
 	w               *whisper.Whisper
+	auxAPIs         []rpc.API
 	lock            sync.Mutex
 	quitC           chan struct{}
 
@@ -179,6 +180,10 @@ func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return pp.Run(self.handlePssMsg)
 }
 
+func (self *Pss) addAPI(api rpc.API) {
+	self.auxAPIs = append(self.auxAPIs, api)
+}
+
 // Exposes the API methods
 //
 // If the debug-parameter was given to the top Pss object, the TestAPI methods will also be included
@@ -190,12 +195,9 @@ func (self *Pss) APIs() []rpc.API {
 			Service:   NewAPI(self),
 			Public:    true,
 		},
-		rpc.API{
-			Namespace: "psstest",
-			Version:   "0.2",
-			Service:   NewAPITest(self),
-			Public:    false,
-		},
+	}
+	for _, auxapi := range self.auxAPIs {
+		apis = append(apis, auxapi)
 	}
 	return apis
 }
@@ -299,11 +301,15 @@ func (self *Pss) clean() {
 	for keyid, peertopics := range self.symKeyPool {
 		var expiredtopics []whisper.TopicType
 		for topic, psp := range peertopics {
+			log.Trace("check topic", "topic", topic, "id", keyid)
 			var match bool
 			if psp.protected {
 				continue
 			}
-			for _, cacheid := range self.symKeyCache {
+
+			for i := self.symKeyCacheCursor; i > self.symKeyCacheCursor-cap(self.symKeyCache) && i > 0; i-- {
+				cacheid := self.symKeyCache[i%cap(self.symKeyCache)]
+				log.Trace("check cache", "idx", i, "id", *cacheid)
 				if *cacheid == keyid {
 					match = true
 				}
@@ -436,7 +442,7 @@ func (self *Pss) process(pssmsg *PssMsg) error {
 		for f := range handlers {
 			err := (*f)(recvmsg.Payload, p, asymmetric, keyid)
 			if err != nil {
-				log.Warn("Pss handler %p failed: %v", err)
+				log.Warn("Pss handler %p failed: %v", f, err)
 			}
 		}
 	}

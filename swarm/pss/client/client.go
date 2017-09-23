@@ -111,9 +111,9 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	}
 
 	// If we have a pointer, check if it is expired
-	var symkeycap int16
+	var symkeycap uint16
 	if rw.symKeyId != nil {
-		err = rw.Client.rpc.Call(&symkeycap, "pss_getSymmetricKeyCapacity", *rw.symKeyId)
+		err = rw.Client.rpc.Call(&symkeycap, "pss_getHandshakeKeyCapacity", *rw.symKeyId)
 		if err != nil {
 			return err
 		}
@@ -237,7 +237,7 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 				// we get passed the symkeyid
 				// need the symkey itself to resolve to peer's pubkey
 				var pubkeyid string
-				err = self.rpc.Call(&pubkeyid, "pss_getPublicKeyFromSymmetricKey", msg.Key)
+				err = self.rpc.Call(&pubkeyid, "pss_getHandshakePublicKey", msg.Key)
 				if err != nil || pubkeyid == "" {
 					log.Trace("proto err or no pubkey", "err", err, "symkeyid", msg.Key)
 					continue

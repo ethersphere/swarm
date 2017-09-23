@@ -2,10 +2,9 @@ package client
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
-	//"net"
-	//"net/http"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -147,6 +146,16 @@ func TestHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	err = clients[0].Call(nil, "pss_addHandshake", hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = clients[1].Call(nil, "pss_addHandshake", hextopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	time.Sleep(time.Second)
 
 	err = lpsc.AddPssPeer(crypto.ToECDSAPub(rpubkey), roaddr, pss.PingProtocol)
@@ -228,19 +237,24 @@ func newServices() adapters.Services {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
-				return nil, fmt.Errorf("create pss cache tmpdir failed", "error", err)
+				return nil, errors.New(fmt.Sprintf("create pss cache tmpdir failed", "error", err))
 			}
 			dpa, err := storage.NewLocalDPA(cachedir)
 			if err != nil {
-				return nil, fmt.Errorf("local dpa creation failed", "error", err)
+				return nil, errors.New(fmt.Sprintf("local dpa creation failed", "error", err))
 			}
 
 			keys, err := wapi.NewKeyPair()
 			privkey, err := w.GetPrivateKey(keys)
-			pssp := pss.NewPssParams(privkey)
-			pssp.SymKeySendLimit = sendLimit
+			psparams := pss.NewPssParams(privkey)
 			pskad := kademlia(ctx.Config.ID)
-			ps := pss.NewPss(pskad, dpa, pssp)
+			ps := pss.NewPss(pskad, dpa, psparams)
+			pshparams := pss.NewHandshakeParams()
+			pshparams.SymKeySendLimit = sendLimit
+			err = pss.SetHandshakeController(ps, pshparams)
+			if err != nil {
+				return nil, errors.New(fmt.Sprintf("handshake controller fail: %v", err))
+			}
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {

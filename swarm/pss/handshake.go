@@ -1,11 +1,13 @@
 package pss
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"time"
 )
@@ -15,6 +17,10 @@ const (
 	HANDSHAKE_OK
 	HANDSHAKE_PEND
 	HANDSHAKE_SUSPEND
+)
+
+var (
+	ctrlSingleton *HandshakeController
 )
 
 const (
@@ -40,17 +46,16 @@ type handshakeMsg struct {
 }
 
 type handshakeKey struct {
-	id        *string
-	limit     uint8
-	count     uint8
+	symkeyid  *string
+	pubkeyid  *string
+	limit     uint16
+	count     uint16
 	expiredAt time.Time
 }
 
 type handshake struct {
-	pubKeyId *string
-	topic    *whisper.TopicType
-	outKeys  []handshakeKey
-	inKeys   []handshakeKey
+	outKeys []handshakeKey
+	inKeys  []handshakeKey
 }
 
 type handshakeGuard struct {
@@ -70,7 +75,7 @@ type HandshakeParams struct {
 
 func NewHandshakeParams() *HandshakeParams {
 	return &HandshakeParams{
-		SymKeyRequestExpiry: defaultSymKeyRequestExpiry,
+		SymKeyRequestExpiry: defaultSymKeyRequestExpiry * time.Millisecond,
 		SymKeySendLimit:     defaultSymKeySendLimit,
 		SymKeyMinLength:     defaultSymKeyMinLength,
 		SymKeyMaxLength:     defaultSymKeyMaxLength,
@@ -88,10 +93,12 @@ type HandshakeController struct {
 	symKeyMaxLength     uint8
 	symKeyCapacity      uint16
 	symKeyLength        uint8
+	symKeyIndex         map[string]*handshakeKey
 	handshakes          map[string]map[whisper.TopicType]*handshake
+	deregisterFuncs     map[whisper.TopicType]func()
 }
 
-func NewHandshakeController(pss *Pss, params *HandshakeParams) *HandshakeController {
+func SetHandshakeController(pss *Pss, params *HandshakeParams) error {
 	ctrl := &HandshakeController{
 		pss:                 pss,
 		keyC:                make(map[string]chan []string),
@@ -101,64 +108,106 @@ func NewHandshakeController(pss *Pss, params *HandshakeParams) *HandshakeControl
 		symKeyMaxLength:     params.SymKeyMaxLength,
 		symKeyLength:        params.SymKeyLength,
 		symKeyCapacity:      params.SymKeyCapacity,
+		symKeyIndex:         make(map[string]*handshakeKey),
+		handshakes:          make(map[string]map[whisper.TopicType]*handshake),
+		deregisterFuncs:     make(map[whisper.TopicType]func()),
 	}
-	topic := whisper.BytesToTopic([]byte{})
-	pss.Register(&topic, ctrl.handler)
-	return ctrl
+	api := &HandshakeAPI{
+		namespace: "pss",
+		ctrl:      ctrl,
+	}
+	pss.addAPI(rpc.API{
+		Namespace: api.namespace,
+		Version:   "0.2",
+		Service:   api,
+		Public:    true,
+	})
+	ctrlSingleton = ctrl
+	return nil
 }
 
 func (self *HandshakeController) validKeys(pubkeyid string, topic *whisper.TopicType, in bool) (validkeys []*string) {
 	if _, ok := self.handshakes[pubkeyid]; !ok {
 		return []*string{}
+	} else if _, ok := self.handshakes[pubkeyid][*topic]; !ok {
+		return []*string{}
 	}
-	var keys []handshakeKey
+	var keys *[]handshakeKey
 	if in {
-		keys = self.handshakes[pubkeyid][*topic].inKeys
+		keys = &self.handshakes[pubkeyid][*topic].inKeys
 	} else {
-		keys = self.handshakes[pubkeyid][*topic].outKeys
+		keys = &self.handshakes[pubkeyid][*topic].outKeys
 	}
 
-	for _, key := range keys {
+	for _, key := range *keys {
 		if key.limit <= key.count {
-			self.releaseKey(pubkeyid, &key, topic, in)
+			self.releaseKey(pubkeyid, topic, in, key.symkeyid)
 		} else if !key.expiredAt.IsZero() && time.Now().After(key.expiredAt) {
-			self.releaseKey(pubkeyid, &key, topic, in)
+			self.releaseKey(pubkeyid, topic, in, key.symkeyid)
 		}
-		validkeys = append(validkeys, key.id)
+		validkeys = append(validkeys, key.symkeyid)
 	}
 	return
 }
 
-func (self *HandshakeController) releaseKey(pubkeyid string, removekey *handshakeKey, topic *whisper.TopicType, in bool) bool {
+// TODO: unprotect in main keypool
+func (self *HandshakeController) updateKeys(pubkeyid string, topic *whisper.TopicType, in bool, symkeyids []string, limit uint16) {
+	if _, ok := self.handshakes[pubkeyid]; !ok {
+		self.handshakes[pubkeyid] = make(map[whisper.TopicType]*handshake)
+
+	}
+	if self.handshakes[pubkeyid][*topic] == nil {
+		self.handshakes[pubkeyid][*topic] = &handshake{}
+	}
+	var keystore *[]handshakeKey
+	if in {
+		keystore = &self.handshakes[pubkeyid][*topic].inKeys
+	} else {
+		keystore = &self.handshakes[pubkeyid][*topic].outKeys
+	}
+	for _, storekey := range *keystore {
+		storekey.expiredAt = time.Now()
+	}
+	for i := 0; i < len(symkeyids); i++ {
+		storekey := handshakeKey{
+			symkeyid: &symkeyids[i],
+			pubkeyid: &pubkeyid,
+			limit:    limit,
+		}
+		self.symKeyIndex[symkeyids[i]] = &storekey
+		*keystore = append(*keystore, storekey)
+	}
+}
+
+func (self *HandshakeController) releaseKey(pubkeyid string, topic *whisper.TopicType, in bool, symkeyid *string) bool {
 	if _, ok := self.handshakes[pubkeyid]; !ok {
 		return false
 	}
-	var keys []handshakeKey
+	var keys *[]handshakeKey
 	if in {
-		keys = self.handshakes[pubkeyid][*topic].inKeys
+		keys = &self.handshakes[pubkeyid][*topic].inKeys
 	} else {
-		keys = self.handshakes[pubkeyid][*topic].outKeys
+		keys = &self.handshakes[pubkeyid][*topic].outKeys
 	}
-
 	var match bool
-	for i, key := range keys {
-		if removekey.id == key.id {
-			self.pss.symKeyPool[*key.id][*topic].protected = false
+	for i, key := range *keys {
+		if *symkeyid == *key.symkeyid {
+			self.pss.symKeyPool[*key.symkeyid][*topic].protected = false
 			match = true
-			keys[i] = keys[len(keys)-1]
+			(*keys)[i] = (*keys)[len(*keys)-1]
+			delete(self.symKeyIndex, *key.symkeyid)
 		}
 	}
 	if !match {
 		return false
 	}
-	keys = keys[:len(keys)-1]
+	(*keys) = (*keys)[:len(*keys)-1]
 	return true
 }
 
 func (self *HandshakeController) handler(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 	if !asymmetric {
-		return errors.New("symmetric handshake")
-
+		return nil
 	}
 	keymsg := &handshakeMsg{}
 	err := rlp.DecodeBytes(msg, keymsg)
@@ -180,10 +229,6 @@ func (self *HandshakeController) handleKeys(pubkeyid string, keymsg *handshakeMs
 	// new keys from peer
 	if len(keymsg.Keys) > 0 {
 		log.Trace("received handshake keys", "pubkeyid", pubkeyid, "from", keymsg.From, "count", len(keymsg.Keys))
-		//		if _, ok := self.pubKeySymKeyIndex[pubkeyid]; !ok {
-		//			self.pubKeySymKeyIndex[pubkeyid] = make(map[whisper.TopicType][]*string)
-		//		}
-
 		var sendsymkeyids []string
 		for _, key := range keymsg.Keys {
 			sendsymkey := make([]byte, keymsg.KeyLength)
@@ -194,10 +239,10 @@ func (self *HandshakeController) handleKeys(pubkeyid string, keymsg *handshakeMs
 			if err != nil {
 				return err
 			}
-			//self.pubKeySymKeyIndex[pubkeyid][envelope.Topic] = append(self.pubKeySymKeyIndex[pubkeyid][envelope.Topic], &sendsymkeyid)
 			sendsymkeyids = append(sendsymkeyids, sendsymkeyid)
 		}
 		if len(sendsymkeyids) > 0 {
+			self.updateKeys(pubkeyid, &keymsg.Topic, false, sendsymkeyids, keymsg.Limit)
 			self.alertHandshake(pubkeyid, sendsymkeyids)
 		}
 	}
@@ -223,11 +268,11 @@ func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicTy
 	}
 
 	// check if buffer is not full
-	inkeys := self.validKeys(pubkeyid, topic, true)
-	requestcount := uint8(self.symKeyCapacity - uint16(len(inkeys)))
+	outkeys := self.validKeys(pubkeyid, topic, false)
+	requestcount := uint8(self.symKeyCapacity - uint16(len(outkeys)))
 
 	// return if there's nothing to be accomplished
-	if requestcount == 0 && len(inkeys) == 0 && keycount == 0 {
+	if requestcount == 0 && len(outkeys) == 0 && keycount == 0 {
 		return []string{}, nil
 	}
 
@@ -242,8 +287,8 @@ func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicTy
 		if err != nil {
 			return []string{}, fmt.Errorf("get generated outgoing symkey fail (addr %x pubkey %x topic %x): %v", to, pubkeyid, topic, err)
 		}
-		//self.symKeyPubKeyIndex[recvkeyids[i]] = pubkeyid
 	}
+	self.updateKeys(pubkeyid, topic, true, recvkeyids, self.symKeySendLimit)
 
 	// encode and send the message
 	recvkeymsg := &handshakeMsg{
@@ -267,9 +312,6 @@ func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicTy
 	return recvkeyids, nil
 }
 
-// used to enable blocked key requests to peer
-// if passed without symkey a new keyid array channel is created with pubkeyid as key
-// if passed with symkeyids, and the channel on the pubkeyid is active, symkeyids are passed to channel
 func (self *HandshakeController) alertHandshake(pubkeyid string, symkeys []string) chan []string {
 	if len(symkeys) > 0 {
 		if _, ok := self.keyC[pubkeyid]; ok {
@@ -286,76 +328,83 @@ func (self *HandshakeController) alertHandshake(pubkeyid string, symkeys []strin
 	return self.keyC[pubkeyid]
 }
 
-//
-//// returns all symkeys that are active for respective public keys after handshake exchange
-//func (self *Pss) getSymmetricKeyBuffer(pubkeyid string, topic *whisper.TopicType) (symkeyids []string, remaining []uint16) {
-//	if _, ok := self.pubKeySymKeyIndex[pubkeyid]; !ok {
-//		return
-//	}
-//	for _, symkeyid := range self.pubKeySymKeyIndex[pubkeyid][*topic] {
-//		capacity, _ := self.GetSymmetricKeyCapacity(*symkeyid)
-//		if capacity == 0 {
-//			continue
-//		}
-//		symkeyids = append(symkeyids, *symkeyid)
-//		remaining = append(remaining, capacity)
-//	}
-//	return
-//}
+type HandshakeAPI struct {
+	namespace string
+	ctrl      *HandshakeController
+}
 
-// checks if symkey is valid for more messages.
-// if not, the symkey will be instantly garbage collected.
-//func (self *Pss) GetSymmetricKeyCapacity(symkeyid string) (uint16, error) {
-//	if _, ok := self.symKeyPool[symkeyid]; !ok {
-//		return 0, errors.New(fmt.Sprintf("Invalid symkeyid %s", symkeyid))
-//	}
-//	capacity := self.symKeyPool[symkeyid].sendLimit - self.symKeyPool[symkeyid].sendCount
-//	if capacity == 0 {
-//		delete(self.symKeyPool, symkeyid)
-//	}
-//	return capacity, nil
-//}
+func (self *HandshakeAPI) Handshake(pubkeyid string, topic whisper.TopicType, to PssAddress, sync bool) (keys []string, err error) {
+	var hsc chan []string
+	validkeys := self.ctrl.validKeys(pubkeyid, &topic, false)
+	requestcount := uint8(self.ctrl.symKeyCapacity - uint16(len(validkeys)))
+	if requestcount == 0 {
+		return keys, errors.New("Symkey buffer is full")
+	}
+	if sync {
+		hsc = self.ctrl.alertHandshake(pubkeyid, []string{})
+	}
+	_, err = self.ctrl.sendKey(pubkeyid, &topic, 0, self.ctrl.symKeySendLimit, to)
+	if err != nil {
+		return keys, err
+	}
+	if sync {
+		ctx, _ := context.WithTimeout(context.Background(), self.ctrl.symKeyRequestExpiry)
+		select {
+		case keys = <-hsc:
+			log.Trace("sync handshake response receive", "key", keys)
+		case <-ctx.Done():
+			return []string{}, errors.New("timeout")
+		}
+	}
+	return keys, nil
+}
 
-// Initiate a handshake with a peer for a specific topic.
-//
-// Will request new symkeys from the peer to fill up the buffer allowance of outgoing symkeys,
-// If the peer's buffer also isn't full, it will respond with keys and request keys from the node, which will be automatically sent.
-//
-// The symkeys will be stored with the address hint specified in the "to" parameter
-//
-// If the "sync" parameter is set, the call will block until they are received or the request times out.
-//
-// will fail if buffer is already full, if handshake request cannot be sent, or by timeout if "sync" is set
-//func (pssapi *API) Handshake(pubkeyid string, topic whisper.TopicType, to PssAddress, sync bool) ([]string, error) {
-//	var err error
-//	var hsc chan []string
-//	var keys []string
-//	_, counts := pssapi.Pss.getSymmetricKeyBuffer(pubkeyid, &topic)
-//	requestcount := uint8(pssapi.Pss.symKeyBufferCapacity - len(counts))
-//	if requestcount == 0 {
-//		return keys, errors.New("Symkey buffer is full")
-//	}
-//	if sync {
-//		hsc = pssapi.Pss.alertHandshake(pubkeyid, []string{})
-//	}
-//	_, err = pssapi.sendKey(pubkeyid, &topic, 0, pssapi.Pss.symKeySendLimit, to)
-//	if err != nil {
-//		return []string{}, err
-//	}
-//	if sync {
-//		ctx, _ := context.WithTimeout(context.Background(), pssapi.Pss.symKeyRequestExpiry)
-//		select {
-//		case keys = <-hsc:
-//			log.Trace("sync handshake response receive", "key", keys)
-//		case <-ctx.Done():
-//			return []string{}, errors.New("timeout")
-//		}
-//	}
-//	return keys, nil
-//}
+func (self *HandshakeAPI) AddHandshake(topic *whisper.TopicType) error {
+	self.ctrl.deregisterFuncs[*topic] = self.ctrl.pss.Register(topic, self.ctrl.handler)
+	return nil
+}
 
-// Get all outgoing symkeys valid for a particular pubkey and topic
-//func (pssapi *API) GetSymmetricKeys(pubkeyid string, topic whisper.TopicType) ([]string, error) {
-//	keys, _ := pssapi.Pss.getSymmetricKeyBuffer(pubkeyid, &topic)
-//	return keys, nil
-//}
+func (self *HandshakeAPI) RemoveHandshake(topic *whisper.TopicType) error {
+	if _, ok := self.ctrl.deregisterFuncs[*topic]; ok {
+		self.ctrl.deregisterFuncs[*topic]()
+	}
+	return nil
+}
+
+func (self *HandshakeAPI) GetHandshakeKeys(pubkeyid string, topic whisper.TopicType, in bool, out bool) (keys []string, err error) {
+	if in {
+		for _, inkey := range self.ctrl.validKeys(pubkeyid, &topic, true) {
+			keys = append(keys, *inkey)
+		}
+	}
+	if out {
+		for _, outkey := range self.ctrl.validKeys(pubkeyid, &topic, false) {
+			keys = append(keys, *outkey)
+		}
+	}
+	return keys, nil
+}
+
+func (self *HandshakeAPI) GetHandshakeKeyCapacity(symkeyid string) (uint16, error) {
+	storekey := self.ctrl.symKeyIndex[symkeyid]
+	if storekey == nil {
+		return 0, errors.New(fmt.Sprintf("invalid symkey id %s", symkeyid))
+	}
+	return storekey.limit - storekey.count, nil
+}
+
+func (self *HandshakeAPI) GetHandshakePublicKey(symkeyid string) (string, error) {
+	storekey := self.ctrl.symKeyIndex[symkeyid]
+	if storekey == nil {
+		return "", errors.New(fmt.Sprintf("invalid symkey id %s", symkeyid))
+	}
+	return *storekey.pubkeyid, nil
+}
+
+func (self *HandshakeAPI) ReleaseHandshakeKey(pubkeyid string, topic whisper.TopicType, symkeyid string) (bool, error) {
+	removed := self.ctrl.releaseKey(pubkeyid, &topic, false, &symkeyid)
+	if !removed {
+		removed = self.ctrl.releaseKey(pubkeyid, &topic, true, &symkeyid)
+	}
+	return removed, nil
+}

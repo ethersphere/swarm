@@ -104,26 +104,3 @@ func (pssapi *API) GetAddress(topic whisper.TopicType, asymmetric bool, key stri
 		return *pssapi.Pss.symKeyPool[key][topic].address, nil
 	}
 }
-
-// PssAPITest are temporary API calls for development use only
-type APITest struct {
-	*Pss
-}
-
-func NewAPITest(ps *Pss) *APITest {
-	return &APITest{Pss: ps}
-}
-
-func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic whisper.TopicType, to []byte) ([2]string, error) {
-	addr := make(PssAddress, len(to))
-	copy(addr[:], to)
-	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &addr, limit, true)
-	if err != nil {
-		return [2]string{}, err
-	}
-	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &addr, limit, false)
-	if err != nil {
-		return [2]string{}, err
-	}
-	return [2]string{recvsymkeyid, sendsymkeyid}, nil
-}
