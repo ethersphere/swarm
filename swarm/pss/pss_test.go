@@ -35,22 +35,15 @@ const (
 	bzzServiceName = "bzz"
 )
 
-type protoCtrl struct {
-	C        chan bool
-	protocol *PssProtocol
-	run      func(*p2p.Peer, p2p.MsgReadWriter) error
-}
-
 var (
 	snapshotfile   string
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 	debugflag      = flag.Bool("v", false, "verbose")
 	w              *whisper.Whisper
 	wapi           *whisper.PublicWhisperAPI
-	// custom logging
-	psslogmain   log.Logger
-	pssprotocols map[string]*protoCtrl
-	useHandshake bool
+	psslogmain     log.Logger
+	pssprotocols   map[string]*protoCtrl
+	useHandshake   bool
 )
 
 var services = newServices()
@@ -95,7 +88,7 @@ func TestCache(t *testing.T) {
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	wparams := &whisper.MessageParams{
-		TTL:      DefaultTTL,
+		TTL:      defaultWhisperTTL,
 		Src:      privkey,
 		Dst:      &privkey.PublicKey,
 		Topic:    PingTopic,
@@ -147,75 +140,6 @@ func TestCache(t *testing.T) {
 	time.Sleep(pp.CacheTTL)
 	if ps.checkFwdCache(nil, digest) {
 		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
-	}
-}
-
-func TestCleanup(t *testing.T) {
-	topic := whisper.BytesToTopic([]byte("foo:42"))
-	keys, err := wapi.NewKeyPair()
-	privkey, err := w.GetPrivateKey(keys)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pp := NewPssParams(nil)
-	pp.SymKeyCacheCapacity = 2
-	ps := newTestPss(privkey, pp)
-
-	var firstsymkeyid *string
-	var secondsymkeyid *string
-	for i := 0; i < ps.symKeyCacheCapacity+1; i++ {
-		symkey := network.RandomAddr().Over()
-		var zeroaddress PssAddress
-		symkeyid, err := ps.SetSymmetricKey(symkey, topic, &zeroaddress, defaultSymKeySendLimit, true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if i == 0 {
-			firstsymkeyid = &symkeyid
-		} else if i == 1 {
-			secondsymkeyid = &symkeyid
-			ps.symKeyPool[symkeyid][topic].protected = true
-		}
-	}
-
-	beforekeycount := len(ps.symKeyPool)
-	ps.clean()
-	afterkeycount := 0
-	for keyid, keytopics := range ps.symKeyPool {
-		if keytopics[topic] != nil {
-			if keyid == *firstsymkeyid {
-				t.Fatalf("key %s found in pool but should have been deleted", keyid)
-			}
-			afterkeycount++
-		}
-	}
-	if beforekeycount == afterkeycount {
-		t.Fatalf("keycount before and after clean is same: expected %d, got %d", beforekeycount-1, afterkeycount)
-	}
-
-	symkey := network.RandomAddr().Over()
-	var zeroaddress PssAddress
-	_, err = ps.SetSymmetricKey(symkey, topic, &zeroaddress, defaultSymKeySendLimit, true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	beforekeycount = afterkeycount + 1
-	ps.clean()
-	afterkeycount = 0
-	match := false
-	for keyid, keytopics := range ps.symKeyPool {
-		if keytopics[topic] != nil {
-			if keyid == *secondsymkeyid {
-				match = true
-			}
-			afterkeycount++
-		}
-	}
-	if beforekeycount != afterkeycount {
-		t.Fatalf("keycount before and after clean is same: expected %d, got %d", beforekeycount, afterkeycount)
-	}
-	if match != true {
-		t.Fatalf("protected key %s not found in pool", *secondsymkeyid)
 	}
 }
 
@@ -294,13 +218,13 @@ func TestKeys(t *testing.T) {
 	outkey := network.RandomAddr().Over()
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topic, &addr)
-	outkeyid, err := ps.SetSymmetricKey(outkey, topic, &addr, 0, false)
+	outkeyid, err := ps.SetSymmetricKey(outkey, topic, &addr, false)
 	if err != nil {
 		t.Fatalf("failed to set 'our' outgoing symmetric key")
 	}
 
 	// make a symmetric key that we will send to peer for encrypting messages to us
-	inkeyid, err := ps.generateSymmetricKey(topic, &addr, defaultSymKeySendLimit, true)
+	inkeyid, err := ps.generateSymmetricKey(topic, &addr, true)
 	if err != nil {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
@@ -573,7 +497,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	topic := whisper.BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
-	symkeyid, err := ps.generateSymmetricKey(topic, &to, defaultSymKeySendLimit, true)
+	symkeyid, err := ps.generateSymmetricKey(topic, &to, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
@@ -581,7 +505,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	if err != nil {
 		b.Fatalf("could not retreive symkey: %v", err)
 	}
-	ps.SetSymmetricKey(symkey, topic, &to, 0, false)
+	ps.SetSymmetricKey(symkey, topic, &to, false)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -631,6 +555,7 @@ func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 }
 
 // decrypt performance using symkey cache, worst case
+// (decrypt key always last in cache)
 func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	keycountstring := strings.Split(b.Name(), "/")
 	cachesize := int64(0)
@@ -661,7 +586,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
 		copy(to[:], network.RandomAddr().Over())
-		keyid, err = ps.generateSymmetricKey(topic, &to, defaultSymKeySendLimit, true)
+		keyid, err = ps.generateSymmetricKey(topic, &to, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -670,7 +595,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 			b.Fatalf("could not retreive symkey %s: %v", keyid, err)
 		}
 		wparams := &whisper.MessageParams{
-			TTL:      DefaultTTL,
+			TTL:      defaultWhisperTTL,
 			KeySym:   symkey,
 			Topic:    topic,
 			WorkTime: defaultWhisperWorkTime,
@@ -712,6 +637,7 @@ func BenchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 }
 
 // decrypt performance using symkey cache, best case
+// (decrypt key always first in cache)
 func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	var keyid string
 	var ps *Pss
@@ -741,7 +667,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	topic := whisper.BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		copy(addr[i], network.RandomAddr().Over())
-		keyid, err = ps.generateSymmetricKey(topic, &addr[i], defaultSymKeySendLimit, true)
+		keyid, err = ps.generateSymmetricKey(topic, &addr[i], true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -752,7 +678,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		b.Fatalf("could not retreive symkey %s: %v", keyid, err)
 	}
 	wparams := &whisper.MessageParams{
-		TTL:      DefaultTTL,
+		TTL:      defaultWhisperTTL,
 		KeySym:   symkey,
 		Topic:    topic,
 		WorkTime: defaultWhisperWorkTime,
@@ -866,7 +792,7 @@ func newServices() adapters.Services {
 				Pong: true,
 			}
 			p2pp := NewPingProtocol(ping.OutC, ping.PingHandler)
-			pp, err := RegisterPssProtocol(ps, &PingTopic, PingProtocol, p2pp, &PssProtocolOptions{Asymmetric: true})
+			pp, err := RegisterProtocol(ps, &PingTopic, PingProtocol, p2pp, &ProtocolParams{Asymmetric: true})
 			if err != nil {
 				return nil, err
 			}
@@ -939,7 +865,7 @@ func newTestPss(privkey *ecdsa.PrivateKey, ppextra *PssParams) *Pss {
 	return ps
 }
 
-// PssAPITest are temporary API calls for development use only
+// API calls for test/development use
 type APITest struct {
 	*Pss
 }
@@ -951,11 +877,11 @@ func NewAPITest(ps *Pss) *APITest {
 func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic whisper.TopicType, to []byte) ([2]string, error) {
 	addr := make(PssAddress, len(to))
 	copy(addr[:], to)
-	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &addr, limit, true)
+	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &addr, true)
 	if err != nil {
 		return [2]string{}, err
 	}
-	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &addr, limit, false)
+	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &addr, false)
 	if err != nil {
 		return [2]string{}, err
 	}
@@ -963,5 +889,5 @@ func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymke
 }
 
 func (apitest *APITest) Clean() (int, error) {
-	return apitest.Pss.clean(), nil
+	return apitest.Pss.cleanKeys(), nil
 }

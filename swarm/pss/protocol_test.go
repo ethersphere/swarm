@@ -14,6 +14,12 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
+type protoCtrl struct {
+	C        chan bool
+	protocol *Protocol
+	run      func(*p2p.Peer, p2p.MsgReadWriter) error
+}
+
 // simple ping pong protocol test for the pss devp2p emulation
 func TestProtocol(t *testing.T) {
 	t.Run("32", testProtocol)
@@ -91,7 +97,7 @@ func testProtocol(t *testing.T) {
 	// add right peer's public key as protocol peer on left
 	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
 	p := p2p.NewPeer(nid, fmt.Sprintf("%x", loaddr), []p2p.Cap{})
-	pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, common.ToHex(rpubkey))
+	pssprotocols[lnodeinfo.ID].protocol.addPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, common.ToHex(rpubkey))
 
 	// sends ping asym, checks delivery
 	pssprotocols[lnodeinfo.ID].C <- false

@@ -11,19 +11,15 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
-// Convenience wrapper for sending and receiving pss messages when using the pss API
+// Wrapper for receiving pss messages when using the pss API
+// providing access to sender of message
 type APIMsg struct {
 	Msg        []byte
 	Asymmetric bool
 	Key        string
 }
 
-// for debugging, show nice hex version
-func (self *APIMsg) String() string {
-	return fmt.Sprintf("APIMsg: asym: %v, key: %s", self.Asymmetric, self.Key)
-}
-
-// Pss API services
+// Additional public methods accessible through API for pss
 type API struct {
 	*Pss
 }
@@ -36,7 +32,8 @@ func NewAPI(ps *Pss) *API {
 //
 // A new handler is registered in pss for the supplied topic
 //
-// All incoming messages to the node matching this topic will be encapsulated in the APIMsg struct and sent to the subscriber
+// All incoming messages to the node matching this topic will be encapsulated in the APIMsg
+// struct and sent to the subscriber
 func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
@@ -68,10 +65,6 @@ func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.S
 	}()
 
 	return psssub, nil
-}
-
-func (pssapi *API) BaseAddr() ([]byte, error) {
-	return pssapi.Pss.BaseAddr(), nil
 }
 
 // Retrieves the node's public key in byte form

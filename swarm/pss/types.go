@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	DefaultTTL = 6000
+	defaultWhisperTTL = 6000
 )
 
 // variable length address

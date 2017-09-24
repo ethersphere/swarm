@@ -8,9 +8,10 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
+// Generic ping protocol implementation for
+// pss devp2p protocol emulation
 type PingMsg struct {
 	Created time.Time
 	Pong    bool // set if message is pong reply
@@ -38,17 +39,16 @@ func (self *Ping) PingHandler(msg interface{}) error {
 	return nil
 }
 
-// Sample protocol used for tests
 var PingProtocol = &protocols.Spec{
 	Name:       "psstest",
 	Version:    1,
-	MaxMsgSize: 10 * 1024 * 1024,
+	MaxMsgSize: 1024,
 	Messages: []interface{}{
 		PingMsg{},
 	},
 }
 
-var PingTopic = whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", PingProtocol.Name, PingProtocol.Version)))
+var PingTopic = ProtocolTopic(PingProtocol)
 
 func NewPingProtocol(pingC chan bool, handler func(interface{}) error) *p2p.Protocol {
 	return &p2p.Protocol{

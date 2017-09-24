@@ -95,7 +95,7 @@ func testHandshake(t *testing.T) {
 	}
 
 	var lhsendsymkeyids []string
-	err = clients[0].Call(&lhsendsymkeyids, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, true, true)
+	err = clients[0].Call(&lhsendsymkeyids, "pss_handshake", common.ToHex(rpubkey), hextopic, true, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func testHandshake(t *testing.T) {
 	}
 
 	// send new handshake request, should send no keys
-	err = clients[0].Call(nil, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, false)
+	err = clients[0].Call(nil, "pss_handshake", common.ToHex(rpubkey), hextopic, false)
 	if err == nil {
 		t.Fatal("expected full symkey buffer error")
 	}
@@ -212,7 +212,7 @@ func testHandshake(t *testing.T) {
 
 	// send new handshake request, should now receive one key
 	// check that it is not in previous right recv key array
-	err = clients[0].Call(&newlhsendkeyids, "pss_handshake", common.ToHex(rpubkey), hextopic, roaddr, true, false)
+	err = clients[0].Call(&newlhsendkeyids, "pss_handshake", common.ToHex(rpubkey), hextopic, true, false)
 	if err != nil {
 		t.Fatalf("handshake send fail: %v", err)
 	} else if len(newlhsendkeyids) > 1 {
@@ -239,6 +239,7 @@ func testHandshake(t *testing.T) {
 		t.Fatalf("right sent old key id %s in second handshake", *rmatchsymkeyid)
 	}
 
+	// clean the pss core keystore. Should clean the key released earlier
 	var cleancount int
 	clients[0].Call(&cleancount, "psstest_clean")
 	if cleancount > 1 {

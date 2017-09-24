@@ -32,7 +32,7 @@ const (
 
 type protoCtrl struct {
 	C        chan bool
-	protocol *pss.PssProtocol
+	protocol *pss.Protocol
 	run      func(*p2p.Peer, p2p.MsgReadWriter) error
 }
 
@@ -77,7 +77,7 @@ func init() {
 // ping pong exchange across one expired symkey
 func TestHandshake(t *testing.T) {
 	sendLimit = 3
-	topic := ProtocolTopic(pss.PingProtocol)
+	topic := pss.ProtocolTopic(pss.PingProtocol)
 	hextopic := fmt.Sprintf("%x", topic)
 
 	clients, err := setupNetwork(2)

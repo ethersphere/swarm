@@ -21,16 +21,12 @@ import (
 )
 
 const (
-	inboxCapacity         = 3000
-	outboxCapacity        = 100
-	addrLen               = common.HashLength
 	handshakeRetryTimeout = 1000
 	handshakeRetryCount   = 3
 )
 
-var ()
-
-// After a successful connection with Client.Start, BaseAddr contains the swarm overlay address of the pss node
+// The pss client provides devp2p emulation over pss RPC API,
+// giving access to pss methods from a different process
 type Client struct {
 	BaseAddr []byte
 
@@ -120,7 +116,7 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	}
 
 	if symkeycap == 0 {
-		// The key has expired. Check if we have more in the buffer
+		// The key has expired. Check if we have more for the same peer and topic
 		var symkeyids []string
 		err = rw.Client.rpc.Call(&symkeyids, "pss_getHandshakeKeys", rw.pubKeyId, rw.hextopic, false, true)
 		if err != nil {
@@ -157,7 +153,7 @@ func (rw *pssRPCRW) handshake(retries int, sync bool, flush bool) (string, error
 	// if the key buffer was depleted, make this as a blocking call and try several times before giving up
 	for i = 0; i < 1+retries; i++ {
 		log.Debug("handshake attempt pssrpcrw", "pubkeyid", rw.pubKeyId, "topic", rw.hextopic, "sync", sync)
-		err := rw.Client.rpc.Call(&symkeyids, "pss_handshake", rw.pubKeyId, rw.hextopic, rw.addr, sync, flush)
+		err := rw.Client.rpc.Call(&symkeyids, "pss_handshake", rw.pubKeyId, rw.hextopic, sync, flush)
 		if err == nil {
 			var keyid string
 			if sync {
@@ -173,6 +169,9 @@ func (rw *pssRPCRW) handshake(retries int, sync bool, flush bool) (string, error
 	return "", errors.New(fmt.Sprintf("handshake failed after %d attempts", i))
 }
 
+// Custom constructor
+//
+// Provides direct access to the rpc object
 func NewClient(rpcurl string) (*Client, error) {
 	rpcclient, err := rpc.Dial(rpcurl)
 	if err != nil {
@@ -186,7 +185,8 @@ func NewClient(rpcurl string) (*Client, error) {
 	return client, nil
 }
 
-// Constructor for test implementations
+// Main constructor
+//
 // The 'rpcclient' parameter allows passing a in-memory rpc client to act as the remote websocket RPC.
 func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
 	client := newClient()
@@ -211,9 +211,10 @@ func newClient() (client *Client) {
 // Mounts a new devp2p protcool on the pss connection
 //
 // the protocol is aliased as a "pss topic"
-// uses normal devp2p Send and incoming message handler routines from the p2p/protocols package
+// uses normal devp2p send and incoming message handler routines from the p2p/protocols package
 //
-// when an incoming message is received from a peer that is not yet known to the client, this peer object is instantiated, and the protocol is run on it.
+// when an incoming message is received from a peer that is not yet known to the client,
+// this peer object is instantiated, and the protocol is run on it.
 func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
 	hextopic := fmt.Sprintf("%x", topic)
@@ -275,10 +276,18 @@ func (self *Client) Stop() error {
 	return nil
 }
 
-// Preemptively add a remote pss peer
+// Add a pss peer (public key) and run the protocol on it
+//
+// client.RunProtocol with matching topic must have been
+// run prior to adding the peer, or this method will
+// return an error.
+//
+// The key must exist in the key store of the pss node
+// before the peer is added. The method will return an error
+// if it is not.
 func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocols.Spec) error {
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(key))
-	topic := ProtocolTopic(spec)
+	topic := pss.ProtocolTopic(spec)
 	if self.peerPool[topic] == nil {
 		return errors.New("addpeer on unset topic")
 	}
@@ -297,15 +306,10 @@ func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocol
 	return nil
 }
 
-// Remove a remote pss peer
+// Remove a pss peer
 //
-// Note this doesn't actually currently drop the peer, but only remmoves the reference from the client's peer lookup table
+// TODO: underlying cleanup
 func (self *Client) RemovePssPeer(pubkeyid string, spec *protocols.Spec) {
-	topic := ProtocolTopic(spec)
+	topic := pss.ProtocolTopic(spec)
 	delete(self.peerPool[topic], pubkeyid)
-}
-
-// Uniform translation of protocol specifiers to topic
-func ProtocolTopic(spec *protocols.Spec) whisper.TopicType {
-	return whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
 }
