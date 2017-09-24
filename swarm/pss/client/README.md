@@ -32,7 +32,7 @@ Minimal-ish usage example. It needs a running pss-enabled swarm node to work. Pl
     	if ok {
     		log.Debug("Yay, just got a message", "msg", foomsg)
     	}
-    	return fmt.Errorf("Unknown message")
+    	return errors.New(fmt.Sprintf("Unknown message"))
     }
     
     spec := &protocols.Spec{

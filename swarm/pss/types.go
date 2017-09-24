@@ -1,8 +1,6 @@
 package pss
 
 import (
-	"bytes"
-	"crypto/ecdsa"
 	"fmt"
 	"time"
 
@@ -13,28 +11,13 @@ import (
 )
 
 const (
-	defaultSymKeyCacheCapacity      = 512
-	defaultDigestCacheTTL           = time.Second
-	defaultMaximumAutoAddressLength = 8
+	defaultWhisperTTL = 6000
 )
 
-// Pss configuration parameters
-type PssParams struct {
-	Cachettl                 time.Duration
-	privatekey               *ecdsa.PrivateKey
-	SymKeyCacheCapacity      int
-	MaximumAutoAddressLength int
-}
+// variable length address
+type PssAddress []byte
 
-// Sane defaults for Pss
-func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
-	return &PssParams{
-		Cachettl:                 defaultDigestCacheTTL,
-		privatekey:               privatekey,
-		SymKeyCacheCapacity:      defaultSymKeyCacheCapacity,
-		MaximumAutoAddressLength: defaultMaximumAutoAddressLength,
-	}
-}
+type pssDigest [digestLength]byte
 
 // Encapsulates messages transported over pss.
 type PssMsg struct {
@@ -79,37 +62,16 @@ func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 	return rlp.EncodeToBytes(smsg)
 }
 
-// Convenience wrapper for sending and receiving pss messages when using the pss API
-type APIMsg struct {
-	Msg  []byte
-	Addr []byte
-}
-
-// for debugging, show nice hex version
-func (self *APIMsg) String() string {
-	return fmt.Sprintf("APIMsg: from: %s..., msg: %s...", common.ByteLabel(self.Msg), common.ByteLabel(self.Addr))
-}
-
 // Signature for a message handler function for a PssMsg
 //
 // Implementations of this type are passed to Pss.Register together with a topic,
-type Handler func(msg []byte, p *p2p.Peer, from []byte) error
+type Handler func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
 
-// For devp2p protocol integration only
-//
-// Creates a serialized (non-buffered) version of a p2p.Msg, used in the specialized p2p.MsgReadwriter implementations used internally by pss
-//
-// Should not normally be called outside the pss package hierarchy
-func ToP2pMsg(msg []byte) (p2p.Msg, error) {
-	payload := &ProtocolMsg{}
-	if err := rlp.DecodeBytes(msg, payload); err != nil {
-		return p2p.Msg{}, fmt.Errorf("pss protocol handler unable to decode payload as p2p message: %v", err)
-	}
+// Wrapper for whisper topic hashing
+func BytesToTopic(b []byte) whisper.TopicType {
+	return whisper.BytesToTopic(b)
+}
 
-	return p2p.Msg{
-		Code:       payload.Code,
-		Size:       uint32(len(payload.Payload)),
-		ReceivedAt: time.Now(),
-		Payload:    bytes.NewBuffer(payload.Payload),
-	}, nil
+func StringToTopic(s string) whisper.TopicType {
+	return whisper.BytesToTopic([]byte(s))
 }
