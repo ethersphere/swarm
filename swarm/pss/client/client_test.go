@@ -177,7 +177,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	nodes := make([]*simulations.Node, numnodes)
 	clients = make([]*rpc.Client, numnodes)
 	if numnodes < 2 {
-		return nil, fmt.Errorf("Minimum two nodes in network")
+		return nil, errors.New(fmt.Sprintf("Minimum two nodes in network"))
 	}
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
@@ -189,27 +189,27 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 			Services: []string{"bzz", "pss"},
 		})
 		if err != nil {
-			return nil, fmt.Errorf("error creating node 1: %v", err)
+			return nil, errors.New(fmt.Sprintf("error creating node 1: %v", err))
 		}
 		err = net.Start(nodes[i].ID())
 		if err != nil {
-			return nil, fmt.Errorf("error starting node 1: %v", err)
+			return nil, errors.New(fmt.Sprintf("error starting node 1: %v", err))
 		}
 		if i > 0 {
 			err = net.Connect(nodes[i].ID(), nodes[i-1].ID())
 			if err != nil {
-				return nil, fmt.Errorf("error connecting nodes: %v", err)
+				return nil, errors.New(fmt.Sprintf("error connecting nodes: %v", err))
 			}
 		}
 		clients[i], err = nodes[i].Client()
 		if err != nil {
-			return nil, fmt.Errorf("create node 1 rpc client fail: %v", err)
+			return nil, errors.New(fmt.Sprintf("create node 1 rpc client fail: %v", err))
 		}
 	}
 	if numnodes > 2 {
 		err = net.Connect(nodes[0].ID(), nodes[len(nodes)-1].ID())
 		if err != nil {
-			return nil, fmt.Errorf("error connecting first and last nodes")
+			return nil, errors.New(fmt.Sprintf("error connecting first and last nodes"))
 		}
 	}
 	return clients, nil

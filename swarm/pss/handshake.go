@@ -168,6 +168,8 @@ func (self *HandshakeController) updateKeys(pubkeyid string, topic *whisper.Topi
 	}
 	for _, storekey := range *keystore {
 		storekey.expiredAt = time.Now()
+		self.pss.lock.Lock()
+		self.pss.lock.Unlock()
 	}
 	for i := 0; i < len(symkeyids); i++ {
 		storekey := handshakeKey{
@@ -176,6 +178,10 @@ func (self *HandshakeController) updateKeys(pubkeyid string, topic *whisper.Topi
 			limit:    limit,
 		}
 		*keystore = append(*keystore, storekey)
+		self.pss.lock.Lock()
+		self.pss.symKeyPool[*storekey.symKeyId][*topic].protected = true
+		log.Warn("setting protected", "p", fmt.Sprintf("%p", self.pss.symKeyPool[*storekey.symKeyId][*topic]))
+		self.pss.lock.Unlock()
 	}
 	for i := 0; i < len(*keystore); i++ {
 		self.symKeyIndex[*(*keystore)[i].symKeyId] = &((*keystore)[i])
@@ -226,6 +232,7 @@ func (self *HandshakeController) cleanHandshake(pubkeyid string, topic *whisper.
 	}
 	for _, keyid := range deletes {
 		delete(self.symKeyIndex, keyid)
+		self.pss.symKeyPool[keyid][*topic].protected = false
 	}
 	return len(deletes)
 }
@@ -321,11 +328,11 @@ func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicTy
 		var err error
 		recvkeyids[i], err = self.pss.generateSymmetricKey(*topic, &to, msglimit, true)
 		if err != nil {
-			return []string{}, fmt.Errorf("set receive symkey fail (addr %x pubkey %x topic %x): %v", to, pubkeyid, topic, err)
+			return []string{}, errors.New(fmt.Sprintf("set receive symkey fail (addr %x pubkey %x topic %x): %v", to, pubkeyid, topic, err))
 		}
 		recvkeys[i], err = self.pss.GetSymmetricKey(recvkeyids[i])
 		if err != nil {
-			return []string{}, fmt.Errorf("get generated outgoing symkey fail (addr %x pubkey %x topic %x): %v", to, pubkeyid, topic, err)
+			return []string{}, errors.New(fmt.Sprintf("get generated outgoing symkey fail (addr %x pubkey %x topic %x): %v", to, pubkeyid, topic, err))
 		}
 	}
 	self.updateKeys(pubkeyid, topic, true, recvkeyids, self.symKeySendLimit)
@@ -341,12 +348,12 @@ func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicTy
 	log.Debug("sending our symkeys", "pubkey", pubkeyid, "symkeys", recvkeyids, "limit", self.symKeySendLimit, "requestcount", requestcount, "keycount", len(recvkeys))
 	recvkeybytes, err := rlp.EncodeToBytes(recvkeymsg)
 	if err != nil {
-		return []string{}, fmt.Errorf("rlp keymsg encode fail: %v", err)
+		return []string{}, errors.New(fmt.Sprintf("rlp keymsg encode fail: %v", err))
 	}
 	// if the send fails it means this public key is not registered for this particular address AND topic
 	err = self.pss.SendAsym(pubkeyid, *topic, recvkeybytes)
 	if err != nil {
-		return []string{}, fmt.Errorf("Send symkey failed: %v", err)
+		return []string{}, errors.New(fmt.Sprintf("Send symkey failed: %v", err))
 	}
 	return recvkeyids, nil
 }

@@ -2,6 +2,7 @@ package pss
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -39,7 +40,7 @@ func NewAPI(ps *Pss) *API {
 func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
-		return nil, fmt.Errorf("Subscribe not supported")
+		return nil, errors.New(fmt.Sprintf("Subscribe not supported"))
 	}
 
 	psssub := notifier.CreateSubscription()

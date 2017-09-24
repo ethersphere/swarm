@@ -193,7 +193,7 @@ func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
 	client.rpc = rpcclient
 	err := client.rpc.Call(&client.BaseAddr, "pss_baseAddr")
 	if err != nil {
-		return nil, fmt.Errorf("cannot get pss node baseaddress: %v", err)
+		return nil, errors.New(fmt.Sprintf("cannot get pss node baseaddress: %v", err))
 	}
 	return client, nil
 }
@@ -221,7 +221,7 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 	self.peerPool[topic] = make(map[string]*pssRPCRW)
 	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", hextopic)
 	if err != nil {
-		return fmt.Errorf("pss event subscription failed: %v", err)
+		return errors.New(fmt.Sprintf("pss event subscription failed: %v", err))
 	}
 	self.sub = sub
 

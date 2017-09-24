@@ -17,8 +17,8 @@ import (
 // full address, partial address (8 bytes) and empty address
 func TestHandshake(t *testing.T) {
 	t.Run("32", testHandshake)
-	t.Run("8", testHandshake)
-	t.Run("0", testHandshake)
+	//t.Run("8", testHandshake)
+	//t.Run("0", testHandshake)
 }
 
 func testHandshake(t *testing.T) {
@@ -81,9 +81,9 @@ func testHandshake(t *testing.T) {
 
 	// perform the handshake
 	// after this each side will have defaultSymKeyBufferCapacity symkeys each for in- and outgoing messages:
-	// L -> request 6 keys -> R
-	// L <- send 6 keys, request 6 keys <- R
-	// L -> send 6 keys -> R
+	// L -> request 4 keys -> R
+	// L <- send 4 keys, request 4 keys <- R
+	// L -> send 4 keys -> R
 	// the call will fill the array with symkeys L needs for sending to R
 	err = clients[0].Call(nil, "pss_addHandshake", hextopic)
 	if err != nil {
@@ -239,4 +239,9 @@ func testHandshake(t *testing.T) {
 		t.Fatalf("right sent old key id %s in second handshake", *rmatchsymkeyid)
 	}
 
+	var cleancount int
+	clients[0].Call(&cleancount, "psstest_clean")
+	if cleancount > 1 {
+		t.Fatalf("pss clean count mismatch; expected 1, got %d", cleancount)
+	}
 }

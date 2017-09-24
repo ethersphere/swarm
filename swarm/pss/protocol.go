@@ -2,6 +2,7 @@ package pss
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -85,7 +86,7 @@ type PssProtocol struct {
 // Maps a Topic to a devp2p protocol.
 func RegisterPssProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *PssProtocolOptions) (*PssProtocol, error) {
 	if !options.Asymmetric && !options.Symmetric {
-		return nil, fmt.Errorf("specify at least one of asymmetric or symmetric messaging mode")
+		return nil, errors.New(fmt.Sprintf("specify at least one of asymmetric or symmetric messaging mode"))
 	}
 	pp := &PssProtocol{
 		Pss:          ps,
@@ -108,7 +109,7 @@ func RegisterPssProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec
 func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 	var vrw *PssReadWriter
 	if self.Asymmetric != asymmetric && self.Symmetric == !asymmetric {
-		return fmt.Errorf("invalid protocol encryption")
+		return errors.New(fmt.Sprintf("invalid protocol encryption"))
 	} else if (!self.isActiveSymKey(keyid, *self.topic) && !asymmetric) ||
 		(!self.isActiveAsymKey(keyid, *self.topic) && asymmetric) {
 
@@ -121,7 +122,7 @@ func (self *PssProtocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid 
 
 	pmsg, err := ToP2pMsg(msg)
 	if err != nil {
-		return fmt.Errorf("could not decode pssmsg")
+		return errors.New(fmt.Sprintf("could not decode pssmsg"))
 	}
 	if asymmetric {
 		vrw = self.pubKeyRWPool[keyid].(*PssReadWriter)
@@ -146,7 +147,7 @@ func (self *PssProtocol) isActiveAsymKey(key string, topic whisper.TopicType) bo
 func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 	payload := &ProtocolMsg{}
 	if err := rlp.DecodeBytes(msg, payload); err != nil {
-		return p2p.Msg{}, fmt.Errorf("pss protocol handler unable to decode payload as p2p message: %v", err)
+		return p2p.Msg{}, errors.New(fmt.Sprintf("pss protocol handler unable to decode payload as p2p message: %v", err))
 	}
 
 	return p2p.Msg{
@@ -179,12 +180,12 @@ func (self *PssProtocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWri
 	}
 	if asymmetric {
 		if _, ok := self.Pss.pubKeyPool[key]; !ok {
-			return nil, fmt.Errorf("asym key does not exist: %s", key)
+			return nil, errors.New(fmt.Sprintf("asym key does not exist: %s", key))
 		}
 		self.pubKeyRWPool[key] = rw
 	} else {
 		if _, ok := self.Pss.symKeyPool[key]; !ok {
-			return nil, fmt.Errorf("symkey does not exist: %s", key)
+			return nil, errors.New(fmt.Sprintf("symkey does not exist: %s", key))
 		}
 		self.symKeyRWPool[key] = rw
 	}

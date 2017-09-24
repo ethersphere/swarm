@@ -297,16 +297,16 @@ func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
 }
 
 // symkey garbage collection
-func (self *Pss) clean() {
+func (self *Pss) clean() (count int) {
 	for keyid, peertopics := range self.symKeyPool {
 		var expiredtopics []whisper.TopicType
 		for topic, psp := range peertopics {
-			log.Trace("check topic", "topic", topic, "id", keyid)
-			var match bool
+			log.Trace("check topic", "topic", topic, "id", keyid, "protect", psp.protected, "p", fmt.Sprintf("%p", self.symKeyPool[keyid][topic]))
 			if psp.protected {
 				continue
 			}
 
+			var match bool
 			for i := self.symKeyCacheCursor; i > self.symKeyCacheCursor-cap(self.symKeyCache) && i > 0; i-- {
 				cacheid := self.symKeyCache[i%cap(self.symKeyCache)]
 				log.Trace("check cache", "idx", i, "id", *cacheid)
@@ -321,8 +321,10 @@ func (self *Pss) clean() {
 		for _, topic := range expiredtopics {
 			delete(self.symKeyPool[keyid], topic)
 			log.Trace("symkey cleanup deletion", "symkeyid", keyid, "topic", topic, "val", self.symKeyPool[keyid])
+			count++
 		}
 	}
+	return
 }
 
 // add a message to the cache
@@ -394,7 +396,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		return self.process(pssmsg)
 	}
 
-	return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
+	return errors.New(fmt.Sprintf("invalid message type. Expected *PssMsg, got %T ", msg))
 }
 
 // Entry point to processing a message for which the current node can be the intended recipient.
@@ -413,7 +415,7 @@ func (self *Pss) process(pssmsg *PssMsg) error {
 
 	handlers := self.getHandlers(envelope.Topic)
 	if len(handlers) == 0 {
-		return fmt.Errorf("No registered handler for topic '%x'", envelope.Topic)
+		return errors.New(fmt.Sprintf("No registered handler for topic '%x'", envelope.Topic))
 	}
 
 	if len(envelope.AESNonce) > 0 { // detect symkey msg according to whisperv5/envelope.go:OpenSymmetric
@@ -516,7 +518,7 @@ func (self *Pss) SendAsym(pubkeyid string, topic whisper.TopicType, msg []byte) 
 	//pubkey := self.pubKeyIndex[pubkeyid]
 	pubkey := crypto.ToECDSAPub(common.FromHex(pubkeyid))
 	if pubkey == nil {
-		return fmt.Errorf("Invalid public key id %x", pubkey)
+		return errors.New(fmt.Sprintf("Invalid public key id %x", pubkey))
 	}
 	psp := self.pubKeyPool[pubkeyid][topic]
 	return self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
@@ -528,7 +530,7 @@ func (self *Pss) SendAsym(pubkeyid string, topic whisper.TopicType, msg []byte) 
 // TODO: Implement proper message padding
 func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, asymmetric bool, key []byte) error {
 	if key == nil || bytes.Equal(key, []byte{}) {
-		return fmt.Errorf("Zero length key passed to pss send")
+		return errors.New(fmt.Sprintf("Zero length key passed to pss send"))
 	}
 	wparams := &whisper.MessageParams{
 		TTL:      DefaultTTL,
@@ -547,14 +549,14 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, asymmetric
 	// set up outgoing message container, which does encryption and envelope wrapping
 	woutmsg, err := whisper.NewSentMessage(wparams)
 	if err != nil {
-		return fmt.Errorf("failed to generate whisper message encapsulation: %v", err)
+		return errors.New(fmt.Sprintf("failed to generate whisper message encapsulation: %v", err))
 	}
 	// performs encryption.
 	// Does NOT perform / performs negligible PoW due to very low difficulty setting
 	// after this the message is ready for sending
 	envelope, err := woutmsg.Wrap(wparams)
 	if err != nil {
-		return fmt.Errorf("failed to perform whisper encryption: %v", err)
+		return errors.New(fmt.Sprintf("failed to perform whisper encryption: %v", err))
 	}
 	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", wparams.Payload, "to", to, "asym", asymmetric, "key", key)
 	// prepare for devp2p transport
@@ -631,7 +633,7 @@ func (self *Pss) forward(msg *PssMsg) error {
 	})
 
 	if sent == 0 {
-		return fmt.Errorf("unable to forward to any peers")
+		return errors.New(fmt.Sprintf("unable to forward to any peers"))
 	}
 
 	self.addFwdCache(digest)
