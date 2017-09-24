@@ -66,3 +66,12 @@ func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 //
 // Implementations of this type are passed to Pss.Register together with a topic,
 type Handler func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
+
+// Wrapper for whisper topic hashing
+func BytesToTopic(b []byte) whisper.TopicType {
+	return whisper.BytesToTopic(b)
+}
+
+func StringToTopic(s string) whisper.TopicType {
+	return whisper.BytesToTopic([]byte(s))
+}
