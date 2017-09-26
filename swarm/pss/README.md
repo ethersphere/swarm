@@ -2,7 +2,7 @@
 
 Pss provides devp2p functionality for swarm nodes without the need for a direct tcp connection between them.
 
-Messages are encapsulated in a devp2p message structure `PssMsg`. These capsules are forwarded from node to node using ordinary tcp devp2p until it reaches its destination: The node or nodes who can successfully decrypt the message.
+Messages are encapsulated in a devp2p message structure `PssMsg`. These capsules are forwarded from node to node using ordinary tcp devp2p until they reach their destination: The node or nodes who can successfully decrypt the message.
 
 Routing of messages is done using swarm's own kademlia routing. Optionally routing can be turned off, forcing the message to be sent to all peers, similar to the behavior of the whisper protocol.
 
@@ -24,7 +24,7 @@ The pss core provides low level control of key handling and message exchange.
 
 ### TOPICS
 
-An encrypted envelope of a pss messages always contains a Topic. This is pss' way of determining which message handlers to dispatch messages to. The topic of a message is only visible for the node(s) who can decrypt the message.
+An encrypted envelope of a pss message always contains a Topic. This is pss' way of determining which message handlers to dispatch messages to. The topic of a message is only visible for the node(s) who can decrypt the message.
 
 This "topic" is not like the subject of an email message, but a hash-like arbitrary 4 byte value. A valid topic can be generated using the `pss_*ToTopic` API methods.
 
@@ -32,7 +32,7 @@ This "topic" is not like the subject of an email message, but a hash-like arbitr
 
 Pss aims to achieve perfect darkness. That means that the minimum requirement for two nodes to communicate using pss is a shared secret. This secret can be an arbitrary byte slice, or a ECDSA keypair. The end recipient of a message is defined as the node that can successfully decrypt that message using stored keys.
 
-A node's public key is derived from the private key passed to the `pss` constructor. Pss (currencly) has no PKI.
+A node's public key is derived from the private key passed to the `pss` constructor. Pss (currently) has no PKI.
 
 Peer keys can manually be added to the pss node through its API calls `pss_setPeerPublicKey` and `pss_setSymmetricKey`. Keys are always coupled with a topic, and the keys will only be valid for these topics.
 
@@ -42,7 +42,7 @@ A "connection" in pss is a purely virtual construct. There is no mechanisms in p
 
 Since pss itself never requires a confirmation from a peer of whether a message is received or not, one could argue that pss shows `UDP`-like behavior.
 
-It is also important to note that if the wrong (partial) address is set for a particular key/topic combination, the message will may never reach that peer. The further left in the address byte slice the error lies, the less likely it is that delivery will occur. 
+It is also important to note that if the wrong (partial) address is set for a particular key/topic combination, the message may never reach that peer. The further left in the address byte slice the error lies, the less likely it is that delivery will occur. 
 
 
 ### EXCHANGE
@@ -77,7 +77,7 @@ Adding a peer in effect "runs" the protocol on that peer, and adds an internal m
 
 #### INCOMING CONNECTIONS
 
-An incoming connection is nothing more than an actual PssMsg appearing with a certain Topic. If a Handler har been registered to that Topic, the message will be passed to it. This constitutes a "new" connection if:
+An incoming connection is nothing more than an actual PssMsg appearing with a certain Topic. If a Handler has been registered to that Topic, the message will be passed to it. This constitutes a "new" connection if:
 
 - The pss node never called AddPeer with this combination of remote peer address and topic, and
 
@@ -131,7 +131,7 @@ the latter may occur if only one entry is in the receiving node's kademlia, or i
 
 ### DEVP2P PROTOCOLS
 
-When implementing devp2p protocols, topics are derived from protocols' name and version. The and a generic Handler that be passed to Pss.Register. This makes it possible to use the same message handler code for pss that is used for directly connected peers in devp2p.
+When implementing devp2p protocols, topics are derived from protocols' name and version. The Protocol provides a generic Handler that be passed to Pss.Register. This makes it possible to use the same message handler code for pss that is used for directly connected peers in devp2p.
 
 Under the hood, pss implements its own MsgReadWriter, which bridges MsgReadWriter.WriteMsg with Pss.SendRaw, and deftly adds an InjectMsg method which pipes incoming messages to appear on the MsgReadWriter.ReadMsg channel.
 

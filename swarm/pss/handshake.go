@@ -165,13 +165,15 @@ func (self *HandshakeController) updateKeys(pubkeyid string, topic *whisper.Topi
 		self.handshakes[pubkeyid][*topic] = &handshake{}
 	}
 	var keystore *[]handshakeKey
+	expire := time.Now()
 	if in {
 		keystore = &(self.handshakes[pubkeyid][*topic].inKeys)
 	} else {
 		keystore = &(self.handshakes[pubkeyid][*topic].outKeys)
+		expire = expire.Add(time.Millisecond * self.symKeyExpiryTimeout)
 	}
 	for _, storekey := range *keystore {
-		storekey.expiredAt = time.Now().Add(time.Millisecond * self.symKeyExpiryTimeout)
+		storekey.expiredAt = expire
 	}
 	for i := 0; i < len(symkeyids); i++ {
 		storekey := handshakeKey{
