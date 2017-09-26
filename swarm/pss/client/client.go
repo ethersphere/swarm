@@ -40,7 +40,6 @@ type Client struct {
 
 	// channels
 	topicsC chan []byte
-	msgC    chan pss.APIMsg
 	quitC   chan struct{}
 
 	lock sync.Mutex
@@ -200,7 +199,6 @@ func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
 
 func newClient() (client *Client) {
 	client = &Client{
-		msgC:     make(chan pss.APIMsg),
 		quitC:    make(chan struct{}),
 		peerPool: make(map[whisper.TopicType]map[string]*pssRPCRW),
 		protos:   make(map[whisper.TopicType]*p2p.Protocol),
