@@ -685,7 +685,7 @@ func (self *Network) Load(snap *Snapshot) error {
 			continue
 		}
 		if err := self.Connect(conn.One, conn.Other); err != nil {
-			return err
+			//return err
 		}
 	}
 	return nil
