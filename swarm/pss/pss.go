@@ -148,6 +148,7 @@ func (self *Pss) Start(srv *p2p.Server) error {
 			log.Info("pss shutting down")
 		}
 	}()
+	log.Debug("Started pss", "public key", common.ToHex(crypto.FromECDSAPub(self.PublicKey())))
 	return nil
 }
 
@@ -348,10 +349,14 @@ func (self *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
 //
 // The value in `address` will be used as a routing hint for the
 // public key / topic association
-func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic whisper.TopicType, address *PssAddress) {
+func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic whisper.TopicType, address *PssAddress) error {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-	pubkeyid := common.ToHex(crypto.FromECDSAPub(pubkey))
+	pubkeybytes := crypto.FromECDSAPub(pubkey)
+	if len(pubkeybytes) == 0 {
+		return errors.New(fmt.Sprintf("invalid public key: %v", pubkey))
+	}
+	pubkeyid := common.ToHex(pubkeybytes)
 	psp := &pssPeer{
 		address: address,
 	}
@@ -359,7 +364,8 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic whisper.TopicTy
 		self.pubKeyPool[pubkeyid] = make(map[whisper.TopicType]*pssPeer)
 	}
 	self.pubKeyPool[pubkeyid][topic] = psp
-	log.Trace("added pubkey", "pubkeyid", pubkeyid, "topic", topic, "address", address)
+	log.Trace("added pubkey", "pubkeyid", pubkeyid, "topic", topic, "address", common.ToHex(*address))
+	return nil
 }
 
 // Automatically generate a new symkey for a topic and address hint

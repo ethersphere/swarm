@@ -68,14 +68,18 @@ func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.S
 }
 
 // Retrieves the node's public key in byte form
-func (pssapi *API) GetPublicKey() []byte {
+func (pssapi *API) GetPublicKey() (keybytes []byte) {
 	key := pssapi.Pss.PublicKey()
-	return crypto.FromECDSAPub(key)
+	keybytes = crypto.FromECDSAPub(key)
+	return keybytes
 }
 
 // Set Public key to associate with a particular Pss peer
 func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic whisper.TopicType, addr PssAddress) error {
-	pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
+	err := pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
+	if err != nil {
+		return errors.New(fmt.Sprintf("Invalid key: %x", pubkey))
+	}
 	return nil
 }
 

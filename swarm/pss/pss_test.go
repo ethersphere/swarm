@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -410,12 +411,12 @@ func testAsymSend(t *testing.T) {
 
 	// retrieve public key from pss instance
 	// set this public key reciprocally
-	lpubkey := make([]byte, 32)
+	lpubkey := make([]byte, 64)
 	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
 	}
-	rpubkey := make([]byte, 32)
+	rpubkey := make([]byte, 64)
 	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
@@ -473,6 +474,197 @@ func testAsymSend(t *testing.T) {
 	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
+}
+
+func TestNetwork(t *testing.T) {
+	t.Run("64/200/32", testNetwork)
+}
+
+func testNetwork(t *testing.T) {
+
+	topic := whisper.BytesToTopic([]byte("foo:42"))
+	hextopic := common.ToHex(topic[:])
+
+	paramstring := strings.Split(t.Name(), "/")
+	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
+	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
+	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
+	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount)
+
+	nodes := make([]discover.NodeID, nodecount)
+	bzzaddrs := make(map[discover.NodeID][]byte, nodecount)
+	rpcs := make(map[discover.NodeID]*rpc.Client, nodecount)
+	pubkeys := make(map[discover.NodeID][]byte, nodecount)
+	subs := make(map[discover.NodeID]*rpc.ClientSubscription, nodecount)
+	msgC := make(map[discover.NodeID]chan APIMsg)
+
+	sentmsgs := make([][]byte, msgcount)
+	recvmsgs := make([]bool, msgcount)
+	sendmsgnodes := make([]discover.NodeID, msgcount)
+	recvmsgnodes := make([]discover.NodeID, msgcount)
+
+	recvtrigger := make(chan discover.NodeID)
+	sendtrigger := make(chan discover.NodeID)
+
+	adapter := adapters.NewSimAdapter(services)
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		ID:             "0",
+		DefaultService: "bzz",
+	})
+	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%s.json", paramstring[1]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	jsonbyte, err := ioutil.ReadAll(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snap simulations.Snapshot
+	err = json.Unmarshal(jsonbyte, &snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = net.Load(&snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	triggerChecks := func(recvtrigger chan discover.NodeID, sendtrigger chan discover.NodeID, net *simulations.Network, id discover.NodeID, rpcclient *rpc.Client, sub *rpc.ClientSubscription, msgC chan APIMsg) error {
+		go func() {
+			defer sub.Unsubscribe()
+			for {
+				select {
+				case recvmsg := <-msgC:
+					for i, sentmsg := range sentmsgs {
+						if bytes.Equal(recvmsg.Msg, sentmsg) {
+							recvmsgs[i] = true
+						}
+					}
+					recvtrigger <- id
+
+				case <-sub.Err():
+					return
+				}
+			}
+		}()
+		return nil
+	}
+
+	for i, nod := range net.GetNodes() {
+		nodes[i] = nod.ID()
+		rpcs[nodes[i]], err = nod.Client()
+		if err != nil {
+			t.Fatal(err)
+		}
+		pubkey := make([]byte, 65)
+		pubkeys[nod.ID()] = make([]byte, 65)
+		err = rpcs[nodes[i]].Call(&pubkey, "pss_getPublicKey")
+		if err != nil {
+			t.Fatal(err)
+		}
+		copy(pubkeys[nod.ID()], pubkey)
+		addr := make([]byte, addrsize)
+		err = rpcs[nodes[i]].Call(&addr, "pss_baseAddr")
+		if err != nil {
+			t.Fatal(err)
+		}
+		bzzaddrs[nodes[i]] = addr
+		msgC[nodes[i]] = make(chan APIMsg)
+		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		subs[nodes[i]], err = rpcs[nodes[i]].Subscribe(ctx, "pss", msgC[nodes[i]], "receive", hextopic)
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = triggerChecks(recvtrigger, sendtrigger, net, nodes[i], rpcs[nodes[i]], subs[nodes[i]], msgC[nodes[i]])
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for i := 0; i < int(msgcount); i++ {
+		sendnodeidx := rand.Int()
+		rand.Seed(int64(sendnodeidx))
+		sendnodeidx %= int(nodecount)
+		recvnodeidx := rand.Int() % int(nodecount)
+		sendmsgnodes[i] = nodes[sendnodeidx]
+		recvmsgnodes[i] = nodes[recvnodeidx]
+		sentmsgs[i] = make([]byte, 32)
+		c, err := rand.Read(sentmsgs[i])
+		if err != nil {
+			t.Fatal(err)
+		} else if c < 32 {
+			t.Fatal("failed msg generation")
+		}
+		err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[recvnodeidx]], hextopic, bzzaddrs[nodes[recvnodeidx]])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = rpcs[nodes[recvnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[sendnodeidx]], hextopic, bzzaddrs[nodes[sendnodeidx]])
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	time.Sleep(time.Second * 2)
+
+	go func() {
+		for i, msg := range sentmsgs {
+			err = rpcs[sendmsgnodes[i]].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[recvmsgnodes[i]]), hextopic, msg)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+	}()
+
+	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+
+		t.Logf("node check %v\n", id)
+		return true, nil
+	}
+
+	timeout := time.Second * 20
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	t.Logf("Starting expect: %d", len(recvmsgnodes))
+	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
+		Action: func(ctx context.Context) error {
+			return nil
+		},
+		Trigger: recvtrigger,
+		Expect: &simulations.Expectation{
+			Nodes: recvmsgnodes,
+			Check: check,
+		},
+	})
+
+	finalmsgcount := msgcount
+	for i, msg := range sentmsgs {
+		if len(msg) == 0 {
+			log.Warn("Unsent message", "idx", i)
+			finalmsgcount--
+		}
+	}
+	t.Logf("%d of %d messages sent", finalmsgcount, msgcount)
+	finalmsgcount = msgcount
+	for i, msg := range recvmsgs {
+		if !msg {
+			log.Warn("missing message", "idx", i, "msg", common.ToHex(sentmsgs[i]))
+			finalmsgcount--
+		}
+	}
+	t.Logf("%d of %d messages received", finalmsgcount, msgcount)
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+	net.Shutdown()
+
 }
 
 // symmetric send performance with varying message sizes
