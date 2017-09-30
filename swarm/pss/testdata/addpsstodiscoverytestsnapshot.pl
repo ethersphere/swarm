@@ -17,8 +17,6 @@ $network = decode_json($jsontext);
 $nodelist = $network->{'nodes'};
 
 for ($i = 0; $i < 0+@$nodelist; $i++) {
-	#my $protocollist = $$nodelist[$i]{'node'}{'info'}{'protocols'};
-	#$$protocollist{'pss'} = "pss";
 	my $svc = $$nodelist[$i]{'node'}{'config'}{'services'};
 	pop(@$svc);
 	push(@$svc, "pss");

@@ -651,7 +651,9 @@ func (self *Pss) forward(msg *PssMsg) error {
 	})
 
 	if sent == 0 {
-		return errors.New(fmt.Sprintf("unable to forward to any peers"))
+		log.Warn("unable to forward to any peers")
+		return nil
+		//return errors.New("unable to forward to any peers")
 	}
 
 	self.addFwdCache(digest)
@@ -683,10 +685,10 @@ func (self *Pss) checkFwdCache(addr []byte, digest pssDigest) bool {
 	entry, ok := self.fwdCache[digest]
 	if ok {
 		if entry.expiresAt.After(time.Now()) {
-			log.Debug(fmt.Sprintf("unexpired cache for digest %x", digest))
+			log.Trace(fmt.Sprintf("unexpired cache for digest %x", digest))
 			return true
 		} else if entry.expiresAt.IsZero() && bytes.Equal(addr, entry.receivedFrom) {
-			log.Debug(fmt.Sprintf("sendermatch %x for digest %x", common.ToHex(addr), digest))
+			log.Trace(fmt.Sprintf("sendermatch %x for digest %x", common.ToHex(addr), digest))
 			return true
 		}
 	}
