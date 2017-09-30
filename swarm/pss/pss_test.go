@@ -477,7 +477,7 @@ func testAsymSend(t *testing.T) {
 }
 
 func TestNetwork(t *testing.T) {
-	t.Run("64/200/32", testNetwork)
+	t.Run("16/512/2", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
@@ -489,7 +489,7 @@ func testNetwork(t *testing.T) {
 	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
 	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
 	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
-	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount)
+	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhint size", addrsize)
 
 	nodes := make([]discover.NodeID, nodecount)
 	bzzaddrs := make(map[discover.NodeID][]byte, nodecount)
@@ -498,19 +498,19 @@ func testNetwork(t *testing.T) {
 	subs := make(map[discover.NodeID]*rpc.ClientSubscription, nodecount)
 	msgC := make(map[discover.NodeID]chan APIMsg)
 
-	sentmsgs := make([][]byte, msgcount)
+	sentmsgs := make([][7]byte, msgcount)
 	recvmsgs := make([]bool, msgcount)
 	sendmsgnodes := make([]discover.NodeID, msgcount)
 	recvmsgnodes := make([]discover.NodeID, msgcount)
+	nodemsgcount := make(map[discover.NodeID]int, nodecount)
 
-	recvtrigger := make(chan discover.NodeID)
-	sendtrigger := make(chan discover.NodeID)
+	trigger := make(chan discover.NodeID)
 
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: "bzz",
+		ID: "0",
 	})
+	defer net.Shutdown()
 	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%s.json", paramstring[1]))
 	if err != nil {
 		t.Fatal(err)
@@ -529,18 +529,21 @@ func testNetwork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	triggerChecks := func(recvtrigger chan discover.NodeID, sendtrigger chan discover.NodeID, net *simulations.Network, id discover.NodeID, rpcclient *rpc.Client, sub *rpc.ClientSubscription, msgC chan APIMsg) error {
+	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, sub *rpc.ClientSubscription, msgC chan APIMsg) error {
 		go func() {
 			defer sub.Unsubscribe()
 			for {
 				select {
 				case recvmsg := <-msgC:
 					for i, sentmsg := range sentmsgs {
-						if bytes.Equal(recvmsg.Msg, sentmsg) {
+						if bytes.Equal(recvmsg.Msg, sentmsg[:]) && recvmsgs[i] == false {
 							recvmsgs[i] = true
+							nodemsgcount[id]--
+							if nodemsgcount[id] == 0 {
+								trigger <- id
+							}
 						}
 					}
-					recvtrigger <- id
 
 				case <-sub.Err():
 					return
@@ -563,38 +566,34 @@ func testNetwork(t *testing.T) {
 			t.Fatal(err)
 		}
 		copy(pubkeys[nod.ID()], pubkey)
-		addr := make([]byte, addrsize)
+		addr := make([]byte, 32)
 		err = rpcs[nodes[i]].Call(&addr, "pss_baseAddr")
 		if err != nil {
 			t.Fatal(err)
 		}
-		bzzaddrs[nodes[i]] = addr
+		bzzaddrs[nodes[i]] = addr[:addrsize]
 		msgC[nodes[i]] = make(chan APIMsg)
 		ctx, _ := context.WithTimeout(context.Background(), time.Second)
 		subs[nodes[i]], err = rpcs[nodes[i]].Subscribe(ctx, "pss", msgC[nodes[i]], "receive", hextopic)
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = triggerChecks(recvtrigger, sendtrigger, net, nodes[i], rpcs[nodes[i]], subs[nodes[i]], msgC[nodes[i]])
+		err = triggerChecks(trigger, nodes[i], subs[nodes[i]], msgC[nodes[i]])
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
 	for i := 0; i < int(msgcount); i++ {
-		sendnodeidx := rand.Int()
-		rand.Seed(int64(sendnodeidx))
-		sendnodeidx %= int(nodecount)
-		recvnodeidx := rand.Int() % int(nodecount)
+		sendnodeidx := rand.Intn(int(nodecount))
+		recvnodeidx := rand.Intn(int(nodecount - 1))
+		if recvnodeidx == sendnodeidx {
+			recvnodeidx++
+		}
 		sendmsgnodes[i] = nodes[sendnodeidx]
 		recvmsgnodes[i] = nodes[recvnodeidx]
-		sentmsgs[i] = make([]byte, 32)
-		c, err := rand.Read(sentmsgs[i])
-		if err != nil {
-			t.Fatal(err)
-		} else if c < 32 {
-			t.Fatal("failed msg generation")
-		}
+		nodemsgcount[recvmsgnodes[i]]++
+		copy(sentmsgs[i][:], []byte(fmt.Sprintf("%d", i+1)))
 		err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[recvnodeidx]], hextopic, bzzaddrs[nodes[recvnodeidx]])
 		if err != nil {
 			t.Fatal(err)
@@ -605,13 +604,18 @@ func testNetwork(t *testing.T) {
 		}
 	}
 
-	time.Sleep(time.Second * 2)
-
 	go func() {
 		for i, msg := range sentmsgs {
-			err = rpcs[sendmsgnodes[i]].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[recvmsgnodes[i]]), hextopic, msg)
+
+			err = rpcs[sendmsgnodes[i]].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[recvmsgnodes[i]]), hextopic, msg[:])
 			if err != nil {
 				t.Fatal(err)
+			}
+			time.Sleep(time.Millisecond * 20)
+		}
+		for _, nod := range nodes {
+			if nodemsgcount[nod] == 0 {
+				trigger <- nod
 			}
 		}
 	}()
@@ -627,16 +631,16 @@ func testNetwork(t *testing.T) {
 		return true, nil
 	}
 
-	timeout := time.Second * 20
+	timeout := time.Second * 30
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	t.Logf("Starting expect: %d", len(recvmsgnodes))
+	psslogmain.Debug("Starting expect", "num expecting", len(recvmsgnodes))
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
 		Action: func(ctx context.Context) error {
 			return nil
 		},
-		Trigger: recvtrigger,
+		Trigger: trigger,
 		Expect: &simulations.Expectation{
 			Nodes: recvmsgnodes,
 			Check: check,
@@ -654,7 +658,7 @@ func testNetwork(t *testing.T) {
 	finalmsgcount = msgcount
 	for i, msg := range recvmsgs {
 		if !msg {
-			log.Warn("missing message", "idx", i, "msg", common.ToHex(sentmsgs[i]))
+			log.Warn("missing message", "idx", i, "msg", string(sentmsgs[i][:]))
 			finalmsgcount--
 		}
 	}
@@ -663,7 +667,6 @@ func testNetwork(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-	net.Shutdown()
 
 }
 
