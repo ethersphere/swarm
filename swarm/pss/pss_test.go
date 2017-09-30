@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -477,15 +478,19 @@ func testAsymSend(t *testing.T) {
 }
 
 func TestNetwork(t *testing.T) {
-	t.Run("16/4096/2", testNetwork)
+	t.Run("8/128/2", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
 
+	type msgnotifyC struct {
+		id     discover.NodeID
+		msgIdx int
+	}
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
-	messagedelay := 20
+	messagedelayvarianceusec := 2 * 1000 * 1000
 
 	paramstring := strings.Split(t.Name(), "/")
 	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
@@ -497,13 +502,9 @@ func testNetwork(t *testing.T) {
 	bzzaddrs := make(map[discover.NodeID][]byte, nodecount)
 	rpcs := make(map[discover.NodeID]*rpc.Client, nodecount)
 	pubkeys := make(map[discover.NodeID][]byte, nodecount)
-	subs := make(map[discover.NodeID]*rpc.ClientSubscription, nodecount)
-	msgC := make(map[discover.NodeID]chan APIMsg)
 
-	sentmsgs := make([][7]byte, msgcount)
+	sentmsgs := make([][]byte, msgcount)
 	recvmsgs := make([]bool, msgcount)
-	sendmsgnodes := make([]discover.NodeID, msgcount)
-	recvmsgnodes := make([]discover.NodeID, msgcount)
 	nodemsgcount := make(map[discover.NodeID]int, nodecount)
 
 	trigger := make(chan discover.NodeID)
@@ -513,6 +514,7 @@ func testNetwork(t *testing.T) {
 		ID: "0",
 	})
 	defer net.Shutdown()
+
 	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%s.json", paramstring[1]))
 	if err != nil {
 		t.Fatal(err)
@@ -531,22 +533,24 @@ func testNetwork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, sub *rpc.ClientSubscription, msgC chan APIMsg) error {
+	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client) error {
+		msgC := make(chan APIMsg)
+		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		sub, err := rpcclient.Subscribe(ctx, "pss", msgC, "receive", hextopic)
+		if err != nil {
+			t.Fatal(err)
+		}
 		go func() {
 			defer sub.Unsubscribe()
 			for {
 				select {
 				case recvmsg := <-msgC:
-					for i, sentmsg := range sentmsgs {
-						if bytes.Equal(recvmsg.Msg, sentmsg[:]) && recvmsgs[i] == false {
-							recvmsgs[i] = true
-							nodemsgcount[id]--
-							if nodemsgcount[id] == 0 {
-								trigger <- id
-							}
-						}
+					idx, _ := binary.Uvarint(recvmsg.Msg)
+					if recvmsgs[idx] == false {
+						log.Debug("msg recv", "idx", idx, "id", id)
+						recvmsgs[idx] = true
+						trigger <- id
 					}
-
 				case <-sub.Err():
 					return
 				}
@@ -574,28 +578,25 @@ func testNetwork(t *testing.T) {
 			t.Fatal(err)
 		}
 		bzzaddrs[nodes[i]] = addr[:addrsize]
-		msgC[nodes[i]] = make(chan APIMsg)
-		ctx, _ := context.WithTimeout(context.Background(), time.Second)
-		subs[nodes[i]], err = rpcs[nodes[i]].Subscribe(ctx, "pss", msgC[nodes[i]], "receive", hextopic)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = triggerChecks(trigger, nodes[i], subs[nodes[i]], msgC[nodes[i]])
+		err = triggerChecks(trigger, nodes[i], rpcs[nodes[i]])
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
+	messagedelayhigh := 0
 	for i := 0; i < int(msgcount); i++ {
 		sendnodeidx := rand.Intn(int(nodecount))
 		recvnodeidx := rand.Intn(int(nodecount - 1))
-		if recvnodeidx == sendnodeidx {
+		if recvnodeidx >= sendnodeidx {
 			recvnodeidx++
 		}
-		sendmsgnodes[i] = nodes[sendnodeidx]
-		recvmsgnodes[i] = nodes[recvnodeidx]
-		nodemsgcount[recvmsgnodes[i]]++
-		copy(sentmsgs[i][:], []byte(fmt.Sprintf("%d", i+1)))
+		nodemsgcount[nodes[recvnodeidx]]++
+		sentmsgs[i] = make([]byte, 8)
+		c := binary.PutUvarint(sentmsgs[i], uint64(i))
+		if c == 0 {
+			t.Fatal("0 byte message")
+		}
 		err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[recvnodeidx]], hextopic, bzzaddrs[nodes[recvnodeidx]])
 		if err != nil {
 			t.Fatal(err)
@@ -604,77 +605,51 @@ func testNetwork(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-	}
-
-	go func() {
-		messagedelayduration, err := time.ParseDuration(fmt.Sprintf("%dms", messagedelay))
+		messagedelay := rand.Intn(messagedelayvarianceusec)
+		if messagedelay > messagedelayhigh {
+			messagedelayhigh = messagedelay
+		}
+		messagedelayduration, err := time.ParseDuration(fmt.Sprintf("%dus", messagedelay))
 		if err != nil {
 			t.Fatal(err)
 		}
-		for i, msg := range sentmsgs {
-
-			err = rpcs[sendmsgnodes[i]].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[recvmsgnodes[i]]), hextopic, msg[:])
+		go func(msg []byte) {
+			time.Sleep(messagedelayduration)
+			err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[nodes[recvnodeidx]]), hextopic, msg)
 			if err != nil {
 				t.Fatal(err)
 			}
-			time.Sleep(messagedelayduration)
-		}
-		for _, nod := range nodes {
-			if nodemsgcount[nod] == 0 {
-				trigger <- nod
-			}
-		}
-	}()
-
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
-		select {
-		case <-ctx.Done():
-			return false, ctx.Err()
-		default:
-		}
-
-		t.Logf("node check %v\n", id)
-		return true, nil
+		}(sentmsgs[i])
 	}
 
-	timeout, err := time.ParseDuration(fmt.Sprintf("%dms", 20000+(messagedelay*int(msgcount))))
+	timeout, err := time.ParseDuration(fmt.Sprintf("%dus", 20000000+messagedelayhigh))
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	finalmsgcount := 0
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-
-	psslogmain.Debug("Starting expect", "num expecting", len(recvmsgnodes))
-	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
-		Action: func(ctx context.Context) error {
-			return nil
-		},
-		Trigger: trigger,
-		Expect: &simulations.Expectation{
-			Nodes: recvmsgnodes,
-			Check: check,
-		},
-	})
-
-	finalmsgcount := msgcount
-	for i, msg := range sentmsgs {
-		if len(msg) == 0 {
-			log.Warn("Unsent message", "idx", i)
-			finalmsgcount--
+	for i := 0; i < int(msgcount); i++ {
+		select {
+		case id := <-trigger:
+			nodemsgcount[id]--
+			finalmsgcount++
+		case <-ctx.Done():
+			log.Warn("timeout")
+			break
 		}
 	}
-	t.Logf("%d of %d messages sent", finalmsgcount, msgcount)
-	finalmsgcount = msgcount
+
 	for i, msg := range recvmsgs {
 		if !msg {
-			log.Warn("missing message", "idx", i, "msg", string(sentmsgs[i][:]))
-			finalmsgcount--
+			log.Debug("missing message", "idx", i)
 		}
 	}
 	t.Logf("%d of %d messages received", finalmsgcount, msgcount)
 
-	if result.Error != nil {
-		t.Fatal(result.Error)
+	if finalmsgcount != int(msgcount) {
+		t.Fatal("not messages were received")
 	}
 
 }
