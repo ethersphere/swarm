@@ -3,6 +3,7 @@ package pss
 import (
 	"bytes"
 	"crypto/ecdsa"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"sync"
@@ -23,6 +24,7 @@ import (
 
 // TODO: proper padding generation for messages
 const (
+	defaultPaddingByteSize     = 16
 	defaultMsgTTL              = time.Second
 	defaultDigestCacheTTL      = time.Second
 	defaultSymKeyCacheCapacity = 512
@@ -88,11 +90,12 @@ type Pss struct {
 	w               *whisper.Whisper  // key and encryption backend
 	auxAPIs         []rpc.API         // builtins (handshake, test) can add APIs
 
-	// forwarding
-	fwdPool  map[discover.NodeID]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
-	fwdCache map[pssDigest]pssCacheEntry         // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	cacheTTL time.Duration                       // how long to keep messages in fwdCache (not implemented)
-	msgTTL   time.Duration
+	// sending and forwarding
+	fwdPool         map[discover.NodeID]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
+	fwdCache        map[pssDigest]pssCacheEntry         // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	cacheTTL        time.Duration                       // how long to keep messages in fwdCache (not implemented)
+	msgTTL          time.Duration
+	paddingByteSize int
 
 	// keys and peers
 	pubKeyPool                 map[string]map[whisper.TopicType]*pssPeer // mapping of hex public keys to peer address by topic.
@@ -125,10 +128,11 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		w:          whisper.New(&whisper.DefaultConfig),
 		quitC:      make(chan struct{}),
 
-		fwdPool:  make(map[discover.NodeID]*protocols.Peer),
-		fwdCache: make(map[pssDigest]pssCacheEntry),
-		cacheTTL: params.CacheTTL,
-		msgTTL:   params.MsgTTL,
+		fwdPool:         make(map[discover.NodeID]*protocols.Peer),
+		fwdCache:        make(map[pssDigest]pssCacheEntry),
+		cacheTTL:        params.CacheTTL,
+		msgTTL:          params.MsgTTL,
+		paddingByteSize: defaultPaddingByteSize,
 
 		pubKeyPool:                 make(map[string]map[whisper.TopicType]*pssPeer),
 		symKeyPool:                 make(map[string]map[whisper.TopicType]*pssPeer),
@@ -563,6 +567,13 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, asymmetric
 	if key == nil || bytes.Equal(key, []byte{}) {
 		return errors.New(fmt.Sprintf("Zero length key passed to pss send"))
 	}
+	padding := make([]byte, self.paddingByteSize)
+	c, err := rand.Read(padding)
+	if err != nil {
+		return err
+	} else if c < self.paddingByteSize {
+		return errors.New(fmt.Sprintf("invalid padding length: %d", c))
+	}
 	wparams := &whisper.MessageParams{
 		TTL:      defaultWhisperTTL,
 		Src:      self.privateKey,
@@ -570,7 +581,7 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, asymmetric
 		WorkTime: defaultWhisperWorkTime,
 		PoW:      defaultWhisperPoW,
 		Payload:  msg,
-		Padding:  []byte("1234567890abcdef"),
+		Padding:  padding,
 	}
 	if asymmetric {
 		wparams.Dst = crypto.ToECDSAPub(key)
