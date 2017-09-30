@@ -23,6 +23,7 @@ import (
 
 // TODO: proper padding generation for messages
 const (
+	defaultMsgTTL              = time.Second
 	defaultDigestCacheTTL      = time.Second
 	defaultSymKeyCacheCapacity = 512
 	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
@@ -61,6 +62,7 @@ type pssPeer struct {
 
 // Pss configuration parameters
 type PssParams struct {
+	MsgTTL              time.Duration
 	CacheTTL            time.Duration
 	privateKey          *ecdsa.PrivateKey
 	SymKeyCacheCapacity int
@@ -69,6 +71,7 @@ type PssParams struct {
 // Sane defaults for Pss
 func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
 	return &PssParams{
+		MsgTTL:              defaultMsgTTL,
 		CacheTTL:            defaultDigestCacheTTL,
 		privateKey:          privatekey,
 		SymKeyCacheCapacity: defaultSymKeyCacheCapacity,
@@ -89,6 +92,7 @@ type Pss struct {
 	fwdPool  map[discover.NodeID]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
 	fwdCache map[pssDigest]pssCacheEntry         // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
 	cacheTTL time.Duration                       // how long to keep messages in fwdCache (not implemented)
+	msgTTL   time.Duration
 
 	// keys and peers
 	pubKeyPool                 map[string]map[whisper.TopicType]*pssPeer // mapping of hex public keys to peer address by topic.
@@ -124,6 +128,7 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		fwdPool:  make(map[discover.NodeID]*protocols.Peer),
 		fwdCache: make(map[pssDigest]pssCacheEntry),
 		cacheTTL: params.CacheTTL,
+		msgTTL:   params.MsgTTL,
 
 		pubKeyPool:                 make(map[string]map[whisper.TopicType]*pssPeer),
 		symKeyPool:                 make(map[string]map[whisper.TopicType]*pssPeer),
@@ -264,6 +269,13 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 	pssmsg, ok := msg.(*PssMsg)
 	if ok {
 		if !self.isSelfPossibleRecipient(pssmsg) {
+			msgexp := time.Unix(int64(pssmsg.Expire), 0)
+			if msgexp.Before(time.Now()) {
+				log.Trace("pss expired :/ ... dropping")
+				return nil
+			} else if msgexp.After(time.Now().Add(self.msgTTL)) {
+				return errors.New("Invalid TTL")
+			}
 			log.Trace("pss was for someone else :'( ... forwarding")
 			return self.forward(pssmsg)
 		}
@@ -581,6 +593,7 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, asymmetric
 	// prepare for devp2p transport
 	pssmsg := &PssMsg{
 		To:      to,
+		Expire:  uint32(time.Now().Add(self.msgTTL).Unix()),
 		Payload: envelope,
 	}
 	return self.forward(pssmsg)

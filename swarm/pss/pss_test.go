@@ -477,13 +477,15 @@ func testAsymSend(t *testing.T) {
 }
 
 func TestNetwork(t *testing.T) {
-	t.Run("16/512/2", testNetwork)
+	t.Run("16/4096/2", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
 
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
+
+	messagedelay := 20
 
 	paramstring := strings.Split(t.Name(), "/")
 	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
@@ -605,13 +607,17 @@ func testNetwork(t *testing.T) {
 	}
 
 	go func() {
+		messagedelayduration, err := time.ParseDuration(fmt.Sprintf("%dms", messagedelay))
+		if err != nil {
+			t.Fatal(err)
+		}
 		for i, msg := range sentmsgs {
 
 			err = rpcs[sendmsgnodes[i]].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[recvmsgnodes[i]]), hextopic, msg[:])
 			if err != nil {
 				t.Fatal(err)
 			}
-			time.Sleep(time.Millisecond * 20)
+			time.Sleep(messagedelayduration)
 		}
 		for _, nod := range nodes {
 			if nodemsgcount[nod] == 0 {
@@ -631,7 +637,10 @@ func testNetwork(t *testing.T) {
 		return true, nil
 	}
 
-	timeout := time.Second * 30
+	timeout, err := time.ParseDuration(fmt.Sprintf("%dms", 20000+(messagedelay*int(msgcount))))
+	if err != nil {
+		t.Fatal(err)
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
