@@ -478,7 +478,7 @@ func testAsymSend(t *testing.T) {
 }
 
 func TestNetwork(t *testing.T) {
-	t.Run("8/128/2", testNetwork)
+	t.Run("256/10/2", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
