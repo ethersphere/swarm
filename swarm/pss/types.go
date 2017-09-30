@@ -22,6 +22,7 @@ type pssDigest [digestLength]byte
 // Encapsulates messages transported over pss.
 type PssMsg struct {
 	To      []byte
+	Expire  uint32
 	Payload *whisper.Envelope
 }
 
