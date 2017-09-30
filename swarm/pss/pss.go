@@ -556,7 +556,11 @@ func (self *Pss) SendAsym(pubkeyid string, topic whisper.TopicType, msg []byte) 
 		return errors.New(fmt.Sprintf("Invalid public key id %x", pubkey))
 	}
 	psp := self.pubKeyPool[pubkeyid][topic]
-	return self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
+	go func() {
+		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
+	}()
+	return nil
+	//return self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
 }
 
 // Send is payload agnostic, and will accept any byte slice as payload
@@ -635,7 +639,7 @@ func (self *Pss) forward(msg *PssMsg) error {
 	sent := 0
 
 	self.Overlay.EachConn(to, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
-		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, common.ToHex(to), common.ToHex(self.BaseAddr()), common.ToHex(op.Address()))
+		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, to, self.BaseAddr(), op.Address())
 		// we need p2p.protocols.Peer.Send
 		// cast and resolve
 		sp, ok := op.(senderPeer)

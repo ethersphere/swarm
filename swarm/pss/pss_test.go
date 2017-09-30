@@ -478,7 +478,7 @@ func testAsymSend(t *testing.T) {
 }
 
 func TestNetwork(t *testing.T) {
-	t.Run("256/10/2", testNetwork)
+	t.Run("32/512/2", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
@@ -509,6 +509,11 @@ func testNetwork(t *testing.T) {
 
 	trigger := make(chan discover.NodeID)
 
+	//	dirname, err := ioutil.TempDir(".", "")
+	//	if err != nil {
+	//		t.Fatal(err)
+	//	}
+	//	adapter := adapters.NewExecAdapter(dirname)
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID: "0",
@@ -535,7 +540,8 @@ func testNetwork(t *testing.T) {
 
 	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client) error {
 		msgC := make(chan APIMsg)
-		ctx, _ := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
 		sub, err := rpcclient.Subscribe(ctx, "pss", msgC, "receive", hextopic)
 		if err != nil {
 			t.Fatal(err)
@@ -622,7 +628,7 @@ func testNetwork(t *testing.T) {
 		}(sentmsgs[i])
 	}
 
-	timeout, err := time.ParseDuration(fmt.Sprintf("%dus", 20000000+messagedelayhigh))
+	timeout, err := time.ParseDuration(fmt.Sprintf("%dus", 60000000+messagedelayhigh))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -630,6 +636,7 @@ func testNetwork(t *testing.T) {
 	finalmsgcount := 0
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
+outer:
 	for i := 0; i < int(msgcount); i++ {
 		select {
 		case id := <-trigger:
@@ -637,7 +644,7 @@ func testNetwork(t *testing.T) {
 			finalmsgcount++
 		case <-ctx.Done():
 			log.Warn("timeout")
-			break
+			break outer
 		}
 	}
 
@@ -649,7 +656,7 @@ func testNetwork(t *testing.T) {
 	t.Logf("%d of %d messages received", finalmsgcount, msgcount)
 
 	if finalmsgcount != int(msgcount) {
-		t.Fatal("not messages were received")
+		t.Fatalf("%d messages were not received", int(msgcount)-finalmsgcount)
 	}
 
 }
