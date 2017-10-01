@@ -38,6 +38,7 @@ const (
 )
 
 var (
+	initDone       = false
 	snapshotfile   string
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 	debugflag      = flag.Bool("v", false, "verbose")
@@ -56,7 +57,10 @@ func init() {
 	rand.Seed(time.Now().Unix())
 
 	adapters.RegisterServices(services)
+	initTest()
+}
 
+func initTest() {
 	loglevel := log.LvlInfo
 	if *debugflag {
 		loglevel = log.LvlDebug
@@ -74,6 +78,7 @@ func init() {
 	wapi = whisper.NewPublicWhisperAPI(w)
 
 	pssprotocols = make(map[string]*protoCtrl)
+	initDone = true
 }
 
 // test if we can insert into cache, match items with cache and cache expiry
@@ -477,8 +482,11 @@ func testAsymSend(t *testing.T) {
 	}
 }
 
+// params in run name:
+// nodes/msgs/addrbytes/adaptertype
+// if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork(t *testing.T) {
-	t.Run("32/512/2", testNetwork)
+	t.Run("16/8192/4/exec", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
@@ -490,13 +498,12 @@ func testNetwork(t *testing.T) {
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
-	messagedelayvarianceusec := 2 * 1000 * 1000
-
 	paramstring := strings.Split(t.Name(), "/")
 	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
 	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
 	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
-	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhint size", addrsize)
+	messagedelayvarianceusec := (int(msgcount) / 1000) * 1000 * 1000
+	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize, "sendtimevariance", messagedelayvarianceusec/(1000*1000))
 
 	nodes := make([]discover.NodeID, nodecount)
 	bzzaddrs := make(map[discover.NodeID][]byte, nodecount)
@@ -509,12 +516,16 @@ func testNetwork(t *testing.T) {
 
 	trigger := make(chan discover.NodeID)
 
-	//	dirname, err := ioutil.TempDir(".", "")
-	//	if err != nil {
-	//		t.Fatal(err)
-	//	}
-	//	adapter := adapters.NewExecAdapter(dirname)
-	adapter := adapters.NewSimAdapter(services)
+	var adapter adapters.NodeAdapter
+	if paramstring[4] == "exec" {
+		dirname, err := ioutil.TempDir(".", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		adapter = adapters.NewExecAdapter(dirname)
+	} else {
+		adapter = adapters.NewSimAdapter(services)
+	}
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID: "0",
 	})
@@ -975,10 +986,15 @@ func newServices() adapters.Services {
 				return nil, errors.New(fmt.Sprintf("local dpa creation failed", "error", err))
 			}
 
+			// execadapter does not exec init()
+			if !initDone {
+				initTest()
+			}
 			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams(privkey)
+			pssp.MsgTTL = time.Second * 30
 			pskad := kademlia(ctx.Config.ID)
 			ps := NewPss(pskad, dpa, pssp)
 
