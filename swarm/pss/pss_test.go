@@ -64,7 +64,10 @@ func init() {
 	rand.Seed(time.Now().Unix())
 
 	adapters.RegisterServices(services)
+	initTest()
+}
 
+func initTest() {
 	initOnce.Do(
 		func() {
 			loglevel := log.LvlInfo
@@ -609,52 +612,11 @@ func testAsymSend(t *testing.T) {
 	}
 }
 
-type networkParams struct {
-	snapshotFile string
-	numMessages  int
-	addressSize  int
-	adapterType  string
-	messageDelay int
-}
-
-func (n *networkParams) String() string {
-	return fmt.Sprintf(":%s:%d:%d:%d:%s", n.snapshotFile, n.numMessages, n.addressSize, n.messageDelay, n.adapterType)
-}
-
-// Tests random message sending in network snapshots
-//
 // params in run name:
-// #nodes/#msgs/#addrbytes/adaptertype
+// nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork(t *testing.T) {
-	var tests []*networkParams
-	if *snapshotflag != "" {
-		if *addresssizeflag < 0 || *addresssizeflag > 32 {
-			t.Fatal("invalid address size")
-		}
-		_, err := os.Stat(*snapshotflag)
-		if err != nil {
-			t.Fatal(err)
-		}
-		tests = append(tests, &networkParams{
-			snapshotFile: *snapshotflag,
-			numMessages:  *messagesflag,
-			addressSize:  *addresssizeflag,
-			adapterType:  *adaptertypeflag,
-			messageDelay: *messagedelayflag,
-		})
-	} else {
-		tests = append(tests, &networkParams{
-			snapshotFile: "testdata/snapshot_8.json",
-			numMessages:  2,
-			addressSize:  2,
-			adapterType:  "sim",
-			messageDelay: 1000,
-		})
-	}
-	for _, p := range tests {
-		t.Run(p.String(), testNetwork)
-	}
+	t.Run("16/8192/4/exec", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
@@ -664,21 +626,28 @@ func testNetwork(t *testing.T) {
 		id     discover.NodeID
 		msgIdx int
 	}
+	topic := whisper.BytesToTopic([]byte("foo:42"))
+	hextopic := common.ToHex(topic[:])
 
-	paramstring := strings.Split(t.Name(), ":")
+	paramstring := strings.Split(t.Name(), "/")
+	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
 	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
 	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
-	messagedelaymax, _ := strconv.ParseInt(paramstring[4], 10, 0)
-	log.Info("network test", "snapshot", paramstring[1], "msgcount", msgcount, "addrhintsize", addrsize, "messagedelay", messagedelaymax)
+	messagedelayvarianceusec := (int(msgcount) / 1000) * 1000 * 1000
+	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize, "sendtimevariance", messagedelayvarianceusec/(1000*1000))
+
+	nodes := make([]discover.NodeID, nodecount)
+	bzzaddrs := make(map[discover.NodeID][]byte, nodecount)
+	rpcs := make(map[discover.NodeID]*rpc.Client, nodecount)
+	pubkeys := make(map[discover.NodeID][]byte, nodecount)
 
 	sentmsgs := make([][]byte, msgcount)
 	recvmsgs := make([]bool, msgcount)
 	trigger := make(chan discover.NodeID)
 
 	var adapter adapters.NodeAdapter
-	if paramstring[5] == "exec" {
+	if paramstring[4] == "exec" {
 		dirname, err := ioutil.TempDir(".", "")
-		defer os.RemoveAll(dirname)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -1154,6 +1123,10 @@ func newServices() adapters.Services {
 				return nil, fmt.Errorf("local dpa creation failed", "error", err)
 			}
 
+			// execadapter does not exec init()
+			if !initDone {
+				initTest()
+			}
 			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
