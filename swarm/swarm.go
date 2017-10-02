@@ -43,21 +43,22 @@ import (
 
 // the swarm stack
 type Swarm struct {
-	config      *api.Config            // swarm configuration
-	api         *api.Api               // high level api layer (fs/manifest)
-	dns         api.Resolver           // DNS registrar
-	dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
-	storage     storage.ChunkStore     // internal access to storage, common interface to cloud storage backends
-	dpa         *storage.DPA           // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	cloud       storage.CloudStore     // procurement, cloud storage backend (can multi-cloud)
-	hive        *network.Hive          // the logistic manager
-	backend     chequebook.Backend     // simple blockchain Backend
+	config *api.Config  // swarm configuration
+	api    *api.Api     // high level api layer (fs/manifest)
+	dns    api.Resolver // DNS registrar
+	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
+	storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
+	dpa     *storage.DPA       // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
+	cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
+	hive        *network.Hive      // the logistic manager
+	backend     chequebook.Backend // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey
 	corsString  string
 	swapEnabled bool
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
+	statestore  network.StateStore
 }
 
 type SwarmAPI struct {
@@ -100,31 +101,36 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	}
 
 	// setup local store
-	log.Debug(fmt.Sprintf("Set up local storage"))
+	//log.Debug(fmt.Sprintf("Set up local storage"))
 
-	self.dbAccess = network.NewDbAccess(self.lstore)
-	log.Debug(fmt.Sprintf("Set up local db access (iterator/counter)"))
+	//self.dbAccess = network.NewDbAccess(self.lstore)
+	//log.Debug(fmt.Sprintf("Set up local db access (iterator/counter)"))
 
+	addr := network.RandomAddr()
+	kadparams := network.NewKadParams()
+	kad := network.NewKademlia(addr.Over(), kadparams)
 	// set up the kademlia hive
 	self.hive = network.NewHive(
-		common.HexToHash(self.config.BzzKey), // key to hive (kademlia base address)
-		config.HiveParams,                    // configuration parameters
-		swapEnabled,                          // SWAP enabled
-		syncEnabled,                          // syncronisation enabled
+		//common.HexToHash(self.config.BzzKey), // key to hive (kademlia base address)
+		config.HiveParams, // configuration parameters
+		kad,
+		Voidstore{},
+		//swapEnabled,                          // SWAP enabled
+		//syncEnabled,                          // syncronisation enabled
 	)
 	log.Debug(fmt.Sprintf("Set up swarm network with Kademlia hive"))
 
 	// setup cloud storage backend
-	self.cloud = network.NewForwarder(self.hive)
-	log.Debug(fmt.Sprintf("-> set swarm forwarder as cloud storage backend"))
+	//self.cloud = network.NewForwarder(self.hive)
+	//log.Debug(fmt.Sprintf("-> set swarm forwarder as cloud storage backend"))
 
 	// setup cloud storage internal access layer
 	self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 
 	// set up Depo (storage handler = cloud storage access layer for incoming remote requests)
-	self.depo = network.NewDepo(hash, self.lstore, self.storage)
-	log.Debug(fmt.Sprintf("-> REmote Access to CHunks"))
+	//self.depo = network.NewDepo(hash, self.lstore, self.storage)
+	//log.Debug(fmt.Sprintf("-> REmote Access to CHunks"))
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewDpaChunkStore(self.lstore, self.storage)
@@ -189,12 +195,8 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	}
 
 	log.Warn(fmt.Sprintf("Starting Swarm service"))
-	self.hive.Start(
-		discover.PubkeyID(&srv.PrivateKey.PublicKey),
-		func() string { return srv.ListenAddr },
-		connectPeer,
-	)
-	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.Addr()))
+	self.hive.Start(srv)
+	log.Info(fmt.Sprintf("Swarm network started on bzz address: %v", self.hive.Overlay.BaseAddr()))
 
 	self.dpa.Start()
 	log.Debug(fmt.Sprintf("Swarm DPA started"))
@@ -235,7 +237,7 @@ func (self *Swarm) Stop() error {
 
 // implements the node.Service interface
 func (self *Swarm) Protocols() []p2p.Protocol {
-	proto, err := network.Bzz(self.depo, self.backend, self.hive, self.dbAccess, self.config.Swap, self.config.SyncParams, self.config.NetworkId)
+	proto := network.NewBzz(network.NewBzzConfig{}, self.hive.Overlay, self.hive.Store)
 	if err != nil {
 		return nil
 	}
@@ -302,7 +304,7 @@ func (self *Swarm) SetChequebook(ctx context.Context) error {
 	}
 	log.Info(fmt.Sprintf("new chequebook set (%v): saving config file, resetting all connections in the hive", self.config.Swap.Contract.Hex()))
 	self.config.Save()
-	self.hive.DropAll()
+	//self.hive.DropAll()
 	return nil
 }
 
@@ -314,7 +316,7 @@ func NewLocalSwarm(datadir, port string) (self *Swarm, err error) {
 		return
 	}
 
-	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkId)
+	config, err := api.NewConfig(datadir, common.Address{}, prvKey, network.NetworkID)
 	if err != nil {
 		return
 	}

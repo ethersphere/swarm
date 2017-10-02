@@ -616,7 +616,7 @@ func testAsymSend(t *testing.T) {
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork(t *testing.T) {
-	t.Run("16/8192/4/exec", testNetwork)
+	t.Run("8/1024/2/exec", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
