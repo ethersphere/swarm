@@ -83,11 +83,10 @@ func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic whisper.TopicType, addr
 	return nil
 }
 
-// Get address hint for topic and key combination
-func (pssapi *API) GetAddress(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
-	if asymmetric {
-		return *pssapi.Pss.pubKeyPool[key][topic].address, nil
-	} else {
-		return *pssapi.Pss.symKeyPool[key][topic].address, nil
-	}
+func (pssapi *API) GetSymmetricAddressHint(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
+	return *pssapi.Pss.symKeyPool[key][topic].address, nil
+}
+
+func (pssapi *API) GetAsymmetricAddressHint(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
+	return *pssapi.Pss.pubKeyPool[key][topic].address, nil
 }
