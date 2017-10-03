@@ -616,7 +616,7 @@ func testAsymSend(t *testing.T) {
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork(t *testing.T) {
-	t.Run("8/1024/2/exec", testNetwork)
+	t.Run("256/128/4/sock", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
@@ -633,7 +633,7 @@ func testNetwork(t *testing.T) {
 	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
 	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
 	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
-	messagedelayvarianceusec := (int(msgcount) / 1000) * 1000 * 1000
+	messagedelayvarianceusec := (int(msgcount)/1000 + 1) * 1000 * 1000
 	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize, "sendtimevariance", messagedelayvarianceusec/(1000*1000))
 
 	nodes := make([]discover.NodeID, nodecount)
@@ -652,8 +652,10 @@ func testNetwork(t *testing.T) {
 			t.Fatal(err)
 		}
 		adapter = adapters.NewExecAdapter(dirname)
+	} else if paramstring[4] == "sock" {
+		adapter = adapters.NewSocketAdapter(services)
 	} else {
-		adapter = adapters.NewSimAdapter(services)
+		adapter = adapters.NewSocketAdapter(services)
 	}
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID: "0",
