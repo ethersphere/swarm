@@ -49,6 +49,7 @@ type pssCacheEntry struct {
 
 // abstraction to enable access to p2p.protocols.Peer.Send
 type senderPeer interface {
+	Info() *p2p.PeerInfo
 	ID() discover.NodeID
 	Address() []byte
 	Send(interface{}) error
@@ -91,9 +92,9 @@ type Pss struct {
 	auxAPIs         []rpc.API         // builtins (handshake, test) can add APIs
 
 	// sending and forwarding
-	fwdPool         map[discover.NodeID]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
-	fwdCache        map[pssDigest]pssCacheEntry         // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
-	cacheTTL        time.Duration                       // how long to keep messages in fwdCache (not implemented)
+	fwdPool         map[string]*protocols.Peer  // keep track of all peers sitting on the pssmsg routing layer
+	fwdCache        map[pssDigest]pssCacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
+	cacheTTL        time.Duration               // how long to keep messages in fwdCache (not implemented)
 	msgTTL          time.Duration
 	paddingByteSize int
 
@@ -128,7 +129,7 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		w:          whisper.New(&whisper.DefaultConfig),
 		quitC:      make(chan struct{}),
 
-		fwdPool:         make(map[discover.NodeID]*protocols.Peer),
+		fwdPool:         make(map[string]*protocols.Peer),
 		fwdCache:        make(map[pssDigest]pssCacheEntry),
 		cacheTTL:        params.CacheTTL,
 		msgTTL:          params.MsgTTL,
@@ -188,7 +189,7 @@ func (self *Pss) Protocols() []p2p.Protocol {
 
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(p, rw, pssSpec)
-	self.fwdPool[p.ID()] = pp
+	self.fwdPool[p.Info().ID] = pp
 	return pp.Run(self.handlePssMsg)
 }
 
@@ -196,7 +197,7 @@ func (self *Pss) APIs() []rpc.API {
 	apis := []rpc.API{
 		rpc.API{
 			Namespace: "pss",
-			Version:   "0.2",
+			Version:   "1.0",
 			Service:   NewAPI(self),
 			Public:    true,
 		},
@@ -491,7 +492,10 @@ func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessa
 		return nil, "", nil, errors.New("invalid message")
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
-	from := self.pubKeyPool[pubkeyid][envelope.Topic].address
+	var from *PssAddress
+	if self.pubKeyPool[pubkeyid][envelope.Topic] != nil {
+		from = self.pubKeyPool[pubkeyid][envelope.Topic].address
+	}
 	return recvmsg, pubkeyid, from, nil
 }
 
@@ -604,7 +608,7 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, asymmetric
 	if err != nil {
 		return errors.New(fmt.Sprintf("failed to perform whisper encryption: %v", err))
 	}
-	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", wparams.Payload, "to", to, "asym", asymmetric, "key", key)
+	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", common.ToHex(wparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
 	// prepare for devp2p transport
 	pssmsg := &PssMsg{
 		To:      to,
@@ -647,7 +651,7 @@ func (self *Pss) forward(msg *PssMsg) error {
 			log.Crit("Pss cannot use kademlia peer type")
 			return false
 		}
-		pp := self.fwdPool[sp.ID()]
+		pp := self.fwdPool[sp.Info().ID]
 		if self.checkFwdCache(op.Address(), digest) {
 			log.Trace(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
 			return true

@@ -90,3 +90,7 @@ func (pssapi *API) GetSymmetricAddressHint(topic whisper.TopicType, asymmetric b
 func (pssapi *API) GetAsymmetricAddressHint(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
 	return *pssapi.Pss.pubKeyPool[key][topic].address, nil
 }
+
+func (pssapi *API) StringToTopic(topicstring string) (whisper.TopicType, error) {
+	return StringToTopic(topicstring), nil
+}
