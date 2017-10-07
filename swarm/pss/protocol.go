@@ -1,3 +1,5 @@
+// +build !noprotocol
+
 package pss
 
 import (

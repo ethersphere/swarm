@@ -1,3 +1,5 @@
+// +build !noclient,!noprotocol
+
 package client
 
 import (

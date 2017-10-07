@@ -127,7 +127,7 @@ func testHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 	var lrecvsymkeyids []string
-	err = clients[1].Call(&lrecvsymkeyids, "pss_getHandshakeKeys", common.ToHex(rpubkey), hextopic, true, false)
+	err = clients[0].Call(&lrecvsymkeyids, "pss_getHandshakeKeys", common.ToHex(rpubkey), hextopic, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
