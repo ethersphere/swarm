@@ -1,3 +1,5 @@
+// +build !nohandshake
+
 package pss
 
 import (
