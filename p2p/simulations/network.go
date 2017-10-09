@@ -666,7 +666,7 @@ func (self *Network) Load(snap *Snapshot) error {
 	}
 	for _, conn := range snap.Conns {
 		if err := self.Connect(conn.One, conn.Other); err != nil {
-			//return err
+			return err
 		}
 	}
 	return nil

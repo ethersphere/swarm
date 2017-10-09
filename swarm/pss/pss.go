@@ -289,7 +289,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		return self.process(pssmsg)
 	}
 
-	return errors.New(fmt.Sprintf("invalid message type. Expected *PssMsg, got %T ", msg))
+	return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
 }
 
 // Entry point to processing a message for which the current node can be the intended recipient.
@@ -307,7 +307,7 @@ func (self *Pss) process(pssmsg *PssMsg) error {
 
 	handlers := self.getHandlers(envelope.Topic)
 	if len(handlers) == 0 {
-		return errors.New(fmt.Sprintf("No registered handler for topic '%x'", envelope.Topic))
+		return fmt.Errorf("No registered handler for topic '%x'", envelope.Topic)
 	}
 
 	if len(envelope.AESNonce) > 0 { // detect symkey msg according to whisperv5/envelope.go:OpenSymmetric
@@ -371,7 +371,7 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic whisper.TopicTy
 	defer self.lock.Unlock()
 	pubkeybytes := crypto.FromECDSAPub(pubkey)
 	if len(pubkeybytes) == 0 {
-		return errors.New(fmt.Sprintf("invalid public key: %v", pubkey))
+		return fmt.Errorf("invalid public key: %v", pubkey)
 	}
 	pubkeyid := common.ToHex(pubkeybytes)
 	psp := &pssPeer{
@@ -466,7 +466,7 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 			continue
 		}
 		if !recvmsg.Validate() {
-			return nil, "", nil, errors.New(fmt.Sprintf("symmetrically encrypted message has invalid signature or is corrupt"))
+			return nil, "", nil, fmt.Errorf("symmetrically encrypted message has invalid signature or is corrupt")
 		}
 		from := self.symKeyPool[*symkeyid][envelope.Topic].address
 		self.symKeyDecryptCacheCursor++
@@ -485,7 +485,7 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
 	recvmsg, err := envelope.OpenAsymmetric(self.privateKey)
 	if err != nil {
-		return nil, "", nil, errors.New(fmt.Sprintf("asym default decrypt of pss msg failed: %v", "err", err))
+		return nil, "", nil, fmt.Errorf("asym default decrypt of pss msg failed: %v", "err", err)
 	}
 	// check signature (if signed), strip padding
 	if !recvmsg.Validate() {
@@ -543,7 +543,7 @@ func (self *Pss) cleanKeys() (count int) {
 func (self *Pss) SendSym(symkeyid string, topic whisper.TopicType, msg []byte) error {
 	symkey, err := self.GetSymmetricKey(symkeyid)
 	if err != nil {
-		return errors.New(fmt.Sprintf("missing valid send symkey %s: %v", symkeyid, err))
+		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
 	}
 	psp := self.symKeyPool[symkeyid][topic]
 	err = self.send(*psp.address, topic, msg, false, symkey)
@@ -557,14 +557,11 @@ func (self *Pss) SendAsym(pubkeyid string, topic whisper.TopicType, msg []byte) 
 	//pubkey := self.pubKeyIndex[pubkeyid]
 	pubkey := crypto.ToECDSAPub(common.FromHex(pubkeyid))
 	if pubkey == nil {
-		return errors.New(fmt.Sprintf("Invalid public key id %x", pubkey))
+		return fmt.Errorf("Invalid public key id %x", pubkey)
 	}
 	psp := self.pubKeyPool[pubkeyid][topic]
-	go func() {
-		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
-	}()
+	self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
 	return nil
-	//return self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
 }
 
 // Send is payload agnostic, and will accept any byte slice as payload
@@ -573,14 +570,14 @@ func (self *Pss) SendAsym(pubkeyid string, topic whisper.TopicType, msg []byte) 
 // TODO: Implement proper message padding
 func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, asymmetric bool, key []byte) error {
 	if key == nil || bytes.Equal(key, []byte{}) {
-		return errors.New(fmt.Sprintf("Zero length key passed to pss send"))
+		return fmt.Errorf("Zero length key passed to pss send")
 	}
 	padding := make([]byte, self.paddingByteSize)
 	c, err := rand.Read(padding)
 	if err != nil {
 		return err
 	} else if c < self.paddingByteSize {
-		return errors.New(fmt.Sprintf("invalid padding length: %d", c))
+		return fmt.Errorf("invalid padding length: %d", c)
 	}
 	wparams := &whisper.MessageParams{
 		TTL:      defaultWhisperTTL,
@@ -599,14 +596,14 @@ func (self *Pss) send(to []byte, topic whisper.TopicType, msg []byte, asymmetric
 	// set up outgoing message container, which does encryption and envelope wrapping
 	woutmsg, err := whisper.NewSentMessage(wparams)
 	if err != nil {
-		return errors.New(fmt.Sprintf("failed to generate whisper message encapsulation: %v", err))
+		return fmt.Errorf("failed to generate whisper message encapsulation: %v", err)
 	}
 	// performs encryption.
 	// Does NOT perform / performs negligible PoW due to very low difficulty setting
 	// after this the message is ready for sending
 	envelope, err := woutmsg.Wrap(wparams)
 	if err != nil {
-		return errors.New(fmt.Sprintf("failed to perform whisper encryption: %v", err))
+		return fmt.Errorf("failed to perform whisper encryption: %v", err)
 	}
 	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", common.ToHex(wparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
 	// prepare for devp2p transport
@@ -685,7 +682,6 @@ func (self *Pss) forward(msg *PssMsg) error {
 	if sent == 0 {
 		log.Debug("unable to forward to any peers")
 		return nil
-		//return errors.New("unable to forward to any peers")
 	}
 
 	self.addFwdCache(digest)

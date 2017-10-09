@@ -263,7 +263,7 @@ func (self *HandshakeController) handler(msg []byte, p *p2p.Peer, asymmetric boo
 	if !asymmetric {
 		if self.symKeyIndex[symkeyid] != nil {
 			if self.symKeyIndex[symkeyid].count >= self.symKeyIndex[symkeyid].limit {
-				return errors.New(fmt.Sprintf("discarding message using expired key", "symkeyid", symkeyid))
+				return fmt.Errorf("discarding message using expired key", "symkeyid", symkeyid)
 			}
 			self.symKeyIndex[symkeyid].count++
 			log.Trace("increment symkey recv use", "symsymkeyid", symkeyid, "count", self.symKeyIndex[symkeyid].count, "limit", self.symKeyIndex[symkeyid].limit, "receiver", common.ToHex(crypto.FromECDSAPub(self.pss.PublicKey())))
@@ -366,11 +366,11 @@ func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicTy
 		var err error
 		recvkeyids[i], err = self.pss.generateSymmetricKey(*topic, to, true)
 		if err != nil {
-			return []string{}, errors.New(fmt.Sprintf("set receive symkey fail (pubkey %x topic %x): %v", pubkeyid, topic, err))
+			return []string{}, fmt.Errorf("set receive symkey fail (pubkey %x topic %x): %v", pubkeyid, topic, err)
 		}
 		recvkeys[i], err = self.pss.GetSymmetricKey(recvkeyids[i])
 		if err != nil {
-			return []string{}, errors.New(fmt.Sprintf("get generated outgoing symkey fail (pubkey %x topic %x): %v", pubkeyid, topic, err))
+			return []string{}, fmt.Errorf("GET Generated outgoing symkey fail (pubkey %x topic %x): %v", pubkeyid, topic, err)
 		}
 	}
 	self.updateKeys(pubkeyid, topic, true, recvkeyids, self.symKeySendLimit)
@@ -386,12 +386,12 @@ func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicTy
 	log.Debug("sending our symkeys", "pubkey", pubkeyid, "symkeys", recvkeyids, "limit", self.symKeySendLimit, "requestcount", requestcount, "keycount", len(recvkeys))
 	recvkeybytes, err := rlp.EncodeToBytes(recvkeymsg)
 	if err != nil {
-		return []string{}, errors.New(fmt.Sprintf("rlp keymsg encode fail: %v", err))
+		return []string{}, fmt.Errorf("rlp keymsg encode fail: %v", err)
 	}
 	// if the send fails it means this public key is not registered for this particular address AND topic
 	err = self.pss.SendAsym(pubkeyid, *topic, recvkeybytes)
 	if err != nil {
-		return []string{}, errors.New(fmt.Sprintf("Send symkey failed: %v", err))
+		return []string{}, fmt.Errorf("Send symkey failed: %v", err)
 	}
 	return recvkeyids, nil
 }
@@ -502,7 +502,7 @@ func (self *HandshakeAPI) GetHandshakeKeys(pubkeyid string, topic whisper.TopicT
 func (self *HandshakeAPI) GetHandshakeKeyCapacity(symkeyid string) (uint16, error) {
 	storekey := self.ctrl.symKeyIndex[symkeyid]
 	if storekey == nil {
-		return 0, errors.New(fmt.Sprintf("invalid symkey id %s", symkeyid))
+		return 0, fmt.Errorf("invalid symkey id %s", symkeyid)
 	}
 	return storekey.limit - storekey.count, nil
 }
@@ -512,7 +512,7 @@ func (self *HandshakeAPI) GetHandshakeKeyCapacity(symkeyid string) (uint16, erro
 func (self *HandshakeAPI) GetHandshakePublicKey(symkeyid string) (string, error) {
 	storekey := self.ctrl.symKeyIndex[symkeyid]
 	if storekey == nil {
-		return "", errors.New(fmt.Sprintf("invalid symkey id %s", symkeyid))
+		return "", fmt.Errorf("invalid symkey id %s", symkeyid)
 	}
 	return *storekey.pubKeyId, nil
 }

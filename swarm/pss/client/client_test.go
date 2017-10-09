@@ -2,7 +2,6 @@ package client
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -179,7 +178,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	nodes := make([]*simulations.Node, numnodes)
 	clients = make([]*rpc.Client, numnodes)
 	if numnodes < 2 {
-		return nil, errors.New(fmt.Sprintf("Minimum two nodes in network"))
+		return nil, fmt.Errorf("Minimum two nodes in network")
 	}
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
@@ -191,27 +190,27 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 			Services: []string{"bzz", "pss"},
 		})
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("error creating node 1: %v", err))
+			return nil, fmt.Errorf("error creating node 1: %v", err)
 		}
 		err = net.Start(nodes[i].ID())
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("error starting node 1: %v", err))
+			return nil, fmt.Errorf("error starting node 1: %v", err)
 		}
 		if i > 0 {
 			err = net.Connect(nodes[i].ID(), nodes[i-1].ID())
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("error connecting nodes: %v", err))
+				return nil, fmt.Errorf("error connecting nodes: %v", err)
 			}
 		}
 		clients[i], err = nodes[i].Client()
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("create node 1 rpc client fail: %v", err))
+			return nil, fmt.Errorf("create node 1 rpc client fail: %v", err)
 		}
 	}
 	if numnodes > 2 {
 		err = net.Connect(nodes[0].ID(), nodes[len(nodes)-1].ID())
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("error connecting first and last nodes"))
+			return nil, fmt.Errorf("error connecting first and last nodes")
 		}
 	}
 	return clients, nil
@@ -239,11 +238,11 @@ func newServices() adapters.Services {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("create pss cache tmpdir failed", "error", err))
+				return nil, fmt.Errorf("create pss cache tmpdir failed", "error", err)
 			}
 			dpa, err := storage.NewLocalDPA(cachedir)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("local dpa creation failed", "error", err))
+				return nil, fmt.Errorf("local dpa creation failed", "error", err)
 			}
 			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
 			keys, err := wapi.NewKeyPair(ctxlocal)
@@ -255,7 +254,7 @@ func newServices() adapters.Services {
 			pshparams.SymKeySendLimit = sendLimit
 			err = pss.SetHandshakeController(ps, pshparams)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("handshake controller fail: %v", err))
+				return nil, fmt.Errorf("handshake controller fail: %v", err)
 			}
 			return ps, nil
 		},

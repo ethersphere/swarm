@@ -167,7 +167,7 @@ func (rw *pssRPCRW) handshake(retries int, sync bool, flush bool) (string, error
 		}
 	}
 
-	return "", errors.New(fmt.Sprintf("handshake failed after %d attempts", i))
+	return "", fmt.Errorf("handshake failed after %d attempts", i)
 }
 
 // Custom constructor
@@ -194,7 +194,7 @@ func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
 	client.rpc = rpcclient
 	err := client.rpc.Call(&client.BaseAddr, "pss_baseAddr")
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("cannot get pss node baseaddress: %v", err))
+		return nil, fmt.Errorf("cannot get pss node baseaddress: %v", err)
 	}
 	return client, nil
 }
@@ -222,7 +222,7 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 	self.peerPool[topic] = make(map[string]*pssRPCRW)
 	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", hextopic)
 	if err != nil {
-		return errors.New(fmt.Sprintf("pss event subscription failed: %v", err))
+		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
 	self.sub = sub
 

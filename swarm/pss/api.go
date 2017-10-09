@@ -2,7 +2,6 @@ package pss
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -37,7 +36,7 @@ func NewAPI(ps *Pss) *API {
 func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
-		return nil, errors.New(fmt.Sprintf("Subscribe not supported"))
+		return nil, fmt.Errorf("Subscribe not supported")
 	}
 
 	psssub := notifier.CreateSubscription()
@@ -78,7 +77,7 @@ func (pssapi *API) GetPublicKey() (keybytes []byte) {
 func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic whisper.TopicType, addr PssAddress) error {
 	err := pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
 	if err != nil {
-		return errors.New(fmt.Sprintf("Invalid key: %x", pubkey))
+		return fmt.Errorf("Invalid key: %x", pubkey)
 	}
 	return nil
 }
