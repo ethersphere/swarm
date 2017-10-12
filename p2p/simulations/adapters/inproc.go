@@ -34,6 +34,11 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+const (
+	socketReadBuffer  = 5000 * 1024
+	socketWriteBuffer = 5000 * 1024
+)
+
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and
 // connects them using net.Pipe or OS socket connections
 type SimAdapter struct {
@@ -364,7 +369,25 @@ func socketPipe() (net.Conn, net.Conn, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+
+	setSocketBuffer(pipe1)
+	setSocketBuffer(pipe2)
+
 	return pipe1, pipe2, nil
+}
+
+func setSocketBuffer(conn net.Conn) {
+	switch v := conn.(type) {
+	case *net.UnixConn:
+		err := v.SetReadBuffer(socketReadBuffer)
+		if err != nil {
+			panic(err)
+		}
+		err = v.SetWriteBuffer(socketWriteBuffer)
+		if err != nil {
+			panic(err)
+		}
+	}
 }
 
 // netPipe wraps net.Pipe in a signature returning  an error
