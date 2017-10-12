@@ -102,12 +102,12 @@ type Pss struct {
 	capstring       string
 
 	// keys and peers
+	pubKeyPoolMu               sync.Mutex
 	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
 	symKeyPool                 map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
 	symKeyDecryptCache         []*string                     // fast lookup of symkeys recently used for decryption; last used is on top of stack
 	symKeyDecryptCacheCursor   int                           // modular cursor pointing to last used, wraps on symKeyDecryptCache array
 	symKeyDecryptCacheCapacity int                           // max amount of symkeys to keep.
-
 	// message handling
 	handlers map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
 
@@ -384,10 +384,12 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address 
 	psp := &pssPeer{
 		address: address,
 	}
+	self.pubKeyPoolMu.Lock()
 	if _, ok := self.pubKeyPool[pubkeyid]; ok == false {
 		self.pubKeyPool[pubkeyid] = make(map[Topic]*pssPeer)
 	}
 	self.pubKeyPool[pubkeyid][topic] = psp
+	self.pubKeyPoolMu.Unlock()
 	log.Trace("added pubkey", "pubkeyid", pubkeyid, "topic", topic, "address", common.ToHex(*address))
 	return nil
 }
@@ -501,9 +503,11 @@ func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessa
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
 	var from *PssAddress
+	self.pubKeyPoolMu.Lock()
 	if self.pubKeyPool[pubkeyid][Topic(envelope.Topic)] != nil {
 		from = self.pubKeyPool[pubkeyid][Topic(envelope.Topic)].address
 	}
+	self.pubKeyPoolMu.Unlock()
 	return recvmsg, pubkeyid, from, nil
 }
 
@@ -572,13 +576,17 @@ func (self *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	if pubkey == nil {
 		return fmt.Errorf("Invalid public key id %x", pubkey)
 	}
+	self.pubKeyPoolMu.Lock()
 	psp, ok := self.pubKeyPool[pubkeyid][topic]
+	self.pubKeyPoolMu.Unlock()
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic, pubkeyid)
 	} else if psp.address == nil {
 		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic, pubkeyid)
 	}
-	self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
+	go func() {
+		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
+	}()
 	return nil
 }
 
