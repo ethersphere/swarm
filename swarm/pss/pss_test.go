@@ -611,16 +611,19 @@ func testAsymSend(t *testing.T) {
 	}
 }
 
-// params in run name:
-// nodes/msgs/addrbytes/adaptertype
-// if adaptertype is exec uses execadapter, simadapter otherwise
-func TestNetwork(t *testing.T) {
-	t.Run("256/128/4/sock", testNetwork)
+type Job struct {
+	Msg      []byte
+	SendNode discover.NodeID
+	RecvNode discover.NodeID
 }
 
-func testNetwork(t *testing.T) {
+func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID][]byte, hextopic string) {
+	for j := range jobs {
+		rpcs[j.SendNode].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[j.RecvNode]), hextopic, j.Msg)
+	}
+}
 
-	lock := &sync.Mutex{}
+func TestNetwork(t *testing.T) {
 	type msgnotifyC struct {
 		id     discover.NodeID
 		msgIdx int
@@ -633,8 +636,7 @@ func testNetwork(t *testing.T) {
 	addrsize := *faddrsize
 	adapter := *fadapter
 
-	messagedelayvarianceusec := (int(msgcount)/1000 + 1) * 1000 * 1000
-	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize, "sendtimevariance", messagedelayvarianceusec/(1000*1000))
+	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize)
 
 	nodes := make([]discover.NodeID, nodecount)
 	bzzaddrs := make(map[discover.NodeID][]byte, nodecount)
@@ -682,11 +684,7 @@ func testNetwork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	nodes := make([]discover.NodeID, len(snap.Nodes))
-	bzzaddrs := make(map[discover.NodeID]string, len(snap.Nodes))
-	rpcs := make(map[discover.NodeID]*rpc.Client, len(snap.Nodes))
-	pubkeys := make(map[discover.NodeID]string, len(snap.Nodes))
-	nodemsgcount := make(map[discover.NodeID]int, len(snap.Nodes))
+	time.Sleep(100 * time.Millisecond)
 
 	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client, topic string) error {
 		msgC := make(chan APIMsg)
@@ -748,7 +746,12 @@ func testNetwork(t *testing.T) {
 		}
 	}
 
-	messagedelayhigh := 0
+	// setup workers
+	jobs := make(chan Job, 10)
+	for w := 1; w <= 10; w++ {
+		go worker(w, jobs, rpcs, pubkeys, hextopic)
+	}
+
 	for i := 0; i < int(msgcount); i++ {
 		sendnodeidx := rand.Intn(int(len(snap.Nodes)))
 		recvnodeidx := rand.Intn(int(len(snap.Nodes) - 1))
@@ -769,30 +772,15 @@ func testNetwork(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		messagedelay := rand.Intn(int(messagedelaymax))
-		if messagedelay > messagedelayhigh {
-			messagedelayhigh = messagedelay
+		jobs <- Job{
+			Msg:      sentmsgs[i],
+			SendNode: nodes[sendnodeidx],
+			RecvNode: nodes[recvnodeidx],
 		}
-		messagedelayduration, err := time.ParseDuration(fmt.Sprintf("%dus", messagedelay))
-		if err != nil {
-			t.Fatal(err)
-		}
-		go func(rpcclient *rpc.Client, pubkey string, msg []byte) {
-			time.Sleep(messagedelayduration)
-			err = rpcclient.Call(nil, "pss_sendAsym", pubkey, topic, hexutil.Encode(msg))
-			if err != nil {
-				log.Error("Send asym rpc fail", "pubkey", pubkey, "topic", topic, "err", err)
-			}
-		}(rpcs[nodes[sendnodeidx]], pubkeys[nodes[recvnodeidx]], sentmsgs[i])
-	}
-
-	timeout, err := time.ParseDuration(fmt.Sprintf("%dus", 60000000+messagedelayhigh))
-	if err != nil {
-		t.Fatal(err)
 	}
 
 	finalmsgcount := 0
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 outer:
 	for i := 0; i < int(msgcount); i++ {
