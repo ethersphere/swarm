@@ -563,15 +563,14 @@ func (self *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 	if err != nil {
 		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
 	}
+	self.symKeyPoolMu.Lock()
 	psp, ok := self.symKeyPool[symkeyid][topic]
+	self.symKeyPoolMu.Unlock()
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic, symkeyid)
 	} else if psp.address == nil {
 		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic, symkeyid)
 	}
-	self.symKeyPoolMu.Lock()
-	psp := self.symKeyPool[symkeyid][topic]
-	self.symKeyPoolMu.Unlock()
 	err = self.send(*psp.address, topic, msg, false, symkey)
 	return err
 }
@@ -593,7 +592,10 @@ func (self *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	self.pubKeyPoolMu.Lock()
 	psp := self.pubKeyPool[pubkeyid][topic]
 	self.pubKeyPoolMu.Unlock()
-	return self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
+	go func() {
+		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
+	}()
+	return nil
 }
 
 // Send is payload agnostic, and will accept any byte slice as payload
