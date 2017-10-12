@@ -25,7 +25,7 @@ import (
 // TODO: proper padding generation for messages
 const (
 	defaultPaddingByteSize     = 16
-	defaultMsgTTL              = time.Second * 8
+	defaultMsgTTL              = time.Second * 20
 	defaultDigestCacheTTL      = time.Second
 	defaultSymKeyCacheCapacity = 512
 	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
