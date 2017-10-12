@@ -545,7 +545,12 @@ func (self *Pss) SendSym(symkeyid string, topic whisper.TopicType, msg []byte) e
 	if err != nil {
 		return fmt.Errorf("missing valid send symkey %s: %v", symkeyid, err)
 	}
-	psp := self.symKeyPool[symkeyid][topic]
+	psp, ok := self.symKeyPool[symkeyid][topic]
+	if !ok {
+		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic, symkeyid)
+	} else if psp.address == nil {
+		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic, symkeyid)
+	}
 	err = self.send(*psp.address, topic, msg, false, symkey)
 	return err
 }
@@ -559,7 +564,12 @@ func (self *Pss) SendAsym(pubkeyid string, topic whisper.TopicType, msg []byte) 
 	if pubkey == nil {
 		return fmt.Errorf("Invalid public key id %x", pubkey)
 	}
-	psp := self.pubKeyPool[pubkeyid][topic]
+	psp, ok := self.pubKeyPool[pubkeyid][topic]
+	if !ok {
+		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic, pubkeyid)
+	} else if psp.address == nil {
+		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic, pubkeyid)
+	}
 	self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
 	return nil
 }
