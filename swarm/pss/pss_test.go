@@ -47,12 +47,16 @@ var (
 	psslogmain     log.Logger
 	pssprotocols   map[string]*protoCtrl
 	useHandshake   bool
+
+	fnodecount = flag.Int("nodecount", 8, "number of nodes")
+	fmsgs      = flag.Int("msgs", 5000, "numner of messages to send")
+	fadapter   = flag.String("adapter", "sock", "adapter type (sim, sock, exec)")
+	faddrsize  = flag.Int("addrsize", 4, "address size")
 )
 
 var services = newServices()
 
 func init() {
-
 	flag.Parse()
 	rand.Seed(time.Now().Unix())
 
@@ -499,10 +503,11 @@ func testNetwork(t *testing.T) {
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
-	paramstring := strings.Split(t.Name(), "/")
-	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
-	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
-	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
+	nodecount := *fnodecount
+	msgcount := *fmsgs
+	addrsize := *faddrsize
+	adapter := *fadapter
+
 	messagedelayvarianceusec := (int(msgcount)/1000 + 1) * 1000 * 1000
 	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize, "sendtimevariance", messagedelayvarianceusec/(1000*1000))
 
@@ -517,24 +522,26 @@ func testNetwork(t *testing.T) {
 
 	trigger := make(chan discover.NodeID)
 
-	var adapter adapters.NodeAdapter
-	if paramstring[4] == "exec" {
+	var a adapters.NodeAdapter
+	if adapter == "exec" {
 		dirname, err := ioutil.TempDir(".", "")
 		if err != nil {
 			t.Fatal(err)
 		}
-		adapter = adapters.NewExecAdapter(dirname)
-	} else if paramstring[4] == "sock" {
-		adapter = adapters.NewSocketAdapter(services)
-	} else {
-		adapter = adapters.NewSocketAdapter(services)
+		a = adapters.NewExecAdapter(dirname)
+	} else if adapter == "sock" {
+		a = adapters.NewSocketAdapter(services)
+	} else if adapter == "sim" {
+		a = adapters.NewSimAdapter(services)
 	}
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
 		ID: "0",
 	})
 	defer net.Shutdown()
 
-	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%s.json", paramstring[1]))
+	time.Sleep(100 * time.Millisecond)
+
+	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%d.json", nodecount))
 	if err != nil {
 		t.Fatal(err)
 	}
