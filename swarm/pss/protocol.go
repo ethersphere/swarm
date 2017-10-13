@@ -202,5 +202,5 @@ func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter
 
 // Uniform translation of protocol specifiers to topic
 func ProtocolTopic(spec *protocols.Spec) whisper.TopicType {
-	return whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
+	return BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
 }

@@ -232,7 +232,7 @@ func TestKeys(t *testing.T) {
 	addr := make(PssAddress, 32)
 	copy(addr, network.RandomAddr().Over())
 	outkey := network.RandomAddr().Over()
-	topic := whisper.BytesToTopic([]byte("foo:42"))
+	topic := BytesToTopic([]byte("foo:42"))
 	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topic, &addr)
 	outkeyid, err := ps.SetSymmetricKey(outkey, topic, &addr, false)
 	if err != nil {
@@ -281,7 +281,7 @@ func testSymSend(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("sym send test", "addrsize", addrsize)
 
-	topic := whisper.BytesToTopic([]byte("foo:42"))
+	topic := BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
@@ -397,7 +397,7 @@ func testAsymSend(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("asym send test", "addrsize", addrsize)
 
-	topic := whisper.BytesToTopic([]byte("foo:42"))
+	topic := BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
@@ -542,7 +542,7 @@ func testNetwork(t *testing.T) {
 		id     discover.NodeID
 		msgIdx int
 	}
-	topic := whisper.BytesToTopic([]byte("foo:42"))
+	topic := BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
 	paramstring := strings.Split(t.Name(), ":")
@@ -740,7 +740,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	ps := newTestPss(privkey, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
-	topic := whisper.BytesToTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
 	symkeyid, err := ps.generateSymmetricKey(topic, &to, true)
@@ -783,7 +783,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	ps := newTestPss(privkey, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
-	topic := whisper.BytesToTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
 	ps.SetPeerPublicKey(&privkey.PublicKey, topic, &to)
@@ -830,7 +830,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	} else {
 		ps = newTestPss(privkey, nil)
 	}
-	topic := whisper.BytesToTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
 		copy(to[:], network.RandomAddr().Over())
@@ -913,7 +913,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	} else {
 		ps = newTestPss(privkey, nil)
 	}
-	topic := whisper.BytesToTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		copy(addr[i], network.RandomAddr().Over())
 		keyid, err = ps.generateSymmetricKey(topic, &addr[i], true)

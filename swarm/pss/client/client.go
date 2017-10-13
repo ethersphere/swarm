@@ -216,7 +216,7 @@ func newClient() (client *Client) {
 // when an incoming message is received from a peer that is not yet known to the client,
 // this peer object is instantiated, and the protocol is run on it.
 func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
-	topic := whisper.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
+	topic := pss.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
 	hextopic := common.ToHex(topic[:])
 	msgC := make(chan pss.APIMsg)
 	self.peerPool[topic] = make(map[string]*pssRPCRW)

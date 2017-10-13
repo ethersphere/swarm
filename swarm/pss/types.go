@@ -7,11 +7,16 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 const (
 	defaultWhisperTTL = 6000
+)
+
+var (
+	topicHashFunc = storage.MakeHashFunc("SHA256")()
 )
 
 // variable length address
@@ -68,15 +73,6 @@ func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
 // Implementations of this type are passed to Pss.Register together with a topic,
 type Handler func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
 
-// Wrapper for whisper topic hashing
-func BytesToTopic(b []byte) whisper.TopicType {
-	return whisper.BytesToTopic(b)
-}
-
-func StringToTopic(s string) whisper.TopicType {
-	return whisper.BytesToTopic([]byte(s))
-}
-
 type stateStore struct {
 	values map[string][]byte
 }
@@ -91,4 +87,10 @@ func (store *stateStore) Load(key string) ([]byte, error) {
 
 func (store *stateStore) Save(key string, v []byte) error {
 	return nil
+}
+
+func BytesToTopic(b []byte) whisper.TopicType {
+	topicHashFunc.Reset()
+	topicHashFunc.Write(b)
+	return whisper.BytesToTopic(topicHashFunc.Sum(nil))
 }
