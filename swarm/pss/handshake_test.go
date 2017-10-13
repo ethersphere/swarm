@@ -9,7 +9,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 // asymmetrical key exchange between two directly connected peers
@@ -31,7 +30,7 @@ func testHandshake(t *testing.T) {
 
 	// set up two nodes directly connected
 	// (we are not testing pss routing here)
-	topic := whisper.BytesToTopic([]byte("foo:42"))
+	topic := BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)

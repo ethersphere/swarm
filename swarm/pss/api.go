@@ -91,5 +91,5 @@ func (pssapi *API) GetAsymmetricAddressHint(topic whisper.TopicType, asymmetric 
 }
 
 func (pssapi *API) StringToTopic(topicstring string) (whisper.TopicType, error) {
-	return StringToTopic(topicstring), nil
+	return BytesToTopic([]byte(topicstring)), nil
 }
