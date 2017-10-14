@@ -2,7 +2,6 @@ package pss
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -37,7 +36,7 @@ func NewAPI(ps *Pss) *API {
 func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
-		return nil, errors.New(fmt.Sprintf("Subscribe not supported"))
+		return nil, fmt.Errorf("Subscribe not supported")
 	}
 
 	psssub := notifier.CreateSubscription()
@@ -68,22 +67,29 @@ func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.S
 }
 
 // Retrieves the node's public key in byte form
-func (pssapi *API) GetPublicKey() []byte {
+func (pssapi *API) GetPublicKey() (keybytes []byte) {
 	key := pssapi.Pss.PublicKey()
-	return crypto.FromECDSAPub(key)
+	keybytes = crypto.FromECDSAPub(key)
+	return keybytes
 }
 
 // Set Public key to associate with a particular Pss peer
 func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic whisper.TopicType, addr PssAddress) error {
-	pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
+	err := pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
+	if err != nil {
+		return fmt.Errorf("Invalid key: %x", pubkey)
+	}
 	return nil
 }
 
-// Get address hint for topic and key combination
-func (pssapi *API) GetAddress(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
-	if asymmetric {
-		return *pssapi.Pss.pubKeyPool[key][topic].address, nil
-	} else {
-		return *pssapi.Pss.symKeyPool[key][topic].address, nil
-	}
+func (pssapi *API) GetSymmetricAddressHint(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
+	return *pssapi.Pss.symKeyPool[key][topic].address, nil
+}
+
+func (pssapi *API) GetAsymmetricAddressHint(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
+	return *pssapi.Pss.pubKeyPool[key][topic].address, nil
+}
+
+func (pssapi *API) StringToTopic(topicstring string) (whisper.TopicType, error) {
+	return BytesToTopic([]byte(topicstring)), nil
 }

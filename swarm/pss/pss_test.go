@@ -4,8 +4,9 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"encoding/binary"
 	"encoding/hex"
-	"errors"
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -13,6 +14,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -36,14 +38,20 @@ const (
 )
 
 var (
-	snapshotfile   string
-	debugdebugflag = flag.Bool("vv", false, "veryverbose")
-	debugflag      = flag.Bool("v", false, "verbose")
-	w              *whisper.Whisper
-	wapi           *whisper.PublicWhisperAPI
-	psslogmain     log.Logger
-	pssprotocols   map[string]*protoCtrl
-	useHandshake   bool
+	initOnce         = sync.Once{}
+	snapshotfile     string
+	debugdebugflag   = flag.Bool("vv", false, "veryverbose")
+	debugflag        = flag.Bool("v", false, "verbose")
+	snapshotflag     = flag.String("s", "", "snapshot filename")
+	messagesflag     = flag.Int("m", 0, "number of messages to generate (default = number of nodes). Ignored if -s is not set")
+	addresssizeflag  = flag.Int("b", 32, "number of bytes to use for address. Ignored if -s is not set")
+	adaptertypeflag  = flag.String("a", "sim", "Adapter type to use. Ignored if -s is not set")
+	messagedelayflag = flag.Int("d", 1000, "Message max delay period, in ms")
+	w                *whisper.Whisper
+	wapi             *whisper.PublicWhisperAPI
+	psslogmain       log.Logger
+	pssprotocols     map[string]*protoCtrl
+	useHandshake     bool
 )
 
 var services = newServices()
@@ -55,23 +63,27 @@ func init() {
 
 	adapters.RegisterServices(services)
 
-	loglevel := log.LvlInfo
-	if *debugflag {
-		loglevel = log.LvlDebug
-	} else if *debugdebugflag {
-		loglevel = log.LvlTrace
-	}
+	initOnce.Do(
+		func() {
+			loglevel := log.LvlInfo
+			if *debugflag {
+				loglevel = log.LvlDebug
+			} else if *debugdebugflag {
+				loglevel = log.LvlTrace
+			}
 
-	psslogmain = log.New("psslog", "*")
-	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(loglevel, hs)
-	h := log.CallerFileHandler(hf)
-	log.Root().SetHandler(h)
+			psslogmain = log.New("psslog", "*")
+			hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
+			hf := log.LvlFilterHandler(loglevel, hs)
+			h := log.CallerFileHandler(hf)
+			log.Root().SetHandler(h)
 
-	w = whisper.New(&whisper.DefaultConfig)
-	wapi = whisper.NewPublicWhisperAPI(w)
+			w = whisper.New(&whisper.DefaultConfig)
+			wapi = whisper.NewPublicWhisperAPI(w)
 
-	pssprotocols = make(map[string]*protoCtrl)
+			pssprotocols = make(map[string]*protoCtrl)
+		},
+	)
 }
 
 // test if we can insert into cache, match items with cache and cache expiry
@@ -220,7 +232,7 @@ func TestKeys(t *testing.T) {
 	addr := make(PssAddress, 32)
 	copy(addr, network.RandomAddr().Over())
 	outkey := network.RandomAddr().Over()
-	topic := whisper.BytesToTopic([]byte("foo:42"))
+	topic := BytesToTopic([]byte("foo:42"))
 	ps.SetPeerPublicKey(&theirprivkey.PublicKey, topic, &addr)
 	outkeyid, err := ps.SetSymmetricKey(outkey, topic, &addr, false)
 	if err != nil {
@@ -269,7 +281,7 @@ func testSymSend(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("sym send test", "addrsize", addrsize)
 
-	topic := whisper.BytesToTopic([]byte("foo:42"))
+	topic := BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
@@ -385,7 +397,7 @@ func testAsymSend(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("asym send test", "addrsize", addrsize)
 
-	topic := whisper.BytesToTopic([]byte("foo:42"))
+	topic := BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
@@ -410,12 +422,12 @@ func testAsymSend(t *testing.T) {
 
 	// retrieve public key from pss instance
 	// set this public key reciprocally
-	lpubkey := make([]byte, 32)
+	lpubkey := make([]byte, 64)
 	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
 	}
-	rpubkey := make([]byte, 32)
+	rpubkey := make([]byte, 64)
 	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
@@ -475,6 +487,235 @@ func testAsymSend(t *testing.T) {
 	}
 }
 
+type networkParams struct {
+	snapshotFile string
+	numMessages  int
+	addressSize  int
+	adapterType  string
+	messageDelay int
+}
+
+func (n *networkParams) String() string {
+	return fmt.Sprintf(":%s:%d:%d:%d:%s", n.snapshotFile, n.numMessages, n.addressSize, n.messageDelay, n.adapterType)
+}
+
+// Tests random message sending in network snapshots
+//
+// params in run name:
+// #nodes/#msgs/#addrbytes/adaptertype
+// if adaptertype is exec uses execadapter, simadapter otherwise
+func TestNetwork(t *testing.T) {
+	var tests []*networkParams
+	if *snapshotflag != "" {
+		if *addresssizeflag < 0 || *addresssizeflag > 32 {
+			t.Fatal("invalid address size")
+		}
+		_, err := os.Stat(*snapshotflag)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tests = append(tests, &networkParams{
+			snapshotFile: *snapshotflag,
+			numMessages:  *messagesflag,
+			addressSize:  *addresssizeflag,
+			adapterType:  *adaptertypeflag,
+			messageDelay: *messagedelayflag,
+		})
+	} else {
+		tests = append(tests, &networkParams{
+			snapshotFile: "testdata/snapshot_8.json",
+			numMessages:  1024,
+			addressSize:  2,
+			adapterType:  "sim",
+			messageDelay: 1000,
+		})
+	}
+	for _, p := range tests {
+		t.Run(p.String(), testNetwork)
+	}
+}
+
+func testNetwork(t *testing.T) {
+
+	lock := &sync.Mutex{}
+	type msgnotifyC struct {
+		id     discover.NodeID
+		msgIdx int
+	}
+	topic := BytesToTopic([]byte("foo:42"))
+	hextopic := common.ToHex(topic[:])
+
+	paramstring := strings.Split(t.Name(), ":")
+	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
+	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
+	messagedelaymax, _ := strconv.ParseInt(paramstring[4], 10, 0)
+	log.Info("network test", "snapshot", paramstring[1], "msgcount", msgcount, "addrhintsize", addrsize, "messagedelay", messagedelaymax)
+
+	sentmsgs := make([][]byte, msgcount)
+	recvmsgs := make([]bool, msgcount)
+	trigger := make(chan discover.NodeID)
+
+	var adapter adapters.NodeAdapter
+	if paramstring[5] == "exec" {
+		dirname, err := ioutil.TempDir(".", "")
+		defer os.RemoveAll(dirname)
+		if err != nil {
+			t.Fatal(err)
+		}
+		adapter = adapters.NewExecAdapter(dirname)
+	} else {
+		adapter = adapters.NewSimAdapter(services)
+	}
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		ID: "0",
+	})
+	defer net.Shutdown()
+
+	f, err := os.Open(paramstring[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var snap simulations.Snapshot
+	err = json.NewDecoder(f).Decode(&snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = net.Load(&snap)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nodes := make([]discover.NodeID, len(snap.Nodes))
+	bzzaddrs := make(map[discover.NodeID][]byte, len(snap.Nodes))
+	rpcs := make(map[discover.NodeID]*rpc.Client, len(snap.Nodes))
+	pubkeys := make(map[discover.NodeID][]byte, len(snap.Nodes))
+	nodemsgcount := make(map[discover.NodeID]int, len(snap.Nodes))
+
+	triggerChecks := func(trigger chan discover.NodeID, id discover.NodeID, rpcclient *rpc.Client) error {
+		msgC := make(chan APIMsg)
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		sub, err := rpcclient.Subscribe(ctx, "pss", msgC, "receive", hextopic)
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func() {
+			defer sub.Unsubscribe()
+			for {
+				select {
+				case recvmsg := <-msgC:
+					idx, _ := binary.Uvarint(recvmsg.Msg)
+					lock.Lock()
+					if recvmsgs[idx] == false {
+						log.Debug("msg recv", "idx", idx, "id", id)
+						recvmsgs[idx] = true
+						trigger <- id
+					}
+					lock.Unlock()
+				case <-sub.Err():
+					return
+				}
+			}
+		}()
+		return nil
+	}
+
+	for i, nod := range net.GetNodes() {
+		nodes[i] = nod.ID()
+		rpcs[nodes[i]], err = nod.Client()
+		if err != nil {
+			t.Fatal(err)
+		}
+		pubkey := make([]byte, 65)
+		pubkeys[nod.ID()] = make([]byte, 65)
+		err = rpcs[nodes[i]].Call(&pubkey, "pss_getPublicKey")
+		if err != nil {
+			t.Fatal(err)
+		}
+		copy(pubkeys[nod.ID()], pubkey)
+		addr := make([]byte, 32)
+		err = rpcs[nodes[i]].Call(&addr, "pss_baseAddr")
+		if err != nil {
+			t.Fatal(err)
+		}
+		bzzaddrs[nodes[i]] = addr[:addrsize]
+		err = triggerChecks(trigger, nodes[i], rpcs[nodes[i]])
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	messagedelayhigh := 0
+	for i := 0; i < int(msgcount); i++ {
+		sendnodeidx := rand.Intn(int(len(snap.Nodes)))
+		recvnodeidx := rand.Intn(int(len(snap.Nodes) - 1))
+		if recvnodeidx >= sendnodeidx {
+			recvnodeidx++
+		}
+		nodemsgcount[nodes[recvnodeidx]]++
+		sentmsgs[i] = make([]byte, 8)
+		c := binary.PutUvarint(sentmsgs[i], uint64(i))
+		if c == 0 {
+			t.Fatal("0 byte message")
+		}
+		err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[recvnodeidx]], hextopic, bzzaddrs[nodes[recvnodeidx]])
+		if err != nil {
+			t.Fatal(err)
+		}
+		err = rpcs[nodes[recvnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[sendnodeidx]], hextopic, bzzaddrs[nodes[sendnodeidx]])
+		if err != nil {
+			t.Fatal(err)
+		}
+		messagedelay := rand.Intn(int(messagedelaymax))
+		if messagedelay > messagedelayhigh {
+			messagedelayhigh = messagedelay
+		}
+		messagedelayduration, err := time.ParseDuration(fmt.Sprintf("%dus", messagedelay))
+		if err != nil {
+			t.Fatal(err)
+		}
+		go func(rpcclient *rpc.Client, pubkey []byte, msg []byte) {
+			time.Sleep(messagedelayduration)
+			err = rpcclient.Call(nil, "pss_sendAsym", common.ToHex(pubkey), hextopic, msg)
+			if err != nil {
+				log.Error("Send asym rpc fail", "pubkey", pubkey, "topic", hextopic, "err", err)
+			}
+		}(rpcs[nodes[sendnodeidx]], pubkeys[nodes[recvnodeidx]], sentmsgs[i])
+	}
+
+	timeout, err := time.ParseDuration(fmt.Sprintf("%dus", 60000000+messagedelayhigh))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	finalmsgcount := 0
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+outer:
+	for i := 0; i < int(msgcount); i++ {
+		select {
+		case id := <-trigger:
+			nodemsgcount[id]--
+			finalmsgcount++
+		case <-ctx.Done():
+			log.Warn("timeout")
+			break outer
+		}
+	}
+
+	for i, msg := range recvmsgs {
+		if !msg {
+			log.Debug("missing message", "idx", i)
+		}
+	}
+	t.Logf("%d of %d messages received", finalmsgcount, msgcount)
+
+	if finalmsgcount != int(msgcount) {
+		t.Fatalf("%d messages were not received", int(msgcount)-finalmsgcount)
+	}
+
+}
+
 // symmetric send performance with varying message sizes
 func BenchmarkSymkeySend(b *testing.B) {
 	b.Run(fmt.Sprintf("%d", 256), benchmarkSymKeySend)
@@ -499,7 +740,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	ps := newTestPss(privkey, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
-	topic := whisper.BytesToTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
 	symkeyid, err := ps.generateSymmetricKey(topic, &to, true)
@@ -542,7 +783,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	ps := newTestPss(privkey, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
-	topic := whisper.BytesToTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
 	ps.SetPeerPublicKey(&privkey.PublicKey, topic, &to)
@@ -589,7 +830,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	} else {
 		ps = newTestPss(privkey, nil)
 	}
-	topic := whisper.BytesToTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
 		copy(to[:], network.RandomAddr().Over())
@@ -672,7 +913,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	} else {
 		ps = newTestPss(privkey, nil)
 	}
-	topic := whisper.BytesToTopic([]byte("foo"))
+	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		copy(addr[i], network.RandomAddr().Over())
 		keyid, err = ps.generateSymmetricKey(topic, &addr[i], true)
@@ -722,7 +963,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	nodes := make([]*simulations.Node, numnodes)
 	clients = make([]*rpc.Client, numnodes)
 	if numnodes < 2 {
-		return nil, errors.New(fmt.Sprintf("Minimum two nodes in network"))
+		return nil, fmt.Errorf("Minimum two nodes in network")
 	}
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
@@ -734,27 +975,27 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 			Services: []string{"bzz", "pss"},
 		})
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("error creating node 1: %v", err))
+			return nil, fmt.Errorf("error creating node 1: %v", err)
 		}
 		err = net.Start(nodes[i].ID())
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("error starting node 1: %v", err))
+			return nil, fmt.Errorf("error starting node 1: %v", err)
 		}
 		if i > 0 {
 			err = net.Connect(nodes[i].ID(), nodes[i-1].ID())
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("error connecting nodes: %v", err))
+				return nil, fmt.Errorf("error connecting nodes: %v", err)
 			}
 		}
 		clients[i], err = nodes[i].Client()
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("create node 1 rpc client fail: %v", err))
+			return nil, fmt.Errorf("create node 1 rpc client fail: %v", err)
 		}
 	}
 	if numnodes > 2 {
 		err = net.Connect(nodes[0].ID(), nodes[len(nodes)-1].ID())
 		if err != nil {
-			return nil, errors.New(fmt.Sprintf("error connecting first and last nodes"))
+			return nil, fmt.Errorf("error connecting first and last nodes")
 		}
 	}
 	return clients, nil
@@ -782,17 +1023,18 @@ func newServices() adapters.Services {
 		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("create pss cache tmpdir failed", "error", err))
+				return nil, fmt.Errorf("create pss cache tmpdir failed", "error", err)
 			}
 			dpa, err := storage.NewLocalDPA(cachedir)
 			if err != nil {
-				return nil, errors.New(fmt.Sprintf("local dpa creation failed", "error", err))
+				return nil, fmt.Errorf("local dpa creation failed", "error", err)
 			}
 
 			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams(privkey)
+			pssp.MsgTTL = time.Second * 30
 			pskad := kademlia(ctx.Config.ID)
 			ps := NewPss(pskad, dpa, pssp)
 
