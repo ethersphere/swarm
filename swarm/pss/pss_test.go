@@ -541,8 +541,6 @@ func TestNetwork(t *testing.T) {
 	})
 	defer net.Shutdown()
 
-	time.Sleep(100 * time.Millisecond)
-
 	f, err := os.Open(fmt.Sprintf("testdata/snapshot_%d.json", nodecount))
 	if err != nil {
 		t.Fatal(err)
