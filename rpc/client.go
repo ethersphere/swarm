@@ -60,7 +60,7 @@ const (
 	// The approach taken here is to maintain a per-subscription linked list buffer
 	// shrinks on demand. If the buffer reaches the size below, the subscription is
 	// dropped.
-	maxClientSubscriptionBuffer = 20000
+	defaultMaxClientSubscriptionBuffer = 8000
 )
 
 // BatchElem is an element in a batch request.
@@ -675,6 +675,8 @@ type ClientSubscription struct {
 	quit     chan struct{} // quit is closed when the subscription exits
 	errOnce  sync.Once     // ensures err is closed once
 	err      chan error
+
+	maxClientSubscriptionBuffer int
 }
 
 func newClientSubscription(c *Client, namespace string, channel reflect.Value) *ClientSubscription {
@@ -686,7 +688,13 @@ func newClientSubscription(c *Client, namespace string, channel reflect.Value) *
 		quit:      make(chan struct{}),
 		err:       make(chan error, 1),
 		in:        make(chan json.RawMessage),
+		maxClientSubscriptionBuffer: defaultMaxClientSubscriptionBuffer,
 	}
+	return sub
+}
+
+func (sub *ClientSubscription) WithClientSubscriptionBufferSize(newsz int) *ClientSubscription {
+	sub.maxClientSubscriptionBuffer = newsz
 	return sub
 }
 
@@ -768,7 +776,7 @@ func (sub *ClientSubscription) forward() (err error, unsubscribeServer bool) {
 			if err != nil {
 				return err, true
 			}
-			if buffer.Len() == maxClientSubscriptionBuffer {
+			if buffer.Len() == sub.maxClientSubscriptionBuffer {
 				return ErrSubscriptionQueueOverflow, true
 			}
 			buffer.PushBack(val)
