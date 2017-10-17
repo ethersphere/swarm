@@ -99,7 +99,6 @@ type Pss struct {
 	paddingByteSize int
 
 	// keys and peers
-	pubKeyPoolMu               sync.Mutex
 	pubKeyPool                 map[string]map[whisper.TopicType]*pssPeer // mapping of hex public keys to peer address by topic.
 	symKeyPool                 map[string]map[whisper.TopicType]*pssPeer // mapping of symkeyids to peer address by topic.
 	symKeyDecryptCache         []*string                                 // fast lookup of symkeys recently used for decryption; last used is on top of stack
@@ -378,12 +377,10 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic whisper.TopicTy
 	psp := &pssPeer{
 		address: address,
 	}
-	self.pubKeyPoolMu.Lock()
 	if _, ok := self.pubKeyPool[pubkeyid]; ok == false {
 		self.pubKeyPool[pubkeyid] = make(map[whisper.TopicType]*pssPeer)
 	}
 	self.pubKeyPool[pubkeyid][topic] = psp
-	self.pubKeyPoolMu.Unlock()
 	log.Trace("added pubkey", "pubkeyid", pubkeyid, "topic", topic, "address", common.ToHex(*address))
 	return nil
 }
@@ -458,6 +455,8 @@ func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
 // of the symmetric key used to decrypt the message.
 // It fails if decryption of the message fails or if the message is corrupted
 func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	for i := self.symKeyDecryptCacheCursor; i > self.symKeyDecryptCacheCursor-cap(self.symKeyDecryptCache) && i > 0; i-- {
 		symkeyid := self.symKeyDecryptCache[i%cap(self.symKeyDecryptCache)]
 		symkey, err := self.w.GetSymKey(*symkeyid)
@@ -486,6 +485,8 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 // the public key used to decrypt the message.
 // It fails if decryption of message fails, or if the message is corrupted
 func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	recvmsg, err := envelope.OpenAsymmetric(self.privateKey)
 	if err != nil {
 		return nil, "", nil, errors.New(fmt.Sprintf("asym default decrypt of pss msg failed: %v", "err", err))
@@ -496,11 +497,9 @@ func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessa
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
 	var from *PssAddress
-	self.pubKeyPoolMu.Lock()
 	if self.pubKeyPool[pubkeyid][envelope.Topic] != nil {
 		from = self.pubKeyPool[pubkeyid][envelope.Topic].address
 	}
-	self.pubKeyPoolMu.Unlock()
 	return recvmsg, pubkeyid, from, nil
 }
 
@@ -546,6 +545,8 @@ func (self *Pss) cleanKeys() (count int) {
 //
 // Fails if the key id does not match any of the stored symmetric keys
 func (self *Pss) SendSym(symkeyid string, topic whisper.TopicType, msg []byte) error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	symkey, err := self.GetSymmetricKey(symkeyid)
 	if err != nil {
 		return errors.New(fmt.Sprintf("missing valid send symkey %s: %v", symkeyid, err))
@@ -559,14 +560,14 @@ func (self *Pss) SendSym(symkeyid string, topic whisper.TopicType, msg []byte) e
 //
 // Fails if the key id does not match any in of the stored public keys
 func (self *Pss) SendAsym(pubkeyid string, topic whisper.TopicType, msg []byte) error {
+	self.lock.Lock()
+	defer self.lock.Unlock()
 	//pubkey := self.pubKeyIndex[pubkeyid]
 	pubkey := crypto.ToECDSAPub(common.FromHex(pubkeyid))
 	if pubkey == nil {
 		return errors.New(fmt.Sprintf("Invalid public key id %x", pubkey))
 	}
-	self.pubKeyPoolMu.Lock()
 	psp := self.pubKeyPool[pubkeyid][topic]
-	self.pubKeyPoolMu.Unlock()
 	go func() {
 		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
 	}()
