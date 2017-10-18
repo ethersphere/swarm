@@ -533,6 +533,8 @@ func TestNetwork(t *testing.T) {
 		a = adapters.NewExecAdapter(dirname)
 	} else if adapter == "sock" {
 		a = adapters.NewSocketAdapter(services)
+	} else if adapter == "tcp" {
+		a = adapters.NewTCPAdapter(services)
 	} else if adapter == "sim" {
 		a = adapters.NewSimAdapter(services)
 	}
