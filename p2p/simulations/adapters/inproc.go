@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	mrand "math/rand"
 	"net"
 	"os"
 	"sync"
@@ -62,6 +63,14 @@ func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 func NewSocketAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		pipe:     socketPipe,
+		nodes:    make(map[discover.NodeID]*SimNode),
+		services: services,
+	}
+}
+
+func NewTCPAdapter(services map[string]ServiceFunc) *SimAdapter {
+	return &SimAdapter{
+		pipe:     tcpPipe,
 		nodes:    make(map[discover.NodeID]*SimNode),
 		services: services,
 	}
@@ -371,4 +380,50 @@ func socketPipe() (net.Conn, net.Conn, error) {
 func netPipe() (net.Conn, net.Conn, error) {
 	p1, p2 := net.Pipe()
 	return p1, p2, nil
+}
+
+func tcpPipe() (net.Conn, net.Conn, error) {
+	cl := make(chan net.Conn)
+	cd := make(chan net.Conn)
+	start := make(chan *net.TCPAddr)
+
+	go func(listener chan net.Conn, start chan *net.TCPAddr) {
+		found := false
+		for !found {
+			// assign random free port to current listener
+			port := 8000 + mrand.Int()%2000
+			endpoint := fmt.Sprintf("localhost:%d", port)
+
+			// resolve
+			addr, err := net.ResolveTCPAddr("tcp", endpoint)
+			if err != nil {
+				panic(err)
+			}
+			// listen
+			l, err := net.ListenTCP("tcp", addr)
+			if err != nil {
+				continue
+			}
+			start <- addr
+			found = true
+			conn, err := l.AcceptTCP()
+			if err != nil {
+				panic(err)
+			}
+			listener <- conn
+		}
+	}(cl, start)
+
+	go func(dialer chan net.Conn, start chan *net.TCPAddr) {
+		addr := <-start
+		c, err := net.DialTCP("tcp", nil, addr)
+		if err != nil {
+			panic(err)
+		}
+		dialer <- c
+	}(cd, start)
+
+	a := <-cl
+	b := <-cd
+	return a, b, nil
 }
