@@ -703,11 +703,12 @@ func (self *Pss) forward(msg *PssMsg) error {
 			return true
 		}
 		// attempt to send the message
-		err := pp.Send(msg)
-		if err != nil {
-			log.Debug(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
-			return true
-		}
+		go func() {
+			err := pp.Send(msg)
+			if err != nil {
+				log.Debug(fmt.Sprintf("%v: failed forwarding: %v", sendMsg, err))
+			}
+		}()
 		log.Trace(fmt.Sprintf("%v: successfully forwarded", sendMsg))
 		sent++
 		// continue forwarding if:
