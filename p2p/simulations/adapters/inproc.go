@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	mrand "math/rand"
 	"net"
 	"os"
 	"sync"
@@ -67,6 +68,14 @@ func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 func NewSocketAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
 		pipe:     socketPipe,
+		nodes:    make(map[discover.NodeID]*SimNode),
+		services: services,
+	}
+}
+
+func NewTCPAdapter(services map[string]ServiceFunc) *SimAdapter {
+	return &SimAdapter{
+		pipe:     tcpPipe,
 		nodes:    make(map[discover.NodeID]*SimNode),
 		services: services,
 	}
@@ -394,4 +403,56 @@ func setSocketBuffer(conn net.Conn) {
 func netPipe() (net.Conn, net.Conn, error) {
 	p1, p2 := net.Pipe()
 	return p1, p2, nil
+}
+
+func tcpPipe() (net.Conn, net.Conn, error) {
+
+	cl := make(chan net.Conn)
+	cd := make(chan net.Conn)
+	start := make(chan *net.TCPAddr)
+
+	go func(listener chan net.Conn, start chan *net.TCPAddr) {
+		found := false
+		for !found {
+			port := 8000 + mrand.Int()%2000
+			endpoint := fmt.Sprintf("localhost:%d", port)
+
+			// resolve
+			addr, err := net.ResolveTCPAddr("tcp", endpoint)
+			if err != nil {
+				panic(err)
+			}
+			// listen
+			l, err := net.ListenTCP("tcp", addr)
+			if err != nil {
+				continue
+			}
+			start <- addr
+			found = true
+			// accept connection on port
+			fmt.Println("listening...")
+			conn, err := l.AcceptTCP()
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("accepted!")
+			listener <- conn
+		}
+	}(cl, start)
+
+	go func(dialer chan net.Conn, start chan *net.TCPAddr) {
+		addr := <-start
+		// connect to this socket
+		fmt.Println("dialing...")
+		c, err := net.DialTCP("tcp", nil, addr)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("dialed")
+		dialer <- c
+	}(cd, start)
+
+	a := <-cl
+	b := <-cd
+	return a, b, nil
 }
