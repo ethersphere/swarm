@@ -42,6 +42,9 @@ var (
 )
 
 func NewClient(gateway string) *Client {
+	if gateway == "" {
+		return DefaultClient
+	}
 	return &Client{
 		Gateway: gateway,
 	}
