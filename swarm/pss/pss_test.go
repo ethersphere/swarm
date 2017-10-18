@@ -661,15 +661,15 @@ func testNetwork(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		a = adapters.NewExecAdapter(dirname)
-	} else if adapter == "sock" {
-		a = adapters.NewSocketAdapter(services)
-	} else if adapter == "tcp" {
-		a = adapters.NewTCPAdapter(services)
-	} else if adapter == "sim" {
-		a = adapters.NewSimAdapter(services)
+		adapter = adapters.NewExecAdapter(dirname)
+	} else if paramstring[4] == "sock" {
+		adapter = adapters.NewSocketAdapter(services)
+	} else if paramstring[4] == "tcp" {
+		adapter = adapters.NewTCPAdapter(services)
+	} else {
+		adapter = adapters.NewSocketAdapter(services)
 	}
-	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID: "0",
 	})
 	defer net.Shutdown()
