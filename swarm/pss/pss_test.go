@@ -649,7 +649,7 @@ func TestNetwork(t *testing.T) {
 	}
 
 	finalmsgcount := 0
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 outer:
 	for i := 0; i < int(msgcount); i++ {
