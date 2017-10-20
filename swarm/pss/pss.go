@@ -193,7 +193,9 @@ func (self *Pss) Protocols() []p2p.Protocol {
 
 func (self *Pss) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	pp := protocols.NewPeer(p, rw, pssSpec)
+	self.fwdPoolMu.Lock()
 	self.fwdPool[p.Info().ID] = pp
+	self.fwdPoolMu.Unlock()
 	return pp.Run(self.handlePssMsg)
 }
 
