@@ -7,7 +7,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 // Wrapper for receiving pss messages when using the pss API
@@ -33,7 +32,7 @@ func NewAPI(ps *Pss) *API {
 //
 // All incoming messages to the node matching this topic will be encapsulated in the APIMsg
 // struct and sent to the subscriber
-func (pssapi *API) Receive(ctx context.Context, topic whisper.TopicType) (*rpc.Subscription, error) {
+func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription, error) {
 	notifier, supported := rpc.NotifierFromContext(ctx)
 	if !supported {
 		return nil, fmt.Errorf("Subscribe not supported")
@@ -74,7 +73,7 @@ func (pssapi *API) GetPublicKey() (keybytes []byte) {
 }
 
 // Set Public key to associate with a particular Pss peer
-func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic whisper.TopicType, addr PssAddress) error {
+func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic Topic, addr PssAddress) error {
 	err := pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
 	if err != nil {
 		return fmt.Errorf("Invalid key: %x", pubkey)
@@ -82,14 +81,14 @@ func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic whisper.TopicType, addr
 	return nil
 }
 
-func (pssapi *API) GetSymmetricAddressHint(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
+func (pssapi *API) GetSymmetricAddressHint(topic Topic, asymmetric bool, key string) (PssAddress, error) {
 	return *pssapi.Pss.symKeyPool[key][topic].address, nil
 }
 
-func (pssapi *API) GetAsymmetricAddressHint(topic whisper.TopicType, asymmetric bool, key string) (PssAddress, error) {
+func (pssapi *API) GetAsymmetricAddressHint(topic Topic, asymmetric bool, key string) (PssAddress, error) {
 	return *pssapi.Pss.pubKeyPool[key][topic].address, nil
 }
 
-func (pssapi *API) StringToTopic(topicstring string) (whisper.TopicType, error) {
+func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
 	return BytesToTopic([]byte(topicstring)), nil
 }

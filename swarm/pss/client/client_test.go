@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -79,7 +78,6 @@ func init() {
 func TestHandshake(t *testing.T) {
 	sendLimit = 3
 	topic := pss.ProtocolTopic(pss.PingProtocol)
-	hextopic := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
 	if err != nil {
@@ -138,21 +136,21 @@ func TestHandshake(t *testing.T) {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
 	}
 
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, roaddr)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topic, roaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, loaddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = clients[0].Call(nil, "pss_addHandshake", hextopic)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topic, loaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = clients[1].Call(nil, "pss_addHandshake", hextopic)
+	err = clients[0].Call(nil, "pss_addHandshake", topic)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = clients[1].Call(nil, "pss_addHandshake", topic)
 	if err != nil {
 		t.Fatal(err)
 	}
