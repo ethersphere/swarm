@@ -9,9 +9,34 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rlp"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"time"
 )
+
+// Convenience wrapper for devp2p protocol messages for transport over pss
+type ProtocolMsg struct {
+	Code       uint64
+	Size       uint32
+	Payload    []byte
+	ReceivedAt time.Time
+}
+
+// Creates a ProtocolMsg
+func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
+
+	rlpdata, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO verify that nested structs cannot be used in rlp
+	smsg := &ProtocolMsg{
+		Code:    code,
+		Size:    uint32(len(rlpdata)),
+		Payload: rlpdata,
+	}
+
+	return rlp.EncodeToBytes(smsg)
+}
 
 // Protocol options to be passed to a new Protocol instance
 //
@@ -29,8 +54,8 @@ type PssReadWriter struct {
 	LastActive time.Time
 	rw         chan p2p.Msg
 	spec       *protocols.Spec
-	topic      *whisper.TopicType
-	sendFunc   func(string, whisper.TopicType, []byte) error
+	topic      *Topic
+	sendFunc   func(string, Topic, []byte) error
 	key        string
 }
 
@@ -68,7 +93,7 @@ func (prw *PssReadWriter) injectMsg(msg p2p.Msg) error {
 type Protocol struct {
 	*Pss
 	proto        *p2p.Protocol
-	topic        *whisper.TopicType
+	topic        *Topic
 	spec         *protocols.Spec
 	pubKeyRWPool map[string]p2p.MsgReadWriter
 	symKeyRWPool map[string]p2p.MsgReadWriter
@@ -82,7 +107,7 @@ type Protocol struct {
 // only one is specified, the protocol will not be valid
 // for the other, and will make the message handler
 // return errors
-func RegisterProtocol(ps *Pss, topic *whisper.TopicType, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *ProtocolParams) (*Protocol, error) {
+func RegisterProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotocol *p2p.Protocol, options *ProtocolParams) (*Protocol, error) {
 	if !options.Asymmetric && !options.Symmetric {
 		return nil, fmt.Errorf("specify at least one of asymmetric or symmetric messaging mode")
 	}
@@ -138,12 +163,12 @@ func (self *Protocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid str
 }
 
 // check if (peer) symmetric key is currently registered with this topic
-func (self *Protocol) isActiveSymKey(key string, topic whisper.TopicType) bool {
+func (self *Protocol) isActiveSymKey(key string, topic Topic) bool {
 	return self.symKeyRWPool[key] != nil
 }
 
 // check if (peer) asymmetric key is currently registered with this topic
-func (self *Protocol) isActiveAsymKey(key string, topic whisper.TopicType) bool {
+func (self *Protocol) isActiveAsymKey(key string, topic Topic) bool {
 	return self.pubKeyRWPool[key] != nil
 }
 
@@ -167,7 +192,7 @@ func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 // `key` and `asymmetric` specifies what encryption key
 // to link the peer to.
 // The key must exist in the pss store prior to adding the peer.
-func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic whisper.TopicType, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
+func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
 	self.Pss.lock.Lock()
 	defer self.Pss.lock.Unlock()
 	rw := &PssReadWriter{
@@ -201,6 +226,6 @@ func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter
 }
 
 // Uniform translation of protocol specifiers to topic
-func ProtocolTopic(spec *protocols.Spec) whisper.TopicType {
+func ProtocolTopic(spec *protocols.Spec) Topic {
 	return BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
 }

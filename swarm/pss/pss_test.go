@@ -104,7 +104,7 @@ func TestCache(t *testing.T) {
 		TTL:      defaultWhisperTTL,
 		Src:      privkey,
 		Dst:      &privkey.PublicKey,
-		Topic:    PingTopic,
+		Topic:    whisper.TopicType(PingTopic),
 		WorkTime: defaultWhisperWorkTime,
 		PoW:      defaultWhisperPoW,
 		Payload:  data,
@@ -282,7 +282,6 @@ func testSymSend(t *testing.T) {
 	log.Info("sym send test", "addrsize", addrsize)
 
 	topic := BytesToTopic([]byte("foo:42"))
-	hextopic := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
 	if err != nil {
@@ -321,12 +320,12 @@ func testSymSend(t *testing.T) {
 	// now try sending symmetrically encrypted message, both directions
 	lmsgC := make(chan APIMsg)
 	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", hextopic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
@@ -337,24 +336,24 @@ func testSymSend(t *testing.T) {
 	var rkeyids [2]string
 
 	// manually set reciprocal symkeys
-	err = clients[0].Call(&lkeyids, "psstest_setSymKeys", common.ToHex(rpubkey), lrecvkey, rrecvkey, defaultSymKeySendLimit, hextopic, roaddr)
+	err = clients[0].Call(&lkeyids, "psstest_setSymKeys", common.ToHex(rpubkey), lrecvkey, rrecvkey, defaultSymKeySendLimit, topic, roaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = clients[0].Call(&lkeyids, "psstest_setSymKeys", common.ToHex(rpubkey), lrecvkey, rrecvkey, defaultSymKeySendLimit, hextopic, roaddr)
+	err = clients[0].Call(&lkeyids, "psstest_setSymKeys", common.ToHex(rpubkey), lrecvkey, rrecvkey, defaultSymKeySendLimit, topic, roaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = clients[1].Call(&rkeyids, "psstest_setSymKeys", common.ToHex(lpubkey), rrecvkey, lrecvkey, defaultSymKeySendLimit, hextopic, loaddr)
+	err = clients[1].Call(&rkeyids, "psstest_setSymKeys", common.ToHex(lpubkey), rrecvkey, lrecvkey, defaultSymKeySendLimit, topic, loaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// send and verify delivery
 	lmsg := []byte("plugh")
-	err = clients[1].Call(nil, "pss_sendSym", rkeyids[1], hextopic, lmsg)
+	err = clients[1].Call(nil, "pss_sendSym", rkeyids[1], topic, lmsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +366,7 @@ func testSymSend(t *testing.T) {
 		t.Fatalf("test message timed out: %v", cerr)
 	}
 	rmsg := []byte("xyzzy")
-	err = clients[0].Call(nil, "pss_sendSym", lkeyids[1], hextopic, rmsg)
+	err = clients[0].Call(nil, "pss_sendSym", lkeyids[1], topic, rmsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -398,7 +397,6 @@ func testAsymSend(t *testing.T) {
 	log.Info("asym send test", "addrsize", addrsize)
 
 	topic := BytesToTopic([]byte("foo:42"))
-	hextopic := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
 	if err != nil {
@@ -439,28 +437,28 @@ func testAsymSend(t *testing.T) {
 
 	lmsgC := make(chan APIMsg)
 	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", hextopic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
 	// store reciprocal public keys
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, addrs[1])
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topic, addrs[1])
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, addrs[0])
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topic, addrs[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// send and verify delivery
 	rmsg := []byte("xyzzy")
-	err = clients[0].Call(nil, "pss_sendAsym", common.ToHex(rpubkey), hextopic, rmsg)
+	err = clients[0].Call(nil, "pss_sendAsym", common.ToHex(rpubkey), topic, rmsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -473,7 +471,7 @@ func testAsymSend(t *testing.T) {
 		t.Fatalf("test message timed out: %v", cerr)
 	}
 	lmsg := []byte("plugh")
-	err = clients[1].Call(nil, "pss_sendAsym", common.ToHex(lpubkey), hextopic, lmsg)
+	err = clients[1].Call(nil, "pss_sendAsym", common.ToHex(lpubkey), topic, lmsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -543,7 +541,6 @@ func testNetwork(t *testing.T) {
 		msgIdx int
 	}
 	topic := BytesToTopic([]byte("foo:42"))
-	hextopic := common.ToHex(topic[:])
 
 	paramstring := strings.Split(t.Name(), ":")
 	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
@@ -595,7 +592,7 @@ func testNetwork(t *testing.T) {
 		msgC := make(chan APIMsg)
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
-		sub, err := rpcclient.Subscribe(ctx, "pss", msgC, "receive", hextopic)
+		sub, err := rpcclient.Subscribe(ctx, "pss", msgC, "receive", topic)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -658,11 +655,11 @@ func testNetwork(t *testing.T) {
 		if c == 0 {
 			t.Fatal("0 byte message")
 		}
-		err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[recvnodeidx]], hextopic, bzzaddrs[nodes[recvnodeidx]])
+		err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[recvnodeidx]], topic, bzzaddrs[nodes[recvnodeidx]])
 		if err != nil {
 			t.Fatal(err)
 		}
-		err = rpcs[nodes[recvnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[sendnodeidx]], hextopic, bzzaddrs[nodes[sendnodeidx]])
+		err = rpcs[nodes[recvnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[sendnodeidx]], topic, bzzaddrs[nodes[sendnodeidx]])
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -676,9 +673,9 @@ func testNetwork(t *testing.T) {
 		}
 		go func(rpcclient *rpc.Client, pubkey []byte, msg []byte) {
 			time.Sleep(messagedelayduration)
-			err = rpcclient.Call(nil, "pss_sendAsym", common.ToHex(pubkey), hextopic, msg)
+			err = rpcclient.Call(nil, "pss_sendAsym", common.ToHex(pubkey), topic, msg)
 			if err != nil {
-				log.Error("Send asym rpc fail", "pubkey", pubkey, "topic", hextopic, "err", err)
+				log.Error("Send asym rpc fail", "pubkey", pubkey, "topic", topic, "err", err)
 			}
 		}(rpcs[nodes[sendnodeidx]], pubkeys[nodes[recvnodeidx]], sentmsgs[i])
 	}
@@ -845,7 +842,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		wparams := &whisper.MessageParams{
 			TTL:      defaultWhisperTTL,
 			KeySym:   symkey,
-			Topic:    topic,
+			Topic:    whisper.TopicType(topic),
 			WorkTime: defaultWhisperWorkTime,
 			PoW:      defaultWhisperPoW,
 			Payload:  []byte("xyzzy"),
@@ -929,7 +926,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	wparams := &whisper.MessageParams{
 		TTL:      defaultWhisperTTL,
 		KeySym:   symkey,
-		Topic:    topic,
+		Topic:    whisper.TopicType(topic),
 		WorkTime: defaultWhisperWorkTime,
 		PoW:      defaultWhisperPoW,
 		Payload:  []byte("xyzzy"),
@@ -1125,7 +1122,7 @@ func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
-func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic whisper.TopicType, to []byte) ([2]string, error) {
+func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic Topic, to []byte) ([2]string, error) {
 	addr := make(PssAddress, len(to))
 	copy(addr[:], to)
 	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &addr, true)

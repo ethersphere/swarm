@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"sync"
 	"time"
 )
@@ -34,7 +33,7 @@ type handshakeMsg struct {
 	Limit   uint16
 	Keys    [][]byte
 	Request uint8
-	Topic   whisper.TopicType
+	Topic   Topic
 }
 
 // internal representation of an individual symmetric key
@@ -91,8 +90,8 @@ type HandshakeController struct {
 	symKeySendLimit      uint16
 	symKeyCapacity       uint8
 	symKeyIndex          map[string]*handshakeKey
-	handshakes           map[string]map[whisper.TopicType]*handshake
-	deregisterFuncs      map[whisper.TopicType]func()
+	handshakes           map[string]map[Topic]*handshake
+	deregisterFuncs      map[Topic]func()
 }
 
 // Attach HandshakeController to pss node
@@ -107,8 +106,8 @@ func SetHandshakeController(pss *Pss, params *HandshakeParams) error {
 		symKeySendLimit:      params.SymKeySendLimit,
 		symKeyCapacity:       params.SymKeyCapacity,
 		symKeyIndex:          make(map[string]*handshakeKey),
-		handshakes:           make(map[string]map[whisper.TopicType]*handshake),
-		deregisterFuncs:      make(map[whisper.TopicType]func()),
+		handshakes:           make(map[string]map[Topic]*handshake),
+		deregisterFuncs:      make(map[Topic]func()),
 	}
 	api := &HandshakeAPI{
 		namespace: "pss",
@@ -126,7 +125,7 @@ func SetHandshakeController(pss *Pss, params *HandshakeParams) error {
 
 // Return all unexpired symmetric keys from store by
 // peer (public key), topic and specified direction
-func (self *HandshakeController) validKeys(pubkeyid string, topic *whisper.TopicType, in bool) (validkeys []*string) {
+func (self *HandshakeController) validKeys(pubkeyid string, topic *Topic, in bool) (validkeys []*string) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	now := time.Now()
@@ -156,11 +155,11 @@ func (self *HandshakeController) validKeys(pubkeyid string, topic *whisper.Topic
 
 // Add all given symmetric keys with validity limits to store by
 // peer (public key), topic and specified direction
-func (self *HandshakeController) updateKeys(pubkeyid string, topic *whisper.TopicType, in bool, symkeyids []string, limit uint16) {
+func (self *HandshakeController) updateKeys(pubkeyid string, topic *Topic, in bool, symkeyids []string, limit uint16) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if _, ok := self.handshakes[pubkeyid]; !ok {
-		self.handshakes[pubkeyid] = make(map[whisper.TopicType]*handshake)
+		self.handshakes[pubkeyid] = make(map[Topic]*handshake)
 
 	}
 	if self.handshakes[pubkeyid][*topic] == nil {
@@ -192,7 +191,7 @@ func (self *HandshakeController) updateKeys(pubkeyid string, topic *whisper.Topi
 }
 
 // Expire a symmetric key, making it elegible for garbage collection
-func (self *HandshakeController) releaseKey(symkeyid string, topic *whisper.TopicType) bool {
+func (self *HandshakeController) releaseKey(symkeyid string, topic *Topic) bool {
 	if self.symKeyIndex[symkeyid] == nil {
 		log.Debug("no symkey", "symkeyid", symkeyid)
 		return false
@@ -207,7 +206,7 @@ func (self *HandshakeController) releaseKey(symkeyid string, topic *whisper.Topi
 // Expired means:
 // - expiry timestamp is set, and grace period is exceeded
 // - message validity limit is reached
-func (self *HandshakeController) cleanHandshake(pubkeyid string, topic *whisper.TopicType, in bool, out bool) int {
+func (self *HandshakeController) cleanHandshake(pubkeyid string, topic *Topic, in bool, out bool) int {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	var deletecount int
@@ -332,7 +331,7 @@ func (self *HandshakeController) handleKeys(pubkeyid string, keymsg *handshakeMs
 // If number of valid outgoing keys is less than the ideal/max
 // amount, a request is sent for the amount of keys to make up
 // the difference
-func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicType, keycount uint8) ([]string, error) {
+func (self *HandshakeController) sendKey(pubkeyid string, topic *Topic, keycount uint8) ([]string, error) {
 
 	var requestcount uint8
 	to := &PssAddress{}
@@ -346,7 +345,7 @@ func (self *HandshakeController) sendKey(pubkeyid string, topic *whisper.TopicTy
 	recvkeyids := make([]string, keycount)
 	self.lock.Lock()
 	if _, ok := self.handshakes[pubkeyid]; !ok {
-		self.handshakes[pubkeyid] = make(map[whisper.TopicType]*handshake)
+		self.handshakes[pubkeyid] = make(map[Topic]*handshake)
 	}
 	self.lock.Unlock()
 
@@ -432,7 +431,7 @@ type HandshakeAPI struct {
 //
 // Fails if the incoming symmetric key store is already full (and `flush` is false),
 // or if the underlying key dispatcher fails
-func (self *HandshakeAPI) Handshake(pubkeyid string, topic whisper.TopicType, sync bool, flush bool) (keys []string, err error) {
+func (self *HandshakeAPI) Handshake(pubkeyid string, topic Topic, sync bool, flush bool) (keys []string, err error) {
 	var hsc chan []string
 	var keycount uint8
 	if flush {
@@ -464,13 +463,13 @@ func (self *HandshakeAPI) Handshake(pubkeyid string, topic whisper.TopicType, sy
 }
 
 // Activate handshake functionality on a topic
-func (self *HandshakeAPI) AddHandshake(topic *whisper.TopicType) error {
+func (self *HandshakeAPI) AddHandshake(topic *Topic) error {
 	self.ctrl.deregisterFuncs[*topic] = self.ctrl.pss.Register(topic, self.ctrl.handler)
 	return nil
 }
 
 // Deactivate handshake functionalty on a topic
-func (self *HandshakeAPI) RemoveHandshake(topic *whisper.TopicType) error {
+func (self *HandshakeAPI) RemoveHandshake(topic *Topic) error {
 	if _, ok := self.ctrl.deregisterFuncs[*topic]; ok {
 		self.ctrl.deregisterFuncs[*topic]()
 	}
@@ -483,7 +482,7 @@ func (self *HandshakeAPI) RemoveHandshake(topic *whisper.TopicType) error {
 // The `in` and `out` parameters indicate for which direction(s)
 // symmetric keys will be returned.
 // If both are false, no keys (and no error) will be returned.
-func (self *HandshakeAPI) GetHandshakeKeys(pubkeyid string, topic whisper.TopicType, in bool, out bool) (keys []string, err error) {
+func (self *HandshakeAPI) GetHandshakeKeys(pubkeyid string, topic Topic, in bool, out bool) (keys []string, err error) {
 	if in {
 		for _, inkey := range self.ctrl.validKeys(pubkeyid, &topic, true) {
 			keys = append(keys, *inkey)
@@ -522,7 +521,7 @@ func (self *HandshakeAPI) GetHandshakePublicKey(symkeyid string) (string, error)
 // If `flush` is set, garbage collection will be performed before returning.
 //
 // Returns true on successful removal, false otherwise
-func (self *HandshakeAPI) ReleaseHandshakeKey(pubkeyid string, topic whisper.TopicType, symkeyid string, flush bool) (removed bool, err error) {
+func (self *HandshakeAPI) ReleaseHandshakeKey(pubkeyid string, topic Topic, symkeyid string, flush bool) (removed bool, err error) {
 	removed = self.ctrl.releaseKey(symkeyid, &topic)
 	if removed && flush {
 		self.ctrl.cleanHandshake(pubkeyid, &topic, true, true)
@@ -534,7 +533,7 @@ func (self *HandshakeAPI) ReleaseHandshakeKey(pubkeyid string, topic whisper.Top
 //
 // Overloads the pss.SendSym() API call, adding symmetric key usage count
 // for message expiry control
-func (self *HandshakeAPI) SendSym(symkeyid string, topic whisper.TopicType, msg []byte) (err error) {
+func (self *HandshakeAPI) SendSym(symkeyid string, topic Topic, msg []byte) (err error) {
 	err = self.ctrl.pss.SendSym(symkeyid, topic, msg)
 	if self.ctrl.symKeyIndex[symkeyid] != nil {
 		if self.ctrl.symKeyIndex[symkeyid].count >= self.ctrl.symKeyIndex[symkeyid].limit {

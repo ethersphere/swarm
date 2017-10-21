@@ -2,9 +2,9 @@ package pss
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -18,6 +18,13 @@ const (
 var (
 	topicHashFunc = storage.MakeHashFunc("SHA256")()
 )
+
+type Topic whisper.TopicType
+
+func (t *Topic) Unmarshal(input []byte) error {
+	err := hexutil.UnmarshalFixedText("Topic", input, t[:])
+	return err
+}
 
 // variable length address
 type PssAddress []byte
@@ -42,32 +49,6 @@ func (self *PssMsg) String() string {
 	return fmt.Sprintf("PssMsg: Recipient: %x", common.ToHex(self.To))
 }
 
-// Convenience wrapper for devp2p protocol messages for transport over pss
-type ProtocolMsg struct {
-	Code       uint64
-	Size       uint32
-	Payload    []byte
-	ReceivedAt time.Time
-}
-
-// Creates a ProtocolMsg
-func NewProtocolMsg(code uint64, msg interface{}) ([]byte, error) {
-
-	rlpdata, err := rlp.EncodeToBytes(msg)
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO verify that nested structs cannot be used in rlp
-	smsg := &ProtocolMsg{
-		Code:    code,
-		Size:    uint32(len(rlpdata)),
-		Payload: rlpdata,
-	}
-
-	return rlp.EncodeToBytes(smsg)
-}
-
 // Signature for a message handler function for a PssMsg
 //
 // Implementations of this type are passed to Pss.Register together with a topic,
@@ -89,8 +70,8 @@ func (store *stateStore) Save(key string, v []byte) error {
 	return nil
 }
 
-func BytesToTopic(b []byte) whisper.TopicType {
+func BytesToTopic(b []byte) Topic {
 	topicHashFunc.Reset()
 	topicHashFunc.Write(b)
-	return whisper.BytesToTopic(topicHashFunc.Sum(nil))
+	return Topic(whisper.BytesToTopic(topicHashFunc.Sum(nil)))
 }
