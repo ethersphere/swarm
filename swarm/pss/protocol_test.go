@@ -36,7 +36,6 @@ func testProtocol(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("protocol test", "addrsize", addrsize)
 
-	hextopic := common.ToHex(PingTopic[:])
 	clients, err := setupNetwork(2)
 	if err != nil {
 		t.Fatal(err)
@@ -75,21 +74,21 @@ func testProtocol(t *testing.T) {
 
 	lmsgC := make(chan APIMsg)
 	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", hextopic)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", PingTopic)
 	log.Trace("lsub", "id", lsub)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", hextopic)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", PingTopic)
 	log.Trace("rsub", "id", rsub)
 	defer rsub.Unsubscribe()
 
 	// set reciprocal public keys
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, hextopic, roaddr)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, PingTopic, roaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, hextopic, loaddr)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, PingTopic, loaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
