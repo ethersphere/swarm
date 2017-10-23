@@ -406,7 +406,6 @@ func netPipe() (net.Conn, net.Conn, error) {
 }
 
 func tcpPipe() (net.Conn, net.Conn, error) {
-
 	cl := make(chan net.Conn)
 	cd := make(chan net.Conn)
 	start := make(chan *net.TCPAddr)
@@ -414,6 +413,7 @@ func tcpPipe() (net.Conn, net.Conn, error) {
 	go func(listener chan net.Conn, start chan *net.TCPAddr) {
 		found := false
 		for !found {
+			// assign random free port to current listener
 			port := 8000 + mrand.Int()%2000
 			endpoint := fmt.Sprintf("localhost:%d", port)
 
@@ -429,26 +429,20 @@ func tcpPipe() (net.Conn, net.Conn, error) {
 			}
 			start <- addr
 			found = true
-			// accept connection on port
-			fmt.Println("listening...")
 			conn, err := l.AcceptTCP()
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("accepted!")
 			listener <- conn
 		}
 	}(cl, start)
 
 	go func(dialer chan net.Conn, start chan *net.TCPAddr) {
 		addr := <-start
-		// connect to this socket
-		fmt.Println("dialing...")
 		c, err := net.DialTCP("tcp", nil, addr)
 		if err != nil {
 			panic(err)
 		}
-		fmt.Println("dialed")
 		dialer <- c
 	}(cd, start)
 
