@@ -579,7 +579,6 @@ func testNetwork(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		sub = sub.WithClientSubscriptionBufferSize(20000)
 		go func() {
 			defer sub.Unsubscribe()
 			for {
