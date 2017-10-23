@@ -49,11 +49,6 @@ var (
 	psslogmain     log.Logger
 	pssprotocols   map[string]*protoCtrl
 	useHandshake   bool
-
-	fnodecount = flag.Int("nodecount", 8, "number of nodes")
-	fmsgs      = flag.Int("msgs", 5000, "numner of messages to send")
-	fadapter   = flag.String("adapter", "sock", "adapter type (sim, sock, exec)")
-	faddrsize  = flag.Int("addrsize", 4, "address size")
 )
 
 var services = newServices()
@@ -623,7 +618,19 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 	}
 }
 
+// params in run name:
+// nodes/msgs/addrbytes/adaptertype
+// if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork(t *testing.T) {
+	t.Run("3/2000/4/sock", testNetwork)
+	t.Run("4/2000/4/sock", testNetwork)
+	t.Run("8/2000/4/sock", testNetwork)
+	t.Run("16/2000/4/sock", testNetwork)
+	t.Run("32/2000/4/sock", testNetwork)
+	t.Run("64/2000/4/sim", testNetwork)
+}
+
+func testNetwork(t *testing.T) {
 	type msgnotifyC struct {
 		id     discover.NodeID
 		msgIdx int
@@ -631,10 +638,11 @@ func TestNetwork(t *testing.T) {
 	topic := whisper.BytesToTopic([]byte("foo:42"))
 	hextopic := common.ToHex(topic[:])
 
-	nodecount := *fnodecount
-	msgcount := *fmsgs
-	addrsize := *faddrsize
-	adapter := *fadapter
+	paramstring := strings.Split(t.Name(), "/")
+	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
+	msgcount, _ := strconv.ParseInt(paramstring[2], 10, 0)
+	addrsize, _ := strconv.ParseInt(paramstring[3], 10, 0)
+	adapter := paramstring[4]
 
 	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize)
 
