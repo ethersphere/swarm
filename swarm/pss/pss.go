@@ -273,6 +273,7 @@ func (self *Pss) getHandlers(topic Topic) map[*Handler]bool {
 func (self *Pss) handlePssMsg(msg interface{}) error {
 	pssmsg, ok := msg.(*PssMsg)
 	if ok {
+		var err error
 		if !self.isSelfPossibleRecipient(pssmsg) {
 			msgexp := time.Unix(int64(pssmsg.Expire), 0)
 			if msgexp.Before(time.Now()) {
@@ -286,7 +287,10 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		}
 		log.Trace("pss for us, yay! ... let's process!")
 
-		return self.process(pssmsg)
+		if !self.process(pssmsg) {
+			err = self.forward(pssmsg)
+		}
+		return err
 	}
 
 	return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
@@ -295,7 +299,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 // Entry point to processing a message for which the current node can be the intended recipient.
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
-func (self *Pss) process(pssmsg *PssMsg) error {
+func (self *Pss) process(pssmsg *PssMsg) bool {
 	var err error
 	var recvmsg *whisper.ReceivedMessage
 	var from *PssAddress
@@ -314,30 +318,29 @@ func (self *Pss) process(pssmsg *PssMsg) error {
 	}
 	recvmsg, keyid, from, err = keyFunc(envelope)
 	if err != nil {
-		log.Trace("decrypt message fail", "err", err, "asym", asymmetric)
+		log.Debug("decrypt message fail", "err", err, "asym", asymmetric)
+		return false
 	}
 
-	if recvmsg != nil {
-		if len(pssmsg.To) < addressLength {
-			go func() {
-				err := self.forward(pssmsg)
-				if err != nil {
-					log.Warn("Redundant forward fail: %v", err)
-				}
-			}()
-		}
-		handlers := self.getHandlers(psstopic)
-		nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
-		p := p2p.NewPeer(nid, fmt.Sprintf("%x", from), []p2p.Cap{})
-		for f := range handlers {
-			err := (*f)(recvmsg.Payload, p, asymmetric, keyid)
+	if len(pssmsg.To) < addressLength {
+		go func() {
+			err := self.forward(pssmsg)
 			if err != nil {
-				log.Warn("Pss handler %p failed: %v", f, err)
+				log.Warn("Redundant forward fail: %v", err)
 			}
+		}()
+	}
+	handlers := self.getHandlers(psstopic)
+	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
+	p := p2p.NewPeer(nid, fmt.Sprintf("%x", from), []p2p.Cap{})
+	for f := range handlers {
+		err := (*f)(recvmsg.Payload, p, asymmetric, keyid)
+		if err != nil {
+			log.Warn("Pss handler %p failed: %v", f, err)
 		}
 	}
+	return true
 
-	return nil
 }
 
 // will return false if using partial address
@@ -469,7 +472,7 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 		self.symKeyDecryptCache[self.symKeyDecryptCacheCursor%cap(self.symKeyDecryptCache)] = symkeyid
 		return recvmsg, *symkeyid, from, nil
 	}
-	return nil, "", nil, nil
+	return nil, "", nil, fmt.Errorf("could not decrypt message")
 }
 
 // Attempt to decrypt, validate and unpack an
@@ -485,7 +488,7 @@ func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessa
 	}
 	// check signature (if signed), strip padding
 	if !recvmsg.Validate() {
-		return nil, "", nil, errors.New("invalid message")
+		return nil, "", nil, fmt.Errorf("could not decrypt message")
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
 	var from *PssAddress
