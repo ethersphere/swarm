@@ -593,10 +593,7 @@ func (self *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	self.pubKeyPoolMu.Lock()
 	psp := self.pubKeyPool[pubkeyid][topic]
 	self.pubKeyPoolMu.Unlock()
-	go func() {
-		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
-	}()
-	return nil
+	return self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
 }
 
 // Send is payload agnostic, and will accept any byte slice as payload
