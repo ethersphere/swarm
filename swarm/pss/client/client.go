@@ -4,14 +4,12 @@ package client
 
 import (
 	"context"
-	"crypto/ecdsa"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -36,8 +34,8 @@ type Client struct {
 	protos   map[pss.Topic]*p2p.Protocol
 
 	// rpc connections
-	rpc *rpc.Client
-	sub *rpc.ClientSubscription
+	rpc  *rpc.Client
+	subs []*rpc.ClientSubscription
 
 	// channels
 	topicsC chan []byte
@@ -53,13 +51,11 @@ type pssRPCRW struct {
 	msgC     chan []byte
 	addr     pss.PssAddress
 	pubKeyId string
-	symKeyId *string
 	lastSeen time.Time
 }
 
-func (self *Client) newpssRPCRW(pubkey *ecdsa.PublicKey, addr pss.PssAddress, topic pss.Topic) (*pssRPCRW, error) {
-	pubkeybytes := crypto.FromECDSAPub(pubkey)
-	err := self.rpc.Call(nil, "pss_setPeerPublicKey", pubkeybytes, topic, addr)
+func (self *Client) newpssRPCRW(pubkeyid string, addr pss.PssAddress, topic pss.Topic) (*pssRPCRW, error) {
+	err := self.rpc.Call(nil, "pss_setPeerPublicKey", common.FromHex(pubkeyid), topic, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -68,7 +64,7 @@ func (self *Client) newpssRPCRW(pubkey *ecdsa.PublicKey, addr pss.PssAddress, to
 		topic:    topic,
 		msgC:     make(chan []byte),
 		addr:     addr,
-		pubKeyId: common.ToHex(pubkeybytes),
+		pubKeyId: pubkeyid,
 	}, nil
 }
 
@@ -83,8 +79,7 @@ func (rw *pssRPCRW) ReadMsg() (p2p.Msg, error) {
 	return pmsg, nil
 }
 
-// if current symkey (pointed to by rw.symKeyId) is expired,
-// pointer is changed to next in buffer
+// If only one message slot left
 // then new is requested through handshake
 // if buffer is empty, handshake request blocks until return
 // after which pointer is changed to first new key in buffer
@@ -105,41 +100,43 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 		return err
 	}
 
-	// If we have a pointer, check if it is expired
+	// Get the keys we have
+	var symkeyids []string
+	err = rw.Client.rpc.Call(&symkeyids, "pss_getHandshakeKeys", rw.pubKeyId, rw.topic, false, true)
+	if err != nil {
+		return err
+	}
+
+	// Check the capacity of the first key
 	var symkeycap uint16
-	if rw.symKeyId != nil {
-		err = rw.Client.rpc.Call(&symkeycap, "pss_getHandshakeKeyCapacity", *rw.symKeyId)
+	if len(symkeyids) > 0 {
+		err = rw.Client.rpc.Call(&symkeycap, "pss_getHandshakeKeyCapacity", symkeyids[0])
 		if err != nil {
 			return err
 		}
 	}
 
-	if symkeycap == 0 {
-		// The key has expired. Check if we have more for the same peer and topic
-		var symkeyids []string
-		err = rw.Client.rpc.Call(&symkeyids, "pss_getHandshakeKeys", rw.pubKeyId, rw.topic, false, true)
-		if err != nil {
-			return err
-		}
-		// set the rw's point to the next key in the buffer
+	err = rw.Client.rpc.Call(nil, "pss_sendSym", symkeyids[0], rw.topic, pmsg)
+	if err != nil {
+		return err
+	}
+
+	// If this is the last message it is valid for, initiate new handshake
+	if symkeycap == 1 {
 		var retries int
 		var sync bool
-		if len(symkeyids) > 0 {
-			rw.symKeyId = &symkeyids[0]
-		} else {
-			retries = handshakeRetryCount
+		// if it's the only remaining key, make sure we don't continue until we have new ones for further writes
+		if len(symkeyids) == 1 {
 			sync = true
 		}
 		// initiate handshake
-		keyid, err := rw.handshake(retries, sync, false)
+		_, err := rw.handshake(retries, sync, false)
 		if err != nil {
+			log.Warn("failing", "err", err)
 			return err
 		}
-		if len(symkeyids) == 0 {
-			rw.symKeyId = &keyid
-		}
 	}
-	return rw.Client.rpc.Call(nil, "pss_sendSym", *rw.symKeyId, rw.topic, pmsg)
+	return nil
 }
 
 // retry and synchronicity wrapper for handshake api call
@@ -221,7 +218,11 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
-	self.sub = sub
+	self.subs = append(self.subs, sub)
+	err = self.rpc.Call(nil, "pss_addHandshake", topic)
+	if err != nil {
+		return fmt.Errorf("pss handshake activation failed: %v", err)
+	}
 
 	// dispatch incoming messages
 	go func() {
@@ -246,10 +247,10 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 					var addr pss.PssAddress
 					err := self.rpc.Call(&addr, "pss_getAddress", topic, false, msg.Key)
 					if err != nil {
-						log.Trace("no addr")
+						log.Trace(err.Error())
 						continue
 					}
-					rw, err := self.newpssRPCRW(crypto.ToECDSAPub(common.FromHex(pubkeyid)), addr, topic)
+					rw, err := self.newpssRPCRW(pubkeyid, addr, topic)
 					if err != nil {
 						break
 					}
@@ -272,7 +273,10 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 }
 
 // Always call this to ensure that we exit cleanly
-func (self *Client) Stop() error {
+func (self *Client) Close() error {
+	for _, s := range self.subs {
+		s.Unsubscribe()
+	}
 	return nil
 }
 
@@ -285,19 +289,18 @@ func (self *Client) Stop() error {
 // The key must exist in the key store of the pss node
 // before the peer is added. The method will return an error
 // if it is not.
-func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocols.Spec) error {
-	pubkeyid := common.ToHex(crypto.FromECDSAPub(key))
+//func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocols.Spec) error {
+func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spec) error {
 	topic := pss.ProtocolTopic(spec)
 	if self.peerPool[topic] == nil {
 		return errors.New("addpeer on unset topic")
 	}
 	if self.peerPool[topic][pubkeyid] == nil {
-		rw, err := self.newpssRPCRW(key, addr, topic)
+		rw, err := self.newpssRPCRW(pubkeyid, addr, topic)
 		if err != nil {
 			return err
 		}
 		symkeyid, err := rw.handshake(handshakeRetryCount, true, true)
-		rw.symKeyId = &symkeyid
 		if err != nil {
 			return err
 		}
@@ -305,6 +308,7 @@ func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocol
 		nid, _ := discover.HexID("0x00")
 		p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
 		go self.protos[topic].Run(p, self.peerPool[topic][pubkeyid])
+		_ = symkeyid
 	}
 	return nil
 }

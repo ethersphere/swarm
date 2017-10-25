@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -95,15 +95,15 @@ func TestHandshake(t *testing.T) {
 	lpssping := &pss.Ping{
 		OutC: make(chan bool),
 		InC:  make(chan bool),
-		Pong: true,
+		Pong: false,
 	}
 	rpssping := &pss.Ping{
 		OutC: make(chan bool),
 		InC:  make(chan bool),
-		Pong: true,
+		Pong: false,
 	}
-	lproto := pss.NewPingProtocol(lpssping.OutC, lpssping.PingHandler)
-	rproto := pss.NewPingProtocol(rpssping.OutC, rpssping.PingHandler)
+	lproto := pss.NewPingProtocol(lpssping)
+	rproto := pss.NewPingProtocol(rpssping)
 
 	ctx, _ := context.WithTimeout(context.Background(), time.Second*10)
 	err = lpsc.RunProtocol(ctx, lproto)
@@ -145,19 +145,9 @@ func TestHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = clients[0].Call(nil, "pss_addHandshake", topic)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	err = clients[1].Call(nil, "pss_addHandshake", topic)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	time.Sleep(time.Second)
 
-	err = lpsc.AddPssPeer(crypto.ToECDSAPub(rpubkey), roaddr, pss.PingProtocol)
+	err = lpsc.AddPssPeer(common.ToHex(rpubkey), roaddr, pss.PingProtocol)
 	if err != nil {
 		t.Fatal(err)
 	}

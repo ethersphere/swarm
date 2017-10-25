@@ -1,4 +1,4 @@
-// +build !noprotocol
+// +build !nopssprotocol
 
 package pss
 
@@ -10,6 +10,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rlp"
 	"time"
+)
+
+const (
+	IsActiveProtocol = true
 )
 
 // Convenience wrapper for devp2p protocol messages for transport over pss

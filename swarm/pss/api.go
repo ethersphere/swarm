@@ -3,6 +3,7 @@ package pss
 import (
 	"context"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -63,6 +64,25 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 	}()
 
 	return psssub, nil
+}
+
+func (pssapi *API) GetAddress(topic Topic, asymmetric bool, key string) (PssAddress, error) {
+	var addr *PssAddress
+	if asymmetric {
+		peer, ok := pssapi.Pss.pubKeyPool[key][topic]
+		if !ok {
+			return nil, fmt.Errorf("pubkey/topic pair %x/%x doesn't exist", key, topic)
+		}
+		addr = peer.address
+	} else {
+		peer, ok := pssapi.Pss.symKeyPool[key][topic]
+		if !ok {
+			return nil, fmt.Errorf("symkey/topic pair %x/%x doesn't exist", key, topic)
+		}
+		addr = peer.address
+
+	}
+	return *addr, nil
 }
 
 // Retrieves the node's public key in byte form
