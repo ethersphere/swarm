@@ -282,10 +282,10 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 			} else if msgexp.After(time.Now().Add(self.msgTTL)) {
 				return errors.New("Invalid TTL")
 			}
-			log.Trace("pss was for someone else :'( ... forwarding")
+			log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(self.BaseAddr()))
 			return self.forward(pssmsg)
 		}
-		log.Trace("pss for us, yay! ... let's process!")
+		log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(self.BaseAddr()))
 
 		if !self.process(pssmsg) {
 			err = self.forward(pssmsg)
@@ -318,7 +318,7 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	}
 	recvmsg, keyid, from, err = keyFunc(envelope)
 	if err != nil {
-		log.Debug("decrypt message fail", "err", err, "asym", asymmetric)
+		log.Debug("decrypt message fail", "err", err, "asym", asymmetric, "pss", common.ToHex(self.BaseAddr()))
 		return false
 	}
 
@@ -432,7 +432,8 @@ func (self *Pss) addSymmetricKeyToPool(keyid string, topic Topic, address *PssAd
 		self.symKeyDecryptCacheCursor++
 		self.symKeyDecryptCache[self.symKeyDecryptCacheCursor%cap(self.symKeyDecryptCache)] = &keyid
 	}
-	log.Trace("added symkey", "symkeyid", keyid, "topic", topic, "address", address, "cache", addtocache)
+	key, _ := self.GetSymmetricKey(keyid)
+	log.Trace("added symkey", "symkeyid", keyid, "symkey", common.ToHex(key), "topic", topic, "address", address, "cache", addtocache)
 }
 
 // Returns a symmetric key byte seqyence stored in the whisper backend
@@ -484,11 +485,11 @@ func (self *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessag
 func (self *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
 	recvmsg, err := envelope.OpenAsymmetric(self.privateKey)
 	if err != nil {
-		return nil, "", nil, fmt.Errorf("asym default decrypt of pss msg failed: %v", "err", err)
+		return nil, "", nil, fmt.Errorf("could not decrypt message: %v", "err", err)
 	}
 	// check signature (if signed), strip padding
 	if !recvmsg.Validate() {
-		return nil, "", nil, fmt.Errorf("could not decrypt message")
+		return nil, "", nil, fmt.Errorf("invalid message")
 	}
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(recvmsg.Src))
 	var from *PssAddress
