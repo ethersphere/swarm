@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
@@ -57,7 +58,7 @@ type Swarm struct {
 	swapEnabled bool
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
-	pss         *pss.Pss
+	ps          *pss.Pss
 }
 
 type SwarmAPI struct {
@@ -143,7 +144,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// Pss = postal service over swarm (devp2p over bzz)
 	if pssEnabled {
 		pssparams := pss.NewPssParams(self.privateKey)
-		self.pss = pss.NewPss(to, self.dpa, pssparams)
+		self.ps = pss.NewPss(to, self.dpa, pssparams)
+		if pss.IsActiveHandshake {
+			pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
+		}
 	}
 
 	// set up high level api
@@ -208,8 +212,8 @@ func (self *Swarm) Start(net *p2p.Server) error {
 	}
 	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
 
-	if self.pss != nil {
-		self.pss.Start(net)
+	if self.ps != nil {
+		self.ps.Start(net)
 		log.Info("Pss started")
 	}
 
@@ -239,8 +243,8 @@ func (self *Swarm) Start(net *p2p.Server) error {
 func (self *Swarm) Stop() error {
 	self.dpa.Stop()
 	self.bzz.Stop()
-	if self.pss != nil {
-		self.pss.Stop()
+	if self.ps != nil {
+		self.ps.Stop()
 	}
 	if ch := self.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
@@ -261,13 +265,21 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 		protos = append(protos, p)
 	}
 
-	if self.pss != nil {
+	if self.ps != nil {
 		log.Warn("adding pss protos")
-		for _, p := range self.pss.Protocols() {
+		for _, p := range self.ps.Protocols() {
 			protos = append(protos, p)
 		}
 	}
 	return
+}
+
+func (self *Swarm) RegisterPssProtocol(spec *protocols.Spec, targetprotocol *p2p.Protocol, options *pss.ProtocolParams) (*pss.Protocol, error) {
+	if !pss.IsActiveProtocol {
+		return nil, fmt.Errorf("Pss protocols not available (built with !nopssprotocol tag)")
+	}
+	topic := pss.ProtocolTopic(spec)
+	return pss.RegisterProtocol(self.ps, &topic, spec, targetprotocol, options)
 }
 
 // implements node.Service
@@ -322,8 +334,8 @@ func (self *Swarm) APIs() []rpc.API {
 		apis = append(apis, api)
 	}
 
-	if self.pss != nil {
-		for _, api := range self.pss.APIs() {
+	if self.ps != nil {
+		for _, api := range self.ps.APIs() {
 			apis = append(apis, api)
 		}
 	}
