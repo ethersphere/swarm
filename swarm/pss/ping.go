@@ -1,4 +1,4 @@
-// +build !noprotocol
+// +build !nopssprotocol,!nopssping
 
 package pss
 
@@ -25,7 +25,7 @@ type Ping struct {
 	InC  chan bool // optional, report back to calling code
 }
 
-func (self *Ping) PingHandler(msg interface{}) error {
+func (self *Ping) pingHandler(msg interface{}) error {
 	var pingmsg *PingMsg
 	var ok bool
 	if pingmsg, ok = msg.(*PingMsg); !ok {
@@ -52,7 +52,7 @@ var PingProtocol = &protocols.Spec{
 
 var PingTopic = ProtocolTopic(PingProtocol)
 
-func NewPingProtocol(pingC chan bool, handler func(interface{}) error) *p2p.Protocol {
+func NewPingProtocol(ping *Ping) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    PingProtocol.Name,
 		Version: PingProtocol.Version,
@@ -60,11 +60,11 @@ func NewPingProtocol(pingC chan bool, handler func(interface{}) error) *p2p.Prot
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 			quitC := make(chan struct{})
 			pp := protocols.NewPeer(p, rw, PingProtocol)
-			log.Trace(fmt.Sprintf("running pss vprotocol on peer %v", p, "outc", pingC))
+			log.Trace(fmt.Sprintf("running pss vprotocol on peer %v", p, "outc", ping.OutC))
 			go func() {
 				for {
 					select {
-					case ispong := <-pingC:
+					case ispong := <-ping.OutC:
 						pp.Send(&PingMsg{
 							Created: time.Now(),
 							Pong:    ispong,
@@ -73,7 +73,7 @@ func NewPingProtocol(pingC chan bool, handler func(interface{}) error) *p2p.Prot
 					}
 				}
 			}()
-			err := pp.Run(handler)
+			err := pp.Run(ping.pingHandler)
 			quitC <- struct{}{}
 			return err
 		},

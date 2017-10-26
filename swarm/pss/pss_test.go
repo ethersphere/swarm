@@ -866,9 +866,8 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err := ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1])
-		if err != nil {
-			b.Fatalf("pss processing failed: %v", err)
+		if !ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1]) {
+			b.Fatalf("pss processing failed")
 		}
 	}
 }
@@ -948,8 +947,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		Payload: env,
 	}
 	for i := 0; i < b.N; i++ {
-		err := ps.process(pssmsg)
-		if err != nil {
+		if !ps.process(pssmsg) {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
@@ -1039,7 +1037,7 @@ func newServices() adapters.Services {
 				OutC: make(chan bool),
 				Pong: true,
 			}
-			p2pp := NewPingProtocol(ping.OutC, ping.PingHandler)
+			p2pp := NewPingProtocol(ping)
 			pp, err := RegisterProtocol(ps, &PingTopic, PingProtocol, p2pp, &ProtocolParams{Asymmetric: true})
 			if err != nil {
 				return nil, err
