@@ -81,12 +81,12 @@ func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic Topic, addr PssAddress)
 	return nil
 }
 
-func (pssapi *API) GetSymmetricAddressHint(topic Topic, asymmetric bool, key string) (PssAddress, error) {
-	return *pssapi.Pss.symKeyPool[key][topic].address, nil
+func (pssapi *API) GetSymmetricAddressHint(topic Topic, symkeyid string) (PssAddress, error) {
+	return *pssapi.Pss.symKeyPool[keyid][topic].address, nil
 }
 
-func (pssapi *API) GetAsymmetricAddressHint(topic Topic, asymmetric bool, key string) (PssAddress, error) {
-	return *pssapi.Pss.pubKeyPool[key][topic].address, nil
+func (pssapi *API) GetAsymmetricAddressHint(topic Topic, pubkeyid string) (PssAddress, error) {
+	return *pssapi.Pss.pubKeyPool[keyid][topic].address, nil
 }
 
 func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
