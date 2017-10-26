@@ -1,138 +1,269 @@
-# Postal Service over Swarm
+# Postal Services over Swarm
 
-Pss provides devp2p functionality for swarm nodes without the need for a direct tcp connection between them.
+* Status of this document
+* Core concepts
+* Caveat
+* API
+  * Retrieve node information
+  * Receive messages
+  * Send messages using public key encryption
+  * Send messages using symmetric encryption
+  * Querying peer keys
+  * Handshakes
 
-Messages are encapsulated in a devp2p message structure `PssMsg`. These capsules are forwarded from node to node using ordinary tcp devp2p until they reach their destination: The node or nodes who can successfully decrypt the message.
-
-Routing of messages is done using swarm's own kademlia routing. Optionally routing can be turned off, forcing the message to be sent to all peers, similar to the behavior of the whisper protocol.
-
-Pss is intended for messages of limited size, typically a couple of Kbytes at most. The messages themselves can be anything at all; complex data structures or non-descript byte sequences.
-
-For the current state and roadmap of pss development please see https://github.com/ethersphere/swarm/wiki/swarm-dev-progress.
-
-Please report issues on https://github.com/ethersphere/go-ethereum
-
-Feel free to ask questions in https://gitter.im/ethersphere/pss
+`pss` enables message relay over swarm. This means nodes can send messages to each other without being directly connected with each other, while taking advantage of the efficient routing algorithms that swarm uses for transporting and storing data.
 
 ## STATUS OF THIS DOCUMENT
 
 `pss` is under active development, and the first implementation is yet to be merged to the Ethereum main branch. Expect things to change.
 
-## CORE INTERFACES
+Details on swarm routing and encryption schemes out of scope of this document.
 
-The pss core provides low level control of key handling and message exchange. 
+Please refer to `ARCHITECTURE.md` for in-depth topics concerning `pss`.
 
-### TOPICS
+## CORE CONCEPTS
 
-An encrypted envelope of a pss message always contains a Topic. This is pss' way of determining which message handlers to dispatch messages to. The topic of a message is only visible for the node(s) who can decrypt the message.
+Three things are required to send a `pss` message:
 
-This "topic" is not like the subject of an email message, but a hash-like arbitrary 4 byte value. A valid topic can be generated using the `pss_*ToTopic` API methods.
+1. Encryption key
+2. Topic
+3. Message payload
 
-### IDENTITY AND ENCRYPTION
+*Encryption key* can be a public key or a 32 byte symmetric key. It must be coupled with a peer address in the node prior to sending.
 
-Pss aims to achieve perfect darkness. That means that the minimum requirement for two nodes to communicate using pss is a shared secret. This secret can be an arbitrary byte slice, or a ECDSA keypair. The end recipient of a message is defined as the node that can successfully decrypt that message using stored keys.
+*Topic* is the initial 4 bytes of a hash value.
 
-A node's public key is derived from the private key passed to the `pss` constructor. Pss (currently) has no PKI.
+*Message payload* is an arbitrary byte slice of data.
 
-Peer keys can manually be added to the pss node through its API calls `pss_setPeerPublicKey` and `pss_setSymmetricKey`. Keys are always coupled with a topic, and the keys will only be valid for these topics.
+Upon sending the message it is encrypted and passed on from peer to peer. Any node along the route that can successfully decrypt the message is regarded as a recipient. Recipients continue to pass on the message to their peers, to make traffic analysis attacks more difficult.
 
-### CONNECTIONS
+The Address that is coupled with the encryption keys are used for routing the message. This does *not* need to be a full addresses; the network will route the message to the best of its ability with the information that is available. If *no* address is given (zero-length byte slice), routing is effectively deactivated, and the message is passed to all peers by all peers.
 
-A "connection" in pss is a purely virtual construct. There is no mechanisms in place to ensure that the remote peer actually is there. In fact, "adding" a peer involves merely the node's opinion that the peer is there. It may issue messages to that remote peer to a directly connected peer, which in turn passes it on. But if it is not present on the network - or if there is no route to it - the message will never reach its destination through mere forwarding.
+##
 
-Since pss itself never requires a confirmation from a peer of whether a message is received or not, one could argue that pss shows `UDP`-like behavior.
+## API
 
-It is also important to note that if the wrong (partial) address is set for a particular key/topic combination, the message may never reach that peer. The further left in the address byte slice the error lies, the less likely it is that delivery will occur. 
+Parameters and return values below have two alternate descriptions. The first is the value type expected when handling raw `json` values through the RPC. The second is the value type when the `rpc.Client` in `go-ethereum` is used.
 
+### Retreive node information
 
-### EXCHANGE
+`pss_getPublicKey`
 
-Message exchange in `pss` *requires* end-to-end encryption. 
+Retrieves the public key of the node, in raw byte format
 
-The API methods `pss_sendSym` and `pss_sendAsym` sends an arbitrary byte slice with a specific topic to a pss peer using the respective encryption scheme. The key passed to the send method must be associated with a topic in the pss key store prior to sending, or the send method will fail.
+parameters:
+none
 
-Return values from the send methods do *not* indicate whether the message was successfully delivered to the pss peer. It *only* indicates whether or not the message could be passed on to the network. If the message could not be forwarded to any peers, the method will fail.
+returns:
+1. publickey `base64(bytes)` `[]byte`
 
-Keep in mind that symmetric encryption is less resource-intensive than asymmetric encryption. The former should be used for nodes with high message volumes.
+`pss_baseAddr`
 
-## EXTENSIONS
+Retrieves the swarm overlay address of the node, in raw byte format
 
-### HANDSHAKE
+parameters:
+none
 
-Pss offers an optional Diffie-Hellman handshake mechanism. Handshake functionality is activated per topic, and can be deactivated per topic even while the node is running.
+returns:
+1. swarm overlay address `base64(bytes)` `[]byte`
 
-Handshakes are activated in the code implementation of the node by running `SetHandshakeController()` on the pss node instance BEFORE starting the node service. The methods exposed by the HandshakeController's API gives the possibility to initiate, remove and check the state of handshakes and associated keys.
+`pss_stringToTopic`
 
-See the `HandshakeAPI` section in `godoc` for details.
+Creates a deterministic 4 byte topic value from input
 
-### DEVP2P PROTOCOLS
+parameters:
+1. topic string `string` `string`
 
-The `Protocol` convenience structure is provided to mimic devp2p-type protocols over pss. In theory this makes it possible to reuse protocol code written for devp2p with a minimum of effort.
+returns:
+1. pss topic `base64(bytes[4])` `pss.Topic`
 
-#### OUTGOING CONNECTIONS
+### Receive messages
 
-In order to message a peer using this layer, a `Protocol` object must first be instantiated. When this is done, peers can be added using the protocol's `AddPeer()` method. The peer's key/topic combination must be in the pss key store before the peer can be aded.
+`pss_subscribe`
 
-Adding a peer in effect "runs" the protocol on that peer, and adds an internal mapping between a topic and that peer, and enables sending and receiving messages using the usual io-construct of devp2p. It does not actually *transmit* anything to the peer, it merely represents the node's opinion that a connection with the peer exists. (See CONNECTION above).
+Creates a subscription. Received messages with matching topic will be passed to subscription client.
 
-#### INCOMING CONNECTIONS
+parameters:
+1. "receive" (literal) `string` `string` 
+2. topic `base64(bytes)` `pss.Topic`
 
-An incoming connection is nothing more than an actual PssMsg appearing with a certain Topic. If a Handler has been registered to that Topic, the message will be passed to it. This constitutes a "new" connection if:
+returns:
+1. subscription handle `base64(byte)` `rpc.ClientSubscription`
 
-- The pss node never called AddPeer with this combination of remote peer address and topic, and
+* In `golang` as special method is used:
 
-- The pss node never received a PssMsg from this remote peer with this specific Topic before.
+`rpc.Client.Subscribe(context.Context, "pss", chan pss.APIMsg, "receive", pss.Topic)`
 
-If it is a "new" connection, the protocol will be "run" on the remote peer, as if the peer was added via the API. 
+Incoming messages are encapsulated in an object (`pss.APIMsg` in `golang`) with the following members:
 
-As with the `AddPeer()` method, the key/topic of the originating peer must exist in the pss key store.
+1. Msg (message payload) `base64(bytes)` `[]byte`
+2. Asymmetric (true if encrypted with public key cryptography) `bool` `bool`
+3. Key (raw encryption key in hex format) `string` `string`
 
-#### TOPICS IN DEVP2P
+### Send message using asymmetric encryption
 
-The `ProtocolTopic()` method should be used to determine the correct topic to use for a pss `Protocol` instance.
+`pss_setPeerPublicKey`
 
-## EXAMPLES
+Register a peer's public key. This is done once for every topic that will be used with the peer. Address can be anything from 0 to 32 bytes inclusive of the peer's swarm overlay address.
 
-Coming. Please refer to the tests for now.
+parameters:
+1. public key of peer `base64(bytes)` `[]byte`
+2. topic `base64(bytes)` `pss.Topic`
+3. address of peer `base64(bytes)` `pss.PssAddress`
 
-## PSS INTERNALS
+returns:
+none
 
-Pss implements the node.Service interface. It depends on a working kademlia overlay for routing.
+`pss_sendAsym`
 
-### DECRYPTION
+Encrypts the message using the provided public key, and signs it using the node's private key. It then wraps it in an envelope containing the topic, and sends it to the network. 
 
-When processing an incoming message, `pss` detects whether it is encrypted symmetrically or asymmetrically.
+parameters:
+1. public key of peer `base64(bytes)` `[]byte`
+2. topic `base64(bytes)` `pss.Topic`
+3. message `base64(bytes)` `[]byte`
 
-When decrypting symmetrically, `pss` iterates through all stored keys, and attempts to decrypt with each key in order.
+returns:
+none
 
-pss keeps a *cache* of these keys. The cache will only store a certain amount of keys, and the iterator will return keys in the order of most recently used key first. Abandoned keys will be garbage collected.
+### Send message using symmetric encryption
 
-### ROUTING 
+`pss_setSymmetricKey`
 
-(please refer to swarm kademlia routing for an explanation of the routing algorithm used for pss)
+Register a symmetric key shared with a peer. This is done once for every topic that will be used with the peer. Address can be anything from 0 to 32 bytes inclusive of the peer's swarm overlay address.
 
-`pss` uses *address hinting* for routing. The address hint is an arbitrary-length MSB byte slice of the peer's swarm overlay address. It can be the whole address, part of the address, or even an empty byte slice. The slice will be matched to the MSB slice of the same length of all devp2p peers in the routing stage.
+If the fourth parameter is false, the key will *not* be added to the list of symmetric keys used for decryption attempts.
 
-If an empty byte slice is passed, all devp2p peers will match the address hint, and the message will be forwarded to everyone. This is equivalent to `whisper` routing, and makes it difficult to perform traffic analysis based on who messages are forwarded to.
+parameters:
+1. symmetric key `base64(bytes)` `[]byte`
+2. topic `base64(bytes)` `pss.Topic`
+3. address of peer `base64(bytes)` `pss.PssAddress`
+4. use for decryption `bool` `bool`
 
-A node will also forward to everyone if the address hint provided is in its proximity bin, both to provide saturation to increase chances of delivery, and also for recipient obfuscation to thwart traffic analysis attacks. The recipient node(s) will always forward to all its peers.
+returns:
+1. symmetric key id `string` `string`
 
-### CACHING
+`pss_sendSym`
 
-pss implements a simple caching mechanism for messages, using the swarm DPA for storage of the messages and generation of the digest keys used in the cache table. The caching is intended to alleviate the following:
+Encrypts the message using the provided symmetric key, wraps it in an envelope containing the topic, and sends it to the network.
 
-- save messages so that they can be delivered later if the recipient was not online at the time of sending.
+parameters:
+1. symmetric key id `string` `string`
+2. topic `base64(bytes)` `pss.Topic`
+3. message `base64(bytes)` `[]byte`
 
-- drop an identical message to the same recipient if received within a given time interval
+returns:
+none
 
-- prevent backwards routing of messages
+### Querying peer keys
 
-the latter may occur if only one entry is in the receiving node's kademlia, or if the proximity of the current node recipient hinted by the address is so close that the message will be forwarded to everyone. In these cases the forwarder will be provided as the "nearest node" to the final recipient. The cache keeps the address of who the message was forwarded from, and if the cache lookup matches, the message will be dropped.
+`pss_GetSymmetricAddressHint`
 
-### DEVP2P PROTOCOLS
+Return the swarm overlay address associated with the peer registered with the given symmetric key and topic combination.
 
-When implementing devp2p protocols, topics are derived from protocols' name and version. The Protocol provides a generic Handler that be passed to Pss.Register. This makes it possible to use the same message handler code for pss that is used for directly connected peers in devp2p.
+parameters:
+1. topic `base64(bytes)` `pss.Topic`
+2. symmetric key id `string` `string`
 
-Under the hood, pss implements its own MsgReadWriter, which bridges MsgReadWriter.WriteMsg with Pss.SendRaw, and deftly adds an InjectMsg method which pipes incoming messages to appear on the MsgReadWriter.ReadMsg channel.
+returns:
+1. peer address `base64(bytes)` `pss.PssAddress`
 
+`pss_GetAsymmetricAddressHint`
 
+Return the swarm overlay address associated with the peer registered with the given symmetric key and topic combination.
+
+parameters:
+1. topic `base64(bytes)` `pss.Topic`
+2. public key in hex form `string` `string`
+
+returns:
+1. peer address `base64(bytes)` `pss.PssAddress`
+
+### Handshakes
+
+Convenience implementation of Diffie-Hellman handshakes using ephemeral symmetric keys. Peers keep separate sets of keys for incoming and outgoing communications.
+
+*This functionality is an optional feature in `pss`. It is compiled in by default, but can be omitted by providing the `nopsshandshake` build tag.*
+
+`pss_addHandshake`
+
+Activate handshake functionality on the specified topic.
+
+parameters:
+1. topic to activate handshake on `base64(bytes)` `pss.Topic`
+
+returns:
+none
+
+`pss_removeHandshake`
+
+Remove handshake functionality on the specified topic.
+
+parameters:
+1. topic to remove handshake from `base64(bytes)` `pss.Topic`
+
+returns:
+none
+
+`pss_handshake`
+
+Instantiate handshake with peer, refreshing symmetric encryption keys.
+
+parameters:
+1. public key of peer in hex format `string` `string`
+2. topic `base64(bytes)` `pss.Topic`
+3. block calls until keys are received `bool` `bool`
+4. flush existing incoming keys `bool` `bool`
+
+returns:
+1. list of symmetric keys `string[]` `[]string`\*
+
+* If parameter 3 is false, the returned array will be empty.
+
+`pss_getHandshakeKeys`
+
+Get valid symmetric encryption keys for a specified peer and topic.
+
+parameters:
+1. public key of peer in hex format `string` `string`
+2. topic `base64(bytes)` `pss.Topic`
+3. include keys for incoming messages `bool` `bool`
+4. include keys for outgoing messages `bool` `bool`
+
+returns:
+1. list of symmetric keys `string[]` `[]string`
+
+`pss_getHandshakeKeyCapacity`
+
+Get amount of remaining messages the specified key is valid for.
+
+parameters:
+1. symmetric key id `string` `string`
+
+return:
+1. number of messages `uint` `uint16`
+
+`pss_getHandshakePublicKey`
+
+Get the peer's public key associated with the specified symmetric key.
+
+parameters:
+1. symmetric key id `string` `string`
+
+returns:
+1. Associated public key in hex format `string` `string`
+
+`pss_releaseHandshakeKey`
+
+Invalidate the specified key.
+
+Normally, the key will be kept for a grace period to allow for decryption of delayed messages. If instant removal is set, this grace period is omitted, and the key removed instantaneously.
+
+parameters:
+1. public key of peer in hex format `string` `string`
+2. topic `base64(bytes)` `pss.Topic`
+3. symmetric key id to release `string` `string`
+4. remove keys instantly `bool` `bool`
+
+returns:
+1. whether key was successfully removed `bool` `bool`
