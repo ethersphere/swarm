@@ -4,16 +4,11 @@ Pss provides devp2p functionality for swarm nodes without the need for a direct 
 
 Messages are encapsulated in a devp2p message structure `PssMsg`. These capsules are forwarded from node to node using ordinary tcp devp2p until they reach their destination: The node or nodes who can successfully decrypt the message.
 
----------------------------
-| PssMsg                  |
-| - Address               |
-| - Expires               |
----------------------------
-| Envelope (whisperv5)    |
-| - Topic                 |
----------------------------
-| enc(Payload)            |
----------------------------
+| Layer     | Contents        |
+|-----------|-----------------|
+| PssMsg:   | Address, Expiry |
+| Envelope: | Topic           |
+| Payload:  | e(data)         |
 
 Routing of messages is done using swarm's own kademlia routing. Optionally routing can be turned off, forcing the message to be sent to all peers, similar to the behavior of the whisper protocol.
 
