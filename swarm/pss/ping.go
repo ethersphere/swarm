@@ -52,7 +52,6 @@ var PingProtocol = &protocols.Spec{
 
 var PingTopic = ProtocolTopic(PingProtocol)
 
-//func NewPingProtocol(pingC chan bool, handler func(interface{}) error) *p2p.Protocol {
 func NewPingProtocol(ping *Ping) *p2p.Protocol {
 	return &p2p.Protocol{
 		Name:    PingProtocol.Name,

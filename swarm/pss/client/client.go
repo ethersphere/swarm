@@ -289,7 +289,6 @@ func (self *Client) Close() error {
 // The key must exist in the key store of the pss node
 // before the peer is added. The method will return an error
 // if it is not.
-//func (self *Client) AddPssPeer(key *ecdsa.PublicKey, addr []byte, spec *protocols.Spec) error {
 func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spec) error {
 	topic := pss.ProtocolTopic(spec)
 	if self.peerPool[topic] == nil {
@@ -300,7 +299,7 @@ func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spe
 		if err != nil {
 			return err
 		}
-		symkeyid, err := rw.handshake(handshakeRetryCount, true, true)
+		_, err := rw.handshake(handshakeRetryCount, true, true)
 		if err != nil {
 			return err
 		}
@@ -308,7 +307,6 @@ func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spe
 		nid, _ := discover.HexID("0x00")
 		p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
 		go self.protos[topic].Run(p, self.peerPool[topic][pubkeyid])
-		_ = symkeyid
 	}
 	return nil
 }
