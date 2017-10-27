@@ -307,6 +307,7 @@ DEPRECATED: use 'swarm db clean'.
 		SwarmConfigPathFlag,
 		SwarmSwapEnabledFlag,
 		SwarmSyncEnabledFlag,
+		SwarmApiFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
 		SwarmNetworkIdFlag,
