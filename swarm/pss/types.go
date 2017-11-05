@@ -2,6 +2,7 @@ package pss
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -16,7 +17,8 @@ const (
 )
 
 var (
-	topicHashFunc = storage.MakeHashFunc("SHA256")()
+	topicHashMutex = sync.Mutex{}
+	topicHashFunc  = storage.MakeHashFunc("SHA256")()
 )
 
 type Topic whisper.TopicType
@@ -71,6 +73,8 @@ func (store *stateStore) Save(key string, v []byte) error {
 }
 
 func BytesToTopic(b []byte) Topic {
+	topicHashMutex.Lock()
+	defer topicHashMutex.Unlock()
 	topicHashFunc.Reset()
 	topicHashFunc.Write(b)
 	return Topic(whisper.BytesToTopic(topicHashFunc.Sum(nil)))
