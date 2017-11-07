@@ -135,6 +135,10 @@ var (
 		Name:  "mime",
 		Usage: "force mime type",
 	}
+	PssEnabledFlag = cli.BoolFlag{
+		Name:  "pss",
+		Usage: "Enable pss (message passing over swarm)",
+	}
 	CorsStringFlag = cli.StringFlag{
 		Name:  "corsdomain",
 		Usage: "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
@@ -341,6 +345,8 @@ DEPRECATED: use 'swarm db clean'.
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
+		// pss flags
+		PssEnabledFlag,
 		//deprecated flags
 		DeprecatedEthAPIFlag,
 	}
@@ -381,8 +387,10 @@ func bzzd(ctx *cli.Context) error {
 	if ctx.GlobalString(DeprecatedEthAPIFlag.Name) != "" {
 		utils.Fatalf("--ethapi is no longer a valid command line flag, please use --ens-api and/or --swap-api.")
 	}
-
 	cfg := defaultNodeConfig
+	if ctx.GlobalBool(PssEnabledFlag.Name) && ctx.GlobalBool(utils.WSEnabledFlag.Name) {
+		cfg.WSModules = append(cfg.WSModules, "pss")
+	}
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
 	if err != nil {
@@ -470,6 +478,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	}
 	swapEnabled := ctx.GlobalBool(SwarmSwapEnabledFlag.Name)
 	syncEnabled := ctx.GlobalBoolT(SwarmSyncEnabledFlag.Name)
+	pssEnabled := ctx.GlobalBool(PssEnabledFlag.Name)
 
 	swapapi := ctx.GlobalString(SwarmSwapAPIFlag.Name)
 	if swapEnabled && swapapi == "" {
@@ -482,10 +491,10 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 	cors := ctx.GlobalString(CorsStringFlag.Name)
 
 	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		var swapClient *ethclient.Client
+		//var swapClient *ethclient.Client
 		if swapapi != "" {
 			log.Info("connecting to SWAP API", "url", swapapi)
-			swapClient, err = ethclient.Dial(swapapi)
+			//	swapClient, err = ethclient.Dial(swapapi)
 			if err != nil {
 				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", swapapi, err)
 			}
@@ -511,8 +520,7 @@ func registerBzzService(ctx *cli.Context, stack *node.Node) {
 				}
 			}
 		}
-
-		return swarm.NewSwarm(ctx, swapClient, ensClient, bzzconfig, swapEnabled, syncEnabled, cors)
+		return swarm.NewSwarm(ctx, ensClient, bzzconfig, swapEnabled, syncEnabled, cors, pssEnabled)
 	}
 	if err := stack.Register(boot); err != nil {
 		utils.Fatalf("Failed to register the Swarm service: %v", err)
