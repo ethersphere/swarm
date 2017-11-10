@@ -535,8 +535,10 @@ func (self *Pss) cleanKeys() (count int) {
 			}
 		}
 		for _, topic := range expiredtopics {
+			self.symKeyPoolMu.Lock()
 			delete(self.symKeyPool[keyid], topic)
 			log.Trace("symkey cleanup deletion", "symkeyid", keyid, "topic", topic, "val", self.symKeyPool[keyid])
+			self.symKeyPoolMu.Unlock()
 			count++
 		}
 	}
