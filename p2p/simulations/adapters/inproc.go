@@ -21,7 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	mrand "math/rand"
+	"math/big"
 	"net"
 	"os"
 	"sync"
@@ -391,7 +391,11 @@ func tcpPipe() (net.Conn, net.Conn, error) {
 		found := false
 		for !found {
 			// assign random free port to current listener
-			port := 8000 + mrand.Int()%2000
+			rnd, err := rand.Int(rand.Reader, big.NewInt(2000))
+			if err != nil {
+				panic(err)
+			}
+			port := 8000 + int(rnd.Int64())
 			endpoint := fmt.Sprintf("localhost:%d", port)
 
 			// resolve
