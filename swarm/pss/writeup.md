@@ -30,6 +30,31 @@ Moreover execution almost always deadlocks with `sim` adapter, and `sock` adapte
 
 Panics were caused due to concurrent map read/writes and unsynchronised access to shared memory by multiple goroutines. This is visible when running the test with the `-race` flag.
 
+```
+go test -race -v ./swarm/pss -cpu 4 -run TestNetwork
+
+  1 ==================
+  2 WARNING: DATA RACE
+  3 Read at 0x00c424d456a0 by goroutine 1089:
+  4   github.com/ethereum/go-ethereum/swarm/pss.(*Pss).forward.func1()
+  5       /Users/nonsense/code/src/github.com/ethereum/go-ethereum/swarm/pss/pss.go:654 +0x44f
+  6   github.com/ethereum/go-ethereum/swarm/network.(*Kademlia).eachConn.func1()
+  7       /Users/nonsense/code/src/github.com/ethereum/go-ethereum/swarm/network/kademlia.go:350 +0xc9
+  8   github.com/ethereum/go-ethereum/pot.(*Pot).eachNeighbour.func1()
+  9       /Users/nonsense/code/src/github.com/ethereum/go-ethereum/pot/pot.go:599 +0x59
+  ...
+
+ 28
+ 29 Previous write at 0x00c424d456a0 by goroutine 829:
+ 30   github.com/ethereum/go-ethereum/swarm/pss.(*Pss).Run()
+ 31       /Users/nonsense/code/src/github.com/ethereum/go-ethereum/swarm/pss/pss.go:192 +0x16a
+ 32   github.com/ethereum/go-ethereum/swarm/pss.(*Pss).Run-fm()
+ 33       /Users/nonsense/code/src/github.com/ethereum/go-ethereum/swarm/pss/pss.go:185 +0x63
+ 34   github.com/ethereum/go-ethereum/p2p.(*Peer).startProtocols.func1()
+ 35       /Users/nonsense/code/src/github.com/ethereum/go-ethereum/p2p/peer.go:347 +0x8b
+ ...
+```
+
 ##### Current solution
 
 Adding a mutex around all shared data.
