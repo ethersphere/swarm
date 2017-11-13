@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/big"
 	"net"
 	"os"
 	"sync"
@@ -383,51 +382,55 @@ func netPipe() (net.Conn, net.Conn, error) {
 }
 
 func tcpPipe() (net.Conn, net.Conn, error) {
-	cl := make(chan net.Conn)
-	cd := make(chan net.Conn)
-	start := make(chan *net.TCPAddr)
+	type result struct {
+		conn net.Conn
+		err  error
+	}
 
-	go func(listener chan net.Conn, start chan *net.TCPAddr) {
-		found := false
-		for !found {
-			// assign random free port to current listener
-			rnd, err := rand.Int(rand.Reader, big.NewInt(2000))
-			if err != nil {
-				panic(err)
-			}
-			port := 8000 + int(rnd.Int64())
-			endpoint := fmt.Sprintf("localhost:%d", port)
+	cl := make(chan result)
+	cd := make(chan result)
 
-			// resolve
-			addr, err := net.ResolveTCPAddr("tcp", endpoint)
-			if err != nil {
-				panic(err)
-			}
-			// listen
-			l, err := net.ListenTCP("tcp", addr)
-			if err != nil {
-				continue
-			}
-			start <- addr
-			found = true
-			conn, err := l.AcceptTCP()
-			if err != nil {
-				panic(err)
-			}
-			listener <- conn
+	start := make(chan net.Addr)
+
+	go func(res chan result, start chan net.Addr) {
+		// resolve
+		addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
+		if err != nil {
+			res <- result{err: err}
+			return
 		}
+		// listen
+		l, err := net.ListenTCP("tcp", addr)
+		if err != nil {
+			res <- result{err: err}
+			return
+		}
+		start <- l.Addr()
+		c, err := l.AcceptTCP()
+		if err != nil {
+			res <- result{err: err}
+			return
+		}
+		res <- result{conn: c}
 	}(cl, start)
 
-	go func(dialer chan net.Conn, start chan *net.TCPAddr) {
+	go func(res chan result, start chan net.Addr) {
 		addr := <-start
-		c, err := net.DialTCP("tcp", nil, addr)
+		c, err := net.DialTCP("tcp", nil, addr.(*net.TCPAddr))
 		if err != nil {
-			panic(err)
+			res <- result{err: err}
+			return
 		}
-		dialer <- c
+		res <- result{conn: c}
 	}(cd, start)
 
 	a := <-cl
+	if a.err != nil {
+		return nil, nil, a.err
+	}
 	b := <-cd
-	return a, b, nil
+	if b.err != nil {
+		return nil, nil, b.err
+	}
+	return a.conn, b.conn, nil
 }
