@@ -370,24 +370,32 @@ func socketPipe() (net.Conn, net.Conn, error) {
 		return nil, nil, err
 	}
 
-	setSocketBuffer(pipe1)
-	setSocketBuffer(pipe2)
+	err = setSocketBuffer(pipe1)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	err = setSocketBuffer(pipe2)
+	if err != nil {
+		return nil, nil, err
+	}
 
 	return pipe1, pipe2, nil
 }
 
-func setSocketBuffer(conn net.Conn) {
+func setSocketBuffer(conn net.Conn) error {
 	switch v := conn.(type) {
 	case *net.UnixConn:
 		err := v.SetReadBuffer(socketReadBuffer)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		err = v.SetWriteBuffer(socketWriteBuffer)
 		if err != nil {
-			panic(err)
+			return err
 		}
 	}
+	return nil
 }
 
 // netPipe wraps net.Pipe in a signature returning  an error
