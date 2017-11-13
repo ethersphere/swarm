@@ -412,6 +412,7 @@ func netPipe() (net.Conn, net.Conn, error) {
 	return p1, p2, nil
 }
 
+// tcpPipe creates an in process full duplex pipe based on a localhost TCP socket
 func tcpPipe() (net.Conn, net.Conn, error) {
 	type result struct {
 		conn net.Conn
