@@ -19,6 +19,7 @@ package adapters
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -30,8 +31,9 @@ func TestSocketPipe(t *testing.T) {
 
 	go func() {
 		msgs := 20
+		size := 8
 		for i := 0; i < msgs; i++ {
-			msg := make([]byte, 8)
+			msg := make([]byte, size)
 			_ = binary.PutUvarint(msg, uint64(i))
 
 			_, err := c1.Write(msg)
@@ -41,10 +43,10 @@ func TestSocketPipe(t *testing.T) {
 		}
 
 		for i := 0; i < msgs; i++ {
-			msg := make([]byte, 8)
+			msg := make([]byte, size)
 			_ = binary.PutUvarint(msg, uint64(i))
 
-			out := make([]byte, 8)
+			out := make([]byte, size)
 			_, err := c2.Read(out)
 			if err != nil {
 				t.Fatal(err)
@@ -64,6 +66,63 @@ func TestSocketPipe(t *testing.T) {
 	}
 }
 
+func TestSocketPipeBidirections(t *testing.T) {
+	c1, c2, _ := socketPipe()
+
+	done := make(chan struct{})
+
+	go func() {
+		msgs := 100
+		size := 4
+		for i := 0; i < msgs; i++ {
+			msg := []byte(`ping`)
+
+			_, err := c1.Write(msg)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		for i := 0; i < msgs; i++ {
+			out := make([]byte, size)
+			_, err := c2.Read(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if bytes.Compare(out, []byte(`ping`)) == 0 {
+				msg := []byte(`pong`)
+				_, err := c2.Write(msg)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+
+		for i := 0; i < msgs; i++ {
+			expected := []byte(`pong`)
+
+			out := make([]byte, size)
+			_, err := c1.Read(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if bytes.Compare(out, expected) != 0 {
+				t.Fatalf("expected %#v, got %#v", expected, out)
+			}
+		}
+
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("test timeout")
+	}
+}
+
 func TestTcpPipe(t *testing.T) {
 	c1, c2, _ := tcpPipe()
 
@@ -71,8 +130,9 @@ func TestTcpPipe(t *testing.T) {
 
 	go func() {
 		msgs := 50
+		size := 1024
 		for i := 0; i < msgs; i++ {
-			msg := make([]byte, 1024)
+			msg := make([]byte, size)
 			_ = binary.PutUvarint(msg, uint64(i))
 
 			_, err := c1.Write(msg)
@@ -82,10 +142,10 @@ func TestTcpPipe(t *testing.T) {
 		}
 
 		for i := 0; i < msgs; i++ {
-			msg := make([]byte, 1024)
+			msg := make([]byte, size)
 			_ = binary.PutUvarint(msg, uint64(i))
 
-			out := make([]byte, 1024)
+			out := make([]byte, size)
 			_, err := c2.Read(out)
 			if err != nil {
 				t.Fatal(err)
@@ -93,6 +153,66 @@ func TestTcpPipe(t *testing.T) {
 
 			if bytes.Compare(msg, out) != 0 {
 				t.Fatalf("expected %#v, got %#v", msg, out)
+			}
+		}
+		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("test timeout")
+	}
+}
+
+func TestTcpPipeBidirections(t *testing.T) {
+	c1, c2, _ := tcpPipe()
+
+	done := make(chan struct{})
+
+	go func() {
+		msgs := 50
+		size := 7
+		for i := 0; i < msgs; i++ {
+			msg := []byte(fmt.Sprintf("ping %02d", i))
+
+			_, err := c1.Write(msg)
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		for i := 0; i < msgs; i++ {
+			expected := []byte(fmt.Sprintf("ping %02d", i))
+
+			out := make([]byte, size)
+			_, err := c2.Read(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if bytes.Compare(expected, out) != 0 {
+				t.Fatalf("expected %#v, got %#v", out, expected)
+			} else {
+				msg := []byte(fmt.Sprintf("pong %02d", i))
+				_, err := c2.Write(msg)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+
+		for i := 0; i < msgs; i++ {
+			expected := []byte(fmt.Sprintf("pong %02d", i))
+
+			out := make([]byte, size)
+			_, err := c1.Read(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if bytes.Compare(expected, out) != 0 {
+				t.Fatalf("expected %#v, got %#v", out, expected)
 			}
 		}
 		done <- struct{}{}
@@ -112,10 +232,11 @@ func TestNetPipe(t *testing.T) {
 
 	go func() {
 		msgs := 50
+		size := 1024
 		// netPipe is blocking, so writes are emitted asynchronously
 		go func() {
 			for i := 0; i < msgs; i++ {
-				msg := make([]byte, 1024)
+				msg := make([]byte, size)
 				_ = binary.PutUvarint(msg, uint64(i))
 
 				_, err := c1.Write(msg)
@@ -126,10 +247,10 @@ func TestNetPipe(t *testing.T) {
 		}()
 
 		for i := 0; i < msgs; i++ {
-			msg := make([]byte, 1024)
+			msg := make([]byte, size)
 			_ = binary.PutUvarint(msg, uint64(i))
 
-			out := make([]byte, 1024)
+			out := make([]byte, size)
 			_, err := c2.Read(out)
 			if err != nil {
 				t.Fatal(err)
@@ -141,6 +262,78 @@ func TestNetPipe(t *testing.T) {
 		}
 
 		done <- struct{}{}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(1 * time.Second):
+		t.Fatal("test timeout")
+	}
+}
+
+func TestNetPipeBidirections(t *testing.T) {
+	c1, c2, _ := netPipe()
+
+	done := make(chan struct{})
+
+	go func() {
+		msgs := 1000
+		size := 8
+		pingTemplate := "ping %03d"
+		pongTemplate := "pong %03d"
+
+		// netPipe is blocking, so writes are emitted asynchronously
+		go func() {
+			for i := 0; i < msgs; i++ {
+				msg := []byte(fmt.Sprintf(pingTemplate, i))
+
+				_, err := c1.Write(msg)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}()
+
+		// netPipe is blocking, so reads for pong are emitted asynchronously
+		go func() {
+			for i := 0; i < msgs; i++ {
+				expected := []byte(fmt.Sprintf(pongTemplate, i))
+
+				out := make([]byte, size)
+				_, err := c1.Read(out)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				if bytes.Compare(expected, out) != 0 {
+					t.Fatalf("expected %#v, got %#v", expected, out)
+				}
+			}
+
+			done <- struct{}{}
+		}()
+
+		// expect to read pings, and respond with pongs to the alternate connection
+		for i := 0; i < msgs; i++ {
+			expected := []byte(fmt.Sprintf(pingTemplate, i))
+
+			out := make([]byte, size)
+			_, err := c2.Read(out)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if bytes.Compare(expected, out) != 0 {
+				t.Fatalf("expected %#v, got %#v", expected, out)
+			} else {
+				msg := []byte(fmt.Sprintf(pongTemplate, i))
+
+				_, err := c2.Write(msg)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
 	}()
 
 	select {
