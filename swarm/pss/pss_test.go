@@ -526,6 +526,8 @@ func testNetwork(t *testing.T) {
 		adapter = adapters.NewExecAdapter(dirname)
 	} else if paramstring[4] == "sock" {
 		adapter = adapters.NewSocketAdapter(services)
+	} else if paramstring[4] == "tcp" {
+		adapter = adapters.NewTCPAdapter(services)
 	} else {
 		adapter = adapters.NewSocketAdapter(services)
 	}
