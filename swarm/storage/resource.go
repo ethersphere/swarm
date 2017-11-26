@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"crypto/ecdsa"
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -61,6 +63,11 @@ import (
 *
 * A lookup agent need only know the identifier name
 *
+* the data itself is prefixed with a signed hash of the data. The sigining key
+* can be used to verify the authenticity of the update, for example by looking
+* up the ownership of the namehash in ENS and comparing to the address derived
+* from it
+*
 * NOTE: the following is yet to be implemented
 * The resource update chunks will be stored in the swarm, but receive special
 * treatment as their keys do not validate as hashes of their data. They are also
@@ -68,8 +75,12 @@ import (
 * flags to tell whether the chunk can be validated or not; if not it is to be
 * treated as a resource update chunk.
 *
-* TODO: signature and signature validation
+* TODO: signature validation
  */
+
+const (
+	SIGNATURE_LENGTH = 65
+)
 
 // Encapsulates an actual resource update. When synced it contains the most recent
 // version of the resource update data.
@@ -93,10 +104,11 @@ type ResourceHandler struct {
 	hashLock     *sync.Mutex
 	resourceLock *sync.Mutex
 	hasher       SwarmHash
+	privKey      *ecdsa.PrivateKey
 }
 
 // Create or open resource update chunk store
-func NewResourceHandler(datadir string, cloudStore CloudStore, ethapi *rpc.Client) (*ResourceHandler, error) {
+func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore CloudStore, ethapi *rpc.Client) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, "resource")
 	dbStore, err := NewDbStore(datadir, nil, singletonSwarmDbCapacity, 0)
 	if err != nil {
@@ -114,6 +126,7 @@ func NewResourceHandler(datadir string, cloudStore CloudStore, ethapi *rpc.Clien
 		resourceLock: &sync.Mutex{},
 		hashLock:     &sync.Mutex{},
 		hasher:       hasher(),
+		privKey:      privKey,
 	}, nil
 }
 
@@ -304,15 +317,16 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 				if err != nil {
 					// rsrc update data chunks are total hacks
 					// and have no size prefix :D
-					if len(chunk.SData) == 0 {
-						return nil, fmt.Errorf("Update contains no data")
+					err := self.verifyContent(chunk.SData)
+					if err != nil {
+						return nil, err
 					}
 					// update our rsrcs entry map
 					rsrc.lastblock = nextblock
 					rsrc.version = version
-					rsrc.data = make([]byte, len(chunk.SData))
+					rsrc.data = make([]byte, len(chunk.SData)-SIGNATURE_LENGTH)
 					rsrc.updated = time.Now()
-					copy(rsrc.data, chunk.SData)
+					copy(rsrc.data, chunk.SData[SIGNATURE_LENGTH:])
 					log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Key, "block", nextblock, "version", version)
 					self.resourceLock.Lock()
 					self.resources[name] = rsrc
@@ -338,9 +352,9 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 // A resource update cannot span chunks, and thus has max length 4096
 func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 
-	// can be only one chunk long
-	if len(data) > 4096 {
-		return nil, fmt.Errorf("Data overflow: %d / 4096 bytes", len(data))
+	// can be only one chunk long minus 65 byte signature
+	if len(data) > 4096-SIGNATURE_LENGTH {
+		return nil, fmt.Errorf("Data overflow: %d / %d bytes", len(data), 4096-SIGNATURE_LENGTH)
 	}
 
 	// get the cached information
@@ -370,7 +384,10 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	// create the update chunk and send it
 	key := self.resourceHash(resource.ensname, nextblock, version)
 	chunk := NewChunk(key, nil)
-	chunk.SData = data
+	chunk.SData, err = self.signContent(data)
+	if err != nil {
+		return nil, err
+	}
 	chunk.Size = int64(len(data))
 	self.Put(chunk)
 	log.Trace("resource update", "name", resource.name, "key", key, "currentblock", currentblock, "lastblock", nextblock, "version", version)
@@ -418,6 +435,48 @@ func (self *ResourceHandler) resourceHash(namehash common.Hash, blockheight uint
 	c = binary.PutUvarint(b, version)
 	self.hasher.Write(b)
 	return self.hasher.Sum(nil)
+}
+
+func (self *ResourceHandler) signContent(data []byte) ([]byte, error) {
+	self.hashLock.Lock()
+	self.hasher.Reset()
+	self.hasher.Write(data)
+	datahash := self.hasher.Sum(nil)
+	self.hashLock.Unlock()
+
+	signature, err := crypto.Sign(datahash, self.privKey)
+	if err != nil {
+		return nil, err
+	}
+	datawithsign := make([]byte, len(data)+SIGNATURE_LENGTH)
+	copy(datawithsign[:SIGNATURE_LENGTH], signature)
+	copy(datawithsign[SIGNATURE_LENGTH:], data)
+	return datawithsign, nil
+}
+
+func (self *ResourceHandler) getContentAccount(chunkdata []byte) (common.Address, error) {
+	if len(chunkdata) <= SIGNATURE_LENGTH {
+		return common.Address{}, fmt.Errorf("zero-length data")
+	}
+	self.hashLock.Lock()
+	self.hasher.Reset()
+	self.hasher.Write(chunkdata[SIGNATURE_LENGTH:])
+	datahash := self.hasher.Sum(nil)
+	self.hashLock.Unlock()
+	pub, err := crypto.SigToPub(datahash, chunkdata[:SIGNATURE_LENGTH])
+	if err != nil {
+		return common.Address{}, err
+	}
+	return crypto.PubkeyToAddress(*pub), nil
+}
+
+func (self *ResourceHandler) verifyContent(chunkdata []byte) error {
+	address, err := self.getContentAccount(chunkdata)
+	if err != nil {
+		return err
+	}
+	log.Warn("ens owner lookup not implemented, verify will return true in all cases", "address", address)
+	return nil
 }
 
 type resourceChunkStore struct {

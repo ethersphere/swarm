@@ -2,6 +2,7 @@ package storage
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/binary"
 	"io/ioutil"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"golang.org/x/net/idna"
 
 	"github.com/ethereum/go-ethereum/contracts/ens"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rpc"
 )
@@ -33,13 +35,76 @@ func (r *FakeRPC) BlockNumber() (string, error) {
 	return strconv.FormatUint(*r.blockcount, 10), nil
 }
 
-func TestResourceHandler(t *testing.T) {
+func TestResourceValidContent(t *testing.T) {
+	// privkey for signing updates
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// temp datadir
 	datadir, err := ioutil.TempDir("", "rh")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(datadir)
-	log.Trace("starttest", "dir", datadir)
+
+	rh, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	validname, err := idna.ToASCII("føø.bar")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	key := rh.resourceHash(ens.EnsNode(validname), 4200, 1)
+	chunk := NewChunk(key, nil)
+
+	data := make([]byte, 8)
+	_, err = rand.Read(data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rh.hasher.Reset()
+	rh.hasher.Write(data)
+	datahash := rh.hasher.Sum(nil)
+	sig, err := crypto.Sign(datahash, privkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chunk.SData = make([]byte, 8+SIGNATURE_LENGTH)
+	copy(chunk.SData[:SIGNATURE_LENGTH], sig)
+	copy(chunk.SData[SIGNATURE_LENGTH:], data)
+
+	// TODO: change this to verifyContent on ENS integration
+	recoveredaddress, err := rh.getContentAccount(chunk.SData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	originaladdress := crypto.PubkeyToAddress(privkey.PublicKey)
+
+	if recoveredaddress != originaladdress {
+		t.Fatalf("addresses dont match: %x != %x", originaladdress, recoveredaddress)
+	}
+}
+
+func TestResourceHandler(t *testing.T) {
+
+	// privkey for signing updates
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// temp datadir
+	datadir, err := ioutil.TempDir("", "rh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(datadir)
 
 	// starting the whole stack just to get blocknumbers is too cumbersome
 	// so we fake the rpc server to get blocknumbers for testing
@@ -63,7 +128,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rh, err := NewResourceHandler(datadir, &testCloudStore{}, rpcclient)
+	rh, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +195,7 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourcefrequency * 3)
 	blockCount = startblocknumber + (resourcefrequency * 4)
 
-	rh2, err := NewResourceHandler(datadir, &testCloudStore{}, rpcclient)
+	rh2, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, rpcclient)
 	_, err = rh2.OpenResource(resourcename, true)
 	if err != nil {
 		t.Fatal(err)
