@@ -101,6 +101,7 @@ func ensNode(name string) common.Hash {
 	return crypto.Keccak256Hash(parentNode[:], parentLabel[:])
 }
 
+// Suggest exporting ensNode so external code can use it for generating ens namehashes
 func EnsNode(name string) common.Hash {
 	return ensNode(name)
 }

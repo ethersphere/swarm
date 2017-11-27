@@ -18,68 +18,10 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-/***
-*
-* Resource updates is a data update scheme built on swarm chunks
-* with chunk keys following a predictable, versionable pattern.
-*
-* The intended use case is to update data locations of certain
-* hashes
-*
-* Updates are defined to be periodic in nature, where periods are
-* expressed in terms of number of blocks.
-*
-* The root entry of a resource update is tied to a unique identifier,
-* typically - but not necessarily - an ens name. It also contains the
-* block number when the resource update was first registered, and
-* the block frequency with which the resource will be updated.
-* Thus, a resource update for identifier "foo.bar" starting at block 4200
-* with frequency 42 will have updates on block 4242, 4284, 4326 and so on.
-*
-* the identifier is supplied as a string, but will be IDNA converted and
-* passed through the ENS namehash function. Pure ascii identifiers without
-* periods will thus merely be hashed.
-*
-* The data format of the root entry is the ENS namehash as key and
-* blocknumber and frequency in little-endian uint64 representation as values,
-* concatenated in that order, for a total of 16 bytes.
-*
-* Note that the root entry is not required for the resource update scheme to
-* work. A normal chunk of the blocknumber/frequency data can also be created,
-* and pointed to by an actual ENS entry instead.
-*
-* Actual data updates are also made in the form of swarm chunks. The keys
-* of the updates are the hash of a concatenation of properties as follows:
-*
-* sha256(namehash|blocknumber|version)
-*
-* The blocknumber here is the next block period after the current block
-* calculated from the start block and frequency of the resource update.
-* Using our previous example, this means that an update made at block 4285,
-* and even 4284, will have 4326 as the block number.
-*
-* If more than one update is made to the same block number, incremental
-* version numbers are used successively.
-*
-* A lookup agent need only know the identifier name
-*
-* the data itself is prefixed with a signed hash of the data. The sigining key
-* can be used to verify the authenticity of the update, for example by looking
-* up the ownership of the namehash in ENS and comparing to the address derived
-* from it
-*
-* NOTE: the following is yet to be implemented
-* The resource update chunks will be stored in the swarm, but receive special
-* treatment as their keys do not validate as hashes of their data. They are also
-* stored using a separate store, and forwarding/syncing protocols carry per-chunk
-* flags to tell whether the chunk can be validated or not; if not it is to be
-* treated as a resource update chunk.
-*
-* TODO: signature validation
- */
-
 const (
 	SIGNATURE_LENGTH = 65
+	MAX_CHUNK_DATA   = 4096 - SIGNATURE_LENGTH
+	INDEX_SIZE       = 24
 )
 
 // Encapsulates an actual resource update. When synced it contains the most recent
@@ -95,14 +37,68 @@ type resource struct {
 	updated    time.Time
 }
 
-// Main interface to resource updates. Creates/opens the resource database,
-// and sets up rpc client to the blockchain api
+// Resource updates is a data update scheme built on swarm chunks
+// with chunk keys following a predictable, versionable pattern.
+//
+// The intended use case is to update data locations of certain
+// hashes
+//
+// Updates are defined to be periodic in nature, where periods are
+// expressed in terms of number of blocks.
+//
+// The root entry of a resource update is tied to a unique identifier,
+// typically - but not necessarily - an ens name. It also contains the
+// block number when the resource update was first registered, and
+// the block frequency with which the resource will be updated.
+// Thus, a resource update for identifier "foo.bar" starting at block 4200
+// with frequency 42 will have updates on block 4242, 4284, 4326 and so on.
+//
+// the identifier is supplied as a string, but will be IDNA converted and
+// passed through the ENS namehash function. Pure ascii identifiers without
+// periods will thus merely be hashed.
+//
+// The data format of the root entry is the ENS namehash as key and
+// blocknumber and frequency in little-endian uint64 representation as values,
+// concatenated in that order, for a total of 16 bytes.
+//
+// Note that the root entry is not required for the resource update scheme to
+// work. A normal chunk of the blocknumber/frequency data can also be created,
+// and pointed to by an actual ENS entry instead.
+//
+// Actual data updates are also made in the form of swarm chunks. The keys
+// of the updates are the hash of a concatenation of properties as follows:
+//
+// sha256(namehash|blocknumber|version)
+//
+// The blocknumber here is the next block period after the current block
+// calculated from the start block and frequency of the resource update.
+// Using our previous example, this means that an update made at block 4285,
+// and even 4284, will have 4326 as the block number.
+//
+// If more than one update is made to the same block number, incremental
+// version numbers are used successively.
+//
+// A lookup agent need only know the identifier name
+//
+// the data itself is prefixed with a signed hash of the data. The sigining key
+// can be used to verify the authenticity of the update, for example by looking
+// up the ownership of the namehash in ENS and comparing to the address derived
+// from it
+//
+// NOTE: the following is yet to be implemented
+// The resource update chunks will be stored in the swarm, but receive special
+// treatment as their keys do not validate as hashes of their data. They are also
+// stored using a separate store, and forwarding/syncing protocols carry per-chunk
+// flags to tell whether the chunk can be validated or not; if not it is to be
+// treated as a resource update chunk.
+//
+// TODO: signature validation
 type ResourceHandler struct {
 	ChunkStore
 	ethapi       *rpc.Client
 	resources    map[string]*resource
-	hashLock     *sync.Mutex
-	resourceLock *sync.Mutex
+	hashLock     sync.Mutex
+	resourceLock sync.Mutex
 	hasher       SwarmHash
 	privKey      *ecdsa.PrivateKey
 }
@@ -123,8 +119,8 @@ func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore Cl
 		ChunkStore:   newResourceChunkStore(path, hasher, localStore, cloudStore),
 		ethapi:       ethapi,
 		resources:    make(map[string]*resource),
-		resourceLock: &sync.Mutex{},
-		hashLock:     &sync.Mutex{},
+		resourceLock: sync.Mutex{},
+		hashLock:     sync.Mutex{},
 		hasher:       hasher(),
 		privKey:      privKey,
 	}, nil
@@ -152,6 +148,11 @@ func NewResource(name string, startblock uint64, frequency uint64) (*resource, e
 // The start block of the resource update will be the actual current block height of the connected network.
 func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
 
+	// frequency 0 is invalid
+	if frequency == 0 {
+		return nil, fmt.Errorf("Frequency cannot be 0")
+	}
+
 	// make sure our ens identifier is idna safe
 	validname, err := idna.ToASCII(name)
 	if err != nil {
@@ -168,7 +169,7 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 	// chunk with key equal to namehash points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
 	chunk := NewChunk(Key(ensname[:]), nil)
-	chunk.SData = make([]byte, 24)
+	chunk.SData = make([]byte, INDEX_SIZE)
 
 	// resource update root chunks follow same convention as "normal" chunks
 	// with 8 bytes prefix specifying size
@@ -277,7 +278,7 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 
 		// sanity check for chunk data
 		// data is prefixed by 8 bytes of size
-		if len(chunk.SData) < 24 {
+		if len(chunk.SData) < INDEX_SIZE {
 			return nil, fmt.Errorf("Invalid chunk length %d", len(chunk.SData))
 		} else {
 			chunklength := binary.LittleEndian.Uint64(chunk.SData[:8])
@@ -353,7 +354,7 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 
 	// can be only one chunk long minus 65 byte signature
-	if len(data) > 4096-SIGNATURE_LENGTH {
+	if len(data) > MAX_CHUNK_DATA {
 		return nil, fmt.Errorf("Data overflow: %d / %d bytes", len(data), 4096-SIGNATURE_LENGTH)
 	}
 
