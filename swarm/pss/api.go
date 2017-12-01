@@ -4,28 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-const (
-	RETURN_BIN = iota
-	RETURN_HEX
-)
-
 // Wrapper for receiving pss messages when using the pss API
 // providing access to sender of message
 type APIMsg struct {
-	Msg        []byte
-	Asymmetric bool
-	Key        string
-}
-
-type APIMsgHex struct {
-	Msg        string
+	Msg        hexutil.Bytes
 	Asymmetric bool
 	Key        string
 }
@@ -55,26 +44,14 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 	psssub := notifier.CreateSubscription()
 
 	handler := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-		if pssapi.returntype == RETURN_HEX {
-			apimsg := &APIMsgHex{
-				Msg:        common.ToHex(msg),
-				Asymmetric: asymmetric,
-				Key:        keyid,
-			}
-			log.Warn("making hex msg")
-			if err := notifier.Notify(psssub.ID, apimsg); err != nil {
-				log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
-			}
-		} else {
-			apimsg := &APIMsg{
-				Msg:        msg,
-				Asymmetric: asymmetric,
-				Key:        keyid,
-			}
-			log.Warn("making bin msg")
-			if err := notifier.Notify(psssub.ID, apimsg); err != nil {
-				log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
-			}
+		apimsg := &APIMsg{
+			Msg:        hexutil.Bytes(msg),
+			Asymmetric: asymmetric,
+			Key:        keyid,
+		}
+		log.Warn("making bin msg")
+		if err := notifier.Notify(psssub.ID, apimsg); err != nil {
+			log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
 		}
 		return nil
 	}
@@ -137,16 +114,4 @@ func (pssapi *API) GetAsymmetricAddressHint(topic Topic, pubkeyid string) (PssAd
 
 func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
 	return BytesToTopic([]byte(topicstring)), nil
-}
-
-func (pssapi *API) SetNotifyType(typ string) error {
-	switch typ {
-	case "bin":
-		pssapi.returntype = RETURN_BIN
-	case "hex":
-		pssapi.returntype = RETURN_HEX
-	default:
-		return fmt.Errorf("Unknown return type '%s'", typ)
-	}
-	return nil
 }
