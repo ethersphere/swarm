@@ -49,7 +49,6 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 			Asymmetric: asymmetric,
 			Key:        keyid,
 		}
-		log.Warn("making bin msg")
 		if err := notifier.Notify(psssub.ID, apimsg); err != nil {
 			log.Warn(fmt.Sprintf("notification on pss sub topic rpc (sub %v) msg %v failed!", psssub.ID, msg))
 		}
