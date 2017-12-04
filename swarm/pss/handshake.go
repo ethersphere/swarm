@@ -437,11 +437,9 @@ type HandshakeAPI struct {
 //
 // Fails if the incoming symmetric key store is already full (and `flush` is false),
 // or if the underlying key dispatcher fails
-func (self *HandshakeAPI) Handshake(pubkeyid string, topicbytes hexutil.Bytes, sync bool, flush bool) (keys []string, err error) {
+func (self *HandshakeAPI) Handshake(pubkeyid string, topic Topic, sync bool, flush bool) (keys []string, err error) {
 	var hsc chan []string
 	var keycount uint8
-	var topic Topic
-	copy(topic[:], topicbytes)
 	if flush {
 		keycount = self.ctrl.symKeyCapacity
 	} else {
@@ -471,9 +469,7 @@ func (self *HandshakeAPI) Handshake(pubkeyid string, topicbytes hexutil.Bytes, s
 }
 
 // Activate handshake functionality on a topic
-func (self *HandshakeAPI) AddHandshake(topicbytes hexutil.Bytes) error {
-	var topic Topic
-	copy(topic[:], topicbytes)
+func (self *HandshakeAPI) AddHandshake(topic Topic) error {
 	self.ctrl.deregisterFuncs[topic] = self.ctrl.pss.Register(&topic, self.ctrl.handler)
 	return nil
 }
@@ -492,9 +488,7 @@ func (self *HandshakeAPI) RemoveHandshake(topic *Topic) error {
 // The `in` and `out` parameters indicate for which direction(s)
 // symmetric keys will be returned.
 // If both are false, no keys (and no error) will be returned.
-func (self *HandshakeAPI) GetHandshakeKeys(pubkeyid string, topicbytes hexutil.Bytes, in bool, out bool) (keys []string, err error) {
-	var topic Topic
-	copy(topic[:], topicbytes)
+func (self *HandshakeAPI) GetHandshakeKeys(pubkeyid string, topic Topic, in bool, out bool) (keys []string, err error) {
 	if in {
 		for _, inkey := range self.ctrl.validKeys(pubkeyid, &topic, true) {
 			keys = append(keys, *inkey)
@@ -533,9 +527,7 @@ func (self *HandshakeAPI) GetHandshakePublicKey(symkeyid string) (string, error)
 // If `flush` is set, garbage collection will be performed before returning.
 //
 // Returns true on successful removal, false otherwise
-func (self *HandshakeAPI) ReleaseHandshakeKey(pubkeyid string, topicbytes hexutil.Bytes, symkeyid string, flush bool) (removed bool, err error) {
-	var topic Topic
-	copy(topic[:], topicbytes)
+func (self *HandshakeAPI) ReleaseHandshakeKey(pubkeyid string, topic Topic, symkeyid string, flush bool) (removed bool, err error) {
 	removed = self.ctrl.releaseKey(symkeyid, &topic)
 	if removed && flush {
 		self.ctrl.cleanHandshake(pubkeyid, &topic, true, true)
@@ -547,9 +539,7 @@ func (self *HandshakeAPI) ReleaseHandshakeKey(pubkeyid string, topicbytes hexuti
 //
 // Overloads the pss.SendSym() API call, adding symmetric key usage count
 // for message expiry control
-func (self *HandshakeAPI) SendSym(symkeyid string, topicbytes hexutil.Bytes, msg hexutil.Bytes) (err error) {
-	var topic Topic
-	copy(topic[:], topicbytes)
+func (self *HandshakeAPI) SendSym(symkeyid string, topic Topic, msg hexutil.Bytes) (err error) {
 	err = self.ctrl.pss.SendSym(symkeyid, topic, msg[:])
 	if self.ctrl.symKeyIndex[symkeyid] != nil {
 		if self.ctrl.symKeyIndex[symkeyid].count >= self.ctrl.symKeyIndex[symkeyid].limit {

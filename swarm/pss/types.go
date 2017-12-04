@@ -2,6 +2,7 @@ package pss
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -28,8 +29,37 @@ func (t *Topic) Unmarshal(input []byte) error {
 	return err
 }
 
+func (t Topic) MarshalJSON() (b []byte, err error) {
+	return []byte(strings.Join([]string{"\"", hexutil.Encode((t)[:]), "\""}, "")), nil
+}
+
+func (t *Topic) UnmarshalJSON(input []byte) error {
+	topicbytes, err := hexutil.Decode(string(input[1 : len(input)-1]))
+	if err != nil {
+		return err
+	}
+	copy(t[:], topicbytes)
+	return nil
+}
+
 // variable length address
 type PssAddress []byte
+
+func (a PssAddress) MarshalJSON() ([]byte, error) {
+	s := strings.Join([]string{"\"", hexutil.Encode((a)[:]), "\""}, "")
+	return []byte(s), nil
+}
+
+func (a *PssAddress) UnmarshalJSON(input []byte) error {
+	b, err := hexutil.Decode(string(input[1 : len(input)-1]))
+	if err != nil {
+		return err
+	}
+	for _, bb := range b {
+		*a = append(*a, bb)
+	}
+	return nil
+}
 
 type pssDigest [digestLength]byte
 
