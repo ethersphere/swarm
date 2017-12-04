@@ -60,7 +60,7 @@ func NewPingProtocol(ping *Ping) *p2p.Protocol {
 		Run: func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 			quitC := make(chan struct{})
 			pp := protocols.NewPeer(p, rw, PingProtocol)
-			log.Trace(fmt.Sprintf("running pss vprotocol on peer %v", p, "outc", ping.OutC))
+			log.Trace(fmt.Sprintf("running pss vprotocol", "peer", p, "outc", ping.OutC))
 			go func() {
 				for {
 					select {

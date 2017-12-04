@@ -373,11 +373,13 @@ func testSymSend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
+	loaddrhex = loaddrhex[:2+(addrsize*2)]
 	var roaddrhex string
 	err = clients[1].Call(&roaddrhex, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
+	roaddrhex = roaddrhex[:2+(addrsize*2)]
 
 	// retrieve public key from pss instance
 	// set this public key reciprocally
@@ -483,15 +485,13 @@ func testAsymSend(t *testing.T) {
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
-	loaddr := common.FromHex(loaddrhex)
-	loaddr = loaddr[:addrsize]
+	loaddrhex = loaddrhex[:2+(addrsize*2)]
 	var roaddrhex string
 	err = clients[1].Call(&roaddrhex, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
-	roaddr := common.FromHex(roaddrhex)
-	roaddr = roaddr[:addrsize]
+	roaddrhex = roaddrhex[:2+(addrsize*2)]
 
 	// retrieve public key from pss instance
 	// set this public key reciprocally
@@ -520,11 +520,11 @@ func testAsymSend(t *testing.T) {
 	defer rsub.Unsubscribe()
 
 	// store reciprocal public keys
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, "0x")
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, roaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, "0x")
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, loaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1194,16 +1194,12 @@ func NewAPITest(ps *Pss) *APITest {
 	return &APITest{Pss: ps}
 }
 
-func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topicbytes hexutil.Bytes, to hexutil.Bytes) ([2]string, error) {
-	var topic Topic
-	copy(topic[:], topicbytes)
-	addr := make(PssAddress, len(to))
-	copy(addr[:], to)
-	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &addr, true)
+func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic Topic, to PssAddress) ([2]string, error) {
+	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &to, true)
 	if err != nil {
 		return [2]string{}, err
 	}
-	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &addr, false)
+	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &to, false)
 	if err != nil {
 		return [2]string{}, err
 	}

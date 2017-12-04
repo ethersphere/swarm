@@ -36,23 +36,26 @@ func testProtocol(t *testing.T) {
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("protocol test", "addrsize", addrsize)
 
-	topichex := common.ToHex(PingTopic[:])
+	topic := PingTopic
+	topichex := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var loaddr string
-	err = clients[0].Call(&loaddr, "pss_baseAddr")
+	var loaddrhex string
+	err = clients[0].Call(&loaddrhex, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
-	var roaddr string
-	err = clients[1].Call(&roaddr, "pss_baseAddr")
+	loaddrhex = loaddrhex[:2+(addrsize*2)]
+	var roaddrhex string
+	err = clients[1].Call(&roaddrhex, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
+	roaddrhex = roaddrhex[:2+(addrsize*2)]
 	lnodeinfo := &p2p.NodeInfo{}
 	err = clients[0].Call(&lnodeinfo, "admin_nodeInfo")
 	if err != nil {
@@ -70,7 +73,7 @@ func testProtocol(t *testing.T) {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
 	}
 
-	time.Sleep(time.Millisecond * 500) // replace with hive healthy code
+	time.Sleep(time.Millisecond * 1000) // replace with hive healthy code
 
 	lmsgC := make(chan APIMsg)
 	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
@@ -82,19 +85,22 @@ func testProtocol(t *testing.T) {
 	defer rsub.Unsubscribe()
 
 	// set reciprocal public keys
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, roaddr)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, roaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, loaddr)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, loaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// add right peer's public key as protocol peer on left
 	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
-	p := p2p.NewPeer(nid, fmt.Sprintf("%x", loaddr), []p2p.Cap{})
-	pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, rpubkey)
+	p := p2p.NewPeer(nid, fmt.Sprintf("%x", common.FromHex(loaddrhex)), []p2p.Cap{})
+	_, err = pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, topic, true, rpubkey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// sends ping asym, checks delivery
 	pssprotocols[lnodeinfo.ID].C <- false
