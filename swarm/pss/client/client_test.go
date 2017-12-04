@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -78,6 +78,7 @@ func init() {
 func TestHandshake(t *testing.T) {
 	sendLimit = 3
 	topic := pss.ProtocolTopic(pss.PingProtocol)
+	topichex := hexutil.Encode(topic[:])
 
 	clients, err := setupNetwork(2)
 	if err != nil {
@@ -114,40 +115,44 @@ func TestHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loaddr := make([]byte, 32)
+	var loaddr string
 	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
-	roaddr := make([]byte, 32)
+	var roaddr string
 	err = clients[1].Call(&roaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
 
-	lpubkey := make([]byte, 32)
+	var lpubkey string
 	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
 	}
-	rpubkey := make([]byte, 32)
+	var rpubkey string
 	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
 	}
 
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topic, roaddr)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, roaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topic, loaddr)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, loaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(time.Second)
 
-	err = lpsc.AddPssPeer(common.ToHex(rpubkey), roaddr, pss.PingProtocol)
+	roaddrbytes, err := hexutil.Decode(roaddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = lpsc.AddPssPeer(rpubkey, roaddrbytes, pss.PingProtocol)
 	if err != nil {
 		t.Fatal(err)
 	}

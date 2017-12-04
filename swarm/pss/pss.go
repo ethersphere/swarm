@@ -649,7 +649,7 @@ func (self *Pss) forward(msg *PssMsg) error {
 	// flood guard:
 	// don't allow identical messages we saw shortly before
 	if self.checkFwdCache(nil, digest) {
-		log.Trace(fmt.Sprintf("pss relay block-cache match: FROM %x TO %x", common.ToHex(self.Overlay.BaseAddr()), common.ToHex(msg.To)))
+		log.Trace(fmt.Sprintf("pss relay block-cache match: FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(msg.To)))
 		return nil
 	}
 

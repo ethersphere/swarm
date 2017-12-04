@@ -1,7 +1,6 @@
 package pss
 
 import (
-	"bytes"
 	"strconv"
 	"strings"
 	"testing"
@@ -31,34 +30,35 @@ func testHandshake(t *testing.T) {
 	// set up two nodes directly connected
 	// (we are not testing pss routing here)
 	topic := BytesToTopic([]byte("foo:42"))
+	topichex := common.ToHex(topic[:])
 
 	clients, err := setupNetwork(2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var loaddr []byte
+	var loaddr string
 	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
-	loaddr = loaddr[:addrsize]
-	var roaddr []byte
+	loaddr = loaddr[:2+(addrsize*2)]
+	var roaddr string
 	err = clients[1].Call(&roaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
-	roaddr = roaddr[:addrsize]
+	roaddr = roaddr[:2+(addrsize*2)]
 	log.Debug("addresses", "left", loaddr, "right", roaddr)
 
 	// retrieve public key from pss instance
 	// set this public key reciprocally
-	lpubkey := make([]byte, 32)
+	var lpubkey string
 	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
 	}
-	rpubkey := make([]byte, 32)
+	var rpubkey string
 	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
@@ -67,11 +67,11 @@ func testHandshake(t *testing.T) {
 	time.Sleep(time.Millisecond * 1000) // replace with hive healthy code
 
 	// give each node its peer's public key
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topic, roaddr)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, roaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topic, loaddr)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, loaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,17 +82,17 @@ func testHandshake(t *testing.T) {
 	// L <- send 4 keys, request 4 keys <- R
 	// L -> send 4 keys -> R
 	// the call will fill the array with symkeys L needs for sending to R
-	err = clients[0].Call(nil, "pss_addHandshake", topic)
+	err = clients[0].Call(nil, "pss_addHandshake", topichex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_addHandshake", topic)
+	err = clients[1].Call(nil, "pss_addHandshake", topichex)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var lhsendsymkeyids []string
-	err = clients[0].Call(&lhsendsymkeyids, "pss_handshake", common.ToHex(rpubkey), topic, true, true)
+	err = clients[0].Call(&lhsendsymkeyids, "pss_handshake", rpubkey, topichex, true, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +102,7 @@ func testHandshake(t *testing.T) {
 
 	// check if we have 6 outgoing keys stored, and they match what was received from R
 	var lsendsymkeyids []string
-	err = clients[0].Call(&lsendsymkeyids, "pss_getHandshakeKeys", common.ToHex(rpubkey), topic, false, true)
+	err = clients[0].Call(&lsendsymkeyids, "pss_getHandshakeKeys", rpubkey, topichex, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,34 +120,34 @@ func testHandshake(t *testing.T) {
 
 	// check if in- and outgoing keys on l-node and r-node match up and are in opposite categories (l recv = r send, l send = r recv)
 	var rsendsymkeyids []string
-	err = clients[1].Call(&rsendsymkeyids, "pss_getHandshakeKeys", common.ToHex(lpubkey), topic, false, true)
+	err = clients[1].Call(&rsendsymkeyids, "pss_getHandshakeKeys", lpubkey, topichex, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var lrecvsymkeyids []string
-	err = clients[0].Call(&lrecvsymkeyids, "pss_getHandshakeKeys", common.ToHex(rpubkey), topic, true, false)
+	err = clients[0].Call(&lrecvsymkeyids, "pss_getHandshakeKeys", rpubkey, topichex, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var rrecvsymkeyids []string
-	err = clients[1].Call(&rrecvsymkeyids, "pss_getHandshakeKeys", common.ToHex(lpubkey), topic, true, false)
+	err = clients[1].Call(&rrecvsymkeyids, "pss_getHandshakeKeys", lpubkey, topichex, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// get outgoing symkeys in byte form from both sides
-	var lsendsymkeys [][]byte
+	var lsendsymkeys []string
 	for _, id := range lsendsymkeyids {
-		var key []byte
+		var key string
 		err = clients[0].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
 		lsendsymkeys = append(lsendsymkeys, key)
 	}
-	var rsendsymkeys [][]byte
+	var rsendsymkeys []string
 	for _, id := range rsendsymkeyids {
-		var key []byte
+		var key string
 		err = clients[1].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
@@ -156,16 +156,16 @@ func testHandshake(t *testing.T) {
 	}
 
 	// get incoming symkeys in byte form from both sides and compare
-	var lrecvsymkeys [][]byte
+	var lrecvsymkeys []string
 	for _, id := range lrecvsymkeyids {
-		var key []byte
+		var key string
 		err = clients[0].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
 		match := false
 		for _, otherkey := range rsendsymkeys {
-			if bytes.Equal(otherkey, key) {
+			if otherkey == key {
 				match = true
 			}
 		}
@@ -174,16 +174,16 @@ func testHandshake(t *testing.T) {
 		}
 		lrecvsymkeys = append(lrecvsymkeys, key)
 	}
-	var rrecvsymkeys [][]byte
+	var rrecvsymkeys []string
 	for _, id := range rrecvsymkeyids {
-		var key []byte
+		var key string
 		err = clients[1].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
 		match := false
 		for _, otherkey := range lsendsymkeys {
-			if bytes.Equal(otherkey, key) {
+			if otherkey == key {
 				match = true
 			}
 		}
@@ -194,13 +194,13 @@ func testHandshake(t *testing.T) {
 	}
 
 	// send new handshake request, should send no keys
-	err = clients[0].Call(nil, "pss_handshake", common.ToHex(rpubkey), topic, false)
+	err = clients[0].Call(nil, "pss_handshake", rpubkey, topichex, false)
 	if err == nil {
 		t.Fatal("expected full symkey buffer error")
 	}
 
 	// expire one key, send new handshake request
-	err = clients[0].Call(nil, "pss_releaseHandshakeKey", common.ToHex(rpubkey), topic, lsendsymkeyids[0], true)
+	err = clients[0].Call(nil, "pss_releaseHandshakeKey", rpubkey, topichex, lsendsymkeyids[0], true)
 	if err != nil {
 		t.Fatalf("release left send key %s fail: %v", lsendsymkeyids[0], err)
 	}
@@ -209,26 +209,26 @@ func testHandshake(t *testing.T) {
 
 	// send new handshake request, should now receive one key
 	// check that it is not in previous right recv key array
-	err = clients[0].Call(&newlhsendkeyids, "pss_handshake", common.ToHex(rpubkey), topic, true, false)
+	err = clients[0].Call(&newlhsendkeyids, "pss_handshake", rpubkey, topichex, true, false)
 	if err != nil {
 		t.Fatalf("handshake send fail: %v", err)
 	} else if len(newlhsendkeyids) != defaultSymKeyCapacity {
 		t.Fatalf("wrong receive count, expected 1, got %d", len(newlhsendkeyids))
 	}
 
-	var newlrecvsymkey []byte
+	var newlrecvsymkey string
 	err = clients[0].Call(&newlrecvsymkey, "pss_getSymmetricKey", newlhsendkeyids[0])
 	if err != nil {
 		t.Fatal(err)
 	}
 	var rmatchsymkeyid *string
 	for i, id := range rrecvsymkeyids {
-		var key []byte
+		var key string
 		err = clients[1].Call(&key, "pss_getSymmetricKey", id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if bytes.Equal(newlrecvsymkey, key) {
+		if newlrecvsymkey == key {
 			rmatchsymkeyid = &rrecvsymkeyids[i]
 		}
 	}

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -27,7 +27,7 @@ const (
 // The pss client provides devp2p emulation over pss RPC API,
 // giving access to pss methods from a different process
 type Client struct {
-	BaseAddr []byte
+	BaseAddrHex string
 
 	// peers
 	peerPool map[pss.Topic]map[string]*pssRPCRW
@@ -47,7 +47,7 @@ type Client struct {
 // implements p2p.MsgReadWriter
 type pssRPCRW struct {
 	*Client
-	topic    pss.Topic
+	topichex string
 	msgC     chan []byte
 	addr     pss.PssAddress
 	pubKeyId string
@@ -55,13 +55,14 @@ type pssRPCRW struct {
 }
 
 func (self *Client) newpssRPCRW(pubkeyid string, addr pss.PssAddress, topic pss.Topic) (*pssRPCRW, error) {
-	err := self.rpc.Call(nil, "pss_setPeerPublicKey", common.FromHex(pubkeyid), topic, addr)
+	topichex := hexutil.Encode(topic[:])
+	err := self.rpc.Call(nil, "pss_setPeerPublicKey", pubkeyid, topichex, hexutil.Encode(addr[:]))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("setpeer %s %s: %v", topichex, pubkeyid, err)
 	}
 	return &pssRPCRW{
 		Client:   self,
-		topic:    topic,
+		topichex: topichex,
 		msgC:     make(chan []byte),
 		addr:     addr,
 		pubKeyId: pubkeyid,
@@ -102,7 +103,7 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 
 	// Get the keys we have
 	var symkeyids []string
-	err = rw.Client.rpc.Call(&symkeyids, "pss_getHandshakeKeys", rw.pubKeyId, rw.topic, false, true)
+	err = rw.Client.rpc.Call(&symkeyids, "pss_getHandshakeKeys", rw.pubKeyId, rw.topichex, false, true)
 	if err != nil {
 		return err
 	}
@@ -116,7 +117,7 @@ func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 		}
 	}
 
-	err = rw.Client.rpc.Call(nil, "pss_sendSym", symkeyids[0], rw.topic, pmsg)
+	err = rw.Client.rpc.Call(nil, "pss_sendSym", symkeyids[0], rw.topichex, hexutil.Encode(pmsg))
 	if err != nil {
 		return err
 	}
@@ -148,8 +149,8 @@ func (rw *pssRPCRW) handshake(retries int, sync bool, flush bool) (string, error
 	// request new keys
 	// if the key buffer was depleted, make this as a blocking call and try several times before giving up
 	for i = 0; i < 1+retries; i++ {
-		log.Debug("handshake attempt pssrpcrw", "pubkeyid", rw.pubKeyId, "topic", rw.topic, "sync", sync)
-		err := rw.Client.rpc.Call(&symkeyids, "pss_handshake", rw.pubKeyId, rw.topic, sync, flush)
+		log.Debug("handshake attempt pssrpcrw", "pubkeyid", rw.pubKeyId, "topic", rw.topichex, "sync", sync)
+		err := rw.Client.rpc.Call(&symkeyids, "pss_handshake", rw.pubKeyId, rw.topichex, sync, flush)
 		if err == nil {
 			var keyid string
 			if sync {
@@ -187,7 +188,7 @@ func NewClient(rpcurl string) (*Client, error) {
 func NewClientWithRPC(rpcclient *rpc.Client) (*Client, error) {
 	client := newClient()
 	client.rpc = rpcclient
-	err := client.rpc.Call(&client.BaseAddr, "pss_baseAddr")
+	err := client.rpc.Call(&client.BaseAddrHex, "pss_baseAddr")
 	if err != nil {
 		return nil, fmt.Errorf("cannot get pss node baseaddress: %v", err)
 	}
@@ -212,14 +213,15 @@ func newClient() (client *Client) {
 // this peer object is instantiated, and the protocol is run on it.
 func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topic := pss.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
+	topichex := hexutil.Encode(topic[:])
 	msgC := make(chan pss.APIMsg)
 	self.peerPool[topic] = make(map[string]*pssRPCRW)
-	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topic)
+	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topichex)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
 	self.subs = append(self.subs, sub)
-	err = self.rpc.Call(nil, "pss_addHandshake", topic)
+	err = self.rpc.Call(nil, "pss_addHandshake", topichex)
 	if err != nil {
 		return fmt.Errorf("pss handshake activation failed: %v", err)
 	}
@@ -244,12 +246,18 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 				// if we don't have the peer on this protocol already, create it
 				// this is more or less the same as AddPssPeer, less the handshake initiation
 				if self.peerPool[topic][pubkeyid] == nil {
-					var addr pss.PssAddress
-					err := self.rpc.Call(&addr, "pss_getAddress", topic, false, msg.Key)
+					var addrhex string
+					err := self.rpc.Call(&addrhex, "pss_getAddress", topichex, false, msg.Key)
 					if err != nil {
 						log.Trace(err.Error())
 						continue
 					}
+					addrbytes, err := hexutil.Decode(addrhex)
+					if err != nil {
+						log.Trace(err.Error())
+						break
+					}
+					addr := pss.PssAddress(addrbytes)
 					rw, err := self.newpssRPCRW(pubkeyid, addr, topic)
 					if err != nil {
 						break
@@ -299,7 +307,7 @@ func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spe
 		if err != nil {
 			return err
 		}
-		_, err := rw.handshake(handshakeRetryCount, true, true)
+		_, err = rw.handshake(handshakeRetryCount, true, true)
 		if err != nil {
 			return err
 		}
