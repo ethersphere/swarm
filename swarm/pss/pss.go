@@ -125,6 +125,10 @@ func (self *Pss) String() string {
 // In addition to params, it takes a swarm network overlay
 // and a DPA storage for message cache storage.
 func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
+	cap := p2p.Cap{
+		Name:    pssProtocolName,
+		Version: pssVersion,
+	}
 	return &Pss{
 		Overlay:    k,
 		privateKey: params.privateKey,
@@ -137,7 +141,7 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		cacheTTL:        params.CacheTTL,
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
-		capstring:       fmt.Sprintf("%s/%d", pssProtocolName, pssVersion),
+		capstring:       cap.String(),
 
 		pubKeyPool:                 make(map[string]map[Topic]*pssPeer),
 		symKeyPool:                 make(map[string]map[Topic]*pssPeer),
