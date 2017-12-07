@@ -1,6 +1,8 @@
 package pss
 
 import (
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -30,7 +32,7 @@ func (t *Topic) Unmarshal(input []byte) error {
 }
 
 func (t Topic) MarshalJSON() (b []byte, err error) {
-	return []byte(strings.Join([]string{"\"", hexutil.Encode((t)[:]), "\""}, "")), nil
+	return json.Marshal(hex.EncodeToString(t[:]))
 }
 
 func (t *Topic) UnmarshalJSON(input []byte) error {
