@@ -101,7 +101,7 @@ func (pssapi *API) GetPublicKey() (keybytes hexutil.Bytes) {
 
 // Set Public key to associate with a particular Pss peer
 func (pssapi *API) SetPeerPublicKey(pubkey hexutil.Bytes, topic Topic, addr PssAddress) error {
-	var err = pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
+	err := pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
 	if err != nil {
 		return fmt.Errorf("Invalid key: %x", pubkey)
 	}
@@ -128,12 +128,6 @@ func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
 func (pssapi *API) SendAsym(pubkeyhex string, topic Topic, msg hexutil.Bytes) error {
 	return pssapi.Pss.SendAsym(pubkeyhex, topic, msg[:])
 }
-
-//func (pssapi *API) SendSym(symkeyhex string, topicbytes hexutil.Bytes, msg hexutil.Bytes) error {
-//	var topic Topic
-//	copy(topic[:], topicbytes)
-//	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
-//}
 
 func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) error {
 	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
