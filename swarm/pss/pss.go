@@ -33,6 +33,8 @@ const (
 	defaultWhisperPoW          = 0.0000000001
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = 1000 * 60 * 10
+	pssProtocolName            = "pss"
+	pssVersion                 = 1
 )
 
 var (
@@ -97,6 +99,7 @@ type Pss struct {
 	cacheTTL        time.Duration               // how long to keep messages in fwdCache (not implemented)
 	msgTTL          time.Duration
 	paddingByteSize int
+	capstring       string
 
 	// keys and peers
 	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
@@ -134,6 +137,7 @@ func NewPss(k network.Overlay, dpa *storage.DPA, params *PssParams) *Pss {
 		cacheTTL:        params.CacheTTL,
 		msgTTL:          params.MsgTTL,
 		paddingByteSize: defaultPaddingByteSize,
+		capstring:       fmt.Sprintf("%s/%d", pssProtocolName, pssVersion),
 
 		pubKeyPool:                 make(map[string]map[Topic]*pssPeer),
 		symKeyPool:                 make(map[string]map[Topic]*pssPeer),
@@ -168,8 +172,8 @@ func (self *Pss) Stop() error {
 }
 
 var pssSpec = &protocols.Spec{
-	Name:       "pss",
-	Version:    1,
+	Name:       pssProtocolName,
+	Version:    pssVersion,
 	MaxMsgSize: defaultMaxMsgSize,
 	Messages: []interface{}{
 		PssMsg{},
@@ -650,7 +654,6 @@ func (self *Pss) forward(msg *PssMsg) error {
 	sent := 0
 
 	self.Overlay.EachConn(to, 256, func(op network.OverlayConn, po int, isproxbin bool) bool {
-		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, to, self.BaseAddr(), op.Address())
 		// we need p2p.protocols.Peer.Send
 		// cast and resolve
 		sp, ok := op.(senderPeer)
@@ -658,6 +661,23 @@ func (self *Pss) forward(msg *PssMsg) error {
 			log.Crit("Pss cannot use kademlia peer type")
 			return false
 		}
+		info := sp.Info()
+
+		// check if the peer is running pss
+		var ispss bool
+		for _, cap := range info.Caps {
+			if cap == self.capstring {
+				ispss = true
+				break
+			}
+		}
+		if !ispss {
+			log.Trace("peer doesn't have matching pss capabilities, skipping", "peer", info.Name, "caps", info.Caps)
+			return true
+		}
+
+		// get the protocol peer from the forwarding peer cache
+		sendMsg := fmt.Sprintf("MSG %x TO %x FROM %x VIA %x", digest, to, self.BaseAddr(), op.Address())
 		pp := self.fwdPool[sp.Info().ID]
 		if self.checkFwdCache(op.Address(), digest) {
 			log.Trace(fmt.Sprintf("%v: peer already forwarded to", sendMsg))
