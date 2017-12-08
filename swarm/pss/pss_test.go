@@ -1172,12 +1172,10 @@ func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *Pss
 		os.Exit(1)
 	}
 
-	// if kademlia is not passed it us
+	// set up routing if kademlia is not passed to us
 	if overlay == nil {
-		// set up routing
 		kp := network.NewKadParams()
 		kp.MinProxBinSize = 3
-
 		overlay = network.NewKademlia(addr.Over(), kp)
 	}
 
