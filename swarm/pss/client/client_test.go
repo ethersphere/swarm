@@ -75,10 +75,8 @@ func init() {
 }
 
 // ping pong exchange across one expired symkey
-func TestHandshake(t *testing.T) {
+func TestClientHandshake(t *testing.T) {
 	sendLimit = 3
-	topic := pss.ProtocolTopic(pss.PingProtocol)
-	topichex := hexutil.Encode(topic[:])
 
 	clients, err := setupNetwork(2)
 	if err != nil {
@@ -115,6 +113,8 @@ func TestHandshake(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	topic := pss.PingTopic.String()
+
 	var loaddr string
 	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
@@ -137,11 +137,11 @@ func TestHandshake(t *testing.T) {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
 	}
 
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, roaddr)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topic, roaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, loaddr)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topic, loaddr)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -31,19 +31,16 @@ func testProtocol(t *testing.T) {
 
 	// address hint size
 	var addrsize int64
-	var err error
 	paramstring := strings.Split(t.Name(), "/")
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("protocol test", "addrsize", addrsize)
 
-	topic := PingTopic
-	topichex := common.ToHex(topic[:])
+	topic := PingTopic.String()
 
 	clients, err := setupNetwork(2)
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	var loaddrhex string
 	err = clients[0].Call(&loaddrhex, "pss_baseAddr")
 	if err != nil {
@@ -77,19 +74,19 @@ func testProtocol(t *testing.T) {
 
 	lmsgC := make(chan APIMsg)
 	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topichex)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topichex)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
 	defer rsub.Unsubscribe()
 
 	// set reciprocal public keys
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, roaddrhex)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topic, roaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, loaddrhex)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topic, loaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,7 +94,7 @@ func testProtocol(t *testing.T) {
 	// add right peer's public key as protocol peer on left
 	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
 	p := p2p.NewPeer(nid, fmt.Sprintf("%x", common.FromHex(loaddrhex)), []p2p.Cap{})
-	_, err = pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, topic, true, rpubkey)
+	_, err = pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, rpubkey)
 	if err != nil {
 		t.Fatal(err)
 	}
