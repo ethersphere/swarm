@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -96,7 +97,7 @@ func TestCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ps := newTestPss(privkey, nil)
+	ps := newTestPss(privkey, nil, nil)
 	pp := NewPssParams(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
@@ -226,7 +227,7 @@ func TestKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve 'their' private key")
 	}
-	ps := newTestPss(ourprivkey, nil)
+	ps := newTestPss(ourprivkey, nil, nil)
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := make(PssAddress, 32)
@@ -263,6 +264,82 @@ func TestKeys(t *testing.T) {
 
 	// check that the key is stored in the peerpool
 	//psp := ps.symKeyPool[inkeyid][topic]
+}
+
+type pssTestPeer struct {
+	*protocols.Peer
+	addr []byte
+}
+
+func (t *pssTestPeer) Address() []byte {
+	return t.addr
+}
+
+func (t *pssTestPeer) Update(addr network.OverlayAddr) network.OverlayAddr {
+	return addr
+}
+
+func (t *pssTestPeer) Off() network.OverlayAddr {
+	return &pssTestPeer{}
+}
+
+// forwarding should skip peers that do not have matching pss capabilities
+func TestMismatch(t *testing.T) {
+
+	// create privkey for forwarder node
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// initialize overlay
+	baseaddr := network.RandomAddr()
+	kad := network.NewKademlia((baseaddr).Over(), network.NewKadParams())
+	rw := &p2p.MsgPipeRW{}
+
+	// one peer has a mismatching version of pss
+	wrongpssaddr := network.RandomAddr()
+	wrongpsscap := p2p.Cap{
+		Name:    pssProtocolName,
+		Version: 0,
+	}
+	nid, _ := discover.HexID("0x01")
+	wrongpsspeer := &pssTestPeer{
+		Peer: protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(wrongpssaddr.Over()), []p2p.Cap{wrongpsscap}), rw, nil),
+		addr: wrongpssaddr.Over(),
+	}
+
+	// one peer doesn't even have pss (boo!)
+	nopssaddr := network.RandomAddr()
+	nopsscap := p2p.Cap{
+		Name:    "nopss",
+		Version: 1,
+	}
+	nid, _ = discover.HexID("0x02")
+	nopsspeer := &pssTestPeer{
+		Peer: protocols.NewPeer(p2p.NewPeer(nid, common.ToHex(nopssaddr.Over()), []p2p.Cap{nopsscap}), rw, nil),
+		addr: nopssaddr.Over(),
+	}
+
+	// add peers to kademlia and activate them
+	// it's safe so don't check errors
+	kad.Register([]network.OverlayAddr{wrongpsspeer})
+	kad.On(wrongpsspeer)
+	kad.Register([]network.OverlayAddr{nopsspeer})
+	kad.On(nopsspeer)
+
+	// create pss
+	pssmsg := &PssMsg{
+		To:      []byte{},
+		Expire:  uint32(time.Now().Add(time.Second).Unix()),
+		Payload: &whisper.Envelope{},
+	}
+	ps := newTestPss(privkey, kad, nil)
+
+	// run the forward
+	// it is enough that it completes; trying to send to incapable peers would create segfault
+	ps.forward(pssmsg)
+
 }
 
 // send symmetrically encrypted message between two directly connected peers
@@ -734,7 +811,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
-	ps := newTestPss(privkey, nil)
+	ps := newTestPss(privkey, nil, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
 	topic := BytesToTopic([]byte("foo"))
@@ -777,7 +854,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	ctx, _ := context.WithTimeout(context.Background(), time.Second)
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
-	ps := newTestPss(privkey, nil)
+	ps := newTestPss(privkey, nil, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
 	topic := BytesToTopic([]byte("foo"))
@@ -823,9 +900,9 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
-		ps = newTestPss(privkey, &PssParams{SymKeyCacheCapacity: int(cachesize)})
+		ps = newTestPss(privkey, nil, &PssParams{SymKeyCacheCapacity: int(cachesize)})
 	} else {
-		ps = newTestPss(privkey, nil)
+		ps = newTestPss(privkey, nil, nil)
 	}
 	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
@@ -905,9 +982,9 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
-		ps = newTestPss(privkey, &PssParams{SymKeyCacheCapacity: int(cachesize)})
+		ps = newTestPss(privkey, nil, &PssParams{SymKeyCacheCapacity: int(cachesize)})
 	} else {
-		ps = newTestPss(privkey, nil)
+		ps = newTestPss(privkey, nil, nil)
 	}
 	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
@@ -967,7 +1044,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	})
 	for i := 0; i < numnodes; i++ {
 		nodes[i], err = net.NewNodeWithConfig(&adapters.NodeConfig{
-			Services: []string{"bzz", "pss"},
+			Services: []string{"bzz", pssProtocolName},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("error creating node 1: %v", err)
@@ -1015,7 +1092,7 @@ func newServices() adapters.Services {
 		return kademlias[id]
 	}
 	return adapters.Services{
-		"pss": func(ctx *adapters.ServiceContext) (node.Service, error) {
+		pssProtocolName: func(ctx *adapters.ServiceContext) (node.Service, error) {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
 				return nil, fmt.Errorf("create pss cache tmpdir failed", "error", err)
@@ -1048,7 +1125,7 @@ func newServices() adapters.Services {
 			ps.Register(&PingTopic, pp.Handle)
 			ps.addAPI(rpc.API{
 				Namespace: "psstest",
-				Version:   "0.2",
+				Version:   "0.3",
 				Service:   NewAPITest(ps),
 				Public:    false,
 			})
@@ -1077,7 +1154,7 @@ func newServices() adapters.Services {
 	}
 }
 
-func newTestPss(privkey *ecdsa.PrivateKey, ppextra *PssParams) *Pss {
+func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *PssParams) *Pss {
 
 	var nid discover.NodeID
 	copy(nid[:], crypto.FromECDSAPub(&privkey.PublicKey))
@@ -1095,17 +1172,18 @@ func newTestPss(privkey *ecdsa.PrivateKey, ppextra *PssParams) *Pss {
 		os.Exit(1)
 	}
 
-	// set up routing
-	kp := network.NewKadParams()
-	kp.MinProxBinSize = 3
+	// set up routing if kademlia is not passed to us
+	if overlay == nil {
+		kp := network.NewKadParams()
+		kp.MinProxBinSize = 3
+		overlay = network.NewKademlia(addr.Over(), kp)
+	}
 
 	// create pss
 	pp := NewPssParams(privkey)
 	if ppextra != nil {
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
-
-	overlay := network.NewKademlia(addr.Over(), kp)
 	ps := NewPss(overlay, dpa, pp)
 
 	return ps
