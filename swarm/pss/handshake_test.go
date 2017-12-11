@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 )
 
@@ -29,10 +28,13 @@ func testHandshake(t *testing.T) {
 
 	// set up two nodes directly connected
 	// (we are not testing pss routing here)
-	topic := BytesToTopic([]byte("foo:42"))
-	topichex := common.ToHex(topic[:])
-
 	clients, err := setupNetwork(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var topic string
+	err = clients[0].Call(&topic, "pss_stringToTopic", "foo:42")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,11 +69,11 @@ func testHandshake(t *testing.T) {
 	time.Sleep(time.Millisecond * 1000) // replace with hive healthy code
 
 	// give each node its peer's public key
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topichex, roaddr)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topic, roaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topichex, loaddr)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topic, loaddr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,17 +84,17 @@ func testHandshake(t *testing.T) {
 	// L <- send 4 keys, request 4 keys <- R
 	// L -> send 4 keys -> R
 	// the call will fill the array with symkeys L needs for sending to R
-	err = clients[0].Call(nil, "pss_addHandshake", topichex)
+	err = clients[0].Call(nil, "pss_addHandshake", topic)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_addHandshake", topichex)
+	err = clients[1].Call(nil, "pss_addHandshake", topic)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	var lhsendsymkeyids []string
-	err = clients[0].Call(&lhsendsymkeyids, "pss_handshake", rpubkey, topichex, true, true)
+	err = clients[0].Call(&lhsendsymkeyids, "pss_handshake", rpubkey, topic, true, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,7 +104,7 @@ func testHandshake(t *testing.T) {
 
 	// check if we have 6 outgoing keys stored, and they match what was received from R
 	var lsendsymkeyids []string
-	err = clients[0].Call(&lsendsymkeyids, "pss_getHandshakeKeys", rpubkey, topichex, false, true)
+	err = clients[0].Call(&lsendsymkeyids, "pss_getHandshakeKeys", rpubkey, topic, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,17 +122,17 @@ func testHandshake(t *testing.T) {
 
 	// check if in- and outgoing keys on l-node and r-node match up and are in opposite categories (l recv = r send, l send = r recv)
 	var rsendsymkeyids []string
-	err = clients[1].Call(&rsendsymkeyids, "pss_getHandshakeKeys", lpubkey, topichex, false, true)
+	err = clients[1].Call(&rsendsymkeyids, "pss_getHandshakeKeys", lpubkey, topic, false, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var lrecvsymkeyids []string
-	err = clients[0].Call(&lrecvsymkeyids, "pss_getHandshakeKeys", rpubkey, topichex, true, false)
+	err = clients[0].Call(&lrecvsymkeyids, "pss_getHandshakeKeys", rpubkey, topic, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	var rrecvsymkeyids []string
-	err = clients[1].Call(&rrecvsymkeyids, "pss_getHandshakeKeys", lpubkey, topichex, true, false)
+	err = clients[1].Call(&rrecvsymkeyids, "pss_getHandshakeKeys", lpubkey, topic, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,13 +196,13 @@ func testHandshake(t *testing.T) {
 	}
 
 	// send new handshake request, should send no keys
-	err = clients[0].Call(nil, "pss_handshake", rpubkey, topichex, false)
+	err = clients[0].Call(nil, "pss_handshake", rpubkey, topic, false)
 	if err == nil {
 		t.Fatal("expected full symkey buffer error")
 	}
 
 	// expire one key, send new handshake request
-	err = clients[0].Call(nil, "pss_releaseHandshakeKey", rpubkey, topichex, lsendsymkeyids[0], true)
+	err = clients[0].Call(nil, "pss_releaseHandshakeKey", rpubkey, topic, lsendsymkeyids[0], true)
 	if err != nil {
 		t.Fatalf("release left send key %s fail: %v", lsendsymkeyids[0], err)
 	}
@@ -209,7 +211,7 @@ func testHandshake(t *testing.T) {
 
 	// send new handshake request, should now receive one key
 	// check that it is not in previous right recv key array
-	err = clients[0].Call(&newlhsendkeyids, "pss_handshake", rpubkey, topichex, true, false)
+	err = clients[0].Call(&newlhsendkeyids, "pss_handshake", rpubkey, topic, true, false)
 	if err != nil {
 		t.Fatalf("handshake send fail: %v", err)
 	} else if len(newlhsendkeyids) != defaultSymKeyCapacity {

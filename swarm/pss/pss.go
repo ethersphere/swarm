@@ -433,7 +433,7 @@ func (self *Pss) addSymmetricKeyToPool(keyid string, topic Topic, address *PssAd
 		self.symKeyDecryptCache[self.symKeyDecryptCacheCursor%cap(self.symKeyDecryptCache)] = &keyid
 	}
 	key, _ := self.GetSymmetricKey(keyid)
-	log.Trace("added symkey", "symkeyid", keyid, "symkey", common.ToHex(key), "topic", topic, "address", address, "cache", addtocache)
+	log.Trace("added symkey", "symkeyid", keyid, "symkey", common.ToHex(key), "topic", topic, "address", fmt.Sprintf("%p", address), "cache", addtocache)
 }
 
 // Returns a symmetric key byte seqyence stored in the whisper backend
