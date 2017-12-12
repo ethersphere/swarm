@@ -39,6 +39,7 @@ func testHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// "0x" = 2 bytes + addrsize address bytes which in hex is 2x length
 	var loaddr string
 	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
