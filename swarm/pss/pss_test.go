@@ -7,6 +7,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io/ioutil"
@@ -612,9 +613,10 @@ type Job struct {
 	RecvNode discover.NodeID
 }
 
-func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID][]byte, hextopic string) {
+//func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID][]byte, hextopic string) {
+func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID]string, topic string) {
 	for j := range jobs {
-		rpcs[j.SendNode].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[j.RecvNode]), hextopic, j.Msg)
+		rpcs[j.SendNode].Call(nil, "pss_sendAsym", pubkeys[j.RecvNode], topic, hexutil.Encode(j.Msg))
 	}
 }
 
@@ -635,8 +637,6 @@ func testNetwork(t *testing.T) {
 		id     discover.NodeID
 		msgIdx int
 	}
-	topic := whisper.BytesToTopic([]byte("foo:42"))
-	hextopic := common.ToHex(topic[:])
 
 	paramstring := strings.Split(t.Name(), "/")
 	nodecount, _ := strconv.ParseInt(paramstring[1], 10, 0)
@@ -647,12 +647,16 @@ func testNetwork(t *testing.T) {
 	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize)
 
 	nodes := make([]discover.NodeID, nodecount)
-	bzzaddrs := make(map[discover.NodeID][]byte, nodecount)
+	//bzzaddrs := make(map[discover.NodeID][]byte, nodecount)
+	bzzaddrs := make(map[discover.NodeID]string, nodecount)
 	rpcs := make(map[discover.NodeID]*rpc.Client, nodecount)
-	pubkeys := make(map[discover.NodeID][]byte, nodecount)
+	//pubkeys := make(map[discover.NodeID][]byte, nodecount)
+	pubkeys := make(map[discover.NodeID]string, nodecount)
 
 	sentmsgs := make([][]byte, msgcount)
 	recvmsgs := make([]bool, msgcount)
+	nodemsgcount := make(map[discover.NodeID]int, nodecount)
+
 	trigger := make(chan discover.NodeID)
 
 	var a adapters.NodeAdapter
@@ -661,15 +665,15 @@ func testNetwork(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		adapter = adapters.NewExecAdapter(dirname)
-	} else if paramstring[4] == "sock" {
-		adapter = adapters.NewSocketAdapter(services)
-	} else if paramstring[4] == "tcp" {
-		adapter = adapters.NewTCPAdapter(services)
-	} else {
-		adapter = adapters.NewSocketAdapter(services)
+		a = adapters.NewExecAdapter(dirname)
+	} else if adapter == "sock" {
+		a = adapters.NewSocketAdapter(services)
+	} else if adapter == "tcp" {
+		a = adapters.NewTCPAdapter(services)
+	} else if adapter == "sim" {
+		a = adapters.NewSimAdapter(services)
 	}
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
 		ID: "0",
 	})
 	defer net.Shutdown()
@@ -683,7 +687,7 @@ func testNetwork(t *testing.T) {
 		t.Fatal(err)
 	}
 	var snap simulations.Snapshot
-	err = json.NewDecoder(f).Decode(&snap)
+	err = json.Unmarshal(jsonbyte, &snap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -706,13 +710,11 @@ func testNetwork(t *testing.T) {
 				select {
 				case recvmsg := <-msgC:
 					idx, _ := binary.Uvarint(recvmsg.Msg)
-					lock.Lock()
 					if recvmsgs[idx] == false {
 						log.Debug("msg recv", "idx", idx, "id", id)
 						recvmsgs[idx] = true
 						trigger <- id
 					}
-					lock.Unlock()
 				case <-sub.Err():
 					return
 				}
@@ -734,18 +736,22 @@ func testNetwork(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
+		//pubkey := make([]byte, 65)
 		var pubkey string
+		//pubkeys[nod.ID()] = make([]byte, 65)
 		err = rpcs[nodes[i]].Call(&pubkey, "pss_getPublicKey")
 		if err != nil {
 			t.Fatal(err)
 		}
 		pubkeys[nod.ID()] = pubkey
-		var addrhex string
-		err = rpcs[nodes[i]].Call(&addrhex, "pss_baseAddr")
+		//copy(pubkeys[nod.ID()], pubkey)
+		//addr := make([]byte, 32)
+		var addr string
+		err = rpcs[nodes[i]].Call(&addr, "pss_baseAddr")
 		if err != nil {
 			t.Fatal(err)
 		}
-		bzzaddrs[nodes[i]] = addrhex
+		bzzaddrs[nodes[i]] = addr[:2+(addrsize*2)]
 		err = triggerChecks(trigger, nodes[i], rpcs[nodes[i]], topic)
 		if err != nil {
 			t.Fatal(err)
@@ -755,12 +761,12 @@ func testNetwork(t *testing.T) {
 	// setup workers
 	jobs := make(chan Job, 10)
 	for w := 1; w <= 10; w++ {
-		go worker(w, jobs, rpcs, pubkeys, hextopic)
+		go worker(w, jobs, rpcs, pubkeys, topic)
 	}
 
 	for i := 0; i < int(msgcount); i++ {
-		sendnodeidx := rand.Intn(int(len(snap.Nodes)))
-		recvnodeidx := rand.Intn(int(len(snap.Nodes) - 1))
+		sendnodeidx := rand.Intn(int(nodecount))
+		recvnodeidx := rand.Intn(int(nodecount - 1))
 		if recvnodeidx >= sendnodeidx {
 			recvnodeidx++
 		}
@@ -1058,7 +1064,7 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 	nodes := make([]*simulations.Node, numnodes)
 	clients = make([]*rpc.Client, numnodes)
 	if numnodes < 2 {
-		return nil, fmt.Errorf("Minimum two nodes in network")
+		return nil, errors.New(fmt.Sprintf("Minimum two nodes in network"))
 	}
 	adapter := adapters.NewSimAdapter(services)
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
@@ -1070,27 +1076,27 @@ func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
 			Services: []string{"bzz", pssProtocolName},
 		})
 		if err != nil {
-			return nil, fmt.Errorf("error creating node 1: %v", err)
+			return nil, errors.New(fmt.Sprintf("error creating node 1: %v", err))
 		}
 		err = net.Start(nodes[i].ID())
 		if err != nil {
-			return nil, fmt.Errorf("error starting node 1: %v", err)
+			return nil, errors.New(fmt.Sprintf("error starting node 1: %v", err))
 		}
 		if i > 0 {
 			err = net.Connect(nodes[i].ID(), nodes[i-1].ID())
 			if err != nil {
-				return nil, fmt.Errorf("error connecting nodes: %v", err)
+				return nil, errors.New(fmt.Sprintf("error connecting nodes: %v", err))
 			}
 		}
 		clients[i], err = nodes[i].Client()
 		if err != nil {
-			return nil, fmt.Errorf("create node 1 rpc client fail: %v", err)
+			return nil, errors.New(fmt.Sprintf("create node 1 rpc client fail: %v", err))
 		}
 	}
 	if numnodes > 2 {
 		err = net.Connect(nodes[0].ID(), nodes[len(nodes)-1].ID())
 		if err != nil {
-			return nil, fmt.Errorf("error connecting first and last nodes")
+			return nil, errors.New(fmt.Sprintf("error connecting first and last nodes"))
 		}
 	}
 	return clients, nil
@@ -1118,17 +1124,16 @@ func newServices() adapters.Services {
 		pssProtocolName: func(ctx *adapters.ServiceContext) (node.Service, error) {
 			cachedir, err := ioutil.TempDir("", "pss-cache")
 			if err != nil {
-				return nil, fmt.Errorf("create pss cache tmpdir failed", "error", err)
+				return nil, errors.New(fmt.Sprintf("create pss cache tmpdir failed", "error", err))
 			}
 			dpa, err := storage.NewLocalDPA(cachedir)
 			if err != nil {
-				return nil, fmt.Errorf("local dpa creation failed", "error", err)
+				return nil, errors.New(fmt.Sprintf("local dpa creation failed", "error", err))
 			}
 
 			// execadapter does not exec init()
-			if !initDone {
-				initTest()
-			}
+			initTest()
+
 			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)

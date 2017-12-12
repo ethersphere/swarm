@@ -94,8 +94,8 @@ type Pss struct {
 	auxAPIs         []rpc.API         // builtins (handshake, test) can add APIs
 
 	// sending and forwarding
-	fwdPool         map[string]*protocols.Peer // keep track of all peers sitting on the pssmsg routing layer
 	fwdPoolMu       sync.Mutex
+	fwdPool         map[string]*protocols.Peer  // keep track of all peers sitting on the pssmsg routing layer
 	fwdCache        map[pssDigest]pssCacheEntry // checksum of unique fields from pssmsg mapped to expiry, cache to determine whether to drop msg
 	fwdCacheMu      sync.Mutex
 	cacheTTL        time.Duration // how long to keep messages in fwdCache (not implemented)
@@ -104,17 +104,17 @@ type Pss struct {
 	capstring       string
 
 	// keys and peers
-	pubKeyPool                 map[string]map[whisper.TopicType]*pssPeer // mapping of hex public keys to peer address by topic.
 	pubKeyPoolMu               sync.Mutex
-	symKeyPool                 map[string]map[whisper.TopicType]*pssPeer // mapping of symkeyids to peer address by topic.
 	symKeyPoolMu               sync.Mutex
-	symKeyDecryptCache         []*string // fast lookup of symkeys recently used for decryption; last used is on top of stack
-	symKeyDecryptCacheCursor   int       // modular cursor pointing to last used, wraps on symKeyDecryptCache array
-	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
+	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
+	symKeyPool                 map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
+	symKeyDecryptCache         []*string                     // fast lookup of symkeys recently used for decryption; last used is on top of stack
+	symKeyDecryptCacheCursor   int                           // modular cursor pointing to last used, wraps on symKeyDecryptCache array
+	symKeyDecryptCacheCapacity int                           // max amount of symkeys to keep.
 
 	// message handling
-	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu sync.Mutex
+	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
 
 	// process
 	quitC chan struct{}
@@ -585,15 +585,14 @@ func (self *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	if pubkey == nil {
 		return fmt.Errorf("Invalid public key id %x", pubkey)
 	}
+	self.pubKeyPoolMu.Lock()
 	psp, ok := self.pubKeyPool[pubkeyid][topic]
+	self.pubKeyPoolMu.Unlock()
 	if !ok {
 		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic, pubkeyid)
 	} else if psp.address == nil {
 		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic, pubkeyid)
 	}
-	self.pubKeyPoolMu.Lock()
-	psp := self.pubKeyPool[pubkeyid][topic]
-	self.pubKeyPoolMu.Unlock()
 	go func() {
 		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
 	}()
