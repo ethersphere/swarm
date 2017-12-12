@@ -31,72 +31,73 @@ func testProtocol(t *testing.T) {
 
 	// address hint size
 	var addrsize int64
-	var err error
 	paramstring := strings.Split(t.Name(), "/")
 	addrsize, _ = strconv.ParseInt(paramstring[1], 10, 0)
 	log.Info("protocol test", "addrsize", addrsize)
+
+	topic := PingTopic.String()
 
 	clients, err := setupNetwork(2)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	var loaddr []byte
-	err = clients[0].Call(&loaddr, "pss_baseAddr")
+	var loaddrhex string
+	err = clients[0].Call(&loaddrhex, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
-	loaddr = loaddr[:addrsize]
-	var roaddr []byte
-	err = clients[1].Call(&roaddr, "pss_baseAddr")
+	loaddrhex = loaddrhex[:2+(addrsize*2)]
+	var roaddrhex string
+	err = clients[1].Call(&roaddrhex, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 2 baseaddr fail: %v", err)
 	}
-	roaddr = roaddr[:addrsize]
+	roaddrhex = roaddrhex[:2+(addrsize*2)]
 	lnodeinfo := &p2p.NodeInfo{}
 	err = clients[0].Call(&lnodeinfo, "admin_nodeInfo")
 	if err != nil {
 		t.Fatalf("rpc nodeinfo node 11 fail: %v", err)
 	}
 
-	lpubkey := make([]byte, 32)
+	var lpubkey string
 	err = clients[0].Call(&lpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 1 pubkey fail: %v", err)
 	}
-	rpubkey := make([]byte, 32)
+	var rpubkey string
 	err = clients[1].Call(&rpubkey, "pss_getPublicKey")
 	if err != nil {
 		t.Fatalf("rpc get node 2 pubkey fail: %v", err)
 	}
 
-	time.Sleep(time.Millisecond * 500) // replace with hive healthy code
+	time.Sleep(time.Millisecond * 1000) // replace with hive healthy code
 
 	lmsgC := make(chan APIMsg)
 	lctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", PingTopic)
-	log.Trace("lsub", "id", lsub)
+	lsub, err := clients[0].Subscribe(lctx, "pss", lmsgC, "receive", topic)
 	defer lsub.Unsubscribe()
 	rmsgC := make(chan APIMsg)
 	rctx, _ := context.WithTimeout(context.Background(), time.Second*10)
-	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", PingTopic)
-	log.Trace("rsub", "id", rsub)
+	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
 	defer rsub.Unsubscribe()
 
 	// set reciprocal public keys
-	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, PingTopic, roaddr)
+	err = clients[0].Call(nil, "pss_setPeerPublicKey", rpubkey, topic, roaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, PingTopic, loaddr)
+	err = clients[1].Call(nil, "pss_setPeerPublicKey", lpubkey, topic, loaddrhex)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// add right peer's public key as protocol peer on left
 	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
-	p := p2p.NewPeer(nid, fmt.Sprintf("%x", loaddr), []p2p.Cap{})
-	pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, common.ToHex(rpubkey))
+	p := p2p.NewPeer(nid, fmt.Sprintf("%x", common.FromHex(loaddrhex)), []p2p.Cap{})
+	_, err = pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, rpubkey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// sends ping asym, checks delivery
 	pssprotocols[lnodeinfo.ID].C <- false

@@ -1,6 +1,7 @@
 package pss
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 
@@ -28,8 +29,40 @@ func (t *Topic) Unmarshal(input []byte) error {
 	return err
 }
 
+func (t *Topic) String() string {
+	return hexutil.Encode(t[:])
+}
+
+func (t Topic) MarshalJSON() (b []byte, err error) {
+	return json.Marshal(t.String())
+}
+
+func (t *Topic) UnmarshalJSON(input []byte) error {
+	topicbytes, err := hexutil.Decode(string(input[1 : len(input)-1]))
+	if err != nil {
+		return err
+	}
+	copy(t[:], topicbytes)
+	return nil
+}
+
 // variable length address
 type PssAddress []byte
+
+func (a PssAddress) MarshalJSON() ([]byte, error) {
+	return json.Marshal(hexutil.Encode(a[:]))
+}
+
+func (a *PssAddress) UnmarshalJSON(input []byte) error {
+	b, err := hexutil.Decode(string(input[1 : len(input)-1]))
+	if err != nil {
+		return err
+	}
+	for _, bb := range b {
+		*a = append(*a, bb)
+	}
+	return nil
+}
 
 type pssDigest [digestLength]byte
 

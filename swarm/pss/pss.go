@@ -441,7 +441,7 @@ func (self *Pss) addSymmetricKeyToPool(keyid string, topic Topic, address *PssAd
 		self.symKeyDecryptCache[self.symKeyDecryptCacheCursor%cap(self.symKeyDecryptCache)] = &keyid
 	}
 	key, _ := self.GetSymmetricKey(keyid)
-	log.Trace("added symkey", "symkeyid", keyid, "symkey", common.ToHex(key), "topic", topic, "address", address, "cache", addtocache)
+	log.Trace("added symkey", "symkeyid", keyid, "symkey", common.ToHex(key), "topic", topic, "address", fmt.Sprintf("%p", address), "cache", addtocache)
 }
 
 // Returns a symmetric key byte seqyence stored in the whisper backend
@@ -649,7 +649,7 @@ func (self *Pss) forward(msg *PssMsg) error {
 	// flood guard:
 	// don't allow identical messages we saw shortly before
 	if self.checkFwdCache(nil, digest) {
-		log.Trace(fmt.Sprintf("pss relay block-cache match: FROM %x TO %x", common.ToHex(self.Overlay.BaseAddr()), common.ToHex(msg.To)))
+		log.Trace(fmt.Sprintf("pss relay block-cache match: FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(msg.To)))
 		return nil
 	}
 

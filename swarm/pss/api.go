@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -13,7 +14,7 @@ import (
 // Wrapper for receiving pss messages when using the pss API
 // providing access to sender of message
 type APIMsg struct {
-	Msg        []byte
+	Msg        hexutil.Bytes
 	Asymmetric bool
 	Key        string
 }
@@ -43,7 +44,7 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 
 	handler := func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 		apimsg := &APIMsg{
-			Msg:        msg,
+			Msg:        hexutil.Bytes(msg),
 			Asymmetric: asymmetric,
 			Key:        keyid,
 		}
@@ -52,6 +53,7 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 		}
 		return nil
 	}
+
 	deregf := pssapi.Register(&topic, handler)
 	go func() {
 		defer deregf()
@@ -85,20 +87,30 @@ func (pssapi *API) GetAddress(topic Topic, asymmetric bool, key string) (PssAddr
 	return *addr, nil
 }
 
-// Retrieves the node's public key in byte form
-func (pssapi *API) GetPublicKey() (keybytes []byte) {
+// Retrieves the node's base address in hex form
+func (pssapi *API) BaseAddr() (PssAddress, error) {
+	return PssAddress(pssapi.Pss.BaseAddr()), nil
+}
+
+// Retrieves the node's public key in hex form
+func (pssapi *API) GetPublicKey() (keybytes hexutil.Bytes) {
 	key := pssapi.Pss.PublicKey()
 	keybytes = crypto.FromECDSAPub(key)
-	return keybytes
+	return hexutil.Bytes(keybytes)
 }
 
 // Set Public key to associate with a particular Pss peer
-func (pssapi *API) SetPeerPublicKey(pubkey []byte, topic Topic, addr PssAddress) error {
+func (pssapi *API) SetPeerPublicKey(pubkey hexutil.Bytes, topic Topic, addr PssAddress) error {
 	err := pssapi.Pss.SetPeerPublicKey(crypto.ToECDSAPub(pubkey), topic, &addr)
 	if err != nil {
 		return fmt.Errorf("Invalid key: %x", pubkey)
 	}
 	return nil
+}
+
+func (pssapi *API) GetSymmetricKey(symkeyid string) (hexutil.Bytes, error) {
+	symkey, err := pssapi.Pss.GetSymmetricKey(symkeyid)
+	return hexutil.Bytes(symkey), err
 }
 
 func (pssapi *API) GetSymmetricAddressHint(topic Topic, symkeyid string) (PssAddress, error) {
@@ -111,4 +123,12 @@ func (pssapi *API) GetAsymmetricAddressHint(topic Topic, pubkeyid string) (PssAd
 
 func (pssapi *API) StringToTopic(topicstring string) (Topic, error) {
 	return BytesToTopic([]byte(topicstring)), nil
+}
+
+func (pssapi *API) SendAsym(pubkeyhex string, topic Topic, msg hexutil.Bytes) error {
+	return pssapi.Pss.SendAsym(pubkeyhex, topic, msg[:])
+}
+
+func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) error {
+	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
 }

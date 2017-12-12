@@ -64,38 +64,38 @@ For `golang` clients, please use the `rpc.Client` provided by the `go-ethereum` 
 
 #### pss_getPublicKey
 
-Retrieves the public key of the node, in raw byte format
+Retrieves the public key of the node, in hex format
 
 ```
 parameters:
 none
 
 returns:
-1. publickey (bytes)
+1. publickey (hex)
 ```
 
 #### pss_baseAddr
 
-Retrieves the swarm overlay address of the node, in raw byte format
+Retrieves the swarm overlay address of the node, in hex format
 
 ```
 parameters:
 none
 
 returns:
-1. swarm overlay address (bytes)
+1. swarm overlay address (hex)
 ```
 
 #### pss_stringToTopic
 
-Creates a deterministic 4 byte topic value from input
+Creates a deterministic 4 byte topic value from input, returned in hex format
 
 ```
 parameters:
 1. topic string (string)
 
 returns:
-1. pss topic (bytes)
+1. pss topic (hex)
 ```
 
 ### RECEIVE MESSAGES
@@ -107,7 +107,7 @@ Creates a subscription. Received messages with matching topic will be passed to 
 ```
 parameters:
 1. string("receive")
-2. topic (4 bytes)
+2. topic (4 bytes in hex)
 
 returns:
 1. subscription handle `base64(byte)` `rpc.ClientSubscription`
@@ -120,7 +120,7 @@ In `golang` as special method is used:
 Incoming messages are encapsulated in an object (`pss.APIMsg` in `golang`) with the following members:
 
 ```
-1. Msg (bytes) - the message payload
+1. Msg (hex) - the message payload
 2. Asymmetric (bool) - true if message used public key encryption
 3. Key (string) - the encryption key used
 ```
@@ -133,9 +133,9 @@ Register a peer's public key. This is done once for every topic that will be use
 
 ```
 parameters:
-1. public key of peer (bytes)
-2. topic (4 bytes)
-3. address of peer (bytes)
+1. public key of peer (hex)
+2. topic (4 bytes in hex)
+3. address of peer (hex)
 
 returns:
 none
@@ -147,9 +147,9 @@ Encrypts the message using the provided public key, and signs it using the node'
 
 ```
 parameters:
-1. public key of peer (bytes)
-2. topic (4 bytes)
-3. message (bytes)
+1. public key of peer (hex)
+2. topic (4 bytes in hex)
+3. message (hex)
 
 returns:
 none
@@ -165,9 +165,9 @@ If the fourth parameter is false, the key will *not* be added to the list of sym
 
 ```
 parameters:
-1. symmetric key (bytes)
-2. topic (4 bytes)
-3. address of peer (bytes)
+1. symmetric key (hex)
+2. topic (4 bytes in hex)
+3. address of peer (hex)
 4. use for decryption (bool)
 
 returns:
@@ -181,8 +181,8 @@ Encrypts the message using the provided symmetric key, wraps it in an envelope c
 ```
 parameters:
 1. symmetric key id (string)
-2. topic (4 bytes)
-3. message (bytes)
+2. topic (4 bytes in hex)
+3. message (hex)
 
 returns:
 none
@@ -196,11 +196,11 @@ Return the swarm overlay address associated with the peer registered with the gi
 
 ```
 parameters:
-1. topic (4 bytes)
+1. topic (4 bytes in hex)
 2. symmetric key id (string)
 
 returns:
-1. peer address (bytes)
+1. peer address (hex)
 ```
 
 #### pss_GetAsymmetricAddressHint
@@ -209,11 +209,11 @@ Return the swarm overlay address associated with the peer registered with the gi
 
 ```
 parameters:
-1. topic (4 bytes)
+1. topic (4 bytes in hex)
 2. public key in hex form (string)
 
 returns:
-1. peer address (bytes)
+1. peer address (hex)
 ```
 
 ### HANDSHAKES
@@ -228,7 +228,7 @@ Activate handshake functionality on the specified topic.
 
 ```
 parameters:
-1. topic (4 bytes)
+1. topic (4 bytes in hex)
 
 returns:
 none
@@ -240,7 +240,7 @@ Remove handshake functionality on the specified topic.
 
 ```
 parameters:
-1. topic (4 bytes)
+1. topic (4 bytes in hex)
 
 returns:
 none
@@ -255,7 +255,7 @@ If parameter 3 is false, the returned array will be empty.
 ```
 parameters:
 1. public key of peer in hex format (string)
-2. topic (4 bytes)
+2. topic (4 bytes in hex)
 3. block calls until keys are received (bool)
 4. flush existing incoming keys (bool)
 
@@ -269,7 +269,7 @@ Get valid symmetric encryption keys for a specified peer and topic.
 
 parameters:
 1. public key of peer in hex format (string)
-2. topic (4 bytes)
+2. topic (4 bytes in hex)
 3. include keys for incoming messages (bool)
 4. include keys for outgoing messages (bool)
 
@@ -309,7 +309,7 @@ Normally, the key will be kept for a grace period to allow for decryption of del
 ```
 parameters:
 1. public key of peer in hex format (string)
-2. topic (4 bytes)
+2. topic (4 bytes in hex)
 3. symmetric key id to release (string)
 4. remove keys instantly (bool)
 

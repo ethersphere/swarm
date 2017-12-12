@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -468,8 +469,8 @@ func (self *HandshakeAPI) Handshake(pubkeyid string, topic Topic, sync bool, flu
 }
 
 // Activate handshake functionality on a topic
-func (self *HandshakeAPI) AddHandshake(topic *Topic) error {
-	self.ctrl.deregisterFuncs[*topic] = self.ctrl.pss.Register(topic, self.ctrl.handler)
+func (self *HandshakeAPI) AddHandshake(topic Topic) error {
+	self.ctrl.deregisterFuncs[topic] = self.ctrl.pss.Register(&topic, self.ctrl.handler)
 	return nil
 }
 
@@ -538,8 +539,8 @@ func (self *HandshakeAPI) ReleaseHandshakeKey(pubkeyid string, topic Topic, symk
 //
 // Overloads the pss.SendSym() API call, adding symmetric key usage count
 // for message expiry control
-func (self *HandshakeAPI) SendSym(symkeyid string, topic Topic, msg []byte) (err error) {
-	err = self.ctrl.pss.SendSym(symkeyid, topic, msg)
+func (self *HandshakeAPI) SendSym(symkeyid string, topic Topic, msg hexutil.Bytes) (err error) {
+	err = self.ctrl.pss.SendSym(symkeyid, topic, msg[:])
 	if self.ctrl.symKeyIndex[symkeyid] != nil {
 		if self.ctrl.symKeyIndex[symkeyid].count >= self.ctrl.symKeyIndex[symkeyid].limit {
 			return errors.New("attempted send with expired key")
