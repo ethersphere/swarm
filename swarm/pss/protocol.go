@@ -4,12 +4,14 @@ package pss
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"time"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rlp"
-	"time"
 )
 
 const (
@@ -197,8 +199,6 @@ func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 // to link the peer to.
 // The key must exist in the pss store prior to adding the peer.
 func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
-	self.Pss.lock.Lock()
-	defer self.Pss.lock.Unlock()
 	rw := &PssReadWriter{
 		Pss:   self.Pss,
 		rw:    make(chan p2p.Msg),
@@ -212,13 +212,19 @@ func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter
 		rw.sendFunc = self.Pss.SendSym
 	}
 	if asymmetric {
-		if _, ok := self.Pss.pubKeyPool[key]; !ok {
-			return nil, fmt.Errorf("asym key does not exist: %s", key)
+		self.Pss.pubKeyPoolMu.Lock()
+		_, ok := self.Pss.pubKeyPool[key]
+		self.Pss.pubKeyPoolMu.Unlock()
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("asym key does not exist: %s", key))
 		}
 		self.pubKeyRWPool[key] = rw
 	} else {
-		if _, ok := self.Pss.symKeyPool[key]; !ok {
-			return nil, fmt.Errorf("symkey does not exist: %s", key)
+		self.Pss.symKeyPoolMu.Lock()
+		_, ok := self.Pss.symKeyPool[key]
+		self.Pss.symKeyPoolMu.Unlock()
+		if !ok {
+			return nil, errors.New(fmt.Sprintf("symkey does not exist: %s", key))
 		}
 		self.symKeyRWPool[key] = rw
 	}
