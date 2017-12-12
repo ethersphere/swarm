@@ -214,7 +214,6 @@ func newClient() (client *Client) {
 func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topicobj := pss.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
 	topichex := topicobj.String()
-	//topichex := hexutil.Encode(topic[:])
 	msgC := make(chan pss.APIMsg)
 	self.peerPool[topicobj] = make(map[string]*pssRPCRW)
 	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topichex)

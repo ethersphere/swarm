@@ -39,12 +39,12 @@ func testHandshake(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// "0x" = 2 bytes + addrsize address bytes which in hex is 2x length
 	var loaddr string
 	err = clients[0].Call(&loaddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatalf("rpc get node 1 baseaddr fail: %v", err)
 	}
+	// "0x" = 2 bytes + addrsize address bytes which in hex is 2x length
 	loaddr = loaddr[:2+(addrsize*2)]
 	var roaddr string
 	err = clients[1].Call(&roaddr, "pss_baseAddr")
