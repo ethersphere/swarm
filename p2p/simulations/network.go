@@ -403,7 +403,6 @@ func (self *Network) getNodeByName(name string) *Node {
 func (self *Network) GetNodes() (nodes []*Node) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
-
 	nodes = append(nodes, self.Nodes...)
 	return nodes
 }
@@ -685,7 +684,7 @@ func (self *Network) Load(snap *Snapshot) error {
 			continue
 		}
 		if err := self.Connect(conn.One, conn.Other); err != nil {
-			return err
+			//return err
 		}
 	}
 	return nil
