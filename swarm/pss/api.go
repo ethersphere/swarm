@@ -132,7 +132,3 @@ func (pssapi *API) SendAsym(pubkeyhex string, topic Topic, msg hexutil.Bytes) er
 func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) error {
 	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
 }
-
-func (pssapi *API) StringToTopic(topicstring string) (whisper.TopicType, error) {
-	return StringToTopic(topicstring), nil
-}

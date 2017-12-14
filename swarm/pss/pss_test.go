@@ -617,9 +617,9 @@ type Job struct {
 	RecvNode discover.NodeID
 }
 
-func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID][]byte, topic string) {
+func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubkeys map[discover.NodeID]string, topic string) {
 	for j := range jobs {
-		rpcs[j.SendNode].Call(nil, "pss_sendAsym", common.ToHex(pubkeys[j.RecvNode]), topic, j.Msg)
+		rpcs[j.SendNode].Call(nil, "pss_sendAsym", pubkeys[j.RecvNode], topic, hexutil.Encode(j.Msg))
 	}
 }
 
@@ -649,19 +649,16 @@ func testNetwork(t *testing.T) {
 
 	log.Info("network test", "nodecount", nodecount, "msgcount", msgcount, "addrhintsize", addrsize)
 
-	nodes := make([]discover.NodeID, len(snap.Nodes))
-	bzzaddrs := make(map[discover.NodeID]string, len(snap.Nodes))
-	rpcs := make(map[discover.NodeID]*rpc.Client, len(snap.Nodes))
-	pubkeys := make(map[discover.NodeID]string, len(snap.Nodes))
-	nodemsgcount := make(map[discover.NodeID]int, len(snap.Nodes))
+	nodes := make([]discover.NodeID, nodecount)
+	bzzaddrs := make(map[discover.NodeID]string, nodecount)
+	rpcs := make(map[discover.NodeID]*rpc.Client, nodecount)
+	pubkeys := make(map[discover.NodeID]string, nodecount)
 
 	sentmsgs := make([][]byte, msgcount)
 	recvmsgs := make([]bool, msgcount)
-	sendmsgnodes := make([]discover.NodeID, msgcount)
-	recvmsgnodes := make([]discover.NodeID, msgcount)
+	nodemsgcount := make(map[discover.NodeID]int, nodecount)
 
-	recvtrigger := make(chan discover.NodeID)
-	sendtrigger := make(chan discover.NodeID)
+	trigger := make(chan discover.NodeID)
 
 	var a adapters.NodeAdapter
 	if adapter == "exec" {
@@ -669,15 +666,15 @@ func testNetwork(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		adapter = adapters.NewExecAdapter(dirname)
-	} else if paramstring[4] == "sock" {
-		adapter = adapters.NewSocketAdapter(services)
-	} else if paramstring[4] == "tcp" {
-		adapter = adapters.NewTCPAdapter(services)
-	} else {
-		adapter = adapters.NewSocketAdapter(services)
+		a = adapters.NewExecAdapter(dirname)
+	} else if adapter == "sock" {
+		a = adapters.NewSocketAdapter(services)
+	} else if adapter == "tcp" {
+		a = adapters.NewTCPAdapter(services)
+	} else if adapter == "sim" {
+		a = adapters.NewSimAdapter(services)
 	}
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
 		ID: "0",
 	})
 	defer net.Shutdown()
@@ -713,13 +710,12 @@ func testNetwork(t *testing.T) {
 			for {
 				select {
 				case recvmsg := <-msgC:
-					for i, sentmsg := range sentmsgs {
-						if bytes.Equal(recvmsg.Msg, sentmsg) {
-							recvmsgs[i] = true
-						}
+					idx, _ := binary.Uvarint(recvmsg.Msg)
+					if recvmsgs[idx] == false {
+						log.Debug("msg recv", "idx", idx, "id", id)
+						recvmsgs[idx] = true
+						trigger <- id
 					}
-					recvtrigger <- id
-
 				case <-sub.Err():
 					return
 				}
@@ -753,13 +749,7 @@ func testNetwork(t *testing.T) {
 			t.Fatal(err)
 		}
 		bzzaddrs[nodes[i]] = addrhex
-		msgC[nodes[i]] = make(chan APIMsg)
-		ctx, _ := context.WithTimeout(context.Background(), time.Second)
-		subs[nodes[i]], err = rpcs[nodes[i]].Subscribe(ctx, "pss", msgC[nodes[i]], "receive", topic)
-		if err != nil {
-			t.Fatal(err)
-		}
-		err = triggerChecks(recvtrigger, sendtrigger, net, nodes[i], rpcs[nodes[i]], subs[nodes[i]], msgC[nodes[i]])
+		err = triggerChecks(trigger, nodes[i], rpcs[nodes[i]], topic)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -772,18 +762,19 @@ func testNetwork(t *testing.T) {
 	}
 
 	for i := 0; i < int(msgcount); i++ {
-		sendnodeidx := rand.Int()
-		rand.Seed(int64(sendnodeidx))
-		sendnodeidx %= int(nodecount)
-		recvnodeidx := rand.Int() % int(nodecount)
-		sendmsgnodes[i] = nodes[sendnodeidx]
-		recvmsgnodes[i] = nodes[recvnodeidx]
-		sentmsgs[i] = make([]byte, 32)
-		c, err := rand.Read(sentmsgs[i])
+		sendnodeidx := rand.Intn(int(nodecount))
+		recvnodeidx := rand.Intn(int(nodecount - 1))
+		if recvnodeidx >= sendnodeidx {
+			recvnodeidx++
+		}
+		nodemsgcount[nodes[recvnodeidx]]++
+		sentmsgs[i] = make([]byte, 8)
+		c := binary.PutUvarint(sentmsgs[i], uint64(i))
+		if c == 0 {
+			t.Fatal("0 byte message")
+		}
 		if err != nil {
 			t.Fatal(err)
-		} else if c < 32 {
-			t.Fatal("failed msg generation")
 		}
 		err = rpcs[nodes[sendnodeidx]].Call(nil, "pss_setPeerPublicKey", pubkeys[nodes[recvnodeidx]], topic, bzzaddrs[nodes[recvnodeidx]])
 		if err != nil {
@@ -800,40 +791,28 @@ func testNetwork(t *testing.T) {
 	finalmsgcount := 0
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-
-	t.Logf("Starting expect: %d", len(recvmsgnodes))
-	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
-		Action: func(ctx context.Context) error {
-			return nil
-		},
-		Trigger: recvtrigger,
-		Expect: &simulations.Expectation{
-			Nodes: recvmsgnodes,
-			Check: check,
-		},
-	})
-
-	finalmsgcount := msgcount
-	for i, msg := range sentmsgs {
-		if len(msg) == 0 {
-			log.Warn("Unsent message", "idx", i)
-			finalmsgcount--
+outer:
+	for i := 0; i < int(msgcount); i++ {
+		select {
+		case id := <-trigger:
+			nodemsgcount[id]--
+			finalmsgcount++
+		case <-ctx.Done():
+			log.Warn("timeout")
+			break outer
 		}
 	}
-	t.Logf("%d of %d messages sent", finalmsgcount, msgcount)
-	finalmsgcount = msgcount
+
 	for i, msg := range recvmsgs {
 		if !msg {
-			log.Warn("missing message", "idx", i, "msg", common.ToHex(sentmsgs[i]))
-			finalmsgcount--
+			log.Debug("missing message", "idx", i)
 		}
 	}
 	t.Logf("%d of %d messages received", finalmsgcount, msgcount)
 
-	if result.Error != nil {
-		t.Fatal(result.Error)
+	if finalmsgcount != int(msgcount) {
+		t.Fatalf("%d messages were not received", int(msgcount)-finalmsgcount)
 	}
-	net.Shutdown()
 
 }
 
@@ -991,7 +970,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if !ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1]) {
-			b.Fatalf("pss processing failed")
+			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
 }
@@ -1150,9 +1129,8 @@ func newServices() adapters.Services {
 			}
 
 			// execadapter does not exec init()
-			if !initDone {
-				initTest()
-			}
+			initTest()
+
 			ctxlocal, _ := context.WithTimeout(context.Background(), time.Second)
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
