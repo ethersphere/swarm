@@ -208,8 +208,8 @@ func TestResourceHandler(t *testing.T) {
 	if rh2.resources[resourcename].version != 2 {
 		t.Fatalf("resource version was %d, expected 2", rh2.resources[resourcename].version)
 	}
-	if rh2.resources[resourcename].lastblock != startblocknumber+(resourcefrequency*3) {
-		t.Fatalf("resource blockheight was %d, expected %d", rh2.resources[resourcename].lastblock, startblocknumber+(resourcefrequency*3))
+	if rh2.resources[resourcename].lastBlock != startblocknumber+(resourcefrequency*3) {
+		t.Fatalf("resource blockheight was %d, expected %d", rh2.resources[resourcename].lastBlock, startblocknumber+(resourcefrequency*3))
 	}
 
 	rsrc, err := NewResource(resourcename, startblocknumber, resourcefrequency)

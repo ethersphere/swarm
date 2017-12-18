@@ -28,9 +28,9 @@ const (
 // version of the resource update data.
 type resource struct {
 	name       string
-	ensname    common.Hash
-	startblock uint64
-	lastblock  uint64
+	ensName    common.Hash
+	startBlock uint64
+	lastBlock  uint64
 	frequency  uint64
 	version    uint64
 	data       []byte
@@ -126,19 +126,40 @@ func NewResourceHandler(privKey *ecdsa.PrivateKey, datadir string, cloudStore Cl
 	}, nil
 }
 
+func validateInput(name string, frequency uint64) (string, error) {
+	// frequency 0 is invalid
+	if frequency == 0 {
+		return "", fmt.Errorf("Frequency cannot be 0")
+	}
+
+	// no name is invalid
+	if name == "" {
+		return "", fmt.Errorf("Name cannot be empty")
+	}
+
+	// make sure our ens identifier is idna safe
+	validname, err := idna.ToASCII(name)
+	if err != nil {
+		return "", err
+	}
+
+	return validname, nil
+}
+
 // Creates a standalone resource object
 //
 // Can be passed to SetResource if external root data lookups are used
-func NewResource(name string, startblock uint64, frequency uint64) (*resource, error) {
-	validname, err := idna.ToASCII(name)
+func NewResource(name string, startBlock uint64, frequency uint64) (*resource, error) {
+
+	validname, err := validateInput(name, frequency)
 	if err != nil {
 		return nil, err
 	}
 
 	return &resource{
 		name:       validname,
-		ensname:    ens.EnsNode(validname),
-		startblock: startblock,
+		ensName:    ens.EnsNode(validname),
+		startBlock: startBlock,
 		frequency:  frequency,
 	}, nil
 }
@@ -148,17 +169,12 @@ func NewResource(name string, startblock uint64, frequency uint64) (*resource, e
 // The start block of the resource update will be the actual current block height of the connected network.
 func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resource, error) {
 
-	// frequency 0 is invalid
-	if frequency == 0 {
-		return nil, fmt.Errorf("Frequency cannot be 0")
-	}
-
-	// make sure our ens identifier is idna safe
-	validname, err := idna.ToASCII(name)
+	validname, err := validateInput(name, frequency)
 	if err != nil {
 		return nil, err
 	}
-	ensname := ens.EnsNode(validname)
+
+	ensName := ens.EnsNode(validname)
 
 	// get our blockheight at this time
 	currentblock, err := self.getBlock()
@@ -168,7 +184,7 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 
 	// chunk with key equal to namehash points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
-	chunk := NewChunk(Key(ensname[:]), nil)
+	chunk := NewChunk(Key(ensName[:]), nil)
 	chunk.SData = make([]byte, INDEX_SIZE)
 
 	// resource update root chunks follow same convention as "normal" chunks
@@ -180,14 +196,14 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 	binary.LittleEndian.PutUint64(val, frequency)
 	copy(chunk.SData[16:], val)
 	self.Put(chunk)
-	log.Debug("new resource", "name", validname, "key", ensname, "startblock", currentblock, "frequency", frequency)
+	log.Debug("new resource", "name", validname, "key", ensName, "startBlock", currentblock, "frequency", frequency)
 
 	self.resourceLock.Lock()
 	defer self.resourceLock.Unlock()
 	self.resources[name] = &resource{
 		name:       validname,
-		ensname:    ensname,
-		startblock: currentblock,
+		ensName:    ensName,
+		startBlock: currentblock,
 		frequency:  frequency,
 		updated:    time.Now(),
 	}
@@ -202,10 +218,6 @@ func (self *ResourceHandler) NewResource(name string, frequency uint64) (*resour
 // Method will fail if resource is already registered in this session, unless
 // `allowOverwrite` is set
 func (self *ResourceHandler) SetResource(rsrc *resource, allowOverwrite bool) error {
-
-	if rsrc.name == "" {
-		return fmt.Errorf("Resource name cannot be empty")
-	}
 
 	utfname, err := idna.ToUnicode(rsrc.name)
 	if err != nil {
@@ -223,18 +235,18 @@ func (self *ResourceHandler) SetResource(rsrc *resource, allowOverwrite bool) er
 		return err
 	}
 
-	if rsrc.startblock > currentblock {
-		return fmt.Errorf("Startblock cannot be higher than current block (%d > %d)", rsrc.startblock, currentblock)
+	if rsrc.startBlock > currentblock {
+		return fmt.Errorf("Startblock cannot be higher than current block (%d > %d)", rsrc.startBlock, currentblock)
 	}
 
 	if rsrc.frequency == 0 {
 		return fmt.Errorf("Frequency cannot be 0")
 	}
 
-	if len(rsrc.ensname) > 0 {
-		ensname := ens.EnsNode(rsrc.name)
-		if ensname != rsrc.ensname {
-			return fmt.Errorf("Namehash %x is not a valid namehash of IDNA name '%s'", rsrc.ensname, rsrc.name)
+	if len(rsrc.ensName) > 0 {
+		ensName := ens.EnsNode(rsrc.name)
+		if ensName != rsrc.ensName {
+			return fmt.Errorf("Namehash %x is not a valid namehash of IDNA name '%s'", rsrc.ensName, rsrc.name)
 		}
 	}
 	self.resources[utfname] = rsrc
@@ -245,7 +257,7 @@ func (self *ResourceHandler) SetResource(rsrc *resource, allowOverwrite bool) er
 //
 // It starts at the next period after the current block height, and upon failure
 // tries the corresponding keys of each previous period until one is found
-// (or startblock is reached, in which case there are no updates).
+// (or startBlock is reached, in which case there are no updates).
 // If an update is found, version numbers are iterated until failure, and the last
 // successfully retrieved version is copied to the corresponding resources map entry
 // and returned.
@@ -268,10 +280,10 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 			return nil, err
 		}
 		rsrc.name = validname
-		rsrc.ensname = ens.EnsNode(validname)
+		rsrc.ensName = ens.EnsNode(validname)
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.Get(Key(rsrc.ensname[:]))
+		chunk, err := self.Get(Key(rsrc.ensName[:]))
 		if err != nil {
 			return nil, err
 		}
@@ -286,12 +298,12 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 				return nil, fmt.Errorf("Invalid chunk length header %d", chunklength)
 			}
 		}
-		rsrc.startblock = binary.LittleEndian.Uint64(chunk.SData[8:16])
+		rsrc.startBlock = binary.LittleEndian.Uint64(chunk.SData[8:16])
 		rsrc.frequency = binary.LittleEndian.Uint64(chunk.SData[16:])
 	} else {
 		rsrc.name = self.resources[name].name
-		rsrc.ensname = self.resources[name].ensname
-		rsrc.startblock = self.resources[name].startblock
+		rsrc.ensName = self.resources[name].ensName
+		rsrc.startBlock = self.resources[name].startBlock
 		rsrc.frequency = self.resources[name].frequency
 	}
 
@@ -300,20 +312,20 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 	if err != nil {
 		return nil, err
 	}
-	nextblock := getNextBlock(rsrc.startblock, currentblock, rsrc.frequency)
+	nextblock := getNextBlock(rsrc.startBlock, currentblock, rsrc.frequency)
 
 	// start from the last possible block period, and iterate previous ones until we find a match
-	// if we hit startblock we're out of options
+	// if we hit startBlock we're out of options
 	version := uint64(1)
-	for nextblock > rsrc.startblock {
-		key := self.resourceHash(rsrc.ensname, nextblock, version)
+	for nextblock > rsrc.startBlock {
+		key := self.resourceHash(rsrc.ensName, nextblock, version)
 		chunk, err := self.Get(key)
 		if err == nil {
 			// check if we have versions > 1. If a version fails, the previous version is used and returned.
 			log.Trace("rsrc update version 1 found, checking for version updates", "nextblock", nextblock, "key", key)
 			for {
 				newversion := version + 1
-				key := self.resourceHash(rsrc.ensname, nextblock, newversion)
+				key := self.resourceHash(rsrc.ensName, nextblock, newversion)
 				newchunk, err := self.Get(key)
 				if err != nil {
 					// rsrc update data chunks are total hacks
@@ -323,7 +335,7 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 						return nil, err
 					}
 					// update our rsrcs entry map
-					rsrc.lastblock = nextblock
+					rsrc.lastBlock = nextblock
 					rsrc.version = version
 					rsrc.data = make([]byte, len(chunk.SData)-SIGNATURE_LENGTH)
 					rsrc.updated = time.Now()
@@ -373,17 +385,17 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	if err != nil {
 		return nil, err
 	}
-	nextblock := getNextBlock(resource.startblock, currentblock, resource.frequency)
+	nextblock := getNextBlock(resource.startBlock, currentblock, resource.frequency)
 
 	// if we already have an update for this block then increment version
 	var version uint64
-	if nextblock == resource.lastblock {
+	if nextblock == resource.lastBlock {
 		version = resource.version
 	}
 	version++
 
 	// create the update chunk and send it
-	key := self.resourceHash(resource.ensname, nextblock, version)
+	key := self.resourceHash(resource.ensName, nextblock, version)
 	chunk := NewChunk(key, nil)
 	chunk.SData, err = self.signContent(data)
 	if err != nil {
@@ -391,10 +403,10 @@ func (self *ResourceHandler) Update(name string, data []byte) (Key, error) {
 	}
 	chunk.Size = int64(len(data))
 	self.Put(chunk)
-	log.Trace("resource update", "name", resource.name, "key", key, "currentblock", currentblock, "lastblock", nextblock, "version", version)
+	log.Trace("resource update", "name", resource.name, "key", key, "currentblock", currentblock, "lastBlock", nextblock, "version", version)
 
 	// update our resources map entry and return the new key
-	resource.lastblock = nextblock
+	resource.lastBlock = nextblock
 	resource.version = version
 	resource.data = make([]byte, len(data))
 	copy(resource.data, data)
