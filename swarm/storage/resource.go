@@ -239,16 +239,6 @@ func (self *ResourceHandler) SetResource(rsrc *resource, allowOverwrite bool) er
 		return fmt.Errorf("Startblock cannot be higher than current block (%d > %d)", rsrc.startBlock, currentblock)
 	}
 
-	if rsrc.frequency == 0 {
-		return fmt.Errorf("Frequency cannot be 0")
-	}
-
-	if len(rsrc.ensName) > 0 {
-		ensName := ens.EnsNode(rsrc.name)
-		if ensName != rsrc.ensName {
-			return fmt.Errorf("Namehash %x is not a valid namehash of IDNA name '%s'", rsrc.ensName, rsrc.name)
-		}
-	}
 	self.resources[utfname] = rsrc
 	return nil
 }
