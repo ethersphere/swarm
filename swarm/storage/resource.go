@@ -20,8 +20,7 @@ import (
 
 const (
 	signatureLength = 65
-	//maxChunkData    = 4096 - signatureLength
-	indexSize = 24
+	indexSize       = 24
 )
 
 // Encapsulates an actual resource update. When synced it contains the most recent
@@ -251,25 +250,113 @@ func (self *ResourceHandler) SetResource(rsrc *resource, allowOverwrite bool) er
 	return nil
 }
 
-// Searches and retrieves the last version of the resource update identified by `name`
+// Searches and retrieves the specific version of the resource update identified by `name`
+// at the specific block height
 //
-// It starts at the next period after the current block height, and upon failure
-// tries the corresponding keys of each previous period until one is found
-// (or startBlock is reached, in which case there are no updates).
-// If an update is found, version numbers are iterated until failure, and the last
-// successfully retrieved version is copied to the corresponding resources map entry
-// and returned.
 //
 // If refresh is set to true, the resource data will be reloaded from the resource update
 // root chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
 // update root data was retrieved externally, it typically doesn't)
-func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource, error) {
+func (self *ResourceHandler) LookupVersion(name string, nextblock uint64, version uint64, refresh bool) (*resource, error) {
+	rsrc, err := self.loadResource(name, refresh)
+	if err != nil {
+		return nil, err
+	}
+	return self.lookup(rsrc, name, nextblock, version, refresh)
+}
+
+// Retrieves the latest version of the resource update identified by `name`
+// at the specified block height
+//
+// If an update is found, version numbers are iterated until failure, and the last
+// successfully retrieved version is copied to the corresponding resources map entry
+// and returned.
+//
+// See also (*ResourceHandler).LookupVersion
+func (self *ResourceHandler) LookupHistorical(name string, nextblock uint64, refresh bool) (*resource, error) {
+	rsrc, err := self.loadResource(name, refresh)
+	if err != nil {
+		return nil, err
+	}
+	return self.lookup(rsrc, name, nextblock, 0, refresh)
+}
+
+// Retrieves the latest version of the resource update identified by `name`
+// at the next update block height
+//
+// It starts at the next period after the current block height, and upon failure
+// tries the corresponding keys of each previous period until one is found
+// (or startBlock is reached, in which case there are no updates).
+//
+// Version iteration is done as in (*ResourceHandler).LookupHistorical
+//
+// See also (*ResourceHandler).LookupHistorical
+func (self *ResourceHandler) LookupLatest(name string, refresh bool) (*resource, error) {
+
+	// get our blockheight at this time and the next block of the update period
+	rsrc, err := self.loadResource(name, refresh)
+	if err != nil {
+		return nil, err
+	}
+	currentblock, err := self.getBlock()
+	if err != nil {
+		return nil, err
+	}
+	nextblock := getNextBlock(rsrc.startBlock, currentblock, rsrc.frequency)
+	return self.lookup(rsrc, name, nextblock, 0, refresh)
+}
+
+// base code for public lookup methods
+func (self *ResourceHandler) lookup(rsrc *resource, name string, nextblock uint64, version uint64, refresh bool) (*resource, error) {
+
+	if nextblock == 0 {
+		return nil, fmt.Errorf("blocknumber must be >0")
+	}
+
+	// start from the last possible block period, and iterate previous ones until we find a match
+	// if we hit startBlock we're out of options
+	var specificversion bool
+	if version > 0 {
+		specificversion = true
+	} else {
+		version = 1
+	}
+
+	for nextblock > rsrc.startBlock {
+		key := self.resourceHash(rsrc.ensName, nextblock, version)
+		chunk, err := self.Get(key)
+		if err == nil {
+			if specificversion {
+				return self.updateResourceIndex(rsrc, chunk, nextblock, version, &name)
+			}
+			// check if we have versions > 1. If a version fails, the previous version is used and returned.
+			log.Trace("rsrc update version 1 found, checking for version updates", "nextblock", nextblock, "key", key)
+			for {
+				newversion := version + 1
+				key := self.resourceHash(rsrc.ensName, nextblock, newversion)
+				newchunk, err := self.Get(key)
+				if err != nil {
+					return self.updateResourceIndex(rsrc, chunk, nextblock, version, &name)
+				}
+				log.Trace("version update found, checking next", "version", version, "block", nextblock, "key", key)
+				chunk = newchunk
+				version = newversion
+			}
+		}
+		log.Trace("rsrc update not found, checking previous period", "block", nextblock, "key", key)
+		nextblock -= rsrc.frequency
+	}
+	return nil, fmt.Errorf("no updates found")
+}
+
+// load existing mutable resource into resource struct
+func (self *ResourceHandler) loadResource(name string, refresh bool) (*resource, error) {
+	// if the resource is not known to this session we must load it
+	// if refresh is set, we force load
 
 	rsrc := &resource{}
 
-	// if the resource is not known to this session we must load it
-	// if refresh is set, we force load
 	self.resourceLock.Lock()
 	_, ok := self.resources[name]
 	self.resourceLock.Unlock()
@@ -306,55 +393,30 @@ func (self *ResourceHandler) OpenResource(name string, refresh bool) (*resource,
 		rsrc.startBlock = self.resources[name].startBlock
 		rsrc.frequency = self.resources[name].frequency
 	}
+	return rsrc, nil
+}
 
-	// get our blockheight at this time and the next block of the update period
-	currentblock, err := self.getBlock()
+// update mutable resource index map with specified content
+func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk, nextblock uint64, version uint64, indexname *string) (*resource, error) {
+
+	// rsrc update data chunks are total hacks
+	// and have no size prefix :D
+	err := self.verifyContent(chunk.SData)
 	if err != nil {
 		return nil, err
 	}
-	nextblock := getNextBlock(rsrc.startBlock, currentblock, rsrc.frequency)
 
-	// start from the last possible block period, and iterate previous ones until we find a match
-	// if we hit startBlock we're out of options
-	version := uint64(1)
-	for nextblock > rsrc.startBlock {
-		key := self.resourceHash(rsrc.ensName, nextblock, version)
-		chunk, err := self.Get(key)
-		if err == nil {
-			// check if we have versions > 1. If a version fails, the previous version is used and returned.
-			log.Trace("rsrc update version 1 found, checking for version updates", "nextblock", nextblock, "key", key)
-			for {
-				newversion := version + 1
-				key := self.resourceHash(rsrc.ensName, nextblock, newversion)
-				newchunk, err := self.Get(key)
-				if err != nil {
-					// rsrc update data chunks are total hacks
-					// and have no size prefix :D
-					err := self.verifyContent(chunk.SData)
-					if err != nil {
-						return nil, err
-					}
-					// update our rsrcs entry map
-					rsrc.lastBlock = nextblock
-					rsrc.version = version
-					rsrc.data = make([]byte, len(chunk.SData)-signatureLength)
-					rsrc.updated = time.Now()
-					copy(rsrc.data, chunk.SData[signatureLength:])
-					log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Key, "block", nextblock, "version", version)
-					self.resourceLock.Lock()
-					self.resources[name] = rsrc
-					self.resourceLock.Unlock()
-					return rsrc, nil
-				}
-				log.Trace("version update found, checking next", "version", version, "block", nextblock, "key", key)
-				chunk = newchunk
-				version = newversion
-			}
-		}
-		log.Trace("rsrc update not found, checking previous period", "block", nextblock, "key", key)
-		nextblock -= rsrc.frequency
-	}
-	return nil, fmt.Errorf("no updates found")
+	// update our rsrcs entry map
+	rsrc.lastBlock = nextblock
+	rsrc.version = version
+	rsrc.data = make([]byte, len(chunk.SData)-signatureLength)
+	rsrc.updated = time.Now()
+	copy(rsrc.data, chunk.SData[signatureLength:])
+	log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Key, "block", nextblock, "version", version)
+	self.resourceLock.Lock()
+	self.resources[*indexname] = rsrc
+	self.resourceLock.Unlock()
+	return rsrc, nil
 }
 
 // Adds an actual data update

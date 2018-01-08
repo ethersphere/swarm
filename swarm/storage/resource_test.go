@@ -160,7 +160,7 @@ func TestResourceHandler(t *testing.T) {
 	blockCount = startblocknumber + (resourcefrequency * 4)
 
 	rh2, err := NewResourceHandler(privkey, datadir, &testCloudStore{}, rh.ethapi)
-	_, err = rh2.OpenResource(resourcename, true)
+	_, err = rh2.LookupLatest(resourcename, true)
 	if err != nil {
 		teardownTest(t, err)
 	}
@@ -184,14 +184,38 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		teardownTest(t, err)
 	}
-	resource, err := rh2.OpenResource(resourcename, false) // if key is specified, refresh is implicit
+
+	// latest block, latest version
+	resource, err := rh2.LookupLatest(resourcename, false) // if key is specified, refresh is implicit
 	if err != nil {
 		teardownTest(t, err)
 	}
 
 	// check data
 	if !bytes.Equal(resource.data, []byte("clyde")) {
-		teardownTest(t, fmt.Errorf("resource data was %v, expected %v", rh2.resources[resourcename].data, []byte("clyde")))
+		teardownTest(t, fmt.Errorf("resource data (latest) was %v, expected %v", rh2.resources[resourcename].data, []byte("clyde")))
+	}
+
+	// specific block, latest version
+	resource, err = rh2.LookupHistorical(resourcename, startblocknumber+(resourcefrequency*3), true)
+	if err != nil {
+		teardownTest(t, err)
+	}
+
+	// check data
+	if !bytes.Equal(resource.data, []byte("clyde")) {
+		teardownTest(t, fmt.Errorf("resource data (historical) was %v, expected %v", rh2.resources[resourcename].data, []byte("clyde")))
+	}
+
+	// specific block, specific version
+	resource, err = rh2.LookupVersion(resourcename, startblocknumber+(resourcefrequency*3), 1, true)
+	if err != nil {
+		teardownTest(t, err)
+	}
+
+	// check data
+	if !bytes.Equal(resource.data, []byte("inky")) {
+		teardownTest(t, fmt.Errorf("resource data (historical) was %v, expected %v", rh2.resources[resourcename].data, []byte("inky")))
 	}
 	teardownTest(t, nil)
 
