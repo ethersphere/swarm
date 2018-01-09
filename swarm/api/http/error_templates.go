@@ -125,6 +125,32 @@ func GetCSS() string {
 	return css
 }
 
+// Stored the url rewriter code as string here, for more information see
+// https://github.com/ethersphere/swarm-url-rewriter
+func GetUrlRewriterJS() string {
+	urlRewriterJs := `
+	if (document.addEventListener) {
+	    document.addEventListener('click', handleClick);
+	} else if (document.attachEvent) {
+	    document.attachEvent('onclick', handleClick);
+	}
+
+	function handleClick(event) {
+	    var target = event.target || event.srcElement;
+	    if (target.tagName == "A" && target.protocol == "bzz:") {
+	        event.preventDefault();
+	        window.location.href = target.href.replace("bzz://", "/bzz:/");
+	    }
+	}`
+
+	return fmt.Sprintf(`
+		<script type="text/javascript">
+		%s
+		</script>
+		`, urlRewriterJs)
+
+}
+
 //This returns the HTML for generic errors
 func GetGenericErrorPage() string {
 	page := fmt.Sprintf(`
@@ -141,6 +167,7 @@ func GetGenericErrorPage() string {
     <title>Swarm::HTTP Error Page</title>
   </head>
 
+%s
 %s
 
   <body>
@@ -197,7 +224,7 @@ func GetGenericErrorPage() string {
       <footer>
         <p>
           Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution<br/>
-          <a href="http://swarm-gateways.net/bzz:/theswarm.eth">Swarm</a>
+          <a href="bzz://theswarm.eth">Swarm</a>
         </p>
       </footer>
 
@@ -206,7 +233,7 @@ func GetGenericErrorPage() string {
   </body>
 
 </html>
-`, GetCSS())
+`, GetCSS(), GetUrlRewriterJS())
 	return page
 }
 
@@ -222,6 +249,7 @@ func GetNotFoundErrorPage() string {
     <meta name="description" content="Ethereum/Swarm error page">
     <meta property="og:url" content="https://swarm-gateways.net/bzz:/theswarm.eth">
 
+%s
 %s
 
     <title>Swarm::404 HTTP Not Found</title>
@@ -281,7 +309,7 @@ func GetNotFoundErrorPage() string {
       <footer>
         <p>
           Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution<br/>
-          <a href="http://swarm-gateways.net/bzz:/theswarm.eth">Swarm</a>
+          <a href="bzz://theswarm.eth">Swarm</a>
         </p>
       </footer>
 
@@ -290,7 +318,7 @@ func GetNotFoundErrorPage() string {
   </body>
 
 </html>
-`, GetCSS())
+`, GetCSS(), GetUrlRewriterJS())
 	return page
 }
 
@@ -308,6 +336,7 @@ func GetMultipleChoicesErrorPage() string {
     <meta name="description" content="Ethereum/Swarm multiple options page">
     <meta property="og:url" content="https://swarm-gateways.net/bzz:/theswarm.eth">
 
+%s
 %s
 
     <title>Swarm::HTTP Disambiguation Page</title>
@@ -368,7 +397,7 @@ func GetMultipleChoicesErrorPage() string {
       <footer>
         <p>
           Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution<br/>
-          <a href="http://swarm-gateways.net/bzz:/theswarm.eth">Swarm</a>
+          <a href="bzz://theswarm.eth">Swarm</a>
         </p>
       </footer>
 
@@ -377,6 +406,6 @@ func GetMultipleChoicesErrorPage() string {
   </body>
 
 </html>
-`, GetCSS())
+`, GetCSS(), GetUrlRewriterJS())
 	return page
 }
