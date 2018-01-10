@@ -84,7 +84,7 @@ type Error struct {
 }
 
 func (e Error) Error() (message string) {
-	if len(message) == 0 {
+	if len(e.message) == 0 {
 		name, ok := errorToString[e.Code]
 		if !ok {
 			panic("invalid message code")
@@ -98,13 +98,11 @@ func (e Error) Error() (message string) {
 }
 
 func errorf(code int, format string, params ...interface{}) *Error {
-	e := &Error{
+	return &Error{
 		Code:   code,
 		format: format,
 		params: params,
 	}
-
-	return e
 }
 
 // Spec is a protocol specification including its name and version as well as
@@ -195,6 +193,8 @@ func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 
 // Run starts the forever loop that handles incoming messages
 // called within the p2p.Protocol#Run function
+// the handler argument is a function which is called for each message received
+// from the remote peer, a returned error causes the loop to exit.
 func (p *Peer) Run(handler func(msg interface{}) error) error {
 	for {
 		if err := p.handleIncoming(handler); err != nil {
@@ -204,11 +204,8 @@ func (p *Peer) Run(handler func(msg interface{}) error) error {
 }
 
 // Drop disconnects a peer.
-// falls back to self.disconnect which is set as p2p.Peer#Disconnect except
-// for test peers where it calls p2p.MsgPipe#Close so that the readloop can terminate
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
-// overwrite Disconnect for testing, so that protocol readloop quits
 func (p *Peer) Drop(err error) {
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
@@ -222,7 +219,6 @@ func (p *Peer) Send(msg interface{}) error {
 	if !found {
 		return errorf(ErrInvalidMsgType, "%v", code)
 	}
-	// log.Trace(fmt.Sprintf("=> msg %s#%d TO %v : %v", p.spec.Name, code, p.ID(), msg))
 	return p2p.Send(p.rw, code, msg)
 }
 
@@ -253,7 +249,6 @@ func (p *Peer) handleIncoming(handle func(msg interface{}) error) error {
 	if err := msg.Decode(val); err != nil {
 		return errorf(ErrDecode, "<= %v: %v", msg, err)
 	}
-	// log.Trace(fmt.Sprintf("<= %s/%v FROM %v %T %v", p.spec.Name, msg, p.ID(), val, val))
 
 	// call the registered handler callbacks
 	// a registered callback take the decoded message as argument as an interface

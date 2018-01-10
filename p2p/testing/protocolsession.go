@@ -22,7 +22,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -81,20 +80,17 @@ func (self *ProtocolSession) trigger(trig Trigger) error {
 	errc := make(chan error)
 
 	go func() {
-		log.Trace(fmt.Sprintf("trigger %v (%v)....", trig.Msg, trig.Code))
 		errc <- mockNode.Trigger(&trig)
-		log.Trace(fmt.Sprintf("triggered %v (%v)", trig.Msg, trig.Code))
 	}()
 
 	t := trig.Timeout
 	if t == time.Duration(0) {
 		t = 1000 * time.Millisecond
 	}
-	alarm := time.NewTimer(t)
 	select {
 	case err := <-errc:
 		return err
-	case <-alarm.C:
+	case <-time.After(t):
 		return fmt.Errorf("timout expecting %v to send to peer %v", trig.Msg, trig.Peer)
 	}
 }
@@ -115,7 +111,6 @@ func (self *ProtocolSession) expect(exp Expect) error {
 
 	errc := make(chan error)
 	go func() {
-		log.Trace(fmt.Sprintf("waiting for msg, %v", exp.Msg))
 		errc <- mockNode.Expect(&exp)
 	}()
 
@@ -123,12 +118,10 @@ func (self *ProtocolSession) expect(exp Expect) error {
 	if t == time.Duration(0) {
 		t = 2000 * time.Millisecond
 	}
-	alarm := time.NewTimer(t)
 	select {
 	case err := <-errc:
-		log.Trace(fmt.Sprintf("expected msg arrives with error %v", err))
 		return err
-	case <-alarm.C:
+	case <-time.After(t):
 		return fmt.Errorf("timout expecting %v sent to peer %v", exp.Msg, exp.Peer)
 	}
 }
@@ -138,12 +131,13 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 	// launch all triggers of this exchanges
 
 	for i, e := range exchanges {
-		errc := make(chan error)
+		errc := make(chan error, 1)
 		wg := &sync.WaitGroup{}
 		for _, trig := range e.Triggers {
 			err := self.trigger(trig)
 			if err != nil {
 				errc <- err
+				break
 			}
 		}
 
@@ -163,7 +157,6 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 				defer wg.Done()
 				err := self.expect(exp)
 				if err != nil {
-					log.Trace(fmt.Sprintf("expect msg fails %v", err))
 					errc <- err
 				}
 			}(ex)
@@ -182,8 +175,6 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 		case err := <-errc:
 			if err != nil {
 				return fmt.Errorf("exchange failed with: %v", err)
-			} else {
-				log.Trace(fmt.Sprintf("exchange %v: '%v' run successfully", i, e.Label))
 			}
 		case <-alarm.C:
 			return fmt.Errorf("exchange %v: '%v' timed out", i, e.Label)
@@ -209,10 +200,8 @@ func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error 
 			if !ok {
 				continue
 			}
-			log.Trace("disconnects: ", "peer", event.Peer, "event type", event.Type, "expect", expectErr, "error", event.Error)
 
 			if !(expectErr == nil && event.Error == "" || expectErr != nil && expectErr.Error() == event.Error) {
-				log.Trace("error!!!")
 				return fmt.Errorf("unexpected error on peer %v. expected '%v', got '%v'", event.Peer, expectErr, event.Error)
 			}
 			delete(expects, event.Peer)
