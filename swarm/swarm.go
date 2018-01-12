@@ -21,6 +21,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"time"
 	"net"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
@@ -39,7 +40,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/utils"
 )
+
+
+var	metricsTimeout = 5 * time.Second
 
 // the swarm stack
 type Swarm struct {
@@ -83,6 +88,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty bzz key")
 	}
+
+  if utils.MetricsEnabled == true {
+    utils.SetupMetrics(config.BzzAccount)
+  }
 
 	self = &Swarm{
 		config:      config,
@@ -213,7 +222,24 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		}
 	}
 
+  go self.metricsLoop()
+
+  utils.TimeEvent("management.start", time.Now())
 	return nil
+}
+
+// metricsLoop periodically sends metrics about storage
+func (self *Swarm) metricsLoop() {
+	timer := time.After(metricsTimeout)
+
+  select {
+	case <-timer: self.sendMetrics()
+  }
+}
+
+func (self *Swarm) sendMetrics() {
+  utils.Gauge("storage.db.chunks.size", self.lstore.DbCounter())
+  utils.Gauge("storage.db.cache.size", self.lstore.CacheCounter())
 }
 
 // implements the node.Service interface
@@ -230,6 +256,7 @@ func (self *Swarm) Stop() error {
 		self.lstore.DbStore.Close()
 	}
 	self.sfs.Stop()
+  utils.TimeEvent("management.stop", time.Now())
 	return err
 }
 
