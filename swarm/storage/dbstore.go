@@ -256,8 +256,7 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	// actual gc
 	for i := 0; i < gcnt; i++ {
 		if s.gcArray[i].value <= cutval {
-      utils.Gauge("storage.db.dbstore.gc.address",getDataKey(s.gcArray[i].idx))
-      utils.Increment("storage.db.dbstore.gc.count")
+			utils.Increment("storage.db.dbstore.gc.count")
 			s.delete(s.gcArray[i].idx, s.gcArray[i].idxKey)
 		}
 	}
@@ -386,8 +385,7 @@ func (s *DbStore) delete(idx uint64, idxKey []byte) {
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx))
-  utils.Gauge("storage.db.dbstore.delete.address",getDataKey(idx))
-  utils.Increment("storage.db.dbstore.delete.count")
+	utils.Increment("storage.db.dbstore.delete.count")
 	s.entryCnt--
 	batch.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
 	s.db.Write(batch)

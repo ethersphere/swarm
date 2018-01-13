@@ -21,8 +21,8 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
-	"time"
 	"net"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -43,8 +43,10 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/utils"
 )
 
-
-var	metricsTimeout = 5 * time.Second
+var (
+	metricsTimeout = 5 * time.Second
+	runTimer       utils.MetricsTimer
+)
 
 // the swarm stack
 type Swarm struct {
@@ -89,9 +91,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 		return nil, fmt.Errorf("empty bzz key")
 	}
 
-  if utils.MetricsEnabled == true {
-    utils.SetupMetrics(config.BzzAccount)
-  }
+	if utils.MetricsEnabled == true {
+		log.Warn("Swarm metrics have been enabled")
+		utils.SetupMetrics(config.BzzAccount)
+	}
 
 	self = &Swarm{
 		config:      config,
@@ -177,6 +180,7 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(srv *p2p.Server) error {
+	runTimer = utils.StartTimer("stack,uptime")
 	connectPeer := func(url string) error {
 		node, err := discover.ParseNode(url)
 		if err != nil {
@@ -222,24 +226,26 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		}
 	}
 
-  go self.metricsLoop()
+	go self.metricsLoop()
 
-  utils.TimeEvent("management.start", time.Now())
+	utils.Increment("stack.start")
 	return nil
 }
 
 // metricsLoop periodically sends metrics about storage
 func (self *Swarm) metricsLoop() {
-	timer := time.After(metricsTimeout)
+	ticker := time.NewTicker(metricsTimeout)
 
-  select {
-	case <-timer: self.sendMetrics()
-  }
+	go func() {
+		for _ = range ticker.C {
+			self.sendMetrics()
+		}
+	}()
 }
 
 func (self *Swarm) sendMetrics() {
-  utils.Gauge("storage.db.chunks.size", self.lstore.DbCounter())
-  utils.Gauge("storage.db.cache.size", self.lstore.CacheCounter())
+	utils.Gauge("storage.db.chunks.size", self.lstore.DbCounter())
+	utils.Gauge("storage.db.cache.size", self.lstore.CacheCounter())
 }
 
 // implements the node.Service interface
@@ -256,7 +262,8 @@ func (self *Swarm) Stop() error {
 		self.lstore.DbStore.Close()
 	}
 	self.sfs.Stop()
-  utils.TimeEvent("management.stop", time.Now())
+	utils.Increment("stack.stop")
+	utils.SendTimer(runTimer)
 	return err
 }
 

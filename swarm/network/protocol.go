@@ -207,7 +207,7 @@ func (self *bzz) handle() error {
 
 	case storeRequestMsg:
 		// store requests are dispatched to netStore
-    utils.Increment("network.protocol.msg.storerequest.count")
+		utils.Increment("network.protocol.msg.storerequest.count")
 		var req storeRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -223,7 +223,7 @@ func (self *bzz) handle() error {
 
 	case retrieveRequestMsg:
 		// retrieve Requests are dispatched to netStore
-    utils.Increment("network.protocol.msg.retrieverequest.count")
+		utils.Increment("network.protocol.msg.retrieverequest.count")
 		var req retrieveRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -244,7 +244,7 @@ func (self *bzz) handle() error {
 	case peersMsg:
 		// response to lookups and immediate response to retrieve requests
 		// dispatches new peer data to the hive that adds them to KADDB
-    utils.Increment("network.protocol.msg.peers.count")
+		utils.Increment("network.protocol.msg.peers.count")
 		var req peersMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -254,7 +254,7 @@ func (self *bzz) handle() error {
 		self.hive.HandlePeersMsg(&req, &peer{bzz: self})
 
 	case syncRequestMsg:
-    utils.Increment("network.protocol.msg.syncrequest.count")
+		utils.Increment("network.protocol.msg.syncrequest.count")
 		var req syncRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -265,7 +265,7 @@ func (self *bzz) handle() error {
 
 	case unsyncedKeysMsg:
 		// coming from parent node offering
-    utils.Increment("network.protocol.msg.unsyncedkeys.count")
+		utils.Increment("network.protocol.msg.unsyncedkeys.count")
 		var req unsyncedKeysMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -280,7 +280,7 @@ func (self *bzz) handle() error {
 	case deliveryRequestMsg:
 		// response to syncKeysMsg hashes filtered not existing in db
 		// also relays the last synced state to the source
-    utils.Increment("network.protocol.msg.deliverrequest.count")
+		utils.Increment("network.protocol.msg.deliverrequest.count")
 		var req deliveryRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<-msg %v: %v", msg, err)
@@ -294,7 +294,7 @@ func (self *bzz) handle() error {
 
 	case paymentMsg:
 		// swap protocol message for payment, Units paid for, Cheque paid with
-    utils.Increment("network.protocol.msg.payment.count")
+		utils.Increment("network.protocol.msg.payment.count")
 		if self.swapEnabled {
 			var req paymentMsgData
 			if err := msg.Decode(&req); err != nil {
@@ -306,7 +306,7 @@ func (self *bzz) handle() error {
 
 	default:
 		// no other message is allowed
-    utils.Increment("network.protocol.msg.invalid.count")
+		utils.Increment("network.protocol.msg.invalid.count")
 		return fmt.Errorf("invalid message code: %v", msg.Code)
 	}
 	return nil
@@ -341,7 +341,7 @@ func (self *bzz) handleStatus() (err error) {
 		return fmt.Errorf("first msg has code %x (!= %x)", msg.Code, statusMsg)
 	}
 
-  utils.Increment("network.protocol.msg.handlestatus.count")
+	utils.Increment("network.protocol.msg.handlestatus.count")
 
 	if msg.Size > ProtocolMaxMsgSize {
 		return fmt.Errorf("message too long: %v > %v", msg.Size, ProtocolMaxMsgSize)

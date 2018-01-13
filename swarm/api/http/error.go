@@ -133,7 +133,7 @@ func respond(w http.ResponseWriter, r *http.Request, params *ErrorParams) {
 
 //return a HTML page
 func respondHtml(w http.ResponseWriter, params *ErrorParams) {
-  utils.Increment("api.http.errorpage.html.count")
+	utils.Increment("api.http.errorpage.html.count")
 	err := params.template.Execute(w, params)
 	if err != nil {
 		log.Error(err.Error())
@@ -142,7 +142,7 @@ func respondHtml(w http.ResponseWriter, params *ErrorParams) {
 
 //return JSON
 func respondJson(w http.ResponseWriter, params *ErrorParams) {
-  utils.Increment("api.http.errorpage.json.count")
+	utils.Increment("api.http.errorpage.json.count")
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)
 }

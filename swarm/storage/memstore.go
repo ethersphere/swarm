@@ -132,7 +132,7 @@ func (s *MemStore) setCapacity(c uint) {
 }
 
 func (s *MemStore) Counter() uint {
-  return s.entryCnt
+	return s.entryCnt
 }
 
 // entry (not its copy) is going to be in MemStore
@@ -150,8 +150,7 @@ func (s *MemStore) Put(entry *Chunk) {
 
 	s.accessCnt++
 
-  utils.Gauge("storage.db.memstore.put.address",entry.Key)
-  utils.Increment("storage.db.memstore.put.count")
+	utils.Increment("storage.db.memstore.put.count")
 
 	node := s.memtree
 	bitpos := uint(0)
@@ -297,8 +296,7 @@ func (s *MemStore) removeOldest() {
 	}
 
 	if node.entry.SData != nil {
-    utils.Gauge("storage.db.memstore.rm.address",node.entry.Key)
-    utils.Increment("storage.db.memstore.rm.count")
+		utils.Increment("storage.db.memstore.rm.count")
 		node.entry = nil
 		s.entryCnt--
 	}

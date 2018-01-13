@@ -42,11 +42,11 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams) (*LocalStore, error) {
 }
 
 func (self *LocalStore) CacheCounter() uint64 {
-  return uint64(self.memStore.(*MemStore).Counter())
+	return uint64(self.memStore.(*MemStore).Counter())
 }
 
 func (self *LocalStore) DbCounter() uint64 {
-  return self.DbStore.(*DbStore).Counter()
+	return self.DbStore.(*DbStore).Counter()
 }
 
 // LocalStore is itself a chunk store
@@ -58,8 +58,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		chunk.wg.Add(1)
 	}
 	go func() {
-    utils.Gauge("storage.db.dbstore.put.address",chunk.Key)
-    utils.Increment("storage.db.dbstore.put.count")
+		utils.Increment("storage.db.dbstore.put.count")
 		self.DbStore.Put(chunk)
 		if chunk.wg != nil {
 			chunk.wg.Done()

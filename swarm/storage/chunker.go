@@ -300,8 +300,7 @@ func (self *TreeChunker) hashChunk(hasher SwarmHash, job *hashJob, chunkC chan *
 	job.parentWg.Done()
 
 	if chunkC != nil {
-    utils.Increment("storage.chunks.new")
-    utils.Gauge("storage.chunks.addresses.new", h)
+		utils.Increment("storage.chunks.new")
 		chunkC <- newChunk
 	}
 }
