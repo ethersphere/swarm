@@ -39,11 +39,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/utils"
+)
+
+//metrics variables
+var (
+	storeRequestMsgCounter    = metrics.NewCounter("network.protocol.msg.storerequest.count")
+	retrieveRequestMsgCounter = metrics.NewCounter("network.protocol.msg.retrieverequest.count")
+	peersMsgCounter           = metrics.NewCounter("network.protocol.msg.peers.count")
+	syncRequestMsgCounter     = metrics.NewCounter("network.protocol.msg.syncrequest.count")
+	unsyncedKeysMsgCounter    = metrics.NewCounter("network.protocol.msg.unsyncedkeys.count")
+	deliverRequestMsgCounter  = metrics.NewCounter("network.protocol.msg.deliverrequest.count")
+	paymentMsgCounter         = metrics.NewCounter("network.protocol.msg.payment.count")
+	invalidMsgCounter         = metrics.NewCounter("network.protocol.msg.invalid.count")
+	handleStatusMsgCounter    = metrics.NewCounter("network.protocol.msg.handlestatus.count")
 )
 
 const (
@@ -207,7 +220,7 @@ func (self *bzz) handle() error {
 
 	case storeRequestMsg:
 		// store requests are dispatched to netStore
-    utils.Increment("network.protocol.msg.storerequest.count")
+		storeRequestMsgCounter.Inc(1)
 		var req storeRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -223,7 +236,7 @@ func (self *bzz) handle() error {
 
 	case retrieveRequestMsg:
 		// retrieve Requests are dispatched to netStore
-    utils.Increment("network.protocol.msg.retrieverequest.count")
+		retrieveRequestMsgCounter.Inc(1)
 		var req retrieveRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -244,7 +257,7 @@ func (self *bzz) handle() error {
 	case peersMsg:
 		// response to lookups and immediate response to retrieve requests
 		// dispatches new peer data to the hive that adds them to KADDB
-    utils.Increment("network.protocol.msg.peers.count")
+		peersMsgCounter.Inc(1)
 		var req peersMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -254,7 +267,7 @@ func (self *bzz) handle() error {
 		self.hive.HandlePeersMsg(&req, &peer{bzz: self})
 
 	case syncRequestMsg:
-    utils.Increment("network.protocol.msg.syncrequest.count")
+		syncRequestMsgCounter.Inc(1)
 		var req syncRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -265,7 +278,7 @@ func (self *bzz) handle() error {
 
 	case unsyncedKeysMsg:
 		// coming from parent node offering
-    utils.Increment("network.protocol.msg.unsyncedkeys.count")
+		unsyncedKeysMsgCounter.Inc(1)
 		var req unsyncedKeysMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<- %v: %v", msg, err)
@@ -280,7 +293,7 @@ func (self *bzz) handle() error {
 	case deliveryRequestMsg:
 		// response to syncKeysMsg hashes filtered not existing in db
 		// also relays the last synced state to the source
-    utils.Increment("network.protocol.msg.deliverrequest.count")
+		deliverRequestMsgCounter.Inc(1)
 		var req deliveryRequestMsgData
 		if err := msg.Decode(&req); err != nil {
 			return fmt.Errorf("<-msg %v: %v", msg, err)
@@ -294,7 +307,7 @@ func (self *bzz) handle() error {
 
 	case paymentMsg:
 		// swap protocol message for payment, Units paid for, Cheque paid with
-    utils.Increment("network.protocol.msg.payment.count")
+		paymentMsgCounter.Inc(1)
 		if self.swapEnabled {
 			var req paymentMsgData
 			if err := msg.Decode(&req); err != nil {
@@ -306,7 +319,7 @@ func (self *bzz) handle() error {
 
 	default:
 		// no other message is allowed
-    utils.Increment("network.protocol.msg.invalid.count")
+		invalidMsgCounter.Inc(1)
 		return fmt.Errorf("invalid message code: %v", msg.Code)
 	}
 	return nil
@@ -341,7 +354,7 @@ func (self *bzz) handleStatus() (err error) {
 		return fmt.Errorf("first msg has code %x (!= %x)", msg.Code, statusMsg)
 	}
 
-  utils.Increment("network.protocol.msg.handlestatus.count")
+	handleStatusMsgCounter.Inc(1)
 
 	if msg.Size > ProtocolMaxMsgSize {
 		return fmt.Errorf("message too long: %v > %v", msg.Size, ProtocolMaxMsgSize)

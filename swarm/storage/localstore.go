@@ -19,7 +19,12 @@ package storage
 import (
 	"encoding/binary"
 
-	"github.com/ethereum/go-ethereum/swarm/utils"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+var (
+	dbStorePutCounter = metrics.NewCounter("storage.db.dbstore.put.count")
 )
 
 // LocalStore is a combination of inmemory db over a disk persisted db
@@ -42,11 +47,11 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams) (*LocalStore, error) {
 }
 
 func (self *LocalStore) CacheCounter() uint64 {
-  return uint64(self.memStore.(*MemStore).Counter())
+	return uint64(self.memStore.(*MemStore).Counter())
 }
 
 func (self *LocalStore) DbCounter() uint64 {
-  return self.DbStore.(*DbStore).Counter()
+	return self.DbStore.(*DbStore).Counter()
 }
 
 // LocalStore is itself a chunk store
@@ -58,8 +63,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		chunk.wg.Add(1)
 	}
 	go func() {
-    utils.Gauge("storage.db.dbstore.put.address",chunk.Key)
-    utils.Increment("storage.db.dbstore.put.count")
+		dbStorePutCounter.Inc(1)
 		self.DbStore.Put(chunk)
 		if chunk.wg != nil {
 			chunk.wg.Done()

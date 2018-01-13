@@ -23,8 +23,17 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/utils"
+)
+
+//metrics variables
+var (
+	syncReceiveCount  = metrics.NewCounter("network.sync.recv.count")
+	syncReceiveIgnore = metrics.NewCounter("network.sync.recv.ignore")
+	syncSendCount     = metrics.NewCounter("network.sync.send.count")
+	syncSendRefused   = metrics.NewCounter("network.sync.send.refused")
+	syncSendNotFound  = metrics.NewCounter("network.sync.send.notfound")
 )
 
 // Handler for storage/retrieval related protocol requests
@@ -108,8 +117,7 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 		log.Trace(fmt.Sprintf("Depo.handleStoreRequest: %v not found locally. create new chunk/request", req.Key))
 		// not found in memory cache, ie., a genuine store request
 		// create chunk
-    utils.Gauge("network.sync.recv.address",req.Key)
-    utils.Increment("network.sync.recv.count")
+		syncReceiveCount.Inc(1)
 		chunk = storage.NewChunk(req.Key, nil)
 
 	case chunk.SData == nil:
@@ -119,7 +127,7 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 	default:
 		// data is found, store request ignored
 		// this should update access count?
-    utils.Increment("network.sync.recv.ignore")
+		syncReceiveIgnore.Inc(1)
 		log.Trace(fmt.Sprintf("Depo.HandleStoreRequest: %v found locally. ignore.", req))
 		islocal = true
 		//return
@@ -176,15 +184,14 @@ func (self *Depo) HandleRetrieveRequestMsg(req *retrieveRequestMsgData, p *peer)
 				SData:          chunk.SData,
 				requestTimeout: req.timeout, //
 			}
-      utils.Gauge("network.sync.send.address",chunk.Key)
-      utils.Increment("network.sync.send.count")
+			syncSendCount.Inc(1)
 			p.syncer.addRequest(sreq, DeliverReq)
 		} else {
-      utils.Increment("network.sync.send.refused")
+			syncSendRefused.Inc(1)
 			log.Trace(fmt.Sprintf("Depo.HandleRetrieveRequest: %v - content found, not wanted", req.Key.Log()))
 		}
 	} else {
-    utils.Increment("network.sync.send.notfound")
+		syncSendNotFound.Inc(1)
 		log.Trace(fmt.Sprintf("Depo.HandleRetrieveRequest: %v - content not found locally. asked swarm for help. will get back", req.Key.Log()))
 	}
 }

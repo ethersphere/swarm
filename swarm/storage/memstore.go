@@ -23,7 +23,13 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/utils"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+var (
+	memstorePutCounter    = metrics.NewCounter("storage.db.memstore.put.count")
+	memstoreRemoveCounter = metrics.NewCounter("storage.db.memstore.rm.count")
 )
 
 const (
@@ -132,7 +138,7 @@ func (s *MemStore) setCapacity(c uint) {
 }
 
 func (s *MemStore) Counter() uint {
-  return s.entryCnt
+	return s.entryCnt
 }
 
 // entry (not its copy) is going to be in MemStore
@@ -150,8 +156,7 @@ func (s *MemStore) Put(entry *Chunk) {
 
 	s.accessCnt++
 
-  utils.Gauge("storage.db.memstore.put.address",entry.Key)
-  utils.Increment("storage.db.memstore.put.count")
+	memstorePutCounter.Inc(1)
 
 	node := s.memtree
 	bitpos := uint(0)
@@ -297,8 +302,7 @@ func (s *MemStore) removeOldest() {
 	}
 
 	if node.entry.SData != nil {
-    utils.Gauge("storage.db.memstore.rm.address",node.entry.Key)
-    utils.Increment("storage.db.memstore.rm.count")
+		memstoreRemoveCounter.Inc(1)
 		node.entry = nil
 		s.entryCnt--
 	}

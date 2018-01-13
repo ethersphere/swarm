@@ -24,7 +24,13 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/utils"
+	"github.com/ethereum/go-ethereum/metrics"
+)
+
+//metrics variables
+var (
+	bucketOnIndexGauge  = metrics.NewGauge("network.kademlia.bucket.onindex")
+	bucketOffIndexGauge = metrics.NewGauge("network.kademlia.bucket.offindex")
 )
 
 const (
@@ -117,7 +123,6 @@ func (self *Kademlia) DBCount() int {
 // On is the entry point called when a new nodes is added
 // unsafe in that node is not checked to be already active node (to be called once)
 func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error) {
-  utils.Increment("network.kademlia.on")
 	log.Debug(fmt.Sprintf("%v", self))
 	defer self.lock.Unlock()
 	self.lock.Lock()
@@ -140,7 +145,7 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 	// TODO: give priority to peers with active traffic
 	if len(bucket) < self.BucketSize { // >= allows us to add peers beyond the bucketsize limitation
 		self.buckets[index] = append(bucket, node)
-    utils.Gauge("network.kademlia.bucket.onindex", index)
+		bucketOnIndexGauge.Update(int64(index))
 		log.Debug(fmt.Sprintf("add node %v to table", node))
 		self.setProxLimit(index, true)
 		record.node = node
@@ -177,12 +182,11 @@ func (self *Kademlia) On(node Node, cb func(*NodeRecord, Node) error) (err error
 
 // Off is the called when a node is taken offline (from the protocol main loop exit)
 func (self *Kademlia) Off(node Node, cb func(*NodeRecord, Node)) (err error) {
-  utils.Increment("network.kademlia.off")
 	self.lock.Lock()
 	defer self.lock.Unlock()
 
 	index := self.proximityBin(node.Addr())
-  utils.Gauge("network.kademlia.bucket.offindex", index)
+	bucketOffIndexGauge.Update(int64(index))
 	bucket := self.buckets[index]
 	for i := 0; i < len(bucket); i++ {
 		if node.Addr() == bucket[i].Addr() {

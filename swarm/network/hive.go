@@ -24,11 +24,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/netutil"
 	"github.com/ethereum/go-ethereum/swarm/network/kademlia"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/utils"
 )
 
 // Hive is the logistic manager of the swarm
@@ -39,6 +39,12 @@ import (
 // for db storage and filtering
 // connections and disconnections are reported and relayed
 // to keep the nodetable uptodate
+
+var (
+	peersNumGauge     = metrics.NewGauge("network.peers.num")
+	addPeerCounter    = metrics.NewCounter("network.addpeer.count")
+	removePeerCounter = metrics.NewCounter("network.removepeer.count")
+)
 
 type Hive struct {
 	listenAddr   func() string
@@ -193,7 +199,7 @@ func (self *Hive) Start(id discover.NodeID, listenAddr func() string, connectPee
 func (self *Hive) keepAlive() {
 	alarm := time.NewTicker(time.Duration(self.callInterval)).C
 	for {
-    utils.Gauge("network.peers.num", self.kad.Count())
+		peersNumGauge.Update(int64(self.kad.Count()))
 		select {
 		case <-alarm:
 			if self.kad.DBCount() > 0 {
@@ -225,7 +231,7 @@ func (self *Hive) Stop() error {
 
 // called at the end of a successful protocol handshake
 func (self *Hive) addPeer(p *peer) error {
-  utils.Increment("network.addpeer.count")
+	addPeerCounter.Inc(1)
 	defer func() {
 		select {
 		case self.more <- true:
@@ -250,7 +256,7 @@ func (self *Hive) addPeer(p *peer) error {
 
 // called after peer disconnected
 func (self *Hive) removePeer(p *peer) {
-  utils.Increment("network.removepeer.count")
+	removePeerCounter.Inc(1)
 	log.Debug(fmt.Sprintf("bee %v removed", p))
 	self.kad.Off(p, saveSync)
 	select {
