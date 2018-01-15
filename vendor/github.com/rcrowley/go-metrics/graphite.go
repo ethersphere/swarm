@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"net"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -24,6 +25,20 @@ func (s Int64Slice) Less(i, j int) bool {
 	return s[i] < s[j]
 }
 
+// GraphiteReporter
+type GraphiteReporter struct {
+	gc *GraphiteConfig
+
+	cache map[string]int64
+}
+
+func NewGraphiteReporter(gc *GraphiteConfig) *GraphiteReporter {
+	return &GraphiteReporter{
+		gc:    gc,
+		cache: make(map[string]int64),
+	}
+}
+
 // GraphiteConfig provides a container with configuration parameters for
 // the Graphite exporter
 type GraphiteConfig struct {
@@ -35,40 +50,40 @@ type GraphiteConfig struct {
 	Percentiles   []float64     // Percentiles to export from timers and histograms
 }
 
-// Graphite is a blocking exporter function which reports metrics in r
-// to a graphite server located at addr, flushing them every d duration
-// and prepending metric names with prefix.
-func Graphite(r Registry, d time.Duration, prefix string, addr *net.TCPAddr) {
-	GraphiteWithConfig(GraphiteConfig{
-		Addr:          addr,
-		Registry:      r,
-		FlushInterval: d,
-		DurationUnit:  time.Nanosecond,
-		Prefix:        prefix,
-		Percentiles:   []float64{0.5, 0.75, 0.95, 0.99, 0.999},
-	})
-}
+// Flush is a blocking exporter function which reports in the registry
+// to the statsd client, flushing every d duration
+func (r *GraphiteReporter) Flush() {
+	defer func() {
+		if rec := recover(); rec != nil {
+			handlePanic(rec)
+		}
+	}()
 
-// GraphiteWithConfig is a blocking exporter function just like Graphite,
-// but it takes a GraphiteConfig instead.
-func GraphiteWithConfig(c GraphiteConfig) {
-	log.Printf("WARNING: This go-metrics client has been DEPRECATED! It has been moved to https://github.com/cyberdelia/go-metrics-graphite and will be removed from rcrowley/go-metrics on August 12th 2015")
-	for _ = range time.Tick(c.FlushInterval) {
-		if err := graphite(&c); nil != err {
+	for range time.Tick(r.gc.FlushInterval) {
+		if err := r.FlushOnce(); err != nil {
 			log.Println(err)
 		}
 	}
 }
 
-// GraphiteOnce performs a single submission to Graphite, returning a
-// non-nil error on failed connections. This can be used in a loop
-// similar to GraphiteWithConfig for custom error handling.
-func GraphiteOnce(c GraphiteConfig) error {
-	log.Printf("WARNING: This go-metrics client has been DEPRECATED! It has been moved to https://github.com/cyberdelia/go-metrics-graphite and will be removed from rcrowley/go-metrics on August 12th 2015")
-	return graphite(&c)
+func handlePanic(rec interface{}) {
+	callers := ""
+	for i := 2; true; i++ {
+		_, file, line, ok := runtime.Caller(i)
+		if !ok {
+			break
+		}
+		callers = callers + fmt.Sprintf("%v:%v\n", file, line)
+	}
+	log.Printf("Recovered from panic: %#v \n%v", rec, callers)
 }
 
-func graphite(c *GraphiteConfig) error {
+// FlushOnce performs a single submission to Graphite, returning a
+// non-nil error on failed connections. This can be used in a loop
+// similar to GraphiteWithConfig for custom error handling.
+func (r *GraphiteReporter) FlushOnce() error {
+	c := r.gc
+
 	now := time.Now().Unix()
 	du := float64(c.DurationUnit)
 	conn, err := net.DialTCP("tcp", nil, c.Addr)
@@ -78,10 +93,13 @@ func graphite(c *GraphiteConfig) error {
 	defer conn.Close()
 	w := bufio.NewWriter(conn)
 	c.Registry.Each(func(name string, i interface{}) {
-		//spew.Dump(i)
 		switch metric := i.(type) {
 		case Counter:
-			fmt.Fprintf(w, "%s.%s.count %d %d\n", c.Prefix, name, metric.Count(), now)
+			v := metric.Count()
+			l := r.cache[name]
+			fmt.Println(v - l)
+			fmt.Fprintf(w, "%s.%s.count %d %d\n", c.Prefix, name, v-l, now)
+			r.cache[name] = v
 		case Gauge:
 			fmt.Fprintf(w, "%s.%s.value %d %d\n", c.Prefix, name, metric.Value(), now)
 		case GaugeFloat64:
@@ -138,9 +156,9 @@ func graphite(c *GraphiteConfig) error {
 				}
 
 				percentiles := map[string]float64{
-					"50": -50,
-					"95": -95,
-					"99": -99,
+					"50": 50,
+					"95": 95,
+					"99": 99,
 				}
 
 				thresholdBoundary := max

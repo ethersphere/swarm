@@ -18,6 +18,8 @@ func main() {
 	setupGraphiteReporter("gometrics.host1", host1reg)
 	setupGraphiteReporter("gometrics.host2", host2reg)
 
+	go percentiles()
+
 	for j := 0; j < 5; j++ {
 		go host2()
 		host1()
@@ -104,14 +106,21 @@ func host2() {
 func setupGraphiteReporter(namespace string, reg metrics.Registry) {
 	addr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:2003")
 
-	gc := metrics.GraphiteConfig{
+	reporter := metrics.NewGraphiteReporter(&metrics.GraphiteConfig{
 		Addr:          addr,
 		Registry:      reg,
 		FlushInterval: 5000 * time.Millisecond,
 		DurationUnit:  time.Nanosecond,
 		Prefix:        namespace,
 		Percentiles:   []float64{0.5, 0.75, 0.95, 0.99, 0.999},
-	}
+	})
 
-	go metrics.GraphiteWithConfig(gc)
+	go reporter.Flush()
+}
+
+func percentiles() {
+	t := metrics.GetOrRegisterResettingTimer("rand_300ms", host2reg)
+	for {
+		t.Time(func() { time.Sleep(time.Duration(rand.Intn(300)) * time.Millisecond) })
+	}
 }
