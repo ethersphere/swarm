@@ -9,8 +9,14 @@ import (
 	statsd "gopkg.in/alexcesaro/statsd.v2"
 )
 
+var (
+	host1reg = metrics.NewRegistry()
+	host2reg = metrics.NewRegistry()
+)
+
 func main() {
-	setupGraphiteReporter("gometricsvsalex")
+	setupGraphiteReporter("gometrics.host1", host1reg)
+	setupGraphiteReporter("gometrics.host2", host2reg)
 
 	for j := 0; j < 5; j++ {
 		go host2()
@@ -43,9 +49,9 @@ func host1() {
 			c.Increment("foo.counter")
 
 			// go-metrics
-			t := metrics.GetOrRegisterTimer("homepage.response_time", metrics.DefaultRegistry)
+			t := metrics.GetOrRegisterResettingTimer("homepage.response_time", host1reg)
 			defer t.UpdateSince(time.Now())
-			count := metrics.GetOrRegisterCounter("foo.counter", metrics.DefaultRegistry)
+			count := metrics.GetOrRegisterCounter("foo.counter", host1reg)
 			count.Inc(1)
 
 			if ind == 10 {
@@ -78,9 +84,9 @@ func host2() {
 			c.Increment("foo.counter")
 
 			// go-metrics
-			t := metrics.GetOrRegisterTimer("homepage.response_time", metrics.DefaultRegistry)
+			t := metrics.GetOrRegisterResettingTimer("homepage.response_time", host2reg)
 			defer t.UpdateSince(time.Now())
-			count := metrics.GetOrRegisterCounter("foo.counter", metrics.DefaultRegistry)
+			count := metrics.GetOrRegisterCounter("foo.counter", host2reg)
 			count.Inc(1)
 
 			if ind == 10 {
@@ -95,13 +101,13 @@ func host2() {
 	}
 }
 
-func setupGraphiteReporter(namespace string) {
+func setupGraphiteReporter(namespace string, reg metrics.Registry) {
 	addr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:2003")
 
 	gc := metrics.GraphiteConfig{
 		Addr:          addr,
-		Registry:      metrics.DefaultRegistry,
-		FlushInterval: 100 * time.Millisecond,
+		Registry:      reg,
+		FlushInterval: 5000 * time.Millisecond,
 		DurationUnit:  time.Nanosecond,
 		Prefix:        namespace,
 		Percentiles:   []float64{0.5, 0.75, 0.95, 0.99, 0.999},

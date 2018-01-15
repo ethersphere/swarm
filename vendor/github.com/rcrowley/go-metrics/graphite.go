@@ -5,10 +5,23 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
 )
+
+type Int64Slice []int64
+
+func (s Int64Slice) Len() int {
+	return len(s)
+}
+func (s Int64Slice) Swap(i, j int) {
+	s[i], s[j] = s[j], s[i]
+}
+func (s Int64Slice) Less(i, j int) bool {
+	return s[i] < s[j]
+}
 
 // GraphiteConfig provides a container with configuration parameters for
 // the Graphite exporter
@@ -64,6 +77,7 @@ func graphite(c *GraphiteConfig) error {
 	defer conn.Close()
 	w := bufio.NewWriter(conn)
 	c.Registry.Each(func(name string, i interface{}) {
+		//spew.Dump(i)
 		switch metric := i.(type) {
 		case Counter:
 			fmt.Fprintf(w, "%s.%s.count %d %d\n", c.Prefix, name, metric.Count(), now)
@@ -106,6 +120,30 @@ func graphite(c *GraphiteConfig) error {
 			fmt.Fprintf(w, "%s.%s.five-minute %.2f %d\n", c.Prefix, name, t.Rate5(), now)
 			fmt.Fprintf(w, "%s.%s.fifteen-minute %.2f %d\n", c.Prefix, name, t.Rate15(), now)
 			fmt.Fprintf(w, "%s.%s.mean-rate %.2f %d\n", c.Prefix, name, t.RateMean(), now)
+		case ResettingTimer:
+			t := metric.Snapshot()
+			sort.Sort(Int64Slice(t.Values()))
+
+			val := t.Values()
+			count := len(val)
+			if count > 0 {
+				min := val[0]
+				max := val[count-1]
+
+				cumulativeValues := make([]int64, count)
+				cumulativeValues[0] = min
+				for i := 1; i < count; i++ {
+					cumulativeValues[i] = val[i] + cumulativeValues[i-1]
+				}
+
+				sum := cumulativeValues[count-1]
+				mean := float64(sum) / float64(count)
+
+				fmt.Fprintf(w, "%s.%s.count %d %d\n", c.Prefix, name, count, now)
+				fmt.Fprintf(w, "%s.%s.min %d %d\n", c.Prefix, name, min, now)
+				fmt.Fprintf(w, "%s.%s.max %d %d\n", c.Prefix, name, max, now)
+				fmt.Fprintf(w, "%s.%s.mean %.2f %d\n", c.Prefix, name, mean, now)
+			}
 		}
 		w.Flush()
 	})
