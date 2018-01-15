@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"log"
+	"math"
 	"net"
 	"sort"
 	"strconv"
@@ -134,6 +135,38 @@ func graphite(c *GraphiteConfig) error {
 				cumulativeValues[0] = min
 				for i := 1; i < count; i++ {
 					cumulativeValues[i] = val[i] + cumulativeValues[i-1]
+				}
+
+				percentiles := map[string]float64{
+					"50": -50,
+					"95": -95,
+					"99": -99,
+				}
+
+				thresholdBoundary := max
+
+				for k, pct := range percentiles {
+					if count > 1 {
+						var abs float64
+						if pct >= 0 {
+							abs = pct
+						} else {
+							abs = 100 + pct
+						}
+						// poor man's math.Round(x):
+						// math.Floor(x + 0.5)
+						indexOfPerc := int(math.Floor(((abs / 100.0) * float64(count)) + 0.5))
+						if pct >= 0 {
+							indexOfPerc -= 1 // index offset=0
+						}
+						thresholdBoundary = val[indexOfPerc]
+					}
+
+					if pct > 0 {
+						fmt.Fprintf(w, "%s.%s.upper_%s %d %d\n", c.Prefix, name, k, thresholdBoundary, now)
+					} else {
+						fmt.Fprintf(w, "%s.%s.lower_%s %d %d\n", c.Prefix, name, k, thresholdBoundary, now)
+					}
 				}
 
 				sum := cumulativeValues[count-1]

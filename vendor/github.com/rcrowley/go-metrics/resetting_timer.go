@@ -5,9 +5,11 @@ import (
 	"time"
 )
 
+// Initial slice capacity for the values stored in a ResettingTimer
+const InitialResettingTimerSliceCap = 100
+
 // ResettingTimers capture the duration and rate of events.
 type ResettingTimer interface {
-	Count() int
 	Values() []int64
 	Snapshot() ResettingTimer
 	Time(func())
@@ -40,18 +42,13 @@ func NewResettingTimer() ResettingTimer {
 		return NilResettingTimer{}
 	}
 	return &StandardResettingTimer{
-		values: make([]int64, 0),
+		values: make([]int64, 0, InitialResettingTimerSliceCap),
 	}
 }
 
 // NilResettingTimer is a no-op ResettingTimer.
 type NilResettingTimer struct {
-	h Histogram
-	m Meter
 }
-
-// Count is a no-op.
-func (NilResettingTimer) Count() int { return 0 }
 
 // Values
 func (NilResettingTimer) Values() []int64 { return []int64{} }
@@ -75,11 +72,6 @@ type StandardResettingTimer struct {
 	mutex  sync.Mutex
 }
 
-// Count returns the number of events recorded.
-func (t *StandardResettingTimer) Count() int {
-	return len(t.values)
-}
-
 // Values
 func (t *StandardResettingTimer) Values() []int64 {
 	return t.values
@@ -90,7 +82,7 @@ func (t *StandardResettingTimer) Snapshot() ResettingTimer {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()
 	currentValues := t.values
-	t.values = make([]int64, 0)
+	t.values = make([]int64, 0, InitialResettingTimerSliceCap)
 
 	return &ResettingTimerSnapshot{
 		values: currentValues,
@@ -122,10 +114,6 @@ func (t *StandardResettingTimer) UpdateSince(ts time.Time) {
 type ResettingTimerSnapshot struct {
 	values []int64
 }
-
-// Count returns the number of events recorded at the time the snapshot was
-// taken.
-func (t *ResettingTimerSnapshot) Count() int { return len(t.values) }
 
 // Snapshot returns the snapshot.
 func (t *ResettingTimerSnapshot) Snapshot() ResettingTimer { return t }
