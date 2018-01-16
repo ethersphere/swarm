@@ -15,8 +15,16 @@ var (
 )
 
 func main() {
-	setupGraphiteReporter("gometrics.host1", host1reg)
-	setupGraphiteReporter("gometrics.host2", host2reg)
+	//setupGraphiteReporter("gometrics.host1", host1reg)
+	//setupGraphiteReporter("gometrics.host2", host2reg)
+
+	go metrics.InfluxDBWithTags(host1reg, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "infl.", map[string]string{
+		"host": "host-1.lvh.me",
+	})
+
+	go metrics.InfluxDBWithTags(host2reg, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "infl.", map[string]string{
+		"host": "host-2.lvh.me",
+	})
 
 	go percentiles()
 
