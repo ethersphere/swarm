@@ -5,7 +5,7 @@ import (
 	"net"
 	"time"
 
-	metrics "github.com/rcrowley/go-metrics"
+	metrics "github.com/nonsense/go-metrics"
 	statsd "gopkg.in/alexcesaro/statsd.v2"
 )
 

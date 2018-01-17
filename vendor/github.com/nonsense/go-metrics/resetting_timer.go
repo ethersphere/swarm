@@ -6,9 +6,9 @@ import (
 )
 
 // Initial slice capacity for the values stored in a ResettingTimer
-const InitialResettingTimerSliceCap = 100
+const InitialResettingTimerSliceCap = 10
 
-// ResettingTimers capture the duration and rate of events.
+// ResettingTimer is used for storing aggregated values for timers, which are reset on every flush interval.
 type ResettingTimer interface {
 	Values() []int64
 	Snapshot() ResettingTimer
@@ -50,8 +50,8 @@ func NewResettingTimer() ResettingTimer {
 type NilResettingTimer struct {
 }
 
-// Values
-func (NilResettingTimer) Values() []int64 { return []int64{} }
+// Values is a no-op.
+func (NilResettingTimer) Values() []int64 { return nil }
 
 // Snapshot is a no-op.
 func (NilResettingTimer) Snapshot() ResettingTimer { return NilResettingTimer{} }
@@ -65,19 +65,19 @@ func (NilResettingTimer) Update(time.Duration) {}
 // UpdateSince is a no-op.
 func (NilResettingTimer) UpdateSince(time.Time) {}
 
-// StandardResettingTimer is the standard implementation of a ResettingTimer and uses a Histogram
+// StandardResettingTimer is the standard implementation of a ResettingTimer.
 // and Meter.
 type StandardResettingTimer struct {
 	values []int64
 	mutex  sync.Mutex
 }
 
-// Values
+// Values returns a slice with all measurements.
 func (t *StandardResettingTimer) Values() []int64 {
 	return t.values
 }
 
-// Snapshot returns a read-only copy of the ResettingTimer.
+// Snapshot resets the timer and returns a read-only copy of its contents.
 func (t *StandardResettingTimer) Snapshot() ResettingTimer {
 	t.mutex.Lock()
 	defer t.mutex.Unlock()

@@ -1,4 +1,4 @@
-package metrics
+package influxdb
 
 import (
 	"fmt"
@@ -9,10 +9,11 @@ import (
 	"time"
 
 	"github.com/influxdata/influxdb/client"
+	"github.com/nonsense/go-metrics"
 )
 
 type reporter struct {
-	reg      Registry
+	reg      metrics.Registry
 	interval time.Duration
 
 	url       uurl.URL
@@ -27,13 +28,13 @@ type reporter struct {
 	cache map[string]int64
 }
 
-// InfluxDB starts a InfluxDB reporter which will post the from the given registry at each d interval.
-func InfluxDB(r Registry, d time.Duration, url, database, username, password, namespace string) {
+// InfluxDB starts a InfluxDB reporter which will post the from the given metrics.Registry at each d interval.
+func InfluxDB(r metrics.Registry, d time.Duration, url, database, username, password, namespace string) {
 	InfluxDBWithTags(r, d, url, database, username, password, namespace, nil)
 }
 
-// InfluxDBWithTags starts a InfluxDB reporter which will post the from the given registry at each d interval with the specified tags
-func InfluxDBWithTags(r Registry, d time.Duration, url, database, username, password, namespace string, tags map[string]string) {
+// InfluxDBWithTags starts a InfluxDB reporter which will post the from the given metrics.Registry at each d interval with the specified tags
+func InfluxDBWithTags(r metrics.Registry, d time.Duration, url, database, username, password, namespace string, tags map[string]string) {
 	u, err := uurl.Parse(url)
 	if err != nil {
 		log.Printf("unable to parse InfluxDB url %s. err=%v", url, err)
@@ -100,7 +101,7 @@ func (r *reporter) send() error {
 		namespace := r.namespace
 
 		switch metric := i.(type) {
-		case Counter:
+		case metrics.Counter:
 			v := metric.Count()
 			l := r.cache[name]
 			pts = append(pts, client.Point{
@@ -112,7 +113,7 @@ func (r *reporter) send() error {
 				Time: now,
 			})
 			r.cache[name] = v
-		case Gauge:
+		case metrics.Gauge:
 			ms := metric.Snapshot()
 			pts = append(pts, client.Point{
 				Measurement: fmt.Sprintf("%s%s.gauge", namespace, name),
@@ -122,7 +123,7 @@ func (r *reporter) send() error {
 				},
 				Time: now,
 			})
-		case GaugeFloat64:
+		case metrics.GaugeFloat64:
 			ms := metric.Snapshot()
 			pts = append(pts, client.Point{
 				Measurement: fmt.Sprintf("%s%s.gauge", namespace, name),
@@ -132,7 +133,7 @@ func (r *reporter) send() error {
 				},
 				Time: now,
 			})
-		case Histogram:
+		case metrics.Histogram:
 			ms := metric.Snapshot()
 			ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
 			pts = append(pts, client.Point{
@@ -154,7 +155,7 @@ func (r *reporter) send() error {
 				},
 				Time: now,
 			})
-		case Meter:
+		case metrics.Meter:
 			ms := metric.Snapshot()
 			pts = append(pts, client.Point{
 				Measurement: fmt.Sprintf("%s%s.meter", namespace, name),
@@ -168,7 +169,7 @@ func (r *reporter) send() error {
 				},
 				Time: now,
 			})
-		case Timer:
+		case metrics.Timer:
 			ms := metric.Snapshot()
 			ps := ms.Percentiles([]float64{0.5, 0.75, 0.95, 0.99, 0.999, 0.9999})
 			pts = append(pts, client.Point{
@@ -194,7 +195,7 @@ func (r *reporter) send() error {
 				},
 				Time: now,
 			})
-		case ResettingTimer:
+		case metrics.ResettingTimer:
 			t := metric.Snapshot()
 			sort.Sort(Int64Slice(t.Values()))
 

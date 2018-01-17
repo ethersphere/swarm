@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/rcrowley/go-metrics"
+	"github.com/nonsense/go-metrics"
 	"golang.org/x/net/websocket"
 )
 
