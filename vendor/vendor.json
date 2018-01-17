@@ -250,9 +250,9 @@
 			"revisionTime": "2018-01-17T12:19:44Z"
 		},
 		{
-			"checksumSHA1": "agmPA1/zliTzW1FFHvrjpt3dr0A=",
+			"checksumSHA1": "imlKDfVfXiGUjNbWUrV+7bMkVPs=",
 			"path": "github.com/nonsense/go-metrics-influxdb",
-			"revision": "ec80371163df89389f378d4ada46223c94d1dc0c",
+			"revision": "da50c4cc2e1531c45fc41f1392250ee3c86de7d2",
 			"revisionTime": "2018-01-17T12:28:20Z"
 		},
 		{

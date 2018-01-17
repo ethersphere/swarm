@@ -2,10 +2,10 @@ package main
 
 import (
 	"math/rand"
-	"net"
 	"time"
 
 	metrics "github.com/nonsense/go-metrics"
+	influxdb "github.com/nonsense/go-metrics-influxdb"
 	statsd "gopkg.in/alexcesaro/statsd.v2"
 )
 
@@ -15,14 +15,11 @@ var (
 )
 
 func main() {
-	//setupGraphiteReporter("gometrics.host1", host1reg)
-	//setupGraphiteReporter("gometrics.host2", host2reg)
-
-	go metrics.InfluxDBWithTags(host1reg, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "infl.", map[string]string{
+	go influxdb.InfluxDBWithTags(host1reg, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "infl.", map[string]string{
 		"host": "host-1.lvh.me",
 	})
 
-	go metrics.InfluxDBWithTags(host2reg, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "infl.", map[string]string{
+	go influxdb.InfluxDBWithTags(host2reg, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "infl.", map[string]string{
 		"host": "host-2.lvh.me",
 	})
 
@@ -109,21 +106,6 @@ func host2() {
 
 		time.Sleep(5 * time.Second)
 	}
-}
-
-func setupGraphiteReporter(namespace string, reg metrics.Registry) {
-	addr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:2003")
-
-	reporter := metrics.NewGraphiteReporter(&metrics.GraphiteConfig{
-		Addr:          addr,
-		Registry:      reg,
-		FlushInterval: 5000 * time.Millisecond,
-		DurationUnit:  time.Nanosecond,
-		Prefix:        namespace,
-		Percentiles:   []float64{0.5, 0.75, 0.95, 0.99, 0.999},
-	})
-
-	go reporter.Flush()
 }
 
 func percentiles() {
