@@ -51,13 +51,13 @@ func SetupMetrics(bzzAccount string) {
 	bzzAccount = bzzAccount[:12]
 	SwarmRegistry = gometrics.NewRegistry()
 
-	//go influxdb.InfluxDBWithTags(SwarmRegistry, 5*time.Second, "http://10.0.1.245:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
-	//"host": bzzAccount,
-	//})
-
-	go influxdb.InfluxDBWithTags(SwarmRegistry, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
+	go influxdb.InfluxDBWithTags(SwarmRegistry, 5*time.Second, "http://10.0.1.245:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
 		"host": bzzAccount,
 	})
+
+	//go influxdb.InfluxDBWithTags(SwarmRegistry, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
+	//"host": bzzAccount,
+	//})
 }
 
 func Gauge(bucket string, value interface{}) {
