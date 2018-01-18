@@ -26,15 +26,14 @@ package utils
 
 import (
 	"fmt"
-	"net"
 	"reflect"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 
-	graphite "github.com/cyberdelia/go-metrics-graphite"
-	gometrics "github.com/rcrowley/go-metrics"
+	gometrics "github.com/nonsense/go-metrics"
+	influxdb "github.com/nonsense/go-metrics-influxdb"
 )
 
 var (
@@ -50,14 +49,15 @@ type MetricsTimer struct {
 
 func SetupMetrics(bzzAccount string) {
 	bzzAccount = bzzAccount[:12]
-	addr, _ := net.ResolveTCPAddr("tcp", "127.0.0.1:2003")
 	SwarmRegistry = gometrics.NewRegistry()
 
-	go graphite.Graphite(
-		SwarmRegistry,
-		5*time.Second,
-		"swarm.node."+bzzAccount,
-		addr)
+	//go influxdb.InfluxDBWithTags(SwarmRegistry, 5*time.Second, "http://10.0.1.245:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
+	//"host": bzzAccount,
+	//})
+
+	go influxdb.InfluxDBWithTags(SwarmRegistry, 5*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
+		"host": bzzAccount,
+	})
 }
 
 func Gauge(bucket string, value interface{}) {
