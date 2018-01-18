@@ -15,7 +15,10 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 /*
-TODO:  documentation
+the p2p/testing package provides a unit test scheme to check simple
+protocol message exchanges with one pivot node and a number of dummy peers
+The pivot test node runs a node.Service, the dummy peers run a mock node
+that can be used to send and receive messages
 */
 
 package testing
@@ -34,11 +37,16 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// ProtocolTester is the tester environment used for unit testing protocol
+// message exchanges. It uses p2p/simulations framework
 type ProtocolTester struct {
 	*ProtocolSession
 	network *simulations.Network
 }
 
+// NewProtocolTester constructs a new ProtocolTester
+// it takes as argument the pivot node id, the number of dummy peers and the
+// protocol run function called on a peer connection by the p2p server
 func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Peer, p2p.MsgReadWriter) error) *ProtocolTester {
 	services := adapters.Services{
 		"test": func(ctx *adapters.ServiceContext) (node.Service, error) {
@@ -87,11 +95,14 @@ func NewProtocolTester(t *testing.T, id discover.NodeID, n int, run func(*p2p.Pe
 	return self
 }
 
+// Stop stops the p2p server
 func (self *ProtocolTester) Stop() error {
 	self.Server.Stop()
 	return nil
 }
 
+// Connect brings up the remote peer node and connects it using the
+// p2p/simulations network connection with the in memory network adapter
 func (self *ProtocolTester) Connect(selfID discover.NodeID, peers ...*adapters.NodeConfig) {
 	for _, peer := range peers {
 		log.Trace(fmt.Sprintf("start node %v", peer.ID))

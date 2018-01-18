@@ -19,7 +19,6 @@ package testing
 import (
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
@@ -27,6 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
+// ProtocolSession is a quasi simulation of a pivot node running
+// a service and a number of dummy peers that can send (trigger) or
+// receive (expect) messages
 type ProtocolSession struct {
 	Server  *p2p.Server
 	IDs     []discover.NodeID
@@ -34,9 +36,9 @@ type ProtocolSession struct {
 	events  chan *p2p.PeerEvent
 }
 
-// exchanges are the basic units of protocol tests
+// Exchange is the basic units of protocol tests
 // the triggers and expects in the arrays are run immediately and asynchronously
-// thus one cannot have multiple expects for the SAME peer with the DIFFERENT messagetypes
+// thus one cannot have multiple expects for the SAME peer with DIFFERENT message types
 // because it's unpredictable which expect will receive which message
 // (with expect #1 and #2, messages might be sent #2 and #1, and both expects will complain about wrong message code)
 // an exchange is defined on a session
@@ -46,7 +48,8 @@ type Exchange struct {
 	Expects  []Expect
 }
 
-// part of the exchange, incoming message from a set of peers
+// Trigger is part of the exchange, incoming message for the pivot node
+// sent by a peer
 type Trigger struct {
 	Msg     interface{}     // type of message to be sent
 	Code    uint64          // code of message is given
@@ -54,6 +57,8 @@ type Trigger struct {
 	Timeout time.Duration   // timeout duration for the sending
 }
 
+// Expect is part of an exchange, outgoing message from the pivot node
+// received by a peer
 type Expect struct {
 	Msg     interface{}     // type of message to expect
 	Code    uint64          // code of message is now given
@@ -61,6 +66,7 @@ type Expect struct {
 	Timeout time.Duration   // timeout duration for receiving
 }
 
+// Disconnect represents a disconnect event, used and checked by TestDisconnected
 type Disconnect struct {
 	Peer  discover.NodeID // discconnected peer
 	Error error           // disconnect reason
@@ -95,7 +101,7 @@ func (self *ProtocolSession) trigger(trig Trigger) error {
 	}
 }
 
-// expect checks an expectation
+// expect checks an expectation of a message sent out by the pivot node
 func (self *ProtocolSession) expect(exp Expect) error {
 	if exp.Msg == nil {
 		return errors.New("no message to expect")
@@ -126,19 +132,14 @@ func (self *ProtocolSession) expect(exp Expect) error {
 	}
 }
 
-// TestExchanges tests a series of exchanges againsts the session
+// TestExchanges tests a series of exchanges against the session
 func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 	// launch all triggers of this exchanges
 
-	for i, e := range exchanges {
-		errc := make(chan error, 1)
-		wg := &sync.WaitGroup{}
+	for _, e := range exchanges {
+		errc := make(chan error, len(e.Triggers)+len(e.Expects))
 		for _, trig := range e.Triggers {
-			err := self.trigger(trig)
-			if err != nil {
-				errc <- err
-				break
-			}
+			errc <- self.trigger(trig)
 		}
 
 		// each expectation is spawned in separate go-routine
@@ -151,38 +152,30 @@ func (self *ProtocolSession) TestExchanges(exchanges ...Exchange) error {
 		// an unexpected message arrives (panic)
 		// times out on their individual timeout
 		for _, ex := range e.Expects {
-			wg.Add(1)
 			// expect msg spawned to separate go routine
 			go func(exp Expect) {
-				defer wg.Done()
-				err := self.expect(exp)
-				if err != nil {
-					errc <- err
-				}
+				errc <- self.expect(exp)
 			}(ex)
 		}
 
-		// wait for all expectations
-		go func() {
-			wg.Wait()
-			close(errc)
-		}()
-
 		// time out globally or finish when all expectations satisfied
-		alarm := time.NewTimer(1000 * time.Millisecond)
-		select {
-
-		case err := <-errc:
-			if err != nil {
-				return fmt.Errorf("exchange failed with: %v", err)
+		timeout := time.After(5 * time.Second)
+		for i := 0; i < len(e.Triggers)+len(e.Expects); i++ {
+			select {
+			case err := <-errc:
+				if err != nil {
+					return fmt.Errorf("exchange failed with: %v", err)
+				}
+			case <-timeout:
+				return fmt.Errorf("exchange %v: '%v' timed out", i, e.Label)
 			}
-		case <-alarm.C:
-			return fmt.Errorf("exchange %v: '%v' timed out", i, e.Label)
 		}
 	}
 	return nil
 }
 
+// TestDisconnected tests the disconnections given as arguments
+// the disconnect structs describe what disconnect error is expected on which peer
 func (self *ProtocolSession) TestDisconnected(disconnects ...*Disconnect) error {
 	expects := make(map[discover.NodeID]error)
 	for _, disconnect := range disconnects {

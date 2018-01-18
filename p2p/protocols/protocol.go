@@ -22,8 +22,8 @@ devp2p subprotocols by abstracting away code standardly shared by protocols.
 * automate RLP decoding/encoding based on reflecting
 * provide the forever loop to read incoming messages
 * standardise error handling related to communication
+* standardised	handshake negotiation
 * TODO: automatic generation of wire protocol specification for peers
-* standardise	handshake negotiation
 
 */
 package protocols
@@ -117,10 +117,11 @@ type Spec struct {
 	// MaxMsgSize is the maximum accepted length of the message payload
 	MaxMsgSize uint32
 
-	// Messages is a list of message types which this protocol uses, with
+	// Messages is a list of message data types which this protocol uses, with
 	// each message type being sent with its array index as the code (so
 	// [&foo{}, &bar{}, &baz{}] would send foo, bar and baz with codes
 	// 0, 1 and 2 respectively)
+	// each message must have a single unique data type
 	Messages []interface{}
 
 	initOnce sync.Once
@@ -181,8 +182,8 @@ type Peer struct {
 
 // NewPeer constructs a new peer
 // this constructor is called by the p2p.Protocol#Run function
-// the first two arguments are comming the arguments passed to p2p.Protocol.Run function
-// the third argument is the CodeMap describing the protocol messages and options
+// the first two arguments are the arguments passed to p2p.Protocol.Run function
+// the third argument is the Spec describing the protocol
 func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 	return &Peer{
 		Peer: p,
@@ -194,7 +195,8 @@ func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 // Run starts the forever loop that handles incoming messages
 // called within the p2p.Protocol#Run function
 // the handler argument is a function which is called for each message received
-// from the remote peer, a returned error causes the loop to exit.
+// from the remote peer, a returned error causes the loop to exit
+// resulting in disconnection
 func (p *Peer) Run(handler func(msg interface{}) error) error {
 	for {
 		if err := p.handleIncoming(handler); err != nil {
@@ -269,7 +271,7 @@ func (p *Peer) handleIncoming(handle func(msg interface{}) error) error {
 // * expects a remote handshake back of the same type
 // * the dialing peer needs to send the handshake first and then waits for remote
 // * the listening peer waits for the remote handshake and then sends it
-// returns the remote hs and an error
+// returns the remote handshake and an error
 func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interface{}) error) (rhs interface{}, err error) {
 	if _, ok := p.spec.GetCode(hs); !ok {
 		return nil, errorf(ErrHandshake, "unknown handshake message type: %T", hs)
@@ -284,13 +286,18 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 	}
 	send := func() { errc <- p.Send(hs) }
 	receive := func() { errc <- p.handleIncoming(handle) }
-	var last bool
-	for {
-		if p.Inbound() == last {
-			go send()
+
+	go func() {
+		if p.Inbound() {
+			receive()
+			send()
 		} else {
-			go receive()
+			send()
+			receive()
 		}
+	}()
+
+	for i := 0; i < 2; i++ {
 		select {
 		case err = <-errc:
 		case <-ctx.Done():
@@ -299,10 +306,6 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 		if err != nil {
 			return nil, errorf(ErrHandshake, err.Error())
 		}
-		if last {
-			break
-		}
-		last = true
 	}
 	return rhs, nil
 }

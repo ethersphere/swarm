@@ -330,7 +330,7 @@ WAIT:
 	}
 
 	// peer 0 sends kill request for peer with index <peer>
-	if err := s.TestExchanges(p2ptest.Exchange{
+	err := s.TestExchanges(p2ptest.Exchange{
 		Triggers: []p2ptest.Trigger{
 			p2ptest.Trigger{
 				Code: 2,
@@ -338,12 +338,14 @@ WAIT:
 				Peer: s.IDs[0],
 			},
 		},
-	}); err != nil {
+	})
+
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	// the peer not killed sends a drop request
-	s.TestExchanges(p2ptest.Exchange{
+	err = s.TestExchanges(p2ptest.Exchange{
 		Triggers: []p2ptest.Trigger{
 			p2ptest.Trigger{
 				Code: 3,
@@ -352,6 +354,11 @@ WAIT:
 			},
 		},
 	})
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// check the actual discconnect errors on the individual peers
 	var disconnects []*p2ptest.Disconnect
 	for i, err := range errs {
