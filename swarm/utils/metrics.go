@@ -32,8 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 
-	gometrics "github.com/nonsense/go-metrics"
-	influxdb "github.com/nonsense/go-metrics-influxdb"
+	gometrics "github.com/ethersphere/go-metrics"
+	influxdb "github.com/ethersphere/go-metrics-influxdb"
 )
 
 var (

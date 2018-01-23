@@ -87,6 +87,18 @@
 			"revisionTime": "2016-05-12T03:30:02Z"
 		},
 		{
+			"checksumSHA1": "euH8WdPZ2UYezUo63Crjr4jV8cg=",
+			"path": "github.com/ethersphere/go-metrics",
+			"revision": "586a6af52eaf7c5bff79659d52f2aa62ab2fab2f",
+			"revisionTime": "2018-01-23T10:11:02Z"
+		},
+		{
+			"checksumSHA1": "hFrrqG1jsym1R/c6evBUKbfFM30=",
+			"path": "github.com/ethersphere/go-metrics-influxdb",
+			"revision": "32cb23a5aafaba2bb6c8f089d85818e602d1f554",
+			"revisionTime": "2018-01-23T10:12:09Z"
+		},
+		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
 			"path": "github.com/fatih/color",
 			"revision": "5ec5d9d3c2cf82e9688b34e9bc27a94d616a7193",
@@ -236,18 +248,6 @@
 			"path": "github.com/naoina/toml/ast",
 			"revision": "eb52202f758b98ac5b1a8eb26f36455205d688f0",
 			"revisionTime": "2017-04-03T15:03:10Z"
-		},
-		{
-			"checksumSHA1": "riVL/YgVMMSXiGx4T84qkeYBt8M=",
-			"path": "github.com/nonsense/go-metrics",
-			"revision": "9551ad5c1c4abf784761d7752fb0e8cc8fbb2181",
-			"revisionTime": "2018-01-17T12:19:44Z"
-		},
-		{
-			"checksumSHA1": "imlKDfVfXiGUjNbWUrV+7bMkVPs=",
-			"path": "github.com/nonsense/go-metrics-influxdb",
-			"revision": "da50c4cc2e1531c45fc41f1392250ee3c86de7d2",
-			"revisionTime": "2018-01-17T12:28:20Z"
 		},
 		{
 			"checksumSHA1": "R1h9XHH3dTmLq7yKL9/uW0xFwfs=",
