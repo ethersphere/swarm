@@ -87,6 +87,18 @@
 			"revisionTime": "2016-05-12T03:30:02Z"
 		},
 		{
+			"checksumSHA1": "euH8WdPZ2UYezUo63Crjr4jV8cg=",
+			"path": "github.com/ethersphere/go-metrics",
+			"revision": "586a6af52eaf7c5bff79659d52f2aa62ab2fab2f",
+			"revisionTime": "2018-01-23T10:11:02Z"
+		},
+		{
+			"checksumSHA1": "hFrrqG1jsym1R/c6evBUKbfFM30=",
+			"path": "github.com/ethersphere/go-metrics-influxdb",
+			"revision": "32cb23a5aafaba2bb6c8f089d85818e602d1f554",
+			"revisionTime": "2018-01-23T10:12:09Z"
+		},
+		{
 			"checksumSHA1": "7oFpbmDfGobwKsFLIf6wMUvVoKw=",
 			"path": "github.com/fatih/color",
 			"revision": "5ec5d9d3c2cf82e9688b34e9bc27a94d616a7193",

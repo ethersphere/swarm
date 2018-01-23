@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/utils"
 )
 
 // Handler for storage/retrieval related protocol requests
@@ -107,6 +108,7 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 		log.Trace(fmt.Sprintf("Depo.handleStoreRequest: %v not found locally. create new chunk/request", req.Key))
 		// not found in memory cache, ie., a genuine store request
 		// create chunk
+		utils.Increment("network.sync.recv.count")
 		chunk = storage.NewChunk(req.Key, nil)
 
 	case chunk.SData == nil:
@@ -116,6 +118,7 @@ func (self *Depo) HandleStoreRequestMsg(req *storeRequestMsgData, p *peer) {
 	default:
 		// data is found, store request ignored
 		// this should update access count?
+		utils.Increment("network.sync.recv.ignore")
 		log.Trace(fmt.Sprintf("Depo.HandleStoreRequest: %v found locally. ignore.", req))
 		islocal = true
 		//return
@@ -172,11 +175,14 @@ func (self *Depo) HandleRetrieveRequestMsg(req *retrieveRequestMsgData, p *peer)
 				SData:          chunk.SData,
 				requestTimeout: req.timeout, //
 			}
+			utils.Increment("network.sync.send.count")
 			p.syncer.addRequest(sreq, DeliverReq)
 		} else {
+			utils.Increment("network.sync.send.refused")
 			log.Trace(fmt.Sprintf("Depo.HandleRetrieveRequest: %v - content found, not wanted", req.Key.Log()))
 		}
 	} else {
+		utils.Increment("network.sync.send.notfound")
 		log.Trace(fmt.Sprintf("Depo.HandleRetrieveRequest: %v - content not found locally. asked swarm for help. will get back", req.Key.Log()))
 	}
 }

@@ -32,6 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/utils"
 )
 
 var hashMatcher = regexp.MustCompile("^[0-9A-Fa-f]{64}")
@@ -79,12 +80,14 @@ type ErrResolve error
 
 // DNS Resolver
 func (self *Api) Resolve(uri *URI) (storage.Key, error) {
+	utils.Increment("api.resolve.count")
 	log.Trace(fmt.Sprintf("Resolving : %v", uri.Addr))
 
 	// if the URI is immutable, check if the address is a hash
 	isHash := hashMatcher.MatchString(uri.Addr)
 	if uri.Immutable() || uri.DeprecatedImmutable() {
 		if !isHash {
+			utils.Increment("api.resolve.fail")
 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
 		}
 		return common.Hex2Bytes(uri.Addr), nil
@@ -93,6 +96,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	// if DNS is not configured, check if the address is a hash
 	if self.dns == nil {
 		if !isHash {
+			utils.Increment("api.resolve.fail")
 			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
 		}
 		return common.Hex2Bytes(uri.Addr), nil
@@ -103,6 +107,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	if err == nil {
 		return resolved[:], nil
 	} else if !isHash {
+		utils.Increment("api.resolve.fail")
 		return nil, err
 	}
 	return common.Hex2Bytes(uri.Addr), nil
@@ -110,16 +115,19 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 
 // Put provides singleton manifest creation on top of dpa store
 func (self *Api) Put(content, contentType string) (storage.Key, error) {
+	utils.Increment("api.put.count")
 	r := strings.NewReader(content)
 	wg := &sync.WaitGroup{}
 	key, err := self.dpa.Store(r, int64(len(content)), wg, nil)
 	if err != nil {
+		utils.Increment("api.put.fail")
 		return nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
 	key, err = self.dpa.Store(r, int64(len(manifest)), wg, nil)
 	if err != nil {
+		utils.Increment("api.put.fail")
 		return nil, err
 	}
 	wg.Wait()
@@ -130,8 +138,10 @@ func (self *Api) Put(content, contentType string) (storage.Key, error) {
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
 func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, err error) {
+	utils.Increment("api.get.count")
 	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
+		utils.Increment("api.get.notfound")
 		status = http.StatusNotFound
 		log.Warn(fmt.Sprintf("loadManifestTrie error: %v", err))
 		return
@@ -145,6 +155,7 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
+			utils.Increment("api.get.http300")
 			return
 		} else {
 			mimeType = entry.ContentType
@@ -153,6 +164,7 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 		}
 	} else {
 		status = http.StatusNotFound
+		utils.Increment("api.get.notfound")
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
 		log.Warn(fmt.Sprintf("%v", err))
 	}
@@ -160,9 +172,11 @@ func (self *Api) Get(key storage.Key, path string) (reader storage.LazySectionRe
 }
 
 func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) (storage.Key, error) {
+	utils.Increment("api.modify.count")
 	quitC := make(chan bool)
 	trie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
+		utils.Increment("api.modify.fail")
 		return nil, err
 	}
 	if contentHash != "" {
@@ -177,6 +191,7 @@ func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) 
 	}
 
 	if err := trie.recalcAndStore(); err != nil {
+		utils.Increment("api.modify.fail")
 		return nil, err
 	}
 	return trie.hash, nil
@@ -184,12 +199,16 @@ func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) 
 
 func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
 
+	utils.Increment("api.addfile.count")
+
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
+		utils.Increment("api.addfile.fail")
 		return nil, "", err
 	}
 	mkey, err := self.Resolve(uri)
 	if err != nil {
+		utils.Increment("api.addfile.fail")
 		return nil, "", err
 	}
 
@@ -208,16 +227,19 @@ func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver
 
 	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
+		utils.Increment("api.addfile.fail")
 		return nil, "", err
 	}
 
 	fkey, err := mw.AddEntry(bytes.NewReader(content), entry)
 	if err != nil {
+		utils.Increment("api.addfile.fail")
 		return nil, "", err
 	}
 
 	newMkey, err := mw.Store()
 	if err != nil {
+		utils.Increment("api.addfile.fail")
 		return nil, "", err
 
 	}
@@ -228,12 +250,16 @@ func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver
 
 func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
 
+	utils.Increment("api.removefile.count")
+
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
+		utils.Increment("api.removefile.fail")
 		return "", err
 	}
 	mkey, err := self.Resolve(uri)
 	if err != nil {
+		utils.Increment("api.removefile.fail")
 		return "", err
 	}
 
@@ -244,16 +270,19 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 
 	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
+		utils.Increment("api.removefile.fail")
 		return "", err
 	}
 
 	err = mw.RemoveEntry(filepath.Join(path, fname))
 	if err != nil {
+		utils.Increment("api.removefile.fail")
 		return "", err
 	}
 
 	newMkey, err := mw.Store()
 	if err != nil {
+		utils.Increment("api.removefile.fail")
 		return "", err
 
 	}
@@ -262,6 +291,8 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 }
 
 func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
+
+	utils.Increment("api.appendfile.count")
 
 	buffSize := offset + addSize
 	if buffSize < existingSize {
@@ -290,10 +321,12 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
+		utils.Increment("api.appendfile.fail")
 		return nil, "", err
 	}
 	mkey, err := self.Resolve(uri)
 	if err != nil {
+		utils.Increment("api.appendfile.fail")
 		return nil, "", err
 	}
 
@@ -304,11 +337,13 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	mw, err := self.NewManifestWriter(mkey, nil)
 	if err != nil {
+		utils.Increment("api.appendfile.fail")
 		return nil, "", err
 	}
 
 	err = mw.RemoveEntry(filepath.Join(path, fname))
 	if err != nil {
+		utils.Increment("api.appendfile.fail")
 		return nil, "", err
 	}
 
@@ -322,11 +357,13 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	fkey, err := mw.AddEntry(io.Reader(combinedReader), entry)
 	if err != nil {
+		utils.Increment("api.appendfile.fail")
 		return nil, "", err
 	}
 
 	newMkey, err := mw.Store()
 	if err != nil {
+		utils.Increment("api.appendfile.fail")
 		return nil, "", err
 
 	}
@@ -336,18 +373,24 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 }
 
 func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
+
+	utils.Increment("api.builddirtree.count")
+
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
+		utils.Increment("api.builddirtree.fail")
 		return nil, nil, err
 	}
 	key, err = self.Resolve(uri)
 	if err != nil {
+		utils.Increment("api.builddirtree.fail")
 		return nil, nil, err
 	}
 
 	quitC := make(chan bool)
 	rootTrie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
+		utils.Increment("api.builddirtree.fail")
 		return nil, nil, fmt.Errorf("can't load manifest %v: %v", key.String(), err)
 	}
 
@@ -357,6 +400,7 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 	})
 
 	if err != nil {
+		utils.Increment("api.builddirtree.fail")
 		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
 	}
 	return key, manifestEntryMap, nil

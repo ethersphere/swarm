@@ -340,6 +340,7 @@ DEPRECATED: use 'swarm db clean'.
 		utils.IPCDisabledFlag,
 		utils.IPCPathFlag,
 		utils.PasswordFileFlag,
+		utils.MetricsEnabledFlag,
 		// bzzd-specific flags
 		CorsStringFlag,
 		EnsAPIFlag,

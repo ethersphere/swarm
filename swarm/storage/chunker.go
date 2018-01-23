@@ -23,6 +23,8 @@ import (
 	"io"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/utils"
 )
 
 /*
@@ -298,6 +300,7 @@ func (self *TreeChunker) hashChunk(hasher SwarmHash, job *hashJob, chunkC chan *
 	job.parentWg.Done()
 
 	if chunkC != nil {
+		utils.Increment("storage.chunks.new")
 		chunkC <- newChunk
 	}
 }
