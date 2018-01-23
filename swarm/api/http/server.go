@@ -322,7 +322,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		}
 		outdata, err = json.Marshal(rsrcResponse)
 		if err != nil {
-			s.Error(w, r, fmt.Errorf("Failed to create json response for %v: error was: %v", r, err))
+			s.translateResourceError(w, r, "Resource creation fail", err)
 			return
 		}
 	}
