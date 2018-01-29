@@ -26,19 +26,11 @@ parsed by Go's html/template package
 */
 package http
 
-//This returns the HTML for generic errors
-func GetGenericErrorPage() string {
-	page := `
-<html>
+import "fmt"
 
-  <head>
-    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" ww="chrome=1">
-    <meta name="description" content="Ethereum/Swarm error page">
-    <meta property="og:url" content="https://swarm-gateways.net/bzz:/theswarm.eth">
-
-    <style>
+func GetCSS() string {
+	css := `
+	<style>
 
       body, div, header, footer {
         margin: 0;
@@ -129,10 +121,54 @@ func GetGenericErrorPage() string {
       }
 
     </style>
+`
+	return css
+}
+
+// Stored the url rewriter code as string here, for more information see
+// https://github.com/ethersphere/swarm-url-rewriter
+func GetUrlRewriterJS() string {
+	urlRewriterJs := `
+	if (document.addEventListener) {
+	    document.addEventListener('click', handleClick);
+	} else if (document.attachEvent) {
+	    document.attachEvent('onclick', handleClick);
+	}
+
+	function handleClick(event) {
+	    var target = event.target || event.srcElement;
+	    if (target.tagName == "A" && target.protocol == "bzz:") {
+	        event.preventDefault();
+	        window.location.href = target.href.replace("bzz://", "/bzz:/");
+	    }
+	}`
+
+	return fmt.Sprintf(`
+		<script type="text/javascript">
+		%s
+		</script>
+		`, urlRewriterJs)
+
+}
+
+//This returns the HTML for generic errors
+func GetGenericErrorPage() string {
+	page := fmt.Sprintf(`
+<html>
+
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" ww="chrome=1">
+    <meta name="description" content="Ethereum/Swarm error page">
+    <meta property="og:url" content="https://swarm-gateways.net/bzz:/theswarm.eth">
+
 
     <title>Swarm::HTTP Error Page</title>
   </head>
 
+%s
+%s
 
   <body>
     <div class="container">
@@ -188,7 +224,7 @@ func GetGenericErrorPage() string {
       <footer>
         <p>
           Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution<br/>
-          <a href="http://swarm-gateways.net/bzz:/theswarm.eth">Swarm</a>
+          <a href="bzz://theswarm.eth">Swarm</a>
         </p>
       </footer>
 
@@ -197,13 +233,13 @@ func GetGenericErrorPage() string {
   </body>
 
 </html>
-`
+`, GetCSS(), GetUrlRewriterJS())
 	return page
 }
 
 //This returns the HTML for a 404 Not Found error
 func GetNotFoundErrorPage() string {
-	page := `
+	page := fmt.Sprintf(`
 <html>
 
   <head>
@@ -213,97 +249,8 @@ func GetNotFoundErrorPage() string {
     <meta name="description" content="Ethereum/Swarm error page">
     <meta property="og:url" content="https://swarm-gateways.net/bzz:/theswarm.eth">
 
-    <style>
-
-      body, div, header, footer {
-        margin: 0;
-        padding: 0;
-      }
-
-      body {
-        overflow: hidden;
-      }
-
-      .container {
-        min-width: 100%;
-        min-height: 100%;
-        max-height: 100%;
-      }
-
-      header {
-        display: flex;
-        align-items: center;
-        background-color: #ffa500;
-        /* height: 20vh; */
-        padding: 5px;
-      }
-
-      .header-left, .header-right {
-        width: 20%;
-      }
-
-      .header-left {
-        padding-left: 40px;
-        float: left;
-      }
-
-      .header-right {
-        padding-right: 40px;
-        float: right;
-      }
-
-      .page-title {
-        /* margin-top: 4.5vh; */
-        text-align: center;
-        float:      left;
-        width:      60%;
-        color:      white;
-      }
-
-      content-body {
-        display: block;
-        margin: 0 auto;
-        /* width: 50%; */
-        min-height: 60vh; 
-        max-height: 60vh; 
-        padding: 50px 20px;
-        opacity: 0.6;
-        background-color: #A9F5BF;
-      }
-
-      table {
-        font-size: 1.2em;
-        margin: 0 auto;
-      }
-
-      tr {
-        height: 60px;
-      }
-
-      td {
-        text-align: center;
-      }
-
-      .key {
-        color: #111;
-        font-weight: bold;
-        width: 200px;
-      }
-
-      .value {
-        color: red;
-        font-weight: bold
-      }
-
-      footer {
-        height: 20vh;
-        background-color: #ffa500;
-        font-size: 1em;
-        text-align: center;
-        padding: 20px;
-      }
-
-    </style>
+%s
+%s
 
     <title>Swarm::404 HTTP Not Found</title>
   </head>
@@ -362,7 +309,7 @@ func GetNotFoundErrorPage() string {
       <footer>
         <p>
           Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution<br/>
-          <a href="http://swarm-gateways.net/bzz:/theswarm.eth">Swarm</a>
+          <a href="bzz://theswarm.eth">Swarm</a>
         </p>
       </footer>
 
@@ -371,7 +318,7 @@ func GetNotFoundErrorPage() string {
   </body>
 
 </html>
-`
+`, GetCSS(), GetUrlRewriterJS())
 	return page
 }
 
@@ -379,7 +326,7 @@ func GetNotFoundErrorPage() string {
 //i.e. if user requested bzz:/<hash>/read and the manifest contains "readme.md" and "readinglist.txt",
 //this page is returned with a clickable list the existing disambiguation links in the manifest
 func GetMultipleChoicesErrorPage() string {
-	page := `
+	page := fmt.Sprintf(`
 <html>
 
   <head>
@@ -389,97 +336,8 @@ func GetMultipleChoicesErrorPage() string {
     <meta name="description" content="Ethereum/Swarm multiple options page">
     <meta property="og:url" content="https://swarm-gateways.net/bzz:/theswarm.eth">
 
-    <style>
-
-      body, div, header, footer {
-        margin: 0;
-        padding: 0;
-      }
-
-      body {
-        overflow: hidden;
-      }
-
-      .container {
-        min-width: 100%;
-        min-height: 100%;
-        max-height: 100%;
-      }
-
-      header {
-        display: flex;
-        align-items: center;
-        background-color: #ffa500;
-        /* height: 20vh; */
-        padding: 5px;
-      }
-
-      .header-left, .header-right {
-        width: 20%;
-      }
-
-      .header-left {
-        padding-left: 40px;
-        float: left;
-      }
-
-      .header-right {
-        padding-right: 40px;
-        float: right;
-      }
-
-      .page-title {
-        /* margin-top: 4.5vh; */
-        text-align: center;
-        float:      left;
-        width:      60%;
-        color:      white;
-      }
-
-      content-body {
-        display: block;
-        margin: 0 auto;
-        /* width: 50%; */
-        min-height: 60vh; 
-        max-height: 60vh; 
-        padding: 50px 20px;
-        opacity: 0.6;
-        background-color: #A9F5BF;
-      }
-
-      table {
-        font-size: 1.2em;
-        margin: 0 auto;
-      }
-
-      tr {
-        height: 60px;
-      }
-
-      td {
-        text-align: center;
-      }
-
-      .key {
-        color: #111;
-        font-weight: bold;
-        width: 200px;
-      }
-
-      .value {
-        color: red;
-        font-weight: bold
-      }
-
-      footer {
-        height: 20vh;
-        background-color: #ffa500;
-        font-size: 1em;
-        text-align: center;
-        padding: 20px;
-      }
-
-    </style>
+%s
+%s
 
     <title>Swarm::HTTP Disambiguation Page</title>
   </head>
@@ -539,7 +397,7 @@ func GetMultipleChoicesErrorPage() string {
       <footer>
         <p>
           Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution<br/>
-          <a href="http://swarm-gateways.net/bzz:/theswarm.eth">Swarm</a>
+          <a href="bzz://theswarm.eth">Swarm</a>
         </p>
       </footer>
 
@@ -548,6 +406,6 @@ func GetMultipleChoicesErrorPage() string {
   </body>
 
 </html>
-`
+`, GetCSS(), GetUrlRewriterJS())
 	return page
 }
