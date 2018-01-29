@@ -759,7 +759,7 @@ func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key,
 	defer it.Release()
 	it.Seek(sincekey)
 
-	for it.Next() {
+	for it.Valid() {
 		dbkey := it.Key()
 		if dbkey[0] != keyData || dbkey[1] != byte(po) || bytes.Compare(untilkey, dbkey) < 0 {
 			break
@@ -770,6 +770,7 @@ func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key,
 		if !f(Key(key), binary.BigEndian.Uint64(dbkey[2:])) {
 			break
 		}
+		it.Next()
 	}
 	return it.Error()
 }
