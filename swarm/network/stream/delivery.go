@@ -186,47 +186,29 @@ func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error
 }
 
 func (d *Delivery) processReceivedChunks() {
-	done := make(chan struct{})
-	timer := time.NewTimer(2 * time.Second)
-	defer timer.Stop()
-	// R:
+R:
 	for req := range d.receiveC {
-		timer.Reset(1 * time.Second)
-		go func(req *ChunkDeliveryMsg) {
-			defer func() { done <- struct{}{} }()
-			// this should be has locally
-			chunk, err := d.db.Get(req.Key)
-			if !bytes.Equal(chunk.Key, req.Key) {
-				panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), storage.Key(req.Key).Hex(), req.peer.ID()))
-			}
-			if err == nil {
-				// continue R
-				return
-			}
-			if err != storage.ErrFetching {
-				panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
-			}
-			select {
-			case <-chunk.ReqC:
-				log.Error("someone else delivered?", "hash", chunk.Key.Hex())
-				// continue R
-				return
-			default:
-			}
-			// go func() {
-			chunk.SData = req.SData
-			d.db.Put(chunk)
-			chunk.WaitToStore()
-			close(chunk.ReqC)
-			//log.Warn("received delivery stored", "hash", chunk.Key)
-			// }()
-		}(req)
-		select {
-		case <-timer.C:
-			log.Error("timeout processing delivery", "peer", req.peer.ID(), "hash", req.Key.Hex())
-		case <-done:
-			log.Trace("done processing delivery", "peer", req.peer.ID(), "hash", req.Key.Hex())
+		// this should be has locally
+		chunk, err := d.db.Get(req.Key)
+		if !bytes.Equal(chunk.Key, req.Key) {
+			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), storage.Key(req.Key).Hex(), req.peer.ID()))
 		}
+		if err == nil {
+			continue R
+		}
+		if err != storage.ErrFetching {
+			panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
+		}
+		select {
+		case <-chunk.ReqC:
+			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
+			continue R
+		default:
+		}
+		chunk.SData = req.SData
+		d.db.Put(chunk)
+		chunk.WaitToStore()
+		close(chunk.ReqC)
 	}
 }
 
