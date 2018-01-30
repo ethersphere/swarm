@@ -188,7 +188,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				if err == storage.ErrFetching {
 					<-chunk.ReqC
 				} else if err != nil {
-					log.Debug("not found", "index", i, "origin", j, "key", key.Hex(), "err", err)
 					continue
 				}
 				// needed for leveldb not to be closed?

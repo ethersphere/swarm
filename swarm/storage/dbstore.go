@@ -686,9 +686,9 @@ func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
 			hash := hasher.Sum(nil)
 
 			if !bytes.Equal(hash, key) {
-				log.Trace(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, key %v", hash, key[:]))
+				log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, key %v", hash, key[:]))
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
-				log.Warn("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+				log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 			}
 		}
 

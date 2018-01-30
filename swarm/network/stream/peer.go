@@ -102,10 +102,6 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Key:           s.key,
 	}
 	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "key", s.key, "len", len(hashes), "from", from, "to", to)
-	for i := 0; i < len(hashes); i += HashSize {
-		hash := hashes[i : i+HashSize]
-		log.Trace("Swarm syncer offer hash", "peer", p.ID(), "stream", s.stream, "hash", storage.Key(hash).Hex(), "len", len(hashes), "from", from, "to", to)
-	}
 	return p.SendPriority(msg, s.priority)
 }
 
