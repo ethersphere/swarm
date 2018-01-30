@@ -168,7 +168,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	}
 	go func() {
 		select {
-		case <-time.After(1 * time.Second):
+		case <-time.After(30 * time.Second):
 			p.Drop(err)
 			return
 		case err := <-s.next:
