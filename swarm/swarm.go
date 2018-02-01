@@ -22,6 +22,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -39,6 +41,16 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+)
+
+var (
+	startTime      time.Time
+	metricsTimeout = 5 * time.Second
+	startCounter   = metrics.NewCounter("stack,start")
+	stopCounter    = metrics.NewCounter("stack,stop")
+  uptimeGauge    = metrics.NewGauge("stack.uptime")
+	dbSizeGauge    = metrics.NewGauge("storage.db.chunks.size")
+	cacheSizeGauge = metrics.NewGauge("storage.db.cache.size")
 )
 
 // the swarm stack
@@ -168,6 +180,7 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(srv *p2p.Server) error {
+	startTime = time.Now()
 	connectPeer := func(url string) error {
 		node, err := discover.ParseNode(url)
 		if err != nil {
@@ -213,7 +226,27 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		}
 	}
 
+	go self.metricsLoop()
+
+	startCounter.Inc(1)
 	return nil
+}
+
+// metricsLoop periodically sends metrics about storage
+func (self *Swarm) metricsLoop() {
+	ticker := time.NewTicker(metricsTimeout)
+
+	go func() {
+		for _ = range ticker.C {
+			self.sendMetrics()
+		}
+	}()
+}
+
+func (self *Swarm) sendMetrics() {
+	dbSizeGauge.Update(int64(self.lstore.DbCounter()))
+	cacheSizeGauge.Update(int64(self.lstore.CacheCounter()))
+	uptimeGauge.Update(startTime.UnixNano())
 }
 
 // implements the node.Service interface
@@ -230,6 +263,8 @@ func (self *Swarm) Stop() error {
 		self.lstore.DbStore.Close()
 	}
 	self.sfs.Stop()
+	stopCounter.Inc(1)
+	uptimeGauge.Update(int64(startTime.UnixNano()))
 	return err
 }
 
