@@ -17,16 +17,15 @@
 package encryption
 
 import (
-	"crypto"
+	"crypto/sha256"
 	"fmt"
-	"hash"
 	"testing"
 )
 
 func TestChunkEncryption(t *testing.T) {
 	chunkEncryption := &chunkEncryption{
-		hashFunc: func() hash.Hash { return crypto.SHA256.New() },
-		size:     4096,
+		hashFunc: sha256.New,
+		size:     32,
 	}
 
 	bytes := make([]byte, 4096)
@@ -34,5 +33,5 @@ func TestChunkEncryption(t *testing.T) {
 	key := make([]byte, 256)
 
 	transformed := chunkEncryption.transformBytes(bytes, key)
-	fmt.Printf("Transformed bytes: %v", transformed)
+	fmt.Printf("Transformed bytes: %x", transformed)
 }
