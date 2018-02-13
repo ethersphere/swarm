@@ -30,7 +30,7 @@ func TestChunkEncryption(t *testing.T) {
 
 	bytes := make([]byte, 4096)
 
-	key := make([]byte, 256)
+	key := make([]byte, 32)
 
 	transformed := chunkEncryption.transformBytes(bytes, key)
 	fmt.Printf("Transformed bytes: %x", transformed)
