@@ -298,7 +298,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		s.NotFound(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
 		return
 	}
 
@@ -377,7 +377,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		s.NotFound(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
 		return
 	}
 
@@ -446,7 +446,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		s.NotFound(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
 		return
 	}
 
@@ -546,7 +546,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	key, err := s.api.Resolve(r.uri)
 	if err != nil {
-		s.Error(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
+		s.NotFound(w, r, fmt.Errorf("error resolving %s: %s", r.uri.Addr, err))
 		return
 	}
 
