@@ -97,8 +97,8 @@ func Test500Page(t *testing.T) {
 	defer resp.Body.Close()
 	respbody, err = ioutil.ReadAll(resp.Body)
 
-	if resp.StatusCode != 500 || !strings.Contains(string(respbody), "500") {
-		t.Fatalf("Invalid Status Code received, expected 500, got %d", resp.StatusCode)
+	if resp.StatusCode != 404 {
+		t.Fatalf("Invalid Status Code received, expected 404, got %d", resp.StatusCode)
 	}
 
 	_, err = html.Parse(strings.NewReader(string(respbody)))
@@ -122,8 +122,8 @@ func Test500PageWith0xHashPrefix(t *testing.T) {
 	defer resp.Body.Close()
 	respbody, err = ioutil.ReadAll(resp.Body)
 
-	if resp.StatusCode != 500 || !strings.Contains(string(respbody), "500") {
-		t.Fatalf("Invalid Status Code received, expected 500, got %d", resp.StatusCode)
+	if resp.StatusCode != 404 {
+		t.Fatalf("Invalid Status Code received, expected 404, got %d", resp.StatusCode)
 	}
 
 	if !strings.Contains(string(respbody), "The requested hash seems to be prefixed with") {
@@ -157,8 +157,8 @@ func TestJsonResponse(t *testing.T) {
 	defer resp.Body.Close()
 	respbody, err = ioutil.ReadAll(resp.Body)
 
-	if resp.StatusCode != 500 {
-		t.Fatalf("Invalid Status Code received, expected 500, got %d", resp.StatusCode)
+	if resp.StatusCode != 404 {
+		t.Fatalf("Invalid Status Code received, expected 404, got %d", resp.StatusCode)
 	}
 
 	if !isJSON(string(respbody)) {

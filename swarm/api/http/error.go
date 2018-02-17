@@ -56,7 +56,7 @@ type ErrorParams struct {
 //additional error info to display with client responses.
 type CaseError struct {
 	Validator func(*Request) bool
-	Msg       string
+	Msg       func(*Request) string
 }
 
 //we init the error handling right on boot time, so lookup and http response is fast
@@ -86,9 +86,13 @@ func initErrHandling() {
 	caseErrors = []CaseError{
 		{
 			Validator: func(r *Request) bool { return r.uri != nil && r.uri.Addr != "" && strings.HasPrefix(r.uri.Addr, "0x") },
-			Msg:       "The requested hash seems to be prefixed with '0x'. Try removing the prefix then try again",
+			Msg: func(r *Request) string {
+				uriCopy := r.uri
+				uriCopy.Addr = strings.TrimPrefix(uriCopy.Addr, "0x")
+				return fmt.Sprintf(`The requested hash seems to be prefixed with '0x'. You will be redirected to the correct URL within 5 seconds.<br/>
+			Please click <a href='%[1]s'>here</a> if your browser does not redirect you.<script>setTimeout("location.href='%[1]s';",5000);</script>`, "/"+uriCopy.String())
+			},
 		}}
-
 }
 
 //ValidateCaseErrors is a method that process the request object through certain validators
@@ -96,7 +100,7 @@ func initErrHandling() {
 func ValidateCaseErrors(r *Request) string {
 	for _, err := range caseErrors {
 		if err.Validator(r) {
-			return err.Msg
+			return err.Msg(r)
 		}
 	}
 
@@ -110,9 +114,9 @@ func ValidateCaseErrors(r *Request) string {
 //"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
 //This only applies if the manifest has no default entry
 func ShowMultipleChoices(w http.ResponseWriter, r *Request, list api.ManifestList) {
-	msg := ValidateCaseErrors(r)
+	msg := ""
 	if list.Entries == nil {
-		ShowError(w, r, "Internal Server Error", http.StatusInternalServerError)
+		ShowError(w, r, "Could not resolve", http.StatusInternalServerError)
 		return
 	}
 	//make links relative
@@ -127,7 +131,7 @@ func ShowMultipleChoices(w http.ResponseWriter, r *Request, list api.ManifestLis
 	base := r.RequestURI[:idx+1]
 	for _, e := range list.Entries {
 		//create clickable link for each entry
-		msg = "<a href='" + base + e.Path + "'>" + e.Path + "</a><br/>Additional information: " + msg
+		msg += "<a href='" + base + e.Path + "'>" + e.Path + "</a><br/>"
 	}
 	respond(w, &r.Request, &ErrorParams{
 		Code:      http.StatusMultipleChoices,
@@ -144,16 +148,13 @@ func ShowMultipleChoices(w http.ResponseWriter, r *Request, list api.ManifestLis
 //(and return the correct HTTP status code)
 func ShowError(w http.ResponseWriter, r *Request, msg string, code int) {
 	additionalMessage := ValidateCaseErrors(r)
-	messages := msg
-	if len(additionalMessage) > 0 {
-		messages += fmt.Sprintf("; Additional information: %s", additionalMessage)
-	}
 	if code == http.StatusInternalServerError {
 		log.Error(msg)
 	}
 	respond(w, &r.Request, &ErrorParams{
 		Code:      code,
-		Msg:       messages,
+		Msg:       msg,
+		Details:   template.HTML(additionalMessage),
 		Timestamp: time.Now().Format(time.RFC1123),
 		template:  getTemplate(code),
 	})
