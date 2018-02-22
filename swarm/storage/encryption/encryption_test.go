@@ -18,7 +18,6 @@ package encryption
 
 import (
 	"bytes"
-	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,9 +34,11 @@ func TestEncryptDataLongerThanPadding(t *testing.T) {
 	data := make([]byte, 4096)
 	key := make([]byte, 32)
 
+	expectedError := "Data length longer than padding, data length 4096 padding 4095"
+
 	_, err := enc.Encrypt(data, key)
-	if err == nil || !strings.Contains(err.Error(), "Data length longer than padding") {
-		t.Fatalf("Expected error \"Data length longer than padding\" got %v", err)
+	if err == nil || err.Error() != expectedError {
+		t.Fatalf("Expected error \"%v\" got \"%v\"", expectedError, err)
 	}
 }
 
@@ -52,7 +53,7 @@ func TestEncryptDataZeroPadding(t *testing.T) {
 		t.Fatalf("Expected no error got %v", err)
 	}
 	if len(encrypted) != 2048 {
-		t.Fatalf("Encrypted data length expected %v got %v", 2048, len(encrypted))
+		t.Fatalf("Encrypted data length expected \"%v\" got %v", 2048, len(encrypted))
 	}
 }
 
@@ -99,9 +100,11 @@ func TestDecryptDataLengthNotEqualsPadding(t *testing.T) {
 	data := make([]byte, 4097)
 	key := make([]byte, 32)
 
+	expectedError := "Data length different than padding, data length 4097 padding 4096"
+
 	_, err := enc.Decrypt(data, key)
-	if err == nil || !strings.Contains(err.Error(), "Data length different than padding") {
-		t.Fatalf("Expected error \"Data length different than padding\" got %v", err)
+	if err == nil || err.Error() != expectedError {
+		t.Fatalf("Expected error \"%v\" got \"%v\"", expectedError, err)
 	}
 }
 
