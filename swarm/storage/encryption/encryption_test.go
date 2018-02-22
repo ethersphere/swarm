@@ -18,6 +18,7 @@ package encryption
 
 import (
 	"bytes"
+	"crypto/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -109,19 +110,39 @@ func TestDecryptDataLengthNotEqualsPadding(t *testing.T) {
 }
 
 func TestEncryptDecryptIsIdentity(t *testing.T) {
-	enc := New(4096, uint32(0), hashFunc)
+	testEncryptDecryptIsIdentity(t, 2048, 0, 2048, 32)
+	testEncryptDecryptIsIdentity(t, 4096, 0, 4096, 32)
+	testEncryptDecryptIsIdentity(t, 4096, 0, 1000, 32)
+	testEncryptDecryptIsIdentity(t, 32, 10, 32, 32)
+}
 
-	data := make([]byte, 4096)
-	key := make([]byte, 32)
+func testEncryptDecryptIsIdentity(t *testing.T, padding int, initCtr uint32, dataLength int, keyLength int) {
+	enc := New(padding, initCtr, hashFunc)
+
+	data := make([]byte, dataLength)
+	rand.Read(data)
+
+	key := make([]byte, keyLength)
+	rand.Read(key)
 
 	encrypted, err := enc.Encrypt(data, key)
 	if err != nil {
 		t.Fatalf("Expected no error got %v", err)
 	}
+
 	decrypted, err := enc.Decrypt(encrypted, key)
 	if err != nil {
 		t.Fatalf("Expected no error got %v", err)
 	}
+	if len(decrypted) != padding {
+		t.Fatalf("Expected decrypted data length %v got %v", padding, len(decrypted))
+	}
+
+	// we have to remove the extra bytes which were randomly added to fill until padding
+	if len(data) < padding {
+		decrypted = decrypted[:len(data)]
+	}
+
 	if !bytes.Equal(data, decrypted) {
 		t.Fatalf("Expected decrypted %v got %v", common.Bytes2Hex(data), common.Bytes2Hex(decrypted))
 	}
