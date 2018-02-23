@@ -178,11 +178,9 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 
 	var resourceHandler *storage.ResourceHandler
 	// if use resource updates
-	if self.config.ResourceEnabled {
-		var resourceValidator storage.ResourceValidator
-		if self.dns != nil {
-			resourceValidator = storage.NewENSValidator(config.EnsRoot, resolver, storage.NewGenericResourceSigner(self.privateKey))
-		}
+	if self.config.ResourceEnabled && resolver != nil {
+		resourceValidator := storage.NewENSValidator(config.EnsRoot, resolver, storage.NewGenericResourceSigner(self.privateKey))
+		resolver.SetNameHash(resourceValidator.NameHash)
 		hashfunc := storage.MakeHashFunc(storage.SHA3Hash)
 		chunkStore := storage.NewResourceChunkStore(self.lstore, func(*storage.Chunk) error { return nil })
 		resourceHandler, err = storage.NewResourceHandler(hashfunc, chunkStore, resolver, resourceValidator)
@@ -227,13 +225,10 @@ func parseEnsAPIAddress(s string) (tld, endpoint string, addr common.Address) {
 	return
 }
 
+// ensClient provides functionality for api.ResolveValidator
 type ensClient struct {
 	*ens.ENS
 	*ethclient.Client
-}
-
-func init() {
-	var _ api.Resolver = &ensClient{}
 }
 
 // newEnsClient creates a new ENS client for that is a consumer of
@@ -245,7 +240,7 @@ func newEnsClient(endpoint string, addr common.Address, config *api.Config) (*en
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to ENS API %s: %s", endpoint, err)
 	}
-	ensCl := ethclient.NewClient(client)
+	ethClient := ethclient.NewClient(client)
 
 	ensRoot := config.EnsRoot
 	if addr != (common.Address{}) {
@@ -259,14 +254,14 @@ func newEnsClient(endpoint string, addr common.Address, config *api.Config) (*en
 		}
 	}
 	transactOpts := bind.NewKeyedTransactor(config.Swap.PrivateKey())
-	dns, err := ens.NewENS(transactOpts, ensRoot, ensCl)
+	dns, err := ens.NewENS(transactOpts, ensRoot, ethClient)
 	if err != nil {
 		return nil, err
 	}
 	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar %v @ address %v", endpoint, ensRoot.Hex()))
 	return &ensClient{
 		ENS:    dns,
-		Client: ensCl,
+		Client: ethClient,
 	}, err
 }
 

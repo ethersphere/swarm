@@ -47,6 +47,6 @@ func (self *ENSValidator) checkAccess(name string, address common.Address) (bool
 	return self.api.ValidateOwner(name, address)
 }
 
-func (self *ENSValidator) nameHash(name string) common.Hash {
+func (self *ENSValidator) NameHash(name string) common.Hash {
 	return ens.EnsNode(name)
 }

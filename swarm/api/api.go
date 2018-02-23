@@ -56,8 +56,8 @@ type Resolver interface {
 	Resolve(string) (common.Hash, error)
 }
 
-type ENSResolver interface {
-	Resolve(string) (common.Hash, error)
+type ResolveValidator interface {
+	Resolver
 	Owner(node [32]byte) (common.Address, error)
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 }
@@ -83,7 +83,8 @@ func (e *NoResolverError) Error() string {
 // Each TLD can have multiple resolvers, and the resoluton from the
 // first one in the sequence will be returned.
 type MultiResolver struct {
-	resolvers map[string][]ENSResolver
+	resolvers map[string][]ResolveValidator
+	nameHash  func(string) common.Hash
 }
 
 // MultiResolverOption sets options for MultiResolver and is used as
@@ -94,16 +95,23 @@ type MultiResolverOption func(*MultiResolver)
 // for a specific TLD. If TLD is an empty string, the resolver will be added
 // to the list of default resolver, the ones that will be used for resolution
 // of addresses which do not have their TLD resolver specified.
-func MultiResolverOptionWithResolver(r ENSResolver, tld string) MultiResolverOption {
+func MultiResolverOptionWithResolver(r ResolveValidator, tld string) MultiResolverOption {
 	return func(m *MultiResolver) {
 		m.resolvers[tld] = append(m.resolvers[tld], r)
+	}
+}
+
+func MultiResolverOptionWithNameHash(nameHash func(string) common.Hash) MultiResolverOption {
+	return func(m *MultiResolver) {
+		m.nameHash = nameHash
 	}
 }
 
 // NewMultiResolver creates a new instance of MultiResolver.
 func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 	m = &MultiResolver{
-		resolvers: make(map[string][]ENSResolver),
+		resolvers: make(map[string][]ResolveValidator),
+		nameHash:  ens.EnsNode,
 	}
 	for _, o := range opts {
 		o(m)
@@ -115,8 +123,8 @@ func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 // If there are more default Resolvers, or for a specific TLD,
 // the Hash from the the first one which does not return error
 // will be returned.
-func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
-	rs, err := m.getResolver(addr)
+func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
+	rs, err := m.getResolveValidator(addr)
 	if err != nil {
 		return h, err
 	}
@@ -129,14 +137,14 @@ func (m MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	return
 }
 
-func (m MultiResolver) ValidateOwner(name string, address common.Address) (bool, error) {
-	rs, err := m.getResolver(name)
+func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool, error) {
+	rs, err := m.getResolveValidator(name)
 	if err != nil {
 		return false, err
 	}
 	var addr common.Address
 	for _, r := range rs {
-		addr, err = r.Owner(ens.EnsNode(name))
+		addr, err = r.Owner(m.nameHash(name))
 		// we hide the error if it is not for the last resolver we check
 		if err == nil {
 			return addr == address, nil
@@ -145,8 +153,8 @@ func (m MultiResolver) ValidateOwner(name string, address common.Address) (bool,
 	return false, err
 }
 
-func (m MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr *big.Int) (*types.Header, error) {
-	rs, err := m.getResolver(name)
+func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr *big.Int) (*types.Header, error) {
+	rs, err := m.getResolveValidator(name)
 	if err != nil {
 		return nil, err
 	}
@@ -161,7 +169,7 @@ func (m MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr 
 	return nil, err
 }
 
-func (m MultiResolver) getResolver(name string) ([]ENSResolver, error) {
+func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, error) {
 	rs := m.resolvers[""]
 	tld := path.Ext(name)
 	if tld != "" {
@@ -175,6 +183,10 @@ func (m MultiResolver) getResolver(name string) ([]ENSResolver, error) {
 		return rs, NewNoResolverError(tld)
 	}
 	return rs, nil
+}
+
+func (m *MultiResolver) SetNameHash(nameHash func(string) common.Hash) {
+	m.nameHash = nameHash
 }
 
 /*

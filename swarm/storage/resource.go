@@ -88,11 +88,11 @@ func (self *resource) NameHash() common.Hash {
 type ResourceValidator interface {
 	hashSize() int
 	checkAccess(string, common.Address) (bool, error)
-	nameHash(string) common.Hash         // nameHashFunc
+	NameHash(string) common.Hash         // nameHashFunc
 	sign(common.Hash) (Signature, error) // SignFunc
 }
 
-type ethApi interface {
+type headerGetter interface {
 	HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error)
 }
 
@@ -158,7 +158,7 @@ type ethApi interface {
 type ResourceHandler struct {
 	ChunkStore
 	validator    ResourceValidator
-	ethClient    ethApi
+	ethClient    headerGetter
 	resources    map[string]*resource
 	hashPool     sync.Pool
 	resourceLock sync.RWMutex
@@ -167,7 +167,7 @@ type ResourceHandler struct {
 }
 
 // Create or open resource update chunk store
-func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient ethApi, validator ResourceValidator) (*ResourceHandler, error) {
+func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient headerGetter, validator ResourceValidator) (*ResourceHandler, error) {
 	rh := &ResourceHandler{
 		ChunkStore:   chunkStore,
 		ethClient:    ethClient,
@@ -182,7 +182,7 @@ func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient eth
 	}
 
 	if rh.validator != nil {
-		rh.nameHash = rh.validator.nameHash
+		rh.nameHash = rh.validator.NameHash
 	} else {
 		rh.nameHash = func(name string) common.Hash {
 			hasher := rh.hashPool.Get().(SwarmHash)
@@ -866,7 +866,7 @@ func isMultihash(data []byte) int {
 }
 
 // TODO: this should not be exposed, but swarm/testutil/http.go needs it
-func NewTestResourceHandler(datadir string, ethClient ethApi, validator ResourceValidator) (*ResourceHandler, error) {
+func NewTestResourceHandler(datadir string, ethClient headerGetter, validator ResourceValidator) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, DbDirName)
 	basekey := make([]byte, 32)
 	hasher := MakeHashFunc(SHA3Hash)
