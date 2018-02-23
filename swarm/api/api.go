@@ -54,6 +54,10 @@ func (e *ErrResourceReturn) Key() string {
 
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
+}
+
+type ENSResolver interface {
+	Resolve(string) (common.Hash, error)
 	Owner(node [32]byte) (common.Address, error)
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 }
@@ -79,7 +83,7 @@ func (e *NoResolverError) Error() string {
 // Each TLD can have multiple resolvers, and the resoluton from the
 // first one in the sequence will be returned.
 type MultiResolver struct {
-	resolvers map[string][]Resolver
+	resolvers map[string][]ENSResolver
 }
 
 // MultiResolverOption sets options for MultiResolver and is used as
@@ -90,7 +94,7 @@ type MultiResolverOption func(*MultiResolver)
 // for a specific TLD. If TLD is an empty string, the resolver will be added
 // to the list of default resolver, the ones that will be used for resolution
 // of addresses which do not have their TLD resolver specified.
-func MultiResolverOptionWithResolver(r Resolver, tld string) MultiResolverOption {
+func MultiResolverOptionWithResolver(r ENSResolver, tld string) MultiResolverOption {
 	return func(m *MultiResolver) {
 		m.resolvers[tld] = append(m.resolvers[tld], r)
 	}
@@ -99,7 +103,7 @@ func MultiResolverOptionWithResolver(r Resolver, tld string) MultiResolverOption
 // NewMultiResolver creates a new instance of MultiResolver.
 func NewMultiResolver(opts ...MultiResolverOption) (m *MultiResolver) {
 	m = &MultiResolver{
-		resolvers: make(map[string][]Resolver),
+		resolvers: make(map[string][]ENSResolver),
 	}
 	for _, o := range opts {
 		o(m)
@@ -157,7 +161,7 @@ func (m MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr 
 	return nil, err
 }
 
-func (m MultiResolver) getResolver(name string) ([]Resolver, error) {
+func (m MultiResolver) getResolver(name string) ([]ENSResolver, error) {
 	rs := m.resolvers[""]
 	tld := path.Ext(name)
 	if tld != "" {

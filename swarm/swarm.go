@@ -52,9 +52,9 @@ import (
 
 // the swarm stack
 type Swarm struct {
-	config *api.Config // swarm configuration
-	api    *api.Api    // high level api layer (fs/manifest)
-	dns    resolver    // DNS registrar
+	config *api.Config  // swarm configuration
+	api    *api.Api     // high level api layer (fs/manifest)
+	dns    api.Resolver // DNS registrar
 	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
 	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
 	dpa *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
@@ -69,10 +69,6 @@ type Swarm struct {
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 	ps          *pss.Pss
-}
-
-type resolver interface {
-	Resolve(string) (common.Hash, error)
 }
 
 type SwarmAPI struct {
@@ -163,7 +159,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 
 	// set up high level api
-	transactOpts := bind.NewKeyedTransactor(self.privateKey)
+	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
 	var resolver *api.MultiResolver
 	if len(config.EnsAPIs) > 0 {
 		opts := []api.MultiResolverOption{}
