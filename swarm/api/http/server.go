@@ -663,7 +663,7 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "application/json") {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Write("Welcome to Swarm!")
+		json.NewEncoder(w).Encode("Welcome to Swarm!")
 		return
 	}
 
