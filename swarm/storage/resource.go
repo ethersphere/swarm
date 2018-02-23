@@ -93,7 +93,7 @@ type ResourceValidator interface {
 }
 
 type ethApi interface {
-	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
+	HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error)
 }
 
 // Mutable resource is an entity which allows updates to a resource
@@ -281,7 +281,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	}
 
 	// get our blockheight at this time
-	currentblock, err := self.getBlock(ctx)
+	currentblock, err := self.getBlock(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +374,7 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 	if err != nil {
 		return nil, err
 	}
-	currentblock, err := self.getBlock(ctx)
+	currentblock, err := self.getBlock(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -583,7 +583,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	}
 
 	// get our blockheight at this time and the next block of the update period
-	currentblock, err := self.getBlock(ctx)
+	currentblock, err := self.getBlock(ctx, name)
 	if err != nil {
 		return nil, NewResourceError(ErrIO, fmt.Sprintf("Could not get block height: %v", err))
 	}
@@ -655,8 +655,8 @@ func (self *ResourceHandler) Close() {
 	self.ChunkStore.Close()
 }
 
-func (self *ResourceHandler) getBlock(ctx context.Context) (uint64, error) {
-	blockheader, err := self.ethClient.HeaderByNumber(ctx, nil)
+func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64, error) {
+	blockheader, err := self.ethClient.HeaderByNumber(ctx, name, nil)
 	if err != nil {
 		return 0, err
 	}
