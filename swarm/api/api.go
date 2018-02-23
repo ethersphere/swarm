@@ -179,7 +179,7 @@ func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, er
 			return rstld, nil
 		}
 	}
-	if rs == nil || len(rs) == 0 {
+	if len(rs) == 0 {
 		return rs, NewNoResolverError(tld)
 	}
 	return rs, nil
