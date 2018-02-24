@@ -122,6 +122,25 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Serv
 	return f, nil
 }
 
+func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream) error {
+
+	peer := r.getPeer(peerId)
+	if peer == nil {
+		return fmt.Errorf("peer not found %v", peerId)
+	}
+
+	msg := &SubscribeMsg{
+		Stream: s,
+		Key:    t,
+		// Live:     live,
+		From:     from,
+		To:       to,
+		Priority: priority,
+	}
+	log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "key", t, "from", from, "to", to)
+	return peer.handleSubscribeMsg(msg)
+}
+
 // Subscribe initiates the streamer
 func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priority uint8) error {
 	// check if the stream is registered

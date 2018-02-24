@@ -61,6 +61,15 @@ type SubscribeMsg struct {
 	Priority uint8  // delivered on priority channel
 }
 
+// RequestSubscriptionMsg is the protocol msg for a node to request subscription to a
+// specific stream
+type RequestSubscriptionMsg struct {
+	Stream   string
+	Key      []byte
+	From, To uint64
+	Priority uint8 // delivered on priority channel
+}
+
 func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 	defer func() {
 		if err != nil {
