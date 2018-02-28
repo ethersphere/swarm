@@ -122,23 +122,23 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Serv
 	return f, nil
 }
 
-func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream) error {
+func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, prio uint8) error {
+	// check if the stream is registered
+	if _, err := r.GetClientFunc(s.Name); err != nil {
+		return err
+	}
 
 	peer := r.getPeer(peerId)
 	if peer == nil {
 		return fmt.Errorf("peer not found %v", peerId)
 	}
 
-	msg := &SubscribeMsg{
-		Stream: s,
-		Key:    t,
-		// Live:     live,
-		From:     from,
-		To:       to,
-		Priority: priority,
+	msg := &RequestSubscriptionMsg{
+		Stream:   s,
+		Priority: prio,
 	}
-	log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "key", t, "from", from, "to", to)
-	return peer.handleSubscribeMsg(msg)
+	log.Debug("RequestSubscription ", "peer", peerId, "stream", s)
+	return peer.Send(msg)
 }
 
 // Subscribe initiates the streamer
@@ -287,6 +287,9 @@ func (p *Peer) HandleMsg(msg interface{}) error {
 
 	case *RetrieveRequestMsg:
 		return p.streamer.delivery.handleRetrieveRequestMsg(p, msg)
+
+	case *RequestSubscriptionMsg:
+		return p.handleRequestSubscription(msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
@@ -444,6 +447,7 @@ var Spec = &protocols.Spec{
 		RetrieveRequestMsg{},
 		ChunkDeliveryMsg{},
 		SubscribeErrorMsg{},
+		RequestSubscriptionMsg{},
 	},
 }
 
