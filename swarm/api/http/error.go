@@ -145,7 +145,7 @@ func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestL
 
 func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
 	additionalMessage := ValidateCaseErrors(req)
-  switch code {
+	switch code {
 	case http.StatusInternalServerError:
 		log.Output(msg, log.LvlError, 3, "ruid", req.ruid, "code", code)
 	default:
