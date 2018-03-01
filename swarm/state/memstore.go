@@ -14,60 +14,62 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package intervals
+package state
 
 import (
-	"errors"
+	"encoding"
 	"sync"
 )
-
-// ErrNotFound is returned by the Store implementation when the Interval
-// for a specific key does not exist.
-var ErrNotFound = errors.New("not found")
-
-// Store defines methods required to get and retrieve Intervals for different keys.
-// It is meant to be used for intervals persistence for different streams in the
-// stream package.
-type Store interface {
-	Get(key string) (i *Intervals, err error)
-	Put(key string, i *Intervals) (err error)
-	Delete(key string) (err error)
-	Close() error
-}
 
 // MemStore is the reference implementation of Store interface that is supposed
 // to be used in tests.
 type MemStore struct {
-	db map[string]*Intervals
+	db map[string][]byte
 	mu sync.RWMutex
 }
 
 // NewMemStore returns a new instance of MemStore.
 func NewMemStore() *MemStore {
 	return &MemStore{
-		db: make(map[string]*Intervals),
+		db: make(map[string][]byte),
 	}
 }
 
 // Get retrieves Intervals for a specific key. If there is no Intervals
 // ErrNotFound is returned.
-func (s *MemStore) Get(key string) (i *Intervals, err error) {
+func (s *MemStore) Get(key string, i interface{}) (err error) {
+	_, ok := i.(encoding.BinaryUnmarshaler)
+	if !ok {
+		return ErrInvalidArgument
+	}
+
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	i, ok := s.db[key]
+	bytes, ok := s.db[key]
 	if !ok {
-		return nil, ErrNotFound
+		return ErrNotFound
 	}
-	return i, nil
+
+	return i.(encoding.BinaryUnmarshaler).UnmarshalBinary(bytes)
 }
 
 // Put stores Intervals for a specific key.
-func (s *MemStore) Put(key string, i *Intervals) (err error) {
+func (s *MemStore) Put(key string, i interface{}) (err error) {
+	_, ok := i.(encoding.BinaryMarshaler)
+	if !ok {
+		return ErrInvalidArgument
+	}
+
+	bytes, err := i.(encoding.BinaryMarshaler).MarshalBinary()
+	if err != nil {
+		return err
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.db[key] = i
+	s.db[key] = bytes
 	return nil
 }
 

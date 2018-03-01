@@ -14,11 +14,18 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package intervals
+package state
 
 import (
+	"encoding"
+	"encoding/json"
+	"errors"
+
 	"github.com/syndtr/goleveldb/leveldb"
 )
+
+var ErrNotFound = errors.New("not found")
+var ErrInvalidArgument = errors.New("InvalidArgumentError")
 
 // DBStore uses LevelDB to store intervals.
 type DBStore struct {
@@ -36,38 +43,46 @@ func NewDBStore(path string) (s *DBStore, err error) {
 	}, nil
 }
 
-// Get retrieves Intervals for a specific key. If there is no Intervals
-// ErrNotFound is returned.
-func (s *DBStore) Get(key string) (i *Intervals, err error) {
-	k := []byte(key)
-	has, err := s.db.Has(k, nil)
-	if err != nil {
-		return nil, ErrNotFound
+// Get retrieves a persisted value for a specific key. If there is no results
+// ErrNotFound is returned. The provided parameter should be either a byte slice or
+// a struct that implements the encoding#BinaryUnmarshaler interface
+func (s *DBStore) Get(key string, i interface{}) (err error) {
+	has, err := s.db.Has([]byte(key), nil)
+	if err != nil || !has {
+		return ErrNotFound
 	}
-	if !has {
-		return nil, ErrNotFound
-	}
-	data, err := s.db.Get(k, nil)
+
+	data, err := s.db.Get([]byte(key), nil)
 	if err == leveldb.ErrNotFound {
-		err = ErrNotFound
+		return ErrNotFound
 	}
-	i = &Intervals{}
-	if err = i.UnmarshalBinary(data); err != nil {
-		return nil, err
+
+	unmarshaler, ok := i.(encoding.BinaryUnmarshaler)
+	if !ok {
+		return json.Unmarshal(data, i)
 	}
-	return i, err
+	return unmarshaler.UnmarshalBinary(data)
 }
 
-// Put stores Intervals for a specific key.
-func (s *DBStore) Put(key string, i *Intervals) (err error) {
-	data, err := i.MarshalBinary()
-	if err != nil {
-		return err
+// Put stores an object that implements Binary for a specific key.
+func (s *DBStore) Put(key string, i interface{}) (err error) {
+	bytes := []byte{}
+
+	marshaler, ok := i.(encoding.BinaryMarshaler)
+	if !ok {
+		if bytes, err = json.Marshal(i); err != nil {
+			return err
+		}
+	} else {
+		if bytes, err = marshaler.MarshalBinary(); err != nil {
+			return err
+		}
 	}
-	return s.db.Put([]byte(key), data, nil)
+
+	return s.db.Put([]byte(key), bytes, nil)
 }
 
-// Delete removes Intervals stored under a specific key.
+// Delete removes entries stored under a specific key.
 func (s *DBStore) Delete(key string) (err error) {
 	return s.db.Delete([]byte(key), nil)
 }

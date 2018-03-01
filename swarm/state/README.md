@@ -1,0 +1,1 @@
+This package is meant to provide a generalized implementation to persist a node's state across different sessions through leveldb

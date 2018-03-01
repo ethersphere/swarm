@@ -47,8 +47,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream"
-	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/pss"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
@@ -149,7 +149,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	db := storage.NewDBAPI(self.lstore)
 	delivery := stream.NewDelivery(to, db)
 	// TODO: decide on intervals store file location
-	intervalsStore, err := intervals.NewDBStore(filepath.Join(config.Path, "stream-intervals.db"))
+	intervalsStore, err := state.NewDBStore(filepath.Join(config.Path, "stream-intervals.db"))
 	if err != nil {
 		return
 	}
