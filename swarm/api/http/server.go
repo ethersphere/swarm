@@ -559,7 +559,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	if err != nil {
 		getFilesFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-    return
+		return
 	}
 
 	walker, err := s.api.NewManifestWalker(key, nil)
@@ -749,8 +749,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 			return
 		}
 		switch status {
-		case http.
-      ound:
+		case http.StatusNotFound:
 			getFileNotFound.Inc(1)
 			Respond(w, r, err.Error(), http.StatusNotFound)
 		default:
