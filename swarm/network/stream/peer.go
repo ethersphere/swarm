@@ -272,6 +272,9 @@ func (p *Peer) getOrSetClient(s Stream, from, to uint64) (c *client, created boo
 		intervalsKey:   intervalsKey,
 	}
 	p.clients[sk] = c
+
+	//fmt.Fprintln(fileLog, "CLIENT", p.streamer.addr.ID(), p.ID())
+
 	cp.clientCreated() // unblock all possible getClient calls that are waiting
 	next <- nil        // this is to allow wantedKeysMsg before first batch arrives
 	return c, true, nil
@@ -298,7 +301,7 @@ func (p *Peer) setClientParams(s Stream, params *clientParams) error {
 		return fmt.Errorf("client %v already exists", sk)
 	}
 	if p.clientParams[sk] != nil {
-		return fmt.Errorf("client params %v already set", sk)
+		return fmt.Errorf("client params %v already set, %s to %s", sk, p.streamer.addr.ID(), p.ID())
 	}
 	p.clientParams[sk] = params
 	return nil

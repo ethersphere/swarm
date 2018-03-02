@@ -122,7 +122,7 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Serv
 	return f, nil
 }
 
-func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, prio uint8) error {
+func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, h *Range, prio uint8) error {
 	// check if the stream is registered
 	if _, err := r.GetClientFunc(s.Name); err != nil {
 		return err
@@ -135,9 +135,10 @@ func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, prio ui
 
 	msg := &RequestSubscriptionMsg{
 		Stream:   s,
+		History:  h,
 		Priority: prio,
 	}
-	log.Debug("RequestSubscription ", "peer", peerId, "stream", s)
+	log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "history", h)
 	return peer.Send(msg)
 }
 
