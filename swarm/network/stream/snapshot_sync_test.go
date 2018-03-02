@@ -47,6 +47,8 @@ var (
 	datadirs  map[discover.NodeID]string
 	conf      *synctestConfig
 	ppmap     map[discover.NodeID]*network.PeerPot
+
+	printed bool
 )
 
 type synctestConfig struct {
@@ -309,6 +311,15 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 		//finally map chunks to the closest addresses
 		mapKeysToNodes(conf)
 
+		//periodically check if chunks have arrived at nodes
+		go func() {
+			startTime = time.Now()
+			ticker := time.NewTicker(time.Second / 100)
+			for range ticker.C {
+				checkChunkIsAtNode(conf)
+			}
+		}()
+
 		return nil
 	}
 
@@ -363,15 +374,6 @@ func runSyncTest(chunkCount int, nodeCount int) error {
 			}
 		}
 	}()
-	/*
-		go func() {
-			startTime = time.Now()
-			ticker := time.NewTicker(time.Second / 10)
-			for range ticker.C {
-				checkChunkIsAtNode(conf)
-			}
-		}()
-	*/
 
 	log.Info("Starting simulation run...")
 	//run the simulation
@@ -471,28 +473,45 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 	return nil
 }
 
+//periodically check if chunks have arrived at nodes
 func checkChunkIsAtNode(conf *synctestConfig) {
 	allOk := true
+	if printed {
+		return
+	}
+	//for every chunk, get the array of nodes it should have arrived to
 	for chunk, nodes := range conf.chunksToNodesMap {
+		//for every of those nodes
 		for _, node := range nodes {
+			//check that the chunk is in that localstore
 			if ok, _ := stores[conf.addrToIdMap[string(conf.addrs[node])]].Get([]byte(chunk)); ok != nil {
+				//if it is there, write the amount of time passed in the retrievalMap
+				//first create the map for the chunk if it is not there yet
 				if len(conf.retrievalMap[chunk]) == 0 {
 					conf.retrievalMap[chunk] = make(map[string]time.Duration)
 				}
-				conf.retrievalMap[chunk][string(conf.addrs[node])] = time.Since(startTime)
+				//if the time value for the chunk at this node has not been recorded yet...
+				if _, ok := conf.retrievalMap[chunk][string(conf.addrs[node])]; !ok {
+					//...record it
+					conf.retrievalMap[chunk][string(conf.addrs[node])] = time.Since(startTime)
+				}
+			} else {
+				allOk = false
 			}
+			//if one of the chunks hasn't arrived yet, don't print
 			if conf.retrievalMap[chunk][string(conf.addrs[node])] == 0 {
 				allOk = false
 			}
 		}
 	}
-	if allOk {
+	if allOk && !printed {
 		log.Info("All chunks arrived at destination")
 		for ch, n := range conf.retrievalMap {
 			for a, t := range n {
-				log.Info(fmt.Sprintf("Chunk %s at node %s took %v ms", string(ch), string(a), t.Seconds()*1e3))
+				log.Info(fmt.Sprintf("Chunk %v at node %s took %v ms", storage.Key([]byte((ch))).String()[:8], conf.addrToIdMap[string(a)].String()[0:8], t.Seconds()*1e3))
 			}
 		}
+		printed = true
 	}
 }
 
@@ -529,7 +548,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 			}
 			return true
 		})
-		kmap[conf.chunks[i].String()] = nns
+		kmap[string(conf.chunks[i])] = nns
 		//log.Debug(fmt.Sprintf("Length for id %s: %d",ids[i],len(kmap[ids[i]])))
 	}
 	if log.Lvl(*loglevel) == log.LvlTrace {
