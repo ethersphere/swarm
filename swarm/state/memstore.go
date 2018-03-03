@@ -36,7 +36,7 @@ func NewMemStore() *MemStore {
 	}
 }
 
-// Get retrieves Intervals for a specific key. If there is no Intervals
+// Get retrieves a value stored for a specific key. If there is no value found,
 // ErrNotFound is returned.
 func (s *MemStore) Get(key string, i interface{}) (err error) {
 	s.mu.RLock()
@@ -55,7 +55,7 @@ func (s *MemStore) Get(key string, i interface{}) (err error) {
 	return unmarshaler.UnmarshalBinary(bytes)
 }
 
-// Put stores Intervals for a specific key.
+// Put stores a value for a specific key.
 func (s *MemStore) Put(key string, i interface{}) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
