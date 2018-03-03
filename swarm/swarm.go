@@ -157,7 +157,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	stream.RegisterSwarmSyncerServer(self.streamer, db)
 	stream.RegisterSwarmSyncerClient(self.streamer, db)
 
-	self.bzz = network.NewBzz(bzzconfig, to, nil)
+	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
+	self.bzz = network.NewBzz(bzzconfig, to, stateStore)
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
