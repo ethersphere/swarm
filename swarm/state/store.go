@@ -16,9 +16,8 @@
 
 package state
 
-// Store defines methods required to get and retrieve Intervals for different keys.
-// It is meant to be used for intervals persistence for different streams in the
-// stream package.
+// Store defines methods required to get, set, delete values for different keys
+// and close the underlying resources.
 type Store interface {
 	Get(key string, i interface{}) (err error)
 	Put(key string, i interface{}) (err error)
