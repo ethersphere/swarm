@@ -149,15 +149,14 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	db := storage.NewDBAPI(self.lstore)
 	delivery := stream.NewDelivery(to, db)
 	// TODO: decide on intervals store file location
-	intervalsStore, err := state.NewDBStore(filepath.Join(config.Path, "stream-intervals.db"))
+	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
 	if err != nil {
 		return
 	}
-	self.streamer = stream.NewRegistry(addr, delivery, self.lstore, intervalsStore, false)
+	self.streamer = stream.NewRegistry(addr, delivery, self.lstore, stateStore, false)
 	stream.RegisterSwarmSyncerServer(self.streamer, db)
 	stream.RegisterSwarmSyncerClient(self.streamer, db)
 
-	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore)
 
 	// set up DPA, the cloud storage local access layer

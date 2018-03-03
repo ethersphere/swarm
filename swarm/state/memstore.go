@@ -18,6 +18,7 @@ package state
 
 import (
 	"encoding"
+	"encoding/json"
 	"sync"
 )
 
@@ -38,11 +39,6 @@ func NewMemStore() *MemStore {
 // Get retrieves Intervals for a specific key. If there is no Intervals
 // ErrNotFound is returned.
 func (s *MemStore) Get(key string, i interface{}) (err error) {
-	_, ok := i.(encoding.BinaryUnmarshaler)
-	if !ok {
-		return ErrInvalidArgument
-	}
-
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -51,29 +47,36 @@ func (s *MemStore) Get(key string, i interface{}) (err error) {
 		return ErrNotFound
 	}
 
-	return i.(encoding.BinaryUnmarshaler).UnmarshalBinary(bytes)
+	unmarshaler, ok := i.(encoding.BinaryUnmarshaler)
+	if !ok {
+		return json.Unmarshal(bytes, i)
+	}
+
+	return unmarshaler.UnmarshalBinary(bytes)
 }
 
 // Put stores Intervals for a specific key.
 func (s *MemStore) Put(key string, i interface{}) (err error) {
-	_, ok := i.(encoding.BinaryMarshaler)
-	if !ok {
-		return ErrInvalidArgument
-	}
-
-	bytes, err := i.(encoding.BinaryMarshaler).MarshalBinary()
-	if err != nil {
-		return err
-	}
-
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	bytes := []byte{}
+
+	marshaler, ok := i.(encoding.BinaryMarshaler)
+	if !ok {
+		if bytes, err = json.Marshal(i); err != nil {
+			return err
+		}
+	} else {
+		if bytes, err = marshaler.MarshalBinary(); err != nil {
+			return err
+		}
+	}
 
 	s.db[key] = bytes
 	return nil
 }
 
-// Delete removes Intervals stored under a specific key.
+// Delete removes value stored under a specific key.
 func (s *MemStore) Delete(key string) (err error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -85,7 +88,7 @@ func (s *MemStore) Delete(key string) (err error) {
 	return nil
 }
 
-// Close doesnot do anything.
+// Close does not do anything.
 func (s *MemStore) Close() error {
 	return nil
 }

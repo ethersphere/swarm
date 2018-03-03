@@ -24,10 +24,13 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-var ErrNotFound = errors.New("not found")
-var ErrInvalidArgument = errors.New("InvalidArgumentError")
+// ErrNotFound is returned when no results are returned from the database
+var ErrNotFound = errors.New("ErrorNotFound")
 
-// DBStore uses LevelDB to store intervals.
+// ErrInvalidArgument is returned when the argument type does not match the expected type
+var ErrInvalidArgument = errors.New("ErrorInvalidArgument")
+
+// DBStore uses LevelDB to store values.
 type DBStore struct {
 	db *leveldb.DB
 }
@@ -45,7 +48,7 @@ func NewDBStore(path string) (s *DBStore, err error) {
 
 // Get retrieves a persisted value for a specific key. If there is no results
 // ErrNotFound is returned. The provided parameter should be either a byte slice or
-// a struct that implements the encoding#BinaryUnmarshaler interface
+// a struct that implements the encoding.BinaryUnmarshaler interface
 func (s *DBStore) Get(key string, i interface{}) (err error) {
 	has, err := s.db.Has([]byte(key), nil)
 	if err != nil || !has {

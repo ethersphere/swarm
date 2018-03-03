@@ -84,8 +84,14 @@ func TestDBStore(t *testing.T) {
 
 func testStore(t *testing.T, store Store) {
 	ser := &SerializingType{key: "key1", value: "value1"}
+	jsonify := []string{"a", "b", "c"}
 
 	err := store.Put(ser.key, ser)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = store.Put("key2", jsonify)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,5 +108,15 @@ func testPersistedStore(t *testing.T, store Store) {
 
 	if ser.key != "key1" || ser.value != "value1" {
 		t.Fatal(ErrInvalidValuePersisted)
+	}
+
+	as := []string{}
+	err = store.Get("key2", &as)
+
+	if len(as) != 3 {
+		t.Fatalf("serialized array did not match expectation")
+	}
+	if as[0] != "a" || as[1] != "b" || as[2] != "c" {
+		t.Fatalf("elements serialized did not match expected values")
 	}
 }

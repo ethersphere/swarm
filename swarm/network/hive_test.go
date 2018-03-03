@@ -102,7 +102,7 @@ func TestHiveStatePersistance(t *testing.T) {
 		i++
 		return true
 	})
-	if len(peers) != 0 && i != 5 {
+	if len(peers) != 0 || i != 5 {
 		t.Fatalf("invalid peers loaded")
 	}
 }

@@ -105,7 +105,7 @@ func (h *Hive) Start(server *p2p.Server) error {
 	log.Trace(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
-		if err := h.loadPeers(); err != nil && err != state.ErrNotFound {
+		if err := h.loadPeers(); err != nil {
 			return err
 		}
 	}
@@ -206,6 +206,9 @@ func (h *Hive) loadPeers() error {
 
 	err := h.Store.Get("peers", &as)
 	if err != nil {
+		if err == state.ErrNotFound {
+			return nil
+		}
 		return err
 	}
 	return h.Register(toOverlayAddrs(as...))
