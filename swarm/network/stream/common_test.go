@@ -39,11 +39,12 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	colorable "github.com/mattn/go-colorable"
 )
 
 var (
 	adapter  = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
+	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
 )
 
 var (
@@ -63,8 +64,8 @@ func init() {
 	// protocol when using the exec adapter
 	adapters.RegisterServices(services)
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
 // NewStreamerService

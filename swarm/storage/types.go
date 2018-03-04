@@ -176,6 +176,8 @@ type Chunk struct {
 	C        chan bool // to signal data delivery by the dpa
 	ReqC     chan bool // to signal the request done
 	dbStored chan bool // never remove a chunk from memStore before it is written to dbStore
+	// TODO: version
+	// TODO: set errored flag or timeout flag
 }
 
 func NewChunk(key Key, reqC chan bool) *Chunk {
