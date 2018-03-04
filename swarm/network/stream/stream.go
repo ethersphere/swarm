@@ -224,9 +224,10 @@ func (r *Registry) getPeer(peerId discover.NodeID) *Peer {
 	return r.peers[peerId]
 }
 
-func (r *Registry) setPeer(peer *Peer) {
+func (r *Registry) SetPeer(peer *protocols.Peer) {
+	sp := NewPeer(peer, r)
 	r.peersMu.Lock()
-	r.peers[peer.ID()] = peer
+	r.peers[peer.ID()] = sp
 	r.peersMu.Unlock()
 }
 
@@ -244,9 +245,8 @@ func (r *Registry) peersCount() (c int) {
 }
 
 // Run protocol run function
-func (r *Registry) run(p *protocols.Peer) error {
-	sp := NewPeer(p, r)
-	r.setPeer(sp)
+func (r *Registry) run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+	sp := r.delivery.getPeer(p.ID())
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
 	defer sp.close()
@@ -255,10 +255,11 @@ func (r *Registry) run(p *protocols.Peer) error {
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, Spec)
+	r.SetPeer(peer)
 	bzzPeer := network.NewBzzTestPeer(peer, r.addr)
 	r.delivery.overlay.On(bzzPeer)
 	defer r.delivery.overlay.Off(bzzPeer)
-	return r.run(peer)
+	return r.run(p, rw)
 }
 
 // HandleMsg is the message handler that delegates incoming messages
@@ -458,7 +459,7 @@ func (r *Registry) Protocols() []p2p.Protocol {
 			Name:    Spec.Name,
 			Version: Spec.Version,
 			Length:  Spec.Length(),
-			Run:     r.runProtocol,
+			Run:     r.run,
 			// NodeInfo: ,
 			// PeerInfo: ,
 		},
@@ -477,6 +478,7 @@ func (r *Registry) APIs() []rpc.API {
 }
 
 func (r *Registry) Start(server *p2p.Server) error {
+	log.Info("Starting streamer")
 	r.api.dpa.Start()
 	return nil
 }

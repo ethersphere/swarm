@@ -118,9 +118,10 @@ type BzzConfig struct {
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
-	localAddr  *BzzAddr
-	mtx        sync.Mutex
-	handshakes map[discover.NodeID]*HandshakeMsg
+	localAddr       *BzzAddr
+	mtx             sync.Mutex
+	handshakes      map[discover.NodeID]*HandshakeMsg
+	setRegistryPeer func(*protocols.Peer)
 }
 
 // NewBzz is the swarm protocol constructor
@@ -128,11 +129,12 @@ type Bzz struct {
 // * bzz config
 // * overlay driver
 // * peer store
-func NewBzz(config *BzzConfig, kad Overlay, store StateStore) *Bzz {
+func NewBzz(config *BzzConfig, kad Overlay, store StateStore, setRegistryPeer func(*protocols.Peer)) *Bzz {
 	return &Bzz{
-		Hive:       NewHive(config.HiveParams, kad, store),
-		localAddr:  &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
-		handshakes: make(map[discover.NodeID]*HandshakeMsg),
+		Hive:            NewHive(config.HiveParams, kad, store),
+		localAddr:       &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
+		handshakes:      make(map[discover.NodeID]*HandshakeMsg),
+		setRegistryPeer: setRegistryPeer,
 	}
 }
 
@@ -167,7 +169,7 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			Name:     DiscoverySpec.Name,
 			Version:  DiscoverySpec.Version,
 			Length:   DiscoverySpec.Length(),
-			Run:      b.RunProtocol(DiscoverySpec, b.Hive.Run),
+			Run:      b.RunProtocol(DiscoverySpec, b.Hive.Run, b.setRegistryPeer),
 			NodeInfo: b.Hive.NodeInfo,
 			PeerInfo: b.Hive.PeerInfo,
 		},
@@ -194,7 +196,7 @@ func (b *Bzz) APIs() []rpc.API {
 //   on return the session is terminated and the peer is disconnected
 // the protocol waits for the bzz handshake is negotiated
 // the overlay address on the BzzPeer is set from the remote handshake
-func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*p2p.Peer, p2p.MsgReadWriter) error {
+func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error, setRegistryPeer func(*protocols.Peer)) func(*p2p.Peer, p2p.MsgReadWriter) error {
 	return func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		// wait for the bzz protocol to perform the handshake
 		handshake, _ := b.GetHandshake(p.ID())
@@ -214,6 +216,7 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 			BzzAddr:    handshake.peerAddr,
 			lastActive: time.Now(),
 		}
+		setRegistryPeer(peer.Peer)
 		return run(peer)
 	}
 }
@@ -268,6 +271,7 @@ type BzzPeer struct {
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 }
 
+// TODO: shouldn't be "Test" here
 func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
 	return &BzzPeer{
 		Peer:      p,
