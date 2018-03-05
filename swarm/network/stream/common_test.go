@@ -74,10 +74,10 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	store := stores[id].(*storage.LocalStore)
-	db := storage.NewDBAPI(store)
+	netStore := storage.NewNetStore(store, nil)
+	db := storage.NewDBAPI(netStore)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	netStore := storage.NewNetStore(store, nil)
 	r := NewRegistry(addr, delivery, netStore, state.NewMemStore(), defaultSkipCheck)
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
@@ -106,7 +106,9 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		return nil, nil, nil, removeDataDir, err
 	}
 
-	db := storage.NewDBAPI(localStore)
+	netStore := storage.NewNetStore(localStore, nil)
+	db := storage.NewDBAPI(netStore)
+
 	delivery := NewDelivery(to, db)
 	streamer := NewRegistry(addr, delivery, localStore, state.NewMemStore(), defaultSkipCheck)
 	teardown := func() {

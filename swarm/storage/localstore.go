@@ -48,8 +48,8 @@ func NewDefaultStoreParams() (self *StoreParams) {
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
-	memStore ChunkStore
-	DbStore  ChunkStore
+	memStore *MemStore
+	DbStore  *LDBStore
 	mu       sync.Mutex
 }
 
@@ -79,7 +79,7 @@ func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) 
 }
 
 func (self *LocalStore) CacheCounter() uint64 {
-	return uint64(self.memStore.(*MemStore).Counter())
+	return uint64(self.memStore.Counter())
 }
 
 // LocalStore is itself a chunk store
