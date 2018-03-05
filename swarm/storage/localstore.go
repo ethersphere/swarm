@@ -140,11 +140,11 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 
 	var err error
 	chunk, err = self.get(key)
-	if err == nil && !chunk.errored {
+	if err == nil && !chunk.GetErrored() {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
 		return chunk, false
 	}
-	if err == ErrFetching && !chunk.errored {
+	if err == ErrFetching && !chunk.GetErrored() {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
 		return chunk, false
 	}

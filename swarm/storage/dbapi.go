@@ -20,6 +20,7 @@ package storage
 type DBAPI struct {
 	db  *LDBStore
 	loc *LocalStore
+	//ns *NetStore
 }
 
 func NewDBAPI(loc *LocalStore) *DBAPI {
