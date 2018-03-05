@@ -18,10 +18,16 @@ package storage
 
 import (
 	"encoding/hex"
+	"errors"
 	"io/ioutil"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/network"
+)
+
+var (
+	errUnknown = errors.New("unknown error")
 )
 
 type mockRetrieve struct {
@@ -32,13 +38,35 @@ func NewMockRetrieve() *mockRetrieve {
 	return &mockRetrieve{requests: make(map[string]int)}
 }
 
+func newDummyChunk(key Key) *Chunk {
+	chunk := NewChunk(key, nil)
+	chunk.SData = []byte{3, 4, 5}
+	chunk.Size = 3
+
+	return chunk
+}
+
 func (m *mockRetrieve) retrieve(chunk *Chunk) error {
-	m.requests[hex.EncodeToString(chunk.Key)] += 1
+	hkey := hex.EncodeToString(chunk.Key)
+	m.requests[hkey] += 1
+
+	// on second call return error
+	if m.requests[hkey] == 2 {
+		return errUnknown
+	}
+
+	// on third call return data
+	if m.requests[hkey] == 3 {
+		chunk = newDummyChunk(chunk.Key)
+		return nil
+	}
 
 	return nil
 }
 
 func TestNetstoreFailedRequest(t *testing.T) {
+	searchTimeout = 50 * time.Millisecond
+
 	// setup
 	addr := network.RandomAddr() // tested peers peer address
 
@@ -56,17 +84,31 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	r := NewMockRetrieve()
 	netStore := NewNetStore(localStore, r.retrieve)
 
+	// first call
 	key := Key{}
 	_, err = netStore.Get(key)
 	if err == nil || err != ErrChunkNotFound {
 		t.Fatalf("expected to get ErrChunkNotFound, but got: %s", err)
 	}
 
+	// second call
 	_, err = netStore.Get(key)
 	if got := r.requests[hex.EncodeToString(key)]; got != 2 {
 		t.Fatalf("expected to have called retrieve two times, but got: %v", got)
 	}
-	if err != nil {
-		t.Fatalf("expected to get the chunk on second request, but got: %s", err)
+	if err != errUnknown {
+		t.Fatalf("expected to get an unknown error, but got: %s", err)
+	}
+
+	// third call
+	chunk, err := netStore.Get(key)
+	if got := r.requests[hex.EncodeToString(key)]; got != 3 {
+		t.Fatalf("expected to have called retrieve three times, but got: %v", got)
+	}
+	if err != nil || chunk == nil {
+		t.Fatalf("expected to get a chunk but got: %v, %s", chunk, err)
+	}
+	if len(chunk.SData) != 3 {
+		t.Fatalf("expected to get a chunk with size 3, but got: %v", chunk.SData)
 	}
 }

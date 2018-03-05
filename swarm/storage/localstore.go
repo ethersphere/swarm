@@ -63,20 +63,6 @@ func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte, mockSt
 	}, nil
 }
 
-func NewTestLocalStore(path string) (*LocalStore, error) {
-	basekey := make([]byte, 32)
-	hasher := MakeHashFunc("SHA3")
-	dbStore, err := NewLDBStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
-	if err != nil {
-		return nil, err
-	}
-	localStore := &LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
-		DbStore:  dbStore,
-	}
-	return localStore, nil
-}
-
 func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) {
 	hasher := MakeHashFunc("SHA3")
 	dbStore, err := NewLDBStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
@@ -139,11 +125,11 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
 	var err error
 	chunk, err = self.Get(key)
-	if err == nil {
+	if err == nil && !chunk.errored {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
 		return chunk, false
 	}
-	if err == ErrFetching {
+	if err == ErrFetching && !chunk.errored {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
 		return chunk, false
 	}

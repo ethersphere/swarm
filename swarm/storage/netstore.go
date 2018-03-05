@@ -48,6 +48,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	} else {
 		var created bool
 		chunk, created = self.localStore.GetOrCreateRequest(key)
+
 		if chunk.ReqC == nil {
 			return chunk, nil
 		}
@@ -55,14 +56,10 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 		if created {
 			err := self.retrieve(chunk)
 			if err != nil {
-				// TODO: mark chunk request as failed so that we can retry
-
+				// mark chunk request as failed so that we can retry it later
+				chunk.errored = true
 				return nil, err
 			}
-
-		} else {
-			// TODO: check if chunk request is failed
-
 		}
 	}
 
@@ -73,9 +70,11 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	case <-t.C:
 		// TODO: mark chunk request as failed so that we can retry
 		// close channel or set flag of chunk to timeouted
+		chunk.errored = true
 		return nil, ErrChunkNotFound
 	case <-chunk.ReqC:
 	}
+	chunk.errored = false
 	return chunk, nil
 }
 
