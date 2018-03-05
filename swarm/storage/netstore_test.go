@@ -39,7 +39,7 @@ func NewMockRetrieve() *mockRetrieve {
 }
 
 func newDummyChunk(key Key) *Chunk {
-	chunk := NewChunk(key, nil)
+	chunk := NewChunk(key, make(chan bool))
 	chunk.SData = []byte{3, 4, 5}
 	chunk.Size = 3
 
@@ -57,7 +57,12 @@ func (m *mockRetrieve) retrieve(chunk *Chunk) error {
 
 	// on third call return data
 	if m.requests[hkey] == 3 {
-		chunk = newDummyChunk(chunk.Key)
+		*chunk = *newDummyChunk(chunk.Key)
+		go func() {
+			time.Sleep(50 * time.Millisecond)
+			close(chunk.ReqC)
+		}()
+
 		return nil
 	}
 
@@ -65,7 +70,7 @@ func (m *mockRetrieve) retrieve(chunk *Chunk) error {
 }
 
 func TestNetstoreFailedRequest(t *testing.T) {
-	searchTimeout = 50 * time.Millisecond
+	searchTimeout = 100 * time.Millisecond
 
 	// setup
 	addr := network.RandomAddr() // tested peers peer address

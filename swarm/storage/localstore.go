@@ -19,6 +19,7 @@ package storage
 import (
 	"encoding/binary"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -49,6 +50,7 @@ func NewDefaultStoreParams() (self *StoreParams) {
 type LocalStore struct {
 	memStore ChunkStore
 	DbStore  ChunkStore
+	mu       sync.Mutex
 }
 
 // This constructor uses MemStore and DbStore as components
@@ -83,6 +85,9 @@ func (self *LocalStore) CacheCounter() uint64 {
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	c := &Chunk{
 		Key:      Key(append([]byte{}, chunk.Key...)),
@@ -101,6 +106,13 @@ func (self *LocalStore) Put(chunk *Chunk) {
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
 func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	return self.get(key)
+}
+
+func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 	chunk, err = self.memStore.Get(key)
 	if err == nil {
 		if chunk.ReqC != nil {
@@ -123,8 +135,11 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 
 // retrieve logic common for local and network chunk retrieval requests
 func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
 	var err error
-	chunk, err = self.Get(key)
+	chunk, err = self.get(key)
 	if err == nil && !chunk.errored {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
 		return chunk, false
