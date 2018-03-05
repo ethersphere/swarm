@@ -33,10 +33,17 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+)
+
+//metrics variables
+var (
+	gcCounter            = metrics.NewRegisteredCounter("storage.db.dbstore.gc.count", nil)
+	dbStoreDeleteCounter = metrics.NewRegisteredCounter("storage.db.dbstore.rm.count", nil)
 )
 
 const (
@@ -98,7 +105,7 @@ type DbStore struct {
 
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
 // to avoid the appearance of a pluggable distance metric and opportunities of bugs associated with providing
-// a function diferent from the one that is actually used.
+// a function different from the one that is actually used.
 func NewDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8) (s *DbStore, err error) {
 	s = new(DbStore)
 	s.hashfunc = hash
@@ -126,7 +133,7 @@ func NewDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uin
 	for i := 0; i < 0x100; i++ {
 		k := make([]byte, 2)
 		k[0] = keyDistanceCnt
-		k[1] = byte(uint8(i))
+		k[1] = uint8(i)
 		cnt, _ := s.db.Get(k)
 		s.bucketCnt[i] = BytesToU64(cnt)
 		s.bucketCnt[i]++
@@ -211,7 +218,7 @@ func getOldDataKey(idx uint64) []byte {
 func getDataKey(idx uint64, po uint8) []byte {
 	key := make([]byte, 10)
 	key[0] = keyData
-	key[1] = byte(po)
+	key[1] = po
 	binary.BigEndian.PutUint64(key[2:], idx)
 
 	return key
@@ -328,6 +335,7 @@ func (s *DbStore) collectGarbage(ratio float32) {
 	// actual gc
 	for i := 0; i < gcnt; i++ {
 		if s.gcArray[i].value <= cutval {
+			gcCounter.Inc(1)
 			s.delete(s.gcArray[i].idx, s.gcArray[i].idxKey, s.po(Key(s.gcPos[1:])))
 		}
 	}
@@ -483,9 +491,9 @@ func (s *DbStore) ReIndex() {
 		oldCntKey[0] = keyDistanceCnt
 		newCntKey[0] = keyDistanceCnt
 		key[0] = keyData
-		key[1] = byte(s.po(Key(key[1:])))
+		key[1] = s.po(Key(key[1:]))
 		oldCntKey[1] = key[1]
-		newCntKey[1] = byte(s.po(Key(newKey[1:])))
+		newCntKey[1] = s.po(Key(newKey[1:]))
 		copy(newKey[2:], key[1:])
 		newValue := append(hash, data...)
 
@@ -507,6 +515,7 @@ func (s *DbStore) delete(idx uint64, idxKey []byte, po uint8) {
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx, po))
+	dbStoreDeleteCounter.Inc(1)
 	s.entryCnt--
 	s.bucketCnt[po]--
 	cntKey := make([]byte, 2)
@@ -695,7 +704,7 @@ func (s *DbStore) get(key Key) (chunk *Chunk, err error) {
 		chunk = NewChunk(key, nil)
 		decodeData(data, chunk)
 	} else {
-		err = ErrNotFound
+		err = ErrChunkNotFound
 	}
 
 	return
@@ -708,8 +717,8 @@ func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Key) (data []byte, e
 	return func(key Key) (data []byte, err error) {
 		data, err = mockStore.Get(key)
 		if err == mock.ErrNotFound {
-			// preserve ErrNotFound error
-			err = ErrNotFound
+			// preserve ErrChunkNotFound error
+			err = ErrChunkNotFound
 		}
 		return data, err
 	}
@@ -733,8 +742,7 @@ func (s *DbStore) setCapacity(c uint64) {
 	s.capacity = c
 
 	if s.entryCnt > c {
-		var ratio float32
-		ratio = float32(1.01) - float32(c)/float32(s.entryCnt)
+		ratio := float32(1.01) - float32(c)/float32(s.entryCnt)
 		if ratio < gcArrayFreeRatio {
 			ratio = gcArrayFreeRatio
 		}
@@ -760,7 +768,7 @@ func (s *DbStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key,
 
 	for ok := it.Seek(sincekey); ok; ok = it.Next() {
 		dbkey := it.Key()
-		if dbkey[0] != keyData || dbkey[1] != byte(po) || bytes.Compare(untilkey, dbkey) < 0 {
+		if dbkey[0] != keyData || dbkey[1] != po || bytes.Compare(untilkey, dbkey) < 0 {
 			break
 		}
 		key := make([]byte, 32)

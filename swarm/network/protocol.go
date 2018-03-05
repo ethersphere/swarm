@@ -26,10 +26,24 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
+)
+
+//metrics variables
+var (
+	storeRequestMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.storerequest.count", nil)
+	retrieveRequestMsgCounter = metrics.NewRegisteredCounter("network.protocol.msg.retrieverequest.count", nil)
+	peersMsgCounter           = metrics.NewRegisteredCounter("network.protocol.msg.peers.count", nil)
+	syncRequestMsgCounter     = metrics.NewRegisteredCounter("network.protocol.msg.syncrequest.count", nil)
+	unsyncedKeysMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.unsyncedkeys.count", nil)
+	deliverRequestMsgCounter  = metrics.NewRegisteredCounter("network.protocol.msg.deliverrequest.count", nil)
+	paymentMsgCounter         = metrics.NewRegisteredCounter("network.protocol.msg.payment.count", nil)
+	invalidMsgCounter         = metrics.NewRegisteredCounter("network.protocol.msg.invalid.count", nil)
+	handleStatusMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.handlestatus.count", nil)
 )
 
 const (
@@ -104,9 +118,11 @@ type BzzConfig struct {
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
-	localAddr  *BzzAddr
-	mtx        sync.Mutex
-	handshakes map[discover.NodeID]*HandshakeMsg
+	localAddr    *BzzAddr
+	mtx          sync.Mutex
+	handshakes   map[discover.NodeID]*HandshakeMsg
+	streamerSpec *protocols.Spec
+	streamerRun  func(*BzzPeer) error
 }
 
 // NewBzz is the swarm protocol constructor
@@ -114,20 +130,22 @@ type Bzz struct {
 // * bzz config
 // * overlay driver
 // * peer store
-func NewBzz(config *BzzConfig, kad Overlay, store StateStore) *Bzz {
+func NewBzz(config *BzzConfig, kad Overlay, store StateStore, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
 	return &Bzz{
-		Hive:       NewHive(config.HiveParams, kad, store),
-		localAddr:  &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
-		handshakes: make(map[discover.NodeID]*HandshakeMsg),
+		Hive:         NewHive(config.HiveParams, kad, store),
+		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
+		handshakes:   make(map[discover.NodeID]*HandshakeMsg),
+		streamerRun:  streamerRun,
+		streamerSpec: streamerSpec,
 	}
 }
 
 // UpdateLocalAddr updates underlayaddress of the running node
 func (b *Bzz) UpdateLocalAddr(byteaddr []byte) *BzzAddr {
-	b.localAddr.Update(&BzzAddr{
+	b.localAddr = b.localAddr.Update(&BzzAddr{
 		UAddr: byteaddr,
 		OAddr: b.localAddr.OAddr,
-	})
+	}).(*BzzAddr)
 	return b.localAddr
 }
 
@@ -156,6 +174,12 @@ func (b *Bzz) Protocols() []p2p.Protocol {
 			Run:      b.RunProtocol(DiscoverySpec, b.Hive.Run),
 			NodeInfo: b.Hive.NodeInfo,
 			PeerInfo: b.Hive.PeerInfo,
+		},
+		{
+			Name:    b.streamerSpec.Name,
+			Version: b.streamerSpec.Version,
+			Length:  b.streamerSpec.Length(),
+			Run:     b.RunProtocol(b.streamerSpec, b.streamerRun),
 		},
 	}
 }
@@ -207,10 +231,11 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 // performHandshake implements the negotiation of the bzz handshake
 // shared among swarm subprotocols
 func performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error {
-	ctx, _ := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
-	// defer cancel()
-	// ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
-	defer close(handshake.done)
+	ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
+	defer func() {
+		close(handshake.done)
+		cancel()
+	}()
 	rsh, err := p.Handshake(ctx, handshake, checkHandshake)
 	if err != nil {
 		handshake.err = err
@@ -261,7 +286,7 @@ func NewBzzTestPeer(p *protocols.Peer, addr *BzzAddr) *BzzPeer {
 	}
 }
 
-// Off returns the overlay peer record for offline persistance
+// Off returns the overlay peer record for offline persistence
 func (p *BzzPeer) Off() OverlayAddr {
 	return p.BzzAddr
 }
@@ -399,6 +424,15 @@ func NewAddrFromNodeID(id discover.NodeID) *BzzAddr {
 	return &BzzAddr{
 		OAddr: ToOverlayAddr(id.Bytes()),
 		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
+	}
+}
+
+// NewAddrFromNodeIDAndPort constucts a BzzAddr from a discover.NodeID and port uint16
+// the overlay address is derived as the hash of the nodeID
+func NewAddrFromNodeIDAndPort(id discover.NodeID, port uint16) *BzzAddr {
+	return &BzzAddr{
+		OAddr: ToOverlayAddr(id.Bytes()),
+		UAddr: []byte(discover.NewNode(id, net.IP{127, 0, 0, 1}, port, port).String()),
 	}
 }
 

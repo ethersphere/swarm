@@ -21,7 +21,12 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"fmt"
+	"math/big"
 	"net"
+	"path/filepath"
+	"strings"
+	"time"
+	"unicode"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -30,19 +35,31 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream"
+	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+)
+
+var (
+	startTime          time.Time
+	updateGaugesPeriod = 5 * time.Second
+	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
+	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
+	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
+	cacheSizeGauge     = metrics.NewRegisteredGauge("storage.db.cache.size", nil)
 )
 
 // the swarm stack
@@ -84,7 +101,8 @@ func (self *Swarm) API() *SwarmAPI {
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *ethclient.Client, config *api.Config, swapEnabled, syncEnabled bool, cors string, pssEnabled bool, mockStore *mock.NodeStore) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
+
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
@@ -93,11 +111,9 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	}
 
 	self = &Swarm{
-		config:      config,
-		swapEnabled: swapEnabled,
-		backend:     backend,
-		privateKey:  config.Swap.PrivateKey(),
-		corsString:  cors,
+		config:     config,
+		backend:    backend,
+		privateKey: config.ShiftPrivateKey(),
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
@@ -132,11 +148,16 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 
 	db := storage.NewDBAPI(self.lstore)
 	delivery := stream.NewDelivery(to, db)
-	self.streamer = stream.NewRegistry(addr, delivery, self.lstore, false)
+	// TODO: decide on intervals store file location
+	intervalsStore, err := intervals.NewDBStore(filepath.Join(config.Path, "stream-intervals.db"))
+	if err != nil {
+		return
+	}
+	self.streamer = stream.NewRegistry(addr, delivery, self.lstore, intervalsStore, false)
 	stream.RegisterSwarmSyncerServer(self.streamer, db)
 	stream.RegisterSwarmSyncerClient(self.streamer, db)
 
-	self.bzz = network.NewBzz(bzzconfig, to, nil)
+	self.bzz = network.NewBzz(bzzconfig, to, nil, stream.Spec, self.streamer.Run)
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
@@ -146,7 +167,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	log.Debug(fmt.Sprintf("-> Content Store API"))
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	if pssEnabled {
+	if self.config.PssEnabled {
 		pssparams := pss.NewPssParams(self.privateKey)
 		self.ps = pss.NewPss(to, self.dpa, pssparams)
 		if pss.IsActiveHandshake {
@@ -155,19 +176,37 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	}
 
 	// set up high level api
-	transactOpts := bind.NewKeyedTransactor(self.privateKey)
+	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
+	var resolver *api.MultiResolver
+	if len(config.EnsAPIs) > 0 {
+		opts := []api.MultiResolverOption{}
+		for _, c := range config.EnsAPIs {
+			tld, endpoint, addr := parseEnsAPIAddress(c)
+			r, err := newEnsClient(endpoint, addr, config)
+			if err != nil {
+				return nil, err
+			}
+			opts = append(opts, api.MultiResolverOptionWithResolver(r, tld))
 
-	if ensClient == nil {
-		log.Warn("No ENS, please specify non-empty --ens-api to use domain name resolution")
-	} else {
-		self.dns, err = ens.NewENS(transactOpts, config.EnsRoot, ensClient)
+		}
+		resolver = api.NewMultiResolver(opts...)
+		self.dns = resolver
+	}
+
+	var resourceHandler *storage.ResourceHandler
+	// if use resource updates
+	if self.config.ResourceEnabled && resolver != nil {
+		resourceValidator := storage.NewENSValidator(config.EnsRoot, resolver, storage.NewGenericResourceSigner(self.privateKey))
+		resolver.SetNameHash(resourceValidator.NameHash)
+		hashfunc := storage.MakeHashFunc(storage.SHA3Hash)
+		chunkStore := storage.NewResourceChunkStore(self.lstore, func(*storage.Chunk) error { return nil })
+		resourceHandler, err = storage.NewResourceHandler(hashfunc, chunkStore, resolver, resourceValidator)
 		if err != nil {
 			return nil, err
 		}
 	}
-	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar @ address %v", config.EnsRoot.Hex()))
 
-	self.api = api.NewApi(self.dpa, self.dns)
+	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
@@ -175,6 +214,104 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, ensClient *e
 	log.Debug("-> Initializing Fuse file system")
 
 	return self, nil
+}
+
+// parseEnsAPIAddress parses string according to format
+// [tld:][contract-addr@]url and returns ENSClientConfig structure
+// with endpoint, contract address and TLD.
+func parseEnsAPIAddress(s string) (tld, endpoint string, addr common.Address) {
+	isAllLetterString := func(s string) bool {
+		for _, r := range s {
+			if !unicode.IsLetter(r) {
+				return false
+			}
+		}
+		return true
+	}
+	endpoint = s
+	if i := strings.Index(endpoint, ":"); i > 0 {
+		if isAllLetterString(endpoint[:i]) && len(endpoint) > i+2 && endpoint[i+1:i+3] != "//" {
+			tld = endpoint[:i]
+			endpoint = endpoint[i+1:]
+		}
+	}
+	if i := strings.Index(endpoint, "@"); i > 0 {
+		addr = common.HexToAddress(endpoint[:i])
+		endpoint = endpoint[i+1:]
+	}
+	return
+}
+
+// ensClient provides functionality for api.ResolveValidator
+type ensClient struct {
+	*ens.ENS
+	*ethclient.Client
+}
+
+// newEnsClient creates a new ENS client for that is a consumer of
+// a ENS API on a specific endpoint. It is used as a helper function
+// for creating multiple resolvers in NewSwarm function.
+func newEnsClient(endpoint string, addr common.Address, config *api.Config) (*ensClient, error) {
+	log.Info("connecting to ENS API", "url", endpoint)
+	client, err := rpc.Dial(endpoint)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to ENS API %s: %s", endpoint, err)
+	}
+	ethClient := ethclient.NewClient(client)
+
+	ensRoot := config.EnsRoot
+	if addr != (common.Address{}) {
+		ensRoot = addr
+	} else {
+		a, err := detectEnsAddr(client)
+		if err == nil {
+			ensRoot = a
+		} else {
+			log.Warn(fmt.Sprintf("could not determine ENS contract address, using default %s", ensRoot), "err", err)
+		}
+	}
+	transactOpts := bind.NewKeyedTransactor(config.Swap.PrivateKey())
+	dns, err := ens.NewENS(transactOpts, ensRoot, ethClient)
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(fmt.Sprintf("-> Swarm Domain Name Registrar %v @ address %v", endpoint, ensRoot.Hex()))
+	return &ensClient{
+		ENS:    dns,
+		Client: ethClient,
+	}, err
+}
+
+// detectEnsAddr determines the ENS contract address by getting both the
+// version and genesis hash using the client and matching them to either
+// mainnet or testnet addresses
+func detectEnsAddr(client *rpc.Client) (common.Address, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	var version string
+	if err := client.CallContext(ctx, &version, "net_version"); err != nil {
+		return common.Address{}, err
+	}
+
+	block, err := ethclient.NewClient(client).BlockByNumber(ctx, big.NewInt(0))
+	if err != nil {
+		return common.Address{}, err
+	}
+
+	switch {
+
+	case version == "1" && block.Hash() == params.MainnetGenesisHash:
+		log.Info("using Mainnet ENS contract address", "addr", ens.MainNetAddress)
+		return ens.MainNetAddress, nil
+
+	case version == "3" && block.Hash() == params.TestnetGenesisHash:
+		log.Info("using Testnet ENS contract address", "addr", ens.TestNetAddress)
+		return ens.TestNetAddress, nil
+
+	default:
+		return common.Address{}, fmt.Errorf("unknown version and genesis hash: %s %s", version, block.Hash())
+	}
 }
 
 /*
@@ -189,13 +326,13 @@ Start is called when the stack is started
 */
 // implements the node.Service interface
 func (self *Swarm) Start(srv *p2p.Server) error {
+	startTime = time.Now()
 
 	// update uaddr to correct enode
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
-	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%x", newaddr.UAddr))
-
+	log.Warn("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook
-	if self.swapEnabled {
+	if self.config.SwapEnabled {
 		ctx := context.Background() // The initial setup has no deadline.
 		err := self.SetChequebook(ctx)
 		if err != nil {
@@ -228,17 +365,36 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
 		go httpapi.StartHttpServer(self.api, &httpapi.ServerConfig{
 			Addr:       addr,
-			CorsString: self.corsString,
+			CorsString: self.config.Cors,
 		})
 	}
 
 	log.Debug(fmt.Sprintf("Swarm http proxy started on port: %v", self.config.Port))
 
-	if self.corsString != "" {
-		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.corsString))
+	if self.config.Cors != "" {
+		log.Debug(fmt.Sprintf("Swarm http proxy started with corsdomain: %v", self.config.Cors))
 	}
 
+	self.periodicallyUpdateGauges()
+
+	startCounter.Inc(1)
+	self.streamer.Start(srv)
 	return nil
+}
+
+func (self *Swarm) periodicallyUpdateGauges() {
+	ticker := time.NewTicker(updateGaugesPeriod)
+
+	go func() {
+		for range ticker.C {
+			self.updateGauges()
+		}
+	}()
+}
+
+func (self *Swarm) updateGauges() {
+	cacheSizeGauge.Update(int64(self.lstore.CacheCounter()))
+	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
 }
 
 // implements the node.Service interface
@@ -257,25 +413,20 @@ func (self *Swarm) Stop() error {
 		self.lstore.DbStore.Close()
 	}
 	self.sfs.Stop()
+	stopCounter.Inc(1)
+	self.streamer.Stop()
 	return self.bzz.Stop()
 }
 
 // implements the node.Service interface
 func (self *Swarm) Protocols() (protos []p2p.Protocol) {
-
-	for _, p := range self.bzz.Protocols() {
-		protos = append(protos, p)
-	}
+	protos = append(protos, self.bzz.Protocols()...)
 
 	if self.ps != nil {
-		for _, p := range self.ps.Protocols() {
-			protos = append(protos, p)
-		}
+		protos = append(protos, self.ps.Protocols()...)
 	}
 	if self.streamer != nil {
-		for _, p := range self.streamer.Protocols() {
-			protos = append(protos, p)
-		}
+		protos = append(protos, self.streamer.Protocols()...)
 	}
 	return
 }
@@ -336,14 +487,10 @@ func (self *Swarm) APIs() []rpc.API {
 		// {Namespace, Version, api.NewAdmin(self), false},
 	}
 
-	for _, api := range self.bzz.APIs() {
-		apis = append(apis, api)
-	}
+	apis = append(apis, self.bzz.APIs()...)
 
 	if self.ps != nil {
-		for _, api := range self.ps.APIs() {
-			apis = append(apis, api)
-		}
+		apis = append(apis, self.ps.APIs()...)
 	}
 
 	return apis

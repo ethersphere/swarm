@@ -142,8 +142,8 @@ func testDbStoreNotFound(t *testing.T, mock bool) {
 	defer db.close()
 
 	_, err = db.Get(ZeroKey)
-	if err != ErrNotFound {
-		t.Errorf("Expected ErrNotFound, got %v", err)
+	if err != ErrChunkNotFound {
+		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
 }
 
@@ -206,7 +206,7 @@ func testIterator(t *testing.T, mock bool) {
 	}
 
 	for i = 0; i < chunkcount; i++ {
-		if bytes.Compare(chunkkeys[i], chunkkeys_results[i]) != 0 {
+		if !bytes.Equal(chunkkeys[i], chunkkeys_results[i]) {
 			t.Fatalf("Chunk put #%d key '%v' does not match iterator's key '%v'", i, chunkkeys[i], chunkkeys_results[i])
 		}
 	}

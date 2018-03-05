@@ -52,7 +52,7 @@ func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
 	return d
 }
 
-// SwarmChunkServer implements OutgoingStreamer
+// SwarmChunkServer implements Server
 type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
@@ -129,7 +129,7 @@ type RetrieveRequestMsg struct {
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
 	log.Debug("received request", "peer", sp.ID(), "hash", req.Key)
-	s, err := sp.getServer(swarmChunkServerStreamName)
+	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, nil, false))
 	if err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ R:
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
 		if !bytes.Equal(chunk.Key, req.Key) {
-			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), storage.Key(req.Key).Hex(), req.peer.ID()))
+			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), req.Key.Hex(), req.peer.ID()))
 		}
 		if err == nil {
 			continue R

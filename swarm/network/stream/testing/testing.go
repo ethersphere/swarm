@@ -117,12 +117,14 @@ func CheckResult(t *testing.T, result *simulations.StepResult, startedAt, finish
 }
 
 type RunConfig struct {
-	Adapter   string
-	Step      *simulations.Step
-	NodeCount int
-	ConnLevel int
-	ToAddr    func(discover.NodeID) *network.BzzAddr
-	Services  adapters.Services
+	Adapter         string
+	Step            *simulations.Step
+	NodeCount       int
+	ConnLevel       int
+	ToAddr          func(discover.NodeID) *network.BzzAddr
+	Services        adapters.Services
+	DefaultService  string
+	EnableMsgEvents bool
 }
 
 func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
@@ -132,9 +134,13 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	if err != nil {
 		return nil, adapterTeardown, err
 	}
+	defaultService := "streamer"
+	if conf.DefaultService != "" {
+		defaultService = conf.DefaultService
+	}
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
-		DefaultService: "streamer",
+		DefaultService: defaultService,
 	})
 	teardown := func() {
 		adapterTeardown()
@@ -144,7 +150,9 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	addrs := make([]network.Addr, nodes)
 	// start nodes
 	for i := 0; i < nodes; i++ {
-		node, err := net.NewNode()
+		nodeconf := adapters.RandomNodeConfig()
+		nodeconf.EnableMsgEvents = conf.EnableMsgEvents
+		node, err := net.NewNodeWithConfig(nodeconf)
 		if err != nil {
 			return nil, teardown, fmt.Errorf("error creating node: %s", err)
 		}

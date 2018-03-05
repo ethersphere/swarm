@@ -59,7 +59,7 @@ func (r *RemoteSectionReader) NeedData(key []byte) func() {
 	}
 }
 
-func (r *RemoteSectionReader) BatchDone(s string, from uint64, hashes []byte, root []byte) func() (*stream.TakeoverProof, error) {
+func (r *RemoteSectionReader) BatchDone(s stream.Stream, from uint64, hashes []byte, root []byte) func() (*stream.TakeoverProof, error) {
 	r.hashes <- hashes
 	return nil
 }
@@ -88,7 +88,7 @@ func (r *RemoteSectionReader) Read(b []byte) (n int64, err error) {
 			end = true
 		}
 		copy(b[n:], chunk.SData[:m])
-		n += int64(m)
+		n += m
 	}
 
 	for {
@@ -117,6 +117,8 @@ func (r *RemoteSectionReader) Read(b []byte) (n int64, err error) {
 	}
 }
 
+func (r *RemoteSectionReader) Close() {}
+
 // RemoteSectionServer implements OutgoingStreamer
 type RemoteSectionServer struct {
 	// quit chan struct{}
@@ -134,12 +136,12 @@ func NewRemoteSectionServer(db *storage.DBAPI, r *storage.LazyChunkReader) *Remo
 }
 
 // GetData retrieves the actual chunk from localstore
-func (s *RemoteSectionServer) GetData(key []byte) []byte {
+func (s *RemoteSectionServer) GetData(key []byte) ([]byte, error) {
 	chunk, err := s.db.Get(storage.Key(key))
 	if err != nil {
-		return nil
+		return nil, err
 	}
-	return chunk.SData
+	return chunk.SData, nil
 }
 
 // GetBatch retrieves the next batch of hashes from the dbstore
@@ -152,9 +154,11 @@ func (s *RemoteSectionServer) SetNextBatch(from, to uint64) ([]byte, uint64, uin
 	return batch, from, to, nil, nil
 }
 
+func (s *RemoteSectionServer) Close() {}
+
 // RegisterRemoteSectionReader registers RemoteSectionReader on light downstream node
 func RegisterRemoteSectionReader(s *stream.Registry, db *storage.DBAPI) {
-	s.RegisterClientFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte) (stream.Client, error) {
+	s.RegisterClientFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte, live bool) (stream.Client, error) {
 		return NewRemoteSectionReader(t, db), nil
 	})
 }
@@ -162,7 +166,7 @@ func RegisterRemoteSectionReader(s *stream.Registry, db *storage.DBAPI) {
 // RegisterRemoteSectionServer registers RemoteSectionServer outgoing streamer on
 // upstream light server node
 func RegisterRemoteSectionServer(s *stream.Registry, db *storage.DBAPI, rf func([]byte) *storage.LazyChunkReader) {
-	s.RegisterServerFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte) (stream.Server, error) {
+	s.RegisterServerFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte, live bool) (stream.Server, error) {
 		r := rf(t)
 		return NewRemoteSectionServer(db, r), nil
 	})

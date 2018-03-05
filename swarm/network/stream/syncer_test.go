@@ -51,11 +51,12 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		return addr
 	}
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: conns,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
 	}
 	// create context for simulation run
 	timeout := 30 * time.Second
@@ -160,7 +161,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				defer cancel()
 				// start syncing, i.e., subscribe to upstream peers po 1 bin
 				sid := sim.IDs[j+1]
-				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, "SYNC", []byte{1}, 0, 0, Top, false)
+				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream("SYNC", []byte{1}, false), &Range{From: 0, To: 0}, Top)
 			})
 			if err != nil {
 				return err

@@ -19,16 +19,21 @@ package storage
 import (
 	"encoding/binary"
 	"fmt"
-	"path/filepath"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+)
+
+var (
+	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
 )
 
 type StoreParams struct {
 	ChunkDbPath   string
 	DbCapacity    uint64
 	CacheCapacity uint
+	Radius        int
 }
 
 //create params with default values
@@ -37,12 +42,6 @@ func NewDefaultStoreParams() (self *StoreParams) {
 		DbCapacity:    defaultDbCapacity,
 		CacheCapacity: defaultCacheCapacity,
 	}
-}
-
-//this can only finally be set after all config options (file, cmd line, env vars)
-//have been evaluated
-func (self *StoreParams) Init(path string) {
-	self.ChunkDbPath = filepath.Join(path, "chunks")
 }
 
 // LocalStore is a combination of inmemory db over a disk persisted db
@@ -91,6 +90,10 @@ func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) 
 	return localStore, nil
 }
 
+func (self *LocalStore) CacheCounter() uint64 {
+	return uint64(self.memStore.(*MemStore).Counter())
+}
+
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
@@ -101,6 +104,8 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		Size:     chunk.Size,
 		dbStored: chunk.dbStored,
 	}
+
+	dbStorePutCounter.Inc(1)
 	self.memStore.Put(c)
 	self.DbStore.Put(c)
 }
@@ -149,7 +154,7 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 	return chunk, true
 }
 
-// Close local store
+// Close the local store
 func (self *LocalStore) Close() {
 	self.DbStore.Close()
 }

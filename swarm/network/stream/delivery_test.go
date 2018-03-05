@@ -57,7 +57,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Key:       hash0[:],
@@ -87,17 +87,18 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	peer := streamer.getPeer(peerID)
 
 	peer.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   swarmChunkServerStreamName,
-		Key:      nil,
-		From:     0,
-		To:       0,
+		Stream: NewStream(swarmChunkServerStreamName, nil, false),
+		History: &Range{
+			From: 0,
+			To:   0,
+		},
 		Priority: Top,
 	})
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Key: chunk.Key[:],
@@ -106,7 +107,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					HandoverProof: nil,
@@ -119,7 +120,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 		},
 	})
 
-	expectedError := "exchange 0: 'RetrieveRequestMsg' timed out"
+	expectedError := `exchange #0 "RetrieveRequestMsg": timed out`
 	if err == nil || err.Error() != expectedError {
 		t.Fatalf("Expected error %v, got %v", expectedError, err)
 	}
@@ -138,10 +139,11 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	peer := streamer.getPeer(peerID)
 
 	peer.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   swarmChunkServerStreamName,
-		Key:      nil,
-		From:     0,
-		To:       0,
+		Stream: NewStream(swarmChunkServerStreamName, nil, false),
+		History: &Range{
+			From: 0,
+			To:   0,
+		},
 		Priority: Top,
 	})
 
@@ -154,7 +156,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Key: hash,
@@ -163,7 +165,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 1,
 				Msg: &OfferedHashesMsg{
 					HandoverProof: &HandoverProof{
@@ -173,8 +175,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 					From:   0,
 					// TODO: why is this 32???
 					To:     32,
-					Key:    []byte{},
-					Stream: swarmChunkServerStreamName,
+					Stream: NewStream(swarmChunkServerStreamName, nil, false),
 				},
 				Peer: peerID,
 			},
@@ -194,7 +195,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
 		Triggers: []p2ptest.Trigger{
-			p2ptest.Trigger{
+			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
 					Key:       hash,
@@ -204,7 +205,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			},
 		},
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 6,
 				Msg: &ChunkDeliveryMsg{
 					Key:   hash,
@@ -227,7 +228,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	streamer.RegisterClientFunc("foo", func(p *Peer, t []byte) (Client, error) {
+	streamer.RegisterClientFunc("foo", func(p *Peer, t []byte, live bool) (Client, error) {
 		return &testClient{
 			t: t,
 		}, nil
@@ -235,7 +236,8 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 	peerID := tester.IDs[0]
 
-	err = streamer.Subscribe(peerID, "foo", []byte{}, 5, 8, Top, true)
+	stream := NewStream("foo", nil, true)
+	err = streamer.Subscribe(peerID, stream, &Range{From: 5, To: 8}, Top)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -256,13 +258,14 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
 		Expects: []p2ptest.Expect{
-			p2ptest.Expect{
+			{
 				Code: 4,
 				Msg: &SubscribeMsg{
-					Stream:   "foo",
-					Key:      []byte{},
-					From:     5,
-					To:       8,
+					Stream: stream,
+					History: &Range{
+						From: 5,
+						To:   8,
+					},
 					Priority: Top,
 				},
 				Peer: peerID,
@@ -272,7 +275,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		p2ptest.Exchange{
 			Label: "ChunkDeliveryRequest message",
 			Triggers: []p2ptest.Trigger{
-				p2ptest.Trigger{
+				{
 					Code: 6,
 					Msg: &ChunkDeliveryMsg{
 						Key:   chunkKey,
@@ -321,11 +324,12 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: conns,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
 	}
 
 	sim, teardown, err := streamTesting.NewSimulation(conf)
@@ -388,7 +392,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				sid := sim.IDs[j+1]
-				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false)
+				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, nil, false), &Range{From: 0, To: 0}, Top)
 			})
 			if err != nil {
 				return err
@@ -495,11 +499,12 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	defer cancel()
 
 	conf := &streamTesting.RunConfig{
-		Adapter:   *adapter,
-		NodeCount: nodes,
-		ConnLevel: conns,
-		ToAddr:    toAddr,
-		Services:  services,
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
 	}
 	sim, teardown, err := streamTesting.NewSimulation(conf)
 	defer teardown()
@@ -561,7 +566,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				sid := sim.IDs[j+1] // the upstream peer's id
-				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, swarmChunkServerStreamName, nil, 0, 0, Top, false)
+				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, nil, false), &Range{From: 0, To: 0}, Top)
 			})
 			if err != nil {
 				break
