@@ -38,7 +38,6 @@ type Delivery struct {
 	overlay  network.Overlay
 	receiveC chan *ChunkDeliveryMsg
 	getPeer  func(discover.NodeID) *Peer
-	quit     chan struct{}
 }
 
 func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
@@ -148,8 +147,6 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 
 			select {
 			case <-chunk.ReqC:
-			case <-d.quit:
-				return
 			case <-t.C:
 				return
 			}
