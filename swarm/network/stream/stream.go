@@ -86,6 +86,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 
 	if doSync {
 		go func() {
+			// this is a temporary workaround to wait for kademlia table to be healthy
 			time.Sleep(30 * time.Second)
 
 			streamer.startSyncing()
