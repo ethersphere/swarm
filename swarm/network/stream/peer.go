@@ -130,7 +130,7 @@ func (p *Peer) getServer(s Stream) (*server, error) {
 
 	server := p.servers[s.String()]
 	if server == nil {
-		return nil, fmt.Errorf("server '%v' not provided to peer %v", s, p.ID())
+		return nil, newNotFoundError("server", s)
 	}
 	return server, nil
 }

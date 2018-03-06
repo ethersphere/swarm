@@ -55,6 +55,8 @@ type Overlay interface {
 	BaseAddr() []byte
 	// connectivity health check used for testing
 	Healthy(*PeerPot) *Health
+	// returns the channel that sends a new kademlia depth on each change
+	DepthC() <-chan uint8
 }
 
 // HiveParams holds the config options to hive

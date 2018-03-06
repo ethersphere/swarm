@@ -83,11 +83,12 @@ func NewKadParams() *KadParams {
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
 	lock       sync.RWMutex
-	*KadParams          // Kademlia configuration parameters
-	base       []byte   // immutable baseaddress of the table
-	addrs      *pot.Pot // pots container for known peer addresses
-	conns      *pot.Pot // pots container for live peer connections
-	depth      uint8    // stores the last current depth of saturation
+	*KadParams            // Kademlia configuration parameters
+	base       []byte     // immutable baseaddress of the table
+	addrs      *pot.Pot   // pots container for known peer addresses
+	conns      *pot.Pot   // pots container for live peer connections
+	depth      uint8      // stores the last current depth of saturation
+	depthC     chan uint8 // triggers OnDepthChange function
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -102,6 +103,7 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
 		conns:     pot.NewPot(nil, 0),
+		depthC:    make(chan uint8),
 	}
 }
 
@@ -302,10 +304,22 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 	depth := uint8(k.saturation(k.MinBinSize))
 	var changed bool
 	if depth != k.depth {
+		// Non blocking send to channel.
+		// If there is no one to receive
+		// this method should not block.
+		select {
+		case k.depthC <- depth:
+		default:
+		}
 		changed = true
 		k.depth = depth
 	}
 	return k.depth, changed
+}
+
+// DepthC returns the channel that sends a new kademlia depth on each change.
+func (k *Kademlia) DepthC() <-chan uint8 {
+	return k.depthC
 }
 
 // Off removes a peer from among live peers

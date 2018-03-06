@@ -90,6 +90,11 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 			time.Sleep(30 * time.Second)
 
 			streamer.startSyncing()
+
+			for depth := range streamer.delivery.overlay.DepthC() {
+				log.Debug("Kademlia depth change", "depth", depth)
+				streamer.startSyncing()
+			}
 		}()
 	}
 
@@ -138,7 +143,7 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Serv
 
 func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, h *Range, prio uint8) error {
 	// check if the stream is registered
-	if _, err := r.GetClientFunc(s.Name); err != nil {
+	if _, err := r.GetServerFunc(s.Name); err != nil {
 		return err
 	}
 
@@ -147,13 +152,20 @@ func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, h *Rang
 		return fmt.Errorf("peer not found %v", peerId)
 	}
 
-	msg := &RequestSubscriptionMsg{
-		Stream:   s,
-		History:  h,
-		Priority: prio,
+	if _, err := peer.getServer(s); err != nil {
+		if e, ok := err.(*notFoundError); ok && e.t == "server" {
+			// request subscription only if the server for this stream is not created
+			log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "history", h)
+			return peer.Send(&RequestSubscriptionMsg{
+				Stream:   s,
+				History:  h,
+				Priority: prio,
+			})
+		}
+		return err
 	}
-	log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "history", h)
-	return peer.Send(msg)
+	log.Trace("RequestSubscription: already subscribed", "peer", peerId, "stream", s, "history", h)
+	return nil
 }
 
 // Subscribe initiates the streamer
