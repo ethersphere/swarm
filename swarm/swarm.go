@@ -51,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/swarmdb"
 )
 
 var (
@@ -81,6 +82,7 @@ type Swarm struct {
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 	ps          *pss.Pss
+	swarmdb     *swarmdb.SwarmDB
 }
 
 type SwarmAPI struct {
@@ -172,6 +174,12 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 			pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 		}
 	}
+
+        if true { //self.config.SwarmDBEnabled {
+                swarmdbConfig, _ := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
+                self.swarmdb, _ = swarmdb.NewSwarmDB(swarmdbConfig)
+                //TODO: errors
+        }
 
 	// set up high level api
 	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
@@ -517,3 +525,4 @@ type Info struct {
 func (self *Info) Info() *Info {
 	return self
 }
+
