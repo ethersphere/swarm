@@ -1,7 +1,7 @@
 package swarmdb
 
 import (
-	"fmt"
+//	"fmt"
 
 	"github.com/ethereum/go-ethereum/p2p"
 )
@@ -41,7 +41,7 @@ func (self *SwarmDB) Protocols() []p2p.Protocol {
 //Run when another node connects
 func (self *SwarmDB) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	//Taken from: https://github.com/nolash/go-ethereum-p2p-demo/blob/master/A4_Message.go
-
+/*
 	// simplest payload possible; a byte slice
 	outmsg := "foobar"
 
@@ -59,7 +59,7 @@ func (self *SwarmDB) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		return fmt.Errorf("Receive p2p message fail: %v", err)
 	}
 	demo.Log.Info("received message", "peer", p, "msg", inmsg)
-
+*/
 	// terminate the protocol
 	return nil
 }
