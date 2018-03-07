@@ -373,6 +373,10 @@ func (ks *KeyStore) Find(a accounts.Account) (accounts.Account, error) {
 	ks.cache.mu.Unlock()
 	return a, err
 }
+func (ks *KeyStore) WgetDecryptedKey(a accounts.Account, auth string) (accounts.Account, *Key, error) {
+        key, err := ks.storage.GetKey(a.Address, a.URL.Path, auth)
+        return a, key, err
+}
 
 func (ks *KeyStore) getDecryptedKey(a accounts.Account, auth string) (accounts.Account, *Key, error) {
 	a, err := ks.Find(a)
