@@ -184,21 +184,22 @@ func TestCache(t *testing.T) {
 	}
 
 	// check the cache
-	err = ps.addFwdCache(digest)
+	// TODO: check the forwarded arg on/off
+	err = ps.addFwdCache(digest, true)
 	if err != nil {
 		t.Fatalf("write to pss expire cache failed: %v", err)
 	}
 
-	if !ps.checkFwdCache(nil, digest) {
+	if !ps.checkFwdCache(nil, digest, true) {
 		t.Fatalf("message %v should have EXPIRE record in cache but checkCache returned false", msg)
 	}
 
-	if ps.checkFwdCache(nil, digesttwo) {
+	if ps.checkFwdCache(nil, digesttwo, true) {
 		t.Fatalf("message %v should NOT have EXPIRE record in cache but checkCache returned true", msgtwo)
 	}
 
 	time.Sleep(pp.CacheTTL)
-	if ps.checkFwdCache(nil, digest) {
+	if ps.checkFwdCache(nil, digest, true) {
 		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
 	}
 }
@@ -390,12 +391,11 @@ func TestMismatch(t *testing.T) {
 
 	// run the forward
 	// it is enough that it completes; trying to send to incapable peers would create segfault
-	ps.forward(pssmsg)
+	ps.forward(pssmsg, pssDigest{})
 
 }
 
 func TestDeduplication(t *testing.T) {
-	t.Skip("Cannot reliably test since sends in other nodes complete before forward in receiving node")
 	var err error
 
 	clients, err := setupNetwork(3)
@@ -444,7 +444,7 @@ func TestDeduplication(t *testing.T) {
 	time.Sleep(time.Millisecond * 500) // replace with hive healthy code
 
 	rmsgC := make(chan APIMsg)
-	rctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	rctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
 	defer cancel()
 	rsub, err := clients[1].Subscribe(rctx, "pss", rmsgC, "receive", topic)
 	log.Trace("rsub", "id", rsub)
