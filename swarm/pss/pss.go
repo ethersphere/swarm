@@ -318,6 +318,13 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 	var keyid string
 	var keyFunc func(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error)
 
+	// dont process if we've seen the message before
+	digest, err := self.storeMsg(pssmsg)
+	if self.checkFwdCache([]byte{}, digest) {
+		log.Warn("cache block in pss msg process", "pss", self)
+		return false
+	}
+
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
 
@@ -333,6 +340,9 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 		return false
 	}
 
+	// if we forward the message, it will be put in the cache there
+	// if not, we put it in the cache here for deduplication
+	emptyDigest := pssDigest{}
 	if len(pssmsg.To) < addressLength {
 		go func() {
 			err := self.forward(pssmsg)
@@ -340,7 +350,10 @@ func (self *Pss) process(pssmsg *PssMsg) bool {
 				log.Warn("Redundant forward fail: %v", err)
 			}
 		}()
+	} else if digest == emptyDigest {
+		self.addFwdCache(digest)
 	}
+
 	handlers := self.getHandlers(psstopic)
 	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
 	p := p2p.NewPeer(nid, fmt.Sprintf("%x", from), []p2p.Cap{})
