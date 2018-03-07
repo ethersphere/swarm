@@ -1,0 +1,18 @@
+allow system_app dal_transport_service:service_manager add;
+allow system_app dal_admin_service:service_manager add;
+
+# allow system_app connect to jhi socket
+unix_socket_connect(system_app, jhid, jhid);
+allow system_app jhid_socket:sock_file rw_file_perms;
+
+# allow system_app enabling android service
+allow system_app jhi_prop:property_service set;
+
+# allow system_app use dynamic sockets folder (the java service is running as system_app)
+allow system_app jhi_dynamic_socket_dir:dir rw_dir_perms;
+allow system_app jhi_dynamic_socket_dir:sock_file create_file_perms;
+allow system_app jhi_dynamic_socket_dir:sock_file rw_file_perms;
+allow system_app jhi_dynamic_socket_dir:sock_file unlink;
+
+allow system_app jhi_data_file:dir create_dir_perms;
+allow system_app jhi_data_file:file create_file_perms;

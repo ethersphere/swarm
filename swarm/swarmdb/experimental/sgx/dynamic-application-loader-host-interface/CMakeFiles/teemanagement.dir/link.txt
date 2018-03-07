@@ -1,0 +1,1 @@
+/usr/bin/c++  -fPIC  -std=c++11 -Wall   -shared -Wl,-soname,libteemanagement.so -o bin_linux/libteemanagement.so CMakeFiles/teemanagement.dir/teemanagement/teemanagement.cpp.o CMakeFiles/teemanagement.dir/common/locker-pthread.cpp.o bin_linux/libjhi.so -lpthread -luuid -lpthread -Wl,-rpath,/var/www/vhost/sgx/dynamic-application-loader-host-interface/bin_linux: 

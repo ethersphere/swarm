@@ -1,0 +1,6 @@
+# allow any app bind android services
+allow untrusted_app dal_transport_service:service_manager find;
+binder_call(untrusted_app, dal_transport_service)
+
+allow untrusted_app dal_admin_service:service_manager find;
+binder_call(untrusted_app, dal_admin_service)

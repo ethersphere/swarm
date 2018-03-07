@@ -1,0 +1,111 @@
+;=============================================================================
+;
+; Copyright (c) Intel Corporation (2017).
+;
+; INTEL MAKES NO WARRANTY OF ANY KIND REGARDING THE CODE.  THIS CODE IS
+; LICENSED ON AN "AS IS" BASIS AND INTEL WILL NOT PROVIDE ANY SUPPORT,
+; ASSISTANCE, INSTALLATION, TRAINING OR OTHER SERVICES.  INTEL DOES NOT
+; PROVIDE ANY UPDATES, ENHANCEMENTS OR EXTENSIONS.  INTEL SPECIFICALLY
+; DISCLAIMS ANY WARRANTY OF MERCHANTABILITY, NONINFRINGEMENT, FITNESS FOR ANY
+; PARTICULAR PURPOSE, OR ANY OTHER WARRANTY.  Intel disclaims all liability,
+; including liability for infringement of any proprietary rights, relating to
+; use of the code. No license, express or implied, by estoppel or otherwise,
+; to any intellectual property rights is granted herein.
+;
+;=============================================================================
+
+;======================================================================
+; Installation INF for the Intel(R) Dynamic Application Loader Host Interface
+; Component INF
+;======================================================================
+[Version]
+Signature="$WINDOWS NT$"
+Class=SoftwareComponent 
+ClassGuid={5c4c3332-344d-483c-8739-259e934c9cc8}
+Provider=%ManufacturerName%
+CatalogFile=DAL.cat
+DriverVer=03/20/2017,9999.99.0.0
+
+[SourceDisksNames]
+1 = %DiskId%
+
+[SourceDisksFiles]
+bhPlugin.dll         = 1
+bhPluginV2.dll       = 1
+JHI.dll              = 1
+jhi_service.exe      = 1
+SpoolerApplet.dalp   = 1
+TEEManagement.dll    = 1
+TEETransport.dll     = 1
+
+[DestinationDirs]
+DefaultDestDir = 11
+
+;*****************************************
+; Install Section
+;*****************************************
+
+[Manufacturer]
+%ManufacturerName%=Intel, NTx86, NTamd64
+
+[Intel.NTx86]
+%DALDescription% = DALInstallSection, SWC\3C4852D6-D47B-4F46-B05E-B5EDC1AA440E
+
+[Intel.NTamd64]
+%DALDescription% = DALInstallSection, SWC\3C4852D6-D47B-4F46-B05E-B5EDC1AA440E
+
+
+[DALInstallSection]
+; The install section is typically empty, but can contain entries that
+; copy files or modify the registry.
+CopyFiles = DAL_Files
+AddReg    = DAL_Service_AddReg
+
+[DALInstallSection.Services]
+AddService = , 0x00000002
+AddService = jhi_service, %SPSVCSINST_STARTSERVICE%, DAL_Service_Inst
+
+[DALInstallSection.ntamd64]
+CopyFiles = DAL_Files
+AddReg    = DAL_Service_AddReg
+
+
+[DALInstallSection.ntamd64.Services]
+AddService = , 0x00000002
+AddService = jhi_service, %SPSVCSINST_STARTSERVICE%, DAL_Service_Inst
+
+; -------------- DAL driver install sections
+[DAL_Service_Inst]
+DisplayName    = "Intel(R) Dynamic Application Loader Host Interface Service"
+Description    = "Intel(R) Dynamic Application Loader Host Interface Service"
+ServiceType    = 0x00000010      ; SERVICE_WIN32_OWN_PROCESS
+StartType      = 2               ; SERVICE_AUTO_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %11%\jhi_service.exe
+
+
+[DAL_Service_AddReg]
+HKLM, "SOFTWARE\Intel\Services\DAL","FILELOCALE",%FLG_ADDREG_TYPE_SZ%, %11%
+HKLM, "SOFTWARE\Intel\Services\DAL","APPLETSLOCALE",%FLG_ADDREG_TYPE_SZ%,"C:\ProgramData\Intel\DAL\Applets"
+
+
+; --------- Files ----------------------
+[DAL_Files]
+bhPlugin.dll
+bhPluginV2.dll
+JHI.dll
+jhi_service.exe
+SpoolerApplet.dalp
+TEEManagement.dll
+TEETransport.dll
+
+[Strings]
+SPSVCINST_ASSOCSERVICE= 0x00000002
+SPSVCSINST_STARTSERVICE= 0x00000800
+FLG_ADDREG_TYPE_DWORD=0x00010001
+FLG_ADDREG_TYPE_EXPAND_SZ=0x00020000 
+FLG_ADDREG_TYPE_SZ=0x00000000 
+
+DALDescription="Intel(R) Dynamic Application Loader Host Interface"
+DiskId = "Intel(R) Dynamic Application Loader Host Interface Installation Disk"
+ManufacturerName="Intel"

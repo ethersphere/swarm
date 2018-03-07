@@ -1,0 +1,30 @@
+enclave {
+    from "sgx_tae_service.edl" import *;
+
+    /* enum definition */
+    enum TEE_ERROR {
+        TEE_ERROR_INVALID_SIGNATURE = 0,
+        TEE_ERROR_INVALID_COUNTER = 1,
+        TEE_ERROR_INVALID_SECRET = 2
+    };
+
+        
+    trusted {
+        /* define ECALLs here. */
+        public uint32_t create_counter(void);
+        public uint32_t read_counter([out] uint32_t* ctr);
+        public uint32_t increment_counter(void);
+        public uint32_t destroy_counter(void);
+
+        /* public int test_hash(void); */
+        public int test_ecc(void);
+
+    };
+
+    untrusted {
+        /* define OCALLs here. */
+        void ocall_print([in, string]const char* str);
+        void ocall_uint8_t_print([in, size = len]uint8_t *arr, size_t len);
+        void ocall_uint32_t_print([in, size = len]uint32_t *arr, size_t len);
+    };
+};

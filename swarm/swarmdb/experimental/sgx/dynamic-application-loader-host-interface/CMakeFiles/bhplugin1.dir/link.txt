@@ -1,0 +1,1 @@
+/usr/bin/c++  -fPIC  -std=c++11 -Wall   -shared -Wl,-soname,libbhplugin1.so -o bin_linux/libbhplugin1.so CMakeFiles/bhplugin1.dir/plugins/bhplugin1/jhi_plugin.cpp.o CMakeFiles/bhplugin1.dir/thirdparty/bhplugin1/Beihai/tools/jhi_lib/BeihaiPlugin.cpp.o 

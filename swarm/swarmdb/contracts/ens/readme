@@ -1,0 +1,89 @@
+
+
+ cd /var/www/vhosts/swarm.wolk.com/test/GoBindingsToEthereumContracts/SimplestENS/
+
+cp sens.sol to ->
+https://remix.ethereum.org
+cp WEB3DEPLOY from remix     and paste it in  geth cli
+geth attach ipc:/var/www/vhosts/data/geth.ipc
+
+
+
+> var simplestensContract = web3.eth.contract([{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"hash","type":"bytes32"}],"name":"setContent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}]);
+undefined
+> var simplestens = simplestensContract.new(
+...    {
+......      from: web3.eth.accounts[0],
+......      data: '0x6060604052341561000f57600080fd5b6101148061001e6000396000f30060606040526004361060485763ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416632dff69418114604d578063c3d014d6146072575b600080fd5b3415605757600080fd5b6060600435608a565b60405190815260200160405180910390f35b3415607c57600080fd5b6088600435602435609c565b005b60009081526020819052604090205490565b6000828152602081905260409081902082905582907f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc9083905190815260200160405180910390a250505600a165627a7a723058200d58a9cdff1508f1bba2a044957ac49166d7e01363236a1578b52188a133ca060029',
+......      gas: '4700000'
+......    }, function (e, contract){
+......     console.log(e, contract);
+......     if (typeof contract.address !== 'undefined') {
+.........          console.log('Contract mined! address: ' + contract.address + ' transactionHash: ' + contract.transactionHash);
+.........     }
+......  })
+null [object Object]
+undefined
+> null [object Object]
+Contract mined! address: 0x6120c3f1fdcd20c384b82eb20d93eef7838e0363 transactionHash: 0x963ae3f12744d8b3048a300d958f292bb8afa99cebf4daea0a0dd507b44d5181
+
+
+
+> function namehash(name) {
+    var node = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    if (name !== '') {
+        var labels = name.split(".");
+        for(var i = labels.length - 1; i >= 0; i--) {
+            node = web3.sha3(node + web3.sha3(labels[i]).slice(2), {encoding: 'hex'});
+        }
+    }
+    return node.toString();
+}
+
+
+
+> simplestens.setContent(namehash('abc.eth'), namehash('0x963ae3f12744d8b3048a300d958f292bb8afa99cebf4daea0a0dd507b44d5181'), {from: eth.accounts[0]});
+"0x2c4a5245b0fccfe23099c30c614bbb3141d295acf849bf74c69ab928bbea15e4"
+
+> simplestens.content(namehash('abc.eth'), {from: eth.accounts[0]});
+"0x720ca86d12058e8278740569a61ef482e23541ebdf463b6d3db5bf8f9320b4fa"
+
+>  namehash('0x963ae3f12744d8b3048a300d958f292bb8afa99cebf4daea0a0dd507b44d5181')
+"0x720ca86d12058e8278740569a61ef482e23541ebdf463b6d3db5bf8f9320b4fa"
+
+
+> namehash('abc.eth')
+"0x9f5cd92e2589fadd191e7e7917b9328d03dc84b7a67773db26efb7d0a4635677"
+
+
+>  x = eth.getTransactionReceipt('0x2c4a5245b0fccfe23099c30c614bbb3141d295acf849bf74c69ab928bbea15e4')
+
+
+
+
+-golang
+
+ abigen --abi sens.abi --pkg main --type simplestens --out sens.go --bin sens.bin
+
+ 
+
+ 
+
+simplestens.setContent(namehash('abc.eth'), namehash('0x963ae3f12744d8b3048a300d958f292bb8afa99cebf4daea0a0dd507b44d5181'), {from: eth.accounts[0]});
+simplestens.content('0x9f5cd92e2589fadd191e7e7917b9328d03dc84b7a67773db26efb7d0a4635677', {from: eth.accounts[0]});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

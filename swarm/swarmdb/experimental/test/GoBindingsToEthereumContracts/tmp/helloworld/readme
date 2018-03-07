@@ -1,0 +1,42 @@
+
+
+
+----------------------------- nodejs ----------------------------------------------------------------------------------------------------------------
+curl --silent --location https://rpm.nodesource.com/setup_8.x | bash -
+Then install:
+
+yum -y install nodejs
+
+
+-solc
+
+[root@puppeth-centos7-11091000-99xf ~]# npm install -g solc
+/usr/bin/solcjs -> /usr/lib/node_modules/solc/solcjs
++ solc@0.4.19
+added 65 packages in 5.01s
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+https://ethereum.github.io/browser-solidity/#version=soljson-v0.4.19+commit.c4cbbb05.js
+
+
+
+
+geth attach ipc:/var/www/vhosts/data/geth.ipc
+
+
+
+personal.unlockAccount(web3.eth.accounts[0], "mdotm")
+
+
+> loadScript("/var/www/vhosts/swarm.wolk.com/test/GoBindingsToEthereumContracts/helloworld/greeter.js")
+
+
+
+Contract mined! address: 0xb90cda1215499c3b01b01d04b8c3987333380ed9 transactionHash: 0xe95db7e3ba23f0497249e81f2d085ec64eca57672f2123b794179ccb2f885657
+
+
+
+eth.getCode(greeter.address)
+
+greeter.greet();

@@ -1,0 +1,19 @@
+To use the API instrumentation you first need to define the value EXTERNAL_API_INSTRUMENTATION in preprocessor of the project.
+Include the "API Instrumentation.h" header file to every source or headers you want to use the instrumentation.
+The instrumentation uses a file that contains the command of the instrumentation.
+That file should be called "API Instrumentation.txt" and it should be placed in the jhi service folder.
+The content of the file and its affects will be described below.
+
+To activate the instrumentation, the "registerApiList()" API should be called and from then on, the instrumentation will be used where included.
+
+_____________________________
+The "API Instrumentation.txt" command file:
+The file should contain only one integer value.
+The value always changes only one external API according to the list below. all the other APIs will not change.
+If the value does not match any instrumentation, no changes will be made.
+
+The values correspond to the following instrumentations:
+1	-	getaddrinfo API will return EAI_NONAME
+2	-	getaddrinfo API will return EAI_BADFLAGS
+3	-	socket API will return INVALID_SOCKET
+4	-	bind API will return SOCKET_ERROR

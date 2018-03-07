@@ -1,0 +1,92 @@
+https://github.com/rupc/go-with-intel-sgx
+https://github.com/digawp/hello-enclave
+
+1)
+cp TEE.cpp from go-with-intel-sgx to /var/www/vhost/sgx/hello-enclave/App/TEE.cpp
+   change testMain(void) content to the code from App.cpp
+
+1)
+cp TEE.h from go-with-intel-sgx to /var/www/vhost/sgx/hello-enclave/App/TEE.h
+
+
+
+1)
+add this to the end of the Makefile ->
+
+######## Library ########
+App/sgx_utils/sgx_utils.o: App/sgx_utils/sgx_utils.cpp
+	$(CXX) $(App_Cpp_Flags) -c $< -o $@
+
+App/TEE.o: App/TEE.cpp App/Enclave_u.c
+	$(CXX) $(App_Cpp_Flags) -c $< -o $@
+
+libtee.so: App/TEE.o App/sgx_utils/sgx_utils.o App/Enclave_u.o
+	$(CXX) -shared $^ -o $@ $(App_Link_Flags)
+
+cgo: libtee.so
+	LD_LIBRARY_PATH=$$LD_LIBRARY_PATH:. go run cgo.go
+
+
+.PHONY: clean
+
+clean:
+	@rm -f $(App_Name) $(Enclave_Name) $(Signed_Enclave_Name) $(App_Cpp_Objects) App/Enclave_u.* $(Enclave_Cpp_Objects) Enclave/Enclave_t.*
+
+
+
+1)
+
+add the cgo.go file to the project at the main folder
+
+
+1) call make  
+
+
+------------------------------------ lib use -----------------------------------------
+
+cp 
+
+cgo.go    change                    
+                    #include "TEE.h"
+                    #cgo LDFLAGS: -IApp -L. -ltee 
+
+
+
+enclave.signed.so
+enclave.so
+libtee.so
+TEE.h
+TEE.o
+
+see readme file for more ->
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

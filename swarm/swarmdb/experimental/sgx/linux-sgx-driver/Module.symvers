@@ -1,0 +1,4 @@
+0xeee05b88	sgx_get_page	/var/www/vhost/sgx/linux-sgx-driver/isgx	EXPORT_SYMBOL
+0x03e2145b	sgx_alloc_page	/var/www/vhost/sgx/linux-sgx-driver/isgx	EXPORT_SYMBOL
+0x9e3ad136	sgx_put_page	/var/www/vhost/sgx/linux-sgx-driver/isgx	EXPORT_SYMBOL
+0xae201b85	sgx_free_page	/var/www/vhost/sgx/linux-sgx-driver/isgx	EXPORT_SYMBOL

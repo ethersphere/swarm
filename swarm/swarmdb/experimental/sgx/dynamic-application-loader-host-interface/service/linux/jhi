@@ -1,0 +1,45 @@
+#!/bin/bash
+### BEGIN INIT INFO
+# Provides: jhid
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Start daemon at boot time
+# Description:       Enable service provided by daemon.
+### END INIT INFO
+
+case "$1" in
+    start)
+        if pidof jhid > /dev/null; then
+            echo "Already running"
+        else
+            echo "Starting jhid..."
+            jhid -d
+        fi
+    ;;
+    stop)
+        echo "Stopping jhid..."
+        pkill jhid
+    ;;
+    restart)
+        echo "Stopping jhid..."
+        pkill jhid
+        echo "Starting jhid..."
+        jhid -d
+
+    ;;
+    status)
+        if pidof jhid > /dev/null; then
+            echo Running
+        else
+            echo Stopped
+        fi 
+    ;;
+    *)
+    echo "Usage: jhi {start|stop|restart|status}"
+    exit 1
+    ;;
+esac
+
+exit 0

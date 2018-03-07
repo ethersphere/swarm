@@ -1,0 +1,12 @@
+var simplestensContract = web3.eth.contract([{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"hash","type":"bytes32"}],"name":"setContent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}]);
+var simplestens = simplestensContract.new(
+   {
+     from: web3.eth.accounts[0], 
+     data: '0x6060604052341561000f57600080fd5b6101148061001e6000396000f30060606040526004361060485763ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416632dff69418114604d578063c3d014d6146072575b600080fd5b3415605757600080fd5b6060600435608a565b60405190815260200160405180910390f35b3415607c57600080fd5b6088600435602435609c565b005b60009081526020819052604090205490565b6000828152602081905260409081902082905582907f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc9083905190815260200160405180910390a250505600a165627a7a723058200d58a9cdff1508f1bba2a044957ac49166d7e01363236a1578b52188a133ca060029', 
+     gas: '4700000'
+   }, function (e, contract){
+    console.log(e, contract);
+    if (typeof contract.address !== 'undefined') {
+         console.log('Contract mined! address: ' + contract.address + ' transactionHash: ' + contract.transactionHash);
+    }
+ })

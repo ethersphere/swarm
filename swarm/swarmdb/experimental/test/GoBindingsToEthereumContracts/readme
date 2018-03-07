@@ -1,0 +1,141 @@
+
+
+ssh 35.202.229.34 
+
+
+
+[root@puppeth-centos7-11091000-99xf data]#  more /var/www/vhosts/data/bootnode.log
+nohup: ignoring input and appending output to ‘nohup.out’
+INFO [12-01|15:48:42] UDP listener up                          self=enode://f6d69f3dc8edc33087cbd500aac794dec0a539ff10d059b06d2c7274492be70636e63115e7fe5917fde8c7cde836583f70f3eee69d75fdcddf019f58a740cd25@
+[::]:30301
+[root@puppeth-centos7-11091000-99xf data]#
+
+
+
+
+[root@puppeth-centos7-11091000-99xf vhosts]# mkdir /var/www/vhosts/data
+[root@puppeth-centos7-11091000-99xf vhosts]# geth --datadir /var/www/vhosts/data/ account new
+WARN [12-01|15:45:15] No etherbase set and no accounts found as default
+Your new account is locked with a password. Please give a password. Do not forget this password.
+Passphrase:                                                                                          mdotm
+Repeat passphrase:
+Address: {c157ed050bdd743d8ea63ddc1dc1cd834781155b}
+
+
+
+nohup geth --bootnodes enode://f6d69f3dc8edc33087cbd500aac794dec0a539ff10d059b06d2c7274492be70636e63115e7fe5917fde8c7cde836583f70f3eee69d75fdcddf019f58a740cd25@10.128.0.13:30301 \
+       --identity  "WolkMainNode" \
+       --datadir /var/www/vhosts/data \
+       --mine \
+       --unlock 0 \
+       --password <(echo -n "mdotm") \
+       --verbosity 6 \
+       --networkid 55334 \
+       --rpc \
+        2>> /var/www/vhosts/data/geth.log &
+        
+        
+        
+nohup swarm \
+       --bzzaccount c157ed050bdd743d8ea63ddc1dc1cd834781155b \
+       --swap \
+       --swap-api /var/www/vhosts/data/geth.ipc \
+       --datadir /var/www/vhosts/data \
+       --verbosity 6 \
+       --ens-api /var/www/vhosts/data/geth.ipc \
+       --bzznetworkid 55334 \
+       2>> /var/www/vhosts/data/swarm.log < <(echo -n "mdotm") &        
+        
+        
+        
+geth attach ipc:/var/www/vhosts/data/geth.ipc
+
+web3.fromWei(eth.getBalance(eth.accounts[0]), "ether")
+
+admin.nodeInfo               will give the port      listener: 30303
+
+                            
+-------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+yum install wget
+- https://github.com/ethereum/solidity/releases
+- get the static bin file
+wget https://github.com/ethereum/solidity/releases/download/v0.4.13/solc-static-linux
+cp solc-static-linux /var/www/vhosts/swarm.wolk.com/src/github.com/ethereum/go-ethereum/build/bin/solc
+chmod 755 /var/www/vhosts/swarm.wolk.com/src/github.com/ethereum/go-ethereum/build/bin/solc
+
+- example 1
+https://vincentserpoul.github.io/post/binding-ethereum-golang/
+
+cd /var/www/vhosts/swarm.wolk.com/test/DeployContract/
+abigen --sol ./Trigger.sol --pkg main --out trigger.go
+
+- example 2
+https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts
+-------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+
+----------------------------- nodejs ----------------------------------------------------------------------------------------------------------------
+curl --silent --location https://rpm.nodesource.com/setup_8.x | bash -
+Then install:
+
+yum -y install nodejs
+
+
+-solc
+
+[root@puppeth-centos7-11091000-99xf ~]# npm install -g solc
+/usr/bin/solcjs -> /usr/lib/node_modules/solc/solcjs
++ solc@0.4.19
+added 65 packages in 5.01s
+
+---------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+
+
+
+Please read "How to Write Go Code".
+
+Don't use /src in your GOPATH. Packages are located in $GOPATH/src.
+
+For build or install you need to have your files in a package directory.
+
+For go run, you need to supply all files as argument:
+
+go run main.go employee.go
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

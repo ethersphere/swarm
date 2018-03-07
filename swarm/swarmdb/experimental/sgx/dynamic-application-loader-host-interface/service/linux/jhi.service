@@ -1,0 +1,10 @@
+[Unit]
+Description=Intel Dynamic Application Loader Host Interface (JHI)
+
+[Service]
+Type=forking
+ExecStart=/usr/sbin/jhid -d
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

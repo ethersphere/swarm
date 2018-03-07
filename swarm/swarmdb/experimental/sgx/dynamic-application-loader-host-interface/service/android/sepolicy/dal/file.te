@@ -1,0 +1,3 @@
+# define types of files used by jhi
+type jhi_data_file, file_type, data_file_type;
+type jhi_dynamic_socket_dir, file_type, data_file_type;

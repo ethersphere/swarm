@@ -1,0 +1,15 @@
+# allow shell connect to jhi socket
+unix_socket_connect(shell, jhid, jhid);
+allow shell jhid_socket:sock_file rw_file_perms;
+
+# allow shell enabling android service
+allow shell jhi_prop:property_service set;
+
+# allow shell use dynamic sockets folder
+allow shell jhi_dynamic_socket_dir:dir rw_dir_perms;
+allow shell jhi_dynamic_socket_dir:sock_file create_file_perms;
+allow shell jhi_dynamic_socket_dir:sock_file rw_file_perms;
+allow shell jhi_dynamic_socket_dir:sock_file unlink;
+
+# allow shell search in jhi files (dynamic sockets is located inside)
+allow shell jhi_data_file:dir search;

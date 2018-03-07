@@ -1,0 +1,7 @@
+# pack-refs with: peeled fully-peeled 
+cd516380e5ffa008505dc0e86ddbf45276021219 refs/remotes/origin/master
+d2d50c36f62693ba629bd1efe4076a1a1f7a06d7 refs/tags/sgx_driver_1.6
+51b2884d4c3ac0f7bfa5b46ff529496e360e5ef1 refs/tags/sgx_driver_1.7
+cec111a6eed065a7d358913ec53f4c741d53976a refs/tags/sgx_driver_1.8
+3abcf829226e7fdf46ae221cf1f9f9562d503fa5 refs/tags/sgx_driver_1.9
+cd516380e5ffa008505dc0e86ddbf45276021219 refs/tags/sgx_driver_1.9_rhel7.4

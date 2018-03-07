@@ -1,0 +1,61 @@
+
+
+echo $LD_LIBRARY_PATH
+/opt/intel/sgxsdk/sdk_libs
+
+
+1)
+cd /var/www/vhost/sgx/hello-enclave-lib
+
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
+go run cgo.go
+go build cgo.go
+./cgo
+
+
+
+2)
+cd /var/www/vhost/sgx/go-code-files
+go build cgo.go
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:. ./cgo
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

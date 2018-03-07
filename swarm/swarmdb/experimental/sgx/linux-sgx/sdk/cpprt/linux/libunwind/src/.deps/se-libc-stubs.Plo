@@ -1,0 +1,96 @@
+se-libc-stubs.lo: se-libc-stubs.c /usr/include/stdc-predef.h \
+ ../../../../../common/inc/internal/arch.h \
+ ../../../../../common/inc/internal/inst.h \
+ ../../../../../common/inc/internal/se_types.h \
+ ../../../../../common/inc/internal/se_cdefs.h \
+ /usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/stdint.h \
+ /usr/include/stdint.h /usr/include/features.h /usr/include/sys/cdefs.h \
+ /usr/include/bits/wordsize.h /usr/include/gnu/stubs.h \
+ /usr/include/gnu/stubs-64.h /usr/include/bits/wchar.h \
+ /usr/include/unistd.h /usr/include/bits/posix_opt.h \
+ /usr/include/bits/types.h /usr/include/bits/typesizes.h \
+ /usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/stddef.h \
+ /usr/include/bits/confname.h ../../../../../common/inc/sgx_attributes.h \
+ ../../../../../common/inc/sgx_key.h \
+ ../../../../../common/inc/sgx_attributes.h \
+ ../../../../../common/inc/sgx_report.h \
+ ../../../../../common/inc/sgx_key.h \
+ ../../../../../common/inc/sgx_tcrypto.h ../../../../../common/inc/sgx.h \
+ ../../../../../common/inc/sgx_error.h \
+ ../../../../../common/inc/sgx_report.h \
+ ../../../../../common/inc/sgx_defs.h \
+ ../../../../../common/inc/sgx_trts.h /usr/include/assert.h \
+ /usr/include/stdlib.h /usr/include/bits/stdlib-float.h \
+ /usr/include/string.h /usr/include/sys/mman.h /usr/include/bits/mman.h
+
+/usr/include/stdc-predef.h:
+
+../../../../../common/inc/internal/arch.h:
+
+../../../../../common/inc/internal/inst.h:
+
+../../../../../common/inc/internal/se_types.h:
+
+../../../../../common/inc/internal/se_cdefs.h:
+
+/usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/stdint.h:
+
+/usr/include/stdint.h:
+
+/usr/include/features.h:
+
+/usr/include/sys/cdefs.h:
+
+/usr/include/bits/wordsize.h:
+
+/usr/include/gnu/stubs.h:
+
+/usr/include/gnu/stubs-64.h:
+
+/usr/include/bits/wchar.h:
+
+/usr/include/unistd.h:
+
+/usr/include/bits/posix_opt.h:
+
+/usr/include/bits/types.h:
+
+/usr/include/bits/typesizes.h:
+
+/usr/lib/gcc/x86_64-redhat-linux/4.8.5/include/stddef.h:
+
+/usr/include/bits/confname.h:
+
+../../../../../common/inc/sgx_attributes.h:
+
+../../../../../common/inc/sgx_key.h:
+
+../../../../../common/inc/sgx_attributes.h:
+
+../../../../../common/inc/sgx_report.h:
+
+../../../../../common/inc/sgx_key.h:
+
+../../../../../common/inc/sgx_tcrypto.h:
+
+../../../../../common/inc/sgx.h:
+
+../../../../../common/inc/sgx_error.h:
+
+../../../../../common/inc/sgx_report.h:
+
+../../../../../common/inc/sgx_defs.h:
+
+../../../../../common/inc/sgx_trts.h:
+
+/usr/include/assert.h:
+
+/usr/include/stdlib.h:
+
+/usr/include/bits/stdlib-float.h:
+
+/usr/include/string.h:
+
+/usr/include/sys/mman.h:
+
+/usr/include/bits/mman.h:

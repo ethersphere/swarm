@@ -1,0 +1,9 @@
+/usr/sbin/jhid
+/usr/lib/libbhplugin1.so
+/usr/lib/libbhplugin2.so
+/usr/lib/libjhi.so
+/usr/lib/libteemanagement.so
+/usr/lib/libteetransport.so
+/var/lib/intel/dal/applets/SpoolerApplet.dalp
+/etc/jhi/jhi.conf
+/usr/lib/systemd/system/jhi.service

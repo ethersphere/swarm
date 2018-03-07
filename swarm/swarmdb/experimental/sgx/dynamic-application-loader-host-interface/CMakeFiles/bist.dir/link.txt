@@ -1,0 +1,1 @@
+/usr/bin/c++    -std=c++11 -Wall    CMakeFiles/bist.dir/test/bist/bist.cpp.o  -o bin_linux/bist -rdynamic bin_linux/libjhi.so bin_linux/libteemanagement.so bin_linux/libjhi.so -luuid -lpthread -Wl,-rpath,/var/www/vhost/sgx/dynamic-application-loader-host-interface/bin_linux 

@@ -1,0 +1,2 @@
+# define types of property for enabling android service
+type jhi_prop, property_type;

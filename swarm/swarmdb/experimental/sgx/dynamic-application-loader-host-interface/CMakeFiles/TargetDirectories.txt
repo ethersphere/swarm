@@ -1,0 +1,8 @@
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/CMakeFiles/bhplugin1.dir
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/CMakeFiles/bhplugin2.dir
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/CMakeFiles/bist.dir
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/CMakeFiles/jhi.dir
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/CMakeFiles/jhid.dir
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/CMakeFiles/smoketest.dir
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/CMakeFiles/teemanagement.dir
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/CMakeFiles/teetransport.dir

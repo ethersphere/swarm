@@ -1,0 +1,57 @@
+src/base/spinlock.lo: src/base/spinlock.cc src/config.h \
+ ../../../common/inc/sgx_trts.h ../../../common/inc/sgx_error.h \
+ ../../../common/inc/tlibc/stddef.h ../../../common/inc/tlibc/sys/cdefs.h \
+ ../../../common/inc/tlibc/sys/_types.h ../../../common/inc/sgx_defs.h \
+ ../../../common/inc/sgx_thread.h ../../../common/inc/tlibc/stdint.h \
+ ../../../common/inc/tlibc/sys/stdint.h \
+ ../../../common/inc/sgx_spinlock.h src/base/spinlock.h \
+ src/base/atomicops.h src/base/arm_instruction_set_select.h \
+ src/base/atomicops-internals-x86.h src/base/basictypes.h \
+ ../../../common/inc/tlibc/string.h ../../../common/inc/tlibc/inttypes.h \
+ ../../../common/inc/tlibc/sys/types.h \
+ ../../../common/inc/tlibc/sys/endian.h src/base/dynamic_annotations.h \
+ src/base/thread_annotations.h
+
+src/config.h:
+
+../../../common/inc/sgx_trts.h:
+
+../../../common/inc/sgx_error.h:
+
+../../../common/inc/tlibc/stddef.h:
+
+../../../common/inc/tlibc/sys/cdefs.h:
+
+../../../common/inc/tlibc/sys/_types.h:
+
+../../../common/inc/sgx_defs.h:
+
+../../../common/inc/sgx_thread.h:
+
+../../../common/inc/tlibc/stdint.h:
+
+../../../common/inc/tlibc/sys/stdint.h:
+
+../../../common/inc/sgx_spinlock.h:
+
+src/base/spinlock.h:
+
+src/base/atomicops.h:
+
+src/base/arm_instruction_set_select.h:
+
+src/base/atomicops-internals-x86.h:
+
+src/base/basictypes.h:
+
+../../../common/inc/tlibc/string.h:
+
+../../../common/inc/tlibc/inttypes.h:
+
+../../../common/inc/tlibc/sys/types.h:
+
+../../../common/inc/tlibc/sys/endian.h:
+
+src/base/dynamic_annotations.h:
+
+src/base/thread_annotations.h:
