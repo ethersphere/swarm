@@ -1,17 +1,11 @@
-package main
+package wolkdbserver
 
 import (
 	"bufio"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"flag"
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
-	swarmdb "github.com/ethereum/go-ethereum/swarmdb"
-	sdbc "github.com/ethereum/go-ethereum/swarmdb/swarmdbcommon"
-	"github.com/rs/cors"
 	"io"
 	"io/ioutil"
 	logger "log"
@@ -23,6 +17,12 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
+	swarmdb "github.com/ethereum/go-ethereum/swarm/swarmdb"
+	sdbc "github.com/ethereum/go-ethereum/swarm/swarmdb/swarmdbcommon"
+	"github.com/rs/cors"
 )
 
 type Client struct {
@@ -637,6 +637,7 @@ func (s *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+/*
 func main() {
 	configFileLocation := flag.String("config", swarmdb.SWARMDBCONF_FILE, "Full path location to SWARMDB configuration file.")
 	//TODO: store this somewhere accessible to be used later
@@ -676,3 +677,4 @@ func main() {
 	log.Debug("Trying to start TCPIP server...\n")
 	StartTcpipServer(swdb, config)
 }
+*/
