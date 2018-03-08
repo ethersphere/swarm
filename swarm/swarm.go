@@ -179,7 +179,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 
 	if true { //self.config.SwarmDBEnabled {
 		swarmdbConfig, _ := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
-		self.swarmdb, _ = swarmdb.NewSwarmDB(swarmdbConfig)
+		self.swarmdb, _ = swarmdb.NewSwarmDB(swarmdbConfig, self.lstore, self.api, self.ps)
 		//TODO: errors
 	}
 

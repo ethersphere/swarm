@@ -23,6 +23,9 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	//sdbc "github.com/wolkdb/swarmdb/swarmdbcommon"
 	sdbc "github.com/ethereum/go-ethereum/swarm/swarmdb/swarmdbcommon"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/pss"
 	"path/filepath"
 	"strings"
 	"github.com/ethereum/go-ethereum/swarm/swarmdb/ash"
@@ -35,6 +38,9 @@ type SwarmDB struct {
 	ens          ENSSimulation
 	swapdb       *SwapDBStore
 	Netstats     *Netstats
+	lstore		*storage.LocalStore
+	api		*api.Api
+	pss		*pss.Pss
 }
 
 //for sql parsing
@@ -161,7 +167,7 @@ const (
 	CHUNK_END_CHUNKVAL   = 4096
 )
 
-func NewSwarmDB(config *SWARMDBConfig) (swdb *SwarmDB, err error) {
+func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api, pss *pss.Pss) (swdb *SwarmDB, err error) {
 	sd := new(SwarmDB)
 	sd.tables = make(map[string]*Table)
 
@@ -190,6 +196,9 @@ func NewSwarmDB(config *SWARMDBConfig) (swdb *SwarmDB, err error) {
 	}
 	sd.swapdb = swapdbObj
 
+	sd.lstore = lstore
+	sd.api = api 
+	sd.pss = pss 
 	return sd, nil
 }
 
