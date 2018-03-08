@@ -91,8 +91,8 @@ func NewDBChunkStore(config *SWARMDBConfig, netstats *Netstats) (self *DBChunkst
 	path := config.ChunkDBPath
 	ldb, err := leveldb.OpenFile(path, nil)
 	if err != nil {
-		return self, err
-	}
+		return self, &sdbc.SWARMDBError{ Message: fmt.Sprintf("[dbchunkstore:NewDBChunkstore] Unable to Open DB at path [%s] | Error: %s",path, err), ErrorCode: 499, ErrorMessage: fmt.Sprintf("[dbchunkstore:NewDBChunkstore] Unable to Open DB [%s] | %s", path, err) }
+	} 
 
 	km, errKM := NewKeyManager(config)
 	if errKM != nil {
