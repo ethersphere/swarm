@@ -300,13 +300,11 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 				return errors.New("Invalid TTL")
 			}
 			log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(self.BaseAddr()))
-			self.checkFwdCache([]byte{}, digest, true)
 			return self.forward(pssmsg, digest)
 		}
 		log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(self.BaseAddr()))
 
 		if !self.process(pssmsg, digest) {
-			self.checkFwdCache([]byte{}, digest, true)
 			err = self.forward(pssmsg, digest)
 		}
 		return err
