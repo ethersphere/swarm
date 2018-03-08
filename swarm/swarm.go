@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -52,6 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/swarmdb"
+	wolkdbserver "github.com/ethereum/go-ethereum/swarm/swarmdb/server"
 )
 
 var (
@@ -175,11 +177,11 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		}
 	}
 
-        if true { //self.config.SwarmDBEnabled {
-                swarmdbConfig, _ := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
-                self.swarmdb, _ = swarmdb.NewSwarmDB(swarmdbConfig)
-                //TODO: errors
-        }
+	if true { //self.config.SwarmDBEnabled {
+		swarmdbConfig, _ := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
+		self.swarmdb, _ = swarmdb.NewSwarmDB(swarmdbConfig)
+		//TODO: errors
+	}
 
 	// set up high level api
 	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
@@ -375,6 +377,31 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		})
 	}
 
+	/* Start of SWARMDB Server Setup/Initiation */
+
+	configFileLocation := swarmdb.SWARMDBCONF_FILE
+	if _, err := os.Stat(configFileLocation); os.IsNotExist(err) {
+		log.Debug("Default config file missing.  Building ..")
+		_, err := swarmdb.NewKeyManagerWithoutConfig(configFileLocation, swarmdb.SWARMDBCONF_DEFAULT_PASSPHRASE)
+		if err != nil {
+			//TODO
+		}
+	}
+
+	config, err := swarmdb.LoadSWARMDBConfig(configFileLocation)
+	if err != nil {
+		log.Debug("The config file location provided [%s] is invalid.  Exiting ...", configFileLocation)
+		os.Exit(1)
+	}
+
+	log.Debug("Initiating StartHttpServer for SwarmDB\n")
+	go wolkdbserver.StartHttpServer(self.swarmdb, config)
+
+	log.Debug("Initiating StartTCP server for SwarmDB\n")
+	go wolkdbserver.StartTcpipServer(self.swarmdb, config)
+
+	/* End of SWARMDB Server Setup/Initiation */
+
 	log.Debug(fmt.Sprintf("Swarm http proxy started on port: %v", self.config.Port))
 
 	if self.config.Cors != "" {
@@ -525,4 +552,3 @@ type Info struct {
 func (self *Info) Info() *Info {
 	return self
 }
-
