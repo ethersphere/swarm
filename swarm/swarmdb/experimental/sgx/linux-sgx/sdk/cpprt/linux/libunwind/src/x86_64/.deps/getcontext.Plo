@@ -1,0 +1,6 @@
+x86_64/getcontext.lo: x86_64/getcontext.S /usr/include/stdc-predef.h \
+ x86_64/ucontext_i.h
+
+/usr/include/stdc-predef.h:
+
+x86_64/ucontext_i.h:

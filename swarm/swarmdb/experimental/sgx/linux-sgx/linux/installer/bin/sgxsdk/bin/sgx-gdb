@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#
+#  Copyright (c) 2011-2017, Intel Corporation.
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#  http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License
+
+shopt -s expand_aliases
+
+GDB_SGX_PLUGIN_PATH=/var/www/vhost/sgx/linux-sgx/linux/installer/bin/sgxsdk/lib64/gdb-sgx-plugin
+SGX_LIBRARY_PATH=/var/www/vhost/sgx/linux-sgx/linux/installer/bin/sgxsdk/lib64
+
+if [ -f /usr/local/bin/gdb ]
+then
+    GDB=/usr/local/bin/gdb
+elif [ -f /usr/bin/gdb ]
+then
+    GDB=/usr/bin/gdb
+else
+    GDB=gdb
+fi
+
+export PYTHONPATH=$GDB_SGX_PLUGIN_PATH
+LD_PRELOAD=$SGX_LIBRARY_PATH/libsgx_ptrace.so $GDB -iex "directory $GDB_SGX_PLUGIN_PATH" -iex "source $GDB_SGX_PLUGIN_PATH/gdb_sgx_plugin.py" -iex "set environment LD_PRELOAD" -iex "add-auto-load-safe-path /usr/lib" "$@"

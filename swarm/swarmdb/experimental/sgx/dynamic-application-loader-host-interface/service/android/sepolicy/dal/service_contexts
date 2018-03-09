@@ -1,0 +1,2 @@
+com.intel.security.dalinterface.IDALTransportManager         u:object_r:dal_transport_service:s0
+com.intel.security.dalinterface.IDALAdminManager             u:object_r:dal_admin_service:s0

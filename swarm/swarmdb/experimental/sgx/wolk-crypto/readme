@@ -1,0 +1,100 @@
+
+
+1)
+-old    cd /var/www/vhost/sgx/ether-seal
+
+cd /var/www/vhosts/swarm.wolk.com/sgx/sgx-seal/
+
+1) -clean all (clean libtee.so    App/TEE.o        added this to the makefile)    **** must call this first before any make****
+make clean
+
+1) -first just make    ( starting with "make cgo" first will fail - need to fix the make file)
+make
+make run
+
+1) - this will create libtee.so
+make cgo
+
+1)
+
+
+echo $LD_LIBRARY_PATH
+/opt/intel/sgxsdk/sdk_libs
+
+
+1)
+-old    cd /var/www/vhost/sgx/ether-seal
+
+cd /var/www/vhosts/swarm.wolk.com/sgx/sgx-seal/
+
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
+go run cgo.go
+go build cgo.go
+./cgo
+
+
+
+2)
+-old    cd /var/www/vhost/sgx/ether-seal
+
+cd /var/www/vhosts/swarm.wolk.com/sgx/sgx-seal/
+
+
+go build cgo.go
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:. ./cgo
+
+
+
+
+--------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+[sourabh@www6001-centos7 root]$  cd /var/www/vhosts/sourabh/swarm.wolk.com/src/github.com/ethereum/go-ethereum/crypto
+[sourabh@www6001-centos7 crypto]$ node
+>  var Web3 = require('web3');
+undefined
+> var web3 = new Web3();
+undefined
+>  web3.eth.accounts.sign("Hello, world!", '0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef')    sk 32byte 64 len
+{ message: 'Hello, world!',
+  messageHash: '0xb453bd4e271eed985cbab8231da609c4ce0a9cf1f763b6c1594e76315510e0f1',                              hash 32byte 64 len
+  v: '0x1b',                                                                                                            1byte  2 len
+  r: '0x3bc843a917d6c19c487c1d0c660cdd61389ce2a7651ee3171bcc212ffddca164',                                             32byte 64 len
+  s: '0x193f1f2e06f7ed8f9fbf2254232d99848a8102b552032b68a5507b4d81492f0f',                                             32byte 64 len
+  signature: '0x3bc843a917d6c19c487c1d0c660cdd61389ce2a7651ee3171bcc212ffddca164193f1f2e06f7ed8f9fbf2254232d99848a8102b552032b68a5507b4d81492f0f1b' }  r+s+v  32+32+1 65byte 130 len
+>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

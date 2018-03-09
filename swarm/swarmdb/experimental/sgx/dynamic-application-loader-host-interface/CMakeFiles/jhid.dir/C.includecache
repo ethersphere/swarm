@@ -1,0 +1,14 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/var/www/vhost/sgx/dynamic-application-loader-host-interface/external/libb64-1.2/src/cdecode.c
+b64/cdecode.h
+-
+
+external/libb64-1.2/include/b64/cdecode.h
+

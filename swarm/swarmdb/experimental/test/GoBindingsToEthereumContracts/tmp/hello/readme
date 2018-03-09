@@ -1,0 +1,26 @@
+
+
+/usr/lib/node_modules/solc/solcjs
+
+/usr/lib/node_modules/solc/solcjs --bin --abi --optimize -o bin hello.sol
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

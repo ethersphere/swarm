@@ -1,0 +1,238 @@
+
+
+ cd /var/www/vhosts/swarm.wolk.com/test/GoBindingsToEthereumContracts/SimplestENS/
+
+cp sens.sol to ->
+https://remix.ethereum.org
+cp WEB3DEPLOY from remix     and paste it in  geth cli
+geth attach ipc:/var/www/vhosts/data/geth.ipc
+
+
+
+> var simplestensContract = web3.eth.contract([{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"hash","type":"bytes32"}],"name":"setContent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}]);
+undefined
+> var simplestens = simplestensContract.new(
+    {
+      from: web3.eth.accounts[0],
+      data: '0x6060604052341561000f57600080fd5b6101148061001e6000396000f30060606040526004361060485763ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416632dff69418114604d578063c3d014d6146072575b600080fd5b3415605757600080fd5b6060600435608a565b60405190815260200160405180910390f35b3415607c57600080fd5b6088600435602435609c565b005b60009081526020819052604090205490565b6000828152602081905260409081902082905582907f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc9083905190815260200160405180910390a250505600a165627a7a723058200d58a9cdff1508f1bba2a044957ac49166d7e01363236a1578b52188a133ca060029',
+      gas: '4700000'
+    }, function (e, contract){
+     console.log(e, contract);
+     if (typeof contract.address !== 'undefined') {
+          console.log('Contract mined! address: ' + contract.address + ' transactionHash: ' + contract.transactionHash);
+     }
+  })
+null [object Object]
+undefined
+> null [object Object]
+Contract mined! address: 0x6120c3f1fdcd20c384b82eb20d93eef7838e0363 transactionHash: 0x963ae3f12744d8b3048a300d958f292bb8afa99cebf4daea0a0dd507b44d5181
+
+
+
+> function namehash(name) {
+    var node = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    if (name !== '') {
+        var labels = name.split(".");
+        for(var i = labels.length - 1; i >= 0; i--) {
+            node = web3.sha3(node + web3.sha3(labels[i]).slice(2), {encoding: 'hex'});
+        }
+    }
+    return node.toString();
+}
+
+
+geth attach ipc:/var/www/vhosts/data/geth.ipc
+
+> simplestens.setContent(namehash('abc.eth'), namehash('0x963ae3f12744d8b3048a300d958f292bb8afa99cebf4daea0a0dd507b44d5181'), {from: eth.accounts[0]});
+"0x2c4a5245b0fccfe23099c30c614bbb3141d295acf849bf74c69ab928bbea15e4"
+
+> simplestens.content(namehash('abc.eth'), {from: eth.accounts[0]});
+"0x720ca86d12058e8278740569a61ef482e23541ebdf463b6d3db5bf8f9320b4fa"
+
+>  namehash('0x963ae3f12744d8b3048a300d958f292bb8afa99cebf4daea0a0dd507b44d5181')
+"0x720ca86d12058e8278740569a61ef482e23541ebdf463b6d3db5bf8f9320b4fa"
+
+
+> namehash('abc.eth')
+"0x9f5cd92e2589fadd191e7e7917b9328d03dc84b7a67773db26efb7d0a4635677"
+
+
+>  x = eth.getTransactionReceipt('0x2c4a5245b0fccfe23099c30c614bbb3141d295acf849bf74c69ab928bbea15e4')
+
+
+
+
+-golang
+
+ abigen --abi sens.abi --pkg main --type simplestens --out sens.go --bin sens.bin
+
+ 
+
+ 
+
+simplestens.setContent(namehash('abc.eth'), namehash('0x963ae3f12744d8b3048a300d958f292bb8afa99cebf4daea0a0dd507b44d5181'), {from: eth.accounts[0]});
+simplestens.content('0x9f5cd92e2589fadd191e7e7917b9328d03dc84b7a67773db26efb7d0a4635677', {from: eth.accounts[0]});
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+-new CLI
+
+> var simplestensABI = [{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"hash","type":"bytes32"}],"name":"setContent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}];
+undefined
+> var simplestens = eth.contract(simplestensABI).at("0x6120c3f1fdcd20c384b82eb20d93eef7838e0363");
+undefined
+
+> simplestens.content('0x9f5cd92e2589fadd191e7e7917b9328d03dc84b7a67773db26efb7d0a4635677', {from: eth.accounts[0]});
+"0x9f5cd92e2589fadd191e7e7917b9328d03dc84b7a67773db26efb7d0a4635677"
+>
+
+function namehash(name) {
+    var node = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    if (name !== '') {
+        var labels = name.split(".");
+        for(var i = labels.length - 1; i >= 0; i--) {
+            node = web3.sha3(node + web3.sha3(labels[i]).slice(2), {encoding: 'hex'});
+        }
+    }
+    return node.toString();
+}
+
+------------------------------------------------------------------------------- mayumi ------------------------------------------------------------------------------------------
+
+geth attach ipc:/var/www/vhosts/data/geth.ipc
+
+var simplestensContract = web3.eth.contract([{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"hash","type":"bytes32"}],"name":"setContent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}]);
+
+var simplestens = simplestensContract.new(
+    {
+      from: web3.eth.accounts[0],
+      data: '0x6060604052341561000f57600080fd5b6101148061001e6000396000f30060606040526004361060485763ffffffff7c01000000000000000000000000000000000000000000000000000000006000350416632dff69418114604d578063c3d014d6146072575b600080fd5b3415605757600080fd5b6060600435608a565b60405190815260200160405180910390f35b3415607c57600080fd5b6088600435602435609c565b005b60009081526020819052604090205490565b6000828152602081905260409081902082905582907f0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc9083905190815260200160405180910390a250505600a165627a7a723058200d58a9cdff1508f1bba2a044957ac49166d7e01363236a1578b52188a133ca060029',
+      gas: '4700000'
+    }, function (e, contract){
+     console.log(e, contract);
+     if (typeof contract.address !== 'undefined') {
+          console.log('Contract mined! address: ' + contract.address + ' transactionHash: ' + contract.transactionHash);
+     }
+  })
+
+Contract mined! address: 0x2b7e37cd42c107805e312c7aa9309021730a264b transactionHash: 0xc954c27f6462039e3feab71f78747f8bcf4500e8a794ce0d636087adbdb416d9
+
+
+function namehash(name) {
+    var node = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    if (name !== '') {
+        var labels = name.split(".");
+        for(var i = labels.length - 1; i >= 0; i--) {
+            node = web3.sha3(node + web3.sha3(labels[i]).slice(2), {encoding: 'hex'});
+        }
+    }
+    return node.toString();
+}    
+    
+
+> simplestens.setContent(namehash('abc.eth'), '0x720ca86d12058e8278740569a61ef482e23541ebdf463b6d3db5bf8f9320b4fa', {from: eth.accounts[0]});
+"0x1955dadbc64149ce918f7fca7216a7f0f7b7d895fd6412c63fd53bf44edef93e"
+> simplestens.content(namehash('abc.eth'), {from: eth.accounts[0]});
+"0x720ca86d12058e8278740569a61ef482e23541ebdf463b6d3db5bf8f9320b4fa"
+>
+
+
+
+-new CLI
+=====================
+> var simplestensABI = [{"constant":true,"inputs":[{"name":"node","type":"bytes32"}],"name":"content","outputs":[{"name":"ret","type":"bytes32"}],"payable":false,"stateMutability":"view","type":"function"},{"constant":false,"inputs":[{"name":"node","type":"bytes32"},{"name":"hash","type":"bytes32"}],"name":"setContent","outputs":[],"payable":false,"stateMutability":"nonpayable","type":"function"},{"anonymous":false,"inputs":[{"indexed":true,"name":"node","type":"bytes32"},{"indexed":false,"name":"hash","type":"bytes32"}],"name":"ContentChanged","type":"event"}];
+undefined
+> var simplestens = eth.contract(simplestensABI).at("0x2b7e37cd42c107805e312c7aa9309021730a264b");
+undefined  
+    
+function namehash(name) {
+    var node = '0x0000000000000000000000000000000000000000000000000000000000000000';
+    if (name !== '') {
+        var labels = name.split(".");
+        for(var i = labels.length - 1; i >= 0; i--) {
+            node = web3.sha3(node + web3.sha3(labels[i]).slice(2), {encoding: 'hex'});
+        }
+    }
+    return node.toString();
+}    
+------------------------------------------------------------------------------- mayumi ------------------------------------------------------------------------------------------
+
+
+
+
+
+nohup geth --bootnodes enode://067f1fdc793a5a5d3f1b98b2efa88622f8c55290efec6b76b59398063027b505c64d07e5d69bd962e4b993127f97bd7fdcd6bee5694ca16a05200c1d09859d05@10.128.0.21:30301 \
+       --identity  "WolkMainNode" \
+       --datadir /var/www/vhosts/data \
+       --mine \
+       --unlock 0 \
+       --password <(echo -n "mdotm") \
+       --verbosity 6 \
+       --networkid 55300 \
+        2>> /var/www/vhosts/data/geth.log &
+
+ 
+--maxpeers 0
+--nodiscover
+
+
+
+nohup geth --bootnodes enode://f5e184262f11afe7f2fdb636afb6980cbbc8426a2227199e640fb6d1de0c7856f00e062088618d77b7dc87bfbc3ad3649751aa53b821e4234691cc7ad4d184e7@10.128.0.3:30301 \
+--identity WolkMainNode \
+--datadir /var/www/vhosts/data \
+--mine \
+--unlock 0 \
+--password <(echo -n "mdotm") \
+--verbosity 6 \
+--networkid 55501 \
+--rpc \
+--rpcaddr 0.0.0.0 \
+2>> /var/www/vhosts/data/geth.log &
+
+
+ 
+
+
+
+
+
+
+-----------------------------------------------------------------puppeth-centos7-11091000-3428---------------------------------------------------------------------------------------
+
+Contract mined! address: 0xadb1adefb7f51e1ffcf926bfbd3c95fe5b0c2612 transactionHash: 0xc27352de23e0379dee4edf05284ac368770d624cadca375eabeb02b8ae7fe5ff
+
+
+
+
+nohup geth --bootnodes enode://24f5025264f55a6dcb748047fb89aa9e84e8597863eb7e5e1d29f70408d91d88747a47cba4ab3b8375579df55e91314f1476f530712fbe1f88d10e66e68c62c9@1104.198.198.45:30301 \
+--identity WolkMainNode \
+--datadir /var/www/vhosts/data \
+--mine \
+--unlock 0 \
+--password <(echo -n "mdotm") \
+--verbosity 6 \
+--networkid 55501 \
+--rpc \
+--rpcaddr 0.0.0.0 \
+2>> /var/www/vhosts/data/geth.log &
+
+
+key->	indexName := []byte("12345678123456781234567812345678")
+value->	roothash := []byte("87654321876543218765432187654321")
+
+> simplestens.setContent(namehash("12345678123456781234567812345678"), namehash("87654321876543218765432187654321"), {from: eth.accounts[0]});
+"0xc819eb8a16f660957f15c20ad8d9f3efb21b718520d711b3cc27a13d7ab47cc1"
+> simplestens.content(namehash("12345678123456781234567812345678"), {from: eth.accounts[0]});
+"0x4bb9bf839234f9bbd0540aac72702599de3cbfcf6420e56048c32580bd536455"
+> namehash("87654321876543218765432187654321")
+"0x4bb9bf839234f9bbd0540aac72702599de3cbfcf6420e56048c32580bd536455"
+>
+
+ namehash("12345678123456781234567812345678")
+
+-----------------------------------------------------------------puppeth-centos7-11091000-3428---------------------------------------------------------------------------------------
+

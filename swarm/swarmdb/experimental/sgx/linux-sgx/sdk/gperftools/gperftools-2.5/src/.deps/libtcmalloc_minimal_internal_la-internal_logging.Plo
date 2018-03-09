@@ -1,0 +1,213 @@
+src/libtcmalloc_minimal_internal_la-internal_logging.lo: \
+ src/internal_logging.cc src/config.h ../../../common/inc/sgx_trts.h \
+ ../../../common/inc/sgx_error.h ../../../common/inc/tlibc/stddef.h \
+ ../../../common/inc/tlibc/sys/cdefs.h \
+ ../../../common/inc/tlibc/sys/_types.h ../../../common/inc/sgx_defs.h \
+ ../../../common/inc/sgx_thread.h ../../../common/inc/tlibc/stdint.h \
+ ../../../common/inc/tlibc/sys/stdint.h \
+ ../../../common/inc/sgx_spinlock.h src/internal_logging.h \
+ ../../../common/inc/tlibc/stdarg.h ../../../common/inc/tlibc/stdio.h \
+ ../../../common/inc/tlibc/stdlib.h ../../../common/inc/tlibc/string.h \
+ ../../../common/inc/tlibc/unistd.h ../../../common/inc/tlibc/sys/types.h \
+ ../../../common/inc/tlibc/sys/endian.h src/gperftools/malloc_extension.h \
+ ../../../sdk/tlibcxx/include/string \
+ ../../../sdk/tlibcxx/include/__config ../../../sdk/tlibcxx/include/__sgx \
+ ../../../common/inc/tlibc/assert.h ../../../sdk/tlibcxx/include/iosfwd \
+ ../../../common/inc/tlibc/wchar.h ../../../sdk/tlibcxx/include/cstring \
+ ../../../sdk/tlibcxx/include/cstdio ../../../sdk/tlibcxx/include/cwchar \
+ ../../../sdk/tlibcxx/include/cwctype ../../../sdk/tlibcxx/include/cctype \
+ ../../../common/inc/tlibc/ctype.h ../../../common/inc/tlibc/wctype.h \
+ ../../../sdk/tlibcxx/include/algorithm \
+ ../../../sdk/tlibcxx/include/initializer_list \
+ ../../../sdk/tlibcxx/include/cstddef \
+ ../../../sdk/tlibcxx/include/type_traits \
+ ../../../sdk/tlibcxx/include/utility \
+ ../../../sdk/tlibcxx/include/__tuple ../../../sdk/tlibcxx/include/memory \
+ ../../../sdk/tlibcxx/include/typeinfo \
+ ../../../common/inc/tlibc/../stdc++/typeinfo \
+ ../../../common/inc/sgx_defs.h ../../../common/inc/stdc++/linux/typeinfo \
+ ../../../common/inc/stdc++/linux/exception \
+ ../../../sdk/tlibcxx/include/cstdint ../../../sdk/tlibcxx/include/new \
+ ../../../common/inc/tlibc/../stdc++/new \
+ ../../../sdk/tlibcxx/include/exception \
+ ../../../common/inc/tlibc/../stdc++/exception \
+ ../../../common/inc/stdc++/linux/exception \
+ ../../../sdk/tlibcxx/include/__undef___deallocate \
+ ../../../sdk/tlibcxx/include/limits \
+ ../../../sdk/tlibcxx/include/__undef_min_max \
+ ../../../sdk/tlibcxx/include/iterator \
+ ../../../sdk/tlibcxx/include/__functional_base \
+ ../../../sdk/tlibcxx/include/__functional_base_03 \
+ ../../../sdk/tlibcxx/include/__debug ../../../sdk/tlibcxx/include/tuple \
+ ../../../sdk/tlibcxx/include/stdexcept \
+ ../../../sdk/tlibcxx/include/cassert ../../../sdk/tlibcxx/include/atomic \
+ ../../../sdk/tlibcxx/include/cstdlib ../../../sdk/tlibcxx/include/vector \
+ ../../../sdk/tlibcxx/include/__bit_reference \
+ ../../../sdk/tlibcxx/include/climits ../../../common/inc/tlibc/limits.h \
+ ../../../common/inc/tlibc/sys/limits.h \
+ ../../../sdk/tlibcxx/include/__split_buffer src/base/logging.h \
+ ../../../common/inc/tlibc/errno.h src/base/commandlineflags.h \
+ src/base/basictypes.h ../../../common/inc/tlibc/inttypes.h \
+ src/base/spinlock.h src/base/atomicops.h \
+ src/base/arm_instruction_set_select.h src/base/atomicops-internals-x86.h \
+ src/base/dynamic_annotations.h src/base/thread_annotations.h
+
+src/config.h:
+
+../../../common/inc/sgx_trts.h:
+
+../../../common/inc/sgx_error.h:
+
+../../../common/inc/tlibc/stddef.h:
+
+../../../common/inc/tlibc/sys/cdefs.h:
+
+../../../common/inc/tlibc/sys/_types.h:
+
+../../../common/inc/sgx_defs.h:
+
+../../../common/inc/sgx_thread.h:
+
+../../../common/inc/tlibc/stdint.h:
+
+../../../common/inc/tlibc/sys/stdint.h:
+
+../../../common/inc/sgx_spinlock.h:
+
+src/internal_logging.h:
+
+../../../common/inc/tlibc/stdarg.h:
+
+../../../common/inc/tlibc/stdio.h:
+
+../../../common/inc/tlibc/stdlib.h:
+
+../../../common/inc/tlibc/string.h:
+
+../../../common/inc/tlibc/unistd.h:
+
+../../../common/inc/tlibc/sys/types.h:
+
+../../../common/inc/tlibc/sys/endian.h:
+
+src/gperftools/malloc_extension.h:
+
+../../../sdk/tlibcxx/include/string:
+
+../../../sdk/tlibcxx/include/__config:
+
+../../../sdk/tlibcxx/include/__sgx:
+
+../../../common/inc/tlibc/assert.h:
+
+../../../sdk/tlibcxx/include/iosfwd:
+
+../../../common/inc/tlibc/wchar.h:
+
+../../../sdk/tlibcxx/include/cstring:
+
+../../../sdk/tlibcxx/include/cstdio:
+
+../../../sdk/tlibcxx/include/cwchar:
+
+../../../sdk/tlibcxx/include/cwctype:
+
+../../../sdk/tlibcxx/include/cctype:
+
+../../../common/inc/tlibc/ctype.h:
+
+../../../common/inc/tlibc/wctype.h:
+
+../../../sdk/tlibcxx/include/algorithm:
+
+../../../sdk/tlibcxx/include/initializer_list:
+
+../../../sdk/tlibcxx/include/cstddef:
+
+../../../sdk/tlibcxx/include/type_traits:
+
+../../../sdk/tlibcxx/include/utility:
+
+../../../sdk/tlibcxx/include/__tuple:
+
+../../../sdk/tlibcxx/include/memory:
+
+../../../sdk/tlibcxx/include/typeinfo:
+
+../../../common/inc/tlibc/../stdc++/typeinfo:
+
+../../../common/inc/sgx_defs.h:
+
+../../../common/inc/stdc++/linux/typeinfo:
+
+../../../common/inc/stdc++/linux/exception:
+
+../../../sdk/tlibcxx/include/cstdint:
+
+../../../sdk/tlibcxx/include/new:
+
+../../../common/inc/tlibc/../stdc++/new:
+
+../../../sdk/tlibcxx/include/exception:
+
+../../../common/inc/tlibc/../stdc++/exception:
+
+../../../common/inc/stdc++/linux/exception:
+
+../../../sdk/tlibcxx/include/__undef___deallocate:
+
+../../../sdk/tlibcxx/include/limits:
+
+../../../sdk/tlibcxx/include/__undef_min_max:
+
+../../../sdk/tlibcxx/include/iterator:
+
+../../../sdk/tlibcxx/include/__functional_base:
+
+../../../sdk/tlibcxx/include/__functional_base_03:
+
+../../../sdk/tlibcxx/include/__debug:
+
+../../../sdk/tlibcxx/include/tuple:
+
+../../../sdk/tlibcxx/include/stdexcept:
+
+../../../sdk/tlibcxx/include/cassert:
+
+../../../sdk/tlibcxx/include/atomic:
+
+../../../sdk/tlibcxx/include/cstdlib:
+
+../../../sdk/tlibcxx/include/vector:
+
+../../../sdk/tlibcxx/include/__bit_reference:
+
+../../../sdk/tlibcxx/include/climits:
+
+../../../common/inc/tlibc/limits.h:
+
+../../../common/inc/tlibc/sys/limits.h:
+
+../../../sdk/tlibcxx/include/__split_buffer:
+
+src/base/logging.h:
+
+../../../common/inc/tlibc/errno.h:
+
+src/base/commandlineflags.h:
+
+src/base/basictypes.h:
+
+../../../common/inc/tlibc/inttypes.h:
+
+src/base/spinlock.h:
+
+src/base/atomicops.h:
+
+src/base/arm_instruction_set_select.h:
+
+src/base/atomicops-internals-x86.h:
+
+src/base/dynamic_annotations.h:
+
+src/base/thread_annotations.h:

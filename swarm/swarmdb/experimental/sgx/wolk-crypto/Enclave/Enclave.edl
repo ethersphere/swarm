@@ -1,0 +1,13 @@
+enclave {
+    from "Sealing/Sealing.edl" import *;
+
+    trusted {
+        /* define ECALLs here. */
+        
+    };
+
+    untrusted {
+        /* define OCALLs here. */
+        
+    };
+};

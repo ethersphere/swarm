@@ -1,0 +1,194 @@
+1. Set up keystore with 3 new accounts (this does not affect blocks):
+
+Use "mdotm"
+[root@dev-sourabh key]# geth account import /var/www/vhosts/datatest/key/c0
+Address: {12233992092d7b405355d771940e5115c17f959f}
+[root@dev-sourabh key]# geth account import /var/www/vhosts/datatest/key/c1
+Address: {f27c2737f8e994741c910295399c321281d0899c}
+[root@dev-sourabh key]# geth account import /var/www/vhosts/datatest/key/c2
+Address: {ce9510bb0d6cce1050caac4018fd3355a212ec83}
+
+[root@dev-sourabh trans]# geth --datadir /var/www/vhosts/datatest account list
+Account #0: {12233992092d7b405355d771940e5115c17f959f} keystore:///var/www/vhosts/datatest/keystore/UTC--2018-02-09T18-38-29.042909294Z--12233992092d7b405355d771940e5115c17f959f
+Account #1: {f27c2737f8e994741c910295399c321281d0899c} keystore:///var/www/vhosts/datatest/keystore/UTC--2018-02-09T18-38-49.530977201Z--f27c2737f8e994741c910295399c321281d0899c
+Account #2: {ce9510bb0d6cce1050caac4018fd3355a212ec83} keystore:///var/www/vhosts/datatest/keystore/UTC--2018-02-09T18-39-00.842775519Z--ce9510bb0d6cce1050caac4018fd3355a212ec83
+
+2. Clean old data with this:
+# geth removedb --datadir /var/www/vhosts/datatest
+/var/www/vhosts/datatest/geth/chaindata
+Remove this database? [y/N] y
+INFO [02-09|10:46:00] Database successfully deleted            database=chaindata elapsed=369.696µs
+
+3. Setup genesis.json file with c0-c2 in the "alloc" section 
+
+{
+  "config": {
+    "chainId": 88,
+    "homesteadBlock": 1,
+    "eip150Block": 2,
+    "eip150Hash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+    "eip155Block": 3,
+    "eip158Block": 3,
+    "byzantiumBlock": 4
+  },
+  "nonce": "0x0",
+  "timestamp": "0x5a73d033",
+  "gasLimit": "0x47b760",
+  "difficulty": "0x1",
+  "mixHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "coinbase": "0xCE9510Bb0d6cCE1050caac4018fD3355A212EC83",
+  "alloc": {
+	"12233992092D7B405355D771940E5115c17f959F": { "balance": "600000000000000" },
+	"F27c2737F8E994741c910295399c321281d0899C": { "balance": "500000000000000" },
+        "CE9510Bb0d6cCE1050caac4018fD3355A212EC83": { "balance": "300000000000000" },
+  },
+  "number": "0x0",
+  "gasUsed": "0x0",
+  "parentHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+}
+
+and use the file to initialize the genesis block
+
+geth --datadir /var/www/vhosts/datatest init /var/www/vhosts/go-ethereum/trans/genesis.json 
+
+We will transfer from C0 to C1 and use C2 as coinbase
+C0    a5718e79ae2fe43431820cba7315f48ac0a79e5305da6988c9f3358003784d85    0x12233992092D7B405355D771940E5115c17f959F
+C1    67048444344ae1d492d67b7990856b23a05a5c87c2f4c98d5bc9d211f705ee3e    0xF27c2737F8E994741c910295399c321281d0899C
+C2    cbb555249c754e8ec0488d45e1d9fa794be2953de7ec3eec89e42422684cf88d    0xCE9510Bb0d6cCE1050caac4018fD3355A212EC83
+
+4. Start the blockchain and the JSON-RPC interface with this:
+
+geth --bootnodes enode://06929be93575e4b2cc20f4c4ac5708d3d8392bdcf33a7fba0063844259825c400fd97595540d692ae0871b14d5cc01ff11d8069bad5132b67e2bfff04b0af343@10.128.0.10:30301 --datadir /var/www/vhosts/datatest --networkid 88 --mine -unlock 2 --etherbase 2 --cache=1024 --verbosity 4 --nodiscover --rpc --rpcaddr 10.128.0.10 --rpcport 8545 --password <(echo -n "mdotm") 
+
+You need to wait until DAG is 100% and then you can run the console with:
+
+geth attach ipc:/var/www/vhosts/datatest/geth.ipc
+
+This shows you the accounts above and the blocknumber after it starts mining, and then you can see the balances of C0, C1, C2:
+> eth
+{
+  accounts: ["0x12233992092d7b405355d771940e5115c17f959f", "0xf27c2737f8e994741c910295399c321281d0899c", "0xce9510bb0d6cce1050caac4018fd3355a212ec83"],
+  blockNumber: 203,
+  coinbase: "0xce9510bb0d6cce1050caac4018fd3355a212ec83",
+  compile: {
+    lll: function(),
+    serpent: function(),
+    solidity: function()
+  },
+  defaultAccount: undefined,
+  defaultBlock: "latest",
+  gasPrice: 18000000000,
+  hashrate: 19010,
+  mining: true,
+  pendingTransactions: [],
+  protocolVersion: "0x3f",
+  syncing: false,
+
+..
+> web3.fromWei(eth.getBalance(eth.accounts[0]), "ether")
+0.0006
+> web3.fromWei(eth.getBalance(eth.accounts[1]), "ether")
+0.0005
+> web3.fromWei(eth.getBalance(eth.accounts[2]), "ether")
+795.0003
+> eth.sendTransaction({from:eth.accounts[2], to:eth.accounts[1], value: web3.toWei(.0002, "ether")})
+"0x70584f8a7cc89dc16068ad5df23813395f39bd6ac30edf2eaa02323c8fa44029"
+> web3.fromWei(eth.getBalance(eth.accounts[2]), "ether")
+816.0001
+> web3.fromWei(eth.getBalance(eth.accounts[1]), "ether")
+0.0007
+
+
+You might need this: (or not)
+> miner.start()
+
+
+The JSON interface can be seen here:
+
+$ curl  -H "Content-Type: application/json" -X POST --data '{"jsonrpc":"2.0","method":"eth_getTransactionCount","params":["0xCE9510Bb0d6cCE1050caac4018fD3355A212EC83","latest"],"id":1}' http://10.128.0.10:8545
+{"jsonrpc":"2.0","id":1,"result":"0x4"}
+
+https://github.com/ethereum/wiki/wiki/JSON-RPC
+
+6. Finally, trans.go uses calls the above JSON-RPC interface to submit a transaction from C2 to C1.
+
+# go run trans.go 
+TX1:  (unsigned)
+     TX(6fbd1717edc9dfe6ff7a7ab45637f830864e3913257006a0b3b6db2d6f5e06ec)
+     Contract: false
+     From:     [invalid sender: invalid sig]
+     To:       f27c2737f8e994741c910295399c321281d0899c
+     Nonce:    10
+     GasPrice: 0xee6b2800
+     GasLimit  0xc350
+     Value:    0x29a2241af62c0000
+     Data:     0x
+     V:        0x0
+     R:        0x0
+     S:        0x0
+     Hex:      eb0a84ee6b280082c35094f27c2737f8e994741c910295399c321281d0899c8829a2241af62c000080808080
+TX:  (signed)
+    TX(d51277e2e6ffdc224b95e091280c286e1cc5da8e524f8876941bd2e68c62f50e)
+    Contract: false
+    From:     ce9510bb0d6cce1050caac4018fd3355a212ec83
+    To:       f27c2737f8e994741c910295399c321281d0899c
+    Nonce:    10
+    GasPrice: 0xee6b2800
+    GasLimit  0xc350
+    Value:    0x29a2241af62c0000
+    Data:     0x
+    V:        0xd4
+    R:        0x44c7cd76faa5e8b2923e304f3df0b578765569b461625450d1a24a70e7f0122f
+    S:        0x38783e661b0413832fdd446d5fa18682012179a6e7b61c3d8fa797158799b1d9
+    Hex:      f86c0a84ee6b280082c35094f27c2737f8e994741c910295399c321281d0899c8829a2241af62c00008081d4a044c7cd76faa5e8b2923e304f3df0b578765569b461625450d1a24a70e7f0122fa038783e661b0413832fdd446d5fa18682012179a6e7b61c3d8fa797158799b1d9
+
+which can be seen in geth balances
+[root@dev-sourabh trans]# geth attach ipc:/var/www/vhosts/datatest/geth.ipc
+> web3.fromWei(eth.getBalance(eth.accounts[1]), "ether")
+30.0007
+> 
+
+and in the raw geth log
+
+INFO [02-09|22:23:34] Submitted transaction                    fullhash=0xd51277e2e6ffdc224b95e091280c286e1cc5da8e524f8876941bd2e68c62f50e recipient=0xF27c2737F8E994741c910295399c321281d0899C
+DEBUG[02-09|22:23:36] Transaction pool status report           executable=1 queued=0 stales=0
+INFO [02-09|22:23:38] Successfully sealed new block            number=1307 hash=ffda8f…74d1e0
+DEBUG[02-09|22:23:38] Trie cache stats after commit            misses=5 unloads=0
+INFO [02-09|22:23:38] 🔗 block reached canonical chain          number=1302 hash=d4b404…e304cf
+INFO [02-09|22:23:38] 🔨 mined potential block                  number=1307 hash=ffda8f…74d1e0
+INFO [02-09|22:23:38] Commit new mining work                   number=1308 txs=1 uncles=0 elapsed=508.029µs
+
+OK.... Dissection of what is happening:
+
+(a) The transaction can be seen as a "Submitted transaction":
+INFO [02-09|22:23:34] Submitted transaction                    fullhash=0xd51277e2e6ffdc224b95e091280c286e1cc5da8e524f8876941bd2e68c62f50e recipient=0xF27c2737F8E994741c910295399c321281d0899C
+  which happens  via a SendTransaction API call 
+     https://github.com/ethereum/go-ethereum/blob/55599ee95d4151a2502465e0afc7c47bd1acba77/internal/ethapi/api.go#L1207
+     https://github.com/ethereum/go-ethereum/blob/55599ee95d4151a2502465e0afc7c47bd1acba77/internal/ethapi/api.go#L374
+     https://github.com/ethereum/go-ethereum/blob/master/internal/ethapi/api.go#L1168
+
+(b) 
+DEBUG[02-09|22:23:36] Transaction pool status report           executable=1 queued=0 stales=0
+  https://github.com/ethereum/go-ethereum/blob/762f3a48a00da02fe58063cb6ce8dc2d08821f15/core/tx_pool.go#L308
+
+(c) with a sealed new block Sealed by the consensus engine
+INFO [02-09|22:23:38] Successfully sealed new block            number=1307 hash=ffda8f…74d1e0
+  https://github.com/ethereum/go-ethereum/blob/cb5235eb0767c4de4ba6cc94cf8283421b2179c1/miner/agent.go#L104
+
+(d) trie is commited in the state DB
+DEBUG[02-09|22:23:38] Trie cache stats after commit            misses=5 unloads=0
+  https://github.com/ethereum/go-ethereum/blob/55599ee95d4151a2502465e0afc7c47bd1acba77/core/state/statedb.go#L626
+
+(e) that has the block reaches the "canonical chain"
+INFO [02-09|22:23:38] 🔗 block reached canonical chain          number=1302 hash=d4b404…e304cf
+   https://github.com/ethereum/go-ethereum/blob/9ff9d04a6906cdb941f6797e63b9da7536316b64/miner/unconfirmed.go#L104
+
+(f) which is then "mined"
+INFO [02-09|22:23:38] 🔨 mined potential block                  number=1307 hash=ffda8f…74d1e0
+   https://github.com/ethereum/go-ethereum/blob/9ff9d04a6906cdb941f6797e63b9da7536316b64/miner/unconfirmed.go#L82
+
+(g) and committed
+INFO [02-09|22:23:38] Commit new mining work                   number=1308 txs=1 uncles=0 elapsed=508.029µs
+   https://github.com/ethereum/go-ethereum/blob/55599ee95d4151a2502465e0afc7c47bd1acba77/miner/worker.go#L488
+
+

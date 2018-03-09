@@ -1,0 +1,6 @@
+/data/intel(/.*)?                       u:object_r:jhi_data_file:s0
+/data/intel/dal/dynamic_sockets(/.*)?   u:object_r:jhi_dynamic_socket_dir:s0
+/system/vendor/bin/jhid                 u:object_r:jhid_exec:s0
+/system/bin/jhid                        u:object_r:jhid_exec:s0
+(/system)?/vendor/bin/jhid              u:object_r:jhid_exec:s0
+/dev/socket/jhid                        u:object_r:jhid_socket:s0

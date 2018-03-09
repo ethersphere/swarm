@@ -1,0 +1,34 @@
+# Rules for jhid
+type jhid, domain;
+type jhid_exec, exec_type, file_type;
+type jhid_socket, file_type;
+init_daemon_domain(jhid);
+
+# jhid socket & dynamic socket permission
+unix_socket_connect(jhid, jhid, jhid);
+allow jhid jhid_socket:sock_file rw_file_perms;
+
+allow jhid jhi_dynamic_socket_dir:dir rw_dir_perms;
+allow jhid jhi_dynamic_socket_dir:sock_file create_file_perms;
+allow jhid jhi_dynamic_socket_dir:sock_file rw_file_perms;
+allow jhid jhi_dynamic_socket_dir:sock_file unlink;
+
+# jhid executable permission
+allow jhid shell_exec:file x_file_perms;
+allow jhid system_file:file x_file_perms;
+
+allow jhid jhi_data_file:dir rw_dir_perms;
+allow jhid jhi_data_file:file create_file_perms;
+
+allow jhid tee_device:chr_file rw_file_perms;
+
+r_dir_file(jhid, system_app)
+r_dir_file(jhid, untrusted_app)
+r_dir_file(jhid, shell)
+r_dir_file(jhid, su)
+
+allow jhid shell:unix_stream_socket { connectto read write };
+allow jhid system_app:unix_stream_socket { connectto read write };
+
+# Access /proc/<PID>/stat files for getting proc start time
+typeattribute jhid mlstrustedsubject;

@@ -1,0 +1,58 @@
+### Starting build.
+# Target: Edger8r.ml.depends, tags: { extension:ml, file:Edger8r.ml, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules Edger8r.ml > Edger8r.ml.depends # cached
+# Target: CodeGen.ml.depends, tags: { extension:ml, file:CodeGen.ml, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules CodeGen.ml > CodeGen.ml.depends # cached
+# Target: Ast.ml.depends, tags: { extension:ml, file:Ast.ml, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules Ast.ml > Ast.ml.depends # cached
+# Target: Ast.cmo, tags: { byte, compile, extension:cmo, extension:ml, file:Ast.cmo, file:Ast.ml, implem, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o Ast.cmo Ast.ml # cached
+# Target: Lexer.mll, tags: { extension:mll, file:Lexer.mll, lexer, ocaml, ocamllex, quiet }
+/usr/bin/ocamllex.opt -q Lexer.mll # cached
+# Target: Lexer.ml.depends, tags: { extension:ml, file:Lexer.ml, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules Lexer.ml > Lexer.ml.depends # cached
+# Target: Parser.mly, tags: { extension:mly, file:Parser.mly, ocaml, ocamlyacc, parser, quiet }
+/usr/bin/ocamlyacc Parser.mly # cached
+# Target: Parser.mli.depends, tags: { extension:mli, file:Parser.mli, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules Parser.mli > Parser.mli.depends # cached
+# Target: Parser.cmi, tags: { byte, compile, extension:mli, file:Parser.mli, interf, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o Parser.cmi Parser.mli # cached
+# Target: Lexer.cmo, tags: { byte, compile, extension:cmo, extension:ml, file:Lexer.cmo, file:Lexer.ml, implem, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o Lexer.cmo Lexer.ml # cached
+# Target: Preprocessor.ml.depends, tags: { extension:ml, file:Preprocessor.ml, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules Preprocessor.ml > Preprocessor.ml.depends # cached
+# Target: Util.ml.depends, tags: { extension:ml, file:Util.ml, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules Util.ml > Util.ml.depends # cached
+# Target: Util.cmo, tags: { byte, compile, extension:cmo, extension:ml, file:Util.cmo, file:Util.ml, implem, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o Util.cmo Util.ml # cached
+# Target: Preprocessor.cmo, tags: { byte, compile, extension:cmo, extension:ml, file:Preprocessor.cmo, file:Preprocessor.ml, implem, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o Preprocessor.cmo Preprocessor.ml # cached
+# Target: SimpleStack.ml.depends, tags: { extension:ml, file:SimpleStack.ml, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules SimpleStack.ml > SimpleStack.ml.depends # cached
+# Target: SimpleStack.cmo, tags: { byte, compile, extension:cmo, extension:ml, file:SimpleStack.cmo, file:SimpleStack.ml, implem, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o SimpleStack.cmo SimpleStack.ml # cached
+# Target: CodeGen.cmo, tags: { byte, compile, extension:cmo, extension:ml, file:CodeGen.cmo, file:CodeGen.ml, implem, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o CodeGen.cmo CodeGen.ml # cached
+# Target: Edger8r.cmo, tags: { byte, compile, extension:cmo, extension:ml, file:Edger8r.cmo, file:Edger8r.ml, implem, ocaml, quiet }
+/usr/bin/ocamlc.opt -c -o Edger8r.cmo Edger8r.ml # cached
+# Target: Ast.cmx, tags: { compile, extension:cmx, extension:ml, file:Ast.cmx, file:Ast.ml, implem, native, ocaml, quiet }
+/usr/bin/ocamlopt.opt -c -o Ast.cmx Ast.ml # cached
+# Target: Parser.ml.depends, tags: { extension:ml, file:Parser.ml, ocaml, ocamldep, quiet }
+/usr/bin/ocamldep.opt -modules Parser.ml > Parser.ml.depends # cached
+# Target: Util.cmx, tags: { compile, extension:cmx, extension:ml, file:Util.cmx, file:Util.ml, implem, native, ocaml, quiet }
+/usr/bin/ocamlopt.opt -c -o Util.cmx Util.ml # cached
+# Target: Parser.cmx, tags: { compile, extension:cmx, extension:ml, file:Parser.cmx, file:Parser.ml, implem, native, ocaml, quiet }
+/usr/bin/ocamlopt.opt -c -o Parser.cmx Parser.ml # cached
+# Target: Lexer.cmx, tags: { compile, extension:cmx, extension:ml, file:Lexer.cmx, file:Lexer.ml, implem, native, ocaml, quiet }
+/usr/bin/ocamlopt.opt -c -o Lexer.cmx Lexer.ml # cached
+# Target: Preprocessor.cmx, tags: { compile, extension:cmx, extension:ml, file:Preprocessor.cmx, file:Preprocessor.ml, implem, native, ocaml, quiet }
+/usr/bin/ocamlopt.opt -c -o Preprocessor.cmx Preprocessor.ml # cached
+# Target: SimpleStack.cmx, tags: { compile, extension:cmx, extension:ml, file:SimpleStack.cmx, file:SimpleStack.ml, implem, native, ocaml, quiet }
+/usr/bin/ocamlopt.opt -c -o SimpleStack.cmx SimpleStack.ml # cached
+# Target: CodeGen.cmx, tags: { compile, extension:cmx, extension:ml, file:CodeGen.cmx, file:CodeGen.ml, implem, native, ocaml, quiet }
+/usr/bin/ocamlopt.opt -c -o CodeGen.cmx CodeGen.ml # cached
+# Target: Edger8r.cmx, tags: { compile, extension:cmx, extension:ml, file:Edger8r.cmx, file:Edger8r.ml, implem, native, ocaml, quiet }
+/usr/bin/ocamlopt.opt -c -o Edger8r.cmx Edger8r.ml # cached
+# Target: Edger8r.native, tags: { dont_link_with, extension:native, file:Edger8r.native, link, native, ocaml, program, quiet }
+/usr/bin/ocamlopt.opt str.cmxa unix.cmxa Ast.cmx Util.cmx Parser.cmx Lexer.cmx Preprocessor.cmx SimpleStack.cmx CodeGen.cmx Edger8r.cmx -o Edger8r.native # cached
+# Compilation successful.

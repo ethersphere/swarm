@@ -1,0 +1,77 @@
+
+
+1)
+cd /var/www/vhost/sgx/ether-seal
+
+1) -clean all (clean libtee.so    App/TEE.o        added this to the makefile)    **** must call this first before any make****
+make clean
+
+1) -first just make    ( starting with "make cgo" first will fail - need to fix the make file)
+make
+make run
+
+1) - this will create libtee.so
+make cgo
+
+1)
+
+
+echo $LD_LIBRARY_PATH
+/opt/intel/sgxsdk/sdk_libs
+
+
+1)
+cd /var/www/vhost/sgx/ether-seal
+
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:.
+go run cgo.go
+go build cgo.go
+./cgo
+
+
+
+2)
+cd /var/www/vhost/sgx/ether-seal
+go build cgo.go
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:. ./cgo
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

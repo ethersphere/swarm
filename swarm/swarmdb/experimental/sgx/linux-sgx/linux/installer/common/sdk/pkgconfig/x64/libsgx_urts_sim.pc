@@ -1,0 +1,10 @@
+prefix=/opt/intel/sgxsdk
+includedir=${prefix}/include
+libdir=${prefix}/lib64
+
+Name: libsgx_urts_sim
+Description: SGX uRTS simulation library
+Version: 1.9.100.39124
+Cflags: -I${includedir}
+Libs: -L${libdir} -lsgx_urts_sim
+Libs.private: -lsgx_uae_service_sim

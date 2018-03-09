@@ -1,0 +1,18 @@
+on post-fs-data
+    # Create data directories for jhi service
+    mkdir  /data/intel 0771 system system
+    mkdir  /data/intel/dal 0771 system system
+    mkdir  /data/intel/dal/applet_repository 0771 system system
+    mkdir  /data/intel/dal/dynamic_sockets 0777 system system
+
+# Permissions for DAL Spooler Applet
+on post-fs
+    chown system system /system/vendor/intel/dal/SpoolerApplet.dalp
+    chmod 0664 /system/vendor/intel/dal/SpoolerApplet.dalp
+
+# jhi service, sockets, properties
+service jhid /system/vendor/bin/jhid
+    class main
+    user system
+    group system
+    socket jhid stream 0666 system system

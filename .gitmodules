@@ -1,3 +1,6 @@
 [submodule "tests"]
 	path = tests/testdata
 	url = https://github.com/ethereum/tests
+[submodule "swarm/swarmdb/swarmdbcommon"]
+	path = swarm/swarmdb/swarmdbcommon
+	url = https://github.com/wolkdb/swarmdbcommon

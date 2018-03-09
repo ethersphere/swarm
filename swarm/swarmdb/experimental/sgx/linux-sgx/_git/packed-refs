@@ -1,0 +1,9 @@
+# pack-refs with: peeled fully-peeled 
+9d8046e310efe860bb9d81e977a323f3905665c1 refs/remotes/origin/master
+f2cf6d18aa73fdaa916f95b1f3c5ac605a90ff06 refs/remotes/origin/revert-151-ocall_exit_enclave
+27124affd87541a526dbea48a42fb848c08f52d5 refs/remotes/origin/sgx_1.7_ae_signing
+601c370872740a360828f4a3b20165d679e79d71 refs/remotes/origin/sgx_libcxx
+85947caa128f9f5c731cb25c3cdc4a4d5f95d6e7 refs/tags/sgx_1.6
+6662022bf8505768b4106de99d07fb96ac653539 refs/tags/sgx_1.7
+c7a3f14de9dbda16fd0fa1edbce1af24b350a678 refs/tags/sgx_1.8
+8383b8c65f49fca017c62eb7efdd97a212829caf refs/tags/sgx_1.9

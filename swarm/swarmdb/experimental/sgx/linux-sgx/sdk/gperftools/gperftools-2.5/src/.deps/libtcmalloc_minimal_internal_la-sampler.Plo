@@ -1,0 +1,187 @@
+src/libtcmalloc_minimal_internal_la-sampler.lo: src/sampler.cc \
+ src/sampler.h src/config.h ../../../common/inc/sgx_trts.h \
+ ../../../common/inc/sgx_error.h ../../../common/inc/tlibc/stddef.h \
+ ../../../common/inc/tlibc/sys/cdefs.h \
+ ../../../common/inc/tlibc/sys/_types.h ../../../common/inc/sgx_defs.h \
+ ../../../common/inc/sgx_thread.h ../../../common/inc/tlibc/stdint.h \
+ ../../../common/inc/tlibc/sys/stdint.h \
+ ../../../common/inc/sgx_spinlock.h ../../../common/inc/tlibc/string.h \
+ src/base/basictypes.h src/config.h ../../../common/inc/tlibc/inttypes.h \
+ ../../../common/inc/tlibc/sys/types.h \
+ ../../../common/inc/tlibc/sys/endian.h src/internal_logging.h \
+ ../../../sdk/tlibcxx/include/algorithm \
+ ../../../sdk/tlibcxx/include/__config ../../../sdk/tlibcxx/include/__sgx \
+ ../../../common/inc/tlibc/assert.h \
+ ../../../sdk/tlibcxx/include/initializer_list \
+ ../../../sdk/tlibcxx/include/cstddef \
+ ../../../sdk/tlibcxx/include/type_traits \
+ ../../../sdk/tlibcxx/include/cstring \
+ ../../../sdk/tlibcxx/include/utility \
+ ../../../sdk/tlibcxx/include/__tuple ../../../sdk/tlibcxx/include/memory \
+ ../../../sdk/tlibcxx/include/typeinfo \
+ ../../../common/inc/tlibc/../stdc++/typeinfo \
+ ../../../common/inc/sgx_defs.h ../../../common/inc/stdc++/linux/typeinfo \
+ ../../../common/inc/stdc++/linux/exception \
+ ../../../sdk/tlibcxx/include/cstdint ../../../sdk/tlibcxx/include/new \
+ ../../../common/inc/tlibc/../stdc++/new \
+ ../../../sdk/tlibcxx/include/exception \
+ ../../../common/inc/tlibc/../stdc++/exception \
+ ../../../common/inc/stdc++/linux/exception \
+ ../../../sdk/tlibcxx/include/__undef___deallocate \
+ ../../../sdk/tlibcxx/include/limits \
+ ../../../sdk/tlibcxx/include/__undef_min_max \
+ ../../../sdk/tlibcxx/include/iterator \
+ ../../../sdk/tlibcxx/include/iosfwd ../../../common/inc/tlibc/wchar.h \
+ ../../../sdk/tlibcxx/include/__functional_base \
+ ../../../sdk/tlibcxx/include/__functional_base_03 \
+ ../../../sdk/tlibcxx/include/__debug ../../../sdk/tlibcxx/include/tuple \
+ ../../../sdk/tlibcxx/include/stdexcept \
+ ../../../sdk/tlibcxx/include/cassert ../../../sdk/tlibcxx/include/atomic \
+ ../../../sdk/tlibcxx/include/cstdlib ../../../common/inc/tlibc/stdlib.h \
+ ../../../common/inc/tlibc/math.h ../../../common/inc/tlibc/sys/limits.h \
+ ../../../common/inc/tlibc/float.h src/base/commandlineflags.h \
+ ../../../sdk/tlibcxx/include/string ../../../sdk/tlibcxx/include/cstdio \
+ ../../../common/inc/tlibc/stdio.h ../../../common/inc/tlibc/stdarg.h \
+ ../../../sdk/tlibcxx/include/cwchar ../../../sdk/tlibcxx/include/cwctype \
+ ../../../sdk/tlibcxx/include/cctype ../../../common/inc/tlibc/ctype.h \
+ ../../../common/inc/tlibc/wctype.h src/base/basictypes.h
+
+src/sampler.h:
+
+src/config.h:
+
+../../../common/inc/sgx_trts.h:
+
+../../../common/inc/sgx_error.h:
+
+../../../common/inc/tlibc/stddef.h:
+
+../../../common/inc/tlibc/sys/cdefs.h:
+
+../../../common/inc/tlibc/sys/_types.h:
+
+../../../common/inc/sgx_defs.h:
+
+../../../common/inc/sgx_thread.h:
+
+../../../common/inc/tlibc/stdint.h:
+
+../../../common/inc/tlibc/sys/stdint.h:
+
+../../../common/inc/sgx_spinlock.h:
+
+../../../common/inc/tlibc/string.h:
+
+src/base/basictypes.h:
+
+src/config.h:
+
+../../../common/inc/tlibc/inttypes.h:
+
+../../../common/inc/tlibc/sys/types.h:
+
+../../../common/inc/tlibc/sys/endian.h:
+
+src/internal_logging.h:
+
+../../../sdk/tlibcxx/include/algorithm:
+
+../../../sdk/tlibcxx/include/__config:
+
+../../../sdk/tlibcxx/include/__sgx:
+
+../../../common/inc/tlibc/assert.h:
+
+../../../sdk/tlibcxx/include/initializer_list:
+
+../../../sdk/tlibcxx/include/cstddef:
+
+../../../sdk/tlibcxx/include/type_traits:
+
+../../../sdk/tlibcxx/include/cstring:
+
+../../../sdk/tlibcxx/include/utility:
+
+../../../sdk/tlibcxx/include/__tuple:
+
+../../../sdk/tlibcxx/include/memory:
+
+../../../sdk/tlibcxx/include/typeinfo:
+
+../../../common/inc/tlibc/../stdc++/typeinfo:
+
+../../../common/inc/sgx_defs.h:
+
+../../../common/inc/stdc++/linux/typeinfo:
+
+../../../common/inc/stdc++/linux/exception:
+
+../../../sdk/tlibcxx/include/cstdint:
+
+../../../sdk/tlibcxx/include/new:
+
+../../../common/inc/tlibc/../stdc++/new:
+
+../../../sdk/tlibcxx/include/exception:
+
+../../../common/inc/tlibc/../stdc++/exception:
+
+../../../common/inc/stdc++/linux/exception:
+
+../../../sdk/tlibcxx/include/__undef___deallocate:
+
+../../../sdk/tlibcxx/include/limits:
+
+../../../sdk/tlibcxx/include/__undef_min_max:
+
+../../../sdk/tlibcxx/include/iterator:
+
+../../../sdk/tlibcxx/include/iosfwd:
+
+../../../common/inc/tlibc/wchar.h:
+
+../../../sdk/tlibcxx/include/__functional_base:
+
+../../../sdk/tlibcxx/include/__functional_base_03:
+
+../../../sdk/tlibcxx/include/__debug:
+
+../../../sdk/tlibcxx/include/tuple:
+
+../../../sdk/tlibcxx/include/stdexcept:
+
+../../../sdk/tlibcxx/include/cassert:
+
+../../../sdk/tlibcxx/include/atomic:
+
+../../../sdk/tlibcxx/include/cstdlib:
+
+../../../common/inc/tlibc/stdlib.h:
+
+../../../common/inc/tlibc/math.h:
+
+../../../common/inc/tlibc/sys/limits.h:
+
+../../../common/inc/tlibc/float.h:
+
+src/base/commandlineflags.h:
+
+../../../sdk/tlibcxx/include/string:
+
+../../../sdk/tlibcxx/include/cstdio:
+
+../../../common/inc/tlibc/stdio.h:
+
+../../../common/inc/tlibc/stdarg.h:
+
+../../../sdk/tlibcxx/include/cwchar:
+
+../../../sdk/tlibcxx/include/cwctype:
+
+../../../sdk/tlibcxx/include/cctype:
+
+../../../common/inc/tlibc/ctype.h:
+
+../../../common/inc/tlibc/wctype.h:
+
+src/base/basictypes.h:

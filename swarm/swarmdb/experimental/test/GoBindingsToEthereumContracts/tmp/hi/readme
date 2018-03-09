@@ -1,0 +1,44 @@
+
+
+
+
+
+
+
+
+cd /var/www/vhosts/swarm.wolk.com/test/GoBindingsToEthereumContracts/hi/
+
+[root@puppeth-centos7-11091000-99xf Test]# echo "var testOutput=`solc --optimize --combined-json abi,bin,interface hi.sol`" > hi.js
+ 
+
+
+
+[root@puppeth-centos7-11091000-99xf Test]# which solc
+/var/www/vhosts/swarm.wolk.com/src/github.com/ethereum/go-ethereum/build/bin/solc
+[root@puppeth-centos7-11091000-99xf Test]#
+
+
+
+
+
+
+
+
+
+> loadScript("/var/www/vhosts/swarm.wolk.com/test/GoBindingsToEthereumContracts/hi/hi.js")
+true
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

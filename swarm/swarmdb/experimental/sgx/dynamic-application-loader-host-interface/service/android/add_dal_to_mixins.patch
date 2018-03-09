@@ -1,0 +1,9 @@
+diff --git a/cht_rvp/mixins.spec b/cht_rvp/mixins.spec
+index e5e86b06ac02..f545a3eab2af 100644
+--- a/cht_rvp/mixins.spec
++++ b/cht_rvp/mixins.spec
+@@ -89,3 +89,4 @@ jpeg-turbo: skia-only
+ fota: true
+ hdmi_settings: true
+ cpuset: 4cores(system-background=0)
++dal: true

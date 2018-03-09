@@ -1,0 +1,10 @@
+[Unit]
+Description=WolkDB
+
+[Service]
+ExecStart=/var/www/vhosts/swarm.wolk.com/src/github.com/ethereum/go-ethereum/swarmdb/server/wolkdb
+ExecReload=/bin/kill -HUP $MAINPID
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target

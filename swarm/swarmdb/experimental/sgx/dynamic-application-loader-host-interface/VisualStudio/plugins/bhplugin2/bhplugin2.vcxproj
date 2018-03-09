@@ -1,0 +1,378 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="14.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Universal_Debug|Win32">
+      <Configuration>Universal_Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Universal_Debug|x64">
+      <Configuration>Universal_Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Universal_Release|Win32">
+      <Configuration>Universal_Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Universal_Release|x64">
+      <Configuration>Universal_Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{9012A721-1FBB-47EF-8AB8-03915F2E32BA}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>bhplugin2</RootNamespace>
+    <ProjectName>bhplugin2</ProjectName>
+    <WindowsTargetPlatformVersion>10.0.15063.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Debug|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Debug|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Release|Win32'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Release|x64'" Label="Configuration">
+    <ConfigurationType>DynamicLibrary</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+    <PlatformToolset>v140</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Debug|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Debug|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Release|Win32'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Release|x64'" Label="PropertySheets">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <TargetName>bhPluginV2</TargetName>
+    <IntDir>$(SolutionDir)intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <TargetName>bhPluginV2</TargetName>
+    <IntDir>$(SolutionDir)intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <TargetName>bhPluginV2</TargetName>
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Debug|x64'">
+    <TargetName>bhPluginV2</TargetName>
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <TargetName>bhPluginV2</TargetName>
+    <IntDir>$(SolutionDir)intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <TargetName>bhPluginV2</TargetName>
+    <IntDir>$(SolutionDir)intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <TargetName>bhPluginV2</TargetName>
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Release|x64'">
+    <TargetName>bhPluginV2</TargetName>
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)bin\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)intermediate\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>TRACER_NAME="JHI_Plugin: ";WIN32;DEBUG;_DEBUG;_WINDOWS;_USRDLL;BHPLUGIN_EXPORTS;ME_PLATFORM;TRANSPORT_OVER_HECI</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include;$(SolutionDir)..\thirdparty\bhplugin2\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\bhp\include;$(SolutionDir)..\common\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>TRACER_NAME="JHI_Plugin: ";WIN32;DEBUG;_DEBUG;_WINDOWS;_USRDLL;BHPLUGIN_EXPORTS;ME_PLATFORM;TRANSPORT_OVER_HECI</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include;$(SolutionDir)..\thirdparty\bhplugin2\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\bhp\include;$(SolutionDir)..\common\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>OneCoreUap.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>kernel32.lib</IgnoreSpecificDefaultLibraries>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>TRACER_NAME="JHI_Plugin: ";WIN32;DEBUG;_DEBUG;_WINDOWS;_USRDLL;BHPLUGIN_EXPORTS;ME_PLATFORM;TRANSPORT_OVER_HECI</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include;$(SolutionDir)..\thirdparty\bhplugin2\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\bhp\include;$(SolutionDir)..\common\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>TRACER_NAME="JHI_Plugin: ";WIN32;DEBUG;_DEBUG;_WINDOWS;_USRDLL;BHPLUGIN_EXPORTS;ME_PLATFORM;TRANSPORT_OVER_HECI</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include;$(SolutionDir)..\thirdparty\bhplugin2\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\bhp\include;$(SolutionDir)..\common\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <AdditionalDependencies>OneCoreUap.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>kernel32.lib</IgnoreSpecificDefaultLibraries>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>TRACER_NAME="JHI_Plugin: ";WIN32;NDEBUG;_WINDOWS;_USRDLL;BHPLUGIN_EXPORTS;ME_PLATFORM;TRANSPORT_OVER_HECI</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include;$(SolutionDir)..\thirdparty\bhplugin2\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\bhp\include;$(SolutionDir)..\common\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm;</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>TRACER_NAME="JHI_Plugin: ";WIN32;NDEBUG;_WINDOWS;_USRDLL;BHPLUGIN_EXPORTS;ME_PLATFORM;TRANSPORT_OVER_HECI</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include;$(SolutionDir)..\thirdparty\bhplugin2\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\bhp\include;$(SolutionDir)..\common\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm;</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>TRACER_NAME="JHI_Plugin: ";WIN32;NDEBUG;_WINDOWS;_USRDLL;BHPLUGIN_EXPORTS;ME_PLATFORM;TRANSPORT_OVER_HECI</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include;$(SolutionDir)..\thirdparty\bhplugin2\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\bhp\include;$(SolutionDir)..\common\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm;</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Universal_Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>TRACER_NAME="JHI_Plugin: ";WIN32;NDEBUG;_WINDOWS;_USRDLL;BHPLUGIN_EXPORTS;ME_PLATFORM;TRANSPORT_OVER_HECI</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include;$(SolutionDir)..\thirdparty\bhplugin2\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\bhp\include;$(SolutionDir)..\common\include;$(SolutionDir)..\thirdparty\bhplugin2\FW\src\apps\dal_ivm;</AdditionalIncludeDirectories>
+    </ClCompile>
+    <Link>
+      <SubSystem>Windows</SubSystem>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>OneCoreUap.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>kernel32.lib</IgnoreSpecificDefaultLibraries>
+    </Link>
+    <ResourceCompile>
+      <AdditionalIncludeDirectories>$(SolutionDir)..\common\include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+    </ResourceCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\bhp\impl\bhp_impl.h" />
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\bhp\impl\bhp_platform.h" />
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\bhp\include\bhp_exp.h" />
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\shared\include\bhp_heci.h" />
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include\bh_acp_exp.h" />
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include\bh_acp_format.h" />
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include\bh_shared_errcode.h" />
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\Beihai\shared\include\bh_shared_types.h" />
+    <ClInclude Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai_shared\include\BeihaiStatusHAL.h" />
+    <ClInclude Include="..\..\..\common\include\jhi.h" />
+    <ClInclude Include="..\..\..\common\include\typedefs.h" />
+    <ClInclude Include="..\..\..\plugins\bhplugin2\jhi_plugin.h" />
+    <ClInclude Include="..\..\..\plugins\bhplugin2\jhi_plugin_internal.h" />
+    <ClInclude Include="resource.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\bhp\impl\bhp_impl.cpp" />
+    <ClCompile Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\bhp\impl\bhp_impl_admin.cpp" />
+    <ClCompile Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\bhp\impl\bhp_impl_ta.cpp" />
+    <ClCompile Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\bhp\impl\bhp_platform_win32.cpp" />
+    <ClCompile Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\shared\admin_pack\admin_pack_ext.c" />
+    <ClCompile Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\shared\admin_pack\admin_pack_int.c" />
+    <ClCompile Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\shared\admin_pack\bh_acp_util.c" />
+    <ClCompile Include="..\..\..\thirdparty\bhplugin2\FW\src\apps\dal_ivm\beihai\shared\admin_pack\dal_hash.c" />
+    <ClCompile Include="..\..\..\common\dbg.cpp" />
+    <ClCompile Include="..\..\..\common\dbg-windows.cpp" />
+    <ClCompile Include="..\..\..\common\MemoryProfiling.cpp" />
+    <ClCompile Include="..\..\..\common\misc.cpp" />
+    <ClCompile Include="..\..\..\plugins\bhplugin2\jhi_plugin.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="bhPlugin.rc" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\teetransport\TeeTransport.vcxproj">
+      <Project>{e6e1fc4b-51bc-4990-8172-120344173036}</Project>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

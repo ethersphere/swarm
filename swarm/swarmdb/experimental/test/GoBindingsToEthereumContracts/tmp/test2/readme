@@ -1,0 +1,62 @@
+
+ssh 35.202.229.34 
+
+-https://github.com/ethereum/go-ethereum/wiki/Native-DApps:-Go-bindings-to-Ethereum-contracts
+
+
+emacs /root/.bashrc
+export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/go/bin:/usr/lib64/google-cloud-sdk/bin:/var/www/vhosts/swarm.wolk.com/src/github.com/ethereum/go-ethereum/build/bin/:/var
+/www/vhosts/swarm.wolk.com/src/github.com/ethereum/go-ethereum/build/_workspace/bin/
+export GOPATH=/var/www/vhosts/swarm.wolk.com/src/github.com/ethereum/go-ethereum/build/_workspace/
+export GOROOT=/usr/local/go
+
+
+
+- didn't use     didn't work
+go get github.com/tools/godep
+
+
+
+token.sol 
+https://gist.github.com/karalabe/08f4b780e01c8452d989
+token.abi 
+https://gist.github.com/karalabe/b8dfdb6d301660f56c1b
+token.bin
+https://gist.github.com/karalabe/026548f6a5f5f97b54de
+get the zip file and unzip
+
+-OLD if you have the contract Deployed already
+- generate token.go
+cd /var/www/vhosts/swarm.wolk.com/test/GoBindingsToEthereumContracts/test2/
+abigen --abi token.abi --pkg main --type Token --out token.go
+
+
+-NEW    + Deploying contracts to Ethereum
+- generate token.go
+abigen --abi token.abi --pkg main --type Token --out token.go --bin token.bin
+
+
+-run
+cd /var/www/vhosts/swarm.wolk.com/test/GoBindingsToEthereumContracts/test2
+go run main.go token.go
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
