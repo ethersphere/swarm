@@ -199,6 +199,10 @@ func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
 	index.Access = s.accessCnt
 }
 
+func (s *LDBStore) GetLDBDatabase() (db *LDBDatabase) {
+	return s.db
+}
+
 func getIndexKey(hash Key) []byte {
 	hashSize := len(hash)
 	key := make([]byte, hashSize+1)

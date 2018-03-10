@@ -42,3 +42,9 @@ profile.cov
 /dashboard/assets/node_modules
 /dashboard/assets/stats.json
 /dashboard/assets/bundle.js
+
+ens.db
+
+netstats.log
+
+swap.db
