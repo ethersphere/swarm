@@ -101,6 +101,8 @@ func NewDBChunkStore(config *SWARMDBConfig, swarmlstore *storage.LocalStore, net
 	userWallet := config.Address
 	walletAddr := common.HexToAddress(userWallet)
 
+	fmt.Printf("SWARMLSTORE: %v\n", swarmlstore)
+	
 	self = &DBChunkstore{
 		lstore:   swarmlstore,
 		km:       &km,
@@ -167,6 +169,7 @@ func (self *DBChunkstore) storeChunkInSwarm(u *SWARMDBUser, val []byte, encrypte
 	chunk.Val = val
 	swarmChunk.SData = val
 	swarmChunk.Size = 4096
+	
 	self.lstore.Put(swarmChunk)
 	//log.Debug(fmt.Sprintf("Storing the following data: %v", val))
 

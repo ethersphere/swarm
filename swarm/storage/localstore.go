@@ -85,8 +85,8 @@ func (self *LocalStore) CacheCounter() uint64 {
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+     //	self.mu.Lock()
+//	defer self.mu.Unlock()
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	c := &Chunk{
@@ -97,6 +97,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	}
 
 	dbStorePutCounter.Inc(1)
+	fmt.Printf("MEMS: %v\n", self.memStore)
 	self.memStore.Put(c)
 	self.DbStore.Put(c)
 }

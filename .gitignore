@@ -14,7 +14,7 @@
 */**/*tx_database*
 */**/*dapps*
 build/_vendor/pkg
-
+vendor/*
 #*
 .#*
 *#
@@ -48,3 +48,5 @@ ens.db
 netstats.log
 
 swap.db
+
+vendor/bin/errcheck

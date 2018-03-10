@@ -172,12 +172,14 @@ const (
 )
 
 func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api, pss *pss.Pss) (swdb *SwarmDB, err error) {
+
 	sd := new(SwarmDB)
 	sd.tables = make(map[string]*Table)
 
 	sd.Netstats = NewNetstats(config)
-	sd.ldb = lstore.DbStore.GetLDBDatabase().GetLevelDB()
+	//sd.ldb = lstore.DbStore.GetLDBDatabase().GetLevelDB()
 
+	sd.lstore = lstore
 	dbchunkstore, err := NewDBChunkStore(config, sd.lstore, sd.Netstats)
 	if err != nil {
 		return swdb, sdbc.GenerateSWARMDBError(err, `[swarmdb:NewSwarmDB] NewDBChunkStore `+err.Error())
@@ -202,7 +204,6 @@ func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api,
 	}
 	sd.swapdb = swapdbObj
 
-	sd.lstore = lstore
 	sd.api = api
 	sd.pss = pss
 	return sd, nil
