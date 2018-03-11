@@ -135,9 +135,6 @@ func (self *DBChunkstore) storeChunkInSwarm(u *SWARMDBUser, val []byte, encrypte
 
 	var chunk DBChunk
 
-	swarmChunk := storage.NewChunk(k, make(chan bool))
-	//? or swarmChunk := NewChunk(k, nil)
-
 	var finalSdata []byte
 	finalSdata = make([]byte, CHUNK_SIZE)
 	recordData := val[CHUNK_START_CHUNKVAL : CHUNK_END_CHUNKVAL-40] //MAJOR TODO: figure out how we pass in to ensure <=4096
@@ -166,10 +163,14 @@ func (self *DBChunkstore) storeChunkInSwarm(u *SWARMDBUser, val []byte, encrypte
 		}
 	}
 
+	swarmChunk := storage.NewChunk(key, nil)
+	//? or swarmChunk := NewChunk(k, make(chan bool))
+
 	chunk.Val = val
 	swarmChunk.SData = val
 	swarmChunk.Size = 4096
 	
+	//fmt.Printf("Storing the following data (swarmChunk): %v | VAL: %+v\n", swarmChunk,swarmChunk.SData)
 	self.lstore.Put(swarmChunk)
 	//log.Debug(fmt.Sprintf("Storing the following data: %v", val))
 
@@ -284,6 +285,10 @@ func (self *DBChunkstore) RetrieveRawChunk(key []byte) (val []byte, err error) {
 
 func (self *DBChunkstore) RetrieveChunk(u *SWARMDBUser, key []byte) (val []byte, err error) {
 	swarmChunk, err := self.lstore.Get(storage.Key(key))
+	if err != nil {
+		fmt.Printf("[dbchunkstore:RetrieveChunk] self.lstore.Get %s\n", err.Error())
+		return val, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:RetrieveChunk] self.lstore.Get %s", err.Error()), ErrorCode: 440, ErrorMessage: "Unable to Retrieve swarmChunk from localStore"} 
+	}
 	val = swarmChunk.SData
 	if string(swarmChunk.SData[CHUNK_START_CHUNKTYPE:CHUNK_END_CHUNKTYPE]) == "k" {
 		//log.Debug(fmt.Sprintf("Retrieving the following data: %v", c.Val))
