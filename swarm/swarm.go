@@ -380,11 +380,13 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	/* Start of SWARMDB Server Setup/Initiation */
 
 	configFileLocation := swarmdb.SWARMDBCONF_FILE
+	log.Info(fmt.Sprintf("Trying to start swarmdb server using: %s", configFileLocation))
 	if _, err := os.Stat(configFileLocation); os.IsNotExist(err) {
-		log.Debug("Default config file missing.  Building ..")
+		log.Info("Default config file missing.  Building ..")
 		_, err := swarmdb.NewKeyManagerWithoutConfig(configFileLocation, swarmdb.SWARMDBCONF_DEFAULT_PASSPHRASE)
 		if err != nil {
 			//TODO
+			log.Info(fmt.Sprintf("Error creating new config : %s\n", err))
 		}
 	}
 
@@ -394,10 +396,10 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		os.Exit(1)
 	}
 
-	log.Debug("Initiating StartHttpServer for SwarmDB\n")
+	log.Info("Initiating StartHttpServer for SwarmDB\n")
 	go wolkdbserver.StartHttpServer(self.swarmdb, config)
 
-	log.Debug("Initiating StartTCP server for SwarmDB\n")
+	log.Info("Initiating StartTCP server for SwarmDB\n")
 	go wolkdbserver.StartTcpipServer(self.swarmdb, config)
 
 	/* End of SWARMDB Server Setup/Initiation */
