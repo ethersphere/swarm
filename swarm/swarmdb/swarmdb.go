@@ -19,18 +19,22 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	//sdbc "github.com/wolkdb/swarmdb/swarmdbcommon"
-	sdbc "github.com/ethereum/go-ethereum/swarm/swarmdb/swarmdbcommon"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/pss"
 	"path/filepath"
 	"strings"
 	"github.com/ethereum/go-ethereum/swarm/swarmdb/ash"
 	sdbp "github.com/ethereum/go-ethereum/swarm/swarmdb/sdbnetwork"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/pss"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/swarmdb/ash"
+	sdbc "github.com/ethereum/go-ethereum/swarm/swarmdb/swarmdbcommon"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type SwarmDB struct {
@@ -175,7 +179,10 @@ func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api,
 	sd.Sdbp = sdbp
 
 	sd.Netstats = NewNetstats(config)
-	dbchunkstore, err := NewDBChunkStore(config, sd.Netstats)
+	//sd.ldb = lstore.DbStore.GetLDBDatabase().GetLevelDB()
+
+	sd.lstore = lstore
+	dbchunkstore, err := NewDBChunkStore(config, sd.lstore, sd.Netstats)
 	if err != nil {
 		return swdb, sdbc.GenerateSWARMDBError(err, `[swarmdb:NewSwarmDB] NewDBChunkStore `+err.Error())
 	} else {
@@ -199,9 +206,8 @@ func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api,
 	}
 	sd.swapdb = swapdbObj
 
-	sd.lstore = lstore
-	sd.api = api 
-	sd.pss = pss 
+	sd.api = api
+	sd.pss = pss
 	return sd, nil
 }
 

@@ -47,6 +47,10 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	return database, nil
 }
 
+func (self *LDBDatabase) GetLevelDB() (*leveldb.DB){
+	return self.db
+}
+
 func (self *LDBDatabase) Put(key []byte, value []byte) {
 	if self.comp {
 		value = rle.Compress(value)
