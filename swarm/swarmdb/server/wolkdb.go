@@ -346,6 +346,7 @@ func StartHttpServer(sdb *swarmdb.SwarmDB, config *swarmdb.SWARMDBConfig) {
 		retJson := buildErrorResp(errkm)
 		fmt.Printf(retJson)
 		//TODO: show error to client
+		log.Info(fmt.Sprintf("Unable to create new KeyManager: %s", errkm))
 	} else {
 		httpSvr.keymanager = km
 	}
@@ -361,13 +362,12 @@ func StartHttpServer(sdb *swarmdb.SwarmDB, config *swarmdb.SWARMDBConfig) {
 		MaxAge:         600,
 		AllowedHeaders: []string{"*"},
 	})
-	//sk, pk := GetKeys()
 	hdlr := c.Handler(httpSvr)
 
-	log.Debug(fmt.Sprintf("HTTP Listening on %s and port %d", config.ListenAddrHTTP, config.PortHTTP))
 	addr := net.JoinHostPort(config.ListenAddrHTTP, strconv.Itoa(config.PortHTTP))
 	//go http.ListenAndServe(config.Addr, hdlr)
 	logger.Fatal(http.ListenAndServe(addr, hdlr))
+	log.Info(fmt.Sprintf("SWARMDB HTTP Listening on %s and port %d (Addr = %s)", config.ListenAddrHTTP, config.PortHTTP, addr))
 }
 
 func (s *HTTPServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
