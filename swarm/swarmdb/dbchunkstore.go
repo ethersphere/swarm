@@ -19,16 +19,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"math/rand"
+
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/swarmdb/ash"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/rlp"
 	//sdbc "swarmdbcommon"
 	sdbc "github.com/ethereum/go-ethereum/swarm/swarmdb/swarmdbcommon"
-	"github.com/syndtr/goleveldb/leveldb"
-	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 const (
@@ -37,7 +35,7 @@ const (
 )
 
 type DBChunkstore struct {
-	ldb      *leveldb.DB
+	lstore   *storage.LocalStore
 	km       *KeyManager
 	netstats *Netstats
 	farmer   common.Address
@@ -87,12 +85,13 @@ func (u *ChunkAsh) MarshalJSON() ([]byte, error) {
 		})
 }
 
-func NewDBChunkStore(config *SWARMDBConfig, netstats *Netstats) (self *DBChunkstore, err error) {
+func NewDBChunkStore(config *SWARMDBConfig, swarmlstore *storage.LocalStore, netstats *Netstats) (self *DBChunkstore, err error) {
 	path := config.ChunkDBPath
-	ldb, err := leveldb.OpenFile(path, nil)
+
+	//ldb, err := leveldb.OpenFile(path, nil)
 	if err != nil {
-		return self, &sdbc.SWARMDBError{ Message: fmt.Sprintf("[dbchunkstore:NewDBChunkstore] Unable to Open DB at path [%s] | Error: %s",path, err), ErrorCode: 499, ErrorMessage: fmt.Sprintf("[dbchunkstore:NewDBChunkstore] Unable to Open DB [%s] | %s", path, err) }
-	} 
+		return self, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:NewDBChunkstore] Unable to Open DB at path [%s] | Error: %s", path, err), ErrorCode: 499, ErrorMessage: fmt.Sprintf("[dbchunkstore:NewDBChunkstore] Unable to Open DB [%s] | %s", path, err)}
+	}
 
 	km, errKM := NewKeyManager(config)
 	if errKM != nil {
@@ -100,11 +99,12 @@ func NewDBChunkStore(config *SWARMDBConfig, netstats *Netstats) (self *DBChunkst
 	}
 
 	userWallet := config.Address
-
 	walletAddr := common.HexToAddress(userWallet)
 
+	fmt.Printf("SWARMLSTORE: %v\n", swarmlstore)
+	
 	self = &DBChunkstore{
-		ldb:      ldb,
+		lstore:   swarmlstore,
 		km:       &km,
 		farmer:   walletAddr,
 		filepath: path,
@@ -119,15 +119,65 @@ func (self *DBChunkstore) GetKeyManager() (km *KeyManager) {
 
 func (self *DBChunkstore) StoreKChunk(u *SWARMDBUser, key []byte, val []byte, encrypted int) (err error) {
 	self.netstats.StoreChunk()
-	_, err = self.storeChunkInDB(u, val, encrypted, key)
+	_, err = self.storeChunkInSwarm(u, val, encrypted, key)
 	return err
 }
 
 func (self *DBChunkstore) StoreChunk(u *SWARMDBUser, val []byte, encrypted int) (key []byte, err error) {
 	//self.netstats.StoreChunk() -- TODO: Review with Michael and Sourabh
-	return self.storeChunkInDB(u, val, encrypted, key)
+	return self.storeChunkInSwarm(u, val, encrypted, key)
 }
 
+func (self *DBChunkstore) storeChunkInSwarm(u *SWARMDBUser, val []byte, encrypted int, k []byte) (key []byte, err error) {
+	if len(val) < CHUNK_SIZE {
+		return nil, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:StoreChunk] Chunk too small (< %s)| %x", CHUNK_SIZE, val), ErrorCode: 439, ErrorMessage: "Unable to Store Chunk"}
+	}
+
+	var chunk DBChunk
+
+	var finalSdata []byte
+	finalSdata = make([]byte, CHUNK_SIZE)
+	recordData := val[CHUNK_START_CHUNKVAL : CHUNK_END_CHUNKVAL-40] //MAJOR TODO: figure out how we pass in to ensure <=4096
+	if len(k) > 0 {
+		key = k
+		finalSdata = make([]byte, CHUNK_SIZE)
+		//log.Debug(fmt.Sprintf("Key: [%x][%v] After Loop recordData length (%d) and start pos %d", key, key, len(recordData), CHUNK_START_CHUNKVAL))
+		copy(finalSdata[0:CHUNK_START_CHUNKVAL], val[0:CHUNK_START_CHUNKVAL])
+		if encrypted > 0 {
+			//log.Debug(fmt.Sprintf("StoreChunk of length %d: VAL (encrypting 0 to %d) = %v", len(val), CHUNK_START_CHUNKVAL, val))
+			encVal := self.km.EncryptData(u, recordData)
+			log.Debug(fmt.Sprintf("EncVal is %+v", encVal))
+			copy(finalSdata[CHUNK_START_CHUNKVAL:CHUNK_END_CHUNKVAL], encVal)
+		} else {
+			copy(finalSdata[CHUNK_START_CHUNKVAL:CHUNK_END_CHUNKVAL], recordData)
+		}
+		chunk.Enc = 1
+		val = finalSdata
+	} else {
+		inp := make([]byte, hashChunkSize)
+		copy(inp, val[0:hashChunkSize])
+		key = ash.Computehash(inp)
+		if encrypted > 0 {
+			chunk.Enc = 1
+			val = self.km.EncryptData(u, val)
+		}
+	}
+
+	swarmChunk := storage.NewChunk(key, nil)
+	//? or swarmChunk := NewChunk(k, make(chan bool))
+
+	chunk.Val = val
+	swarmChunk.SData = val
+	swarmChunk.Size = 4096
+	
+	//fmt.Printf("Storing the following data (swarmChunk): %v | VAL: %+v\n", swarmChunk,swarmChunk.SData)
+	self.lstore.Put(swarmChunk)
+	//log.Debug(fmt.Sprintf("Storing the following data: %v", val))
+
+	return key, nil
+}
+
+/*
 func (self *DBChunkstore) storeChunkInDB(u *SWARMDBUser, val []byte, encrypted int, k []byte) (key []byte, err error) {
 	if len(val) < CHUNK_SIZE {
 		return nil, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:StoreChunk] Chunk too small (< %s)| %x", CHUNK_SIZE, val), ErrorCode: 439, ErrorMessage: "Unable to Store Chunk"}
@@ -167,6 +217,7 @@ func (self *DBChunkstore) storeChunkInDB(u *SWARMDBUser, val []byte, encrypted i
 	if err != nil {
 		return key, err
 	}
+
 	//log.Debug(fmt.Sprintf("LDB Put with key %x", key))
 	err = self.ldb.Put(key, data, nil)
 	if err != nil {
@@ -210,55 +261,51 @@ func (self *DBChunkstore) storeChunkInDB(u *SWARMDBUser, val []byte, encrypted i
 	}
 	return key, nil
 }
+*/
 
 func (self *DBChunkstore) RetrieveRawChunk(key []byte) (val []byte, err error) {
-	data, err := self.ldb.Get(key, nil)
-	if err == leveldb.ErrNotFound {
-		val = make([]byte, CHUNK_SIZE)
-		return val, nil
-	} else if err != nil {
-		return val, err
-		//TODO: make swarmdberror
-	}
-	c := new(DBChunk)
-	err = rlp.Decode(bytes.NewReader(data), c)
-	if err != nil {
-		return val, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:RetrieveRawChunk] Prepare %s", err.Error()), ErrorCode: 440, ErrorMessage: "Unable to Retrieve Chunk"}
-	}
-	self.netstats.RetrieveChunk()
-	return c.Val, nil
+	/*
+		data, err := self.ldb.Get(key, nil)
+		if err == leveldb.ErrNotFound {
+			val = make([]byte, CHUNK_SIZE)
+			return val, nil
+		} else if err != nil {
+			return val, err
+			//TODO: make swarmdberror
+		}
+		c := new(DBChunk)
+		err = rlp.Decode(bytes.NewReader(data), c)
+		if err != nil {
+			return val, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:RetrieveRawChunk] Prepare %s", err.Error()), ErrorCode: 440, ErrorMessage: "Unable to Retrieve Chunk"}
+		}
+		self.netstats.RetrieveChunk()
+	*/
+	return val, nil
 }
 
 func (self *DBChunkstore) RetrieveChunk(u *SWARMDBUser, key []byte) (val []byte, err error) {
-	data, err := self.ldb.Get(key, nil)
-	if err == leveldb.ErrNotFound {
-		log.Debug("Chunk not found")
-		val = make([]byte, CHUNK_SIZE)
-		return val, nil
-	} else if err != nil {
-		log.Debug(fmt.Sprintf("Error retrieving Chunk: %s", err.Error()))
-		return val, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:RetrieveChunk] Get - %s", err.Error()), ErrorCode: 440, ErrorMessage: "unable to Retrieve Chunk"}
-	}
-	c := new(DBChunk)
-	err = rlp.Decode(bytes.NewReader(data), c)
+	swarmChunk, err := self.lstore.Get(storage.Key(key))
 	if err != nil {
-		return val, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:RetrieveChunk] Prepare %s", err.Error()), ErrorCode: 440, ErrorMessage: "Unable to Retrieve Chunk"}
+		fmt.Printf("[dbchunkstore:RetrieveChunk] self.lstore.Get %s\n", err.Error())
+		return val, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:RetrieveChunk] self.lstore.Get %s", err.Error()), ErrorCode: 440, ErrorMessage: "Unable to Retrieve swarmChunk from localStore"} 
 	}
-	val = c.Val
-	if string(c.Val[CHUNK_START_CHUNKTYPE:CHUNK_END_CHUNKTYPE]) == "k" {
+	val = swarmChunk.SData
+	if string(swarmChunk.SData[CHUNK_START_CHUNKTYPE:CHUNK_END_CHUNKTYPE]) == "k" {
 		//log.Debug(fmt.Sprintf("Retrieving the following data: %v", c.Val))
 		val = val[CHUNK_START_CHUNKVAL:CHUNK_END_CHUNKVAL]
 	}
-	if c.Enc > 0 {
-		val, err = self.km.DecryptData(u, val)
-		if err != nil {
-			return val, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:RetrieveChunk] DecryptData %s", err.Error()), ErrorCode: 440, ErrorMessage: "Unable to Retrieve Chunk"}
+	/*
+		if c.Enc > 0 {
+			val, err = self.km.DecryptData(u, val)
+			if err != nil {
+				return val, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:RetrieveChunk] DecryptData %s", err.Error()), ErrorCode: 440, ErrorMessage: "Unable to Retrieve Chunk"}
+			}
 		}
-	}
+	*/
 	var fullVal []byte
 	fullVal = make([]byte, CHUNK_SIZE)
-	if string(c.Val[CHUNK_START_CHUNKTYPE:CHUNK_END_CHUNKTYPE]) == "k" {
-		copy(fullVal[0:CHUNK_START_CHUNKVAL], c.Val[0:CHUNK_START_CHUNKVAL])
+	if string(swarmChunk.SData[CHUNK_START_CHUNKTYPE:CHUNK_END_CHUNKTYPE]) == "k" {
+		copy(fullVal[0:CHUNK_START_CHUNKVAL], swarmChunk.SData[0:CHUNK_START_CHUNKVAL])
 		copy(fullVal[CHUNK_START_CHUNKVAL:CHUNK_END_CHUNKVAL], val)
 		val = fullVal
 		//log.Debug(fmt.Sprintf("Decrypted Retrieved K Node => %+v\n", val))
@@ -288,33 +335,36 @@ func (self *DBChunkstore) GenerateFarmerLog(startTS int64, endTS int64) (log []s
 }
 
 func (self *DBChunkstore) GenerateBuyerLog(startTS int64, endTS int64) (log []string, err error) {
-	for ts := startTS; ts < endTS; ts += epochSeconds {
-		epochPrefix := epochBytesFromTimestamp(ts)
-		iter := self.ldb.NewIterator(util.BytesPrefix(epochPrefix), nil)
-		for iter.Next() {
-			epochkey := iter.Key()
-			key := epochkey[8:]
-			//fmt.Printf("%x\n", key)
+	/*
+		for ts := startTS; ts < endTS; ts += epochSeconds {
+			epochPrefix := epochBytesFromTimestamp(ts)
+			iter := self.ldb.NewIterator(util.BytesPrefix(epochPrefix), nil)
+			for iter.Next() {
+				epochkey := iter.Key()
+				key := epochkey[8:]
+				//fmt.Printf("%x\n", key)
 
-			chunkash := new(ChunkAsh)
-			err = rlp.Decode(bytes.NewReader(iter.Value()), chunkash)
-			if err != nil {
-				return log, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:GenerateBuyerLog] EKEY: %x | Prepare %s", epochkey, err.Error()), ErrorCode: 451, ErrorMessage: "Unable to Decode Chunkash"}
+				chunkash := new(ChunkAsh)
+				err = rlp.Decode(bytes.NewReader(iter.Value()), chunkash)
+				if err != nil {
+					return log, &sdbc.SWARMDBError{Message: fmt.Sprintf("[dbchunkstore:GenerateBuyerLog] EKEY: %x | Prepare %s", epochkey, err.Error()), ErrorCode: 451, ErrorMessage: "Unable to Decode Chunkash"}
+				}
+
+				chunkash.chunkID = key
+				chunkash.epoch = bytes.TrimLeft(epochkey[0:8], "\x00")
+				output, _ := json.Marshal(chunkash)
+				log = append(log, fmt.Sprintf("%s\n", string(output)))
+
+				// data, err := self.ldb.Get(key, nil)
+				// chunklog, err := json.Marshal(c)
+				// sql_readall := fmt.Sprintf("SELECT chunkKey,strftime('%s',chunkBirthDT) as chunkBirthTS, strftime('%s',chunkStoreDT) as chunkStoreTS, maxReplication, renewal FROM chunk where chunkBD >= %d and chunkBD < %d", time.Unix(startTS, 0).Format(time.RFC3339), time.Unix(endTS, 0).Format(time.RFC3339))
 			}
-
-			chunkash.chunkID = key
-			chunkash.epoch = bytes.TrimLeft(epochkey[0:8], "\x00")
-			output, _ := json.Marshal(chunkash)
-			log = append(log, fmt.Sprintf("%s\n", string(output)))
-
-			// data, err := self.ldb.Get(key, nil)
-			// chunklog, err := json.Marshal(c)
-			// sql_readall := fmt.Sprintf("SELECT chunkKey,strftime('%s',chunkBirthDT) as chunkBirthTS, strftime('%s',chunkStoreDT) as chunkStoreTS, maxReplication, renewal FROM chunk where chunkBD >= %d and chunkBD < %d", time.Unix(startTS, 0).Format(time.RFC3339), time.Unix(endTS, 0).Format(time.RFC3339))
+			iter.Release()
+			err = iter.Error()
 		}
-		iter.Release()
-		err = iter.Error()
-	}
-	self.netstats.GenerateBuyerLog()
+
+		self.netstats.GenerateBuyerLog()
+	*/
 	return log, nil
 }
 

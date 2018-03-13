@@ -21,14 +21,19 @@ import (
 	"swarmdb"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+/*
 func BenchmarkStoreChunk(b *testing.B) {
 	config, _ := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
 	swarmdb.NewKeyManager(config)
 	u := config.GetSWARMDBUser()
 
 	store, err := swarmdb.NewDBChunkStore(config, swarmdb.NewNetstats(config))
+
 	if err != nil {
 		fmt.Printf("%s\n", err)
 		b.Fatal("Failure to open NewDBChunkStore")
@@ -47,11 +52,17 @@ func BenchmarkStoreChunk(b *testing.B) {
 		}
 	}
 }
+*/
 
 func TestDBChunkStore(t *testing.T) {
 	config, _ := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
 	swarmdb.NewKeyManager(config)
 	u := config.GetSWARMDBUser()
+
+	swarmconfig := api.NewConfig()
+	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
+	mockStore := nil
+	lstore, err := storage.NewLocalStore(hash, swarmconfig.StoreParams, common.Hex2Bytes(swarmconfig.BzzKey), mockStore)
 
 	store, err := swarmdb.NewDBChunkStore(config, swarmdb.NewNetstats(config))
 	if err != nil {
