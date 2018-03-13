@@ -85,8 +85,8 @@ func (self *LocalStore) CacheCounter() uint64 {
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+	//	self.mu.Lock()
+	//	defer self.mu.Unlock()
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	c := &Chunk{
@@ -97,6 +97,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	}
 
 	dbStorePutCounter.Inc(1)
+	fmt.Printf("MEMS: %v\n", self.memStore)
 	self.memStore.Put(c)
 	self.DbStore.Put(c)
 }
@@ -113,6 +114,7 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 }
 
 func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
+	log.Info(fmt.Sprintf("Attempting to retrieve [%x] from memStore", key))
 	chunk, err = self.memStore.Get(key)
 	if err == nil {
 		if chunk.ReqC != nil {
@@ -124,10 +126,13 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 		}
 		return
 	}
+	log.Info(fmt.Sprintf("Attempting to retrieve [%x] from DbStore", key))
 	chunk, err = self.DbStore.Get(key)
 	if err != nil {
+		log.Info(fmt.Sprintf("Error attempting to retrieve [%x] from DbStore: %s", key, err))
 		return
 	}
+	log.Info(fmt.Sprintf("Retrieved [%x] with chunk data of [%+v]", key, chunk))
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.memStore.Put(chunk)
 	return

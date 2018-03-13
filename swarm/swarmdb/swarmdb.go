@@ -19,17 +19,20 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	//sdbc "github.com/wolkdb/swarmdb/swarmdbcommon"
-	sdbc "github.com/ethereum/go-ethereum/swarm/swarmdb/swarmdbcommon"
-	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/pss"
 	"path/filepath"
 	"strings"
-	"github.com/ethereum/go-ethereum/swarm/swarmdb/ash"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/pss"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/swarmdb/ash"
+	sdbc "github.com/ethereum/go-ethereum/swarm/swarmdb/swarmdbcommon"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type SwarmDB struct {
@@ -38,9 +41,10 @@ type SwarmDB struct {
 	ens          ENSSimulation
 	swapdb       *SwapDBStore
 	Netstats     *Netstats
-	lstore		*storage.LocalStore
-	api		*api.Api
-	pss		*pss.Pss
+	lstore       *storage.LocalStore
+	api          *api.Api
+	pss          *pss.Pss
+	ldb          *leveldb.DB
 }
 
 //for sql parsing
@@ -168,11 +172,15 @@ const (
 )
 
 func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api, pss *pss.Pss) (swdb *SwarmDB, err error) {
+
 	sd := new(SwarmDB)
 	sd.tables = make(map[string]*Table)
 
 	sd.Netstats = NewNetstats(config)
-	dbchunkstore, err := NewDBChunkStore(config, sd.Netstats)
+	//sd.ldb = lstore.DbStore.GetLDBDatabase().GetLevelDB()
+
+	sd.lstore = lstore
+	dbchunkstore, err := NewDBChunkStore(config, sd.lstore, sd.Netstats)
 	if err != nil {
 		return swdb, sdbc.GenerateSWARMDBError(err, `[swarmdb:NewSwarmDB] NewDBChunkStore `+err.Error())
 	} else {
@@ -196,9 +204,8 @@ func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api,
 	}
 	sd.swapdb = swapdbObj
 
-	sd.lstore = lstore
-	sd.api = api 
-	sd.pss = pss 
+	sd.api = api
+	sd.pss = pss
 	return sd, nil
 }
 

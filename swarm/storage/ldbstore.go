@@ -199,6 +199,10 @@ func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
 	index.Access = s.accessCnt
 }
 
+func (s *LDBStore) GetLDBDatabase() (db *LDBDatabase) {
+	return s.db
+}
+
 func getIndexKey(hash Key) []byte {
 	hashSize := len(hash)
 	key := make([]byte, hashSize+1)
@@ -554,13 +558,16 @@ func (s *LDBStore) Put(chunk *Chunk) {
 	defer s.lock.Unlock()
 
 	idata, err := s.db.Get(ikey)
-	if err != nil {
+	if err == leveldb.ErrNotFound {
+		log.Info(fmt.Sprintf("ikey [%x] not found", ikey, err))
 		s.doPut(chunk, ikey, &index, po)
 		batchC := s.batchC
 		go func() {
 			<-batchC
 			close(chunk.dbStored)
 		}()
+	} else if err != nil {
+		log.Info(fmt.Sprintf("Error getting ikey [%x] %s", ikey, err))
 	} else {
 		log.Trace(fmt.Sprintf("DbStore: chunk already exists, only update access"))
 		decodeIndex(idata, &index)
@@ -589,7 +596,6 @@ func (s *LDBStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8)
 	cntKey[0] = keyDistanceCnt
 	cntKey[1] = po
 	s.batch.Put(cntKey, U64ToBytes(s.bucketCnt[po]))
-
 }
 
 func (s *LDBStore) writeBatches() {
@@ -619,6 +625,7 @@ func (s *LDBStore) writeBatches() {
 
 // must be called non concurrently
 func (s *LDBStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint64) error {
+	log.Info("Writing Batch ...\n")
 	b.Put(keyEntryCnt, U64ToBytes(entryCnt))
 	b.Put(keyDataIdx, U64ToBytes(dataIdx))
 	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
