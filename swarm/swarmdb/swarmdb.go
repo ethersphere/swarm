@@ -29,6 +29,7 @@ import (
 	"path/filepath"
 	"strings"
 	"github.com/ethereum/go-ethereum/swarm/swarmdb/ash"
+	sdbp "github.com/ethereum/go-ethereum/swarm/swarmdb/sdbnetwork"
 	"time"
 )
 
@@ -41,6 +42,7 @@ type SwarmDB struct {
 	lstore		*storage.LocalStore
 	api		*api.Api
 	pss		*pss.Pss
+	Sdbp		*sdbp.Sdbp
 }
 
 //for sql parsing
@@ -167,9 +169,10 @@ const (
 	CHUNK_END_CHUNKVAL   = 4096
 )
 
-func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api, pss *pss.Pss) (swdb *SwarmDB, err error) {
+func NewSwarmDB(config *SWARMDBConfig, lstore *storage.LocalStore, api *api.Api, pss *pss.Pss, sdbp *sdbp.Sdbp) (swdb *SwarmDB, err error) {
 	sd := new(SwarmDB)
 	sd.tables = make(map[string]*Table)
+	sd.Sdbp = sdbp
 
 	sd.Netstats = NewNetstats(config)
 	dbchunkstore, err := NewDBChunkStore(config, sd.Netstats)
@@ -533,6 +536,7 @@ func (self *SwarmDB) SelectHandler(u *SWARMDBUser, data string) (resp sdbc.SWARM
 		}
 
 	case sdbc.RT_LIST_DATABASES:
+		self.Sdbp.SendTest()
 		databases, err := self.ListDatabases(u, d.Owner)
 		if err != nil {
 			return resp, sdbc.GenerateSWARMDBError(err, fmt.Sprintf("[swarmdb:SelectHandler] ListDatabases %s", err.Error()))
