@@ -181,6 +181,15 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		swarmdbConfig, _ := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
 		self.swarmdb, _ = swarmdb.NewSwarmDB(swarmdbConfig, self.lstore, self.api, self.ps)
 		//TODO: errors
+
+		/*
+			nodeid := "50c48ed277409f7c14cca9cfc2c833f364bb91db61c6a4754a559e9cd37567b58c08a1362fcc9bfab06dc843b3026dc9585e34ecfc87bd287f55c63ab191191e"
+			//key_b := []byte("testbyte")
+			str := stream.NewStream(stream.swarmChunkServerStreamName, key_b, true)
+			r := &stream.Range{From: 0, To: 100}
+			priority := uint8(1)
+			self.streamer.Subscribe(nodeid, key_b, str, r, priority)
+		*/
 	}
 
 	// set up high level api
