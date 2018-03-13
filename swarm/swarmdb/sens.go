@@ -1,15 +1,17 @@
-// This file is an automatically generated Go binding. Do not modify as any
-// change will likely be lost upon the next re-generation!
+// Code generated - DO NOT EDIT.
+// This file is a generated binding and any manual changes will be lost.
 
 package swarmdb
 
 import (
 	"strings"
 
+	ethereum "github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/event"
 )
 
 // SimplestensABI is the input ABI used to generate the binding from.
@@ -28,13 +30,14 @@ func DeploySimplestens(auth *bind.TransactOpts, backend bind.ContractBackend) (c
 	if err != nil {
 		return common.Address{}, nil, nil, err
 	}
-	return address, tx, &Simplestens{SimplestensCaller: SimplestensCaller{contract: contract}, SimplestensTransactor: SimplestensTransactor{contract: contract}}, nil
+	return address, tx, &Simplestens{SimplestensCaller: SimplestensCaller{contract: contract}, SimplestensTransactor: SimplestensTransactor{contract: contract}, SimplestensFilterer: SimplestensFilterer{contract: contract}}, nil
 }
 
 // Simplestens is an auto generated Go binding around an Ethereum contract.
 type Simplestens struct {
 	SimplestensCaller     // Read-only binding to the contract
 	SimplestensTransactor // Write-only binding to the contract
+	SimplestensFilterer   // Log filterer for contract events
 }
 
 // SimplestensCaller is an auto generated read-only Go binding around an Ethereum contract.
@@ -44,6 +47,11 @@ type SimplestensCaller struct {
 
 // SimplestensTransactor is an auto generated write-only Go binding around an Ethereum contract.
 type SimplestensTransactor struct {
+	contract *bind.BoundContract // Generic contract wrapper for the low level calls
+}
+
+// SimplestensFilterer is an auto generated log filtering Go binding around an Ethereum contract events.
+type SimplestensFilterer struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
@@ -86,16 +94,16 @@ type SimplestensTransactorRaw struct {
 
 // NewSimplestens creates a new instance of Simplestens, bound to a specific deployed contract.
 func NewSimplestens(address common.Address, backend bind.ContractBackend) (*Simplestens, error) {
-	contract, err := bindSimplestens(address, backend, backend)
+	contract, err := bindSimplestens(address, backend, backend, backend)
 	if err != nil {
 		return nil, err
 	}
-	return &Simplestens{SimplestensCaller: SimplestensCaller{contract: contract}, SimplestensTransactor: SimplestensTransactor{contract: contract}}, nil
+	return &Simplestens{SimplestensCaller: SimplestensCaller{contract: contract}, SimplestensTransactor: SimplestensTransactor{contract: contract}, SimplestensFilterer: SimplestensFilterer{contract: contract}}, nil
 }
 
 // NewSimplestensCaller creates a new read-only instance of Simplestens, bound to a specific deployed contract.
 func NewSimplestensCaller(address common.Address, caller bind.ContractCaller) (*SimplestensCaller, error) {
-	contract, err := bindSimplestens(address, caller, nil)
+	contract, err := bindSimplestens(address, caller, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -104,20 +112,29 @@ func NewSimplestensCaller(address common.Address, caller bind.ContractCaller) (*
 
 // NewSimplestensTransactor creates a new write-only instance of Simplestens, bound to a specific deployed contract.
 func NewSimplestensTransactor(address common.Address, transactor bind.ContractTransactor) (*SimplestensTransactor, error) {
-	contract, err := bindSimplestens(address, nil, transactor)
+	contract, err := bindSimplestens(address, nil, transactor, nil)
 	if err != nil {
 		return nil, err
 	}
 	return &SimplestensTransactor{contract: contract}, nil
 }
 
+// NewSimplestensFilterer creates a new log filterer instance of Simplestens, bound to a specific deployed contract.
+func NewSimplestensFilterer(address common.Address, filterer bind.ContractFilterer) (*SimplestensFilterer, error) {
+	contract, err := bindSimplestens(address, nil, nil, filterer)
+	if err != nil {
+		return nil, err
+	}
+	return &SimplestensFilterer{contract: contract}, nil
+}
+
 // bindSimplestens binds a generic wrapper to an already deployed contract.
-func bindSimplestens(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor) (*bind.BoundContract, error) {
+func bindSimplestens(address common.Address, caller bind.ContractCaller, transactor bind.ContractTransactor, filterer bind.ContractFilterer) (*bind.BoundContract, error) {
 	parsed, err := abi.JSON(strings.NewReader(SimplestensABI))
 	if err != nil {
 		return nil, err
 	}
-	return bind.NewBoundContract(address, parsed, caller, transactor), nil
+	return bind.NewBoundContract(address, parsed, caller, transactor, filterer), nil
 }
 
 // Call invokes the (constant) contract method with params as input values and
@@ -203,4 +220,137 @@ func (_Simplestens *SimplestensSession) SetContent(node [32]byte, hash [32]byte)
 // Solidity: function setContent(node bytes32, hash bytes32) returns()
 func (_Simplestens *SimplestensTransactorSession) SetContent(node [32]byte, hash [32]byte) (*types.Transaction, error) {
 	return _Simplestens.Contract.SetContent(&_Simplestens.TransactOpts, node, hash)
+}
+
+// SimplestensContentChangedIterator is returned from FilterContentChanged and is used to iterate over the raw logs and unpacked data for ContentChanged events raised by the Simplestens contract.
+type SimplestensContentChangedIterator struct {
+	Event *SimplestensContentChanged // Event containing the contract specifics and raw log
+
+	contract *bind.BoundContract // Generic contract to use for unpacking event data
+	event    string              // Event name to use for unpacking event data
+
+	logs chan types.Log        // Log channel receiving the found contract events
+	sub  ethereum.Subscription // Subscription for errors, completion and termination
+	done bool                  // Whether the subscription completed delivering logs
+	fail error                 // Occurred error to stop iteration
+}
+
+// Next advances the iterator to the subsequent event, returning whether there
+// are any more events found. In case of a retrieval or parsing error, false is
+// returned and Error() can be queried for the exact failure.
+func (it *SimplestensContentChangedIterator) Next() bool {
+	// If the iterator failed, stop iterating
+	if it.fail != nil {
+		return false
+	}
+	// If the iterator completed, deliver directly whatever's available
+	if it.done {
+		select {
+		case log := <-it.logs:
+			it.Event = new(SimplestensContentChanged)
+			if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+				it.fail = err
+				return false
+			}
+			it.Event.Raw = log
+			return true
+
+		default:
+			return false
+		}
+	}
+	// Iterator still in progress, wait for either a data or an error event
+	select {
+	case log := <-it.logs:
+		it.Event = new(SimplestensContentChanged)
+		if err := it.contract.UnpackLog(it.Event, it.event, log); err != nil {
+			it.fail = err
+			return false
+		}
+		it.Event.Raw = log
+		return true
+
+	case err := <-it.sub.Err():
+		it.done = true
+		it.fail = err
+		return it.Next()
+	}
+}
+
+// Error returns any retrieval or parsing error occurred during filtering.
+func (it *SimplestensContentChangedIterator) Error() error {
+	return it.fail
+}
+
+// Close terminates the iteration process, releasing any pending underlying
+// resources.
+func (it *SimplestensContentChangedIterator) Close() error {
+	it.sub.Unsubscribe()
+	return nil
+}
+
+// SimplestensContentChanged represents a ContentChanged event raised by the Simplestens contract.
+type SimplestensContentChanged struct {
+	Node [32]byte
+	Hash [32]byte
+	Raw  types.Log // Blockchain specific contextual infos
+}
+
+// FilterContentChanged is a free log retrieval operation binding the contract event 0x0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc.
+//
+// Solidity: event ContentChanged(node indexed bytes32, hash bytes32)
+func (_Simplestens *SimplestensFilterer) FilterContentChanged(opts *bind.FilterOpts, node [][32]byte) (*SimplestensContentChangedIterator, error) {
+
+	var nodeRule []interface{}
+	for _, nodeItem := range node {
+		nodeRule = append(nodeRule, nodeItem)
+	}
+
+	logs, sub, err := _Simplestens.contract.FilterLogs(opts, "ContentChanged", nodeRule)
+	if err != nil {
+		return nil, err
+	}
+	return &SimplestensContentChangedIterator{contract: _Simplestens.contract, event: "ContentChanged", logs: logs, sub: sub}, nil
+}
+
+// WatchContentChanged is a free log subscription operation binding the contract event 0x0424b6fe0d9c3bdbece0e7879dc241bb0c22e900be8b6c168b4ee08bd9bf83bc.
+//
+// Solidity: event ContentChanged(node indexed bytes32, hash bytes32)
+func (_Simplestens *SimplestensFilterer) WatchContentChanged(opts *bind.WatchOpts, sink chan<- *SimplestensContentChanged, node [][32]byte) (event.Subscription, error) {
+
+	var nodeRule []interface{}
+	for _, nodeItem := range node {
+		nodeRule = append(nodeRule, nodeItem)
+	}
+
+	logs, sub, err := _Simplestens.contract.WatchLogs(opts, "ContentChanged", nodeRule)
+	if err != nil {
+		return nil, err
+	}
+	return event.NewSubscription(func(quit <-chan struct{}) error {
+		defer sub.Unsubscribe()
+		for {
+			select {
+			case log := <-logs:
+				// New log arrived, parse the event and forward to the user
+				event := new(SimplestensContentChanged)
+				if err := _Simplestens.contract.UnpackLog(event, "ContentChanged", log); err != nil {
+					return err
+				}
+				event.Raw = log
+
+				select {
+				case sink <- event:
+				case err := <-sub.Err():
+					return err
+				case <-quit:
+					return nil
+				}
+			case err := <-sub.Err():
+				return err
+			case <-quit:
+				return nil
+			}
+		}
+	}), nil
 }
