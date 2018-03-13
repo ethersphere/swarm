@@ -53,6 +53,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/swarmdb"
+	sdbp "github.com/ethereum/go-ethereum/swarm/swarmdb/sdbnetwork"
 	wolkdbserver "github.com/ethereum/go-ethereum/swarm/swarmdb/server"
 )
 
@@ -172,14 +173,19 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	if self.config.PssEnabled {
 		pssparams := pss.NewPssParams(self.privateKey)
 		self.ps = pss.NewPss(to, self.dpa, pssparams)
+log.Debug(fmt.Sprintf("NewPss %v", self.ps))
 		if pss.IsActiveHandshake {
 			pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 		}
 	}
 
+	swarmdbps := sdbp.NewSdbp(to)
+log.Debug(fmt.Sprintf("NewSdbp %v", swarmdbps))
+
 	if true { //self.config.SwarmDBEnabled {
-		swarmdbConfig, _ := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
-		self.swarmdb, _ = swarmdb.NewSwarmDB(swarmdbConfig, self.lstore, self.api, self.ps)
+		swarmdbConfig, err := swarmdb.LoadSWARMDBConfig(swarmdb.SWARMDBCONF_FILE)
+log.Debug(fmt.Sprintf("swarmdb config %v %v", swarmdbConfig, err))
+		self.swarmdb, err = swarmdb.NewSwarmDB(swarmdbConfig, self.lstore, self.api, self.ps, swarmdbps)
 		//TODO: errors
 
 		/*
@@ -191,6 +197,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 			self.streamer.Subscribe(nodeid, key_b, str, r, priority)
 		*/
 	}
+log.Debug(fmt.Sprintf("swarmdb %v %v", self.swarmdb, err))
 
 	// set up high level api
 	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
@@ -374,6 +381,10 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		log.Info("Pss started")
 	}
 
+	if self.swarmdb.Sdbp != nil{
+		self.swarmdb.Sdbp.Start(srv)
+	}
+
 	self.dpa.Start()
 	log.Debug(fmt.Sprintf("Swarm DPA started"))
 
@@ -471,6 +482,9 @@ func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	}
 	if self.streamer != nil {
 		protos = append(protos, self.streamer.Protocols()...)
+	}
+	if self.swarmdb.Sdbp != nil {
+		protos = append(protos, self.swarmdb.Sdbp.Protocols()...)
 	}
 	return
 }
