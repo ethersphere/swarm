@@ -92,7 +92,6 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 			streamer.startSyncing()
 		}()
 	}
-
 	return streamer
 }
 
@@ -270,7 +269,6 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 			return err
 		}
 	}
-
 	return sp.Run(sp.HandleMsg)
 }
 
