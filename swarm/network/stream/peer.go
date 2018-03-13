@@ -100,14 +100,14 @@ func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
-	log.Info("from %s and to %s for SendOfferedHashes", from, to)
+	log.Info(fmt.Sprintf("from [%d] and to [%d] for SendOfferedHashes", from, to))
 	if err != nil {
 		log.Error(fmt.Sprintf("Error Sending Offered Hashes: %s", err))
 		return err
 	}
 	// true only when quiting
 	if len(hashes) == 0 {
-		log.Info(fmt.Sprintf("Hashes is empty, so returning from SendOfferedHashes", err))
+		log.Info(fmt.Sprintf("Hashes is empty, so returning from SendOfferedHashes"))
 		return nil
 	}
 	if proof == nil {
