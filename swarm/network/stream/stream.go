@@ -73,7 +73,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 		intervalsStore: intervalsStore,
 		doRetrieve:     doRetrieve,
 	}
-	log.Info(fmt.Sprintf("creating a new registry/streamer with add %s and do retrieve value of %s", addr, doRetrieve))
+	log.Info(fmt.Sprintf("creating a new registry/streamer with add %s and do retrieve value of %d", addr, doRetrieve))
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ []byte, _ bool) (Server, error) {
@@ -137,7 +137,7 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Serv
 }
 
 func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, h *Range, prio uint8) error {
-	log.Info(fmt.Sprintf("Requesting subscription peerId (%v) for stream.Name (%s) and do retrieve value of %s", peerId, s.Name))
+	log.Info(fmt.Sprintf("Requesting subscription peerId (%v) for stream.Name (%s)", peerId, s.Name))
 	// check if the stream is registered
 	if _, err := r.GetClientFunc(s.Name); err != nil {
 		return err
