@@ -73,6 +73,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 		intervalsStore: intervalsStore,
 		doRetrieve:     doRetrieve,
 	}
+	log.Info(fmt.Sprintf("creating a new registry/streamer with add %s and do retrieve value of %s", addr, doRetrieve))
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ []byte, _ bool) (Server, error) {
@@ -137,6 +138,7 @@ func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Serv
 }
 
 func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, h *Range, prio uint8) error {
+	log.Info(fmt.Sprintf("Requesting subscription peerId (%v) for stream.Name (%s) and do retrieve value of %s", peerId, s.Name))
 	// check if the stream is registered
 	if _, err := r.GetClientFunc(s.Name); err != nil {
 		return err
@@ -152,7 +154,7 @@ func (r *Registry) RequestSubscription(peerId discover.NodeID, s Stream, h *Rang
 		History:  h,
 		Priority: prio,
 	}
-	log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "history", h)
+	log.Info("RequestSubscription ", "peer", peerId, "stream", s, "history", h)
 	return peer.Send(msg)
 }
 
@@ -192,7 +194,7 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priorit
 		History:  h,
 		Priority: priority,
 	}
-	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
+	log.Info("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
 	return peer.SendPriority(msg, priority)
 }
@@ -270,7 +272,6 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 			return err
 		}
 	}
-
 	return sp.Run(sp.HandleMsg)
 }
 
@@ -280,7 +281,7 @@ func (r *Registry) startSyncing() {
 
 	kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(conn network.OverlayConn, bin int) bool {
 		p := conn.(network.Peer)
-		log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
+		log.Info(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
 
 		stream := NewStream("SYNC", []byte{uint8(bin)}, true)
 		err := r.RequestSubscription(p.ID(), stream, &Range{}, Top)
@@ -302,6 +303,7 @@ func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 // HandleMsg is the message handler that delegates incoming messages
 func (p *Peer) HandleMsg(msg interface{}) error {
+	log.Info(fmt.Sprintf("Handling message: %s", msg))
 	switch msg := msg.(type) {
 
 	case *SubscribeMsg:
