@@ -100,11 +100,14 @@ func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
+	log.Info("from %s and to %s for SendOfferedHashes", from, to)
 	if err != nil {
+		log.Error(fmt.Sprintf("Error Sending Offered Hashes: %s", err))
 		return err
 	}
 	// true only when quiting
 	if len(hashes) == 0 {
+		log.Info(fmt.Sprintf("Hashes is empty, so returning from SendOfferedHashes", err))
 		return nil
 	}
 	if proof == nil {
@@ -120,7 +123,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		To:            to,
 		Stream:        s.stream,
 	}
-	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
+	log.Info("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
 	return p.SendPriority(msg, s.priority)
 }
 
