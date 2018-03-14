@@ -117,6 +117,7 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 	log.Info(fmt.Sprintf("Attempting to retrieve [%x] from memStore", key))
 	chunk, err = self.memStore.Get(key)
 	if err == nil {
+		log.Info(fmt.Sprintf("Successfully retrieved [%x] from memStore", key))
 		if chunk.ReqC != nil {
 			select {
 			case <-chunk.ReqC:
@@ -132,7 +133,7 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 		log.Info(fmt.Sprintf("Error attempting to retrieve [%x] from DbStore: %s", key, err))
 		return
 	}
-	log.Info(fmt.Sprintf("Retrieved [%x] with chunk data of [%+v]", key, chunk))
+	log.Info(fmt.Sprintf("Retrieved [%x] from DbStore with chunk data of [%+v]", key, chunk))
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.memStore.Put(chunk)
 	return

@@ -559,7 +559,7 @@ func (s *LDBStore) Put(chunk *Chunk) {
 
 	idata, err := s.db.Get(ikey)
 	if err == leveldb.ErrNotFound {
-		log.Info(fmt.Sprintf("ikey [%x] not found", ikey, err))
+		log.Info(fmt.Sprintf("Didn't find Chunk with Key [%x] using ikey [%x] so will execute doPut", chunk.Key, ikey))
 		s.doPut(chunk, ikey, &index, po)
 		batchC := s.batchC
 		go func() {
@@ -586,6 +586,7 @@ func (s *LDBStore) Put(chunk *Chunk) {
 // force putting into db, does not check access index
 func (s *LDBStore) doPut(chunk *Chunk, ikey []byte, index *dpaDBIndex, po uint8) {
 	data := s.encodeDataFunc(chunk)
+	log.Info(fmt.Sprintf("[ldbstore:doPut] Chunk [%+v] now encoded as data [%+v] with Key [%x] using ikey [%x] so will execute doPut", chunk, data, chunk.Key, ikey))
 	s.batch.Put(getDataKey(s.dataIdx, po), data)
 	index.Idx = s.dataIdx
 	s.bucketCnt[po] = s.dataIdx
@@ -631,9 +632,11 @@ func (s *LDBStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uin
 	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
 	l := b.Len()
 	if err := s.db.Write(b); err != nil {
+		log.Info(fmt.Sprintf("Unable to write batch: %+v", err))
 		return fmt.Errorf("unable to write batch: %v", err)
 	}
-	log.Trace(fmt.Sprintf("DbStore: batch write (%d chunks) complete", l))
+	log.Info(fmt.Sprintf("DbStore: batch write (%d chunks) complete", l))
+	log.Info(fmt.Sprintf("Batches: %+v", b))
 	return nil
 }
 
@@ -687,9 +690,10 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 			proximity := s.po(key)
 			datakey := getDataKey(indx.Idx, proximity)
 			data, err = s.db.Get(datakey)
-			log.Trace(fmt.Sprintf("DBStore: Chunk %v indexkey %v datakey %x proximity %d", key.Log(), indx.Idx, datakey, proximity))
+			log.Info(fmt.Sprintf("DBStore.Get: Original Key is [%x] Chunk %v indexkey %v datakey %x proximity %d", key, key.Log(), indx.Idx, datakey, proximity))
 			if err != nil {
 				log.Trace(fmt.Sprintf("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err))
+				log.Error(fmt.Sprintf("DBStore: Chunk %v found but could not be accessed: %v", key.Log(), err))
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
 				return
 			}
