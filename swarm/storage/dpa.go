@@ -71,7 +71,7 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
 	// TODO: initialize hashFunc properly
 	hashFunc := MakeHashFunc(params.Hash)
-	chunker := NewTreeChunker(params)
+	chunker := NewPyramidChunker(params)
 	return &DPA{
 		Chunker:    chunker,
 		ChunkStore: store,

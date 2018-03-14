@@ -31,7 +31,7 @@ type chunkEncryption struct {
 
 type hasherStore struct {
 	store           ChunkStore
-	hasher          SwarmHash
+	hashFunc        SwarmHasher
 	chunkEncryption *chunkEncryption
 }
 
@@ -49,7 +49,7 @@ func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool)
 	}
 	return &hasherStore{
 		store:           chunkStore,
-		hasher:          hashFunc(),
+		hashFunc:        hashFunc,
 		chunkEncryption: chunkEncryption,
 	}
 }
@@ -111,9 +111,10 @@ func (h *hasherStore) Close() {
 }
 
 func (h *hasherStore) createHash(chunkData ChunkData) Key {
-	h.hasher.ResetWithLength(chunkData[:8]) // 8 bytes of length
-	h.hasher.Write(chunkData[8:])           // minus 8 []byte length
-	return h.hasher.Sum(nil)
+	hasher := h.hashFunc()
+	hasher.ResetWithLength(chunkData[:8]) // 8 bytes of length
+	hasher.Write(chunkData[8:])           // minus 8 []byte length
+	return hasher.Sum(nil)
 }
 
 func (h *hasherStore) createChunk(chunkData ChunkData, chunkSize int64) *Chunk {
