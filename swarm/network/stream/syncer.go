@@ -19,7 +19,6 @@ package stream
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"io"
 	"math"
 	"strconv"
@@ -222,13 +221,14 @@ func (s *SwarmSyncerClient) TakeoverProof(stream Stream, from uint64, hashes []b
 	if s.chunker != nil {
 		if from > s.sessionAt { // for live syncing currentRoot is always updated
 			//expRoot, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC, s.storeC)
-			expRoot, _, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC)
-			if err != nil {
-				return nil, err
-			}
-			if !bytes.Equal(root, expRoot) {
-				return nil, fmt.Errorf("HandoverProof mismatch")
-			}
+			// TODO: reenable this with putter/getter
+			// expRoot, _, err := s.chunker.Append(s.currentRoot, bytes.NewReader(hashes), s.retrieveC)
+			// if err != nil {
+			// 	return nil, err
+			// }
+			// if !bytes.Equal(root, expRoot) {
+			// 	return nil, fmt.Errorf("HandoverProof mismatch")
+			// }
 			s.currentRoot = root
 		} else {
 			expHashes := make([]byte, len(hashes))

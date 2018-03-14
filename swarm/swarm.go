@@ -359,9 +359,6 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		log.Info("Pss started")
 	}
 
-	self.dpa.Start()
-	log.Debug(fmt.Sprintf("Swarm DPA started"))
-
 	// start swarm http proxy server
 	if self.config.Port != "" {
 		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
@@ -402,7 +399,6 @@ func (self *Swarm) updateGauges() {
 // implements the node.Service interface
 // stops all component services.
 func (self *Swarm) Stop() error {
-	self.dpa.Stop()
 	if self.ps != nil {
 		self.ps.Stop()
 	}

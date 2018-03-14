@@ -32,6 +32,7 @@ import (
 )
 
 const MaxPO = 7
+const KeyLength = 32
 
 type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash
@@ -264,14 +265,32 @@ type Splitter interface {
 	   The caller gets returned an error channel, if an error is encountered during splitting, it is fed to errC error channel.
 	   A closed error signals process completion at which point the key can be considered final if there were no errors.
 	*/
-	Split(io.Reader, int64, chan *Chunk) (Key, func(), error)
+	Split(io.Reader, int64, PutGetter) (Key, func(), error)
 
 	/* This is the first step in making files mutable (not chunks)..
 	   Append allows adding more data chunks to the end of the already existsing file.
 	   The key for the root chunk is supplied to load the respective tree.
 	   Rest of the parameters behave like Split.
 	*/
-	Append(Key, io.Reader, chan *Chunk) (Key, func(), error)
+	Append(Key, io.Reader, PutGetter) (Key, func(), error)
+}
+
+type ChunkData []byte
+
+type Reference []byte
+
+type Putter interface {
+	Put(ChunkData) (Reference, error)
+	Close()
+}
+
+type Getter interface {
+	Get(Reference) (ChunkData, error)
+}
+
+type PutGetter interface {
+	Putter
+	Getter
 }
 
 type Joiner interface {
@@ -287,7 +306,7 @@ type Joiner interface {
 	   The chunks are not meant to be validated by the chunker when joining. This
 	   is because it is left to the DPA to decide which sources are trusted.
 	*/
-	Join(key Key, chunkC chan *Chunk, depth int) LazySectionReader
+	Join(key Key, getter Getter, depth int) LazySectionReader
 }
 
 type Chunker interface {
@@ -311,4 +330,13 @@ type LazyTestSectionReader struct {
 
 func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
 	return self.SectionReader.Size(), nil
+}
+
+// NOTE: this returns invalid data if chunk is encrypted
+func (c ChunkData) Size() int64 {
+	return int64(binary.LittleEndian.Uint64(c[:8]))
+}
+
+func (c ChunkData) Data() []byte {
+	return c[8:]
 }

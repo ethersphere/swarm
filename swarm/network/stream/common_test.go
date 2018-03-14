@@ -207,12 +207,10 @@ func (r *TestRegistry) ReadAll(hash common.Hash) (int64, error) {
 }
 
 func (r *TestRegistry) Start(server *p2p.Server) error {
-	r.dpa.Start()
 	return r.Registry.Start(server)
 }
 
 func (r *TestRegistry) Stop() error {
-	r.dpa.Stop()
 	return r.Registry.Stop()
 }
 

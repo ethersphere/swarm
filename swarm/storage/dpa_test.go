@@ -39,17 +39,12 @@ func TestDPArandom(t *testing.T) {
 		memStore: memStore,
 		DbStore:  db,
 	}
-	chunker := NewTreeChunker(NewChunkerParams())
-	dpa := &DPA{
-		Chunker:    chunker,
-		ChunkStore: localStore,
-	}
-	dpa.Start()
-	defer dpa.Stop()
+
+	dpa := NewDPA(localStore, NewChunkerParams())
 	defer os.RemoveAll("/tmp/bzz")
 
 	reader, slice := generateRandomData(testDataSize)
-	key, wait, err := dpa.Store(reader, testDataSize)
+	key, wait, err := dpa.Store(reader, testDataSize, false)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
@@ -97,14 +92,9 @@ func TestDPA_capacity(t *testing.T) {
 		memStore: memStore,
 		DbStore:  db,
 	}
-	chunker := NewTreeChunker(NewChunkerParams())
-	dpa := &DPA{
-		Chunker:    chunker,
-		ChunkStore: localStore,
-	}
-	dpa.Start()
+	dpa := NewDPA(localStore, NewChunkerParams())
 	reader, slice := generateRandomData(testDataSize)
-	key, wait, err := dpa.Store(reader, testDataSize)
+	key, wait, err := dpa.Store(reader, testDataSize, false)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}

@@ -18,12 +18,8 @@ package storage
 
 import (
 	"errors"
-	"fmt"
 	"io"
-	"sync"
 	"time"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 /*
@@ -39,12 +35,8 @@ implementation for storage or retrieval.
 */
 
 const (
-	storeChanCapacity           = 100
-	retrieveChanCapacity        = 100
 	singletonSwarmDbCapacity    = 50000
 	singletonSwarmCacheCapacity = 500
-	maxStoreProcesses           = 8
-	maxRetrieveProcesses        = 8
 )
 
 var (
@@ -56,14 +48,8 @@ var (
 
 type DPA struct {
 	ChunkStore
-	storeC    chan *Chunk
-	retrieveC chan *Chunk
-	Chunker   Chunker
-
-	lock    sync.Mutex
-	running bool
-	wg      *sync.WaitGroup
-	quitC   chan bool
+	Chunker  Chunker
+	hashFunc SwarmHasher
 }
 
 // for testing locally
@@ -83,10 +69,13 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 }
 
 func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
+	// TODO: initialize hashFunc properly
+	hashFunc := MakeHashFunc(params.Hash)
 	chunker := NewPyramidChunker(params)
 	return &DPA{
 		Chunker:    chunker,
 		ChunkStore: store,
+		hashFunc:   hashFunc,
 	}
 }
 
@@ -95,83 +84,85 @@ func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 func (self *DPA) Retrieve(key Key) LazySectionReader {
-	return self.Chunker.Join(key, self.retrieveC, 0)
+	getter := NewHasherStore(self.ChunkStore, self.hashFunc, false)
+	return self.Chunker.Join(key, getter, 0)
 }
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data io.Reader, size int64) (key Key, wait func(), err error) {
-	return self.Chunker.Split(data, size, self.storeC)
+func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (key Key, wait func(), err error) {
+	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
+	return self.Chunker.Split(data, size, putter)
 }
 
-func (self *DPA) Start() {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	if self.running {
-		return
-	}
-	self.running = true
-	self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
-	self.storeC = make(chan *Chunk, storeChanCapacity)
-	self.quitC = make(chan bool)
-	self.storeLoop()
-	self.retrieveLoop()
-}
-
-func (self *DPA) Stop() {
-	self.lock.Lock()
-	defer self.lock.Unlock()
-	if !self.running {
-		return
-	}
-	self.running = false
-	close(self.quitC)
-}
+// func (self *DPA) Start() {
+// 	self.lock.Lock()
+// 	defer self.lock.Unlock()
+// 	if self.running {
+// 		return
+// 	}
+// 	self.running = true
+// 	// self.retrieveC = make(chan *Chunk, retrieveChanCapacity)
+// 	// self.storeC = make(chan *Chunk, storeChanCapacity)
+// 	self.quitC = make(chan bool)
+// 	self.storeLoop()
+// 	self.retrieveLoop()
+// }
+//
+// func (self *DPA) Stop() {
+// 	self.lock.Lock()
+// 	defer self.lock.Unlock()
+// 	if !self.running {
+// 		return
+// 	}
+// 	self.running = false
+// 	close(self.quitC)
+// }
 
 // retrieveLoop dispatches the parallel chunk retrieval requests received on the
 // retrieve channel to its ChunkStore  (NetStore or LocalStore)
-func (self *DPA) retrieveLoop() {
-	for i := 0; i < maxRetrieveProcesses; i++ {
-		go self.retrieveWorker()
-	}
-	log.Trace(fmt.Sprintf("dpa: retrieve loop spawning %v workers", maxRetrieveProcesses))
-}
-
-func (self *DPA) retrieveWorker() {
-	for chunk := range self.retrieveC {
-		storedChunk, err := self.Get(chunk.Key)
-		if err != nil {
-			log.Trace(fmt.Sprintf("error retrieving chunk %v: %v", chunk.Key.Log(), err))
-		} else {
-			chunk.SData = storedChunk.SData
-			chunk.Size = storedChunk.Size
-		}
-		close(chunk.C)
-
-		select {
-		case <-self.quitC:
-			return
-		default:
-		}
-	}
-}
+// func (self *DPA) retrieveLoop() {
+// 	for i := 0; i < maxRetrieveProcesses; i++ {
+// 		go self.retrieveWorker()
+// 	}
+// 	log.Trace(fmt.Sprintf("dpa: retrieve loop spawning %v workers", maxRetrieveProcesses))
+// }
+//
+// func (self *DPA) retrieveWorker() {
+// 	for chunk := range self.retrieveC {
+// 		storedChunk, err := self.Get(chunk.Key)
+// 		if err != nil {
+// 			log.Trace(fmt.Sprintf("error retrieving chunk %v: %v", chunk.Key.Log(), err))
+// 		} else {
+// 			chunk.SData = storedChunk.SData
+// 			chunk.Size = storedChunk.Size
+// 		}
+// 		close(chunk.C)
+//
+// 		select {
+// 		case <-self.quitC:
+// 			return
+// 		default:
+// 		}
+// 	}
+// }
 
 // storeLoop dispatches the parallel chunk store request processors
 // received on the store channel to its ChunkStore (NetStore or LocalStore)
-func (self *DPA) storeLoop() {
-	for i := 0; i < maxStoreProcesses; i++ {
-		go self.storeWorker()
-	}
-	log.Trace(fmt.Sprintf("dpa: store spawning %v workers", maxStoreProcesses))
-}
+// func (self *DPA) storeLoop() {
+// 	for i := 0; i < maxStoreProcesses; i++ {
+// 		go self.storeWorker()
+// 	}
+// 	log.Trace(fmt.Sprintf("dpa: store spawning %v workers", maxStoreProcesses))
+// }
 
-func (self *DPA) storeWorker() {
-	for chunk := range self.storeC {
-		self.Put(chunk)
-		select {
-		case <-self.quitC:
-			return
-		default:
-		}
-	}
-}
+// func (self *DPA) storeWorker() {
+// 	for chunk := range self.storeC {
+// 		self.Put(chunk)
+// 		select {
+// 		case <-self.quitC:
+// 			return
+// 		default:
+// 		}
+// 	}
+// }

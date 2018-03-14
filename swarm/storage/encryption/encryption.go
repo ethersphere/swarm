@@ -23,6 +23,8 @@ import (
 	"hash"
 )
 
+const KeyLength = 32
+
 type Key []byte
 
 type Encryption interface {
@@ -98,6 +100,12 @@ func (e *encryption) transform(data []byte, key Key) []byte {
 		ctr++
 	}
 	return transformedData
+}
+
+func GenerateRandomKey() (Key, error) {
+	key := make([]byte, KeyLength)
+	_, err := rand.Read(key)
+	return key, err
 }
 
 func min(x, y int) int {
