@@ -225,15 +225,27 @@ func TestRandomData(t *testing.T) {
 	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678}
 	tester := &chunkerTester{t: t}
 
-	// TODO: only tree chunker is implemented well
-	chunker := NewTreeChunker(NewChunkerParams())
+	cp := NewChunkerParams()
+	chunker := NewTreeChunker(cp)
+	pyramid := NewPyramidChunker(cp)
+	for _, s := range sizes {
+		treeChunkerKey := testRandomData(chunker, s, tester)
+		pyramidChunkerKey := testRandomData(pyramid, s, tester)
+		if treeChunkerKey.String() != pyramidChunkerKey.String() {
+			tester.t.Fatalf("tree chunker and pyramid chunker key mismatch for size %v\n TC: %v\n PC: %v\n", s, treeChunkerKey.String(), pyramidChunkerKey.String())
+		}
+	}
+
+	cp.Hash = BMTHash
+	chunker = NewTreeChunker(cp)
+	pyramid = NewPyramidChunker(cp)
 	// pyramid := NewTreePyramidChunker(NewChunkerParams())
 	for _, s := range sizes {
-		testRandomData(chunker, s, tester)
-		// testRandomData(pyramid, s, tester)
-		// if treeChunkerKey.String() != pyramidChunkerKey.String() {
-		// 	tester.t.Fatalf("tree chunker and pyramid chunker key mismatch for size %v\n TC: %v\n PC: %v\n", s, treeChunkerKey.String(), pyramidChunkerKey.String())
-		// }
+		treeChunkerKey := testRandomData(chunker, s, tester)
+		pyramidChunkerKey := testRandomData(pyramid, s, tester)
+		if treeChunkerKey.String() != pyramidChunkerKey.String() {
+			tester.t.Fatalf("tree chunker BMT and pyramid chunker BMT key mismatch for size %v \n TC: %v\n PC: %v\n", s, treeChunkerKey.String(), pyramidChunkerKey.String())
+		}
 	}
 }
 
