@@ -109,7 +109,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		to = req.History.To
 	}
 
-	log.Info("Before gofunc calling SendOfferedHashes\n")
+	log.Info(fmt.Sprintf("Before gofunc calling SendOfferedHashes where req.Stream.Live is %+v and req.History is [%+v] \n", req.Stream.Live, req.History))
 	go func() {
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
 			p.Drop(err)

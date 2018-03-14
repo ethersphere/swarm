@@ -302,7 +302,7 @@ func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 // HandleMsg is the message handler that delegates incoming messages
 func (p *Peer) HandleMsg(msg interface{}) error {
-	log.Info(fmt.Sprintf("Handling message: %s", msg))
+	log.Info(fmt.Sprintf("Handling message: %+v", msg))
 	switch msg := msg.(type) {
 
 	case *SubscribeMsg:
@@ -333,6 +333,7 @@ func (p *Peer) HandleMsg(msg interface{}) error {
 		return p.handleRequestSubscription(msg)
 
 	default:
+		log.Info(fmt.Sprintf("unknown message type: %T for msg %+v", msg, msg))
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
 }
