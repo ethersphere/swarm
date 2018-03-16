@@ -53,47 +53,130 @@ type Registry struct {
 	clientMu       sync.RWMutex
 	serverMu       sync.RWMutex
 	peersMu        sync.RWMutex
-	serverFuncs    map[string]func(*Peer, []byte, bool) (Server, error)
-	clientFuncs    map[string]func(*Peer, []byte, bool) (Client, error)
+	serverFuncs    map[string]func(*Peer, string, bool) (Server, error)
+	clientFuncs    map[string]func(*Peer, string, bool) (Client, error)
 	peers          map[discover.NodeID]*Peer
 	delivery       *Delivery
 	intervalsStore state.Store
 	doRetrieve     bool
 }
 
+// RegistryOptions holds optional values for NewRegistry constructor.
+type RegistryOptions struct {
+	SkipCheck       bool
+	DoSync          bool
+	DoRetrieve      bool
+	SyncUpdateDelay time.Duration
+}
+
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, skipCheck, doSync, doRetrieve bool) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, options *RegistryOptions) *Registry {
+	if options == nil {
+		options = &RegistryOptions{}
+	}
+	if options.SyncUpdateDelay <= 0 {
+		options.SyncUpdateDelay = 15 * time.Second
+	}
 	streamer := &Registry{
 		addr:           addr,
-		skipCheck:      skipCheck,
-		serverFuncs:    make(map[string]func(*Peer, []byte, bool) (Server, error)),
-		clientFuncs:    make(map[string]func(*Peer, []byte, bool) (Client, error)),
+		skipCheck:      options.SkipCheck,
+		serverFuncs:    make(map[string]func(*Peer, string, bool) (Server, error)),
+		clientFuncs:    make(map[string]func(*Peer, string, bool) (Client, error)),
 		peers:          make(map[discover.NodeID]*Peer),
 		delivery:       delivery,
 		intervalsStore: intervalsStore,
-		doRetrieve:     doRetrieve,
+		doRetrieve:     options.DoRetrieve,
 	}
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
-	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ []byte, _ bool) (Server, error) {
+	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
 		return NewSwarmChunkServer(delivery.db), nil
 	})
-	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, _ []byte, _ bool) (Client, error) {
+	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, _ string, _ bool) (Client, error) {
 		return NewSwarmSyncerClient(p, delivery.db, nil)
 	})
 	RegisterSwarmSyncerServer(streamer, db)
 	RegisterSwarmSyncerClient(streamer, db)
 
-	if doSync {
+	if options.DoSync {
+		// latestIntC function ensures that
+		//   - receiving from the in chan is not blocked by processing inside the for loop
+		// 	 - the latest int value is delivered to the loop after the processing is done
+		// In context of NeighbourhoodDepthC:
+		// after the syncing is done updating inside the loop, we do not need to update on the intermediate
+		// depth changes, only to the latest one
+		latestIntC := func(in <-chan int) <-chan int {
+			out := make(chan int)
+
+			go func() {
+				defer close(out)
+
+				var last *int
+				for i := range in {
+					select {
+					case out <- i:
+					default:
+						last = &i
+					}
+				}
+				// ensure that the last received stat is sent out
+				if last != nil {
+					out <- *last
+				}
+			}()
+
+			return out
+		}
+
 		go func() {
-			// this is a temporary workaround to wait for kademlia table to be healthy
-			time.Sleep(30 * time.Second)
+			// wait for kademlia table to be healthy
+			time.Sleep(options.SyncUpdateDelay)
 
-			streamer.startSyncing()
+			// initial requests for syncing subscription to peers
+			streamer.updateSyncing()
 
-			for depth := range streamer.delivery.overlay.DepthC() {
-				log.Debug("Kademlia depth change", "depth", depth)
-				streamer.startSyncing()
+			kad := streamer.delivery.overlay.(*network.Kademlia)
+			depthC := latestIntC(kad.NeighbourhoodDepthC())
+			addressBookSizeC := latestIntC(kad.AddressBookSizeC())
+
+			for depth := range depthC {
+				log.Debug("Kademlia neighbourhood depth change", "depth", depth)
+
+				// Prevent too early sync subscriptions by waiting until there are no
+				// new peers connecting. Sync streams updating will be done after no
+				// peers are connected for at least SyncUpdateDelay period.
+				timer := time.NewTimer(options.SyncUpdateDelay)
+				// Hard limit to sync update delay, preventing long delays
+				// on a very dynamic network
+				maxTimer := time.NewTimer(3 * time.Minute)
+			loop:
+				for {
+					select {
+					case <-maxTimer.C:
+						// force syncing update when a hard timeout is reached
+						log.Trace("Sync subscriptions update on hard timeout")
+						// request for syncing subscription to new peers
+						streamer.updateSyncing()
+						break loop
+					case <-timer.C:
+						// start syncing as no new peers has been added to kademlia
+						// for some time
+						log.Trace("Sync subscriptions update")
+						// request for syncing subscription to new peers
+						streamer.updateSyncing()
+						break loop
+					case size := <-addressBookSizeC:
+						log.Trace("Kademlia address book size changed on depth change", "size", size)
+						// new peers has been added to kademlia,
+						// reset the timer to prevent early sync subscriptions
+						if !timer.Stop() {
+							<-timer.C
+						}
+						timer.Reset(options.SyncUpdateDelay)
+					}
+				}
+				timer.Stop()
+				maxTimer.Stop()
 			}
 		}()
 	}
@@ -102,7 +185,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 }
 
 // RegisterClient registers an incoming streamer constructor
-func (r *Registry) RegisterClientFunc(stream string, f func(*Peer, []byte, bool) (Client, error)) {
+func (r *Registry) RegisterClientFunc(stream string, f func(*Peer, string, bool) (Client, error)) {
 	r.clientMu.Lock()
 	defer r.clientMu.Unlock()
 
@@ -110,7 +193,7 @@ func (r *Registry) RegisterClientFunc(stream string, f func(*Peer, []byte, bool)
 }
 
 // RegisterServer registers an outgoing streamer constructor
-func (r *Registry) RegisterServerFunc(stream string, f func(*Peer, []byte, bool) (Server, error)) {
+func (r *Registry) RegisterServerFunc(stream string, f func(*Peer, string, bool) (Server, error)) {
 	r.serverMu.Lock()
 	defer r.serverMu.Unlock()
 
@@ -118,7 +201,7 @@ func (r *Registry) RegisterServerFunc(stream string, f func(*Peer, []byte, bool)
 }
 
 // GetClient accessor for incoming streamer constructors
-func (r *Registry) GetClientFunc(stream string) (func(*Peer, []byte, bool) (Client, error), error) {
+func (r *Registry) GetClientFunc(stream string) (func(*Peer, string, bool) (Client, error), error) {
 	r.clientMu.RLock()
 	defer r.clientMu.RUnlock()
 
@@ -130,7 +213,7 @@ func (r *Registry) GetClientFunc(stream string) (func(*Peer, []byte, bool) (Clie
 }
 
 // GetServer accessor for incoming streamer constructors
-func (r *Registry) GetServerFunc(stream string) (func(*Peer, []byte, bool) (Server, error), error) {
+func (r *Registry) GetServerFunc(stream string) (func(*Peer, string, bool) (Server, error), error) {
 	r.serverMu.RLock()
 	defer r.serverMu.RUnlock()
 
@@ -226,6 +309,24 @@ func (r *Registry) Unsubscribe(peerId discover.NodeID, s Stream) error {
 	return peer.removeClient(s)
 }
 
+// Quit sends the QuitMsg to the peer to remove the
+// stream peer client and terminate the streaming.
+func (r *Registry) Quit(peerId discover.NodeID, s Stream) error {
+	peer := r.getPeer(peerId)
+	if peer == nil {
+		log.Debug("stream quit: peer not found", "peer", peerId, "stream", s)
+		// if the peer is not found, abort the request
+		return nil
+	}
+
+	msg := &QuitMsg{
+		Stream: s,
+	}
+	log.Debug("Quit ", "peer", peerId, "stream", s)
+
+	return peer.Send(msg)
+}
+
 func (r *Registry) Retrieve(chunk *storage.Chunk) error {
 	return r.delivery.RequestFromPeers(chunk.Key[:], r.skipCheck)
 }
@@ -277,7 +378,7 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer sp.close()
 
 	if r.doRetrieve {
-		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, nil, false), nil, Top)
+		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", false), nil, Top)
 		if err != nil {
 			return err
 		}
@@ -286,22 +387,70 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	return sp.Run(sp.HandleMsg)
 }
 
-func (r *Registry) startSyncing() {
-	// panic freely
+// updateSyncing subscribes to SYNC streams by iterating over the
+// kademlia connections and bins. If there are existing SYNC streams
+// and they are no longer required after iteration, request to Quit
+// them will be send to appropriate peers.
+func (r *Registry) updateSyncing() {
+	// if overlay in not Kademlia, panic
 	kad := r.delivery.overlay.(*network.Kademlia)
 
+	// map of all SYNC streams for all peers
+	// used at the and of the function to remove servers
+	// that are not needed anymore
+	subs := make(map[discover.NodeID]map[Stream]struct{})
+	r.peersMu.RLock()
+	for id, peer := range r.peers {
+		peer.serverMu.RLock()
+		for stream := range peer.servers {
+			if stream.Name == "SYNC" {
+				if _, ok := subs[id]; !ok {
+					subs[id] = make(map[Stream]struct{})
+				}
+				subs[id][stream] = struct{}{}
+			}
+		}
+		peer.serverMu.RUnlock()
+	}
+	r.peersMu.RUnlock()
+
+	// request subscriptions for all nodes and bins
 	kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(conn network.OverlayConn, bin int) bool {
 		p := conn.(network.Peer)
 		log.Debug(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
 
-		stream := NewStream("SYNC", []byte{uint8(bin)}, true)
-		err := r.RequestSubscription(p.ID(), stream, &Range{}, Top)
+		// bin is always less then 256 and it is safe to convert it to type uint8
+		stream := NewStream("SYNC", FormatSyncBinKey(uint8(bin)), true)
+		if streams, ok := subs[p.ID()]; ok {
+			// delete live and history streams from the map, so that it won't be removed with a Quit request
+			delete(streams, stream)
+			delete(streams, getHistoryStream(stream))
+		}
+		err := r.RequestSubscription(p.ID(), stream, NewRange(0, 0), Top)
 		if err != nil {
-			log.Error("request subscription", "err", err, "peer", p.ID(), "stream", stream)
+			log.Error("Request subscription", "err", err, "peer", p.ID(), "stream", stream)
 			return false
 		}
 		return true
 	})
+
+	// remove SYNC servers that do not need to be subscribed
+	for id, streams := range subs {
+		if len(streams) == 0 {
+			continue
+		}
+		peer := r.getPeer(id)
+		if peer == nil {
+			continue
+		}
+		for stream := range streams {
+			log.Debug("Remove sync server", "peer", id, "stream", stream)
+			err := r.Quit(peer.ID(), stream)
+			if err != nil {
+				log.Error("quit", "err", err, "peer", peer.ID(), "stream", stream)
+			}
+		}
+	}
 }
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
@@ -342,6 +491,9 @@ func (p *Peer) HandleMsg(msg interface{}) error {
 
 	case *RequestSubscriptionMsg:
 		return p.handleRequestSubscription(msg)
+
+	case *QuitMsg:
+		return p.handleQuitMsg(msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
@@ -502,6 +654,7 @@ var Spec = &protocols.Spec{
 		ChunkDeliveryMsg{},
 		SubscribeErrorMsg{},
 		RequestSubscriptionMsg{},
+		QuitMsg{},
 	},
 }
 
@@ -540,6 +693,17 @@ func (r *Registry) Stop() error {
 
 type Range struct {
 	From, To uint64
+}
+
+func NewRange(from, to uint64) *Range {
+	return &Range{
+		From: from,
+		To:   to,
+	}
+}
+
+func (r *Range) String() string {
+	return fmt.Sprintf("%v-%v", r.From, r.To)
 }
 
 func getHistoryPriority(priority uint8) uint8 {

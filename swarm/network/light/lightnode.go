@@ -32,11 +32,11 @@ type RemoteSectionReader struct {
 	currentHashes []byte
 	currentData   []byte
 	quit          chan struct{}
-	root          []byte
+	root          string
 }
 
 // NewRemoteReader is the constructor for RemoteReader
-func NewRemoteSectionReader(root []byte, db *storage.DBAPI) *RemoteSectionReader {
+func NewRemoteSectionReader(root string, db *storage.DBAPI) *RemoteSectionReader {
 	return &RemoteSectionReader{
 		db:     db,
 		root:   root,
@@ -158,15 +158,15 @@ func (s *RemoteSectionServer) Close() {}
 
 // RegisterRemoteSectionReader registers RemoteSectionReader on light downstream node
 func RegisterRemoteSectionReader(s *stream.Registry, db *storage.DBAPI) {
-	s.RegisterClientFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte, live bool) (stream.Client, error) {
+	s.RegisterClientFunc("REMOTE_SECTION", func(p *stream.Peer, t string, live bool) (stream.Client, error) {
 		return NewRemoteSectionReader(t, db), nil
 	})
 }
 
 // RegisterRemoteSectionServer registers RemoteSectionServer outgoing streamer on
 // upstream light server node
-func RegisterRemoteSectionServer(s *stream.Registry, db *storage.DBAPI, rf func([]byte) *storage.LazyChunkReader) {
-	s.RegisterServerFunc("REMOTE_SECTION", func(p *stream.Peer, t []byte, live bool) (stream.Server, error) {
+func RegisterRemoteSectionServer(s *stream.Registry, db *storage.DBAPI, rf func(string) *storage.LazyChunkReader) {
+	s.RegisterServerFunc("REMOTE_SECTION", func(p *stream.Peer, t string, live bool) (stream.Server, error) {
 		r := rf(t)
 		return NewRemoteSectionServer(db, r), nil
 	})

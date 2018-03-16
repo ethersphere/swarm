@@ -78,7 +78,9 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false, false)
+	r := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
+		SkipCheck: defaultSkipCheck,
+	})
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {
@@ -109,7 +111,9 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, db, state.NewMemStore(), defaultSkipCheck, false, false)
+	streamer := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
+		SkipCheck: defaultSkipCheck,
+	})
 	teardown := func() {
 		streamer.Close()
 		removeDataDir()
@@ -291,7 +295,7 @@ func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Str
 // with testClient and testServer.
 
 type testExternalClient struct {
-	t []byte
+	t string
 	// wait0     chan bool
 	// batchDone chan bool
 	hashes               chan []byte
@@ -299,7 +303,7 @@ type testExternalClient struct {
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(t []byte, db *storage.DBAPI) *testExternalClient {
+func newTestExternalClient(t string, db *storage.DBAPI) *testExternalClient {
 	return &testExternalClient{
 		t: t,
 		// wait0:     make(chan bool),
@@ -330,14 +334,14 @@ func (c *testExternalClient) Close() {}
 const testExternalServerBatchSize = 10
 
 type testExternalServer struct {
-	t         []byte
+	t         string
 	keyFunc   func(key []byte, index uint64)
 	sessionAt uint64
 	maxKeys   uint64
 	streamer  *TestExternalRegistry
 }
 
-func newTestExternalServer(t []byte, sessionAt, maxKeys uint64, keyFunc func(key []byte, index uint64)) *testExternalServer {
+func newTestExternalServer(t string, sessionAt, maxKeys uint64, keyFunc func(key []byte, index uint64)) *testExternalServer {
 	if keyFunc == nil {
 		keyFunc = binary.BigEndian.PutUint64
 	}

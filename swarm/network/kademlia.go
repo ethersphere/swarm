@@ -82,13 +82,15 @@ func NewKadParams() *KadParams {
 
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
-	lock       sync.RWMutex
-	*KadParams            // Kademlia configuration parameters
-	base       []byte     // immutable baseaddress of the table
-	addrs      *pot.Pot   // pots container for known peer addresses
-	conns      *pot.Pot   // pots container for live peer connections
-	depth      uint8      // stores the last current depth of saturation
-	depthC     chan uint8 // returned by DepthC function to signal depth change
+	lock             sync.RWMutex
+	*KadParams                // Kademlia configuration parameters
+	base             []byte   // immutable baseaddress of the table
+	addrs            *pot.Pot // pots container for known peer addresses
+	conns            *pot.Pot // pots container for live peer connections
+	depth            uint8    // stores the last current depth of saturation
+	nDepth           int      // stores the last neighbourhood depth
+	nDepthC          chan int // returned by DepthC function to signal neighbourhood depth change
+	addressBookSizeC chan int // returned by AddressBookSizeC function to signal peer count change
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -199,6 +201,10 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 		}
 		size++
 	}
+	// send new address book size only if there are new addresses
+	if k.addressBookSizeC != nil && size-known > 0 {
+		k.addressBookSizeC <- k.addrs.Size()
+	}
 	// log.Trace(fmt.Sprintf("%x registered %v peers, %v known, total: %v", k.BaseAddr()[:4], size, known, k.addrs.Size()))
 	return nil
 }
@@ -303,23 +309,39 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 	depth := uint8(k.saturation(k.MinBinSize))
 	var changed bool
 	if depth != k.depth {
-		if k.depthC != nil {
-			k.depthC <- depth
-		}
 		changed = true
 		k.depth = depth
+	}
+	if k.nDepthC != nil {
+		nDepth := k.neighbourhoodDepth()
+		if nDepth != k.nDepth {
+			k.nDepth = nDepth
+			k.nDepthC <- nDepth
+		}
 	}
 	return k.depth, changed
 }
 
-// DepthC returns the channel that sends a new kademlia depth on each change.
+// NeighbourhoodDepthC returns the channel that sends a new kademlia
+// neighbourhood depth on each change.
 // Not receiving from the returned channel will block On function
-// when the depth is changed.
-func (k *Kademlia) DepthC() <-chan uint8 {
-	if k.depthC == nil {
-		k.depthC = make(chan uint8)
+// when the neighbourhood depth is changed.
+func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
+	if k.nDepthC == nil {
+		k.nDepthC = make(chan int)
 	}
-	return k.depthC
+	return k.nDepthC
+}
+
+// AddressBookSizeC returns the channel that sends a new
+// address book size on each change.
+// Not receiving from the returned channel will block Register function
+// when address book size changes.
+func (k *Kademlia) AddressBookSizeC() <-chan int {
+	if k.addressBookSizeC == nil {
+		k.addressBookSizeC = make(chan int)
+	}
+	return k.addressBookSizeC
 }
 
 // Off removes a peer from among live peers
