@@ -112,6 +112,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 	//log.Info(fmt.Sprintf("Before gofunc calling SendOfferedHashes where req.Stream.Live is %+v and req.History is [%+v] \n", req.Stream.Live, req.History))
 	go func() {
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
+			log.Info(fmt.Sprintf("Error Sending Offered Hashes: %v", err))
 			p.Drop(err)
 		}
 	}()
@@ -130,6 +131,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		//log.Info("Before 2ND gofunc calling SendOfferedHashes\n")
 		go func() {
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
+				log.Info(fmt.Sprintf("Error Sending Offered Hashes: %v", err))
 				p.Drop(err)
 			}
 		}()
@@ -172,6 +174,7 @@ func (m OfferedHashesMsg) String() string {
 // handleOfferedHashesMsg protocol msg handler calls the incoming streamer interface
 // Filter method
 func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
+	log.Info(fmt.Sprintf("[messages:handleOfferedHashesMsg] handling offered hashes msg %+v", req))
 	c, _, err := p.getOrSetClient(req.Stream, req.From, req.To)
 	if err != nil {
 		return err
