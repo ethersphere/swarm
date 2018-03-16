@@ -83,10 +83,12 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 
 // Deliver sends a storeRequestMsg protocol message to the peer
 func (p *Peer) Deliver(chunk *storage.Chunk, priority uint8) error {
+
 	msg := &ChunkDeliveryMsg{
 		Key:   chunk.Key,
 		SData: chunk.SData,
 	}
+	log.Info("Attempting to deliver %+v with priority of %d", msg, priority)
 	return p.SendPriority(msg, priority)
 }
 
@@ -100,14 +102,14 @@ func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
-	log.Info(fmt.Sprintf("from [%d] and to [%d] for SendOfferedHashes", from, to))
+	log.Info(fmt.Sprintf("[peer:SendOfferedHashes] from [%d] and to [%d] for SendOfferedHashes", from, to))
 	if err != nil {
 		log.Error(fmt.Sprintf("Error Sending Offered Hashes: %s", err))
 		return err
 	}
 	// true only when quiting
 	if len(hashes) == 0 {
-		log.Info(fmt.Sprintf("Hashes is empty, so returning from SendOfferedHashes"))
+		//log.Info(fmt.Sprintf("Hashes is empty, so returning from SendOfferedHashes"))
 		return nil
 	}
 	if proof == nil {
@@ -123,7 +125,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		To:            to,
 		Stream:        s.stream,
 	}
-	log.Info("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
+	log.Info("[peer:SendOfferedHashes] Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
 	return p.SendPriority(msg, s.priority)
 }
 
