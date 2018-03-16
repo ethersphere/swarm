@@ -27,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
@@ -88,8 +87,8 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 	if doSync {
 		go func() {
 			// this is a temporary workaround to wait for kademlia table to be healthy
-			time.Sleep(30 * time.Second)
-
+			time.Sleep(3 * time.Second)
+			log.Info(fmt.Sprintf("[stream:NewRegistry] about to call 'startSyncing' (%d)", time.Second))
 			streamer.startSyncing()
 		}()
 	}
@@ -275,21 +274,43 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 }
 
 func (r *Registry) startSyncing() {
+	log.Info(fmt.Sprintf("starting to sync"))
 	// panic freely
 	kad := r.delivery.overlay.(*network.Kademlia)
+	log.Info(fmt.Sprintf("set kad and it is [%+v]", kad))
+	log.Info(fmt.Sprintf("Address Over is: %x", r.addr.Over()))
 
-	kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(conn network.OverlayConn, bin int) bool {
-		p := conn.(network.Peer)
-		log.Info(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
-
-		stream := NewStream("SYNC", []byte{uint8(bin)}, true)
-		err := r.RequestSubscription(p.ID(), stream, &Range{}, Top)
-		if err != nil {
-			log.Error("request subscription", "err", err, "peer", p.ID(), "stream", stream)
-			return false
+	for {
+		log.Info(fmt.Sprintf("[stream:startSyncing] Sleeping : found %d peers...", r.peersCount()))
+		time.Sleep(10 * time.Second)
+		for bin := 0; bin < 16; bin++ {
+			for nodeid, currentPeer := range r.peers {
+				log.Info(fmt.Sprintf("traversing peers: %v | %v", nodeid, currentPeer))
+				stream := NewStream("SYNC", []byte{uint8(bin)}, true)
+				err := r.RequestSubscription(currentPeer.ID(), stream, &Range{}, Top)
+				//currentPeer.
+				if err != nil {
+					log.Error("request subscription", "err", err, "peer", currentPeer.ID(), "stream", stream)
+					//return false
+				}
+			}
 		}
-		return true
-	})
+	}
+
+	/*
+		kad.EachBin(r.addr.Over(), pot.DefaultPof(256), 0, func(conn network.OverlayConn, bin int) bool {
+			p := conn.(network.Peer)
+			log.Info(fmt.Sprintf("Requesting subscription by: registry %s from peer %s for bin: %d", r.addr.ID(), p.ID(), bin))
+
+			stream := NewStream("SYNC", []byte{uint8(bin)}, true)
+			err := r.RequestSubscription(p.ID(), stream, &Range{}, Top)
+			if err != nil {
+				log.Error("request subscription", "err", err, "peer", p.ID(), "stream", stream)
+				return false
+			}
+			return true
+		})
+	*/
 }
 
 func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
