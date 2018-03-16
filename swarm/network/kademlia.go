@@ -329,7 +329,12 @@ func (k *Kademlia) Off(p OverlayConn) {
 	}
 }
 
+func (k *Kademlia) GetConns() *pot.Pot {
+	return k.conns
+}
+
 func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(conn OverlayConn, po int) bool) {
+	log.Info(fmt.Sprintf("In '(k *Kademlia) EachBin' for base %s", base))
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 
@@ -338,7 +343,13 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 	var endPo int
 	kadDepth := int(k.depth)
 
+	for binindx, currentBin := range k.GetConns().GetBins() {
+		log.Info("traversing peers: %v | %v", binindx, currentBin)
+	}
+
+	log.Info(fmt.Sprintf("About to call '(k.conns.EachBin' for base", base))
 	k.conns.EachBin(base, pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+		log.Info("[kademlia:EachBin] In EachBin conns callback")
 		if po < kadDepth {
 			endPo = po
 			if i > 0 {
@@ -353,6 +364,7 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 			endPo = k.MaxProxDisplay
 		}
 
+		log.Info("[kademlia:EachBin] In EachBin conns callback")
 		for bin := startPo; bin <= endPo; bin++ {
 			f(func(val pot.Val, _ int) bool {
 				return eachBinFunc(val.(*entry).conn(), bin)
@@ -361,7 +373,6 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 		i++
 		return true
 	})
-
 }
 
 // EachConn is an iterator with args (base, po, f) applies f to each live peer

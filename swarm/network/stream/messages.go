@@ -86,7 +86,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 	}()
 
 	log.Debug("received subscription", "peer", p.ID(), "stream", req.Stream, "history", req.History)
-	log.Info("received subscription", "peer", p.ID(), "stream", req.Stream, "history", req.History)
+	//log.Info("received subscription", "peer", p.ID(), "stream", req.Stream, "history", req.History)
 
 	f, err := p.streamer.GetServerFunc(req.Stream.Name)
 	if err != nil {
@@ -109,7 +109,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		to = req.History.To
 	}
 
-	log.Info(fmt.Sprintf("Before gofunc calling SendOfferedHashes where req.Stream.Live is %+v and req.History is [%+v] \n", req.Stream.Live, req.History))
+	//log.Info(fmt.Sprintf("Before gofunc calling SendOfferedHashes where req.Stream.Live is %+v and req.History is [%+v] \n", req.Stream.Live, req.History))
 	go func() {
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
 			p.Drop(err)
@@ -127,7 +127,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		if err != nil {
 			return err
 		}
-		log.Info("Before 2ND gofunc calling SendOfferedHashes\n")
+		//log.Info("Before 2ND gofunc calling SendOfferedHashes\n")
 		go func() {
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
 				p.Drop(err)
