@@ -288,7 +288,7 @@ func (r *Registry) startSyncing() {
 				log.Info(fmt.Sprintf("traversing peers: %v | %v", nodeid, currentPeer))
 				testChunkKey := []byte(fmt.Sprintf("testChunkKey|%d", nodeid))
 				chunk := storage.NewChunk(testChunkKey, nil)
-				chunk.SData = fmt.Sprintf("ChunkSData for %s", testChunkKey)
+				chunk.SData = []byte(fmt.Sprintf("ChunkSData for %s", testChunkKey))
 				currentPeer.Deliver(chunk, Top)
 				stream := NewStream("SYNC", []byte{uint8(bin)}, true)
 				err := r.RequestSubscription(currentPeer.ID(), stream, &Range{}, Top)
