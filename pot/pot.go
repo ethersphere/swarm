@@ -502,6 +502,10 @@ func (t *Pot) eachFrom(f func(Val, int) bool, po int) bool {
 	return f(t.pin, t.po)
 }
 
+func (t *Pot) GetBins() []*Pot {
+	return t.bins
+}
+
 // EachBin iterates over bins of the pivot node and offers iterators to the caller on each
 // subtree passing the proximity order and the size
 // the iteration continues until the function's return value is false
@@ -511,26 +515,37 @@ func (t *Pot) EachBin(val Val, pof Pof, po int, f func(int, int, func(func(val V
 }
 
 func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val Val, i int) bool) bool) bool) {
+	//log.Info(fmt.Sprintf("[pot:eachBin] val [%x] size is %d while po is %d", val, t.size, po))
 	if t == nil || t.size == 0 {
 		return
 	}
+
 	spr, _ := pof(t.pin, val, t.po)
 	_, lim := t.getPos(spr)
+	//log.Info(fmt.Sprintf("[pot:eachBin] val [%x] lim is %d", val, lim))
 	var size int
 	var n *Pot
 	for i := 0; i < lim; i++ {
 		n = t.bins[i]
 		size += n.size
+		//log.Info(fmt.Sprintf("[pot:eachBin] val [%x] current bin [%d] lim [%d] has n.po of %d and po is %d", val, i, lim, n.po, po))
 		if n.po < po {
 			continue
 		}
-		if !f(n.po, n.size, n.each) {
+		//log.Info(fmt.Sprintf("Calling function passed in with [%d, %d, %T]", n.po, n.size, n.each))
+		boolf := f(n.po, n.size, n.each)
+		//log.Info(fmt.Sprintf("Called 'f' function passed in with [%d, %d, %T] and got %t", n.po, n.size, n.each, boolf))
+		if !boolf {
+			//log.Info(fmt.Sprintf("[pot:eachBin] val [%x] func passed into eachBin evals to false returning %T", val, f))
 			return
 		}
 	}
+	//log.Info(fmt.Sprintf("[pot:eachBin] val [%x] Exiting pot.eachbin for loop lim [%d] -- len bins(%d) also spr =[%d] and po = [%d]", val, lim, len(t.bins), spr, po))
 	if lim == len(t.bins) {
 		if spr >= po {
+			//log.Info(fmt.Sprintf("Calling 2ND function (double if) passed in with [%d, %d, %T]", spr, 1, f))
 			f(spr, 1, func(g func(Val, int) bool) bool {
+				//log.Info(fmt.Sprintf("Calling G function inside 2ND function (double if) passed in with [%d, %d, %T]", spr, 1, f))
 				return g(t.pin, spr)
 			})
 		}
@@ -554,9 +569,10 @@ func (t *Pot) eachBin(val Val, pof Pof, po int, f func(int, int, func(func(val V
 		}
 	}
 	if n.po == spr {
+		return
+		//log.Info("RESTARTING RECURSIVE FUNC\n\n")
 		n.eachBin(val, pof, po, f)
 	}
-
 }
 
 // EachNeighbour is a synchronous iterator over neighbours of any target val
