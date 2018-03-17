@@ -143,7 +143,9 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			}
 		}
 		go func() {
-			t := time.NewTimer(3 * time.Minute)
+			log.Info("[delivery:handleRetrieveRequestMsg] timer set to 1 Min")
+			//t := time.NewTimer(3 * time.Minute)
+			t := time.NewTimer(1 * time.Minute)
 			defer t.Stop()
 
 			select {
@@ -186,26 +188,32 @@ func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error
 }
 
 func (d *Delivery) processReceivedChunks() {
+	log.Info("[delivery:processReceivedChunks] Processing Received Chunks")
 R:
 	for req := range d.receiveC {
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
-		if !bytes.Equal(chunk.Key, req.Key) {
-			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), req.Key.Hex(), req.peer.ID()))
-		}
 		if err == nil {
 			continue R
 		}
-		if err != storage.ErrFetching {
-			panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
+
+		if err != storage.ErrFetching && err.Error() != "chunk not found" {
+			panic(fmt.Sprintf("not in db? key %v chunk %v \n err: %s", req.Key, chunk, err))
 		}
+
+		if !bytes.Equal(chunk.Key, req.Key) {
+			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), req.Key.Hex(), req.peer.ID()))
+		}
+
 		select {
 		case <-chunk.ReqC:
 			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
 			continue R
 		default:
 		}
+
 		chunk.SData = req.SData
+		log.Info(fmt.Sprintf("[delivery:processReceivedChunks] putting chunk in db"))
 		d.db.Put(chunk)
 		chunk.WaitToStore()
 		close(chunk.ReqC)
