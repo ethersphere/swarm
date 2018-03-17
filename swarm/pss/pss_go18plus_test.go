@@ -1,4 +1,4 @@
-// +build foo
+// +build go1.8
 
 package pss
 
@@ -626,7 +626,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if !ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1]) {
+		if !ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1], pssDigest{}) {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
@@ -708,7 +708,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 		Payload: env,
 	}
 	for i := 0; i < b.N; i++ {
-		if !ps.process(pssmsg) {
+		if !ps.process(pssmsg, pssDigest{}) {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
