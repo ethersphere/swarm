@@ -88,7 +88,7 @@ func (p *Peer) Deliver(chunk *storage.Chunk, priority uint8) error {
 		Key:   chunk.Key,
 		SData: chunk.SData,
 	}
-	log.Info("Attempting to deliver %+v with priority of %d", msg, priority)
+	log.Info(fmt.Sprintf("[peer:Deliver] Attempting to deliver [%x] => [%s] with priority of %d", msg.Key, msg.SData, priority))
 	return p.SendPriority(msg, priority)
 }
 
@@ -102,7 +102,7 @@ func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
-	log.Info(fmt.Sprintf("[peer:SendOfferedHashes] from [%d] and to [%d] for SendOfferedHashes", from, to))
+	log.Info(fmt.Sprintf("[peer:SendOfferedHashes] Attempting to send [%d] offered hashes from [%d] and to [%d] for SendOfferedHashes", len(hashes), from, to))
 	if err != nil {
 		log.Error(fmt.Sprintf("Error Sending Offered Hashes: %s", err))
 		return err
