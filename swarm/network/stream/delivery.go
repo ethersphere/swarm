@@ -201,6 +201,12 @@ R:
 			panic(fmt.Sprintf("not in db? key %v chunk %v \n err: %s", req.Key, chunk, err))
 		}
 
+		/* Start Rodney Added -- Should I? */
+		if chunk == nil {
+			chunk = storage.NewChunk(req.Key, make(chan bool))
+		}
+		/* End Rodney Added */
+
 		if !bytes.Equal(chunk.Key, req.Key) {
 			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), req.Key.Hex(), req.peer.ID()))
 		}
