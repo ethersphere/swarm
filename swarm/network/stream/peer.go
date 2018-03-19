@@ -94,6 +94,7 @@ func (p *Peer) Deliver(chunk *storage.Chunk, priority uint8) error {
 
 // SendPriority sends message to the peer using the outgoing priority queue
 func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
+	log.Info(fmt.Sprintf("[peer:SendPriority] Adding %+v", msg))
 	ctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
 	defer cancel()
 	return p.pq.Push(ctx, msg, int(priority))
