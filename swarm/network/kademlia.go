@@ -303,6 +303,10 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 		k.addrs, _, _, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
 			return e
 		})
+		// send new address book size only if the peer is inserted
+		if k.addressBookSizeC != nil {
+			k.addressBookSizeC <- k.addrs.Size()
+		}
 	}
 	log.Trace(k.string())
 	// calculate if depth of saturation changed
@@ -362,6 +366,10 @@ func (k *Kademlia) Off(p OverlayConn) {
 			// v cannot be nil, but no need to check
 			return nil
 		})
+		// send new address book size only if the peer is deleted
+		if k.addressBookSizeC != nil {
+			k.addressBookSizeC <- k.addrs.Size()
+		}
 	}
 }
 
