@@ -270,7 +270,7 @@ func (m WantedHashesMsg) String() string {
 // * sends the next batch of unsynced keys
 // * sends the actual data chunks as per WantedHashesMsg
 func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
-	log.Info("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
+	log.Info("[messages:handleWantedHashesMsg] received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	s, err := p.getServer(req.Stream)
 	if err != nil {
 		return err
@@ -290,17 +290,24 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", l, err)
 	}
 	for i := 0; i < l; i++ {
+		log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] checking want.Get for %d", i))
 		if want.Get(i) {
 			hash := hashes[i*HashSize : (i+1)*HashSize]
 			data, err := s.GetData(hash)
+			log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] calling GetData for hash %x and got %+v", hash, data))
 			if err != nil {
+				log.Info(fmt.Sprintf("handleWantedHashesMsg get data %x: %v", hash, err))
 				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}
 			chunk := storage.NewChunk(hash, nil)
 			chunk.SData = data
+			log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] calling Delivery of Data "))
 			if err := p.Deliver(chunk, s.priority); err != nil {
+				log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] ERROR attmepting to deliver %s ", err))
 				return err
 			}
+		} else {
+			log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] want.Get for %d is false", i))
 		}
 	}
 	return nil
