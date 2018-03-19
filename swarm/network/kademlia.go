@@ -377,23 +377,17 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 
-	var i int
 	var startPo int
 	var endPo int
 	kadDepth := int(k.depth)
 
 	k.conns.EachBin(base, pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+		if startPo > 0 && endPo != k.MaxProxDisplay {
+			startPo = endPo + 1
+		}
 		if po < kadDepth {
 			endPo = po
-			if i > 0 {
-				startPo = endPo + 1
-			}
-		} else if endPo < kadDepth || endPo == 0 {
-			if po == 0 && kadDepth == 0 {
-				startPo = endPo
-			} else {
-				startPo = endPo + 1
-			}
+		} else {
 			endPo = k.MaxProxDisplay
 		}
 
@@ -402,10 +396,8 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 				return eachBinFunc(val.(*entry).conn(), bin)
 			})
 		}
-		i++
 		return true
 	})
-
 }
 
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
