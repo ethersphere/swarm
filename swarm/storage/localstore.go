@@ -156,7 +156,7 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 		return chunk, false
 	}
 	// no data and no request status
-	log.Info(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", key))
+	log.Info(fmt.Sprintf("LocalStore.GetOrRetrieve: %v (%x) not found locally. open new request", key, key))
 	chunk = NewChunk(key, make(chan bool))
 	log.Info(fmt.Sprintf("[localstore:GetOrCreateRequest] about to PUT a 'NewChunk' for key %x into memStore", key))
 	self.memStore.Put(chunk)
