@@ -286,10 +286,12 @@ func (r *Registry) startSyncing() {
 		for bin := 0; bin < 16; bin++ {
 			for nodeid, currentPeer := range r.peers {
 				log.Info(fmt.Sprintf("traversing peers: %v | %v", nodeid, currentPeer))
-				testChunkKey := []byte(fmt.Sprintf("testChunkKey|%d", nodeid))
-				chunk := storage.NewChunk(testChunkKey, nil)
-				chunk.SData = []byte(fmt.Sprintf("ChunkSData for %s", testChunkKey))
-				currentPeer.Deliver(chunk, Top)
+				/*
+					testChunkKey := []byte(fmt.Sprintf("testChunkKey|%d", nodeid))
+					chunk := storage.NewChunk(testChunkKey, nil)
+					chunk.SData = []byte(fmt.Sprintf("ChunkSData for %s", testChunkKey))
+					currentPeer.Deliver(chunk, Top)
+				*/
 				stream := NewStream("SYNC", []byte{uint8(bin)}, true)
 				err := r.RequestSubscription(currentPeer.ID(), stream, &Range{}, Top)
 				//currentPeer.
@@ -327,7 +329,7 @@ func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 // HandleMsg is the message handler that delegates incoming messages
 func (p *Peer) HandleMsg(msg interface{}) error {
-	log.Info(fmt.Sprintf("Handling message: %+v", msg))
+	log.Info(fmt.Sprintf("Handling %T message: %+v", msg, msg))
 	switch msg := msg.(type) {
 
 	case *SubscribeMsg:

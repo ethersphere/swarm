@@ -187,7 +187,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	wg := sync.WaitGroup{}
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
-
+		log.Info(fmt.Sprintf("[messages:handleOfferedHashesMsg] Trying to call c.NeedData for hash %x", hash))
 		if wait := c.NeedData(hash); wait != nil {
 			want.Set(i/HashSize, true)
 			wg.Add(1)
@@ -220,8 +220,9 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	if c.stream.Live {
 		c.sessionAt = req.From
 	}
+	log.Info("[messages:handleOfferedHashesMsg] Requesting Next Batch?")
 	from, to := c.nextBatch(req.To + 1)
-	log.Trace("received offered batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
+	log.Info("received offered batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	if from == to {
 		return nil
 	}
@@ -243,7 +244,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 				return
 			}
 		}
-		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+		log.Info("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(msg, c.priority)
 		if err != nil {
 			p.Drop(err)
@@ -269,7 +270,7 @@ func (m WantedHashesMsg) String() string {
 // * sends the next batch of unsynced keys
 // * sends the actual data chunks as per WantedHashesMsg
 func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
-	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
+	log.Info("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	s, err := p.getServer(req.Stream)
 	if err != nil {
 		return err
@@ -277,6 +278,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	hashes := s.currentBatch
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
+		log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] Calling SendOfferedHashes from: %d to %d", req.From, req.To))
 		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
 			p.Drop(err)
 		}
