@@ -193,6 +193,7 @@ func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
+	log.Info(fmt.Sprintf("[syncher:NeedData] Calling NeedData on Key %x", key))
 	chunk, _ := s.db.GetOrCreateRequest(key)
 	// TODO: we may want to request from this peer anyway even if the request exists
 	if chunk.ReqC == nil {

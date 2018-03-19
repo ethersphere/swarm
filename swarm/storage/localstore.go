@@ -114,7 +114,7 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 }
 
 func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
-	log.Info(fmt.Sprintf("Attempting to retrieve [%x] from memStore", key))
+	log.Info(fmt.Sprintf("[localstore:get] Attempting to retrieve [%x] from memStore", key))
 	chunk, err = self.memStore.Get(key)
 	if err == nil {
 		log.Info(fmt.Sprintf("Successfully retrieved [%x] from memStore", key))
@@ -127,13 +127,13 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 		}
 		return
 	}
-	log.Info(fmt.Sprintf("Attempting to retrieve [%x] from DbStore", key))
+	log.Info(fmt.Sprintf("[localstore:get] Attempting to retrieve [%x] from DbStore", key))
 	chunk, err = self.DbStore.Get(key)
 	if err != nil {
-		log.Info(fmt.Sprintf("Error attempting to retrieve [%x] from DbStore: %s", key, err))
+		log.Info(fmt.Sprintf("[localstore:get] Error attempting to retrieve [%x] from DbStore: %s", key, err))
 		return
 	}
-	log.Info(fmt.Sprintf("Retrieved [%x] from DbStore with chunk data of [%+v]", key, chunk))
+	log.Info(fmt.Sprintf("[localstore:get] Retrieved [%x] from DbStore with chunk data of [%+v]", key, chunk))
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.memStore.Put(chunk)
 	return
@@ -141,22 +141,24 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 
 // retrieve logic common for local and network chunk retrieval requests
 func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
+	log.Info(fmt.Sprintf("[localstore:GetOrCreateRequest] calling for key %x", key))
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	var err error
 	chunk, err = self.get(key)
 	if err == nil && !chunk.GetErrored() {
-		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
+		log.Info(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
 		return chunk, false
 	}
 	if err == ErrFetching && !chunk.GetErrored() {
-		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
+		log.Info(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
 		return chunk, false
 	}
 	// no data and no request status
-	log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", key))
+	log.Info(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", key))
 	chunk = NewChunk(key, make(chan bool))
+	log.Info(fmt.Sprintf("[localstore:GetOrCreateRequest] about to PUT a 'NewChunk' for key %x into memStore", key))
 	self.memStore.Put(chunk)
 	return chunk, true
 }
