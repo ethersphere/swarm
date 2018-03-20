@@ -103,7 +103,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	if to <= from || from >= s.sessionAt {
 		to = math.MaxUint64
 	}
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
 		select {
