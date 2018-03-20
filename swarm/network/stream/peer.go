@@ -103,7 +103,7 @@ func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
-	log.Info(fmt.Sprintf("[peer:SendOfferedHashes] Attempting to send [%d] offered hashes from [%d] and to [%d] for SendOfferedHashes", len(hashes), from, to))
+	log.Info(fmt.Sprintf("[peer:SendOfferedHashes] Attempting to send [%d] offered hashes from [%d] and to [%d] for SendOfferedHashes", len(hashes)/HashSize, from, to))
 	if err != nil {
 		log.Error(fmt.Sprintf("Error Sending Offered Hashes: %s", err))
 		return err

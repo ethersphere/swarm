@@ -80,7 +80,9 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetSection retrieves the actual chunk from localstore
 func (s *SwarmSyncerServer) GetData(key []byte) ([]byte, error) {
+	log.Info(fmt.Sprintf("[syncer:GetData] GetData - about to try to retrieve chunk data for key (byte) %x vs %v", key, storage.Key(key)))
 	chunk, err := s.db.Get(storage.Key(key))
+	log.Info(fmt.Sprintf("[syncer:GetData] s.db.Get - Chunk Retrieved: [%+v]", chunk))
 	if err == storage.ErrFetching {
 		<-chunk.ReqC
 	} else if err != nil {

@@ -285,6 +285,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	}()
 	// go p.SendOfferedHashes(s, req.From, req.To)
 	l := len(hashes) / HashSize
+	log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] len(hashes) = %d, HashSize = %d and l {len(hashes)/HashSize} = %d", len(hashes), HashSize, l))
 	want, err := bv.NewFromBytes(req.Want, l)
 	if err != nil {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", l, err)
@@ -294,7 +295,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 		if want.Get(i) {
 			hash := hashes[i*HashSize : (i+1)*HashSize]
 			data, err := s.GetData(hash)
-			log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] calling GetData for hash %x and got %+v", hash, data))
+			log.Info(fmt.Sprintf("[messages:handleWantedHashesMsg] calling GetData for hash #%d %x (or %v) and got %+v", i, hash, hash, data))
 			if err != nil {
 				log.Info(fmt.Sprintf("handleWantedHashesMsg get data %x: %v", hash, err))
 				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
