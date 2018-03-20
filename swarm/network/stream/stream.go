@@ -106,22 +106,17 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 		// after the syncing is done updating inside the loop, we do not need to update on the intermediate
 		// depth changes, only to the latest one
 		latestIntC := func(in <-chan int) <-chan int {
-			out := make(chan int)
+			out := make(chan int, 1)
 
 			go func() {
 				defer close(out)
 
-				var last *int
 				for i := range in {
 					select {
-					case out <- i:
+					case <-out:
 					default:
-						last = &i
 					}
-				}
-				// ensure that the last received stat is sent out
-				if last != nil {
-					out <- *last
+					out <- i
 				}
 			}()
 
