@@ -148,15 +148,15 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 	var err error
 	chunk, err = self.get(key)
 	if err == nil && !chunk.GetErrored() {
-		log.Info(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
+		log.Info(fmt.Sprintf("LocalStore.GetOrCreateRequest: %v found locally", key))
 		return chunk, false
 	}
 	if err == ErrFetching && !chunk.GetErrored() {
-		log.Info(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
+		log.Info(fmt.Sprintf("LocalStore.GetOrCreateRequest: %v hit on an existing request %v", key, chunk.ReqC))
 		return chunk, false
 	}
 	// no data and no request status
-	log.Info(fmt.Sprintf("LocalStore.GetOrRetrieve: %v (%x) not found locally. open new request", key, key))
+	log.Info(fmt.Sprintf("LocalStore.GetOrCreateRequest: %v (%x) not found locally. open new request", key, key))
 	chunk = NewChunk(key, make(chan bool))
 	log.Info(fmt.Sprintf("[localstore:GetOrCreateRequest] about to PUT a 'NewChunk' for key %x into memStore", key))
 	self.memStore.Put(chunk)
