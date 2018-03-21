@@ -295,19 +295,13 @@ func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Str
 // with testClient and testServer.
 
 type testExternalClient struct {
-	t string
-	// wait0     chan bool
-	// batchDone chan bool
 	hashes               chan []byte
 	db                   *storage.DBAPI
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(t string, db *storage.DBAPI) *testExternalClient {
+func newTestExternalClient(db *storage.DBAPI) *testExternalClient {
 	return &testExternalClient{
-		t: t,
-		// wait0:     make(chan bool),
-		// batchDone: make(chan bool),
 		hashes:               make(chan []byte),
 		db:                   db,
 		enableNotificationsC: make(chan struct{}),

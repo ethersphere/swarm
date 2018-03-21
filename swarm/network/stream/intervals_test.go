@@ -55,7 +55,7 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	})
 
 	r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
-		return newTestExternalClient(t, db), nil
+		return newTestExternalClient(db), nil
 	})
 	r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
 		return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
