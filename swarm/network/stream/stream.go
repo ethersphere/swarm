@@ -132,7 +132,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 
 			kad := streamer.delivery.overlay.(*network.Kademlia)
 			depthC := latestIntC(kad.NeighbourhoodDepthC())
-			addressBookSizeC := latestIntC(kad.AddressBookSizeC())
+			addressBookSizeC := latestIntC(kad.AddrCountC())
 
 			for depth := range depthC {
 				log.Debug("Kademlia neighbourhood depth change", "depth", depth)

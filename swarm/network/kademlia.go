@@ -82,15 +82,15 @@ func NewKadParams() *KadParams {
 
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
-	lock             sync.RWMutex
-	*KadParams                // Kademlia configuration parameters
-	base             []byte   // immutable baseaddress of the table
-	addrs            *pot.Pot // pots container for known peer addresses
-	conns            *pot.Pot // pots container for live peer connections
-	depth            uint8    // stores the last current depth of saturation
-	nDepth           int      // stores the last neighbourhood depth
-	nDepthC          chan int // returned by DepthC function to signal neighbourhood depth change
-	addressBookSizeC chan int // returned by AddressBookSizeC function to signal peer count change
+	lock       sync.RWMutex
+	*KadParams          // Kademlia configuration parameters
+	base       []byte   // immutable baseaddress of the table
+	addrs      *pot.Pot // pots container for known peer addresses
+	conns      *pot.Pot // pots container for live peer connections
+	depth      uint8    // stores the last current depth of saturation
+	nDepth     int      // stores the last neighbourhood depth
+	nDepthC    chan int // returned by DepthC function to signal neighbourhood depth change
+	addrCountC chan int // returned by AddrCountC function to signal peer count change
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -201,9 +201,9 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 		}
 		size++
 	}
-	// send new address book size only if there are new addresses
-	if k.addressBookSizeC != nil && size-known > 0 {
-		k.addressBookSizeC <- k.addrs.Size()
+	// send new address count value only if there are new addresses
+	if k.addrCountC != nil && size-known > 0 {
+		k.addrCountC <- k.addrs.Size()
 	}
 	// log.Trace(fmt.Sprintf("%x registered %v peers, %v known, total: %v", k.BaseAddr()[:4], size, known, k.addrs.Size()))
 	return nil
@@ -303,9 +303,9 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 		k.addrs, _, _, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
 			return e
 		})
-		// send new address book size only if the peer is inserted
-		if k.addressBookSizeC != nil {
-			k.addressBookSizeC <- k.addrs.Size()
+		// send new address count value only if the peer is inserted
+		if k.addrCountC != nil {
+			k.addrCountC <- k.addrs.Size()
 		}
 	}
 	log.Trace(k.string())
@@ -337,15 +337,15 @@ func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
 	return k.nDepthC
 }
 
-// AddressBookSizeC returns the channel that sends a new
-// address book size on each change.
+// AddrCountC returns the channel that sends a new
+// address count value on each change.
 // Not receiving from the returned channel will block Register function
-// when address book size changes.
-func (k *Kademlia) AddressBookSizeC() <-chan int {
-	if k.addressBookSizeC == nil {
-		k.addressBookSizeC = make(chan int)
+// when address count value changes.
+func (k *Kademlia) AddrCountC() <-chan int {
+	if k.addrCountC == nil {
+		k.addrCountC = make(chan int)
 	}
-	return k.addressBookSizeC
+	return k.addrCountC
 }
 
 // Off removes a peer from among live peers
@@ -366,9 +366,9 @@ func (k *Kademlia) Off(p OverlayConn) {
 			// v cannot be nil, but no need to check
 			return nil
 		})
-		// send new address book size only if the peer is deleted
-		if k.addressBookSizeC != nil {
-			k.addressBookSizeC <- k.addrs.Size()
+		// send new address count value only if the peer is deleted
+		if k.addrCountC != nil {
+			k.addrCountC <- k.addrs.Size()
 		}
 	}
 }
