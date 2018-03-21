@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/bmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 const MaxPO = 7
@@ -284,4 +285,19 @@ func (c ChunkData) Size() int64 {
 
 func (c ChunkData) Data() []byte {
 	return c[8:]
+}
+
+func NoValidateChunk(hasher SwarmHash, key *Key, data []byte) bool {
+	return true
+}
+
+func ValidateChunk(hasher SwarmHash, key *Key, data []byte) bool {
+	hasher.Reset()
+	hasher.Write(data)
+	hash := hasher.Sum(nil)
+	if !bytes.Equal(hash, (*key)[:]) {
+		log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, data %v, key %v", hash, data[:16], (*key)[:]))
+		return false
+	}
+	return true
 }

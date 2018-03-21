@@ -165,7 +165,8 @@ func TestResourceHandler(t *testing.T) {
 
 	// check that the new resource is stored correctly
 	namehash := rh.nameHash(safeName)
-	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
+	chunk, err := rh.ChunkStore.(*LocalStore).memStore.Get(Key(namehash[:]))
+	//chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(Key(namehash[:]))
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
@@ -579,7 +580,8 @@ func (self *testValidator) NameHash(name string) common.Hash {
 }
 
 func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
-	chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(key)
+	//chunk, err := rh.ChunkStore.(*resourceChunkStore).localStore.(*LocalStore).memStore.Get(key)
+	chunk, err := rh.ChunkStore.(*LocalStore).memStore.Get(key)
 	if err != nil {
 		return nil, err
 	}

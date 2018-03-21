@@ -789,56 +789,57 @@ func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32
 	return chunk
 }
 
-// \TODO chunkSize is a workaround until the ChunkStore interface exports a method to get the chunk size directly
-type resourceChunkStore struct {
-	localStore ChunkStore
-	netStore   ChunkStore
-	chunkSize  int64
-}
-
-func NewResourceChunkStore(localStore *LocalStore, request func(*Chunk) error) ChunkStore {
-	return &resourceChunkStore{
-		localStore: localStore,
-		netStore:   NewNetStore(localStore, request),
-	}
-}
-
-func (r *resourceChunkStore) Get(key Key) (*Chunk, error) {
-	chunk, err := r.netStore.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	// if the chunk has to be remotely retrieved, we define a timeout of how long to wait for it before failing.
-	// sadly due to the nature of swarm, the error will never be conclusive as to whether it was a network issue
-	// that caused the failure or that the chunk doesn't exist.
-	if chunk.ReqC == nil {
-		return chunk, nil
-	}
-	t := time.NewTimer(time.Second * 1)
-	select {
-	case <-t.C:
-		log.Trace("Timeout on resource chunk store")
-		return nil, fmt.Errorf("timeout")
-	case <-chunk.C:
-		log.Trace("Received resource update chunk")
-	}
-	return chunk, nil
-}
-
-func (r *resourceChunkStore) Put(chunk *Chunk) {
-	r.netStore.Put(chunk)
-	chunk.WaitToStore()
-}
-
-func (r *resourceChunkStore) Close() {
-	r.netStore.Close()
-	r.localStore.Close()
-}
-
-func (r *resourceChunkStore) Validate(key *Key, data []byte) bool {
-	return true
-}
-
+//
+//// \TODO chunkSize is a workaround until the ChunkStore interface exports a method to get the chunk size directly
+//type resourceChunkStore struct {
+//	localStore ChunkStore
+//	netStore   ChunkStore
+//	chunkSize  int64
+//}
+//
+//func NewResourceChunkStore(localStore *LocalStore, request func(*Chunk) error) ChunkStore {
+//	return &resourceChunkStore{
+//		localStore: localStore,
+//		netStore:   NewNetStore(localStore, request),
+//	}
+//}
+//
+//func (r *resourceChunkStore) Get(key Key) (*Chunk, error) {
+//	chunk, err := r.netStore.Get(key)
+//	if err != nil {
+//		return nil, err
+//	}
+//	// if the chunk has to be remotely retrieved, we define a timeout of how long to wait for it before failing.
+//	// sadly due to the nature of swarm, the error will never be conclusive as to whether it was a network issue
+//	// that caused the failure or that the chunk doesn't exist.
+//	if chunk.ReqC == nil {
+//		return chunk, nil
+//	}
+//	t := time.NewTimer(time.Second * 1)
+//	select {
+//	case <-t.C:
+//		log.Trace("Timeout on resource chunk store")
+//		return nil, fmt.Errorf("timeout")
+//	case <-chunk.C:
+//		log.Trace("Received resource update chunk")
+//	}
+//	return chunk, nil
+//}
+//
+//func (r *resourceChunkStore) Put(chunk *Chunk) {
+//	r.netStore.Put(chunk)
+//	chunk.WaitToStore()
+//}
+//
+//func (r *resourceChunkStore) Close() {
+//	r.netStore.Close()
+//	r.localStore.Close()
+//}
+//
+//func (r *resourceChunkStore) Validate(key *Key, data []byte) bool {
+//	return true
+//}
+//
 func getNextPeriod(start uint64, current uint64, frequency uint64) uint32 {
 	blockdiff := current - start
 	period := blockdiff / frequency
@@ -901,6 +902,10 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, validator Re
 	path := filepath.Join(datadir, DbDirName)
 	hasher := MakeHashFunc(SHA3Hash)
 	params := NewLDBStoreParams(path, 0, nil, nil)
+	params.Validator = func(hash SwarmHash, key *Key, data []byte) bool {
+		log.Trace("skipping check on key in resource update test")
+		return true
+	}
 	dbStore, err := NewLDBStore(params)
 	if err != nil {
 		return nil, err
@@ -909,15 +914,10 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, validator Re
 		memStore: NewMemStore(NewStoreParams(defaultDbCapacity, nil, nil), dbStore),
 		DbStore:  dbStore,
 	}
-	resourceChunkStore := NewResourceChunkStore(localStore, nil)
-	if maxLimit == nil {
-		maxLimit = &ResourceLookupParams{
-			Limit: false,
-		}
-	}
-	params := &ResourceHandlerParams{
-		Validator:       validator,
-		QueryMaxPeriods: maxLimit,
-	}
-	return NewResourceHandler(hasher, resourceChunkStore, ethClient, params)
+	resourceChunkStore := localStore
+	return NewResourceHandler(hasher, resourceChunkStore, ethClient, validator)
+}
+
+func ValidateResourceChunk(hash SwarmHash, key *Key, data []byte) bool {
+	return true
 }

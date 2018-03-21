@@ -98,7 +98,7 @@ func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey [
 
 type LDBStore struct {
 	db        *LDBDatabase
-	validator func(*Key, []byte) bool
+	validator func(SwarmHash, *Key, []byte) bool
 
 	// this should be stored in db, accessed transactionally
 	entryCnt, accessCnt, dataIdx, capacity uint64
@@ -114,7 +114,7 @@ type LDBStore struct {
 	batchesC chan struct{}
 	batch    *leveldb.Batch
 	lock     sync.RWMutex
-	trusted  bool // if hash integity check is to be performed (for testing only)
+	//trusted  bool // if hash integity check is to be performed (for testing only)
 
 	// Functions encodeDataFunc is used to bypass
 	// the default functionality of DbStore with
@@ -147,7 +147,7 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	}
 
 	s.po = params.Po
-	s.setCapacity(uint64(params.Capacity))
+	s.setCapacity(uint64(params.DbCapacity))
 
 	s.gcStartPos = make([]byte, 1)
 	s.gcStartPos[0] = kpIndex
@@ -319,7 +319,7 @@ func (s *LDBStore) Validate(key *Key, data []byte) bool {
 	if s.validator == nil {
 		return true
 	}
-	return s.validator(key, data)
+	return s.validator(s.hashfunc(), key, data)
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
@@ -732,7 +732,7 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 
 		if !s.Validate(&key, data[32:]) {
 			s.delete(indx.Idx, getIndexKey(key), s.po(key))
-			log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
+			log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'", "chunk", chunk)
 		}
 
 		chunk = NewChunk(key, nil)

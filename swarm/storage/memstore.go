@@ -63,10 +63,15 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
 */
 
 func NewMemStore(params *StoreParams, d *LDBStore) (m *MemStore) {
+
+	capacity := params.CacheCapacity
+	if capacity == 0 {
+		capacity = defaultCacheCapacity
+	}
 	m = &MemStore{}
 	m.memtree = newMemTree(memTreeFLW, nil, 0)
 	m.ldbStore = d
-	m.setCapacity(uint(params.Capacity))
+	m.setCapacity(capacity)
 	return
 }
 

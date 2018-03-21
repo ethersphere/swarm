@@ -117,8 +117,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
-	hash := storage.MakeHashFunc(config.DPAParams.Hash)
-	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, common.FromHex(config.BzzKey), mockStore)
+	self.lstore, err = storage.NewLocalStore(config.LocalStoreParams, mockStore)
 	if err != nil {
 		return
 	}
@@ -198,13 +197,15 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	var resourceHandler *storage.ResourceHandler
 	// if use resource updates
 	if self.config.ResourceEnabled && resolver != nil {
-		resourceparams := &storage.ResourceHandlerParams{
-			Validator: storage.NewENSValidator(config.EnsRoot, resolver, storage.NewGenericResourceSigner(self.privateKey)),
-		}
-		resolver.SetNameHash(resourceparams.Validator.NameHash)
+		var resourceStoreParams storage.LocalStoreParams
+		resourceValidator := storage.NewENSValidator(config.EnsRoot, resolver, storage.NewGenericResourceSigner(self.privateKey))
+		resolver.SetNameHash(resourceValidator.NameHash)
 		hashfunc := storage.MakeHashFunc(storage.SHA3Hash)
-		chunkStore := storage.NewResourceChunkStore(self.lstore, func(*storage.Chunk) error { return nil })
-		resourceHandler, err = storage.NewResourceHandler(hashfunc, chunkStore, resolver, resourceparams)
+		resourceStoreParams = *config.LocalStoreParams
+		resourceStoreParams.ChunkDbPath += "/resource"
+		resourceStoreParams.Validator = storage.ValidateResourceChunk
+		chunkStore, err := storage.NewLocalStore(config.LocalStoreParams, mockStore)
+		resourceHandler, err = storage.NewResourceHandler(hashfunc, chunkStore, resolver, resourceValidator)
 		if err != nil {
 			return nil, err
 		}

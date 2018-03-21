@@ -33,18 +33,14 @@ var (
 
 type LocalStoreParams struct {
 	*StoreParams
-	ChunkDbPath   string
-	CacheCapacity uint
-	Radius        int
+	ChunkDbPath string
+	Radius      int
 }
 
 //create params with default values
 func NewDefaultLocalStoreParams() (self *LocalStoreParams) {
 	return &LocalStoreParams{
-		StoreParams: &StoreParams{
-			Capacity: defaultDbCapacity,
-		},
-		CacheCapacity: defaultCacheCapacity,
+		StoreParams: NewStoreParams(0, nil, nil),
 	}
 }
 
@@ -56,6 +52,14 @@ func (self *LocalStoreParams) Init(path string) {
 	}
 }
 
+//
+//func (l *LocalStoreParams) MarshalTOML() ([]byte, error) {
+//	return []byte(fmt.Sprintf(`[LocalStoreParams]
+//Capacity = %d
+//BaseKey = "%v"
+//`, l.StoreParams.Capacity, common.Bytes2Hex(l.StoreParams.BaseKey))), nil
+//}
+
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
@@ -66,13 +70,12 @@ type LocalStore struct {
 
 // This constructor uses MemStore and DbStore as components
 func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.Capacity, params.Hash, params.BaseKey)
+	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
 	dbStore, err := NewMockDbStore(ldbparams, mockStore)
 	//dbStore, err := NewMockDbStore(params.ChunkDbPath, params.Hash, params.DbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(params.Basekey[:], k[:])) }, mockStore)
 	if err != nil {
 		return nil, err
 	}
-	params.Capacity = uint64(params.CacheCapacity)
 	return &LocalStore{
 		memStore: NewMemStore(params.StoreParams, dbStore),
 		DbStore:  dbStore,
@@ -80,7 +83,7 @@ func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalS
 }
 
 func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.Capacity, params.Hash, params.BaseKey)
+	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
 	dbStore, err := NewLDBStore(ldbparams) //path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
