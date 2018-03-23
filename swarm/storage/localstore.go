@@ -52,14 +52,6 @@ func (self *LocalStoreParams) Init(path string) {
 	}
 }
 
-//
-//func (l *LocalStoreParams) MarshalTOML() ([]byte, error) {
-//	return []byte(fmt.Sprintf(`[LocalStoreParams]
-//Capacity = %d
-//BaseKey = "%v"
-//`, l.StoreParams.Capacity, common.Bytes2Hex(l.StoreParams.BaseKey))), nil
-//}
-
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {

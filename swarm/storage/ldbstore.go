@@ -114,7 +114,6 @@ type LDBStore struct {
 	batchesC chan struct{}
 	batch    *leveldb.Batch
 	lock     sync.RWMutex
-	//trusted  bool // if hash integity check is to be performed (for testing only)
 
 	// Functions encodeDataFunc is used to bypass
 	// the default functionality of DbStore with
