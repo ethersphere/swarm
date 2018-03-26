@@ -119,7 +119,7 @@ func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 	return chunkData, nil
 }
 
-// The Close() indicates that no more chunks will be put with the hasherStore, so the Wait
+// Close() indicates that no more chunks will be put with the hasherStore, so the Wait
 // function can return when all the previously put chunks has been stored.
 func (h *hasherStore) Close() {
 	close(h.closed)
