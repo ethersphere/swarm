@@ -88,16 +88,6 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 	h.storeChunk(chunk)
 
 	return Reference(append(chunk.Key, encryptionKey...)), nil
-
-	//TODO: implement wait for storage
-	// if chunkC != nil {
-	// 	chunkC <- newChunk
-	// 	storageWG.Add(1)
-	// 	go func() {
-	// 		defer storageWG.Done()
-	// 		<-newChunk.dbStored
-	// 	}()
-	//
 }
 
 // Returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).
