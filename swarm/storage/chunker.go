@@ -114,10 +114,26 @@ type TreeChunker struct {
 	quitC       chan bool
 }
 
+/*
+	Join reconstructs original content based on a root key.
+	When joining, the caller gets returned a Lazy SectionReader, which is
+	seekable and implements on-demand fetching of chunks as and where it is read.
+	New chunks to retrieve are coming from the getter, which the caller provides.
+	If an error is encountered during joining, it appears as a reader error.
+	The SectionReader.
+	As a result, partial reads from a document are possible even if other parts
+	are corrupt or lost.
+	The chunks are not meant to be validated by the chunker when joining. This
+	is because it is left to the DPA to decide which sources are trusted.
+*/
 func TreeJoin(key Key, getter Getter, depth int) LazySectionReader {
 	return NewTreeJoiner(NewJoinerParams(key, getter, depth, DefaultBranches)).Join()
 }
 
+/*
+	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
+	New chunks to store are store using the putter which the caller provides.
+*/
 func TreeSplit(data io.Reader, size int64, putter Putter) (k Key, wait func(), err error) {
 	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultBranches)).Split()
 }
