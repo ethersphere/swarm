@@ -442,7 +442,7 @@ func TestResourceENSOwner(t *testing.T) {
 		t.Fatalf("Update resource fail: %v", err)
 	}
 
-	// update resource when we are owner = ok
+	// update resource when we are not owner = !ok
 	signertwo, err := newTestSigner()
 	if err != nil {
 		t.Fatal(err)
@@ -451,6 +451,58 @@ func TestResourceENSOwner(t *testing.T) {
 	_, err = rh.Update(ctx, safeName, data)
 	if err == nil {
 		t.Fatalf("Expected resource update fail due to owner mismatch")
+	}
+}
+
+func TestResourceChunkValidator(t *testing.T) {
+	// signer containing private key
+	signer, err := newTestSigner()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ens address and transact options
+	addr := crypto.PubkeyToAddress(signer.privKey.PublicKey)
+	transactOpts := bind.NewKeyedTransactor(signer.privKey)
+
+	// set up ENS sim
+	domainparts := strings.Split(safeName, ".")
+	contractAddr, contractbackend, err := setupENS(addr, transactOpts, domainparts[0], domainparts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ensClient, err := ens.NewENS(transactOpts, contractAddr, contractbackend)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validator := NewENSValidator(contractAddr, newTestResolver(ensClient), signer.signContent)
+
+	// set up rpc and create resourcehandler with ENS sim backend
+	rh, _, _, teardownTest, err := setupTest(contractbackend, validator)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardownTest()
+
+	// create new resource when we are owner = ok
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	rsrc, err := rh.NewResource(ctx, safeName, resourceFrequency)
+	if err != nil {
+		t.Fatalf("Create resource fail: %v", err)
+	}
+
+	data := []byte("foo")
+	key := rh.resourceHash(1, 1, rsrc.nameHash)
+	digest := rh.keyDataHash(key, data)
+	sig, err := rh.validator.sign(digest)
+	if err != nil {
+		t.Fatalf("sign fail: %v", err)
+	}
+	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
+	if !rh.ValidateChunk(nil, &chunk.Key, chunk.SData) {
+		t.Fatal("Chunk validator fail")
 	}
 }
 

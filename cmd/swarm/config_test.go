@@ -385,7 +385,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error writing TOML file in TestFileOverride: %v", err)
 	}
-	//defer os.Remove(fname)
+	defer os.Remove(fname)
 	//write file
 	_, err = f.WriteString(string(out))
 	if err != nil {

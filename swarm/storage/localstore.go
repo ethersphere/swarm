@@ -64,7 +64,6 @@ type LocalStore struct {
 func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
 	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
 	dbStore, err := NewMockDbStore(ldbparams, mockStore)
-	//dbStore, err := NewMockDbStore(params.ChunkDbPath, params.Hash, params.DbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(params.Basekey[:], k[:])) }, mockStore)
 	if err != nil {
 		return nil, err
 	}

@@ -867,6 +867,20 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, validator Re
 	return NewResourceHandler(hasher, resourceChunkStore, ethClient, validator)
 }
 
-func ValidateResourceChunk(hash SwarmHash, key *Key, data []byte) bool {
+// chunkstore validator
+func (self *ResourceHandler) ValidateChunk(hash SwarmHash, key *Key, data []byte) bool {
+	signature, _, _, name, data, err := self.parseUpdate(data)
+	if err != nil {
+		return false
+	}
+	digest := self.keyDataHash(*key, data)
+	addr, err := getAddressFromDataSig(digest, *signature)
+	if err != nil {
+		return false
+	}
+	ok, _ := self.validator.checkAccess(name, addr)
+	if !ok {
+		return false
+	}
 	return true
 }
