@@ -265,14 +265,14 @@ type Splitter interface {
 	   The caller gets returned an error channel, if an error is encountered during splitting, it is fed to errC error channel.
 	   A closed error signals process completion at which point the key can be considered final if there were no errors.
 	*/
-	Split(io.Reader, int64, PutGetter) (Key, func(), error)
+	Split() (Key, func(), error)
 
 	/* This is the first step in making files mutable (not chunks)..
 	   Append allows adding more data chunks to the end of the already existsing file.
 	   The key for the root chunk is supplied to load the respective tree.
 	   Rest of the parameters behave like Split.
 	*/
-	Append(Key, io.Reader, PutGetter) (Key, func(), error)
+	Append() (Key, func(), error)
 }
 
 type ChunkData []byte
@@ -281,16 +281,13 @@ type Reference []byte
 
 type Putter interface {
 	Put(ChunkData) (Reference, error)
+	RefSize() int64
 	Close()
+	Wait()
 }
 
 type Getter interface {
 	Get(Reference) (ChunkData, error)
-}
-
-type PutGetter interface {
-	Putter
-	Getter
 }
 
 type Joiner interface {
@@ -306,7 +303,7 @@ type Joiner interface {
 	   The chunks are not meant to be validated by the chunker when joining. This
 	   is because it is left to the DPA to decide which sources are trusted.
 	*/
-	Join(key Key, getter Getter, depth int) LazySectionReader
+	Join() LazySectionReader
 }
 
 type Chunker interface {

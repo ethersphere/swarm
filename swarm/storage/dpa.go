@@ -48,8 +48,17 @@ var (
 
 type DPA struct {
 	ChunkStore
-	Chunker  Chunker
 	hashFunc SwarmHasher
+}
+
+type DPAParams struct {
+	Hash string
+}
+
+func NewDPAParams() *DPAParams {
+	return &DPAParams{
+		Hash: SHA3Hash,
+	}
 }
 
 // for testing locally
@@ -65,15 +74,12 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 	return NewDPA(&LocalStore{
 		memStore: NewMemStore(dbStore, singletonSwarmCacheCapacity),
 		DbStore:  dbStore,
-	}, NewChunkerParams()), nil
+	}, NewDPAParams()), nil
 }
 
-func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
-	// TODO: initialize hashFunc properly
+func NewDPA(store ChunkStore, params *DPAParams) *DPA {
 	hashFunc := MakeHashFunc(params.Hash)
-	chunker := NewPyramidChunker(params)
 	return &DPA{
-		Chunker:    chunker,
 		ChunkStore: store,
 		hashFunc:   hashFunc,
 	}
@@ -84,15 +90,15 @@ func NewDPA(store ChunkStore, params *ChunkerParams) *DPA {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 func (self *DPA) Retrieve(key Key) LazySectionReader {
-	getter := NewHasherStore(self.ChunkStore, self.hashFunc, false)
-	return self.Chunker.Join(key, getter, 0)
+	getter := NewHasherStore(self.ChunkStore, self.hashFunc, true)
+	return TreeJoin(key, getter, 0)
 }
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
 func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (key Key, wait func(), err error) {
 	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
-	return self.Chunker.Split(data, size, putter)
+	return PyramidSplit(data, putter, putter)
 }
 
 // func (self *DPA) Start() {

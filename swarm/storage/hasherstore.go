@@ -17,8 +17,10 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
@@ -33,6 +35,9 @@ type hasherStore struct {
 	store           ChunkStore
 	hashFunc        SwarmHasher
 	chunkEncryption *chunkEncryption
+	refSize         int64
+	wg              *sync.WaitGroup
+	closed          chan struct{}
 }
 
 func newChunkEncryption() *chunkEncryption {
@@ -44,13 +49,20 @@ func newChunkEncryption() *chunkEncryption {
 
 func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
 	var chunkEncryption *chunkEncryption
+
+	refSize := int64(hashFunc().Size())
 	if toEncrypt {
 		chunkEncryption = newChunkEncryption()
+		refSize += encryption.KeyLength
 	}
+
 	return &hasherStore{
 		store:           chunkStore,
 		hashFunc:        hashFunc,
 		chunkEncryption: chunkEncryption,
+		refSize:         refSize,
+		wg:              &sync.WaitGroup{},
+		closed:          make(chan struct{}),
 	}
 }
 
@@ -67,8 +79,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 	}
 	chunk := h.createChunk(c, size)
 
-	// need to do this parallelly
-	h.store.Put(chunk)
+	h.storeChunk(chunk)
 
 	return Reference(append(chunk.Key, encryptionKey...)), nil
 
@@ -84,6 +95,9 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 }
 
 func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
+	if h.store == nil {
+		return nil, errors.New("Can not get ref from HasherStore with nil ChunkStore")
+	}
 	key, encryptionKey, err := parseReference(ref)
 	if err != nil {
 		return nil, err
@@ -107,7 +121,12 @@ func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 }
 
 func (h *hasherStore) Close() {
-	return
+	close(h.closed)
+}
+
+func (h *hasherStore) Wait() {
+	<-h.closed
+	h.wg.Wait()
 }
 
 func (h *hasherStore) createHash(chunkData ChunkData) Key {
@@ -167,6 +186,22 @@ func (p *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryp
 	copy(c[:8], decryptedSpan)
 	copy(c[8:], decryptedData)
 	return c, nil
+}
+
+func (h *hasherStore) RefSize() int64 {
+	return h.refSize
+}
+
+func (h *hasherStore) storeChunk(chunk *Chunk) {
+	// need to do this parallelly
+	if h.store != nil {
+		h.wg.Add(1)
+		go func() {
+			<-chunk.dbStored
+			h.wg.Done()
+		}()
+		h.store.Put(chunk)
+	}
 }
 
 func parseReference(ref Reference) (Key, encryption.Key, error) {

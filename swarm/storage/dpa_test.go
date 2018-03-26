@@ -27,6 +27,11 @@ import (
 const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
+	testDpaRandom(false, t)
+	testDpaRandom(true, t)
+}
+
+func testDpaRandom(toEncrypt bool, t *testing.T) {
 	tdb, err := newTestDbStore(false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
@@ -40,11 +45,11 @@ func TestDPArandom(t *testing.T) {
 		DbStore:  db,
 	}
 
-	dpa := NewDPA(localStore, NewChunkerParams())
+	dpa := NewDPA(localStore, NewDPAParams())
 	defer os.RemoveAll("/tmp/bzz")
 
 	reader, slice := generateRandomData(testDataSize)
-	key, wait, err := dpa.Store(reader, testDataSize, false)
+	key, wait, err := dpa.Store(reader, testDataSize, toEncrypt)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
@@ -92,9 +97,9 @@ func TestDPA_capacity(t *testing.T) {
 		memStore: memStore,
 		DbStore:  db,
 	}
-	dpa := NewDPA(localStore, NewChunkerParams())
+	dpa := NewDPA(localStore, NewDPAParams())
 	reader, slice := generateRandomData(testDataSize)
-	key, wait, err := dpa.Store(reader, testDataSize, false)
+	key, wait, err := dpa.Store(reader, testDataSize, true)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}

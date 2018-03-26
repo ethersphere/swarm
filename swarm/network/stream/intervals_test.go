@@ -105,7 +105,7 @@ func testIntervals(t *testing.T, live bool, history *Range) {
 		return 1
 	}
 
-	dpa := storage.NewDPA(sim.Stores[0], storage.NewChunkerParams())
+	dpa := storage.NewDPA(sim.Stores[0], storage.NewDPAParams())
 	size := chunkCount * chunkSize
 	_, wait, err := dpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	wait()

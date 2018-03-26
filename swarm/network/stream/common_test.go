@@ -86,7 +86,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewChunkerParams())
+	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewDPAParams())
 	return &TestRegistry{Registry: r, dpa: dpa}, nil
 }
 

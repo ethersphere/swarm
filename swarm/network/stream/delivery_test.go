@@ -341,7 +341,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 
 	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
-	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewChunkerParams())
+	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewDPAParams())
 	size := chunkCount * chunkSize
 	fileHash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// wait until all chunks stored
@@ -393,7 +393,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
 		}
 		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
-		dpa := storage.NewDPA(netStore, storage.NewChunkerParams())
+		dpa := storage.NewDPA(netStore, storage.NewDPAParams())
 
 		go func() {
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
@@ -514,7 +514,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	waitPeerErrC = make(chan error)
 
 	// create a dpa for the last node in the chain which we are gonna write to
-	remoteDpa := storage.NewDPA(sim.Stores[nodes-1], storage.NewChunkerParams())
+	remoteDpa := storage.NewDPA(sim.Stores[nodes-1], storage.NewDPAParams())
 
 	// channel to signal simulation initialisation with action call complete
 	// or node disconnections

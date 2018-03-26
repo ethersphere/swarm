@@ -70,30 +70,92 @@ var (
 	newChunkCounter = metrics.NewRegisteredCounter("storage.chunks.new", nil)
 )
 
+type ChunkerParams struct {
+	branches int64
+	hashSize int64
+}
+
+type SplitterParams struct {
+	ChunkerParams
+	reader io.Reader
+	putter Putter
+	key    Key
+}
+
+type TreeSplitterParams struct {
+	SplitterParams
+	size int64
+}
+
+type JoinerParams struct {
+	ChunkerParams
+	key    Key
+	getter Getter
+	depth  int
+}
+
 type TreeChunker struct {
 	branches int64
 	hashFunc SwarmHasher
+	dataSize int64
+	data     io.Reader
 	// calculated
+	key         Key
+	depth       int
 	hashSize    int64        // self.hashFunc.New().Size()
 	chunkSize   int64        // hashSize* branches
 	workerCount int64        // the number of worker routines used
 	workerLock  sync.RWMutex // lock for the worker count
+	jobC        chan *hashJob
+	wg          *sync.WaitGroup
+	putter      Putter
+	getter      Getter
+	errC        chan error
+	quitC       chan bool
 }
 
-func NewTreeChunker(params *ChunkerParams) (self *TreeChunker) {
-	self = &TreeChunker{}
-	self.hashFunc = MakeHashFunc(params.Hash)
-	self.branches = params.Branches
-	self.hashSize = int64(self.hashFunc().Size())
+func TreeJoin(key Key, getter Getter, depth int) LazySectionReader {
+	return NewTreeJoiner(NewJoinerParams(key, getter, depth, DefaultBranches)).Join()
+}
+
+func TreeSplit(data io.Reader, size int64, putter Putter) (k Key, wait func(), err error) {
+	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultBranches)).Split()
+}
+
+func NewTreeJoiner(params *JoinerParams) *TreeChunker {
+	self := &TreeChunker{}
+	self.branches = params.branches
+	self.hashSize = params.hashSize
+	self.key = params.key
+	self.getter = params.getter
+	self.depth = params.depth
 	self.chunkSize = self.hashSize * self.branches
 	self.workerCount = 0
+	self.jobC = make(chan *hashJob, 2*ChunkProcessors)
+	self.wg = &sync.WaitGroup{}
+	self.errC = make(chan error)
+	self.quitC = make(chan bool)
 
-	return
+	return self
 }
 
-// func (self *TreeChunker) KeySize() int64 {
-// 	return self.hashSize
-// }
+func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
+	self := &TreeChunker{}
+	self.data = params.reader
+	self.dataSize = params.size
+	self.branches = params.branches
+	self.hashSize = params.hashSize
+	self.key = params.key
+	self.chunkSize = self.hashSize * self.branches
+	self.putter = params.putter
+	self.workerCount = 0
+	self.jobC = make(chan *hashJob, 2*ChunkProcessors)
+	self.wg = &sync.WaitGroup{}
+	self.errC = make(chan error)
+	self.quitC = make(chan bool)
+
+	return self
+}
 
 // String() for pretty printing
 func (self *Chunk) String() string {
@@ -125,44 +187,40 @@ func (self *TreeChunker) decrementWorkerCount() {
 	self.workerCount -= 1
 }
 
-func (self *TreeChunker) Split(data io.Reader, size int64, putGetter PutGetter) (k Key, wait func(), err error) {
+func (self *TreeChunker) Split() (k Key, wait func(), err error) {
 	if self.chunkSize <= 0 {
 		panic("chunker must be initialised")
 	}
 
-	jobC := make(chan *hashJob, 2*ChunkProcessors)
-	wg := &sync.WaitGroup{}
-	errC := make(chan error)
-	quitC := make(chan bool)
-
 	self.incrementWorkerCount()
-	self.runWorker(jobC, putGetter, errC, quitC)
+	self.runWorker()
 
 	depth := 0
 	treeSize := self.chunkSize
 
 	// takes lowest depth such that chunksize*HashCount^(depth+1) > size
 	// power series, will find the order of magnitude of the data size in base hashCount or numbers of levels of branching in the resulting tree.
-	for ; treeSize < size; treeSize *= self.branches {
+	for ; treeSize < self.dataSize; treeSize *= self.branches {
 		depth++
 	}
 
-	key := make([]byte, self.hashFunc().Size())
+	key := make([]byte, self.hashSize)
 	// this waitgroup member is released after the root hash is calculated
-	wg.Add(1)
+	self.wg.Add(1)
 	//launch actual recursive function passing the waitgroups
-	go self.split(depth, treeSize/self.branches, key, data, size, jobC, putGetter, errC, quitC, wg)
+	go self.split(depth, treeSize/self.branches, key, self.dataSize, self.wg)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
 		// waiting for all threads to finish
-		wg.Wait()
-		close(errC)
+		self.wg.Wait()
+		close(self.errC)
 	}()
 
-	defer close(quitC)
+	defer close(self.quitC)
+	defer self.putter.Close()
 	select {
-	case err := <-errC:
+	case err := <-self.errC:
 		if err != nil {
 			return nil, nil, err
 		}
@@ -170,11 +228,10 @@ func (self *TreeChunker) Split(data io.Reader, size int64, putGetter PutGetter) 
 		return nil, nil, errOperationTimedOut
 	}
 
-	// TODO: this is a fake wait function
-	return key, func() { return }, nil
+	return key, self.putter.Wait, nil
 }
 
-func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reader, size int64, jobC chan *hashJob, putter Putter, errC chan error, quitC chan bool, parentWg *sync.WaitGroup) {
+func (self *TreeChunker) split(depth int, treeSize int64, key Key, size int64, parentWg *sync.WaitGroup) {
 
 	//
 
@@ -189,16 +246,16 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reade
 		binary.LittleEndian.PutUint64(chunkData[0:8], uint64(size))
 		var readBytes int64
 		for readBytes < size {
-			n, err := data.Read(chunkData[8+readBytes:])
+			n, err := self.data.Read(chunkData[8+readBytes:])
 			readBytes += int64(n)
 			if err != nil && !(err == io.EOF && readBytes == size) {
-				errC <- err
+				self.errC <- err
 				return
 			}
 		}
 		select {
-		case jobC <- &hashJob{key, chunkData, size, parentWg}:
-		case <-quitC:
+		case self.jobC <- &hashJob{key, chunkData, size, parentWg}:
+		case <-self.quitC:
 		}
 		return
 	}
@@ -224,7 +281,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reade
 		subTreeKey := chunk[8+i*self.hashSize : 8+(i+1)*self.hashSize]
 
 		childrenWg.Add(1)
-		self.split(depth-1, treeSize/self.branches, subTreeKey, data, secSize, jobC, putter, errC, quitC, childrenWg)
+		self.split(depth-1, treeSize/self.branches, subTreeKey, secSize, childrenWg)
 
 		i++
 		pos += treeSize
@@ -235,50 +292,49 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, data io.Reade
 	childrenWg.Wait()
 
 	worker := self.getWorkerCount()
-	if int64(len(jobC)) > worker && worker < ChunkProcessors {
+	if int64(len(self.jobC)) > worker && worker < ChunkProcessors {
 		self.incrementWorkerCount()
-		self.runWorker(jobC, putter, errC, quitC)
+		self.runWorker()
 
 	}
 	select {
-	case jobC <- &hashJob{key, chunk, size, parentWg}:
-	case <-quitC:
+	case self.jobC <- &hashJob{key, chunk, size, parentWg}:
+	case <-self.quitC:
 	}
 }
 
-func (self *TreeChunker) runWorker(jobC chan *hashJob, putter Putter, errC chan error, quitC chan bool) {
+func (self *TreeChunker) runWorker() {
 	go func() {
 		defer self.decrementWorkerCount()
 		for {
 			select {
 
-			case job, ok := <-jobC:
+			case job, ok := <-self.jobC:
 				if !ok {
 					return
 				}
 
-				h, err := putter.Put(job.chunk)
+				h, err := self.putter.Put(job.chunk)
 				if err != nil {
-					errC <- err
+					self.errC <- err
 					return
 				}
 				copy(job.key, h)
 				job.parentWg.Done()
-			case <-quitC:
+			case <-self.quitC:
 				return
 			}
 		}
 	}()
 }
 
-func (self *TreeChunker) Append(key Key, data io.Reader, putGetter PutGetter) (Key, func(), error) {
+func (self *TreeChunker) Append() (Key, func(), error) {
 	return nil, nil, errAppendOppNotSuported
 }
 
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
-	key Key // root key
-	// chunkC    chan *Chunk // chunk channel to send retrieve requests on
+	key       Key       // root key
 	chunkData ChunkData // size of the entire subtree
 	off       int64     // offset
 	chunkSize int64     // inherit from chunker
@@ -289,15 +345,14 @@ type LazyChunkReader struct {
 }
 
 // implements the Joiner interface
-func (self *TreeChunker) Join(key Key, getter Getter, depth int) LazySectionReader {
+func (self *TreeChunker) Join() LazySectionReader {
 	return &LazyChunkReader{
-		key: key,
-		// chunkC:    chunkC,
+		key:       self.key,
 		chunkSize: self.chunkSize,
 		branches:  self.branches,
 		hashSize:  self.hashSize,
-		depth:     depth,
-		getter:    getter,
+		depth:     self.depth,
+		getter:    self.getter,
 	}
 }
 
@@ -362,7 +417,6 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	err = <-errC
 	if err != nil {
 		close(quitC)
-
 		return 0, err
 	}
 	if off+int64(len(b)) >= size {
@@ -413,7 +467,6 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		wg.Add(1)
 		go func(j int64) {
 			childKey := chunkData[8+j*self.hashSize : 8+(j+1)*self.hashSize]
-			// chunk := retrieve(childKey, self.chunkC, quitC)
 			chunkData, err := self.getter.Get(Reference(childKey))
 			if err != nil {
 				select {
@@ -428,36 +481,6 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 			self.join(b[soff-off:seoff-off], soff-roff, seoff-roff, depth-1, treeSize/self.branches, chunkData, wg, errC, quitC)
 		}(i)
 	} //for
-}
-
-// the helper method submits chunks for a key to a oueue (DPA) and
-// block until they time out or arrive
-// abort if quitC is readable
-func retrieve(key Key, chunkC chan *Chunk, quitC chan bool) *Chunk {
-	log.Debug("retrieve", "key", key)
-	chunk := NewChunk(key, nil)
-	chunk.C = make(chan bool)
-	// submit chunk for retrieval
-	log.Debug("submit chunk for retrieval", "key", key)
-	select {
-	case chunkC <- chunk: // submit retrieval request, someone should be listening on the other side (or we will time out globally)
-	case <-quitC:
-		return nil
-	}
-	// waiting for the chunk retrieval
-	log.Debug("waiting for the chunk retrieval", "key", key)
-	select { // chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-
-	case <-quitC:
-		// this is how we control process leakage (quitC is closed once join is finished (after timeout))
-		return nil
-	case <-chunk.C: // bells are ringing, data have been delivered
-	}
-	if len(chunk.SData) == 0 {
-		return nil
-	}
-	log.Debug("chunk retrieved", "key", key)
-	return chunk
 }
 
 // Read keeps a cursor so cannot be called simulateously, see ReadAt

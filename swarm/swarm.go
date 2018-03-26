@@ -117,7 +117,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
-	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
+	hash := storage.MakeHashFunc(config.DPAParams.Hash)
 	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, common.Hex2Bytes(config.BzzKey), mockStore)
 	if err != nil {
 		return
@@ -165,7 +165,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
 	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
+	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
 	log.Debug(fmt.Sprintf("-> Content Store API"))
 
 	// Pss = postal service over swarm (devp2p over bzz)
