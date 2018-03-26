@@ -47,6 +47,9 @@ func newChunkEncryption() *chunkEncryption {
 	}
 }
 
+// NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
+// With the HasherStore you can put and get chunk data (which is just []byte) into a ChunkStore
+// and the hasherStore will take core of encryption/decryption of data if necessary
 func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
 	var chunkEncryption *chunkEncryption
 
@@ -66,6 +69,9 @@ func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool)
 	}
 }
 
+// Puts the chunkData into the ChunkStore of the hasherStore and returns the reference.
+// If hasherStore has a chunkEncryption object, the data will be encrypted.
+// Asynchronous function, the data will not necessarily be stored when it returns.
 func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 	c := chunkData
 	size := chunkData.Size()
@@ -94,6 +100,9 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 	//
 }
 
+// Returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).
+// If the data is encrypted and the reference contains an encryption key, it will be decrypted before
+// return.
 func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 	if h.store == nil {
 		return nil, errors.New("Can not get ref from HasherStore with nil ChunkStore")
@@ -120,10 +129,15 @@ func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 	return chunkData, nil
 }
 
+// The Close() indicates that no more chunks will be put with the hasherStore, so the Wait
+// function can return when all the previously put chunks has been stored.
 func (h *hasherStore) Close() {
 	close(h.closed)
 }
 
+// Wait() function returns when
+//    1) the Close() function has been called and
+//    2) all the chunks which has been Put has been stored
 func (h *hasherStore) Wait() {
 	<-h.closed
 	h.wg.Wait()

@@ -281,8 +281,11 @@ type Reference []byte
 
 type Putter interface {
 	Put(ChunkData) (Reference, error)
+	// Length of the Reference created by this Putter
 	RefSize() int64
+	// Calling Close() indicated that no more chunk data will be Put on this Putter
 	Close()
+	// Wait() returns if all data has been store and the Close() was called.
 	Wait()
 }
 
