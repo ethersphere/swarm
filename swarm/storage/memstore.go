@@ -62,11 +62,11 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
   (access[] is a binary tree inside the multi-bit leveled hash tree)
 */
 
-func NewMemStore(d *LDBStore, capacity uint) (m *MemStore) {
+func NewMemStore(params *StoreParams, d *LDBStore) (m *MemStore) {
 	m = &MemStore{}
 	m.memtree = newMemTree(memTreeFLW, nil, 0)
 	m.ldbStore = d
-	m.setCapacity(capacity)
+	m.setCapacity(uint(params.Capacity))
 	return
 }
 
@@ -371,3 +371,7 @@ func (s *MemStore) removeOldest() {
 
 // Close memstore
 func (s *MemStore) Close() {}
+
+func (s *MemStore) Validate(key *Key, data []byte) bool {
+	return true
+}

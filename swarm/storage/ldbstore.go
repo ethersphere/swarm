@@ -75,8 +75,30 @@ type gcItem struct {
 	idxKey []byte
 }
 
+type LDBStoreParams struct {
+	*StoreParams
+	Path string
+	Po   func(Key) uint8
+}
+
+func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey []byte) *LDBStoreParams {
+	if hash == nil {
+		hash = MakeHashFunc(SHA3Hash)
+	}
+	if capacity == 0 {
+		capacity = singletonSwarmDbCapacity
+	}
+	storeparams := NewStoreParams(capacity, hash, basekey)
+	return &LDBStoreParams{
+		StoreParams: storeparams,
+		Path:        path,
+		Po:          func(k Key) (ret uint8) { return uint8(Proximity(storeparams.BaseKey[:], k[:])) },
+	}
+}
+
 type LDBStore struct {
-	db *LDBDatabase
+	db        *LDBDatabase
+	validator func(*Key, []byte) bool
 
 	// this should be stored in db, accessed transactionally
 	entryCnt, accessCnt, dataIdx, capacity uint64
@@ -107,9 +129,10 @@ type LDBStore struct {
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
 // to avoid the appearance of a pluggable distance metric and opportunities of bugs associated with providing
 // a function different from the one that is actually used.
-func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8) (s *LDBStore, err error) {
+func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s = new(LDBStore)
-	s.hashfunc = hash
+	s.hashfunc = params.Hash
+	s.validator = params.Validator
 
 	s.batchC = make(chan bool)
 	s.batchesC = make(chan struct{}, 1)
@@ -118,13 +141,13 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	// associate encodeData with default functionality
 	s.encodeDataFunc = encodeData
 
-	s.db, err = NewLDBDatabase(path)
+	s.db, err = NewLDBDatabase(params.Path)
 	if err != nil {
 		return nil, err
 	}
 
-	s.po = po
-	s.setCapacity(capacity)
+	s.po = params.Po
+	s.setCapacity(uint64(params.Capacity))
 
 	s.gcStartPos = make([]byte, 1)
 	s.gcStartPos[0] = kpIndex
@@ -163,8 +186,8 @@ func (self *LDBStore) SetTrusted() {
 // NewMockDbStore creates a new instance of DbStore with
 // mockStore set to a provided value. If mockStore argument is nil,
 // this function behaves exactly as NewDbStore.
-func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8, mockStore *mock.NodeStore) (s *LDBStore, err error) {
-	s, err = NewLDBStore(path, hash, capacity, po)
+func NewMockDbStore(params *LDBStoreParams, mockStore *mock.NodeStore) (s *LDBStore, err error) {
+	s, err = NewLDBStore(params)
 	if err != nil {
 		return nil, err
 	}
@@ -290,6 +313,13 @@ func gcListSelect(list []*gcItem, left int, right int, n int) int {
 			return gcListSelect(list, pivotIndex+1, right, n)
 		}
 	}
+}
+
+func (s *LDBStore) Validate(key *Key, data []byte) bool {
+	if s.validator == nil {
+		return true
+	}
+	return s.validator(key, data)
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
@@ -700,17 +730,9 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 			}
 		}
 
-		if !s.trusted {
-			data_mod := data[32:]
-			hasher := s.hashfunc()
-			hasher.Write(data_mod)
-			hash := hasher.Sum(nil)
-
-			if !bytes.Equal(hash, key) {
-				log.Error("apparent key/hash mismatch", "hash", hash, "key", key[:])
-				s.delete(indx.Idx, getIndexKey(key), s.po(key))
-				log.Error("invalid chunk in database.")
-			}
+		if !s.Validate(&key, data[32:]) {
+			s.delete(indx.Idx, getIndexKey(key), s.po(key))
+			log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'")
 		}
 
 		chunk = NewChunk(key, nil)

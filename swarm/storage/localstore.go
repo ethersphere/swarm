@@ -19,6 +19,7 @@ package storage
 import (
 	"encoding/binary"
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -30,18 +31,28 @@ var (
 	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
 )
 
-type StoreParams struct {
+type LocalStoreParams struct {
+	*StoreParams
 	ChunkDbPath   string
-	DbCapacity    uint64
 	CacheCapacity uint
 	Radius        int
 }
 
 //create params with default values
-func NewDefaultStoreParams() (self *StoreParams) {
-	return &StoreParams{
-		DbCapacity:    defaultDbCapacity,
+func NewDefaultLocalStoreParams() (self *LocalStoreParams) {
+	return &LocalStoreParams{
+		StoreParams: &StoreParams{
+			Capacity: defaultDbCapacity,
+		},
 		CacheCapacity: defaultCacheCapacity,
+	}
+}
+
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (self *LocalStoreParams) Init(path string) {
+	if self.ChunkDbPath == "" {
+		self.ChunkDbPath = filepath.Join(path, "chunks")
 	}
 }
 
@@ -54,28 +65,36 @@ type LocalStore struct {
 }
 
 // This constructor uses MemStore and DbStore as components
-func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte, mockStore *mock.NodeStore) (*LocalStore, error) {
-	dbStore, err := NewMockDbStore(params.ChunkDbPath, hash, params.DbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) }, mockStore)
+func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
+	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.Capacity, params.Hash, params.BaseKey)
+	dbStore, err := NewMockDbStore(ldbparams, mockStore)
+	//dbStore, err := NewMockDbStore(params.ChunkDbPath, params.Hash, params.DbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(params.Basekey[:], k[:])) }, mockStore)
 	if err != nil {
 		return nil, err
 	}
+	params.Capacity = uint64(params.CacheCapacity)
 	return &LocalStore{
-		memStore: NewMemStore(dbStore, params.CacheCapacity),
+		memStore: NewMemStore(params.StoreParams, dbStore),
 		DbStore:  dbStore,
 	}, nil
 }
 
-func NewTestLocalStoreForAddr(path string, basekey []byte) (*LocalStore, error) {
-	hasher := MakeHashFunc("SHA3")
-	dbStore, err := NewLDBStore(path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
+	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.Capacity, params.Hash, params.BaseKey)
+	dbStore, err := NewLDBStore(ldbparams) //path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
 	}
 	localStore := &LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmDbCapacity),
+		memStore: NewMemStore(params.StoreParams, dbStore),
 		DbStore:  dbStore,
 	}
 	return localStore, nil
+}
+
+// we defer to substores to validate
+func (self *LocalStore) Validate(key *Key, data []byte) bool {
+	return true
 }
 
 func (self *LocalStore) CacheCounter() uint64 {

@@ -41,14 +41,16 @@ func newTestDbStore(mock bool) (*testDbStore, error) {
 	}
 
 	var db *LDBStore
+	params := NewLDBStoreParams(dir, defaultDbCapacity, nil, nil)
+	params.Po = testPoFunc
 	if mock {
 		globalStore := mem.NewGlobalStore()
 		addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
 		mockStore := globalStore.NewNodeStore(addr)
 
-		db, err = NewMockDbStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc, mockStore)
+		db, err = NewMockDbStore(params, mockStore)
 	} else {
-		db, err = NewLDBStore(dir, MakeHashFunc(SHA3Hash), defaultDbCapacity, testPoFunc)
+		db, err = NewLDBStore(params)
 	}
 
 	return &testDbStore{db, dir}, err
