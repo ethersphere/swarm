@@ -17,7 +17,6 @@
 package storage
 
 import (
-	"errors"
 	"fmt"
 	"math"
 	"sync"
@@ -94,9 +93,6 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 // If the data is encrypted and the reference contains an encryption key, it will be decrypted before
 // return.
 func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
-	if h.store == nil {
-		return nil, errors.New("Can not get ref from HasherStore with nil ChunkStore")
-	}
 	key, encryptionKey, err := parseReference(ref)
 	if err != nil {
 		return nil, err
@@ -197,15 +193,12 @@ func (h *hasherStore) RefSize() int64 {
 }
 
 func (h *hasherStore) storeChunk(chunk *Chunk) {
-	// need to do this parallelly
-	if h.store != nil {
-		h.wg.Add(1)
-		go func() {
-			<-chunk.dbStored
-			h.wg.Done()
-		}()
-		h.store.Put(chunk)
-	}
+	h.wg.Add(1)
+	go func() {
+		<-chunk.dbStored
+		h.wg.Done()
+	}()
+	h.store.Put(chunk)
 }
 
 func parseReference(ref Reference) (Key, encryption.Key, error) {

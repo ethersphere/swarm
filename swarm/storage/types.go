@@ -230,21 +230,6 @@ func getDefaultChunkSize() int64 {
 
 }
 
-/*
-The ChunkStore interface is implemented by :
-
-- MemStore: a memory cache
-- DbStore: local disk/db store
-- LocalStore: a combination (sequence of) memStore and dbStore
-- NetStore: cloud storage abstraction layer
-- DPA: local requests for swarm storage and retrieval
-*/
-type ChunkStore interface {
-	Put(*Chunk) // effectively there is no error even if there is an error
-	Get(Key) (*Chunk, error)
-	Close()
-}
-
 // Size, Seek, Read, ReadAt
 type LazySectionReader interface {
 	Size(chan bool) (int64, error)
