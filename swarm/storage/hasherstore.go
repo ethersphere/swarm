@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -69,7 +69,7 @@ func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool)
 	}
 }
 
-// Puts the chunkData into the ChunkStore of the hasherStore and returns the reference.
+// Put stores the chunkData into the ChunkStore of the hasherStore and returns the reference.
 // If hasherStore has a chunkEncryption object, the data will be encrypted.
 // Asynchronous function, the data will not necessarily be stored when it returns.
 func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
@@ -90,7 +90,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 	return Reference(append(chunk.Key, encryptionKey...)), nil
 }
 
-// Returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).
+// Get returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).
 // If the data is encrypted and the reference contains an encryption key, it will be decrypted before
 // return.
 func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
@@ -119,13 +119,13 @@ func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 	return chunkData, nil
 }
 
-// Close() indicates that no more chunks will be put with the hasherStore, so the Wait
+// Close indicates that no more chunks will be put with the hasherStore, so the Wait
 // function can return when all the previously put chunks has been stored.
 func (h *hasherStore) Close() {
 	close(h.closed)
 }
 
-// Wait() function returns when
+// Wait returns when
 //    1) the Close() function has been called and
 //    2) all the chunks which has been Put has been stored
 func (h *hasherStore) Wait() {

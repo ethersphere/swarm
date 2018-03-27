@@ -268,14 +268,15 @@ type Reference []byte
 // Putter is responsible to store data and create a reference for it
 type Putter interface {
 	Put(ChunkData) (Reference, error)
-	// Length of the Reference created by this Putter
+	// RefSize returns the length of the Reference created by this Putter
 	RefSize() int64
-	// Calling Close() indicated that no more chunk data will be Put on this Putter
+	// Close is to indicate that no more chunk data will be Put on this Putter
 	Close()
-	// Wait() returns if all data has been store and the Close() was called.
+	// Wait returns if all data has been store and the Close() was called.
 	Wait()
 }
 
+// Getter is an interface to retrieve a chunk's data by its reference
 type Getter interface {
 	Get(Reference) (ChunkData, error)
 }
