@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
+	"path"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -21,16 +23,60 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/state"
 	colorable "github.com/mattn/go-colorable"
 )
 
 // serviceName is used with the exec adapter so the exec'd binary knows which
 // service to execute
 const serviceName = "discovery"
+const serviceNamePersistence = "noDiscovery_persistence"
+const serviceNameNoPersistence = "discovery_no_persistence"
 const testMinProxBinSize = 2
+const discoveryPersistenceDatadir = "discovery_persistence_test_store"
 
-var services = adapters.Services{
-	serviceName: newService,
+var discoveryPersistencePath = path.Join(os.TempDir(), discoveryPersistenceDatadir)
+
+func getServices(persistent bool, discovery bool) adapters.Services {
+	if persistent {
+		if discovery {
+			return adapters.Services{
+				serviceName: newServiceWithPersistenceAndDiscovery,
+			}
+		}
+		return adapters.Services{
+			serviceName: newServiceWithPersistenceNoDiscovery,
+		}
+	}
+	return adapters.Services{
+		serviceName: newService,
+	}
+}
+
+func cleanDbStores() error {
+	entries, err := ioutil.ReadDir(os.TempDir())
+	if err != nil {
+		return err
+	}
+
+	for _, f := range entries {
+		if strings.HasPrefix(f.Name(), discoveryPersistenceDatadir) {
+			os.RemoveAll(path.Join(os.TempDir(), f.Name()))
+		}
+	}
+	return nil
+
+}
+
+func getDbStore(nodeID string) (*state.DBStore, error) {
+	if _, err := os.Stat(discoveryPersistencePath + "_" + nodeID); os.IsNotExist(err) {
+		ioutil.TempDir("", discoveryPersistencePath+"_"+nodeID)
+	}
+	store, err := state.NewDBStore(discoveryPersistencePath + "_" + nodeID)
+	if err != nil {
+		return nil, err
+	}
+	return store, nil
 }
 
 var (
@@ -44,7 +90,7 @@ func init() {
 	flag.Parse()
 	// register the discovery service which will run as a devp2p
 	// protocol when using the exec adapter
-	adapters.RegisterServices(services)
+	adapters.RegisterServices(getServices(false, true))
 
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
@@ -110,12 +156,23 @@ func TestDiscoverySimulationSimAdapter(t *testing.T) {
 	testDiscoverySimulationSimAdapter(t, *nodeCount, *initCount)
 }
 
+func TestDiscoveryPersistenceSimulationSimAdapter(t *testing.T) {
+	testDiscoveryPersistenceSimulationSimAdapter(t, *nodeCount, *initCount)
+}
+
+func testDiscoveryPersistenceSimulationSimAdapter(t *testing.T, nodes, conns int) {
+	cleanDbStores()
+	testNodes := testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(getServices(true, true)))
+	testDiscoveryWithPersistedNodesSimulation(t, testNodes, conns, adapters.NewSimAdapter(getServices(true, false)))
+	cleanDbStores()
+}
+
 func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
-	testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+	testDiscoverySimulation(t, nodes, conns, adapters.NewSimAdapter(getServices(false, true)))
 }
 
 func testDiscoverySimulationSocketAdapter(t *testing.T, nodes, conns int) {
-	testDiscoverySimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
+	testDiscoverySimulation(t, nodes, conns, adapters.NewSocketAdapter(getServices(false, true)))
 }
 
 func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) {
@@ -145,9 +202,68 @@ func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.No
 	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
 }
 
+func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) map[int][]byte {
+	startedAt := time.Now()
+	result, testNodes, err := discoveryPersistenceSimulation(nodes, conns, adapter, nil)
+	if err != nil {
+		t.Fatalf("Setting up simulation failed: %v", err)
+	}
+	if result.Error != nil {
+		t.Fatalf("Simulation failed: %s", result.Error)
+	}
+	t.Logf("Simulation with %d nodes passed in %s", nodes, result.FinishedAt.Sub(result.StartedAt))
+	var min, max time.Duration
+	var sum int
+	for _, pass := range result.Passes {
+		duration := pass.Sub(result.StartedAt)
+		if sum == 0 || duration < min {
+			min = duration
+		}
+		if duration > max {
+			max = duration
+		}
+		sum += int(duration.Nanoseconds())
+	}
+	t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
+	finishedAt := time.Now()
+	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
+
+	return testNodes
+}
+
+func testDiscoveryWithPersistedNodesSimulation(t *testing.T, preloadedNodes map[int][]byte, conns int, adapter adapters.NodeAdapter) map[int][]byte {
+	startedAt := time.Now()
+	result, testNodes, err := discoveryPersistenceSimulation(len(preloadedNodes), conns, adapter, preloadedNodes)
+
+	if err != nil {
+		t.Fatalf("Setting up simulation failed: %v", err)
+	}
+	if result.Error != nil {
+		t.Fatalf("Simulation failed: %s", result.Error)
+	}
+	t.Logf("Simulation with %d nodes passed in %s", len(preloadedNodes), result.FinishedAt.Sub(result.StartedAt))
+	var min, max time.Duration
+	var sum int
+	for _, pass := range result.Passes {
+		duration := pass.Sub(result.StartedAt)
+		if sum == 0 || duration < min {
+			min = duration
+		}
+		if duration > max {
+			max = duration
+		}
+		sum += int(duration.Nanoseconds())
+	}
+	t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
+	finishedAt := time.Now()
+	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
+
+	return testNodes
+}
+
 func benchmarkDiscovery(b *testing.B, nodes, conns int) {
 	for i := 0; i < b.N; i++ {
-		result, err := discoverySimulation(nodes, conns, adapters.NewSimAdapter(services))
+		result, err := discoverySimulation(nodes, conns, adapters.NewSimAdapter(getServices(false, true)))
 		if err != nil {
 			b.Fatalf("setting up simulation failed: %v", err)
 		}
@@ -268,6 +384,267 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	return result, nil
 }
 
+func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapter, preloadedTestNodes map[int][]byte) (*simulations.StepResult, map[int][]byte, error) {
+	// create network
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		ID:             "0",
+		DefaultService: serviceName,
+	})
+	defer net.Shutdown()
+	trigger := make(chan discover.NodeID)
+	ids := make([]discover.NodeID, nodes)
+
+	testNodes := make(map[int][]byte)
+	if preloadedTestNodes != nil {
+		for i := 0; i < nodes; i++ {
+			bytes := preloadedTestNodes[i]
+			conf := adapters.NodeConfig{}
+			err := json.Unmarshal(bytes, &conf)
+			if err != nil {
+				panic(err)
+			}
+			node, err := net.NewNodeWithConfig(&conf)
+			if err != nil {
+				panic(err)
+			}
+			if err := net.Start(node.ID()); err != nil {
+				return nil, nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
+			}
+			if err := triggerChecks(trigger, net, node.ID()); err != nil {
+				return nil, nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
+			}
+			ids[i] = node.ID()
+		}
+	} else {
+		for i := 0; i < nodes; i++ {
+			conf := adapters.RandomNodeConfig()
+			node, err := net.NewNodeWithConfig(conf)
+			if err != nil {
+				panic(err)
+			}
+			bytes, err := json.Marshal(&conf)
+			if err != nil {
+				panic(err)
+			}
+			testNodes[i] = bytes
+			if err != nil {
+				return nil, nil, fmt.Errorf("error starting node: %s", err)
+			}
+			if err := net.Start(node.ID()); err != nil {
+				return nil, nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
+			}
+			if err := triggerChecks(trigger, net, node.ID()); err != nil {
+				return nil, nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
+			}
+			ids[i] = node.ID()
+		}
+	}
+	// run a simulation which connects the 10 nodes in a ring and waits
+	// for full peer discovery
+	var addrs [][]byte
+	action := func(ctx context.Context) error {
+		return nil
+	}
+	wg := sync.WaitGroup{}
+	for i := range ids {
+		// collect the overlay addresses, to
+		addrs = append(addrs, network.ToOverlayAddr(ids[i].Bytes()))
+		for j := 0; j < conns; j++ {
+			var k int
+			if j == 0 {
+				k = (i + 1) % len(ids)
+			} else {
+				k = rand.Intn(len(ids))
+			}
+			wg.Add(1)
+			go func(i, k int) {
+				defer wg.Done()
+				net.Connect(ids[i], ids[k])
+			}(i, k)
+		}
+	}
+	wg.Wait()
+	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
+	// construct the peer pot, so that kademlia health can be checked
+	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
+	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+
+		node := net.GetNode(id)
+		if node == nil {
+			return false, fmt.Errorf("unknown node: %s", id)
+		}
+		client, err := node.Client()
+		if err != nil {
+			return false, fmt.Errorf("error getting node client: %s", err)
+		}
+		healthy := &network.Health{}
+		if err := client.Call(&healthy, "hive_healthy", ppmap[id]); err != nil {
+			return false, fmt.Errorf("error getting node health: %s", err)
+		}
+		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
+
+		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
+	}
+
+	// 64 nodes ~ 1min
+	// 128 nodes ~
+	timeout := 300 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
+		Action:  action,
+		Trigger: trigger,
+		Expect: &simulations.Expectation{
+			Nodes: ids,
+			Check: check,
+		},
+	})
+	if result.Error != nil {
+		return result, nil, nil
+	}
+
+	if *snapshotFile != "" {
+		snap, err := net.Snapshot()
+		if err != nil {
+			return nil, nil, errors.New("no shapshot dude")
+		}
+		jsonsnapshot, err := json.Marshal(snap)
+		if err != nil {
+			return nil, nil, fmt.Errorf("corrupt json snapshot: %v", err)
+		}
+		log.Info("writing snapshot", "file", *snapshotFile)
+		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return result, testNodes, nil
+}
+
+func discoveryPersistenceSimulationPreloadedNodes(nodes, conns int, adapter adapters.NodeAdapter, preloadedTestNodes map[int][]byte) (*simulations.StepResult, map[int][]byte, error) {
+	// create network
+	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+		ID:             "0",
+		DefaultService: serviceName,
+	})
+	defer net.Shutdown()
+	trigger := make(chan discover.NodeID)
+	ids := make([]discover.NodeID, nodes)
+
+	testNodes := make(map[int][]byte)
+
+	for i := 0; i < nodes; i++ {
+		conf := adapters.RandomNodeConfig()
+		node, err := net.NewNodeWithConfig(conf)
+		bytes, err := json.Marshal(&node)
+		if err != nil {
+			panic(err)
+		}
+		testNodes[i] = bytes
+		if err != nil {
+			return nil, nil, fmt.Errorf("error starting node: %s", err)
+		}
+		if err := net.Start(node.ID()); err != nil {
+			return nil, nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
+		}
+		if err := triggerChecks(trigger, net, node.ID()); err != nil {
+			return nil, nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
+		}
+		ids[i] = node.ID()
+	}
+
+	// run a simulation which connects the 10 nodes in a ring and waits
+	// for full peer discovery
+	var addrs [][]byte
+	action := func(ctx context.Context) error {
+		return nil
+	}
+	wg := sync.WaitGroup{}
+	for i := range ids {
+		// collect the overlay addresses, to
+		addrs = append(addrs, network.ToOverlayAddr(ids[i].Bytes()))
+		for j := 0; j < conns; j++ {
+			var k int
+			if j == 0 {
+				k = (i + 1) % len(ids)
+			} else {
+				k = rand.Intn(len(ids))
+			}
+			wg.Add(1)
+			go func(i, k int) {
+				defer wg.Done()
+				net.Connect(ids[i], ids[k])
+			}(i, k)
+		}
+	}
+	wg.Wait()
+	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
+	// construct the peer pot, so that kademlia health can be checked
+	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
+	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+
+		node := net.GetNode(id)
+		if node == nil {
+			return false, fmt.Errorf("unknown node: %s", id)
+		}
+		client, err := node.Client()
+		if err != nil {
+			return false, fmt.Errorf("error getting node client: %s", err)
+		}
+		healthy := &network.Health{}
+		if err := client.Call(&healthy, "hive_healthy", ppmap[id]); err != nil {
+			return false, fmt.Errorf("error getting node health: %s", err)
+		}
+		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
+
+		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
+	}
+
+	// 64 nodes ~ 1min
+	// 128 nodes ~
+	timeout := 300 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
+		Action:  action,
+		Trigger: trigger,
+		Expect: &simulations.Expectation{
+			Nodes: ids,
+			Check: check,
+		},
+	})
+	if result.Error != nil {
+		return result, nil, nil
+	}
+
+	if *snapshotFile != "" {
+		snap, err := net.Snapshot()
+		if err != nil {
+			return nil, nil, errors.New("no shapshot dude")
+		}
+		jsonsnapshot, err := json.Marshal(snap)
+		if err != nil {
+			return nil, nil, fmt.Errorf("corrupt json snapshot: %v", err)
+		}
+		log.Info("writing snapshot", "file", *snapshotFile)
+		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	return result, testNodes, nil
+}
+
 // triggerChecks triggers a simulation step check whenever a peer is added or
 // removed from the given node, and also every second to avoid a race between
 // peer events and kademlia becoming healthy
@@ -331,6 +708,8 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	hp := network.NewHiveParams()
 	hp.KeepAliveInterval = 200 * time.Millisecond
 
+	hp.Discovery = false
+
 	config := &network.BzzConfig{
 		OverlayAddr:  addr.Over(),
 		UnderlayAddr: addr.Under(),
@@ -338,4 +717,78 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	}
 
 	return network.NewBzz(config, kad, nil, nil, nil), nil
+}
+
+func newServiceWithPersistenceNoDiscovery(ctx *adapters.ServiceContext) (node.Service, error) {
+	store, err := getDbStore(ctx.Config.ID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	host := adapters.ExternalIP()
+
+	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
+
+	kp := network.NewKadParams()
+	kp.MinProxBinSize = testMinProxBinSize
+	kp.MaxBinSize = 3
+	kp.MinBinSize = 1
+	kp.MaxRetries = 1000
+	kp.RetryExponent = 2
+	kp.RetryInterval = 50000000
+
+	if ctx.Config.Reachable != nil {
+		kp.Reachable = func(o network.OverlayAddr) bool {
+			return ctx.Config.Reachable(o.(*network.BzzAddr).ID())
+		}
+	}
+	kad := network.NewKademlia(addr.Over(), kp)
+
+	hp := network.NewHiveParams()
+	hp.KeepAliveInterval = 200 * time.Millisecond
+	hp.Discovery = false
+
+	config := &network.BzzConfig{
+		OverlayAddr:  addr.Over(),
+		UnderlayAddr: addr.Under(),
+		HiveParams:   hp,
+	}
+
+	return network.NewBzz(config, kad, store, nil, nil), nil
+}
+
+func newServiceWithPersistenceAndDiscovery(ctx *adapters.ServiceContext) (node.Service, error) {
+	store, err := getDbStore(ctx.Config.ID.String())
+	if err != nil {
+		return nil, err
+	}
+	host := adapters.ExternalIP()
+
+	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
+
+	kp := network.NewKadParams()
+	kp.MinProxBinSize = testMinProxBinSize
+	kp.MaxBinSize = 3
+	kp.MinBinSize = 1
+	kp.MaxRetries = 1000
+	kp.RetryExponent = 2
+	kp.RetryInterval = 50000000
+
+	if ctx.Config.Reachable != nil {
+		kp.Reachable = func(o network.OverlayAddr) bool {
+			return ctx.Config.Reachable(o.(*network.BzzAddr).ID())
+		}
+	}
+	kad := network.NewKademlia(addr.Over(), kp)
+
+	hp := network.NewHiveParams()
+	hp.KeepAliveInterval = 200 * time.Millisecond
+
+	config := &network.BzzConfig{
+		OverlayAddr:  addr.Over(),
+		UnderlayAddr: addr.Under(),
+		HiveParams:   hp,
+	}
+
+	return network.NewBzz(config, kad, store, nil, nil), nil
 }

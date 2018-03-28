@@ -123,7 +123,12 @@ func (h *Hive) Stop() error {
 	log.Info(fmt.Sprintf("%08x hive stopping, saving peers", h.BaseAddr()[:4]))
 	h.ticker.Stop()
 	if h.Store != nil {
-		return h.savePeers()
+		if err := h.savePeers(); err != nil {
+			return fmt.Errorf("could not save peers to persistence store: %v", err)
+		}
+		if err := h.Store.Close(); err != nil {
+			return fmt.Errorf("could not close file handle to persistence store: %v", err)
+		}
 	}
 	log.Info(fmt.Sprintf("%08x hive stopped, dropping peers", h.BaseAddr()[:4]))
 	h.EachConn(nil, 255, func(p OverlayConn, _ int, _ bool) bool {
