@@ -107,7 +107,7 @@ type LDBStore struct {
 // to avoid the appearance of a pluggable distance metric and opportunities of bugs associated with providing
 // a function different from the one that is actually used.
 func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) uint8) (s *LDBStore, err error) {
-	s = new(LDBStore)
+	s = &LDBStore{}
 	s.hashfunc = hash
 
 	s.batchC = make(chan bool)
