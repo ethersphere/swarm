@@ -65,7 +65,6 @@ func (t *testChunkStore) Get(key Key) (*Chunk, error) {
 }
 
 func (t *testChunkStore) Close() {
-	return
 }
 
 func newTestChunkStore() *testChunkStore {
