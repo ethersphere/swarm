@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -235,8 +236,8 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	}
 	go func() {
 		select {
-		case <-time.After(30 * time.Second):
-			p.Drop(err)
+		case <-time.After(600 * time.Second):
+			p.Drop(errors.New("handle offered hashes timeout"))
 			return
 		case err := <-c.next:
 			if err != nil {

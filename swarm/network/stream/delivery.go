@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -128,7 +129,7 @@ type RetrieveRequestMsg struct {
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
 	log.Debug("received request", "peer", sp.ID(), "hash", req.Key)
-	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
+	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", true))
 	if err != nil {
 		return err
 	}
@@ -143,12 +144,16 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			}
 		}
 		go func() {
-			t := time.NewTimer(3 * time.Minute)
+			t := time.NewTimer(10 * time.Minute)
 			defer t.Stop()
+
+			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Key, "node", common.Bytes2Hex(d.overlay.BaseAddr()), "created", created)
 
 			select {
 			case <-chunk.ReqC:
+				log.Debug("retrieve request ReqC closed", "peer", sp.ID(), "hash", req.Key)
 			case <-t.C:
+				log.Debug("retrieve request timeout", "peer", sp.ID(), "hash", req.Key)
 				chunk.SetErrored(true)
 				return
 			}
@@ -157,6 +162,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			if req.SkipCheck {
 				err := sp.Deliver(chunk, s.priority)
 				if err != nil {
+					log.Error("retrieve request deliver ", "peer", sp.ID(), "hash", req.Key, "err", err)
 					sp.Drop(err)
 				}
 			}
@@ -207,8 +213,10 @@ R:
 		}
 		chunk.SData = req.SData
 		d.db.Put(chunk)
-		chunk.WaitToStore()
-		close(chunk.ReqC)
+		//go func() {
+		// chunk.WaitToStore()
+		// close(chunk.ReqC)
+		//}()
 	}
 }
 

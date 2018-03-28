@@ -51,7 +51,7 @@ var (
 	ErrChunkNotFound = errors.New("chunk not found")
 	ErrFetching      = errors.New("chunk still fetching")
 	// timeout interval before retrieval is timed out
-	searchTimeout = 3 * time.Second
+	searchTimeout = 600 * time.Second
 )
 
 type DPA struct {

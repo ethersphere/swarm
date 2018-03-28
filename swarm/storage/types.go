@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
-const MaxPO = 7
+const MaxPO = 16
 
 type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash

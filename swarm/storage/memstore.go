@@ -186,6 +186,9 @@ func (s *MemStore) Put(entry *Chunk) {
 			if entry.ReqC == nil {
 				entry.ReqC = node.entry.ReqC
 			}
+			if node.entry.dbStored != nil {
+				entry.dbStored = node.entry.dbStored
+			}
 			entry.C = node.entry.C
 			node.entry = entry
 			return
@@ -340,7 +343,7 @@ func (s *MemStore) removeOldest() {
 // 	mu sync.RWMutex
 // }
 
-// func NewMemStore(d *DbStore, capacity uint) (m *MemStore) {
+// func NewMemStore(d *LDBStore, capacity uint) (m *MemStore) {
 // 	return &MemStore{
 // 		m: make(map[string]*Chunk),
 // 	}
@@ -351,7 +354,7 @@ func (s *MemStore) removeOldest() {
 // 	defer m.mu.RUnlock()
 // 	c, ok := m.m[string(key[:])]
 // 	if !ok {
-// 		return nil, ErrNotFound
+// 		return nil, ErrChunkNotFound
 // 	}
 // 	if !bytes.Equal(c.Key, key) {
 // 		panic(fmt.Errorf("MemStore.Get: chunk key %s != req key %s", c.Key.Hex(), key.Hex()))
@@ -367,6 +370,12 @@ func (s *MemStore) removeOldest() {
 
 // func (m *MemStore) setCapacity(n int) {
 
+// }
+
+// func (m *MemStore) Counter() uint {
+// 	m.mu.RLock()
+// 	defer m.mu.RUnlock()
+// 	return uint(len(m.m))
 // }
 
 // Close memstore

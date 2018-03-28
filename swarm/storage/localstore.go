@@ -99,7 +99,18 @@ func (self *LocalStore) Put(chunk *Chunk) {
 
 	dbStorePutCounter.Inc(1)
 	self.memStore.Put(c)
+	if chunk.ReqC != nil {
+		close(chunk.ReqC)
+	}
 	self.DbStore.Put(c)
+
+	newc := NewChunk(c.Key, nil)
+	newc.SData = c.SData
+	newc.Size = c.Size
+	go func() {
+		<-c.dbStored
+		self.memStore.Put(newc)
+	}()
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores

@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -52,6 +53,8 @@ func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerS
 	var start uint64
 	if live {
 		start = sessionAt
+	} else {
+		sessionAt--
 	}
 	return &SwarmSyncerServer{
 		po:        po,
@@ -131,24 +134,30 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	sessionAt     uint64
-	nextC         chan struct{}
-	sessionRoot   storage.Key
-	sessionReader storage.LazySectionReader
-	retrieveC     chan *storage.Chunk
-	storeC        chan *storage.Chunk
-	db            *storage.DBAPI
-	chunker       storage.Chunker
-	currentRoot   storage.Key
-	requestFunc   func(chunk *storage.Chunk)
-	end, start    uint64
+	sessionAt             uint64
+	nextC                 chan struct{}
+	sessionRoot           storage.Key
+	sessionReader         storage.LazySectionReader
+	retrieveC             chan *storage.Chunk
+	storeC                chan *storage.Chunk
+	db                    *storage.DBAPI
+	chunker               storage.Chunker
+	currentRoot           storage.Key
+	requestFunc           func(chunk *storage.Chunk)
+	end, start            uint64
+	peer                  *Peer
+	ignoreExistingRequest bool
+	stream                Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, chunker storage.Chunker) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, db *storage.DBAPI, chunker storage.Chunker, ignoreExistingRequest bool, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
 		db:      db,
 		chunker: chunker,
+		peer:    p,
+		ignoreExistingRequest: ignoreExistingRequest,
+		stream:                stream,
 	}, nil
 }
 
@@ -191,16 +200,17 @@ func NewSwarmSyncerClient(_ *Peer, db *storage.DBAPI, chunker storage.Chunker) (
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
 func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
-	streamer.RegisterClientFunc("SYNC", func(p *Peer, _ string, love bool) (Client, error) {
-		return NewSwarmSyncerClient(p, db, nil)
+	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
+		return NewSwarmSyncerClient(p, db, nil, true, NewStream("SYNC", t, live))
 	})
 }
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
+	log.Debug("sync need data", "key", common.Bytes2Hex(key), "peer", s.peer.ID(), "node", common.Bytes2Hex(s.peer.streamer.delivery.overlay.BaseAddr()), "sync handling", s.ignoreExistingRequest, "stream", s.stream)
 	chunk, _ := s.db.GetOrCreateRequest(key)
 	// TODO: we may want to request from this peer anyway even if the request exists
-	if chunk.ReqC == nil {
+	if chunk.ReqC == nil { //|| (s.ignoreExistingRequest && !created) {
 		return nil
 	}
 	// create request and wait until the chunk data arrives and is stored

@@ -92,8 +92,8 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
 		return NewSwarmChunkServer(delivery.db), nil
 	})
-	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, _ string, _ bool) (Client, error) {
-		return NewSwarmSyncerClient(p, delivery.db, nil)
+	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
+		return NewSwarmSyncerClient(p, delivery.db, nil, false, NewStream(swarmChunkServerStreamName, t, live))
 	})
 	RegisterSwarmSyncerServer(streamer, db)
 	RegisterSwarmSyncerClient(streamer, db)
@@ -127,12 +127,12 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 			// wait for kademlia table to be healthy
 			time.Sleep(options.SyncUpdateDelay)
 
-			// initial requests for syncing subscription to peers
-			streamer.updateSyncing()
-
 			kad := streamer.delivery.overlay.(*network.Kademlia)
 			depthC := latestIntC(kad.NeighbourhoodDepthC())
 			addressBookSizeC := latestIntC(kad.AddrCountC())
+
+			// initial requests for syncing subscription to peers
+			streamer.updateSyncing()
 
 			for depth := range depthC {
 				log.Debug("Kademlia neighbourhood depth change", "depth", depth)
@@ -373,7 +373,7 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer sp.close()
 
 	if r.doRetrieve {
-		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", false), nil, Top)
+		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", true), nil, Top)
 		if err != nil {
 			return err
 		}
