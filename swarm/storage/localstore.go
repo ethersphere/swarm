@@ -23,7 +23,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
 var (
@@ -54,14 +53,14 @@ type LocalStore struct {
 }
 
 // This constructor uses MemStore and DbStore as components
-func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte, mockStore *mock.NodeStore) (*LocalStore, error) {
-	dbStore, err := NewMockDbStore(params.ChunkDbPath, hash, params.DbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) }, mockStore)
+func NewLocalStore(hash SwarmHasher, params *StoreParams, basekey []byte) (*LocalStore, error) {
+	ldbStore, err := NewLDBStore(params.ChunkDbPath, hash, params.DbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
 	if err != nil {
 		return nil, err
 	}
 	return &LocalStore{
-		memStore: NewMemStore(dbStore, params.CacheCapacity),
-		DbStore:  dbStore,
+		memStore: NewMemStore(ldbStore, params.CacheCapacity),
+		DbStore:  ldbStore,
 	}, nil
 }
 

@@ -50,7 +50,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
 var (
@@ -99,9 +98,7 @@ func (self *Swarm) API() *SwarmAPI {
 
 // creates a new swarm service instance
 // implements node.Service
-// If mockStore is not nil, it will be used as the storage for chunk data.
-// MockStore should be used only for testing.
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
+func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config) (self *Swarm, err error) {
 
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
@@ -118,7 +115,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
 	hash := storage.MakeHashFunc(config.ChunkerParams.Hash)
-	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, common.Hex2Bytes(config.BzzKey), mockStore)
+	self.lstore, err = storage.NewLocalStore(hash, config.StoreParams, common.Hex2Bytes(config.BzzKey))
 	if err != nil {
 		return
 	}
