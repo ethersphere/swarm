@@ -52,7 +52,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 		DbCapacity:    5000000,
 		CacheCapacity: 5000,
 	}
-	localStore, err := storage.NewLocalStore(storage.MakeHashFunc(storage.SHA3Hash), storeparams, make([]byte, 32), nil)
+	localStore, err := storage.NewLocalStore(storage.MakeHashFunc(storage.SHA3Hash), storeparams, make([]byte, 32))
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)
