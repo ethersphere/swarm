@@ -376,7 +376,3 @@ func (s *MemStore) removeOldest() {
 
 // Close memstore
 func (s *MemStore) Close() {}
-
-func (s *MemStore) Validate(key *Key, data []byte) bool {
-	return true
-}

@@ -7,6 +7,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// Signs resource updates
+type ResourceSigner interface {
+	Sign(common.Hash) (Signature, error)
+}
+
 type GenericResourceSigner struct {
 	PrivKey *ecdsa.PrivateKey
 }

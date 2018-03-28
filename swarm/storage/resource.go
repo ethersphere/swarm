@@ -90,11 +90,6 @@ type headerGetter interface {
 	HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error)
 }
 
-// Signs resource updates
-type ResourceSigner interface {
-	Sign(common.Hash) (Signature, error)
-}
-
 // Mutable resource is an entity which allows updates to a resource
 // without resorting to ENS on each update.
 // The update scheme is built on swarm chunks with chunk keys following
@@ -834,7 +829,7 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, ensClient *e
 	path := filepath.Join(datadir, DbDirName)
 	hasher := MakeHashFunc(SHA3Hash)
 	params := NewLDBStoreParams(path, 0, nil, nil)
-	params.Validator = func(hash SwarmHash, key *Key, data []byte) bool {
+	params.Validator = func(key *Key, data []byte) bool {
 		log.Trace("skipping check on key in resource update test")
 		return true
 	}
@@ -850,7 +845,7 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, ensClient *e
 }
 
 // chunkstore validator
-func (self *ResourceHandler) ValidateChunk(hash SwarmHash, key *Key, data []byte) bool {
+func (self *ResourceHandler) ValidateWithENS(key *Key, data []byte) bool {
 	signature, _, _, name, data, err := self.parseUpdate(data)
 	if err != nil {
 		return false

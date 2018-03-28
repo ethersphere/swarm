@@ -83,7 +83,3 @@ func (self *NetStore) Put(chunk *Chunk) {
 
 // Close chunk store
 func (self *NetStore) Close() {}
-
-func (self *NetStore) Validate(key *Key, data []byte) bool {
-	return true
-}

@@ -497,7 +497,7 @@ func TestResourceChunkValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
-	if !rh.ValidateChunk(nil, &chunk.Key, chunk.SData) {
+	if !rh.ValidateWithENS(&chunk.Key, chunk.SData) {
 		t.Fatal("Chunk validator fail")
 	}
 }

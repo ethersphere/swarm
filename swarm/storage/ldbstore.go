@@ -77,8 +77,9 @@ type gcItem struct {
 
 type LDBStoreParams struct {
 	*StoreParams
-	Path string
-	Po   func(Key) uint8
+	Path      string
+	Po        func(Key) uint8
+	Validator func(*Key, []byte) bool
 }
 
 // create params with specified values.
@@ -101,7 +102,7 @@ func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey [
 
 type LDBStore struct {
 	db        *LDBDatabase
-	validator func(SwarmHash, *Key, []byte) bool
+	validator func(*Key, []byte) bool
 
 	// this should be stored in db, accessed transactionally
 	entryCnt, accessCnt, dataIdx, capacity uint64
@@ -321,7 +322,7 @@ func (s *LDBStore) Validate(key *Key, data []byte) bool {
 	if s.validator == nil {
 		return true
 	}
-	return s.validator(s.hashfunc(), key, data)
+	return s.validator(key, data)
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {

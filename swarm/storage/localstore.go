@@ -86,11 +86,6 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 	return localStore, nil
 }
 
-// we defer to substores to validate
-func (self *LocalStore) Validate(key *Key, data []byte) bool {
-	return true
-}
-
 func (self *LocalStore) CacheCounter() uint64 {
 	return uint64(self.memStore.Counter())
 }

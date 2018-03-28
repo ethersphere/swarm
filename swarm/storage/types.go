@@ -291,12 +291,16 @@ func NoValidateChunk(hasher SwarmHash, key *Key, data []byte) bool {
 	return true
 }
 
-func ValidateChunk(hasher SwarmHash, key *Key, data []byte) bool {
-	hasher.Reset()
-	hasher.Write(data)
-	hash := hasher.Sum(nil)
+type ContentAddressValidator struct {
+	Hasher SwarmHash
+}
+
+func (self *ContentAddressValidator) Validate(key *Key, data []byte) bool {
+	self.Hasher.Reset()
+	self.Hasher.Write(data)
+	hash := self.Hasher.Sum(nil)
 	if !bytes.Equal(hash, (*key)[:]) {
-		log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, data %v, key %v", hash, data[:16], (*key)[:]))
+		log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, dself.Hata %v, key %v", hash, data[:16], (*key)[:]))
 		return false
 	}
 	return true
