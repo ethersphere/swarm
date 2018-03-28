@@ -95,7 +95,8 @@ type JoinerParams struct {
 	ChunkerParams
 	key    Key
 	getter Getter
-	depth  int
+	// TODO: there is a bug, so depth can only be 0 today, see: https://github.com/ethersphere/go-ethereum/issues/344
+	depth int
 }
 
 type TreeChunker struct {
