@@ -40,7 +40,7 @@ type LocalStoreParams struct {
 //create params with default values
 func NewDefaultLocalStoreParams() (self *LocalStoreParams) {
 	return &LocalStoreParams{
-		StoreParams: NewStoreParams(0, nil, nil),
+		StoreParams: NewStoreParams(0, nil, nil, nil),
 	}
 }
 
@@ -62,7 +62,7 @@ type LocalStore struct {
 
 // This constructor uses MemStore and DbStore as components
 func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
+	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey, params.Validator)
 	dbStore, err := NewMockDbStore(ldbparams, mockStore)
 	if err != nil {
 		return nil, err
@@ -74,8 +74,8 @@ func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalS
 }
 
 func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
-	dbStore, err := NewLDBStore(ldbparams) //path, hasher, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey, params.Validator)
+	dbStore, err := NewLDBStore(ldbparams)
 	if err != nil {
 		return nil, err
 	}

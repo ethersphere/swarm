@@ -48,7 +48,7 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	store := stores[id].(*storage.LocalStore)
 	db := storage.NewDBAPI(store)
-	delivery := NewDelivery(kad, db)
+	delivery := NewDelivery(kad, db, nil)
 	deliveries[id] = delivery
 	r := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
 		SkipCheck: defaultSkipCheck,

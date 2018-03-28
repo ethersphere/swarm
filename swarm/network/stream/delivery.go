@@ -34,17 +34,19 @@ const (
 )
 
 type Delivery struct {
-	db       *storage.DBAPI
-	overlay  network.Overlay
-	receiveC chan *ChunkDeliveryMsg
-	getPeer  func(discover.NodeID) *Peer
+	db        *storage.DBAPI
+	overlay   network.Overlay
+	receiveC  chan *ChunkDeliveryMsg
+	getPeer   func(discover.NodeID) *Peer
+	validator *storage.ChunkValidator
 }
 
-func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
+func NewDelivery(overlay network.Overlay, db *storage.DBAPI, validator *storage.ChunkValidator) *Delivery {
 	d := &Delivery{
-		db:       db,
-		overlay:  overlay,
-		receiveC: make(chan *ChunkDeliveryMsg, deliveryCap),
+		db:        db,
+		overlay:   overlay,
+		receiveC:  make(chan *ChunkDeliveryMsg, deliveryCap),
+		validator: validator,
 	}
 
 	go d.processReceivedChunks()
@@ -58,6 +60,7 @@ type SwarmChunkServer struct {
 	db         *storage.DBAPI
 	currentLen uint64
 	quit       chan struct{}
+	validator  *storage.ChunkValidator
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
@@ -205,6 +208,11 @@ R:
 			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
 			continue R
 		default:
+		}
+		if d.validator != nil {
+			if !d.validator.Validate(&chunk.Key, chunk.SData) {
+				log.Error("Invalid chunk", "key", chunk.Key)
+			}
 		}
 		chunk.SData = req.SData
 		d.db.Put(chunk)

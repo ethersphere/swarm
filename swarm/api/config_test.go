@@ -36,7 +36,6 @@ func TestConfig(t *testing.T) {
 	one := NewConfig()
 	two := NewConfig()
 
-	// different pointer member = not identical
 	one.LocalStoreParams = two.LocalStoreParams
 	if equal := reflect.DeepEqual(one, two); !equal {
 		t.Fatal("Two default configs are not equal")

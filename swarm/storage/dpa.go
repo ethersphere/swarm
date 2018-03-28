@@ -64,7 +64,9 @@ func NewDPAParams() *DPAParams {
 // for testing locally
 func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 
-	params := NewLDBStoreParams(datadir, 0, nil, nil)
+	contentvalidator := NewContentAddressValidator(MakeHashFunc(SHA3Hash)())
+	validator := NewChunkValidator(contentvalidator.Validate, nil)
+	params := NewLDBStoreParams(datadir, 0, nil, nil, validator)
 
 	dbStore, err := NewLDBStore(params)
 	if err != nil {

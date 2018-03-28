@@ -1,7 +1,8 @@
 package storage
 
 const (
-	ErrNotFound = iota
+	ErrInit = iota
+	ErrNotFound
 	ErrIO
 	ErrUnauthorized
 	ErrInvalidValue

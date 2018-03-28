@@ -164,14 +164,14 @@ func TestResourceHandler(t *testing.T) {
 
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(safeName)
-	chunk, err := rh.ChunkStore.(*LocalStore).memStore.Get(Key(namehash[:]))
+	chunk, err := rh.chunkStore.(*LocalStore).memStore.Get(Key(namehash[:]))
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
 		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(chunk.SData))
 	}
-	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[:8])
-	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[8:])
+	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[2:10])
+	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[10:])
 	if startblocknumber != uint64(backend.blocknumber) {
 		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber)
 	}
@@ -497,7 +497,7 @@ func TestResourceChunkValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
-	if !rh.ValidateWithENS(&chunk.Key, chunk.SData) {
+	if !rh.Validate(&chunk.Key, chunk.SData) {
 		t.Fatal("Chunk validator fail")
 	}
 }
@@ -590,7 +590,7 @@ func newTestSigner() (*GenericResourceSigner, error) {
 }
 
 func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
-	chunk, err := rh.ChunkStore.(*LocalStore).memStore.Get(key)
+	chunk, err := rh.chunkStore.(*LocalStore).memStore.Get(key)
 	if err != nil {
 		return nil, err
 	}

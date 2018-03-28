@@ -19,7 +19,8 @@ package storage
 import "testing"
 
 func newTestMemStore() *MemStore {
-	return NewMemStore(NewStoreParams(defaultCacheCapacity, nil, nil), nil)
+	storeparams := NewStoreParams(defaultCacheCapacity, nil, nil, nil)
+	return NewMemStore(storeparams, nil)
 }
 
 func testMemStoreRandom(n int, processors int, chunksize int, t *testing.T) {

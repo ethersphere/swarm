@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -21,7 +22,7 @@ import (
 
 const (
 	signatureLength     = 65
-	indexSize           = 16
+	indexSize           = 18
 	DbDirName           = "resource"
 	chunkSize           = 4096 // temporary until we implement DPA in the resourcehandler
 	defaultStoreTimeout = 4000 * time.Millisecond
@@ -142,8 +143,7 @@ type headerGetter interface {
 //
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
-	ChunkStore
-	Validate        bool
+	chunkStore      ChunkStore
 	HashSize        int
 	signer          ResourceSigner
 	ethClient       headerGetter
@@ -169,21 +169,17 @@ func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient hea
 		}
 	}
 	rh := &ResourceHandler{
-		ChunkStore:   chunkStore,
 		ethClient:    ethClient,
 		ensClient:    ensClient,
 		resources:    make(map[string]*resource),
-		signer:       signer,
 		storeTimeout: defaultStoreTimeout,
+		signer:       signer,
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return MakeHashFunc(resourceHash)()
 			},
 		},
 		queryMaxPeriods: params.QueryMaxPeriods,
-	}
-	if rh.ensClient != nil {
-		rh.Validate = true
 	}
 
 	for i := 0; i < hasherCount; i++ {
@@ -197,13 +193,65 @@ func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient hea
 	return rh, nil
 }
 
+// Sets the store backend for resource updates
+func (self *ResourceHandler) SetStore(store ChunkStore) {
+	self.chunkStore = store
+}
+
+// Chunk Validation method (matches ChunkValidatorFunc signature)
+//
+// If resource update, owner is checked against ENS record of resource name inferred from chunk data
+// If parsed signature is nil, validates automatically
+// If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
+func (self *ResourceHandler) Validate(key *Key, data []byte) bool {
+	signature, _, _, name, parseddata, err := self.parseUpdate(data)
+	if err != nil {
+		if len(data) == indexSize {
+			if bytes.Equal(data[:2], []byte{0, 0}) {
+				return true
+			}
+		}
+		return false
+	} else if signature == nil {
+		return true
+	}
+	digest := self.keyDataHash(*key, parseddata)
+	addr, err := getAddressFromDataSig(digest, *signature)
+	if err != nil {
+		return false
+	}
+	ok, _ := self.checkAccess(name, addr)
+	if !ok {
+		return false
+	}
+	return true
+}
+
+// If no ens client is supplied, resource updates are not validated
+func (self *ResourceHandler) IsValidated() bool {
+	return self.ensClient != nil
+}
+
+// Create the resource update digest used in signatures
+func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
+	hasher := self.hashPool.Get().(SwarmHash)
+	defer self.hashPool.Put(hasher)
+	hasher.Reset()
+	hasher.Write(key[:])
+	hasher.Write(data)
+	return common.BytesToHash(hasher.Sum(nil))
+}
+
+// Checks if current address matches owner address of ENS
 func (self *ResourceHandler) checkAccess(name string, address common.Address) (bool, error) {
-	addr, err := self.ensClient.Owner(ens.EnsNode(name))
-	return addr == address, err
+	if self.ensClient == nil {
+		return true, nil
+	}
+	owneraddress, err := self.ensClient.Owner(ens.EnsNode(name))
+	return (address == owneraddress), err
 }
 
 // get data from current resource
-
 func (self *ResourceHandler) GetContent(name string) (Key, []byte, error) {
 	rsrc := self.getResource(name)
 	if rsrc == nil || !rsrc.isSynced() {
@@ -254,7 +302,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 
 	nameHash := ens.EnsNode(name)
 
-	if self.Validate {
+	if self.signer != nil {
 		signature, err := self.signer.Sign(nameHash)
 		if err != nil {
 			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Sign fail: %v", err))
@@ -282,12 +330,13 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	chunk := NewChunk(Key(nameHash.Bytes()), nil)
 	chunk.SData = make([]byte, indexSize)
 
+	// root block has first two bytes both, which distinguishes from update bytes
 	val := make([]byte, 8)
 	binary.LittleEndian.PutUint64(val, currentblock)
-	copy(chunk.SData[:8], val)
+	copy(chunk.SData[2:10], val)
 	binary.LittleEndian.PutUint64(val, frequency)
-	copy(chunk.SData[8:], val)
-	self.Put(chunk)
+	copy(chunk.SData[10:], val)
+	self.chunkStore.Put(chunk)
 	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
 
 	rsrc := &resource{
@@ -378,6 +427,10 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 // base code for public lookup methods
 func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
+	if self.chunkStore == nil {
+		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before performing lookups")
+	}
+
 	if period == 0 {
 		return nil, NewResourceError(ErrInvalidValue, "period must be >0")
 	}
@@ -400,7 +453,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		key := self.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := self.Get(key)
+		chunk, err := self.chunkStore.Get(key)
 		if err == nil {
 			if specificversion {
 				return self.updateResourceIndex(rsrc, chunk)
@@ -410,7 +463,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			for {
 				newversion := version + 1
 				key := self.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := self.Get(key)
+				newchunk, err := self.chunkStore.Get(key)
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk)
 				}
@@ -446,7 +499,7 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.Get(Key(rsrc.nameHash[:]))
+		chunk, err := self.chunkStore.Get(Key(rsrc.nameHash[:]))
 		if err != nil {
 			return nil, err
 		}
@@ -455,8 +508,8 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		if len(chunk.SData) != indexSize {
 			return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Invalid chunk length %d, should be %d", len(chunk.SData), indexSize))
 		}
-		rsrc.startBlock = binary.LittleEndian.Uint64(chunk.SData[:8])
-		rsrc.frequency = binary.LittleEndian.Uint64(chunk.SData[8:])
+		rsrc.startBlock = binary.LittleEndian.Uint64(chunk.SData[2:10])
+		rsrc.frequency = binary.LittleEndian.Uint64(chunk.SData[10:])
 	} else {
 		rsrc.name = self.resources[name].name
 		rsrc.nameHash = self.resources[name].nameHash
@@ -566,6 +619,9 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 
 func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Key, error) {
 
+	if self.chunkStore == nil {
+		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before updating")
+	}
 	var signaturelength int
 	if self.signer != nil {
 		signaturelength = signatureLength
@@ -619,7 +675,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 		if err != nil {
 			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Invalid data/signature: %v", err))
 		}
-		if self.Validate {
+		if self.signer != nil {
 			// check if the signer has access to update
 			ok, err := self.checkAccess(name, addr)
 			if err != nil {
@@ -637,7 +693,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	chunk := newUpdateChunk(key, signature, nextperiod, version, name, data, datalength)
 
 	// send the chunk
-	self.Put(chunk)
+	self.chunkStore.Put(chunk)
 	timeout := time.NewTimer(self.storeTimeout)
 	select {
 	case <-chunk.dbStoredC:
@@ -657,7 +713,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 // Closes the datastore.
 // Always call this at shutdown to avoid data corruption.
 func (self *ResourceHandler) Close() {
-	self.ChunkStore.Close()
+	self.chunkStore.Close()
 }
 
 func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64, error) {
@@ -789,16 +845,6 @@ func isSafeName(name string) bool {
 	return validname == name
 }
 
-// convenience for creating signature hashes of update data
-func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
-	hasher := self.hashPool.Get().(SwarmHash)
-	defer self.hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(key[:])
-	hasher.Write(data)
-	return common.BytesToHash(hasher.Sum(nil))
-}
-
 // if first byte is the start of a multihash this function will try to parse it
 // if successful it returns the length of multihash data, 0 otherwise
 func isMultihash(data []byte) int {
@@ -828,36 +874,22 @@ func isMultihash(data []byte) int {
 func NewTestResourceHandler(datadir string, ethClient headerGetter, ensClient *ens.ENS, signer ResourceSigner) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, DbDirName)
 	hasher := MakeHashFunc(SHA3Hash)
-	params := NewLDBStoreParams(path, 0, nil, nil)
-	params.Validator = func(key *Key, data []byte) bool {
-		log.Trace("skipping check on key in resource update test")
-		return true
+	rh, err := NewResourceHandler(hasher, ethClient, ensClient, signer)
+	if err != nil {
+		return nil, err
 	}
+	validator := &ChunkValidator{
+		resource: rh.Validate,
+	}
+	params := NewLDBStoreParams(path, 0, nil, nil, validator)
 	dbStore, err := NewLDBStore(params)
 	if err != nil {
 		return nil, err
 	}
 	localStore := &LocalStore{
-		memStore: NewMemStore(NewStoreParams(defaultDbCapacity, nil, nil), dbStore),
+		memStore: NewMemStore(NewStoreParams(defaultDbCapacity, nil, nil, validator), dbStore),
 		DbStore:  dbStore,
 	}
-	return NewResourceHandler(hasher, localStore, ethClient, ensClient, signer)
-}
-
-// chunkstore validator
-func (self *ResourceHandler) ValidateWithENS(key *Key, data []byte) bool {
-	signature, _, _, name, data, err := self.parseUpdate(data)
-	if err != nil {
-		return false
-	}
-	digest := self.keyDataHash(*key, data)
-	addr, err := getAddressFromDataSig(digest, *signature)
-	if err != nil {
-		return false
-	}
-	ok, _ := self.checkAccess(name, addr)
-	if !ok {
-		return false
-	}
-	return true
+	rh.SetStore(localStore)
+	return rh, nil
 }

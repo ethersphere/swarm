@@ -122,11 +122,7 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	self.privateKey = prvKey
 	self.LocalStoreParams.BaseKey = common.Hex2Bytes(self.BzzKey)
-	if self.LocalStoreParams.StoreParams.StoreParamsHidden == nil {
-		self.LocalStoreParams.StoreParams.StoreParamsHidden = &storage.StoreParamsHidden{}
-	}
 	self.LocalStoreParams.Hash = storage.MakeHashFunc(self.ChunkerParams.Hash)
-	self.LocalStoreParams.Validator = storage.ValidateChunk
 	self.LocalStoreParams.Init(self.Path)
 }
 

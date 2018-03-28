@@ -41,14 +41,13 @@ func newTestDbStore(mock bool, trusted bool) (*testDbStore, error) {
 	}
 
 	var db *LDBStore
-	params := NewLDBStoreParams(dir, defaultDbCapacity, nil, nil)
+	params := NewLDBStoreParams(dir, defaultDbCapacity, nil, nil, nil)
 	params.Po = testPoFunc
-	validator := &ContentAddressValidator{
-		Hasher: MakeHashFunc(SHA3Hash)(),
-	}
+	params.Validator = &ChunkValidator{}
 
 	if !trusted {
-		params.Validator = validator.Validate
+		contentvalidator := NewContentAddressValidator(MakeHashFunc(SHA3Hash)())
+		params.Validator.content = contentvalidator.Validate
 	}
 	if mock {
 		globalStore := mem.NewGlobalStore()

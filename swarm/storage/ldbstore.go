@@ -77,22 +77,21 @@ type gcItem struct {
 
 type LDBStoreParams struct {
 	*StoreParams
-	Path      string
-	Po        func(Key) uint8
-	Validator func(*Key, []byte) bool
+	Path string
+	Po   func(Key) uint8
 }
 
 // create params with specified values.
 // If 0 for capacity or nil for hash, baskey is specified, default values for these params will be used
 // path has no default value
-func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey []byte) *LDBStoreParams {
+func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey []byte, validator *ChunkValidator) *LDBStoreParams {
 	if hash == nil {
 		hash = MakeHashFunc(SHA3Hash)
 	}
 	if capacity == 0 {
 		capacity = singletonSwarmDbCapacity
 	}
-	storeparams := NewStoreParams(capacity, hash, basekey)
+	storeparams := NewStoreParams(capacity, hash, basekey, validator)
 	return &LDBStoreParams{
 		StoreParams: storeparams,
 		Path:        path,
@@ -102,7 +101,7 @@ func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey [
 
 type LDBStore struct {
 	db        *LDBDatabase
-	validator func(*Key, []byte) bool
+	validator ChunkValidatorFunc
 
 	// this should be stored in db, accessed transactionally
 	entryCnt, accessCnt, dataIdx, capacity uint64
@@ -135,7 +134,7 @@ type LDBStore struct {
 func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s = new(LDBStore)
 	s.hashfunc = params.Hash
-	s.validator = params.Validator
+	s.validator = params.Validator.Validate
 
 	s.batchC = make(chan bool)
 	s.batchesC = make(chan struct{}, 1)
@@ -316,13 +315,6 @@ func gcListSelect(list []*gcItem, left int, right int, n int) int {
 			return gcListSelect(list, pivotIndex+1, right, n)
 		}
 	}
-}
-
-func (s *LDBStore) Validate(key *Key, data []byte) bool {
-	if s.validator == nil {
-		return true
-	}
-	return s.validator(key, data)
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
@@ -733,7 +725,7 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 			}
 		}
 
-		if !s.Validate(&key, data[32:]) {
+		if !s.validator(&key, data[32:]) {
 			s.delete(indx.Idx, getIndexKey(key), s.po(key))
 			log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'", "chunk", chunk)
 		}
