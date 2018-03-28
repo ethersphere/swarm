@@ -240,7 +240,6 @@ func (self *TreeChunker) Split() (k Key, wait func(), err error) {
 		panic("chunker must be initialised")
 	}
 
-	self.incrementWorkerCount()
 	self.runWorker()
 
 	depth := 0
@@ -341,7 +340,6 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, size int64, p
 
 	worker := self.getWorkerCount()
 	if int64(len(self.jobC)) > worker && worker < ChunkProcessors {
-		self.incrementWorkerCount()
 		self.runWorker()
 
 	}
@@ -352,6 +350,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, size int64, p
 }
 
 func (self *TreeChunker) runWorker() {
+	self.incrementWorkerCount()
 	go func() {
 		defer self.decrementWorkerCount()
 		for {
@@ -382,12 +381,12 @@ func (self *TreeChunker) Append() (Key, func(), error) {
 
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
-	key       Key       // root key
-	chunkData ChunkData // size of the entire subtree
-	off       int64     // offset
-	chunkSize int64     // inherit from chunker
-	branches  int64     // inherit from chunker
-	hashSize  int64     // inherit from chunker
+	key       Key // root key
+	chunkData ChunkData
+	off       int64 // offset
+	chunkSize int64 // inherit from chunker
+	branches  int64 // inherit from chunker
+	hashSize  int64 // inherit from chunker
 	depth     int
 	getter    Getter
 }
