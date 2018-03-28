@@ -13,6 +13,7 @@ import (
 	"golang.org/x/net/idna"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -25,6 +26,7 @@ const (
 	chunkSize           = 4096 // temporary until we implement DPA in the resourcehandler
 	defaultStoreTimeout = 4000 * time.Millisecond
 	hasherCount         = 8
+	resourceHash        = SHA3Hash
 )
 
 type ResourceError struct {
@@ -61,10 +63,6 @@ type ResourceLookupParams struct {
 	Max   uint32
 }
 
-type SignFunc func(common.Hash) (Signature, error)
-
-type nameHashFunc func(string) common.Hash
-
 // Encapsulates an specific resource update. When synced it contains the most recent
 // version of the resource update data.
 type resource struct {
@@ -88,17 +86,13 @@ func (self *resource) NameHash() common.Hash {
 	return self.nameHash
 }
 
-// Implement to activate validation of resource updates
-// Specifically signing data and verification of signatures
-type ResourceValidator interface {
-	hashSize() int
-	checkAccess(string, common.Address) (bool, error)
-	NameHash(string) common.Hash         // nameHashFunc
-	sign(common.Hash) (Signature, error) // SignFunc
-}
-
 type headerGetter interface {
 	HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error)
+}
+
+// Signs resource updates
+type ResourceSigner interface {
+	Sign(common.Hash) (Signature, error)
 }
 
 // Mutable resource is an entity which allows updates to a resource
@@ -146,28 +140,22 @@ type headerGetter interface {
 // headerlength|period|version|identifier|data
 //
 // if a validator is active, the chunk data is:
-// sign(resourcedata)|resourcedata
+// resourcedata|sign(resourcedata)
 // otherwise, the chunk data is the same as the resourcedata
 //
 // headerlength is a 16 bit value containing the byte length of period|version|name
-// period and version are both 32 bit values. name can have arbitrary length
-//
-// NOTE: the following is yet to be implemented
-// The resource update chunks will be stored in the swarm, but receive special
-// treatment as their keys do not validate as hashes of their data. They are also
-// stored using a separate store, and forwarding/syncing protocols carry per-chunk
-// flags to tell whether the chunk can be validated or not; if not it is to be
-// treated as a resource update chunk.
 //
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
 	ChunkStore
-	validator       ResourceValidator
+	Validate        bool
+	HashSize        int
+	signer          ResourceSigner
 	ethClient       headerGetter
+	ensClient       *ens.ENS
 	resources       map[string]*resource
 	hashPool        sync.Pool
 	resourceLock    sync.RWMutex
-	nameHash        nameHashFunc
 	storeTimeout    time.Duration
 	queryMaxPeriods *ResourceLookupParams
 }
@@ -175,6 +163,7 @@ type ResourceHandler struct {
 type ResourceHandlerParams struct {
 	Validator       ResourceValidator
 	QueryMaxPeriods *ResourceLookupParams
+	Signer          ResourceSigner
 }
 
 // Create or open resource update chunk store
@@ -187,45 +176,35 @@ func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient hea
 	rh := &ResourceHandler{
 		ChunkStore:   chunkStore,
 		ethClient:    ethClient,
+		ensClient:    ensClient,
 		resources:    make(map[string]*resource),
-		validator:    params.Validator,
+		signer:       signer,
 		storeTimeout: defaultStoreTimeout,
 		hashPool: sync.Pool{
 			New: func() interface{} {
-				return MakeHashFunc(SHA3Hash)()
+				return MakeHashFunc(resourceHash)()
 			},
 		},
 		queryMaxPeriods: params.QueryMaxPeriods,
 	}
-
-	if rh.validator != nil {
-		rh.nameHash = rh.validator.NameHash
-	} else {
-		rh.nameHash = func(name string) common.Hash {
-			hasher := rh.hashPool.Get().(SwarmHash)
-			defer rh.hashPool.Put(hasher)
-			hasher.Reset()
-			hasher.Write([]byte(name))
-			hashval := common.BytesToHash(hasher.Sum(nil))
-			log.Debug("generic namehasher", "name", name, "hash", hashval)
-			return hashval
-		}
+	if rh.ensClient != nil {
+		rh.Validate = true
 	}
 
 	for i := 0; i < hasherCount; i++ {
-		hashfunc := MakeHashFunc(SHA3Hash)()
+		hashfunc := MakeHashFunc(resourceHash)()
+		if rh.HashSize == 0 {
+			rh.HashSize = hashfunc.Size()
+		}
 		rh.hashPool.Put(hashfunc)
 	}
 
 	return rh, nil
 }
 
-func (self *ResourceHandler) IsValidated() bool {
-	return self.validator == nil
-}
-
-func (self *ResourceHandler) HashSize() int {
-	return self.validator.hashSize()
+func (self *ResourceHandler) checkAccess(name string, address common.Address) (bool, error) {
+	addr, err := self.ensClient.Owner(ens.EnsNode(name))
+	return addr == address, err
 }
 
 // get data from current resource
@@ -278,10 +257,10 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 		return nil, NewResourceError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s'", name))
 	}
 
-	nameHash := self.nameHash(name)
+	nameHash := ens.EnsNode(name)
 
-	if self.validator != nil {
-		signature, err := self.validator.sign(nameHash)
+	if self.Validate {
+		signature, err := self.signer.Sign(nameHash)
 		if err != nil {
 			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Sign fail: %v", err))
 		}
@@ -289,7 +268,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 		if err != nil {
 			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Retrieve address from signature fail: %v", err))
 		}
-		ok, err := self.validator.checkAccess(name, addr)
+		ok, err := self.checkAccess(name, addr)
 		if err != nil {
 			return nil, err
 		} else if !ok {
@@ -501,8 +480,8 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, *rsrc.name))
 	}
 	log.Trace("update", "name", *rsrc.name, "rootkey", rsrc.nameHash, "updatekey", chunk.Key, "period", period, "version", version)
-	// only check signature if validator is present
-	if self.validator != nil {
+	// check signature (if signer algorithm is present)
+	if signature != nil {
 		digest := self.keyDataHash(chunk.Key, data)
 		_, err = getAddressFromDataSig(digest, *signature)
 		if err != nil {
@@ -560,10 +539,13 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 
 	// omit signatures if we have no validator
 	var signature *Signature
-	if self.validator != nil {
-		cursor += intdatalength
-		signature = &Signature{}
-		copy(signature[:], chunkdata[cursor:cursor+signatureLength])
+	cursor += intdatalength
+	if self.signer != nil {
+		sigdata := chunkdata[cursor : cursor+signatureLength]
+		if len(sigdata) > 0 {
+			signature = &Signature{}
+			copy(signature[:], sigdata)
+		}
 	}
 
 	return signature, period, version, name, data, nil
@@ -590,7 +572,7 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Key, error) {
 
 	var signaturelength int
-	if self.validator != nil {
+	if self.signer != nil {
 		signaturelength = signatureLength
 	}
 
@@ -628,10 +610,10 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	key := self.resourceHash(nextperiod, version, rsrc.nameHash)
 
 	var signature *Signature
-	if self.validator != nil {
+	if self.signer != nil {
 		// sign the data hash with the key
 		digest := self.keyDataHash(key, data)
-		sig, err := self.validator.sign(digest)
+		sig, err := self.signer.Sign(digest)
 		if err != nil {
 			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Sign fail: %v", err))
 		}
@@ -642,13 +624,14 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 		if err != nil {
 			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Invalid data/signature: %v", err))
 		}
-
-		// check if the signer has access to update
-		ok, err := self.validator.checkAccess(name, addr)
-		if err != nil {
-			return nil, NewResourceError(ErrIO, fmt.Sprintf("Access check fail: %v", err))
-		} else if !ok {
-			return nil, NewResourceError(ErrUnauthorized, fmt.Sprintf("Address %x does not have access to update %s", addr, name))
+		if self.Validate {
+			// check if the signer has access to update
+			ok, err := self.checkAccess(name, addr)
+			if err != nil {
+				return nil, NewResourceError(ErrIO, fmt.Sprintf("Access check fail: %v", err))
+			} else if !ok {
+				return nil, NewResourceError(ErrUnauthorized, fmt.Sprintf("Address %x does not have access to update %s", addr, name))
+			}
 		}
 	}
 
@@ -846,8 +829,8 @@ func isMultihash(data []byte) int {
 	return cursor + inthashlength
 }
 
-// TODO: this should not be part of production code, but currently swarm/testutil/http.go needs it
-func NewTestResourceHandler(datadir string, ethClient headerGetter, validator ResourceValidator, maxLimit *ResourceLookupParams) (*ResourceHandler, error) {
+// TODO: this should not be exposed, but swarm/testutil/http.go needs it
+func NewTestResourceHandler(datadir string, ethClient headerGetter, ensClient *ens.ENS, signer ResourceSigner) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, DbDirName)
 	hasher := MakeHashFunc(SHA3Hash)
 	params := NewLDBStoreParams(path, 0, nil, nil)
@@ -863,8 +846,7 @@ func NewTestResourceHandler(datadir string, ethClient headerGetter, validator Re
 		memStore: NewMemStore(NewStoreParams(defaultDbCapacity, nil, nil), dbStore),
 		DbStore:  dbStore,
 	}
-	resourceChunkStore := localStore
-	return NewResourceHandler(hasher, resourceChunkStore, ethClient, validator)
+	return NewResourceHandler(hasher, localStore, ethClient, ensClient, signer)
 }
 
 // chunkstore validator
@@ -878,7 +860,7 @@ func (self *ResourceHandler) ValidateChunk(hash SwarmHash, key *Key, data []byte
 	if err != nil {
 		return false
 	}
-	ok, _ := self.validator.checkAccess(name, addr)
+	ok, _ := self.checkAccess(name, addr)
 	if !ok {
 		return false
 	}

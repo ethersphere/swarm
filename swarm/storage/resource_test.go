@@ -3,7 +3,6 @@ package storage
 import (
 	"bytes"
 	"context"
-	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/binary"
 	"flag"
@@ -83,14 +82,14 @@ func TestResourceReverse(t *testing.T) {
 	}
 
 	// set up rpc and create resourcehandler
-	rh, _, _, teardownTest, err := setupTest(nil, newTestValidator(signer.signContent))
+	rh, _, teardownTest, err := setupTest(nil, nil, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer teardownTest()
 
 	// generate a hash for block 4200 version 1
-	key := rh.resourceHash(period, version, rh.nameHash(safeName))
+	key := rh.resourceHash(period, version, ens.EnsNode(safeName))
 
 	// generate some bogus data for the chunk and sign it
 	data := make([]byte, 8)
@@ -101,7 +100,7 @@ func TestResourceReverse(t *testing.T) {
 	testHasher.Reset()
 	testHasher.Write(data)
 	digest := rh.keyDataHash(key, data)
-	sig, err := rh.validator.sign(digest)
+	sig, err := rh.signer.Sign(digest)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +117,7 @@ func TestResourceReverse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
 	}
-	originaladdress := crypto.PubkeyToAddress(signer.privKey.PublicKey)
+	originaladdress := crypto.PubkeyToAddress(signer.PrivKey.PublicKey)
 
 	// check that the metadata retrieved from the chunk matches what we gave it
 	if recoveredaddress != originaladdress {
@@ -149,7 +148,7 @@ func TestResourceHandler(t *testing.T) {
 	backend := &fakeBackend{
 		blocknumber: int64(startBlock),
 	}
-	rh, datadir, _, teardownTest, err := setupTest(backend, nil)
+	rh, datadir, teardownTest, err := setupTest(backend, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +163,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// check that the new resource is stored correctly
-	namehash := rh.nameHash(safeName)
+	namehash := ens.EnsNode(safeName)
 	chunk, err := rh.ChunkStore.(*LocalStore).memStore.Get(Key(namehash[:]))
 	if err != nil {
 		t.Fatal(err)
@@ -267,6 +266,65 @@ func TestResourceHandler(t *testing.T) {
 
 }
 
+// create ENS enabled resource update, with and without valid owner
+func TestResourceENSOwner(t *testing.T) {
+
+	// signer containing private key
+	signer, err := newTestSigner()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// ens address and transact options
+	addr := crypto.PubkeyToAddress(signer.PrivKey.PublicKey)
+	transactOpts := bind.NewKeyedTransactor(signer.PrivKey)
+
+	// set up ENS sim
+	domainparts := strings.Split(safeName, ".")
+	contractAddr, contractbackend, err := setupENS(addr, transactOpts, domainparts[0], domainparts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ensClient, err := ens.NewENS(transactOpts, contractAddr, contractbackend)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// set up rpc and create resourcehandler with ENS sim backend
+	rh, _, teardownTest, err := setupTest(contractbackend, ensClient, signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardownTest()
+
+	// create new resource when we are owner = ok
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	if err != nil {
+		t.Fatalf("Create resource fail: %v", err)
+	}
+
+	data := []byte("foo")
+	// update resource when we are owner = ok
+	_, err = rh.Update(ctx, safeName, data)
+	if err != nil {
+		t.Fatalf("Update resource fail: %v", err)
+	}
+
+	// update resource when we are not owner = !ok
+	signertwo, err := newTestSigner()
+	if err != nil {
+		t.Fatal(err)
+	}
+	rh.signer = signertwo
+	_, err = rh.Update(ctx, safeName, data)
+	if err == nil {
+		t.Fatalf("Expected resource update fail due to owner mismatch")
+	}
+}
+
 func TestResourceMultihash(t *testing.T) {
 
 	// signer containing private key
@@ -274,7 +332,6 @@ func TestResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	validator := newTestValidator(signer.signContent)
 
 	// make fake backend, set up rpc and create resourcehandler
 	backend := &fakeBackend{
@@ -282,7 +339,7 @@ func TestResourceMultihash(t *testing.T) {
 	}
 
 	// set up rpc and create resourcehandler
-	rh, datadir, _, teardownTest, err := setupTest(backend, nil)
+	rh, datadir, teardownTest, err := setupTest(backend, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -298,7 +355,7 @@ func TestResourceMultihash(t *testing.T) {
 
 	// we're naïvely assuming keccak256 for swarm hashes
 	// if it ever changes this test should also change
-	swarmhashbytes := rh.nameHash("foo")
+	swarmhashbytes := ens.EnsNode("foo")
 	swarmhashmulti, err := multihash.Encode(swarmhashbytes.Bytes(), multihash.KECCAK_256)
 	if err != nil {
 		t.Fatal(err)
@@ -353,7 +410,7 @@ func TestResourceMultihash(t *testing.T) {
 	rh.Close()
 
 	// test with signed data
-	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, validator, nil)
+	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, nil, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,66 +451,6 @@ func TestResourceMultihash(t *testing.T) {
 	}
 }
 
-// create ENS enabled resource update, with and without valid owner
-func TestResourceENSOwner(t *testing.T) {
-
-	// signer containing private key
-	signer, err := newTestSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// ens address and transact options
-	addr := crypto.PubkeyToAddress(signer.privKey.PublicKey)
-	transactOpts := bind.NewKeyedTransactor(signer.privKey)
-
-	// set up ENS sim
-	domainparts := strings.Split(safeName, ".")
-	contractAddr, contractbackend, err := setupENS(addr, transactOpts, domainparts[0], domainparts[1])
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	ensClient, err := ens.NewENS(transactOpts, contractAddr, contractbackend)
-	if err != nil {
-		t.Fatal(err)
-	}
-	validator := NewENSValidator(contractAddr, newTestResolver(ensClient), signer.signContent)
-
-	// set up rpc and create resourcehandler with ENS sim backend
-	rh, _, _, teardownTest, err := setupTest(contractbackend, validator)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer teardownTest()
-
-	// create new resource when we are owner = ok
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
-	if err != nil {
-		t.Fatalf("Create resource fail: %v", err)
-	}
-
-	data := []byte("foo")
-	// update resource when we are owner = ok
-	_, err = rh.Update(ctx, safeName, data)
-	if err != nil {
-		t.Fatalf("Update resource fail: %v", err)
-	}
-
-	// update resource when we are not owner = !ok
-	signertwo, err := newTestSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
-	rh.validator.(*ENSValidator).signFunc = signertwo.signContent
-	_, err = rh.Update(ctx, safeName, data)
-	if err == nil {
-		t.Fatalf("Expected resource update fail due to owner mismatch")
-	}
-}
-
 func TestResourceChunkValidator(t *testing.T) {
 	// signer containing private key
 	signer, err := newTestSigner()
@@ -462,8 +459,8 @@ func TestResourceChunkValidator(t *testing.T) {
 	}
 
 	// ens address and transact options
-	addr := crypto.PubkeyToAddress(signer.privKey.PublicKey)
-	transactOpts := bind.NewKeyedTransactor(signer.privKey)
+	addr := crypto.PubkeyToAddress(signer.PrivKey.PublicKey)
+	transactOpts := bind.NewKeyedTransactor(signer.PrivKey)
 
 	// set up ENS sim
 	domainparts := strings.Split(safeName, ".")
@@ -476,10 +473,9 @@ func TestResourceChunkValidator(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	validator := NewENSValidator(contractAddr, newTestResolver(ensClient), signer.signContent)
 
 	// set up rpc and create resourcehandler with ENS sim backend
-	rh, _, _, teardownTest, err := setupTest(contractbackend, validator)
+	rh, _, teardownTest, err := setupTest(contractbackend, ensClient, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -496,7 +492,7 @@ func TestResourceChunkValidator(t *testing.T) {
 	data := []byte("foo")
 	key := rh.resourceHash(1, 1, rsrc.nameHash)
 	digest := rh.keyDataHash(key, data)
-	sig, err := rh.validator.sign(digest)
+	sig, err := rh.signer.Sign(digest)
 	if err != nil {
 		t.Fatalf("sign fail: %v", err)
 	}
@@ -514,7 +510,7 @@ func fwdBlocks(count int, backend *fakeBackend) {
 }
 
 // create rpc and resourcehandler
-func setupTest(backend headerGetter, validator ResourceValidator) (rh *ResourceHandler, datadir string, signer *testSigner, teardown func(), err error) {
+func setupTest(backend headerGetter, ensBackend *ens.ENS, signer ResourceSigner) (rh *ResourceHandler, datadir string, teardown func(), err error) {
 
 	var fsClean func()
 	var rpcClean func()
@@ -530,14 +526,14 @@ func setupTest(backend headerGetter, validator ResourceValidator) (rh *ResourceH
 	// temp datadir
 	datadir, err = ioutil.TempDir("", "rh")
 	if err != nil {
-		return nil, "", nil, nil, err
+		return nil, "", nil, err
 	}
 	fsClean = func() {
 		os.RemoveAll(datadir)
 	}
 
-	rh, err = NewTestResourceHandler(datadir, backend, validator, &ResourceLookupParams{Limit: false})
-	return rh, datadir, signer, cleanF, nil
+	rh, err = NewTestResourceHandler(datadir, backend, ensBackend, signer)
+	return rh, datadir, cleanF, nil
 }
 
 // Set up simulated ENS backend for use with ENSResourceHandler tests
@@ -583,51 +579,14 @@ func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, 
 	return contractAddress, contractBackend, nil
 }
 
-// implementation of an external signer to pass to validator
-type testSigner struct {
-	privKey     *ecdsa.PrivateKey
-	hasher      SwarmHash
-	signContent SignFunc
-}
-
-func newTestSigner() (*testSigner, error) {
+func newTestSigner() (*GenericResourceSigner, error) {
 	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
-	return &testSigner{
-		privKey:     privKey,
-		hasher:      testHasher,
-		signContent: NewGenericResourceSigner(privKey),
+	return &GenericResourceSigner{
+		PrivKey: privKey,
 	}, nil
-}
-
-// Default fallthrough validation of mutable resource ownership
-type testValidator struct {
-	*baseValidator
-	hashFunc func(string) common.Hash
-}
-
-func newTestValidator(signFunc SignFunc) *testValidator {
-	return &testValidator{
-		baseValidator: &baseValidator{
-			signFunc: signFunc,
-		},
-		hashFunc: func(name string) common.Hash {
-			testHasher.Reset()
-			testHasher.Write([]byte(name))
-			return common.BytesToHash(testHasher.Sum(nil))
-		},
-	}
-
-}
-
-func (self *testValidator) checkAccess(name string, address common.Address) (bool, error) {
-	return true, nil
-}
-
-func (self *testValidator) NameHash(name string) common.Hash {
-	return self.hashFunc(name)
 }
 
 func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
@@ -640,19 +599,4 @@ func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
 		return nil, err
 	}
 	return data, nil
-}
-
-type testResolver struct {
-	ens *ens.ENS
-}
-
-func newTestResolver(ens *ens.ENS) *testResolver {
-	return &testResolver{
-		ens: ens,
-	}
-}
-
-func (r *testResolver) ValidateOwner(name string, address common.Address) (bool, error) {
-	addr, err := r.ens.Owner(ens.EnsNode(name))
-	return addr == address, err
 }
