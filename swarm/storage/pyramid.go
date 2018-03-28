@@ -409,7 +409,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 	go self.processor(self.workerCount)
 
 	parent := NewTreeEntry(self)
-	var unfinishedChunk ChunkData
+	var unfinishedChunkData ChunkData
 	var unfinishedChunkSize int64
 
 	if isAppend && len(self.chunkLevel[0]) != 0 {
@@ -431,16 +431,16 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 			lastKey := parent.chunk[8+lastBranch*self.hashSize : 8+(lastBranch+1)*self.hashSize]
 
 			var err error
-			unfinishedChunk, err = self.getter.Get(lastKey)
+			unfinishedChunkData, err = self.getter.Get(lastKey)
 			if err != nil {
 				self.errC <- err
 			}
-			unfinishedChunkSize = unfinishedChunk.Size()
+			unfinishedChunkSize = unfinishedChunkData.Size()
 			if unfinishedChunkSize < self.chunkSize {
 				parent.subtreeSize = parent.subtreeSize - uint64(unfinishedChunkSize)
 				parent.branchCount = parent.branchCount - 1
 			} else {
-				unfinishedChunk = nil
+				unfinishedChunkData = nil
 			}
 		}
 	}
@@ -451,10 +451,10 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 		var readBytes int
 
-		if unfinishedChunk != nil {
-			copy(chunkData, unfinishedChunk)
+		if unfinishedChunkData != nil {
+			copy(chunkData, unfinishedChunkData)
 			readBytes += int(unfinishedChunkSize)
-			unfinishedChunk = nil
+			unfinishedChunkData = nil
 			log.Trace("pyramid.chunker: found unfinished chunk", "readBytes", readBytes)
 		}
 
