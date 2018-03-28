@@ -70,9 +70,13 @@ var (
 	newChunkCounter = metrics.NewRegisteredCounter("storage.chunks.new", nil)
 )
 
+const (
+	DefaultChunkSize int64 = 4096
+)
+
 type ChunkerParams struct {
-	branches int64
-	hashSize int64
+	chunkSize int64
+	hashSize  int64
 }
 
 type SplitterParams struct {
@@ -127,7 +131,7 @@ type TreeChunker struct {
 	is because it is left to the DPA to decide which sources are trusted.
 */
 func TreeJoin(key Key, getter Getter, depth int) LazySectionReader {
-	return NewTreeJoiner(NewJoinerParams(key, getter, depth, DefaultBranches)).Join()
+	return NewTreeJoiner(NewJoinerParams(key, getter, depth, DefaultChunkSize)).Join()
 }
 
 /*
@@ -135,13 +139,26 @@ func TreeJoin(key Key, getter Getter, depth int) LazySectionReader {
 	New chunks to store are store using the putter which the caller provides.
 */
 func TreeSplit(data io.Reader, size int64, putter Putter) (k Key, wait func(), err error) {
-	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultBranches)).Split()
+	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultChunkSize)).Split()
+}
+
+func NewJoinerParams(key Key, getter Getter, depth int, chunkSize int64) *JoinerParams {
+	hashSize := int64(len(key))
+	return &JoinerParams{
+		ChunkerParams: ChunkerParams{
+			chunkSize: chunkSize,
+			hashSize:  hashSize,
+		},
+		key:    key,
+		getter: getter,
+		depth:  depth,
+	}
 }
 
 func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	self := &TreeChunker{}
-	self.branches = params.branches
 	self.hashSize = params.hashSize
+	self.branches = params.chunkSize / self.hashSize
 	self.key = params.key
 	self.getter = params.getter
 	self.depth = params.depth
@@ -159,8 +176,8 @@ func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
 	self := &TreeChunker{}
 	self.data = params.reader
 	self.dataSize = params.size
-	self.branches = params.branches
 	self.hashSize = params.hashSize
+	self.branches = params.chunkSize / self.hashSize
 	self.key = params.key
 	self.chunkSize = self.hashSize * self.branches
 	self.putter = params.putter

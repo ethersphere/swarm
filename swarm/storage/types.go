@@ -207,7 +207,7 @@ func (c *Chunk) WaitToStore() {
 func FakeChunk(size int64, count int, chunks []*Chunk) int {
 	var i int
 	hasher := MakeHashFunc(SHA3Hash)()
-	chunksize := getDefaultChunkSize()
+	chunksize := DefaultChunkSize
 	if size > chunksize {
 		size = chunksize
 	}
@@ -223,11 +223,6 @@ func FakeChunk(size int64, count int, chunks []*Chunk) int {
 	}
 
 	return i
-}
-
-func getDefaultChunkSize() int64 {
-	return DefaultBranches * int64(MakeHashFunc(SHA3Hash)().Size())
-
 }
 
 // Size, Seek, Read, ReadAt

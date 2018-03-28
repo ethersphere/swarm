@@ -65,9 +65,8 @@ var (
 )
 
 const (
-	ChunkProcessors       = 8
-	DefaultBranches int64 = 128
-	splitTimeout          = time.Minute * 5
+	ChunkProcessors = 8
+	splitTimeout    = time.Minute * 5
 )
 
 const (
@@ -80,14 +79,13 @@ type PyramidSplitterParams struct {
 	getter Getter
 }
 
-func NewPyramidSplitterParams(key Key, reader io.Reader, putter Putter, getter Getter, branches int64) *PyramidSplitterParams {
+func NewPyramidSplitterParams(key Key, reader io.Reader, putter Putter, getter Getter, chunkSize int64) *PyramidSplitterParams {
 	hashSize := putter.RefSize()
 	return &PyramidSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
-				// TODO: use chunkSize as parameter, because that is the constant
-				branches: 4096 / hashSize,
-				hashSize: hashSize,
+				chunkSize: chunkSize,
+				hashSize:  hashSize,
 			},
 			reader: reader,
 			putter: putter,
@@ -102,8 +100,8 @@ func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches
 	return &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
-				branches: 4096 / hashSize,
-				hashSize: hashSize,
+				chunkSize: chunkSize,
+				hashSize:  hashSize,
 			},
 			reader: reader,
 			putter: putter,
@@ -117,24 +115,11 @@ func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches
 	New chunks to store are store using the putter which the caller provides.
 */
 func PyramidSplit(reader io.Reader, putter Putter, getter Getter) (Key, func(), error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultBranches)).Split()
+	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultChunkSize)).Split()
 }
 
 func PyramidAppend(key Key, reader io.Reader, putter Putter, getter Getter) (Key, func(), error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(key, reader, putter, getter, DefaultBranches)).Append()
-}
-
-func NewJoinerParams(key Key, getter Getter, depth int, branches int64) *JoinerParams {
-	hashSize := int64(len(key))
-	return &JoinerParams{
-		ChunkerParams: ChunkerParams{
-			branches: 4096 / hashSize,
-			hashSize: hashSize,
-		},
-		key:    key,
-		getter: getter,
-		depth:  depth,
-	}
+	return NewPyramidSplitter(NewPyramidSplitterParams(key, reader, putter, getter, DefaultChunkSize)).Append()
 }
 
 // Entry to create a tree node
@@ -188,8 +173,8 @@ type PyramidChunker struct {
 func NewPyramidSplitter(params *PyramidSplitterParams) (self *PyramidChunker) {
 	self = &PyramidChunker{}
 	self.reader = params.reader
-	self.branches = params.branches
 	self.hashSize = params.hashSize
+	self.branches = params.chunkSize / self.hashSize
 	self.chunkSize = self.hashSize * self.branches
 	self.putter = params.putter
 	self.getter = params.getter
