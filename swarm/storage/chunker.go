@@ -172,6 +172,21 @@ func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	return self
 }
 
+func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches int64) *TreeSplitterParams {
+	hashSize := putter.RefSize()
+	return &TreeSplitterParams{
+		SplitterParams: SplitterParams{
+			ChunkerParams: ChunkerParams{
+				chunkSize: chunkSize,
+				hashSize:  hashSize,
+			},
+			reader: reader,
+			putter: putter,
+		},
+		size: size,
+	}
+}
+
 func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
 	self := &TreeChunker{}
 	self.data = params.reader

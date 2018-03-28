@@ -95,21 +95,6 @@ func NewPyramidSplitterParams(key Key, reader io.Reader, putter Putter, getter G
 	}
 }
 
-func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches int64) *TreeSplitterParams {
-	hashSize := putter.RefSize()
-	return &TreeSplitterParams{
-		SplitterParams: SplitterParams{
-			ChunkerParams: ChunkerParams{
-				chunkSize: chunkSize,
-				hashSize:  hashSize,
-			},
-			reader: reader,
-			putter: putter,
-		},
-		size: size,
-	}
-}
-
 /*
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
