@@ -333,7 +333,7 @@ func benchmarkSplitPyramidBMT(n int, t *testing.B) {
 		data := testDataReader(n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
 
-		_, _, err := TreeSplit(data, int64(n), putGetter)
+		_, _, err := PyramidSplit(data, putGetter, putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
