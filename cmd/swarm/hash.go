@@ -38,7 +38,7 @@ func hash(ctx *cli.Context) {
 	defer f.Close()
 
 	stat, _ := f.Stat()
-	dpa := storage.NewDPA(&storage.FakeChunkStore{}, storage.NewDPAParams())
+	dpa := storage.NewDPA(storage.NewMapChunkStore(), storage.NewDPAParams())
 	key, _, err := dpa.Store(f, stat.Size(), false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)

@@ -43,7 +43,7 @@ func TestHasherStore(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		chunkStore := newTestChunkStore()
+		chunkStore := NewMapChunkStore()
 		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(SHA3Hash), tt.toEncrypt)
 
 		// Put two random chunks into the hasherStore

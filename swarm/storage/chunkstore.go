@@ -16,6 +16,8 @@
 
 package storage
 
+import "sync"
+
 /*
 ChunkStore interface is implemented by :
 
@@ -32,21 +34,34 @@ type ChunkStore interface {
 	Close()
 }
 
-// FakeChunkStore doesn't store anything, just implements the ChunkStore interface
-// It can be used to inject into a hasherStore if you don't want to actually store data just do the
-// hashing
-type FakeChunkStore struct {
+// MapChunkStore is a very simple ChunkStore implementation to store chunks in a map in memory.
+type MapChunkStore struct {
+	chunks map[string]*Chunk
+	mu     sync.RWMutex
 }
 
-// Put doesn't store anything it is just here to implement ChunkStore
-func (d *FakeChunkStore) Put(*Chunk) {
+func NewMapChunkStore() *MapChunkStore {
+	return &MapChunkStore{
+		chunks: make(map[string]*Chunk),
+	}
 }
 
-// Gut doesn't store anything it is just here to implement ChunkStore
-func (d *FakeChunkStore) Get(Key) (*Chunk, error) {
-	return nil, nil
+func (m *MapChunkStore) Put(chunk *Chunk) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.chunks[chunk.Key.Hex()] = chunk
+	close(chunk.dbStored)
 }
 
-// Close doesn't store anything it is just here to implement ChunkStore
-func (d *FakeChunkStore) Close() {
+func (m *MapChunkStore) Get(key Key) (*Chunk, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	chunk := m.chunks[key.Hex()]
+	if chunk == nil {
+		return nil, ErrChunkNotFound
+	}
+	return chunk, nil
+}
+
+func (m *MapChunkStore) Close() {
 }
