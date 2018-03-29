@@ -155,6 +155,10 @@ func NewLDBStore(path string, hash SwarmHasher, capacity uint64, po func(Key) ui
 	return s, nil
 }
 
+func (self *LDBStore) SetTrusted() {
+	self.trusted = true
+}
+
 // NewMockDbStore creates a new instance of DbStore with
 // mockStore set to a provided value. If mockStore argument is nil,
 // this function behaves exactly as NewDbStore.
@@ -163,6 +167,7 @@ func NewMockDbStore(path string, hash SwarmHasher, capacity uint64, po func(Key)
 	if err != nil {
 		return nil, err
 	}
+
 	// replace put and get with mock store functionality
 	if mockStore != nil {
 		s.encodeDataFunc = newMockEncodeDataFunc(mockStore)
@@ -421,7 +426,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			<-chunk.dbStored
+			<-chunk.dbStoredC
 		}()
 		count++
 	}
@@ -561,14 +566,14 @@ func (s *LDBStore) Put(chunk *Chunk) {
 		batchC := s.batchC
 		go func() {
 			<-batchC
-			close(chunk.dbStored)
+			chunk.markAsStored()
 			// func() {
 			// 	defer func() {
 			// 		if err := recover(); err != nil {
 			// 			log.Error("ldbstore.put panic (go)", "key", chunk.Key, "err", err)
 			// 		}
 			// 	}()
-			// 	close(chunk.dbStored)
+			// 	chunk.markAsStored()
 			// 	if chunk.ReqC != nil {
 			// 		close(chunk.ReqC)
 			// 	}
@@ -578,14 +583,14 @@ func (s *LDBStore) Put(chunk *Chunk) {
 	} else {
 		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Key)
 		decodeIndex(idata, &index)
-		close(chunk.dbStored)
+		chunk.markAsStored()
 		// func() {
 		// 	defer func() {
 		// 		if err := recover(); err != nil {
 		// 			log.Error("ldbstore.put panic", "key", chunk.Key, "err", err)
 		// 		}
 		// 	}()
-		// 	close(chunk.dbStored)
+		// 	chunk.markAsStored()
 		// 	if chunk.ReqC != nil {
 		// 		close(chunk.ReqC)
 		// 	}
@@ -731,7 +736,7 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 		}
 
 		chunk = NewChunk(key, nil)
-		close(chunk.dbStored)
+		chunk.markAsStored()
 		decodeData(data, chunk)
 	} else {
 		err = ErrChunkNotFound

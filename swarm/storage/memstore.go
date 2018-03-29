@@ -186,8 +186,10 @@ func (s *MemStore) Put(entry *Chunk) {
 			if entry.ReqC == nil {
 				entry.ReqC = node.entry.ReqC
 			}
-			if node.entry.dbStored != nil {
+			if node.entry.dbStoredC != nil {
 				entry.dbStored = node.entry.dbStored
+				entry.dbStoredC = node.entry.dbStoredC
+				entry.dbStoredMu = node.entry.dbStoredMu
 			}
 			entry.C = node.entry.C
 			node.entry = entry
@@ -305,7 +307,7 @@ func (s *MemStore) removeOldest() {
 
 	if node.entry.ReqC == nil {
 		log.Trace(fmt.Sprintf("Memstore Clean: Waiting for chunk %v to be saved", node.entry.Key.Log()))
-		<-node.entry.dbStored
+		<-node.entry.dbStoredC
 		log.Trace(fmt.Sprintf("Memstore Clean: Chunk %v saved to DBStore. Ready to clear from mem.", node.entry.Key.Log()))
 
 		memstoreRemoveCounter.Inc(1)
