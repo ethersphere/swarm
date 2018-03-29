@@ -42,7 +42,7 @@ type hasherStore struct {
 func newChunkEncryption() *chunkEncryption {
 	return &chunkEncryption{
 		spanEncryption: encryption.New(0, math.MaxUint32, sha3.NewKeccak256),
-		dataEncryption: encryption.New(4096, 0, sha3.NewKeccak256),
+		dataEncryption: encryption.New(int(DefaultChunkSize), 0, sha3.NewKeccak256),
 	}
 }
 
@@ -155,7 +155,6 @@ func (p *hasherStore) encryptChunkData(chunkData ChunkData) (ChunkData, encrypti
 		return nil, nil, err
 	}
 
-	c := make(ChunkData, len(chunkData))
 	encryptedSpan, err := p.chunkEncryption.spanEncryption.Encrypt(chunkData[:8], encryptionKey)
 	if err != nil {
 		return nil, nil, err
@@ -164,28 +163,40 @@ func (p *hasherStore) encryptChunkData(chunkData ChunkData) (ChunkData, encrypti
 	if err != nil {
 		return nil, nil, err
 	}
+	c := make(ChunkData, len(encryptedSpan)+len(encryptedData))
 	copy(c[:8], encryptedSpan)
 	copy(c[8:], encryptedData)
 	return c, encryptionKey, nil
 }
 
-func (p *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryption.Key) (ChunkData, error) {
+func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryption.Key) (ChunkData, error) {
 	if len(chunkData) < 8 {
 		return nil, fmt.Errorf("Invalid ChunkData, min length 8 got %v", len(chunkData))
 	}
 
-	c := make(ChunkData, len(chunkData))
-	decryptedSpan, err := p.chunkEncryption.spanEncryption.Decrypt(chunkData[:8], encryptionKey)
+	decryptedSpan, err := h.chunkEncryption.spanEncryption.Decrypt(chunkData[:8], encryptionKey)
 	if err != nil {
 		return nil, err
 	}
-	decryptedData, err := p.chunkEncryption.dataEncryption.Decrypt(chunkData[8:], encryptionKey)
+
+	decryptedData, err := h.chunkEncryption.dataEncryption.Decrypt(chunkData[8:], encryptionKey)
 	if err != nil {
 		return nil, err
 	}
+
+	// removing extra bytes which were just added for padding
+	length := ChunkData(decryptedSpan).Size()
+	for length > DefaultChunkSize {
+		length = length + (DefaultChunkSize - 1)
+		length = length / DefaultChunkSize
+		length *= h.refSize
+	}
+
+	c := make(ChunkData, length+8)
 	copy(c[:8], decryptedSpan)
-	copy(c[8:], decryptedData)
-	return c, nil
+	copy(c[8:], decryptedData[:length])
+
+	return c[:length+8], nil
 }
 
 func (h *hasherStore) RefSize() int64 {

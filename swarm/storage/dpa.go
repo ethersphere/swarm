@@ -90,7 +90,7 @@ func NewDPA(store ChunkStore, params *DPAParams) *DPA {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 func (self *DPA) Retrieve(key Key) LazySectionReader {
-	getter := NewHasherStore(self.ChunkStore, self.hashFunc, true)
+	getter := NewHasherStore(self.ChunkStore, self.hashFunc, len(key) > self.hashFunc().Size())
 	return TreeJoin(key, getter, 0)
 }
 

@@ -86,6 +86,11 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 }
 
 func TestDPA_capacity(t *testing.T) {
+	testDPA_capacity(false, t)
+	testDPA_capacity(true, t)
+}
+
+func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	tdb, err := newTestDbStore(false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
@@ -99,7 +104,7 @@ func TestDPA_capacity(t *testing.T) {
 	}
 	dpa := NewDPA(localStore, NewDPAParams())
 	reader, slice := generateRandomData(testDataSize)
-	key, wait, err := dpa.Store(reader, testDataSize, true)
+	key, wait, err := dpa.Store(reader, testDataSize, toEncrypt)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}
