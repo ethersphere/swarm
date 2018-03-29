@@ -222,10 +222,7 @@ func (self *ResourceHandler) Validate(key *Key, data []byte) bool {
 		return false
 	}
 	ok, _ := self.checkAccess(name, addr)
-	if !ok {
-		return false
-	}
-	return true
+	return ok
 }
 
 // If no ens client is supplied, resource updates are not validated

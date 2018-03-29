@@ -149,7 +149,7 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	}
 
 	s.po = params.Po
-	s.setCapacity(uint64(params.DbCapacity))
+	s.setCapacity(params.DbCapacity)
 
 	s.gcStartPos = make([]byte, 1)
 	s.gcStartPos[0] = kpIndex

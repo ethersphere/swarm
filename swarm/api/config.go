@@ -121,9 +121,9 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	}
 
 	self.privateKey = prvKey
+	self.LocalStoreParams.Init(self.Path)
 	self.LocalStoreParams.BaseKey = common.Hex2Bytes(self.BzzKey)
 	self.LocalStoreParams.Hash = storage.MakeHashFunc(self.ChunkerParams.Hash)
-	self.LocalStoreParams.Init(self.Path)
 }
 
 func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
