@@ -18,7 +18,6 @@ package storage
 
 import (
 	"fmt"
-	"math"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -39,10 +38,10 @@ type hasherStore struct {
 	closed          chan struct{}
 }
 
-func newChunkEncryption() *chunkEncryption {
+func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
 	return &chunkEncryption{
-		spanEncryption: encryption.New(0, math.MaxUint32, sha3.NewKeccak256),
-		dataEncryption: encryption.New(int(DefaultChunkSize), 0, sha3.NewKeccak256),
+		spanEncryption: encryption.New(0, uint32(chunkSize/refSize), sha3.NewKeccak256),
+		dataEncryption: encryption.New(int(chunkSize), 0, sha3.NewKeccak256),
 	}
 }
 
@@ -54,8 +53,9 @@ func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool)
 
 	refSize := int64(hashFunc().Size())
 	if toEncrypt {
-		chunkEncryption = newChunkEncryption()
 		refSize += encryption.KeyLength
+		chunkEncryption = newChunkEncryption(DefaultChunkSize, refSize)
+
 	}
 
 	return &hasherStore{
