@@ -271,7 +271,7 @@ func benchReadAll(reader LazySectionReader) {
 	}
 }
 
-func benchmarkJoin(n int, t *testing.B) {
+func benchmarkSplitJoin(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testDataReader(n)
@@ -340,7 +340,7 @@ func benchmarkSplitPyramidBMT(n int, t *testing.B) {
 	}
 }
 
-func benchmarkAppendPyramid(n, m int, t *testing.B) {
+func benchmarkSplitAppendPyramid(n, m int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testDataReader(n)
@@ -364,14 +364,14 @@ func benchmarkAppendPyramid(n, m int, t *testing.B) {
 	}
 }
 
-func BenchmarkJoin_2(t *testing.B) { benchmarkJoin(100, t) }
-func BenchmarkJoin_3(t *testing.B) { benchmarkJoin(1000, t) }
-func BenchmarkJoin_4(t *testing.B) { benchmarkJoin(10000, t) }
-func BenchmarkJoin_5(t *testing.B) { benchmarkJoin(100000, t) }
-func BenchmarkJoin_6(t *testing.B) { benchmarkJoin(1000000, t) }
-func BenchmarkJoin_7(t *testing.B) { benchmarkJoin(10000000, t) }
+func BenchmarkSplitJoin_2(t *testing.B) { benchmarkSplitJoin(100, t) }
+func BenchmarkSplitJoin_3(t *testing.B) { benchmarkSplitJoin(1000, t) }
+func BenchmarkSplitJoin_4(t *testing.B) { benchmarkSplitJoin(10000, t) }
+func BenchmarkSplitJoin_5(t *testing.B) { benchmarkSplitJoin(100000, t) }
+func BenchmarkSplitJoin_6(t *testing.B) { benchmarkSplitJoin(1000000, t) }
+func BenchmarkSplitJoin_7(t *testing.B) { benchmarkSplitJoin(10000000, t) }
 
-// func BenchmarkJoin_8(t *testing.B) { benchmarkJoin(100000000, t) }
+// func BenchmarkSplitJoin_8(t *testing.B) { benchmarkJoin(100000000, t) }
 
 func BenchmarkSplitTreeSHA3_2(t *testing.B)  { benchmarkSplitTreeSHA3(100, t) }
 func BenchmarkSplitTreeSHA3_2h(t *testing.B) { benchmarkSplitTreeSHA3(500, t) }
@@ -421,14 +421,14 @@ func BenchmarkSplitPyramidBMT_7(t *testing.B)  { benchmarkSplitPyramidBMT(100000
 
 // func BenchmarkSplitPyramidBMT_8(t *testing.B)  { benchmarkSplitPyramidBMT(100000000, t) }
 
-func BenchmarkAppendPyramid_2(t *testing.B)  { benchmarkAppendPyramid(100, 1000, t) }
-func BenchmarkAppendPyramid_2h(t *testing.B) { benchmarkAppendPyramid(500, 1000, t) }
-func BenchmarkAppendPyramid_3(t *testing.B)  { benchmarkAppendPyramid(1000, 1000, t) }
-func BenchmarkAppendPyramid_4(t *testing.B)  { benchmarkAppendPyramid(10000, 1000, t) }
-func BenchmarkAppendPyramid_4h(t *testing.B) { benchmarkAppendPyramid(50000, 1000, t) }
-func BenchmarkAppendPyramid_5(t *testing.B)  { benchmarkAppendPyramid(1000000, 1000, t) }
-func BenchmarkAppendPyramid_6(t *testing.B)  { benchmarkAppendPyramid(1000000, 1000, t) }
-func BenchmarkAppendPyramid_7(t *testing.B)  { benchmarkAppendPyramid(10000000, 1000, t) }
+func BenchmarkSplitAppendPyramid_2(t *testing.B)  { benchmarkSplitAppendPyramid(100, 1000, t) }
+func BenchmarkSplitAppendPyramid_2h(t *testing.B) { benchmarkSplitAppendPyramid(500, 1000, t) }
+func BenchmarkSplitAppendPyramid_3(t *testing.B)  { benchmarkSplitAppendPyramid(1000, 1000, t) }
+func BenchmarkSplitAppendPyramid_4(t *testing.B)  { benchmarkSplitAppendPyramid(10000, 1000, t) }
+func BenchmarkSplitAppendPyramid_4h(t *testing.B) { benchmarkSplitAppendPyramid(50000, 1000, t) }
+func BenchmarkSplitAppendPyramid_5(t *testing.B)  { benchmarkSplitAppendPyramid(1000000, 1000, t) }
+func BenchmarkSplitAppendPyramid_6(t *testing.B)  { benchmarkSplitAppendPyramid(1000000, 1000, t) }
+func BenchmarkSplitAppendPyramid_7(t *testing.B)  { benchmarkSplitAppendPyramid(10000000, 1000, t) }
 
 // func BenchmarkAppendPyramid_8(t *testing.B)  { benchmarkAppendPyramid(100000000, 1000, t) }
 
