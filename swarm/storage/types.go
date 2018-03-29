@@ -207,9 +207,8 @@ func (c *Chunk) WaitToStore() {
 func FakeChunk(size int64, count int, chunks []*Chunk) int {
 	var i int
 	hasher := MakeHashFunc(SHA3Hash)()
-	chunksize := DefaultChunkSize
-	if size > chunksize {
-		size = chunksize
+	if size > DefaultChunkSize {
+		size = DefaultChunkSize
 	}
 
 	for i = 0; i < count; i++ {

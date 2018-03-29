@@ -33,7 +33,8 @@ type hasherStore struct {
 	store           ChunkStore
 	hashFunc        SwarmHasher
 	chunkEncryption *chunkEncryption
-	refSize         int64
+	hashSize        int   // content hash size
+	refSize         int64 // reference size (content hash + possibly encryption key)
 	wg              *sync.WaitGroup
 	closed          chan struct{}
 }
@@ -51,17 +52,18 @@ func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
 func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
 	var chunkEncryption *chunkEncryption
 
-	refSize := int64(hashFunc().Size())
+	hashSize := hashFunc().Size()
+	refSize := int64(hashSize)
 	if toEncrypt {
 		refSize += encryption.KeyLength
 		chunkEncryption = newChunkEncryption(DefaultChunkSize, refSize)
-
 	}
 
 	return &hasherStore{
 		store:           chunkStore,
 		hashFunc:        hashFunc,
 		chunkEncryption: chunkEncryption,
+		hashSize:        hashSize,
 		refSize:         refSize,
 		wg:              &sync.WaitGroup{},
 		closed:          make(chan struct{}),
@@ -93,7 +95,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 // If the data is encrypted and the reference contains an encryption key, it will be decrypted before
 // return.
 func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
-	key, encryptionKey, err := parseReference(ref)
+	key, encryptionKey, err := parseReference(ref, int(h.hashSize))
 	if err != nil {
 		return nil, err
 	}
@@ -212,8 +214,8 @@ func (h *hasherStore) storeChunk(chunk *Chunk) {
 	h.store.Put(chunk)
 }
 
-func parseReference(ref Reference) (Key, encryption.Key, error) {
-	encryptedKeyLength := KeyLength + encryption.KeyLength
+func parseReference(ref Reference, hashSize int) (Key, encryption.Key, error) {
+	encryptedKeyLength := hashSize + encryption.KeyLength
 	switch len(ref) {
 	case KeyLength:
 		return Key(ref), nil, nil
@@ -221,7 +223,7 @@ func parseReference(ref Reference) (Key, encryption.Key, error) {
 		encKeyIdx := len(ref) - encryption.KeyLength
 		return Key(ref[:encKeyIdx]), encryption.Key(ref[encKeyIdx:]), nil
 	default:
-		return nil, nil, fmt.Errorf("Invalid reference length, expected %v or %v got %v", KeyLength, encryptedKeyLength, len(ref))
+		return nil, nil, fmt.Errorf("Invalid reference length, expected %v or %v got %v", hashSize, encryptedKeyLength, len(ref))
 	}
 
 }

@@ -86,7 +86,7 @@ func TestHasherStore(t *testing.T) {
 			t.Fatalf("Expected retrieved chunk data %v, got %v", common.Bytes2Hex(chunkData2), common.Bytes2Hex(retrievedChunkData2))
 		}
 
-		hash1, encryptionKey1, err := parseReference(key1)
+		hash1, encryptionKey1, err := parseReference(key1, hasherStore.hashSize)
 		if err != nil {
 			t.Fatalf("Expected no error, got \"%v\"", err)
 		}
