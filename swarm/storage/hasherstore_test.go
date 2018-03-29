@@ -28,92 +28,95 @@ import (
 )
 
 func TestHasherStore(t *testing.T) {
-	testHasherStore(10, false, t)
-	testHasherStore(100, false, t)
-	testHasherStore(1000, false, t)
-	testHasherStore(4096, false, t)
-	testHasherStore(10, true, t)
-	testHasherStore(100, true, t)
-	testHasherStore(1000, true, t)
-	testHasherStore(4096, true, t)
-}
-
-func testHasherStore(chunkLength int, toEncrypt bool, t *testing.T) {
-	chunkStore := newTestChunkStore()
-	hasherStore := NewHasherStore(chunkStore, MakeHashFunc(SHA3Hash), toEncrypt)
-
-	// Put two random chunks into the hasherStore
-
-	chunkData1 := generateRandomChunkData(chunkLength)
-	key1, err := hasherStore.Put(chunkData1)
-	if err != nil {
-		t.Fatalf("Expected no error got \"%v\"", err)
+	var tests = []struct {
+		chunkLength int
+		toEncrypt   bool
+	}{
+		{10, false},
+		{100, false},
+		{1000, false},
+		{4096, false},
+		{10, true},
+		{100, true},
+		{1000, true},
+		{4096, true},
 	}
 
-	chunkData2 := generateRandomChunkData(chunkLength)
-	key2, err := hasherStore.Put(chunkData2)
-	if err != nil {
-		t.Fatalf("Expected no error got \"%v\"", err)
-	}
+	for _, tt := range tests {
+		chunkStore := newTestChunkStore()
+		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(SHA3Hash), tt.toEncrypt)
 
-	hasherStore.Close()
+		// Put two random chunks into the hasherStore
+		chunkData1 := generateRandomChunkData(tt.chunkLength)
+		key1, err := hasherStore.Put(chunkData1)
+		if err != nil {
+			t.Fatalf("Expected no error got \"%v\"", err)
+		}
 
-	// Wait until chunks are really stored
-	hasherStore.Wait()
+		chunkData2 := generateRandomChunkData(tt.chunkLength)
+		key2, err := hasherStore.Put(chunkData2)
+		if err != nil {
+			t.Fatalf("Expected no error got \"%v\"", err)
+		}
 
-	// Get the first chunk
-	retrievedChunkData1, err := hasherStore.Get(key1)
-	if err != nil {
-		t.Fatalf("Expected no error got \"%v\"", err)
-	}
+		hasherStore.Close()
 
-	// Retrieved data should be same as the original
-	if !bytes.Equal(chunkData1, retrievedChunkData1) {
-		t.Fatalf("Expected retrieved chunk data %v got %v", common.Bytes2Hex(chunkData1), common.Bytes2Hex(retrievedChunkData1))
-	}
+		// Wait until chunks are really stored
+		hasherStore.Wait()
 
-	// Get the second chunk
-	retrievedChunkData2, err := hasherStore.Get(key2)
-	if err != nil {
-		t.Fatalf("Expected no error got \"%v\"", err)
-	}
+		// Get the first chunk
+		retrievedChunkData1, err := hasherStore.Get(key1)
+		if err != nil {
+			t.Fatalf("Expected no error, got \"%v\"", err)
+		}
 
-	// Retrieved data should be same as the original
-	if !bytes.Equal(chunkData2, retrievedChunkData2) {
-		t.Fatalf("Expected retrieved chunk data %v got %v", common.Bytes2Hex(chunkData2), common.Bytes2Hex(retrievedChunkData2))
-	}
+		// Retrieved data should be same as the original
+		if !bytes.Equal(chunkData1, retrievedChunkData1) {
+			t.Fatalf("Expected retrieved chunk data %v, got %v", common.Bytes2Hex(chunkData1), common.Bytes2Hex(retrievedChunkData1))
+		}
 
-	hash1, encryptionKey1, err := parseReference(key1)
-	if err != nil {
-		t.Fatalf("Expected no error got \"%v\"", err)
-	}
+		// Get the second chunk
+		retrievedChunkData2, err := hasherStore.Get(key2)
+		if err != nil {
+			t.Fatalf("Expected no error, got \"%v\"", err)
+		}
 
-	if toEncrypt {
-		if encryptionKey1 == nil {
-			t.Fatal("Expected non-nil encryption key got nil")
-		} else if len(encryptionKey1) != encryption.KeyLength {
-			t.Fatalf("Expected encryption key length %v got %v", encryption.KeyLength, len(encryptionKey1))
+		// Retrieved data should be same as the original
+		if !bytes.Equal(chunkData2, retrievedChunkData2) {
+			t.Fatalf("Expected retrieved chunk data %v, got %v", common.Bytes2Hex(chunkData2), common.Bytes2Hex(retrievedChunkData2))
+		}
+
+		hash1, encryptionKey1, err := parseReference(key1)
+		if err != nil {
+			t.Fatalf("Expected no error, got \"%v\"", err)
+		}
+
+		if tt.toEncrypt {
+			if encryptionKey1 == nil {
+				t.Fatal("Expected non-nil encryption key, got nil")
+			} else if len(encryptionKey1) != encryption.KeyLength {
+				t.Fatalf("Expected encryption key length %v, got %v", encryption.KeyLength, len(encryptionKey1))
+			}
+		}
+		if !tt.toEncrypt && encryptionKey1 != nil {
+			t.Fatalf("Expected nil encryption key, got key with length %v", len(encryptionKey1))
+		}
+
+		// Check if chunk data in store is encrypted or not
+		chunkInStore, err := chunkStore.Get(hash1)
+		if err != nil {
+			t.Fatalf("Expected no error got \"%v\"", err)
+		}
+
+		chunkDataInStore := chunkInStore.SData
+
+		if tt.toEncrypt && bytes.Equal(chunkData1, chunkDataInStore) {
+			t.Fatalf("Chunk expected to be encrypted but it is stored without encryption")
+		}
+		if !tt.toEncrypt && !bytes.Equal(chunkData1, chunkDataInStore) {
+			t.Fatalf("Chunk expected to be not encrypted but stored content is different. Expected %v got %v", common.Bytes2Hex(chunkData1), common.Bytes2Hex(chunkDataInStore))
 		}
 	}
-	if !toEncrypt && encryptionKey1 != nil {
-		t.Fatalf("Expected nil encryption key got key with length %v", len(encryptionKey1))
-	}
-
-	// Check if chunk data in store is encrypted or not
-	chunkInStore, err := chunkStore.Get(hash1)
-	if err != nil {
-		t.Fatalf("Expected no error got \"%v\"", err)
-	}
-
-	chunkDataInStore := chunkInStore.SData
-
-	if toEncrypt && bytes.Equal(chunkData1, chunkDataInStore) {
-		t.Fatalf("Chunk expected to be encrypted but it is stored without encryption")
-	}
-	if !toEncrypt && !bytes.Equal(chunkData1, chunkDataInStore) {
-		t.Fatalf("Chunk expected to be not encrypted but stored content is different. Expected %v got %v", common.Bytes2Hex(chunkData1), common.Bytes2Hex(chunkDataInStore))
-	}
-
 }
 
 func generateRandomChunkData(length int) ChunkData {
