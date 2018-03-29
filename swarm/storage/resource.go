@@ -156,24 +156,25 @@ type ResourceHandler struct {
 }
 
 type ResourceHandlerParams struct {
-	Validator       ResourceValidator
 	QueryMaxPeriods *ResourceLookupParams
 	Signer          ResourceSigner
+	EthClient       headerGetter
+	EnsClient       *ens.ENS
 }
 
 // Create or open resource update chunk store
-func NewResourceHandler(hasher SwarmHasher, chunkStore ChunkStore, ethClient headerGetter, params *ResourceHandlerParams) (*ResourceHandler, error) {
+func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error) {
 	if params.QueryMaxPeriods == nil {
 		params.QueryMaxPeriods = &ResourceLookupParams{
 			Limit: false,
 		}
 	}
 	rh := &ResourceHandler{
-		ethClient:    ethClient,
-		ensClient:    ensClient,
+		ethClient:    params.EthClient,
+		ensClient:    params.EnsClient,
 		resources:    make(map[string]*resource),
 		storeTimeout: defaultStoreTimeout,
-		signer:       signer,
+		signer:       params.Signer,
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return MakeHashFunc(resourceHash)()
@@ -359,12 +360,8 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 // root chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
 // update root data was retrieved externally, it typically doesn't)
-//
-// If maxPeriod is -1, the default QueryMaxPeriod from ResourceHandlerParams will be used
-// if maxPeriod is 0, there will be no limit on period hops
-// if maxPeriod > 0, the given value will be the limit of period hops
 func (self *ResourceHandler) LookupVersionByName(ctx context.Context, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-	return self.LookupVersion(ctx, self.nameHash(name), name, period, version, refresh, maxLookup)
+	return self.LookupVersion(ctx, ens.EnsNode(name), name, period, version, refresh, maxLookup)
 }
 
 func (self *ResourceHandler) LookupVersion(ctx context.Context, nameHash common.Hash, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
@@ -384,7 +381,7 @@ func (self *ResourceHandler) LookupVersion(ctx context.Context, nameHash common.
 //
 // See also (*ResourceHandler).LookupVersion
 func (self *ResourceHandler) LookupHistoricalByName(ctx context.Context, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-	return self.LookupHistorical(ctx, self.nameHash(name), name, period, refresh, maxLookup)
+	return self.LookupHistorical(ctx, ens.EnsNode(name), name, period, refresh, maxLookup)
 }
 
 func (self *ResourceHandler) LookupHistorical(ctx context.Context, nameHash common.Hash, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
@@ -406,7 +403,7 @@ func (self *ResourceHandler) LookupHistorical(ctx context.Context, nameHash comm
 //
 // See also (*ResourceHandler).LookupHistorical
 func (self *ResourceHandler) LookupLatestByName(ctx context.Context, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-	return self.LookupLatest(ctx, self.nameHash(name), name, refresh, maxLookup)
+	return self.LookupLatest(ctx, ens.EnsNode(name), name, refresh, maxLookup)
 }
 
 func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.Hash, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
@@ -871,18 +868,17 @@ func isMultihash(data []byte) int {
 }
 
 // TODO: this should not be exposed, but swarm/testutil/http.go needs it
-func NewTestResourceHandler(datadir string, ethClient headerGetter, ensClient *ens.ENS, signer ResourceSigner) (*ResourceHandler, error) {
+func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, DbDirName)
-	hasher := MakeHashFunc(SHA3Hash)
-	rh, err := NewResourceHandler(hasher, ethClient, ensClient, signer)
+	rh, err := NewResourceHandler(params)
 	if err != nil {
 		return nil, err
 	}
 	validator := &ChunkValidator{
 		resource: rh.Validate,
 	}
-	params := NewLDBStoreParams(path, 0, nil, nil, validator)
-	dbStore, err := NewLDBStore(params)
+	dbstoreparams := NewLDBStoreParams(path, 0, nil, nil, validator)
+	dbStore, err := NewLDBStore(dbstoreparams)
 	if err != nil {
 		return nil, err
 	}

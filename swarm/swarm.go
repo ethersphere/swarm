@@ -190,10 +190,18 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// if use resource updates
 	if self.config.ResourceEnabled && resolver != nil {
 		resolver.SetNameHash(ens.EnsNode)
-		hashfunc := storage.MakeHashFunc(storage.SHA3Hash)
-		resourceHandler, err = storage.NewResourceHandler(hashfunc, resolver, ensresolver, &storage.GenericResourceSigner{
-			PrivKey: self.privateKey,
-		})
+		rhparams := &storage.ResourceHandlerParams{
+			// TODO: config parameter to set limits
+			QueryMaxPeriods: &storage.ResourceLookupParams{
+				Limit: false,
+			},
+			Signer: &storage.GenericResourceSigner{
+				PrivKey: self.privateKey,
+			},
+			EthClient: resolver,
+			EnsClient: ensresolver,
+		}
+		resourceHandler, err = storage.NewResourceHandler(rhparams)
 		if err != nil {
 			return nil, err
 		}

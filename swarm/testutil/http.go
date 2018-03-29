@@ -63,8 +63,11 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	rh, err := storage.NewTestResourceHandler(resourceDir, &fakeBackend{}, nil, &storage.ResourceLookupParams{Limit: false})
+	rhparams := &storage.ResourceHandlerParams{
+		QueryMaxPeriods: &storage.ResourceLookupParams{},
+		EthClient:       &fakeBackend{},
+	}
+	rh, err := storage.NewTestResourceHandler(resourceDir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}

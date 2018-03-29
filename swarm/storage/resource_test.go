@@ -218,10 +218,14 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourceFrequency * 3)
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
-	lookupParams := &ResourceLookupParams{
-		Limit: false,
+	rhparams := &ResourceHandlerParams{
+		QueryMaxPeriods: &ResourceLookupParams{
+			Limit: false,
+		},
+		Signer:    nil,
+		EthClient: rh.ethClient,
 	}
-	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, nil, lookupParams)
+	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,7 +247,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true, lookupParams)
+	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -254,7 +258,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true, lookupParams)
+	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,8 +413,16 @@ func TestResourceMultihash(t *testing.T) {
 	}
 	rh.Close()
 
+	rhparams := &ResourceHandlerParams{
+		QueryMaxPeriods: &ResourceLookupParams{
+			Limit: false,
+		},
+		Signer:    signer,
+		EthClient: rh.ethClient,
+		EnsClient: rh.ensClient,
+	}
 	// test with signed data
-	rh2, err := NewTestResourceHandler(datadir, rh.ethClient, nil, signer)
+	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -532,7 +544,15 @@ func setupTest(backend headerGetter, ensBackend *ens.ENS, signer ResourceSigner)
 		os.RemoveAll(datadir)
 	}
 
-	rh, err = NewTestResourceHandler(datadir, backend, ensBackend, signer)
+	rhparams := &ResourceHandlerParams{
+		QueryMaxPeriods: &ResourceLookupParams{
+			Limit: false,
+		},
+		Signer:    signer,
+		EthClient: backend,
+		EnsClient: ensBackend,
+	}
+	rh, err = NewTestResourceHandler(datadir, rhparams)
 	return rh, datadir, cleanF, nil
 }
 
