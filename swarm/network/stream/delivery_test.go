@@ -87,8 +87,8 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	peer := streamer.getPeer(peerID)
 
 	peer.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   NewStream(swarmChunkServerStreamName, "", false),
-		History:  NewRange(0, 0),
+		Stream:   NewStream(swarmChunkServerStreamName, "", true),
+		History:  nil,
 		Priority: Top,
 	})
 
@@ -135,9 +135,11 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	peerID := tester.IDs[0]
 	peer := streamer.getPeer(peerID)
 
+	stream := NewStream(swarmChunkServerStreamName, "", true)
+
 	peer.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   NewStream(swarmChunkServerStreamName, "", false),
-		History:  NewRange(0, 0),
+		Stream:   stream,
+		History:  nil,
 		Priority: Top,
 	})
 
@@ -169,7 +171,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 					From:   0,
 					// TODO: why is this 32???
 					To:     32,
-					Stream: NewStream(swarmChunkServerStreamName, "", false),
+					Stream: stream,
 				},
 				Peer: peerID,
 			},
@@ -341,13 +343,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 
 	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
-	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewChunkerParams())
-	rrdpa.Start()
+	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewDPAParams())
 	size := chunkCount * chunkSize
-	fileHash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size))
+	fileHash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// wait until all chunks stored
 	wait()
-	defer rrdpa.Stop()
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -383,7 +383,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				sid := sim.IDs[j+1]
-				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, "", false), NewRange(0, 0), Top)
+				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, "", true), NewRange(0, 0), Top)
 			})
 			if err != nil {
 				return err
@@ -395,11 +395,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 			return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
 		}
 		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
-		dpa := storage.NewDPA(netStore, storage.NewChunkerParams())
-		dpa.Start()
+		dpa := storage.NewDPA(netStore, storage.NewDPAParams())
 
 		go func() {
-			defer dpa.Stop()
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
 			// we must wait for the peer connections to have started before requesting
 			n, err := readAll(dpa, fileHash)
@@ -518,9 +516,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	waitPeerErrC = make(chan error)
 
 	// create a dpa for the last node in the chain which we are gonna write to
-	remoteDpa := storage.NewDPA(sim.Stores[nodes-1], storage.NewChunkerParams())
-	remoteDpa.Start()
-	defer remoteDpa.Stop()
+	remoteDpa := storage.NewDPA(sim.Stores[nodes-1], storage.NewDPAParams())
 
 	// channel to signal simulation initialisation with action call complete
 	// or node disconnections
@@ -614,7 +610,7 @@ Loop:
 		hashes := make([]storage.Key, chunkCount)
 		for i := 0; i < chunkCount; i++ {
 			// create actual size real chunks
-			hash, wait, err := remoteDpa.Store(io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize))
+			hash, wait, err := remoteDpa.Store(io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
 			// wait until all chunks stored
 			wait()
 			if err != nil {

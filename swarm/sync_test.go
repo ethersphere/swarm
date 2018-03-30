@@ -54,6 +54,7 @@ func init() {
 }
 
 func TestSync(t *testing.T) {
+	t.Skip()
 	testSync(t,
 		// testSyncStep{
 		// 	nodeCount: 1,
