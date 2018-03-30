@@ -44,7 +44,6 @@ type Config struct {
 	// serialised/persisted fields
 	*storage.DPAParams
 	*storage.LocalStoreParams
-	*storage.ChunkerParams
 	*network.HiveParams
 	Swap *swap.SwapParams
 	//*network.SyncParams
@@ -75,7 +74,6 @@ func NewConfig() (self *Config) {
 	self = &Config{
 		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
 		DPAParams:        storage.NewDPAParams(),
-		ChunkerParams:    storage.NewChunkerParams(),
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
 		Swap:            swap.NewDefaultSwapParams(),
@@ -123,7 +121,7 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	self.privateKey = prvKey
 	self.LocalStoreParams.Init(self.Path)
 	self.LocalStoreParams.BaseKey = common.Hex2Bytes(self.BzzKey)
-	self.LocalStoreParams.Hash = storage.MakeHashFunc(self.ChunkerParams.Hash)
+	//self.LocalStoreParams.Hash = storage.MakeHashFunc(self.ChunkerParams.Hash)
 }
 
 func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {

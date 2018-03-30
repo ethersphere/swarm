@@ -142,12 +142,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	if err != nil {
 		return
 	}
-	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{
-		DoSync:          true,
-		DoRetrieve:      true,
-		SyncUpdateDelay: config.SyncUpdateDelay,
-	})
-
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// set up DPA, the cloud storage local access layer
@@ -229,13 +223,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	})
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
-
-	// set up DPA, the cloud storage local access layer
-	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
-	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
-	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.dpa = storage.NewDPA(dpaChunkStore, self.config.ChunkerParams)
-	log.Debug(fmt.Sprintf("-> Content Store API"))
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	if self.config.PssEnabled {

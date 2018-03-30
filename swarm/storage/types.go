@@ -254,12 +254,35 @@ type LazyTestSectionReader struct {
 	*io.SectionReader
 }
 
+func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
+	return self.SectionReader.Size(), nil
+}
+
 type StoreParams struct {
 	Hash          SwarmHasher `toml:"-"`
 	DbCapacity    uint64
 	CacheCapacity uint
 	BaseKey       []byte
 	Validator     *ChunkValidator `toml:"-"`
+}
+
+func NewStoreParams(capacity uint64, hash SwarmHasher, basekey []byte, validator *ChunkValidator) *StoreParams {
+	if basekey == nil {
+		basekey = make([]byte, 32)
+	}
+	if hash == nil {
+		hash = MakeHashFunc("SHA3")
+	}
+	if capacity == 0 {
+		capacity = defaultDbCapacity
+	}
+	return &StoreParams{
+		Hash:          hash,
+		DbCapacity:    capacity,
+		CacheCapacity: defaultCacheCapacity,
+		BaseKey:       basekey,
+		Validator:     validator,
+	}
 }
 
 type ChunkData []byte
