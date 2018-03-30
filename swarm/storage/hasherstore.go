@@ -208,7 +208,7 @@ func (h *hasherStore) RefSize() int64 {
 func (h *hasherStore) storeChunk(chunk *Chunk) {
 	h.wg.Add(1)
 	go func() {
-		<-chunk.dbStored
+		<-chunk.dbStoredC
 		h.wg.Done()
 	}()
 	h.store.Put(chunk)

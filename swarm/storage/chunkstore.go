@@ -50,7 +50,7 @@ func (m *MapChunkStore) Put(chunk *Chunk) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chunks[chunk.Key.Hex()] = chunk
-	close(chunk.dbStored)
+	chunk.markAsStored()
 }
 
 func (m *MapChunkStore) Get(key Key) (*Chunk, error) {
