@@ -198,7 +198,7 @@ func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter 
 	persistenceEnabled = true
 	discoveryEnabled = true
 
-	result, testNodes, err := discoveryPersistenceSimulation(nodes, conns, adapters.NewSimAdapter(services), nil) //
+	result, err := discoveryPersistenceSimulation(nodes, conns, adapters.NewSimAdapter(services))
 
 	if err != nil {
 		t.Fatalf("Setting up simulation failed: %v", err)
@@ -224,42 +224,7 @@ func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter 
 	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
 
 	startedAt = time.Now()
-
-	//2nd run
-	persistenceEnabled = true
-	discoveryEnabled = false
-
-	result, testNodes2, err := discoveryPersistenceSimulation(len(testNodes), conns, adapters.NewSimAdapter(services), testNodes)
-	if len(testNodes) != len(testNodes2) {
-		t.Fatalf("number of nodes unequel between simulations %d != %d", len(testNodes), len(testNodes2))
-	}
-	if err != nil {
-		t.Fatalf("Setting up simulation failed: %v", err)
-	}
-	if result.Error != nil {
-		t.Fatalf("Simulation failed: %s", result.Error)
-	}
-	t.Logf("Simulation with %d nodes passed in %s", nodes, result.FinishedAt.Sub(result.StartedAt))
-	min = 0
-	max = 0
-	sum = 0
-
-	for _, pass := range result.Passes {
-		duration := pass.Sub(result.StartedAt)
-		if sum == 0 || duration < min {
-			min = duration
-		}
-		if duration > max {
-			max = duration
-		}
-		sum += int(duration.Nanoseconds())
-	}
-	t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
-	finishedAt = time.Now()
-	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
-
 	cleanDbStores()
-
 	return nil
 }
 
@@ -386,7 +351,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	return result, nil
 }
 
-func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapter, preloadedTestNodes map[int][]byte) (*simulations.StepResult, map[int][]byte, error) {
+func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
 	// create network
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
@@ -397,63 +362,33 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 	ids := make([]discover.NodeID, nodes)
 	var addrs [][]byte
 
-	testNodes := make(map[int][]byte)
-	if preloadedTestNodes != nil {
-		for i := 0; i < nodes; i++ {
-			bytes := preloadedTestNodes[i]
-			conf := adapters.NodeConfig{}
-			err := json.Unmarshal(bytes, &conf)
-			if err != nil {
-				panic(err)
-			}
-			node, err := net.NewNodeWithConfig(&conf)
-			if err != nil {
-				panic(err)
-			}
-			if err := net.Start(node.ID()); err != nil {
-				return nil, nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
-			}
-			if err := triggerChecks(trigger, net, node.ID()); err != nil {
-				return nil, nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
-			}
-			ids[i] = node.ID()
-			testNodes[i] = bytes
-			a := network.ToOverlayAddr(node.ID().Bytes())
-
-			addrs = append(addrs, a)
+	for i := 0; i < nodes; i++ {
+		conf := adapters.RandomNodeConfig()
+		node, err := net.NewNodeWithConfig(conf)
+		if err != nil {
+			panic(err)
 		}
-	} else {
-		for i := 0; i < nodes; i++ {
-			conf := adapters.RandomNodeConfig()
-			node, err := net.NewNodeWithConfig(conf)
-			if err != nil {
-				panic(err)
-			}
-			bytes, err := json.Marshal(&conf)
-			if err != nil {
-				panic(err)
-			}
-			testNodes[i] = bytes
-			if err != nil {
-				return nil, nil, fmt.Errorf("error starting node: %s", err)
-			}
-			if err := net.Start(node.ID()); err != nil {
-				return nil, nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
-			}
-			if err := triggerChecks(trigger, net, node.ID()); err != nil {
-				return nil, nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
-			}
-			ids[i] = node.ID()
-			a := network.ToOverlayAddr(ids[i].Bytes())
-
-			addrs = append(addrs, a)
-
+		if err != nil {
+			return nil, fmt.Errorf("error starting node: %s", err)
 		}
+		if err := net.Start(node.ID()); err != nil {
+			return nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
+		}
+		if err := triggerChecks(trigger, net, node.ID()); err != nil {
+			return nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
+		}
+		ids[i] = node.ID()
+		a := network.ToOverlayAddr(ids[i].Bytes())
+
+		addrs = append(addrs, a)
 	}
+
 	// run a simulation which connects the 10 nodes in a ring and waits
 	// for full peer discovery
 	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
 
+	//hasRestarted := false
+	var restartTime time.Time
 	action := func(ctx context.Context) error {
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
@@ -474,13 +409,35 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 					return fmt.Errorf("error getting node health: %s", err)
 				}
 
-				log.Debug(fmt.Sprintf("IS HEALTHY: %t", healthy.GotNN && healthy.KnowNN && healthy.Full))
+				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", id.String(), healthy.GotNN && healthy.KnowNN && healthy.Full))
 				if !healthy.GotNN || !healthy.Full {
 					isHealthy = false
 					break
 				}
 			}
 			if isHealthy {
+				log.Info("reached healthy kademlia. starting to shutdown nodes.")
+
+				shutdownStarted := time.Now()
+				// stop all ids, then start them again
+				for _, id := range ids {
+					node := net.GetNode(id)
+					node.Stop()
+				}
+				log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Now().Sub(shutdownStarted)))
+				persistenceEnabled = true
+				discoveryEnabled = false
+
+				for _, id := range ids {
+					node := net.GetNode(id)
+					if err := net.Start(node.ID()); err != nil {
+						return fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
+					}
+					//	node.Up = true
+					if err := triggerChecks(trigger, net, node.ID()); err != nil {
+						return fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
+					}
+				}
 				break
 			}
 		}
@@ -525,7 +482,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		if err := client.Call(&healthy, "hive_healthy", ppmap[id]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
+		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
 
 		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
 	}
@@ -544,25 +501,25 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		},
 	})
 	if result.Error != nil {
-		return result, nil, nil
+		return result, nil
 	}
 
 	if *snapshotFile != "" {
 		snap, err := net.Snapshot()
 		if err != nil {
-			return nil, nil, errors.New("no shapshot dude")
+			return nil, errors.New("no shapshot dude")
 		}
 		jsonsnapshot, err := json.Marshal(snap)
 		if err != nil {
-			return nil, nil, fmt.Errorf("corrupt json snapshot: %v", err)
+			return nil, fmt.Errorf("corrupt json snapshot: %v", err)
 		}
 		log.Info("writing snapshot", "file", *snapshotFile)
 		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
-	return result, testNodes, nil
+	return result, nil
 }
 
 // triggerChecks triggers a simulation step check whenever a peer is added or

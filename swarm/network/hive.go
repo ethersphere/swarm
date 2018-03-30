@@ -102,7 +102,7 @@ func NewHive(params *HiveParams, overlay Overlay, store state.Store) *Hive {
 // server is used to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
-	log.Trace(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
+	log.Info(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
 		if err := h.loadPeers(); err != nil {
@@ -208,14 +208,16 @@ func ToAddr(pa OverlayPeer) *BzzAddr {
 // loadPeers, savePeer implement persistence callback/
 func (h *Hive) loadPeers() error {
 	var as []*BzzAddr
-
 	err := h.Store.Get("peers", &as)
 	if err != nil {
 		if err == state.ErrNotFound {
+			log.Info(fmt.Sprintf("hive %08x: no persisted peers found", h.BaseAddr()[:4]))
 			return nil
 		}
 		return err
 	}
+	log.Info(fmt.Sprintf("hive %08x: peers loaded", h.BaseAddr()[:4]))
+
 	return h.Register(toOverlayAddrs(as...))
 }
 
