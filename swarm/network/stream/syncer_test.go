@@ -22,10 +22,12 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	//	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -35,6 +37,21 @@ import (
 )
 
 const dataChunkCount = 500
+
+func getConnFromEvents(events []*simulations.Event) (ones []discover.NodeID, others []discover.NodeID, downcount int) {
+	for _, r := range events {
+		if r.Type == simulations.EventTypeConn {
+			if !r.Conn.Up {
+				log.Warn(fmt.Sprintf("conn %s => %s down! (ctrl: %v)", r.Conn.One.TerminalString(), r.Conn.Other.TerminalString()), r.Control)
+				downcount++
+			} else {
+				ones = append(ones, r.Conn.One)
+				others = append(others, r.Conn.Other)
+			}
+		}
+	}
+	return
+}
 
 func TestDiscoveryAndSync(t *testing.T) {
 	testDiscoveryAndSync(t, 8, 0, dataChunkCount, false, 1)
@@ -47,21 +64,15 @@ func testDiscoveryAndSync(t *testing.T, nodes int, conns int, chunkCount int, sk
 		addr.OAddr[0] = byte(0)
 		return addr
 	}
+
 	conf := &streamTesting.RunConfig{
 		Adapter:         *adapter,
 		NodeCount:       nodes,
 		ConnLevel:       conns,
 		ToAddr:          toAddr,
 		Services:        services,
-		EnableMsgEvents: false,
-		DefaultService:  "discovery",
+		EnableMsgEvents: true,
 	}
-
-	// create context for simulation run
-	timeout := 30 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	// defer cancel should come before defer simulation teardown
-	defer cancel()
 
 	// create simulation network with the config
 	sim, teardown, err := streamTesting.NewSimulation(conf)
@@ -128,9 +139,123 @@ func testDiscoveryAndSync(t *testing.T, nodes int, conns int, chunkCount int, sk
 	errc := make(chan error, 1)
 	quitC := make(chan struct{})
 	defer close(quitC)
-	defer close(errc)
 
-	_, err = sim.Run(ctx, conf)
+	wgParent := &sync.WaitGroup{}
+	wgParent.Add(1)
+	idC := make(chan discover.NodeID)
+	go func(wgParent *sync.WaitGroup) {
+		wgParent.Wait()
+		time.Sleep(time.Second * 3)
+		for i := 0; i < nodes; i++ {
+			idC <- sim.IDs[i]
+		}
+	}(wgParent)
+	conf.Step = &simulations.Step{
+		Action: func(ctx context.Context) error {
+			var k int
+			wg := sync.WaitGroup{}
+			for i := 0; i < nodes; i++ {
+				j := i - 1
+				if j < 0 {
+					j = nodes - 1
+				}
+				wg.Add(1)
+				go func(i int, j int, k *int) {
+					defer wg.Done()
+					err := sim.Net.Connect(sim.IDs[i], sim.IDs[j])
+					if err != nil {
+						t.Fatalf("connfail", "one", sim.IDs[i], "other", sim.IDs[j], "err", err)
+					}
+					*k++
+				}(i, j, &k)
+			}
+			wg.Wait()
+			wgParent.Done()
+			log.Warn("after action 1", "k", k, "nodes", nodes)
+			return nil
+		},
+		Trigger: idC,
+		Expect: &simulations.Expectation{
+			Nodes: sim.IDs[:],
+			Check: func(ctx context.Context, id discover.NodeID) (bool, error) {
+				return true, nil
+			},
+		},
+	}
+
+	// create context for simulation run
+	timeout := 60 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
+
+	results, err := sim.Run(ctx, conf)
+	if err != nil {
+		t.Fatalf("stream sim fail: %v", err)
+	} else if results.Error != nil {
+		t.Fatalf("sim expect fail: %v", results.Error)
+	}
+	// TODO: move to expect
+	var lastconncount int
+	var lastupcount int
+	for {
+		ones, _, downcount := getConnFromEvents(results.NetworkEvents)
+		upcount := len(ones)
+		if upcount+downcount == lastconncount && upcount > 0 {
+			break
+		}
+		lastupcount = upcount
+		log.Warn("conncount diff", "lastconncount", lastconncount, "now", upcount+downcount, "ups", upcount, "downs", downcount)
+		lastconncount = upcount + downcount
+		time.Sleep(time.Millisecond * 500)
+	}
+	log.Warn("conns stable", "ups", lastupcount)
+
+	idC = make(chan discover.NodeID)
+	conf.Step = &simulations.Step{
+		Action: func(ctx context.Context) error {
+			ones, others, _ := getConnFromEvents(results.NetworkEvents)
+			for i, n := range ones {
+				conn := sim.Net.GetConn(n, others[i])
+				log.Warn("conn", "count", i, "one", conn.One.TerminalString(), "other", conn.Other.TerminalString(), "up", conn.Up)
+			}
+
+			for i, n := range ones {
+				err := sim.CallClient(n, func(client *rpc.Client) error {
+					// report disconnect events to the error channel cos peers should not disconnect
+					ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
+					defer cancel()
+					// start syncing, i.e., subscribe to upstream peers po 1 bin
+					sid := others[i]
+					return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream("SYNC", FormatSyncBinKey(1), false), NewRange(0, 0), Top)
+				})
+				if err != nil {
+					log.Error("subscribeerror", "one", ones[i].TerminalString(), "other", others[i].TerminalString(), "err", err)
+				}
+			}
+			return nil
+		},
+		Trigger: idC,
+		Expect: &simulations.Expectation{
+			Nodes: sim.IDs[0:1],
+			Check: func(ctx context.Context, id discover.NodeID) (bool, error) {
+				return true, nil
+			},
+		},
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	go func() {
+		time.Sleep(10 * time.Second)
+		idC <- sim.IDs[0]
+	}()
+	results = simulations.NewSimulation(sim.Net).Run(ctx, conf.Step)
+	if results.Error != nil {
+		t.Fatalf("%v", results.Error)
+	}
+
+	_ = errc
 
 }
 

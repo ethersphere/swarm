@@ -45,8 +45,9 @@ import (
 )
 
 var (
-	adapter  = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
-	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
+	adapter   = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
+	loglevel  = flag.Int("loglevel", 4, "verbosity of logs")
+	rawformat = flag.Bool("rawlog", false, "set to true to omit terminal formatting")
 )
 
 var (
@@ -56,9 +57,9 @@ var (
 )
 
 var services = adapters.Services{
-	"streamer":          NewStreamerService,
-	"intervalsStreamer": newIntervalsStreamerService,
-	"discovery":         discoveryTest.NewService,
+	"streamer": NewStreamerService,
+	//"intervalsStreamer": newIntervalsStreamerService,
+	"discovery": discoveryTest.NewService,
 }
 
 func init() {
@@ -66,9 +67,8 @@ func init() {
 	// register the Delivery service which will run as a devp2p
 	// protocol when using the exec adapter
 	adapters.RegisterServices(services)
-
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(!*rawformat))))
 }
 
 // NewStreamerService
@@ -89,6 +89,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
 	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewDPAParams())
+	log.Warn("newstreamersvc", "node", id, "registry", fmt.Sprintf("%p", r))
 	return &TestRegistry{Registry: r, dpa: dpa}, nil
 }
 

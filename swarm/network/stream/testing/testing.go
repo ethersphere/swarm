@@ -210,15 +210,6 @@ func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.Ste
 					}(i, k)
 				}
 			}
-		} else {
-			j := i - 1
-			if j < 0 {
-				j = nodes - 1
-			}
-			wg.Add(1)
-			go func(i int, j int) {
-				s.Net.Connect(s.IDs[i], s.IDs[j])
-			}(i, j)
 		}
 	}
 	wg.Wait()

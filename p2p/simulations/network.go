@@ -269,8 +269,13 @@ func (self *Network) Connect(oneID, otherID discover.NodeID) error {
 	if err != nil {
 		return err
 	}
+	err = client.Call(nil, "admin_addPeer", string(conn.other.Addr()))
+	if err != nil {
+		return err
+	}
+	conn.Up = true
 	self.events.Send(ControlEvent(conn))
-	return client.Call(nil, "admin_addPeer", string(conn.other.Addr()))
+	return nil
 }
 
 // Disconnect disconnects two nodes by calling the "admin_removePeer" RPC
