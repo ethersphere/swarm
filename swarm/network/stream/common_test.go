@@ -38,6 +38,7 @@ import (
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	discoveryTest "github.com/ethereum/go-ethereum/swarm/network/simulations/discovery"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
@@ -57,6 +58,7 @@ var (
 var services = adapters.Services{
 	"streamer":          NewStreamerService,
 	"intervalsStreamer": newIntervalsStreamerService,
+	"discovery":         discoveryTest.NewService,
 }
 
 func init() {

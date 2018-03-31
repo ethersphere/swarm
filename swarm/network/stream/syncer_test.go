@@ -36,6 +36,104 @@ import (
 
 const dataChunkCount = 500
 
+func TestDiscoveryAndSync(t *testing.T) {
+	testDiscoveryAndSync(t, 8, 0, dataChunkCount, false, 1)
+}
+
+func testDiscoveryAndSync(t *testing.T, nodes int, conns int, chunkCount int, skipCheck bool, po uint8) {
+	defaultSkipCheck = skipCheck
+	toAddr = func(id discover.NodeID) *network.BzzAddr {
+		addr := network.NewAddrFromNodeID(id)
+		addr.OAddr[0] = byte(0)
+		return addr
+	}
+	conf := &streamTesting.RunConfig{
+		Adapter:         *adapter,
+		NodeCount:       nodes,
+		ConnLevel:       conns,
+		ToAddr:          toAddr,
+		Services:        services,
+		EnableMsgEvents: false,
+		DefaultService:  "discovery",
+	}
+
+	// create context for simulation run
+	timeout := 30 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
+
+	// create simulation network with the config
+	sim, teardown, err := streamTesting.NewSimulation(conf)
+	defer teardown()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// HACK: these are global variables in the test so that they are available for
+	// the service constructor function
+	// TODO: will this work with exec/docker adapter?
+	// localstore of nodes made available for action and check calls
+	stores = make(map[discover.NodeID]storage.ChunkStore)
+	nodeIndex := make(map[discover.NodeID]int)
+	for i, id := range sim.IDs {
+		nodeIndex[id] = i
+		stores[id] = sim.Stores[i]
+	}
+	deliveries = make(map[discover.NodeID]*Delivery)
+	// peerCount function gives the number of peer connections for a nodeID
+	// this is needed for the service run function to wait until
+	// each protocol  instance runs and the streamer peers are available
+	peerCount = func(id discover.NodeID) int {
+		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
+			return 1
+		}
+		return 2
+	}
+	waitPeerErrC = make(chan error)
+
+	// here we distribute chunks of a random file into stores 1...nodes
+	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewDPAParams())
+	size := chunkCount * chunkSize
+	_, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+	// need to wait cos we then immediately collect the relevant bin content
+	wait()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	// create DBAPI-s for all nodes
+	dbs := make([]*storage.DBAPI, nodes)
+	for i := 0; i < nodes; i++ {
+		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
+	}
+
+	// collect hashes in po 1 bin for each node
+	hashes := make([][]storage.Key, nodes)
+	totalHashes := 0
+	hashCounts := make([]int, nodes)
+	for i := nodes - 1; i >= 0; i-- {
+		if i < nodes-1 {
+			hashCounts[i] = hashCounts[i+1]
+		}
+		dbs[i].Iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
+			hashes[i] = append(hashes[i], key)
+			totalHashes++
+			hashCounts[i]++
+			return true
+		})
+	}
+
+	// errc is error channel for simulation
+	errc := make(chan error, 1)
+	quitC := make(chan struct{})
+	defer close(quitC)
+	defer close(errc)
+
+	_, err = sim.Run(ctx, conf)
+
+}
+
 func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
 	testSyncBetweenNodes(t, 4, 1, dataChunkCount, true, 1)
@@ -43,7 +141,7 @@ func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
 }
 
-func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool, po uint8) {
+func testSyncBetweenNodes(t *testing.T, nodes int, conns int, chunkCount int, skipCheck bool, po uint8) {
 	defaultSkipCheck = skipCheck
 	toAddr = func(id discover.NodeID) *network.BzzAddr {
 		addr := network.NewAddrFromNodeID(id)
