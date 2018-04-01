@@ -64,19 +64,15 @@ func NewDPAParams() *DPAParams {
 // for testing locally
 func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 
-	contentvalidator := NewContentAddressValidator(MakeHashFunc(SHA3Hash)())
-	validator := NewChunkValidator(contentvalidator.Validate, nil)
-	params := NewLDBStoreParams(datadir, 0, nil, nil, validator)
-
-	dbStore, err := NewLDBStore(params)
+	params := NewDefaultLocalStoreParams()
+	params.Init(datadir)
+	localStore, err := NewLocalStore(params, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	return NewDPA(&LocalStore{
-		memStore: NewMemStore(params.StoreParams, dbStore),
-		DbStore:  dbStore,
-	}, NewDPAParams()), nil
+	contentvalidator := NewContentAddressValidator(MakeHashFunc(SHA3Hash)())
+	localStore.Validator = NewChunkValidator(contentvalidator.Validate, nil)
+	return NewDPA(localStore, NewDPAParams()), nil
 }
 
 func NewDPA(store ChunkStore, params *DPAParams) *DPA {

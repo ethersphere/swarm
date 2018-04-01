@@ -84,14 +84,14 @@ type LDBStoreParams struct {
 // create params with specified values.
 // If 0 for capacity or nil for hash, baskey is specified, default values for these params will be used
 // path has no default value
-func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey []byte, validator *ChunkValidator) *LDBStoreParams {
+func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey []byte) *LDBStoreParams {
 	if hash == nil {
 		hash = MakeHashFunc(SHA3Hash)
 	}
 	if capacity == 0 {
 		capacity = singletonSwarmDbCapacity
 	}
-	storeparams := NewStoreParams(capacity, hash, basekey, validator)
+	storeparams := NewStoreParams(capacity, hash, basekey)
 	return &LDBStoreParams{
 		StoreParams: storeparams,
 		Path:        path,
@@ -100,8 +100,7 @@ func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey [
 }
 
 type LDBStore struct {
-	db        *LDBDatabase
-	validator ChunkValidatorFunc
+	db *LDBDatabase
 
 	// this should be stored in db, accessed transactionally
 	entryCnt, accessCnt, dataIdx, capacity uint64
@@ -134,7 +133,6 @@ type LDBStore struct {
 func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s = new(LDBStore)
 	s.hashfunc = params.Hash
-	s.validator = params.Validator.Validate
 
 	s.batchC = make(chan bool)
 	s.batchesC = make(chan struct{}, 1)
@@ -719,11 +717,6 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 				s.delete(indx.Idx, getIndexKey(key), s.po(key))
 				return
 			}
-		}
-
-		if !s.validator(&key, data[32:]) {
-			s.delete(indx.Idx, getIndexKey(key), s.po(key))
-			log.Error("Invalid Chunk in Database. Please repair with command: 'swarm cleandb'", "chunk", chunk)
 		}
 
 		chunk = NewChunk(key, nil)

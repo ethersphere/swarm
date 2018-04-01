@@ -546,11 +546,16 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 // retrieve update metadata from chunk data
 // mirrors newUpdateChunk()
 func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, string, []byte, error) {
+	// 14 = header + one byte of name + one byte of data
+	if len(chunkdata) < 14 {
+		return nil, 0, 0, "", nil, NewResourceError(ErrNothingToReturn, "chunk less than 13 bytes cannot be a resource update chunk")
+	}
 	cursor := 0
 	headerlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
 	cursor += 2
 	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
-	if int(headerlength+datalength+4) > len(chunkdata) {
+	exclsignlength := int(headerlength + datalength + 4)
+	if exclsignlength > len(chunkdata) || exclsignlength < 14 {
 		return nil, 0, 0, "", nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata)))
 	}
 	var period uint32
@@ -871,17 +876,14 @@ func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*Res
 	if err != nil {
 		return nil, err
 	}
-	validator := &ChunkValidator{
-		resource: rh.Validate,
-	}
-	dbstoreparams := NewLDBStoreParams(path, 0, nil, nil, validator)
-	dbStore, err := NewLDBStore(dbstoreparams)
+	localstoreparams := NewDefaultLocalStoreParams()
+	localstoreparams.Init(path)
+	localStore, err := NewLocalStore(localstoreparams, nil)
 	if err != nil {
 		return nil, err
 	}
-	localStore := &LocalStore{
-		memStore: NewMemStore(NewStoreParams(defaultDbCapacity, nil, nil, validator), dbStore),
-		DbStore:  dbStore,
+	localStore.Validator = &ChunkValidator{
+		resource: rh.Validate,
 	}
 	rh.SetStore(localStore)
 	return rh, nil

@@ -39,7 +39,7 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	defer tdb.close()
 	db := tdb.LDBStore
 	db.setCapacity(50000)
-	storeParams := NewStoreParams(defaultCacheCapacity, nil, nil, nil)
+	storeParams := NewStoreParams(defaultCacheCapacity, nil, nil)
 	memStore := NewMemStore(storeParams, db)
 	localStore := &LocalStore{
 		memStore: memStore,
@@ -98,7 +98,7 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	}
 	defer tdb.close()
 	db := tdb.LDBStore
-	storeParams := NewStoreParams(0, nil, nil, nil)
+	storeParams := NewStoreParams(0, nil, nil)
 	storeParams.CacheCapacity = 10000000
 	memStore := NewMemStore(storeParams, db)
 	localStore := &LocalStore{

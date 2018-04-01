@@ -55,10 +55,6 @@ func TestBzzResource(t *testing.T) {
 	defer srv.Close()
 
 	// our mutable resource "name"
-	//	keybytes := []byte("foo")
-	//	srv.Hasher.Reset()
-	//	srv.Hasher.Write([]byte(fmt.Sprintf("%x", keybytes)))
-	//	keybyteshash := fmt.Sprintf("%x", srv.Hasher.Sum(nil))
 	keybytes := "foo"
 	keybyteshash := ens.EnsNode(keybytes)
 

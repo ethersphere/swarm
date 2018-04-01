@@ -34,13 +34,12 @@ var (
 type LocalStoreParams struct {
 	*StoreParams
 	ChunkDbPath string
-	Radius      int
 }
 
 //create params with default values
 func NewDefaultLocalStoreParams() (self *LocalStoreParams) {
 	return &LocalStoreParams{
-		StoreParams: NewStoreParams(0, nil, nil, nil),
+		StoreParams: NewStoreParams(0, nil, nil),
 	}
 }
 
@@ -55,14 +54,15 @@ func (self *LocalStoreParams) Init(path string) {
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
-	memStore *MemStore
-	DbStore  *LDBStore
-	mu       sync.Mutex
+	Validator *ChunkValidator
+	memStore  *MemStore
+	DbStore   *LDBStore
+	mu        sync.Mutex
 }
 
 // This constructor uses MemStore and DbStore as components
 func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey, params.Validator)
+	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
 	dbStore, err := NewMockDbStore(ldbparams, mockStore)
 	if err != nil {
 		return nil, err
@@ -74,7 +74,7 @@ func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalS
 }
 
 func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey, params.Validator)
+	ldbparams := NewLDBStoreParams(params.ChunkDbPath, params.DbCapacity, params.Hash, params.BaseKey)
 	dbStore, err := NewLDBStore(ldbparams)
 	if err != nil {
 		return nil, err
@@ -93,6 +93,13 @@ func (self *LocalStore) CacheCounter() uint64 {
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
+	if self.Validator != nil {
+		if !self.Validator.Validate(&chunk.Key, chunk.SData) {
+			chunk.SetErrored(ChunkErrInvalid)
+			chunk.dbStoredC <- false
+			return
+		}
+	}
 	log.Trace("localstore.put", "key", chunk.Key)
 	self.mu.Lock()
 	defer self.mu.Unlock()
@@ -151,11 +158,11 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 
 	var err error
 	chunk, err = self.get(key)
-	if err == nil && !chunk.GetErrored() {
+	if err == nil && chunk.GetErrored() == ChunkErrOk {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
 		return chunk, false
 	}
-	if err == ErrFetching && !chunk.GetErrored() {
+	if err == ErrFetching && chunk.GetErrored() == ChunkErrOk {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
 		return chunk, false
 	}

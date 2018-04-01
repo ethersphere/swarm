@@ -205,11 +205,11 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	contentvalidator := storage.NewContentAddressValidator(storage.MakeHashFunc(storage.SHA3Hash)())
 	validator := storage.NewChunkValidator(contentvalidator.Validate, resourceHandler.Validate)
 
-	config.LocalStoreParams.Validator = validator
 	self.lstore, err = storage.NewLocalStore(config.LocalStoreParams, mockStore)
 	if err != nil {
 		return
 	}
+	self.lstore.Validator = validator
 	// setup local store
 	log.Debug(fmt.Sprintf("Set up local storage"))
 

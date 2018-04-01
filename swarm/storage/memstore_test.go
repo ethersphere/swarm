@@ -19,7 +19,7 @@ package storage
 import "testing"
 
 func newTestMemStore() *MemStore {
-	storeparams := NewStoreParams(defaultCacheCapacity, nil, nil, nil)
+	storeparams := NewStoreParams(defaultCacheCapacity, nil, nil)
 	return NewMemStore(storeparams, nil)
 }
 

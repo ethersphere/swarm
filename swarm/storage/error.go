@@ -13,3 +13,13 @@ const (
 	ErrPeriodDepth
 	ErrCnt
 )
+
+const (
+	ChunkErrOk = iota
+	ChunkErrNotFound
+	ChunkErrNoForward
+	ChunkErrTimeout
+	ChunkErrInvalid
+)
+
+type ChunkError byte

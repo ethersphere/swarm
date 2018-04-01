@@ -181,18 +181,18 @@ type Chunk struct {
 	dbStoredC  chan bool // never remove a chunk from memStore before it is written to dbStore
 	dbStored   bool
 	dbStoredMu *sync.Mutex
-	errored    bool // flag which is set when the chunk request has errored or timeouted
+	errored    ChunkError // flag which is set when the chunk request has errored or timeouted
 	erroredMu  sync.Mutex
 }
 
-func (c *Chunk) SetErrored(val bool) {
+func (c *Chunk) SetErrored(val ChunkError) {
 	c.erroredMu.Lock()
 	defer c.erroredMu.Unlock()
 
 	c.errored = val
 }
 
-func (c *Chunk) GetErrored() bool {
+func (c *Chunk) GetErrored() ChunkError {
 	c.erroredMu.Lock()
 	defer c.erroredMu.Unlock()
 
@@ -263,10 +263,9 @@ type StoreParams struct {
 	DbCapacity    uint64
 	CacheCapacity uint
 	BaseKey       []byte
-	Validator     *ChunkValidator `toml:"-"`
 }
 
-func NewStoreParams(capacity uint64, hash SwarmHasher, basekey []byte, validator *ChunkValidator) *StoreParams {
+func NewStoreParams(capacity uint64, hash SwarmHasher, basekey []byte) *StoreParams {
 	if basekey == nil {
 		basekey = make([]byte, 32)
 	}
@@ -281,7 +280,6 @@ func NewStoreParams(capacity uint64, hash SwarmHasher, basekey []byte, validator
 		DbCapacity:    capacity,
 		CacheCapacity: defaultCacheCapacity,
 		BaseKey:       basekey,
-		Validator:     validator,
 	}
 }
 
