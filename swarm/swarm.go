@@ -144,20 +144,11 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
-	// set up DPA, the cloud storage local access layer
-	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
-	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
-	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
-	log.Debug(fmt.Sprintf("-> Content Store API"))
-
 	// Pss = postal service over swarm (devp2p over bzz)
-	if self.config.PssEnabled {
-		pssparams := pss.NewPssParams(self.privateKey)
-		self.ps = pss.NewPss(to, pssparams)
-		if pss.IsActiveHandshake {
-			pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
-		}
+	pssparams := pss.NewPssParams(self.privateKey)
+	self.ps = pss.NewPss(to, self.dpa, pssparams)
+	if pss.IsActiveHandshake {
+		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
 	// set up high level api
@@ -180,8 +171,14 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		self.dns = resolver
 	}
 
+	self.lstore, err = storage.NewLocalStore(config.LocalStoreParams, mockStore)
+	if err != nil {
+		return
+	}
+
 	var resourceHandler *storage.ResourceHandler
 	// if use resource updates
+
 	if self.config.ResourceEnabled && resolver != nil {
 		resolver.SetNameHash(ens.EnsNode)
 		rhparams := &storage.ResourceHandlerParams{
@@ -203,13 +200,14 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 
 	contentvalidator := storage.NewContentAddressValidator(storage.MakeHashFunc(storage.SHA3Hash)())
-	validator := storage.NewChunkValidator(contentvalidator.Validate, resourceHandler.Validate)
-
-	self.lstore, err = storage.NewLocalStore(config.LocalStoreParams, mockStore)
-	if err != nil {
-		return
+	var validator *storage.ChunkValidator
+	if resourceHandler != nil {
+		validator = storage.NewChunkValidator(contentvalidator.Validate, resourceHandler.Validate)
+	} else {
+		validator = storage.NewChunkValidator(contentvalidator.Validate, nil)
 	}
 	self.lstore.Validator = validator
+
 	// setup local store
 	log.Debug(fmt.Sprintf("Set up local storage"))
 
@@ -221,6 +219,13 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		DoRetrieve:      true,
 		SyncUpdateDelay: config.SyncUpdateDelay,
 	})
+
+	// set up DPA, the cloud storage local access layer
+	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
+	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
+	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
+	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
+	log.Debug(fmt.Sprintf("-> Content Store API"))
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 

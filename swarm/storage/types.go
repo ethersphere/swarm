@@ -335,9 +335,14 @@ func (self *ContentAddressValidator) Validate(key *Key, data []byte) bool {
 	self.Hasher.Write(data)
 	hash := self.Hasher.Sum(nil)
 	if !bytes.Equal(hash, (*key)[:]) {
-		log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, dself.Hata %v, key %v", hash, data[:16], (*key)[:]))
+		log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, self.data %v, key %v", hash, data[:16], (*key)[:]))
 		return false
 	}
+	l := 16
+	if len(data) < 16 {
+		l = len(data)
+	}
+	log.Info("valid content chunk", "key", (*key)[:], "data", data[:l])
 	return true
 }
 
