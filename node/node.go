@@ -287,7 +287,7 @@ func (n *Node) startInProc(apis []rpc.API) error {
 		if err := handler.RegisterName(api.Namespace, api.Service); err != nil {
 			return err
 		}
-		n.log.Debug("InProc registered", "service", api.Service, "namespace", api.Namespace)
+		//		n.log.Debug("InProc registered", "service", api.Service, "namespace", api.Namespace)
 	}
 	n.inprocHandler = handler
 	return nil
@@ -513,6 +513,7 @@ func (n *Node) Stop() error {
 	// Remove the keystore if it was created ephemerally.
 	var keystoreErr error
 	if n.ephemeralKeystore != "" {
+		log.Trace("deleting emphemeral keystore")
 		keystoreErr = os.RemoveAll(n.ephemeralKeystore)
 	}
 

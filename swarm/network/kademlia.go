@@ -74,9 +74,9 @@ func NewKadParams() *KadParams {
 		MinProxBinSize: 2,
 		MinBinSize:     2,
 		MaxBinSize:     4,
-		RetryInterval:  4200000000, // 4.2 sec
+		RetryInterval:  5200000000, // 4.2 sec
 		MaxRetries:     42,
-		RetryExponent:  2,
+		RetryExponent:  1,
 		PruneInterval:  0, // TODO:
 	}
 }
