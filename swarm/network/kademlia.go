@@ -18,6 +18,7 @@ package network
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -177,7 +178,6 @@ func (e *entry) conn() OverlayConn {
 // Register enters each OverlayAddr as kademlia peer record into the
 // database of known peer addresses
 func (k *Kademlia) Register(peers []OverlayAddr) error {
-	log.Trace("registering peers")
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	var known, size int
@@ -192,14 +192,14 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 			// if not found
 			if v == nil {
 				// insert new offline peer into conns
-				log.Trace("inserting peer")
-
+				log.Trace(fmt.Sprintf("inserting peer %s", hex.EncodeToString(p.Address())))
 				return newEntry(p)
 			}
 			// found among known peers, do nothing
 			return v
 		})
 		if found {
+			log.Trace("found peer, not doing anything")
 			known++
 		}
 		size++
@@ -235,7 +235,7 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		log.Trace(fmt.Sprintf("%08x candidate nearest neighbour found: %v (%v)", k.BaseAddr()[:4], a, ppo))
 		return a, 0, false
 	}
-	// log.Trace(fmt.Sprintf("%08x no candidate nearest neighbours to connect to (Depth: %v, minProxSize: %v) %#v", k.BaseAddr()[:4], depth, k.MinProxBinSize, a))
+	log.Trace(fmt.Sprintf("%08x no candidate nearest neighbours to connect to (Depth: %v, minProxSize: %v) %#v", k.BaseAddr()[:4], depth, k.MinProxBinSize, a))
 
 	var bpo []int
 	prev := -1
