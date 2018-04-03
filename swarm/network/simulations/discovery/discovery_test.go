@@ -15,7 +15,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -72,10 +71,10 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount    = flag.Int("nodes", 16, "number of nodes to create (default 10)")
+	nodeCount    = flag.Int("nodes", 6, "number of nodes to create (default 10)")
 	initCount    = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
 	snapshotFile = flag.String("snapshot", "", "create snapshot")
-	loglevel     = flag.Int("loglevel", 3, "verbosity of logs")
+	loglevel     = flag.Int("loglevel", 6, "verbosity of logs")
 )
 
 func init() {
@@ -153,6 +152,13 @@ func TestDiscoveryPersistenceSimulationSimAdapter(t *testing.T) {
 }
 
 func testDiscoveryPersistenceSimulationSimAdapter(t *testing.T, nodes, conns int) {
+	baseDir, err := ioutil.TempDir("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(baseDir)
+
+	//testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewExecAdapter(baseDir))
 	testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(services))
 }
 
@@ -198,7 +204,7 @@ func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter 
 	persistenceEnabled = true
 	discoveryEnabled = true
 
-	result, err := discoveryPersistenceSimulation(nodes, conns, adapters.NewSimAdapter(services))
+	result, err := discoveryPersistenceSimulation(nodes, conns, adapter)
 
 	if err != nil {
 		t.Fatalf("Setting up simulation failed: %v", err)
@@ -224,7 +230,7 @@ func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter 
 	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
 
 	startedAt = time.Now()
-	cleanDbStores()
+	//cleanDbStores()
 	return nil
 }
 
@@ -240,116 +246,115 @@ func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter 
 // 	}
 // }
 
-func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
-	// create network
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: serviceName,
-	})
-	defer net.Shutdown()
-	trigger := make(chan discover.NodeID)
-	ids := make([]discover.NodeID, nodes)
-	for i := 0; i < nodes; i++ {
-		conf := adapters.RandomNodeConfig()
-		node, err := net.NewNodeWithConfig(conf)
-		if err != nil {
-			return nil, fmt.Errorf("error starting node: %s", err)
-		}
-		if err := net.Start(node.ID()); err != nil {
-			return nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
-		}
-		if err := triggerChecks(trigger, net, node.ID()); err != nil {
-			return nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
-		}
-		ids[i] = node.ID()
-	}
+// func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
+// 	// create network
+// 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
+// 		ID:             "0",
+// 		DefaultService: serviceName,
+// 	})
+// 	defer net.Shutdown()
+// 	trigger := make(chan discover.NodeID)
+// 	ids := make([]discover.NodeID, nodes)
+// 	for i := 0; i < nodes; i++ {
+// 		conf := adapters.RandomNodeConfig()
+// 		node, err := net.NewNodeWithConfig(conf)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("error starting node: %s", err)
+// 		}
+// 		if err := net.Start(node.ID()); err != nil {
+// 			return nil, fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
+// 		}
+// 		if err := triggerChecks(trigger, net, node.ID()); err != nil {
+// 			return nil, fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
+// 		}
+// 		ids[i] = node.ID()
+// 	}
 
-	// run a simulation which connects the 10 nodes in a ring and waits
-	// for full peer discovery
-	var addrs [][]byte
-	action := func(ctx context.Context) error {
-		return nil
-	}
-	wg := sync.WaitGroup{}
-	for i := range ids {
-		// collect the overlay addresses, to
-		addrs = append(addrs, network.ToOverlayAddr(ids[i].Bytes()))
-		for j := 0; j < conns; j++ {
-			var k int
-			if j == 0 {
-				k = (i + 1) % len(ids)
-			} else {
-				k = rand.Intn(len(ids))
-			}
-			wg.Add(1)
-			go func(i, k int) {
-				defer wg.Done()
-				net.Connect(ids[i], ids[k])
-			}(i, k)
-		}
-	}
-	wg.Wait()
-	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
-	// construct the peer pot, so that kademlia health can be checked
-	ppmap := network.NewPeerPotMap(testMinProxBinSize, addrs)
-	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
-		select {
-		case <-ctx.Done():
-			return false, ctx.Err()
-		default:
-		}
+// 	// run a simulation which connects the 10 nodes in a ring and waits
+// 	// for full peer discovery
+// 	var addrs [][]byte
+// 	action := func(ctx context.Context) error {
+// 		return nil
+// 	}
+// 	wg := sync.WaitGroup{}
+// 	for i := range ids {
+// 		// collect the overlay addresses, to
+// 		addrs = append(addrs, network.ToOverlayAddr(ids[i].Bytes()))
+// 		for j := 0; j < conns; j++ {
+// 			var k int
+// 			if j == 0 {
+// 				k = (i + 1) % len(ids)
+// 			} else {
+// 				k = rand.Intn(len(ids))
+// 			}
+// 			wg.Add(1)
+// 			go func(i, k int) {
+// 				defer wg.Done()
+// 				net.Connect(ids[i], ids[k])
+// 			}(i, k)
+// 		}
+// 	}
+// 	wg.Wait()
+// 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
+// 	// construct the peer pot, so that kademlia health can be checked
+// 	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
+// 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
+// 		select {
+// 		case <-ctx.Done():
+// 			return false, ctx.Err()
+// 		default:
+// 		}
 
-		node := net.GetNode(id)
-		if node == nil {
-			return false, fmt.Errorf("unknown node: %s", id)
-		}
-		client, err := node.Client()
-		if err != nil {
-			return false, fmt.Errorf("error getting node client: %s", err)
-		}
-		healthy := &network.Health{}
-		addr := common.Bytes2Hex(network.ToOverlayAddr(id.Bytes()))
-		if err := client.Call(&healthy, "hive_healthy", ppmap[addr]); err != nil {
-			return false, fmt.Errorf("error getting node health: %s", err)
-		}
-		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
-		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
-	}
+// 		node := net.GetNode(id)
+// 		if node == nil {
+// 			return false, fmt.Errorf("unknown node: %s", id)
+// 		}
+// 		client, err := node.Client()
+// 		if err != nil {
+// 			return false, fmt.Errorf("error getting node client: %s", err)
+// 		}
+// 		healthy := &network.Health{}
+// 		if err := client.Call(&healthy, "hive_healthy", ppmap[id]); err != nil {
+// 			return false, fmt.Errorf("error getting node health: %s", err)
+// 		}
+// 		log.Debug(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
+// 		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
+// 	}
 
-	// 64 nodes ~ 1min
-	// 128 nodes ~
-	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
-		Action:  action,
-		Trigger: trigger,
-		Expect: &simulations.Expectation{
-			Nodes: ids,
-			Check: check,
-		},
-	})
-	if result.Error != nil {
-		return result, nil
-	}
+// 	// 64 nodes ~ 1min
+// 	// 128 nodes ~
+// 	timeout := 300 * time.Second
+// 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+// 	defer cancel()
+// 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
+// 		Action:  action,
+// 		Trigger: trigger,
+// 		Expect: &simulations.Expectation{
+// 			Nodes: ids,
+// 			Check: check,
+// 		},
+// 	})
+// 	if result.Error != nil {
+// 		return result, nil
+// 	}
 
-	if *snapshotFile != "" {
-		snap, err := net.Snapshot()
-		if err != nil {
-			return nil, errors.New("no shapshot dude")
-		}
-		jsonsnapshot, err := json.Marshal(snap)
-		if err != nil {
-			return nil, fmt.Errorf("corrupt json snapshot: %v", err)
-		}
-		log.Info("writing snapshot", "file", *snapshotFile)
-		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return result, nil
-}
+// 	if *snapshotFile != "" {
+// 		snap, err := net.Snapshot()
+// 		if err != nil {
+// 			return nil, errors.New("no shapshot dude")
+// 		}
+// 		jsonsnapshot, err := json.Marshal(snap)
+// 		if err != nil {
+// 			return nil, fmt.Errorf("corrupt json snapshot: %v", err)
+// 		}
+// 		log.Info("writing snapshot", "file", *snapshotFile)
+// 		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 	}
+// 	return result, nil
+// }
 
 func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
 	// create network
@@ -389,10 +394,13 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 
 	//hasRestarted := false
 	var restartTime time.Time
+	var mutex = &sync.Mutex{}
+
 	action := func(ctx context.Context) error {
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
 		for range ticker.C {
+			mutex.Lock()
 			isHealthy := true
 			for _, id := range ids {
 				//call Healthy RPC
@@ -412,7 +420,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", id.String(), healthy.GotNN && healthy.KnowNN && healthy.Full))
 				if !healthy.GotNN || !healthy.Full {
 					isHealthy = false
-					break
+					//	break
 				}
 			}
 			if isHealthy {
@@ -422,30 +430,42 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				// stop all ids, then start them again
 				for _, id := range ids {
 					node := net.GetNode(id)
-					node.Stop()
+
+					if err := net.Stop(node.ID()); err != nil {
+						return fmt.Errorf("error stopping node %s: %s", node.ID().TerminalString(), err)
+					}
+
 				}
+				//time.Sleep(100 * time.Millisecond)
+
 				log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Now().Sub(shutdownStarted)))
 				persistenceEnabled = true
 				discoveryEnabled = false
+
+				restartTime = time.Now()
 
 				for _, id := range ids {
 					node := net.GetNode(id)
 					if err := net.Start(node.ID()); err != nil {
 						return fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
 					}
-					//	node.Up = true
+					time.Sleep(100 * time.Millisecond)
 					if err := triggerChecks(trigger, net, node.ID()); err != nil {
 						return fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
 					}
 				}
+
+				log.Info(fmt.Sprintf("restarting nodes took: %s", time.Now().Sub(restartTime)))
 				break
 			}
+			mutex.Unlock()
 		}
 		return nil
 	}
+	//connects in a chain
 	wg := sync.WaitGroup{}
+	//connects in a ring
 	for i := range ids {
-
 		for j := 0; j < conns; j++ {
 			var k int
 			if j == 0 {
@@ -482,7 +502,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		if err := client.Call(&healthy, "hive_healthy", ppmap[id]); err != nil {
 			return false, fmt.Errorf("error getting node health: %s", err)
 		}
-		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v\n%v", id, healthy.GotNN, healthy.KnowNN, healthy.Full, healthy.Hive))
+		log.Info(fmt.Sprintf("node %4s healthy: got nearest neighbours: %v, know nearest neighbours: %v, saturated: %v", id, healthy.GotNN, healthy.KnowNN, healthy.Full))
 
 		return healthy.KnowNN && healthy.GotNN && healthy.Full, nil
 	}

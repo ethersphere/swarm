@@ -177,6 +177,7 @@ func (e *entry) conn() OverlayConn {
 // Register enters each OverlayAddr as kademlia peer record into the
 // database of known peer addresses
 func (k *Kademlia) Register(peers []OverlayAddr) error {
+	log.Trace("registering peers")
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	var known, size int
@@ -191,6 +192,8 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 			// if not found
 			if v == nil {
 				// insert new offline peer into conns
+				log.Trace("inserting peer")
+
 				return newEntry(p)
 			}
 			// found among known peers, do nothing
@@ -307,7 +310,7 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 			k.addrCountC <- k.addrs.Size()
 		}
 	}
-	log.Trace(k.string())
+	//	log.Trace(k.string())
 	// calculate if depth of saturation changed
 	depth := uint8(k.saturation(k.MinBinSize))
 	var changed bool
@@ -767,7 +770,7 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	gotnn := k.gotNearestNeighbours(pp.NNSet)
 	knownn := k.knowNearestNeighbours(pp.NNSet)
 	full := k.full(pp.EmptyBins)
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full, k.string()))
+	//	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full, k.string()))
 	return &Health{knownn, gotnn, full, k.string()}
 }
 

@@ -102,10 +102,12 @@ func NewHive(params *HiveParams, overlay Overlay, store state.Store) *Hive {
 // server is used to connect to a peer based on its NodeID or enode URL
 // these are called on the p2p.Server which runs on the node
 func (h *Hive) Start(server *p2p.Server) error {
-	log.Info(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
+	log.Trace(fmt.Sprintf("%08x hive starting", h.BaseAddr()[:4]))
 	// if state store is specified, load peers to prepopulate the overlay address book
 	if h.Store != nil {
+		log.Trace("deteced an existing store. trying to load peers")
 		if err := h.loadPeers(); err != nil {
+			log.Trace(fmt.Sprintf("%08x hive encoutered an error trying to load peers", h.BaseAddr()[:4]))
 			return err
 		}
 	}
@@ -144,8 +146,13 @@ func (h *Hive) Stop() error {
 // at each iteration, ask the overlay driver to suggest the most preferred peer to connect to
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
+	var mutex = &sync.Mutex{}
+
 	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
 	for range h.ticker.C {
+		mutex.Lock()
+		log.Trace(fmt.Sprintf("%08x hive connect()", h.BaseAddr()[:4]))
+
 		addr, depth, changed := h.SuggestPeer()
 		if h.Discovery && changed {
 			NotifyDepth(uint8(depth), h)
@@ -160,6 +167,7 @@ func (h *Hive) connect() {
 		}
 		log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
 		h.addPeer(under)
+		mutex.Unlock()
 	}
 }
 
