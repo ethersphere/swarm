@@ -265,7 +265,7 @@ func (s *MemStore) removeOldest() {
 	defer metrics.GetOrRegisterResettingTimer("memstore.purge", metrics.DefaultRegistry).UpdateSince(time.Now())
 
 	node := s.memtree
-	log.Warn("purge memstore")
+	log.Trace("purge memstore")
 	for node.entry == nil {
 
 		aidx := uint(0)
