@@ -38,7 +38,7 @@ import (
 // 5. imports the exported datastore
 // 6. fetches the uploaded random file from the second node
 func TestCLISwarmExportImport(t *testing.T) {
-	t.Skip("Test creates invalid chunks")
+	t.Skip("fails on invalid chunks")
 	cluster := newTestCluster(t, 1)
 
 	// generate random 10mb file

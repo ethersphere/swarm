@@ -225,7 +225,7 @@ func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
 }
 
 func getIndexKey(hash Key) []byte {
-	hashSize := len(hash)
+	hashSize := len(hash[:])
 	key := make([]byte, hashSize+1)
 	key[0] = keyIndex
 	copy(key[1:], hash[:])
@@ -432,7 +432,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 			continue
 		}
 
-		key, err := hex.DecodeString(hdr.Name)
+		keybytes, err := hex.DecodeString(hdr.Name)
 		if err != nil {
 			log.Warn("ignoring invalid chunk file", "name", hdr.Name, "err", err)
 			continue
@@ -442,6 +442,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		if err != nil {
 			return count, err
 		}
+		key := Key(keybytes)
 		chunk := NewChunk(key, nil)
 		chunk.SData = data[32:]
 		s.Put(chunk)

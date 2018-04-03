@@ -319,6 +319,7 @@ func NoValidateChunk(hasher SwarmHash, key *Key, data []byte) bool {
 // Provides method for validation of content address in chunks
 // Holds the corresponding hasher to create the address
 type ContentAddressValidator struct {
+	hashMu sync.Mutex
 	Hasher SwarmHash
 }
 
@@ -330,24 +331,22 @@ func NewContentAddressValidator(hash SwarmHash) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (self *ContentAddressValidator) Validate(key *Key, data []byte) bool {
+func (self *ContentAddressValidator) Validate(key Key, data []byte) bool {
+	self.hashMu.Lock()
+	defer self.hashMu.Unlock()
 	self.Hasher.Reset()
 	self.Hasher.Write(data)
 	hash := self.Hasher.Sum(nil)
-	if !bytes.Equal(hash, (*key)[:]) {
-		log.Error(fmt.Sprintf("Apparent key/hash mismatch. Hash %x, self.data %v, key %v", hash, data[:16], (*key)[:]))
+
+	if !bytes.Equal(hash, key[:]) {
+		log.Error("invalid content address. Expected %x, have %x", hash, key)
 		return false
 	}
-	l := 16
-	if len(data) < 16 {
-		l = len(data)
-	}
-	log.Info("valid content chunk", "key", (*key)[:], "data", data[:l])
 	return true
 }
 
 // Common signature for chunk validation functions
-type ChunkValidatorFunc func(*Key, []byte) bool
+type ChunkValidatorFunc func(Key, []byte) bool
 
 // Provides method for validating any chunk type
 type ChunkValidator struct {
@@ -371,7 +370,7 @@ func NewChunkValidator(content ChunkValidatorFunc, resource ChunkValidatorFunc) 
 // If resource is nil and content is not, then check will fail if content check fails
 // If content is nil and resource is not, then check falls through to resource
 // If both are nil, all chunks will be valid
-func (self *ChunkValidator) Validate(key *Key, data []byte) bool {
+func (self *ChunkValidator) Validate(key Key, data []byte) bool {
 	if self.content != nil {
 		if self.content(key, data) {
 			return true

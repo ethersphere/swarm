@@ -94,7 +94,7 @@ func (self *LocalStore) CacheCounter() uint64 {
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
 	if self.Validator != nil {
-		if !self.Validator.Validate(&chunk.Key, chunk.SData) {
+		if !self.Validator.Validate(chunk.Key, chunk.SData) {
 			chunk.SetErrored(ChunkErrInvalid)
 			chunk.dbStoredC <- false
 			return

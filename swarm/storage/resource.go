@@ -204,7 +204,7 @@ func (self *ResourceHandler) SetStore(store ChunkStore) {
 // If resource update, owner is checked against ENS record of resource name inferred from chunk data
 // If parsed signature is nil, validates automatically
 // If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
-func (self *ResourceHandler) Validate(key *Key, data []byte) bool {
+func (self *ResourceHandler) Validate(key Key, data []byte) bool {
 	signature, _, _, name, parseddata, err := self.parseUpdate(data)
 	if err != nil {
 		if len(data) == indexSize {
@@ -216,7 +216,7 @@ func (self *ResourceHandler) Validate(key *Key, data []byte) bool {
 	} else if signature == nil {
 		return true
 	}
-	digest := self.keyDataHash(*key, parseddata)
+	digest := self.keyDataHash(key, parseddata)
 	addr, err := getAddressFromDataSig(digest, *signature)
 	if err != nil {
 		return false
@@ -325,7 +325,8 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 
 	// chunk with key equal to namehash points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
-	chunk := NewChunk(Key(nameHash.Bytes()), nil)
+	key := Key(nameHash.Bytes())
+	chunk := NewChunk(key, nil)
 	chunk.SData = make([]byte, indexSize)
 
 	// root block has first two bytes both, which distinguishes from update bytes

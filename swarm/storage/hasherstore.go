@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 )
 
@@ -31,9 +32,10 @@ type chunkEncryption struct {
 
 type hasherStore struct {
 	store           ChunkStore
-	hashFunc        SwarmHasher
+	hashFunc        SwarmHash
 	chunkEncryption *chunkEncryption
-	hashSize        int   // content hash size
+	hashSize        int // content hash size
+	hashMu          sync.Mutex
 	refSize         int64 // reference size (content hash + possibly encryption key)
 	wg              *sync.WaitGroup
 	closed          chan struct{}
@@ -52,7 +54,8 @@ func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
 func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
 	var chunkEncryption *chunkEncryption
 
-	hashSize := hashFunc().Size()
+	hasher := hashFunc()
+	hashSize := hasher.Size()
 	refSize := int64(hashSize)
 	if toEncrypt {
 		refSize += encryption.KeyLength
@@ -61,7 +64,7 @@ func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool)
 
 	return &hasherStore{
 		store:           chunkStore,
-		hashFunc:        hashFunc,
+		hashFunc:        hasher,
 		chunkEncryption: chunkEncryption,
 		hashSize:        hashSize,
 		refSize:         refSize,
@@ -85,7 +88,6 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 		}
 	}
 	chunk := h.createChunk(c, size)
-
 	h.storeChunk(chunk)
 
 	return Reference(append(chunk.Key, encryptionKey...)), nil
@@ -132,10 +134,11 @@ func (h *hasherStore) Wait() {
 }
 
 func (h *hasherStore) createHash(chunkData ChunkData) Key {
-	hasher := h.hashFunc()
-	hasher.ResetWithLength(chunkData[:8]) // 8 bytes of length
-	hasher.Write(chunkData[8:])           // minus 8 []byte length
-	return hasher.Sum(nil)
+	h.hashMu.Lock()
+	defer h.hashMu.Unlock()
+	h.hashFunc.ResetWithLength(chunkData[:8]) // 8 bytes of length
+	h.hashFunc.Write(chunkData[8:])           // minus 8 []byte length
+	return h.hashFunc.Sum(nil)
 }
 
 func (h *hasherStore) createChunk(chunkData ChunkData, chunkSize int64) *Chunk {
@@ -172,6 +175,7 @@ func (p *hasherStore) encryptChunkData(chunkData ChunkData) (ChunkData, encrypti
 }
 
 func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryption.Key) (ChunkData, error) {
+	log.Info("decryptChunkData", "length", len(chunkData))
 	if len(chunkData) < 8 {
 		return nil, fmt.Errorf("Invalid ChunkData, min length 8 got %v", len(chunkData))
 	}
