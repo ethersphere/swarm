@@ -149,9 +149,14 @@ func NewSimulation(conf *RunConfig) (*Simulation, func(), error) {
 	ids := make([]discover.NodeID, nodes)
 	addrs := make([]network.Addr, nodes)
 	// start nodes
+	var nodeServices []string
+	for svc := range conf.Services {
+		nodeServices = append(nodeServices, svc)
+	}
 	for i := 0; i < nodes; i++ {
 		nodeconf := adapters.RandomNodeConfig()
 		nodeconf.EnableMsgEvents = conf.EnableMsgEvents
+		nodeconf.Services = nodeServices
 		node, err := net.NewNodeWithConfig(nodeconf)
 		if err != nil {
 			return nil, teardown, fmt.Errorf("error creating node: %s", err)
@@ -187,28 +192,28 @@ func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.Ste
 			return nil, fmt.Errorf("error starting node %s: %s", s.IDs[i].TerminalString(), err)
 		}
 	}
-	// run a simulation which connects the 10 nodes in a chain
 	wg := sync.WaitGroup{}
 	for i := range s.IDs {
-		// collect the overlay addresses, to
-		for j := 0; j < conns; j++ {
-			var k int
-			if j == 0 {
-				k = i - 1
-			} else {
-				k = rand.Intn(len(s.IDs))
-			}
-			if i > 0 {
-				wg.Add(1)
-				go func(i, k int) {
-					defer wg.Done()
-					s.Net.Connect(s.IDs[i], s.IDs[k])
-				}(i, k)
+		if conf.ConnLevel > 0 {
+			for j := 0; j < conns; j++ {
+				var k int
+				if j == 0 {
+					k = i - 1
+				} else {
+					k = rand.Intn(len(s.IDs))
+				}
+				if i > 0 {
+					wg.Add(1)
+					go func(i, k int) {
+						defer wg.Done()
+						s.Net.Connect(s.IDs[i], s.IDs[k])
+					}(i, k)
+				}
 			}
 		}
 	}
 	wg.Wait()
-	log.Info(fmt.Sprintf("simulation with %v nodes", len(s.Addrs)))
+	log.Info(fmt.Sprintf("simulation with %d nodes (conn %d)", len(s.Addrs), conf.ConnLevel))
 
 	// create an only locally retrieving dpa for the pivot node to test
 	// if retriee requests have arrived

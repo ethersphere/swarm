@@ -47,6 +47,7 @@ const (
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
+	DebugNodeID    string
 	api            *API
 	addr           *network.BzzAddr
 	skipCheck      bool
@@ -255,7 +256,7 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priorit
 
 	peer := r.getPeer(peerId)
 	if peer == nil {
-		return fmt.Errorf("peer not found %v", peerId)
+		return fmt.Errorf("registry %p: peer not found %v", r, peerId)
 	}
 
 	var to uint64
@@ -372,14 +373,17 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer close(sp.quit)
 	defer sp.close()
 
+	log.Warn("inside registry", "registry", fmt.Sprintf("%p", r), "node", r.DebugNodeID[:18], "peer", p.Peer, "peerid", sp.ID())
 	if r.doRetrieve {
-		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", false), nil, Top)
+
+		err := r.Subscribe(sp.Peer.ID(), NewStream(swarmChunkServerStreamName, "", false), nil, Top)
 		if err != nil {
 			return err
 		}
 	}
 
-	return sp.Run(sp.HandleMsg)
+	err := sp.Run(sp.HandleMsg)
+	return err
 }
 
 // updateSyncing subscribes to SYNC streams by iterating over the
@@ -678,6 +682,7 @@ func (r *Registry) APIs() []rpc.API {
 }
 
 func (r *Registry) Start(server *p2p.Server) error {
+	r.DebugNodeID = server.NodeInfo().ID
 	log.Info("Streamer started")
 	return nil
 }

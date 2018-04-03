@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
@@ -25,11 +24,9 @@ import (
 
 // serviceName is used with the exec adapter so the exec'd binary knows which
 // service to execute
-const serviceName = "discovery"
-const testMinProxBinSize = 2
 
 var services = adapters.Services{
-	serviceName: newService,
+	ServiceName: NewService,
 }
 
 var (
@@ -160,7 +157,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	// create network
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
-		DefaultService: serviceName,
+		DefaultService: ServiceName,
 	})
 	defer net.Shutdown()
 	trigger := make(chan discover.NodeID)
@@ -207,7 +204,7 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 	wg.Wait()
 	log.Debug(fmt.Sprintf("nodes: %v", len(addrs)))
 	// construct the peer pot, so that kademlia health can be checked
-	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
+	ppmap := network.NewPeerPot(TestMinProxBinSize, ids, addrs)
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
 		select {
 		case <-ctx.Done():
@@ -304,36 +301,4 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 		}
 	}()
 	return nil
-}
-
-func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	host := adapters.ExternalIP()
-
-	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
-
-	kp := network.NewKadParams()
-	kp.MinProxBinSize = testMinProxBinSize
-	kp.MaxBinSize = 3
-	kp.MinBinSize = 1
-	kp.MaxRetries = 1000
-	kp.RetryExponent = 2
-	kp.RetryInterval = 50000000
-
-	if ctx.Config.Reachable != nil {
-		kp.Reachable = func(o network.OverlayAddr) bool {
-			return ctx.Config.Reachable(o.(*network.BzzAddr).ID())
-		}
-	}
-	kad := network.NewKademlia(addr.Over(), kp)
-
-	hp := network.NewHiveParams()
-	hp.KeepAliveInterval = 200 * time.Millisecond
-
-	config := &network.BzzConfig{
-		OverlayAddr:  addr.Over(),
-		UnderlayAddr: addr.Under(),
-		HiveParams:   hp,
-	}
-
-	return network.NewBzz(config, kad, nil, nil, nil), nil
 }
