@@ -643,13 +643,11 @@ func TestNetwork(t *testing.T) {
 	t.Run("4/2000/4/sock", testNetwork)
 	t.Run("8/2000/4/sock", testNetwork)
 	t.Run("16/2000/4/sock", testNetwork)
-	t.Run("32/2000/4/sock", testNetwork)
 
 	t.Run("3/2000/4/sim", testNetwork)
 	t.Run("4/2000/4/sim", testNetwork)
 	t.Run("8/2000/4/sim", testNetwork)
 	t.Run("16/2000/4/sim", testNetwork)
-	t.Run("32/2000/4/sim", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
