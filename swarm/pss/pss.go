@@ -171,6 +171,7 @@ func (self *Pss) Start(srv *p2p.Server) error {
 				self.cleanKeys()
 			case <-self.quitC:
 				log.Info("pss shutting down")
+				return
 			}
 		}
 	}()
@@ -181,6 +182,7 @@ func (self *Pss) Start(srv *p2p.Server) error {
 				self.forward(msg)
 			case <-self.quitC:
 				log.Info("pss shutting down")
+				return
 			}
 		}
 	}()
