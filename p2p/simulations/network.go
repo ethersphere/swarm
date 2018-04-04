@@ -448,9 +448,11 @@ func (self *Network) getConn(oneID, otherID discover.NodeID) *Conn {
 // this is cheating as the simulation is used as an oracle and know about
 // remote peers attempt to connect to a node which will then not initiate the connection
 func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
+	log.Debug(fmt.Sprintf("InitConn(oneID: %v, otherID: %v)", oneID, otherID))
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if oneID == otherID {
+		log.Trace(fmt.Sprintf("refusing to connect to self %v", oneID))
 		return nil, fmt.Errorf("refusing to connect to self %v", oneID)
 	}
 	conn, err := self.getOrCreateConn(oneID, otherID)
@@ -458,21 +460,26 @@ func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 		return nil, err
 	}
 	if time.Since(conn.initiated) < dialBanTimeout {
+		log.Trace(fmt.Sprintf("connection between %v and %v recently attempted", oneID, otherID))
 		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
 	}
 	if conn.Up {
+		log.Trace(fmt.Sprintf("%v and %v already connected", oneID, otherID))
 		return nil, fmt.Errorf("%v and %v already connected", oneID, otherID)
 	}
 	err = conn.nodesUp()
 	if err != nil {
+		log.Trace(fmt.Sprintf("nodes not up: %v", err))
 		return nil, fmt.Errorf("nodes not up: %v", err)
 	}
+	log.Debug("InitConn - connection initiated")
 	conn.initiated = time.Now()
 	return conn, nil
 }
 
 // Shutdown stops all nodes in the network and closes the quit channel
 func (self *Network) Shutdown() {
+	log.Debug("network.Shutdown()")
 	for _, node := range self.Nodes {
 		log.Debug(fmt.Sprintf("stopping node %s", node.ID().TerminalString()))
 		if err := node.Stop(); err != nil {

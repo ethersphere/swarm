@@ -71,7 +71,7 @@ func NewHiveParams() *HiveParams {
 		Discovery:             true,
 		PeersBroadcastSetSize: 3,
 		MaxPeersPerRequest:    5,
-		KeepAliveInterval:     1000 * time.Millisecond,
+		KeepAliveInterval:     500 * time.Millisecond,
 	}
 }
 
@@ -148,8 +148,10 @@ func (h *Hive) Stop() error {
 func (h *Hive) connect() {
 	var mutex = &sync.Mutex{}
 
-	time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
+	time.Sleep(time.Duration(rand.Intn(2000)) * time.Millisecond)
 	for range h.ticker.C {
+		time.Sleep(time.Duration(rand.Intn(100)+200) * time.Millisecond)
+
 		mutex.Lock()
 		log.Trace(fmt.Sprintf("%08x hive connect()", h.BaseAddr()[:4]))
 

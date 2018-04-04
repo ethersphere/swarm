@@ -74,9 +74,9 @@ func NewKadParams() *KadParams {
 		MinProxBinSize: 2,
 		MinBinSize:     2,
 		MaxBinSize:     4,
-		RetryInterval:  5200000000, // 4.2 sec
-		MaxRetries:     42,
-		RetryExponent:  1,
+		RetryInterval:  4200000, // 4.2 sec
+		MaxRetries:     4000,
+		RetryExponent:  3,
 		PruneInterval:  0, // TODO:
 	}
 }
@@ -199,7 +199,6 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 			return v
 		})
 		if found {
-			log.Trace("found peer, not doing anything")
 			known++
 		}
 		size++
@@ -469,6 +468,7 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	e := val.(*entry)
 	// not callable if peer is live or exceeded maxRetries
 	if e.conn() != nil || e.retries > k.MaxRetries {
+		log.Trace(fmt.Sprintf("e.conn() != nil or max retries exceeded: %d", e.retries))
 		return nil
 	}
 	// calculate the allowed number of retries based on time lapsed since last seen
@@ -489,6 +489,7 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	// function to sanction or prevent suggesting a peer
 	if k.Reachable != nil && !k.Reachable(e.addr()) {
 		log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
+		time.Sleep(time.Duration(rand.Int31n(50) + 210))
 		return nil
 	}
 	e.retries++

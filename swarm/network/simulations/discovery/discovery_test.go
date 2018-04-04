@@ -71,7 +71,7 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount    = flag.Int("nodes", 3, "number of nodes to create (default 10)")
+	nodeCount    = flag.Int("nodes", 6, "number of nodes to create (default 10)")
 	initCount    = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
 	snapshotFile = flag.String("snapshot", "", "create snapshot")
 	loglevel     = flag.Int("loglevel", 6, "verbosity of logs")
@@ -159,7 +159,8 @@ func testDiscoveryPersistenceSimulationSimAdapter(t *testing.T, nodes, conns int
 	defer os.RemoveAll(baseDir)
 
 	//testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewExecAdapter(baseDir))
-	testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+	//testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+	testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
 }
 
 // func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
@@ -420,12 +421,11 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				log.Info(fmt.Sprintf("NODE: %s, IS HEALTHY: %t", id.String(), healthy.GotNN && healthy.KnowNN && healthy.Full))
 				if !healthy.GotNN || !healthy.Full {
 					isHealthy = false
-					//	break
+					break
 				}
 			}
 			if isHealthy {
 				log.Info("reached healthy kademlia. starting to shutdown nodes.")
-
 				shutdownStarted := time.Now()
 				// stop all ids, then start them again
 				for _, id := range ids {
@@ -436,20 +436,17 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 					}
 
 				}
-				//time.Sleep(100 * time.Millisecond)
-
+				time.Sleep(3000 * time.Millisecond)
 				log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Now().Sub(shutdownStarted)))
 				persistenceEnabled = true
 				discoveryEnabled = false
-
 				restartTime = time.Now()
-
 				for _, id := range ids {
 					node := net.GetNode(id)
 					if err := net.Start(node.ID()); err != nil {
 						return fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
 					}
-					time.Sleep(100 * time.Millisecond)
+					time.Sleep(time.Duration(rand.Int31n(300) + 200))
 					if err := triggerChecks(trigger, net, node.ID()); err != nil {
 						return fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
 					}
@@ -509,7 +506,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 
 	// 64 nodes ~ 1min
 	// 128 nodes ~
-	timeout := 300 * time.Second
+	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -585,6 +582,7 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	var store *state.DBStore
 	var err error
+
 	if persistenceEnabled {
 		log.Info(fmt.Sprintf("persistence enabled for nodeID %s", ctx.Config.ID.String()))
 		store, err = getDbStore(ctx.Config.ID.String())
@@ -598,12 +596,10 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
 
 	kp := network.NewKadParams()
+	randomInterval := (rand.Float32()) * 0.3 //random within a 10% deviation
+
+	kp.RetryInterval = int64(float32(kp.RetryInterval) * randomInterval)
 	kp.MinProxBinSize = testMinProxBinSize
-	kp.MaxBinSize = 3
-	kp.MinBinSize = 1
-	kp.MaxRetries = 1000
-	kp.RetryExponent = 2
-	kp.RetryInterval = 50000000
 
 	if ctx.Config.Reachable != nil {
 		kp.Reachable = func(o network.OverlayAddr) bool {
@@ -611,9 +607,8 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 		}
 	}
 	kad := network.NewKademlia(addr.Over(), kp)
-
 	hp := network.NewHiveParams()
-	hp.KeepAliveInterval = 200 * time.Millisecond
+	hp.KeepAliveInterval = time.Duration(rand.Intn(200)+400) * time.Millisecond
 	hp.Discovery = discoveryEnabled
 
 	log.Info(fmt.Sprintf("discovery for nodeID %s is %t", ctx.Config.ID.String(), hp.Discovery))
