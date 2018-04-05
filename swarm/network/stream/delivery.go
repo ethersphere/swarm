@@ -38,7 +38,6 @@ type Delivery struct {
 	overlay  network.Overlay
 	receiveC chan *ChunkDeliveryMsg
 	getPeer  func(discover.NodeID) *Peer
-	//validator *storage.ChunkValidator
 }
 
 //func NewDelivery(overlay network.Overlay, db *storage.DBAPI, validator *storage.ChunkValidator) *Delivery {
@@ -47,7 +46,6 @@ func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
 		db:       db,
 		overlay:  overlay,
 		receiveC: make(chan *ChunkDeliveryMsg, deliveryCap),
-		//validator: validator,
 	}
 
 	go d.processReceivedChunks()
@@ -61,7 +59,6 @@ type SwarmChunkServer struct {
 	db         *storage.DBAPI
 	currentLen uint64
 	quit       chan struct{}
-	//validator  *storage.ChunkValidator
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor

@@ -20,6 +20,7 @@ const (
 	ChunkErrNoForward
 	ChunkErrTimeout
 	ChunkErrInvalid
+	ChunkErrUnavailable
 )
 
 type ChunkError byte

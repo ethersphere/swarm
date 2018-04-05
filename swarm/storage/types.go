@@ -339,7 +339,7 @@ func (self *ContentAddressValidator) Validate(key Key, data []byte) bool {
 	hash := self.Hasher.Sum(nil)
 
 	if !bytes.Equal(hash, key[:]) {
-		log.Error("invalid content address. Expected %x, have %x", hash, key)
+		log.Error("invalid content address", "expected", fmt.Sprintf("%x", hash), "have", fmt.Sprintf("%x", key))
 		return false
 	}
 	return true

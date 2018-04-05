@@ -50,6 +50,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	storeparams := storage.NewDefaultLocalStoreParams()
 	storeparams.DbCapacity = 5000000
 	storeparams.CacheCapacity = 5000
+	storeparams.Validator = &storage.NoopValidator{}
 	storeparams.Init(dir)
 	localStore, err := storage.NewLocalStore(storeparams, nil)
 	if err != nil {

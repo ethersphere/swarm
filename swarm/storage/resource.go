@@ -205,7 +205,7 @@ func (self *ResourceHandler) SetStore(store ChunkStore) {
 // If parsed signature is nil, validates automatically
 // If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
 func (self *ResourceHandler) Validate(key Key, data []byte) bool {
-	signature, _, _, name, parseddata, err := self.parseUpdate(data)
+	signature, period, version, name, parseddata, err := self.parseUpdate(data)
 	if err != nil {
 		if len(data) == indexSize {
 			if bytes.Equal(data[:2], []byte{0, 0}) {
@@ -214,6 +214,9 @@ func (self *ResourceHandler) Validate(key Key, data []byte) bool {
 		}
 		return false
 	} else if signature == nil {
+		if !bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), key) {
+			return false
+		}
 		return true
 	}
 	digest := self.keyDataHash(key, parseddata)

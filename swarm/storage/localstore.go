@@ -34,7 +34,7 @@ var (
 type LocalStoreParams struct {
 	*StoreParams
 	ChunkDbPath string
-	Validator   ChunkValidator
+	Validator   ChunkValidator `toml:"-"`
 }
 
 //create params with default values

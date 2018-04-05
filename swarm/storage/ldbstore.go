@@ -225,7 +225,7 @@ func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
 }
 
 func getIndexKey(hash Key) []byte {
-	hashSize := len(hash[:])
+	hashSize := len(hash)
 	key := make([]byte, hashSize+1)
 	key[0] = keyIndex
 	copy(key[1:], hash[:])

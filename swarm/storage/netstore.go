@@ -56,7 +56,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 			err := self.retrieve(chunk)
 			if err != nil {
 				// mark chunk request as failed so that we can retry it later
-				chunk.SetErrored(ChunkErrTimeout)
+				chunk.SetErrored(ChunkErrUnavailable)
 				return nil, err
 			}
 		}
