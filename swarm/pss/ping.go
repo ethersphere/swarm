@@ -69,6 +69,7 @@ func NewPingProtocol(ping *Ping) *p2p.Protocol {
 							Pong:    ispong,
 						})
 					case <-quitC:
+						return
 					}
 				}
 			}()
