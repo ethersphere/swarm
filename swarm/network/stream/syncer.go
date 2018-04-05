@@ -21,7 +21,6 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -202,10 +201,9 @@ func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
-	log.Debug("sync need data", "key", common.Bytes2Hex(key), "peer", s.peer.ID(), "node", common.Bytes2Hex(s.peer.streamer.delivery.overlay.BaseAddr()), "sync handling", s.ignoreExistingRequest, "stream", s.stream)
-	chunk, _ := s.db.GetOrCreateRequest(key)
+	chunk, created := s.db.GetOrCreateRequest(key)
 	// TODO: we may want to request from this peer anyway even if the request exists
-	if chunk.ReqC == nil { //|| (s.ignoreExistingRequest && !created) {
+	if chunk.ReqC == nil || (s.ignoreExistingRequest && !created) {
 		return nil
 	}
 	// create request and wait until the chunk data arrives and is stored

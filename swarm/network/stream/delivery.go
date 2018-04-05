@@ -128,7 +128,7 @@ type RetrieveRequestMsg struct {
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
-	log.Debug("received request", "peer", sp.ID(), "hash", req.Key)
+	log.Trace("received request", "peer", sp.ID(), "hash", req.Key)
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", true))
 	if err != nil {
 		return err
@@ -162,7 +162,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			if req.SkipCheck {
 				err := sp.Deliver(chunk, s.priority)
 				if err != nil {
-					log.Error("retrieve request deliver ", "peer", sp.ID(), "hash", req.Key, "err", err)
+					log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
 					sp.Drop(err)
 				}
 			}
