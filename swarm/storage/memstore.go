@@ -65,9 +65,6 @@ a hash prefix subtree containing subtrees or one storage entry (but never both)
 func NewMemStore(params *StoreParams, d *LDBStore) (m *MemStore) {
 
 	capacity := params.CacheCapacity
-	if capacity == 0 {
-		capacity = defaultCacheCapacity
-	}
 	m = &MemStore{}
 	m.memtree = newMemTree(memTreeFLW, nil, 0)
 	m.ldbStore = d
@@ -265,7 +262,6 @@ func (s *MemStore) removeOldest() {
 	defer metrics.GetOrRegisterResettingTimer("memstore.purge", metrics.DefaultRegistry).UpdateSince(time.Now())
 
 	node := s.memtree
-	log.Trace("purge memstore")
 	for node.entry == nil {
 
 		aidx := uint(0)
