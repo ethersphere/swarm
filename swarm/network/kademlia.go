@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -74,9 +73,9 @@ func NewKadParams() *KadParams {
 		MinProxBinSize: 2,
 		MinBinSize:     2,
 		MaxBinSize:     4,
-		RetryInterval:  4200000, // 4.2 sec
+		RetryInterval:  420000000, // 4.2 sec
 		MaxRetries:     4000,
-		RetryExponent:  3,
+		RetryExponent:  2,
 		PruneInterval:  0, // TODO:
 	}
 }
@@ -466,15 +465,18 @@ func (k *Kademlia) neighbourhoodDepth() (depth int) {
 // callable when called with val,
 func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	e := val.(*entry)
+	if e.retries == 0 && bytes.Compare(e.Address(), k.BaseAddr()) < 0 {
+		e.retries++
+		return nil
+	}
 	// not callable if peer is live or exceeded maxRetries
 	if e.conn() != nil || e.retries > k.MaxRetries {
-		log.Trace(fmt.Sprintf("e.conn() != nil or max retries exceeded: %d", e.retries))
+		log.Debug(fmt.Sprintf("e.conn() != nil or max retries exceeded: %d", e.retries))
 		return nil
 	}
 	// calculate the allowed number of retries based on time lapsed since last seen
 	timeAgo := int64(time.Since(e.seenAt))
 	div := int64(k.RetryExponent)
-	div += (150000 - rand.Int63n(300000)) * div / 1000000
 	var retries int
 	for delta := timeAgo; delta > k.RetryInterval; delta /= div {
 		retries++
@@ -486,11 +488,12 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 		log.Trace(fmt.Sprintf("%08x: %v long time since last try (at %v) needed before retry %v, wait only warrants %v", k.BaseAddr()[:4], e, timeAgo, e.retries, retries))
 		return nil
 	}
+
 	// function to sanction or prevent suggesting a peer
 	if k.Reachable != nil && !k.Reachable(e.addr()) {
 		log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
-		time.Sleep(time.Duration(rand.Int31n(50) + 210))
-		return nil
+
+		//return nil
 	}
 	e.retries++
 	log.Trace(fmt.Sprintf("%08x: peer %v is callable", k.BaseAddr()[:4], e))

@@ -159,8 +159,8 @@ func testDiscoveryPersistenceSimulationSimAdapter(t *testing.T, nodes, conns int
 	defer os.RemoveAll(baseDir)
 
 	//testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewExecAdapter(baseDir))
-	//testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(services))
-	testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
+	testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(services))
+	//testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
 }
 
 // func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
@@ -393,7 +393,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 	// for full peer discovery
 	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
 
-	//hasRestarted := false
 	var restartTime time.Time
 	var mutex = &sync.Mutex{}
 
@@ -434,7 +433,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 					if err := net.Stop(node.ID()); err != nil {
 						return fmt.Errorf("error stopping node %s: %s", node.ID().TerminalString(), err)
 					}
-
 				}
 				time.Sleep(3000 * time.Millisecond)
 				log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Now().Sub(shutdownStarted)))
@@ -446,7 +444,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 					if err := net.Start(node.ID()); err != nil {
 						return fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
 					}
-					time.Sleep(time.Duration(rand.Int31n(300) + 200))
 					if err := triggerChecks(trigger, net, node.ID()); err != nil {
 						return fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
 					}
@@ -468,7 +465,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 			if j == 0 {
 				k = (i + 1) % len(ids)
 			} else {
-				k = rand.Intn(len(ids))
+				k = (i + 1) % len(ids)
 			}
 			wg.Add(1)
 			go func(i, k int) {
@@ -582,7 +579,6 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	var store *state.DBStore
 	var err error
-
 	if persistenceEnabled {
 		log.Info(fmt.Sprintf("persistence enabled for nodeID %s", ctx.Config.ID.String()))
 		store, err = getDbStore(ctx.Config.ID.String())
@@ -596,9 +592,6 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
 
 	kp := network.NewKadParams()
-	randomInterval := (rand.Float32()) * 0.3 //random within a 10% deviation
-
-	kp.RetryInterval = int64(float32(kp.RetryInterval) * randomInterval)
 	kp.MinProxBinSize = testMinProxBinSize
 
 	if ctx.Config.Reachable != nil {
@@ -608,7 +601,8 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	}
 	kad := network.NewKademlia(addr.Over(), kp)
 	hp := network.NewHiveParams()
-	hp.KeepAliveInterval = time.Duration(rand.Intn(200)+400) * time.Millisecond
+	hp.KeepAliveInterval = time.Duration(200+rand.Intn(400)) * time.Millisecond
+	//hp.InitialConnectDelay = time.Duration(initialDelayCounter) * time.Millisecond
 	hp.Discovery = discoveryEnabled
 
 	log.Info(fmt.Sprintf("discovery for nodeID %s is %t", ctx.Config.ID.String(), hp.Discovery))

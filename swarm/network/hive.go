@@ -18,7 +18,6 @@ package network
 
 import (
 	"fmt"
-	"math/rand"
 	"sync"
 	"time"
 
@@ -63,6 +62,7 @@ type HiveParams struct {
 	PeersBroadcastSetSize uint8 // how many peers to use when relaying
 	MaxPeersPerRequest    uint8 // max size for peer address batches
 	KeepAliveInterval     time.Duration
+	InitialConnectDelay   time.Duration
 }
 
 // NewHiveParams returns hive config with only the
@@ -72,6 +72,7 @@ func NewHiveParams() *HiveParams {
 		PeersBroadcastSetSize: 3,
 		MaxPeersPerRequest:    5,
 		KeepAliveInterval:     500 * time.Millisecond,
+		InitialConnectDelay:   100 * time.Millisecond,
 	}
 }
 
@@ -146,13 +147,11 @@ func (h *Hive) Stop() error {
 // at each iteration, ask the overlay driver to suggest the most preferred peer to connect to
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
-	var mutex = &sync.Mutex{}
-
-	time.Sleep(time.Duration(rand.Intn(2000)) * time.Millisecond)
+	//var mutex = &sync.Mutex{}
+	//time.Sleep(h.InitialConnectDelay)
 	for range h.ticker.C {
-		time.Sleep(time.Duration(rand.Intn(100)+200) * time.Millisecond)
-
-		mutex.Lock()
+		time.Sleep(100 * time.Millisecond)
+		//mutex.Lock()
 		log.Trace(fmt.Sprintf("%08x hive connect()", h.BaseAddr()[:4]))
 
 		addr, depth, changed := h.SuggestPeer()
@@ -169,7 +168,7 @@ func (h *Hive) connect() {
 		}
 		log.Trace(fmt.Sprintf("%08x attempt to connect to bee %08x", h.BaseAddr()[:4], addr.Address()[:4]))
 		h.addPeer(under)
-		mutex.Unlock()
+		//mutex.Unlock()
 	}
 }
 
