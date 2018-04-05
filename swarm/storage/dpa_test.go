@@ -42,8 +42,9 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	storeParams := NewStoreParams(defaultCacheCapacity, nil, nil)
 	memStore := NewMemStore(storeParams, db)
 	localStore := &LocalStore{
-		memStore: memStore,
-		DbStore:  db,
+		memStore:  memStore,
+		DbStore:   db,
+		Validator: &NoopValidator{},
 	}
 
 	dpa := NewDPA(localStore, NewDPAParams())
@@ -102,8 +103,9 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	storeParams.CacheCapacity = 10000000
 	memStore := NewMemStore(storeParams, db)
 	localStore := &LocalStore{
-		memStore: memStore,
-		DbStore:  db,
+		memStore:  memStore,
+		DbStore:   db,
+		Validator: &NoopValidator{},
 	}
 	dpa := NewDPA(localStore, NewDPAParams())
 	reader, slice := generateRandomData(testDataSize)

@@ -200,11 +200,11 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 
 	contentvalidator := storage.NewContentAddressValidator(storage.MakeHashFunc(storage.SHA3Hash)())
-	var validator *storage.ChunkValidator
+	var validator storage.ChunkValidator
 	if resourceHandler != nil {
-		validator = storage.NewChunkValidator(contentvalidator.Validate, resourceHandler.Validate)
+		validator = storage.NewSequentialValidator(contentvalidator, resourceHandler)
 	} else {
-		validator = storage.NewChunkValidator(contentvalidator.Validate, nil)
+		validator = storage.NewSequentialValidator(contentvalidator, &storage.NoopValidator{})
 	}
 	self.lstore.Validator = validator
 
@@ -212,7 +212,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	log.Debug(fmt.Sprintf("Set up local storage"))
 
 	db := storage.NewDBAPI(self.lstore)
-	delivery := stream.NewDelivery(to, db, validator)
+	delivery := stream.NewDelivery(to, db)
 
 	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{
 		DoSync:          true,

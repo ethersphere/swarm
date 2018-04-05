@@ -345,20 +345,26 @@ func (self *ContentAddressValidator) Validate(key Key, data []byte) bool {
 	return true
 }
 
-// Common signature for chunk validation functions
-type ChunkValidatorFunc func(Key, []byte) bool
+type NoopValidator struct {
+}
+
+func (self *NoopValidator) Validate(key Key, data []byte) bool {
+	return true
+}
 
 // Provides method for validating any chunk type
-type ChunkValidator struct {
-	content  ChunkValidatorFunc
-	resource ChunkValidatorFunc
+type ChunkValidator interface {
+	Validate(Key, []byte) bool
+}
+
+type SequentialValidator struct {
+	validators []ChunkValidator
 }
 
 // Constructor
-func NewChunkValidator(content ChunkValidatorFunc, resource ChunkValidatorFunc) *ChunkValidator {
-	return &ChunkValidator{
-		content:  content,
-		resource: resource,
+func NewSequentialValidator(content ChunkValidator, resource ChunkValidator) ChunkValidator {
+	return &SequentialValidator{
+		validators: []ChunkValidator{content, resource},
 	}
 }
 
@@ -370,15 +376,11 @@ func NewChunkValidator(content ChunkValidatorFunc, resource ChunkValidatorFunc) 
 // If resource is nil and content is not, then check will fail if content check fails
 // If content is nil and resource is not, then check falls through to resource
 // If both are nil, all chunks will be valid
-func (self *ChunkValidator) Validate(key Key, data []byte) bool {
-	if self.content != nil {
-		if self.content(key, data) {
+func (self *SequentialValidator) Validate(key Key, data []byte) bool {
+	for _, v := range self.validators {
+		if v.Validate(key, data) {
 			return true
-		} else if self.resource == nil {
-			return false
 		}
-	} else if self.resource == nil {
-		return true
 	}
-	return self.resource(key, data)
+	return false
 }

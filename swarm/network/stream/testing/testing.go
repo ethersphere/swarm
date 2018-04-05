@@ -58,6 +58,7 @@ func SetStores(addrs ...network.Addr) ([]storage.ChunkStore, func(), error) {
 		params := storage.NewDefaultLocalStoreParams()
 		params.Init(datadir)
 		params.BaseKey = addr.Over()
+		params.Validator = &storage.NoopValidator{}
 		store, err = storage.NewTestLocalStoreForAddr(params)
 		if err != nil {
 			break

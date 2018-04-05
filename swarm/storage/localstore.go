@@ -34,10 +34,11 @@ var (
 type LocalStoreParams struct {
 	*StoreParams
 	ChunkDbPath string
+	Validator   ChunkValidator
 }
 
 //create params with default values
-func NewDefaultLocalStoreParams() (self *LocalStoreParams) {
+func NewDefaultLocalStoreParams() *LocalStoreParams {
 	return &LocalStoreParams{
 		StoreParams: NewStoreParams(0, nil, nil),
 	}
@@ -54,7 +55,7 @@ func (self *LocalStoreParams) Init(path string) {
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
-	Validator *ChunkValidator
+	Validator ChunkValidator
 	memStore  *MemStore
 	DbStore   *LDBStore
 	mu        sync.Mutex
@@ -68,8 +69,9 @@ func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalS
 		return nil, err
 	}
 	return &LocalStore{
-		memStore: NewMemStore(params.StoreParams, dbStore),
-		DbStore:  dbStore,
+		memStore:  NewMemStore(params.StoreParams, dbStore),
+		DbStore:   dbStore,
+		Validator: params.Validator,
 	}, nil
 }
 
@@ -80,8 +82,9 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 		return nil, err
 	}
 	localStore := &LocalStore{
-		memStore: NewMemStore(params.StoreParams, dbStore),
-		DbStore:  dbStore,
+		memStore:  NewMemStore(params.StoreParams, dbStore),
+		DbStore:   dbStore,
+		Validator: params.Validator,
 	}
 	return localStore, nil
 }
@@ -93,12 +96,10 @@ func (self *LocalStore) CacheCounter() uint64 {
 // LocalStore is itself a chunk store
 // unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
-	if self.Validator != nil {
-		if !self.Validator.Validate(chunk.Key, chunk.SData) {
-			chunk.SetErrored(ChunkErrInvalid)
-			chunk.dbStoredC <- false
-			return
-		}
+	if !self.Validator.Validate(chunk.Key, chunk.SData) {
+		chunk.SetErrored(ChunkErrInvalid)
+		chunk.dbStoredC <- false
+		return
 	}
 	log.Trace("localstore.put", "key", chunk.Key)
 	self.mu.Lock()
