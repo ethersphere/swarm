@@ -175,7 +175,6 @@ func (p *hasherStore) encryptChunkData(chunkData ChunkData) (ChunkData, encrypti
 }
 
 func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryption.Key) (ChunkData, error) {
-	log.Info("decryptChunkData", "length", len(chunkData))
 	if len(chunkData) < 8 {
 		return nil, fmt.Errorf("Invalid ChunkData, min length 8 got %v", len(chunkData))
 	}
