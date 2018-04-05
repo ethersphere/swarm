@@ -71,7 +71,7 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount    = flag.Int("nodes", 6, "number of nodes to create (default 10)")
+	nodeCount    = flag.Int("nodes", 32, "number of nodes to create (default 10)")
 	initCount    = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
 	snapshotFile = flag.String("snapshot", "", "create snapshot")
 	loglevel     = flag.Int("loglevel", 6, "verbosity of logs")
