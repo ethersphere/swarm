@@ -479,7 +479,6 @@ func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 
 // Shutdown stops all nodes in the network and closes the quit channel
 func (self *Network) Shutdown() {
-	log.Debug("network.Shutdown()")
 	for _, node := range self.Nodes {
 		log.Debug(fmt.Sprintf("stopping node %s", node.ID().TerminalString()))
 		if err := node.Stop(); err != nil {

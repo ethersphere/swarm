@@ -401,24 +401,18 @@ func (c *Config) AccountConfig() (int, int, string, error) {
 }
 
 func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
-	log.Debug("makeAccountManager")
 	scryptN, scryptP, keydir, err := conf.AccountConfig()
 	var ephemeral string
 	if keydir == "" {
 		// There is no datadir.
-		log.Trace("there is no datadir")
 		keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
 		ephemeral = keydir
 	}
-	// keydir, err = ioutil.TempDir("", "go-ethereum-keystore")
-	// ephemeral = keydir
+
 	if err != nil {
 		return nil, "", err
 	}
-	log.Trace(fmt.Sprintf("keydir creating: %s", keydir))
 	if err := os.MkdirAll(keydir, 0700); err != nil {
-		log.Trace(fmt.Sprintf("keydir create error: %s, %s", keydir, err))
-		panic(err)
 		return nil, "", err
 	}
 	// Assemble the account manager and supported backends

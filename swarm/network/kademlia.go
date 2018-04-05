@@ -308,7 +308,7 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 			k.addrCountC <- k.addrs.Size()
 		}
 	}
-	//	log.Trace(k.string())
+	log.Trace(k.string())
 	// calculate if depth of saturation changed
 	depth := uint8(k.saturation(k.MinBinSize))
 	var changed bool
@@ -471,7 +471,6 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	}
 	// not callable if peer is live or exceeded maxRetries
 	if e.conn() != nil || e.retries > k.MaxRetries {
-		log.Debug(fmt.Sprintf("e.conn() != nil or max retries exceeded: %d", e.retries))
 		return nil
 	}
 	// calculate the allowed number of retries based on time lapsed since last seen
@@ -488,7 +487,6 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 		log.Trace(fmt.Sprintf("%08x: %v long time since last try (at %v) needed before retry %v, wait only warrants %v", k.BaseAddr()[:4], e, timeAgo, e.retries, retries))
 		return nil
 	}
-
 	// function to sanction or prevent suggesting a peer
 	if k.Reachable != nil && !k.Reachable(e.addr()) {
 		log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
@@ -774,7 +772,7 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	gotnn := k.gotNearestNeighbours(pp.NNSet)
 	knownn := k.knowNearestNeighbours(pp.NNSet)
 	full := k.full(pp.EmptyBins)
-	//	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full, k.string()))
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full, k.string()))
 	return &Health{knownn, gotnn, full, k.string()}
 }
 
