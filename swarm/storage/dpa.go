@@ -70,8 +70,7 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 	if err != nil {
 		return nil, err
 	}
-	contentvalidator := NewContentAddressValidator(MakeHashFunc(SHA3Hash)())
-	localStore.Validator = NewSequentialValidator(contentvalidator, &NoopValidator{})
+	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(SHA3Hash)()))
 	return NewDPA(localStore, NewDPAParams()), nil
 }
 

@@ -142,14 +142,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	if err != nil {
 		return
 	}
-	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
-
-	// Pss = postal service over swarm (devp2p over bzz)
-	pssparams := pss.NewPssParams(self.privateKey)
-	self.ps = pss.NewPss(to, self.dpa, pssparams)
-	if pss.IsActiveHandshake {
-		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
-	}
 
 	// set up high level api
 	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
@@ -199,14 +191,12 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		resourceHandler.SetStore(self.lstore)
 	}
 
-	contentvalidator := storage.NewContentAddressValidator(storage.MakeHashFunc(storage.SHA3Hash)())
-	var validator storage.ChunkValidator
+	var validators []storage.ChunkValidator
+	validators = append(validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.SHA3Hash)()))
 	if resourceHandler != nil {
-		validator = storage.NewSequentialValidator(contentvalidator, resourceHandler)
-	} else {
-		validator = storage.NewSequentialValidator(contentvalidator, &storage.NoopValidator{})
+		validators = append(validators, resourceHandler)
 	}
-	self.lstore.Validator = validator
+	self.lstore.Validators = validators
 
 	// setup local store
 	log.Debug(fmt.Sprintf("Set up local storage"))
@@ -230,12 +220,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	if self.config.PssEnabled {
-		pssparams := pss.NewPssParams(self.privateKey)
-		self.ps = pss.NewPss(to, self.dpa, pssparams)
-		if pss.IsActiveHandshake {
-			pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
-		}
+	pssparams := pss.NewPssParams(self.privateKey)
+	self.ps = pss.NewPss(to, pssparams)
+	if pss.IsActiveHandshake {
+		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
 	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)

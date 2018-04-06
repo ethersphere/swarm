@@ -40,7 +40,6 @@ type Delivery struct {
 	getPeer  func(discover.NodeID) *Peer
 }
 
-//func NewDelivery(overlay network.Overlay, db *storage.DBAPI, validator *storage.ChunkValidator) *Delivery {
 func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
 	d := &Delivery{
 		db:       db,

@@ -312,8 +312,8 @@ func (c ChunkData) Data() []byte {
 	return c[8:]
 }
 
-func NoValidateChunk(hasher SwarmHash, key *Key, data []byte) bool {
-	return true
+type ChunkValidator interface {
+	Validate(key Key, data []byte) bool
 }
 
 // Provides method for validation of content address in chunks
@@ -339,48 +339,8 @@ func (self *ContentAddressValidator) Validate(key Key, data []byte) bool {
 	hash := self.Hasher.Sum(nil)
 
 	if !bytes.Equal(hash, key[:]) {
-		log.Error("invalid content address", "expected", fmt.Sprintf("%x", hash), "have", fmt.Sprintf("%x", key))
+		log.Error("invalid content address", "expected", fmt.Sprintf("%x", hash), "have", key)
 		return false
 	}
 	return true
-}
-
-type NoopValidator struct {
-}
-
-func (self *NoopValidator) Validate(key Key, data []byte) bool {
-	return true
-}
-
-// Provides method for validating any chunk type
-type ChunkValidator interface {
-	Validate(Key, []byte) bool
-}
-
-type SequentialValidator struct {
-	validators []ChunkValidator
-}
-
-// Constructor
-func NewSequentialValidator(content ChunkValidator, resource ChunkValidator) ChunkValidator {
-	return &SequentialValidator{
-		validators: []ChunkValidator{content, resource},
-	}
-}
-
-// Validate the integrity of the chunk
-//
-// First checks if the key is a valid content address, as in SwarmHash(data)
-// If this fails, it checks if the chunk data is a valid resource update chunk
-//
-// If resource is nil and content is not, then check will fail if content check fails
-// If content is nil and resource is not, then check falls through to resource
-// If both are nil, all chunks will be valid
-func (self *SequentialValidator) Validate(key Key, data []byte) bool {
-	for _, v := range self.validators {
-		if v.Validate(key, data) {
-			return true
-		}
-	}
-	return false
 }

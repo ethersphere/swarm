@@ -886,7 +886,7 @@ func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*Res
 	if err != nil {
 		return nil, err
 	}
-	localStore.Validator = NewSequentialValidator(&NoopValidator{}, rh)
+	localStore.Validators = append(localStore.Validators, rh)
 	rh.SetStore(localStore)
 	return rh, nil
 }
