@@ -465,10 +465,6 @@ func (k *Kademlia) neighbourhoodDepth() (depth int) {
 // callable when called with val,
 func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	e := val.(*entry)
-	if e.retries == 0 && bytes.Compare(e.Address(), k.BaseAddr()) < 0 {
-		e.retries++
-		return nil
-	}
 	// not callable if peer is live or exceeded maxRetries
 	if e.conn() != nil || e.retries > k.MaxRetries {
 		return nil
@@ -490,8 +486,7 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	// function to sanction or prevent suggesting a peer
 	if k.Reachable != nil && !k.Reachable(e.addr()) {
 		log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
-
-		//return nil
+		return nil
 	}
 	e.retries++
 	log.Trace(fmt.Sprintf("%08x: peer %v is callable", k.BaseAddr()[:4], e))

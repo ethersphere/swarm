@@ -87,7 +87,10 @@ func (self *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error)
 	if conf.Reachable == nil {
 		conf.Reachable = func(otherID discover.NodeID) bool {
 			_, err := self.InitConn(conf.ID, otherID)
-			return err == nil
+			if err != nil && bytes.Compare(conf.ID.Bytes(), otherID.Bytes()) < 0 {
+				return false
+			}
+			return true
 		}
 	}
 

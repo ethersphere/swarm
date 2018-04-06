@@ -71,10 +71,10 @@ func getDbStore(nodeID string) (*state.DBStore, error) {
 }
 
 var (
-	nodeCount    = flag.Int("nodes", 16, "number of nodes to create (default 10)")
+	nodeCount    = flag.Int("nodes", 10, "number of nodes to create (default 10)")
 	initCount    = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
 	snapshotFile = flag.String("snapshot", "", "create snapshot")
-	loglevel     = flag.Int("loglevel", 6, "verbosity of logs")
+	loglevel     = flag.Int("loglevel", 1, "verbosity of logs")
 )
 
 func init() {
@@ -434,7 +434,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 						return fmt.Errorf("error stopping node %s: %s", node.ID().TerminalString(), err)
 					}
 				}
-				//time.Sleep(3000 * time.Millisecond)
 				log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Now().Sub(shutdownStarted)))
 				persistenceEnabled = true
 				discoveryEnabled = false
@@ -460,12 +459,10 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 	wg := sync.WaitGroup{}
 	//connects in a ring
 	for i := range ids {
-		for j := 0; j < conns; j++ {
-			var k int
-			if j == 0 {
-				k = (i + 1) % len(ids)
-			} else {
-				k = (i + 1) % len(ids)
+		for j := 1; j <= conns; j++ {
+			k := (i + j) % len(ids)
+			if k == i {
+				k = (k + 1) % len(ids)
 			}
 			wg.Add(1)
 			go func(i, k int) {
