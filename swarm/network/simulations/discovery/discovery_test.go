@@ -74,7 +74,7 @@ var (
 	nodeCount    = flag.Int("nodes", 10, "number of nodes to create (default 10)")
 	initCount    = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
 	snapshotFile = flag.String("snapshot", "", "create snapshot")
-	loglevel     = flag.Int("loglevel", 1, "verbosity of logs")
+	loglevel     = flag.Int("loglevel", 6, "verbosity of logs")
 )
 
 func init() {
@@ -152,15 +152,7 @@ func TestDiscoveryPersistenceSimulationSimAdapter(t *testing.T) {
 }
 
 func testDiscoveryPersistenceSimulationSimAdapter(t *testing.T, nodes, conns int) {
-	baseDir, err := ioutil.TempDir("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer os.RemoveAll(baseDir)
-
-	//testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewExecAdapter(baseDir))
 	testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSimAdapter(services))
-	//testDiscoveryPersistenceSimulation(t, nodes, conns, adapters.NewSocketAdapter(services))
 }
 
 func testDiscoverySimulationSimAdapter(t *testing.T, nodes, conns int) {
@@ -199,7 +191,6 @@ func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.No
 }
 
 func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) map[int][]byte {
-	startedAt := time.Now()
 	cleanDbStores()
 
 	persistenceEnabled = true
@@ -214,24 +205,11 @@ func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter 
 		t.Fatalf("Simulation failed: %s", result.Error)
 	}
 	t.Logf("Simulation with %d nodes passed in %s", nodes, result.FinishedAt.Sub(result.StartedAt))
-	var min, max time.Duration
-	var sum int
-	for _, pass := range result.Passes {
-		duration := pass.Sub(result.StartedAt)
-		if sum == 0 || duration < min {
-			min = duration
-		}
-		if duration > max {
-			max = duration
-		}
-		sum += int(duration.Nanoseconds())
-	}
-	t.Logf("Min: %s, Max: %s, Average: %s", min, max, time.Duration(sum/len(result.Passes))*time.Nanosecond)
-	finishedAt := time.Now()
-	t.Logf("Setup: %s, shutdown: %s", result.StartedAt.Sub(startedAt), finishedAt.Sub(result.FinishedAt))
-
-	startedAt = time.Now()
 	cleanDbStores()
+	// set the discovery and persistence flags again to default so other
+	// tests will not be affected
+	discoveryEnabled = true
+	persistenceEnabled = false
 	return nil
 }
 
@@ -574,16 +552,6 @@ func triggerChecks(trigger chan discover.NodeID, net *simulations.Network, id di
 }
 
 func newService(ctx *adapters.ServiceContext) (node.Service, error) {
-	var store *state.DBStore
-	var err error
-	if persistenceEnabled {
-		log.Info(fmt.Sprintf("persistence enabled for nodeID %s", ctx.Config.ID.String()))
-		store, err = getDbStore(ctx.Config.ID.String())
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	host := adapters.ExternalIP()
 
 	addr := network.NewAddrFromNodeIDAndPort(ctx.Config.ID, host, ctx.Config.Port)
@@ -610,5 +578,14 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 		HiveParams:   hp,
 	}
 
-	return network.NewBzz(config, kad, store, nil, nil), nil
+	if persistenceEnabled {
+		log.Info(fmt.Sprintf("persistence enabled for nodeID %s", ctx.Config.ID.String()))
+		store, err := getDbStore(ctx.Config.ID.String())
+		if err != nil {
+			return nil, err
+		}
+		return network.NewBzz(config, kad, store, nil, nil), nil
+	}
+
+	return network.NewBzz(config, kad, nil, nil, nil), nil
 }
