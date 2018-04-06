@@ -296,7 +296,9 @@ func (self *Network) Disconnect(oneID, otherID discover.NodeID) error {
 
 // DidConnect tracks the fact that the "one" node connected to the "other" node
 func (self *Network) DidConnect(one, other discover.NodeID) error {
-	conn, err := self.GetOrCreateConn(one, other)
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	conn, err := self.getOrCreateConn(one, other)
 	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
@@ -311,7 +313,9 @@ func (self *Network) DidConnect(one, other discover.NodeID) error {
 // DidDisconnect tracks the fact that the "one" node disconnected from the
 // "other" node
 func (self *Network) DidDisconnect(one, other discover.NodeID) error {
-	conn := self.GetConn(one, other)
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	conn := self.getConn(one, other)
 	if conn == nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
