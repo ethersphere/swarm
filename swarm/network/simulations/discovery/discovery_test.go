@@ -74,7 +74,7 @@ var (
 	nodeCount    = flag.Int("nodes", 10, "number of nodes to create (default 10)")
 	initCount    = flag.Int("conns", 1, "number of originally connected peers	 (default 1)")
 	snapshotFile = flag.String("snapshot", "", "create snapshot")
-	loglevel     = flag.Int("loglevel", 6, "verbosity of logs")
+	loglevel     = flag.Int("loglevel", 3, "verbosity of logs")
 )
 
 func init() {
@@ -191,8 +191,6 @@ func testDiscoverySimulation(t *testing.T, nodes, conns int, adapter adapters.No
 }
 
 func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter adapters.NodeAdapter) map[int][]byte {
-	cleanDbStores()
-
 	persistenceEnabled = true
 	discoveryEnabled = true
 
@@ -205,7 +203,6 @@ func testDiscoveryPersistenceSimulation(t *testing.T, nodes, conns int, adapter 
 		t.Fatalf("Simulation failed: %s", result.Error)
 	}
 	t.Logf("Simulation with %d nodes passed in %s", nodes, result.FinishedAt.Sub(result.StartedAt))
-	cleanDbStores()
 	// set the discovery and persistence flags again to default so other
 	// tests will not be affected
 	discoveryEnabled = true
@@ -336,6 +333,9 @@ func discoverySimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simul
 }
 
 func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapter) (*simulations.StepResult, error) {
+	cleanDbStores()
+	defer cleanDbStores()
+
 	// create network
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
 		ID:             "0",
@@ -372,13 +372,11 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 	ppmap := network.NewPeerPot(testMinProxBinSize, ids, addrs)
 
 	var restartTime time.Time
-	var mutex = &sync.Mutex{}
 
 	action := func(ctx context.Context) error {
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
+		ticker := time.NewTicker(500 * time.Millisecond)
+
 		for range ticker.C {
-			mutex.Lock()
 			isHealthy := true
 			for _, id := range ids {
 				//call Healthy RPC
@@ -402,35 +400,37 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 				}
 			}
 			if isHealthy {
-				log.Info("reached healthy kademlia. starting to shutdown nodes.")
-				shutdownStarted := time.Now()
-				// stop all ids, then start them again
-				for _, id := range ids {
-					node := net.GetNode(id)
-
-					if err := net.Stop(node.ID()); err != nil {
-						return fmt.Errorf("error stopping node %s: %s", node.ID().TerminalString(), err)
-					}
-				}
-				log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Now().Sub(shutdownStarted)))
-				persistenceEnabled = true
-				discoveryEnabled = false
-				restartTime = time.Now()
-				for _, id := range ids {
-					node := net.GetNode(id)
-					if err := net.Start(node.ID()); err != nil {
-						return fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
-					}
-					if err := triggerChecks(trigger, net, node.ID()); err != nil {
-						return fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
-					}
-				}
-
-				log.Info(fmt.Sprintf("restarting nodes took: %s", time.Now().Sub(restartTime)))
 				break
 			}
-			mutex.Unlock()
 		}
+		ticker.Stop()
+
+		log.Info("reached healthy kademlia. starting to shutdown nodes.")
+		shutdownStarted := time.Now()
+		// stop all ids, then start them again
+		for _, id := range ids {
+			node := net.GetNode(id)
+
+			if err := net.Stop(node.ID()); err != nil {
+				return fmt.Errorf("error stopping node %s: %s", node.ID().TerminalString(), err)
+			}
+		}
+		log.Info(fmt.Sprintf("shutting down nodes took: %s", time.Now().Sub(shutdownStarted)))
+		persistenceEnabled = true
+		discoveryEnabled = false
+		restartTime = time.Now()
+		for _, id := range ids {
+			node := net.GetNode(id)
+			if err := net.Start(node.ID()); err != nil {
+				return fmt.Errorf("error starting node %s: %s", node.ID().TerminalString(), err)
+			}
+			if err := triggerChecks(trigger, net, node.ID()); err != nil {
+				return fmt.Errorf("error triggering checks for node %s: %s", node.ID().TerminalString(), err)
+			}
+		}
+
+		log.Info(fmt.Sprintf("restarting nodes took: %s", time.Now().Sub(restartTime)))
+
 		return nil
 	}
 	//connects in a chain
@@ -478,7 +478,7 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 
 	// 64 nodes ~ 1min
 	// 128 nodes ~
-	timeout := 30 * time.Second
+	timeout := 300 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -493,21 +493,6 @@ func discoveryPersistenceSimulation(nodes, conns int, adapter adapters.NodeAdapt
 		return result, nil
 	}
 
-	if *snapshotFile != "" {
-		snap, err := net.Snapshot()
-		if err != nil {
-			return nil, errors.New("no shapshot dude")
-		}
-		jsonsnapshot, err := json.Marshal(snap)
-		if err != nil {
-			return nil, fmt.Errorf("corrupt json snapshot: %v", err)
-		}
-		log.Info("writing snapshot", "file", *snapshotFile)
-		err = ioutil.WriteFile(*snapshotFile, jsonsnapshot, 0755)
-		if err != nil {
-			return nil, err
-		}
-	}
 	return result, nil
 }
 
@@ -566,7 +551,7 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	}
 	kad := network.NewKademlia(addr.Over(), kp)
 	hp := network.NewHiveParams()
-	hp.KeepAliveInterval = time.Duration(200+rand.Intn(400)) * time.Millisecond
+	//hp.KeepAliveInterval = time.Duration(200+rand.Intn(400)) * time.Millisecond
 	//hp.InitialConnectDelay = time.Duration(initialDelayCounter) * time.Millisecond
 	hp.Discovery = discoveryEnabled
 

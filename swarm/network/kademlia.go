@@ -18,8 +18,8 @@ package network
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -73,8 +73,8 @@ func NewKadParams() *KadParams {
 		MinProxBinSize: 2,
 		MinBinSize:     2,
 		MaxBinSize:     4,
-		RetryInterval:  420000000, // 4.2 sec
-		MaxRetries:     4000,
+		RetryInterval:  4200000000, // 4.2 sec
+		MaxRetries:     42,
 		RetryExponent:  2,
 		PruneInterval:  0, // TODO:
 	}
@@ -191,7 +191,6 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 			// if not found
 			if v == nil {
 				// insert new offline peer into conns
-				log.Trace(fmt.Sprintf("inserting peer %s", hex.EncodeToString(p.Address())))
 				return newEntry(p)
 			}
 			// found among known peers, do nothing
@@ -233,7 +232,7 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		log.Trace(fmt.Sprintf("%08x candidate nearest neighbour found: %v (%v)", k.BaseAddr()[:4], a, ppo))
 		return a, 0, false
 	}
-	log.Trace(fmt.Sprintf("%08x no candidate nearest neighbours to connect to (Depth: %v, minProxSize: %v) %#v", k.BaseAddr()[:4], depth, k.MinProxBinSize, a))
+	// log.Trace(fmt.Sprintf("%08x no candidate nearest neighbours to connect to (Depth: %v, minProxSize: %v) %#v", k.BaseAddr()[:4], depth, k.MinProxBinSize, a))
 
 	var bpo []int
 	prev := -1
@@ -264,10 +263,14 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		if po >= depth {
 			return false
 		}
-		return f(func(val pot.Val, _ int) bool {
+		ok := f(func(val pot.Val, _ int) bool {
 			a = k.callable(val)
 			return a == nil
 		})
+		if !ok {
+			return false
+		}
+		return true
 	})
 	// found a candidate
 	if a != nil {
@@ -472,6 +475,7 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	// calculate the allowed number of retries based on time lapsed since last seen
 	timeAgo := int64(time.Since(e.seenAt))
 	div := int64(k.RetryExponent)
+	div += (150000 - rand.Int63n(300000)) * div / 1000000
 	var retries int
 	for delta := timeAgo; delta > k.RetryInterval; delta /= div {
 		retries++
