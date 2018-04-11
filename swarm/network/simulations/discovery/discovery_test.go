@@ -30,8 +30,6 @@ import (
 // serviceName is used with the exec adapter so the exec'd binary knows which
 // service to execute
 const serviceName = "discovery"
-const serviceNamePersistence = "noDiscovery_persistence"
-const serviceNameNoPersistence = "discovery_no_persistence"
 const testMinProxBinSize = 2
 const discoveryPersistenceDatadir = "discovery_persistence_test_store"
 
@@ -555,8 +553,7 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	}
 	kad := network.NewKademlia(addr.Over(), kp)
 	hp := network.NewHiveParams()
-	//hp.KeepAliveInterval = time.Duration(200+rand.Intn(400)) * time.Millisecond
-	//hp.InitialConnectDelay = time.Duration(initialDelayCounter) * time.Millisecond
+	hp.KeepAliveInterval = time.Duration(200) * time.Millisecond
 	hp.Discovery = discoveryEnabled
 
 	log.Info(fmt.Sprintf("discovery for nodeID %s is %t", ctx.Config.ID.String(), hp.Discovery))

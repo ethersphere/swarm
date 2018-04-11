@@ -128,7 +128,6 @@ func (h *Hive) Stop() error {
 			return fmt.Errorf("could not save peers to persistence store: %v", err)
 		}
 		if err := h.Store.Close(); err != nil {
-			log.Error(fmt.Sprintf("could not close file handle to persistence store: %v", err))
 			return fmt.Errorf("could not close file handle to persistence store: %v", err)
 		}
 	}
@@ -146,7 +145,6 @@ func (h *Hive) Stop() error {
 // at each iteration, ask the overlay driver to suggest the most preferred peer to connect to
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
-	//time.Sleep(time.Duration(rand.Intn(1000)) * time.Millisecond)
 	for range h.ticker.C {
 		log.Trace(fmt.Sprintf("%08x hive connect()", h.BaseAddr()[:4]))
 
