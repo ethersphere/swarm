@@ -319,24 +319,22 @@ type ChunkValidator interface {
 // Provides method for validation of content address in chunks
 // Holds the corresponding hasher to create the address
 type ContentAddressValidator struct {
-	hashMu sync.Mutex
-	Hasher SwarmHash
+	Hasher SwarmHasher
 }
 
 // Constructor
-func NewContentAddressValidator(hash SwarmHash) *ContentAddressValidator {
+func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 	return &ContentAddressValidator{
-		Hasher: hash,
+		Hasher: hasher,
 	}
 }
 
 // Validate that the given key is a valid content address for the given data
 func (self *ContentAddressValidator) Validate(key Key, data []byte) bool {
-	self.hashMu.Lock()
-	defer self.hashMu.Unlock()
-	self.Hasher.Reset()
-	self.Hasher.Write(data)
-	hash := self.Hasher.Sum(nil)
+	hasher := self.Hasher()
+	hasher.ResetWithLength(data[:8])
+	hasher.Write(data[8:])
+	hash := hasher.Sum(nil)
 
 	if !bytes.Equal(hash, key[:]) {
 		log.Error("invalid content address", "expected", fmt.Sprintf("%x", hash), "have", key)

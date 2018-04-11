@@ -141,7 +141,6 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 	if err != nil {
 		return nil, nil, nil, removeDataDir, err
 	}
-	localStore.Validator = &storage.NoopValidator{}
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)

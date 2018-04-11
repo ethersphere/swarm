@@ -94,14 +94,18 @@ func (self *LocalStore) CacheCounter() uint64 {
 }
 
 // LocalStore is itself a chunk store
-// unsafe, in that the data is not integrity checked
 func (self *LocalStore) Put(chunk *Chunk) {
+	valid := true
 	for _, v := range self.Validators {
-		if !v.Validate(chunk.Key, chunk.SData) {
-			chunk.SetErrored(ChunkErrInvalid)
-			chunk.dbStoredC <- false
-			return
+		if v.Validate(chunk.Key, chunk.SData) {
+			valid = true
+			break
 		}
+	}
+	if !valid {
+		chunk.SetErrored(ChunkErrInvalid)
+		chunk.dbStoredC <- false
+		return
 	}
 	log.Trace("localstore.put", "key", chunk.Key)
 	self.mu.Lock()
