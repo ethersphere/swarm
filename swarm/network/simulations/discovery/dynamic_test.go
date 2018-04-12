@@ -291,7 +291,7 @@ func (self *nodeCtrl) nodeUpDown() error {
 			break
 		}
 		self.mu.Unlock()
-		time.Sleep(time.Millisecond * 100)
+		time.Sleep(simulations.DialBanTimeout * 2)
 	}
 
 	// now we can add the node back to the uplist
