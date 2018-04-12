@@ -97,13 +97,12 @@ func (self *LocalStore) CacheCounter() uint64 {
 func (self *LocalStore) Put(chunk *Chunk) {
 	valid := true
 	for _, v := range self.Validators {
-		if v.Validate(chunk.Key, chunk.SData) {
-			valid = true
+		if valid = v.Validate(chunk.Key, chunk.SData); valid {
 			break
 		}
 	}
 	if !valid {
-		chunk.SetErrored(ChunkErrInvalid)
+		chunk.SetErrored(ErrChunkInvalid)
 		chunk.dbStoredC <- false
 		return
 	}
@@ -165,11 +164,11 @@ func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool)
 
 	var err error
 	chunk, err = self.get(key)
-	if err == nil && chunk.GetErrored() == ChunkErrOk {
+	if err == nil && chunk.GetErrored() == nil {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
 		return chunk, false
 	}
-	if err == ErrFetching && chunk.GetErrored() == ChunkErrOk {
+	if err == ErrFetching && chunk.GetErrored() == nil {
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
 		return chunk, false
 	}

@@ -17,7 +17,6 @@
 package storage
 
 import (
-	"errors"
 	"io"
 	"time"
 )
@@ -40,8 +39,6 @@ const (
 )
 
 var (
-	ErrChunkNotFound = errors.New("chunk not found")
-	ErrFetching      = errors.New("chunk still fetching")
 	// timeout interval before retrieval is timed out
 	searchTimeout = 3 * time.Second
 )

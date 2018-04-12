@@ -181,18 +181,18 @@ type Chunk struct {
 	dbStoredC  chan bool // never remove a chunk from memStore before it is written to dbStore
 	dbStored   bool
 	dbStoredMu *sync.Mutex
-	errored    ChunkError // flag which is set when the chunk request has errored or timeouted
+	errored    error // flag which is set when the chunk request has errored or timeouted
 	erroredMu  sync.Mutex
 }
 
-func (c *Chunk) SetErrored(val ChunkError) {
+func (c *Chunk) SetErrored(err error) {
 	c.erroredMu.Lock()
 	defer c.erroredMu.Unlock()
 
-	c.errored = val
+	c.errored = err
 }
 
-func (c *Chunk) GetErrored() ChunkError {
+func (c *Chunk) GetErrored() error {
 	c.erroredMu.Lock()
 	defer c.erroredMu.Unlock()
 

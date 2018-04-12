@@ -1,7 +1,12 @@
 package storage
 
+import (
+	"errors"
+)
+
 const (
-	ErrInit = iota
+	ErrOk = iota
+	ErrInit
 	ErrNotFound
 	ErrIO
 	ErrUnauthorized
@@ -14,13 +19,20 @@ const (
 	ErrCnt
 )
 
-const (
-	ChunkErrOk = iota
-	ChunkErrNotFound
-	ChunkErrNoForward
-	ChunkErrTimeout
-	ChunkErrInvalid
-	ChunkErrUnavailable
+var (
+	ErrChunkNotFound    = errors.New("chunk not found")
+	ErrFetching         = errors.New("chunk still fetching")
+	ErrChunkInvalid     = errors.New("invalid chunk")
+	ErrChunkForward     = errors.New("cannot forward")
+	ErrChunkUnavailable = errors.New("chunk unavailable")
+	ErrChunkTimeout     = errors.New("timeout")
 )
 
-type ChunkError byte
+//const (
+//	ChunkErrOk = iota
+//	ChunkErrNotFound
+//	ChunkErrNoForward
+//	ChunkErrTimeout
+//	ChunkErrInvalid
+//	ChunkErrUnavailable
+//)
