@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -30,16 +31,17 @@ const (
 )
 
 var (
-	upNodes     []*discover.NodeID
-	upNodesLast int
-	mu          sync.Mutex
-	bootNodes   []*discover.NodeID
-	rpcs        map[discover.NodeID]*rpc.Client
-	subs        map[discover.NodeID]*rpc.ClientSubscription
-	events      chan *p2p.PeerEvent
-	ids         []discover.NodeID
+	//upNodes     []*discover.NodeID
+	//upNodesLast int
+	mu        sync.Mutex
+	bootNodes []*discover.NodeID
+	rpcs      map[discover.NodeID]*rpc.Client
+	subs      map[discover.NodeID]*rpc.ClientSubscription
+	events    chan *p2p.PeerEvent
+	ids       []discover.NodeID
 )
 
+// node count should be higher than disconnect count for now
 func TestDynamicDiscovery(t *testing.T) {
 	t.Run("16/10/sim", dynamicDiscoverySimulation)
 }
@@ -193,7 +195,8 @@ type nodeCtrl struct {
 	readyNodes         []discover.NodeID
 	upNodes            []discover.NodeID
 	upAddrs            [][]byte
-	pot                map[discover.NodeID]*network.PeerPot
+	addrIdx            map[discover.NodeID]string
+	pot                map[string]*network.PeerPot
 	mu                 sync.Mutex
 	healthCheckRetries int
 	healthCheckDelay   time.Duration
@@ -206,17 +209,20 @@ func newNodeCtrl(net *simulations.Network, nodes []discover.NodeID) *nodeCtrl {
 		net:                net,
 		healthCheckRetries: defaultHealthCheckRetires,
 		healthCheckDelay:   defaultHealthCheckDelay,
+		addrIdx:            make(map[discover.NodeID]string),
 	}
 	for i := 0; i < len(nodes); i++ {
 		ctrl.upNodes = append(ctrl.upNodes, nodes[i])
 		ctrl.readyNodes = append(ctrl.readyNodes, nodes[i])
-		ctrl.upAddrs = append(ctrl.upAddrs, network.ToOverlayAddr(ids[i].Bytes()))
+		addr := network.ToOverlayAddr(ids[i].Bytes())
+		ctrl.upAddrs = append(ctrl.upAddrs, addr)
+		ctrl.addrIdx[nodes[i]] = common.Bytes2Hex(addr)
 		log.Debug("init nodeCtrl", "idx", i, "upnode", ctrl.upNodes[i], "upaddr", fmt.Sprintf("%x", ctrl.upAddrs[i]))
 	}
-	ctrl.pot = network.NewPeerPot(testMinProxBinSize, ctrl.upNodes, ctrl.upAddrs)
+	ctrl.pot = network.NewPeerPotMap(testMinProxBinSize, ctrl.upAddrs)
 	for k, p := range ctrl.pot {
 		for i, nn := range p.NNSet {
-			log.Debug("init nodeCtrl nnset", "i", i, "node", k.TerminalString(), "nn", fmt.Sprintf("%x", nn))
+			log.Debug("init nodeCtrl nnset", "i", i, "node", k, "nn", fmt.Sprintf("%x", nn))
 		}
 	}
 	return ctrl
@@ -261,7 +267,7 @@ func (self *nodeCtrl) nodeUpDown() error {
 
 	// stop the node
 	log.Info("Restart node: stop", "id", nodeId, "addr", fmt.Sprintf("%x", self.upAddrs[nodeIdx]), "upnodes", len(self.upNodes), "readynodes", len(self.readyNodes))
-	self.pot = network.NewPeerPot(testMinProxBinSize, self.upNodes, self.upAddrs)
+	self.pot = network.NewPeerPotMap(testMinProxBinSize, self.upAddrs)
 	self.mu.Unlock()
 	if err := self.net.Stop(nodeId); err != nil {
 		self.mu.Unlock()
@@ -291,7 +297,6 @@ func (self *nodeCtrl) nodeUpDown() error {
 			break
 		}
 		self.mu.Unlock()
-		time.Sleep(simulations.DialBanTimeout * 2)
 	}
 
 	// now we can add the node back to the uplist
@@ -360,9 +365,9 @@ func (self *nodeCtrl) checkHealth(node *simulations.Node, seq int) error {
 		time.Sleep(self.healthCheckDelay)
 		healthy := &network.Health{}
 		self.mu.Lock()
-		self.pot = network.NewPeerPot(testMinProxBinSize, self.upNodes, self.upAddrs)
+		self.pot = network.NewPeerPotMap(testMinProxBinSize, self.upAddrs)
 
-		if _, ok := self.pot[node.ID()]; !ok {
+		if _, ok := self.pot[self.addrIdx[node.ID()]]; !ok {
 			self.mu.Unlock()
 			return fmt.Errorf("missing node in pot", "nodeid", node.ID(), "seq", seq)
 			//log.Error("Missing node in pot", "nodeid", node.ID(), "seq", seq)
@@ -375,7 +380,7 @@ func (self *nodeCtrl) checkHealth(node *simulations.Node, seq int) error {
 			//			self.mu.Unlock()
 			//			continue
 		}
-		if err := client.Call(&healthy, "hive_healthy", self.pot[node.ID()]); err != nil {
+		if err := client.Call(&healthy, "hive_healthy", self.pot[self.addrIdx[node.ID()]]); err != nil {
 			self.mu.Unlock()
 			return fmt.Errorf("error retrieving node health by rpc for node %v: %v", node.ID(), err)
 		}
