@@ -43,7 +43,7 @@ var (
 
 // node count should be higher than disconnect count for now
 func TestDynamicDiscovery(t *testing.T) {
-	t.Run("16/10/sim", dynamicDiscoverySimulation)
+	t.Run("8/4/sim", dynamicDiscoverySimulation)
 }
 
 func dynamicDiscoverySimulation(t *testing.T) {
@@ -126,13 +126,15 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			go func(i, j int) {
 				net.Connect(ids[i], ids[j])
 				// TODO: replace with simevents check
-				time.Sleep(time.Second * 2)
+				time.Sleep(time.Second)
 				trigger <- ids[i]
 			}(i, j)
 		}
 		return nil
 	}
 
+	var checkseq int
+	mu := sync.Mutex{}
 	ctrl := newNodeCtrl(net, ids)
 	// construct the peer pot, so that kademlia health can be checked
 	check := func(ctx context.Context, id discover.NodeID) (bool, error) {
@@ -144,7 +146,10 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			if e.Type == p2p.PeerEventTypeAdd {
 				n := net.GetNode(id)
 				err := ctrl.checkHealth(n, 0)
-				log.Debug("check health return", "id", id, "err", err)
+				mu.Lock()
+				checkseq++
+				log.Debug("check health return", "id", id, "seq", checkseq, "err", err)
+				mu.Unlock()
 				return true, err
 			}
 		case err := <-subs[id].Err():
@@ -369,7 +374,6 @@ func (self *nodeCtrl) checkHealth(node *simulations.Node, seq int) error {
 
 		if _, ok := self.pot[self.addrIdx[node.ID()]]; !ok {
 			self.mu.Unlock()
-			return fmt.Errorf("missing node in pot", "nodeid", node.ID(), "seq", seq)
 			//log.Error("Missing node in pot", "nodeid", node.ID(), "seq", seq)
 			//			for i, n := range self.upNodes {
 			//				log.Trace("ctrl dump", "node", n.TerminalString(), "addr", fmt.Sprintf("%x", self.upAddrs[i]))
@@ -379,6 +383,7 @@ func (self *nodeCtrl) checkHealth(node *simulations.Node, seq int) error {
 			//			}
 			//			self.mu.Unlock()
 			//			continue
+			return fmt.Errorf("missing node in pot", "nodeid", node.ID(), "seq", seq)
 		}
 		if err := client.Call(&healthy, "hive_healthy", self.pot[self.addrIdx[node.ID()]]); err != nil {
 			self.mu.Unlock()
@@ -403,10 +408,11 @@ func newServices(ctx *adapters.ServiceContext) (node.Service, error) {
 	kp.MinProxBinSize = testMinProxBinSize
 	kp.MaxBinSize = 3
 	kp.MinBinSize = 1
-	kp.MaxRetries = 4000
+	kp.MaxRetries = 10
 	kp.RetryExponent = 2
 	kp.RetryInterval = 50000000
-
+	//kp.RetryExponent = 2
+	//	kp.RetryInterval = 50000000
 	if ctx.Config.Reachable != nil {
 		kp.Reachable = func(o network.OverlayAddr) bool {
 			return ctx.Config.Reachable(o.(*network.BzzAddr).ID())
