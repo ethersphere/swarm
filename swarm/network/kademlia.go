@@ -490,7 +490,7 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	for delta := timeAgo; delta > k.RetryInterval; delta /= div {
 		retries++
 	}
-
+	retries = 10
 	// this is never called concurrently, so safe to increment
 	// peer can be retried again
 	if retries < e.retries {
@@ -794,7 +794,7 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	knownn := k.knowNearestNeighbours(pp.NNSet)
 	full := k.full(pp.EmptyBins)
 	//log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full, k.string()))
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", knownn, gotnn, full))
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full))
 	return &Health{knownn, gotnn, countnn, full, k.string()}
 }
 
