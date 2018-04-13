@@ -237,7 +237,9 @@ func (self *ResourceHandler) IsValidated() bool {
 func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
 	hasher := self.hashPool.Get().(SwarmHash)
 	defer self.hashPool.Put(hasher)
-	hasher.Reset()
+	length := make([]byte, 8)
+	binary.LittleEndian.PutUint64(length, uint64(len(key)+len(data)))
+	hasher.ResetWithLength(length)
 	hasher.Write(key[:])
 	hasher.Write(data)
 	return common.BytesToHash(hasher.Sum(nil))
@@ -755,7 +757,9 @@ func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehas
 	// format is: hash(period|version|namehash)
 	hasher := self.hashPool.Get().(SwarmHash)
 	defer self.hashPool.Put(hasher)
-	hasher.Reset()
+	length := make([]byte, 8)
+	binary.LittleEndian.PutUint64(length, uint64(8+len(namehash)))
+	hasher.ResetWithLength(length)
 	b := make([]byte, 4)
 	binary.LittleEndian.PutUint32(b, period)
 	hasher.Write(b)
@@ -867,7 +871,7 @@ func isMultihash(data []byte) int {
 	// we cheekily assume hashlength < maxint
 	inthashlength := int(hashlength)
 	if len(data[cursor:]) < inthashlength {
-		log.Warn("Corrupt multihash data, hash does not align with data boundary")
+		log.Warn("Corrupt multihash data, hash does not align with data boundary", "inthashlength", inthashlength)
 		return 0
 	}
 	return cursor + inthashlength
