@@ -37,7 +37,6 @@ type LocalStoreParams struct {
 	Validators  []ChunkValidator `toml:"-"`
 }
 
-//create params with default values
 func NewDefaultLocalStoreParams() *LocalStoreParams {
 	return &LocalStoreParams{
 		StoreParams: NewStoreParams(0, nil, nil),
@@ -93,7 +92,6 @@ func (self *LocalStore) CacheCounter() uint64 {
 	return uint64(self.memStore.Counter())
 }
 
-// LocalStore is itself a chunk store
 func (self *LocalStore) Put(chunk *Chunk) {
 	valid := true
 	for _, v := range self.Validators {

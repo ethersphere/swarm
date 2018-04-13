@@ -5,8 +5,7 @@ import (
 )
 
 const (
-	ErrOk = iota
-	ErrInit
+	ErrInit = iota
 	ErrNotFound
 	ErrIO
 	ErrUnauthorized
@@ -27,12 +26,3 @@ var (
 	ErrChunkUnavailable = errors.New("chunk unavailable")
 	ErrChunkTimeout     = errors.New("timeout")
 )
-
-//const (
-//	ChunkErrOk = iota
-//	ChunkErrNotFound
-//	ChunkErrNoForward
-//	ChunkErrTimeout
-//	ChunkErrInvalid
-//	ChunkErrUnavailable
-//)

@@ -81,8 +81,8 @@ type LDBStoreParams struct {
 	Po   func(Key) uint8
 }
 
-// create params with specified values.
-// If 0 for capacity or nil for hash, baskey is specified, default values for these params will be used
+// NewLDBStoreParams constructs LDBStoreParams with the specified values.
+// if 0 is set for capacity or nil for hash, and basekey is specified, default values for these params will be used
 // path has no default value
 func NewLDBStoreParams(path string, capacity uint64, hash SwarmHasher, basekey []byte) *LDBStoreParams {
 	if hash == nil {

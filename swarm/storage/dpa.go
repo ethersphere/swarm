@@ -60,7 +60,6 @@ func NewDPAParams() *DPAParams {
 
 // for testing locally
 func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
-
 	params := NewDefaultLocalStoreParams()
 	params.Init(datadir)
 	localStore, err := NewLocalStore(params, nil)
