@@ -871,7 +871,7 @@ func isMultihash(data []byte) int {
 	// we cheekily assume hashlength < maxint
 	inthashlength := int(hashlength)
 	if len(data[cursor:]) < inthashlength {
-		log.Warn("Corrupt multihash data, hash does not align with data boundary", "inthashlength", inthashlength)
+		log.Warn("Corrupt multihash data, hash does not align with data boundary")
 		return 0
 	}
 	return cursor + inthashlength
