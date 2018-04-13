@@ -29,6 +29,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -51,7 +52,7 @@ var (
 	startTime time.Time
 	ids       []discover.NodeID
 	datadirs  map[discover.NodeID]string
-	ppmap     map[discover.NodeID]*network.PeerPot
+	ppmap     map[string]*network.PeerPot
 
 	globalWg sync.WaitGroup
 
@@ -199,15 +200,20 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	if err != nil {
 		return err
 	}
+	var rpcSubscriptionsWg sync.WaitGroup
 	//do cleanup after test is terminated
 	defer func() {
+		// close quitC channel to signall all goroutines to clanup
+		// before calling simulation network shutdown.
+		close(quitC)
+		//wait for all rpc subscriptions to unsubscribe
+		rpcSubscriptionsWg.Wait()
 		//shutdown the snapshot network
 		net.Shutdown()
 		//after the test, clean up local stores initialized with createLocalStoreForId
 		localStoreCleanup()
 		//finally clear all data directories
 		datadirsCleanup()
-		close(quitC)
 	}()
 	//get the nodes of the network
 	nodes := net.GetNodes()
@@ -235,7 +241,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	log.Info("Test config successfully initialized")
 
 	//only needed for healthy call when debugging
-	ppmap = network.NewPeerPot(testMinProxBinSize, ids, conf.addrs)
+	ppmap = network.NewPeerPotMap(testMinProxBinSize, conf.addrs)
 
 	//define the action to be performed before the test checks: start syncing
 	action := func(ctx context.Context) error {
@@ -246,7 +252,8 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			for _, id := range ids {
 				r := registries[id]
 				//PeerPot for this node
-				pp := ppmap[id]
+				addr := common.Bytes2Hex(network.ToOverlayAddr(id.Bytes()))
+				pp := ppmap[addr]
 				//call Healthy RPC
 				h := r.delivery.overlay.Healthy(pp)
 				//print info
@@ -290,7 +297,16 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				return err
 			}
 
-			watchSubscriptionEvents(ctx, id, client, errc)
+			wsDoneC := watchSubscriptionEvents(ctx, id, client, errc, quitC)
+			// doneC is nil, the error happened which is sent to errc channel, already
+			if wsDoneC == nil {
+				continue
+			}
+			rpcSubscriptionsWg.Add(1)
+			go func() {
+				<-wsDoneC
+				rpcSubscriptionsWg.Done()
+			}()
 
 			if log.Lvl(*loglevel) >= log.LvlTrace {
 				//this will print the kademlia tables of all nodes
@@ -306,10 +322,15 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 				log.Debug(kt)
 			}
 			//watch for peers disconnecting
-			err = streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
+			wdDoneC, err := streamTesting.WatchDisconnections(id, client, disconnectC, quitC)
 			if err != nil {
 				return err
 			}
+			rpcSubscriptionsWg.Add(1)
+			go func() {
+				<-wdDoneC
+				rpcSubscriptionsWg.Done()
+			}()
 			//start syncing!
 			err = client.CallContext(ctx, nil, "stream_startSyncing")
 			if err != nil {
@@ -323,11 +344,9 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			errc <- nil
 		}()
 
-		select {
-		case err := <-errc:
-			if err != nil {
-				return err
-			}
+		err := <-errc
+		if err != nil {
+			return err
 		}
 		log.Info("Stream subscriptions successfully requested")
 		if live {
@@ -428,10 +447,9 @@ func (r *TestRegistry) StartSyncing(ctx context.Context) error {
 	var err error
 
 	if log.Lvl(*loglevel) == log.LvlDebug {
-		//address of registry
-		add := r.addr.ID()
 		//PeerPot for this node
-		pp := ppmap[add]
+		addr := common.Bytes2Hex(r.addr.OAddr)
+		pp := ppmap[addr]
 		//call Healthy RPC
 		h := r.delivery.overlay.Healthy(pp)
 		//print info
@@ -589,7 +607,7 @@ func initNetWithSnapshot(nodeCount int) (*simulations.Network, error) {
 
 //we want to wait for subscriptions to be established before uploading to test
 //that live syncing is working correctly
-func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rpc.Client, errc chan error) {
+func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rpc.Client, errc chan error, quitC chan struct{}) (doneC <-chan struct{}) {
 	events := make(chan *p2p.PeerEvent)
 	sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
 	if err != nil {
@@ -597,13 +615,23 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 		errc <- fmt.Errorf("error getting peer events for node %v: %s", id, err)
 		return
 	}
+	c := make(chan struct{})
 	go func() {
-		defer sub.Unsubscribe()
+		defer func() {
+			log.Trace("watch subscription events: unsubscribe", "id", id)
+			sub.Unsubscribe()
+			close(c)
+		}()
 
 		for {
 			select {
+			case <-quitC:
+				return
 			case <-ctx.Done():
-				errc <- ctx.Err()
+				select {
+				case errc <- ctx.Err():
+				case <-quitC:
+				}
 				return
 			case e := <-events:
 				//just catch SubscribeMsg
@@ -612,13 +640,16 @@ func watchSubscriptionEvents(ctx context.Context, id discover.NodeID, client *rp
 				}
 			case err := <-sub.Err():
 				if err != nil {
-					errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err)
+					select {
+					case errc <- fmt.Errorf("error getting peer events for node %v: %v", id, err):
+					case <-quitC:
+					}
 					return
 				}
 			}
 		}
 	}()
-	return
+	return c
 }
 
 //create a local store for the given node
