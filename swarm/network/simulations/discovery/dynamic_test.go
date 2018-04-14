@@ -13,13 +13,14 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
+	//"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
@@ -35,15 +36,15 @@ var (
 	//upNodesLast int
 	mu        sync.Mutex
 	bootNodes []*discover.NodeID
-	rpcs      map[discover.NodeID]*rpc.Client
-	subs      map[discover.NodeID]*rpc.ClientSubscription
-	events    chan *p2p.PeerEvent
-	ids       []discover.NodeID
+	//rpcs      map[discover.NodeID]*rpc.Client
+	//subs      map[discover.NodeID]*rpc.ClientSubscription
+	events chan *p2p.PeerEvent
+	ids    []discover.NodeID
 )
 
 // node count should be higher than disconnect count for now
 func TestDynamicDiscovery(t *testing.T) {
-	t.Run("8/4/sim", dynamicDiscoverySimulation)
+	t.Run("4/3/sim", dynamicDiscoverySimulation)
 }
 
 func dynamicDiscoverySimulation(t *testing.T) {
@@ -55,8 +56,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 
 	bootNodes = make([]*discover.NodeID, 3)
 	events = make(chan *p2p.PeerEvent)
-	subs = make(map[discover.NodeID]*rpc.ClientSubscription)
-	rpcs = make(map[discover.NodeID]*rpc.Client)
+	//subs = make(map[discover.NodeID]*rpc.ClientSubscription)
+	//rpcs = make(map[discover.NodeID]*rpc.Client)
 	ids = make([]discover.NodeID, nodeCount)
 
 	log.Info("dynamic test", "nodecount", nodeCount, "adaptertype", adapter)
@@ -82,6 +83,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	})
 	defer net.Shutdown()
 
+	wgNodes := sync.WaitGroup{}
+	wgNodes.Add(int(nodeCount))
 	for i := 0; i < int(nodeCount); i++ {
 		conf := adapters.RandomNodeConfig()
 		node, err := net.NewNodeWithConfig(conf)
@@ -94,20 +97,40 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			bootNodes[i] = &ids[i]
 		}
 
+		// receive
+		events := make(chan *simulations.Event)
+		sub := net.Events().Subscribe(events)
+		go func(sub event.Subscription) {
+		OUTER:
+			for {
+				select {
+				case ev := <-events:
+					if ev.Type == simulations.EventTypeNode {
+						if ev.Node.Up && ev.Node.Config.ID == node.ID() {
+							wgNodes.Done()
+							break OUTER
+						}
+					}
+				}
+			}
+			sub.Unsubscribe()
+		}(sub)
+
 		if err = net.Start(node.ID()); err != nil {
 			t.Fatalf("error starting node %s: %s", node.ID().TerminalString(), err)
 		}
-		client, err := node.Client()
-		if err != nil {
-			t.Fatal(err)
-		}
-		rpcs[ids[i]] = client
-		sub, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
-		if err != nil {
-			t.Fatalf("error getting peer events for node %v: %s", ids[i], err)
-		}
-		subs[ids[i]] = sub
+		//client, err := node.Client()
+		//		if err != nil {
+		//			t.Fatal(err)
+		//		}
+		//		rpcs[ids[i]] = client
+		//		sub2, err := client.Subscribe(context.Background(), "admin", events, "peerEvents")
+		//		if err != nil {
+		//			t.Fatalf("error getting peer events for node %v: %s", ids[i], err)
+		//		}
+		//		subs[ids[i]] = sub2
 	}
+	wgNodes.Wait()
 
 	// run a simulation which connects the nodes to the bootnodes
 	trigger := make(chan discover.NodeID)
@@ -124,11 +147,30 @@ func dynamicDiscoverySimulation(t *testing.T) {
 				j = rand.Intn(bootNodeCount)
 			}
 			go func(i, j int) {
-				net.Connect(ids[i], ids[j])
-				// TODO: replace with simevents check
-				time.Sleep(time.Second)
-				trigger <- ids[i]
+				events := make(chan *simulations.Event)
+				sub := net.Events().Subscribe(events)
+			OUTER:
+				for {
+					select {
+					case ev := <-events:
+						if ev.Type == simulations.EventTypeConn {
+							log.Warn("conn", "node", ids[i])
+							if ev.Conn.Up {
+								log.Warn("conn up", "node", ids[i])
+								if (ev.Conn.One == ids[i] && ev.Conn.Other == ids[j]) || (ev.Conn.One == ids[j] && ev.Conn.Other == ids[i]) {
+
+									log.Warn("conn match", "node", ids[i], "to", ids[j])
+									trigger <- ids[i]
+									break OUTER
+								}
+							}
+						}
+					}
+				}
+				sub.Unsubscribe()
 			}(i, j)
+			time.Sleep(time.Second)
+			net.Connect(ids[i], ids[j])
 		}
 		return nil
 	}
@@ -142,22 +184,31 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		select {
 		case <-ctx.Done():
 			err = ctx.Err()
-		case e := <-events:
-			if e.Type == p2p.PeerEventTypeAdd {
-				n := net.GetNode(id)
-				err := ctrl.checkHealth(n, 0)
-				mu.Lock()
-				checkseq++
-				log.Debug("check health return", "id", id, "seq", checkseq, "err", err)
-				mu.Unlock()
-				return true, err
-			}
-		case err := <-subs[id].Err():
-			if err != nil {
-				log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
-			}
+			//		case e := <-events:
+			//			if e.Type == p2p.PeerEventTypeAdd {
+			//				n := net.GetNode(id)
+			//				err := ctrl.checkHealth(n, 0)
+			//				mu.Lock()
+			//				checkseq++
+			//				log.Debug("check health return", "id", id, "seq", checkseq, "err", err)
+			//				mu.Unlock()
+			//				return true, err
+			//			}
+			//		case err := <-subs[id].Err():
+			//			if err != nil {
+			//				log.Error(fmt.Sprintf("error getting peer events for node %v", id), "err", err)
+			//			}
 		default:
 		}
+		log.Warn("check", "node", id)
+		n := net.GetNode(id)
+		err = ctrl.checkHealth(n, 0)
+		mu.Lock()
+		checkseq++
+		log.Debug("check health return", "id", id, "seq", checkseq, "err", err)
+		mu.Unlock()
+		return true, err
+
 		return false, err
 	}
 
