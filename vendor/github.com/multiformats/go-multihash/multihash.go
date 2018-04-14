@@ -146,7 +146,7 @@ var DefaultLengths = map[uint64]int{
 	KECCAK_512:   64,
 	SHAKE_128:    32,
 	SHAKE_256:    64,
-	BMT_SHA3:     64,
+	BMT_SHA3:     32,
 }
 
 func uvarint(buf []byte) (uint64, []byte, error) {
