@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -17,62 +16,17 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 }
 
-type dispatcher struct {
-	network *Network
-	events  map[discover.NodeID]chan *Event
-	startC  chan error
-	quitC   chan struct{}
-}
+func TestNodeUpAndConn(t *testing.T) {
 
-func newDispatcher(network *Network, quitC chan struct{}) *dispatcher {
-	return &dispatcher{
-		network: network,
-		startC:  make(chan error),
-		quitC:   quitC,
-		events:  make(map[discover.NodeID]chan *Event),
-	}
-}
-
-func (self *dispatcher) run() {
-	events := make(chan *Event)
-	sub := self.network.Events().Subscribe(events)
-	defer sub.Unsubscribe()
-
-	wg := sync.WaitGroup{}
-	nodes := self.network.GetNodes()
-	wg.Add(1)
-	for _, n := range nodes {
-		self.events[n.ID()] = make(chan *Event)
-	}
-	go func() {
-		for {
-			select {
-			case ev := <-events:
-				if ev == nil {
-					log.Warn("dispatcher got nil event")
-					wg.Done()
-					return
-				}
-				log.Warn("dispatcher event", "event", ev.Type)
-				if ev.Type == "msg" {
-					continue
-				} else if ev.Type == EventTypeConn {
-					self.events[ev.Conn.One] <- ev
-				} else if ev.Type == EventTypeNode {
-					self.events[ev.Node.Config.ID] <- ev
-				}
+	var quitC []chan struct{}
+	defer func() {
+		for _, q := range quitC {
+			if q != nil {
+				close(q)
 			}
 		}
 	}()
-	self.startC <- nil
-	wg.Wait()
-	<-self.quitC
-	for _, n := range nodes {
-		close(self.events[n.ID()])
-	}
-}
 
-func TestNodeUpAndConn(t *testing.T) {
 	// create simulation network with 20 testService nodes
 	adapter := adapters.NewSimAdapter(adapters.Services{
 		"test": newTestService,
@@ -80,7 +34,6 @@ func TestNodeUpAndConn(t *testing.T) {
 	network := NewNetwork(adapter, &NetworkConfig{
 		DefaultService: "test",
 	})
-	defer network.Shutdown()
 	nodeCount := 3
 	ids := make([]discover.NodeID, nodeCount)
 
@@ -95,34 +48,40 @@ func TestNodeUpAndConn(t *testing.T) {
 
 	trigger := make(chan discover.NodeID)
 	events := make(chan *Event)
-	sub := self.network.Events().Subscribe(events)
+	sub := network.Events().Subscribe(events)
 	defer sub.Unsubscribe()
+	quitC = append(quitC, make(chan struct{}))
 
 	action := func(ctx context.Context) error {
-		go func() {
+		go func(quitC chan struct{}) {
 			for {
 				select {
 				case ev := <-events:
 					if ev == nil {
-						log.Warn("got nil event", "node", n)
-						return
+						panic("got nil event")
 					}
 					if ev.Type == EventTypeNode {
 						if ev.Node.Up {
-							log.Info(fmt.Sprintf("got node up event %v", ev))
+							log.Info("got node up event", "event", ev, "node", ev.Node.Config.ID)
 							trigger <- ev.Node.Config.ID
-							return
 						}
 					}
+
+				case <-quitC:
+					log.Warn("got quit action 1")
+					return
 				}
+
+			}
+		}(quitC[len(quitC)-1])
+		go func() {
+			for _, n := range ids {
+				if err := network.Start(n); err != nil {
+					t.Fatalf("error starting node: %s", err)
+				}
+				log.Info("network start returned", "node", n)
 			}
 		}()
-		for _, n := range ids {
-			if err := network.Start(n); err != nil {
-				t.Fatalf("error starting node: %s", err)
-			}
-			log.Info("network start returned", "node", n)
-		}
 		return nil
 	}
 
@@ -132,7 +91,7 @@ func TestNodeUpAndConn(t *testing.T) {
 			return false, ctx.Err()
 		default:
 		}
-		log.Info("check up", "node", nodeId)
+		log.Info("trigger expect up", "node", nodeId)
 		return true, nil
 	}
 
@@ -150,17 +109,17 @@ func TestNodeUpAndConn(t *testing.T) {
 	if result.Error != nil {
 		t.Fatalf("simulation failed: %s", result.Error)
 	}
+	close(quitC[len(quitC)-1])
+	quitC[len(quitC)-1] = make(chan struct{})
 
 	action = func(ctx context.Context) error {
-		go func() {
+		go func(quitC chan struct{}) {
 			for {
 				select {
 				case ev := <-events:
 					if ev.Type == EventTypeConn {
 						if ev.Conn.Up {
 							log.Info(fmt.Sprintf("got conn up event %v", ev))
-							//if (ev.Conn.One == ids[i] && ev.Conn.Other == ids[j]) || (ev.Conn.One == ids[j] && ev.Conn.Other == ids[i]) {
-							//if ev.Conn.One == ids[i] && ev.Conn.Other == ids[j] {
 							trigger <- ev.Conn.One
 						}
 					}
@@ -168,18 +127,20 @@ func TestNodeUpAndConn(t *testing.T) {
 					return
 				}
 			}
-		}()
-		for i, n := range ids {
-			j := i - 1
-			if i == 0 {
-				j = len(ids) - 1
-			}
+		}(quitC[len(quitC)-1])
+		go func() {
+			for i := range ids {
+				j := i - 1
+				if i == 0 {
+					j = len(ids) - 1
+				}
 
-			if err := network.Connect(ids[i], ids[j]); err != nil {
-				t.Fatalf("error connecting nodes %x => %x: %s", ids[i], ids[j], err)
+				if err := network.Connect(ids[i], ids[j]); err != nil {
+					t.Fatalf("error connecting nodes %x => %x: %s", ids[i], ids[j], err)
+				}
+				log.Info("network connect returned", "one", ids[i], "other", ids[j])
 			}
-			log.Info("network connect returned", "one", ids[i], "other", ids[j])
-		}
+		}()
 		return nil
 	}
 
@@ -191,7 +152,7 @@ func TestNodeUpAndConn(t *testing.T) {
 			return false, ctx.Err()
 		default:
 		}
-		log.Info("trigger expect", "node", id)
+		log.Info("trigger expect conn", "node", id)
 		return true, nil
 	}
 	result = NewSimulation(network).Run(ctx, &Step{
@@ -205,4 +166,5 @@ func TestNodeUpAndConn(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
+	log.Info("done")
 }
