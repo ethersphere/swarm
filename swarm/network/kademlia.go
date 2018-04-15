@@ -490,7 +490,6 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	for delta := timeAgo; delta > k.RetryInterval; delta /= div {
 		retries++
 	}
-	retries = 10
 	// this is never called concurrently, so safe to increment
 	// peer can be retried again
 	if retries < e.retries {
