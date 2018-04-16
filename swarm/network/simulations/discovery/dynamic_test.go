@@ -41,11 +41,18 @@ var (
 	dynamicServices adapters.Services
 )
 
-// node count must be higher than 3 and higher than disconnect count for now
+// Test to verify that restarted nodes will reach healthy state
+//
+// First, it brings up and connects bootnodes, and connects each of the further nodes
+// to a random bootnode
+//
+// if network is healthy, it proceeds to randomly and asynchronously stop and start nodes
+// and performing new health checks after they have connected to one of their previous peers
 func TestDynamicDiscovery(t *testing.T) {
 	t.Run("8/3/sim", dynamicDiscoverySimulation)
 }
 
+// node count must be higher than 3 and higher than disconnect count for now
 func dynamicDiscoverySimulation(t *testing.T) {
 
 	// quitC is used to make sure the async sim events select loops exit

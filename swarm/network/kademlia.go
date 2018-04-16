@@ -225,7 +225,6 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		if po < depth {
 			return false
 		}
-		//log.Warn("val suggest", "val", fmt.Sprintf("%p", val))
 		a = k.callable(val)
 		ppo = po
 		return a == nil
@@ -474,10 +473,10 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	k.entryLock.Lock()
 	defer k.entryLock.Unlock()
 	e := val.(*entry)
-	if e.retries == 0 && bytes.Compare(e.Address(), k.BaseAddr()) < 0 {
-		e.retries++
-		return nil
-	}
+	//	if e.retries == 0 && bytes.Compare(e.Address(), k.BaseAddr()) < 0 {
+	//		e.retries++
+	//		return nil
+	//	}
 	// not callable if peer is live or exceeded maxRetries
 	if e.conn() != nil || e.retries > k.MaxRetries {
 		return nil
@@ -769,7 +768,7 @@ func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (bool, int) {
 			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", k.BaseAddr()[:4], pk[:8]))
 		}
 	}
-	if gots < len(pm) {
+	if gots < len(peers) {
 		return false, gots
 	}
 	return true, gots
