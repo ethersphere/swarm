@@ -138,9 +138,13 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	//self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 
+	nodeID, err := discover.HexID(config.NodeID)
+	if err != nil {
+		return nil, err
+	}
 	addr := &network.BzzAddr{
 		OAddr: common.FromHex(config.BzzKey),
-		UAddr: []byte(discover.NewNode(config.NodeID, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
+		UAddr: []byte(discover.NewNode(nodeID, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
 	}
 
 	bzzconfig := &network.BzzConfig{

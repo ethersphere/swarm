@@ -56,7 +56,7 @@ type Config struct {
 	Port            string
 	PublicKey       string
 	BzzKey          string
-	NodeID          discover.NodeID
+	NodeID          string
 	NetworkId       uint64
 	SwapEnabled     bool
 	SyncEnabled     bool
@@ -115,7 +115,7 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	self.PublicKey = pubkeyhex
 	self.BzzKey = keyhex
-	self.NodeID = discover.PubkeyID(&prvKey.PublicKey)
+	self.NodeID = discover.PubkeyID(&prvKey.PublicKey).String()
 
 	if self.SwapEnabled {
 		self.Swap.Init(self.Contract, prvKey)
