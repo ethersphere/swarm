@@ -459,7 +459,6 @@ func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if oneID == otherID {
-		log.Trace(fmt.Sprintf("refusing to connect to self %v", oneID))
 		return nil, fmt.Errorf("refusing to connect to self %v", oneID)
 	}
 	conn, err := self.getOrCreateConn(oneID, otherID)
@@ -467,7 +466,6 @@ func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 		return nil, err
 	}
 	if conn.Up {
-		log.Trace(fmt.Sprintf("%v and %v already connected", oneID, otherID))
 		return nil, fmt.Errorf("%v and %v already connected", oneID, otherID)
 	}
 	if time.Since(conn.initiated) < DialBanTimeout {

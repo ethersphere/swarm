@@ -16,18 +16,11 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
 }
 
+// This test confirms (and demonstrates) using simulation events
+// to determine whether starting and connecting nodes
+//
 func TestNodeUpAndConn(t *testing.T) {
 
-	var quitC []chan struct{}
-	defer func() {
-		for _, q := range quitC {
-			if q != nil {
-				close(q)
-			}
-		}
-	}()
-
-	// create simulation network with 20 testService nodes
 	adapter := adapters.NewSimAdapter(adapters.Services{
 		"test": newTestService,
 	})
@@ -46,11 +39,18 @@ func TestNodeUpAndConn(t *testing.T) {
 		}
 	}
 
+	var quitC *chan struct{}
+	defer func() {
+		if quitC == nil {
+			close(*quitC)
+		}
+	}()
+	q := make(chan struct{})
+	quitC = &q
 	trigger := make(chan discover.NodeID)
 	events := make(chan *Event)
 	sub := network.Events().Subscribe(events)
 	defer sub.Unsubscribe()
-	quitC = append(quitC, make(chan struct{}))
 
 	action := func(ctx context.Context) error {
 		go func(quitC chan struct{}) {
@@ -59,8 +59,7 @@ func TestNodeUpAndConn(t *testing.T) {
 				case ev := <-events:
 					if ev == nil {
 						panic("got nil event")
-					}
-					if ev.Type == EventTypeNode {
+					} else if ev.Type == EventTypeNode {
 						if ev.Node.Up {
 							log.Info("got node up event", "event", ev, "node", ev.Node.Config.ID)
 							trigger <- ev.Node.Config.ID
@@ -73,7 +72,7 @@ func TestNodeUpAndConn(t *testing.T) {
 				}
 
 			}
-		}(quitC[len(quitC)-1])
+		}(*quitC)
 		go func() {
 			for _, n := range ids {
 				if err := network.Start(n); err != nil {
@@ -109,15 +108,18 @@ func TestNodeUpAndConn(t *testing.T) {
 	if result.Error != nil {
 		t.Fatalf("simulation failed: %s", result.Error)
 	}
-	close(quitC[len(quitC)-1])
-	quitC[len(quitC)-1] = make(chan struct{})
+	close(*quitC)
+	q = make(chan struct{})
+	quitC = &q
 
 	action = func(ctx context.Context) error {
 		go func(quitC chan struct{}) {
 			for {
 				select {
 				case ev := <-events:
-					if ev.Type == EventTypeConn {
+					if ev == nil {
+						panic("got nil event")
+					} else if ev.Type == EventTypeConn {
 						if ev.Conn.Up {
 							log.Info(fmt.Sprintf("got conn up event %v", ev))
 							trigger <- ev.Conn.One
@@ -127,7 +129,7 @@ func TestNodeUpAndConn(t *testing.T) {
 					return
 				}
 			}
-		}(quitC[len(quitC)-1])
+		}(*quitC)
 		go func() {
 			for i := range ids {
 				j := i - 1
