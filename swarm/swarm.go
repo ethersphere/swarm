@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/contracts/ens"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -138,10 +137,14 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	//self.cloud = &storage.Forwarder{}
 	//self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
-	nodeid := discover.PubkeyID(crypto.ToECDSAPub(common.FromHex(config.PublicKey)))
-	addr := network.NewAddrFromNodeID(nodeid)
+
+	addr := &network.BzzAddr{
+		OAddr: common.FromHex(config.BzzKey),
+		UAddr: []byte(discover.NewNode(config.NodeID, net.IP{127, 0, 0, 1}, 30303, 30303).String()),
+	}
+
 	bzzconfig := &network.BzzConfig{
-		OverlayAddr:  common.FromHex(config.BzzKey),
+		OverlayAddr:  addr.OAddr,
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
 	}

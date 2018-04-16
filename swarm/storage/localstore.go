@@ -101,8 +101,8 @@ func (self *LocalStore) Put(chunk *Chunk) {
 
 	dbStorePutCounter.Inc(1)
 	self.memStore.Put(c)
-	if chunk.ReqC != nil {
-		close(chunk.ReqC)
+	if c.ReqC != nil {
+		close(c.ReqC)
 	}
 	self.DbStore.Put(c)
 

@@ -80,7 +80,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	peer := streamer.getPeer(peerID)
 
 	peer.handleSubscribeMsg(&SubscribeMsg{
-		Stream:   NewStream(swarmChunkServerStreamName, "", true),
+		Stream:   NewStream(swarmChunkServerStreamName, "", false),
 		History:  nil,
 		Priority: Top,
 	})
@@ -128,7 +128,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	peerID := tester.IDs[0]
 	peer := streamer.getPeer(peerID)
 
-	stream := NewStream(swarmChunkServerStreamName, "", true)
+	stream := NewStream(swarmChunkServerStreamName, "", false)
 
 	peer.handleSubscribeMsg(&SubscribeMsg{
 		Stream:   stream,
@@ -378,7 +378,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 				defer cancel()
 				sid := sim.IDs[j+1]
-				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, "", true), NewRange(0, 0), Top)
+				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, "", false), NewRange(0, 0), Top)
 			})
 			if err != nil {
 				return err

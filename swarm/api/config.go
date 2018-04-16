@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -55,6 +56,7 @@ type Config struct {
 	Port            string
 	PublicKey       string
 	BzzKey          string
+	NodeID          discover.NodeID
 	NetworkId       uint64
 	SwapEnabled     bool
 	SyncEnabled     bool
@@ -113,6 +115,7 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	self.PublicKey = pubkeyhex
 	self.BzzKey = keyhex
+	self.NodeID = discover.PubkeyID(&prvKey.PublicKey)
 
 	if self.SwapEnabled {
 		self.Swap.Init(self.Contract, prvKey)

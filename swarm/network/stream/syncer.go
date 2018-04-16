@@ -48,8 +48,6 @@ func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerS
 	var start uint64
 	if live {
 		start = sessionAt
-	} else {
-		sessionAt--
 	}
 	return &SwarmSyncerServer{
 		po:        po,
@@ -101,13 +99,18 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	if to <= from || from >= s.sessionAt {
 		to = math.MaxUint64
 	}
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
+	var ticker *time.Ticker
+	var wait bool
 	for {
-		select {
-		case <-ticker.C:
-		case <-s.quit:
-			return nil, 0, 0, nil, nil
+		if wait {
+			if ticker == nil {
+				ticker = time.NewTicker(1000 * time.Millisecond)
+			}
+			select {
+			case <-ticker.C:
+			case <-s.quit:
+				return nil, 0, 0, nil, nil
+			}
 		}
 		err := s.db.Iterator(from, to, s.po, func(key storage.Key, idx uint64) bool {
 			batch = append(batch, key[:]...)
@@ -121,6 +124,10 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		if len(batch) > 0 {
 			break
 		}
+		wait = true
+	}
+	if wait {
+		ticker.Stop()
 	}
 
 	log.Debug("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.db.CurrentBucketStorageIndex(s.po))

@@ -85,7 +85,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		}
 	}()
 
-	log.Debug("%s received subscription", "from", p.streamer.addr.ID(), "peer", p.ID(), "stream", req.Stream, "history", req.History)
+	log.Debug("received subscription", "from", p.streamer.addr.ID(), "peer", p.ID(), "stream", req.Stream, "history", req.History)
 
 	f, err := p.streamer.GetServerFunc(req.Stream.Name)
 	if err != nil {
@@ -216,7 +216,10 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	// }()
 	go func() {
 		wg.Wait()
-		c.next <- c.batchDone(p, req, hashes)
+		select {
+		case c.next <- c.batchDone(p, req, hashes):
+		case <-c.quit:
+		}
 	}()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
@@ -247,6 +250,8 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 				p.Drop(err)
 				return
 			}
+		case <-c.quit:
+			return
 		}
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(msg, c.priority)

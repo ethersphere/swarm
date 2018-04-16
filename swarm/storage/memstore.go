@@ -186,11 +186,9 @@ func (s *MemStore) Put(entry *Chunk) {
 			if entry.ReqC == nil {
 				entry.ReqC = node.entry.ReqC
 			}
-			// if node.entry.dbStoredC != nil {
-			// 	entry.dbStored = node.entry.dbStored
-			// 	entry.dbStoredC = node.entry.dbStoredC
-			// 	entry.dbStoredMu = node.entry.dbStoredMu
-			// }
+			entry.dbStored = node.entry.dbStored
+			entry.dbStoredC = node.entry.dbStoredC
+			entry.dbStoredMu = node.entry.dbStoredMu
 			entry.C = node.entry.C
 			node.entry = entry
 			return

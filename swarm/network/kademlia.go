@@ -206,6 +206,14 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 		k.addrCountC <- k.addrs.Size()
 	}
 	// log.Trace(fmt.Sprintf("%x registered %v peers, %v known, total: %v", k.BaseAddr()[:4], size, known, k.addrs.Size()))
+
+	if k.nDepthC != nil {
+		nDepth := k.neighbourhoodDepth()
+		if nDepth != k.nDepth {
+			k.nDepth = nDepth
+			k.nDepthC <- nDepth
+		}
+	}
 	return nil
 }
 
@@ -263,14 +271,10 @@ func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
 		if po >= depth {
 			return false
 		}
-		ok := f(func(val pot.Val, _ int) bool {
+		return f(func(val pot.Val, _ int) bool {
 			a = k.callable(val)
 			return a == nil
 		})
-		if !ok {
-			return false
-		}
-		return true
 	})
 	// found a candidate
 	if a != nil {
@@ -372,6 +376,13 @@ func (k *Kademlia) Off(p OverlayConn) {
 		// send new address count value only if the peer is deleted
 		if k.addrCountC != nil {
 			k.addrCountC <- k.addrs.Size()
+		}
+		if k.nDepthC != nil {
+			nDepth := k.neighbourhoodDepth()
+			if nDepth != k.nDepth {
+				k.nDepth = nDepth
+				k.nDepthC <- nDepth
+			}
 		}
 	}
 }

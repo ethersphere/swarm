@@ -373,7 +373,7 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer sp.close()
 
 	if r.doRetrieve {
-		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", true), nil, Top)
+		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", false), nil, Top)
 		if err != nil {
 			return err
 		}
@@ -516,6 +516,7 @@ type client struct {
 	sessionAt uint64
 	to        uint64
 	next      chan error
+	quit      chan struct{}
 
 	intervalsKey   string
 	intervalsStore state.Store
@@ -600,7 +601,11 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 }
 
 func (c *client) close() {
-	close(c.next)
+	select {
+	case <-c.quit:
+	default:
+		close(c.quit)
+	}
 	c.Close()
 }
 

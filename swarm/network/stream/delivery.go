@@ -129,7 +129,7 @@ type RetrieveRequestMsg struct {
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
 	log.Trace("received request", "peer", sp.ID(), "hash", req.Key)
-	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", true))
+	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
 	if err != nil {
 		return err
 	}
@@ -137,7 +137,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	chunk, created := d.db.GetOrCreateRequest(req.Key)
 	if chunk.ReqC != nil {
 		if created {
-			if err := d.RequestFromPeers(chunk.Key[:], false, sp.ID()); err != nil {
+			if err := d.RequestFromPeers(chunk.Key[:], true, sp.ID()); err != nil {
 				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Key, "err", err)
 				chunk.SetErrored(true)
 				return nil
@@ -148,10 +148,10 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			defer t.Stop()
 
 			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Key, "node", common.Bytes2Hex(d.overlay.BaseAddr()), "created", created)
-
+			start := time.Now()
 			select {
 			case <-chunk.ReqC:
-				log.Debug("retrieve request ReqC closed", "peer", sp.ID(), "hash", req.Key)
+				log.Debug("retrieve request ReqC closed", "peer", sp.ID(), "hash", req.Key, "time", time.Since(start))
 			case <-t.C:
 				log.Debug("retrieve request timeout", "peer", sp.ID(), "hash", req.Key)
 				chunk.SetErrored(true)
@@ -242,11 +242,14 @@ func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...
 			Key:       hash,
 			SkipCheck: skipCheck,
 		}, Top)
+		if err != nil {
+			return true
+		}
 		success = true
 		return false
 	})
 	if success {
-		return err
+		return nil
 	}
 	return errors.New("no peer found")
 }
