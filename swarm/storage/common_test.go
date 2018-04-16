@@ -28,7 +28,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -189,12 +188,12 @@ func testStoreRandom(m ChunkStore, processors int, n int, chunksize int, t *test
 }
 
 func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int, t *testing.T) {
-	hs := mputChunks(m, processors, n, chunksize, sha3.NewKeccak256())
+	hs := mputChunks(m, processors, n, chunksize, MakeHashFunc(DefaultHash)())
 	f := func(h Key, chunk *Chunk) error {
 		if !bytes.Equal(h, chunk.Key) {
 			return fmt.Errorf("key does not match retrieved chunk Key")
 		}
-		hasher := sha3.NewKeccak256()
+		hasher := MakeHashFunc(DefaultHash)()
 		hasher.Write(chunk.SData)
 		exp := hasher.Sum(nil)
 		if !bytes.Equal(h, exp) {
