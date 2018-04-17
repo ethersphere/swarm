@@ -215,12 +215,9 @@ R:
 		d.db.Put(chunk)
 
 		go func(req *ChunkDeliveryMsg) {
-			chunk.WaitToStore()
-			err = chunk.GetErrored()
-			if err != nil {
-				if err == storage.ErrChunkInvalid {
-					req.peer.Drop(err)
-				}
+			err := chunk.WaitToStore()
+			if err == storage.ErrChunkInvalid {
+				req.peer.Drop(err)
 			}
 		}(req)
 	}

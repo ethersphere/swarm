@@ -97,38 +97,50 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	}
 	if !valid {
 		chunk.SetErrored(ErrChunkInvalid)
-		chunk.dbStoredC <- false
+		chunk.markAsStored()
 		return
 	}
+
 	log.Trace("localstore.put", "key", chunk.Key)
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-	c := &Chunk{
-		Key:        Key(append([]byte{}, chunk.Key...)),
-		SData:      append([]byte{}, chunk.SData...),
-		Size:       chunk.Size,
-		dbStored:   chunk.dbStored,
-		dbStoredC:  chunk.dbStoredC,
-		dbStoredMu: chunk.dbStoredMu,
+
+	memChunk, err := self.memStore.Get(chunk.Key)
+	switch err {
+	case nil:
+		if memChunk.ReqC == nil {
+			chunk.markAsStored()
+			return
+		}
+	case ErrChunkNotFound:
+	default:
+		chunk.SetErrored(err)
+		return
+	}
+
+	self.memStore.Put(chunk)
+
+	if memChunk != nil && memChunk.ReqC != nil {
+		close(memChunk.ReqC)
 	}
 
 	dbStorePutCounter.Inc(1)
-	self.memStore.Put(c)
-	if c.ReqC != nil {
-		close(c.ReqC)
-	}
-	self.DbStore.Put(c)
+	self.DbStore.Put(chunk)
 
-	newc := NewChunk(c.Key, nil)
-	newc.SData = c.SData
-	newc.Size = c.Size
-	//newc.dbStored = c.dbStored
-	newc.dbStoredC = c.dbStoredC
-	//newc.dbStoredMu = c.dbStoredMu
+	newc := NewChunk(chunk.Key, nil)
+	newc.SData = chunk.SData
+	newc.Size = chunk.Size
+	//newc.dbStored = chunk.dbStored
+	newc.dbStoredC = chunk.dbStoredC
+	//newc.dbStoredMu = chunk.dbStoredMu
 	go func() {
-		<-c.dbStoredC
+		<-chunk.dbStoredC
+
+		self.mu.Lock()
+		defer self.mu.Unlock()
+
 		self.memStore.Put(newc)
 	}()
 }

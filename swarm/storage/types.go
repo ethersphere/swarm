@@ -218,8 +218,9 @@ func (c *Chunk) markAsStored() {
 	}
 }
 
-func (c *Chunk) WaitToStore() {
+func (c *Chunk) WaitToStore() error {
 	<-c.dbStoredC
+	return c.GetErrored()
 }
 
 func FakeChunk(size int64, count int, chunks []*Chunk) int {
