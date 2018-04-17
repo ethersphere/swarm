@@ -2,7 +2,6 @@ package discovery
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"math/rand"
@@ -14,7 +13,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -50,13 +48,14 @@ var (
 // First, it brings up and connects bootnodes, and connects each of the further nodes
 // to a random bootnode
 //
-// if network is healthy, it proceeds to randomly and asynchronously stop and start nodes
-// and performing new health checks after they have connected to one of their previous peers
+// if network is healthy, it proceeds to stop and start a selection of nodes
+// upon stop, it checks the health of the remaining nodes in the network that are up
+// after starting, it performs new health checks after they have connected
+// to one of their previous peers
 func TestDynamicDiscovery(t *testing.T) {
-	t.Run("16/3/sim", dynamicDiscoverySimulation)
+	t.Run("16/8/sim", dynamicDiscoverySimulation)
 }
 
-// node count must be higher than 3 and higher than disconnect count for now
 func dynamicDiscoverySimulation(t *testing.T) {
 
 	// this directory will keep the state store dbs
@@ -76,6 +75,11 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	nodeCount, _ := strconv.ParseInt(paramstring[1], 10, 0)
 	numUpDowns, _ := strconv.ParseInt(paramstring[2], 10, 0)
 	adapter := paramstring[3]
+
+	if nodeCount < bootNodeCount {
+		t.Fatal("nodeCount must be bigger than bootnodeCount (%d < %d)", nodeCount, bootNodeCount)
+	}
+
 	bootNodes = make([]*discover.NodeID, bootNodeCount)
 	events = make(chan *p2p.PeerEvent)
 	ids = make([]discover.NodeID, nodeCount)
@@ -119,7 +123,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			t.Fatalf("error starting node: %s", err)
 		}
 		ids[i] = node.ID()
-		log.Info("new node", "id", ids[i])
+		log.Debug("new node", "id", ids[i])
 		if i < bootNodeCount {
 			bootNodes[i] = &ids[i]
 		}
@@ -133,6 +137,9 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	events := make(chan *simulations.Event)
 	sub := net.Events().Subscribe(events)
 	defer sub.Unsubscribe()
+
+	// quitC stops the event listener loops
+	// inside the step action method after step is complete
 	quitC := make(chan struct{})
 
 	action := func(ctx context.Context) error {
@@ -149,9 +156,9 @@ func dynamicDiscoverySimulation(t *testing.T) {
 							trigger <- ev.Node.Config.ID
 						}
 					}
-
+				case <-ctx.Done():
+					return
 				case <-quitC:
-					log.Warn("got quit action up")
 					return
 				}
 
@@ -163,6 +170,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 					t.Fatalf("error starting node: %s", err)
 				}
 				log.Info("network start returned", "node", n)
+
+				// rpc client is only available after node start
 				rpcs[n], err = net.GetNode(n).Client()
 				if err != nil {
 					t.Fatalf("error getting node rpc: %s", err)
@@ -183,7 +192,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		return true, nil
 	}
 
-	timeout := 30 * time.Second
+	timeout := 10 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -200,8 +209,9 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	}
 
 	// sim step 2
-	// connect the three bootnodes together
+	// connect the three bootnodes together 1 -> 2 -> .. -> n
 	// connect each of the other nodes to a random bootnode
+	// triggers on connection event from sim
 	close(quitC)
 	quitC = make(chan struct{})
 	action = func(ctx context.Context) error {
@@ -215,6 +225,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 							trigger <- ev.Conn.One
 						}
 					}
+				case <-ctx.Done():
+					return
 				case <-quitC:
 					log.Debug("got quit action connect")
 					return
@@ -252,7 +264,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		return true, nil
 	}
 
-	timeout = 5 * time.Second
+	timeout = 10 * time.Second
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -268,7 +280,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	}
 
 	// sim step 3
-	// check health of all nodes
+	// now all nodes are up, all nodes are connected to network
+	// so we check health of all nodes
 	close(quitC)
 	quitC = make(chan struct{})
 	action = func(ctx context.Context) error {
@@ -282,14 +295,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 							return
 						}
 						trigger <- n.ID()
-						//						time.NewTicker(healthCheckDelay)
-						//						tickC := time.NewTicker(healthCheckDelay)
-						//						trigger <- i
-						//						err := ctrl.checkHealth(n)
-						//						if err != nil {
-						//							t.Fatalf("Node %v failed health check", n)
-						//						}
-						//						log.Info("node health ok", "node", n)
+					case <-ctx.Done():
+						return
 					case <-quitC:
 						return
 					}
@@ -325,8 +332,9 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	}
 
 	// sim step 4
-	// bring up and down random nodes in parallell and in random intervals
-	// TODO: check at start that numbers match
+	// bring the nodes up and down
+	// if any health checks fail, the step will fail
+	// check will be triggered when the first node up event is received
 	close(quitC)
 	quitC = make(chan struct{})
 	victimSliceOffset := rand.Intn(len(ids) - int(numUpDowns) - 1)
@@ -334,39 +342,88 @@ func dynamicDiscoverySimulation(t *testing.T) {
 
 	action = func(ctx context.Context) error {
 		for _, nid := range victimNodes {
-			go func(nid discover.NodeID) {
+			stopC := make(chan struct{})
+			go func(nid discover.NodeID, stopC chan struct{}) {
+				var stopped bool
 				for {
 					select {
 					case ev := <-events:
 						if ev == nil {
 							return
 						} else if ev.Type == simulations.EventTypeNode {
+							if ev.Node.Config.ID == nid {
+								if ev.Node.Up && stopped {
+									log.Info(fmt.Sprintf("got node up event %v", ev))
+									// rpc client is changed upon new start, we need to get it anew
+									mu.Lock()
+									rpcs[nid], err = net.GetNode(nid).Client()
+									mu.Unlock()
+									if err != nil {
+										t.Fatal(err)
+									}
+									trigger <- nid
 
-							if ev.Node.Up && ev.Node.Config.ID == nid {
-								log.Info(fmt.Sprintf("got node up event %v", ev))
-								mu.Lock()
-								rpcs[nid], err = net.GetNode(nid).Client()
-								mu.Unlock()
-								if err != nil {
-									t.Fatal(err)
+								} else {
+									log.Info(fmt.Sprintf("got node down event %v", ev))
+									if !stopped {
+
+										stopped = true
+										close(stopC)
+									}
 								}
-								trigger <- nid
-
 							}
 						}
+					case <-ctx.Done():
+						return
 					case <-quitC:
 						return
 					}
 				}
-			}(nid)
+			}(nid, stopC)
 
-			randomDelay(0)
+			// stop the node
 			log.Info("restarting: stop", "node", nid)
 			err := net.Stop(nid)
 			if err != nil {
 				t.Fatal(err)
 			}
-			randomDelay(0)
+
+			// wait for the stop event
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-quitC:
+				return nil
+			case <-stopC:
+			}
+
+			// check health of remaining nodes
+		OUTER:
+			for _, n := range net.GetNodes() {
+				if !n.Up {
+					if n.ID() != nid {
+
+						log.Warn("a remaining node is down", "stoppednode", nid, "checknode", n.ID())
+					}
+					continue
+				}
+				for k := 0; k < healthCheckRetries; k++ {
+					log.Debug("health check other node after stop", "stoppednode", nid, "checknode", n.ID(), "attempt", k)
+					ok, err := checkHealth(n.ID())
+					if ok {
+						log.Info("health ok other node after stop", "stoppednode", nid, "checknode", n.ID())
+						continue OUTER
+					} else if err != nil {
+						return err
+					}
+					time.Sleep(healthCheckDelay)
+				}
+				return fmt.Errorf("health not reached for node %s (addr %s) after stopped node %s (addr %s)", n.ID().TerminalString(), addrIdx[n.ID()][:8], nid.TerminalString(), addrIdx[nid][:8])
+			}
+
+			// wait a bit
+			// then bring the node back up
+			//time.Sleep(randomDelay(0))
 			log.Info("restarting: start", "node", nid)
 			err = net.Start(nid)
 			if err != nil {
@@ -383,6 +440,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			return false, ctx.Err()
 		default:
 		}
+
+		// health check for the restarted node
 		for i := 0; i < healthCheckRetries; i++ {
 			log.Debug("health check after restart", "node", id, "attempt", i)
 			ok, err := checkHealth(id)
@@ -394,7 +453,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			}
 			time.Sleep(healthCheckDelay)
 		}
-		return false, fmt.Errorf("health not reached for node %s", id.TerminalString())
+		return false, fmt.Errorf("health not reached for node %s (addr %s)", id.TerminalString(), addrIdx[id][:8])
 	}
 
 	timeout = 30 * time.Second
@@ -413,23 +472,6 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	}
 	close(quitC)
 
-	//ctrl := newNodeCtrl(net, ids)
-	//	// asynchronously restart random nodes
-	//	wg := sync.WaitGroup{}
-	//	for i := 0; i < int(numUpDowns); i++ {
-	//		wg.Add(1)
-	//		dur := ctrl.randomDelay(0)
-	//		time.Sleep(dur)
-	//		go func() {
-	//			if err := ctrl.nodeUpDown(); err != nil {
-	//				wg.Done()
-	//				t.Fatal(err)
-	//			}
-	//			wg.Done()
-	//		}()
-	//	}
-	//	wg.Wait()
-	//
 	log.Warn("exiting test")
 }
 
@@ -461,257 +503,6 @@ func checkHealth(id discover.NodeID) (bool, error) {
 	}
 	return true, nil
 
-}
-
-// upNodes and upAddrs: node arrays to calculate peerpot from. After restart, a node is added to the array immediately after starting and connect to bootnode
-// readyNodes: node array to choose next node to restart from. After restart, a node is added to the array after it is healthy
-type nodeCtrl struct {
-	seq                int
-	net                *simulations.Network
-	readyNodes         []discover.NodeID
-	upNodes            []discover.NodeID
-	upAddrs            [][]byte
-	addrIdx            map[discover.NodeID]string
-	pot                map[string]*network.PeerPot
-	mu                 sync.Mutex
-	healthCheckRetries int
-	healthCheckDelay   time.Duration
-}
-
-func newNodeCtrl(net *simulations.Network, nodes []discover.NodeID) *nodeCtrl {
-	ctrl := &nodeCtrl{
-		net:                net,
-		healthCheckRetries: defaultHealthCheckRetries,
-		healthCheckDelay:   defaultHealthCheckDelay,
-		addrIdx:            make(map[discover.NodeID]string),
-	}
-	for i := 0; i < len(nodes); i++ {
-		ctrl.upNodes = append(ctrl.upNodes, nodes[i])
-		ctrl.readyNodes = append(ctrl.readyNodes, nodes[i])
-		addr := network.ToOverlayAddr(ids[i].Bytes())
-		ctrl.upAddrs = append(ctrl.upAddrs, addr)
-		ctrl.addrIdx[nodes[i]] = common.Bytes2Hex(addr)
-		log.Debug("init nodeCtrl", "idx", i, "upnode", ctrl.upNodes[i], "upaddr", fmt.Sprintf("%x", ctrl.upAddrs[i]))
-	}
-	ctrl.pot = network.NewPeerPotMap(testMinProxBinSize, ctrl.upAddrs)
-	for k, p := range ctrl.pot {
-		for i, nn := range p.NNSet {
-			log.Debug("init nodeCtrl nnset", "i", i, "node", k, "nn", fmt.Sprintf("%x", nn))
-		}
-	}
-	return ctrl
-}
-
-func (self *nodeCtrl) nodeUpDown() error {
-
-	self.mu.Lock()
-
-	if len(self.readyNodes) == 1 {
-		self.mu.Unlock()
-		return errors.New("uh-oh, spaghettios: ran out of readyNodes")
-	}
-
-	// used for logging
-	self.seq++
-	seq := self.seq
-
-	// choose a random node to restart from nodes not currently stopped or getting health checked
-	nodeIdx := rand.Intn(len(self.readyNodes) - 1)
-	nodeId := self.readyNodes[nodeIdx]
-	self.readyNodes[nodeIdx] = self.readyNodes[len(self.readyNodes)-1]
-	self.readyNodes = self.readyNodes[:len(self.readyNodes)-1]
-
-	// find the selected node in the upNodes and upAddrs arrays (they have identical indices)
-	var found bool
-	for i, up := range self.upNodes {
-		if up == nodeId {
-			self.upNodes[i] = self.upNodes[len(self.upNodes)-1]
-			self.upAddrs[i] = self.upAddrs[len(self.upAddrs)-1]
-			self.upNodes = self.upNodes[:len(self.upNodes)-1]
-			self.upAddrs = self.upAddrs[:len(self.upAddrs)-1]
-			found = true
-			break
-		}
-	}
-
-	// this shouldn't happen
-	if !found {
-		self.mu.Unlock()
-		return fmt.Errorf("node %v listed as ready but not found in uplist", nodeId)
-	}
-
-	// stop the node
-	log.Info("Restart node: stop", "seq", seq, "id", nodeId, "addr", fmt.Sprintf("%x", self.upAddrs[nodeIdx]), "upnodes", len(self.upNodes), "readynodes", len(self.readyNodes))
-	self.pot = network.NewPeerPotMap(testMinProxBinSize, self.upAddrs)
-
-	if err := self.net.Stop(nodeId); err != nil {
-		self.mu.Unlock()
-		return err
-	}
-	self.mu.Unlock()
-
-	// wait a bit then bring back up
-	time.Sleep(self.randomDelay(0))
-
-	// start the node again
-	// wait for the up event and a conn event which involves the node
-	self.mu.Lock()
-	log.Info("Restart node: start", "seq", seq, "id", nodeId, "addr", fmt.Sprintf("%x", network.ToOverlayAddr(nodeId.Bytes())), "upnodes", len(self.upNodes), "readynodes", len(self.readyNodes))
-	self.mu.Unlock()
-
-	var err error
-	events := make(chan *simulations.Event)
-	sub := self.net.Events().Subscribe(events)
-	defer sub.Unsubscribe()
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
-	defer cancel()
-	errC := make(chan error)
-	quitC := make(chan struct{})
-	go func(errC chan error) {
-		for {
-			select {
-			case <-quitC:
-				return
-			case ev := <-events:
-				if ev == nil {
-					errC <- errors.New("got nil event")
-					return
-				} else if ev.Type == simulations.EventTypeNode {
-					if ev.Node.Up && ev.Node.Config.ID == nodeId {
-						log.Info("got node up event", "event", ev, "node", ev.Node.Config.ID)
-					}
-				} else if ev.Type == simulations.EventTypeConn {
-					if ev.Conn.Up && (ev.Conn.One == nodeId || ev.Conn.Other == nodeId) {
-						log.Info("got node conn event", "event", ev, "one", ev.Conn.One, "other", ev.Conn.Other)
-						errC <- nil
-					}
-				}
-
-			case <-ctx.Done():
-				errC <- ctx.Err()
-				return
-			}
-
-		}
-	}(errC)
-
-	if err := self.net.Start(nodeId); err != nil {
-		return err
-	}
-	if err = <-errC; err != nil {
-		return err
-	}
-	close(quitC)
-
-	sub.Unsubscribe()
-
-	// node is now up, we are connected to a peer
-	// we can add the node back to the uplist
-	self.mu.Lock()
-	self.upNodes = append(self.upNodes, nodeId)
-	self.upAddrs = append(self.upAddrs, network.ToOverlayAddr(nodeId.Bytes()))
-	self.mu.Unlock()
-
-	// then we poll for health
-	n := self.net.GetNode(nodeId)
-	err = self.checkHealth(n, seq)
-	if err != nil {
-		return err //"failed health", "node", n, "seq", seq
-	}
-
-	// celebrate good times, come on!
-	log.Info("Restarted node regained health", "id", nodeId, "seq", seq)
-
-	// now we add the node to the readyNode list, so it can be selected as a node to restart again
-	self.mu.Lock()
-	self.readyNodes = append(self.readyNodes, nodeId)
-	self.mu.Unlock()
-
-	return nil
-}
-
-func (self *nodeCtrl) randomDelay(maxDuration int) time.Duration {
-	if maxDuration == 0 {
-		maxDuration = 1000000000
-	}
-	timeout := rand.Intn(maxDuration) + 10000000
-	ns := fmt.Sprintf("%dns", timeout)
-	dur, _ := time.ParseDuration(ns)
-	return dur
-}
-
-//
-//// check health nodeCtrl.healthCheckRetries times with small delays inbetween before giving up
-//func checkHealth(node *simulations.Node, pot map[string]*network.PeerPot) error {
-//	mu := sync.Mutex{}
-//	client, err := node.Client()
-//	if err != nil {
-//		return fmt.Errorf("can't get node rpc for node %v: %v", node.ID().TerminalString(), err)
-//	}
-//
-//	i := 0
-//	for {
-//		if i > healthCheckRetries {
-//			return fmt.Errorf("max health retries for node %v (seq %d)", node.ID().TerminalString(), seq)
-//		}
-//		i++
-//		time.Sleep(healthCheckDelay)
-//		healthy := &network.Health{}
-//		mu.Lock()
-//		self.pot = network.NewPeerPotMap(testMinProxBinSize, self.upAddrs)
-//
-//		if _, ok := self.pot[self.addrIdx[node.ID()]]; !ok {
-//			self.mu.Unlock()
-//			return fmt.Errorf("missing node in pot", "nodeid", node.ID(), "seq", seq)
-//		}
-//		if err := client.Call(&healthy, "hive_healthy", self.pot[self.addrIdx[node.ID()]]); err != nil {
-//			self.mu.Unlock()
-//			return fmt.Errorf("error retrieving node health by rpc for node %v: %v", node.ID(), err)
-//		}
-//		mu.Unlock()
-//		if !(healthy.KnowNN && healthy.GotNN && healthy.Full) {
-//			log.Debug("healthy not yet reached", "id", node.ID(), "addr", self.addrIdx[node.ID()], "attempt", i, "health", healthy.Hive)
-//			continue
-//		}
-//		break
-//	}
-//	return nil
-//}
-
-// check health nodeCtrl.healthCheckRetries times with small delays inbetween before giving up
-func (self *nodeCtrl) checkHealth(node *simulations.Node, seq int) error {
-	client, err := node.Client()
-	if err != nil {
-		return fmt.Errorf("can't get node rpc for node %v: %v", node.ID().TerminalString(), err)
-	}
-
-	i := 0
-	for {
-		if i > self.healthCheckRetries {
-			return fmt.Errorf("max health retries for node %v (seq %d)", node.ID().TerminalString(), seq)
-		}
-		i++
-		time.Sleep(self.healthCheckDelay)
-		healthy := &network.Health{}
-		self.mu.Lock()
-		self.pot = network.NewPeerPotMap(testMinProxBinSize, self.upAddrs)
-
-		if _, ok := self.pot[self.addrIdx[node.ID()]]; !ok {
-			self.mu.Unlock()
-			return fmt.Errorf("missing node in pot", "nodeid", node.ID(), "seq", seq)
-		}
-		if err := client.Call(&healthy, "hive_healthy", self.pot[self.addrIdx[node.ID()]]); err != nil {
-			self.mu.Unlock()
-			return fmt.Errorf("error retrieving node health by rpc for node %v: %v", node.ID(), err)
-		}
-		self.mu.Unlock()
-		if !(healthy.KnowNN && healthy.GotNN && healthy.Full) {
-			log.Debug("healthy not yet reached", "id", node.ID(), "addr", self.addrIdx[node.ID()], "attempt", i, "health", healthy.Hive)
-			continue
-		}
-		break
-	}
-	return nil
 }
 
 func newDynamicServices(storePath string) func(*adapters.ServiceContext) (node.Service, error) {
