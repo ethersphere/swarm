@@ -37,8 +37,7 @@ var (
 	bootNodes       []*discover.NodeID
 	events          chan *p2p.PeerEvent
 	ids             []discover.NodeID
-	addrs           [][]byte
-	addrIdx         map[discover.NodeID]string
+	addrIdx         map[discover.NodeID][]byte
 	rpcs            map[discover.NodeID]*rpc.Client
 	dynamicServices adapters.Services
 )
@@ -83,8 +82,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	bootNodes = make([]*discover.NodeID, bootNodeCount)
 	events = make(chan *p2p.PeerEvent)
 	ids = make([]discover.NodeID, nodeCount)
-	addrs = make([][]byte, nodeCount)
-	addrIdx = make(map[discover.NodeID]string)
+	addrIdx = make(map[discover.NodeID][]byte)
 	rpcs = make(map[discover.NodeID]*rpc.Client)
 
 	healthCheckDelay := defaultHealthCheckDelay
@@ -127,8 +125,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		if i < bootNodeCount {
 			bootNodes[i] = &ids[i]
 		}
-		addrs[i] = network.ToOverlayAddr(node.ID().Bytes())
-		addrIdx[node.ID()] = fmt.Sprintf("%x", addrs[i])
+		addrIdx[node.ID()] = network.ToOverlayAddr(node.ID().Bytes()) //fmt.Sprintf("%x", network.ToOverlayAddr(node.ID().Bytes()))
 	}
 
 	// sim step 1
@@ -312,7 +309,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		default:
 		}
 		log.Info("health ok", "node", id)
-		return checkHealth(id)
+		return checkHealth(net, id)
 	}
 
 	timeout = 5 * time.Second
@@ -408,7 +405,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 				}
 				for k := 0; k < healthCheckRetries; k++ {
 					log.Debug("health check other node after stop", "stoppednode", nid, "checknode", n.ID(), "attempt", k)
-					ok, err := checkHealth(n.ID())
+					ok, err := checkHealth(net, n.ID())
 					if ok {
 						log.Info("health ok other node after stop", "stoppednode", nid, "checknode", n.ID())
 						continue OUTER
@@ -417,7 +414,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 					}
 					time.Sleep(healthCheckDelay)
 				}
-				return fmt.Errorf("health not reached for node %s (addr %s) after stopped node %s (addr %s)", n.ID().TerminalString(), addrIdx[n.ID()][:8], nid.TerminalString(), addrIdx[nid][:8])
+				return fmt.Errorf("health not reached for node %s (addr %s) after stopped node %s (addr %s)", n.ID().TerminalString(), fmt.Sprintf("%x", addrIdx[n.ID()][:8]), nid.TerminalString(), fmt.Sprintf("%x", addrIdx[nid][:8]))
 			}
 
 			// wait a bit
@@ -443,7 +440,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		// health check for the restarted node
 		for i := 0; i < healthCheckRetries; i++ {
 			log.Debug("health check after restart", "node", id, "attempt", i)
-			ok, err := checkHealth(id)
+			ok, err := checkHealth(net, id)
 			if ok {
 				log.Info("health ok after restart", "node", id)
 				return true, nil
@@ -452,10 +449,10 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			}
 			time.Sleep(healthCheckDelay)
 		}
-		return false, fmt.Errorf("health not reached for node %s (addr %s)", id.TerminalString(), addrIdx[id][:8])
+		return false, fmt.Errorf("health not reached for node %s (addr %s)", id.TerminalString(), fmt.Sprintf("%x", addrIdx[id][:8]))
 	}
 
-	timeout = 30 * time.Second
+	timeout = 300 * time.Second
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -484,20 +481,25 @@ func randomDelay(maxDuration int) time.Duration {
 	return dur
 }
 
-func checkHealth(id discover.NodeID) (bool, error) {
+func checkHealth(net *simulations.Network, id discover.NodeID) (bool, error) {
 	healthy := &network.Health{}
 
-	hotPot := network.NewPeerPotMap(testMinProxBinSize, addrs)
+	var upAddrs [][]byte
+	for _, n := range net.GetNodes() {
+		upAddrs = append(upAddrs, addrIdx[n.ID()])
+	}
+	hotPot := network.NewPeerPotMap(testMinProxBinSize, upAddrs)
+	addrHex := fmt.Sprintf("%x", addrIdx[id])
 
-	if _, ok := hotPot[addrIdx[id]]; !ok {
-		log.Debug("missing pot", "node", id, "addr", fmt.Sprintf("%x", addrIdx[id][:8]))
+	if _, ok := hotPot[addrHex]; !ok {
+		log.Debug("missing pot", "node", id, "addr", fmt.Sprintf("%x", addrHex[:8]))
 		return false, nil
 	}
-	if err := rpcs[id].Call(&healthy, "hive_healthy", hotPot[addrIdx[id]]); err != nil {
+	if err := rpcs[id].Call(&healthy, "hive_healthy", hotPot[addrHex]); err != nil {
 		return false, fmt.Errorf("error retrieving node health by rpc for node %v: %v", id, err)
 	}
 	if !(healthy.KnowNN && healthy.GotNN && healthy.Full) {
-		log.Debug(fmt.Sprintf("healthy not yet reached\n%s", healthy.Hive), "id", id, "addr", addrIdx[id])
+		log.Debug(fmt.Sprintf("healthy not yet reached\n%s", healthy.Hive), "id", id, "addr", addrIdx[id], "knowNN", healthy.KnowNN, "gotNN", healthy.GotNN, "countNN", healthy.CountNN, "full", healthy.Full)
 		return false, nil
 	}
 	return true, nil
