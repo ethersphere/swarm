@@ -109,6 +109,9 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	newc := NewChunk(c.Key, nil)
 	newc.SData = c.SData
 	newc.Size = c.Size
+	//newc.dbStored = c.dbStored
+	newc.dbStoredC = c.dbStoredC
+	//newc.dbStoredMu = c.dbStoredMu
 	go func() {
 		<-c.dbStoredC
 		self.memStore.Put(newc)

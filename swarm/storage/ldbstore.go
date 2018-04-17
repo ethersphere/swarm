@@ -570,34 +570,12 @@ func (s *LDBStore) Put(chunk *Chunk) {
 		go func() {
 			<-batchC
 			chunk.markAsStored()
-			// func() {
-			// 	defer func() {
-			// 		if err := recover(); err != nil {
-			// 			log.Error("ldbstore.put panic (go)", "key", chunk.Key, "err", err)
-			// 		}
-			// 	}()
-			// 	chunk.markAsStored()
-			// 	if chunk.ReqC != nil {
-			// 		close(chunk.ReqC)
-			// 	}
-			// }()
 			log.Info("ldbstore.put success (go)", "key", chunk.Key)
 		}()
 	} else {
 		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Key)
 		decodeIndex(idata, &index)
 		chunk.markAsStored()
-		// func() {
-		// 	defer func() {
-		// 		if err := recover(); err != nil {
-		// 			log.Error("ldbstore.put panic", "key", chunk.Key, "err", err)
-		// 		}
-		// 	}()
-		// 	chunk.markAsStored()
-		// 	if chunk.ReqC != nil {
-		// 		close(chunk.ReqC)
-		// 	}
-		// }()
 		log.Info("ldbstore.put success", "key", chunk.Key)
 	}
 	index.Access = s.accessCnt

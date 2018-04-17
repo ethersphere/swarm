@@ -57,34 +57,48 @@ func TestSwarmNetwork(t *testing.T) {
 		name  string
 		steps []testSwarmNetworkStep
 	}{
+		// {
+		// 	name: "10_nodes",
+		// 	steps: []testSwarmNetworkStep{
+		// 		{
+		// 			nodeCount: 10,
+		// 		},
+		// 	},
+		// },
+		// {
+		// 	name: "100_nodes",
+		// 	steps: []testSwarmNetworkStep{
+		// 		{
+		// 			nodeCount: 100,
+		// 		},
+		// 	},
+		// },
+		// This test fails sometimes.
 		{
-			name: "10_nodes",
+			name: "inc_node_count",
 			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 3,
+				},
+				{
+					nodeCount: 5,
+				},
 				{
 					nodeCount: 10,
 				},
 			},
 		},
-		{
-			name: "100_nodes",
-			steps: []testSwarmNetworkStep{
-				{
-					nodeCount: 100,
-				},
-			},
-		},
-		// This test fails sometimes.
 		// {
 		// 	name: "inc_node_count",
 		// 	steps: []testSwarmNetworkStep{
 		// 		{
-		// 			nodeCount: 3,
+		// 			nodeCount: 15,
 		// 		},
 		// 		{
-		// 			nodeCount: 5,
+		// 			nodeCount: 30,
 		// 		},
 		// 		{
-		// 			nodeCount: 10,
+		// 			nodeCount: 50,
 		// 		},
 		// 	},
 		// },
@@ -200,7 +214,7 @@ func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
 		// Currently, we need to wait before the syncing stars.
 		// If checks are started before, missing chunk errors are very frequent.
 		// This needs to be fixed.
-		time.Sleep(20 * time.Second)
+		//time.Sleep(20 * time.Second)
 
 		// nIDs := allNodeIDs(net)
 		// addrs := make([][]byte, len(nIDs))
