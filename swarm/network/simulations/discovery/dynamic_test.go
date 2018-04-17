@@ -55,14 +55,6 @@ func TestDynamicDiscovery(t *testing.T) {
 // node count must be higher than 3 and higher than disconnect count for now
 func dynamicDiscoverySimulation(t *testing.T) {
 
-	// quitC is used to make sure the async sim events select loops exit
-	var quitC *chan struct{}
-	defer func(quitC *chan struct{}) {
-		if quitC != nil {
-			close(*quitC)
-		}
-	}(quitC)
-
 	// this directory will keep the state store dbs
 	dir, err := ioutil.TempDir("", "dynamic-discovery")
 	if err != nil {
@@ -128,11 +120,10 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	trigger := make(chan discover.NodeID)
 	events := make(chan *simulations.Event)
 	sub := net.Events().Subscribe(events)
-	q := make(chan struct{})
-	quitC = &q
+	quitC := make(chan struct{})
 
 	action := func(ctx context.Context) error {
-		go func(quitC chan struct{}) {
+		go func() {
 			for {
 				select {
 				case ev := <-events:
@@ -152,7 +143,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 				}
 
 			}
-		}(*quitC)
+		}()
 		go func() {
 			for _, n := range ids {
 				if err := net.Start(n); err != nil {
@@ -190,15 +181,14 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-	close(*quitC)
 
 	// sim step 2
 	// connect the three bootnodes together
 	// connect each of the other nodes to a random bootnode
-	q = make(chan struct{})
-	quitC = &q
+	close(quitC)
+	quitC = make(chan struct{})
 	action = func(ctx context.Context) error {
-		go func(quitC chan struct{}) {
+		go func() {
 			for {
 				select {
 				case ev := <-events:
@@ -213,7 +203,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 					return
 				}
 			}
-		}(*quitC)
+		}()
 		go func() {
 			for i := range ids {
 				var j int
@@ -259,8 +249,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-	close(*quitC)
-	*quitC = nil
+	close(quitC)
 	sub.Unsubscribe()
 	sub = nil
 
