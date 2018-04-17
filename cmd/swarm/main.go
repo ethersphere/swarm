@@ -141,6 +141,10 @@ var (
 		Name:  "mime",
 		Usage: "force mime type",
 	}
+	SwarmEncryptedFlag = cli.BoolFlag{
+		Name:  "encrypted",
+		Usage: "use encrypted upload",
+	}
 	SwarmPssEnabledFlag = cli.BoolFlag{
 		Name:  "pss",
 		Usage: "Enable pss (message passing over swarm)",
@@ -164,11 +168,6 @@ var (
 		Name:   "store.cache.size",
 		Usage:  "Number of recent chunks cached in memory (default 5000)",
 		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
-	}
-	SwarmStoreRadius = cli.IntFlag{
-		Name:   "store.radius",
-		Usage:  "Minimum proximity order (number of identical prefix bits of address key) for chunks to warrant storage (default 0)",
-		EnvVar: SWARM_ENV_STORE_RADIUS,
 	}
 
 	// the following flags are deprecated and should be removed in the future
@@ -222,6 +221,7 @@ The output of this command is supposed to be machine-readable.
 			Name:      "up",
 			Usage:     "upload a file or directory to swarm using the HTTP API",
 			ArgsUsage: " <file>",
+			Flags:     []cli.Flag{SwarmEncryptedFlag},
 			Description: `
 "upload a file or directory to swarm using the HTTP API and prints the root hash",
 `,
@@ -380,7 +380,6 @@ Remove corrupt entries from a local chunk database.
 		SwarmStorePath,
 		SwarmStoreCapacity,
 		SwarmStoreCacheCapacity,
-		SwarmStoreRadius,
 		//deprecated flags
 		DeprecatedEthAPIFlag,
 		DeprecatedEnsAddrFlag,

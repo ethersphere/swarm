@@ -17,6 +17,7 @@
 package main
 
 import (
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -29,6 +30,16 @@ import (
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
 // available from all nodes via the HTTP API
 func TestCLISwarmUp(t *testing.T) {
+	testCLISwarmUp(false, t)
+}
+
+// TestCLISwarmUpEncrypted tests that running 'swarm encrypted-up' makes the resulting file
+// available from all nodes via the HTTP API
+func TestCLISwarmUpEncrypted(t *testing.T) {
+	testCLISwarmUp(true, t)
+}
+
+func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 	log.Info("starting 3 node cluster")
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
@@ -48,10 +59,23 @@ func TestCLISwarmUp(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	hashRegexp := `[a-f\d]{64}`
+	flags := []string{
+		"--bzzapi", cluster.Nodes[0].URL,
+		"up",
+		tmp.Name()}
+	if toEncrypt {
+		hashRegexp = `[a-f\d]{128}`
+		flags = []string{
+			"--bzzapi", cluster.Nodes[0].URL,
+			"up",
+			"--encrypted",
+			tmp.Name()}
+	}
 	// upload the file with 'swarm up' and expect a hash
-	log.Info("uploading file with 'swarm up'")
-	up := runSwarm(t, "--bzzapi", cluster.Nodes[0].URL, "up", tmp.Name())
-	_, matches := up.ExpectRegexp(`[a-f\d]{64}`)
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up := runSwarm(t, flags...)
+	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 	hash := matches[0]
 	log.Info("file uploaded", "hash", hash)
@@ -66,7 +90,7 @@ func TestCLISwarmUp(t *testing.T) {
 		}
 
 		if res.StatusCode != 200 {
-			t.Fatalf("expected HTTP status %d, got %s", 200, res.Status)
+			t.Fatalf("expected HTTP status 200, got %s", res.Status)
 		}
 
 		reply, err := ioutil.ReadAll(res.Body)
@@ -76,6 +100,17 @@ func TestCLISwarmUp(t *testing.T) {
 		}
 		if string(reply) != data {
 			t.Fatalf("expected HTTP body %q, got %q", data, reply)
+		}
+	}
+
+	// get an non-existent hash from each node
+	for _, node := range cluster.Nodes {
+		res, err := http.Get(node.URL + "/bzz:/1023e8bae0f70be7d7b5f74343088ba408a218254391490c85ae16278e230340")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != 404 {
+			t.Fatalf("expected HTTP status 404, got %s", res.Status)
 		}
 	}
 }

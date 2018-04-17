@@ -32,14 +32,14 @@ func TestDPArandom(t *testing.T) {
 }
 
 func testDpaRandom(toEncrypt bool, t *testing.T) {
-	tdb, err := newTestDbStore(false)
+	tdb, err := newTestDbStore(false, false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	defer tdb.close()
 	db := tdb.LDBStore
 	db.setCapacity(50000)
-	memStore := NewMemStore(db, defaultCacheCapacity)
+	memStore := NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{
 		memStore: memStore,
 		DbStore:  db,
@@ -54,7 +54,10 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 		t.Errorf("Store error: %v", err)
 	}
 	wait()
-	resultReader := dpa.Retrieve(key)
+	resultReader, isEncrypted := dpa.Retrieve(key)
+	if isEncrypted != toEncrypt {
+		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
+	}
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
@@ -68,8 +71,11 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
-	localStore.memStore = NewMemStore(db, defaultCacheCapacity)
-	resultReader = dpa.Retrieve(key)
+	localStore.memStore = NewMemStore(NewDefaultStoreParams(), db)
+	resultReader, isEncrypted = dpa.Retrieve(key)
+	if isEncrypted != toEncrypt {
+		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
+	}
 	for i := range resultSlice {
 		resultSlice[i] = 0
 	}
@@ -91,13 +97,13 @@ func TestDPA_capacity(t *testing.T) {
 }
 
 func testDPA_capacity(toEncrypt bool, t *testing.T) {
-	tdb, err := newTestDbStore(false)
+	tdb, err := newTestDbStore(false, false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	defer tdb.close()
 	db := tdb.LDBStore
-	memStore := NewMemStore(db, 0)
+	memStore := NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{
 		memStore: memStore,
 		DbStore:  db,
@@ -109,7 +115,10 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 		t.Errorf("Store error: %v", err)
 	}
 	wait()
-	resultReader := dpa.Retrieve(key)
+	resultReader, isEncrypted := dpa.Retrieve(key)
+	if isEncrypted != toEncrypt {
+		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
+	}
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
@@ -125,14 +134,20 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	memStore.setCapacity(0)
 	// check whether it is, indeed, empty
 	dpa.ChunkStore = memStore
-	resultReader = dpa.Retrieve(key)
+	resultReader, isEncrypted = dpa.Retrieve(key)
+	if isEncrypted != toEncrypt {
+		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
+	}
 	if _, err = resultReader.ReadAt(resultSlice, 0); err == nil {
 		t.Errorf("Was able to read %d bytes from an empty memStore.", len(slice))
 	}
 	// check how it works with localStore
 	dpa.ChunkStore = localStore
 	//	localStore.dbStore.setCapacity(0)
-	resultReader = dpa.Retrieve(key)
+	resultReader, isEncrypted = dpa.Retrieve(key)
+	if isEncrypted != toEncrypt {
+		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
+	}
 	for i := range resultSlice {
 		resultSlice[i] = 0
 	}

@@ -50,14 +50,18 @@ var (
 	peerCount  func(discover.NodeID) int
 	adapter    = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
 	loglevel   = flag.Int("loglevel", 2, "verbosity of logs")
+	nodes      = flag.Int("nodes", 0, "number of nodes")
+	chunks     = flag.Int("chunks", 0, "number of chunks")
 )
 
 var (
-	defaultSkipCheck bool
-	waitPeerErrC     chan error
-	chunkSize        = 4096
-	registries       map[discover.NodeID]*TestRegistry
-	createStoreFunc  func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
+	defaultSkipCheck  bool
+	waitPeerErrC      chan error
+	chunkSize         = 4096
+	registries        map[discover.NodeID]*TestRegistry
+	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
+	getRetrieveFunc   = defaultRetrieveFunc
+	subscriptionCount = 0
 )
 
 var services = adapters.Services{
@@ -89,18 +93,23 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	db := storage.NewDBAPI(store)
 	delivery := NewDelivery(kad, db)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
-		SkipCheck: defaultSkipCheck,
+	r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+		SkipCheck:  defaultSkipCheck,
+		DoRetrieve: false,
 	})
 	RegisterSwarmSyncerServer(r, db)
 	RegisterSwarmSyncerClient(r, db)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	dpa := storage.NewDPA(storage.NewNetStore(store, nil), storage.NewDPAParams())
+	dpa := storage.NewDPA(storage.NewNetStore(store, getRetrieveFunc(id)), storage.NewDPAParams())
 	testRegistry := &TestRegistry{Registry: r, dpa: dpa}
 	registries[id] = testRegistry
 	return testRegistry, nil
+}
+
+func defaultRetrieveFunc(id discover.NodeID) func(chunk *storage.Chunk) error {
+	return nil
 }
 
 func datadirsCleanup() {
@@ -133,14 +142,18 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		os.RemoveAll(datadir)
 	}
 
-	localStore, err := storage.NewTestLocalStoreForAddr(datadir, addr.Over())
+	params := storage.NewDefaultLocalStoreParams()
+	params.Init(datadir)
+	params.BaseKey = addr.Over()
+
+	localStore, err := storage.NewTestLocalStoreForAddr(params)
 	if err != nil {
 		return nil, nil, nil, removeDataDir, err
 	}
 
 	db := storage.NewDBAPI(localStore)
 	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, db, state.NewMemStore(), &RegistryOptions{
+	streamer := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck: defaultSkipCheck,
 	})
 	teardown := func() {
@@ -216,7 +229,7 @@ func (r *TestRegistry) APIs() []rpc.API {
 }
 
 func readAll(dpa *storage.DPA, hash []byte) (int64, error) {
-	r := dpa.Retrieve(hash)
+	r, _ := dpa.Retrieve(hash)
 	buf := make([]byte, 1024)
 	var n int
 	var total int64

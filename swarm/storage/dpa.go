@@ -17,7 +17,6 @@
 package storage
 
 import (
-	"errors"
 	"io"
 	"time"
 )
@@ -35,13 +34,12 @@ implementation for storage or retrieval.
 */
 
 const (
-	singletonSwarmDbCapacity    = 50000
-	singletonSwarmCacheCapacity = 500
+	defaultLDBCapacity                = 5000000 // capacity for LevelDB, by default 5*10^6*4096 bytes == 20GB
+	defaultCacheCapacity              = 500     // capacity for in-memory chunks' cache
+	defaultChunkRequestsCacheCapacity = 5000000 // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
 )
 
 var (
-	ErrChunkNotFound = errors.New("chunk not found")
-	ErrFetching      = errors.New("chunk still fetching")
 	// timeout interval before retrieval is timed out
 	searchTimeout = 3 * time.Second
 )
@@ -63,18 +61,14 @@ func NewDPAParams() *DPAParams {
 
 // for testing locally
 func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
-
-	hash := MakeHashFunc("SHA3")
-
-	dbStore, err := NewLDBStore(datadir, hash, singletonSwarmDbCapacity, func(k Key) (ret uint8) { return uint8(Proximity(basekey[:], k[:])) })
+	params := NewDefaultLocalStoreParams()
+	params.Init(datadir)
+	localStore, err := NewLocalStore(params, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	return NewDPA(&LocalStore{
-		memStore: NewMemStore(dbStore, singletonSwarmCacheCapacity),
-		DbStore:  dbStore,
-	}, NewDPAParams()), nil
+	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(SHA3Hash)))
+	return NewDPA(localStore, NewDPAParams()), nil
 }
 
 func NewDPA(store ChunkStore, params *DPAParams) *DPA {
@@ -89,9 +83,12 @@ func NewDPA(store ChunkStore, params *DPAParams) *DPA {
 // FS-aware API and httpaccess
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
-func (self *DPA) Retrieve(key Key) LazySectionReader {
-	getter := NewHasherStore(self.ChunkStore, self.hashFunc, len(key) > self.hashFunc().Size())
-	return TreeJoin(key, getter, 0)
+// It returns a reader with the chunk data and whether the content was encrypted
+func (self *DPA) Retrieve(key Key) (reader LazySectionReader, isEncrypted bool) {
+	isEncrypted = len(key) > self.hashFunc().Size()
+	getter := NewHasherStore(self.ChunkStore, self.hashFunc, isEncrypted)
+	reader = TreeJoin(key, getter, 0)
+	return
 }
 
 // Public API. Main entry point for document storage directly. Used by the
