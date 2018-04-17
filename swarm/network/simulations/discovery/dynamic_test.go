@@ -228,7 +228,6 @@ func dynamicDiscoverySimulation(t *testing.T) {
 				case <-ctx.Done():
 					return
 				case <-quitC:
-					log.Debug("got quit action connect")
 					return
 				}
 			}
@@ -498,7 +497,7 @@ func checkHealth(id discover.NodeID) (bool, error) {
 		return false, fmt.Errorf("error retrieving node health by rpc for node %v: %v", id, err)
 	}
 	if !(healthy.KnowNN && healthy.GotNN && healthy.Full) {
-		log.Debug("healthy not yet reached", "id", id, "addr", addrIdx[id], "health", healthy.Hive)
+		log.Debug(fmt.Sprintf("healthy not yet reached\n%s", healthy.Hive), "id", id, "addr", addrIdx[id])
 		return false, nil
 	}
 	return true, nil
