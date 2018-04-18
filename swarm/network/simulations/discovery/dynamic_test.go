@@ -22,8 +22,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/state"
-
-	"github.com/pborman/uuid"
 )
 
 const (
@@ -387,7 +385,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			}(nid, stopC)
 
 			// stop the node
-			log.Info("restarting: stop", "node", nid, "addr", addrIdx[nid])
+			log.Info("restarting: stop", "node", nid, "addr", fmt.Sprintf("%x", addrIdx[nid]))
 			err := net.Stop(nid)
 			if err != nil {
 				t.Fatal(err)
@@ -429,7 +427,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			// wait a bit
 			// then bring the node back up
 			//time.Sleep(randomDelay(0))
-			log.Info("restarting: start", "node", nid, "addr", addrIdx[nid])
+			log.Info("restarting: start", "node", nid, "addr", fmt.Sprintf("%x", addrIdx[nid]))
 			err = net.Start(nid)
 			if err != nil {
 				t.Fatal(err)
@@ -499,7 +497,7 @@ func checkHealth(net *simulations.Network, id discover.NodeID) (bool, error) {
 			upAddrs = append(upAddrs, addrIdx[n.ID()])
 		}
 	}
-	log.Debug("generating new peerpotmap", "node", id)
+	log.Debug("generating new peerpotmap", "node", id, "addr", fmt.Sprintf("%x", addrIdx[id]))
 	hotPot := network.NewPeerPotMap(testMinProxBinSize, upAddrs)
 	addrHex := fmt.Sprintf("%x", addrIdx[id])
 
@@ -511,7 +509,7 @@ func checkHealth(net *simulations.Network, id discover.NodeID) (bool, error) {
 		return false, fmt.Errorf("error retrieving node health by rpc for node %v: %v", id, err)
 	}
 	if !(healthy.KnowNN && healthy.GotNN && healthy.Full) {
-		log.Debug(fmt.Sprintf("healthy not yet reached\n%s", healthy.Hive), "id", id, "addr", addrIdx[id], "knowNN", healthy.KnowNN, "gotNN", healthy.GotNN, "countNN", healthy.CountNN, "full", healthy.Full)
+		log.Debug(fmt.Sprintf("healthy not yet reached\n%s", healthy.Hive), "id", id, "addr", fmt.Sprintf("%x", addrIdx[id][:8]), "missing", network.LogNNS(healthy.CulpritsNN), "knowNN", healthy.KnowNN, "gotNN", healthy.GotNN, "countNN", healthy.CountNN, "full", healthy.Full)
 		return false, nil
 	}
 	return true, nil
@@ -547,8 +545,7 @@ func newDynamicServices(storePath string) func(*adapters.ServiceContext) (node.S
 			HiveParams:   hp,
 		}
 
-		uuid := uuid.NewUUID()
-		stateStore, err := state.NewDBStore(filepath.Join(storePath, fmt.Sprintf("state-store-%s.db", uuid)))
+		stateStore, err := state.NewDBStore(filepath.Join(storePath, fmt.Sprintf("state-store-%d.db", ctx.Config.ID)))
 		if err != nil {
 			return nil, err
 		}
