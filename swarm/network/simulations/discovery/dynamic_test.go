@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
@@ -19,6 +20,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/state"
@@ -28,6 +30,9 @@ const (
 	bootNodeCount             = 3
 	defaultHealthCheckRetries = 10
 	defaultHealthCheckDelay   = time.Millisecond * 250
+	defaultEventsTimeout      = time.Second
+	defaultPruneInterval      = 5000000000 // 1 sec
+	defaultMaxBinSize         = 3
 )
 
 var (
@@ -50,10 +55,10 @@ var (
 // after starting, it performs new health checks after they have connected
 // to one of their previous peers
 func TestDynamicDiscovery(t *testing.T) {
-	t.Run("32/4/sim", dynamicDiscoverySimulation)
+	t.Run("32/4/sim", testDynamicDiscoveryRestarts)
 }
 
-func dynamicDiscoverySimulation(t *testing.T) {
+func testDynamicDiscoveryRestarts(t *testing.T) {
 
 	// this directory will keep the state store dbs
 	dir, err := ioutil.TempDir("", "dynamic-discovery")
@@ -64,7 +69,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 
 	// discovery service
 	dynamicServices := adapters.Services{
-		"discovery": newDynamicServices(dir),
+		"discovery": newDynamicServices(dir, false),
 	}
 
 	// set up locals we need
@@ -74,7 +79,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	adapter := paramstring[3]
 
 	if nodeCount < bootNodeCount {
-		t.Fatal("nodeCount must be bigger than bootnodeCount (%d < %d)", nodeCount, bootNodeCount)
+		t.Fatalf("nodeCount must be bigger than bootnodeCount (%d < %d)", nodeCount, bootNodeCount)
 	}
 
 	bootNodes = make([]*discover.NodeID, bootNodeCount)
@@ -84,7 +89,6 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	rpcs = make(map[discover.NodeID]*rpc.Client)
 
 	healthCheckDelay := defaultHealthCheckDelay
-	healthCheckRetries := defaultHealthCheckRetries
 
 	log.Info("starting dynamic test", "nodecount", nodeCount, "adaptertype", adapter)
 
@@ -119,11 +123,10 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			t.Fatalf("error starting node: %s", err)
 		}
 		ids[i] = node.ID()
-		log.Debug("new node", "id", ids[i])
 		if i < bootNodeCount {
 			bootNodes[i] = &ids[i]
 		}
-		addrIdx[node.ID()] = network.ToOverlayAddr(node.ID().Bytes()) //fmt.Sprintf("%x", network.ToOverlayAddr(node.ID().Bytes()))
+		addrIdx[node.ID()] = network.ToOverlayAddr(node.ID().Bytes())
 	}
 
 	// sim step 1
@@ -446,16 +449,21 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		}
 
 		// health check for the restarted node
-		for i := 0; i < healthCheckRetries; i++ {
+		tick := time.NewTicker(healthCheckDelay)
+		for i := 0; ; i++ {
 			log.Debug("health check after restart", "node", id, "attempt", i)
-			ok, err := checkHealth(net, id)
-			if ok {
-				log.Info("health ok after restart", "node", id)
-				return true, nil
-			} else if err != nil {
-				return false, err
+			select {
+			case <-tick.C:
+				ok, err := checkHealth(net, id)
+				if ok {
+					log.Info("health ok after restart", "node", id)
+					return true, nil
+				} else if err != nil {
+					return false, err
+				}
+			case <-ctx.Done():
+				return false, ctx.Err()
 			}
-			time.Sleep(healthCheckDelay)
 		}
 		return false, fmt.Errorf("health not reached for node %s (addr %s)", id.TerminalString(), fmt.Sprintf("%x", addrIdx[id][:8]))
 	}
@@ -476,7 +484,302 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	}
 	close(quitC)
 
-	log.Warn("exiting test")
+	log.Warn("exiting dynamic test")
+}
+
+func TestDynamicPruning(t *testing.T) {
+	t.Run("32/sim", testDynamicPruning)
+}
+
+func testDynamicPruning(t *testing.T) {
+	// this directory will keep the state store dbs
+	dir, err := ioutil.TempDir("", "dynamic-discovery")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	// discovery service
+	dynamicServices := adapters.Services{
+		"discovery": newDynamicServices(dir, true),
+	}
+
+	// set up locals we need
+	paramstring := strings.Split(t.Name(), "/")
+	nodeCount, _ := strconv.ParseInt(paramstring[1], 10, 0)
+	adapter := paramstring[2]
+
+	bootNodes = make([]*discover.NodeID, bootNodeCount)
+	events = make(chan *p2p.PeerEvent)
+	ids = make([]discover.NodeID, nodeCount)
+	addrIdx = make(map[discover.NodeID][]byte)
+	rpcs = make(map[discover.NodeID]*rpc.Client)
+
+	eventsTimeout := defaultEventsTimeout
+	maxBinSize := defaultMaxBinSize
+
+	log.Info("starting pruning test", "nodecount", nodeCount, "adaptertype", adapter)
+
+	// select adapter
+	var a adapters.NodeAdapter
+	if adapter == "exec" {
+		dirname, err := ioutil.TempDir(".", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		a = adapters.NewExecAdapter(dirname)
+	} else if adapter == "sock" {
+		a = adapters.NewSocketAdapter(dynamicServices)
+	} else if adapter == "tcp" {
+		a = adapters.NewTCPAdapter(dynamicServices)
+	} else if adapter == "sim" {
+		a = adapters.NewSimAdapter(dynamicServices)
+	}
+
+	// create network
+	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
+		ID:             "0",
+		DefaultService: "discovery",
+	})
+	defer net.Shutdown()
+
+	// create simnodes
+	for i := 0; i < int(nodeCount); i++ {
+		conf := adapters.RandomNodeConfig()
+		node, err := net.NewNodeWithConfig(conf)
+		if err != nil {
+			t.Fatalf("error starting node: %s", err)
+		}
+		ids[i] = node.ID()
+		if i < bootNodeCount {
+			bootNodes[i] = &ids[i]
+		}
+		addrIdx[node.ID()] = network.ToOverlayAddr(node.ID().Bytes())
+	}
+
+	// sim step 1
+	// start nodes, trigger them on node up event from sim
+	trigger := make(chan discover.NodeID)
+	events := make(chan *simulations.Event)
+	sub := net.Events().Subscribe(events)
+	defer sub.Unsubscribe()
+	// quitC stops the event listener loops
+	// inside the step action method after step is complete
+	quitC := make(chan struct{})
+
+	action := func(ctx context.Context) error {
+		go func() {
+			for {
+				select {
+				case ev := <-events:
+					if ev == nil {
+						panic("got nil event")
+					}
+					if ev.Type == simulations.EventTypeNode {
+						if ev.Node.Up {
+							log.Info("got node up event", "event", ev, "node", ev.Node.Config.ID)
+							trigger <- ev.Node.Config.ID
+						}
+					}
+				case <-ctx.Done():
+					return
+				case <-quitC:
+					return
+				}
+
+			}
+		}()
+		go func() {
+			for _, n := range ids {
+				if err := net.Start(n); err != nil {
+					t.Fatalf("error starting node: %s", err)
+				}
+				log.Info("network start returned", "node", n)
+
+				// rpc client is only available after node start
+				rpcs[n], err = net.GetNode(n).Client()
+				if err != nil {
+					t.Fatalf("error getting node rpc: %s", err)
+				}
+			}
+		}()
+		return nil
+
+	}
+
+	check := func(ctx context.Context, nodeId discover.NodeID) (bool, error) {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+		log.Info("trigger expect up", "node", nodeId)
+		return true, nil
+	}
+
+	timeout := 10 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
+		Action:  action,
+		Trigger: trigger,
+		Expect: &simulations.Expectation{
+			Nodes: ids,
+			Check: check,
+		},
+	})
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+
+	// sim step 2
+	// connect the three bootnodes together 1 -> 2 -> .. -> n
+	// connect each of the other nodes to a random bootnode
+	// triggers on connection event from sim
+	close(quitC)
+	quitC = make(chan struct{})
+	action = func(ctx context.Context) error {
+		go func(quitC chan struct{}) {
+			for {
+				var lastEvent time.Time
+				tick := time.NewTicker(eventsTimeout)
+				select {
+				case ev := <-events:
+					if ev.Type == simulations.EventTypeConn {
+						lastEvent = time.Now()
+					}
+				case <-tick.C:
+					if time.Since(lastEvent) > eventsTimeout {
+						trigger <- ids[0]
+					}
+				case <-ctx.Done():
+					return
+				case <-quitC:
+					return
+				}
+			}
+		}(quitC)
+		go func() {
+			for i := range ids {
+				var j int
+				if i == 0 {
+					continue
+				}
+				if i < len(bootNodes) {
+					j = i - 1
+				} else {
+					j = rand.Intn(len(bootNodes) - 1)
+				}
+
+				if err := net.Connect(ids[i], ids[j]); err != nil {
+					t.Fatalf("error connecting node %x => bootnode %x: %s", ids[i], ids[j], err)
+				}
+				log.Info("network connect returned", "one", ids[i], "other", ids[j])
+			}
+		}()
+		return nil
+	}
+
+	check = func(ctx context.Context, id discover.NodeID) (bool, error) {
+		select {
+		case <-ctx.Done():
+			return false, ctx.Err()
+		default:
+		}
+		return true, nil
+	}
+
+	timeout = 20 * time.Second
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
+		Action:  action,
+		Trigger: trigger,
+		Expect: &simulations.Expectation{
+			Nodes: ids[:1],
+			Check: check,
+		},
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+
+	sub.Unsubscribe()
+	close(quitC)
+
+	// sort all network events according to po, and appended chronologically
+	pof := pot.DefaultPof(256)
+	eventMap := make(map[discover.NodeID]map[int][][]byte)
+	for _, n := range net.GetNodes() {
+		eventMap[n.ID()] = make(map[int][][]byte)
+	}
+	for _, ev := range result.NetworkEvents {
+		if ev.Type == simulations.EventTypeConn {
+			if ev.Conn.Up {
+				log.Debug("Processing event", "time", ev.Time, "one", ev.Conn.One.TerminalString(), "other", ev.Conn.Other.TerminalString())
+				po, _ := pof(addrIdx[ev.Conn.One], addrIdx[ev.Conn.Other], 0)
+				eventMap[ev.Conn.One][po] = append(eventMap[ev.Conn.One][po], addrIdx[ev.Conn.Other])
+				eventMap[ev.Conn.Other][po] = append(eventMap[ev.Conn.Other][po], addrIdx[ev.Conn.One])
+			}
+		}
+	}
+
+	// slice the newest MaxProxBinSize entries from the events
+	// the latest should be the ones in the pruned kademlia
+	for k, bin := range eventMap {
+		for i, addrs := range bin {
+			if len(addrs) > maxBinSize {
+				addrs = addrs[len(addrs)-maxBinSize:]
+			}
+			log.Trace("sliced", "po", 255-i, "node", k.TerminalString(), "addr", network.LogAddrs(addrs))
+		}
+	}
+
+	time.Sleep(5 * time.Second)
+
+	// get current connections
+	// (they should now be pruned)
+	connMap := make(map[discover.NodeID][]discover.NodeID)
+	potMap := make(map[discover.NodeID]*pot.Pot)
+	for _, n := range net.GetNodes() {
+		potMap[n.ID()] = pot.NewPot(addrIdx[n.ID()], 0)
+	}
+
+	// map all connections to individual nodes
+	for _, conn := range net.Conns {
+		if conn.Up {
+			connMap[conn.One] = append(connMap[conn.One], conn.Other)
+			connMap[conn.Other] = append(connMap[conn.Other], conn.One)
+			potMap[conn.One], _, _ = pot.Add(potMap[conn.One], addrIdx[conn.Other], pof)
+			potMap[conn.Other], _, _ = pot.Add(potMap[conn.Other], addrIdx[conn.One], pof)
+		}
+	}
+
+	for _, n := range net.GetNodes() {
+		var bins [256]int
+		potMap[n.ID()].EachFrom(func(v pot.Val, po int) bool {
+
+			log.Debug(fmt.Sprintf("checking peer %08x against node %s", v.([]byte), n.ID().TerminalString()))
+			if bins[po] == maxBinSize {
+				t.Fatalf("node %s (addr %08x) has more than maxBinSize peers", n.ID().TerminalString(), addrIdx[n.ID()])
+			}
+			var matchPeer bool
+			for _, p := range eventMap[n.ID()][po] {
+				if bytes.Equal(v.([]byte), p) {
+					matchPeer = true
+				}
+			}
+			if !matchPeer {
+				t.Fatalf("node %s (addr %08x) is missing most recent peer %08x", n.ID().TerminalString(), addrIdx[n.ID()], v.([]byte))
+			}
+			bins[po]++
+			log.Info(fmt.Sprintf("%s [%d] -> %x", n.ID().TerminalString(), po, v.([]byte)[:8]))
+			return true
+		}, 0)
+
+	}
+	log.Info("exit pruning test")
 }
 
 func randomDelay(maxDuration int) time.Duration {
@@ -517,7 +820,7 @@ func checkHealth(net *simulations.Network, id discover.NodeID) (bool, error) {
 
 }
 
-func newDynamicServices(storePath string) func(*adapters.ServiceContext) (node.Service, error) {
+func newDynamicServices(storePath string, pruning bool) func(*adapters.ServiceContext) (node.Service, error) {
 	return func(ctx *adapters.ServiceContext) (node.Service, error) {
 		host := adapters.ExternalIP()
 
@@ -525,11 +828,14 @@ func newDynamicServices(storePath string) func(*adapters.ServiceContext) (node.S
 
 		kp := network.NewKadParams()
 		kp.MinProxBinSize = testMinProxBinSize
-		kp.MaxBinSize = 3
+		kp.MaxBinSize = defaultMaxBinSize
 		kp.MinBinSize = 1
 		kp.MaxRetries = 10
 		kp.RetryExponent = 2
 		kp.RetryInterval = 50000000
+		if pruning {
+			kp.PruneInterval = defaultPruneInterval
+		}
 		if ctx.Config.Reachable != nil {
 			kp.Reachable = func(o network.OverlayAddr) bool {
 				return ctx.Config.Reachable(o.(*network.BzzAddr).ID())

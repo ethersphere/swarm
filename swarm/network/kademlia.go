@@ -101,12 +101,15 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	if params == nil {
 		params = NewKadParams()
 	}
-	return &Kademlia{
+	k := &Kademlia{
 		base:      addr,
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
 		conns:     pot.NewPot(nil, 0),
 	}
+	dur, _ := time.ParseDuration(fmt.Sprintf("%dns", params.PruneInterval))
+	k.Prune(time.NewTicker(dur).C)
+	return k
 }
 
 // OverlayPeer interface captures the common aspect of view of a peer from the Overlay
