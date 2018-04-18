@@ -275,22 +275,13 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-
+	sub.Unsubscribe()
 	// sim step 3
 	// now all nodes are up, all nodes are connected to network
 	// so we check health of all nodes
 	close(quitC)
 	quitC = make(chan struct{})
 	action = func(ctx context.Context) error {
-		go func() {
-			for {
-				select {
-				case <-quitC:
-					return
-				case <-events:
-				}
-			}
-		}()
 		for _, n := range net.GetNodes() {
 			go func(n *simulations.Node) {
 				tick := time.NewTicker(healthCheckDelay)
@@ -342,6 +333,10 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	quitC = make(chan struct{})
 	victimSliceOffset := rand.Intn(len(ids) - int(numUpDowns) - 1)
 	victimNodes := ids[victimSliceOffset : victimSliceOffset+int(numUpDowns)]
+
+	events = make(chan *simulations.Event)
+	sub = net.Events().Subscribe(events)
+	defer sub.Unsubscribe()
 
 	action = func(ctx context.Context) error {
 		for _, nid := range victimNodes {
