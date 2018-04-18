@@ -164,7 +164,7 @@ func TestCache(t *testing.T) {
 	}
 
 	var messages []*PssMsg
-	var digests  []*pssDigest
+	var digests []*pssDigest
 
 	// map datas into digests and messages slices
 	for _, data := range datas {
