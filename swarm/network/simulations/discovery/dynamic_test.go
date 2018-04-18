@@ -348,6 +348,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			stopC := make(chan struct{})
 			go func(nid discover.NodeID, stopC chan struct{}) {
 				var stopped bool
+				var upped bool
 				for {
 					select {
 					case ev := <-events:
@@ -355,7 +356,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 							panic("got nil event")
 						} else if ev.Type == simulations.EventTypeNode {
 							if ev.Node.Config.ID == nid {
-								if ev.Node.Up && stopped {
+								if ev.Node.Up && stopped && !upped {
 									log.Info(fmt.Sprintf("got node up event %v", ev))
 									// rpc client is changed upon new start, we need to get it anew
 									mu.Lock()
@@ -364,6 +365,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 									if err != nil {
 										t.Fatal(err)
 									}
+									upped = true
 									trigger <- nid
 
 								} else {
@@ -410,23 +412,27 @@ func dynamicDiscoverySimulation(t *testing.T) {
 					}
 					continue
 				}
-				for k := 0; k < healthCheckRetries; k++ {
-					log.Debug("health check other node after stop", "stoppednode", nid, "checknode", n.ID(), "attempt", k)
-					ok, err := checkHealth(net, n.ID())
-					if ok {
-						log.Info("health ok other node after stop", "stoppednode", nid, "checknode", n.ID())
-						continue OUTER
-					} else if err != nil {
-						return err
+				tick := time.NewTicker(healthCheckDelay)
+				for i := 0; ; i++ {
+					select {
+					case <-tick.C:
+						log.Debug("health check other node after stop", "stoppednode", nid, "checknode", n.ID(), "attempt", i)
+						ok, err := checkHealth(net, n.ID())
+						if ok {
+							log.Info("health ok other node after stop", "stoppednode", nid, "checknode", n.ID())
+							continue OUTER
+						} else if err != nil {
+							return err
+						}
+					case <-ctx.Done():
+						return fmt.Errorf("health not reached for node %s (addr %s) after stopped node %s (addr %s)", n.ID().TerminalString(), fmt.Sprintf("%x", addrIdx[n.ID()][:8]), nid.TerminalString(), fmt.Sprintf("%x", addrIdx[nid][:8]))
+					case <-quitC:
+						return nil
 					}
-					time.Sleep(healthCheckDelay)
 				}
-				return fmt.Errorf("health not reached for node %s (addr %s) after stopped node %s (addr %s)", n.ID().TerminalString(), fmt.Sprintf("%x", addrIdx[n.ID()][:8]), nid.TerminalString(), fmt.Sprintf("%x", addrIdx[nid][:8]))
 			}
 
-			// wait a bit
-			// then bring the node back up
-			//time.Sleep(randomDelay(0))
+			// bring the node back up
 			log.Info("restarting: start", "node", nid, "addr", fmt.Sprintf("%x", addrIdx[nid]))
 			err = net.Start(nid)
 			if err != nil {
@@ -545,7 +551,7 @@ func newDynamicServices(storePath string) func(*adapters.ServiceContext) (node.S
 			HiveParams:   hp,
 		}
 
-		stateStore, err := state.NewDBStore(filepath.Join(storePath, fmt.Sprintf("state-store-%d.db", ctx.Config.ID)))
+		stateStore, err := state.NewDBStore(filepath.Join(storePath, fmt.Sprintf("state-store-%s.db", ctx.Config.ID)))
 		if err != nil {
 			return nil, err
 		}
