@@ -231,6 +231,10 @@ func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 
+		var checkStatusM sync.Map
+		var nodeStatusM sync.Map
+		var totalFoundCount uint64
+
 		result := sim.Run(ctx, &simulations.Step{
 			Action: func(ctx context.Context) error {
 				// ticker := time.NewTicker(200 * time.Millisecond)
@@ -270,7 +274,7 @@ func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
 
 				go func() {
 					for {
-						if retrieve(net, files, swarms, trigger) == 0 {
+						if retrieve(net, files, swarms, trigger, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
 							return
 						}
 					}
@@ -371,11 +375,15 @@ func uploadFile(swarm *Swarm) (storage.Key, string, error) {
 	return k, data, nil
 }
 
-func retrieve(net *simulations.Network, files []file, swarms map[discover.NodeID]*Swarm, trigger chan discover.NodeID) (missing uint64) {
-	var checkStatusM sync.Map
-	var nodeStatusM sync.Map
-	var totalFoundCount uint64
-
+func retrieve(
+	net *simulations.Network,
+	files []file,
+	swarms map[discover.NodeID]*Swarm,
+	trigger chan discover.NodeID,
+	checkStatusM *sync.Map,
+	nodeStatusM *sync.Map,
+	totalFoundCount *uint64,
+) (missing uint64) {
 	rand.Shuffle(len(files), func(i, j int) {
 		files[i], files[j] = files[j], files[i]
 	})
@@ -415,7 +423,7 @@ func retrieve(net *simulations.Network, files []file, swarms map[discover.NodeID
 			go func(f file, id discover.NodeID) {
 				defer wg.Done()
 
-				log.Debug("api get: check file", "node", id.String(), "key", f.key.String(), "total files found", atomic.LoadUint64(&totalFoundCount))
+				log.Debug("api get: check file", "node", id.String(), "key", f.key.String(), "total files found", atomic.LoadUint64(totalFoundCount))
 
 				r, _, _, err := swarm.api.Get(f.key, "/")
 				if err != nil {
@@ -442,7 +450,7 @@ func retrieve(net *simulations.Network, files []file, swarms map[discover.NodeID
 			defer totalWg.Done()
 			wg.Wait()
 
-			atomic.AddUint64(&totalFoundCount, foundCount)
+			atomic.AddUint64(totalFoundCount, foundCount)
 
 			if foundCount == checkCount {
 				log.Info("all files are found for node", "id", id.String(), "duration", time.Since(start))
@@ -468,7 +476,7 @@ func retrieve(net *simulations.Network, files []file, swarms map[discover.NodeID
 		log.Error(err.Error())
 	}
 
-	log.Info("check stats", "total check count", totalCheckCount, "total files found", atomic.LoadUint64(&totalFoundCount), "total errors", errCount)
+	log.Info("check stats", "total check count", totalCheckCount, "total files found", atomic.LoadUint64(totalFoundCount), "total errors", errCount)
 
-	return uint64(totalCheckCount) - atomic.LoadUint64(&totalFoundCount)
+	return uint64(totalCheckCount) - atomic.LoadUint64(totalFoundCount)
 }
