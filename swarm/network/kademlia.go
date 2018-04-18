@@ -668,7 +668,7 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 		for j := prev; j >= 0; j-- {
 			emptyBins = append(emptyBins, j)
 		}
-		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], logNNS(nns)))
+		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], LogNNS(nns)))
 		ppmap[common.Bytes2Hex(a)] = &PeerPot{nns, emptyBins}
 	}
 	return ppmap
@@ -748,7 +748,7 @@ func (k *Kademlia) knowNearestNeighbours(peers [][]byte) bool {
 	return true
 }
 
-func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (bool, int) {
+func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (bool, int, [][]byte) {
 	pm := make(map[string]bool)
 
 	k.eachConn(nil, 255, func(p OverlayConn, po int, nn bool) bool {
@@ -760,27 +760,27 @@ func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (bool, int) {
 		return true
 	})
 	var gots int
+	var culprits [][]byte
 	for _, p := range peers {
 		pk := fmt.Sprintf("%x", p)
 		if pm[pk] {
 			gots++
 		} else {
 			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", k.BaseAddr()[:4], pk[:8]))
+			culprits = append(culprits, p)
 		}
 	}
-	if gots < len(peers) {
-		return false, gots
-	}
-	return true, gots
+	return gots == len(peers), gots, culprits
 }
 
 // Health state of the Kademlia
 type Health struct {
-	KnowNN  bool // whether node knows all its nearest neighbours
-	GotNN   bool // whether node is connected to all its nearest neighbours
-	CountNN int  // amount of nearest neighbors connected to
-	Full    bool // whether node has a peer in each kademlia bin (where there is such a peer)
-	Hive    string
+	KnowNN     bool     // whether node knows all its nearest neighbours
+	GotNN      bool     // whether node is connected to all its nearest neighbours
+	CountNN    int      // amount of nearest neighbors connected to
+	CulpritsNN [][]byte // which known NNs are missing
+	Full       bool     // whether node has a peer in each kademlia bin (where there is such a peer)
+	Hive       string
 }
 
 // Healthy reports the health state of the kademlia connectivity
@@ -788,15 +788,15 @@ type Health struct {
 func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
-	gotnn, countnn := k.gotNearestNeighbours(pp.NNSet)
+	gotnn, countnn, culpritsnn := k.gotNearestNeighbours(pp.NNSet)
 	knownn := k.knowNearestNeighbours(pp.NNSet)
 	full := k.full(pp.EmptyBins)
 	//log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full, k.string()))
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full))
-	return &Health{knownn, gotnn, countnn, full, k.string()}
+	return &Health{knownn, gotnn, countnn, culpritsnn, full, k.string()}
 }
 
-func logNNS(nns [][]byte) string {
+func LogNNS(nns [][]byte) string {
 	var nnsa []string
 	for _, nn := range nns {
 		nnsa = append(nnsa, fmt.Sprintf("%08x", nn[:4]))
