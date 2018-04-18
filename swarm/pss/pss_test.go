@@ -134,7 +134,7 @@ func TestTopic(t *testing.T) {
 
 // test if we can insert into cache, match items with cache and cache expiry
 func TestCache(t *testing.T) {
-	var err error
+	// setting up context
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -145,9 +145,14 @@ func TestCache(t *testing.T) {
 	}
 	ps := newTestPss(privkey, nil, nil)
 	pp := NewPssParams(privkey)
-	data := []byte("foo")
-	datatwo := []byte("bar")
-	datathree := []byte("baz")
+
+	// spawn data for three different messages
+	datas := [][]byte{
+		[]byte("foo"),
+		[]byte("bar"),
+		[]byte("baz"),
+	}
+
 	wparams := &whisper.MessageParams{
 		TTL:      defaultWhisperTTL,
 		Src:      privkey,
@@ -155,76 +160,66 @@ func TestCache(t *testing.T) {
 		Topic:    whisper.TopicType(PingTopic),
 		WorkTime: defaultWhisperWorkTime,
 		PoW:      defaultWhisperPoW,
-		Payload:  data,
-	}
-	woutmsg, err := whisper.NewSentMessage(wparams)
-	env, err := woutmsg.Wrap(wparams)
-	msg := &PssMsg{
-		Payload: env,
-		To:      to,
-	}
-	wparams.Payload = datatwo
-	woutmsg, err = whisper.NewSentMessage(wparams)
-	envtwo, err := woutmsg.Wrap(wparams)
-	msgtwo := &PssMsg{
-		Payload: envtwo,
-		To:      to,
-	}
-	wparams.Payload = datathree
-	woutmsg, err = whisper.NewSentMessage(wparams)
-	envthree, err := woutmsg.Wrap(wparams)
-	msgthree := &PssMsg{
-		Payload: envthree,
-		To:      to,
+		Payload:  []byte(""), //dummy
 	}
 
-	digest := ps.digest(msg)
-	if err != nil {
-		t.Fatalf("could not store cache msgone: %v", err)
-	}
-	digesttwo := ps.digest(msgtwo)
-	if err != nil {
-		t.Fatalf("could not store cache msgtwo: %v", err)
-	}
-	digestthree := ps.digest(msgthree)
-	if err != nil {
-		t.Fatalf("could not store cache msgthree: %v", err)
+	var messages []*PssMsg
+	var digests  []*pssDigest
+
+	// map datas into digests and messages slices
+	for _, data := range datas {
+		wparams.Payload = data
+		woutmsg, _ := whisper.NewSentMessage(wparams)
+		env, err := woutmsg.Wrap(wparams)
+		if err != nil {
+			t.Fatalf("could not store cache msg: %v", err)
+		}
+		msg := &PssMsg{
+			Payload: env,
+			To:      to,
+		}
+		digest := ps.digest(msg)
+		messages = append(messages, msg)
+		digests = append(digests, &digest)
 	}
 
-	if digest == digesttwo {
-		t.Fatalf("different msgs return same hash: %d", digesttwo)
+	// check if somehow from different messages we obtain the same digest
+	if *digests[0] == *digests[1] {
+		t.Fatalf("different msgs return same hash: %d", *digests[1])
 	}
 
 	// check the cache
-	err = ps.addFwdCache(msg)
+	err = ps.addFwdCache(messages[0])
 	if err != nil {
 		t.Fatalf("write to pss expire cache failed: %v", err)
 	}
 
-	if !ps.checkFwdCache(msg) {
-		t.Fatalf("message %v should have EXPIRE record in cache but checkCache returned false", msg)
+	if !ps.checkFwdCache(messages[0]) {
+		t.Fatalf("message %v should have EXPIRE record in cache but checkCache returned false", messages[0])
 	}
 
-	if ps.checkFwdCache(msgtwo) {
-		t.Fatalf("message %v should NOT have EXPIRE record in cache but checkCache returned true", msgtwo)
+	if ps.checkFwdCache(messages[1]) {
+		t.Fatalf("message %v should NOT have EXPIRE record in cache but checkCache returned true", messages[1])
 	}
 
+	// wait some time to flush
 	time.Sleep(pp.CacheTTL + 1*time.Second)
-	err = ps.addFwdCache(msgthree)
+
+	err = ps.addFwdCache(messages[2])
 	if err != nil {
 		t.Fatalf("write to pss expire cache failed: %v", err)
 	}
 
-	if ps.checkFwdCache(msg) {
-		t.Fatalf("message %v should have expired from cache but checkCache returned true", msg)
+	if ps.checkFwdCache(messages[0]) {
+		t.Fatalf("message %v should have expired from cache but checkCache returned true", messages[0])
 	}
 
-	if _, ok := ps.fwdCache[digestthree]; !ok {
-		t.Fatalf("unexpired message should be in the cache: %v", digestthree)
+	if _, ok := ps.fwdCache[*digests[2]]; !ok {
+		t.Fatalf("unexpired message should be in the cache: %v", *digests[2])
 	}
 
-	if _, ok := ps.fwdCache[digesttwo]; ok {
-		t.Fatalf("expired message should have been cleared from the cache: %v", digesttwo)
+	if _, ok := ps.fwdCache[*digests[1]]; ok {
+		t.Fatalf("expired message should have been cleared from the cache: %v", *digests[1])
 	}
 }
 
