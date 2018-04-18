@@ -210,14 +210,14 @@ type testAPI struct {
 }
 
 func (ta *testAPI) mountListAndUnmountEncrypted(t *testing.T) {
-	ta.mountListAndUnmount(true, t)
+	ta.mountListAndUnmount(t, true)
 }
 
 func (ta *testAPI) mountListAndUnmountNonEncrypted(t *testing.T) {
-	ta.mountListAndUnmount(false, t)
+	ta.mountListAndUnmount(t, false)
 }
 
-func (ta *testAPI) mountListAndUnmount(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) mountListAndUnmount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "fuse-source")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "fuse-dest")
@@ -255,14 +255,14 @@ func (ta *testAPI) mountListAndUnmount(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) maxMountsEncrypted(t *testing.T) {
-	ta.runMaxMounts(true, t)
+	ta.runMaxMounts(t, true)
 }
 
 func (ta *testAPI) maxMountsNonEncrypted(t *testing.T) {
-	ta.runMaxMounts(false, t)
+	ta.runMaxMounts(t, false)
 }
 
-func (ta *testAPI) runMaxMounts(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "max-upload1")
@@ -313,13 +313,13 @@ func (ta *testAPI) runMaxMounts(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) remountEncrypted(t *testing.T) {
-	ta.remount(true, t)
+	ta.remount(t, true)
 }
 func (ta *testAPI) remountNonEncrypted(t *testing.T) {
-	ta.remount(false, t)
+	ta.remount(t, false)
 }
 
-func (ta *testAPI) remount(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) remount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "re-upload1")
@@ -354,14 +354,14 @@ func (ta *testAPI) remount(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) unmountEncrypted(t *testing.T) {
-	ta.unmount(true, t)
+	ta.unmount(t, true)
 }
 
 func (ta *testAPI) unmountNonEncrypted(t *testing.T) {
-	ta.unmount(false, t)
+	ta.unmount(t, false)
 }
 
-func (ta *testAPI) unmount(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) unmount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	uploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
@@ -383,13 +383,13 @@ func (ta *testAPI) unmount(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) unmountWhenResourceBusyEncrypted(t *testing.T) {
-	ta.unmountWhenResourceBusy(true, t)
+	ta.unmountWhenResourceBusy(t, true)
 }
 func (ta *testAPI) unmountWhenResourceBusyNonEncrypted(t *testing.T) {
-	ta.unmountWhenResourceBusy(false, t)
+	ta.unmountWhenResourceBusy(t, false)
 }
 
-func (ta *testAPI) unmountWhenResourceBusy(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) unmountWhenResourceBusy(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
@@ -419,14 +419,14 @@ func (ta *testAPI) unmountWhenResourceBusy(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) seekInMultiChunkFileEncrypted(t *testing.T) {
-	ta.seekInMultiChunkFile(true, t)
+	ta.seekInMultiChunkFile(t, true)
 }
 
 func (ta *testAPI) seekInMultiChunkFileNonEncrypted(t *testing.T) {
-	ta.seekInMultiChunkFile(false, t)
+	ta.seekInMultiChunkFile(t, false)
 }
 
-func (ta *testAPI) seekInMultiChunkFile(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) seekInMultiChunkFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "seek-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "seek-mount")
@@ -454,14 +454,14 @@ func (ta *testAPI) seekInMultiChunkFile(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) createNewFileEncrypted(t *testing.T) {
-	ta.createNewFile(true, t)
+	ta.createNewFile(t, true)
 }
 
 func (ta *testAPI) createNewFileNonEncrypted(t *testing.T) {
-	ta.createNewFile(false, t)
+	ta.createNewFile(t, false)
 }
 
-func (ta *testAPI) createNewFile(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "create-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "create-mount")
@@ -499,14 +499,14 @@ func (ta *testAPI) createNewFile(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) createNewFileInsideDirectoryEncrypted(t *testing.T) {
-	ta.createNewFileInsideDirectory(true, t)
+	ta.createNewFileInsideDirectory(t, true)
 }
 
 func (ta *testAPI) createNewFileInsideDirectoryNonEncrypted(t *testing.T) {
-	ta.createNewFileInsideDirectory(false, t)
+	ta.createNewFileInsideDirectory(t, false)
 }
 
-func (ta *testAPI) createNewFileInsideDirectory(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) createNewFileInsideDirectory(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "createinsidedir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "createinsidedir-mount")
@@ -543,14 +543,14 @@ func (ta *testAPI) createNewFileInsideDirectory(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) createNewFileInsideNewDirectoryEncrypted(t *testing.T) {
-	ta.createNewFileInsideNewDirectory(true, t)
+	ta.createNewFileInsideNewDirectory(t, true)
 }
 
 func (ta *testAPI) createNewFileInsideNewDirectoryNonEncrypted(t *testing.T) {
-	ta.createNewFileInsideNewDirectory(false, t)
+	ta.createNewFileInsideNewDirectory(t, false)
 }
 
-func (ta *testAPI) createNewFileInsideNewDirectory(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "createinsidenewdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "createinsidenewdir-mount")
@@ -588,14 +588,14 @@ func (ta *testAPI) createNewFileInsideNewDirectory(toEncrypt bool, t *testing.T)
 }
 
 func (ta *testAPI) removeExistingFileEncrypted(t *testing.T) {
-	ta.removeExistingFile(true, t)
+	ta.removeExistingFile(t, true)
 }
 
 func (ta *testAPI) removeExistingFileNonEncrypted(t *testing.T) {
-	ta.removeExistingFile(false, t)
+	ta.removeExistingFile(t, false)
 }
 
-func (ta *testAPI) removeExistingFile(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) removeExistingFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "remove-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "remove-mount")
@@ -624,14 +624,14 @@ func (ta *testAPI) removeExistingFile(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) removeExistingFileInsideDirEncrypted(t *testing.T) {
-	ta.removeExistingFileInsideDir(true, t)
+	ta.removeExistingFileInsideDir(t, true)
 }
 
 func (ta *testAPI) removeExistingFileInsideDirNonEncrypted(t *testing.T) {
-	ta.removeExistingFileInsideDir(false, t)
+	ta.removeExistingFileInsideDir(t, false)
 }
 
-func (ta *testAPI) removeExistingFileInsideDir(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) removeExistingFileInsideDir(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "remove-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "remove-mount")
@@ -660,14 +660,14 @@ func (ta *testAPI) removeExistingFileInsideDir(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) removeNewlyAddedFileEncrypted(t *testing.T) {
-	ta.removeNewlyAddedFile(true, t)
+	ta.removeNewlyAddedFile(t, true)
 }
 
 func (ta *testAPI) removeNewlyAddedFileNonEncrypted(t *testing.T) {
-	ta.removeNewlyAddedFile(false, t)
+	ta.removeNewlyAddedFile(t, false)
 }
 
-func (ta *testAPI) removeNewlyAddedFile(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) removeNewlyAddedFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "removenew-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "removenew-mount")
@@ -712,14 +712,14 @@ func (ta *testAPI) removeNewlyAddedFile(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) addNewFileAndModifyContentsEncrypted(t *testing.T) {
-	ta.addNewFileAndModifyContents(true, t)
+	ta.addNewFileAndModifyContents(t, true)
 }
 
 func (ta *testAPI) addNewFileAndModifyContentsNonEncrypted(t *testing.T) {
-	ta.addNewFileAndModifyContents(false, t)
+	ta.addNewFileAndModifyContents(t, false)
 }
 
-func (ta *testAPI) addNewFileAndModifyContents(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "modifyfile-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "modifyfile-mount")
@@ -790,14 +790,14 @@ func (ta *testAPI) addNewFileAndModifyContents(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) removeEmptyDirEncrypted(t *testing.T) {
-	ta.removeEmptyDir(true, t)
+	ta.removeEmptyDir(t, true)
 }
 
 func (ta *testAPI) removeEmptyDirNonEncrypted(t *testing.T) {
-	ta.removeEmptyDir(false, t)
+	ta.removeEmptyDir(t, false)
 }
 
-func (ta *testAPI) removeEmptyDir(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) removeEmptyDir(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-mount")
@@ -822,13 +822,13 @@ func (ta *testAPI) removeEmptyDir(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) removeDirWhichHasFilesEncrypted(t *testing.T) {
-	ta.removeDirWhichHasFiles(true, t)
+	ta.removeDirWhichHasFiles(t, true)
 }
 func (ta *testAPI) removeDirWhichHasFilesNonEncrypted(t *testing.T) {
-	ta.removeDirWhichHasFiles(false, t)
+	ta.removeDirWhichHasFiles(t, false)
 }
 
-func (ta *testAPI) removeDirWhichHasFiles(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) removeDirWhichHasFiles(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmdir-mount")
@@ -858,13 +858,13 @@ func (ta *testAPI) removeDirWhichHasFiles(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) removeDirWhichHasSubDirsEncrypted(t *testing.T) {
-	ta.removeDirWhichHasSubDirs(true, t)
+	ta.removeDirWhichHasSubDirs(t, true)
 }
 
 func (ta *testAPI) removeDirWhichHasSubDirsNonEncrypted(t *testing.T) {
-	ta.removeDirWhichHasSubDirs(false, t)
+	ta.removeDirWhichHasSubDirs(t, false)
 }
-func (ta *testAPI) removeDirWhichHasSubDirs(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "rmsubdir-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "rmsubdir-mount")
@@ -901,14 +901,14 @@ func (ta *testAPI) removeDirWhichHasSubDirs(toEncrypt bool, t *testing.T) {
 }
 
 func (ta *testAPI) appendFileContentsToEndEncrypted(t *testing.T) {
-	ta.appendFileContentsToEnd(true, t)
+	ta.appendFileContentsToEnd(t, true)
 }
 
 func (ta *testAPI) appendFileContentsToEndNonEncrypted(t *testing.T) {
-	ta.appendFileContentsToEnd(false, t)
+	ta.appendFileContentsToEnd(t, false)
 }
 
-func (ta *testAPI) appendFileContentsToEnd(toEncrypt bool, t *testing.T) {
+func (ta *testAPI) appendFileContentsToEnd(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "appendlargefile-upload")
 	testMountDir, _ := ioutil.TempDir(os.TempDir(), "appendlargefile-mount")
