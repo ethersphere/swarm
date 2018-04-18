@@ -52,7 +52,7 @@ var (
 // after starting, it performs new health checks after they have connected
 // to one of their previous peers
 func TestDynamicDiscovery(t *testing.T) {
-	t.Run("16/8/sim", dynamicDiscoverySimulation)
+	t.Run("32/4/sim", dynamicDiscoverySimulation)
 }
 
 func dynamicDiscoverySimulation(t *testing.T) {
@@ -216,6 +216,9 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			for {
 				select {
 				case ev := <-events:
+					if ev == nil {
+						panic("got nil event")
+					}
 					if ev.Type == simulations.EventTypeConn {
 						if ev.Conn.Up {
 							log.Info(fmt.Sprintf("got conn up event %v", ev))
@@ -281,15 +284,21 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	close(quitC)
 	quitC = make(chan struct{})
 	action = func(ctx context.Context) error {
+		go func() {
+			for {
+				select {
+				case <-quitC:
+					return
+				case <-events:
+				}
+			}
+		}()
 		for _, n := range net.GetNodes() {
 			go func(n *simulations.Node) {
 				tick := time.NewTicker(healthCheckDelay)
 				for {
 					select {
-					case t := <-tick.C:
-						if t.IsZero() {
-							return
-						}
+					case <-tick.C:
 						trigger <- n.ID()
 					case <-ctx.Done():
 						return
@@ -345,7 +354,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 					select {
 					case ev := <-events:
 						if ev == nil {
-							return
+							panic("got nil event")
 						} else if ev.Type == simulations.EventTypeNode {
 							if ev.Node.Config.ID == nid {
 								if ev.Node.Up && stopped {
@@ -378,7 +387,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			}(nid, stopC)
 
 			// stop the node
-			log.Info("restarting: stop", "node", nid)
+			log.Info("restarting: stop", "node", nid, "addr", addrIdx[nid])
 			err := net.Stop(nid)
 			if err != nil {
 				t.Fatal(err)
@@ -420,7 +429,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			// wait a bit
 			// then bring the node back up
 			//time.Sleep(randomDelay(0))
-			log.Info("restarting: start", "node", nid)
+			log.Info("restarting: start", "node", nid, "addr", addrIdx[nid])
 			err = net.Start(nid)
 			if err != nil {
 				t.Fatal(err)
