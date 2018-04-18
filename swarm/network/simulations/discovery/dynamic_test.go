@@ -486,8 +486,11 @@ func checkHealth(net *simulations.Network, id discover.NodeID) (bool, error) {
 
 	var upAddrs [][]byte
 	for _, n := range net.GetNodes() {
-		upAddrs = append(upAddrs, addrIdx[n.ID()])
+		if n.Up {
+			upAddrs = append(upAddrs, addrIdx[n.ID()])
+		}
 	}
+	log.Debug("generating new peerpotmap", "node", id)
 	hotPot := network.NewPeerPotMap(testMinProxBinSize, upAddrs)
 	addrHex := fmt.Sprintf("%x", addrIdx[id])
 
