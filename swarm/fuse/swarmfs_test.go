@@ -960,8 +960,8 @@ func TestFUSE(t *testing.T) {
 	}
 	ta := &testAPI{api: api.NewApi(dpa, nil, nil)}
 
-	t.Run("mountListAndUmountEncrypted", ta.mountListAndUnmountEncrypted)
-	t.Run("mountListAndUmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)
+	t.Run("mountListAndUnmountEncrypted", ta.mountListAndUnmountEncrypted)
+	t.Run("mountListAndUnmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)
 	t.Run("maxMountsEncrypted", ta.maxMountsEncrypted)
 	t.Run("maxMountsNonEncrypted", ta.maxMountsNonEncrypted)
 	t.Run("remountEncrypted", ta.remountEncrypted)
