@@ -510,7 +510,7 @@ func checkHealth(net *simulations.Network, id discover.NodeID) (bool, error) {
 		return false, fmt.Errorf("error retrieving node health by rpc for node %v: %v", id, err)
 	}
 	if !(healthy.KnowNN && healthy.GotNN && healthy.Full) {
-		log.Debug(fmt.Sprintf("healthy not yet reached\n%s", healthy.Hive), "id", id, "addr", fmt.Sprintf("%x", addrIdx[id][:8]), "missing", network.LogNNS(healthy.CulpritsNN), "knowNN", healthy.KnowNN, "gotNN", healthy.GotNN, "countNN", healthy.CountNN, "full", healthy.Full)
+		log.Debug(fmt.Sprintf("healthy not yet reached\n%s", healthy.Hive), "id", id, "addr", fmt.Sprintf("%x", addrIdx[id][:8]), "missing", network.LogAddrs(healthy.CulpritsNN), "knowNN", healthy.KnowNN, "gotNN", healthy.GotNN, "countNN", healthy.CountNN, "full", healthy.Full)
 		return false, nil
 	}
 	return true, nil

@@ -288,7 +288,6 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 	defer k.lock.Unlock()
 	e := newEntry(p)
 	var ins bool
-	//dumpPot(k, "On before conns")
 	k.conns, _, _, _ = pot.Swap(k.conns, p, pof, func(v pot.Val) pot.Val {
 		// if not found live
 		if v == nil {
@@ -299,14 +298,11 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 		// found among live peers, do nothing
 		return v
 	})
-	//dumpPot(k, "On after conns")
 	if ins {
 		// insert new online peer into addrs
-		//dumpPot(k, "On before ins")
 		k.addrs, _, _, _ = pot.Swap(k.addrs, p, pof, func(v pot.Val) pot.Val {
 			return e
 		})
-		//dumpPot(k, "On after ins")
 		// send new address count value only if the peer is inserted
 		if k.addrCountC != nil {
 			k.addrCountC <- k.addrs.Size()
@@ -375,7 +371,6 @@ func (k *Kademlia) Off(p OverlayConn) {
 		return newEntry(p.Off())
 	})
 
-	//dumpPot(k, "Off")
 	if del {
 		k.conns, _, _, _ = pot.Swap(k.conns, p, pof, func(_ pot.Val) pot.Val {
 			// v cannot be nil, but no need to check
@@ -642,7 +637,7 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 		for j := prev; j >= 0; j-- {
 			emptyBins = append(emptyBins, j)
 		}
-		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], LogNNS(nns)))
+		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], LogAddrs(nns)))
 		ppmap[common.Bytes2Hex(a)] = &PeerPot{nns, emptyBins}
 	}
 	return ppmap
@@ -700,9 +695,6 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 
 func (k *Kademlia) knowNearestNeighbours(peers [][]byte) bool {
 	pm := make(map[string]bool)
-
-	log.Trace("checking know addrs", "addr", fmt.Sprintf("%x", k.base[:4]), "pot", fmt.Sprintf("%p", k.addrs), "kad", fmt.Sprintf("%p", k))
-	//dumpPot(k, "know")
 
 	k.eachAddr(nil, 255, func(p OverlayAddr, po int, nn bool) bool {
 		if !nn {
@@ -765,30 +757,6 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	gotnn, countnn, culpritsnn := k.gotNearestNeighbours(pp.NNSet)
 	knownn := k.knowNearestNeighbours(pp.NNSet)
 	full := k.full(pp.EmptyBins)
-	//log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full, k.string()))
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full))
 	return &Health{knownn, gotnn, countnn, culpritsnn, full, k.string()}
-}
-
-func LogNNS(nns [][]byte) string {
-	var nnsa []string
-	for _, nn := range nns {
-		nnsa = append(nnsa, fmt.Sprintf("%08x", nn[:4]))
-	}
-	return strings.Join(nnsa, ", ")
-}
-
-func logEmptyBins(ebs []int) string {
-	var ebss []string
-	for _, eb := range ebs {
-		ebss = append(ebss, fmt.Sprintf("%d", eb))
-	}
-	return strings.Join(ebss, ", ")
-}
-
-func dumpPot(k *Kademlia, label string) {
-	k.addrs.Each(func(v pot.Val, po int) bool {
-		log.Debug("dumpPot", "label", label, "v", v.(*entry), "base", fmt.Sprintf("%x", k.base[:4]))
-		return true
-	})
 }
