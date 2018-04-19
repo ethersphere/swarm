@@ -84,11 +84,24 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 
 	defer res.Body.Close()
 
-	rdigest, err := digest(res.Body)
+	bdy, err := ioutil.ReadAll(res.Body)
 	if err != nil {
 		log.Warn(err.Error(), "ruid", ruid)
 		return err
 	}
+
+	log.Trace("bdy", "len", len(bdy))
+
+	h := md5.New()
+	wrote, err := h.Write(bdy)
+	if err != nil {
+		log.Warn(err.Error(), "ruid", ruid)
+		return err
+	}
+
+	log.Trace("md5 wrote", "len", wrote)
+
+	rdigest := h.Sum(nil)
 
 	if !bytes.Equal(rdigest, original) {
 		err := fmt.Errorf("downloaded imported file md5=%x is not the same as the generated one=%x", rdigest, original)
