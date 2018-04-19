@@ -18,57 +18,105 @@ package storage
 
 import (
 	"encoding/binary"
+	"fmt"
+	"path/filepath"
+	"sync"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
-//metrics variables
 var (
 	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
 )
 
+type LocalStoreParams struct {
+	*StoreParams
+	ChunkDbPath string
+	Validators  []ChunkValidator `toml:"-"`
+}
+
+func NewDefaultLocalStoreParams() *LocalStoreParams {
+	return &LocalStoreParams{
+		StoreParams: NewDefaultStoreParams(),
+	}
+}
+
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (self *LocalStoreParams) Init(path string) {
+	if self.ChunkDbPath == "" {
+		self.ChunkDbPath = filepath.Join(path, "chunks")
+	}
+}
+
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
-	memStore ChunkStore
-	DbStore  ChunkStore
+	Validators []ChunkValidator
+	memStore   *MemStore
+	DbStore    *LDBStore
+	mu         sync.Mutex
 }
 
 // This constructor uses MemStore and DbStore as components
-func NewLocalStore(hash SwarmHasher, params *StoreParams) (*LocalStore, error) {
-	dbStore, err := NewDbStore(params.ChunkDbPath, hash, params.DbCapacity, params.Radius)
+func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
+	ldbparams := NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
+	dbStore, err := NewMockDbStore(ldbparams, mockStore)
 	if err != nil {
 		return nil, err
 	}
 	return &LocalStore{
-		memStore: NewMemStore(dbStore, params.CacheCapacity),
-		DbStore:  dbStore,
+		memStore:   NewMemStore(params.StoreParams, dbStore),
+		DbStore:    dbStore,
+		Validators: params.Validators,
 	}, nil
 }
 
-func (self *LocalStore) CacheCounter() uint64 {
-	return uint64(self.memStore.(*MemStore).Counter())
-}
-
-func (self *LocalStore) DbCounter() uint64 {
-	return self.DbStore.(*DbStore).Counter()
-}
-
-// LocalStore is itself a chunk store
-// unsafe, in that the data is not integrity checked
-func (self *LocalStore) Put(chunk *Chunk) {
-	chunk.dbStored = make(chan bool)
-	self.memStore.Put(chunk)
-	if chunk.wg != nil {
-		chunk.wg.Add(1)
+func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
+	ldbparams := NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
+	dbStore, err := NewLDBStore(ldbparams)
+	if err != nil {
+		return nil, err
 	}
-	go func() {
-		dbStorePutCounter.Inc(1)
-		self.DbStore.Put(chunk)
-		if chunk.wg != nil {
-			chunk.wg.Done()
+	localStore := &LocalStore{
+		memStore:   NewMemStore(params.StoreParams, dbStore),
+		DbStore:    dbStore,
+		Validators: params.Validators,
+	}
+	return localStore, nil
+}
+
+func (self *LocalStore) Put(chunk *Chunk) {
+	valid := true
+	for _, v := range self.Validators {
+		if valid = v.Validate(chunk.Key, chunk.SData); valid {
+			break
 		}
-	}()
+	}
+	if !valid {
+		chunk.SetErrored(ErrChunkInvalid)
+		chunk.dbStoredC <- false
+		return
+	}
+	log.Trace("localstore.put", "key", chunk.Key)
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
+	c := &Chunk{
+		Key:        Key(append([]byte{}, chunk.Key...)),
+		SData:      append([]byte{}, chunk.SData...),
+		Size:       chunk.Size,
+		dbStored:   chunk.dbStored,
+		dbStoredC:  chunk.dbStoredC,
+		dbStoredMu: chunk.dbStoredMu,
+	}
+
+	dbStorePutCounter.Inc(1)
+	self.memStore.Put(c)
+	self.DbStore.Put(c)
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores
@@ -76,8 +124,22 @@ func (self *LocalStore) Put(chunk *Chunk) {
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
 func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	return self.get(key)
+}
+
+func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 	chunk, err = self.memStore.Get(key)
 	if err == nil {
+		if chunk.ReqC != nil {
+			select {
+			case <-chunk.ReqC:
+			default:
+				return chunk, ErrFetching
+			}
+		}
 		return
 	}
 	chunk, err = self.DbStore.Get(key)
@@ -89,5 +151,29 @@ func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
 	return
 }
 
-// Close local store
-func (self *LocalStore) Close() {}
+// retrieve logic common for local and network chunk retrieval requests
+func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+
+	var err error
+	chunk, err = self.get(key)
+	if err == nil && chunk.GetErrored() == nil {
+		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
+		return chunk, false
+	}
+	if err == ErrFetching && chunk.GetErrored() == nil {
+		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
+		return chunk, false
+	}
+	// no data and no request status
+	log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", key))
+	chunk = NewChunk(key, make(chan bool))
+	self.memStore.Put(chunk)
+	return chunk, true
+}
+
+// Close the local store
+func (self *LocalStore) Close() {
+	self.DbStore.Close()
+}
