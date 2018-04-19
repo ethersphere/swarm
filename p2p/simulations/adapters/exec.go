@@ -349,7 +349,7 @@ func ExternalIP() net.IP {
 			return ip.IP
 		}
 	}
-	log.Crit("unable to determine explicit IP address")
+	log.Warn("unable to determine explicit IP address, falling back to loopback")
 	return net.IP{127, 0, 0, 1}
 }
 

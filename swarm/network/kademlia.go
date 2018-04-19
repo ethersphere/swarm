@@ -83,6 +83,7 @@ func NewKadParams() *KadParams {
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
 	lock       sync.RWMutex
+	entryLock  sync.Mutex
 	*KadParams          // Kademlia configuration parameters
 	base       []byte   // immutable baseaddress of the table
 	addrs      *pot.Pot // pots container for known peer addresses
@@ -100,12 +101,15 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	if params == nil {
 		params = NewKadParams()
 	}
-	return &Kademlia{
+	k := &Kademlia{
 		base:      addr,
 		KadParams: params,
 		addrs:     pot.NewPot(nil, 0),
 		conns:     pot.NewPot(nil, 0),
 	}
+	dur, _ := time.ParseDuration(fmt.Sprintf("%dns", params.PruneInterval))
+	k.Prune(time.NewTicker(dur).C)
+	return k
 }
 
 // OverlayPeer interface captures the common aspect of view of a peer from the Overlay
@@ -148,7 +152,7 @@ func (e *entry) Bin() string {
 }
 
 // Label is a short tag for the entry for debug
-func Label(e *entry) string {
+func Label(e entry) string {
 	return fmt.Sprintf("%s (%d)", e.Hex()[:4], e.retries)
 }
 
@@ -360,6 +364,7 @@ func (k *Kademlia) Off(p OverlayConn) {
 		del = true
 		return newEntry(p.Off())
 	})
+
 	if del {
 		k.conns, _, _, _ = pot.Swap(k.conns, p, pof, func(_ pot.Val) pot.Val {
 			// v cannot be nil, but no need to check
@@ -463,6 +468,8 @@ func (k *Kademlia) neighbourhoodDepth() (depth int) {
 
 // callable when called with val,
 func (k *Kademlia) callable(val pot.Val) OverlayAddr {
+	k.entryLock.Lock()
+	defer k.entryLock.Unlock()
 	e := val.(*entry)
 	// not callable if peer is live or exceeded maxRetries
 	if e.conn() != nil || e.retries > k.MaxRetries {
@@ -476,7 +483,6 @@ func (k *Kademlia) callable(val pot.Val) OverlayAddr {
 	for delta := timeAgo; delta > k.RetryInterval; delta /= div {
 		retries++
 	}
-
 	// this is never called concurrently, so safe to increment
 	// peer can be retried again
 	if retries < e.retries {
@@ -550,7 +556,10 @@ func (k *Kademlia) string() string {
 		row := []string{fmt.Sprintf("%2d", size)}
 		// we are displaying live peers too
 		f(func(val pot.Val, vpo int) bool {
-			row = append(row, Label(val.(*entry)))
+			k.entryLock.Lock()
+			e := val.(*entry)
+			row = append(row, Label(*e))
+			k.entryLock.Unlock()
 			rowlen++
 			return rowlen < 4
 		})
@@ -653,7 +662,7 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 		for j := prev; j >= 0; j-- {
 			emptyBins = append(emptyBins, j)
 		}
-		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], logNNS(nns)))
+		log.Trace(fmt.Sprintf("%x NNS: %s", addrs[i][:4], LogAddrs(nns)))
 		ppmap[common.Bytes2Hex(a)] = &PeerPot{nns, emptyBins}
 	}
 	return ppmap
@@ -730,7 +739,7 @@ func (k *Kademlia) knowNearestNeighbours(peers [][]byte) bool {
 	return true
 }
 
-func (k *Kademlia) gotNearestNeighbours(peers [][]byte) bool {
+func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (bool, int, [][]byte) {
 	pm := make(map[string]bool)
 
 	k.eachConn(nil, 255, func(p OverlayConn, po int, nn bool) bool {
@@ -741,22 +750,28 @@ func (k *Kademlia) gotNearestNeighbours(peers [][]byte) bool {
 		pm[pk] = true
 		return true
 	})
+	var gots int
+	var culprits [][]byte
 	for _, p := range peers {
 		pk := fmt.Sprintf("%x", p)
-		if !pm[pk] {
+		if pm[pk] {
+			gots++
+		} else {
 			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", k.BaseAddr()[:4], pk[:8]))
-			return false
+			culprits = append(culprits, p)
 		}
 	}
-	return true
+	return gots == len(peers), gots, culprits
 }
 
 // Health state of the Kademlia
 type Health struct {
-	KnowNN bool // whether node knows all its nearest neighbours
-	GotNN  bool // whether node is connected to all its nearest neighbours
-	Full   bool // whether node has a peer in each kademlia bin (where there is such a peer)
-	Hive   string
+	KnowNN     bool     // whether node knows all its nearest neighbours
+	GotNN      bool     // whether node is connected to all its nearest neighbours
+	CountNN    int      // amount of nearest neighbors connected to
+	CulpritsNN [][]byte // which known NNs are missing
+	Full       bool     // whether node has a peer in each kademlia bin (where there is such a peer)
+	Hive       string
 }
 
 // Healthy reports the health state of the kademlia connectivity
@@ -764,25 +779,9 @@ type Health struct {
 func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
-	gotnn := k.gotNearestNeighbours(pp.NNSet)
+	gotnn, countnn, culpritsnn := k.gotNearestNeighbours(pp.NNSet)
 	knownn := k.knowNearestNeighbours(pp.NNSet)
 	full := k.full(pp.EmptyBins)
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full, k.string()))
-	return &Health{knownn, gotnn, full, k.string()}
-}
-
-func logNNS(nns [][]byte) string {
-	var nnsa []string
-	for _, nn := range nns {
-		nnsa = append(nnsa, fmt.Sprintf("%08x", nn[:4]))
-	}
-	return strings.Join(nnsa, ", ")
-}
-
-func logEmptyBins(ebs []int) string {
-	var ebss []string
-	for _, eb := range ebs {
-		ebss = append(ebss, fmt.Sprintf("%d", eb))
-	}
-	return strings.Join(ebss, ", ")
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full))
+	return &Health{knownn, gotnn, countnn, culpritsnn, full, k.string()}
 }
