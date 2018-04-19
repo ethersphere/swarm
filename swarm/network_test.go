@@ -28,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -35,16 +36,21 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
 )
 
 var (
-	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
+	loglevel     = flag.Int("loglevel", 4, "verbosity of logs")
+	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
+	waitKademlia = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
 )
 
 func init() {
 	rand.Seed(time.Now().UnixNano())
+
+	flag.Parse()
 
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
@@ -54,8 +60,10 @@ func init() {
 // uploading files to every node and retreiving them.
 func TestSwarmNetwork(t *testing.T) {
 	for _, tc := range []struct {
-		name  string
-		steps []testSwarmNetworkStep
+		name     string
+		steps    []testSwarmNetworkStep
+		timeout  time.Duration
+		disabled bool
 	}{
 		{
 			name: "10_nodes",
@@ -64,73 +72,133 @@ func TestSwarmNetwork(t *testing.T) {
 					nodeCount: 10,
 				},
 			},
+			timeout: 45 * time.Second,
 		},
-		// {
-		// 	name: "100_nodes",
-		// 	steps: []testSwarmNetworkStep{
-		// 		{
-		// 			nodeCount: 100,
-		// 		},
-		// 	},
-		// },
-		// This test fails sometimes.
-		// {
-		// 	name: "inc_node_count",
-		// 	steps: []testSwarmNetworkStep{
-		// 		{
-		// 			nodeCount: 3,
-		// 		},
-		// 		{
-		// 			nodeCount: 5,
-		// 		},
-		// 		{
-		// 			nodeCount: 10,
-		// 		},
-		// 	},
-		// },
-		// {
-		// 	name: "inc_node_count",
-		// 	steps: []testSwarmNetworkStep{
-		// 		{
-		// 			nodeCount: 15,
-		// 		},
-		// 		{
-		// 			nodeCount: 30,
-		// 		},
-		// 		{
-		// 			nodeCount: 50,
-		// 		},
-		// 	},
-		// },
+		{
+			name: "100_nodes",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 100,
+				},
+			},
+			timeout:  3 * time.Minute,
+			disabled: !*longrunning,
+		},
+		{
+			name: "inc_node_count",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 2,
+				},
+				{
+					nodeCount: 5,
+				},
+				{
+					nodeCount: 10,
+				},
+			},
+			timeout:  90 * time.Second,
+			disabled: !*longrunning,
+		},
+		{
+			name: "dec_node_count",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 10,
+				},
+				{
+					nodeCount: 6,
+				},
+				{
+					nodeCount: 3,
+				},
+			},
+			timeout:  90 * time.Second,
+			disabled: !*longrunning,
+		},
+		{
+			name: "dec_inc_node_count",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 5,
+				},
+				{
+					nodeCount: 3,
+				},
+				{
+					nodeCount: 10,
+				},
+			},
+			timeout: 90 * time.Second,
+		},
+		{
+			name: "inc_dec_node_count",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 3,
+				},
+				{
+					nodeCount: 5,
+				},
+				{
+					nodeCount: 25,
+				},
+				{
+					nodeCount: 10,
+				},
+				{
+					nodeCount: 4,
+				},
+			},
+			timeout:  5 * time.Minute,
+			disabled: !*longrunning,
+		},
 	} {
+		if tc.disabled {
+			continue
+		}
 		t.Run(tc.name, func(t *testing.T) {
-			testSwarmNetwork(t, tc.steps...)
+			testSwarmNetwork(t, tc.timeout, tc.steps...)
 		})
 	}
 }
 
+// testSwarmNetworkStep is the configuration
+// for the state of the simulation network.
 type testSwarmNetworkStep struct {
+	// number of swarm nodes that must be in the Up state
 	nodeCount int
-	timeout   time.Duration
 }
 
+// file represents the file uploaded on a particular node.
 type file struct {
 	key    storage.Key
 	data   string
 	nodeID discover.NodeID
 }
 
+// check represents a reference to a file that is retrieved
+// from a particular node.
 type check struct {
 	key    string
 	nodeID discover.NodeID
 }
 
-func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
+// testSwarmNetwork is a helper function used for testing different
+// static and dynamic Swarm network simulations.
+func testSwarmNetwork(t *testing.T, timeout time.Duration, steps ...testSwarmNetworkStep) {
 	dir, err := ioutil.TempDir("", "swarm-network-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
+
+	ctx := context.Background()
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
 
 	swarms := make(map[discover.NodeID]*Swarm)
 	files := make([]file, 0)
@@ -180,7 +248,7 @@ func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
 		change := step.nodeCount - len(allNodeIDs(net))
 
 		if change > 0 {
-			_, err := addNodes(change, net, trigger)
+			_, err := addNodes(change, net)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -211,25 +279,16 @@ func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
 			})
 		}
 
-		// Currently, we need to wait before the syncing stars.
-		// If checks are started before, missing chunk errors are very frequent.
-		// This needs to be fixed.
-		//time.Sleep(20 * time.Second)
-
-		// nIDs := allNodeIDs(net)
-		// addrs := make([][]byte, len(nIDs))
-		// for i, id := range nIDs {
-		// 	addrs[i] = swarms[id].bzz.BaseAddr()
-		// }
-		// ppmap := network.NewPeerPotMap(2, addrs)
-
-		timeout := step.timeout
-		if timeout == 0 {
-			timeout = 5 * time.Minute
+		// Prepare PeerPot map for checking Kademlia health
+		var ppmap map[string]*network.PeerPot
+		nIDs := allNodeIDs(net)
+		addrs := make([][]byte, len(nIDs))
+		if *waitKademlia {
+			for i, id := range nIDs {
+				addrs[i] = swarms[id].bzz.BaseAddr()
+			}
+			ppmap = network.NewPeerPotMap(2, addrs)
 		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
 
 		var checkStatusM sync.Map
 		var nodeStatusM sync.Map
@@ -237,42 +296,40 @@ func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
 
 		result := sim.Run(ctx, &simulations.Step{
 			Action: func(ctx context.Context) error {
-				// ticker := time.NewTicker(200 * time.Millisecond)
-				// defer ticker.Stop()
+				if *waitKademlia {
+					// Wait for healthy Kademlia on every node before checking files
+					ticker := time.NewTicker(200 * time.Millisecond)
+					defer ticker.Stop()
 
-				// for range ticker.C {
-				// 	healthy := true
-				// 	log.Debug("kademlia health check", "node count", len(nIDs), "addr count", len(addrs))
-				// 	for i, id := range nIDs {
-				// 		swarm := swarms[id]
-				// 		//PeerPot for this node
-				// 		addr := common.Bytes2Hex(swarm.bzz.BaseAddr())
-				// 		pp := ppmap[addr]
-				// 		//call Healthy RPC
-				// 		h := swarm.bzz.Healthy(pp)
-				// 		//print info
-				// 		log.Debug(swarm.bzz.String())
-				// 		log.Debug("kademlia", "empty bins", pp.EmptyBins, "gotNN", h.GotNN, "knowNN", h.KnowNN, "full", h.Full)
-				// 		log.Debug("kademlia", "health", h.GotNN && h.KnowNN && h.Full, "addr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()), "id", id, "i", i)
-				// 		log.Debug("kademlia", "ill condition", !h.GotNN || !h.Full, "addr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()), "id", id, "i", i)
-				// 		if !h.GotNN || !h.Full {
-				// 			healthy = false
-				// 			// fmt.Printf("ADDRESSES \"%x\",\n", addrs[i])
-				// 			// for j, a := range addrs {
-				// 			// 	if i == j {
-				// 			// 		continue
-				// 			// 	}
-				// 			// 	fmt.Printf("\"%x\",\n", a)
-				// 			// }
-				// 			break
-				// 		}
-				// 	}
-				// 	if healthy {
-				// 		break
-				// 	}
-				// }
+					for range ticker.C {
+						healthy := true
+						log.Debug("kademlia health check", "node count", len(nIDs), "addr count", len(addrs))
+						for i, id := range nIDs {
+							swarm := swarms[id]
+							//PeerPot for this node
+							addr := common.Bytes2Hex(swarm.bzz.BaseAddr())
+							pp := ppmap[addr]
+							//call Healthy RPC
+							h := swarm.bzz.Healthy(pp)
+							//print info
+							log.Debug(swarm.bzz.String())
+							log.Debug("kademlia", "empty bins", pp.EmptyBins, "gotNN", h.GotNN, "knowNN", h.KnowNN, "full", h.Full)
+							log.Debug("kademlia", "health", h.GotNN && h.KnowNN && h.Full, "addr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()), "id", id, "i", i)
+							log.Debug("kademlia", "ill condition", !h.GotNN || !h.Full, "addr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()), "id", id, "i", i)
+							if !h.GotNN || !h.Full {
+								healthy = false
+								break
+							}
+						}
+						if healthy {
+							break
+						}
+					}
+				}
 
 				go func() {
+					// File retrieval check is repeated until all uploaded files are retrieved from all nodes
+					// or until the timeout is reached.
 					for {
 						if retrieve(net, files, swarms, trigger, &checkStatusM, &nodeStatusM, &totalFoundCount) == 0 {
 							return
@@ -285,6 +342,7 @@ func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
 			Expect: &simulations.Expectation{
 				Nodes: allNodeIDs(net),
 				Check: func(ctx context.Context, id discover.NodeID) (bool, error) {
+					// The check is done by a goroutine in the action function.
 					return true, nil
 				},
 			},
@@ -296,6 +354,7 @@ func testSwarmNetwork(t *testing.T, steps ...testSwarmNetworkStep) {
 	}
 }
 
+// allNodeIDs is returning NodeID for every node that is Up.
 func allNodeIDs(net *simulations.Network) (nodes []discover.NodeID) {
 	for _, n := range net.GetNodes() {
 		if n.Up {
@@ -305,7 +364,8 @@ func allNodeIDs(net *simulations.Network) (nodes []discover.NodeID) {
 	return
 }
 
-func addNodes(count int, net *simulations.Network, trigger chan discover.NodeID) (ids []discover.NodeID, err error) {
+// addNodes adds a number of nodes to the network.
+func addNodes(count int, net *simulations.Network) (ids []discover.NodeID, err error) {
 	for i := 0; i < count; i++ {
 		nodeIDs := allNodeIDs(net)
 		l := len(nodeIDs)
@@ -341,8 +401,10 @@ func addNodes(count int, net *simulations.Network, trigger chan discover.NodeID)
 	return ids, nil
 }
 
+// removeNodes stops a random nodes in the network.
 func removeNodes(count int, net *simulations.Network) error {
 	for i := 0; i < count; i++ {
+		// allNodeIDs are returning only the Up nodes.
 		nodeIDs := allNodeIDs(net)
 		if len(nodeIDs) == 0 {
 			break
@@ -356,6 +418,8 @@ func removeNodes(count int, net *simulations.Network) error {
 	return nil
 }
 
+// uploadFile, uploads a short file to the swarm instance
+// using the api.Put method.
 func uploadFile(swarm *Swarm) (storage.Key, string, error) {
 	b := make([]byte, 8)
 	_, err := rand.Read(b)
@@ -375,6 +439,8 @@ func uploadFile(swarm *Swarm) (storage.Key, string, error) {
 	return k, data, nil
 }
 
+// retrieve is the function that is used for checking the availability of
+// uploaded files in testSwarmNetwork test helper function.
 func retrieve(
 	net *simulations.Network,
 	files []file,
@@ -473,7 +539,7 @@ func retrieve(
 		if err != nil {
 			errCount++
 		}
-		log.Error(err.Error())
+		log.Warn(err.Error())
 	}
 
 	log.Info("check stats", "total check count", totalCheckCount, "total files found", atomic.LoadUint64(totalFoundCount), "total errors", errCount)
