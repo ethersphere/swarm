@@ -123,6 +123,7 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	self.privateKey = prvKey
 	self.LocalStoreParams.Init(self.Path)
+	self.LocalStoreParams.BaseKey = common.FromHex(keyhex)
 }
 
 func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
