@@ -186,6 +186,11 @@ type check struct {
 
 // testSwarmNetwork is a helper function used for testing different
 // static and dynamic Swarm network simulations.
+// It is responsible for:
+//  - Setting up a Swarm network simulation, and updates the number of nodes within the network on every step according to steps.
+//  - Uploading a unique file to every node on every step.
+//  - May wait for Kademlia on every node to be healthy.
+//  - Checking if a file is retrievable from all nodes.
 func testSwarmNetwork(t *testing.T, timeout time.Duration, steps ...testSwarmNetworkStep) {
 	dir, err := ioutil.TempDir("", "swarm-network-test")
 	if err != nil {
