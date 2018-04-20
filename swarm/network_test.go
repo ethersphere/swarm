@@ -57,7 +57,7 @@ func init() {
 
 // TestSwarmNetwork runs a series of test simulations with
 // static and dynamic Swarm nodes in network simulation, by
-// uploading files to every node and retreiving them.
+// uploading files to every node and retrieving them.
 func TestSwarmNetwork(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
