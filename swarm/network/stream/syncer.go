@@ -210,6 +210,9 @@ func RegisterSwarmSyncerClient(streamer *Registry, db *storage.DBAPI) {
 func (s *SwarmSyncerClient) NeedData(key []byte) (wait func()) {
 	chunk, _ := s.db.GetOrCreateRequest(key)
 	// TODO: we may want to request from this peer anyway even if the request exists
+
+	// ignoreExistingRequest is temporary commented out until its functionality is verified.
+	// For now, this optimization can be disabled.
 	if chunk.ReqC == nil { //|| (s.ignoreExistingRequest && !created) {
 		return nil
 	}
