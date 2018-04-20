@@ -752,7 +752,7 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	gotnn, countnn, culpritsnn := k.gotNearestNeighbours(pp.NNSet)
 	knownn := k.knowNearestNeighbours(pp.NNSet)
 	full := k.full(pp.EmptyBins)
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full))
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n", k.BaseAddr()[:4], knownn, gotnn, full))
 	return &Health{knownn, gotnn, countnn, culpritsnn, full, k.string()}
 }
 
