@@ -516,13 +516,11 @@ func (s *LDBStore) Put(chunk *Chunk) {
 		go func() {
 			<-batchC
 			chunk.markAsStored()
-			log.Info("ldbstore.put success (go)", "key", chunk.Key)
 		}()
 	} else {
 		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Key)
 		decodeIndex(idata, &index)
 		chunk.markAsStored()
-		log.Info("ldbstore.put success", "key", chunk.Key)
 	}
 	index.Access = s.accessCnt
 	s.accessCnt++
