@@ -81,7 +81,6 @@ func NewKadParams() *KadParams {
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
 	lock       sync.RWMutex
-	entryLock  sync.Mutex
 	*KadParams          // Kademlia configuration parameters
 	base       []byte   // immutable baseaddress of the table
 	addrs      *pot.Pot // pots container for known peer addresses
@@ -475,8 +474,6 @@ func (k *Kademlia) neighbourhoodDepth() (depth int) {
 
 // callable when called with val,
 func (k *Kademlia) callable(val pot.Val) OverlayAddr {
-	k.entryLock.Lock()
-	defer k.entryLock.Unlock()
 	e := val.(*entry)
 	// not callable if peer is live or exceeded maxRetries
 	if e.conn() != nil || e.retries > k.MaxRetries {
@@ -563,10 +560,8 @@ func (k *Kademlia) string() string {
 		row := []string{fmt.Sprintf("%2d", size)}
 		// we are displaying live peers too
 		f(func(val pot.Val, vpo int) bool {
-			k.entryLock.Lock()
 			e := val.(*entry)
 			row = append(row, Label(*e))
-			k.entryLock.Unlock()
 			rowlen++
 			return rowlen < 4
 		})
@@ -759,4 +754,12 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	full := k.full(pp.EmptyBins)
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n%v", k.BaseAddr()[:4], knownn, gotnn, full))
 	return &Health{knownn, gotnn, countnn, culpritsnn, full, k.string()}
+}
+
+func logEmptyBins(ebs []int) string {
+	var ebss []string
+	for _, eb := range ebs {
+		ebss = append(ebss, fmt.Sprintf("%d", eb))
+	}
+	return strings.Join(ebss, ", ")
 }

@@ -89,12 +89,9 @@ func NotifyPeer(p OverlayAddr, k Overlay) {
 // NotifyPeer notifies the remote node about
 func (d *discPeer) NotifyPeer(a OverlayAddr, po uint8) error {
 	// immediately return
-	d.mtx.Lock()
 	if (po < d.depth && pot.ProxCmp(d.localAddr, d, a) != 1) || d.seen(a) {
-		d.mtx.Unlock()
 		return nil
 	}
-	d.mtx.Unlock()
 	// log.Trace(fmt.Sprintf("%08x peer %08x notified of peer %08x", d.localAddr.Over()[:4], d.Address()[:4], a.Address()[:4]))
 	resp := &peersMsg{
 		Peers: []*BzzAddr{ToAddr(a)}, // perhaps the PeerAddr interface is unnecessary generalization
@@ -147,9 +144,7 @@ func (d *discPeer) handlePeersMsg(msg *peersMsg) error {
 	}
 
 	for _, a := range msg.Peers {
-		d.mtx.Lock()
 		d.seen(a)
-		d.mtx.Unlock()
 		NotifyPeer(a, d.overlay)
 	}
 	return d.overlay.Register(toOverlayAddrs(msg.Peers...))
@@ -166,8 +161,6 @@ func (msg subPeersMsg) String() string {
 }
 
 func (d *discPeer) handleSubPeersMsg(msg *subPeersMsg) error {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
 	if !d.sentPeers {
 		d.depth = msg.Depth
 		var peers []*BzzAddr
@@ -192,6 +185,8 @@ func (d *discPeer) handleSubPeersMsg(msg *subPeersMsg) error {
 // seen takes an Overlay peer and checks if it was sent to a peer already
 // if not, marks the peer as sent
 func (d *discPeer) seen(p OverlayPeer) bool {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
 	k := string(p.Address())
 	if d.peers[k] {
 		return true

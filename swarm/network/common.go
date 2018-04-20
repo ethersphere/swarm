@@ -12,11 +12,3 @@ func LogAddrs(nns [][]byte) string {
 	}
 	return strings.Join(nnsa, ", ")
 }
-
-func logEmptyBins(ebs []int) string {
-	var ebss []string
-	for _, eb := range ebs {
-		ebss = append(ebss, fmt.Sprintf("%d", eb))
-	}
-	return strings.Join(ebss, ", ")
-}
