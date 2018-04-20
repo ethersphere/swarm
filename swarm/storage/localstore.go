@@ -88,6 +88,18 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 	return localStore, nil
 }
 
+// Put is responsible for doing validation and storage of the chunk
+// by using configured ChunkValidators, MemStore and LDBStore.
+// If the chunk is not valid, its GetErrored function will
+// return ErrChunkInvalid.
+// This method will check if the chunk is already in the MemStore
+// and it will return it if it is. If there is an error from
+// the MemStore.Get, it will be returned by calling GetErrored
+// on the chunk.
+// This method is responsible for closing Chunk.ReqC channel
+// when the chunk is stored in memstore.
+// After the LDBStore.Put, it is ensured that the MemStore
+// contains the chunk with the same data, but nil ReqC channel.
 func (self *LocalStore) Put(chunk *Chunk) {
 	valid := true
 	for _, v := range self.Validators {
