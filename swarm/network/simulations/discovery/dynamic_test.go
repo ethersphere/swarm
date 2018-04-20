@@ -74,7 +74,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	adapter := paramstring[3]
 
 	if nodeCount < bootNodeCount {
-		t.Fatal("nodeCount must be bigger than bootnodeCount (%d < %d)", nodeCount, bootNodeCount)
+		t.Fatalf("nodeCount must be bigger than bootnodeCount (%d < %d)", nodeCount, bootNodeCount)
 	}
 
 	bootNodes = make([]*discover.NodeID, bootNodeCount)
@@ -142,9 +142,6 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			for {
 				select {
 				case ev := <-events:
-					if ev == nil {
-						panic("got nil event")
-					}
 					if ev.Type == simulations.EventTypeNode {
 						if ev.Node.Up {
 							log.Info("got node up event", "event", ev, "node", ev.Node.Config.ID)
@@ -214,9 +211,6 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			for {
 				select {
 				case ev := <-events:
-					if ev == nil {
-						panic("got nil event")
-					}
 					if ev.Type == simulations.EventTypeConn {
 						if ev.Conn.Up {
 							log.Info(fmt.Sprintf("got conn up event %v", ev))
@@ -347,9 +341,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 				for {
 					select {
 					case ev := <-events:
-						if ev == nil {
-							panic("got nil event")
-						} else if ev.Type == simulations.EventTypeNode {
+						if ev.Type == simulations.EventTypeNode {
 							if ev.Node.Config.ID == nid {
 								if ev.Node.Up && stopped && !upped {
 									log.Info(fmt.Sprintf("got node up event %v", ev))

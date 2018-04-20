@@ -50,9 +50,7 @@ func TestNodeUpAndConn(t *testing.T) {
 			for {
 				select {
 				case ev := <-events:
-					if ev == nil {
-						panic("got nil event")
-					} else if ev.Type == EventTypeNode {
+					if ev.Type == EventTypeNode {
 						if ev.Node.Up {
 							log.Info("got node up event", "event", ev, "node", ev.Node.Config.ID)
 							trigger <- ev.Node.Config.ID
@@ -109,9 +107,7 @@ func TestNodeUpAndConn(t *testing.T) {
 			for {
 				select {
 				case ev := <-events:
-					if ev == nil {
-						panic("got nil event")
-					} else if ev.Type == EventTypeConn {
+					if ev.Type == EventTypeConn {
 						if ev.Conn.Up {
 							log.Info(fmt.Sprintf("got conn up event %v", ev))
 							trigger <- ev.Conn.One
