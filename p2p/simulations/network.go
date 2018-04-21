@@ -165,7 +165,9 @@ func (self *Network) Start(id discover.NodeID) error {
 // startWithSnapshots starts the node with the given ID using the give
 // snapshots
 func (self *Network) startWithSnapshots(id discover.NodeID, snapshots map[string][]byte) error {
-	node := self.GetNode(id)
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	node := self.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
 	}
@@ -243,7 +245,9 @@ func (self *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEv
 
 // Stop stops the node with the given ID
 func (self *Network) Stop(id discover.NodeID) error {
-	node := self.GetNode(id)
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	node := self.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
 	}
@@ -393,6 +397,18 @@ func (self *Network) GetNodes() (nodes []*Node) {
 	defer self.lock.Unlock()
 
 	nodes = append(nodes, self.Nodes...)
+	return nodes
+}
+
+// GetNodes returns the existing nodes
+func (self *Network) GetUpNodes() (nodes []*Node) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	for _, n := range self.Nodes {
+		if n.Up {
+			nodes = append(nodes, n)
+		}
+	}
 	return nodes
 }
 

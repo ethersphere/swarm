@@ -15,11 +15,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
@@ -31,12 +29,9 @@ const (
 )
 
 var (
-	mu              sync.Mutex
 	bootNodes       []*discover.NodeID
-	events          chan *p2p.PeerEvent
 	ids             []discover.NodeID
 	addrIdx         map[discover.NodeID][]byte
-	rpcs            map[discover.NodeID]*rpc.Client
 	dynamicServices adapters.Services
 )
 
@@ -78,10 +73,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	}
 
 	bootNodes = make([]*discover.NodeID, bootNodeCount)
-	events = make(chan *p2p.PeerEvent)
 	ids = make([]discover.NodeID, nodeCount)
 	addrIdx = make(map[discover.NodeID][]byte)
-	rpcs = make(map[discover.NodeID]*rpc.Client)
 
 	healthCheckDelay := defaultHealthCheckDelay
 	healthCheckRetries := defaultHealthCheckRetries
@@ -129,7 +122,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	// sim step 1
 	// start nodes, trigger them on node up event from sim
 	trigger := make(chan discover.NodeID)
-	events := make(chan *simulations.Event)
+	events := make(chan *simulations.Event, 100)
 	sub := net.Events().Subscribe(events)
 	defer sub.Unsubscribe()
 
@@ -162,12 +155,6 @@ func dynamicDiscoverySimulation(t *testing.T) {
 					t.Fatalf("error starting node: %s", err)
 				}
 				log.Info("network start returned", "node", n)
-
-				// rpc client is only available after node start
-				rpcs[n], err = net.GetNode(n).Client()
-				if err != nil {
-					t.Fatalf("error getting node rpc: %s", err)
-				}
 			}
 		}()
 		return nil
@@ -184,7 +171,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		return true, nil
 	}
 
-	timeout := 10 * time.Second
+	timeout := 100 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -205,9 +192,9 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	// connect each of the other nodes to a random bootnode
 	// triggers on connection event from sim
 	close(quitC)
-	quitC = make(chan struct{})
+	quitCC := make(chan struct{})
 	action = func(ctx context.Context) error {
-		go func(quitC chan struct{}) {
+		go func() {
 			for {
 				select {
 				case ev := <-events:
@@ -219,11 +206,11 @@ func dynamicDiscoverySimulation(t *testing.T) {
 					}
 				case <-ctx.Done():
 					return
-				case <-quitC:
+				case <-quitCC:
 					return
 				}
 			}
-		}(quitC)
+		}()
 		go func() {
 			for i := range ids {
 				var j int
@@ -255,7 +242,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		return true, nil
 	}
 
-	timeout = 10 * time.Second
+	timeout = 100 * time.Second
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -270,11 +257,13 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		t.Fatal(result.Error)
 	}
 	sub.Unsubscribe()
+	// for range events {
+	// }
 	// sim step 3
 	// now all nodes are up, all nodes are connected to network
 	// so we check health of all nodes
-	close(quitC)
-	quitC = make(chan struct{})
+	close(quitCC)
+	quitCCC := make(chan struct{})
 	action = func(ctx context.Context) error {
 		for _, n := range net.GetNodes() {
 			go func(n *simulations.Node) {
@@ -285,7 +274,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 						trigger <- n.ID()
 					case <-ctx.Done():
 						return
-					case <-quitC:
+					case <-quitCCC:
 						return
 					}
 				}
@@ -304,7 +293,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		return checkHealth(net, id)
 	}
 
-	timeout = 5 * time.Second
+	timeout = 100 * time.Second
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -323,14 +312,16 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	// bring the nodes up and down
 	// if any health checks fail, the step will fail
 	// check will be triggered when the first node up event is received
-	close(quitC)
-	quitC = make(chan struct{})
+	close(quitCCC)
+	quitCCCC := make(chan struct{})
 	victimSliceOffset := rand.Intn(len(ids) - int(numUpDowns) - 1)
 	victimNodes := ids[victimSliceOffset : victimSliceOffset+int(numUpDowns)]
 
-	events = make(chan *simulations.Event)
+	// events = make(chan *simulations.Event)
 	sub = net.Events().Subscribe(events)
 	defer sub.Unsubscribe()
+	wg := sync.WaitGroup{}
+	wg.Add(len(victimNodes))
 
 	action = func(ctx context.Context) error {
 		for _, nid := range victimNodes {
@@ -345,13 +336,6 @@ func dynamicDiscoverySimulation(t *testing.T) {
 							if ev.Node.Config.ID == nid {
 								if ev.Node.Up && stopped && !upped {
 									log.Info(fmt.Sprintf("got node up event %v", ev))
-									// rpc client is changed upon new start, we need to get it anew
-									mu.Lock()
-									rpcs[nid], err = net.GetNode(nid).Client()
-									mu.Unlock()
-									if err != nil {
-										t.Fatal(err)
-									}
 									upped = true
 									trigger <- nid
 
@@ -367,7 +351,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 						}
 					case <-ctx.Done():
 						return
-					case <-quitC:
+					case <-quitCCCC:
 						return
 					}
 				}
@@ -384,21 +368,21 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-quitC:
+			case <-quitCCCC:
 				return nil
 			case <-stopC:
 			}
 
 			// check health of remaining nodes
 		OUTER:
-			for _, n := range net.GetNodes() {
-				if !n.Up {
-					if n.ID() != nid {
-
-						log.Warn("a remaining node is down", "stoppednode", nid, "checknode", n.ID())
-					}
-					continue
-				}
+			for _, n := range net.GetUpNodes() {
+				// if !n.Up {
+				// 	if n.ID() != nid {
+				//
+				// 		log.Warn("a remaining node is down", "stoppednode", nid, "checknode", n.ID())
+				// 	}
+				// 	continue
+				// }
 				tick := time.NewTicker(healthCheckDelay)
 				for i := 0; ; i++ {
 					select {
@@ -485,10 +469,8 @@ func checkHealth(net *simulations.Network, id discover.NodeID) (bool, error) {
 	healthy := &network.Health{}
 
 	var upAddrs [][]byte
-	for _, n := range net.GetNodes() {
-		if n.Up {
-			upAddrs = append(upAddrs, addrIdx[n.ID()])
-		}
+	for _, n := range net.GetUpNodes() {
+		upAddrs = append(upAddrs, addrIdx[n.ID()])
 	}
 	log.Debug("generating new peerpotmap", "node", id, "addr", fmt.Sprintf("%x", addrIdx[id]))
 	hotPot := network.NewPeerPotMap(testMinProxBinSize, upAddrs)
@@ -498,7 +480,11 @@ func checkHealth(net *simulations.Network, id discover.NodeID) (bool, error) {
 		log.Debug("missing pot", "node", id, "addr", fmt.Sprintf("%x", addrHex[:8]))
 		return false, nil
 	}
-	if err := rpcs[id].Call(&healthy, "hive_healthy", hotPot[addrHex]); err != nil {
+	client, err := net.GetNode(id).Client()
+	if err != nil {
+		return false, fmt.Errorf("error getting node client for node %v: %v", id, err)
+	}
+	if err := client.Call(&healthy, "hive_healthy", hotPot[addrHex]); err != nil {
 		return false, fmt.Errorf("error retrieving node health by rpc for node %v: %v", id, err)
 	}
 	if !(healthy.KnowNN && healthy.GotNN && healthy.Full) {
