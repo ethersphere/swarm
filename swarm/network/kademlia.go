@@ -213,8 +213,8 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 // lowest bincount below depth
 // naturally if there is an empty row it returns a peer for that
 func (k *Kademlia) SuggestPeer() (a OverlayAddr, o int, want bool) {
-	k.lock.RLock()
-	defer k.lock.RUnlock()
+	k.lock.Lock()
+	defer k.lock.Unlock()
 	minsize := k.MinBinSize
 	depth := k.neighbourhoodDepth()
 	// if there is a callable neighbour within the current proxBin, connect
