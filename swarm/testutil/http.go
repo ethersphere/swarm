@@ -20,15 +20,19 @@ import (
 	"context"
 	"io/ioutil"
 	"math/big"
+	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
+
+type TestServer interface {
+	ServeHTTP(http.ResponseWriter, *http.Request)
+}
 
 type fakeBackend struct {
 	blocknumber int64
@@ -42,7 +46,7 @@ func (f *fakeBackend) HeaderByNumber(context context.Context, _ string, bigblock
 	}, nil
 }
 
-func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *TestSwarmServer {
 	dir, err := ioutil.TempDir("", "swarm-storage-test")
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +77,7 @@ func NewTestSwarmServer(t *testing.T) *TestSwarmServer {
 	}
 
 	a := api.NewApi(dpa, nil, rh)
-	srv := httptest.NewServer(httpapi.NewServer(a))
+	srv := httptest.NewServer(serverFunc(a))
 	return &TestSwarmServer{
 		Server: srv,
 		Dpa:    dpa,

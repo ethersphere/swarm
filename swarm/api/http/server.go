@@ -364,20 +364,15 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
-func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
-	log.Debug("handle.post.resource", "ruid", r.ruid)
-
-	var outdata []byte
-	var isRaw bool
-
-	// possible combinations:
-	// /			add multihash update to existing hash
-	// /raw 		add raw update to existing hash
-	// /#			create new resource with first update as mulitihash
-	// /raw/#		create new resource with first update raw
-	fields := strings.Split(r.uri.Path, "/")
+// possible combinations:
+// /			add multihash update to existing hash
+// /raw 		add raw update to existing hash
+// /#			create new resource with first update as mulitihash
+// /raw/#		create new resource with first update raw
+func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
+	fields := strings.Split(path, "/")
 	freqUrlIdx := -1
-	if len(fields) > 0 {
+	if fields[0] != "" {
 		freqUrlIdx++
 		if fields[0] == "raw" {
 			if len(fields) > 1 {
@@ -387,15 +382,25 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			}
 			isRaw = true
 		}
-	}
-
-	if freqUrlIdx > -1 {
-
-		frequency, err := strconv.ParseUint(fields[freqUrlIdx], 10, 64)
-		if err != nil {
-			Respond(w, r, fmt.Sprintf("cannot parse frequency parameter: %v", err), http.StatusBadRequest)
-			return
+		if freqUrlIdx > -1 {
+			frequency, err = strconv.ParseUint(fields[freqUrlIdx], 10, 64)
+			if err != nil {
+				return false, 0, err
+			}
 		}
+	}
+	return isRaw, frequency, nil
+}
+
+func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
+	log.Debug("handle.post.resource", "ruid", r.ruid)
+
+	var outdata []byte
+	isRaw, frequency, err := resourcePostMode(r.uri.Path)
+	if err != nil {
+		Respond(w, r, err.Error(), http.StatusBadRequest)
+	}
+	if frequency > 0 {
 
 		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
 		if err != nil {

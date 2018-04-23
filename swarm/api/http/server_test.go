@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package http_test
+package http
 
 import (
 	"bytes"
@@ -45,11 +45,49 @@ func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
-// manifest with truncated members
-type resourceResponse struct {
-	Manifest storage.Key `json:"manifest"`
-	Resource string      `json:"resource"`
-	Update   storage.Key `json:"update"`
+func TestResourcePostMode(t *testing.T) {
+	path := ""
+	errstr := "resourcePostMode for '%s' should be raw %v frequency %d, was raw %v, frequency %d"
+	r, f, err := resourcePostMode(path)
+	if err != nil {
+		t.Fatal(err)
+	} else if r || f != 0 {
+		t.Fatalf(errstr, path, false, 0, r, f)
+	}
+
+	path = "raw"
+	r, f, err = resourcePostMode(path)
+	if err != nil {
+		t.Fatal(err)
+	} else if !r || f != 0 {
+		t.Fatalf(errstr, path, true, 0, r, f)
+	}
+
+	path = "13"
+	r, f, err = resourcePostMode(path)
+	if err != nil {
+		t.Fatal(err)
+	} else if r || f == 0 {
+		t.Fatalf(errstr, path, false, 13, r, f)
+	}
+
+	path = "raw/13"
+	r, f, err = resourcePostMode(path)
+	if err != nil {
+		t.Fatal(err)
+	} else if !r || f == 0 {
+		t.Fatalf(errstr, path, true, 13, r, f)
+	}
+
+	path = "foo/13"
+	r, f, err = resourcePostMode(path)
+	if err == nil {
+		t.Fatal("resourcePostMode for 'foo/13' should fail, returned error nil")
+	}
+}
+
+func serverFunc(api *api.Api) testutil.TestServer {
+	return NewServer(api)
 }
 
 // test the transparent resolving of multihash resource types with bzz:// scheme
@@ -58,7 +96,7 @@ type resourceResponse struct {
 // retrieving the update with the multihash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
 func TestBzzResourceMultihash(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	// add the data our multihash aliased manifest will point to
@@ -152,7 +190,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 // Test resource updates using the raw methods
 func TestBzzResourceRaw(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	// our mutable resource "name"
@@ -350,7 +388,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	key := [3]storage.Key{}
 
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	for i, mf := range testmanifest {
@@ -571,7 +609,7 @@ func TestBzzRootRedirectEncrypted(t *testing.T) {
 }
 
 func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	// create a manifest with some data at the root path
