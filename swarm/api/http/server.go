@@ -370,6 +370,11 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	var outdata []byte
 	var isRaw bool
 
+	// possible combinations:
+	// /			add multihash update to existing hash
+	// /raw 		add raw update to existing hash
+	// /#			create new resource with first update as mulitihash
+	// /raw/#		create new resource with first update raw
 	fields := strings.Split(r.uri.Path, "/")
 	freqUrlIdx := -1
 	if len(fields) > 0 {
