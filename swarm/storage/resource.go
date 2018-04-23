@@ -700,7 +700,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	case <-timeout.C:
 		return nil, NewResourceError(ErrIO, "chunk store timeout")
 	}
-	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.SData)
+	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.SData, "multihash", multihash)
 
 	// update our resources map entry and return the new key
 	rsrc.lastPeriod = nextperiod

@@ -610,8 +610,21 @@ func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint
 	return storage.Key(h[:]), nil
 }
 
+func (self *Api) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
+	return self.resourceUpdate(ctx, name, data, true)
+}
 func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
-	key, err := self.resource.Update(ctx, name, data)
+	return self.resourceUpdate(ctx, name, data, false)
+}
+
+func (self *Api) resourceUpdate(ctx context.Context, name string, data []byte, multihash bool) (storage.Key, uint32, uint32, error) {
+	var key storage.Key
+	var err error
+	if multihash {
+		key, err = self.resource.UpdateMultihash(ctx, name, data)
+	} else {
+		key, err = self.resource.Update(ctx, name, data)
+	}
 	period, _ := self.resource.GetLastPeriod(name)
 	version, _ := self.resource.GetVersion(name)
 	return key, period, version, err
