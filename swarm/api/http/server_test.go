@@ -113,6 +113,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("err %s", resp.Status)
 	}
 	b, err := ioutil.ReadAll(resp.Body)
+
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,6 +122,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
 	// our mutable resource "name"
@@ -192,7 +194,6 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 // Test resource updates using the raw methods
 func TestBzzResourceRaw(t *testing.T) {
-	t.Skip("fixed in different branch to be merged after this PR")
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
