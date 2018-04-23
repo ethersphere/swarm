@@ -29,10 +29,12 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
@@ -50,23 +52,19 @@ type resourceResponse struct {
 	Update   storage.Key `json:"update"`
 }
 
+// test the transparent resolving of multihash resource types with bzz:// scheme
+//
+// first upload data, and store the multihash to the resulting manifest in a resource update
+// retrieving the update with the multihash should return the manifest pointing directly to the data
+// and raw retrieve of that hash should return the data
 func TestBzzResourceMultihash(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 
-	// our mutable resource "name"
-	keybytes := "foo.eth"
-	keybyteshash := ens.EnsNode(keybytes)
-
-	// data of update 1
-	databytes := make([]byte, 666)
-	_, err := rand.Read(databytes)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	url := fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, []byte(keybytes))
-	resp, err := http.Post(url, "application/octet-strea,", bytes.NewReader(databytes))
+	// add the data our multihash aliased manifest will point to
+	databytes := "bar"
+	url := fmt.Sprintf("%s/bzz:/", srv.URL)
+	resp, err := http.Post(url, "text/plain", bytes.NewReader([]byte(databytes)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,6 +76,31 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	s := common.FromHex(string(b))
+	mh, err := multihash.Encode(s, multihash.KECCAK_256)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
+
+	// our mutable resource "name"
+	keybytes := "foo.eth"
+	keybyteshash := ens.EnsNode(keybytes)
+
+	// create the multihash update
+	url = fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, keybytes)
+	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(mh))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
 	rsrcResp := &resourceResponse{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
@@ -86,9 +109,49 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if !bytes.Equal(rsrcResp.Update, keybyteshash.Bytes()) {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash.Hex(), rsrcResp.Update.Hex())
 	}
+
+	// get bzz manifest transparent resource resolve
+	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp.Manifest)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := &api.Manifest{}
+	err = json.Unmarshal(b, manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// get data behind manifest
+	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, manifest.Entries[0].Hash)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(b, []byte(databytes)) {
+		t.Fatalf("expected data return %x, got %x", databytes, b)
+	}
 }
 
-func TestBzzResource(t *testing.T) {
+// Test resource updates using the raw methods
+func TestBzzResourceRaw(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t)
 	defer srv.Close()
 

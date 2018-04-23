@@ -107,7 +107,7 @@ func TestResourceReverse(t *testing.T) {
 	chunk := newUpdateChunk(key, &sig, period, version, safeName, data, len(data))
 
 	// check that we can recover the owner account from the update chunk's signature
-	checksig, checkperiod, checkversion, checkname, checkdata, err := rh.parseUpdate(chunk.SData)
+	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.SData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -613,7 +613,7 @@ func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, _, _, _, data, err := rh.parseUpdate(chunk.SData)
+	_, _, _, _, data, _, err := rh.parseUpdate(chunk.SData)
 	if err != nil {
 		return nil, err
 	}

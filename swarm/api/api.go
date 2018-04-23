@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -70,6 +71,7 @@ var (
 	apiRmFileFail      = metrics.NewRegisteredCounter("api.removefile.fail", nil)
 	apiAppendFileCount = metrics.NewRegisteredCounter("api.appendfile.count", nil)
 	apiAppendFileFail  = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
+	apiGetInvalid      = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
 type Resolver interface {
@@ -330,14 +332,76 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		// is set as the hash of the manifest (see swarm/api/manifest.go:NewResourceManifest)
 		//
 		// to avoid taking a performance hit hacking a storage.LazySectionReader to wrap the resource key,
+		// if the resource update is of raw type:
 		// we return a typed error instead. Since for all other purposes this is an invalid manifest,
 		// any normal interfacing code will just see an error fail accordingly.
+		//
+		// if the resource update is of multihash type:
+		// we validate the multihash and retrieve the manifest behind it, and resume normal operations from there
 		if entry.ContentType == ResourceContentType {
 			log.Warn("resource type", "key", key, "hash", entry.Hash)
-			return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
+			_, rsrcData, err := self.resource.GetContent(entry.Hash)
+			if err != nil {
+				apiGetNotFound.Inc(1)
+				status = http.StatusNotFound
+				log.Warn(fmt.Sprintf("get resource content error: %v", err))
+				return reader, mimeType, status, err
+			}
+			if rsrc.Multihash {
+				var fail bool
+
+				// validate data as multihash
+				decodedMultihash, err := multihash.Decode(rsrcData)
+				if err != nil {
+					fail = true
+				} else if decodedMultihash.Code != multihash.SHA3_256 {
+					err = fmt.Errorf("wrong hash type '%s'", decodedMultihash.Name)
+				}
+				if fail {
+					apiGetInvalid.Inc(1)
+					status = http.StatusUnprocessableEntity
+					log.Warn(fmt.Sprintf("invalid resource multihash: %v", err))
+
+					return reader, mimeType, status, err
+				}
+				key = storage.Key(decodedMultihash.Digest)
+				log.Debug("resouce is multihash", "key", key)
+				// is it correct to increment again here?
+				apiGetCount.Inc(1)
+
+				// get the manifest the multihash digest points to
+				trie, err := loadManifest(self.dpa, key, nil)
+				if err != nil {
+					apiGetNotFound.Inc(1)
+					status = http.StatusNotFound
+					log.Warn(fmt.Sprintf("loadManifestTrie (resource multihash) error: %v", err))
+
+					return reader, mimeType, status, err
+				}
+
+				log.Trace("trie resolving resource multihash entry", "key", key, "path", path)
+				entry, _ := trie.getEntry(path)
+				log.Trace("trie resolving resource multihash entry", "key", key, "path", path)
+
+				if entry == nil {
+					status = http.StatusNotFound
+					apiGetNotFound.Inc(1)
+					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
+					log.Trace("manifest (resource multihash) entry not found", "key", key, "path", path)
+				}
+				log.Warn("entry", "entry", entry)
+
+			} else {
+				return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
+			}
 		}
+
 		key = common.Hex2Bytes(entry.Hash)
 		log.Debug("trie key", "key", key)
+
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			apiGetHttp300.Inc(1)
