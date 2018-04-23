@@ -368,12 +368,30 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 
 	var outdata []byte
-	if r.uri.Path != "" {
-		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
+	var isRaw bool
+
+	fields := strings.Split(r.uri.Path, "/")
+	freqUrlIdx := -1
+	if len(fields) > 0 {
+		freqUrlIdx++
+		if fields[0] == "raw" {
+			if len(fields) > 1 {
+				freqUrlIdx++
+			} else {
+				freqUrlIdx--
+			}
+			isRaw = true
+		}
+	}
+
+	if freqUrlIdx > -1 {
+
+		frequency, err := strconv.ParseUint(fields[freqUrlIdx], 10, 64)
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("cannot parse frequency parameter: %v", err), http.StatusBadRequest)
 			return
 		}
+
 		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
@@ -403,7 +421,11 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
+	if isRaw {
+		_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
+	} else {
+		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), r.uri.Addr, data)
+	}
 	if err != nil {
 		code, err2 := s.translateResourceError(w, r, "mutable resource update fail", err)
 

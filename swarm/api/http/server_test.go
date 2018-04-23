@@ -43,10 +43,49 @@ func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
+// manifest with truncated members
 type resourceResponse struct {
 	Manifest storage.Key `json:"manifest"`
 	Resource string      `json:"resource"`
 	Update   storage.Key `json:"update"`
+}
+
+func TestBzzResourceMultihash(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t)
+	defer srv.Close()
+
+	// our mutable resource "name"
+	keybytes := "foo.eth"
+	keybyteshash := ens.EnsNode(keybytes)
+
+	// data of update 1
+	databytes := make([]byte, 666)
+	_, err := rand.Read(databytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	url := fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, []byte(keybytes))
+	resp, err := http.Post(url, "application/octet-strea,", bytes.NewReader(databytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsrcResp := &resourceResponse{}
+	err = json.Unmarshal(b, rsrcResp)
+	if err != nil {
+		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
+	}
+	if !bytes.Equal(rsrcResp.Update, keybyteshash.Bytes()) {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash.Hex(), rsrcResp.Update.Hex())
+	}
 }
 
 func TestBzzResource(t *testing.T) {
@@ -54,7 +93,7 @@ func TestBzzResource(t *testing.T) {
 	defer srv.Close()
 
 	// our mutable resource "name"
-	keybytes := "foo"
+	keybytes := "foo.eth"
 	keybyteshash := ens.EnsNode(keybytes)
 
 	// data of update 1
@@ -65,7 +104,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// creates resource and sets update 1
-	url := fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, []byte(keybytes))
+	url := fmt.Sprintf("%s/bzz-resource:/%s/raw/13", srv.URL, []byte(keybytes))
 	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +194,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// update 2
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
+	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, keybytes)
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
