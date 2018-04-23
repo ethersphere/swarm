@@ -369,8 +369,6 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 				}
 				key = storage.Key(decodedMultihash.Digest)
 				log.Debug("resouce is multihash", "key", key)
-				// is it correct to increment again here?
-				apiGetCount.Inc(1)
 
 				// get the manifest the multihash digest points to
 				trie, err := loadManifest(self.dpa, key, nil)
@@ -378,21 +376,20 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
 					log.Warn(fmt.Sprintf("loadManifestTrie (resource multihash) error: %v", err))
-
 					return reader, mimeType, status, err
 				}
 
-				log.Trace("trie resolving resource multihash entry", "key", key, "path", path)
+				log.Trace("trie getting resource multihash entry", "key", key, "path", path)
 				entry, _ := trie.getEntry(path)
-				log.Trace("trie resolving resource multihash entry", "key", key, "path", path)
+				log.Trace("trie got resource multihash entry", "key", key, "path", path)
 
 				if entry == nil {
 					status = http.StatusNotFound
 					apiGetNotFound.Inc(1)
 					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
 					log.Trace("manifest (resource multihash) entry not found", "key", key, "path", path)
+					return reader, mimeType, status, err
 				}
-				log.Warn("entry", "entry", entry)
 
 			} else {
 				return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
