@@ -45,7 +45,7 @@ var (
 // after starting, it performs new health checks after they have connected
 // to one of their previous peers
 func TestDynamicDiscovery(t *testing.T) {
-	t.Run("32/4/sim", dynamicDiscoverySimulation)
+	t.Run("32/16/sim", dynamicDiscoverySimulation)
 }
 
 func dynamicDiscoverySimulation(t *testing.T) {
@@ -375,10 +375,6 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			// check health of remaining nodes
 		OUTER:
 			for _, n := range net.GetUpNodes() {
-				if n.ID() != nid {
-					log.Warn("a remaining node is down", "stoppednode", nid, "checknode", n.ID())
-				}
-				continue
 				tick := time.NewTicker(healthCheckDelay)
 				for i := 0; ; i++ {
 					select {
