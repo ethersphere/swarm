@@ -400,7 +400,7 @@ func (self *Network) GetNodes() (nodes []*Node) {
 	return nodes
 }
 
-// GetNodes returns the existing nodes
+// GetNodes returns the existing nodes that are up
 func (self *Network) GetUpNodes() (nodes []*Node) {
 	self.lock.Lock()
 	defer self.lock.Unlock()

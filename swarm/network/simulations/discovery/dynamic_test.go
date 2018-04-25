@@ -122,12 +122,13 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	// sim step 1
 	// start nodes, trigger them on node up event from sim
 	trigger := make(chan discover.NodeID)
-	events := make(chan *simulations.Event, 100)
+	events := make(chan *simulations.Event)
 	sub := net.Events().Subscribe(events)
 	defer sub.Unsubscribe()
 
 	// quitC stops the event listener loops
 	// inside the step action method after step is complete
+	log.Info("starting step 1")
 	quitC := make(chan struct{})
 
 	action := func(ctx context.Context) error {
@@ -171,7 +172,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		return true, nil
 	}
 
-	timeout := 100 * time.Second
+	timeout := 10 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result := simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -192,7 +193,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	// connect each of the other nodes to a random bootnode
 	// triggers on connection event from sim
 	close(quitC)
-	quitCC := make(chan struct{})
+	log.Info("starting step 2")
+	quitC = make(chan struct{})
 	action = func(ctx context.Context) error {
 		go func() {
 			for {
@@ -206,7 +208,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 					}
 				case <-ctx.Done():
 					return
-				case <-quitCC:
+				case <-quitC:
 					return
 				}
 			}
@@ -242,7 +244,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		return true, nil
 	}
 
-	timeout = 100 * time.Second
+	timeout = 10 * time.Second
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -256,25 +258,24 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-	sub.Unsubscribe()
-	// for range events {
-	// }
 	// sim step 3
 	// now all nodes are up, all nodes are connected to network
 	// so we check health of all nodes
-	close(quitCC)
-	quitCCC := make(chan struct{})
+	close(quitC)
+	log.Info("starting step 3")
+	quitC = make(chan struct{})
 	action = func(ctx context.Context) error {
 		for _, n := range net.GetNodes() {
 			go func(n *simulations.Node) {
 				tick := time.NewTicker(healthCheckDelay)
 				for {
 					select {
+					case <-events:
 					case <-tick.C:
 						trigger <- n.ID()
 					case <-ctx.Done():
 						return
-					case <-quitCCC:
+					case <-quitC:
 						return
 					}
 				}
@@ -293,7 +294,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		return checkHealth(net, id)
 	}
 
-	timeout = 100 * time.Second
+	timeout = 10 * time.Second
 	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result = simulations.NewSimulation(net).Run(ctx, &simulations.Step{
@@ -308,18 +309,16 @@ func dynamicDiscoverySimulation(t *testing.T) {
 		t.Fatal(result.Error)
 	}
 
+	log.Info("starting step 4")
 	// sim step 4
 	// bring the nodes up and down
 	// if any health checks fail, the step will fail
 	// check will be triggered when the first node up event is received
-	close(quitCCC)
-	quitCCCC := make(chan struct{})
+	close(quitC)
+	quitC = make(chan struct{})
 	victimSliceOffset := rand.Intn(len(ids) - int(numUpDowns) - 1)
 	victimNodes := ids[victimSliceOffset : victimSliceOffset+int(numUpDowns)]
 
-	// events = make(chan *simulations.Event)
-	sub = net.Events().Subscribe(events)
-	defer sub.Unsubscribe()
 	wg := sync.WaitGroup{}
 	wg.Add(len(victimNodes))
 
@@ -340,8 +339,8 @@ func dynamicDiscoverySimulation(t *testing.T) {
 									trigger <- nid
 
 								} else {
-									log.Info(fmt.Sprintf("got node down event %v", ev))
 									if !stopped {
+										log.Info(fmt.Sprintf("got node down event %v", ev))
 
 										stopped = true
 										close(stopC)
@@ -351,7 +350,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 						}
 					case <-ctx.Done():
 						return
-					case <-quitCCCC:
+					case <-quitC:
 						return
 					}
 				}
@@ -368,7 +367,7 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-quitCCCC:
+			case <-quitC:
 				return nil
 			case <-stopC:
 			}
@@ -376,13 +375,10 @@ func dynamicDiscoverySimulation(t *testing.T) {
 			// check health of remaining nodes
 		OUTER:
 			for _, n := range net.GetUpNodes() {
-				// if !n.Up {
-				// 	if n.ID() != nid {
-				//
-				// 		log.Warn("a remaining node is down", "stoppednode", nid, "checknode", n.ID())
-				// 	}
-				// 	continue
-				// }
+				if n.ID() != nid {
+					log.Warn("a remaining node is down", "stoppednode", nid, "checknode", n.ID())
+				}
+				continue
 				tick := time.NewTicker(healthCheckDelay)
 				for i := 0; ; i++ {
 					select {
