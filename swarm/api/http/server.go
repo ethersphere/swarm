@@ -394,9 +394,9 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	isRaw, frequency, err := resourcePostMode(r.uri.Path)
 	if err != nil {
 		Respond(w, r, err.Error(), http.StatusBadRequest)
+		return
 	}
 	if frequency > 0 {
-
 		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
@@ -417,6 +417,12 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		outdata, err = json.Marshal(rsrcResponse)
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		_, _, err := s.api.ResourceLookup(r.Context(), r.uri.Addr, 0, 0, &storage.ResourceLookupParams{})
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusNotFound)
 			return
 		}
 	}

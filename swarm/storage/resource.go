@@ -30,6 +30,25 @@ const (
 	resourceHash        = SHA3Hash
 )
 
+type blockEstimator struct {
+	Start   time.Time
+	Average time.Duration
+}
+
+func NewBlockEstimator() *blockEstimator {
+	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z")
+	return &blockEstimator{
+		Start:   ropstenStart,
+		Average: time.Second * 10,
+	}
+}
+
+func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
+	return &types.Header{
+		Number: big.NewInt(int64(time.Now().Sub(b.Start).Seconds() / b.Average.Seconds())),
+	}, nil
+}
+
 type ResourceError struct {
 	code int
 	err  string
@@ -51,7 +70,7 @@ func NewResourceError(code int, s string) error {
 		err: s,
 	}
 	switch code {
-	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced, ErrPeriodDepth:
+	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced, ErrPeriodDepth, ErrBlockchain:
 		r.code = code
 	}
 	return r
