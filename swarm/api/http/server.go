@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -370,26 +371,24 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 // /#			create new resource with first update as mulitihash
 // /raw/#		create new resource with first update raw
 func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
-	fields := strings.Split(path, "/")
-	freqUrlIdx := -1
-	if fields[0] != "" {
-		freqUrlIdx++
-		if fields[0] == "raw" {
-			if len(fields) > 1 {
-				freqUrlIdx++
-			} else {
-				freqUrlIdx--
-			}
+	re, err := regexp.Compile("^(raw)?/?([0-9]+)?$")
+	if err != nil {
+		return isRaw, frequency, err
+	}
+	m := re.FindAllStringSubmatch(path, 2)
+	var freqstr = "0"
+	if len(m) > 0 {
+		if m[0][1] != "" {
 			isRaw = true
 		}
-		if freqUrlIdx > -1 {
-			frequency, err = strconv.ParseUint(fields[freqUrlIdx], 10, 64)
-			if err != nil {
-				return false, 0, err
-			}
+		if m[0][2] != "" {
+			freqstr = m[0][2]
 		}
+	} else if len(path) > 0 {
+		return isRaw, frequency, fmt.Errorf("invalid path")
 	}
-	return isRaw, frequency, nil
+	frequency, err = strconv.ParseUint(freqstr, 10, 64)
+	return isRaw, frequency, err
 }
 
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
