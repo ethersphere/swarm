@@ -351,24 +351,22 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 				return reader, mimeType, status, err
 			}
 			if rsrc.Multihash {
-				var fail bool
 
 				// validate data as multihash
 				decodedMultihash, err := multihash.Decode(rsrcData)
 				if err != nil {
-					fail = true
-				} else if decodedMultihash.Code != multihash.SHA3_256 {
-					err = fmt.Errorf("wrong hash type '%s'", decodedMultihash.Name)
-				}
-				if fail {
+					apiGetInvalid.Inc(1)
+					status = http.StatusInternalServerError
+					log.Warn(fmt.Sprintf("could not decode resource multihash: %v", err))
+					return reader, mimeType, status, err
+				} else if decodedMultihash.Code != multihash.KECCAK_256 {
 					apiGetInvalid.Inc(1)
 					status = http.StatusUnprocessableEntity
-					log.Warn(fmt.Sprintf("invalid resource multihash: %v", err))
-
+					log.Warn(fmt.Sprintf("invalid resource multihash code: %x", decodedMultihash.Code))
 					return reader, mimeType, status, err
 				}
 				key = storage.Key(decodedMultihash.Digest)
-				log.Debug("resouce is multihash", "key", key)
+				log.Trace("resource is multihash", "key", key)
 
 				// get the manifest the multihash digest points to
 				trie, err := loadManifest(self.dpa, key, nil)
@@ -402,7 +400,7 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			apiGetHttp300.Inc(1)
-			return
+			return nil, entry.ContentType, status, err
 		} else {
 			mimeType = entry.ContentType
 			log.Debug("content lookup key", "key", key, "mimetype", mimeType)
