@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -70,6 +71,7 @@ var (
 	apiRmFileFail      = metrics.NewRegisteredCounter("api.removefile.fail", nil)
 	apiAppendFileCount = metrics.NewRegisteredCounter("api.appendfile.count", nil)
 	apiAppendFileFail  = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
+	apiGetInvalid      = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
 type Resolver interface {
@@ -330,17 +332,73 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		// is set as the hash of the manifest (see swarm/api/manifest.go:NewResourceManifest)
 		//
 		// to avoid taking a performance hit hacking a storage.LazySectionReader to wrap the resource key,
+		// if the resource update is of raw type:
 		// we return a typed error instead. Since for all other purposes this is an invalid manifest,
 		// any normal interfacing code will just see an error fail accordingly.
+		//
+		// if the resource update is of multihash type:
+		// we validate the multihash and retrieve the manifest behind it, and resume normal operations from there
 		if entry.ContentType == ResourceContentType {
 			log.Warn("resource type", "key", key, "hash", entry.Hash)
-			return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
+			_, rsrcData, err := self.resource.GetContent(entry.Hash)
+			if err != nil {
+				apiGetNotFound.Inc(1)
+				status = http.StatusNotFound
+				log.Warn(fmt.Sprintf("get resource content error: %v", err))
+				return reader, mimeType, status, err
+			}
+			if rsrc.Multihash {
+
+				// validate data as multihash
+				decodedMultihash, err := multihash.Decode(rsrcData)
+				if err != nil {
+					apiGetInvalid.Inc(1)
+					status = http.StatusInternalServerError
+					log.Warn(fmt.Sprintf("could not decode resource multihash: %v", err))
+					return reader, mimeType, status, err
+				} else if decodedMultihash.Code != multihash.KECCAK_256 {
+					apiGetInvalid.Inc(1)
+					status = http.StatusUnprocessableEntity
+					log.Warn(fmt.Sprintf("invalid resource multihash code: %x", decodedMultihash.Code))
+					return reader, mimeType, status, err
+				}
+				key = storage.Key(decodedMultihash.Digest)
+				log.Trace("resource is multihash", "key", key)
+
+				// get the manifest the multihash digest points to
+				trie, err := loadManifest(self.dpa, key, nil)
+				if err != nil {
+					apiGetNotFound.Inc(1)
+					status = http.StatusNotFound
+					log.Warn(fmt.Sprintf("loadManifestTrie (resource multihash) error: %v", err))
+					return reader, mimeType, status, err
+				}
+
+				log.Trace("trie getting resource multihash entry", "key", key, "path", path)
+				entry, _ := trie.getEntry(path)
+				log.Trace("trie got resource multihash entry", "key", key, "path", path)
+
+				if entry == nil {
+					status = http.StatusNotFound
+					apiGetNotFound.Inc(1)
+					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
+					log.Trace("manifest (resource multihash) entry not found", "key", key, "path", path)
+					return reader, mimeType, status, err
+				}
+
+			} else {
+				return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
+			}
+		} else {
+			key = common.Hex2Bytes(entry.Hash)
 		}
-		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			apiGetHttp300.Inc(1)
-			return
+			return nil, entry.ContentType, status, err
 		} else {
 			mimeType = entry.ContentType
 			log.Debug("content lookup key", "key", key, "mimetype", mimeType)
@@ -609,8 +667,21 @@ func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint
 	return storage.Key(h[:]), nil
 }
 
+func (self *Api) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
+	return self.resourceUpdate(ctx, name, data, true)
+}
 func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
-	key, err := self.resource.Update(ctx, name, data)
+	return self.resourceUpdate(ctx, name, data, false)
+}
+
+func (self *Api) resourceUpdate(ctx context.Context, name string, data []byte, multihash bool) (storage.Key, uint32, uint32, error) {
+	var key storage.Key
+	var err error
+	if multihash {
+		key, err = self.resource.UpdateMultihash(ctx, name, data)
+	} else {
+		key, err = self.resource.Update(ctx, name, data)
+	}
 	period, _ := self.resource.GetLastPeriod(name)
 	version, _ := self.resource.GetVersion(name)
 	return key, period, version, err

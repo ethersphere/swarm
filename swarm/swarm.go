@@ -178,27 +178,31 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	var resourceHandler *storage.ResourceHandler
 	// if use resource updates
 
+	if ensresolver == nil {
+		log.Warn("No ENS API specified, resource updates will NOT validate resource update chunks")
+	}
+	rhparams := &storage.ResourceHandlerParams{
+		// TODO: config parameter to set limits
+		QueryMaxPeriods: &storage.ResourceLookupParams{
+			Limit: false,
+		},
+		Signer: &storage.GenericResourceSigner{
+			PrivKey: self.privateKey,
+		},
+		EthClient: resolver,
+		EnsClient: ensresolver,
+	}
 	if resolver != nil {
 		resolver.SetNameHash(ens.EnsNode)
-		rhparams := &storage.ResourceHandlerParams{
-			// TODO: config parameter to set limits
-			QueryMaxPeriods: &storage.ResourceLookupParams{
-				Limit: false,
-			},
-			Signer: &storage.GenericResourceSigner{
-				PrivKey: self.privateKey,
-			},
-			EthClient: resolver,
-			EnsClient: ensresolver,
-		}
-		resourceHandler, err = storage.NewResourceHandler(rhparams)
-		if err != nil {
-			return nil, err
-		}
-		resourceHandler.SetStore(self.lstore)
 	} else {
-		log.Warn("No ENS API specified, resource updates will be disabled")
+		log.Warn("No ETH API specified, resource updates will use block height approximation")
+		rhparams.EthClient = storage.NewBlockEstimator()
 	}
+	resourceHandler, err = storage.NewResourceHandler(rhparams)
+	if err != nil {
+		return nil, err
+	}
+	resourceHandler.SetStore(self.lstore)
 
 	var validators []storage.ChunkValidator
 	validators = append(validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)))

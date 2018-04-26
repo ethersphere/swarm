@@ -32,6 +32,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -363,16 +364,42 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
+// possible combinations:
+// /			add multihash update to existing hash
+// /raw 		add raw update to existing hash
+// /#			create new resource with first update as mulitihash
+// /raw/#		create new resource with first update raw
+func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
+	re, err := regexp.Compile("^(raw)?/?([0-9]+)?$")
+	if err != nil {
+		return isRaw, frequency, err
+	}
+	m := re.FindAllStringSubmatch(path, 2)
+	var freqstr = "0"
+	if len(m) > 0 {
+		if m[0][1] != "" {
+			isRaw = true
+		}
+		if m[0][2] != "" {
+			freqstr = m[0][2]
+		}
+	} else if len(path) > 0 {
+		return isRaw, frequency, fmt.Errorf("invalid path")
+	}
+	frequency, err = strconv.ParseUint(freqstr, 10, 64)
+	return isRaw, frequency, err
+}
+
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 
 	var outdata []byte
-	if r.uri.Path != "" {
-		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
-		if err != nil {
-			Respond(w, r, fmt.Sprintf("cannot parse frequency parameter: %v", err), http.StatusBadRequest)
-			return
-		}
+	isRaw, frequency, err := resourcePostMode(r.uri.Path)
+	if err != nil {
+		Respond(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if frequency > 0 {
 		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
@@ -395,6 +422,12 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			Respond(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
 			return
 		}
+	} else {
+		_, _, err := s.api.ResourceLookup(r.Context(), r.uri.Addr, 0, 0, &storage.ResourceLookupParams{})
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusNotFound)
+			return
+		}
 	}
 
 	data, err := ioutil.ReadAll(r.Body)
@@ -402,7 +435,11 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
+	if isRaw {
+		_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
+	} else {
+		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), r.uri.Addr, data)
+	}
 	if err != nil {
 		code, err2 := s.translateResourceError(w, r, "mutable resource update fail", err)
 
