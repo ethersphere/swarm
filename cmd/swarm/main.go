@@ -241,6 +241,16 @@ Prints the swarm hash of file or directory.
 `,
 		},
 		{
+			Action:    download,
+			Name:      "download",
+			Usage:     "downloads a swarm manifest or a file inside a manifest",
+			ArgsUsage: " <bzzhash> [<download path>]",
+			Description: `
+Downloads .
+`,
+		},
+
+		{
 			Name:      "manifest",
 			Usage:     "update a MANIFEST",
 			ArgsUsage: "manifest COMMAND",

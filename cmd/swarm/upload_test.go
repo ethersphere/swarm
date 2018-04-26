@@ -101,6 +101,33 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		if string(reply) != data {
 			t.Fatalf("expected HTTP body %q, got %q", data, reply)
 		}
+
+		//try to get the content with `go-swarm download`
+		tmpDownload, err := ioutil.TempFile("", "swarm-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer tmpDownload.Close()
+		defer os.Remove(tmpDownload.Name())
+
+		bzzLocator := "bzz:/" + hash
+		flagss := []string{}
+		flagss = []string{
+			"--bzzapi", cluster.Nodes[0].URL,
+			"download",
+			bzzLocator,
+			tmpDownload.Name(),
+		}
+		if toEncrypt {
+			hashRegexp = `[a-f\d]{128}`
+			flagss = []string{
+				"--bzzapi", cluster.Nodes[0].URL,
+				"download",
+				"--encrypted",
+				tmpDownload.Name()}
+		}
+		down := runSwarm(t, flagss...)
+		down.ExpectExit()
 	}
 
 	// get an non-existent hash from each node
