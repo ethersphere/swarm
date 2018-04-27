@@ -13,8 +13,6 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with go-ethereum. If not, see <http://www.gnu.org/licenses/>.
-
-// Command bzzhash computes a swarm tree hash.
 package main
 
 import (
@@ -24,13 +22,11 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
 func download(ctx *cli.Context) {
 	args := ctx.Args()
-	log.Error(fmt.Sprintf("args %v", args))
 	if len(args) < 1 {
 		utils.Fatalf("Usage: swarm download <bzz locator> [<destination path>]")
 	}
