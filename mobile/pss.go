@@ -25,7 +25,6 @@ func (ps *Pss) SetPeerPublicKey(pubKey []byte, topic []byte, addr []byte) error 
 	return ps.ps.SetPeerPublicKey(crypto.ToECDSAPub(pubKey), makeTopic(topic), &pssaddr)
 }
 
-func (ps *Pss) SendAsym(pubKeyId string, topic []byte, addr []byte) error {
-	pssaddr := pss.PssAddress(addr)
-	return ps.ps.SendAsym(pubKeyId, makeTopic(topic), pssaddr)
+func (ps *Pss) SendAsym(pubKeyId string, topic []byte, msg []byte) error {
+	return ps.ps.SendAsym(pubKeyId, makeTopic(topic), msg)
 }
