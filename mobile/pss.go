@@ -10,7 +10,7 @@ import (
 )
 
 type Pss struct {
-	ps *pss.Pss
+	ps pss.Pss
 }
 
 func (ps *Pss) SetPeerPublicKey(pubKeyHex string, topic [4]byte, addr []byte) error {

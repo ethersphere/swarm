@@ -258,7 +258,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			bzzconfig.Init(bzzkey)
 
 			svc, err := swarm.NewSwarm(ctx, nil, bzzconfig, nil)
-			resultNode.Ps = &Pss{ps: svc.Ps}
+			resultNode.Ps = &Pss{ps: *svc.Ps}
 			if err != nil {
 				log.Error("swarm svc", "err", err)
 			}
