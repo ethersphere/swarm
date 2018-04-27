@@ -119,7 +119,13 @@ func NewNode(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *
 	return NewNodeWithKeystore(datadir, config, nil)
 }
 
-func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *Node, _ error) {
+func NewNodeWithKeystoreString(datadir string, config *NodeConfig, ksstr string) (stack *Node, _ error) {
+	ks := NewKeyStore(ksstr, keystore.LightScryptN, keystore.LightScryptP)
+	return NewNodeWithKeystore(datadir, config, ks)
+	//ks := rawStack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+}
+
+func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stack *Node, _ error) {
 	// If no or partial configurations were specified, use defaults
 	if config == nil {
 		config = NewNodeConfig()
@@ -204,7 +210,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *keystore.KeySto
 			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}
-	if config.PssEnabled {
+	if config.PssEnabled && ks != nil {
 		log.Debug("pss enabled")
 		bzzSvc := func(ctx *node.ServiceContext) (node.Service, error) {
 			//ks := rawStack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
@@ -212,9 +218,10 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *keystore.KeySto
 			var a accounts.Account
 			var err error
 			if common.IsHexAddress(config.PssAccount) {
-				a, err = ks.Find(accounts.Account{Address: common.HexToAddress(config.PssAccount)})
+				//a, err = ks.Find(accounts.Account{Address: common.HexToAddress(config.PssAccount)})
+				a = ks.GetAccounts().accounts[0]
 			} else if ix, ixerr := strconv.Atoi(config.PssAccount); ixerr == nil && ix > 0 {
-				if accounts := ks.Accounts(); len(accounts) > ix {
+				if accounts := ks.GetAccounts().accounts; len(accounts) > ix {
 					a = accounts[ix]
 				} else {
 					err = fmt.Errorf("index %d higher than number of accounts %d", ix, len(accounts))
