@@ -79,7 +79,7 @@ type Swarm struct {
 	swapEnabled bool
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
-	ps          *pss.Pss
+	Ps          *pss.Pss
 }
 
 type SwarmAPI struct {
@@ -381,8 +381,8 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	}
 	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
 
-	if self.ps != nil {
-		self.ps.Start(srv)
+	if self.Ps != nil {
+		self.Ps.Start(srv)
 		log.Info("Pss started")
 	}
 

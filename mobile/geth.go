@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/swarm"
 	swarmapi "github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/pss"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
@@ -127,6 +128,7 @@ func NewNodeWithKeystoreString(datadir string, config *NodeConfig, ksstr string)
 
 func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stack *Node, _ error) {
 
+	var ps *pss.Pss
 	// If no or partial configurations were specified, use defaults
 	if config == nil {
 		config = NewNodeConfig()
@@ -252,11 +254,11 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			}
 			bzzconfig := swarmapi.NewConfig()
 			bzzconfig.SyncEnabled = false
+			bzzconfig.Path = rawStack.DataDir()
 			bzzconfig.Init(bzzkey)
 
-			log.Warn("datadir after", rawStack.DataDir())
-			bzzconfig.Path = rawStack.DataDir()
 			svc, err := swarm.NewSwarm(ctx, nil, bzzconfig, nil)
+			ps = swarm.Ps
 			if err != nil {
 				log.Error("swarm svc", "err", err)
 			}
@@ -266,7 +268,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			return nil, fmt.Errorf("pss init: %v", err)
 		}
 	}
-	return &Node{rawStack}, nil
+	return &Node{rawStack}, &Pss{ps: ps}, nil
 }
 
 // Start creates a live P2P node and starts running it.
