@@ -114,7 +114,12 @@ type Node struct {
 }
 
 // NewNode creates and configures a new Geth node.
+
 func NewNode(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *Node, _ error) {
+	return NewNodeWithKeystore(datadir, config, nil)
+}
+
+func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *Node, _ error) {
 	// If no or partial configurations were specified, use defaults
 	if config == nil {
 		config = NewNodeConfig()
