@@ -283,6 +283,22 @@ func (n *Node) Stop() error {
 	return n.node.Stop()
 }
 
+func (n *Node) AddPeer(enode string) error {
+	rpcClient, err := n.node.Attach()
+	defer rpcClient.Close()
+	if err != nil {
+		return fmt.Errorf("could not attach rpc for adding peer %s, %v", enode, err)
+	}
+	var ok bool
+	err = rpcClient.Call(&ok, "admin_addPeer", enode)
+	if err != nil {
+		return fmt.Errorf("could not call rpc for adding peer %s: %v", enode, err)
+	} else if !ok {
+		return fmt.Errorf("could not add peer %s: %v", enode, err)
+	}
+	return nil
+}
+
 // GetEthereumClient retrieves a client to access the Ethereum subsystem.
 func (n *Node) GetEthereumClient() (client *EthereumClient, _ error) {
 	rpc, err := n.node.Attach()
