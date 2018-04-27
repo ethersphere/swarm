@@ -45,7 +45,7 @@ var (
 // after starting, it performs new health checks after they have connected
 // to one of their previous peers
 func TestDynamicDiscovery(t *testing.T) {
-	t.Run("32/16/sim", dynamicDiscoverySimulation)
+	t.Run("16/4/sim", dynamicDiscoverySimulation)
 }
 
 func dynamicDiscoverySimulation(t *testing.T) {
@@ -123,6 +123,12 @@ func dynamicDiscoverySimulation(t *testing.T) {
 	// start nodes, trigger them on node up event from sim
 	trigger := make(chan discover.NodeID)
 	events := make(chan *simulations.Event)
+	defer func() {
+		go func() {
+			for range events {
+			}
+		}()
+	}()
 	sub := net.Events().Subscribe(events)
 	defer sub.Unsubscribe()
 
