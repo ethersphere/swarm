@@ -821,7 +821,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", key)
 
-	reader, contentType, status, err := s.api.Get(key, r.uri.Addr, r.uri.Path)
+	reader, contentType, status, err := s.api.Get(key, r.uri.Path)
 
 	if err != nil {
 		// cheeky, cheeky hack. See swarm/api/api.go:Api.Get() for an explanation
