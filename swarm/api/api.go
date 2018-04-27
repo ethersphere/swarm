@@ -307,10 +307,14 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key
 	}, nil
 }
 
+func (self *Api) Get(key storage.Key, name string, path string) (reader *storage.LazyChunkReader, mimeType string, status int, err error) {
+	return self.get(key, "", path)
+}
+
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status and an error
-func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkReader, mimeType string, status int, err error) {
+func (self *Api) get(key storage.Key, name string, path string) (reader *storage.LazyChunkReader, mimeType string, status int, err error) {
 	log.Debug("api.get", "key", key, "path", path)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(self.dpa, key, nil)
@@ -339,10 +343,10 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		// if the resource update is of multihash type:
 		// we validate the multihash and retrieve the manifest behind it, and resume normal operations from there
 		if entry.ContentType == ResourceContentType {
-			log.Warn("resource type", "key", key, "hash", entry.Hash)
+			log.Info("resource type", "key", key, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
+			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{Max: 100, Limit: true})
 			_, rsrcData, err := self.resource.GetContent(entry.Hash)
 			if err != nil {
 				apiGetNotFound.Inc(1)
@@ -378,8 +382,9 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 				}
 
 				log.Trace("trie getting resource multihash entry", "key", key, "path", path)
-				entry, _ := trie.getEntry(path)
-				log.Trace("trie got resource multihash entry", "key", key, "path", path)
+				var fullpath string
+				entry, fullpath = trie.getEntry(path)
+				log.Trace("trie got resource multihash entry", "key", key, "path", path, "entry", entry, "fullpath", fullpath)
 
 				if entry == nil {
 					status = http.StatusNotFound
@@ -395,10 +400,9 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		}
 
 		key = common.Hex2Bytes(entry.Hash)
-		log.Debug("trie key", "key", key)
-
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
+			log.Warn("multiple")
 			apiGetHttp300.Inc(1)
 			return nil, entry.ContentType, status, err
 		} else {

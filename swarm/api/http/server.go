@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -435,11 +436,14 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	if isRaw {
 		_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
 	} else {
-		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), r.uri.Addr, data)
+		bytesdata, err := hexutil.Decode(string(data))
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusBadRequest)
+		}
+		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), r.uri.Addr, bytesdata)
 	}
 	if err != nil {
 		code, err2 := s.translateResourceError(w, r, "mutable resource update fail", err)
-
 		Respond(w, r, err2.Error(), code)
 		return
 	}
@@ -817,7 +821,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", key)
 
-	reader, contentType, status, err := s.api.Get(key, r.uri.Path)
+	reader, contentType, status, err := s.api.Get(key, r.uri.Addr, r.uri.Path)
 
 	if err != nil {
 		// cheeky, cheeky hack. See swarm/api/api.go:Api.Get() for an explanation

@@ -236,6 +236,7 @@ func (self *ResourceHandler) Validate(key Key, data []byte) bool {
 	} else if signature == nil {
 		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), key)
 	}
+
 	digest := self.keyDataHash(key, parseddata)
 	addr, err := getAddressFromDataSig(digest, *signature)
 	if err != nil {
@@ -463,6 +464,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 	if maxLookup == nil {
 		maxLookup = self.queryMaxPeriods
 	}
+	log.Trace("resource lookuup", "period", period, "version", version, "limit", maxLookup.Limit, "max", maxLookup.Max)
 	for period > 0 {
 		if maxLookup.Limit && hops > maxLookup.Max {
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
@@ -744,6 +746,7 @@ func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64,
 	if err != nil {
 		return 0, err
 	}
+	log.Warn("blockheader", "header", blockheader)
 	return blockheader.Number.Uint64(), nil
 }
 
@@ -887,7 +890,7 @@ func isMultihash(data []byte) int {
 	// we cheekily assume hashlength < maxint
 	inthashlength := int(hashlength)
 	if len(data[cursor:]) < inthashlength {
-		log.Warn("Corrupt multihash data, hash does not align with data boundary")
+		log.Warn("Corrupt multihash data, hash does not align with data boundary", "data", data)
 		return 0
 	}
 	return cursor + inthashlength
