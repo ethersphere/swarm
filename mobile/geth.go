@@ -114,7 +114,7 @@ type Node struct {
 }
 
 // NewNode creates and configures a new Geth node.
-func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
+func NewNode(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *Node, _ error) {
 	// If no or partial configurations were specified, use defaults
 	if config == nil {
 		config = NewNodeConfig()
@@ -202,7 +202,8 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	if config.PssEnabled {
 		log.Debug("pss enabled")
 		bzzSvc := func(ctx *node.ServiceContext) (node.Service, error) {
-			ks := rawStack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+			//ks := rawStack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+			log.Warn("keystore", "ks", ks)
 			var a accounts.Account
 			var err error
 			if common.IsHexAddress(config.PssAccount) {
