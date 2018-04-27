@@ -39,7 +39,7 @@ func NewBlockEstimator() *blockEstimator {
 	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z")
 	return &blockEstimator{
 		Start:   ropstenStart,
-		Average: time.Second * 10,
+		Average: 14467100 * time.Microsecond,
 	}
 }
 

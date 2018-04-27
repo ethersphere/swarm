@@ -175,12 +175,11 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		return
 	}
 
-	var resourceHandler *storage.ResourceHandler
-	// if use resource updates
-
 	if ensresolver == nil {
 		log.Warn("No ENS API specified, resource updates will NOT validate resource update chunks")
 	}
+
+	var resourceHandler *storage.ResourceHandler
 	rhparams := &storage.ResourceHandlerParams{
 		// TODO: config parameter to set limits
 		QueryMaxPeriods: &storage.ResourceLookupParams{
@@ -196,6 +195,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		resolver.SetNameHash(ens.EnsNode)
 	} else {
 		log.Warn("No ETH API specified, resource updates will use block height approximation")
+		// TODO: blockestimator should use saved values derived from last time ethclient was connected
 		rhparams.EthClient = storage.NewBlockEstimator()
 	}
 	resourceHandler, err = storage.NewResourceHandler(rhparams)
