@@ -126,6 +126,7 @@ func NewNodeWithKeystoreString(datadir string, config *NodeConfig, ksstr string)
 }
 
 func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stack *Node, _ error) {
+
 	// If no or partial configurations were specified, use defaults
 	if config == nil {
 		config = NewNodeConfig()
@@ -156,6 +157,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			MaxPeers:         config.MaxPeers,
 		},
 	}
+
 	rawStack, err := node.New(nodeConf)
 	if err != nil {
 		return nil, err
@@ -251,6 +253,8 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			bzzconfig := swarmapi.NewConfig()
 			bzzconfig.SyncEnabled = false
 			bzzconfig.Init(bzzkey)
+
+			log.Warn("datadir after", rawStack.DataDir())
 			bzzconfig.Path = rawStack.DataDir()
 			svc, err := swarm.NewSwarm(ctx, nil, bzzconfig, nil)
 			if err != nil {
