@@ -70,7 +70,7 @@ func NewResourceError(code int, s string) error {
 		err: s,
 	}
 	switch code {
-	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced, ErrPeriodDepth, ErrBlockchain:
+	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced, ErrPeriodDepth:
 		r.code = code
 	}
 	return r
@@ -890,7 +890,7 @@ func isMultihash(data []byte) int {
 	// we cheekily assume hashlength < maxint
 	inthashlength := int(hashlength)
 	if len(data[cursor:]) < inthashlength {
-		log.Warn("Corrupt multihash data, hash does not align with data boundary", "data", data)
+		log.Warn("Corrupt multihash data, hash does not align with data boundary")
 		return 0
 	}
 	return cursor + inthashlength

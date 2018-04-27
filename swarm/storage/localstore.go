@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"fmt"
 	"path/filepath"
-	"reflect"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -104,7 +103,6 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 func (self *LocalStore) Put(chunk *Chunk) {
 	valid := true
 	for _, v := range self.Validators {
-		log.Trace("invoking validator", "type", reflect.TypeOf(v))
 		if valid = v.Validate(chunk.Key, chunk.SData); valid {
 			break
 		}

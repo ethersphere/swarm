@@ -15,7 +15,6 @@ const (
 	ErrInvalidSignature
 	ErrNotSynced
 	ErrPeriodDepth
-	ErrBlockchain
 	ErrCnt
 )
 

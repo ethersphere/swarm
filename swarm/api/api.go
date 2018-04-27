@@ -398,7 +398,6 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		key = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
-			log.Warn("multiple")
 			apiGetHttp300.Inc(1)
 			return nil, entry.ContentType, status, err
 		} else {
