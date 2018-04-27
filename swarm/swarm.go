@@ -234,6 +234,13 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	if pss.IsActiveHandshake {
 		pss.SetHandshakeController(self.Ps, pss.NewHandshakeParams())
 	}
+	exampleTopic := pss.Topic([4]byte{0x01, 0x01, 0x01, 0x01})
+	self.Ps.Register(
+		&exampleTopic,
+		func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+			log.Warn("Message received", "payload", msg, "keyid", keyid)
+			return nil
+		})
 
 	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
