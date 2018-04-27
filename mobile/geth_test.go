@@ -37,7 +37,7 @@ func TestPssNode(t *testing.T) {
 	cfg.PssPassword = pssPassword
 	cfg.PssAccount = a.Address.Hex()
 
-	n, err := NewNode(dir, cfg, nil)
+	n, _, err := NewNode(dir, cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
