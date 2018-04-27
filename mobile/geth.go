@@ -111,22 +111,24 @@ func NewNodeConfig() *NodeConfig {
 // Node represents a Geth Ethereum node instance.
 type Node struct {
 	node *node.Node
+	Ps   *Pss
 }
 
 // NewNode creates and configures a new Geth node.
 
-func NewNode(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *Node, ps *Pss, _ error) {
+func NewNode(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *Node, _ error) {
 	return NewNodeWithKeystore(datadir, config, nil)
 }
 
-func NewNodeWithKeystoreString(datadir string, config *NodeConfig, ksstr string) (stack *Node, ps *Pss, _ error) {
+func NewNodeWithKeystoreString(datadir string, config *NodeConfig, ksstr string) (stack *Node, _ error) {
 	ks := NewKeyStore(ksstr, keystore.LightScryptN, keystore.LightScryptP)
 	return NewNodeWithKeystore(datadir, config, ks)
 	//ks := rawStack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 }
 
-func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stack *Node, ps *Pss, _ error) {
+func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stack *Node, _ error) {
 
+	resultNode := &Node{}
 	// If no or partial configurations were specified, use defaults
 	if config == nil {
 		config = NewNodeConfig()
@@ -160,7 +162,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 
 	rawStack, err := node.New(nodeConf)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	debug.Memsize.Add("node", rawStack)
@@ -170,7 +172,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 		// Parse the user supplied genesis spec if not mainnet
 		genesis = new(core.Genesis)
 		if err := json.Unmarshal([]byte(config.EthereumGenesis), genesis); err != nil {
-			return nil, nil, fmt.Errorf("invalid genesis spec: %v", err)
+			return nil, fmt.Errorf("invalid genesis spec: %v", err)
 		}
 		// If we have the testnet, hard code the chain configs too
 		if config.EthereumGenesis == TestnetGenesis() {
@@ -190,7 +192,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 		if err := rawStack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 			return les.New(ctx, &ethConf)
 		}); err != nil {
-			return nil, nil, fmt.Errorf("ethereum init: %v", err)
+			return nil, fmt.Errorf("ethereum init: %v", err)
 		}
 		// If netstats reporting is requested, do it
 		if config.EthereumNetStats != "" {
@@ -200,7 +202,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 
 				return ethstats.New(config.EthereumNetStats, nil, lesServ)
 			}); err != nil {
-				return nil, nil, fmt.Errorf("netstats init: %v", err)
+				return nil, fmt.Errorf("netstats init: %v", err)
 			}
 		}
 	}
@@ -209,7 +211,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 		if err := rawStack.Register(func(*node.ServiceContext) (node.Service, error) {
 			return whisper.New(&whisper.DefaultConfig), nil
 		}); err != nil {
-			return nil, nil, fmt.Errorf("whisper init: %v", err)
+			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}
 	if config.PssEnabled && ks != nil {
@@ -256,17 +258,18 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			bzzconfig.Init(bzzkey)
 
 			svc, err := swarm.NewSwarm(ctx, nil, bzzconfig, nil)
-			ps = &Pss{ps: svc.Ps}
+			resultNode.Ps = &Pss{ps: svc.Ps}
 			if err != nil {
 				log.Error("swarm svc", "err", err)
 			}
 			return svc, err
 		}
 		if err := rawStack.Register(bzzSvc); err != nil {
-			return nil, nil, fmt.Errorf("pss init: %v", err)
+			return nil, fmt.Errorf("pss init: %v", err)
 		}
 	}
-	return &Node{rawStack}, ps, nil
+	resultNode.node = rawStack
+	return resultNode, nil
 }
 
 // Start creates a live P2P node and starts running it.
