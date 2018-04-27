@@ -20,30 +20,61 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/log"
 	"gopkg.in/urfave/cli.v1"
 )
 
 func download(ctx *cli.Context) {
-	panic("shitfuck")
 	args := ctx.Args()
-	if len(args) < 3 {
-		utils.Fatalf("Usage: swarm download <bzz locator> <destination path>")
+	log.Error(fmt.Sprintf("args %v", args))
+	if len(args) < 1 {
+		utils.Fatalf("Usage: swarm download <bzz locator> [<destination path>]")
 	}
-	f, err := os.Open(args[0])
-	if err != nil {
-		utils.Fatalf("Error opening file " + args[1])
-	}
-	defer f.Close()
 
-	stat, _ := f.Stat()
-	dpa := storage.NewDPA(storage.NewMapChunkStore(), storage.NewDPAParams())
-	key, _, err := dpa.Store(f, stat.Size(), false)
-	if err != nil {
-		utils.Fatalf("%v\n", err)
-	} else {
-		fmt.Printf("%v\n", key)
+	isRecursive := false
+
+	newArgs := []string{}
+
+	for _, v := range args {
+		if v == "--recursive" {
+			isRecursive = true
+		}
+		if !strings.HasPrefix(v, "--") {
+			newArgs = append(newArgs, v)
+		}
 	}
+	args = newArgs
+
+	dir := ""
+	if len(args) == 1 {
+		// no destination arg - assume current terminal working dir ./
+		workingDir, err := filepath.Abs("./")
+		if err != nil {
+			utils.Fatalf("Fatal: could not get current working directory")
+		}
+		dir = workingDir
+	} else {
+		dir = args[1]
+	}
+
+	fmt.Println(dir)
+
+	fi, err := os.Stat(dir)
+	if err != nil {
+		utils.Fatalf("could not stat path")
+
+	}
+	switch mode := fi.Mode(); {
+	case mode.IsRegular():
+		utils.Fatalf("destination path is not a directory")
+	}
+
+	if !isRecursive {
+
+	}
+
 }
