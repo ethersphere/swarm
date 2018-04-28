@@ -26,8 +26,13 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
+
+func serverFunc(api *api.Api) testutil.TestServer {
+	return swarmhttp.NewServer(api)
+}
 
 // TestClientUploadDownloadRaw test uploading and downloading raw data to swarm
 func TestClientUploadDownloadRaw(t *testing.T) {
@@ -38,7 +43,7 @@ func TestClientUploadDownloadRawEncrypted(t *testing.T) {
 }
 
 func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
@@ -79,7 +84,7 @@ func TestClientUploadDownloadFilesEncrypted(t *testing.T) {
 }
 
 func testClientUploadDownloadFiles(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	client := NewClient(srv.URL)
@@ -177,7 +182,7 @@ func newTestDirectory(t *testing.T) string {
 // TestClientUploadDownloadDirectory tests uploading and downloading a
 // directory of files to a swarm manifest
 func TestClientUploadDownloadDirectory(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -243,7 +248,7 @@ func TestClientFileListEncrypted(t *testing.T) {
 }
 
 func testClientFileList(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	dir := newTestDirectory(t)
@@ -301,7 +306,7 @@ func testClientFileList(toEncrypt bool, t *testing.T) {
 // TestClientMultipartUpload tests uploading files to swarm using a multipart
 // upload
 func TestClientMultipartUpload(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	// define an uploader which uploads testDirFiles with some data
