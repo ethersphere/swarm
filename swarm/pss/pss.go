@@ -75,13 +75,16 @@ type PssParams struct {
 }
 
 // Sane defaults for Pss
-func NewPssParams(privatekey *ecdsa.PrivateKey) *PssParams {
+func NewPssParams() *PssParams {
 	return &PssParams{
 		MsgTTL:              defaultMsgTTL,
 		CacheTTL:            defaultDigestCacheTTL,
-		privateKey:          privatekey,
 		SymKeyCacheCapacity: defaultSymKeyCacheCapacity,
 	}
+}
+
+func (self *PssParams) Init(privatekey *ecdsa.PrivateKey) {
+	self.privateKey = privatekey
 }
 
 // Toplevel pss object, takes care of message sending, receiving, decryption and encryption, message handler dispatchers and message forwarding.
@@ -131,7 +134,10 @@ func (self *Pss) String() string {
 //
 // In addition to params, it takes a swarm network overlay
 // and a DPA storage for message cache storage.
-func NewPss(k network.Overlay, params *PssParams) *Pss {
+func NewPss(k network.Overlay, params *PssParams) (*Pss, error) {
+	if params.privateKey == nil {
+		return nil, errors.New("missing private key for pss")
+	}
 	cap := p2p.Cap{
 		Name:    pssProtocolName,
 		Version: pssVersion,
@@ -169,7 +175,7 @@ func NewPss(k network.Overlay, params *PssParams) *Pss {
 		ps.hashPool.Put(hashfunc)
 	}
 
-	return ps
+	return ps, nil
 }
 
 /////////////////////////////////////////////////////////////////////

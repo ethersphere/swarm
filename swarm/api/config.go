@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -47,6 +48,7 @@ type Config struct {
 	*storage.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.SwapParams
+	Pss  *pss.PssParams
 	//*network.SyncParams
 	Contract        common.Address
 	EnsRoot         common.Address
@@ -77,6 +79,7 @@ func NewConfig() (self *Config) {
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
 		Swap:            swap.NewDefaultSwapParams(),
+		Pss:             pss.NewPssParams(),
 		ListenAddr:      DefaultHTTPListenAddr,
 		Port:            DefaultHTTPPort,
 		Path:            node.DefaultDataDir(),
