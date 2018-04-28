@@ -67,6 +67,7 @@ type ResourceLookupParams struct {
 // Encapsulates an specific resource update. When synced it contains the most recent
 // version of the resource update data.
 type resource struct {
+	Multihash  bool
 	name       *string
 	nameHash   common.Hash
 	startBlock uint64
@@ -205,7 +206,7 @@ func (self *ResourceHandler) SetStore(store ChunkStore) {
 // If parsed signature is nil, validates automatically
 // If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
 func (self *ResourceHandler) Validate(key Key, data []byte) bool {
-	signature, period, version, name, parseddata, err := self.parseUpdate(data)
+	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
 		if len(data) == indexSize {
 			if bytes.Equal(data[:2], []byte{0, 0}) {
@@ -518,7 +519,7 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (*resource, error) {
 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
-	signature, period, version, name, data, err := self.parseUpdate(chunk.SData)
+	signature, period, version, name, data, multihash, err := self.parseUpdate(chunk.SData)
 	if *rsrc.name != name {
 		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, *rsrc.name))
 	}
@@ -538,6 +539,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	rsrc.version = version
 	rsrc.updated = time.Now()
 	rsrc.data = make([]byte, len(data))
+	rsrc.Multihash = multihash
 	copy(rsrc.data, data)
 	log.Debug("Resource synced", "name", *rsrc.name, "key", chunk.Key, "period", rsrc.lastPeriod, "version", rsrc.version)
 	self.setResource(*rsrc.name, rsrc)
@@ -546,10 +548,10 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 
 // retrieve update metadata from chunk data
 // mirrors newUpdateChunk()
-func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, string, []byte, error) {
+func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, string, []byte, bool, error) {
 	// 14 = header + one byte of name + one byte of data
 	if len(chunkdata) < 14 {
-		return nil, 0, 0, "", nil, NewResourceError(ErrNothingToReturn, "chunk less than 13 bytes cannot be a resource update chunk")
+		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, "chunk less than 13 bytes cannot be a resource update chunk")
 	}
 	cursor := 0
 	headerlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
@@ -557,7 +559,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
 	exclsignlength := int(headerlength + datalength + 4)
 	if exclsignlength > len(chunkdata) || exclsignlength < 14 {
-		return nil, 0, 0, "", nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata)))
+		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata)))
 	}
 	var period uint32
 	var version uint32
@@ -572,13 +574,15 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	name = string(chunkdata[cursor : cursor+namelength])
 	cursor += namelength
 	var intdatalength int
+	var multihash bool
 	if datalength == 0 {
 		intdatalength = isMultihash(chunkdata[cursor:])
 		multihashboundary := cursor + intdatalength
 		if len(chunkdata) != multihashboundary && len(chunkdata) < multihashboundary+signatureLength {
 			log.Debug("multihash error", "chunkdatalen", len(chunkdata), "multihashboundary", multihashboundary)
-			return nil, 0, 0, "", nil, errors.New("Corrupt multihash data")
+			return nil, 0, 0, "", nil, false, errors.New("Corrupt multihash data")
 		}
+		multihash = true
 	} else {
 		intdatalength = int(datalength)
 	}
@@ -596,7 +600,7 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 		}
 	}
 
-	return signature, period, version, name, data, nil
+	return signature, period, version, name, data, multihash, nil
 }
 
 // Adds an actual data update
@@ -700,7 +704,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	case <-timeout.C:
 		return nil, NewResourceError(ErrIO, "chunk store timeout")
 	}
-	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.SData)
+	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.SData, "multihash", multihash)
 
 	// update our resources map entry and return the new key
 	rsrc.lastPeriod = nextperiod
