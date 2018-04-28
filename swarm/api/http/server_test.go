@@ -30,6 +30,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -123,6 +124,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	mhHex := hexutil.Encode(mh)
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
 	// our mutable resource "name"
@@ -131,7 +133,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	// create the multihash update
 	url = fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, keybytes)
-	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(mh))
+	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader([]byte(mhHex)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -166,29 +168,8 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest := &api.Manifest{}
-	err = json.Unmarshal(b, manifest)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// get data behind manifest
-	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, manifest.Entries[0].Hash)
-	resp, err = http.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("err %s", resp.Status)
-	}
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	if !bytes.Equal(b, []byte(databytes)) {
-		t.Fatalf("expected data return %x, got %x", databytes, b)
+		t.Fatalf("retrieved data mismatch, expected %x, got %x", databytes, b)
 	}
 }
 

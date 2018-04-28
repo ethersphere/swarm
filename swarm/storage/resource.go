@@ -746,7 +746,6 @@ func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64,
 	if err != nil {
 		return 0, err
 	}
-	log.Warn("blockheader", "header", blockheader)
 	return blockheader.Number.Uint64(), nil
 }
 
