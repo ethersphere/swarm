@@ -18,6 +18,23 @@ package storage
 
 import (
 	"time"
+
+	"github.com/ethereum/go-ethereum/log"
+)
+
+var (
+	// NetStore.Get timeout for get and get retries
+	// This is the maximum period that the Get will block.
+	// If it is reached, Get will return ErrChunkNotFound.
+	netStoreRetryTimeout = 60 * time.Second
+	// Minimal period between calling get method on NetStore
+	// on retry. It protects calling get very frequently if
+	// it returns ErrChunkNotFound very fast.
+	netStoreMinRetryDelay = 3 * time.Second
+	// Timeout interval before retrieval is timed out.
+	// It is used in NetStore.get on waiting for ReqC to be
+	// closed on a single retrieve request.
+	searchTimeout = 10 * time.Second
 )
 
 // NetStore implements the ChunkStore interface,
@@ -35,7 +52,76 @@ func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *Net
 
 // Get is the entrypoint for local retrieve requests
 // waits for response or times out
+//
+// Get uses get method to retrieve request, but retries if the
+// ErrChunkNotFound is returned by get, until the netStoreRetryTimeout
+// is reached.
 func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
+	timer := time.NewTimer(netStoreRetryTimeout)
+	defer timer.Stop()
+
+	// result and resultC provide results from the goroutine
+	// where NetStore.get is called.
+	type result struct {
+		chunk *Chunk
+		err   error
+	}
+	resultC := make(chan result)
+
+	// quitC ensures that retring goroutine is terminated
+	// when this function returns.
+	quitC := make(chan struct{})
+	defer close(quitC)
+
+	// do retries in a goroutine so that the timer can
+	// force this method to return after the netStoreRetryTimeout.
+	go func() {
+		// limiter ensures that NetStore.get is not called more frequently
+		// then netStoreMinRetryDelay. If NetStore.get takes longer
+		// then netStoreMinRetryDelay, the next retry call will be
+		// without a delay.
+		limiter := time.NewTimer(netStoreMinRetryDelay)
+		defer limiter.Stop()
+
+		for {
+			chunk, err := self.get(key)
+			if err != ErrChunkNotFound {
+				// break retry only if the error is nil
+				// or other error then ErrChunkNotFound
+				select {
+				case <-quitC:
+					// Maybe NetStore.Get function has returned
+					// by the timer.C while we were waiting for the
+					// results. Terminate this goroutine.
+				case resultC <- result{chunk: chunk, err: err}:
+					// Send the result to the parrent goroutine.
+				}
+				return
+
+			}
+			select {
+			case <-quitC:
+				// NetStore.Get function has returned, possibly
+				// by the timer.C, which makes this goroutine
+				// not needed.
+				return
+			case <-limiter.C:
+			}
+			// Reset the limiter for the next iteration.
+			limiter.Reset(netStoreMinRetryDelay)
+			log.Debug("NetStore.Get retry chunk", "key", key)
+		}
+	}()
+
+	select {
+	case r := <-resultC:
+		return r.chunk, r.err
+	case <-timer.C:
+		return nil, ErrChunkNotFound
+	}
+}
+
+func (self *NetStore) get(key Key) (chunk *Chunk, err error) {
 	if self.retrieve == nil {
 		chunk, err = self.localStore.Get(key)
 		if err == nil {
