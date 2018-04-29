@@ -158,7 +158,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, key)
 }
 
-// HandlePostFiles handles a POST request (or deprecated PUT request) to
+// HandlePostFiles handles a POST request to
 // bzz:/<hash>/<path> which contains either a single file or multiple files
 // (either a tar archive or multipart form), adds those files either to an
 // existing manifest or to a new manifest under <path> and returns the
@@ -593,7 +593,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
 
 	switch {
-	case r.uri.Raw() || r.uri.DeprecatedRaw():
+	case r.uri.Raw():
 		// allow the request to overwrite the content type using a query
 		// parameter
 		contentType := "application/octet-stream"
@@ -902,7 +902,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "POST":
-		if uri.Raw() || uri.DeprecatedRaw() {
+		if uri.Raw() {
 			log.Debug("handlePostRaw")
 			s.HandlePostRaw(w, req)
 		} else if uri.Resource() {
@@ -914,20 +914,11 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		}
 
 	case "PUT":
-		// DEPRECATED:
-		//   clients should send a POST request (the request creates a
-		//   new manifest leaving the existing one intact, so it isn't
-		//   strictly a traditional PUT request which replaces content
-		//   at a URI, and POST is more ubiquitous)
-		if uri.Raw() || uri.DeprecatedRaw() {
-			Respond(w, req, fmt.Sprintf("PUT method to %s not allowed", uri), http.StatusBadRequest)
-			return
-		} else {
-			s.HandlePostFiles(w, req)
-		}
+		Respond(w, req, fmt.Sprintf("PUT method to %s not allowed", uri), http.StatusBadRequest)
+		return
 
 	case "DELETE":
-		if uri.Raw() || uri.DeprecatedRaw() {
+		if uri.Raw() {
 			Respond(w, req, fmt.Sprintf("DELETE method to %s not allowed", uri), http.StatusBadRequest)
 			return
 		}
@@ -940,7 +931,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if uri.Raw() || uri.Hash() || uri.DeprecatedRaw() {
+		if uri.Raw() || uri.Hash() {
 			s.HandleGet(w, req)
 			return
 		}
