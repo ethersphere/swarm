@@ -32,8 +32,6 @@ type URI struct {
 	//                   (address is not resolved)
 	// * bzz-list      -  list of all files contained in a swarm manifest
 	//
-	// Deprecated Schemes:
-	//
 	Scheme string
 
 	// Addr is either a hexadecimal storage key or it an address which
