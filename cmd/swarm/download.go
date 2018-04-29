@@ -22,6 +22,8 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -62,15 +64,20 @@ func download(ctx *cli.Context) {
 	fi, err := os.Stat(dir)
 	if err != nil {
 		utils.Fatalf("could not stat path")
-
 	}
+
 	switch mode := fi.Mode(); {
 	case mode.IsRegular():
-		utils.Fatalf("destination path is not a directory")
+		utils.Fatalf("destination path is not a directory!")
 	}
+
+	uri, err := api.Parse(args[0])
 
 	if !isRecursive {
 
 	}
+
+	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+	client := client.NewClient(bzzapi)
 
 }
