@@ -28,12 +28,12 @@ import (
 )
 
 func download(ctx *cli.Context) {
+	isRecursive := false
+
 	args := ctx.Args()
 	if len(args) < 1 {
 		utils.Fatalf("Usage: swarm download <bzz locator> [<destination path>]")
 	}
-
-	isRecursive := false
 
 	newArgs := []string{}
 
@@ -72,12 +72,30 @@ func download(ctx *cli.Context) {
 	}
 
 	uri, err := api.Parse(args[0])
+	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+	client := client.NewClient(bzzapi)
+
+	//possible cases:
+	// bzz:/addr -> download directory, possible recursive
+	// bzz:/addr/path -> download file
+
+	if uri.Path != "" {
+		// we are downloading a file/path from a manifest
+		file, err := client.Download(uri.Addr, uri.Path)
+		if err != nil {
+			utils.Fatalf("could not download %s from given address: %s. error: %v", uri.Path, uri.Addr, err)
+		}
+
+	} else {
+		// we are downloading a directory
+		err := client.DownloadDirectory(uri.Addr, uri.Path, dir)
+		if err != nil {
+			utils.Fatalf("could not download directory error: %v", err)
+		}
+	}
 
 	if !isRecursive {
 
 	}
-
-	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-	client := client.NewClient(bzzapi)
 
 }
