@@ -147,7 +147,7 @@ func (self *Protocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid str
 	} else if (!self.isActiveSymKey(keyid, *self.topic) && !asymmetric) ||
 		(!self.isActiveAsymKey(keyid, *self.topic) && asymmetric) {
 
-		rw, err := self.AddPeer(p, self.proto.Run, *self.topic, asymmetric, keyid)
+		rw, err := self.AddPeer(p, *self.topic, asymmetric, keyid)
 		if err != nil {
 			return err
 		}
@@ -197,7 +197,8 @@ func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 // `key` and `asymmetric` specifies what encryption key
 // to link the peer to.
 // The key must exist in the pss store prior to adding the peer.
-func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
+//func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
+func (self *Protocol) AddPeer(p *p2p.Peer, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
 	rw := &PssReadWriter{
 		Pss:   self.Pss,
 		rw:    make(chan p2p.Msg),
@@ -226,7 +227,7 @@ func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter
 		self.symKeyRWPool[key] = rw
 	}
 	go func() {
-		err := run(p, rw)
+		err := self.proto.Run(p, rw)
 		log.Warn(fmt.Sprintf("pss vprotocol quit on %v topic %v: %v", p, topic, err))
 	}()
 	return rw, nil

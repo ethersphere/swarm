@@ -96,7 +96,7 @@ func testProtocol(t *testing.T) {
 	// add right peer's public key as protocol peer on left
 	nid, _ := discover.HexID("0x00") // this hack is needed to satisfy the p2p method
 	p := p2p.NewPeer(nid, fmt.Sprintf("%x", common.FromHex(loaddrhex)), []p2p.Cap{})
-	_, err = pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, pssprotocols[lnodeinfo.ID].run, PingTopic, true, rpubkey)
+	_, err = pssprotocols[lnodeinfo.ID].protocol.AddPeer(p, PingTopic, true, rpubkey)
 	if err != nil {
 		t.Fatal(err)
 	}
