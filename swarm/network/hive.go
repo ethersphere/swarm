@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -193,7 +194,14 @@ func (h *Hive) NodeInfo() interface{} {
 // PeerInfo function is used by the p2p.server RPC interface to display
 // protocol specific information any connected peer referred to by their NodeID
 func (h *Hive) PeerInfo(id discover.NodeID) interface{} {
-	return NewAddrFromNodeID(id)
+	addr := NewAddrFromNodeID(id)
+	return struct {
+		OAddr hexutil.Bytes
+		UAddr hexutil.Bytes
+	}{
+		OAddr: addr.OAddr,
+		UAddr: addr.UAddr,
+	}
 }
 
 // ToAddr returns the serialisable version of u
