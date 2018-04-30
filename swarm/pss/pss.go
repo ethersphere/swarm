@@ -83,8 +83,9 @@ func NewPssParams() *PssParams {
 	}
 }
 
-func (self *PssParams) Init(privatekey *ecdsa.PrivateKey) {
+func (self *PssParams) WithPrivateKey(privatekey *ecdsa.PrivateKey) *PssParams {
 	self.privateKey = privatekey
+	return self
 }
 
 // Toplevel pss object, takes care of message sending, receiving, decryption and encryption, message handler dispatchers and message forwarding.

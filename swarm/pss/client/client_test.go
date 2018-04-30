@@ -228,8 +228,7 @@ func newServices() adapters.Services {
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
-			psparams := pss.NewPssParams()
-			psparams.Init(privkey)
+			psparams := pss.NewPssParams().WithPrivateKey(privkey)
 			pskad := kademlia(ctx.Config.ID)
 			ps, err := pss.NewPss(pskad, psparams)
 			if err != nil {

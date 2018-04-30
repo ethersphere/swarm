@@ -133,8 +133,7 @@ func TestCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	ps := newTestPss(privkey, nil, nil)
-	pp := NewPssParams()
-	pp.Init(privkey)
+	pp := NewPssParams().WithPrivateKey(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	datathree := []byte("baz")
@@ -233,8 +232,7 @@ func TestAddressMatch(t *testing.T) {
 		t.Fatalf("Could not generate private key: %v", err)
 	}
 	privkey, err := w.GetPrivateKey(keys)
-	pssp := NewPssParams()
-	pssp.Init(privkey)
+	pssp := NewPssParams().WithPrivateKey(privkey)
 	ps, err := NewPss(kad, pssp)
 	if err != nil {
 		t.Fatal(err.Error())
@@ -1346,8 +1344,7 @@ func newServices(allowRaw bool) adapters.Services {
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
-			pssp := NewPssParams()
-			pssp.Init(privkey)
+			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.MsgTTL = time.Second * 30
 			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
@@ -1414,8 +1411,7 @@ func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *Pss
 	}
 
 	// create pss
-	pp := NewPssParams()
-	pp.Init(privkey)
+	pp := NewPssParams().WithPrivateKey(privkey)
 	if ppextra != nil {
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
