@@ -229,7 +229,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	config.Pss.WithPrivateKey(self.privateKey)
+	config.Pss = config.Pss.WithPrivateKey(self.privateKey)
 	self.ps, err = pss.NewPss(to, config.Pss)
 	if err != nil {
 		return nil, err
