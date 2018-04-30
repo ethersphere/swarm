@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 const (
-	UpModeBootnode = iota
+	UpModeStar = iota
 	UpModeCircle
+	UpModeCluster
 )
 
 type up struct {
@@ -36,8 +36,8 @@ func Up(ctx context.Context, net *Network, nids []discover.NodeID, mode int) err
 	}
 
 	switch mode {
-	case UpModeBootnode:
-		u.conns = modeBootnode(nids)
+	case UpModeStar:
+		u.conns = modeStar(nids)
 	case UpModeCircle:
 		u.conns = modeCircle(nids)
 	}
@@ -54,7 +54,6 @@ func (u *up) upWithConfig() error {
 	trigger := make(chan discover.NodeID)
 	sub := u.net.Events().Subscribe(u.events)
 	// event sink on quit
-	log.Warn("checking", "nids", u.nids)
 	defer func() {
 		sub.Unsubscribe()
 		close(quitC)
@@ -71,7 +70,6 @@ func (u *up) upWithConfig() error {
 				case e := <-u.events:
 					if e.Type == EventTypeNode {
 						if e.Node.Up {
-							log.Warn("got nid", "nid", e.Node.ID())
 							trigger <- e.Node.ID()
 						}
 					}
@@ -98,7 +96,6 @@ func (u *up) upWithConfig() error {
 			return false, ctx.Err()
 		default:
 		}
-		log.Warn("ok")
 		return true, nil
 	}
 
@@ -125,7 +122,6 @@ func (u *up) connWithConfig() error {
 	trigger := make(chan discover.NodeID)
 	sub := u.net.Events().Subscribe(u.events)
 	// event sink on quit
-	log.Warn("checking", "nids", u.nids)
 	defer func() {
 		sub.Unsubscribe()
 		close(quitC)
@@ -169,7 +165,6 @@ func (u *up) connWithConfig() error {
 			return false, ctx.Err()
 		default:
 		}
-		log.Warn("ok")
 		return true, nil
 	}
 
@@ -191,7 +186,7 @@ func (u *up) connWithConfig() error {
 	return step.Error
 }
 
-func modeBootnode(nids []discover.NodeID) (conns []*Conn) {
+func modeStar(nids []discover.NodeID) (conns []*Conn) {
 	for i, n := range nids {
 		if i > 0 {
 			conns = append(conns, &Conn{
