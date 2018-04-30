@@ -342,7 +342,7 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 			log.Info("resource type", "key", key, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{Max: 100, Limit: true})
+			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
 			_, rsrcData, err := self.resource.GetContent(entry.Hash)
 			if err != nil {
 				apiGetNotFound.Inc(1)
