@@ -107,11 +107,12 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tmpDownload)
+		//defer os.Remove(tmpDownload)
 
 		bzzLocator := "bzz:/" + hash
 		flagss := []string{}
 		flagss = []string{
+			"--verbosity", "5",
 			"--bzzapi", cluster.Nodes[0].URL,
 			"download",
 			bzzLocator,
