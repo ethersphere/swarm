@@ -133,7 +133,7 @@ func TestCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	ps := newTestPss(privkey, nil, nil)
-	pp := NewPssParams(privkey)
+	pp := NewPssParams().WithPrivateKey(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	datathree := []byte("baz")
@@ -232,8 +232,11 @@ func TestAddressMatch(t *testing.T) {
 		t.Fatalf("Could not generate private key: %v", err)
 	}
 	privkey, err := w.GetPrivateKey(keys)
-	pssp := NewPssParams(privkey)
-	ps := NewPss(kad, pssp)
+	pssp := NewPssParams().WithPrivateKey(privkey)
+	ps, err := NewPss(kad, pssp)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 
 	pssmsg := &PssMsg{
 		To:      remoteaddr,
@@ -1341,11 +1344,14 @@ func newServices(allowRaw bool) adapters.Services {
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
-			pssp := NewPssParams(privkey)
+			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.MsgTTL = time.Second * 30
 			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
-			ps := NewPss(pskad, pssp)
+			ps, err := NewPss(pskad, pssp)
+			if err != nil {
+				return nil, err
+			}
 
 			ping := &Ping{
 				OutC: make(chan bool),
@@ -1405,11 +1411,14 @@ func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *Pss
 	}
 
 	// create pss
-	pp := NewPssParams(privkey)
+	pp := NewPssParams().WithPrivateKey(privkey)
 	if ppextra != nil {
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
-	ps := NewPss(overlay, pp)
+	ps, err := NewPss(overlay, pp)
+	if err != nil {
+		return nil
+	}
 	ps.Start(nil)
 
 	return ps
