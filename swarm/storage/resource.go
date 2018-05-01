@@ -420,6 +420,29 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 	return self.lookup(rsrc, nextperiod, 0, refresh, maxLookup)
 }
 
+// Returns the resource before the one currently loaded in the resource object
+//
+// Requires a synced resource object
+func (self *ResourceHandler) LookupPreviousByName(ctx context.Context, name string, maxLookup *ResourceLookupParams) (*resource, error) {
+	return self.LookupPrevious(ctx, ens.EnsNode(name), name, maxLookup)
+}
+
+func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common.Hash, name string, maxLookup *ResourceLookupParams) (*resource, error) {
+	rsrc := self.getResource(name)
+	if !rsrc.isSynced() {
+		return nil, NewResourceError(ErrNotSynced, "LookupPrevious requires synced resource.")
+	}
+	if rsrc.version > 1 {
+		rsrc.version--
+	} else if rsrc.lastPeriod == 1 {
+		return nil, NewResourceError(ErrNothingToReturn, "Current update is the oldest")
+	} else {
+		rsrc.version = 1
+		rsrc.lastPeriod--
+	}
+	return self.lookup(rsrc, rsrc.lastPeriod, rsrc.version, false, maxLookup)
+}
+
 // base code for public lookup methods
 func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
