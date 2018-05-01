@@ -99,7 +99,7 @@ func (u *up) upWithConfig() error {
 		return true, nil
 	}
 
-	d, err := time.ParseDuration(fmt.Sprintf("%dms", 10*len(u.nids)))
+	d, err := time.ParseDuration(fmt.Sprintf("%dms", 100*len(u.nids)))
 	if err != nil {
 		return err
 	}
