@@ -334,9 +334,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		var err error
 		if !self.isSelfPossibleRecipient(pssmsg) {
 			log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(self.BaseAddr()))
-			if err := self.enqueue(pssmsg); err != nil {
-				return err
-			}
+			return self.enqueue(pssmsg)
 		}
 		log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(self.BaseAddr()))
 
