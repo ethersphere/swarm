@@ -325,6 +325,10 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 	pssmsg, ok := msg.(*PssMsg)
 
 	if ok {
+		if int64(pssmsg.Expire) < time.Now().Unix() {
+			log.Trace(fmt.Sprintf("pss filtered expired message FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+			return nil
+		}
 		if self.checkFwdCache(pssmsg) {
 			log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
 			return nil

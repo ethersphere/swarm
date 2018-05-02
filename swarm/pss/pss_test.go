@@ -352,14 +352,19 @@ func TestHandlerConditions(t *testing.T) {
 		t.Fatalf("expected only one queued message but also had message %v", msg)
 	}
 
-	// outbox full should return error
-	for i := 0; i < defaultOutboxCapacity; i++ {
-		ps.outbox <- msg
+	// expired message should be dropped
+	msg.Expire = uint32(time.Now().Add(-time.Second).Unix())
+	if err := ps.handlePssMsg(msg); err != nil {
+		t.Fatal(err.Error())
 	}
-	msg.Payload.Data = []byte{0x62, 0x61, 0x72}
-	err = ps.handlePssMsg(msg)
-	if err == nil {
-		t.Fatal("expected error when mailbox full, but was nil")
+	tmr.Reset(time.Millisecond * 10)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected empty queue but have message %v", msg)
 	}
 
 	// invalid message should return error
@@ -370,6 +375,17 @@ func TestHandlerConditions(t *testing.T) {
 	}
 	if err := ps.handlePssMsg(fckedupmsg); err == nil {
 		t.Fatalf("expected error from processMsg but error nil")
+	}
+
+	// outbox full should return error
+	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
+	for i := 0; i < defaultOutboxCapacity; i++ {
+		ps.outbox <- msg
+	}
+	msg.Payload.Data = []byte{0x62, 0x61, 0x72}
+	err = ps.handlePssMsg(msg)
+	if err == nil {
+		t.Fatal("expected error when mailbox full, but was nil")
 	}
 }
 
