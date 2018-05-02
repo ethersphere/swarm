@@ -422,6 +422,9 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 
 // Returns the resource before the one currently loaded in the resource object
 //
+// This is useful where resource updates are used incrementally in contrast to
+// merely replacing content.
+//
 // Requires a synced resource object
 func (self *ResourceHandler) LookupPreviousByName(ctx context.Context, name string, maxLookup *ResourceLookupParams) (*resource, error) {
 	return self.LookupPrevious(ctx, ens.EnsNode(name), name, maxLookup)
