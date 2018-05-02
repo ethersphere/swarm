@@ -270,6 +270,109 @@ func TestAddressMatch(t *testing.T) {
 	}
 }
 
+//
+func TestHandlerConditions(t *testing.T) {
+
+	// setup
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	addr := make([]byte, 32)
+	addr[0] = 0x01
+	ps := newTestPss(privkey, network.NewKademlia(addr, network.NewKadParams()), NewPssParams())
+
+	// message should pass
+	msg := &PssMsg{
+		To:     addr,
+		Expire: uint32(time.Now().Add(time.Second * 60).Unix()),
+		Payload: &whisper.Envelope{
+			Topic: [4]byte{},
+			Data:  []byte{0x66, 0x6f, 0x6f},
+		},
+	}
+	if err := ps.handlePssMsg(msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr := time.NewTimer(time.Millisecond * 100)
+	var outmsg *PssMsg
+	select {
+	case outmsg = <-ps.outbox:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected outbox empty after full address on msg, but had message %v", msg)
+	}
+
+	// message should pass and queue due to partial length
+	msg.To = addr[0:1]
+	msg.Payload.Data = []byte{0x78, 0x79, 0x80, 0x80, 0x79}
+	if err := ps.handlePssMsg(msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr.Reset(time.Millisecond * 100)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	}
+	if outmsg == nil {
+		t.Fatal("expected message in outbox on encrypt fail, but empty")
+	}
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected only one queued message but also had message %v", msg)
+	}
+
+	// full address mismatch should put message in queue
+	msg.To[0] = 0xff
+	if err := ps.handlePssMsg(msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr.Reset(time.Millisecond * 10)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	}
+	if outmsg == nil {
+		t.Fatal("expected message in outbox on address mismatch, but empty")
+	}
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected only one queued message but also had message %v", msg)
+	}
+
+	// outbox full should return error
+	for i := 0; i < defaultOutboxCapacity; i++ {
+		ps.outbox <- msg
+	}
+	msg.Payload.Data = []byte{0x62, 0x61, 0x72}
+	err = ps.handlePssMsg(msg)
+	if err == nil {
+		t.Fatal("expected error when mailbox full, but was nil")
+	}
+
+	// invalid message should return error
+	fckedupmsg := &struct {
+		pssMsg *PssMsg
+	}{
+		pssMsg: &PssMsg{},
+	}
+	if err := ps.handlePssMsg(fckedupmsg); err == nil {
+		t.Fatalf("expected error from processMsg but error nil")
+	}
+}
+
 // set and generate pubkeys and symkeys
 func TestKeys(t *testing.T) {
 	// make our key and init pss with it

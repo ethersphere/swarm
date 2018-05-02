@@ -320,7 +320,7 @@ func (self *Pss) getHandlers(topic Topic) map[*Handler]bool {
 // Filters incoming messages for processing or forwarding.
 // Check if address partially matches
 // If yes, it CAN be for us, and we process it
-// Passes error to pss protocol handler if payload is not valid pssmsg
+// Only passes error to pss protocol handler if payload is not valid pssmsg
 func (self *Pss) handlePssMsg(msg interface{}) error {
 	pssmsg, ok := msg.(*PssMsg)
 
@@ -331,20 +331,19 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		}
 		self.addFwdCache(pssmsg)
 
-		var err error
 		if !self.isSelfPossibleRecipient(pssmsg) {
 			log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(self.BaseAddr()))
 			return self.enqueue(pssmsg)
 		}
-		log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(self.BaseAddr()))
 
+		log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(self.BaseAddr()))
 		if err := self.process(pssmsg); err != nil {
 			qerr := self.enqueue(pssmsg)
 			if qerr != nil {
-				err = fmt.Errorf("%s + %s", err, qerr)
+				return fmt.Errorf("process fail: processerr %v, queueerr: %v", err, qerr)
 			}
 		}
-		return err
+		return nil
 	}
 
 	return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
@@ -374,6 +373,7 @@ func (self *Pss) process(pssmsg *PssMsg) error {
 		asymmetric = true
 		keyFunc = self.processAsym
 	}
+
 	recvmsg, keyid, from, err = keyFunc(envelope)
 	if err != nil {
 		return errors.New("Decryption failed")
