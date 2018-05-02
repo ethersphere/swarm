@@ -464,7 +464,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 	if maxLookup == nil {
 		maxLookup = self.queryMaxPeriods
 	}
-	log.Trace("resource lookuup", "period", period, "version", version, "limit", maxLookup.Limit, "max", maxLookup.Max)
+	log.Trace("resource lookup", "period", period, "version", version, "limit", maxLookup.Limit, "max", maxLookup.Max)
 	for period > 0 {
 		if maxLookup.Limit && hops > maxLookup.Max {
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))

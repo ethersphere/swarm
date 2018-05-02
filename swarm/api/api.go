@@ -339,7 +339,7 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		// if the resource update is of multihash type:
 		// we validate the multihash and retrieve the manifest behind it, and resume normal operations from there
 		if entry.ContentType == ResourceContentType {
-			log.Info("resource type", "key", key, "hash", entry.Hash)
+			log.Trace("resource type", "key", key, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
