@@ -17,8 +17,7 @@
 package storage
 
 import (
-	"encoding/binary"
-	"fmt"
+	"context"
 	"path/filepath"
 	"sync"
 
@@ -100,115 +99,58 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // when the chunk is stored in memstore.
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
-func (self *LocalStore) Put(chunk *Chunk) {
+func (self *LocalStore) Put(ctx context.Context, chunk Chunk) (func(ctx context.Context) error, error) {
+	data, err := chunk.Data()
+	if err != nil {
+		return nil, err
+	}
 	valid := true
 	for _, v := range self.Validators {
-		if valid = v.Validate(chunk.Key, chunk.SData); valid {
+		if valid = v.Validate(chunk.Address(), data); valid {
 			break
 		}
 	}
 	if !valid {
-		chunk.SetErrored(ErrChunkInvalid)
-		chunk.markAsStored()
-		return
+		return nil, ErrChunkInvalid
 	}
 
-	log.Trace("localstore.put", "key", chunk.Key)
+	log.Trace("localstore.put", "key", chunk.Address())
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-
-	memChunk, err := self.memStore.Get(chunk.Key)
-	switch err {
-	case nil:
-		if memChunk.ReqC == nil {
-			chunk.markAsStored()
-			return
-		}
-	case ErrChunkNotFound:
-	default:
-		chunk.SetErrored(err)
-		return
+	memChunk, err := self.memStore.Get(chunk.Address())
+	if err == nil {
+		return nil, nil
 	}
-
-	self.memStore.Put(chunk)
-
-	if memChunk != nil && memChunk.ReqC != nil {
-		close(memChunk.ReqC)
+	if err != nil && err != ErrChunkNotFound {
+		return nil, err
 	}
-
 	dbStorePutCounter.Inc(1)
-	self.DbStore.Put(chunk)
-
-	newc := NewChunk(chunk.Key, nil)
-	newc.SData = chunk.SData
-	newc.Size = chunk.Size
-	//newc.dbStored = chunk.dbStored
-	newc.dbStoredC = chunk.dbStoredC
-	//newc.dbStoredMu = chunk.dbStoredMu
-	go func() {
-		<-chunk.dbStoredC
-
-		self.mu.Lock()
-		defer self.mu.Unlock()
-
-		self.memStore.Put(newc)
-	}()
+	return self.DbStore.Put(ctx, chunk)
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
+func (self *LocalStore) Get(key Address) (chunk *chunk, err error) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	return self.get(key)
 }
 
-func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
+func (self *LocalStore) get(key Address) (chunk *chunk, err error) {
 	chunk, err = self.memStore.Get(key)
-	if err == nil {
-		if chunk.ReqC != nil {
-			select {
-			case <-chunk.ReqC:
-			default:
-				return chunk, ErrFetching
-			}
-		}
-		return
+	if err != nil && err != ErrChunkNotFound {
+		return nil, err
 	}
 	chunk, err = self.DbStore.Get(key)
 	if err != nil {
-		return
+		return nil, err
 	}
-	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 	self.memStore.Put(chunk)
-	return
-}
-
-// retrieve logic common for local and network chunk retrieval requests
-func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
-
-	var err error
-	chunk, err = self.get(key)
-	if err == nil && chunk.GetErrored() == nil {
-		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
-		return chunk, false
-	}
-	if err == ErrFetching && chunk.GetErrored() == nil {
-		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
-		return chunk, false
-	}
-	// no data and no request status
-	log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", key))
-	chunk = NewChunk(key, make(chan bool))
-	self.memStore.Put(chunk)
-	return chunk, true
+	return chunk, nil
 }
 
 // RequestsCacheLen returns the current number of outgoing requests stored in the cache

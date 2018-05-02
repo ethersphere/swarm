@@ -17,32 +17,15 @@
 package storage
 
 import (
-	"time"
+	"context"
 
-	"github.com/ethereum/go-ethereum/log"
+	lru "github.com/hashicorp/golang-lru"
 )
 
-var (
-	// NetStore.Get timeout for get and get retries
-	// This is the maximum period that the Get will block.
-	// If it is reached, Get will return ErrChunkNotFound.
-	netStoreRetryTimeout = 30 * time.Second
-	// Minimal period between calling get method on NetStore
-	// on retry. It protects calling get very frequently if
-	// it returns ErrChunkNotFound very fast.
-	netStoreMinRetryDelay = 3 * time.Second
-	// Timeout interval before retrieval is timed out.
-	// It is used in NetStore.get on waiting for ReqC to be
-	// closed on a single retrieve request.
-	searchTimeout = 10 * time.Second
-)
-
-// NetStore implements the ChunkStore interface,
-// this chunk access layer assumed 2 chunk stores
-// local storage eg. LocalStore and network storage eg., NetStore
-// access by calling network is blocking with a timeout
+// NetStore
 type NetStore struct {
 	localStore *LocalStore
+	requests   *lru.Cache
 	retrieve   func(chunk *Chunk) error
 }
 
@@ -50,121 +33,80 @@ func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *Net
 	return &NetStore{localStore, retrieve}
 }
 
-// Get is the entrypoint for local retrieve requests
-// waits for response or times out
-//
-// Get uses get method to retrieve request, but retries if the
-// ErrChunkNotFound is returned by get, until the netStoreRetryTimeout
-// is reached.
-func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
-	timer := time.NewTimer(netStoreRetryTimeout)
-	defer timer.Stop()
-
-	// result and resultC provide results from the goroutine
-	// where NetStore.get is called.
-	type result struct {
-		chunk *Chunk
-		err   error
+// Has checks if chunk with hash address ref is stored locally
+// if not it returns a fetcher function to be called with a context
+// block until item is stotef
+func (n *NetStore) Has(ctx context.Context, ref Address) (func(context.Context) error, error) {
+	chunk, fetch, err := n.Get(ctx, ref)
+	if chunk != nil {
+		return nil
 	}
-	resultC := make(chan result)
-
-	// quitC ensures that retring goroutine is terminated
-	// when this function returns.
-	quitC := make(chan struct{})
-	defer close(quitC)
-
-	// do retries in a goroutine so that the timer can
-	// force this method to return after the netStoreRetryTimeout.
-	go func() {
-		// limiter ensures that NetStore.get is not called more frequently
-		// then netStoreMinRetryDelay. If NetStore.get takes longer
-		// then netStoreMinRetryDelay, the next retry call will be
-		// without a delay.
-		limiter := time.NewTimer(netStoreMinRetryDelay)
-		defer limiter.Stop()
-
-		for {
-			chunk, err := self.get(key)
-			if err != ErrChunkNotFound {
-				// break retry only if the error is nil
-				// or other error then ErrChunkNotFound
-				select {
-				case <-quitC:
-					// Maybe NetStore.Get function has returned
-					// by the timer.C while we were waiting for the
-					// results. Terminate this goroutine.
-				case resultC <- result{chunk: chunk, err: err}:
-					// Send the result to the parrent goroutine.
-				}
-				return
-
-			}
-			select {
-			case <-quitC:
-				// NetStore.Get function has returned, possibly
-				// by the timer.C, which makes this goroutine
-				// not needed.
-				return
-			case <-limiter.C:
-			}
-			// Reset the limiter for the next iteration.
-			limiter.Reset(netStoreMinRetryDelay)
-			log.Debug("NetStore.Get retry chunk", "key", key)
+	return func(c context.Context) error {
+		chunk, err = fetch(c)
+		if err != nil {
+			return err
 		}
+		chunk.Stored()
 	}()
-
-	select {
-	case r := <-resultC:
-		return r.chunk, r.err
-	case <-timer.C:
-		return nil, ErrChunkNotFound
-	}
 }
 
-func (self *NetStore) get(key Key) (chunk *Chunk, err error) {
-	if self.retrieve == nil {
-		chunk, err = self.localStore.Get(key)
-		if err == nil {
-			return chunk, nil
-		}
-		if err != ErrFetching {
-			return nil, err
-		}
-	} else {
-		var created bool
-		chunk, created = self.localStore.GetOrCreateRequest(key)
-
-		if chunk.ReqC == nil {
-			return chunk, nil
-		}
-
-		if created {
-			err := self.retrieve(chunk)
-			if err != nil {
-				// mark chunk request as failed so that we can retry it later
-				chunk.SetErrored(ErrChunkUnavailable)
-				return nil, err
-			}
-		}
+// Get attempts at retrieving the chunk from LocalStore
+// if it is not found, attempts at retrieving an existing requests
+// if none exists, creates one and saves it in the requests cache
+// From here on, all Get will hit on this request until the chunk is delivered
+// or all request contexts are done
+// it returns a chunk, a fetcher function and an error
+// if chunk is nil, fetcher needs to be called with a context to return the chunk
+func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, func(ctx context.Context) (Chunk, error), error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	chunk, err := n.LocalStore.Get(ctx, ref)
+	if err == nil {
+		return chunk, nil, nil
 	}
-
-	t := time.NewTicker(searchTimeout)
-	defer t.Stop()
-
-	select {
-	case <-t.C:
-		// mark chunk request as failed so that we can retry
-		chunk.SetErrored(ErrChunkNotFound)
-		return nil, ErrChunkNotFound
-	case <-chunk.ReqC:
+	request, err := n.getOrCreateRequest(ref)
+	if err != nil {
+		return nil, nil, err
 	}
-	chunk.SetErrored(nil)
-	return chunk, nil
+	return nil, request.Run, nil
+}
+
+// getOrCreateRequest attempts at retrieving an existing requests
+// if none exists, creates one and saves it in the requests cache
+// caller must hold the lock
+func (n *NetStore) getOrCreateRequest(ref Address) (*Request, error) {
+	r, err := n.requests.Get(ref)
+	if err == nil {
+		return r, err
+	}
+	r = NewRequest(n)
+	err = n.requests.Add(ref, r)
+	if err != nil {
+		return nil, err
+	}
+	return r, nil
 }
 
 // Put is the entrypoint for local store requests coming from storeLoop
-func (self *NetStore) Put(chunk *Chunk) {
-	self.localStore.Put(chunk)
+
+// Put stores a chunk in localstore, manages the request for the chunk if exists
+// by closing the ReqC channel
+func (n *NetStore) Put(ctx context.Context, ch Chunk) (func(ctx context.Context) error, error) {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	defer func() {
+		r := n.requests.Get(ch.Ref)
+		if r != nil {
+			r.chunk = ch
+			close(r.deliveredC)
+			n.requests.Remove(ch.Ref)
+		}
+	}()
+	waitToStore, err := n.LocalStore.Put(ch)
+	if err != nil {
+		return nil, err
+	}
+	return waitToStore, nil
 }
 
 // Close chunk store

@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -88,7 +89,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 
 	h.storeChunk(chunk)
 
-	return Reference(append(chunk.Key, encryptionKey...)), nil
+	return Reference(append(chunk.Address(), encryptionKey...)), nil
 }
 
 // Get returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).
@@ -99,14 +100,17 @@ func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 	if err != nil {
 		return nil, err
 	}
-	toDecrypt := (encryptionKey != nil)
-
-	chunk, err := h.store.Get(key)
+	ctx := context.Background()
+	chunk, fetch, err := h.store.Get(ctx, key)
 	if err != nil {
 		return nil, err
 	}
+	if chunk == nil {
+		chunk, err = fetch(ctx)
+	}
 
-	chunkData := chunk.SData
+	chunkData, _ := chunk.Data()
+	toDecrypt := (encryptionKey != nil)
 	if toDecrypt {
 		var err error
 		chunkData, err = h.decryptChunkData(chunkData, encryptionKey)
@@ -131,19 +135,16 @@ func (h *hasherStore) Wait() {
 	h.wg.Wait()
 }
 
-func (h *hasherStore) createHash(chunkData ChunkData) Key {
+func (h *hasherStore) createHash(chunkData ChunkData) Address {
 	hasher := h.hashFunc()
 	hasher.ResetWithLength(chunkData[:8]) // 8 bytes of length
 	hasher.Write(chunkData[8:])           // minus 8 []byte length
 	return hasher.Sum(nil)
 }
 
-func (h *hasherStore) createChunk(chunkData ChunkData, chunkSize int64) *Chunk {
+func (h *hasherStore) createChunk(chunkData ChunkData, chunkSize int64) *chunk {
 	hash := h.createHash(chunkData)
-	chunk := NewChunk(hash, nil)
-	chunk.SData = chunkData
-	chunk.Size = chunkSize
-
+	chunk := NewChunk(hash, chunkData)
 	return chunk
 }
 
@@ -205,25 +206,27 @@ func (h *hasherStore) RefSize() int64 {
 	return h.refSize
 }
 
-func (h *hasherStore) storeChunk(chunk *Chunk) {
+func (h *hasherStore) storeChunk(chunk *chunk) {
+	ctx := context.Background()
+	wait, err := h.store.Put(ctx, chunk)
+	_ = err
 	h.wg.Add(1)
 	go func() {
-		<-chunk.dbStoredC
+		_ = wait(ctx)
 		h.wg.Done()
 	}()
-	h.store.Put(chunk)
 }
 
-func parseReference(ref Reference, hashSize int) (Key, encryption.Key, error) {
-	encryptedKeyLength := hashSize + encryption.KeyLength
+func parseReference(ref Reference, hashSize int) (Address, encryption.Key, error) {
+	encryptedRefLength := hashSize + encryption.KeyLength
 	switch len(ref) {
-	case KeyLength:
-		return Key(ref), nil, nil
-	case encryptedKeyLength:
+	case AddressLength:
+		return Address(ref), nil, nil
+	case encryptedRefLength:
 		encKeyIdx := len(ref) - encryption.KeyLength
-		return Key(ref[:encKeyIdx]), encryption.Key(ref[encKeyIdx:]), nil
+		return Address(ref[:encKeyIdx]), encryption.Key(ref[encKeyIdx:]), nil
 	default:
-		return nil, nil, fmt.Errorf("Invalid reference length, expected %v or %v got %v", hashSize, encryptedKeyLength, len(ref))
+		return nil, nil, fmt.Errorf("Invalid reference length, expected %v or %v got %v", hashSize, encryptedRefLength, len(ref))
 	}
 
 }

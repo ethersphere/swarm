@@ -91,7 +91,7 @@ type resource struct {
 	nameHash   common.Hash
 	startBlock uint64
 	lastPeriod uint32
-	lastKey    Key
+	lastKey    Address
 	frequency  uint64
 	version    uint32
 	data       []byte
@@ -224,8 +224,8 @@ func (self *ResourceHandler) SetStore(store ChunkStore) {
 // If resource update, owner is checked against ENS record of resource name inferred from chunk data
 // If parsed signature is nil, validates automatically
 // If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
-func (self *ResourceHandler) Validate(key Key, data []byte) bool {
-	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
+func (self *ResourceHandler) Validate(key Address, data []byte) bool {
+	signature, period, version, name, parseddata, err := self.parseUpdate(data)
 	if err != nil {
 		if len(data) == indexSize {
 			if bytes.Equal(data[:2], []byte{0, 0}) {
@@ -252,7 +252,7 @@ func (self *ResourceHandler) IsValidated() bool {
 }
 
 // Create the resource update digest used in signatures
-func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
+func (self *ResourceHandler) keyDataHash(key Address, data []byte) common.Hash {
 	hasher := self.hashPool.Get().(SwarmHash)
 	defer self.hashPool.Put(hasher)
 	hasher.Reset()
@@ -271,7 +271,7 @@ func (self *ResourceHandler) checkAccess(name string, address common.Address) (b
 }
 
 // get data from current resource
-func (self *ResourceHandler) GetContent(name string) (Key, []byte, error) {
+func (self *ResourceHandler) GetContent(name string) (Address, []byte, error) {
 	rsrc := self.getResource(name)
 	if rsrc == nil || !rsrc.isSynced() {
 		return nil, nil, NewResourceError(ErrNotFound, "Resource does not exist or is not synced")
@@ -346,7 +346,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 
 	// chunk with key equal to namehash points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
-	key := Key(nameHash.Bytes())
+	key := Address(nameHash.Bytes())
 	chunk := NewChunk(key, nil)
 	chunk.SData = make([]byte, indexSize)
 
@@ -542,7 +542,7 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.chunkStore.Get(Key(rsrc.nameHash[:]))
+		chunk, err := self.chunkStore.Get(Address(rsrc.nameHash[:]))
 		if err != nil {
 			return nil, err
 		}
@@ -570,10 +570,10 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	if *rsrc.name != name {
 		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, *rsrc.name))
 	}
-	log.Trace("update", "name", *rsrc.name, "rootkey", rsrc.nameHash, "updatekey", chunk.Key, "period", period, "version", version)
+	log.Trace("update", "name", *rsrc.name, "rootkey", rsrc.nameHash, "updatekey", chunk.Address, "period", period, "version", version)
 	// check signature (if signer algorithm is present)
 	if signature != nil {
-		digest := self.keyDataHash(chunk.Key, data)
+		digest := self.keyDataHash(chunk.Address, data)
 		_, err = getAddressFromDataSig(digest, *signature)
 		if err != nil {
 			return nil, NewResourceError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
@@ -581,14 +581,14 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	}
 
 	// update our rsrcs entry map
-	rsrc.lastKey = chunk.Key
+	rsrc.lastKey = chunk.Address
 	rsrc.lastPeriod = period
 	rsrc.version = version
 	rsrc.updated = time.Now()
 	rsrc.data = make([]byte, len(data))
 	rsrc.Multihash = multihash
 	copy(rsrc.data, data)
-	log.Debug("Resource synced", "name", *rsrc.name, "key", chunk.Key, "period", rsrc.lastPeriod, "version", rsrc.version)
+	log.Debug("Resource synced", "name", *rsrc.name, "key", chunk.Address, "period", rsrc.lastPeriod, "version", rsrc.version)
 	self.setResource(*rsrc.name, rsrc)
 	return rsrc, nil
 }
@@ -657,18 +657,18 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 //
 // A resource update cannot span chunks, and thus has max length 4096
 
-func (self *ResourceHandler) UpdateMultihash(ctx context.Context, name string, data []byte) (Key, error) {
+func (self *ResourceHandler) UpdateMultihash(ctx context.Context, name string, data []byte) (Address, error) {
 	if isMultihash(data) == 0 {
 		return nil, NewResourceError(ErrNothingToReturn, "Invalid multihash")
 	}
 	return self.update(ctx, name, data, true)
 }
 
-func (self *ResourceHandler) Update(ctx context.Context, name string, data []byte) (Key, error) {
+func (self *ResourceHandler) Update(ctx context.Context, name string, data []byte) (Address, error) {
 	return self.update(ctx, name, data, false)
 }
 
-func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Key, error) {
+func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Address, error) {
 
 	if self.chunkStore == nil {
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before updating")
@@ -799,7 +799,7 @@ func (self *ResourceHandler) setResource(name string, rsrc *resource) {
 }
 
 // used for chunk keys
-func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehash common.Hash) Key {
+func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehash common.Hash) Address {
 	// format is: hash(period|version|namehash)
 	hasher := self.hashPool.Get().(SwarmHash)
 	defer self.hashPool.Put(hasher)
@@ -826,7 +826,7 @@ func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Ad
 }
 
 // create an update chunk
-func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *Chunk {
+func newUpdateChunk(key Address, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *Chunk {
 
 	// no signatures if no validator
 	var signaturelength int

@@ -136,38 +136,31 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 	defer cleanup()
 
 	cacheCap := 200
-	requestsCap := 200
 	memStore := NewMemStore(NewStoreParams(4000, 200, 200, nil, nil), nil)
 
 	tests := []struct {
 		n         int    // number of chunks to push to memStore
 		chunkSize uint64 // size of chunk (by default in Swarm - 4096)
-		request   bool   // whether or not to set the ReqC channel on the random chunks
 	}{
 		{
 			n:         1,
 			chunkSize: 4096,
-			request:   false,
 		},
 		{
 			n:         201,
 			chunkSize: 4096,
-			request:   false,
 		},
 		{
 			n:         501,
 			chunkSize: 4096,
-			request:   false,
 		},
 		{
 			n:         3100,
 			chunkSize: 4096,
-			request:   false,
 		},
 		{
 			n:         100,
 			chunkSize: 4096,
-			request:   true,
 		},
 	}
 
@@ -194,9 +187,6 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 				t.Fatalf("expected to get cache capacity less than %v, but got %v", cacheCap, got)
 			}
 
-			if got := memStore.requests.Len(); got > requestsCap {
-				t.Fatalf("expected to get requests capacity less than %v, but got %v", requestsCap, got)
-			}
 		}
 
 		for i := 0; i < tt.n; i++ {

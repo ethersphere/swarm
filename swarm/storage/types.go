@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/rand"
 	"encoding/binary"
@@ -33,7 +34,7 @@ import (
 )
 
 const MaxPO = 16
-const KeyLength = 32
+const AddressLength = 32
 
 type Hasher func() hash.Hash
 type SwarmHasher func() SwarmHash
@@ -42,17 +43,17 @@ type SwarmHasher func() SwarmHash
 // should probably not be here? but network should wrap chunk object
 type Peer interface{}
 
-type Key []byte
+type Address []byte
 
-func (x Key) Size() uint {
+func (x Address) Size() uint {
 	return uint(len(x))
 }
 
-func (x Key) isEqual(y Key) bool {
+func (x Address) isEqual(y Address) bool {
 	return bytes.Equal(x, y)
 }
 
-func (h Key) bits(i, j uint) uint {
+func (h Address) bits(i, j uint) uint {
 	ii := i >> 3
 	jj := i & 7
 	if ii >= h.Size() {
@@ -99,11 +100,11 @@ func Proximity(one, other []byte) (ret int) {
 	return MaxPO
 }
 
-func IsZeroKey(key Key) bool {
-	return len(key) == 0 || bytes.Equal(key, ZeroKey)
+func IsZeroAddress(key Address) bool {
+	return len(key) == 0 || bytes.Equal(key, ZeroAddress)
 }
 
-var ZeroKey = Key(common.Hash{}.Bytes())
+var ZeroAddress = Address(common.Hash{}.Bytes())
 
 func MakeHashFunc(hash string) SwarmHasher {
 	switch hash {
@@ -121,26 +122,26 @@ func MakeHashFunc(hash string) SwarmHasher {
 	return nil
 }
 
-func (key Key) Hex() string {
+func (key Address) Hex() string {
 	return fmt.Sprintf("%064x", []byte(key[:]))
 }
 
-func (key Key) Log() string {
+func (key Address) Log() string {
 	if len(key[:]) < 8 {
 		return fmt.Sprintf("%x", []byte(key[:]))
 	}
 	return fmt.Sprintf("%016x", []byte(key[:8]))
 }
 
-func (key Key) String() string {
+func (key Address) String() string {
 	return fmt.Sprintf("%064x", []byte(key)[:])
 }
 
-func (key Key) MarshalJSON() (out []byte, err error) {
+func (key Address) MarshalJSON() (out []byte, err error) {
 	return []byte(`"` + key.String() + `"`), nil
 }
 
-func (key *Key) UnmarshalJSON(value []byte) error {
+func (key *Address) UnmarshalJSON(value []byte) error {
 	s := string(value)
 	*key = make([]byte, 32)
 	h := common.Hex2Bytes(s[1 : len(s)-1])
@@ -148,7 +149,7 @@ func (key *Key) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-type KeyCollection []Key
+type KeyCollection []Address
 
 func NewKeyCollection(l int) KeyCollection {
 	return make(KeyCollection, l)
@@ -166,49 +167,80 @@ func (c KeyCollection) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
-// Chunk also serves as a request object passed to ChunkStores
-// in case it is a retrieval request, Data is nil and Size is 0
-// Note that Size is not the size of the data chunk, which is Data.Size()
-// but the size of the subtree encoded in the chunk
-// 0 if request, to be supplied by the dpa
-type Chunk struct {
-	Key   Key    // always
-	SData []byte // nil if request, to be supplied by dpa
-	Size  int64  // size of the data covered by the subtree encoded in this chunk
-	//Source   Peer           // peer
-	C          chan bool // to signal data delivery by the dpa
-	ReqC       chan bool // to signal the request done
-	dbStoredC  chan bool // never remove a chunk from memStore before it is written to dbStore
-	dbStored   bool
-	dbStoredMu *sync.Mutex
-	errored    error // flag which is set when the chunk request has errored or timeouted
-	erroredMu  sync.Mutex
+// ChunkStore is the interface for
+type ChunkStore interface {
+	Get(ctx context.Context, ref Address) (Chunk, func(ctx context.Context) (Chunk, error), error)
+	Put(ctx context.Context, ch Chunk) (func(ctx context.Context) error, error)
+	Has(ctx context.Context, ref Address) (func(context.Context) error, error)
+	Close()
 }
 
-func (c *Chunk) SetErrored(err error) {
-	c.erroredMu.Lock()
-	defer c.erroredMu.Unlock()
-
-	c.errored = err
+// Chunk interface implemented by requests and data chunks
+type Chunk interface {
+	Address() Address
+	Payload() ([]byte, error)
+	Span() (int64, error)
+	Data() ([]byte, error)
 }
 
-func (c *Chunk) GetErrored() error {
-	c.erroredMu.Lock()
-	defer c.erroredMu.Unlock()
-
-	return c.errored
+type chunk struct {
+	addr  Address
+	sdata []byte
+	span  int64
 }
 
-func NewChunk(key Key, reqC chan bool) *Chunk {
-	return &Chunk{
-		Key:        key,
-		ReqC:       reqC,
-		dbStoredC:  make(chan bool),
-		dbStoredMu: &sync.Mutex{},
+func NewChunk(addr Address, data []byte) *chunk {
+	return &chunk{
+		addr:  addr,
+		sdata: data,
 	}
 }
 
-func (c *Chunk) markAsStored() {
+func (c *chunk) Address() Address {
+	return c.addr
+}
+
+func (c *chunk) Span() (int64, error) {
+	if c.span == 0 {
+		span := binary.BigEndian.Uint64(c.sdata)
+		if err != nil {
+			return nil, err
+		}
+		c.span = span
+	}
+	return c.span, nil
+}
+
+func (c *chunk) Data() ([]byte, error) {
+	return c.sdata, nil
+}
+
+func (c *chunk) Payload() ([]byte, error) {
+	return c.sdata[8:], nil
+}
+
+// Request is created when a chunk is not found locally
+// it starts a process of fetching once and keeps it
+// alive until all active requests complete
+// either by the chunk delivered or all cancelled/timed out
+type Request struct {
+	chunk      *chunk
+	triggerC   chan context.Context
+	deliveredC chan struct{}
+	quitC      chan struct{}
+	wg         sync.WaitGroup
+	// Deliver([]byte) error
+}
+
+func NewRequest() *Request {
+	return &Request{
+		triggerC:   make(chan context.Context),
+		deliveredC: make(chan struct{}),
+		quitC:      make(chan struct{}),
+	}
+}
+
+func (c *chunk) markAsStored() {
 	c.dbStoredMu.Lock()
 	defer c.dbStoredMu.Unlock()
 
@@ -218,9 +250,14 @@ func (c *Chunk) markAsStored() {
 	}
 }
 
-func (c *Chunk) WaitToStore() error {
+func (c *chunk) WaitToStore() error {
 	<-c.dbStoredC
 	return c.GetErrored()
+}
+
+// String() for pretty printing
+func (self *chunk) String() string {
+	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
 }
 
 func GenerateRandomChunk(dataSize int64) *Chunk {
@@ -241,8 +278,8 @@ func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(dataSize))
 		hasher.ResetWithLength(chunks[i].SData[:8])
 		hasher.Write(chunks[i].SData[8:])
-		chunks[i].Key = make([]byte, 32)
-		copy(chunks[i].Key, hasher.Sum(nil))
+		chunks[i].Address = make([]byte, 32)
+		copy(chunks[i].Address, hasher.Sum(nil))
 	}
 
 	return chunks
@@ -265,18 +302,17 @@ func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
 }
 
 type StoreParams struct {
-	Hash                       SwarmHasher `toml:"-"`
-	DbCapacity                 uint64
-	CacheCapacity              uint
-	ChunkRequestsCacheCapacity uint
-	BaseKey                    []byte
+	Hash          SwarmHasher `toml:"-"`
+	DbCapacity    uint64
+	CacheCapacity uint
+	BaseKey       []byte
 }
 
 func NewDefaultStoreParams() *StoreParams {
-	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, defaultChunkRequestsCacheCapacity, nil, nil)
+	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, nil, nil)
 }
 
-func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
+func NewStoreParams(ldbCap uint64, cacheCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
 	if basekey == nil {
 		basekey = make([]byte, 32)
 	}
@@ -284,11 +320,10 @@ func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHa
 		hash = MakeHashFunc(DefaultHash)
 	}
 	return &StoreParams{
-		Hash:                       hash,
-		DbCapacity:                 ldbCap,
-		CacheCapacity:              cacheCap,
-		ChunkRequestsCacheCapacity: requestsCap,
-		BaseKey:                    basekey,
+		Hash:          hash,
+		DbCapacity:    ldbCap,
+		CacheCapacity: cacheCap,
+		BaseKey:       basekey,
 	}
 }
 
@@ -322,7 +357,7 @@ func (c ChunkData) Data() []byte {
 }
 
 type ChunkValidator interface {
-	Validate(key Key, data []byte) bool
+	Validate(key Address, data []byte) bool
 }
 
 // Provides method for validation of content address in chunks
@@ -339,7 +374,7 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (self *ContentAddressValidator) Validate(key Key, data []byte) bool {
+func (self *ContentAddressValidator) Validate(key Address, data []byte) bool {
 	hasher := self.Hasher()
 	hasher.ResetWithLength(data[:8])
 	hasher.Write(data[8:])
