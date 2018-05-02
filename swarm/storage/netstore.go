@@ -26,7 +26,7 @@ var (
 	// NetStore.Get timeout for get and get retries
 	// This is the maximum period that the Get will block.
 	// If it is reached, Get will return ErrChunkNotFound.
-	netStoreRetryTimeout = 60 * time.Second
+	netStoreRetryTimeout = 30 * time.Second
 	// Minimal period between calling get method on NetStore
 	// on retry. It protects calling get very frequently if
 	// it returns ErrChunkNotFound very fast.
