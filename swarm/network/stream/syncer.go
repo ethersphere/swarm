@@ -107,6 +107,9 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			select {
 			case <-ticker.C:
 			case <-s.quit:
+				if wait {
+					ticker.Stop()
+				}
 				return nil, 0, 0, nil, nil
 			}
 		}
@@ -114,9 +117,15 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			batch = append(batch, key[:]...)
 			i++
 			to = idx
+			if wait {
+				ticker.Stop()
+			}
 			return i < BatchSize
 		})
 		if err != nil {
+			if wait {
+				ticker.Stop()
+			}
 			return nil, 0, 0, nil, err
 		}
 		if len(batch) > 0 {
