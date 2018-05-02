@@ -185,13 +185,15 @@ func NewPss(k network.Overlay, params *PssParams) (*Pss, error) {
 
 func (self *Pss) Start(srv *p2p.Server) error {
 	go func() {
+		ticker := time.NewTicker(defaultCleanInterval)
+		cacheTicker := time.NewTicker(self.cacheTTL)
+		defer ticker.Stop()
+		defer cacheTicker.Stop()
 		for {
-			tickC := time.Tick(defaultCleanInterval)
-			cacheTickC := time.Tick(self.cacheTTL)
 			select {
-			case <-cacheTickC:
+			case <-cacheTicker.C:
 				self.cleanFwdCache()
-			case <-tickC:
+			case <-ticker.C:
 				self.cleanKeys()
 			case <-self.quitC:
 				return
