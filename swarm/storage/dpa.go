@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"io"
 	"time"
 )
@@ -35,8 +36,8 @@ implementation for storage or retrieval.
 
 const (
 	defaultLDBCapacity                = 5000000 // capacity for LevelDB, by default 5*10^6*4096 bytes == 20GB
-	defaultCacheCapacity              = 500     // capacity for in-memory chunks' cache
-	defaultChunkRequestsCacheCapacity = 5000000 // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
+	defaultCacheCapacity              = 5000    // capacity for in-memory chunks' cache
+	defaultChunkRequestsCacheCapacity = 5000    // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
 )
 
 var (
@@ -45,39 +46,56 @@ var (
 	retryInterval = 30 * time.Second
 )
 
-type DPA struct {
-	ChunkStore
+// NetStore is the interface for
+type DPA interface {
+	Get(ctx context.Context, ref Address) (Chunk, func(ctx context.Context) (Chunk, error), error)
+	Put(ctx context.Context, ch Chunk) (func(ctx context.Context) error, error)
+	Has(ctx context.Context, ref Address) (func(context.Context) error, error)
+}
+
+type DPAAPI struct {
+	DPA
 	hashFunc SwarmHasher
 }
 
 type DPAParams struct {
-	Hash string
+	Hash     string
+	Local    bool
+	DataDir  string
+	BaseAddr []byte
 }
 
 func NewDPAParams() *DPAParams {
 	return &DPAParams{
-		Hash: DefaultHash,
+		Hash:  DefaultHash,
+		Local: false,
 	}
 }
 
 // for testing locally
-func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
+func NewLocalDPA(dataDir string, baseAddr []byte) (DPA, error) {
 	params := NewDefaultLocalStoreParams()
-	params.Init(datadir)
+	params.Init(dataDir)
 	localStore, err := NewLocalStore(params, nil)
 	if err != nil {
 		return nil, err
 	}
 	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(DefaultHash)))
-	netStore := NewNetStore(localStore, nil)
-	return NewDPA(netStore, NewDPAParams()), nil
+	return NewNetStore(localStore, nil)
 }
 
-func NewDPA(store *NetStore, params *DPAParams) *DPA {
-	hashFunc := MakeHashFunc(params.Hash)
-	return &DPA{
-		ChunkStore: store,
-		hashFunc:   hashFunc,
+func NewLocalDPAAPI(dataDir string, baseAddr []byte) (*DPAAPI, error) {
+	dpa, err := NewLocalDPA(dataDir, baseAddr)
+	if err != nil {
+		return nil, err
+	}
+	return NewDPAAPI(dpa, NewDPAParams()), nil
+}
+
+func NewDPAAPI(dpa DPA, params *DPAParams) *DPAAPI {
+	return &DPAAPI{
+		DPA:      dpa,
+		hashFunc: MakeHashFunc(params.Hash),
 	}
 }
 
@@ -86,20 +104,20 @@ func NewDPA(store *NetStore, params *DPAParams) *DPA {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
-func (self *DPA) Retrieve(key Address) (reader *LazyChunkReader, isEncrypted bool) {
+func (self *DPAAPI) Retrieve(key Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(key) > self.hashFunc().Size()
-	getter := NewHasherStore(self.ChunkStore, self.hashFunc, isEncrypted)
+	getter := NewHasherStore(self.DPA, self.hashFunc, isEncrypted)
 	reader = TreeJoin(key, getter, 0)
 	return
 }
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (key Address, wait func(), err error) {
-	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
+func (self *DPAAPI) Store(data io.Reader, size int64, toEncrypt bool) (key Address, wait func(), err error) {
+	putter := NewHasherStore(self.DPA, self.hashFunc, toEncrypt)
 	return PyramidSplit(data, putter, putter)
 }
 
-func (self *DPA) HashSize() int {
+func (self *DPAAPI) HashSize() int {
 	return self.hashFunc().Size()
 }

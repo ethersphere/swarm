@@ -18,36 +18,44 @@ package storage
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	lru "github.com/hashicorp/golang-lru"
 )
 
 // NetStore
 type NetStore struct {
+	mu         sync.Mutex
 	localStore *LocalStore
 	requests   *lru.Cache
-	retrieve   func(chunk *Chunk) error
+	retrieve   func(ctx context.Context, chunk Chunk) (chan struct{}, error)
 }
 
-func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *NetStore {
-	return &NetStore{localStore, retrieve}
+func NewNetStore(localStore *LocalStore, retrieve func(ctx context.Context, chunk Chunk) (chan struct{}, error)) (*NetStore, error) {
+	requests, err := lru.New(defaultChunkRequestsCacheCapacity)
+	if err != nil {
+		return nil, err
+	}
+	return &NetStore{
+		localStore: localStore,
+		requests:   requests,
+		retrieve:   retrieve,
+	}, nil
 }
 
 // Has checks if chunk with hash address ref is stored locally
 // if not it returns a fetcher function to be called with a context
-// block until item is stotef
+// block until item is stored
 func (n *NetStore) Has(ctx context.Context, ref Address) (func(context.Context) error, error) {
 	chunk, fetch, err := n.Get(ctx, ref)
 	if chunk != nil {
-		return nil
+		return nil, nil
 	}
 	return func(c context.Context) error {
-		chunk, err = fetch(c)
-		if err != nil {
-			return err
-		}
-		chunk.Stored()
-	}()
+		_, err = fetch(c)
+		return err
+	}, nil
 }
 
 // Get attempts at retrieving the chunk from LocalStore
@@ -60,7 +68,7 @@ func (n *NetStore) Has(ctx context.Context, ref Address) (func(context.Context) 
 func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, func(ctx context.Context) (Chunk, error), error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	chunk, err := n.LocalStore.Get(ctx, ref)
+	chunk, err := n.localStore.Get(ctx, ref)
 	if err == nil {
 		return chunk, nil, nil
 	}
@@ -68,22 +76,22 @@ func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, func(ctx contex
 	if err != nil {
 		return nil, nil, err
 	}
-	return nil, request.Run, nil
+	f := func(ctx context.Context) (Chunk, error) {
+		return n.Run(ctx, request)
+	}
+	return nil, f, nil
 }
 
 // getOrCreateRequest attempts at retrieving an existing requests
 // if none exists, creates one and saves it in the requests cache
 // caller must hold the lock
 func (n *NetStore) getOrCreateRequest(ref Address) (*Request, error) {
-	r, err := n.requests.Get(ref)
-	if err == nil {
-		return r, err
+	ch, ok := n.requests.Get(ref)
+	if ok {
+		return ch.(*Request), nil
 	}
-	r = NewRequest(n)
-	err = n.requests.Add(ref, r)
-	if err != nil {
-		return nil, err
-	}
+	r := NewRequest()
+	n.requests.Add(ref, r)
 	return r, nil
 }
 
@@ -95,14 +103,12 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) (func(ctx context.Context)
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	defer func() {
-		r := n.requests.Get(ch.Ref)
+		r, _ := n.requests.Get(ch.Address())
 		if r != nil {
-			r.chunk = ch
-			close(r.deliveredC)
-			n.requests.Remove(ch.Ref)
+			r.(*Request).chunk = ch.Chunk()
 		}
 	}()
-	waitToStore, err := n.LocalStore.Put(ch)
+	waitToStore, err := n.localStore.Put(ctx, ch)
 	if err != nil {
 		return nil, err
 	}
@@ -111,3 +117,83 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) (func(ctx context.Context)
 
 // Close chunk store
 func (self *NetStore) Close() {}
+
+// request is a fetcher function to be called
+// it launches the fetching only once by calling
+// the retrieve function
+func (n *NetStore) request(ctx context.Context, r *Request) (Chunk, error) {
+	r.wg.Add(1)
+	n.run(ctx, r)
+	defer r.wg.Done()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-r.deliveredC:
+		return r.chunk, nil
+	}
+}
+
+// run prepares the request
+// it keeps the request alive by rerequesting
+// * after a search timeouted if request was successful
+// * after retryInterval if request was unsuccessful
+// * if an upstream sync client offers the chunk
+func (n *NetStore) run(ctx context.Context, r *Request) {
+	wait := time.NewTimer(0)
+	var doRetrieve bool
+	var waitC <-chan time.Time
+	var quitC chan struct{}
+	var err error
+
+	// wait till all actual requests a closed
+	go func() {
+		r.wg.Wait()
+		close(r.quitC)
+	}()
+
+	// loop that keeps the request alive
+	go func() {
+		// remove the request from the cache when all requests
+		// contexts closed
+		defer func() {
+			n.requests.Remove(r.chunk.Address())
+		}()
+	F:
+		for {
+			if doRetrieve {
+				quitC, err = n.retrieve(ctx, r.chunk)
+				if err != nil {
+					// retrieve error, wait before retry
+					wait.Reset(retryInterval)
+				} else {
+					// otherwise wait for response
+					wait.Reset(searchTimeout)
+				}
+				waitC = wait.C
+				doRetrieve = false
+			}
+			select {
+			case ctx = <-r.triggerC:
+				//
+				if ctx != nil && r.wanted {
+					doRetrieve = true
+
+				}
+				if ctx == nil && !r.wanted {
+					r.wanted = true
+					doRetrieve = true
+				}
+			case <-waitC:
+				// search or retry timeout; rerequest
+				doRetrieve = true
+			case <-quitC:
+				// requested downstream peer disconnected; rerequest
+				doRetrieve = true
+			case <-r.quitC:
+				// all request context closed, can quit
+				break F
+			}
+		}
+	}()
+
+}

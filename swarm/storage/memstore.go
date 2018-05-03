@@ -25,12 +25,8 @@ type MemStore struct {
 	disabled bool
 }
 
-//NewMemStore is instantiating a MemStore cache. We are keeping a record of all outgoing requests for chunks, that
-//should later be delivered by peer nodes, in the `requests` LRU cache. We are also keeping all frequently requested
+//NewMemStore is instantiating a MemStore cache keeping all frequently requested
 //chunks in the `cache` LRU cache.
-//
-//`requests` LRU cache capacity should ideally never be reached, this is why for the time being it should be initialised
-//with the same value as the LDBStore capacity.
 func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	if params.CacheCapacity == 0 {
 		return &MemStore{
@@ -38,11 +34,7 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 		}
 	}
 
-	onEvicted := func(key interface{}, value interface{}) {
-		v := value.(*Chunk)
-		<-v.dbStoredC
-	}
-	c, err := lru.NewWithEvict(int(params.CacheCapacity), onEvicted)
+	c, err := lru.New(int(params.CacheCapacity))
 	if err != nil {
 		panic(err)
 	}
@@ -52,7 +44,7 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	}
 }
 
-func (m *MemStore) Get(key Address) (*Chunk, error) {
+func (m *MemStore) Get(key Address) (*chunk, error) {
 	if m.disabled {
 		return nil, ErrChunkNotFound
 	}
@@ -61,26 +53,22 @@ func (m *MemStore) Get(key Address) (*Chunk, error) {
 	if !ok {
 		return nil, ErrChunkNotFound
 	}
-	return c.(*Chunk), nil
+	return c.(*chunk), nil
 }
 
-func (m *MemStore) Put(c *Chunk) {
+func (m *MemStore) Put(c *chunk) {
 	if m.disabled {
 		return
 	}
 
-	m.cache.Add(string(c.Address), c)
+	m.cache.Add(string(c.addr), c)
 }
 
 func (m *MemStore) setCapacity(n int) {
 	if n <= 0 {
 		m.disabled = true
 	} else {
-		onEvicted := func(key interface{}, value interface{}) {
-			v := value.(*Chunk)
-			v.WaitToStore()
-		}
-		c, err := lru.NewWithEvict(n, onEvicted)
+		c, err := lru.New(n)
 		if err != nil {
 			panic(err)
 		}

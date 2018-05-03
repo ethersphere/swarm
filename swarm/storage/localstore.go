@@ -100,13 +100,9 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
 func (self *LocalStore) Put(ctx context.Context, chunk Chunk) (func(ctx context.Context) error, error) {
-	data, err := chunk.Data()
-	if err != nil {
-		return nil, err
-	}
 	valid := true
 	for _, v := range self.Validators {
-		if valid = v.Validate(chunk.Address(), data); valid {
+		if valid = v.Validate(chunk.Address(), chunk.Data()); valid {
 			break
 		}
 	}
@@ -118,7 +114,7 @@ func (self *LocalStore) Put(ctx context.Context, chunk Chunk) (func(ctx context.
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	memChunk, err := self.memStore.Get(chunk.Address())
+	_, err := self.memStore.Get(chunk.Address())
 	if err == nil {
 		return nil, nil
 	}
@@ -126,14 +122,18 @@ func (self *LocalStore) Put(ctx context.Context, chunk Chunk) (func(ctx context.
 		return nil, err
 	}
 	dbStorePutCounter.Inc(1)
-	return self.DbStore.Put(ctx, chunk)
+	wait, err := self.DbStore.Put(ctx, chunk)
+	if err != nil {
+		return nil, err
+	}
+	return wait, nil
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (self *LocalStore) Get(key Address) (chunk *chunk, err error) {
+func (self *LocalStore) Get(_ context.Context, key Address) (chunk *chunk, err error) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
@@ -151,11 +151,6 @@ func (self *LocalStore) get(key Address) (chunk *chunk, err error) {
 	}
 	self.memStore.Put(chunk)
 	return chunk, nil
-}
-
-// RequestsCacheLen returns the current number of outgoing requests stored in the cache
-func (self *LocalStore) RequestsCacheLen() int {
-	return self.memStore.requests.Len()
 }
 
 // Close the local store

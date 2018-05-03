@@ -21,13 +21,14 @@ import (
 )
 
 const (
-	signatureLength     = 65
-	indexSize           = 18
-	DbDirName           = "resource"
-	chunkSize           = 4096 // temporary until we implement DPA in the resourcehandler
-	defaultStoreTimeout = 4000 * time.Millisecond
-	hasherCount         = 8
-	resourceHash        = SHA3Hash
+	signatureLength      = 65
+	indexSize            = 18
+	DbDirName            = "resource"
+	chunkSize            = 4096 // temporary until we implement DPA in the resourcehandler
+	defaultStoreTimeout  = 4000 * time.Millisecond
+	resourceFetchTimeout = 15 * time.Second
+	hasherCount          = 8
+	resourceHash         = SHA3Hash
 )
 
 type blockEstimator struct {
@@ -163,7 +164,7 @@ type headerGetter interface {
 //
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
-	chunkStore      ChunkStore
+	chunkStore      *NetStore
 	HashSize        int
 	signer          ResourceSigner
 	ethClient       headerGetter
@@ -215,7 +216,7 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 }
 
 // Sets the store backend for resource updates
-func (self *ResourceHandler) SetStore(store ChunkStore) {
+func (self *ResourceHandler) SetStore(store *NetStore) {
 	self.chunkStore = store
 }
 
@@ -225,7 +226,7 @@ func (self *ResourceHandler) SetStore(store ChunkStore) {
 // If parsed signature is nil, validates automatically
 // If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
 func (self *ResourceHandler) Validate(key Address, data []byte) bool {
-	signature, period, version, name, parseddata, err := self.parseUpdate(data)
+	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
 		if len(data) == indexSize {
 			if bytes.Equal(data[:2], []byte{0, 0}) {
@@ -347,16 +348,16 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	// chunk with key equal to namehash points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
 	key := Address(nameHash.Bytes())
-	chunk := NewChunk(key, nil)
-	chunk.SData = make([]byte, indexSize)
-
 	// root block has first two bytes both, which distinguishes from update bytes
-	val := make([]byte, 8)
-	binary.LittleEndian.PutUint64(val, currentblock)
-	copy(chunk.SData[2:10], val)
-	binary.LittleEndian.PutUint64(val, frequency)
-	copy(chunk.SData[10:], val)
-	self.chunkStore.Put(chunk)
+	data := make([]byte, indexSize)
+	binary.LittleEndian.PutUint64(data[2:10], currentblock)
+	binary.LittleEndian.PutUint64(data[10:18], frequency)
+	chunk := NewChunk(key, data)
+
+	_, err = self.chunkStore.Put(context.Background(), chunk)
+	if err != nil {
+		return nil, err
+	}
 	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
 
 	rsrc := &resource{
@@ -496,7 +497,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		key := self.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := self.chunkStore.Get(key)
+		chunk, err := self.retrieveResource(key)
 		if err == nil {
 			if specificversion {
 				return self.updateResourceIndex(rsrc, chunk)
@@ -506,7 +507,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			for {
 				newversion := version + 1
 				key := self.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := self.chunkStore.Get(key)
+				newchunk, err := self.retrieveResource(key)
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk)
 				}
@@ -520,6 +521,15 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 		hops++
 	}
 	return nil, NewResourceError(ErrNotFound, "no updates found")
+}
+
+func (self *ResourceHandler) retrieveResource(key Address) (Chunk, error) {
+	ctx, _ := context.WithTimeout(context.Background(), resourceFetchTimeout)
+	chunk, fetch, err := self.chunkStore.Get(ctx, key)
+	if fetch == nil {
+		return chunk, err
+	}
+	return fetch(ctx)
 }
 
 // load existing mutable resource into resource struct
@@ -542,17 +552,17 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.chunkStore.Get(Address(rsrc.nameHash[:]))
+		chunk, err := self.retrieveResource(Address(rsrc.nameHash[:]))
 		if err != nil {
 			return nil, err
 		}
 
 		// minimum sanity check for chunk data
-		if len(chunk.SData) != indexSize {
-			return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Invalid chunk length %d, should be %d", len(chunk.SData), indexSize))
+		if len(chunk.Data()) != indexSize {
+			return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Invalid chunk length %d, should be %d", len(chunk.Data()), indexSize))
 		}
-		rsrc.startBlock = binary.LittleEndian.Uint64(chunk.SData[2:10])
-		rsrc.frequency = binary.LittleEndian.Uint64(chunk.SData[10:])
+		rsrc.startBlock = binary.LittleEndian.Uint64(chunk.Data()[2:10])
+		rsrc.frequency = binary.LittleEndian.Uint64(chunk.Data()[10:])
 	} else {
 		rsrc.name = self.resources[name].name
 		rsrc.nameHash = self.resources[name].nameHash
@@ -563,17 +573,17 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 }
 
 // update mutable resource index map with specified content
-func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (*resource, error) {
+func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk Chunk) (*resource, error) {
 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
-	signature, period, version, name, data, multihash, err := self.parseUpdate(chunk.SData)
+	signature, period, version, name, data, multihash, err := self.parseUpdate(chunk.Data())
 	if *rsrc.name != name {
 		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, *rsrc.name))
 	}
 	log.Trace("update", "name", *rsrc.name, "rootkey", rsrc.nameHash, "updatekey", chunk.Address, "period", period, "version", version)
 	// check signature (if signer algorithm is present)
 	if signature != nil {
-		digest := self.keyDataHash(chunk.Address, data)
+		digest := self.keyDataHash(chunk.Address(), data)
 		_, err = getAddressFromDataSig(digest, *signature)
 		if err != nil {
 			return nil, NewResourceError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
@@ -581,7 +591,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	}
 
 	// update our rsrcs entry map
-	rsrc.lastKey = chunk.Address
+	rsrc.lastKey = chunk.Address()
 	rsrc.lastPeriod = period
 	rsrc.version = version
 	rsrc.updated = time.Now()
@@ -744,14 +754,16 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	chunk := newUpdateChunk(key, signature, nextperiod, version, name, data, datalength)
 
 	// send the chunk
-	self.chunkStore.Put(chunk)
-	timeout := time.NewTimer(self.storeTimeout)
-	select {
-	case <-chunk.dbStoredC:
-	case <-timeout.C:
-		return nil, NewResourceError(ErrIO, "chunk store timeout")
+	ctx, cancel := context.WithTimeout(context.Background(), self.storeTimeout)
+	defer cancel()
+	wait, err := self.chunkStore.Put(ctx, chunk)
+	if wait != nil {
+		err = wait(ctx)
 	}
-	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.SData, "multihash", multihash)
+	if err != nil {
+		return nil, NewResourceError(ErrIO, err.Error())
+	}
+	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.Data(), "multihash", multihash)
 
 	// update our resources map entry and return the new key
 	rsrc.lastPeriod = nextperiod
@@ -826,7 +838,7 @@ func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Ad
 }
 
 // create an update chunk
-func newUpdateChunk(key Address, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *Chunk {
+func newUpdateChunk(key Address, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *chunk {
 
 	// no signatures if no validator
 	var signaturelength int
@@ -838,40 +850,39 @@ func newUpdateChunk(key Address, signature *Signature, period uint32, version ui
 	headerlength := len(name) + 4 + 4
 
 	actualdatalength := len(data)
-	chunk := NewChunk(key, nil)
-	chunk.SData = make([]byte, 4+signaturelength+headerlength+actualdatalength) // initial 4 are uint16 length descriptors for headerlength and datalength
+
+	sdata := make([]byte, 4+signaturelength+headerlength+actualdatalength) // initial 4 are uint16 length descriptors for headerlength and datalength
 
 	// data header length does NOT include the header length prefix bytes themselves
 	cursor := 0
-	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(headerlength))
+	binary.LittleEndian.PutUint16(sdata[cursor:], uint16(headerlength))
 	cursor += 2
 
 	// data length
-	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(datalength))
+	binary.LittleEndian.PutUint16(sdata[cursor:], uint16(datalength))
 	cursor += 2
 
 	// header = period + version + name
-	binary.LittleEndian.PutUint32(chunk.SData[cursor:], period)
+	binary.LittleEndian.PutUint32(sdata[cursor:], period)
 	cursor += 4
 
-	binary.LittleEndian.PutUint32(chunk.SData[cursor:], version)
+	binary.LittleEndian.PutUint32(sdata[cursor:], version)
 	cursor += 4
 
 	namebytes := []byte(name)
-	copy(chunk.SData[cursor:], namebytes)
+	copy(sdata[cursor:], namebytes)
 	cursor += len(namebytes)
 
 	// add the data
-	copy(chunk.SData[cursor:], data)
+	copy(sdata[cursor:], data)
 
 	// if signature is present it's the last item in the chunk data
 	if signature != nil {
 		cursor += actualdatalength
-		copy(chunk.SData[cursor:], signature[:])
+		copy(sdata[cursor:], signature[:])
 	}
 
-	chunk.Size = int64(len(chunk.SData))
-	return chunk
+	return NewChunk(key, sdata)
 }
 
 func getNextPeriod(start uint64, current uint64, frequency uint64) uint32 {
@@ -935,6 +946,10 @@ func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*Res
 		return nil, err
 	}
 	localStore.Validators = append(localStore.Validators, rh)
-	rh.SetStore(localStore)
+	netStore, err := NewNetStore(localStore, nil)
+	if err != nil {
+		return nil, err
+	}
+	rh.SetStore(netStore)
 	return rh, nil
 }

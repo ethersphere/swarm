@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"io"
 	"testing"
@@ -42,26 +41,7 @@ type chunkerTester struct {
 	t      test
 }
 
-// fakeChunkStore doesn't store anything, just implements the ChunkStore interface
-// It can be used to inject into a hasherStore if you don't want to actually store data just do the
-// hashing
-type fakeChunkStore struct {
-}
-
-// Put doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Put(*Chunk) {
-}
-
-// Gut doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Get(Key) (*Chunk, error) {
-	return nil, errors.New("FakeChunkStore doesn't support Get")
-}
-
-// Close doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Close() {
-}
-
-func newTestHasherStore(chunkStore ChunkStore, hash string) *hasherStore {
+func newTestHasherStore(chunkStore *NetStore, hash string) *hasherStore {
 	return NewHasherStore(chunkStore, MakeHashFunc(hash), false)
 }
 

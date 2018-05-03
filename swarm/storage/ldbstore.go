@@ -231,9 +231,7 @@ func encodeData(chunk Chunk) []byte {
 	// The chunk.Address array may be used in the returned slice which
 	// may be changed later in the code or by the LevelDB, resulting
 	// that the Address is changed as well.
-	data, err := chunk.Data()
-	_ = err
-	return append(append([]byte{}, chunk.Address()[:]...), data...)
+	return append(append([]byte{}, chunk.Address()[:]...), chunk.Data()...)
 }
 
 func decodeIndex(data []byte, index *dpaDBIndex) error {
@@ -620,7 +618,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *LDBStore) Get(key Address) (chunk Chunk, err error) {
+func (s *LDBStore) Get(key Address) (chunk *chunk, err error) {
 	log.Trace("ldbstore.get", "key", key)
 	s.lock.Lock()
 	defer s.lock.Unlock()

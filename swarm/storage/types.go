@@ -178,9 +178,10 @@ type ChunkStore interface {
 // Chunk interface implemented by requests and data chunks
 type Chunk interface {
 	Address() Address
-	Payload() ([]byte, error)
-	Span() (int64, error)
-	Data() ([]byte, error)
+	Payload() []byte
+	Span() int64
+	Data() []byte
+	Chunk() *chunk
 }
 
 type chunk struct {
@@ -200,23 +201,23 @@ func (c *chunk) Address() Address {
 	return c.addr
 }
 
-func (c *chunk) Span() (int64, error) {
+func (c *chunk) Span() int64 {
 	if c.span == 0 {
-		span := binary.BigEndian.Uint64(c.sdata)
-		if err != nil {
-			return nil, err
-		}
-		c.span = span
+		c.span = int64(binary.BigEndian.Uint64(c.sdata))
 	}
-	return c.span, nil
+	return c.span
 }
 
-func (c *chunk) Data() ([]byte, error) {
-	return c.sdata, nil
+func (c *chunk) Data() []byte {
+	return c.sdata
 }
 
-func (c *chunk) Payload() ([]byte, error) {
-	return c.sdata[8:], nil
+func (c *chunk) Payload() []byte {
+	return c.sdata[8:]
+}
+
+func (c *chunk) Chunk() *chunk {
+	return c
 }
 
 // Request is created when a chunk is not found locally
@@ -229,6 +230,7 @@ type Request struct {
 	deliveredC chan struct{}
 	quitC      chan struct{}
 	wg         sync.WaitGroup
+	wanted     bool
 	// Deliver([]byte) error
 }
 
@@ -240,31 +242,16 @@ func NewRequest() *Request {
 	}
 }
 
-func (c *chunk) markAsStored() {
-	c.dbStoredMu.Lock()
-	defer c.dbStoredMu.Unlock()
-
-	if !c.dbStored {
-		close(c.dbStoredC)
-		c.dbStored = true
-	}
-}
-
-func (c *chunk) WaitToStore() error {
-	<-c.dbStoredC
-	return c.GetErrored()
-}
-
 // String() for pretty printing
 func (self *chunk) String() string {
 	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
 }
 
-func GenerateRandomChunk(dataSize int64) *Chunk {
+func GenerateRandomChunk(dataSize int64) *chunk {
 	return GenerateRandomChunks(dataSize, 1)[0]
 }
 
-func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
+func GenerateRandomChunks(dataSize int64, count int) (chunks []*chunk) {
 	var i int
 	hasher := MakeHashFunc(DefaultHash)()
 	if dataSize > DefaultChunkSize {
@@ -272,14 +259,12 @@ func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 	}
 
 	for i = 0; i < count; i++ {
-		chunks = append(chunks, NewChunk(nil, nil))
-		chunks[i].SData = make([]byte, dataSize+8)
-		rand.Read(chunks[i].SData)
-		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(dataSize))
-		hasher.ResetWithLength(chunks[i].SData[:8])
-		hasher.Write(chunks[i].SData[8:])
-		chunks[i].Address = make([]byte, 32)
-		copy(chunks[i].Address, hasher.Sum(nil))
+		sdata := make([]byte, dataSize+8)
+		rand.Read(sdata[8:])
+		binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
+		hasher.ResetWithLength(sdata[:8])
+		hasher.Write(sdata[8:])
+		chunks = append(chunks, NewChunk(hasher.Sum(nil), sdata))
 	}
 
 	return chunks

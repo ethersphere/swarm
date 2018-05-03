@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"flag"
 	"fmt"
@@ -199,4 +200,36 @@ func benchmarkStoreGet(store ChunkStore, processors int, n int, chunksize int64,
 			b.Fatalf("mget failed: %v", err)
 		}
 	}
+}
+
+// MapChunkStore is a very simple ChunkStore implementation to store chunks in a map in memory.
+type MapChunkStore struct {
+	chunks map[string]*Chunk
+	mu     sync.RWMutex
+}
+
+func NewMapChunkStore() *MapChunkStore {
+	return &MapChunkStore{
+		chunks: make(map[string]*Chunk),
+	}
+}
+
+func (m *MapChunkStore) Put(_ context.Context, chunk Chunk) (func(context.Context) error, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.chunks[chunk.Key.Hex()] = chunk
+	return nil, nil
+}
+
+func (m *MapChunkStore) Get(key Key) (Chunk, func(context.Context) (Chunk, error), error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	chunk := m.chunks[key.Hex()]
+	if chunk == nil {
+		return nil, nil, ErrChunkNotFound
+	}
+	return chunk, nil, nil
+}
+
+func (m *MapChunkStore) Close() {
 }
