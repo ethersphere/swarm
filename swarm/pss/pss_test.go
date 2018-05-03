@@ -299,10 +299,11 @@ func TestHandlerConditions(t *testing.T) {
 	var outmsg *PssMsg
 	select {
 	case outmsg = <-ps.outbox:
+	case <-tmr.C:
 	default:
 	}
 	if outmsg != nil {
-		t.Fatalf("expected outbox empty after full address on msg, but had message %v", msg)
+		t.Fatalf("expected outbox empty after full address on msg, but had message %s", msg)
 	}
 
 	// message should pass and queue due to partial length
@@ -361,6 +362,7 @@ func TestHandlerConditions(t *testing.T) {
 	outmsg = nil
 	select {
 	case outmsg = <-ps.outbox:
+	case <-tmr.C:
 	default:
 	}
 	if outmsg != nil {
