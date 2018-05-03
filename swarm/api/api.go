@@ -339,7 +339,7 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		// if the resource update is of multihash type:
 		// we validate the multihash and retrieve the manifest behind it, and resume normal operations from there
 		if entry.ContentType == ResourceContentType {
-			log.Warn("resource type", "key", key, "hash", entry.Hash)
+			log.Trace("resource type", "key", key, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
@@ -378,8 +378,9 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 				}
 
 				log.Trace("trie getting resource multihash entry", "key", key, "path", path)
-				entry, _ := trie.getEntry(path)
-				log.Trace("trie got resource multihash entry", "key", key, "path", path)
+				var fullpath string
+				entry, fullpath = trie.getEntry(path)
+				log.Trace("trie got resource multihash entry", "key", key, "path", path, "entry", entry, "fullpath", fullpath)
 
 				if entry == nil {
 					status = http.StatusNotFound
@@ -395,8 +396,6 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		}
 
 		key = common.Hex2Bytes(entry.Hash)
-		log.Debug("trie key", "key", key)
-
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			apiGetHttp300.Inc(1)

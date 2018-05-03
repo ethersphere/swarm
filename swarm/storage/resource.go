@@ -30,6 +30,25 @@ const (
 	resourceHash        = SHA3Hash
 )
 
+type blockEstimator struct {
+	Start   time.Time
+	Average time.Duration
+}
+
+func NewBlockEstimator() *blockEstimator {
+	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z")
+	return &blockEstimator{
+		Start:   ropstenStart,
+		Average: 14467100 * time.Microsecond,
+	}
+}
+
+func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
+	return &types.Header{
+		Number: big.NewInt(int64(time.Now().Sub(b.Start).Seconds() / b.Average.Seconds())),
+	}, nil
+}
+
 type ResourceError struct {
 	code int
 	err  string
@@ -217,6 +236,7 @@ func (self *ResourceHandler) Validate(key Key, data []byte) bool {
 	} else if signature == nil {
 		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), key)
 	}
+
 	digest := self.keyDataHash(key, parseddata)
 	addr, err := getAddressFromDataSig(digest, *signature)
 	if err != nil {
@@ -444,6 +464,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 	if maxLookup == nil {
 		maxLookup = self.queryMaxPeriods
 	}
+	log.Trace("resource lookup", "period", period, "version", version, "limit", maxLookup.Limit, "max", maxLookup.Max)
 	for period > 0 {
 		if maxLookup.Limit && hops > maxLookup.Max {
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
