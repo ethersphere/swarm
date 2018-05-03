@@ -140,6 +140,17 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	log.Trace("received request", "peer", sp.ID(), "hash", req.Key)
 	handleRetrieveRequestMsgCount.Inc(1)
 
+	// swap - record credit for 1 request
+	// note that only charge actual reqsearches
+	var err error
+	if sp.swap != nil {
+		err = sp.swap.Add(1)
+	}
+	if err != nil {
+		log.Warn(fmt.Sprintf("Delivery.handleRetrieveRequestMsg: %v - cannot process request: %v", req.Key.Log(), err))
+		return err
+	}
+
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
 	if err != nil {
 		return err
@@ -206,6 +217,16 @@ func (d *Delivery) processReceivedChunks() {
 R:
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
+
+		var err error
+		if req.peer.swap != nil {
+			err = req.peer.swap.Add(-1)
+		}
+
+		if err != nil {
+			log.Error(fmt.Sprintf("Delivery.processReceivedChunks: %v - cannot account for received chunks: %v",
+				req.Key.Log(), err), "peer", req.peer.ID(), "err", err)
+		}
 
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
