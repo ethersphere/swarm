@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-var dialBanTimeout = 200 * time.Millisecond
+var DialBanTimeout = 200 * time.Millisecond
 
 // NetworkConfig defines configuration options for starting a Network
 type NetworkConfig struct {
@@ -165,7 +165,9 @@ func (self *Network) Start(id discover.NodeID) error {
 // startWithSnapshots starts the node with the given ID using the give
 // snapshots
 func (self *Network) startWithSnapshots(id discover.NodeID, snapshots map[string][]byte) error {
-	node := self.GetNode(id)
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	node := self.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
 	}
@@ -243,7 +245,9 @@ func (self *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEv
 
 // Stop stops the node with the given ID
 func (self *Network) Stop(id discover.NodeID) error {
-	node := self.GetNode(id)
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	node := self.getNode(id)
 	if node == nil {
 		return fmt.Errorf("node %v does not exist", id)
 	}
@@ -296,7 +300,9 @@ func (self *Network) Disconnect(oneID, otherID discover.NodeID) error {
 
 // DidConnect tracks the fact that the "one" node connected to the "other" node
 func (self *Network) DidConnect(one, other discover.NodeID) error {
-	conn, err := self.GetOrCreateConn(one, other)
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	conn, err := self.getOrCreateConn(one, other)
 	if err != nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
@@ -311,7 +317,9 @@ func (self *Network) DidConnect(one, other discover.NodeID) error {
 // DidDisconnect tracks the fact that the "one" node disconnected from the
 // "other" node
 func (self *Network) DidDisconnect(one, other discover.NodeID) error {
-	conn := self.GetConn(one, other)
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	conn := self.getConn(one, other)
 	if conn == nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
@@ -319,7 +327,7 @@ func (self *Network) DidDisconnect(one, other discover.NodeID) error {
 		return fmt.Errorf("%v and %v already disconnected", one, other)
 	}
 	conn.Up = false
-	conn.initiated = time.Now().Add(-dialBanTimeout)
+	conn.initiated = time.Now().Add(-DialBanTimeout)
 	self.events.Send(NewEvent(conn))
 	return nil
 }
@@ -392,6 +400,18 @@ func (self *Network) GetNodes() (nodes []*Node) {
 	return nodes
 }
 
+// GetNodes returns the existing nodes that are up
+func (self *Network) GetUpNodes() (nodes []*Node) {
+	self.lock.Lock()
+	defer self.lock.Unlock()
+	for _, n := range self.Nodes {
+		if n.Up {
+			nodes = append(nodes, n)
+		}
+	}
+	return nodes
+}
+
 // GetConn returns the connection which exists between "one" and "other"
 // regardless of which node initiated the connection
 func (self *Network) GetConn(oneID, otherID discover.NodeID) *Conn {
@@ -455,21 +475,19 @@ func (self *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
 	self.lock.Lock()
 	defer self.lock.Unlock()
 	if oneID == otherID {
-		log.Trace(fmt.Sprintf("refusing to connect to self %v", oneID))
 		return nil, fmt.Errorf("refusing to connect to self %v", oneID)
 	}
 	conn, err := self.getOrCreateConn(oneID, otherID)
 	if err != nil {
 		return nil, err
 	}
-	if time.Since(conn.initiated) < dialBanTimeout {
-		log.Trace(fmt.Sprintf("connection between %v and %v recently attempted", oneID, otherID))
-		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
-	}
 	if conn.Up {
-		log.Trace(fmt.Sprintf("%v and %v already connected", oneID, otherID))
 		return nil, fmt.Errorf("%v and %v already connected", oneID, otherID)
 	}
+	if time.Since(conn.initiated) < DialBanTimeout {
+		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
+	}
+
 	err = conn.nodesUp()
 	if err != nil {
 		log.Trace(fmt.Sprintf("nodes not up: %v", err))
