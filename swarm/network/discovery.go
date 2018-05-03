@@ -67,7 +67,7 @@ func NotifyDepth(depth uint8, h Overlay) {
 	f := func(val OverlayConn, po int, _ bool) bool {
 		dp, ok := val.(*discPeer)
 		if ok {
-			go dp.NotifyDepth(depth)
+			dp.NotifyDepth(depth)
 		}
 		return true
 	}
@@ -79,7 +79,7 @@ func NotifyPeer(p OverlayAddr, k Overlay) {
 	f := func(val OverlayConn, po int, _ bool) bool {
 		dp, ok := val.(*discPeer)
 		if ok {
-			go dp.NotifyPeer(p, uint8(po))
+			dp.NotifyPeer(p, uint8(po))
 		}
 		return true
 	}
@@ -87,23 +87,23 @@ func NotifyPeer(p OverlayAddr, k Overlay) {
 }
 
 // NotifyPeer notifies the remote node about
-func (d *discPeer) NotifyPeer(a OverlayAddr, po uint8) error {
+func (d *discPeer) NotifyPeer(a OverlayAddr, po uint8) {
 	// immediately return
-	if (po < d.depth && pot.ProxCmp(d.localAddr, d, a) != 1) || d.seen(a) {
-		return nil
+	if (po < d.getDepth() && pot.ProxCmp(d.localAddr, d, a) != 1) || d.seen(a) {
+		return
 	}
 	// log.Trace(fmt.Sprintf("%08x peer %08x notified of peer %08x", d.localAddr.Over()[:4], d.Address()[:4], a.Address()[:4]))
 	resp := &peersMsg{
 		Peers: []*BzzAddr{ToAddr(a)}, // perhaps the PeerAddr interface is unnecessary generalization
 	}
-	return d.Send(resp)
+	go d.Send(resp)
 }
 
 // NotifyDepth sends a subPeers Msg to the receiver notifying them about
 // a change in the depth of saturation
-func (d *discPeer) NotifyDepth(po uint8) error {
+func (d *discPeer) NotifyDepth(po uint8) {
 	// log.Trace(fmt.Sprintf("%08x peer %08x notified of new depth %v", d.localAddr.Over()[:4], d.Address()[:4], po))
-	return d.Send(&subPeersMsg{Depth: po})
+	go d.Send(&subPeersMsg{Depth: po})
 }
 
 /*
@@ -162,7 +162,7 @@ func (msg subPeersMsg) String() string {
 
 func (d *discPeer) handleSubPeersMsg(msg *subPeersMsg) error {
 	if !d.sentPeers {
-		d.depth = msg.Depth
+		d.setDepth(msg.Depth)
 		var peers []*BzzAddr
 		d.overlay.EachConn(d.Over(), 255, func(p OverlayConn, po int, isproxbin bool) bool {
 			if pob, _ := pof(d, d.localAddr, 0); pob > po {
@@ -193,4 +193,15 @@ func (d *discPeer) seen(p OverlayPeer) bool {
 	}
 	d.peers[k] = true
 	return false
+}
+
+func (d *discPeer) getDepth() uint8 {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+	return d.depth
+}
+func (d *discPeer) setDepth(depth uint8) {
+	d.mtx.Lock()
+	defer d.mtx.Unlock()
+	d.depth = depth
 }
