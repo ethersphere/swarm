@@ -42,7 +42,7 @@ import (
 )
 
 var (
-	loglevel     = flag.Int("loglevel", 4, "verbosity of logs")
+	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
 	longrunning  = flag.Bool("longrunning", false, "do run long-running tests")
 	waitKademlia = flag.Bool("waitkademlia", false, "wait for healthy kademlia before checking files availability")
 )
