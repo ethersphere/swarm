@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/state"
+	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
 )
 
 const (
@@ -94,6 +95,8 @@ type BzzConfig struct {
 	OverlayAddr  []byte // base address of the overlay network
 	UnderlayAddr []byte // node's underlay address
 	HiveParams   *HiveParams
+	Swap         *bzzswap.SwapParams
+	SwapEnabled  bool
 }
 
 // Bzz is the swarm protocol bundle
@@ -104,6 +107,7 @@ type Bzz struct {
 	handshakes   map[discover.NodeID]*HandshakeMsg
 	streamerSpec *protocols.Spec
 	streamerRun  func(*BzzPeer) error
+	swapParams  *bzzswap.SwapParams
 }
 
 // NewBzz is the swarm protocol constructor
@@ -118,6 +122,7 @@ func NewBzz(config *BzzConfig, kad Overlay, store state.Store, streamerSpec *pro
 		handshakes:   make(map[discover.NodeID]*HandshakeMsg),
 		streamerRun:  streamerRun,
 		streamerSpec: streamerSpec,
+		swapParams:   config.Swap,
 	}
 }
 
@@ -288,21 +293,22 @@ func (p *BzzPeer) LastActive() time.Time {
 * Addr: the address advertised by the node including underlay and overlay connecctions
 */
 type HandshakeMsg struct {
-	Version   uint64
-	NetworkID uint64
-	Addr      *BzzAddr
+	Version     uint64
+	NetworkID   uint64
+	Addr        *BzzAddr
 
 	// peerAddr is the address received in the peer handshake
-	peerAddr *BzzAddr
+	peerAddr    *BzzAddr
+	SwapProfile *bzzswap.SwapProfile
 
-	init chan bool
-	done chan struct{}
-	err  error
+	init chan   bool
+	done chan   struct{}
+	err         error
 }
 
 // String pretty prints the handshake
 func (bh *HandshakeMsg) String() string {
-	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v", bh.Version, bh.NetworkID, bh.Addr)
+	return fmt.Sprintf("Handshake: Version: %v, NetworkID: %v, Addr: %v, SwapProfile: %v,", bh.Version, bh.NetworkID, bh.Addr, bh.SwapProfile)
 }
 
 // Perform initiates the handshake and validates the remote handshake message
@@ -335,6 +341,10 @@ func (b *Bzz) GetHandshake(peerID discover.NodeID) (*HandshakeMsg, bool) {
 			Version:   uint64(BzzSpec.Version),
 			NetworkID: uint64(NetworkID),
 			Addr:      b.localAddr,
+			SwapProfile: &bzzswap.SwapProfile{
+				Profile:    b.swapParams.Profile,
+				PayProfile: b.swapParams.PayProfile,
+			},
 			init:      make(chan bool, 1),
 			done:      make(chan struct{}),
 		}
