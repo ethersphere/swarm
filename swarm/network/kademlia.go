@@ -146,7 +146,7 @@ func (e *entry) Bin() string {
 }
 
 // Label is a short tag for the entry for debug
-func Label(e *entry) string {
+func Label(e entry) string {
 	return fmt.Sprintf("%s (%d)", e.Hex()[:4], e.retries)
 }
 
