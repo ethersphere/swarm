@@ -922,7 +922,6 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		} else if uri.Immutable() || uri.List() || uri.Hash() {
 			log.Debug("POST not allowed on immutable, list or hash")
 			Respond(w, req, fmt.Sprintf("POST method on scheme %s not allowed", uri.Scheme), http.StatusMethodNotAllowed)
-			return
 		} else {
 			log.Debug("handlePostFiles")
 			s.HandlePostFiles(w, req)
