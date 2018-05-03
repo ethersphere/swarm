@@ -98,6 +98,11 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		to = math.MaxUint64
 	}
 	var ticker *time.Ticker
+	defer func() {
+		if ticker != nil {
+			ticker.Stop()
+		}
+	}()
 	var wait bool
 	for {
 		if wait {
@@ -123,9 +128,6 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			break
 		}
 		wait = true
-	}
-	if wait {
-		ticker.Stop()
 	}
 
 	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.db.CurrentBucketStorageIndex(s.po))
