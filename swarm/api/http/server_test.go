@@ -104,7 +104,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	// add the data our multihash aliased manifest will point to
 	databytes := "bar"
-	url := fmt.Sprintf("%s/bzz:/", srv.URL)
+	url := fmt.Sprintf("%s/bzz-immutable:/", srv.URL)
 	resp, err := http.Post(url, "text/plain", bytes.NewReader([]byte(databytes)))
 	if err != nil {
 		t.Fatal(err)

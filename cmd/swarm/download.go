@@ -32,7 +32,7 @@ import (
 )
 
 func download(ctx *cli.Context) {
-	//isRecursive := false
+	//isRecursive,isRaw := false
 	log.Debug("swarm download")
 	args := ctx.Args()
 	if len(args) < 1 {
@@ -91,6 +91,21 @@ func download(ctx *cli.Context) {
 	// bzz:/addr/path -> download file
 
 	// && strings.endsWith(uri.path,'/') == false ??
+
+	manifestList, err := client.List(uri.Addr, uri.Path)
+	if err != nil {
+		utils.Fatalf("could not list manifest: %v", err)
+	}
+	manifestLen := len(manifestList.Entries)
+	if manifestLen == 0 {
+		//err
+		utils.Fatalf("could not stat path at address")
+	} else if manifestLen == 1 {
+		//single file
+		v := manifestList.Entries[0]
+	} else {
+		//multiple files
+	}
 
 	if uri.Path != "" {
 		// we are downloading a file/path from a manifest

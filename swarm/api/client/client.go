@@ -160,6 +160,31 @@ func (c *Client) Download(hash, path string) (*File, error) {
 	}, nil
 }
 
+// DownloadURI downloads the supplied URI from the gateway
+func (c *Client) DownloadURI(uri string) (*File, error) {
+	if _, err := api.Parse(uri); err != nil {
+		// this will return an error if the requested uri does not conform to the supported schemes
+		return nil, err
+	}
+
+	uri = c.Gateway + "/" + uri
+	res, err := http.DefaultClient.Get(uri)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode != http.StatusOK {
+		res.Body.Close()
+		return nil, fmt.Errorf("unexpected HTTP status: %s", res.Status)
+	}
+	return &File{
+		ReadCloser: res.Body,
+		ManifestEntry: api.ManifestEntry{
+			ContentType: res.Header.Get("Content-Type"),
+			Size:        res.ContentLength,
+		},
+	}, nil
+}
+
 // UploadDirectory uploads a directory tree to swarm and either adds the files
 // to an existing manifest (if the manifest argument is non-empty) or creates a
 // new manifest, returning the resulting manifest hash (files from the
