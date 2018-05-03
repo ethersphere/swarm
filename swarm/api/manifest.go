@@ -34,6 +34,8 @@ import (
 const (
 	ManifestType        = "application/bzz-manifest+json"
 	ResourceContentType = "application/bzz-resource"
+
+	manifestSizeLimit = 100 * 1024 * 1024
 )
 
 // Manifest represents a swarm manifest
@@ -218,6 +220,10 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 		// can't determine size means we don't have the root chunk
 		log.Trace("manifest not found", "key", hash)
 		err = fmt.Errorf("Manifest not Found")
+		return
+	}
+	if size > manifestSizeLimit {
+		err = fmt.Errorf("Manifest size of %v bytes exceeds the %v byte limit", size, manifestSizeLimit)
 		return
 	}
 	manifestData := make([]byte, size)
