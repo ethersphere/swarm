@@ -30,8 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/state"
 	bzzswap "github.com/ethereum/go-ethereum/swarm/services/swap"
+	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
 const (
@@ -107,7 +107,7 @@ type Bzz struct {
 	handshakes   map[discover.NodeID]*HandshakeMsg
 	streamerSpec *protocols.Spec
 	streamerRun  func(*BzzPeer) error
-	swapParams  *bzzswap.SwapParams
+	swapParams   *bzzswap.SwapParams
 }
 
 // NewBzz is the swarm protocol constructor
@@ -293,17 +293,17 @@ func (p *BzzPeer) LastActive() time.Time {
 * Addr: the address advertised by the node including underlay and overlay connecctions
 */
 type HandshakeMsg struct {
-	Version     uint64
-	NetworkID   uint64
-	Addr        *BzzAddr
+	Version   uint64
+	NetworkID uint64
+	Addr      *BzzAddr
 
 	// peerAddr is the address received in the peer handshake
 	peerAddr    *BzzAddr
 	SwapProfile *bzzswap.SwapProfile
 
-	init chan   bool
-	done chan   struct{}
-	err         error
+	init chan bool
+	done chan struct{}
+	err  error
 }
 
 // String pretty prints the handshake
@@ -345,8 +345,8 @@ func (b *Bzz) GetHandshake(peerID discover.NodeID) (*HandshakeMsg, bool) {
 				Profile:    b.swapParams.Profile,
 				PayProfile: b.swapParams.PayProfile,
 			},
-			init:      make(chan bool, 1),
-			done:      make(chan struct{}),
+			init: make(chan bool, 1),
+			done: make(chan struct{}),
 		}
 		// when handhsake is first created for a remote peer
 		// it is initialised with the init

@@ -47,8 +47,8 @@ type Config struct {
 	*storage.DPAParams
 	*storage.LocalStoreParams
 	*network.HiveParams
-	Swap            *swap.SwapParams
-	Pss             *pss.PssParams
+	Swap *swap.SwapParams
+	Pss  *pss.PssParams
 	//*network.SyncParams
 	Contract        common.Address
 	EnsRoot         common.Address
@@ -78,7 +78,7 @@ func NewConfig() (self *Config) {
 		DPAParams:        storage.NewDPAParams(),
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
-		Swap:             swap.NewDefaultSwapParams(),
+		Swap:            swap.NewDefaultSwapParams(),
 		Pss:             pss.NewPssParams(),
 		ListenAddr:      DefaultHTTPListenAddr,
 		Port:            DefaultHTTPPort,

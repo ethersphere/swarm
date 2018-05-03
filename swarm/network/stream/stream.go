@@ -31,9 +31,9 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
+	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 )
 
 const (
