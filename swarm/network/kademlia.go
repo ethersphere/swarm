@@ -146,7 +146,7 @@ func (e *entry) Bin() string {
 }
 
 // Label is a short tag for the entry for debug
-func Label(e entry) string {
+func Label(e *entry) string {
 	return fmt.Sprintf("%s (%d)", e.Hex()[:4], e.retries)
 }
 
@@ -561,7 +561,7 @@ func (k *Kademlia) string() string {
 		// we are displaying live peers too
 		f(func(val pot.Val, vpo int) bool {
 			e := val.(*entry)
-			row = append(row, Label(*e))
+			row = append(row, Label(e))
 			rowlen++
 			return rowlen < 4
 		})
@@ -709,7 +709,7 @@ func (k *Kademlia) knowNearestNeighbours(peers [][]byte) bool {
 	return true
 }
 
-func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (bool, int, [][]byte) {
+func (k *Kademlia) gotNearestNeighbours(peers [][]byte) (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
 
 	k.eachConn(nil, 255, func(p OverlayConn, po int, nn bool) bool {
