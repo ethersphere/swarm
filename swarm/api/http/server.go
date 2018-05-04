@@ -901,8 +901,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	http.ServeContent(w, &r.Request, "", time.Now(), reader)
 }
 
-
-func (s *Server) (rw http.ResponseWriter, r *http.Request) {
+func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	req := &Request{Request: *r, ruid: uuid.New()[:8]}
 	metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
 	log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
