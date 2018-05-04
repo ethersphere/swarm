@@ -18,7 +18,6 @@ package main
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -138,7 +137,7 @@ LOOP:
 
 	//check if number of nodes received is same as sent
 	if len(nodesArr) != nodeCount {
-		t.Fatal(errors.New(fmt.Sprintf("Expected %d number of nodes, got %d", nodeCount, len(nodesArr))))
+		t.Fatal(fmt.Errorf("Expected %d number of nodes, got %d", nodeCount, len(nodesArr)))
 	}
 
 	//need to let it run for a little while, otherwise stopping it immediately can crash due running nodes
