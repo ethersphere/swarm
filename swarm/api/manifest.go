@@ -35,7 +35,7 @@ const (
 	ManifestType        = "application/bzz-manifest+json"
 	ResourceContentType = "application/bzz-resource"
 
-	manifestSizeLimit = 100 * 1024 * 1024
+	manifestSizeLimit = 5 * 1024 * 1024
 )
 
 // Manifest represents a swarm manifest
