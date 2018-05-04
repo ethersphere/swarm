@@ -86,11 +86,7 @@ func download(ctx *cli.Context) {
 	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 	client := client.NewClient(bzzapi)
 
-	//possible cases:
-	// bzz:/addr -> download directory, possible recursive
-	// bzz:/addr/path -> download file
-
-	// assume behaviour accoridng to --recursive switch
+	// assume behaviour according to --recursive switch
 	manifestList, err := client.List(uri.Addr, uri.Path)
 	if err != nil {
 		utils.Fatalf("could not list manifest: %v", err)
@@ -123,10 +119,9 @@ func download(ctx *cli.Context) {
 			utils.Fatalf("could not download %s from given address: %s. error: %v", uri.Path, uri.Addr, err)
 		}
 
-		log.Debug(fmt.Sprintf("swarm download: downloaded successfully"))
 		re := regexp.MustCompile("[^/]+$") //everything after last slash
-		if results := re.FindAllString(uri.Path, -1); len(results) > 0 {
 
+		if results := re.FindAllString(uri.Path, -1); len(results) > 0 {
 			filename = results[len(results)-1]
 			log.Debug(fmt.Sprintf("swarm download: assuming filename from requested path: %s", filename))
 		} else {
@@ -135,7 +130,7 @@ func download(ctx *cli.Context) {
 				log.Debug(fmt.Sprintf("swarm download: assuming filename from manifest entry: %s", filename))
 			} else {
 				// assume hash as name if there's nothing from the command line
-				filename = entry.Hash
+				filename = uri.Addr
 				log.Debug(fmt.Sprintf("swarm download: filename fallback to be hash: %s", filename))
 			}
 		}

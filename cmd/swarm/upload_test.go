@@ -17,14 +17,18 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
+	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 )
 
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
@@ -53,7 +57,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 	defer os.Remove(tmp.Name())
 
 	// write data to file
-	data := "randomdata"
+	data := "notsorandomdata"
 	_, err = io.WriteString(tmp, data)
 	if err != nil {
 		t.Fatal(err)
@@ -128,6 +132,30 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		}
 		down := runSwarm(t, flagss...)
 		down.ExpectExit()
+
+		fi, err := os.Stat(path.Join(tmpDownload, hash))
+		if err != nil {
+			utils.Fatalf("could not stat path: %v", err)
+		}
+
+		switch mode := fi.Mode(); {
+		case mode.IsRegular():
+			if file, err := swarm.Open(path.Join(tmpDownload, hash)); err != nil {
+				t.Fatalf("encountered an error opening the file returned from the CLI: %v", err)
+			} else {
+
+				ff := make([]byte, len(data))
+				io.ReadFull(file, ff)
+				buf := bytes.NewBufferString(data)
+
+				if !bytes.Equal(ff, buf.Bytes()) {
+					t.Fatalf("retrieved data and posted data not equal!")
+				}
+			}
+		default:
+			utils.Fatalf("this shouldnt happen")
+
+		}
 
 	}
 
