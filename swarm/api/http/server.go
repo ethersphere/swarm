@@ -543,12 +543,22 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
-	key, err := s.api.Resolve(r.uri)
-	if err != nil {
-		getFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-		return
+	var err error
+	var resolvedKey bool // indicates if the key was resolved by DNS
+	var etag string
+	key := r.uri.Key()
+	if key == nil {
+		key, err = s.api.Resolve(r.uri)
+		if err != nil {
+			getFail.Inc(1)
+			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
+			return
+		}
+		resolvedKey = true // url was of type bzz://name.eth/path , so we won't set cache headers
+	} else {
+		resolvedKey = false // url was of type bzz://<hex key>/path, so we are sure it is immutable.
 	}
+
 	log.Debug("handle.get: resolved", "ruid", r.ruid, "key", key)
 
 	// if path is set, interpret <key> as a manifest and return the
@@ -590,6 +600,9 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			return
 		}
 		key = storage.Key(common.Hex2Bytes(entry.Hash))
+		etag = entry.Hash
+	} else {
+		etag = common.Bytes2Hex(key)
 	}
 
 	// check the root chunk exists by retrieving the file's size
@@ -601,6 +614,11 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	}
 
 	w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
+
+	if !resolvedKey { // url was of type bzz-raw://<hex key>, so we are sure it is immutable.
+		w.Header().Set("Cache-Control", "max-age=2147483648, immutable")
+	}
+	w.Header().Set("ETag", etag) // set etag to hash of actually delivered content
 
 	switch {
 	case r.uri.Raw():
@@ -812,16 +830,25 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
 		return
 	}
+	var err error
+	manifestKey := r.uri.Key()
+	var resolvedKey bool // indicates if the key was resolved by DNS
 
-	key, err := s.api.Resolve(r.uri)
-	if err != nil {
-		getFileFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-		return
+	if manifestKey == nil {
+		manifestKey, err = s.api.Resolve(r.uri)
+		if err != nil {
+			getFileFail.Inc(1)
+			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
+			return
+		}
+		resolvedKey = true // url was of type bzz://name.eth/path , so we won't set cache headers
+	} else {
+		resolvedKey = false // url was of type bzz://<hex key>/path, so we are sure it is immutable.
 	}
-	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", key)
 
-	reader, contentType, status, err := s.api.Get(key, r.uri.Path)
+	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestKey)
+
+	reader, contentType, status, contentKey, err := s.api.Get(manifestKey, r.uri.Path)
 
 	if err != nil {
 		// cheeky, cheeky hack. See swarm/api/api.go:Api.Get() for an explanation
@@ -844,7 +871,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.getManifestList(key, r.uri.Path)
+		list, err := s.getManifestList(manifestKey, r.uri.Path)
 
 		if err != nil {
 			getFileFail.Inc(1)
@@ -866,6 +893,10 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
+	if !resolvedKey { // url was of type bzz://<hex key>/path, so we are sure it is immutable.
+		w.Header().Set("Cache-Control", "max-age=2147483648, immutable")
+	}
+	w.Header().Set("ETag", common.Bytes2Hex(contentKey)) // set etag to hash of actually delivered content
 
 	http.ServeContent(w, &r.Request, "", time.Now(), reader)
 }

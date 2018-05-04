@@ -66,7 +66,7 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	reader, mimeType, status, err := self.api.Get(key, uri.Path)
+	reader, mimeType, status, _, err := self.api.Get(key, uri.Path)
 	if err != nil {
 		return nil, err
 	}
