@@ -219,10 +219,6 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.EnsAPIs = ensAPIs
 	}
 
-	if ensaddr := ctx.GlobalString(DeprecatedEnsAddrFlag.Name); ensaddr != "" {
-		currentConfig.EnsRoot = common.HexToAddress(ensaddr)
-	}
-
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
 	}
@@ -342,14 +338,10 @@ func dumpConfig(ctx *cli.Context) error {
 
 //deprecated flags checked here
 func checkDeprecated(ctx *cli.Context) {
-	// exit if the deprecated --ethapi flag is set
-	if ctx.GlobalString(DeprecatedEthAPIFlag.Name) != "" {
-		utils.Fatalf("--ethapi is no longer a valid command line flag, please use --ens-api and/or --swap-api.")
-	}
-	// warn if --ens-api flag is set
-	if ctx.GlobalString(DeprecatedEnsAddrFlag.Name) != "" {
-		log.Warn("--ens-addr is no longer a valid command line flag, please use --ens-api to specify contract address.")
-	}
+	// add deprecated flags here in this form
+	// if ctx.GlobalString(FLAGNAME.Name) != "" {
+	// 	utils.Fatalf("--flagname is no longer a valid command line flag, please use...")
+	// }
 }
 
 //validate configuration parameters
