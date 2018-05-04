@@ -46,13 +46,6 @@ var (
 	retryInterval = 30 * time.Second
 )
 
-// NetStore is the interface for
-type DPA interface {
-	Get(ctx context.Context, ref Address) (Chunk, func(ctx context.Context) (Chunk, error), error)
-	Put(ctx context.Context, ch Chunk) (func(ctx context.Context) error, error)
-	Has(ctx context.Context, ref Address) (func(context.Context) error, error)
-}
-
 type DPAAPI struct {
 	DPA
 	hashFunc SwarmHasher
@@ -113,7 +106,7 @@ func (self *DPAAPI) Retrieve(key Address) (reader *LazyChunkReader, isEncrypted 
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPAAPI) Store(data io.Reader, size int64, toEncrypt bool) (key Address, wait func(), err error) {
+func (self *DPAAPI) Store(data io.Reader, size int64, toEncrypt bool) (key Address, wait func(context.Context) error, err error) {
 	putter := NewHasherStore(self.DPA, self.hashFunc, toEncrypt)
 	return PyramidSplit(data, putter, putter)
 }

@@ -19,7 +19,6 @@ package storage
 import (
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
@@ -36,8 +35,12 @@ type hasherStore struct {
 	chunkEncryption *chunkEncryption
 	hashSize        int   // content hash size
 	refSize         int64 // reference size (content hash + possibly encryption key)
-	wg              *sync.WaitGroup
-	closed          chan struct{}
+	count           int64
+	errC            chan error
+	waitC           chan func(context.Context) error
+	doneC           chan struct{}
+	quitC           chan struct{}
+	closedC         chan error
 }
 
 func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
@@ -60,15 +63,47 @@ func NewHasherStore(dpa DPA, hashFunc SwarmHasher, toEncrypt bool) *hasherStore 
 		chunkEncryption = newChunkEncryption(DefaultChunkSize, refSize)
 	}
 
-	return &hasherStore{
+	h := &hasherStore{
 		dpa:             dpa,
 		hashFunc:        hashFunc,
 		chunkEncryption: chunkEncryption,
 		hashSize:        hashSize,
 		refSize:         refSize,
-		wg:              &sync.WaitGroup{},
-		closed:          make(chan struct{}),
+		waitC:           make(chan func(ctx context.Context) error),
+		errC:            make(chan error),
+		doneC:           make(chan struct{}),
+		quitC:           make(chan struct{}),
+		closedC:         make(chan error, 1),
 	}
+
+	go func() {
+		var n int64
+		var done bool
+		for {
+			select {
+			case _, more := <-h.doneC:
+				if !more {
+					return
+				}
+				done = true
+			case err := <-h.errC:
+				if err != nil {
+					h.closedC <- err
+					return
+				}
+				n++
+			}
+			if done {
+				if n >= h.count {
+					close(h.closedC)
+					return
+				}
+			}
+
+		}
+	}()
+
+	return h
 }
 
 // Put stores the chunkData into the ChunkStore of the hasherStore and returns the reference.
@@ -124,15 +159,21 @@ func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 // Close indicates that no more chunks will be put with the hasherStore, so the Wait
 // function can return when all the previously put chunks has been stored.
 func (h *hasherStore) Close() {
-	close(h.closed)
+	h.doneC <- struct{}{}
 }
 
 // Wait returns when
 //    1) the Close() function has been called and
 //    2) all the chunks which has been Put has been stored
-func (h *hasherStore) Wait() {
-	<-h.closed
-	h.wg.Wait()
+func (h *hasherStore) Wait(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		// quit the error checking loop
+		close(h.doneC)
+		return ctx.Err()
+	case err := <-h.closedC:
+		return err
+	}
 }
 
 func (h *hasherStore) createHash(chunkData ChunkData) Address {
@@ -207,13 +248,13 @@ func (h *hasherStore) RefSize() int64 {
 }
 
 func (h *hasherStore) storeChunk(chunk *chunk) {
-	ctx := context.Background()
-	wait, err := h.dpa.Put(ctx, chunk)
-	_ = err
-	h.wg.Add(1)
+	wait, err := h.dpa.Put(chunk)
+	if err != nil {
+		h.errC <- err
+		return
+	}
 	go func() {
-		_ = wait(ctx)
-		h.wg.Done()
+		h.waitC <- wait
 	}()
 }
 

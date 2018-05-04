@@ -56,13 +56,14 @@ func brokenLimitReader(data io.Reader, size int, errAt int) *brokenLimitedReader
 	}
 }
 
-func mputChunks(store ChunkStore, processors int, n int, chunksize int64) (hs []Key) {
+func mputChunks(store ChunkStore, processors int, n int, chunksize int64) (hs []Address) {
 	return mput(store, processors, n, GenerateRandomChunk)
 }
-func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs []Key) {
+func mput(store ChunkStore, processors int, n int, f func(i int64) *chunk) (hs []Address) {
 	wg := sync.WaitGroup{}
 	wg.Add(processors)
-	c := make(chan *Chunk)
+	ctx := context.Background()
+	c := make(chan Chunk)
 	for i := 0; i < processors; i++ {
 		go func() {
 			defer wg.Done()
@@ -72,24 +73,18 @@ func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs [
 				go func() {
 					defer wg.Done()
 
-					store.Put(chunk)
-
-					<-chunk.dbStoredC
+					wait, err := store.Put(ctx, chunk)
+					if err != nil {
+						panic("store.Put failed")
+					}
+					wait(ctx)
 				}()
 			}
 		}()
 	}
-	fa := f
-	if _, ok := store.(*MemStore); ok {
-		fa = func(i int64) *Chunk {
-			chunk := f(i)
-			chunk.markAsStored()
-			return chunk
-		}
-	}
 	for i := 0; i < n; i++ {
-		chunk := fa(int64(i))
-		hs = append(hs, chunk.Key)
+		chunk := f(int64(i))
+		hs = append(hs, chunk.Address())
 		c <- chunk
 	}
 	close(c)
@@ -97,13 +92,13 @@ func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs [
 	return hs
 }
 
-func mget(store ChunkStore, hs []Key, f func(h Key, chunk *Chunk) error) error {
+func mget(store ChunkStore, hs []Address, f func(h Address, chunk *Chunk) error) error {
 	wg := sync.WaitGroup{}
 	wg.Add(len(hs))
 	errc := make(chan error)
 
 	for _, k := range hs {
-		go func(h Key) {
+		go func(h Address) {
 			defer wg.Done()
 			chunk, err := store.Get(h)
 			if err != nil {
@@ -163,9 +158,9 @@ func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *te
 
 func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
 	hs := mputChunks(m, processors, n, chunksize)
-	f := func(h Key, chunk *Chunk) error {
-		if !bytes.Equal(h, chunk.Key) {
-			return fmt.Errorf("key does not match retrieved chunk Key")
+	f := func(h Address, chunk *Chunk) error {
+		if !bytes.Equal(h, chunk.Address) {
+			return fmt.Errorf("key does not match retrieved chunk Address")
 		}
 		hasher := MakeHashFunc(DefaultHash)()
 		hasher.ResetWithLength(chunk.SData[:8])
@@ -214,22 +209,42 @@ func NewMapChunkStore() *MapChunkStore {
 	}
 }
 
-func (m *MapChunkStore) Put(_ context.Context, chunk Chunk) (func(context.Context) error, error) {
+func (m *MapChunkStore) Put(ch Chunk) (func() error, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.chunks[chunk.Key.Hex()] = chunk
-	return nil, nil
+	m.chunks[chunk.Address.Hex()] = chunk
+	return func() { return nil }, nil
 }
 
-func (m *MapChunkStore) Get(key Key) (Chunk, func(context.Context) (Chunk, error), error) {
+func (m *MapChunkStore) Get(ref Address) (Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	chunk := m.chunks[key.Hex()]
 	if chunk == nil {
-		return nil, nil, ErrChunkNotFound
+		return nil, ErrChunkNotFound
 	}
-	return chunk, nil, nil
+	return chunk, nil
 }
 
 func (m *MapChunkStore) Close() {
+}
+
+// fakeChunkStore doesn't store anything, just implements the ChunkStore interface
+// It can be used to inject into a hasherStore if you don't want to actually store data just do the
+// hashing
+type fakeChunkStore struct {
+}
+
+// Put doesn't store anything it is just here to implement ChunkStore
+func (f *fakeChunkStore) Put(ch Chunk) (func() error, error) {
+	return func() { return nil }, nil
+}
+
+// Gut doesn't store anything it is just here to implement ChunkStore
+func (f *fakeChunkStore) Get(ref Address) (Chunk, error) {
+	panic("FakeChunkStore doesn't support Get")
+}
+
+// Close doesn't store anything it is just here to implement ChunkStore
+func (f *fakeChunkStore) Close() {
 }

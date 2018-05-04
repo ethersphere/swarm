@@ -99,7 +99,7 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // when the chunk is stored in memstore.
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
-func (self *LocalStore) Put(ctx context.Context, chunk Chunk) (func(ctx context.Context) error, error) {
+func (self *LocalStore) Put(chunk Chunk) (func(ctx context.Context) error, error) {
 	valid := true
 	for _, v := range self.Validators {
 		if valid = v.Validate(chunk.Address(), chunk.Data()); valid {
@@ -122,7 +122,7 @@ func (self *LocalStore) Put(ctx context.Context, chunk Chunk) (func(ctx context.
 		return nil, err
 	}
 	dbStorePutCounter.Inc(1)
-	wait, err := self.DbStore.Put(ctx, chunk)
+	wait, err := self.DbStore.Put(chunk)
 	if err != nil {
 		return nil, err
 	}
@@ -133,14 +133,14 @@ func (self *LocalStore) Put(ctx context.Context, chunk Chunk) (func(ctx context.
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (self *LocalStore) Get(_ context.Context, key Address) (chunk *chunk, err error) {
+func (self *LocalStore) Get(key Address) (chunk Chunk, err error) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	return self.get(key)
 }
 
-func (self *LocalStore) get(key Address) (chunk *chunk, err error) {
+func (self *LocalStore) get(key Address) (chunk Chunk, err error) {
 	chunk, err = self.memStore.Get(key)
 	if err != nil && err != ErrChunkNotFound {
 		return nil, err

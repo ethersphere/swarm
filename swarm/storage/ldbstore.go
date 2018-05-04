@@ -344,7 +344,6 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 	tr := tar.NewReader(in)
 
 	var count int64
-	var wg sync.WaitGroup
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -370,17 +369,13 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		}
 		key := Address(keybytes)
 		chunk := NewChunk(key, data[32:])
-		ctx := context.Background()
-		wait, err := s.Put(ctx, chunk)
-		_ = err
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			wait(ctx)
-		}()
+		_, err = s.Put(chunk)
+		if err != nil {
+			log.Info("hasherStore.Put:", "chunk", chunk, "err", err)
+			return count, err
+		}
 		count++
 	}
-	wg.Wait()
 	return count, nil
 }
 
@@ -500,7 +495,7 @@ func (s *LDBStore) CurrentStorageIndex() uint64 {
 	return s.dataIdx
 }
 
-func (s *LDBStore) Put(_ context.Context, chunk Chunk) (func(context.Context) error, error) {
+func (s *LDBStore) Put(chunk Chunk) (func(context.Context) error, error) {
 	log.Trace("ldbstore.put", "key", chunk.Address())
 	ikey := getIndexKey(chunk.Address())
 	var index dpaDBIndex

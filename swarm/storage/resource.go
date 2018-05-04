@@ -164,7 +164,7 @@ type headerGetter interface {
 //
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
-	chunkStore      *NetStore
+	dpa             DPA
 	HashSize        int
 	signer          ResourceSigner
 	ethClient       headerGetter
@@ -217,7 +217,7 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 
 // Sets the store backend for resource updates
 func (self *ResourceHandler) SetStore(store *NetStore) {
-	self.chunkStore = store
+	self.dpa = store
 }
 
 // Chunk Validation method (matches ChunkValidatorFunc signature)
@@ -354,7 +354,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	binary.LittleEndian.PutUint64(data[10:18], frequency)
 	chunk := NewChunk(key, data)
 
-	_, err = self.chunkStore.Put(context.Background(), chunk)
+	_, err = self.dpa.Put(chunk)
 	if err != nil {
 		return nil, err
 	}
@@ -470,7 +470,7 @@ func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common
 // base code for public lookup methods
 func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
-	if self.chunkStore == nil {
+	if self.dpa == nil {
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before performing lookups")
 	}
 
@@ -525,7 +525,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 
 func (self *ResourceHandler) retrieveResource(key Address) (Chunk, error) {
 	ctx, _ := context.WithTimeout(context.Background(), resourceFetchTimeout)
-	chunk, fetch, err := self.chunkStore.Get(ctx, key)
+	chunk, fetch, err := self.dpa.Get(ctx, key)
 	if fetch == nil {
 		return chunk, err
 	}
@@ -680,7 +680,7 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 
 func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Address, error) {
 
-	if self.chunkStore == nil {
+	if self.dpa == nil {
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before updating")
 	}
 	var signaturelength int
@@ -756,7 +756,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	// send the chunk
 	ctx, cancel := context.WithTimeout(context.Background(), self.storeTimeout)
 	defer cancel()
-	wait, err := self.chunkStore.Put(ctx, chunk)
+	wait, err := self.dpa.Put(chunk)
 	if wait != nil {
 		err = wait(ctx)
 	}
@@ -776,7 +776,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 // Closes the datastore.
 // Always call this at shutdown to avoid data corruption.
 func (self *ResourceHandler) Close() {
-	self.chunkStore.Close()
+	self.dpa.Close()
 }
 
 func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64, error) {

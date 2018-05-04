@@ -168,9 +168,9 @@ func (c KeyCollection) Swap(i, j int) {
 }
 
 // ChunkStore is the interface for
-type ChunkStore interface {
+type DPA interface {
 	Get(ctx context.Context, ref Address) (Chunk, func(ctx context.Context) (Chunk, error), error)
-	Put(ctx context.Context, ch Chunk) (func(ctx context.Context) error, error)
+	Put(ch Chunk) (func(ctx context.Context) error, error)
 	Has(ctx context.Context, ref Address) (func(context.Context) error, error)
 	Close()
 }
@@ -324,7 +324,7 @@ type Putter interface {
 	// Close is to indicate that no more chunk data will be Put on this Putter
 	Close()
 	// Wait returns if all data has been store and the Close() was called.
-	Wait()
+	Wait(ctx context.Context) error
 }
 
 // Getter is an interface to retrieve a chunk's data by its reference
@@ -370,4 +370,10 @@ func (self *ContentAddressValidator) Validate(key Address, data []byte) bool {
 		return false
 	}
 	return true
+}
+
+type ChunkStore interface {
+	Get(ref Address) (Chunk, error)
+	Put(ch Chunk) (func(context.Context) error, error)
+	Close()
 }

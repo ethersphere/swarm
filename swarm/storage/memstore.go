@@ -56,12 +56,12 @@ func (m *MemStore) Get(key Address) (*chunk, error) {
 	return c.(*chunk), nil
 }
 
-func (m *MemStore) Put(c *chunk) {
+func (m *MemStore) Put(c Chunk) {
 	if m.disabled {
 		return
 	}
 
-	m.cache.Add(string(c.addr), c)
+	m.cache.Add(string(c.Address()), c)
 }
 
 func (m *MemStore) setCapacity(n int) {

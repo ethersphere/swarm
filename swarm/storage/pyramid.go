@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"io"
@@ -99,11 +100,11 @@ func NewPyramidSplitterParams(key Address, reader io.Reader, putter Putter, gett
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Address), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func PyramidSplit(reader io.Reader, putter Putter, getter Getter) (Address, func(), error) {
+func PyramidSplit(reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
 	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultChunkSize)).Split()
 }
 
-func PyramidAppend(key Address, reader io.Reader, putter Putter, getter Getter) (Address, func(), error) {
+func PyramidAppend(key Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
 	return NewPyramidSplitter(NewPyramidSplitterParams(key, reader, putter, getter, DefaultChunkSize)).Append()
 }
 
@@ -203,7 +204,7 @@ func (self *PyramidChunker) decrementWorkerCount() {
 	self.workerCount -= 1
 }
 
-func (self *PyramidChunker) Split() (k Address, wait func(), err error) {
+func (self *PyramidChunker) Split() (k Address, wait func(context.Context) error, err error) {
 	log.Debug("pyramid.chunker: Split()")
 
 	self.wg.Add(1)
@@ -235,7 +236,7 @@ func (self *PyramidChunker) Split() (k Address, wait func(), err error) {
 
 }
 
-func (self *PyramidChunker) Append() (k Address, wait func(), err error) {
+func (self *PyramidChunker) Append() (k Address, wait func(context.Context) error, err error) {
 	log.Debug("pyramid.chunker: Append()")
 	// Load the right most unfinished tree chunks in every level
 	self.loadTree()

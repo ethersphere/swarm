@@ -16,6 +16,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -134,7 +135,7 @@ func TreeJoin(key Address, getter Getter, depth int) *LazyChunkReader {
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Address), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(), err error) {
+func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(context.Context) error, err error) {
 	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultChunkSize)).Split()
 }
 
@@ -226,7 +227,7 @@ func (self *TreeChunker) decrementWorkerCount() {
 	self.workerCount -= 1
 }
 
-func (self *TreeChunker) Split() (k Address, wait func(), err error) {
+func (self *TreeChunker) Split() (k Address, wait func(context.Context) error, err error) {
 	if self.chunkSize <= 0 {
 		panic("chunker must be initialised")
 	}
