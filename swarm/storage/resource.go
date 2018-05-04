@@ -42,7 +42,7 @@ func NewBlockEstimator() *blockEstimator {
 	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z") // from etherscan.io
 	ns := sampleDate.Sub(ropstenStart).Nanoseconds()
 	period := int(ns / sampleBlock)
-	parsestring := fmt.Sprintf("%dns", int(float64(period)*0.99995)) // increase the blockcount a little, so we don't undershoot the read block height; if we do, we will never find the updates
+	parsestring := fmt.Sprintf("%dns", int(float64(period)*1.0005)) // increase the blockcount a little, so we don't overshoot the read block height; if we do, we will never find the updates when getting synced data
 	periodNs, _ := time.ParseDuration(parsestring)
 	return &blockEstimator{
 		Start:   ropstenStart,
