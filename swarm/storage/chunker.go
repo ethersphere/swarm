@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 /*
@@ -399,6 +400,8 @@ func (self *TreeChunker) Join() *LazyChunkReader {
 
 // Size is meant to be called on the LazySectionReader
 func (self *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
+	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
+
 	log.Debug("lazychunkreader.size", "key", self.key)
 	if self.chunkData == nil {
 		chunkData, err := self.getter.Get(Reference(self.key))
@@ -422,6 +425,8 @@ func (self *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
 // concurrent reads are allowed
 // Size() needs to be called synchronously on the LazyChunkReader first
 func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
+	metrics.GetOrRegisterCounter("lazychunkreader.readat", nil).Inc(1)
+
 	// this is correct, a swarm doc cannot be zero length, so no EOF is expected
 	if len(b) == 0 {
 		return 0, nil
@@ -535,6 +540,8 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 // Read keeps a cursor so cannot be called simulateously, see ReadAt
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 	log.Debug("lazychunkreader.read", "key", self.key)
+	metrics.GetOrRegisterCounter("lazychunkreader.read", nil).Inc(1)
+
 	read, err = self.ReadAt(b, self.off)
 	if err != nil && err != io.EOF {
 		log.Error("lazychunkreader.readat", "read", read, "err", err)
