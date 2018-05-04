@@ -495,7 +495,7 @@ func retrieve(
 
 				log.Debug("api get: check file", "node", id.String(), "key", f.key.String(), "total files found", atomic.LoadUint64(totalFoundCount))
 
-				r, _, _, err := swarm.api.Get(f.key, "/")
+				r, _, _, _, err := swarm.api.Get(f.key, "/")
 				if err != nil {
 					errc <- fmt.Errorf("api get: node %s, key %s, kademlia %s: %v", id, f.key, swarm.bzz.Hive, err)
 					return
