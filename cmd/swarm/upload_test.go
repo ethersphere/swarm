@@ -111,7 +111,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		//defer os.Remove(tmpDownload)
+		defer os.Remove(tmpDownload)
 
 		bzzLocator := "bzz:/" + hash
 		flagss := []string{}
@@ -123,11 +123,10 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 			tmpDownload,
 		}
 		if toEncrypt {
-			hashRegexp = `[a-f\d]{128}`
 			flagss = []string{
 				"--bzzapi", cluster.Nodes[0].URL,
 				"download",
-				"--encrypted",
+				bzzLocator,
 				tmpDownload}
 		}
 		down := runSwarm(t, flagss...)
@@ -135,7 +134,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 
 		fi, err := os.Stat(path.Join(tmpDownload, hash))
 		if err != nil {
-			utils.Fatalf("could not stat path: %v", err)
+			t.Fatalf("could not stat path: %v", err)
 		}
 
 		switch mode := fi.Mode(); {
