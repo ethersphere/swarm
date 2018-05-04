@@ -87,10 +87,6 @@ var (
 		Usage:  "Network identifier (integer, default 3=swarm testnet)",
 		EnvVar: SWARM_ENV_NETWORK_ID,
 	}
-	SwarmConfigPathFlag = cli.StringFlag{
-		Name:  "bzzconfig",
-		Usage: "DEPRECATED: please use --config path/to/TOML-file",
-	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
 		Name:   "swap",
 		Usage:  "Swarm SWAP enabled (default false)",
@@ -164,16 +160,6 @@ var (
 		Name:   "store.cache.size",
 		Usage:  "Number of recent chunks cached in memory (default 5000)",
 		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
-	}
-
-	// the following flags are deprecated and should be removed in the future
-	DeprecatedEthAPIFlag = cli.StringFlag{
-		Name:  "ethapi",
-		Usage: "DEPRECATED: please use --ens-api and --swap-api",
-	}
-	DeprecatedEnsAddrFlag = cli.StringFlag{
-		Name:  "ens-addr",
-		Usage: "DEPRECATED: ENS contract address, please use --ens-api with contract address according to its format",
 	}
 )
 
@@ -374,9 +360,6 @@ Remove corrupt entries from a local chunk database.
 		SwarmStorePath,
 		SwarmStoreCapacity,
 		SwarmStoreCacheCapacity,
-		//deprecated flags
-		DeprecatedEthAPIFlag,
-		DeprecatedEnsAddrFlag,
 	}
 	rpcFlags := []cli.Flag{
 		utils.WSEnabledFlag,
