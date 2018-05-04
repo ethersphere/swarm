@@ -23,7 +23,6 @@ import (
 	"math/big"
 	"net/http"
 	"path"
-	"regexp"
 	"strings"
 
 	"bytes"
@@ -39,9 +38,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
-// TODO: this is bad, it should not be hardcoded how long is a hash
-var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?$")
 
 type ErrResourceReturn struct {
 	key string
@@ -256,33 +252,37 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
 
-	// if the URI is immutable, check if the address is a hash
-	isHash := hashMatcher.MatchString(uri.Addr)
+	// if the URI is immutable, check if the address looks like a hash
 	if uri.Immutable() {
-		if !isHash {
+		key := uri.Key()
+		if key == nil {
 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
 		}
-		return common.Hex2Bytes(uri.Addr), nil
+		return key, nil
 	}
 
 	// if DNS is not configured, check if the address is a hash
 	if self.dns == nil {
-		if !isHash {
+		key := uri.Key()
+		if key == nil {
 			apiResolveFail.Inc(1)
 			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
 		}
-		return common.Hex2Bytes(uri.Addr), nil
+		return key, nil
 	}
 
 	// try and resolve the address
 	resolved, err := self.dns.Resolve(uri.Addr)
 	if err == nil {
 		return resolved[:], nil
-	} else if !isHash {
+	}
+
+	key := uri.Key()
+	if key == nil {
 		apiResolveFail.Inc(1)
 		return nil, err
 	}
-	return common.Hex2Bytes(uri.Addr), nil
+	return key, nil
 }
 
 // Put provides singleton manifest creation on top of dpa store
@@ -309,11 +309,11 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key
 
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
-// it returns a section reader, mimeType, status and an error
-func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkReader, mimeType string, status int, err error) {
-	log.Debug("api.get", "key", key, "path", path)
+// it returns a section reader, mimeType, status, the key of the actual content and an error
+func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.LazyChunkReader, mimeType string, status int, contentKey storage.Key, err error) {
+	log.Debug("api.get", "key", manifestKey, "path", path)
 	apiGetCount.Inc(1)
-	trie, err := loadManifest(self.dpa, key, nil)
+	trie, err := loadManifest(self.dpa, manifestKey, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
@@ -321,11 +321,11 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		return
 	}
 
-	log.Debug("trie getting entry", "key", key, "path", path)
+	log.Debug("trie getting entry", "key", manifestKey, "path", path)
 	entry, _ := trie.getEntry(path)
 
 	if entry != nil {
-		log.Debug("trie got entry", "key", key, "path", path, "entry.Hash", entry.Hash)
+		log.Debug("trie got entry", "key", manifestKey, "path", path, "entry.Hash", entry.Hash)
 		// we want to be able to serve Mutable Resource Updates transparently using the bzz:// scheme
 		//
 		// we use a special manifest hack for this purpose, which is pathless and where the resource root key
@@ -339,7 +339,7 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 		// if the resource update is of multihash type:
 		// we validate the multihash and retrieve the manifest behind it, and resume normal operations from there
 		if entry.ContentType == ResourceContentType {
-			log.Trace("resource type", "key", key, "hash", entry.Hash)
+			log.Trace("resource type", "key", manifestKey, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
@@ -348,7 +348,7 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
 				log.Warn(fmt.Sprintf("get resource content error: %v", err))
-				return reader, mimeType, status, err
+				return reader, mimeType, status, nil, err
 			}
 			if rsrc.Multihash {
 
@@ -358,58 +358,58 @@ func (self *Api) Get(key storage.Key, path string) (reader *storage.LazyChunkRea
 					apiGetInvalid.Inc(1)
 					status = http.StatusInternalServerError
 					log.Warn(fmt.Sprintf("could not decode resource multihash: %v", err))
-					return reader, mimeType, status, err
+					return reader, mimeType, status, nil, err
 				} else if decodedMultihash.Code != multihash.KECCAK_256 {
 					apiGetInvalid.Inc(1)
 					status = http.StatusUnprocessableEntity
 					log.Warn(fmt.Sprintf("invalid resource multihash code: %x", decodedMultihash.Code))
-					return reader, mimeType, status, err
+					return reader, mimeType, status, nil, err
 				}
-				key = storage.Key(decodedMultihash.Digest)
-				log.Trace("resource is multihash", "key", key)
+				manifestKey = storage.Key(decodedMultihash.Digest)
+				log.Trace("resource is multihash", "key", manifestKey)
 
 				// get the manifest the multihash digest points to
-				trie, err := loadManifest(self.dpa, key, nil)
+				trie, err := loadManifest(self.dpa, manifestKey, nil)
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
 					log.Warn(fmt.Sprintf("loadManifestTrie (resource multihash) error: %v", err))
-					return reader, mimeType, status, err
+					return reader, mimeType, status, nil, err
 				}
 
-				log.Trace("trie getting resource multihash entry", "key", key, "path", path)
+				log.Trace("trie getting resource multihash entry", "key", manifestKey, "path", path)
 				var fullpath string
 				entry, fullpath = trie.getEntry(path)
-				log.Trace("trie got resource multihash entry", "key", key, "path", path, "entry", entry, "fullpath", fullpath)
+				log.Trace("trie got resource multihash entry", "key", manifestKey, "path", path, "entry", entry, "fullpath", fullpath)
 
 				if entry == nil {
 					status = http.StatusNotFound
 					apiGetNotFound.Inc(1)
 					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
-					log.Trace("manifest (resource multihash) entry not found", "key", key, "path", path)
-					return reader, mimeType, status, err
+					log.Trace("manifest (resource multihash) entry not found", "key", manifestKey, "path", path)
+					return reader, mimeType, status, nil, err
 				}
 
 			} else {
-				return nil, entry.ContentType, http.StatusOK, &ErrResourceReturn{entry.Hash}
+				return nil, entry.ContentType, http.StatusOK, nil, &ErrResourceReturn{entry.Hash}
 			}
 		}
 
-		key = common.Hex2Bytes(entry.Hash)
+		contentKey = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			apiGetHttp300.Inc(1)
-			return nil, entry.ContentType, status, err
+			return nil, entry.ContentType, status, contentKey, err
 		} else {
 			mimeType = entry.ContentType
-			log.Debug("content lookup key", "key", key, "mimetype", mimeType)
-			reader, _ = self.dpa.Retrieve(key)
+			log.Debug("content lookup key", "key", contentKey, "mimetype", mimeType)
+			reader, _ = self.dpa.Retrieve(contentKey)
 		}
 	} else {
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
-		log.Trace("manifest entry not found", "key", key, "path", path)
+		log.Trace("manifest entry not found", "key", contentKey, "path", path)
 	}
 	return
 }

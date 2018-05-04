@@ -138,6 +138,7 @@ func (h *Hive) Stop() error {
 		p.Drop(nil)
 		return true
 	})
+
 	log.Info(fmt.Sprintf("%08x all peers dropped", h.BaseAddr()[:4]))
 	return nil
 }
@@ -147,7 +148,6 @@ func (h *Hive) Stop() error {
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
 	for range h.ticker.C {
-		log.Trace(fmt.Sprintf("%08x hive connect()", h.BaseAddr()[:4]))
 
 		addr, depth, changed := h.SuggestPeer()
 		if h.Discovery && changed {
@@ -156,6 +156,8 @@ func (h *Hive) connect() {
 		if addr == nil {
 			continue
 		}
+
+		log.Trace(fmt.Sprintf("%08x hive connect() suggested %08x", h.BaseAddr()[:4], addr.Address()[:4]))
 		under, err := discover.ParseNode(string(addr.(Addr).Under()))
 		if err != nil {
 			log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))

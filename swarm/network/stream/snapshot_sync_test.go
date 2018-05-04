@@ -116,17 +116,15 @@ func TestSyncing(t *testing.T) {
 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
 		testSyncing(t, *chunks, *nodes)
 	} else {
-		var nodeCnt []int
-		var chnkCnt []int
+		chnkCnt := []int{128}
+		nodeCnt := []int{32}
 		//if the `longrunning` flag has been provided
 		//run more test combinations
 		if *longrunning {
-			chnkCnt = []int{1, 8, 32, 256, 1024}
-			nodeCnt = []int{16, 32, 64, 128, 256}
+			chnkCnt = append(chnkCnt, 256, 1024)
+			nodeCnt = append(nodeCnt, 64, 128, 256)
 		} else {
 			//default test
-			chnkCnt = []int{4, 32}
-			nodeCnt = []int{32, 16}
 		}
 		for _, chnk := range chnkCnt {
 			for _, n := range nodeCnt {
@@ -421,7 +419,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
 			//check if the expected chunk is indeed in the localstore
 			if _, err := lstore.Get(chunk); err != nil {
-				log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
+				log.Debug(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
 				allSuccess = false
 			} else {
 				log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))

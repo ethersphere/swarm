@@ -647,3 +647,31 @@ func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 		t.Fatalf("expected response to equal %q, got %q", data, gotData)
 	}
 }
+
+func TestMethodsNotAllowed(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+	databytes := "bar"
+	for _, c := range []struct {
+		url  string
+		code int
+	}{
+		{
+			url:  fmt.Sprintf("%s/bzz-list:/", srv.URL),
+			code: 405,
+		}, {
+			url:  fmt.Sprintf("%s/bzz-hash:/", srv.URL),
+			code: 405,
+		},
+		{
+			url:  fmt.Sprintf("%s/bzz-immutable:/", srv.URL),
+			code: 405,
+		},
+	} {
+		res, _ := http.Post(c.url, "text/plain", bytes.NewReader([]byte(databytes)))
+		if res.StatusCode != c.code {
+			t.Fatal("should have failed")
+		}
+	}
+
+}

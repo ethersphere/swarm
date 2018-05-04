@@ -19,8 +19,16 @@ package api
 import (
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
+
+//matches hex swarm hashes
+// TODO: this is bad, it should not be hardcoded how long is a hash
+var hashMatcher = regexp.MustCompile("^([0-9A-Fa-f]{64})([0-9A-Fa-f]{64})?$")
 
 // URI is a reference to content stored in swarm.
 type URI struct {
@@ -37,6 +45,9 @@ type URI struct {
 	// Addr is either a hexadecimal storage key or it an address which
 	// resolves to a storage key
 	Addr string
+
+	// key stores the parsed storage key
+	key storage.Key
 
 	// Path is the path to the content within a swarm manifest
 	Path string
@@ -84,7 +95,6 @@ func Parse(rawuri string) (*URI, error) {
 	}
 	return uri, nil
 }
-
 func (u *URI) Resource() bool {
 	return u.Scheme == "bzz-resource"
 }
@@ -107,4 +117,15 @@ func (u *URI) Hash() bool {
 
 func (u *URI) String() string {
 	return u.Scheme + ":/" + u.Addr + "/" + u.Path
+}
+
+func (u *URI) Key() storage.Key {
+	if u.key != nil {
+		return u.key
+	}
+	if hashMatcher.MatchString(u.Addr) {
+		u.key = common.Hex2Bytes(u.Addr)
+		return u.key
+	}
+	return nil
 }
