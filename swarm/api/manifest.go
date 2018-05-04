@@ -223,6 +223,7 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dp
 		return
 	}
 	if size > manifestSizeLimit {
+		log.Warn("manifest exceeds size limit", "key", hash, "size", size, "limit", manifestSizeLimit)
 		err = fmt.Errorf("Manifest size of %v bytes exceeds the %v byte limit", size, manifestSizeLimit)
 		return
 	}
