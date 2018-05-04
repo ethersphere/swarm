@@ -32,7 +32,7 @@ import (
 )
 
 func download(ctx *cli.Context) {
-	//isRecursive,isRaw := false
+	isRecursive, isRaw := false
 	log.Debug("swarm download")
 	args := ctx.Args()
 	if len(args) < 1 {
@@ -43,7 +43,7 @@ func download(ctx *cli.Context) {
 
 	for _, v := range args {
 		if v == "--recursive" {
-			//isRecursive = true
+			isRecursive = true
 			log.Debug("swarm download: is recursive")
 
 		}
@@ -55,18 +55,18 @@ func download(ctx *cli.Context) {
 
 	dir := ""
 	filename := ""
+
 	if len(args) == 1 {
-		// no destination arg - assume current terminal working dir ./
+		// no destination arg - assume current terminal working dir
 		workingDir, err := filepath.Abs("./")
-		log.Debug(fmt.Sprintf("swarm download: no destination path - assuming working dir: %s", workingDir))
+		log.Trace(fmt.Sprintf("swarm download: no destination path - assuming working dir: %s", workingDir))
 
 		if err != nil {
 			utils.Fatalf("Fatal: could not get current working directory")
 		}
 		dir = workingDir
 	} else {
-		log.Debug(fmt.Sprintf("swarm download: destination path arg: %s", args[1]))
-
+		log.Trace(fmt.Sprintf("swarm download: destination path arg: %s", args[1]))
 		dir = args[1]
 	}
 
@@ -89,6 +89,13 @@ func download(ctx *cli.Context) {
 	//possible cases:
 	// bzz:/addr -> download directory, possible recursive
 	// bzz:/addr/path -> download file
+
+	// assume behaviour accoridng to --recursive switch
+	if isRecursive {
+		//we are downloading a directory
+	} else {
+		// we are downloading a file
+	}
 
 	// && strings.endsWith(uri.path,'/') == false ??
 
