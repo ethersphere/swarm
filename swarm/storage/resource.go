@@ -460,7 +460,7 @@ func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common
 	} else if rsrc.lastPeriod == 1 {
 		return nil, NewResourceError(ErrNothingToReturn, "Current update is the oldest")
 	} else {
-		rsrc.version = 1
+		rsrc.version = 0
 		rsrc.lastPeriod--
 	}
 	return self.lookup(rsrc, rsrc.lastPeriod, rsrc.version, false, maxLookup)
@@ -510,9 +510,9 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk)
 				}
-				log.Trace("version update found, checking next", "version", version, "period", period, "key", key)
 				chunk = newchunk
 				version = newversion
+				log.Trace("version update found, checking next", "version", version, "period", period, "key", key)
 			}
 		}
 		log.Trace("rsrc update not found, checking previous period", "period", period, "key", key)
