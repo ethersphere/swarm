@@ -30,7 +30,7 @@ type discPeer struct {
 	*BzzPeer
 	overlay   Overlay
 	sentPeers bool // whether we already sent peer closer to this address
-	mtx       sync.Mutex
+	mtx       sync.RWMutex
 	peers     map[string]bool // tracks node records sent to the peer
 	depth     uint8           // the proximity order advertised by remote as depth of saturation
 }
@@ -86,7 +86,10 @@ func NotifyPeer(p OverlayAddr, k Overlay) {
 	k.EachConn(p.Address(), 255, f)
 }
 
-// NotifyPeer notifies the remote node about
+// NotifyPeer notifies the remote node (recipient) about a peer if
+// the peer's PO is within the recipients advertised depth
+// OR the peer is closer to the recipient than self
+// unless already notified during the connection session
 func (d *discPeer) NotifyPeer(a OverlayAddr, po uint8) {
 	// immediately return
 	if (po < d.getDepth() && pot.ProxCmp(d.localAddr, d, a) != 1) || d.seen(a) {
@@ -94,7 +97,7 @@ func (d *discPeer) NotifyPeer(a OverlayAddr, po uint8) {
 	}
 	// log.Trace(fmt.Sprintf("%08x peer %08x notified of peer %08x", d.localAddr.Over()[:4], d.Address()[:4], a.Address()[:4]))
 	resp := &peersMsg{
-		Peers: []*BzzAddr{ToAddr(a)}, // perhaps the PeerAddr interface is unnecessary generalization
+		Peers: []*BzzAddr{ToAddr(a)},
 	}
 	go d.Send(resp)
 }
@@ -196,8 +199,8 @@ func (d *discPeer) seen(p OverlayPeer) bool {
 }
 
 func (d *discPeer) getDepth() uint8 {
-	d.mtx.Lock()
-	defer d.mtx.Unlock()
+	d.mtx.RLock()
+	defer d.mtx.RUnlock()
 	return d.depth
 }
 func (d *discPeer) setDepth(depth uint8) {
