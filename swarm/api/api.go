@@ -343,6 +343,13 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.Lazy
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
+			if err != nil {
+				apiGetNotFound.Inc(1)
+				status = http.StatusNotFound
+				log.Warn(fmt.Sprintf("get resource content error: %v", err))
+				return reader, mimeType, status, nil, err
+
+			}
 			_, rsrcData, err := self.resource.GetContent(entry.Hash)
 			if err != nil {
 				apiGetNotFound.Inc(1)
