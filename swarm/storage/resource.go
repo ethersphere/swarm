@@ -21,13 +21,14 @@ import (
 )
 
 const (
-	signatureLength     = 65
-	indexSize           = 18
-	DbDirName           = "resource"
-	chunkSize           = 4096 // temporary until we implement DPA in the resourcehandler
-	defaultStoreTimeout = 4000 * time.Millisecond
-	hasherCount         = 8
-	resourceHash        = SHA3Hash
+	signatureLength        = 65
+	indexSize              = 18
+	DbDirName              = "resource"
+	chunkSize              = 4096 // temporary until we implement DPA in the resourcehandler
+	defaultStoreTimeout    = 4000 * time.Millisecond
+	defaultRetrieveTimeout = 4000 * time.Millisecond
+	hasherCount            = 8
+	resourceHash           = SHA3Hash
 )
 
 type blockEstimator struct {
@@ -163,6 +164,7 @@ type headerGetter interface {
 //
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
+	dbapi           *DBAPI
 	chunkStore      ChunkStore
 	HashSize        int
 	signer          ResourceSigner
@@ -215,8 +217,8 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 }
 
 // Sets the store backend for resource updates
-func (self *ResourceHandler) SetStore(store ChunkStore) {
-	self.chunkStore = store
+func (self *ResourceHandler) SetStore(store *LocalStore) {
+	self.dbapi = NewDBAPI(store)
 }
 
 // Chunk Validation method (matches ChunkValidatorFunc signature)
@@ -356,7 +358,8 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	copy(chunk.SData[2:10], val)
 	binary.LittleEndian.PutUint64(val, frequency)
 	copy(chunk.SData[10:], val)
-	self.chunkStore.Put(chunk)
+	//self.chunkStore.Put(chunk)
+	self.dbapi.Put(chunk)
 	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
 
 	rsrc := &resource{
@@ -429,6 +432,7 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 
 	// get our blockheight at this time and the next block of the update period
 	rsrc, err := self.loadResource(nameHash, name, refresh)
+
 	if err != nil {
 		return nil, err
 	}
@@ -469,7 +473,9 @@ func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common
 // base code for public lookup methods
 func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
-	if self.chunkStore == nil {
+	//if self.chunkStore == nil {
+	if self.dbapi == nil {
+
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before performing lookups")
 	}
 
@@ -496,7 +502,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		key := self.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := self.chunkStore.Get(key)
+		chunk, err := self.getChunk(key)
 		if err == nil {
 			if specificversion {
 				return self.updateResourceIndex(rsrc, chunk)
@@ -506,7 +512,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			for {
 				newversion := version + 1
 				key := self.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := self.chunkStore.Get(key)
+				newchunk, err := self.getChunk(key)
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk)
 				}
@@ -542,7 +548,8 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.chunkStore.Get(Key(rsrc.nameHash[:]))
+		//chunk, err := self.chunkStore.Get(Key(rsrc.nameHash[:]))
+		chunk, err := self.getChunk(Key(rsrc.nameHash[:]))
 		if err != nil {
 			return nil, err
 		}
@@ -815,6 +822,23 @@ func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehas
 
 func (self *ResourceHandler) hasUpdate(name string, period uint32) bool {
 	return self.resources[name].lastPeriod == period
+}
+
+func (self *ResourceHandler) getChunk(key Key) (*Chunk, error) {
+	chunk, ok := self.dbapi.GetOrCreateRequest(key)
+	timer := time.NewTimer(defaultRetrieveTimeout)
+	if ok {
+		select {
+		case <-timer.C:
+			return nil, NewResourceError(ErrNotFound, fmt.Sprintf("timeout on resource remote retrieve chunk %v", key))
+		case c := <-chunk.ReqC:
+			log.Warn("chunk: %v", c)
+			if chunk.GetErrored() == nil {
+				return nil, chunk.GetErrored()
+			}
+		}
+	}
+	return chunk, nil
 }
 
 func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Address, error) {
