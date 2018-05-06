@@ -339,7 +339,6 @@ Remove corrupt entries from a local chunk database.
 		CorsStringFlag,
 		EnsAPIFlag,
 		SwarmTomlConfigPathFlag,
-		SwarmConfigPathFlag,
 		SwarmSwapEnabledFlag,
 		SwarmSwapAPIFlag,
 		SwarmSyncDisabledFlag,
