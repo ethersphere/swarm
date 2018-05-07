@@ -629,8 +629,9 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	} else {
 		exclsignlength = int(headerlength + datalength + 4)
 	}
-	if exclsignlength > len(chunkdata) {
-		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata)))
+	exclsignlength := int(headerlength + datalength + 4)
+	if exclsignlength > len(chunkdata) || exclsignlength < 14 {
+		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, exclsignlength, len(chunkdata)))
 	} else if exclsignlength < 14 {
 		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d is smaller than minimum valid resource chunk length %d", headerlength, datalength, 14))
 	}
@@ -695,6 +696,9 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 
 func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Key, error) {
 
+	if len(data) == 0 {
+		return nil, NewResourceError(ErrInvalidValue, "I refuse to waste swarm space for updates with empty values, amigo (data length is 0)")
+	}
 	if self.chunkStore == nil {
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before updating")
 	}
