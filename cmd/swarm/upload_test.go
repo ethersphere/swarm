@@ -18,6 +18,7 @@ package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -26,15 +27,23 @@ import (
 	"path"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	colorable "github.com/mattn/go-colorable"
 )
+
+var loglevel = flag.Int("loglevel", 6, "verbosity of logs")
+
+func init() {
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+}
 
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
 // available from all nodes via the HTTP API
 func TestCLISwarmUp(t *testing.T) {
 	testCLISwarmUp(false, t)
+	//testCLISwarmUpRecursive(false, t)
 }
 
 // TestCLISwarmUpEncrypted tests that running 'swarm encrypted-up' makes the resulting file
@@ -105,7 +114,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		if string(reply) != data {
 			t.Fatalf("expected HTTP body %q, got %q", data, reply)
 		}
-
+		log.Info("verifying uploaded file using `swarm download`")
 		//try to get the content with `go-swarm download`
 		tmpDownload, err := ioutil.TempDir("", "swarm-test")
 		if err != nil {
@@ -116,7 +125,6 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		bzzLocator := "bzz:/" + hash
 		flagss := []string{}
 		flagss = []string{
-			"--verbosity", "5",
 			"--bzzapi", cluster.Nodes[0].URL,
 			"download",
 			bzzLocator,
@@ -152,20 +160,156 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 				}
 			}
 		default:
-			utils.Fatalf("this shouldnt happen")
+			t.Fatalf("this shouldnt happen")
 
 		}
 
 	}
 
 	// get an non-existent hash from each node
-	// for _, node := range cluster.Nodes {
-	// 	res, err := http.Get(node.URL + "/bzz:/1023e8bae0f70be7d7b5f74343088ba408a218254391490c85ae16278e230340")
-	// 	if err != nil {
-	// 		t.Fatal(err)
-	// 	}
-	// 	if res.StatusCode != 404 {
-	// 		t.Fatalf("expected HTTP status 404, got %s", res.Status)
-	// 	}
-	// }
+	for _, node := range cluster.Nodes {
+		res, err := http.Get(node.URL + "/bzz:/1023e8bae0f70be7d7b5f74343088ba408a218254391490c85ae16278e230340")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != 404 {
+			t.Fatalf("expected HTTP status 404, got %s", res.Status)
+		}
+	}
+}
+
+func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
+	fmt.Println("starting 3 node cluster")
+	cluster := newTestCluster(t, 3)
+	defer cluster.Shutdown()
+
+	tmpUploadDir, err := ioutil.TempDir("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmpUploadDir)
+	// create a tmp file
+	tmp1, err := ioutil.TempFile(tmpUploadDir, "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tmp2, err := ioutil.TempFile(tmpUploadDir, "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmp2.Close()
+	defer os.Remove(tmp1.Name())
+	defer os.Remove(tmp1.Name())
+
+	// write data to file
+	data := "notsorandomdata"
+	_, err = io.WriteString(tmp1, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = io.WriteString(tmp2, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hashRegexp := `[a-f\d]{64}`
+	flags := []string{
+		"--bzzapi", cluster.Nodes[0].URL,
+		"--recursive",
+		"up",
+		tmpUploadDir}
+	if toEncrypt {
+		hashRegexp = `[a-f\d]{128}`
+		flags = []string{
+			"--bzzapi", cluster.Nodes[0].URL,
+			"--recursive",
+			"up",
+			"--encrypted",
+			tmpUploadDir}
+	}
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up := runSwarm(t, flags...)
+	_, matches := up.ExpectRegexp(hashRegexp)
+	up.ExpectExit()
+	hash := matches[0]
+	log.Info("dir uploaded", "hash", hash)
+
+	// get the file from the HTTP API of each node
+	for _, node := range cluster.Nodes {
+		log.Info("getting file from node", "node", node.Name)
+
+		res, err := http.Get(node.URL + "/bzz-list:/" + hash)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if res.StatusCode != 200 {
+			t.Fatalf("expected HTTP status 200, got %s", res.Status)
+		}
+
+		_, err = ioutil.ReadAll(res.Body)
+		defer res.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}
+		//try to get the content with `go-swarm download`
+		tmpDownload, err := ioutil.TempDir("", "swarm-test")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.Remove(tmpDownload)
+
+		bzzLocator := "bzz:/" + hash
+		flagss := []string{}
+		flagss = []string{
+			"--verbosity", "5",
+			"--bzzapi", cluster.Nodes[0].URL,
+			"--recursive",
+			"download",
+			bzzLocator,
+			tmpDownload,
+		}
+		if toEncrypt {
+			flagss = []string{
+				"--bzzapi", cluster.Nodes[0].URL,
+				"--recursive",
+				"download",
+				bzzLocator,
+				tmpDownload}
+		}
+		fmt.Println("downloading from swarm with recursive")
+		down := runSwarm(t, flagss...)
+		down.ExpectExit()
+
+		files, err := ioutil.ReadDir(tmpDownload)
+		for _, v := range files {
+			fi, err := os.Stat(path.Join(tmpDownload, v.Name()))
+			if err != nil {
+				t.Fatalf("got an error: %v", err)
+			}
+
+			switch mode := fi.Mode(); {
+			case mode.IsRegular():
+				if file, err := swarm.Open(path.Join(tmpDownload, v.Name())); err != nil {
+					t.Fatalf("encountered an error opening the file returned from the CLI: %v", err)
+				} else {
+
+					ff := make([]byte, len(data))
+					io.ReadFull(file, ff)
+					buf := bytes.NewBufferString(data)
+
+					if !bytes.Equal(ff, buf.Bytes()) {
+						t.Fatalf("retrieved data and posted data not equal!")
+					}
+				}
+			default:
+				t.Fatalf("this shouldnt happen")
+			}
+		}
+		if err != nil {
+			t.Fatalf("could not list files at: %v", files)
+		}
+	}
 }

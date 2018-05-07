@@ -27,31 +27,24 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/api/client"
+	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 
 func download(ctx *cli.Context) {
-	isRecursive := false
+	//isRecursive := false
+
 	log.Debug("swarm download")
 	args := ctx.Args()
 	if len(args) < 1 {
 		utils.Fatalf("Usage: swarm download <bzz locator> [<destination path>]")
 	}
 
-	newArgs := []string{}
-
-	for _, v := range args {
-		if v == "--recursive" {
-			isRecursive = true
-			log.Debug("swarm download: is recursive")
-
-		}
-		if !strings.HasPrefix(v, "--") {
-			newArgs = append(newArgs, v)
-		}
-	}
-	args = newArgs
+	var (
+		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		isRecursive = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
+		client      = swarm.NewClient(bzzapi)
+	)
 
 	dir := ""
 	filename := ""
@@ -83,8 +76,6 @@ func download(ctx *cli.Context) {
 	}
 
 	uri, err := api.Parse(args[0])
-	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-	client := client.NewClient(bzzapi)
 
 	// assume behaviour according to --recursive switch
 	manifestList, err := client.List(uri.Addr, uri.Path)

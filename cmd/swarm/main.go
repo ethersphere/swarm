@@ -241,8 +241,10 @@ Prints the swarm hash of file or directory.
 `,
 		},
 		{
-			Action:    download,
-			Name:      "download",
+			Action: download,
+			Name:   "download",
+			Flags:  []cli.Flag{SwarmRecursiveUploadFlag},
+
 			Usage:     "downloads a swarm manifest or a file inside a manifest",
 			ArgsUsage: " <bzzhash> [<download path>]",
 			Description: `
