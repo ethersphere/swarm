@@ -15,6 +15,7 @@ const (
 	ErrInvalidSignature
 	ErrNotSynced
 	ErrPeriodDepth
+	ErrTimeout
 	ErrCnt
 )
 
