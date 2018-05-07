@@ -107,7 +107,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	for {
 		if wait {
 			if ticker == nil {
-				ticker = time.NewTicker(1000 * time.Millisecond)
+				ticker = time.NewTicker(10000 * time.Millisecond)
 			}
 			select {
 			case <-ticker.C:
