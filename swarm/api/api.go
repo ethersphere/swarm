@@ -346,7 +346,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.Lazy
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
-				log.Warn(fmt.Sprintf("get resource content error: %v", err))
+				log.Debug(fmt.Sprintf("get resource content error: %v", err))
 				return reader, mimeType, status, nil, err
 
 			}
