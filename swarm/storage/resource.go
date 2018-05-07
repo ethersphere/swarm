@@ -50,14 +50,6 @@ func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*typ
 	}, nil
 }
 
-type resourceChunkStore struct {
-	*NetStore
-}
-
-func (self *resourceChunkStore) GetSingle(key Key, timeout time.Duration) (*Chunk, error) {
-	return self.get(key, timeout)
-}
-
 type ResourceError struct {
 	code int
 	err  string
@@ -172,7 +164,7 @@ type headerGetter interface {
 //
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
-	chunkStore      *resourceChunkStore
+	chunkStore      *NetStore
 	HashSize        int
 	signer          ResourceSigner
 	ethClient       headerGetter
@@ -225,9 +217,7 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 
 // Sets the store backend for resource updates
 func (self *ResourceHandler) SetStore(store *NetStore) {
-	self.chunkStore = &resourceChunkStore{
-		NetStore: store,
-	}
+	self.chunkStore = store
 }
 
 // Chunk Validation method (matches ChunkValidatorFunc signature)
@@ -507,7 +497,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		key := self.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := self.chunkStore.GetSingle(key, defaultRetrieveTimeout)
+		chunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
 				return self.updateResourceIndex(rsrc, chunk)
@@ -517,7 +507,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			for {
 				newversion := version + 1
 				key := self.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := self.chunkStore.GetSingle(key, defaultRetrieveTimeout)
+				newchunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk)
 				}
@@ -553,7 +543,7 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.chunkStore.GetSingle(Key(rsrc.nameHash[:]), defaultRetrieveTimeout)
+		chunk, err := self.chunkStore.get(Key(rsrc.nameHash[:]), defaultRetrieveTimeout)
 		if err != nil {
 			return nil, err
 		}

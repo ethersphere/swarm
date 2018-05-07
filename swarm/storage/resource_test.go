@@ -163,7 +163,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(safeName)
-	chunk, err := rh.chunkStore.NetStore.localStore.memStore.Get(Key(namehash[:]))
+	chunk, err := rh.chunkStore.localStore.memStore.Get(Key(namehash[:]))
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
@@ -233,7 +233,7 @@ func TestResourceHandler(t *testing.T) {
 		EthClient: rh.ethClient,
 	}
 
-	rh.chunkStore.NetStore.localStore.Close()
+	rh.chunkStore.localStore.Close()
 	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -450,7 +450,7 @@ func TestResourceMultihash(t *testing.T) {
 		EnsClient: rh.ensClient,
 	}
 	// test with signed data
-	rh.chunkStore.NetStore.localStore.Close()
+	rh.chunkStore.localStore.Close()
 	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -639,7 +639,7 @@ func newTestSigner() (*GenericResourceSigner, error) {
 }
 
 func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
-	chunk, err := rh.chunkStore.NetStore.localStore.memStore.Get(key)
+	chunk, err := rh.chunkStore.localStore.memStore.Get(key)
 	if err != nil {
 		return nil, err
 	}
