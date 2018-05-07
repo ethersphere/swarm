@@ -21,14 +21,15 @@ import (
 )
 
 const (
-	signatureLength        = 65
-	indexSize              = 18
-	DbDirName              = "resource"
-	chunkSize              = 4096 // temporary until we implement DPA in the resourcehandler
-	defaultStoreTimeout    = 4000 * time.Millisecond
-	defaultRetrieveTimeout = 4000 * time.Millisecond
-	hasherCount            = 8
-	resourceHash           = SHA3Hash
+	signatureLength             = 65
+	indexSize                   = 18
+	DbDirName                   = "resource"
+	chunkSize                   = 4096 // temporary until we implement DPA in the resourcehandler
+	defaultStoreTimeout         = 4000 * time.Millisecond
+	defaultRetrieveTimeout      = 4000 * time.Millisecond
+	defaultRetrieveChunkTimeout = 250 * time.Millisecond
+	hasherCount                 = 8
+	resourceHash                = SHA3Hash
 )
 
 type blockEstimator struct {
@@ -164,17 +165,18 @@ type headerGetter interface {
 //
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
-	dbapi           *DBAPI
-	localStore      *LocalStore
-	HashSize        int
-	signer          ResourceSigner
-	ethClient       headerGetter
-	ensClient       *ens.ENS
-	resources       map[string]*resource
-	hashPool        sync.Pool
-	resourceLock    sync.RWMutex
-	storeTimeout    time.Duration
-	queryMaxPeriods *ResourceLookupParams
+	dbapi                *DBAPI
+	localStore           *LocalStore
+	HashSize             int
+	signer               ResourceSigner
+	ethClient            headerGetter
+	ensClient            *ens.ENS
+	resources            map[string]*resource
+	hashPool             sync.Pool
+	resourceLock         sync.RWMutex
+	storeTimeout         time.Duration
+	retrieveChunkTimeout time.Duration
+	queryMaxPeriods      *ResourceLookupParams
 }
 
 type ResourceHandlerParams struct {
@@ -192,11 +194,12 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 		}
 	}
 	rh := &ResourceHandler{
-		ethClient:    params.EthClient,
-		ensClient:    params.EnsClient,
-		resources:    make(map[string]*resource),
-		storeTimeout: defaultStoreTimeout,
-		signer:       params.Signer,
+		ethClient:            params.EthClient,
+		ensClient:            params.EnsClient,
+		resources:            make(map[string]*resource),
+		storeTimeout:         defaultStoreTimeout,
+		retrieveChunkTimeout: defaultRetrieveChunkTimeout,
+		signer:               params.Signer,
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return MakeHashFunc(resourceHash)()
@@ -824,16 +827,16 @@ func (self *ResourceHandler) hasUpdate(name string, period uint32) bool {
 
 func (self *ResourceHandler) getChunk(key Key) (*Chunk, error) {
 	chunk, ok := self.dbapi.GetOrCreateRequest(key)
-	timer := time.NewTimer(defaultRetrieveTimeout)
-	if ok {
+	timer := time.NewTimer(defaultRetrieveChunkTimeout)
+	if ok || chunk.ReqC != nil {
 		select {
-		case <-timer.C:
-			return nil, NewResourceError(ErrNotFound, fmt.Sprintf("timeout on resource remote retrieve chunk %v", key))
 		case c := <-chunk.ReqC:
 			log.Warn("chunk: %v", c)
 			if chunk.GetErrored() == nil {
 				return nil, chunk.GetErrored()
 			}
+		case <-timer.C:
+			return nil, NewResourceError(ErrNotFound, fmt.Sprintf("timeout on resource remote retrieve chunk %v", key))
 		}
 	}
 	return chunk, nil
