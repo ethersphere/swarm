@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -115,6 +116,8 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 				return nil, 0, 0, nil, nil
 			}
 		}
+
+		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
 		err := s.db.Iterator(from, to, s.po, func(key storage.Key, idx uint64) bool {
 			batch = append(batch, key[:]...)
 			i++
