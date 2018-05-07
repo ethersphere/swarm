@@ -612,12 +612,16 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 		uvarintbuf := bytes.NewBuffer(chunkdata[headerlength+4:])
 		r, err := binary.ReadUvarint(uvarintbuf)
 		if err != nil {
-			return nil, 0, 0, "", nil, false, NewResourceError(ErrCorruptData, fmt.Sprintf("corrupt multihash, hash id varint could not be read: %v", err))
+			errstr := fmt.Sprintf("corrupt multihash, hash id varint could not be read: %v", err)
+			log.Warn(errstr)
+			return nil, 0, 0, "", nil, false, NewResourceError(ErrCorruptData, errstr)
 
 		}
 		r, err = binary.ReadUvarint(uvarintbuf)
 		if err != nil {
-			return nil, 0, 0, "", nil, false, NewResourceError(ErrCorruptData, fmt.Sprintf("corrupt multihash, hash length field could not be read: %v", err))
+			errstr := fmt.Sprintf("corrupt multihash, hash length field could not be read: %v", err)
+			log.Warn(errstr)
+			return nil, 0, 0, "", nil, false, NewResourceError(ErrCorruptData, errstr)
 
 		}
 		exclsignlength = int(headerlength + uint16(r))
