@@ -125,6 +125,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		bzzLocator := "bzz:/" + hash
 		flagss := []string{}
 		flagss = []string{
+			"--verbosity", "5",
 			"--bzzapi", cluster.Nodes[0].URL,
 			"download",
 			bzzLocator,
@@ -132,6 +133,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		}
 		if toEncrypt {
 			flagss = []string{
+				"--verbosity", "5",
 				"--bzzapi", cluster.Nodes[0].URL,
 				"download",
 				bzzLocator,
@@ -273,6 +275,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 		}
 		if toEncrypt {
 			flagss = []string{
+				"--verbosity", "5",
 				"--bzzapi", cluster.Nodes[0].URL,
 				"--recursive",
 				"download",
