@@ -165,7 +165,7 @@ type headerGetter interface {
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
 	dbapi           *DBAPI
-	chunkStore      ChunkStore
+	localStore      *LocalStore
 	HashSize        int
 	signer          ResourceSigner
 	ethClient       headerGetter
@@ -218,7 +218,8 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 
 // Sets the store backend for resource updates
 func (self *ResourceHandler) SetStore(store *LocalStore) {
-	self.dbapi = NewDBAPI(store)
+	self.localStore = store
+	self.dbapi = NewDBAPI(self.localStore)
 }
 
 // Chunk Validation method (matches ChunkValidatorFunc signature)
@@ -358,7 +359,6 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	copy(chunk.SData[2:10], val)
 	binary.LittleEndian.PutUint64(val, frequency)
 	copy(chunk.SData[10:], val)
-	//self.chunkStore.Put(chunk)
 	self.dbapi.Put(chunk)
 	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
 
@@ -473,7 +473,6 @@ func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common
 // base code for public lookup methods
 func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
-	//if self.chunkStore == nil {
 	if self.dbapi == nil {
 
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before performing lookups")
@@ -548,7 +547,6 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
-		//chunk, err := self.chunkStore.Get(Key(rsrc.nameHash[:]))
 		chunk, err := self.getChunk(Key(rsrc.nameHash[:]))
 		if err != nil {
 			return nil, err
@@ -677,7 +675,7 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 
 func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Key, error) {
 
-	if self.chunkStore == nil {
+	if self.dbapi == nil {
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before updating")
 	}
 	var signaturelength int
@@ -751,7 +749,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	chunk := newUpdateChunk(key, signature, nextperiod, version, name, data, datalength)
 
 	// send the chunk
-	self.chunkStore.Put(chunk)
+	self.dbapi.Put(chunk)
 	timeout := time.NewTimer(self.storeTimeout)
 	select {
 	case <-chunk.dbStoredC:
@@ -771,7 +769,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 // Closes the datastore.
 // Always call this at shutdown to avoid data corruption.
 func (self *ResourceHandler) Close() {
-	self.chunkStore.Close()
+	self.localStore.Close()
 }
 
 func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64, error) {
