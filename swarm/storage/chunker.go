@@ -545,7 +545,10 @@ func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 	read, err = self.ReadAt(b, self.off)
 	if err != nil && err != io.EOF {
 		log.Error("lazychunkreader.readat", "read", read, "err", err)
+		metrics.GetOrRegisterCounter("lazychunkreader.read.err", nil).Inc(1)
 	}
+
+	metrics.GetOrRegisterCounter("lazychunkreader.read.bytes", nil).Inc(int64(read))
 
 	self.off += int64(read)
 	return
