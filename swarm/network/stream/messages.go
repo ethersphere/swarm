@@ -288,7 +288,7 @@ func (m WantedHashesMsg) String() string {
 func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg", nil).Inc(1)
 
-	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
+	log.Debug("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	s, err := p.getServer(req.Stream)
 	if err != nil {
 		return err
@@ -309,6 +309,8 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	}
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
+			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
+
 			hash := hashes[i*HashSize : (i+1)*HashSize]
 			data, err := s.GetData(hash)
 			if err != nil {
