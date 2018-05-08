@@ -142,7 +142,7 @@ var (
 		Usage: "force mime type",
 	}
 	SwarmEncryptedFlag = cli.BoolFlag{
-		Name:  "encrypted",
+		Name:  "encrypt",
 		Usage: "use encrypted upload",
 	}
 	CorsStringFlag = cli.StringFlag{

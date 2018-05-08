@@ -89,7 +89,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		flags = []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"up",
-			"--encrypted",
+			"--encrypt",
 			tmp.Name()}
 	}
 	// upload the file with 'swarm up' and expect a hash
@@ -239,7 +239,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 			"--bzzapi", cluster.Nodes[0].URL,
 			"--recursive",
 			"up",
-			"--encrypted",
+			"--encrypt",
 			tmpUploadDir}
 	}
 	// upload the file with 'swarm up' and expect a hash
