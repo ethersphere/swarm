@@ -45,6 +45,8 @@ func init() {
 // available from all nodes via the HTTP API
 func TestCLISwarmUp(t *testing.T) {
 	testCLISwarmUp(false, t)
+}
+func TestCLISwarmUpRecursive(t *testing.T) {
 	testCLISwarmUpRecursive(false, t)
 }
 
@@ -52,6 +54,8 @@ func TestCLISwarmUp(t *testing.T) {
 // available from all nodes via the HTTP API
 func TestCLISwarmUpEncrypted(t *testing.T) {
 	testCLISwarmUp(true, t)
+}
+func TestCLISwarmUpEncryptedRecursive(t *testing.T) {
 	testCLISwarmUpRecursive(true, t)
 }
 
@@ -130,7 +134,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		flagss = []string{
 			"--verbosity", "5",
 			"--bzzapi", cluster.Nodes[0].URL,
-			"download",
+			"down",
 			bzzLocator,
 			tmpDownload,
 		}
@@ -138,7 +142,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 			flagss = []string{
 				"--verbosity", "5",
 				"--bzzapi", cluster.Nodes[0].URL,
-				"download",
+				"down",
 				bzzLocator,
 				tmpDownload}
 		}
@@ -276,7 +280,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 		flagss = []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"--recursive",
-			"download",
+			"down",
 			bzzLocator,
 			tmpDownload,
 		}
@@ -284,7 +288,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 			flagss = []string{
 				"--bzzapi", cluster.Nodes[0].URL,
 				"--recursive",
-				"download",
+				"down",
 				bzzLocator,
 				tmpDownload}
 		}
