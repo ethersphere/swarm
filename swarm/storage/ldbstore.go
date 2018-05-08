@@ -248,6 +248,8 @@ func decodeOldData(data []byte, chunk *Chunk) {
 }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
+	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
+
 	it := s.db.NewIterator()
 	defer it.Release()
 
@@ -287,6 +289,8 @@ func (s *LDBStore) collectGarbage(ratio float32) {
 	sort.Slice(garbage[:gcnt], func(i, j int) bool { return garbage[i].value < garbage[j].value })
 
 	cutoff := int(float32(gcnt) * ratio)
+	metrics.GetOrRegisterCounter("ldbstore.collectgarbage.delete", nil).Inc(int64(cutoff))
+
 	for i := 0; i < cutoff; i++ {
 		s.delete(garbage[i].idx, garbage[i].idxKey, garbage[i].po)
 	}
