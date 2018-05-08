@@ -77,6 +77,8 @@ func (p *Peer) handleRequestSubscription(req *RequestSubscriptionMsg) (err error
 }
 
 func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
+	metrics.GetOrRegisterCounter("peer.handlesubscribemsg", nil).Inc(1)
+
 	defer func() {
 		if err != nil {
 			if e := p.Send(SubscribeErrorMsg{
@@ -284,6 +286,8 @@ func (m WantedHashesMsg) String() string {
 // * sends the next batch of unsynced keys
 // * sends the actual data chunks as per WantedHashesMsg
 func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
+	metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg", nil).Inc(1)
+
 	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	s, err := p.getServer(req.Stream)
 	if err != nil {
