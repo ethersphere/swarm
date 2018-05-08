@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -135,8 +134,8 @@ func TreeJoin(key Address, getter Getter, depth int) *LazyChunkReader {
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Address), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(context.Context) error, err error) {
-	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultChunkSize)).Split()
+func TreeSplit(ctx context.Context, data io.Reader, size int64, putter Putter) (k Address, wait func(context.Context) error, err error) {
+	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultChunkSize)).Split(ctx)
 }
 
 func NewJoinerParams(key Address, getter Getter, depth int, chunkSize int64) *JoinerParams {
@@ -227,7 +226,7 @@ func (self *TreeChunker) decrementWorkerCount() {
 	self.workerCount -= 1
 }
 
-func (self *TreeChunker) Split() (k Address, wait func(context.Context) error, err error) {
+func (self *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	if self.chunkSize <= 0 {
 		panic("chunker must be initialised")
 	}
@@ -263,8 +262,8 @@ func (self *TreeChunker) Split() (k Address, wait func(context.Context) error, e
 		if err != nil {
 			return nil, nil, err
 		}
-	case <-time.NewTimer(splitTimeout).C:
-		return nil, nil, errOperationTimedOut
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
 	}
 
 	return key, self.putter.Wait, nil
@@ -381,6 +380,9 @@ type LazyChunkReader struct {
 	hashSize  int64 // inherit from chunker
 	depth     int
 	getter    Getter
+	// somewhat unusually context needs to be saved here since it cannot be
+	// passed via ReadAt?
+	ctx context.Context
 }
 
 func (self *TreeChunker) Join() *LazyChunkReader {
@@ -395,26 +397,37 @@ func (self *TreeChunker) Join() *LazyChunkReader {
 }
 
 // Size is meant to be called on the LazySectionReader
-func (self *LazyChunkReader) Size(quitC chan bool) (n int64, err error) {
+func (self *LazyChunkReader) Size() (n int64, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
 
 	log.Debug("lazychunkreader.size", "key", self.key)
 	if self.chunkData == nil {
-		chunkData, err := self.getter.Get(Reference(self.key))
+		chunkData, err := self.getter.Get(self.ctx, Reference(self.key))
 		if err != nil {
 			return 0, err
 		}
-		if chunkData == nil {
-			select {
-			case <-quitC:
-				return 0, errors.New("aborted")
-			default:
-				return 0, fmt.Errorf("root chunk not found for %v", self.key.Hex())
-			}
-		}
+		// when can this happen? I commenting this out there should be an error upstream
+		// if chunkData == nil {
+		// 	select {
+		// 	case <-ctx.Done():
+		// 		return 0, ctx.Err()
+		// 	default:
+		// 		return 0, fmt.Errorf("root chunk not found for %v", self.key.Hex())
+		// 	}
+		// }
 		self.chunkData = chunkData
+		s := self.chunkData.Size()
+		log.Warn("lazychunkreader.size", "key", self.key, "size", s)
+		if s < 0 {
+			panic("corrupt size")
+			return 0, errors.New("corrupt size")
+		}
+		return int64(s), nil
 	}
-	return self.chunkData.Size(), nil
+	s := self.chunkData.Size()
+	log.Warn("lazychunkreader.size", "key", self.key, "size", s)
+
+	return int64(s), nil
 }
 
 // read at can be called numerous times
@@ -427,8 +440,8 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	if len(b) == 0 {
 		return 0, nil
 	}
-	quitC := make(chan bool)
-	size, err := self.Size(quitC)
+	size, err := self.Size()
+	log.Warn(">", "size", size)
 	if err != nil {
 		log.Error("lazychunkreader.readat.size", "size", size, "err", err)
 		return 0, err
@@ -451,6 +464,7 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		length *= self.chunkSize
 	}
 	wg.Add(1)
+	quitC := make(chan bool)
 	go self.join(b, off, off+length, depth, treeSize/self.branches, self.chunkData, &wg, errC, quitC)
 	go func() {
 		wg.Wait()
@@ -464,15 +478,17 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		return 0, err
 	}
 	if off+int64(len(b)) >= size {
+		log.Error("lazychunkreader.readat.return at end", "size", size, "off", off)
 		return int(size - off), io.EOF
 	}
+	log.Error("lazychunkreader.readat.errc", "buff", len(b))
 	return len(b), nil
 }
 
 func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeSize int64, chunkData ChunkData, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
 	defer parentWg.Done()
 	// find appropriate block level
-	for chunkData.Size() < treeSize && depth > self.depth {
+	for chunkData.Size() < uint64(treeSize) && depth > self.depth {
 		treeSize /= self.branches
 		depth--
 	}
@@ -516,7 +532,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 		wg.Add(1)
 		go func(j int64) {
 			childAddress := chunkData[8+j*self.hashSize : 8+(j+1)*self.hashSize]
-			chunkData, err := self.getter.Get(Reference(childAddress))
+			chunkData, err := self.getter.Get(self.ctx, Reference(childAddress))
 			if err != nil {
 				log.Error("lazychunkreader.join", "key", fmt.Sprintf("%x", childAddress), "err", err)
 				select {
@@ -547,7 +563,7 @@ func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.read.bytes", nil).Inc(int64(read))
 
 	self.off += int64(read)
-	return
+	return read, nil
 }
 
 // completely analogous to standard SectionReader implementation
@@ -565,12 +581,12 @@ func (s *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
 		offset += s.off
 	case 2:
 		if s.chunkData == nil { //seek from the end requires rootchunk for size. call Size first
-			_, err := s.Size(nil)
+			_, err := s.Size()
 			if err != nil {
 				return 0, fmt.Errorf("can't get size: %v", err)
 			}
 		}
-		offset += s.chunkData.Size()
+		offset += int64(s.chunkData.Size())
 	}
 
 	if offset < 0 {

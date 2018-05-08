@@ -3,7 +3,6 @@ package storage
 import (
 	"io/ioutil"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/contracts/ens"
@@ -12,23 +11,6 @@ import (
 var (
 	hashfunc = MakeHashFunc(DefaultHash)
 )
-
-// put to localstore and wait for stored channel
-// does not check delivery error state
-func putChunks(store *LocalStore, chunks ...*Chunk) {
-	wg := sync.WaitGroup{}
-	wg.Add(len(chunks))
-	go func() {
-		for _, c := range chunks {
-			<-c.dbStoredC
-			wg.Done()
-		}
-	}()
-	for _, c := range chunks {
-		go store.Put(c)
-	}
-	wg.Wait()
-}
 
 // tests that the content address validator correctly checks the data
 // tests that resource update chunks are passed through content address validator
@@ -52,13 +34,14 @@ func TestValidator(t *testing.T) {
 	chunks := GenerateRandomChunks(259, 2)
 	goodChunk := chunks[0]
 	badChunk := chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	putChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	err = mputChunks(store, goodChunk)
+	if err != nil {
 		t.Fatalf("expected no error on good content address chunk in spite of no validation, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err != nil {
+	err = mputChunks(store, badChunk)
+	if err != nil {
 		t.Fatalf("expected no error on bad content address chunk in spite of no validation, but got: %s", err)
 	}
 
@@ -68,13 +51,14 @@ func TestValidator(t *testing.T) {
 	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	putChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	err = mputChunks(store, goodChunk, badChunk)
+	if err != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+	err = mputChunks(store, badChunk)
+	if err == nil {
 		t.Fatal("expected error on bad content address chunk with content address validator only, but got nil")
 	}
 
@@ -92,14 +76,16 @@ func TestValidator(t *testing.T) {
 	data := []byte("bar")
 	uglyChunk := newUpdateChunk(key, nil, 42, 1, "xyzzy.eth", data, len(data))
 
-	putChunks(store, goodChunk, badChunk, uglyChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	err = mputChunks(store, goodChunk)
+	if err != nil {
 		t.Fatalf("expected no error on good content address chunk with both validators, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+	err = mputChunks(store, badChunk)
+	if err != nil {
 		t.Fatal("expected error on bad chunk address with both validators, but got nil")
 	}
-	if err := uglyChunk.GetErrored(); err != nil {
+	err = mputChunks(store, uglyChunk)
+	if err != nil {
 		t.Fatalf("expected no error on resource update chunk with both validators, but got: %s", err)
 	}
 
@@ -114,14 +100,16 @@ func TestValidator(t *testing.T) {
 	data = []byte("baz")
 	uglyChunk = newUpdateChunk(key, nil, 42, 2, "xyzzy.eth", data, len(data))
 
-	putChunks(store, goodChunk, badChunk, uglyChunk)
-	if goodChunk.GetErrored() == nil {
+	err = mputChunks(store, goodChunk)
+	if err != nil {
 		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
 	}
-	if badChunk.GetErrored() == nil {
+	err = mputChunks(store, badChunk)
+	if err != nil {
 		t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
 	}
-	if err := uglyChunk.GetErrored(); err != nil {
+	err = mputChunks(store, uglyChunk)
+	if err != nil {
 		t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
 	}
 }

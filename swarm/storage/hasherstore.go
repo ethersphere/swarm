@@ -19,8 +19,10 @@ package storage
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 )
 
@@ -33,14 +35,13 @@ type hasherStore struct {
 	dpa             DPA
 	hashFunc        SwarmHasher
 	chunkEncryption *chunkEncryption
-	hashSize        int   // content hash size
-	refSize         int64 // reference size (content hash + possibly encryption key)
-	count           int64
-	errC            chan error
-	waitC           chan func(context.Context) error
-	doneC           chan struct{}
-	quitC           chan struct{}
-	closedC         chan error
+	hashSize        int                              // content hash size
+	refSize         int64                            // reference size (content hash + possibly encryption key)
+	count           uint64                           // number of chunks to store
+	errC            chan error                       // global error channel
+	waitC           chan func(context.Context) error // ChunkStore response wait-to-store functions
+	doneC           chan struct{}                    // closed by Close() call to indicate that count is the final number of chunks
+	quitC           chan struct{}                    // closed to quit unterminated routines
 }
 
 func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
@@ -73,35 +74,7 @@ func NewHasherStore(dpa DPA, hashFunc SwarmHasher, toEncrypt bool) *hasherStore 
 		errC:            make(chan error),
 		doneC:           make(chan struct{}),
 		quitC:           make(chan struct{}),
-		closedC:         make(chan error, 1),
 	}
-
-	go func() {
-		var n int64
-		var done bool
-		for {
-			select {
-			case _, more := <-h.doneC:
-				if !more {
-					return
-				}
-				done = true
-			case err := <-h.errC:
-				if err != nil {
-					h.closedC <- err
-					return
-				}
-				n++
-			}
-			if done {
-				if n >= h.count {
-					close(h.closedC)
-					return
-				}
-			}
-
-		}
-	}()
 
 	return h
 }
@@ -111,7 +84,7 @@ func NewHasherStore(dpa DPA, hashFunc SwarmHasher, toEncrypt bool) *hasherStore 
 // Asynchronous function, the data will not necessarily be stored when it returns.
 func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 	c := chunkData
-	size := chunkData.Size()
+	log.Warn("hasherstore.put", "span", c.Size())
 	var encryptionKey encryption.Key
 	if h.chunkEncryption != nil {
 		var err error
@@ -120,8 +93,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 			return nil, err
 		}
 	}
-	chunk := h.createChunk(c, size)
-
+	chunk := h.createChunk(c)
 	h.storeChunk(chunk)
 
 	return Reference(append(chunk.Address(), encryptionKey...)), nil
@@ -130,21 +102,24 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 // Get returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).
 // If the data is encrypted and the reference contains an encryption key, it will be decrypted before
 // return.
-func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
+func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error) {
 	key, encryptionKey, err := parseReference(ref, h.hashSize)
 	if err != nil {
 		return nil, err
 	}
-	ctx := context.Background()
-	chunk, fetch, err := h.dpa.Get(ctx, key)
+	chunk, fetch, err := h.dpa.Get(key)
 	if err != nil {
 		return nil, err
 	}
 	if chunk == nil {
 		chunk, err = fetch(ctx)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	chunkData := chunk.Data()
+	chunkData := ChunkData(chunk.Data())
+	log.Warn("hasherstore.get pre decrypt", "span", chunkData.Size(), "hash", chunk.Address().Hex(), "size", len(chunk.Data()))
 	toDecrypt := (encryptionKey != nil)
 	if toDecrypt {
 		var err error
@@ -153,26 +128,53 @@ func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 			return nil, err
 		}
 	}
+	log.Warn("hasherstore.get", "span", chunkData.Size())
 	return chunkData, nil
 }
 
 // Close indicates that no more chunks will be put with the hasherStore, so the Wait
 // function can return when all the previously put chunks has been stored.
 func (h *hasherStore) Close() {
-	h.doneC <- struct{}{}
+	close(h.doneC)
 }
 
 // Wait returns when
 //    1) the Close() function has been called and
 //    2) all the chunks which has been Put has been stored
 func (h *hasherStore) Wait(ctx context.Context) error {
-	select {
-	case <-ctx.Done():
-		// quit the error checking loop
-		close(h.doneC)
-		return ctx.Err()
-	case err := <-h.closedC:
-		return err
+	go func() {
+		for {
+			select {
+			case wait := <-h.waitC:
+				go func() {
+					select {
+					case h.errC <- wait(ctx):
+					case <-h.quitC:
+					}
+				}()
+			}
+		}
+	}()
+	defer close(h.quitC)
+	var n uint64
+	var done bool
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-h.doneC:
+			done = true
+		case err := <-h.errC:
+			if err != nil {
+				return err
+			}
+			n++
+		}
+		if done {
+			if n >= h.count {
+				return nil
+			}
+		}
 	}
 }
 
@@ -183,7 +185,7 @@ func (h *hasherStore) createHash(chunkData ChunkData) Address {
 	return hasher.Sum(nil)
 }
 
-func (h *hasherStore) createChunk(chunkData ChunkData, chunkSize int64) *chunk {
+func (h *hasherStore) createChunk(chunkData ChunkData) *chunk {
 	hash := h.createHash(chunkData)
 	chunk := NewChunk(hash, chunkData)
 	return chunk
@@ -229,7 +231,7 @@ func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryp
 	}
 
 	// removing extra bytes which were just added for padding
-	length := ChunkData(decryptedSpan).Size()
+	length := int64(ChunkData(decryptedSpan).Size())
 	for length > DefaultChunkSize {
 		length = length + (DefaultChunkSize - 1)
 		length = length / DefaultChunkSize
@@ -249,12 +251,19 @@ func (h *hasherStore) RefSize() int64 {
 
 func (h *hasherStore) storeChunk(chunk *chunk) {
 	wait, err := h.dpa.Put(chunk)
+	atomic.AddUint64(&h.count, 1)
 	if err != nil {
-		h.errC <- err
+		select {
+		case h.errC <- err:
+		case <-h.quitC:
+		}
 		return
 	}
 	go func() {
-		h.waitC <- wait
+		select {
+		case h.waitC <- wait:
+		case <-h.quitC:
+		}
 	}()
 }
 

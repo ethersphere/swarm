@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/bmt"
@@ -169,9 +170,9 @@ func (c KeyCollection) Swap(i, j int) {
 
 // ChunkStore is the interface for
 type DPA interface {
-	Get(ctx context.Context, ref Address) (Chunk, func(ctx context.Context) (Chunk, error), error)
-	Put(ch Chunk) (func(ctx context.Context) error, error)
-	Has(ctx context.Context, ref Address) (func(context.Context) error, error)
+	Get(ref Address) (ch Chunk, fetch func(ctx context.Context) (Chunk, error), err error)
+	Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error)
+	Has(ref Address) (waitToStore func(context.Context) error, err error)
 	Close()
 }
 
@@ -179,6 +180,7 @@ type DPA interface {
 type Chunk interface {
 	Address() Address
 	Payload() []byte
+	SpanBytes() []byte
 	Span() int64
 	Data() []byte
 	Chunk() *chunk
@@ -201,10 +203,14 @@ func (c *chunk) Address() Address {
 	return c.addr
 }
 
+func (c *chunk) SpanBytes() []byte {
+	return c.sdata[:8]
+}
+
 func (c *chunk) Span() int64 {
-	if c.span == 0 {
-		c.span = int64(binary.BigEndian.Uint64(c.sdata))
-	}
+	// if c.span == 0 {
+	c.span = int64(binary.LittleEndian.Uint64(c.sdata[:8]))
+	// }
 	return c.span
 }
 
@@ -225,7 +231,7 @@ func (c *chunk) Chunk() *chunk {
 // alive until all active requests complete
 // either by the chunk delivered or all cancelled/timed out
 type Request struct {
-	chunk      *chunk
+	*chunk
 	triggerC   chan context.Context
 	deliveredC chan struct{}
 	quitC      chan struct{}
@@ -247,11 +253,11 @@ func (self *chunk) String() string {
 	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
 }
 
-func GenerateRandomChunk(dataSize int64) *chunk {
+func GenerateRandomChunk(dataSize int64) Chunk {
 	return GenerateRandomChunks(dataSize, 1)[0]
 }
 
-func GenerateRandomChunks(dataSize int64, count int) (chunks []*chunk) {
+func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
 	var i int
 	hasher := MakeHashFunc(DefaultHash)()
 	if dataSize > DefaultChunkSize {
@@ -270,9 +276,19 @@ func GenerateRandomChunks(dataSize int64, count int) (chunks []*chunk) {
 	return chunks
 }
 
+func GenerateRandomData(l int) (r io.Reader, slice []byte) {
+	slice, err := ioutil.ReadAll(io.LimitReader(rand.Reader, int64(l)))
+	if err != nil {
+		panic("rand error")
+	}
+	log.Warn("generate random data", "len", len(slice), "data", common.Bytes2Hex(slice))
+	r = io.LimitReader(bytes.NewReader(slice), int64(l))
+	return r, slice
+}
+
 // Size, Seek, Read, ReadAt
 type LazySectionReader interface {
-	Size(chan bool) (int64, error)
+	Size() (int64, error)
 	io.Seeker
 	io.Reader
 	io.ReaderAt
@@ -329,12 +345,12 @@ type Putter interface {
 
 // Getter is an interface to retrieve a chunk's data by its reference
 type Getter interface {
-	Get(Reference) (ChunkData, error)
+	Get(context.Context, Reference) (ChunkData, error)
 }
 
 // NOTE: this returns invalid data if chunk is encrypted
-func (c ChunkData) Size() int64 {
-	return int64(binary.LittleEndian.Uint64(c[:8]))
+func (c ChunkData) Size() uint64 {
+	return uint64(binary.LittleEndian.Uint64(c[:8]))
 }
 
 func (c ChunkData) Data() []byte {

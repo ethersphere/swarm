@@ -26,34 +26,34 @@ import (
 
 // NetStore
 type NetStore struct {
-	mu         sync.Mutex
-	localStore ChunkStore
-	requests   *lru.Cache
-	retrieve   func(ctx context.Context, chunk Chunk) (chan struct{}, error)
+	mu       sync.Mutex
+	store    ChunkStore
+	requests *lru.Cache
+	retrieve func(ctx context.Context, r *Request) (chan struct{}, error)
 }
 
-func NewNetStore(localStore *LocalStore, retrieve func(ctx context.Context, chunk Chunk) (chan struct{}, error)) (*NetStore, error) {
+func NewNetStore(store ChunkStore, retrieve func(ctx context.Context, r *Request) (chan struct{}, error)) (*NetStore, error) {
 	requests, err := lru.New(defaultChunkRequestsCacheCapacity)
 	if err != nil {
 		return nil, err
 	}
 	return &NetStore{
-		localStore: localStore,
-		requests:   requests,
-		retrieve:   retrieve,
+		store:    store,
+		requests: requests,
+		retrieve: retrieve,
 	}, nil
 }
 
 // Has checks if chunk with hash address ref is stored locally
 // if not it returns a fetcher function to be called with a context
 // block until item is stored
-func (n *NetStore) Has(ctx context.Context, ref Address) (func(context.Context) error, error) {
-	chunk, fetch, err := n.Get(ctx, ref)
+func (n *NetStore) Has(ref Address) (func(context.Context) error, error) {
+	chunk, fetch, err := n.Get(ref)
 	if chunk != nil {
 		return nil, nil
 	}
-	return func(c context.Context) error {
-		_, err = fetch(c)
+	return func(ctx context.Context) error {
+		_, err = fetch(ctx)
 		// TODO: exact logic for waiting till stored
 		return err
 	}, nil
@@ -66,10 +66,10 @@ func (n *NetStore) Has(ctx context.Context, ref Address) (func(context.Context) 
 // or all request contexts are done
 // it returns a chunk, a fetcher function and an error
 // if chunk is nil, fetcher needs to be called with a context to return the chunk
-func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, func(ctx context.Context) (Chunk, error), error) {
+func (n *NetStore) Get(ref Address) (Chunk, func(context.Context) (Chunk, error), error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	chunk, err := n.localStore.Get(ref)
+	chunk, err := n.store.Get(ref)
 	if err == nil {
 		return chunk, nil, nil
 	}
@@ -96,6 +96,17 @@ func (n *NetStore) getOrCreateRequest(ref Address) (*Request, error) {
 	return r, nil
 }
 
+func Get(ctx context.Context, dpa DPA, ref Address) (Chunk, error) {
+	chunk, fetch, err := dpa.Get(ref)
+	if err != nil {
+		return nil, err
+	}
+	if chunk != nil {
+		return chunk, nil
+	}
+	return fetch(ctx)
+}
+
 // Put is the entrypoint for local store requests coming from storeLoop
 
 // Put stores a chunk in localstore, manages the request for the chunk if exists
@@ -109,7 +120,7 @@ func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
 			r.(*Request).chunk = ch.Chunk()
 		}
 	}()
-	wait, err := n.localStore.Put(ch)
+	wait, err := n.store.Put(ch)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +128,13 @@ func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
 }
 
 // Close chunk store
-func (self *NetStore) Close() {}
+func (n *NetStore) Close() {
+	n.store.Close()
+}
+
+func (r *Request) SetData(addr Address, data []byte) {
+	r.chunk = NewChunk(addr, data)
+}
 
 // request is a fetcher function to be called
 // it launches the fetching only once by calling
@@ -162,7 +179,7 @@ func (n *NetStore) run(ctx context.Context, r *Request) {
 	F:
 		for {
 			if doRetrieve {
-				quitC, err = n.retrieve(ctx, r.chunk)
+				quitC, err = n.retrieve(ctx, r)
 				if err != nil {
 					// retrieve error, wait before retry
 					wait.Reset(retryInterval)

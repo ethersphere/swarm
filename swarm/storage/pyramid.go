@@ -100,11 +100,11 @@ func NewPyramidSplitterParams(key Address, reader io.Reader, putter Putter, gett
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Address), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func PyramidSplit(reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultChunkSize)).Split()
+func PyramidSplit(ctx context.Context, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
+	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultChunkSize)).Split(ctx)
 }
 
-func PyramidAppend(key Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
+func PyramidAppend(ctx context.Context, key Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
 	return NewPyramidSplitter(NewPyramidSplitterParams(key, reader, putter, getter, DefaultChunkSize)).Append()
 }
 
@@ -154,6 +154,7 @@ type PyramidChunker struct {
 	quitC       chan bool
 	rootAddress []byte
 	chunkLevel  [][]*TreeEntry
+	ctx         context.Context
 }
 
 func NewPyramidSplitter(params *PyramidSplitterParams) (self *PyramidChunker) {
@@ -175,7 +176,7 @@ func NewPyramidSplitter(params *PyramidSplitterParams) (self *PyramidChunker) {
 	return
 }
 
-func (self *PyramidChunker) Join(key Address, getter Getter, depth int) LazySectionReader {
+func (self *PyramidChunker) Join(ctx context.Context, key Address, getter Getter, depth int) LazySectionReader {
 	return &LazyChunkReader{
 		key:       key,
 		depth:     depth,
@@ -204,7 +205,7 @@ func (self *PyramidChunker) decrementWorkerCount() {
 	self.workerCount -= 1
 }
 
-func (self *PyramidChunker) Split() (k Address, wait func(context.Context) error, err error) {
+func (self *PyramidChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	log.Debug("pyramid.chunker: Split()")
 
 	self.wg.Add(1)
@@ -230,7 +231,9 @@ func (self *PyramidChunker) Split() (k Address, wait func(context.Context) error
 		if err != nil {
 			return nil, nil, err
 		}
-	case <-time.NewTimer(splitTimeout).C:
+	case <-ctx.Done():
+		_ = self.putter.Wait(ctx) //???
+		return nil, nil, ctx.Err()
 	}
 	return self.rootAddress, self.putter.Wait, nil
 
@@ -289,7 +292,10 @@ func (self *PyramidChunker) processChunk(id int64, job *chunkJob) {
 
 	ref, err := self.putter.Put(job.chunk)
 	if err != nil {
-		self.errC <- err
+		select {
+		case self.errC <- err:
+		case <-self.quitC:
+		}
 	}
 
 	// report hash of this chunk one level up (keys corresponds to the proper subslice of the parent chunk)
@@ -302,11 +308,11 @@ func (self *PyramidChunker) processChunk(id int64, job *chunkJob) {
 func (self *PyramidChunker) loadTree() error {
 	log.Debug("pyramid.chunker: loadTree()")
 	// Get the root chunk to get the total size
-	chunkData, err := self.getter.Get(Reference(self.key))
+	chunkData, err := self.getter.Get(self.ctx, Reference(self.key))
 	if err != nil {
 		return errLoadingTreeRootChunk
 	}
-	chunkSize := chunkData.Size()
+	chunkSize := int64(chunkData.Size())
 	log.Trace("pyramid.chunker: root chunk", "chunk.Size", chunkSize, "self.chunkSize", self.chunkSize)
 
 	//if data size is less than a chunk... add a parent with update as pending
@@ -355,7 +361,7 @@ func (self *PyramidChunker) loadTree() error {
 			branchCount = int64(len(ent.chunk)-8) / self.hashSize
 			for i := int64(0); i < branchCount; i++ {
 				key := ent.chunk[8+(i*self.hashSize) : 8+((i+1)*self.hashSize)]
-				newChunkData, err := self.getter.Get(Reference(key))
+				newChunkData, err := self.getter.Get(self.ctx, Reference(key))
 				if err != nil {
 					return errLoadingTreeChunk
 				}
@@ -396,7 +402,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 	parent := NewTreeEntry(self)
 	var unfinishedChunkData ChunkData
-	var unfinishedChunkSize int64
+	var unfinishedChunkSize uint64
 
 	if isAppend && len(self.chunkLevel[0]) != 0 {
 		lastIndex := len(self.chunkLevel[0]) - 1
@@ -417,13 +423,13 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 			lastAddress := parent.chunk[8+lastBranch*self.hashSize : 8+(lastBranch+1)*self.hashSize]
 
 			var err error
-			unfinishedChunkData, err = self.getter.Get(lastAddress)
+			unfinishedChunkData, err = self.getter.Get(self.ctx, lastAddress)
 			if err != nil {
 				self.errC <- err
 			}
 			unfinishedChunkSize = unfinishedChunkData.Size()
-			if unfinishedChunkSize < self.chunkSize {
-				parent.subtreeSize = parent.subtreeSize - uint64(unfinishedChunkSize)
+			if unfinishedChunkSize < uint64(self.chunkSize) {
+				parent.subtreeSize = parent.subtreeSize - unfinishedChunkSize
 				parent.branchCount = parent.branchCount - 1
 			} else {
 				unfinishedChunkData = nil

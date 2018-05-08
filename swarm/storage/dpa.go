@@ -106,9 +106,9 @@ func (self *DPAAPI) Retrieve(key Address) (reader *LazyChunkReader, isEncrypted 
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPAAPI) Store(data io.Reader, size int64, toEncrypt bool) (key Address, wait func(context.Context) error, err error) {
+func (self *DPAAPI) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (key Address, wait func(context.Context) error, err error) {
 	putter := NewHasherStore(self.DPA, self.hashFunc, toEncrypt)
-	return PyramidSplit(data, putter, putter)
+	return PyramidSplit(ctx, data, putter, putter)
 }
 
 func (self *DPAAPI) HashSize() int {

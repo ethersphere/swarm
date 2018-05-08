@@ -520,9 +520,10 @@ func (s *LDBStore) Put(chunk Chunk) (func(context.Context) error, error) {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
+	batchC := s.batchC
 	wait := func(ctx context.Context) error {
 		select {
-		case <-s.batchC:
+		case <-batchC:
 			return nil // TODO
 		case <-ctx.Done():
 			return ctx.Err()
@@ -613,7 +614,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *LDBStore) Get(key Address) (chunk *chunk, err error) {
+func (s *LDBStore) Get(key Address) (chunk Chunk, err error) {
 	log.Trace("ldbstore.get", "key", key)
 	s.lock.Lock()
 	defer s.lock.Unlock()

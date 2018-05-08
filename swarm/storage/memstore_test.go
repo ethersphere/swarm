@@ -17,11 +17,8 @@
 package storage
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"io/ioutil"
 	"os"
-	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -32,47 +29,47 @@ func newTestMemStore() *MemStore {
 	return NewMemStore(storeparams, nil)
 }
 
-func testMemStoreRandom(n int, processors int, chunksize int64, t *testing.T) {
+func testMemStoreRandom(n int, chunksize int64, t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
-	testStoreRandom(m, processors, n, chunksize, t)
+	testStoreRandom(&chunkMemStore{m}, n, chunksize, t)
 }
 
-func testMemStoreCorrect(n int, processors int, chunksize int64, t *testing.T) {
+func testMemStoreCorrect(n int, chunksize int64, t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
-	testStoreCorrect(m, processors, n, chunksize, t)
+	testStoreCorrect(&chunkMemStore{m}, n, chunksize, t)
 }
 
 func TestMemStoreRandom_1(t *testing.T) {
-	testMemStoreRandom(1, 1, 0, t)
+	testMemStoreRandom(1, 0, t)
 }
 
 func TestMemStoreCorrect_1(t *testing.T) {
-	testMemStoreCorrect(1, 1, 4104, t)
+	testMemStoreCorrect(1, 4104, t)
 }
 
 func TestMemStoreRandom_1_10k(t *testing.T) {
-	testMemStoreRandom(1, 5000, 0, t)
+	testMemStoreRandom(5000, 0, t)
 }
 
 func TestMemStoreCorrect_1_10k(t *testing.T) {
-	testMemStoreCorrect(1, 5000, 4096, t)
+	testMemStoreCorrect(5000, 4096, t)
 }
 
 func TestMemStoreRandom_8_10k(t *testing.T) {
-	testMemStoreRandom(8, 5000, 0, t)
+	testMemStoreRandom(5000, 0, t)
 }
 
 func TestMemStoreCorrect_8_10k(t *testing.T) {
-	testMemStoreCorrect(8, 5000, 4096, t)
+	testMemStoreCorrect(5000, 4096, t)
 }
 
 func TestMemStoreNotFound(t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
 
-	_, err := m.Get(ZeroKey)
+	_, err := m.Get(ZeroAddress)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -81,13 +78,13 @@ func TestMemStoreNotFound(t *testing.T) {
 func benchmarkMemStorePut(n int, processors int, chunksize int64, b *testing.B) {
 	m := newTestMemStore()
 	defer m.Close()
-	benchmarkStorePut(m, processors, n, chunksize, b)
+	benchmarkStorePut(&chunkMemStore{m}, n, chunksize, b)
 }
 
 func benchmarkMemStoreGet(n int, processors int, chunksize int64, b *testing.B) {
 	m := newTestMemStore()
 	defer m.Close()
-	benchmarkStoreGet(m, processors, n, chunksize, b)
+	benchmarkStoreGet(&chunkMemStore{m}, n, chunksize, b)
 }
 
 func BenchmarkMemStorePut_1_5k(b *testing.B) {
@@ -136,7 +133,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 	defer cleanup()
 
 	cacheCap := 200
-	memStore := NewMemStore(NewStoreParams(4000, 200, 200, nil, nil), nil)
+	memStore := NewMemStore(NewStoreParams(4000, 200, nil, nil), nil)
 
 	tests := []struct {
 		n         int    // number of chunks to push to memStore
@@ -166,16 +163,10 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 
 	for i, tt := range tests {
 		log.Info("running test", "idx", i, "tt", tt)
-		var chunks []*Chunk
+		var chunks []Chunk
 
 		for i := 0; i < tt.n; i++ {
-			var c *Chunk
-			if tt.request {
-				c = NewRandomRequestChunk(tt.chunkSize)
-			} else {
-				c = NewRandomChunk(tt.chunkSize)
-			}
-
+			c := NewRandomChunk(tt.chunkSize)
 			chunks = append(chunks, c)
 		}
 
@@ -190,10 +181,10 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 		}
 
 		for i := 0; i < tt.n; i++ {
-			_, err := memStore.Get(chunks[i].Key)
+			_, err := memStore.Get(chunks[i].Address())
 			if err != nil {
 				if err == ErrChunkNotFound {
-					_, err := ldb.Get(chunks[i].Key)
+					_, err := ldb.Get(chunks[i].Address())
 					if err != nil {
 						t.Fatalf("couldn't get chunk %v from ldb, got error: %v", i, err)
 					}
@@ -202,37 +193,5 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 				}
 			}
 		}
-
-		// wait for all chunks to be stored before ending the test are cleaning up
-		for i := 0; i < tt.n; i++ {
-			<-chunks[i].dbStoredC
-		}
 	}
-}
-
-func NewRandomChunk(chunkSize uint64) *Chunk {
-	c := &Chunk{
-		Key:        make([]byte, 32),
-		ReqC:       nil,
-		SData:      make([]byte, chunkSize+8), // SData should be chunkSize + 8 bytes reserved for length
-		dbStoredC:  make(chan bool),
-		dbStoredMu: &sync.Mutex{},
-	}
-
-	rand.Read(c.SData)
-
-	binary.LittleEndian.PutUint64(c.SData[:8], chunkSize)
-
-	hasher := MakeHashFunc(SHA3Hash)()
-	hasher.Write(c.SData)
-	copy(c.Key, hasher.Sum(nil))
-
-	return c
-}
-
-func NewRandomRequestChunk(chunkSize uint64) *Chunk {
-	c := NewRandomChunk(chunkSize)
-	c.ReqC = make(chan bool)
-
-	return c
 }

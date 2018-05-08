@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/hex"
 	"errors"
 	"io/ioutil"
@@ -38,35 +39,27 @@ func NewMockRetrieve() *mockRetrieve {
 	return &mockRetrieve{requests: make(map[string]int)}
 }
 
-func newDummyChunk(key Key) *Chunk {
-	chunk := NewChunk(key, make(chan bool))
-	chunk.SData = []byte{3, 4, 5}
-	chunk.Size = 3
+func (m *mockRetrieve) retrieve(ctx context.Context, r *Request) (quitc chan struct{}, err error) {
 
-	return chunk
-}
-
-func (m *mockRetrieve) retrieve(chunk *Chunk) error {
-	hkey := hex.EncodeToString(chunk.Key)
+	hkey := hex.EncodeToString(r.Address())
 	m.requests[hkey] += 1
 
 	// on second call return error
 	if m.requests[hkey] == 2 {
-		return errUnknown
+		return nil, errUnknown
 	}
 
 	// on third call return data
 	if m.requests[hkey] == 3 {
-		*chunk = *newDummyChunk(chunk.Key)
 		go func() {
 			time.Sleep(100 * time.Millisecond)
-			close(chunk.ReqC)
+			r.SetData(r.Address(), []byte{0, 1})
 		}()
 
-		return nil
+		return nil, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func TestNetstoreFailedRequest(t *testing.T) {
@@ -89,10 +82,13 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	}
 
 	r := NewMockRetrieve()
-	netStore := NewNetStore(localStore, r.retrieve)
+	netStore, err := NewNetStore(localStore, r.retrieve)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	key := Key{}
-
+	key := Address{}
+	ctx := context.Background()
 	// first call is done by the retry on ErrChunkNotFound, no need to do it here
 	// _, err = netStore.Get(key)
 	// if err == nil || err != ErrChunkNotFound {
@@ -100,7 +96,7 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	// }
 
 	// second call
-	_, err = netStore.Get(key)
+	_, err = Get(ctx, netStore, key)
 	if got := r.requests[hex.EncodeToString(key)]; got != 2 {
 		t.Fatalf("expected to have called retrieve two times, but got: %v", got)
 	}
@@ -109,14 +105,14 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	}
 
 	// third call
-	chunk, err := netStore.Get(key)
+	chunk, err := Get(ctx, netStore, key)
 	if got := r.requests[hex.EncodeToString(key)]; got != 3 {
 		t.Fatalf("expected to have called retrieve three times, but got: %v", got)
 	}
 	if err != nil || chunk == nil {
 		t.Fatalf("expected to get a chunk but got: %v, %s", chunk, err)
 	}
-	if len(chunk.SData) != 3 {
-		t.Fatalf("expected to get a chunk with size 3, but got: %v", chunk.SData)
+	if len(chunk.Data()) != 3 {
+		t.Fatalf("expected to get a chunk with size 3, but got: %v", chunk.Data())
 	}
 }

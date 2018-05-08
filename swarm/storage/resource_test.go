@@ -107,11 +107,11 @@ func TestResourceReverse(t *testing.T) {
 	chunk := newUpdateChunk(key, &sig, period, version, safeName, data, len(data))
 
 	// check that we can recover the owner account from the update chunk's signature
-	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.SData)
+	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.Data())
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := rh.keyDataHash(chunk.Key, checkdata)
+	checkdigest := rh.keyDataHash(chunk.Address(), checkdata)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
@@ -123,8 +123,8 @@ func TestResourceReverse(t *testing.T) {
 		t.Fatalf("addresses dont match: %x != %x", originaladdress, recoveredaddress)
 	}
 
-	if !bytes.Equal(key[:], chunk.Key[:]) {
-		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Key)
+	if !bytes.Equal(key[:], chunk.Address()[:]) {
+		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Address())
 	}
 	if period != checkperiod {
 		t.Fatalf("Expected period '%d', was '%d'", period, checkperiod)
@@ -163,14 +163,14 @@ func TestResourceHandler(t *testing.T) {
 
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(safeName)
-	chunk, err := rh.chunkStore.(*LocalStore).memStore.Get(Key(namehash[:]))
+	chunk, err := Get(context.Background(), rh.dpa, Address(namehash[:]))
 	if err != nil {
 		t.Fatal(err)
-	} else if len(chunk.SData) < 16 {
-		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(chunk.SData))
+	} else if len(chunk.Data()) < 16 {
+		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(chunk.Data()))
 	}
-	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[2:10])
-	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[10:])
+	startblocknumber := binary.LittleEndian.Uint64(chunk.Data()[2:10])
+	chunkfrequency := binary.LittleEndian.Uint64(chunk.Data()[10:])
 	if startblocknumber != uint64(backend.blocknumber) {
 		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber)
 	}
@@ -187,7 +187,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update halfway to first period
-	resourcekey := make(map[string]Key)
+	resourcekey := make(map[string]Address)
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data := []byte(updates[0])
 	resourcekey[updates[0]], err = rh.Update(ctx, safeName, data)
@@ -535,7 +535,7 @@ func TestResourceChunkValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
-	if !rh.Validate(chunk.Key, chunk.SData) {
+	if !rh.Validate(chunk.Address(), chunk.Data()) {
 		t.Fatal("Chunk validator fail")
 	}
 }
@@ -635,12 +635,12 @@ func newTestSigner() (*GenericResourceSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
-	chunk, err := rh.chunkStore.(*LocalStore).memStore.Get(key)
+func getUpdateDirect(rh *ResourceHandler, key Address) ([]byte, error) {
+	chunk, err := Get(context.Background(), rh.dpa, key)
 	if err != nil {
 		return nil, err
 	}
-	_, _, _, _, data, _, err := rh.parseUpdate(chunk.SData)
+	_, _, _, _, data, _, err := rh.parseUpdate(chunk.Data())
 	if err != nil {
 		return nil, err
 	}

@@ -385,11 +385,11 @@ func (self *ResourceHandler) LookupVersionByName(ctx context.Context, name strin
 }
 
 func (self *ResourceHandler) LookupVersion(ctx context.Context, nameHash common.Hash, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-	rsrc, err := self.loadResource(nameHash, name, refresh)
+	rsrc, err := self.loadResource(ctx, nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
-	return self.lookup(rsrc, period, version, refresh, maxLookup)
+	return self.lookup(ctx, rsrc, period, version, refresh, maxLookup)
 }
 
 // Retrieves the latest version of the resource update identified by `name`
@@ -405,11 +405,11 @@ func (self *ResourceHandler) LookupHistoricalByName(ctx context.Context, name st
 }
 
 func (self *ResourceHandler) LookupHistorical(ctx context.Context, nameHash common.Hash, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-	rsrc, err := self.loadResource(nameHash, name, refresh)
+	rsrc, err := self.loadResource(ctx, nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
-	return self.lookup(rsrc, period, 0, refresh, maxLookup)
+	return self.lookup(ctx, rsrc, period, 0, refresh, maxLookup)
 }
 
 // Retrieves the latest version of the resource update identified by `name`
@@ -429,7 +429,7 @@ func (self *ResourceHandler) LookupLatestByName(ctx context.Context, name string
 func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.Hash, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
 	// get our blockheight at this time and the next block of the update period
-	rsrc, err := self.loadResource(nameHash, name, refresh)
+	rsrc, err := self.loadResource(ctx, nameHash, name, refresh)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +438,7 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 		return nil, err
 	}
 	nextperiod := getNextPeriod(rsrc.startBlock, currentblock, rsrc.frequency)
-	return self.lookup(rsrc, nextperiod, 0, refresh, maxLookup)
+	return self.lookup(ctx, rsrc, nextperiod, 0, refresh, maxLookup)
 }
 
 // Returns the resource before the one currently loaded in the resource object
@@ -464,11 +464,11 @@ func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common
 		rsrc.version = 0
 		rsrc.lastPeriod--
 	}
-	return self.lookup(rsrc, rsrc.lastPeriod, rsrc.version, false, maxLookup)
+	return self.lookup(ctx, rsrc, rsrc.lastPeriod, rsrc.version, false, maxLookup)
 }
 
 // base code for public lookup methods
-func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) lookup(ctx context.Context, rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
 	if self.dpa == nil {
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before performing lookups")
@@ -497,7 +497,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		key := self.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := self.retrieveResource(key)
+		chunk, err := self.retrieveResource(ctx, key)
 		if err == nil {
 			if specificversion {
 				return self.updateResourceIndex(rsrc, chunk)
@@ -507,7 +507,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			for {
 				newversion := version + 1
 				key := self.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := self.retrieveResource(key)
+				newchunk, err := self.retrieveResource(ctx, key)
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk)
 				}
@@ -523,9 +523,8 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 	return nil, NewResourceError(ErrNotFound, "no updates found")
 }
 
-func (self *ResourceHandler) retrieveResource(key Address) (Chunk, error) {
-	ctx, _ := context.WithTimeout(context.Background(), resourceFetchTimeout)
-	chunk, fetch, err := self.dpa.Get(ctx, key)
+func (self *ResourceHandler) retrieveResource(ctx context.Context, key Address) (Chunk, error) {
+	chunk, fetch, err := self.dpa.Get(key)
 	if fetch == nil {
 		return chunk, err
 	}
@@ -533,7 +532,7 @@ func (self *ResourceHandler) retrieveResource(key Address) (Chunk, error) {
 }
 
 // load existing mutable resource into resource struct
-func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, refresh bool) (*resource, error) {
+func (self *ResourceHandler) loadResource(ctx context.Context, nameHash common.Hash, name string, refresh bool) (*resource, error) {
 
 	if name == "" {
 		name = nameHash.Hex()
@@ -552,7 +551,7 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.retrieveResource(Address(rsrc.nameHash[:]))
+		chunk, err := self.retrieveResource(ctx, Address(rsrc.nameHash[:]))
 		if err != nil {
 			return nil, err
 		}

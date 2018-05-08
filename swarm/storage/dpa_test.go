@@ -18,17 +18,21 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
-const testDataSize = 0x1000000
+// const testDataSize = 0x1000000
+const testDataSize = 0x100
 
 func TestDPArandom(t *testing.T) {
 	testDpaRandom(false, t)
-	testDpaRandom(true, t)
+	// testDpaRandom(true, t)
 }
 
 func testDpaRandom(toEncrypt bool, t *testing.T) {
@@ -45,15 +49,23 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 		DbStore:  db,
 	}
 
-	dpa := NewDPA(localStore, NewDPAParams())
+	dpa := NewDPAAPI(&fakeDPA{localStore}, NewDPAParams())
 	defer os.RemoveAll("/tmp/bzz")
 
-	reader, slice := generateRandomData(testDataSize)
-	key, wait, err := dpa.Store(reader, testDataSize, toEncrypt)
+	reader, slice := GenerateRandomData(testDataSize)
+	ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
+	defer cancel()
+	key, wait, err := dpa.Store(ctx, reader, testDataSize, toEncrypt)
 	if err != nil {
-		t.Errorf("Store error: %v", err)
+		t.Fatalf("Store error: %v", err)
 	}
-	wait()
+	log.Warn("store called")
+	err = wait(ctx)
+	if err != nil {
+		t.Fatalf("Store error: %v", err)
+	}
+	log.Warn("store complete", "address", key.Hex())
+
 	resultReader, isEncrypted := dpa.Retrieve(key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -61,13 +73,13 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
-		t.Errorf("Retrieve error: %v", err)
+		t.Fatalf("Retrieve error: %v", err)
 	}
 	if n != len(slice) {
-		t.Errorf("Slice size error got %d, expected %d.", n, len(slice))
+		t.Fatalf("Slice size error got %d, expected %d.", n, len(slice))
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error.")
+		t.Fatalf("Comparison error.")
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
@@ -81,13 +93,13 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 	}
 	n, err = resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
-		t.Errorf("Retrieve error after removing memStore: %v", err)
+		t.Fatalf("Retrieve error after removing memStore: %v", err)
 	}
 	if n != len(slice) {
-		t.Errorf("Slice size error after removing memStore got %d, expected %d.", n, len(slice))
+		t.Fatalf("Slice size error after removing memStore got %d, expected %d.", n, len(slice))
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error after removing memStore.")
+		t.Fatalf("Comparison error after removing memStore.")
 	}
 }
 
@@ -108,13 +120,18 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 		memStore: memStore,
 		DbStore:  db,
 	}
-	dpa := NewDPA(localStore, NewDPAParams())
-	reader, slice := generateRandomData(testDataSize)
-	key, wait, err := dpa.Store(reader, testDataSize, toEncrypt)
+	dpa := NewDPAAPI(&fakeDPA{localStore}, NewDPAParams())
+	reader, slice := GenerateRandomData(testDataSize)
+	ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
+	defer cancel()
+	key, wait, err := dpa.Store(ctx, reader, testDataSize, toEncrypt)
 	if err != nil {
-		t.Errorf("Store error: %v", err)
+		t.Fatalf("Store error: %v", err)
 	}
-	wait()
+	err = wait(ctx)
+	if err != nil {
+		t.Fatalf("Store error: %v", err)
+	}
 	resultReader, isEncrypted := dpa.Retrieve(key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -122,27 +139,27 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	resultSlice := make([]byte, len(slice))
 	n, err := resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
-		t.Errorf("Retrieve error: %v", err)
+		t.Fatalf("Retrieve error: %v", err)
 	}
 	if n != len(slice) {
-		t.Errorf("Slice size error got %d, expected %d.", n, len(slice))
+		t.Fatalf("Slice size error got %d, expected %d.", n, len(slice))
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error.")
+		t.Fatalf("Comparison error.")
 	}
 	// Clear memStore
 	memStore.setCapacity(0)
 	// check whether it is, indeed, empty
-	dpa.ChunkStore = memStore
+	dpa.DPA = &fakeDPA{&chunkMemStore{memStore}}
 	resultReader, isEncrypted = dpa.Retrieve(key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
 	if _, err = resultReader.ReadAt(resultSlice, 0); err == nil {
-		t.Errorf("Was able to read %d bytes from an empty memStore.", len(slice))
+		t.Fatalf("Was able to read %d bytes from an empty memStore.", len(slice))
 	}
 	// check how it works with localStore
-	dpa.ChunkStore = localStore
+	dpa.DPA = &fakeDPA{localStore}
 	//	localStore.dbStore.setCapacity(0)
 	resultReader, isEncrypted = dpa.Retrieve(key)
 	if isEncrypted != toEncrypt {
@@ -153,12 +170,12 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	}
 	n, err = resultReader.ReadAt(resultSlice, 0)
 	if err != io.EOF {
-		t.Errorf("Retrieve error after clearing memStore: %v", err)
+		t.Fatalf("Retrieve error after clearing memStore: %v", err)
 	}
 	if n != len(slice) {
-		t.Errorf("Slice size error after clearing memStore got %d, expected %d.", n, len(slice))
+		t.Fatalf("Slice size error after clearing memStore got %d, expected %d.", n, len(slice))
 	}
 	if !bytes.Equal(slice, resultSlice) {
-		t.Errorf("Comparison error after clearing memStore.")
+		t.Fatalf("Comparison error after clearing memStore.")
 	}
 }
