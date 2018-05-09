@@ -98,8 +98,6 @@ var tomlSettings = toml.Config{
 
 //before booting the swarm node, build the configuration
 func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
-	//check for deprecated flags
-	checkDeprecated(ctx)
 	//start by creating a default config
 	config = bzzapi.NewConfig()
 	//first load settings from config file (if provided)
@@ -334,14 +332,6 @@ func dumpConfig(ctx *cli.Context) error {
 	io.WriteString(os.Stdout, comment)
 	os.Stdout.Write(out)
 	return nil
-}
-
-//deprecated flags checked here
-func checkDeprecated(ctx *cli.Context) {
-	// add deprecated flags here in this form
-	// if ctx.GlobalString(FLAGNAME.Name) != "" {
-	// 	utils.Fatalf("--flagname is no longer a valid command line flag, please use...")
-	// }
 }
 
 //validate configuration parameters
