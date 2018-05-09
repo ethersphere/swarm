@@ -303,6 +303,8 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	}()
 	// go p.SendOfferedHashes(s, req.From, req.To)
 	l := len(hashes) / HashSize
+
+	log.Debug("wanted batch length", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "lenhashes", len(hashes), "l", l)
 	want, err := bv.NewFromBytes(req.Want, l)
 	if err != nil {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", l, err)
