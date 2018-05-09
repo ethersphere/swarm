@@ -287,7 +287,7 @@ func (c *Client) DownloadFile(hash, path, destDir string) error {
 			return err
 		}
 		filename := ""
-		// ignore the default path file
+		// try to find a candidate filename with fallback to hash
 		if hdr.Name != "" {
 			filename = hdr.Name
 		} else {
@@ -295,7 +295,6 @@ func (c *Client) DownloadFile(hash, path, destDir string) error {
 
 			if results := re.FindAllString(path, -1); len(results) > 0 {
 				filename = results[len(results)-1]
-				// log.Debug(fmt.Sprintf("swarm download: assuming filename from requested path: %s", filename))
 			} else {
 				if entry := manifestList.Entries[0]; entry.Path != "" && entry.Path != "/" {
 					filename = entry.Path

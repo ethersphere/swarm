@@ -121,8 +121,8 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		if string(reply) != data {
 			t.Fatalf("expected HTTP body %q, got %q", data, reply)
 		}
-		log.Info("verifying uploaded file using `swarm download`")
-		//try to get the content with `go-swarm download`
+		log.Info("verifying uploaded file using `swarm down`")
+		//try to get the content with `swarm down`
 		tmpDownload, err := ioutil.TempDir("", "swarm-test")
 		if err != nil {
 			t.Fatal(err)
@@ -268,7 +268,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		//try to get the content with `go-swarm download`
+		//try to get the content with `swarm down`
 		tmpDownload, err := ioutil.TempDir("", "swarm-test")
 		if err != nil {
 			t.Fatal(err)

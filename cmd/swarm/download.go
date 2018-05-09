@@ -29,10 +29,10 @@ import (
 )
 
 func download(ctx *cli.Context) {
-	log.Debug("swarm download")
+	log.Debug("swarm down")
 	args := ctx.Args()
 	if len(args) < 1 {
-		utils.Fatalf("Usage: swarm download <bzz locator> [<destination path>]")
+		utils.Fatalf("Usage: swarm down <bzz locator> [<destination path>]")
 	}
 
 	var (
@@ -46,14 +46,14 @@ func download(ctx *cli.Context) {
 	if len(args) == 1 {
 		// no destination arg - assume current terminal working dir
 		workingDir, err := filepath.Abs("./")
-		log.Trace(fmt.Sprintf("swarm download: no destination path - assuming working dir: %s", workingDir))
+		log.Trace(fmt.Sprintf("swarm down: no destination path - assuming working dir: %s", workingDir))
 
 		if err != nil {
 			utils.Fatalf("Fatal: could not get current working directory")
 		}
 		dir = workingDir
 	} else {
-		log.Trace(fmt.Sprintf("swarm download: destination path arg: %s", args[1]))
+		log.Trace(fmt.Sprintf("swarm down: destination path arg: %s", args[1]))
 		dir = args[1]
 	}
 
@@ -78,7 +78,7 @@ func download(ctx *cli.Context) {
 		}
 	} else {
 		// we are downloading a file
-		log.Debug(fmt.Sprintf("swarm download: downloading file/path from a manifest. hash: %s, path:%s", uri.Addr, uri.Path))
+		log.Debug(fmt.Sprintf("swarm down: downloading file/path from a manifest. hash: %s, path:%s", uri.Addr, uri.Path))
 
 		err := client.DownloadFile(uri.Addr, uri.Path, dir)
 		if err != nil {
