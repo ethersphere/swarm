@@ -264,6 +264,46 @@ Removes a path from the manifest
 			},
 		},
 		{
+			Name:      "fs",
+			Usage:     "perform FUSE operations",
+			ArgsUsage: "fs COMMAND",
+			Description: `
+Performs FUSE operations by mounting/unmounting/listing mount points
+`,
+			Subcommands: []cli.Command{
+				{
+					Action:    mount,
+					Name:      "mount",
+					Flags:     []cli.Flag{utils.IPCPathFlag},
+					Usage:     "mount a swarm hash to a mount point",
+					ArgsUsage: "",
+					Description: `
+
+					`,
+				},
+				{
+					Action:    unmount,
+					Name:      "unmount",
+					Flags:     []cli.Flag{utils.IPCPathFlag},
+					Usage:     "",
+					ArgsUsage: "",
+					Description: `
+
+					`,
+				},
+				{
+					Action:    listMounts,
+					Name:      "list",
+					Flags:     []cli.Flag{utils.IPCPathFlag},
+					Usage:     "",
+					ArgsUsage: "",
+					Description: `
+
+					`,
+				},
+			},
+		},
+		{
 			Name:      "db",
 			Usage:     "manage the local chunk database",
 			ArgsUsage: "db COMMAND",
@@ -314,6 +354,16 @@ Remove corrupt entries from a local chunk database.
 				},
 			},
 		},
+		// 		{
+		// 			Action:    mount,
+		// 			Name:      "mount",
+		// 			Usage:     "swarm mount <hash|domain> <mount_point>",
+		// 			ArgsUsage: " <hash|domain> <mount_point>",
+		// 			Description: `
+		// Mounts a swarm file or directory using FUSE.
+		// `,
+		// 		},
+
 		// See config.go
 		DumpConfigCommand,
 	}
