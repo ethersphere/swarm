@@ -72,7 +72,7 @@ func NewMountInfo(mhash, mpoint string, sapi *api.Api) *MountInfo {
 	return newMountInfo
 }
 
-func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
+func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 
 	if mountpoint == "" {
 		return nil, errEmptyMountPoint
@@ -82,25 +82,25 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, err
 	}
 
-	self.swarmFsLock.Lock()
-	defer self.swarmFsLock.Unlock()
+	swarmfs.swarmFsLock.Lock()
+	defer swarmfs.swarmFsLock.Unlock()
 
-	noOfActiveMounts := len(self.activeMounts)
+	noOfActiveMounts := len(swarmfs.activeMounts)
 	if noOfActiveMounts >= maxFuseMounts {
 		return nil, errMaxMountCount
 	}
 
-	if _, ok := self.activeMounts[cleanedMountPoint]; ok {
+	if _, ok := swarmfs.activeMounts[cleanedMountPoint]; ok {
 		return nil, errAlreadyMounted
 	}
 
 	log.Info(fmt.Sprintf("Attempting to mount %s ", cleanedMountPoint))
-	_, manifestEntryMap, err := self.swarmApi.BuildDirectoryTree(mhash, true)
+	_, manifestEntryMap, err := swarmfs.swarmApi.BuildDirectoryTree(mhash, true)
 	if err != nil {
 		return nil, err
 	}
 
-	mi := NewMountInfo(mhash, cleanedMountPoint, self.swarmApi)
+	mi := NewMountInfo(mhash, cleanedMountPoint, swarmfs.swarmApi)
 
 	dirTree := map[string]*SwarmDir{}
 	rootDir := NewSwarmDir("/", mi)
@@ -128,7 +128,6 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 				} else {
 					parentDir = dirTree[dirUntilNow]
 				}
-
 			}
 		}
 		thisFile := NewSwarmFile(basepath, filepath.Base(fullpath), mi)
@@ -174,21 +173,21 @@ func (self *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		log.Info("Now serving swarm FUSE FS", "manifest", mhash, "mountpoint", cleanedMountPoint)
 	}
 
-	self.activeMounts[cleanedMountPoint] = mi
+	swarmfs.activeMounts[cleanedMountPoint] = mi
 	return mi, nil
 }
 
-func (self *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
+func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 
-	self.swarmFsLock.Lock()
-	defer self.swarmFsLock.Unlock()
+	swarmfs.swarmFsLock.Lock()
+	defer swarmfs.swarmFsLock.Unlock()
 
 	cleanedMountPoint, err := filepath.Abs(filepath.Clean(mountpoint))
 	if err != nil {
 		return nil, err
 	}
 
-	mountInfo := self.activeMounts[cleanedMountPoint]
+	mountInfo := swarmfs.activeMounts[cleanedMountPoint]
 
 	if mountInfo == nil || mountInfo.MountPoint != cleanedMountPoint {
 		return nil, fmt.Errorf("%s is not mounted", cleanedMountPoint)
@@ -204,7 +203,7 @@ func (self *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 	}
 
 	mountInfo.fuseConnection.Close()
-	delete(self.activeMounts, cleanedMountPoint)
+	delete(swarmfs.activeMounts, cleanedMountPoint)
 
 	succString := fmt.Sprintf("UnMounting %v succeeded", cleanedMountPoint)
 	log.Info(succString)
@@ -212,21 +211,21 @@ func (self *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 	return mountInfo, nil
 }
 
-func (self *SwarmFS) Listmounts() []*MountInfo {
-	self.swarmFsLock.RLock()
-	defer self.swarmFsLock.RUnlock()
+func (swarmfs *SwarmFS) Listmounts() []*MountInfo {
+	swarmfs.swarmFsLock.RLock()
+	defer swarmfs.swarmFsLock.RUnlock()
 
-	rows := make([]*MountInfo, 0, len(self.activeMounts))
-	for _, mi := range self.activeMounts {
+	rows := make([]*MountInfo, 0, len(swarmfs.activeMounts))
+	for _, mi := range swarmfs.activeMounts {
 		rows = append(rows, mi)
 	}
 	return rows
 }
 
-func (self *SwarmFS) Stop() bool {
-	for mp := range self.activeMounts {
-		mountInfo := self.activeMounts[mp]
-		self.Unmount(mountInfo.MountPoint)
+func (swarmfs *SwarmFS) Stop() bool {
+	for mp := range swarmfs.activeMounts {
+		mountInfo := swarmfs.activeMounts[mp]
+		swarmfs.Unmount(mountInfo.MountPoint)
 	}
 	return true
 }
