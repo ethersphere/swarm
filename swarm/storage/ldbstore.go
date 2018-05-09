@@ -41,11 +41,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
-//metrics variables
-var (
-	dbStoreDeleteCounter = metrics.NewRegisteredCounter("storage.db.dbstore.rm.count", nil)
-)
-
 const (
 	gcArrayFreeRatio = 0.1
 	maxGCitems       = 5000 // max number of items to be gc'd per call to collectGarbage()
@@ -468,10 +463,11 @@ func (s *LDBStore) ReIndex() {
 }
 
 func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
+	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
+
 	batch := new(leveldb.Batch)
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx, po))
-	dbStoreDeleteCounter.Inc(1)
 	s.entryCnt--
 	s.bucketCnt[po]--
 	cntKey := make([]byte, 2)
