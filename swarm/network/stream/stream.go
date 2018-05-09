@@ -585,10 +585,6 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 		if err != nil {
 			return err
 		}
-		// TODO: make a test case for testing if the interval is added when the batch is done
-		if err := c.AddInterval(tp.Takeover.Start, tp.Takeover.End); err != nil {
-			return err
-		}
 		if err := p.SendPriority(tp, c.priority); err != nil {
 			return err
 		}
@@ -596,6 +592,10 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 			return p.streamer.Unsubscribe(p.Peer.ID(), req.Stream)
 		}
 		return nil
+	}
+	// TODO: make a test case for testing if the interval is added when the batch is done
+	if err := c.AddInterval(req.From, req.To); err != nil {
+		return err
 	}
 	return nil
 }
