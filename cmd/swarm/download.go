@@ -53,11 +53,9 @@ func download(ctx *cli.Context) {
 		}
 		dir = workingDir
 	} else {
-		log.Trace(fmt.Sprintf("swarm down: destination path arg: %s", args[1]))
+		log.Trace(fmt.Sprintf("destination path arg: %s", args[1]))
 		dir = args[1]
 	}
-
-	log.Debug(fmt.Sprintf("working dir: %s", dir))
 
 	fi, err := os.Stat(dir)
 	if err != nil {
