@@ -23,12 +23,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
-)
-
-var (
-	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
 )
 
 type LocalStoreParams struct {
@@ -138,7 +133,6 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		close(memChunk.ReqC)
 	}
 
-	dbStorePutCounter.Inc(1)
 	self.DbStore.Put(chunk)
 
 	newc := NewChunk(chunk.Key, nil)
