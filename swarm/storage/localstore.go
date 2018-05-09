@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
@@ -169,13 +170,17 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 			select {
 			case <-chunk.ReqC:
 			default:
+				metrics.GetOrRegisterCounter("localstore.get.errfetching", nil).Inc(1)
 				return chunk, ErrFetching
 			}
 		}
+		metrics.GetOrRegisterCounter("localstore.get.cachehit", nil).Inc(1)
 		return
 	}
+	metrics.GetOrRegisterCounter("localstore.get.cachemiss", nil).Inc(1)
 	chunk, err = self.DbStore.Get(key)
 	if err != nil {
+		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
 		return
 	}
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
@@ -185,20 +190,25 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 
 // retrieve logic common for local and network chunk retrieval requests
 func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
+	metrics.GetOrRegisterCounter("localstore.getorcreaterequest", nil).Inc(1)
+
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	var err error
 	chunk, err = self.get(key)
 	if err == nil && chunk.GetErrored() == nil {
+		metrics.GetOrRegisterCounter("localstore.getorcreaterequest.hit", nil).Inc(1)
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
 		return chunk, false
 	}
 	if err == ErrFetching && chunk.GetErrored() == nil {
+		metrics.GetOrRegisterCounter("localstore.getorcreaterequest.errfetching", nil).Inc(1)
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
 		return chunk, false
 	}
 	// no data and no request status
+	metrics.GetOrRegisterCounter("localstore.getorcreaterequest.miss", nil).Inc(1)
 	log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", key))
 	chunk = NewChunk(key, make(chan bool))
 	self.memStore.Put(chunk)
