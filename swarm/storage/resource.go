@@ -36,17 +36,24 @@ type blockEstimator struct {
 	Average time.Duration
 }
 
+// TODO: Average must  be adjusted when blockchain connection is present and synced
 func NewBlockEstimator() *blockEstimator {
-	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z")
+	sampleDate, _ := time.Parse(time.RFC3339, "2018-05-04T20:35:22Z")   // from etherscan.io
+	sampleBlock := int64(3169691)                                       // from etherscan.io
+	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z") // from etherscan.io
+	ns := sampleDate.Sub(ropstenStart).Nanoseconds()
+	period := int(ns / sampleBlock)
+	parsestring := fmt.Sprintf("%dns", int(float64(period)*1.0005)) // increase the blockcount a little, so we don't overshoot the read block height; if we do, we will never find the updates when getting synced data
+	periodNs, _ := time.ParseDuration(parsestring)
 	return &blockEstimator{
 		Start:   ropstenStart,
-		Average: 14467100 * time.Microsecond,
+		Average: periodNs,
 	}
 }
 
 func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
 	return &types.Header{
-		Number: big.NewInt(int64(time.Since(b.Start).Seconds() / b.Average.Seconds())),
+		Number: big.NewInt(time.Since(b.Start).Nanoseconds() / b.Average.Nanoseconds()),
 	}, nil
 }
 
