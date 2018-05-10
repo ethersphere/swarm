@@ -70,7 +70,7 @@ func NewResourceError(code int, s string) error {
 		err: s,
 	}
 	switch code {
-	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced, ErrPeriodDepth:
+	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced, ErrPeriodDepth, ErrCorruptData:
 		r.code = code
 	}
 	return r
@@ -604,15 +604,39 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	headerlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
 	cursor += 2
 	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
-	exclsignlength := int(headerlength + datalength + 4)
-	if exclsignlength > len(chunkdata) || exclsignlength < 14 {
+	cursor += 2
+	var exclsignlength int
+	// we need extra magic if it's a multihash
+	// TODO: merge with isMultihash code
+	if datalength == 0 {
+		uvarintbuf := bytes.NewBuffer(chunkdata[headerlength+4:])
+		r, err := binary.ReadUvarint(uvarintbuf)
+		if err != nil {
+			errstr := fmt.Sprintf("corrupt multihash, hash id varint could not be read: %v", err)
+			log.Warn(errstr)
+			return nil, 0, 0, "", nil, false, NewResourceError(ErrCorruptData, errstr)
+
+		}
+		r, err = binary.ReadUvarint(uvarintbuf)
+		if err != nil {
+			errstr := fmt.Sprintf("corrupt multihash, hash length field could not be read: %v", err)
+			log.Warn(errstr)
+			return nil, 0, 0, "", nil, false, NewResourceError(ErrCorruptData, errstr)
+
+		}
+		exclsignlength = int(headerlength + uint16(r))
+	} else {
+		exclsignlength = int(headerlength + datalength + 4)
+	}
+	if exclsignlength > len(chunkdata) {
 		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata)))
+	} else if exclsignlength < 14 {
+		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d is smaller than minimum valid resource chunk length %d", headerlength, datalength, 14))
 	}
 	var period uint32
 	var version uint32
 	var name string
 	var data []byte
-	cursor += 2
 	period = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
 	cursor += 4
 	version = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
@@ -748,6 +772,9 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	timeout := time.NewTimer(self.storeTimeout)
 	select {
 	case <-chunk.dbStoredC:
+		if err := chunk.GetErrored(); err != nil {
+			return nil, NewResourceError(ErrIO, fmt.Sprintf("chunk not stored: %v", err))
+		}
 	case <-timeout.C:
 		return nil, NewResourceError(ErrIO, "chunk store timeout")
 	}

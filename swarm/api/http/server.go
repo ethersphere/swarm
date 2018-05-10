@@ -441,6 +441,9 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			Respond(w, r, err.Error(), http.StatusBadRequest)
 		}
 		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), r.uri.Addr, bytesdata)
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusBadRequest)
+		}
 	}
 	if err != nil {
 		code, err2 := s.translateResourceError(w, r, "mutable resource update fail", err)
