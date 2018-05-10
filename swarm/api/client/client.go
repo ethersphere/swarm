@@ -298,9 +298,15 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 			}
 		}
 	}
-	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
+	filePath, err := filepath.Abs(filename)
+	if err != nil {
 		return err
 	}
+
+	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+		return err
+	}
+
 	var mode os.FileMode = 0644
 
 	dst, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)

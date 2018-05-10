@@ -124,6 +124,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		log.Debug("verifying uploaded file using `swarm down`")
 		//try to get the content with `swarm down`
 		tmpDownload, err := ioutil.TempDir("", "swarm-test")
+		tmpDownload = path.Join(tmpDownload, "tmpfile.tmp")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,14 +141,14 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		down := runSwarm(t, flags...)
 		down.ExpectExit()
 
-		fi, err := os.Stat(path.Join(tmpDownload, hash))
+		fi, err := os.Stat(tmpDownload)
 		if err != nil {
 			t.Fatalf("could not stat path: %v", err)
 		}
 
 		switch mode := fi.Mode(); {
 		case mode.IsRegular():
-			downloadedBytes, err := ioutil.ReadFile(path.Join(tmpDownload, hash))
+			downloadedBytes, err := ioutil.ReadFile(tmpDownload)
 			if err != nil {
 				t.Fatalf("had an error opening the downloaded file for read: %v", err)
 			}
