@@ -611,6 +611,10 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	index.Access = s.accessCnt
 	idata = encodeIndex(index)
 	s.batch.Put(ikey, idata)
+	select {
+	case s.batchesC <- struct{}{}:
+	default:
+	}
 	return true
 }
 
