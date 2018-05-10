@@ -52,7 +52,7 @@ func NewBlockEstimator() *blockEstimator {
 
 func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
 	return &types.Header{
-		Number: big.NewInt(int64(time.Since(b.Start).Nanoseconds() / b.Average.Nanoseconds())),
+		Number: big.NewInt(time.Since(b.Start).Nanoseconds() / b.Average.Nanoseconds()),
 	}, nil
 }
 
