@@ -307,17 +307,12 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 	if err != nil {
 		return err
 	}
+	defer dst.Close()
 
-	piper, pipew := io.Pipe()
-	go func() {
-		defer pipew.Close()
-		io.Copy(pipew, res.Body)
-	}()
+	if _, err := io.Copy(dst, res.Body); err != nil {
+		return err
+	}
 
-	io.Copy(dst, piper)
-	piper.Close()
-
-	dst.Close()
 	return nil
 }
 
