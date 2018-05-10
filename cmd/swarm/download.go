@@ -18,7 +18,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -29,54 +28,47 @@ import (
 )
 
 func download(ctx *cli.Context) {
-	log.Debug("swarm down")
+	log.Debug("downloading content using swarm down")
 	args := ctx.Args()
-	if len(args) < 1 {
-		utils.Fatalf("Usage: swarm down <bzz locator> [<destination path>]")
-	}
+	dir := "."
 
-	var (
-		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		isRecursive = ctx.GlobalBool(SwarmRecursiveUploadFlag.Name)
-		client      = swarm.NewClient(bzzapi)
-	)
-
-	dir := ""
-
-	if len(args) == 1 {
-		// no destination arg - assume current terminal working dir
-		workingDir, err := filepath.Abs("./")
-		log.Trace(fmt.Sprintf("swarm down: no destination path - assuming working dir: %s", workingDir))
-
-		if err != nil {
-			utils.Fatalf("Fatal: could not get current working directory")
-		}
-		dir = workingDir
-	} else {
+	switch len(args) {
+	case 0:
+		utils.Fatalf("Usage: swarm down [options] <bzz locator> [<destination path>]")
+	case 1:
+		log.Trace(fmt.Sprintf("swarm down: no destination path - assuming working dir"))
+	default:
 		log.Trace(fmt.Sprintf("destination path arg: %s", args[1]))
 		dir = args[1]
 	}
 
-	fi, err := os.Stat(dir)
-	if err != nil {
-		utils.Fatalf("could not stat path")
-	}
+	var (
+		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		isRecursive = ctx.Bool(SwarmRecursiveFlag.Name)
+		client      = swarm.NewClient(bzzapi)
+	)
 
-	switch mode := fi.Mode(); {
-	case mode.IsRegular():
-		utils.Fatalf("destination path is not a directory!")
+	if fi, err := os.Stat(dir); err == nil {
+		if isRecursive && !fi.Mode().IsDir() {
+			utils.Fatalf("destination path is not a directory!")
+		}
+	} else {
+		utils.Fatalf("could not stat path: %v", err)
 	}
 
 	uri, err := api.Parse(args[0])
+	if err != nil {
+		utils.Fatalf("could not parse uri argument: %v", err)
+	}
 
 	// assume behaviour according to --recursive switch
 	if isRecursive {
 		if err := client.DownloadDirectory(uri.Addr, uri.Path, dir); err != nil {
-			utils.Fatalf("encoutered a fatal error while downloading directory: %v", err)
+			utils.Fatalf("encoutered an error while downloading directory: %v", err)
 		}
 	} else {
 		// we are downloading a file
-		log.Debug(fmt.Sprintf("swarm down: downloading file/path from a manifest. hash: %s, path:%s", uri.Addr, uri.Path))
+		log.Debug(fmt.Sprintf("downloading file/path from a manifest. hash: %s, path:%s", uri.Addr, uri.Path))
 
 		err := client.DownloadFile(uri.Addr, uri.Path, dir)
 		if err != nil {

@@ -34,8 +34,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
@@ -241,26 +239,31 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 // DownloadFile downloads a single file into the destination directory
 // if the manifest entry does not specify a file name - it will fallback
 // to the hash of the file as a filename
-func (c *Client) DownloadFile(hash, path, destDir string) error {
-	stat, err := os.Stat(destDir)
-	if err != nil {
-		return err
-	} else if !stat.IsDir() {
-		return fmt.Errorf("not a directory: %s", destDir)
+func (c *Client) DownloadFile(hash, path, dest string) error {
+	hasDestinationFilename := false
+	if stat, err := os.Stat(dest); err == nil {
+		hasDestinationFilename = !stat.IsDir()
+	} else {
+		if os.IsNotExist(err) {
+			// does not exist - should be created
+			hasDestinationFilename = true
+		} else {
+			return fmt.Errorf("could not stat path: %v", err)
+		}
 	}
 
 	manifestList, err := c.List(hash, path)
 	if err != nil {
-		utils.Fatalf("could not list manifest: %v", err)
+		return fmt.Errorf("could not list manifest: %v", err)
 	}
 
 	switch len(manifestList.Entries) {
 	case 0:
-		utils.Fatalf("could not find path requested at manifest address. make sure the path you've specified is correct")
+		return fmt.Errorf("could not find path requested at manifest address. make sure the path you've specified is correct")
 	case 1:
 		//continue
 	default:
-		utils.Fatalf("got too many matches for this path")
+		return fmt.Errorf("got too many matches for this path")
 	}
 
 	uri := c.Gateway + "/bzz:/" + hash + "/" + path
@@ -268,64 +271,55 @@ func (c *Client) DownloadFile(hash, path, destDir string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Accept", "application/x-tar")
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err
 	}
-
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("unexpected HTTP status: %s", res.Status)
-	}
-	tr := tar.NewReader(res.Body)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return err
-		}
-		filename := ""
-		// try to find a candidate filename with fallback to hash
-		if hdr.Name != "" {
-			filename = hdr.Name
-		} else {
-			re := regexp.MustCompile("[^/]+$") //everything after last slash
 
-			if results := re.FindAllString(path, -1); len(results) > 0 {
-				filename = results[len(results)-1]
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected HTTP status: expected 200 OK, got %d", res.StatusCode)
+	}
+	filename := ""
+	if hasDestinationFilename {
+		filename = dest
+	} else {
+		// try to assert
+		re := regexp.MustCompile("[^/]+$") //everything after last slash
+
+		if results := re.FindAllString(path, -1); len(results) > 0 {
+			filename = results[len(results)-1]
+		} else {
+			if entry := manifestList.Entries[0]; entry.Path != "" && entry.Path != "/" {
+				filename = entry.Path
 			} else {
-				if entry := manifestList.Entries[0]; entry.Path != "" && entry.Path != "/" {
-					filename = entry.Path
-				} else {
-					// assume hash as name if there's nothing from the command line
-					filename = hash
-				}
+				// assume hash as name if there's nothing from the command line
+				filename = hash
 			}
 		}
-
-		dstPath := filepath.Join(destDir, filepath.Clean(strings.TrimPrefix(filename, path)))
-		if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
-			return err
-		}
-		var mode os.FileMode = 0644
-		if hdr.Mode > 0 {
-			mode = os.FileMode(hdr.Mode)
-		}
-		dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
-		log.Debug(fmt.Sprintf("opening file at: %s", dst.Name()))
-		if err != nil {
-			return err
-		}
-		n, err := io.Copy(dst, tr)
-		dst.Close()
-		if err != nil {
-			return err
-		} else if n != hdr.Size {
-			return fmt.Errorf("expected %s to be %d bytes but got %d", hdr.Name, hdr.Size, n)
-		}
 	}
+	dstPath := filepath.Join(dest, filepath.Clean(strings.TrimPrefix(filename, path)))
+	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+		return err
+	}
+	var mode os.FileMode = 0644
+
+	dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+
+	piper, pipew := io.Pipe()
+	go func() {
+		defer pipew.Close()
+		io.Copy(pipew, res.Body)
+	}()
+
+	io.Copy(dst, piper)
+	piper.Close()
+
+	dst.Close()
+	return nil
 }
 
 // UploadManifest uploads the given manifest to swarm

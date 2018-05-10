@@ -121,7 +121,7 @@ var (
 		Usage: "Swarm HTTP endpoint",
 		Value: "http://127.0.0.1:8500",
 	}
-	SwarmRecursiveUploadFlag = cli.BoolFlag{
+	SwarmRecursiveFlag = cli.BoolFlag{
 		Name:  "recursive",
 		Usage: "Upload directories recursively",
 	}
@@ -241,14 +241,13 @@ Prints the swarm hash of file or directory.
 `,
 		},
 		{
-			Action: download,
-			Name:   "down",
-			Flags:  []cli.Flag{SwarmRecursiveUploadFlag},
-
+			Action:    download,
+			Name:      "down",
+			Flags:     []cli.Flag{SwarmRecursiveFlag},
 			Usage:     "downloads a swarm manifest or a file inside a manifest",
-			ArgsUsage: " <bzzhash> [<download path>]",
+			ArgsUsage: " <uri> [<dir>]",
 			Description: `
-Downloads a swarm hash to a certain path. When downloading a manifest with multiple entries - the --recursive flag is expected. if no download path is specified, the current working directory would be assumed.
+Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.
 `,
 		},
 
@@ -377,7 +376,7 @@ Remove corrupt entries from a local chunk database.
 		ChequebookAddrFlag,
 		// upload flags
 		SwarmApiFlag,
-		SwarmRecursiveUploadFlag,
+		SwarmRecursiveFlag,
 		SwarmWantManifestFlag,
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,

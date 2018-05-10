@@ -25,6 +25,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -108,30 +109,28 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		if res.StatusCode != 200 {
-			t.Fatalf("expected HTTP status 200, got %s", res.Status)
-		}
+		defer res.Body.Close()
 
 		reply, err := ioutil.ReadAll(res.Body)
-		defer res.Body.Close()
 		if err != nil {
 			t.Fatal(err)
+		}
+		if res.StatusCode != 200 {
+			t.Fatalf("expected HTTP status 200, got %s", res.Status)
 		}
 		if string(reply) != data {
 			t.Fatalf("expected HTTP body %q, got %q", data, reply)
 		}
-		log.Info("verifying uploaded file using `swarm down`")
+		log.Debug("verifying uploaded file using `swarm down`")
 		//try to get the content with `swarm down`
 		tmpDownload, err := ioutil.TempDir("", "swarm-test")
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tmpDownload)
+		defer os.RemoveAll(tmpDownload)
 
 		bzzLocator := "bzz:/" + hash
-		flagss := []string{}
-		flagss = []string{
+		flags = []string{
 			"--verbosity", "5",
 			"--bzzapi", cluster.Nodes[0].URL,
 			"down",
@@ -139,14 +138,14 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 			tmpDownload,
 		}
 		if toEncrypt {
-			flagss = []string{
+			flags = []string{
 				"--verbosity", "5",
 				"--bzzapi", cluster.Nodes[0].URL,
 				"down",
 				bzzLocator,
 				tmpDownload}
 		}
-		down := runSwarm(t, flagss...)
+		down := runSwarm(t, flags...)
 		down.ExpectExit()
 
 		fi, err := os.Stat(path.Join(tmpDownload, hash))
@@ -156,20 +155,16 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 
 		switch mode := fi.Mode(); {
 		case mode.IsRegular():
-			if file, err := swarm.Open(path.Join(tmpDownload, hash)); err != nil {
-				t.Fatalf("encountered an error opening the file returned from the CLI: %v", err)
-			} else {
-
-				ff := make([]byte, len(data))
-				io.ReadFull(file, ff)
-				buf := bytes.NewBufferString(data)
-
-				if !bytes.Equal(ff, buf.Bytes()) {
-					t.Fatalf("retrieved data and posted data not equal!")
-				}
+			downloadedBytes, err := ioutil.ReadFile(path.Join(tmpDownload, hash))
+			if err != nil {
+				t.Fatalf("had an error opening the downloaded file for read: %v", err)
 			}
+			if !bytes.Equal(downloadedBytes, bytes.NewBufferString(data).Bytes()) {
+				t.Fatalf("retrieved data and posted data not equal!")
+			}
+
 		default:
-			t.Fatalf("this shouldnt happen")
+			t.Fatalf("expected to download regular file, got %s", fi.Mode())
 		}
 	}
 
@@ -201,30 +196,13 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.Remove(tmpUploadDir)
-	// create a tmp file
-	tmp1, err := ioutil.TempFile(tmpUploadDir, "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	tmp2, err := ioutil.TempFile(tmpUploadDir, "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tmp2.Close()
-	defer os.Remove(tmp1.Name())
-	defer os.Remove(tmp1.Name())
-
-	// write data to file
+	defer os.RemoveAll(tmpUploadDir)
+	// create tmp files
 	data := "notsorandomdata"
-	_, err = io.WriteString(tmp1, data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	_, err = io.WriteString(tmp2, data)
-	if err != nil {
-		t.Fatal(err)
+	for _, path := range []string{"tmp1", "tmp2"} {
+		if err := ioutil.WriteFile(filepath.Join(tmpUploadDir, path), bytes.NewBufferString(data).Bytes(), 0644); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	hashRegexp := `[a-f\d]{64}`
@@ -253,42 +231,27 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 	// get the file from the HTTP API of each node
 	for _, node := range cluster.Nodes {
 		log.Info("getting file from node", "node", node.Name)
-
-		res, err := http.Get(node.URL + "/bzz-list:/" + hash)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		if res.StatusCode != 200 {
-			t.Fatalf("expected HTTP status 200, got %s", res.Status)
-		}
-
-		_, err = ioutil.ReadAll(res.Body)
-		defer res.Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}
 		//try to get the content with `swarm down`
 		tmpDownload, err := ioutil.TempDir("", "swarm-test")
 		if err != nil {
 			t.Fatal(err)
 		}
-		defer os.Remove(tmpDownload)
+		defer os.RemoveAll(tmpDownload)
 
 		bzzLocator := "bzz:/" + hash
 		flagss := []string{}
 		flagss = []string{
 			"--bzzapi", cluster.Nodes[0].URL,
-			"--recursive",
 			"down",
+			"--recursive",
 			bzzLocator,
 			tmpDownload,
 		}
 		if toEncrypt {
 			flagss = []string{
 				"--bzzapi", cluster.Nodes[0].URL,
-				"--recursive",
 				"down",
+				"--recursive",
 				bzzLocator,
 				tmpDownload}
 		}
