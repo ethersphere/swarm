@@ -21,13 +21,14 @@ import (
 )
 
 const (
-	signatureLength     = 65
-	indexSize           = 18
-	DbDirName           = "resource"
-	chunkSize           = 4096 // temporary until we implement DPA in the resourcehandler
-	defaultStoreTimeout = 4000 * time.Millisecond
-	hasherCount         = 8
-	resourceHash        = SHA3Hash
+	signatureLength        = 65
+	indexSize              = 18
+	DbDirName              = "resource"
+	chunkSize              = 4096 // temporary until we implement DPA in the resourcehandler
+	defaultStoreTimeout    = 4000 * time.Millisecond
+	hasherCount            = 8
+	resourceHash           = SHA3Hash
+	defaultRetrieveTimeout = 100 * time.Millisecond
 )
 
 type blockEstimator struct {
@@ -163,7 +164,7 @@ type headerGetter interface {
 //
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
-	chunkStore      ChunkStore
+	chunkStore      *NetStore
 	HashSize        int
 	signer          ResourceSigner
 	ethClient       headerGetter
@@ -215,7 +216,7 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 }
 
 // Sets the store backend for resource updates
-func (self *ResourceHandler) SetStore(store ChunkStore) {
+func (self *ResourceHandler) SetStore(store *NetStore) {
 	self.chunkStore = store
 }
 
@@ -496,7 +497,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		key := self.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := self.chunkStore.Get(key)
+		chunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
 				return self.updateResourceIndex(rsrc, chunk)
@@ -506,7 +507,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 			for {
 				newversion := version + 1
 				key := self.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := self.chunkStore.Get(key)
+				newchunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk)
 				}
@@ -542,7 +543,7 @@ func (self *ResourceHandler) loadResource(nameHash common.Hash, name string, ref
 		rsrc.nameHash = nameHash
 
 		// get the root info chunk and update the cached value
-		chunk, err := self.chunkStore.Get(Key(rsrc.nameHash[:]))
+		chunk, err := self.chunkStore.get(Key(rsrc.nameHash[:]), defaultRetrieveTimeout)
 		if err != nil {
 			return nil, err
 		}
@@ -953,15 +954,16 @@ func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*Res
 	path := filepath.Join(datadir, DbDirName)
 	rh, err := NewResourceHandler(params)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resource handler create fail: %v", err)
 	}
 	localstoreparams := NewDefaultLocalStoreParams()
 	localstoreparams.Init(path)
 	localStore, err := NewLocalStore(localstoreparams, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("localstore create fail, path %s: %v", path, err)
 	}
 	localStore.Validators = append(localStore.Validators, rh)
-	rh.SetStore(localStore)
+	dpaStore := NewNetStore(localStore, nil)
+	rh.SetStore(dpaStore)
 	return rh, nil
 }
