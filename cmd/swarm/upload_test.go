@@ -131,20 +131,12 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 
 		bzzLocator := "bzz:/" + hash
 		flags = []string{
-			"--verbosity", "5",
 			"--bzzapi", cluster.Nodes[0].URL,
 			"down",
 			bzzLocator,
 			tmpDownload,
 		}
-		if toEncrypt {
-			flags = []string{
-				"--verbosity", "5",
-				"--bzzapi", cluster.Nodes[0].URL,
-				"down",
-				bzzLocator,
-				tmpDownload}
-		}
+
 		down := runSwarm(t, flags...)
 		down.ExpectExit()
 
@@ -247,14 +239,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 			bzzLocator,
 			tmpDownload,
 		}
-		if toEncrypt {
-			flagss = []string{
-				"--bzzapi", cluster.Nodes[0].URL,
-				"down",
-				"--recursive",
-				bzzLocator,
-				tmpDownload}
-		}
+
 		fmt.Println("downloading from swarm with recursive")
 		down := runSwarm(t, flagss...)
 		down.ExpectExit()
