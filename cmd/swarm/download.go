@@ -53,7 +53,9 @@ func download(ctx *cli.Context) {
 			utils.Fatalf("destination path is not a directory!")
 		}
 	} else {
-		utils.Fatalf("could not stat path: %v", err)
+		if !os.IsNotExist(err) {
+			utils.Fatalf("could not stat path: %v", err)
+		}
 	}
 
 	uri, err := api.Parse(args[0])

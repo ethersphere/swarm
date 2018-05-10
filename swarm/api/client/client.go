@@ -298,13 +298,12 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 			}
 		}
 	}
-	dstPath := filepath.Join(dest, filepath.Clean(strings.TrimPrefix(filename, path)))
-	if err := os.MkdirAll(filepath.Dir(dstPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filename), 0755); err != nil {
 		return err
 	}
 	var mode os.FileMode = 0644
 
-	dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	dst, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
 	if err != nil {
 		return err
 	}
