@@ -423,7 +423,7 @@ func (r *Registry) updateSyncing() {
 		}
 		err := r.RequestSubscription(p.ID(), stream, NewRange(0, 0), High)
 		if err != nil {
-			log.Error("Request subscription", "err", err, "peer", p.ID(), "stream", stream)
+			log.Debug("Request subscription", "err", err, "peer", p.ID(), "stream", stream)
 			return false
 		}
 		return true
