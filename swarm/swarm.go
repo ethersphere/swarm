@@ -186,29 +186,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
-	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
-	log.Debug(fmt.Sprintf("-> Content Store API"))
-
-	if ensresolver == nil {
-		log.Warn("No ENS API specified, resource updates will NOT validate resource update chunks")
-	}
-	// setup local store
-	log.Debug(fmt.Sprintf("Set up local storage"))
-
-	db := storage.NewDBAPI(self.lstore)
-	delivery := stream.NewDelivery(to, db)
-
-	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{
-		DoSync:          config.SyncEnabled,
-		DoRetrieve:      true,
-		SyncUpdateDelay: config.SyncUpdateDelay,
-	})
-
-	// set up DPA, the cloud storage local access layer
-	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
-	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 
 	var resourceHandler *storage.ResourceHandler
 	rhparams := &storage.ResourceHandlerParams{
