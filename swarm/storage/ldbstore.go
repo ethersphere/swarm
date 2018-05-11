@@ -240,7 +240,7 @@ func decodeIndex(data []byte, index *dpaDBIndex) error {
 }
 
 func decodeData(addr Address, data []byte) (*chunk, error) {
-	return NewChunk(addr, data), nil
+	return NewChunk(addr, data[32:]), nil
 }
 
 //
