@@ -563,7 +563,7 @@ func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.read.bytes", nil).Inc(int64(read))
 
 	self.off += int64(read)
-	return read, nil
+	return read, err
 }
 
 // completely analogous to standard SectionReader implementation
