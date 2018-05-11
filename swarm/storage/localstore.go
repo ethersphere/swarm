@@ -26,10 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
-var (
-	dbStorePutCounter = metrics.NewRegisteredCounter("storage.db.dbstore.put.count", nil)
-)
-
 type LocalStoreParams struct {
 	*StoreParams
 	ChunkDbPath string
@@ -122,7 +118,6 @@ func (self *LocalStore) Put(chunk Chunk) (func(ctx context.Context) error, error
 		return nil, err
 	}
 	self.memStore.Put(chunk)
-	dbStorePutCounter.Inc(1)
 	wait, err := self.DbStore.Put(chunk)
 	if err != nil {
 		return nil, err
@@ -143,13 +138,24 @@ func (self *LocalStore) Get(key Address) (chunk Chunk, err error) {
 
 func (self *LocalStore) get(key Address) (chunk Chunk, err error) {
 	chunk, err = self.memStore.Get(key)
+
 	if err != nil && err != ErrChunkNotFound {
+		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
 		return nil, err
 	}
+
+	if err == nil {
+		metrics.GetOrRegisterCounter("localstore.get.cachehit", nil).Inc(1)
+		return chunk, nil
+	}
+
+	metrics.GetOrRegisterCounter("localstore.get.cachemiss", nil).Inc(1)
 	chunk, err = self.DbStore.Get(key)
 	if err != nil {
+		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
 		return nil, err
 	}
+
 	self.memStore.Put(chunk)
 	return chunk, nil
 }

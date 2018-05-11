@@ -36,17 +36,24 @@ type blockEstimator struct {
 	Average time.Duration
 }
 
+// TODO: Average must  be adjusted when blockchain connection is present and synced
 func NewBlockEstimator() *blockEstimator {
-	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z")
+	sampleDate, _ := time.Parse(time.RFC3339, "2018-05-04T20:35:22Z")   // from etherscan.io
+	sampleBlock := int64(3169691)                                       // from etherscan.io
+	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z") // from etherscan.io
+	ns := sampleDate.Sub(ropstenStart).Nanoseconds()
+	period := int(ns / sampleBlock)
+	parsestring := fmt.Sprintf("%dns", int(float64(period)*1.0005)) // increase the blockcount a little, so we don't overshoot the read block height; if we do, we will never find the updates when getting synced data
+	periodNs, _ := time.ParseDuration(parsestring)
 	return &blockEstimator{
 		Start:   ropstenStart,
-		Average: 14467100 * time.Microsecond,
+		Average: periodNs,
 	}
 }
 
 func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
 	return &types.Header{
-		Number: big.NewInt(int64(time.Since(b.Start).Seconds() / b.Average.Seconds())),
+		Number: big.NewInt(time.Since(b.Start).Nanoseconds() / b.Average.Nanoseconds()),
 	}, nil
 }
 
@@ -71,7 +78,7 @@ func NewResourceError(code int, s string) error {
 		err: s,
 	}
 	switch code {
-	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced, ErrPeriodDepth:
+	case ErrNotFound, ErrIO, ErrUnauthorized, ErrInvalidValue, ErrDataOverflow, ErrNothingToReturn, ErrInvalidSignature, ErrNotSynced, ErrPeriodDepth, ErrCorruptData:
 		r.code = code
 	}
 	return r
@@ -613,15 +620,39 @@ func (self *ResourceHandler) parseUpdate(chunkdata []byte) (*Signature, uint32, 
 	headerlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
 	cursor += 2
 	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
-	exclsignlength := int(headerlength + datalength + 4)
-	if exclsignlength > len(chunkdata) || exclsignlength < 14 {
+	cursor += 2
+	var exclsignlength int
+	// we need extra magic if it's a multihash
+	// TODO: merge with isMultihash code
+	if datalength == 0 {
+		uvarintbuf := bytes.NewBuffer(chunkdata[headerlength+4:])
+		r, err := binary.ReadUvarint(uvarintbuf)
+		if err != nil {
+			errstr := fmt.Sprintf("corrupt multihash, hash id varint could not be read: %v", err)
+			log.Warn(errstr)
+			return nil, 0, 0, "", nil, false, NewResourceError(ErrCorruptData, errstr)
+
+		}
+		r, err = binary.ReadUvarint(uvarintbuf)
+		if err != nil {
+			errstr := fmt.Sprintf("corrupt multihash, hash length field could not be read: %v", err)
+			log.Warn(errstr)
+			return nil, 0, 0, "", nil, false, NewResourceError(ErrCorruptData, errstr)
+
+		}
+		exclsignlength = int(headerlength + uint16(r))
+	} else {
+		exclsignlength = int(headerlength + datalength + 4)
+	}
+	if exclsignlength > len(chunkdata) {
 		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, datalength, len(chunkdata)))
+	} else if exclsignlength < 14 {
+		return nil, 0, 0, "", nil, false, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d is smaller than minimum valid resource chunk length %d", headerlength, datalength, 14))
 	}
 	var period uint32
 	var version uint32
 	var name string
 	var data []byte
-	cursor += 2
 	period = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
 	cursor += 4
 	version = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
@@ -936,13 +967,13 @@ func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*Res
 	path := filepath.Join(datadir, DbDirName)
 	rh, err := NewResourceHandler(params)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("resource handler create fail: %v", err)
 	}
 	localstoreparams := NewDefaultLocalStoreParams()
 	localstoreparams.Init(path)
 	localStore, err := NewLocalStore(localstoreparams, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("localstore create fail, path %s: %v", path, err)
 	}
 	localStore.Validators = append(localStore.Validators, rh)
 	netStore, err := NewNetStore(localStore, nil)

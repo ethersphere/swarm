@@ -77,6 +77,8 @@ func (p *Peer) handleRequestSubscription(req *RequestSubscriptionMsg) (err error
 }
 
 func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
+	metrics.GetOrRegisterCounter("peer.handlesubscribemsg", nil).Inc(1)
+
 	defer func() {
 		if err != nil {
 			if e := p.Send(SubscribeErrorMsg{
@@ -112,7 +114,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 
 	go func() {
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
-			log.Warn("ERROR in SendOfferedHashes, DROPPING peer!", "err", err)
+			log.Warn("SendOfferedHashes dropping peer", "err", err)
 			p.Drop(err)
 		}
 	}()
@@ -130,7 +132,7 @@ func (p *Peer) handleSubscribeMsg(req *SubscribeMsg) (err error) {
 		}
 		go func() {
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
-				log.Warn("ERROR in SendOfferedHashes, DROPPING peer!", "err", err)
+				log.Warn("SendOfferedHashes dropping peer", "err", err)
 				p.Drop(err)
 			}
 		}()
@@ -245,12 +247,12 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	go func() {
 		select {
 		case <-time.After(120 * time.Second):
-			log.Warn("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", "TIMEOUT")
+			log.Warn("handleOfferedHashesMsg timeout, so dropping peer")
 			p.Drop(errors.New("handle offered hashes timeout"))
 			return
 		case err := <-c.next:
 			if err != nil {
-				log.Warn("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", err)
+				log.Warn("c.next dropping peer", "err", err)
 				p.Drop(err)
 				return
 			}
@@ -260,7 +262,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(msg, c.priority)
 		if err != nil {
-			log.Warn("ERROR in handleOfferedHashesMsg, DROPPING peer!", "err", err)
+			log.Warn("SendPriority err, so dropping peer", "err", err)
 			p.Drop(err)
 		}
 	}()
@@ -284,6 +286,8 @@ func (m WantedHashesMsg) String() string {
 // * sends the next batch of unsynced keys
 // * sends the actual data chunks as per WantedHashesMsg
 func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
+	metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg", nil).Inc(1)
+
 	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	s, err := p.getServer(req.Stream)
 	if err != nil {
@@ -293,18 +297,22 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
 		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
-			log.Warn("ERROR in handleWantedHashesMsg, DROPPING peer!", "err", err)
+			log.Warn("SendOfferedHashes dropping peer", "err", err)
 			p.Drop(err)
 		}
 	}()
 	// go p.SendOfferedHashes(s, req.From, req.To)
 	l := len(hashes) / HashSize
+
+	log.Trace("wanted batch length", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "lenhashes", len(hashes), "l", l)
 	want, err := bv.NewFromBytes(req.Want, l)
 	if err != nil {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", l, err)
 	}
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
+			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
+
 			hash := hashes[i*HashSize : (i+1)*HashSize]
 			data, err := s.GetData(hash)
 			if err != nil {

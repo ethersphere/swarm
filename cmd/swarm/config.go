@@ -98,8 +98,6 @@ var tomlSettings = toml.Config{
 
 //before booting the swarm node, build the configuration
 func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
-	//check for deprecated flags
-	checkDeprecated(ctx)
 	//start by creating a default config
 	config = bzzapi.NewConfig()
 	//first load settings from config file (if provided)
@@ -219,10 +217,6 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.EnsAPIs = ensAPIs
 	}
 
-	if ensaddr := ctx.GlobalString(DeprecatedEnsAddrFlag.Name); ensaddr != "" {
-		currentConfig.EnsRoot = common.HexToAddress(ensaddr)
-	}
-
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
 		currentConfig.Cors = cors
 	}
@@ -338,18 +332,6 @@ func dumpConfig(ctx *cli.Context) error {
 	io.WriteString(os.Stdout, comment)
 	os.Stdout.Write(out)
 	return nil
-}
-
-//deprecated flags checked here
-func checkDeprecated(ctx *cli.Context) {
-	// exit if the deprecated --ethapi flag is set
-	if ctx.GlobalString(DeprecatedEthAPIFlag.Name) != "" {
-		utils.Fatalf("--ethapi is no longer a valid command line flag, please use --ens-api and/or --swap-api.")
-	}
-	// warn if --ens-api flag is set
-	if ctx.GlobalString(DeprecatedEnsAddrFlag.Name) != "" {
-		log.Warn("--ens-addr is no longer a valid command line flag, please use --ens-api to specify contract address.")
-	}
 }
 
 //validate configuration parameters

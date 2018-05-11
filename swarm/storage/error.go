@@ -12,6 +12,7 @@ const (
 	ErrInvalidValue
 	ErrDataOverflow
 	ErrNothingToReturn
+	ErrCorruptData
 	ErrInvalidSignature
 	ErrNotSynced
 	ErrPeriodDepth

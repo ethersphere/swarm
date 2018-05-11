@@ -232,6 +232,8 @@ func TestResourceHandler(t *testing.T) {
 		Signer:    nil,
 		EthClient: rh.ethClient,
 	}
+
+	rh.dpa.Close()
 	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -448,6 +450,7 @@ func TestResourceMultihash(t *testing.T) {
 		EnsClient: rh.ensClient,
 	}
 	// test with signed data
+	rh.dpa.Close()
 	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -579,7 +582,7 @@ func setupTest(backend headerGetter, ensBackend *ens.ENS, signer ResourceSigner)
 		EnsClient: ensBackend,
 	}
 	rh, err = NewTestResourceHandler(datadir, rhparams)
-	return rh, datadir, cleanF, nil
+	return rh, datadir, cleanF, err
 }
 
 // Set up simulated ENS backend for use with ENSResourceHandler tests
