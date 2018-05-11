@@ -130,5 +130,4 @@ func testProtocol(t *testing.T) {
 	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
-
 }

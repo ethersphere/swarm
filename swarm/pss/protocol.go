@@ -233,6 +233,18 @@ func (self *Protocol) AddPeer(p *p2p.Peer, topic Topic, asymmetric bool, key str
 	return rw, nil
 }
 
+func (self *Protocol) RemovePeer(topic Topic, asymmetric bool, key string) {
+	if asymmetric {
+		self.pubKeyPoolMu.Lock()
+		delete(self.Pss.pubKeyPool, key)
+		self.pubKeyPoolMu.Unlock()
+	} else {
+		self.symKeyPoolMu.Lock()
+		delete(self.Pss.symKeyPool, key)
+		self.symKeyPoolMu.Unlock()
+	}
+}
+
 // Uniform translation of protocol specifiers to topic
 func ProtocolTopic(spec *protocols.Spec) Topic {
 	return BytesToTopic([]byte(fmt.Sprintf("%s:%d", spec.Name, spec.Version)))
