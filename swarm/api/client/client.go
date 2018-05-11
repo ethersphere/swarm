@@ -307,9 +307,7 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 		return err
 	}
 
-	var mode os.FileMode = 0644
-
-	dst, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	dst, err := os.Create(filename)
 	if err != nil {
 		return err
 	}
