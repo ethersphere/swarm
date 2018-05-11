@@ -27,12 +27,11 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 )
 
-// const testDataSize = 0x1000000
-const testDataSize = 0x100
+const testDataSize = 0x1000000
 
 func TestDPArandom(t *testing.T) {
 	testDpaRandom(false, t)
-	// testDpaRandom(true, t)
+	testDpaRandom(true, t)
 }
 
 func testDpaRandom(toEncrypt bool, t *testing.T) {
