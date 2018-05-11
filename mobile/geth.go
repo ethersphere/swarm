@@ -150,6 +150,10 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 		Version:     params.Version,
 		DataDir:     datadir,
 		KeyStoreDir: filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
+		WSHost:      "localhost",
+		WSPort:      8546,
+		WSOrigins:   []string{"*"},
+		WSModules:   []string{"pss"},
 		P2P: p2p.Config{
 			NoDiscovery:      true,
 			DiscoveryV5:      true,
