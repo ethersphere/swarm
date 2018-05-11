@@ -44,7 +44,9 @@ type Overlay interface {
 	On(OverlayConn) (depth uint8, changed bool)
 	Off(OverlayConn)
 	// register peer addresses
-	Register([]OverlayAddr) error // used by the
+	Register([]OverlayAddr) error
+	// unregister peer address
+	Unregister(OverlayPeer)
 	// iterate over connected peers
 	EachConn([]byte, int, func(OverlayConn, int, bool) bool)
 	// iterate over known peers (address records)
@@ -230,10 +232,6 @@ func (h *Hive) loadPeers() error {
 	}
 	log.Info(fmt.Sprintf("hive %08x: peers loaded", h.BaseAddr()[:4]))
 
-	for _, aas := range as {
-		log.Info("about to load peer", "peer", aas)
-	}
-
 	return h.Register(toOverlayAddrs(as...))
 }
 
@@ -247,16 +245,15 @@ func toOverlayAddrs(as ...*BzzAddr) (oas []OverlayAddr) {
 
 // savePeers, savePeer implement persistence callback/
 func (h *Hive) savePeers() error {
-	log.Info("saving peers")
 	var peers []*BzzAddr
 	h.Overlay.EachAddr(nil, 256, func(pa OverlayAddr, i int, _ bool) bool {
 		if pa == nil {
 			log.Warn(fmt.Sprintf("empty addr: %v", i))
 			return true
 		}
-		ppp := ToAddr(pa)
-		log.Info("saving peer", "peer", ppp)
-		peers = append(peers, ppp)
+		apa := ToAddr(pa)
+		log.Trace("saving peer", "peer", apa)
+		peers = append(peers, apa)
 		return true
 	})
 	if err := h.Store.Put("peers", peers); err != nil {

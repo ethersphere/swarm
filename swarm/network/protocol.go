@@ -34,8 +34,7 @@ import (
 )
 
 const (
-	// NetworkID swarm network id
-	//NetworkID = 322 // BZZ in l33t
+	DefaultNetworkID = 3
 	// ProtocolMaxMsgSize maximum allowed message size
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
 	// timeout for waiting
@@ -245,6 +244,7 @@ func (b *Bzz) runBzz(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	err := b.performHandshake(peer, handshake)
 	if err != nil {
 		log.Warn(fmt.Sprintf("%08x: handshake failed with remote peer %08x: %v", b.localAddr.Over()[:4], ToOverlayAddr(p.ID().Bytes())[:4], err))
+		b.Hive.Unregister(p.ID())
 		return err
 	}
 	// fail if we get another handshake
@@ -311,7 +311,6 @@ func (bh *HandshakeMsg) String() string {
 // Perform initiates the handshake and validates the remote handshake message
 func (b *Bzz) checkHandshake(hs interface{}) error {
 	rhs := hs.(*HandshakeMsg)
-	log.Info("network ids", "rhs.networkid", rhs.NetworkID, "NetworkID", b.NetworkID)
 	if rhs.NetworkID != b.NetworkID {
 		return fmt.Errorf("network id mismatch %d (!= %d)", rhs.NetworkID, b.NetworkID)
 	}

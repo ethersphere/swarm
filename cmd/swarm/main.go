@@ -28,7 +28,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -430,8 +429,6 @@ func bzzd(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
 	}
-
-	log.Info("bzzconfig after buildConfig", spew.Sdump(bzzconfig))
 
 	cfg := defaultNodeConfig
 

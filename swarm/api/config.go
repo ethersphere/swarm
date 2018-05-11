@@ -86,7 +86,7 @@ func NewConfig() (self *Config) {
 		Path:              node.DefaultDataDir(),
 		EnsAPIs:           nil,
 		EnsRoot:           ens.TestNetAddress,
-		NetworkId:         3,
+		NetworkId:         network.DefaultNetworkID,
 		SwapEnabled:       false,
 		SyncEnabled:       true,
 		DeliverySkipCheck: false,

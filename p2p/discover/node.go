@@ -230,6 +230,10 @@ func (n NodeID) Bytes() []byte {
 	return n[:]
 }
 
+func (n NodeID) Address() []byte {
+	return n[:]
+}
+
 // NodeID prints as a long hexadecimal number.
 func (n NodeID) String() string {
 	return fmt.Sprintf("%x", n[:])
