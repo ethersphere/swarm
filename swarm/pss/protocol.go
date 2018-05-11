@@ -244,7 +244,7 @@ func (self *Protocol) AddPeer(p *p2p.Peer, topic Topic, asymmetric bool, key str
 }
 
 func (self *Protocol) RemovePeer(asymmetric bool, key string) {
-	log.Warn("closing peer", "key", key)
+	log.Debug("closing pss peer", "asym", asymmetric, "key", key)
 	self.RWPoolMu.Lock()
 	defer self.RWPoolMu.Unlock()
 	if asymmetric {
