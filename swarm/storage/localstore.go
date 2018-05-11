@@ -121,6 +121,7 @@ func (self *LocalStore) Put(chunk Chunk) (func(ctx context.Context) error, error
 	if err != nil && err != ErrChunkNotFound {
 		return nil, err
 	}
+	self.memStore.Put(chunk)
 	dbStorePutCounter.Inc(1)
 	wait, err := self.DbStore.Put(chunk)
 	if err != nil {
