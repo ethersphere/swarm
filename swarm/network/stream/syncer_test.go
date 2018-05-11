@@ -23,7 +23,6 @@ import (
 	"io"
 	"io/ioutil"
 	"math"
-	//"os"
 	"sync"
 	"testing"
 	"time"

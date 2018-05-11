@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/db"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -53,7 +54,7 @@ var (
 	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
 	nodes        = flag.Int("nodes", 0, "number of nodes")
 	chunks       = flag.Int("chunks", 0, "number of chunks")
-	useMockStore = flag.Bool("mockStore", false, "disabled mock store (default: enabled)")
+	useMockStore = flag.Bool("mockstore", false, "disabled mock store (default: enabled)")
 )
 
 var (
@@ -64,7 +65,7 @@ var (
 	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
 	getRetrieveFunc   = defaultRetrieveFunc
 	subscriptionCount = 0
-	globalStore       *db.GlobalStore
+	globalStore       mock.GlobalStorer
 	globalStoreDir    string
 )
 
