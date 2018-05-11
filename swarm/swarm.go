@@ -139,6 +139,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 
 	bzzconfig := &network.BzzConfig{
+		NetworkID:    config.NetworkId,
 		OverlayAddr:  addr.OAddr,
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,

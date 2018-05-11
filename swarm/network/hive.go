@@ -230,6 +230,10 @@ func (h *Hive) loadPeers() error {
 	}
 	log.Info(fmt.Sprintf("hive %08x: peers loaded", h.BaseAddr()[:4]))
 
+	for _, aas := range as {
+		log.Info("about to load peer", "peer", aas)
+	}
+
 	return h.Register(toOverlayAddrs(as...))
 }
 
@@ -243,13 +247,16 @@ func toOverlayAddrs(as ...*BzzAddr) (oas []OverlayAddr) {
 
 // savePeers, savePeer implement persistence callback/
 func (h *Hive) savePeers() error {
+	log.Info("saving peers")
 	var peers []*BzzAddr
 	h.Overlay.EachAddr(nil, 256, func(pa OverlayAddr, i int, _ bool) bool {
 		if pa == nil {
 			log.Warn(fmt.Sprintf("empty addr: %v", i))
 			return true
 		}
-		peers = append(peers, ToAddr(pa))
+		ppp := ToAddr(pa)
+		log.Info("saving peer", "peer", ppp)
+		peers = append(peers, ppp)
 		return true
 	})
 	if err := h.Store.Put("peers", peers); err != nil {
