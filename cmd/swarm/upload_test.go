@@ -150,7 +150,7 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 		case mode.IsRegular():
 			downloadedBytes, err := ioutil.ReadFile(tmpDownload)
 			if err != nil {
-				t.Fatalf("had an error opening the downloaded file for read: %v", err)
+				t.Fatalf("had an error reading the downloaded file: %v", err)
 			}
 			if !bytes.Equal(downloadedBytes, bytes.NewBufferString(data).Bytes()) {
 				t.Fatalf("retrieved data and posted data not equal!")
@@ -230,7 +230,6 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 			t.Fatal(err)
 		}
 		defer os.RemoveAll(tmpDownload)
-
 		bzzLocator := "bzz:/" + hash
 		flagss := []string{}
 		flagss = []string{

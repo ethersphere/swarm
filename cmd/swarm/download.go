@@ -18,6 +18,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -30,7 +31,7 @@ import (
 func download(ctx *cli.Context) {
 	log.Debug("downloading content using swarm down")
 	args := ctx.Args()
-	dir := "."
+	dest := "."
 
 	switch len(args) {
 	case 0:
@@ -39,7 +40,11 @@ func download(ctx *cli.Context) {
 		log.Trace(fmt.Sprintf("swarm down: no destination path - assuming working dir"))
 	default:
 		log.Trace(fmt.Sprintf("destination path arg: %s", args[1]))
-		dir = args[1]
+		if absDest, err := filepath.Abs(args[1]); err == nil {
+			dest = absDest
+		} else {
+			utils.Fatalf("could not get download path: %v", err)
+		}
 	}
 
 	var (
@@ -48,7 +53,7 @@ func download(ctx *cli.Context) {
 		client      = swarm.NewClient(bzzapi)
 	)
 
-	if fi, err := os.Stat(dir); err == nil {
+	if fi, err := os.Stat(dest); err == nil {
 		if isRecursive && !fi.Mode().IsDir() {
 			utils.Fatalf("destination path is not a directory!")
 		}
@@ -65,14 +70,14 @@ func download(ctx *cli.Context) {
 
 	// assume behaviour according to --recursive switch
 	if isRecursive {
-		if err := client.DownloadDirectory(uri.Addr, uri.Path, dir); err != nil {
+		if err := client.DownloadDirectory(uri.Addr, uri.Path, dest); err != nil {
 			utils.Fatalf("encoutered an error while downloading directory: %v", err)
 		}
 	} else {
 		// we are downloading a file
 		log.Debug(fmt.Sprintf("downloading file/path from a manifest. hash: %s, path:%s", uri.Addr, uri.Path))
 
-		err := client.DownloadFile(uri.Addr, uri.Path, dir)
+		err := client.DownloadFile(uri.Addr, uri.Path, dest)
 		if err != nil {
 			utils.Fatalf("could not download %s from given address: %s. error: %v", uri.Path, uri.Addr, err)
 		}

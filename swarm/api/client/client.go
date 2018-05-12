@@ -297,6 +297,7 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 				filename = hash
 			}
 		}
+		filename = filepath.Join(dest, filename)
 	}
 	filePath, err := filepath.Abs(filename)
 	if err != nil {
