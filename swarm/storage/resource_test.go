@@ -34,6 +34,7 @@ var (
 	cleanF            func()
 	domainName        = "føø.bar"
 	safeName          string
+	nameHash          common.Hash
 )
 
 func init() {
@@ -44,6 +45,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	nameHash = ens.EnsNode(safeName)
 }
 
 // simulated backend does not have the blocknumber call
@@ -156,14 +158,13 @@ func TestResourceHandler(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	rootChunkKey, _, err := rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// check that the new resource is stored correctly
-	namehash := ens.EnsNode(safeName)
-	chunk, err := rh.chunkStore.localStore.memStore.Get(Key(namehash[:]))
+	chunk, err := rh.chunkStore.localStore.memStore.Get(rootChunkKey)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
@@ -238,44 +239,45 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = rh2.LookupLatestByName(ctx, safeName, true, nil)
+	_, err = rh2.LookupLatest(ctx, rootChunkKey, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// last update should be "clyde", version two, blockheight startblocknumber + (resourcefrequency * 3)
-	if !bytes.Equal(rh2.resources[safeName].data, []byte(updates[len(updates)-1])) {
-		t.Fatalf("resource data was %v, expected %v", rh2.resources[safeName].data, updates[len(updates)-1])
+	rsrc2 := rh2.getResource(nameHash.Hex())
+	if !bytes.Equal(rsrc2.data, []byte(updates[len(updates)-1])) {
+		t.Fatalf("resource data was %v, expected %v", rsrc2.data, updates[len(updates)-1])
 	}
-	if rh2.resources[safeName].version != 2 {
-		t.Fatalf("resource version was %d, expected 2", rh2.resources[safeName].version)
+	if rsrc2.version != 2 {
+		t.Fatalf("resource version was %d, expected 2", rsrc2.version)
 	}
-	if rh2.resources[safeName].lastPeriod != 3 {
-		t.Fatalf("resource period was %d, expected 3", rh2.resources[safeName].lastPeriod)
+	if rsrc2.lastPeriod != 3 {
+		t.Fatalf("resource period was %d, expected 3", rsrc2.lastPeriod)
 	}
-	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
+	log.Debug("Latest lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true, rh2.queryMaxPeriods)
+	rsrc, err := rh2.LookupHistorical(ctx, rootChunkKey, 3, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// check data
 	if !bytes.Equal(rsrc.data, []byte(updates[len(updates)-1])) {
-		t.Fatalf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, updates[len(updates)-1])
+		t.Fatalf("resource data (historical) was %v, expected %v", rsrc2.data, updates[len(updates)-1])
 	}
-	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
+	log.Debug("Historical lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true, rh2.queryMaxPeriods)
+	rsrc, err = rh2.LookupVersion(ctx, rootChunkKey, 3, 1, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// check data
 	if !bytes.Equal(rsrc.data, []byte(updates[2])) {
-		t.Fatalf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, updates[2])
+		t.Fatalf("resource data (historical) was %v, expected %v", rsrc2.data, updates[2])
 	}
-	log.Debug("Specific version lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
+	log.Debug("Specific version lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// we are now at third update
 	// check backwards stepping to the first
@@ -285,7 +287,7 @@ func TestResourceHandler(t *testing.T) {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(rsrc.data, []byte(updates[i])) {
-			t.Fatalf("resource data (previous) was %v, expected %v", rh2.resources[domainName].data, updates[i])
+			t.Fatalf("resource data (previous) was %v, expected %v", rsrc2.data, updates[i])
 
 		}
 	}
@@ -293,7 +295,7 @@ func TestResourceHandler(t *testing.T) {
 	// beyond the first should yield an error
 	rsrc, err = rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
 	if err == nil {
-		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rh2.resources[domainName].lastPeriod, rh2.resources[domainName].version, rh2.resources[domainName].data)
+		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rsrc2.lastPeriod, rsrc2.version, rsrc2.data)
 	}
 
 }
@@ -333,7 +335,7 @@ func TestResourceENSOwner(t *testing.T) {
 	// create new resource when we are owner = ok
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
@@ -380,7 +382,7 @@ func TestResourceMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +457,7 @@ func TestResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = rh2.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh2.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -525,13 +527,13 @@ func TestResourceChunkValidator(t *testing.T) {
 	// create new resource when we are owner = ok
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rsrc, err := rh.NewResource(ctx, safeName, resourceFrequency)
+	key, rsrc, err := rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
 
 	data := []byte("foo")
-	key := rh.resourceHash(1, 1, rsrc.nameHash)
+	key = rh.resourceHash(1, 1, rsrc.nameHash)
 	digest := rh.keyDataHash(key, data)
 	sig, err := rh.signer.Sign(digest)
 	if err != nil {
