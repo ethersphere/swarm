@@ -390,7 +390,9 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
-
+	var err error
+	var key storage.Key
+	var name string
 	var outdata []byte
 	isRaw, frequency, err := resourcePostMode(r.uri.Path)
 	if err != nil {
@@ -398,30 +400,46 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		return
 	}
 	if frequency > 0 {
-		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
+		name = r.uri.Addr
+		key, err = s.api.ResourceCreate(r.Context(), name, frequency)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
 
 			Respond(w, r, err2.Error(), code)
 			return
 		}
-		m, err := s.api.NewResourceManifest(r.uri.Addr)
+		m, err := s.api.NewResourceManifest(key.Hex())
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return
 		}
-		rsrcResponse := &resourceResponse{
-			Manifest: m,
-			Resource: r.uri.Addr,
-			Update:   key,
-		}
-		outdata, err = json.Marshal(rsrcResponse)
+		//		rsrcResponse := &resourceResponse{
+		//			Manifest: m,
+		//			Resource: r.uri.Addr,
+		//			Update:   key,
+		//		}
+		//e := NewManifestWalker(key)
+		outdata, err = json.Marshal(m) //rsrcResponse)
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
 			return
 		}
 	} else {
-		_, _, err := s.api.ResourceLookup(r.Context(), r.uri.Addr, 0, 0, &storage.ResourceLookupParams{})
+		key = r.uri.Key()
+		if key == nil {
+			key, err = s.api.Resolve(r.uri)
+			if err != nil {
+				getFail.Inc(1)
+				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
+				return
+			}
+		} else {
+			w.Header().Set("Cache-Control", "max-age=2147483648")
+		}
+
+		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "key", key)
+
+		name, _, err = s.api.ResourceLookup(r.Context(), key, 0, 0, &storage.ResourceLookupParams{})
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -433,8 +451,9 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
 	if isRaw {
-		_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
+		_, _, _, err = s.api.ResourceUpdate(r.Context(), name, data)
 	} else {
 		bytesdata, err := hexutil.Decode(string(data))
 		if err != nil {
@@ -466,26 +485,41 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 // bzz-resource://<id>/<n>/<m> - get update version m of period n
 // <id> = ens name or hash
 func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
-	s.handleGetResource(w, r, r.uri.Addr)
+	s.handleGetResource(w, r)
 }
 
 // TODO: Enable pass maxPeriod parameter
-func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name string) {
+func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.resource", "ruid", r.ruid)
+	var err error
+	var key storage.Key
+	key = r.uri.Key()
+	if key == nil {
+		key, err = s.api.Resolve(r.uri)
+		if err != nil {
+			getFail.Inc(1)
+			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
+			return
+		}
+	} else {
+		w.Header().Set("Cache-Control", "max-age=2147483648")
+	}
+
+	log.Debug("handle.get.resource: resolved", "ruid", r.ruid, "key", key)
+
 	var params []string
 	if len(r.uri.Path) > 0 {
 		params = strings.Split(r.uri.Path, "/")
 	}
-	var updateKey storage.Key
+	var name string
 	var period uint64
 	var version uint64
 	var data []byte
-	var err error
 	now := time.Now()
 	log.Debug("handlegetdb", "name", name, "ruid", r.ruid)
 	switch len(params) {
 	case 0:
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, 0, 0, nil)
+		name, data, err = s.api.ResourceLookup(r.Context(), key, 0, 0, nil)
 	case 2:
 		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
@@ -495,24 +529,23 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version), nil)
+		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
 	case 1:
 		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version), nil)
+		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
 	default:
 		Respond(w, r, "invalid mutable resource request", http.StatusBadRequest)
 		return
 	}
 	if err != nil {
 		code, err2 := s.translateResourceError(w, r, "mutable resource lookup fail", err)
-
 		Respond(w, r, err2.Error(), code)
 		return
 	}
-	log.Debug("Found update", "key", updateKey, "ruid", r.ruid)
+	log.Debug("Found update", "name", name, "ruid", r.ruid)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, &r.Request, "", now, bytes.NewReader(data))
 }
@@ -861,11 +894,11 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	if err != nil {
 		// cheeky, cheeky hack. See swarm/api/api.go:Api.Get() for an explanation
-		if rsrcErr, ok := err.(*api.ErrResourceReturn); ok {
-			log.Trace("getting resource proxy", "err", rsrcErr.Key())
-			s.handleGetResource(w, r, rsrcErr.Key())
-			return
-		}
+		//		if rsrcErr, ok := err.(*api.ErrResourceReturn); ok {
+		//			log.Trace("getting resource proxy", "err", rsrcErr.Key())
+		//			s.handleGetResource(w, r)
+		//			return
+		//		}
 		switch status {
 		case http.StatusNotFound:
 			getFileNotFound.Inc(1)

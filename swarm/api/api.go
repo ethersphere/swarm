@@ -310,7 +310,8 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.LazyChunkReader, mimeType string, status int, contentKey storage.Key, err error) {
+//func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.LazyChunkReader, mimeType string, status int, contentKey storage.Key, err error) {
+func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, contentKey storage.Key, err error) {
 	log.Debug("api.get", "key", manifestKey, "path", path)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(self.dpa, manifestKey, nil)
@@ -342,15 +343,21 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.Lazy
 			log.Trace("resource type", "key", manifestKey, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
+			rsrc, err := self.resource.LoadResource(storage.Key(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
 				log.Debug(fmt.Sprintf("get resource content error: %v", err))
 				return reader, mimeType, status, nil, err
-
 			}
-			_, rsrcData, err := self.resource.GetContent(entry.Hash)
+			rsrc, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, &storage.ResourceLookupParams{})
+			if err != nil {
+				apiGetNotFound.Inc(1)
+				status = http.StatusNotFound
+				log.Debug(fmt.Sprintf("get resource content error: %v", err))
+				return reader, mimeType, status, nil, err
+			}
+			contentKey, rsrcData, err := self.resource.GetContent(rsrc.NameHash().Hex())
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -398,7 +405,10 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.Lazy
 				}
 
 			} else {
-				return nil, entry.ContentType, http.StatusOK, nil, &ErrResourceReturn{entry.Hash}
+				log.Warn("retuning", "entryhash", entry.Hash, "contentkey", contentKey)
+				//return nil, entry.ContentType, http.StatusOK, nil, &ErrResourceReturn{entry.Hash}
+				return rsrc, "application/octet-stream", http.StatusOK, nil, nil
+				//reader = rsrc
 			}
 		}
 
@@ -648,31 +658,34 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (storage.Key, []byte, error) {
+func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (string, []byte, error) {
 	var err error
+	rsrc, err := self.resource.LoadResource(key)
+	if err != nil {
+		return "", nil, err
+	}
 	if version != 0 {
 		if period == 0 {
-			return nil, nil, storage.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
+			return "", nil, storage.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
 		}
-		_, err = self.resource.LookupVersionByName(ctx, name, period, version, true, maxLookup)
+		_, err = self.resource.LookupVersion(ctx, rsrc.NameHash(), period, version, true, maxLookup)
 	} else if period != 0 {
-		_, err = self.resource.LookupHistoricalByName(ctx, name, period, true, maxLookup)
+		_, err = self.resource.LookupHistorical(ctx, rsrc.NameHash(), period, true, maxLookup)
 	} else {
-		_, err = self.resource.LookupLatestByName(ctx, name, true, maxLookup)
+		_, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, maxLookup)
 	}
 	if err != nil {
-		return nil, nil, err
+		return "", nil, err
 	}
-	return self.resource.GetContent(name)
+	return self.resource.GetContent(rsrc.NameHash().Hex())
 }
 
 func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {
-	rsrc, err := self.resource.NewResource(ctx, name, frequency)
+	key, _, err := self.resource.NewResource(ctx, name, frequency)
 	if err != nil {
 		return nil, err
 	}
-	h := rsrc.NameHash()
-	return storage.Key(h[:]), nil
+	return key, nil
 }
 
 func (self *Api) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {

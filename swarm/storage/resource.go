@@ -94,6 +94,7 @@ type ResourceLookupParams struct {
 // Encapsulates an specific resource update. When synced it contains the most recent
 // version of the resource update data.
 type resource struct {
+	*bytes.Reader
 	Multihash  bool
 	name       string
 	nameHash   common.Hash
@@ -113,6 +114,17 @@ func (self *resource) isSynced() bool {
 
 func (self *resource) NameHash() common.Hash {
 	return self.nameHash
+}
+
+func (self *resource) Size(chan bool) (int64, error) {
+	if !self.isSynced() {
+		return 0, NewResourceError(ErrNotSynced, "Not synced")
+	}
+	return int64(len(self.data)), nil
+}
+
+func (self *resource) Name() string {
+	return self.name
 }
 
 type headerGetter interface {
@@ -284,16 +296,16 @@ func (self *ResourceHandler) checkAccess(name string, address common.Address) (b
 }
 
 // get data from current resource
-func (self *ResourceHandler) GetContent(name string) (Key, []byte, error) {
-	rsrc := self.getResource(name)
+func (self *ResourceHandler) GetContent(nameHash string) (string, []byte, error) {
+	rsrc := self.getResource(nameHash)
 	if rsrc == nil || !rsrc.isSynced() {
-		return nil, nil, NewResourceError(ErrNotFound, "Resource does not exist or is not synced")
+		return "", nil, NewResourceError(ErrNotFound, fmt.Sprintf("Resource %s does not exist or is not synced", nameHash))
 	}
-	return rsrc.lastKey, rsrc.data, nil
+	return rsrc.name, rsrc.data, nil
 }
 
-func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
-	rsrc := self.getResource(name)
+func (self *ResourceHandler) GetLastPeriod(nameHash string) (uint32, error) {
+	rsrc := self.getResource(nameHash)
 
 	if rsrc == nil || !rsrc.isSynced() {
 		return 0, NewResourceError(ErrNotFound, "Resource does not exist or is not synced")
@@ -301,8 +313,8 @@ func (self *ResourceHandler) GetLastPeriod(name string) (uint32, error) {
 	return rsrc.lastPeriod, nil
 }
 
-func (self *ResourceHandler) GetVersion(name string) (uint32, error) {
-	rsrc := self.getResource(name)
+func (self *ResourceHandler) GetVersion(nameHash string) (uint32, error) {
+	rsrc := self.getResource(nameHash)
 	if rsrc == nil {
 		return 0, NewResourceError(ErrNotFound, "Resource does not exist")
 	} else if !rsrc.isSynced() {
@@ -382,19 +394,20 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	copy(chunk.SData, data)
 
 	self.chunkStore.Put(chunk)
-	select {
-	case <-chunk.dbStoredC:
-	}
+	//	select {
+	//	case <-chunk.dbStoredC:
+	//	}
 	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
 
 	rsrc := &resource{
+		Reader:     nil,
 		name:       name,
 		nameHash:   nameHash,
 		startBlock: currentblock,
 		frequency:  frequency,
 		updated:    time.Now(),
 	}
-	self.setResource(name, rsrc)
+	self.setResource(nameHash.Hex(), rsrc)
 
 	return key, rsrc, nil
 }
@@ -505,7 +518,6 @@ func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common
 // base code for public lookup methods
 func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
-	log.Warn("looking up resource", "rsrc", rsrc)
 	if self.chunkStore == nil {
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before performing lookups")
 	}
@@ -606,6 +618,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	rsrc.updated = time.Now()
 	rsrc.data = make([]byte, len(data))
 	rsrc.Multihash = multihash
+	rsrc.Reader = bytes.NewReader(rsrc.data)
 	copy(rsrc.data, data)
 	log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Key, "period", rsrc.lastPeriod, "version", rsrc.version)
 	self.setResource(rsrc.nameHash.Hex(), rsrc)
@@ -714,6 +727,9 @@ func (self *ResourceHandler) Update(ctx context.Context, name string, data []byt
 
 func (self *ResourceHandler) update(ctx context.Context, name string, data []byte, multihash bool) (Key, error) {
 
+	nameHash := ens.EnsNode(name)
+	nameHashHex := nameHash.Hex()
+
 	if len(data) == 0 {
 		return nil, NewResourceError(ErrInvalidValue, "I refuse to waste swarm space for updates with empty values, amigo (data length is 0)")
 	}
@@ -726,9 +742,9 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	}
 
 	// get the cached information
-	rsrc := self.getResource(name)
+	rsrc := self.getResource(nameHashHex)
 	if rsrc == nil {
-		return nil, NewResourceError(ErrNotFound, "Resource object not in index")
+		return nil, NewResourceError(ErrNotFound, fmt.Sprintf("Resource object '%s' not in index", name))
 	}
 	if !rsrc.isSynced() {
 		return nil, NewResourceError(ErrNotSynced, "Resource object not in sync")
@@ -753,7 +769,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	// if we already have an update for this block then increment version
 	// (resource object MUST be in sync for version to be correct)
 	var version uint32
-	if self.hasUpdate(name, nextperiod) {
+	if self.hasUpdate(nameHashHex, nextperiod) {
 		version = rsrc.version
 	}
 	version++
@@ -866,8 +882,8 @@ func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehas
 	return hasher.Sum(nil)
 }
 
-func (self *ResourceHandler) hasUpdate(name string, period uint32) bool {
-	return self.resources[name].lastPeriod == period
+func (self *ResourceHandler) hasUpdate(nameHash string, period uint32) bool {
+	return self.resources[nameHash].lastPeriod == period
 }
 
 func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Address, error) {
