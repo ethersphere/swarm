@@ -654,9 +654,9 @@ func (self *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 	psp, ok := self.symKeyPool[symkeyid][topic]
 	self.symKeyPoolMu.Unlock()
 	if !ok {
-		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic, symkeyid)
+		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic.String(), symkeyid)
 	} else if psp.address == nil {
-		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic, symkeyid)
+		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic.String(), symkeyid)
 	}
 	err = self.send(*psp.address, topic, msg, false, symkey)
 	return err
@@ -674,9 +674,9 @@ func (self *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	psp, ok := self.pubKeyPool[pubkeyid][topic]
 	self.pubKeyPoolMu.Unlock()
 	if !ok {
-		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic, pubkeyid)
+		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic.String(), pubkeyid)
 	} else if psp.address == nil {
-		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic, pubkeyid)
+		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic.String(), pubkeyid)
 	}
 	go func() {
 		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))
