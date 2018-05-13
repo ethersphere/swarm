@@ -407,14 +407,14 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 // root chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
 // update root data was retrieved externally, it typically doesn't)
-//func (self *ResourceHandler) LookupVersionByName(ctx context.Context, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-//	return self.LookupVersion(ctx, ens.EnsNode(name), period, version, refresh, maxLookup)
-//}
+func (self *ResourceHandler) LookupVersionByName(ctx context.Context, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+	return self.LookupVersion(ctx, ens.EnsNode(name), period, version, refresh, maxLookup)
+}
 
-func (self *ResourceHandler) LookupVersion(ctx context.Context, key Key, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-	rsrc, err := self.loadResource(key)
-	if err != nil {
-		return nil, err
+func (self *ResourceHandler) LookupVersion(ctx context.Context, nameHash common.Hash, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+	rsrc := self.getResource(nameHash.Hex())
+	if rsrc == nil {
+		return nil, NewResourceError(ErrNothingToReturn, "resource not loaded")
 	}
 	return self.lookup(rsrc, period, version, refresh, maxLookup)
 }
@@ -427,14 +427,14 @@ func (self *ResourceHandler) LookupVersion(ctx context.Context, key Key, period 
 // and returned.
 //
 // See also (*ResourceHandler).LookupVersion
-//func (self *ResourceHandler) LookupHistoricalByName(ctx context.Context, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-//	return self.LookupHistorical(ctx, ens.EnsNode(name), period, refresh, maxLookup)
-//}
+func (self *ResourceHandler) LookupHistoricalByName(ctx context.Context, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+	return self.LookupHistorical(ctx, ens.EnsNode(name), period, refresh, maxLookup)
+}
 
-func (self *ResourceHandler) LookupHistorical(ctx context.Context, key Key, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-	rsrc, err := self.loadResource(key)
-	if err != nil {
-		return nil, err
+func (self *ResourceHandler) LookupHistorical(ctx context.Context, nameHash common.Hash, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+	rsrc := self.getResource(nameHash.Hex())
+	if rsrc == nil {
+		return nil, NewResourceError(ErrNothingToReturn, "resource not loaded")
 	}
 	return self.lookup(rsrc, period, 0, refresh, maxLookup)
 }
@@ -449,16 +449,16 @@ func (self *ResourceHandler) LookupHistorical(ctx context.Context, key Key, peri
 // Version iteration is done as in (*ResourceHandler).LookupHistorical
 //
 // See also (*ResourceHandler).LookupHistorical
-//func (self *ResourceHandler) LookupLatestByName(ctx context.Context, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
-//	return self.LookupLatest(ctx, ens.EnsNode(name), refresh, maxLookup)
-//}
+func (self *ResourceHandler) LookupLatestByName(ctx context.Context, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+	return self.LookupLatest(ctx, ens.EnsNode(name), refresh, maxLookup)
+}
 
-func (self *ResourceHandler) LookupLatest(ctx context.Context, key Key, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.Hash, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
 	// get our blockheight at this time and the next block of the update period
-	rsrc, err := self.loadResource(key)
-	if err != nil {
-		log.Warn("fail", "err", err)
+	rsrc := self.getResource(nameHash.Hex())
+	if rsrc == nil {
+		return nil, NewResourceError(ErrNothingToReturn, "resource not loaded")
 	}
 	currentblock, err := self.getBlock(ctx, rsrc.name)
 	if err != nil {
@@ -483,6 +483,9 @@ func (self *ResourceHandler) LookupPreviousByName(ctx context.Context, name stri
 
 func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common.Hash, maxLookup *ResourceLookupParams) (*resource, error) {
 	rsrc := self.getResource(nameHash.Hex())
+	if rsrc == nil {
+		return nil, NewResourceError(ErrNothingToReturn, "resource not loaded")
+	}
 	if !rsrc.isSynced() {
 		return nil, NewResourceError(ErrNotSynced, "LookupPrevious requires synced resource.")
 	} else if rsrc.lastPeriod == 0 {
@@ -556,7 +559,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 	return nil, NewResourceError(ErrNotFound, "no updates found")
 }
 
-func (self *ResourceHandler) loadResource(key Key) (*resource, error) {
+func (self *ResourceHandler) LoadResource(key Key) (*resource, error) {
 	chunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
 	if err != nil {
 		return nil, err

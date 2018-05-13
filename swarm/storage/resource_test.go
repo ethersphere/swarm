@@ -239,13 +239,13 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = rh2.LookupLatest(ctx, rootChunkKey, true, nil)
+	rsrc2, err := rh2.LoadResource(rootChunkKey)
+	_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// last update should be "clyde", version two, blockheight startblocknumber + (resourcefrequency * 3)
-	rsrc2 := rh2.getResource(nameHash.Hex())
 	if !bytes.Equal(rsrc2.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("resource data was %v, expected %v", rsrc2.data, updates[len(updates)-1])
 	}
@@ -258,7 +258,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistorical(ctx, rootChunkKey, 3, true, rh2.queryMaxPeriods)
+	rsrc, err := rh2.LookupHistorical(ctx, nameHash, 3, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +269,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersion(ctx, rootChunkKey, 3, 1, true, rh2.queryMaxPeriods)
+	rsrc, err = rh2.LookupVersion(ctx, nameHash, 3, 1, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
