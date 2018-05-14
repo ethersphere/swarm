@@ -450,7 +450,7 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address 
 }
 
 // Automatically generate a new symkey for a topic and address hint
-func (self *Pss) generateSymmetricKey(topic Topic, address *PssAddress, addToCache bool) (string, error) {
+func (self *Pss) GenerateSymmetricKey(topic Topic, address *PssAddress, addToCache bool) (string, error) {
 	keyid, err := self.w.GenerateSymKey()
 	if err != nil {
 		return "", err
