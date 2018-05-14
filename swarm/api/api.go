@@ -310,7 +310,6 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-//func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.LazyChunkReader, mimeType string, status int, contentKey storage.Key, err error) {
 func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, contentKey storage.Key, err error) {
 	log.Debug("api.get", "key", manifestKey, "path", path)
 	apiGetCount.Inc(1)
@@ -327,19 +326,10 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 
 	if entry != nil {
 		log.Debug("trie got entry", "key", manifestKey, "path", path, "entry.Hash", entry.Hash)
-		// we want to be able to serve Mutable Resource Updates transparently using the bzz:// scheme
-		//
-		// we use a special manifest hack for this purpose, which is pathless and where the resource root key
-		// is set as the hash of the manifest (see swarm/api/manifest.go:NewResourceManifest)
-		//
-		// to avoid taking a performance hit hacking a storage.LazySectionReader to wrap the resource key,
-		// if the resource update is of raw type:
-		// we return a typed error instead. Since for all other purposes this is an invalid manifest,
-		// any normal interfacing code will just see an error fail accordingly.
-		//
-		// if the resource update is of multihash type:
-		// we validate the multihash and retrieve the manifest behind it, and resume normal operations from there
+		// we need to do some extra work if this is a mutable resource manifest
 		if entry.ContentType == ResourceContentType {
+
+			// get the resource root chunk key
 			log.Trace("resource type", "key", manifestKey, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
@@ -350,6 +340,8 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 				log.Debug(fmt.Sprintf("get resource content error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
+
+			// use this key to retrieve the latest update
 			rsrc, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, &storage.ResourceLookupParams{})
 			if err != nil {
 				apiGetNotFound.Inc(1)
@@ -357,16 +349,21 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 				log.Debug(fmt.Sprintf("get resource content error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
-			contentKey, rsrcData, err := self.resource.GetContent(rsrc.NameHash().Hex())
-			if err != nil {
-				apiGetNotFound.Inc(1)
-				status = http.StatusNotFound
-				log.Warn(fmt.Sprintf("get resource content error: %v", err))
-				return reader, mimeType, status, nil, err
-			}
+
+			// if it's multihash, we will transparently serve the content this multihash points to
+			// \TODO this resolve is rather expensive all in all, review to see if it can be achieved cheaper
 			if rsrc.Multihash {
 
-				// validate data as multihash
+				// get the data of the update
+				_, rsrcData, err := self.resource.GetContent(rsrc.NameHash().Hex())
+				if err != nil {
+					apiGetNotFound.Inc(1)
+					status = http.StatusNotFound
+					log.Warn(fmt.Sprintf("get resource content error: %v", err))
+					return reader, mimeType, status, nil, err
+				}
+
+				// validate that data as multihash
 				decodedMultihash, err := multihash.Decode(rsrcData)
 				if err != nil {
 					apiGetInvalid.Inc(1)
@@ -391,11 +388,9 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 					return reader, mimeType, status, nil, err
 				}
 
-				log.Trace("trie getting resource multihash entry", "key", manifestKey, "path", path)
-				var fullpath string
-				entry, fullpath = trie.getEntry(path)
-				log.Trace("trie got resource multihash entry", "key", manifestKey, "path", path, "entry", entry, "fullpath", fullpath)
-
+				// finally, get the manifest entry
+				// it will always be the entry on path ""
+				entry, _ = trie.getEntry(path)
 				if entry == nil {
 					status = http.StatusNotFound
 					apiGetNotFound.Inc(1)
@@ -405,13 +400,13 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 				}
 
 			} else {
-				log.Warn("retuning", "entryhash", entry.Hash, "contentkey", contentKey)
-				//return nil, entry.ContentType, http.StatusOK, nil, &ErrResourceReturn{entry.Hash}
+				// data is returned verbatim since it's not a multihash
 				return rsrc, "application/octet-stream", http.StatusOK, nil, nil
-				//reader = rsrc
 			}
 		}
 
+		// regardless of resource update manifests or normal manifests we will converge at this point
+		// get the key the mamifest entry points to and serve it if it's unambiguous
 		contentKey = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
@@ -423,6 +418,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 			reader, _ = self.dpa.Retrieve(contentKey)
 		}
 	} else {
+		// no entry found
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
@@ -714,4 +710,18 @@ func (self *Api) ResourceHashSize() int {
 
 func (self *Api) ResourceIsValidated() bool {
 	return self.resource.IsValidated()
+}
+
+func (self *Api) ResolveResourceManifest(key storage.Key) (storage.Key, error) {
+	trie, err := loadManifest(self.dpa, key, nil)
+	if err != nil {
+		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
+	}
+
+	entry, _ := trie.getEntry("")
+	if entry.ContentType != ResourceContentType {
+		return nil, fmt.Errorf("not a resource manifest: %s", key)
+	}
+
+	return storage.Key(common.FromHex(entry.Hash)), nil
 }

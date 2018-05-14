@@ -175,8 +175,8 @@ func TestBzzResourceMultihash(t *testing.T) {
 	}
 }
 
-// Test resource updates using the raw methods
-func TestBzzResourceRaw(t *testing.T) {
+// Test resource updates using the raw update methods
+func TestBzzResource(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
@@ -205,8 +205,6 @@ func TestBzzResourceRaw(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//rsrcResp := &resourceResponse{}
-	//rsrcResp := &api.ManifestEntry{}
 	rsrcResp := &storage.Key{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
@@ -218,7 +216,7 @@ func TestBzzResourceRaw(t *testing.T) {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestKeyHex, rsrcResp.Hex())
 	}
 
-	// get manifest
+	// get the manifest
 	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(url)
 	if err != nil {
@@ -261,7 +259,7 @@ func TestBzzResourceRaw(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// get non-existent name
+	// get non-existent name, should fail
 	url = fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
 	resp, err = http.Get(url)
 	if err != nil {
@@ -270,8 +268,8 @@ func TestBzzResourceRaw(t *testing.T) {
 	resp.Body.Close()
 
 	// get latest update (1.1) through resource directly
-	log.Info("get update 1.1", "addr", correctRootKeyHex)
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctRootKeyHex)
+	log.Info("get update latest = 1.1", "addr", correctManifestKeyHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -290,7 +288,7 @@ func TestBzzResourceRaw(t *testing.T) {
 
 	// update 2
 	log.Info("update 2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, correctRootKeyHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, correctManifestKeyHex)
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
@@ -303,7 +301,7 @@ func TestBzzResourceRaw(t *testing.T) {
 
 	// get latest update (1.2) through resource directly
 	log.Info("get update 1.2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctRootKeyHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -321,7 +319,8 @@ func TestBzzResourceRaw(t *testing.T) {
 	}
 
 	// get latest update (1.2) with specified period
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, correctRootKeyHex)
+	log.Info("get update latest = 1.2")
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -339,7 +338,8 @@ func TestBzzResourceRaw(t *testing.T) {
 	}
 
 	// get first update (1.1) with specified period and version
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, correctRootKeyHex)
+	log.Info("get first update 1.1")
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)

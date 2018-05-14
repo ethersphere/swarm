@@ -362,6 +362,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
+// Parses a resource update post url to corresponding action
 // possible combinations:
 // /			add multihash update to existing hash
 // /raw 		add raw update to existing hash
@@ -388,6 +389,14 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 	return isRaw, frequency, err
 }
 
+// Handles creation of new mutable resources and adding updates to existing mutable resources
+// There are two types of updates available, "raw" and "multihash."
+// If the latter is used, a subsequent bzz:// GET call to the manifest of the resource will return
+// the page that the multihash is pointing to, as if it held a normal swarm content manifest
+//
+// The resource name will be verbatim what is passed as the address part of the url.
+// For example, if a POST is made to /bzz-resource:/foo.eth/raw/13 a new resource with frequency 13
+// and name "foo.eth" will be created
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 	var err error
@@ -399,8 +408,13 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		Respond(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
+
+	// new mutable resource creation will always have a frequency field larger than 0
 	if frequency > 0 {
+
 		name = r.uri.Addr
+
+		// the key is the content addressed root chunk holding mutable resource metadata information
 		key, err = s.api.ResourceCreate(r.Context(), name, frequency)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
@@ -408,26 +422,31 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			Respond(w, r, err2.Error(), code)
 			return
 		}
+
+		// we create a manifest so we can retrieve the resource with bzz:// later
+		// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
+		// root chunk
 		m, err := s.api.NewResourceManifest(key.Hex())
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return
 		}
-		//		rsrcResponse := &resourceResponse{
-		//			Manifest: m,
-		//			Resource: r.uri.Addr,
-		//			Update:   key,
-		//		}
-		//e := NewManifestWalker(key)
-		outdata, err = json.Marshal(m) //rsrcResponse)
+
+		// the key to the manifest will be passed back to the client
+		// the client can access the root chunk key directly through its Hash member
+		// the manifest key should be set as content in the resolver of the ENS name
+		// \TODO update manifest key automatically in ENS
+		outdata, err = json.Marshal(m)
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
 			return
 		}
 	} else {
-		key = r.uri.Key()
-		if key == nil {
-			key, err = s.api.Resolve(r.uri)
+		// to update the resource through http we need to retrieve the key for the mutable resource root chunk
+		// that means that we retrieve the manifest and inspect its Hash member.
+		manifestKey := r.uri.Key()
+		if manifestKey == nil {
+			manifestKey, err = s.api.Resolve(r.uri)
 			if err != nil {
 				getFail.Inc(1)
 				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -437,7 +456,15 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			w.Header().Set("Cache-Control", "max-age=2147483648")
 		}
 
-		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "key", key)
+		// get the root chunk key from the manifest
+		key, err = s.api.ResolveResourceManifest(manifestKey)
+		if err != nil {
+			getFail.Inc(1)
+			Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
+			return
+		}
+
+		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestKey, "rootchunkkey", key)
 
 		name, _, err = s.api.ResourceLookup(r.Context(), key, 0, 0, &storage.ResourceLookupParams{})
 		if err != nil {
@@ -446,30 +473,42 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		}
 	}
 
+	// Creation and update must send data aswell. This data constitutes the update data itself.
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
+	// Multihash will be passed as hex-encoded data, so we need to parse this to bytes
 	if isRaw {
 		_, _, _, err = s.api.ResourceUpdate(r.Context(), name, data)
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
 	} else {
 		bytesdata, err := hexutil.Decode(string(data))
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusBadRequest)
+			return
 		}
-		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), r.uri.Addr, bytesdata)
+		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), name, bytesdata)
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusBadRequest)
+			return
 		}
 	}
-	if err != nil {
-		code, err2 := s.translateResourceError(w, r, "mutable resource update fail", err)
-		Respond(w, r, err2.Error(), code)
-		return
-	}
 
+	//
+	//	if err != nil {
+	//		code, err2 := s.translateResourceError(w, r, "mutable resource update fail", err)
+	//		Respond(w, r, err2.Error(), code)
+	//		return
+	//	}
+
+	// If we have data to return, write this now
+	// \TODO there should always be data to return here
 	if len(outdata) > 0 {
 		w.Header().Add("Content-type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -492,10 +531,12 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.resource", "ruid", r.ruid)
 	var err error
-	var key storage.Key
-	key = r.uri.Key()
-	if key == nil {
-		key, err = s.api.Resolve(r.uri)
+
+	// resolve the content key.
+	var manifestKey storage.Key
+	manifestKey = r.uri.Key()
+	if manifestKey == nil {
+		manifestKey, err = s.api.Resolve(r.uri)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -505,8 +546,17 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 		w.Header().Set("Cache-Control", "max-age=2147483648")
 	}
 
-	log.Debug("handle.get.resource: resolved", "ruid", r.ruid, "key", key)
+	// get the root chunk key from the manifest
+	key, err := s.api.ResolveResourceManifest(manifestKey)
+	if err != nil {
+		getFail.Inc(1)
+		Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
+		return
+	}
 
+	log.Debug("handle.get.resource: resolved", "ruid", r.ruid, "manifestkey", manifestKey, "rootchunk key", key)
+
+	// determine if the query specifies period and version
 	var params []string
 	if len(r.uri.Path) > 0 {
 		params = strings.Split(r.uri.Path, "/")
@@ -516,11 +566,11 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	var version uint64
 	var data []byte
 	now := time.Now()
-	log.Debug("handlegetdb", "name", name, "ruid", r.ruid)
+
 	switch len(params) {
-	case 0:
+	case 0: // latest only
 		name, data, err = s.api.ResourceLookup(r.Context(), key, 0, 0, nil)
-	case 2:
+	case 2: // specific period and version
 		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
 			break
@@ -530,21 +580,24 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 			break
 		}
 		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
-	case 1:
+	case 1: // last version of specific period
 		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
 		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
-	default:
-		Respond(w, r, "invalid mutable resource request", http.StatusBadRequest)
-		return
+	default: // bogus
+		err = storage.NewResourceError(storage.ErrInvalidValue, "invalid mutable resource request")
 	}
+
+	// any error from the switch statement will end up here
 	if err != nil {
 		code, err2 := s.translateResourceError(w, r, "mutable resource lookup fail", err)
 		Respond(w, r, err2.Error(), code)
 		return
 	}
+
+	// All ok, serve the retrieved update
 	log.Debug("Found update", "name", name, "ruid", r.ruid)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, &r.Request, "", now, bytes.NewReader(data))
