@@ -444,7 +444,10 @@ func (self *ResourceHandler) LookupLatest(ctx context.Context, nameHash common.H
 	if err != nil {
 		return nil, err
 	}
-	nextperiod := getNextPeriod(rsrc.startBlock, currentblock, rsrc.frequency)
+	nextperiod, err := getNextPeriod(rsrc.startBlock, currentblock, rsrc.frequency)
+	if err != nil {
+		return nil, err
+	}
 	return self.lookup(rsrc, nextperiod, 0, refresh, maxLookup)
 }
 
@@ -462,6 +465,8 @@ func (self *ResourceHandler) LookupPrevious(ctx context.Context, nameHash common
 	rsrc := self.getResource(name)
 	if !rsrc.isSynced() {
 		return nil, NewResourceError(ErrNotSynced, "LookupPrevious requires synced resource.")
+	} else if rsrc.lastPeriod == 0 {
+		return nil, NewResourceError(ErrNothingToReturn, "Resource not found")
 	}
 	if rsrc.version > 1 {
 		rsrc.version--
@@ -730,7 +735,10 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	if err != nil {
 		return nil, NewResourceError(ErrIO, fmt.Sprintf("Could not get block height: %v", err))
 	}
-	nextperiod := getNextPeriod(rsrc.startBlock, currentblock, rsrc.frequency)
+	nextperiod, err := getNextPeriod(rsrc.startBlock, currentblock, rsrc.frequency)
+	if err != nil {
+		return nil, err
+	}
 
 	// if we already have an update for this block then increment version
 	// (resource object MUST be in sync for version to be correct)
@@ -811,7 +819,7 @@ func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64,
 }
 
 // Calculate the period index (aka major version number) from a given block number
-func (self *ResourceHandler) BlockToPeriod(name string, blocknumber uint64) uint32 {
+func (self *ResourceHandler) BlockToPeriod(name string, blocknumber uint64) (uint32, error) {
 	return getNextPeriod(self.resources[name].startBlock, blocknumber, self.resources[name].frequency)
 }
 
@@ -909,10 +917,13 @@ func newUpdateChunk(key Key, signature *Signature, period uint32, version uint32
 	return chunk
 }
 
-func getNextPeriod(start uint64, current uint64, frequency uint64) uint32 {
+func getNextPeriod(start uint64, current uint64, frequency uint64) (uint32, error) {
+	if current < start {
+		return 0, NewResourceError(ErrInvalidValue, fmt.Sprintf("given current block value %d < start block %d", current, start))
+	}
 	blockdiff := current - start
 	period := blockdiff / frequency
-	return uint32(period + 1)
+	return uint32(period + 1), nil
 }
 
 func ToSafeName(name string) (string, error) {
