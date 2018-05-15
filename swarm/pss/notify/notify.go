@@ -2,11 +2,13 @@ package notify
 
 import (
 	"bytes"
-	"crypto/ecdsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
@@ -19,7 +21,10 @@ const (
 
 const (
 	minimumAddressLength = 1
-	controlTopic         = pss.Topic{0x00, 0x00, 0x00, 0x01}
+)
+
+var (
+	controlTopic = pss.Topic{0x00, 0x00, 0x00, 0x01}
 )
 
 // when code is MsgCodeStart, Payload is address
@@ -33,14 +38,14 @@ type Msg struct {
 
 func (self *Msg) Serialize() []byte {
 	b := bytes.NewBuffer(nil)
-	b.Write(Code)
+	b.Write([]byte{self.Code})
 	ib := make([]byte, 2)
 	binary.LittleEndian.PutUint16(ib, uint16(len(self.Name)))
 	b.Write(ib)
 	binary.LittleEndian.PutUint16(ib, uint16(len(self.Payload)))
 	b.Write(ib)
-	b.Write([]byte(Msg.Name))
-	b.Write(Payload)
+	b.Write([]byte(self.Name))
+	b.Write(self.Payload)
 	return b.Bytes()
 }
 
@@ -48,14 +53,14 @@ func deserializeMsg(msgbytes []byte) (*Msg, error) {
 	msg := &Msg{
 		Code: msgbytes[0],
 	}
-	nameLen := binary.LittleEndian.Uint16(msgbytes[1:])
-	dataLen := binary.LittleEndian.Uint16(msgbytes[3:])
-	if nameLen+dataLen != len(msgbytes)+5 {
-		return errors.New("Corrupt message")
+	nameLen := binary.LittleEndian.Uint16(msgbytes[1:3])
+	dataLen := binary.LittleEndian.Uint16(msgbytes[3:5])
+	if int(nameLen+dataLen)+5 != len(msgbytes) {
+		return nil, errors.New("Corrupt message")
 	}
 	msg.Name = string(msgbytes[5 : 5+nameLen])
-	msg.Payload = string(msgbytes[5+nameLen:])
-	return msg
+	msg.Payload = msgbytes[5+nameLen:]
+	return msg, nil
 }
 
 // a notifier has one sendmux entry for each address space it sends messages to
@@ -66,7 +71,7 @@ type sendMux struct {
 }
 
 type notifier struct {
-	muxes     []*SendMux
+	muxes     []*sendMux
 	topic     pss.Topic
 	threshold int
 	ackFunc   func(string) []byte
@@ -86,22 +91,23 @@ func NewController(ps *pss.Pss) *Controller {
 
 func (self *Controller) NewNotifier(name string, threshold int, ackFunc func(string) []byte) error {
 	if _, ok := self.notifiers[name]; ok {
-		fmt.Errorf("%s already exists in controller", name)
+		return fmt.Errorf("%s already exists in controller", name)
 	}
-	self.notifiers[name] = &Notifier{
+	self.notifiers[name] = &notifier{
 		topic:     pss.BytesToTopic([]byte(name)),
 		threshold: threshold,
 		ackFunc:   ackFunc,
 	}
+	return nil
 }
 
 func (self *Controller) addToNotifier(name string, address pss.PssAddress) (string, error) {
 	notifier, ok := self.notifiers[name]
 	if !ok {
-		return "", fmt.Errorf("Unknown notifier %d", name)
+		return "", fmt.Errorf("Unknown notifier %s", name)
 	}
 	for _, m := range notifier.muxes {
-		if bytes.Equal(address, m.addr) {
+		if bytes.Equal(address, m.address) {
 			m.count++
 			return m.symkeyid, nil
 		}
@@ -118,18 +124,15 @@ func (self *Controller) addToNotifier(name string, address pss.PssAddress) (stri
 	return symkeyid, nil
 }
 
-func (self *Controller) Handler(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 	// control messages should be asym
 	if !asymmetric {
 		return errors.New("Control messages must be asymmetric")
 	}
-	pubkey, err := crypto.ToECDSA(common.FromHex(keyid))
-	if err != nil {
-		return fmt.Errorf("Invalid pubkey: %v", err)
-	}
+	pubkey := crypto.ToECDSAPub(common.FromHex(keyid))
 
 	// see if the message is valid
-	msg, err := deserializeMsg(msg)
+	msg, err := deserializeMsg(smsg)
 	if err != nil {
 		return fmt.Errorf("Invalid message: %v", err)
 	}
@@ -139,7 +142,7 @@ func (self *Controller) Handler(msg []byte, p *p2p.Peer, asymmetric bool, keyid 
 
 		// if name is not registered for notifications we will not react
 		if _, ok := self.notifiers[msg.Name]; !ok {
-			return fmt.Errorf("Subscribe attempted on unknown resource %s", startMsg.Name)
+			return fmt.Errorf("Subscribe attempted on unknown resource %s", msg.Name)
 		}
 
 		// parse the address from the message and truncate if longer than our mux threshold
@@ -149,19 +152,20 @@ func (self *Controller) Handler(msg []byte, p *p2p.Peer, asymmetric bool, keyid 
 		}
 
 		// add the address to the notification list
-		err := self.addToNotifier(msg.name, address)
+		symkeyid, err := self.addToNotifier(msg.Name, address)
 		if err != nil {
 			return fmt.Errorf("add address to notifier fail: %v", err)
 		}
 
 		// add to address book for send initial notify
-		err := self.SetPeerPublicKey(pubkey, controlTopic, address)
+		pssaddr := pss.PssAddress(address)
+		err = self.pss.SetPeerPublicKey(pubkey, controlTopic, &pssaddr)
 		if err != nil {
 			return fmt.Errorf("add pss peer for reply fail: %v", err)
 		}
 
 		// send initial notify, will contain symkey to use for consequtive messages
-		err := self.pss.SendAsym(keyid, controlTopic, self.notifiers[msg.Name].ackFunc(self.notifiers[msg.Name]))
+		err = self.pss.SendAsym(keyid, controlTopic, self.notifiers[msg.Name].ackFunc(symkeyid))
 		if err != nil {
 			return fmt.Errorf("send start reply fail: %v", err)
 		}
