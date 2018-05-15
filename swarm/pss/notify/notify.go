@@ -8,12 +8,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
 const (
 	MsgCodeStart = iota
+	MsgCodeNotifyWithKey
 	MsgCodeNotify
 	MsgCodeStop
 	MsgCodeMax
@@ -21,6 +23,7 @@ const (
 
 const (
 	minimumAddressLength = 1
+	symKeyLength         = 32 // this should be gotten from source
 )
 
 var (
@@ -66,15 +69,15 @@ func deserializeMsg(msgbytes []byte) (*Msg, error) {
 // a notifier has one sendmux entry for each address space it sends messages to
 type sendMux struct {
 	address  pss.PssAddress
-	symkeyid string
+	symKeyId string
 	count    int
 }
 
 type notifier struct {
-	muxes     []*sendMux
-	topic     pss.Topic
-	threshold int
-	ackFunc   func(string) []byte
+	muxes       []*sendMux
+	topic       pss.Topic
+	threshold   int
+	contentFunc func() []byte
 }
 
 type Controller struct {
@@ -83,20 +86,38 @@ type Controller struct {
 }
 
 func NewController(ps *pss.Pss) *Controller {
-	return &Controller{
+	ctrl := &Controller{
 		pss:       ps,
 		notifiers: make(map[string]*notifier),
 	}
+	ctrl.pss.Register(&controlTopic, ctrl.Handler)
+	return ctrl
 }
 
-func (self *Controller) NewNotifier(name string, threshold int, ackFunc func(string) []byte) error {
+func (self *Controller) NewNotifier(name string, threshold int, contentFunc func() []byte) error {
 	if _, ok := self.notifiers[name]; ok {
 		return fmt.Errorf("%s already exists in controller", name)
 	}
 	self.notifiers[name] = &notifier{
-		topic:     pss.BytesToTopic([]byte(name)),
-		threshold: threshold,
-		ackFunc:   ackFunc,
+		topic:       pss.BytesToTopic([]byte(name)),
+		threshold:   threshold,
+		contentFunc: contentFunc,
+	}
+	return nil
+}
+
+func (self *Controller) Notify(name string, data []byte) error {
+	msg := Msg{
+		Code:    MsgCodeNotify,
+		Name:    name,
+		Payload: data,
+	}
+	for _, m := range self.notifiers[name].muxes {
+		log.Trace("sending pss notify", "name", name, "addr", fmt.Sprintf("%x", m.address), "topic", fmt.Sprintf("%x", self.notifiers[name].topic))
+		err := self.pss.SendSym(m.symKeyId, self.notifiers[name].topic, msg.Serialize())
+		if err != nil {
+			log.Warn("Failed to send notify to addr %x: %v", m.address, err)
+		}
 	}
 	return nil
 }
@@ -109,22 +130,24 @@ func (self *Controller) addToNotifier(name string, address pss.PssAddress) (stri
 	for _, m := range notifier.muxes {
 		if bytes.Equal(address, m.address) {
 			m.count++
-			return m.symkeyid, nil
+			return m.symKeyId, nil
 		}
 	}
-	symkeyid, err := self.pss.GenerateSymmetricKey(notifier.topic, &address, false)
+	symKeyId, err := self.pss.GenerateSymmetricKey(notifier.topic, &address, false)
 	if err != nil {
 		return "", fmt.Errorf("Generate symkey fail: %v", err)
 	}
 	notifier.muxes = append(notifier.muxes, &sendMux{
 		address:  address,
-		symkeyid: symkeyid,
+		symKeyId: symKeyId,
 		count:    1,
 	})
-	return symkeyid, nil
+	return symKeyId, nil
 }
 
 func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+
+	log.Debug("notify controller handler", "keyid", keyid)
 	// control messages should be asym
 	if !asymmetric {
 		return errors.New("Control messages must be asymmetric")
@@ -152,9 +175,13 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 		}
 
 		// add the address to the notification list
-		symkeyid, err := self.addToNotifier(msg.Name, address)
+		symKeyId, err := self.addToNotifier(msg.Name, address)
 		if err != nil {
 			return fmt.Errorf("add address to notifier fail: %v", err)
+		}
+		symkey, err := self.pss.GetSymmetricKey(symKeyId)
+		if err != nil {
+			return fmt.Errorf("retrieve symkey fail: %v", err)
 		}
 
 		// add to address book for send initial notify
@@ -164,8 +191,16 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 			return fmt.Errorf("add pss peer for reply fail: %v", err)
 		}
 
-		// send initial notify, will contain symkey to use for consequtive messages
-		err = self.pss.SendAsym(keyid, controlTopic, self.notifiers[msg.Name].ackFunc(symkeyid))
+		// send initial notify, will contain symkey to use for consecutive messages
+		notify := self.notifiers[msg.Name].contentFunc()
+		replyMsg := &Msg{
+			Code:    MsgCodeNotifyWithKey,
+			Name:    msg.Name,
+			Payload: make([]byte, len(notify)+symKeyLength),
+		}
+		copy(replyMsg.Payload, notify)
+		copy(replyMsg.Payload[len(notify):], symkey)
+		err = self.pss.SendAsym(keyid, controlTopic, replyMsg.Serialize())
 		if err != nil {
 			return fmt.Errorf("send start reply fail: %v", err)
 		}

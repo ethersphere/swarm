@@ -56,6 +56,7 @@ func (pssapi *API) Receive(ctx context.Context, topic Topic) (*rpc.Subscription,
 	}
 
 	deregf := pssapi.Register(&topic, handler)
+	log.Trace("registered handler for api subscribe", "topic", fmt.Sprintf("%x", topic))
 	go func() {
 		defer deregf()
 		select {
