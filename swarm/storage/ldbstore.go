@@ -28,6 +28,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -55,6 +56,10 @@ var (
 	keyDataIdx     = []byte{4}
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
+)
+
+var (
+	ErrDBClosed = errors.New("LDBStore closed")
 )
 
 type gcItem struct {
@@ -94,7 +99,8 @@ type LDBStore struct {
 
 	batchC   chan bool
 	batchesC chan struct{}
-	batch    *leveldb.Batch
+	closed   bool
+	batch    *dbBatch
 	lock     sync.RWMutex
 
 	// Functions encodeDataFunc is used to bypass
@@ -107,6 +113,16 @@ type LDBStore struct {
 	getDataFunc func(key Address) (data []byte, err error)
 }
 
+type dbBatch struct {
+	*leveldb.Batch
+	err error
+	c   chan struct{}
+}
+
+func newBatch() *dbBatch {
+	return &dbBatch{Batch: new(leveldb.Batch), c: make(chan struct{})}
+}
+
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
 // to avoid the appearance of a pluggable distance metric and opportunities of bugs associated with providing
 // a function different from the one that is actually used.
@@ -114,10 +130,9 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s = new(LDBStore)
 	s.hashfunc = params.Hash
 
-	s.batchC = make(chan bool)
 	s.batchesC = make(chan struct{}, 1)
 	go s.writeBatches()
-	s.batch = new(leveldb.Batch)
+	s.batch = newBatch()
 	// associate encodeData with default functionality
 	s.encodeDataFunc = encodeData
 
@@ -505,6 +520,10 @@ func (s *LDBStore) Put(chunk Chunk) (func(context.Context) error, error) {
 	po := s.po(chunk.Address())
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	if s.closed {
+		return nil, ErrDBClosed
+	}
+	batch := s.batch
 
 	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Address(), "ikey", fmt.Sprintf("%x", ikey))
 	idata, err := s.db.Get(ikey)
@@ -517,19 +536,19 @@ func (s *LDBStore) Put(chunk Chunk) (func(context.Context) error, error) {
 	index.Access = s.accessCnt
 	s.accessCnt++
 	idata = encodeIndex(&index)
+	wait := func(ctx context.Context) error {
+		select {
+		case <-batch.c:
+			return batch.err
+		case <-ctx.Done():
+			// log.Error("context done", "err", ctx.Err())
+			return ctx.Err()
+		}
+	}
 	s.batch.Put(ikey, idata)
 	select {
 	case s.batchesC <- struct{}{}:
 	default:
-	}
-	batchC := s.batchC
-	wait := func(ctx context.Context) error {
-		select {
-		case <-batchC:
-			return nil // TODO
-		case <-ctx.Done():
-			return ctx.Err()
-		}
 	}
 	return wait, nil
 }
@@ -552,36 +571,39 @@ func (s *LDBStore) doPut(chunk Chunk, index *dpaDBIndex, po uint8) {
 
 func (s *LDBStore) writeBatches() {
 	for range s.batchesC {
-		s.lock.Lock()
-		b := s.batch
-		e := s.entryCnt
-		d := s.dataIdx
-		a := s.accessCnt
-		c := s.batchC
-		s.batchC = make(chan bool)
-		s.batch = new(leveldb.Batch)
-		err := s.writeBatch(b, e, d, a)
-		// TODO: set this error on the batch, then tell the chunk
-		if err != nil {
-			log.Error(fmt.Sprintf("spawn batch write (%d entries): %v", b.Len(), err))
-		}
-		close(c)
-		for e > s.capacity {
-			s.collectGarbage(gcArrayFreeRatio)
-			e = s.entryCnt
-		}
-		s.lock.Unlock()
+		s.writeCurrentBatch()
 	}
 	log.Trace(fmt.Sprintf("DbStore: quit batch write loop"))
 }
 
+func (s *LDBStore) writeCurrentBatch() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	b := s.batch
+	l := b.Len()
+	if l == 0 {
+		return
+	}
+	e := s.entryCnt
+	d := s.dataIdx
+	a := s.accessCnt
+	s.batch = newBatch()
+	b.err = s.writeBatch(b, e, d, a)
+	close(b.c)
+	for e > s.capacity {
+		s.collectGarbage(gcArrayFreeRatio)
+		e = s.entryCnt
+	}
+	return
+}
+
 // must be called non concurrently
-func (s *LDBStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint64) error {
+func (s *LDBStore) writeBatch(b *dbBatch, entryCnt, dataIdx, accessCnt uint64) error {
 	b.Put(keyEntryCnt, U64ToBytes(entryCnt))
 	b.Put(keyDataIdx, U64ToBytes(dataIdx))
 	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
 	l := b.Len()
-	if err := s.db.Write(b); err != nil {
+	if err := s.db.Write(b.Batch); err != nil {
 		return fmt.Errorf("unable to write batch: %v", err)
 	}
 	log.Trace(fmt.Sprintf("batch write (%d entries)", l))
@@ -631,7 +653,9 @@ func (s *LDBStore) Get(key Address) (chunk Chunk, err error) {
 
 func (s *LDBStore) get(key Address) (chunk *chunk, err error) {
 	var indx dpaDBIndex
-
+	if s.closed {
+		return nil, ErrDBClosed
+	}
 	if s.tryAccessIdx(getIndexKey(key), &indx) {
 		var data []byte
 		if s.getDataFunc != nil {
@@ -707,6 +731,12 @@ func (s *LDBStore) setCapacity(c uint64) {
 }
 
 func (s *LDBStore) Close() {
+	s.lock.Lock()
+	s.closed = true
+	s.lock.Unlock()
+	// force writing out current batch
+	s.writeCurrentBatch()
+	close(s.batchesC)
 	s.db.Close()
 }
 

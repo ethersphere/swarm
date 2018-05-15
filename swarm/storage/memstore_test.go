@@ -17,8 +17,7 @@
 package storage
 
 import (
-	"io/ioutil"
-	"os"
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -103,30 +102,6 @@ func BenchmarkMemStoreGet_8_5k(b *testing.B) {
 	benchmarkMemStoreGet(5000, 8, 4096, b)
 }
 
-func newLDBStore(t *testing.T) (*LDBStore, func()) {
-	dir, err := ioutil.TempDir("", "bzz-storage-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	log.Trace("memstore.tempdir", "dir", dir)
-
-	ldbparams := NewLDBStoreParams(NewDefaultStoreParams(), dir)
-	db, err := NewLDBStore(ldbparams)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cleanup := func() {
-		db.Close()
-		err := os.RemoveAll(dir)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	return db, cleanup
-}
-
 func TestMemStoreAndLDBStore(t *testing.T) {
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(4000)
@@ -170,14 +145,27 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			chunks = append(chunks, c)
 		}
 
+		errc := make(chan error)
 		for i := 0; i < tt.n; i++ {
-			go ldb.Put(chunks[i])
+			wait, err := ldb.Put(chunks[i])
+			if err != nil {
+				t.Fatal(err)
+			}
+			go func() {
+				errc <- wait(context.Background())
+			}()
 			memStore.Put(chunks[i])
 
 			if got := memStore.cache.Len(); got > cacheCap {
 				t.Fatalf("expected to get cache capacity less than %v, but got %v", cacheCap, got)
 			}
 
+		}
+		for i := 0; i < tt.n; i++ {
+			err := <-errc
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		for i := 0; i < tt.n; i++ {

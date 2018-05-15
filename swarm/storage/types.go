@@ -26,7 +26,6 @@ import (
 	"hash"
 	"io"
 	"io/ioutil"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/bmt"
 	"github.com/ethereum/go-ethereum/common"
@@ -170,9 +169,9 @@ func (c KeyCollection) Swap(i, j int) {
 
 // ChunkStore is the interface for
 type DPA interface {
-	Get(ref Address) (ch Chunk, fetch func(ctx context.Context) (Chunk, error), err error)
+	Get(ref Address) (ch Chunk, fetch func(rctx Request) (Chunk, error), err error)
 	Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error)
-	Has(ref Address) (waitToStore func(context.Context) error, err error)
+	Has(ref Address) (waitToStore func(Request) error, err error)
 	Close()
 }
 
@@ -226,53 +225,29 @@ func (c *chunk) Chunk() *chunk {
 	return c
 }
 
-// Request is created when a chunk is not found locally
-// it starts a process of fetching once and keeps it
-// alive until all active requests complete
-// either by the chunk delivered or all cancelled/timed out
-type Request struct {
-	*chunk
-	triggerC   chan context.Context
-	deliveredC chan struct{}
-	quitC      chan struct{}
-	wg         sync.WaitGroup
-	wanted     bool
-	// Deliver([]byte) error
-}
-
-func NewRequest() *Request {
-	return &Request{
-		triggerC:   make(chan context.Context),
-		deliveredC: make(chan struct{}),
-		quitC:      make(chan struct{}),
-	}
-}
-
 // String() for pretty printing
 func (self *chunk) String() string {
 	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
 }
 
 func GenerateRandomChunk(dataSize int64) Chunk {
-	return GenerateRandomChunks(dataSize, 1)[0]
+	hasher := MakeHashFunc(DefaultHash)()
+	sdata := make([]byte, dataSize+8)
+	rand.Read(sdata[8:])
+	binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
+	hasher.ResetWithLength(sdata[:8])
+	hasher.Write(sdata[8:])
+	return NewChunk(hasher.Sum(nil), sdata)
 }
 
 func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
-	var i int
-	hasher := MakeHashFunc(DefaultHash)()
 	if dataSize > DefaultChunkSize {
 		dataSize = DefaultChunkSize
 	}
-
-	for i = 0; i < count; i++ {
-		sdata := make([]byte, dataSize+8)
-		rand.Read(sdata[8:])
-		binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
-		hasher.ResetWithLength(sdata[:8])
-		hasher.Write(sdata[8:])
-		chunks = append(chunks, NewChunk(hasher.Sum(nil), sdata))
+	for i := 0; i < count; i++ {
+		ch := GenerateRandomChunk(DefaultChunkSize)
+		chunks = append(chunks, ch)
 	}
-
 	return chunks
 }
 
@@ -281,7 +256,7 @@ func GenerateRandomData(l int) (r io.Reader, slice []byte) {
 	if err != nil {
 		panic("rand error")
 	}
-	log.Warn("generate random data", "len", len(slice), "data", common.Bytes2Hex(slice))
+	// log.Warn("generate random data", "len", len(slice), "data", common.Bytes2Hex(slice))
 	r = io.LimitReader(bytes.NewReader(slice), int64(l))
 	return r, slice
 }
@@ -392,4 +367,13 @@ type ChunkStore interface {
 	Get(ref Address) (Chunk, error)
 	Put(ch Chunk) (func(context.Context) error, error)
 	Close()
+}
+
+type localRequest struct {
+	context.Context
+	addr Address
+}
+
+func (l *localRequest) Address() Address {
+	return l.addr
 }

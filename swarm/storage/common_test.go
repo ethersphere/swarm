@@ -23,6 +23,8 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"io/ioutil"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -32,7 +34,9 @@ import (
 )
 
 var (
-	loglevel = flag.Int("loglevel", 3, "verbosity of logs")
+	loglevel   = flag.Int("loglevel", 3, "verbosity of logs")
+	putTimeout = 30 * time.Second
+	getTimeout = 30 * time.Second
 )
 
 func init() {
@@ -56,13 +60,40 @@ func brokenLimitReader(data io.Reader, size int, errAt int) *brokenLimitedReader
 	}
 }
 
+func newLDBStore(t *testing.T) (*LDBStore, func()) {
+	dir, err := ioutil.TempDir("", "bzz-storage-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	log.Trace("memstore.tempdir", "dir", dir)
+
+	ldbparams := NewLDBStoreParams(NewDefaultStoreParams(), dir)
+	db, err := NewLDBStore(ldbparams)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cleanup := func() {
+		db.Close()
+		err := os.RemoveAll(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	return db, cleanup
+}
+
 func mputRandomChunks(store ChunkStore, n int, chunksize int64) ([]Address, error) {
 	return mput(store, n, GenerateRandomChunk)
 }
 
 func mputChunks(store ChunkStore, chunks ...Chunk) error {
-	f := func(i int64) Chunk {
-		return chunks[i]
+	i := 0
+	f := func(n int64) Chunk {
+		chunk := chunks[i]
+		i++
+		return chunk
 	}
 	_, err := mput(store, len(chunks), f)
 	return err
@@ -73,11 +104,11 @@ func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Address, err err
 	// does not check delivery error state
 	done := make(chan struct{})
 	errc := make(chan error)
-	ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-	defer cancel()
+	ctx, _ := context.WithTimeout(context.Background(), putTimeout)
+	// defer cancel()
 	defer close(done)
 	for i := int64(0); i < int64(n); i++ {
-		chunk := f(i)
+		chunk := f(DefaultChunkSize)
 		wait, err := store.Put(chunk)
 		if err != nil {
 			return nil, err
@@ -272,7 +303,7 @@ type fakeDPA struct {
 	store ChunkStore
 }
 
-func (f *fakeDPA) Get(ref Address) (ch Chunk, fetch func(ctx context.Context) (Chunk, error), err error) {
+func (f *fakeDPA) Get(ref Address) (ch Chunk, fetch func(ctx Request) (Chunk, error), err error) {
 	chunk, err := f.store.Get(ref)
 	return chunk, nil, err
 }
@@ -281,7 +312,7 @@ func (f *fakeDPA) Put(ch Chunk) (waitToStore func(ctx context.Context) error, er
 	return f.store.Put(ch)
 }
 
-func (f *fakeDPA) Has(ref Address) (waitToStore func(context.Context) error, err error) {
+func (f *fakeDPA) Has(ref Address) (waitToStore func(Request) error, err error) {
 	_, err = f.store.Get(ref)
 	return nil, err
 }
@@ -296,5 +327,5 @@ type chunkMemStore struct {
 
 func (m *chunkMemStore) Put(c Chunk) (waitToStore func(ctx context.Context) error, err error) {
 	m.MemStore.Put(c)
-	return nil, nil
+	return func(context.Context) error { return nil }, nil
 }

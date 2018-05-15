@@ -305,10 +305,14 @@ func (self *PyramidChunker) processChunk(id int64, job *chunkJob) {
 	job.parentWg.Done()
 }
 
+func (self *PyramidChunker) request(addr Address) Request {
+	return &localRequest{self.ctx, addr}
+}
+
 func (self *PyramidChunker) loadTree() error {
 	log.Debug("pyramid.chunker: loadTree()")
 	// Get the root chunk to get the total size
-	chunkData, err := self.getter.Get(self.ctx, Reference(self.key))
+	chunkData, err := self.getter.Get(self.request(self.key), Reference(self.key))
 	if err != nil {
 		return errLoadingTreeRootChunk
 	}
@@ -361,7 +365,7 @@ func (self *PyramidChunker) loadTree() error {
 			branchCount = int64(len(ent.chunk)-8) / self.hashSize
 			for i := int64(0); i < branchCount; i++ {
 				key := ent.chunk[8+(i*self.hashSize) : 8+((i+1)*self.hashSize)]
-				newChunkData, err := self.getter.Get(self.ctx, Reference(key))
+				newChunkData, err := self.getter.Get(self.request(key), Reference(key))
 				if err != nil {
 					return errLoadingTreeChunk
 				}
@@ -423,7 +427,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 			lastAddress := parent.chunk[8+lastBranch*self.hashSize : 8+(lastBranch+1)*self.hashSize]
 
 			var err error
-			unfinishedChunkData, err = self.getter.Get(self.ctx, lastAddress)
+			unfinishedChunkData, err = self.getter.Get(self.request(lastAddress), lastAddress)
 			if err != nil {
 				self.errC <- err
 			}

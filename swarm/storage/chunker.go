@@ -382,7 +382,7 @@ type LazyChunkReader struct {
 	getter    Getter
 	// somewhat unusually context needs to be saved here since it cannot be
 	// passed via ReadAt?
-	ctx context.Context
+	ctx Request
 }
 
 func (self *TreeChunker) Join() *LazyChunkReader {

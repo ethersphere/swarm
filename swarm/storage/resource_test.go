@@ -163,7 +163,10 @@ func TestResourceHandler(t *testing.T) {
 
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(safeName)
-	chunk, err := Get(context.Background(), rh.dpa, Address(namehash[:]))
+	addr := Address(namehash[:])
+	rctx := &localRequest{ctx, addr}
+
+	chunk, err := Get(rctx, rh.dpa, addr)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.Data()) < 16 {
@@ -238,7 +241,7 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = rh2.LookupLatestByName(ctx, safeName, true, nil)
+	_, err = rh2.LookupLatestByName(rctx, safeName, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -256,7 +259,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true, rh2.queryMaxPeriods)
+	rsrc, err := rh2.LookupHistoricalByName(rctx, safeName, 3, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -267,7 +270,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true, rh2.queryMaxPeriods)
+	rsrc, err = rh2.LookupVersionByName(rctx, safeName, 3, 1, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +283,7 @@ func TestResourceHandler(t *testing.T) {
 	// we are now at third update
 	// check backwards stepping to the first
 	for i := 1; i >= 0; i-- {
-		rsrc, err := rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
+		rsrc, err := rh2.LookupPreviousByName(rctx, safeName, rh2.queryMaxPeriods)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -291,7 +294,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// beyond the first should yield an error
-	rsrc, err = rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
+	rsrc, err = rh2.LookupPreviousByName(rctx, safeName, rh2.queryMaxPeriods)
 	if err == nil {
 		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rh2.resources[domainName].lastPeriod, rh2.resources[domainName].version, rh2.resources[domainName].data)
 	}
@@ -378,7 +381,7 @@ func TestResourceMultihash(t *testing.T) {
 	defer teardownTest()
 
 	// create a new resource
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
 	defer cancel()
 	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
@@ -417,7 +420,8 @@ func TestResourceMultihash(t *testing.T) {
 		t.Fatalf("Expected update to fail with last byte skipped")
 	}
 
-	data, err := getUpdateDirect(rh, swarmhashkey)
+	rctx := &localRequest{ctx, swarmhashkey}
+	data, err := getUpdateDirect(rctx, rh, swarmhashkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,7 +432,7 @@ func TestResourceMultihash(t *testing.T) {
 	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
 		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
 	}
-	data, err = getUpdateDirect(rh, sha1key)
+	data, err = getUpdateDirect(rctx, rh, sha1key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +472,7 @@ func TestResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err = getUpdateDirect(rh2, swarmhashsignedkey)
+	data, err = getUpdateDirect(rctx, rh2, swarmhashsignedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -479,7 +483,7 @@ func TestResourceMultihash(t *testing.T) {
 	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
 		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
 	}
-	data, err = getUpdateDirect(rh2, sha1signedkey)
+	data, err = getUpdateDirect(rctx, rh2, sha1signedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -638,8 +642,8 @@ func newTestSigner() (*GenericResourceSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rh *ResourceHandler, key Address) ([]byte, error) {
-	chunk, err := Get(context.Background(), rh.dpa, key)
+func getUpdateDirect(rctx Request, rh *ResourceHandler, key Address) ([]byte, error) {
+	chunk, err := Get(rctx, rh.dpa, key)
 	if err != nil {
 		return nil, err
 	}

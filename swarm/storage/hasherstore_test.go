@@ -60,7 +60,7 @@ func TestHasherStore(t *testing.T) {
 
 		hasherStore.Close()
 
-		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
 		// Wait until chunks are really stored
 		err = hasherStore.Wait(ctx)
 		if err != nil {

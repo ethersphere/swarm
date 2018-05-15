@@ -22,7 +22,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 )
 
@@ -84,7 +83,6 @@ func NewHasherStore(dpa DPA, hashFunc SwarmHasher, toEncrypt bool) *hasherStore 
 // Asynchronous function, the data will not necessarily be stored when it returns.
 func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 	c := chunkData
-	log.Warn("hasherstore.put", "span", c.Size())
 	var encryptionKey encryption.Key
 	if h.chunkEncryption != nil {
 		var err error
@@ -112,14 +110,14 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 		return nil, err
 	}
 	if chunk == nil {
-		chunk, err = fetch(ctx)
+		rctx := &localRequest{ctx, key}
+		chunk, err = fetch(rctx)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	chunkData := ChunkData(chunk.Data())
-	log.Warn("hasherstore.get pre decrypt", "span", chunkData.Size(), "hash", chunk.Address().Hex(), "size", len(chunk.Data()))
 	toDecrypt := (encryptionKey != nil)
 	if toDecrypt {
 		var err error
@@ -128,7 +126,6 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 			return nil, err
 		}
 	}
-	log.Warn("hasherstore.get", "span", chunkData.Size())
 	return chunkData, nil
 }
 
