@@ -304,7 +304,7 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 		return err
 	}
 
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(filePath), 0777); err != nil {
 		return err
 	}
 
