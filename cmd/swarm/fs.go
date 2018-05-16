@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of go-ethereum.
 //
 // go-ethereum is free software: you can redistribute it and/or modify
@@ -30,56 +30,57 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-func mount(ctx *cli.Context) {
-	args := ctx.Args()
+func mount(cliContext *cli.Context) {
+	args := cliContext.Args()
 	if len(args) < 2 {
 		utils.Fatalf("Usage: swarm fs mount --ipcpath <path to bzzd.ipc> <manifestHash> <file name>")
 	}
 
-	client, err := dialRPC(ctx)
+	client, err := dialRPC(cliContext)
 	if err != nil {
 		utils.Fatalf("had an error dailing to RPC endpoint: %v", err)
 	}
-	context, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	mf := &fuse.MountInfo{}
-	err = client.CallContext(context, mf, "swarmfs_mount", args[0], args[1])
+	err = client.CallContext(ctx, mf, "swarmfs_mount", args[0], args[1])
 	if err != nil {
 		utils.Fatalf("had an error calling the RPC endpoint while mounting: %v", err)
 	}
 }
 
-func unmount(ctx *cli.Context) {
-	args := ctx.Args()
+func unmount(cliContext *cli.Context) {
+	args := cliContext.Args()
 
 	if len(args) < 1 {
 		utils.Fatalf("Usage: swarm fs unmount --ipcpath <path to bzzd.ipc> <mount path>")
 	}
-	client, err := dialRPC(ctx)
+	client, err := dialRPC(cliContext)
 	if err != nil {
 		utils.Fatalf("had an error dailing to RPC endpoint: %v", err)
 	}
-	context, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	mf := &fuse.MountInfo{}
-	err = client.CallContext(context, mf, "swarmfs_unmount", args[0])
+	err = client.CallContext(ctx, mf, "swarmfs_unmount", args[0])
 	if err != nil {
 		utils.Fatalf("encountered an error calling the RPC endpoint while unmounting: %v", err)
 	}
 }
 
-func listMounts(ctx *cli.Context) {
-	client, err := dialRPC(ctx)
+func listMounts(cliContext *cli.Context) {
+	client, err := dialRPC(cliContext)
 	if err != nil {
 		utils.Fatalf("had an error dailing to RPC endpoint: %v", err)
 	}
-	context, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	mf := []fuse.MountInfo{}
-	err = client.CallContext(context, &mf, "swarmfs_listmounts")
+	err = client.CallContext(ctx, &mf, "swarmfs_listmounts")
 	if err != nil {
 		utils.Fatalf("encountered an error calling the RPC endpoint while unmounting: %v", err)
 	}
