@@ -62,7 +62,7 @@ func TestSwarmNetwork(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		steps    []testSwarmNetworkStep
-		timeout  time.Duration
+		options  *testSwarmNetworkOptions
 		disabled bool
 	}{
 		{
@@ -72,7 +72,21 @@ func TestSwarmNetwork(t *testing.T) {
 					nodeCount: 10,
 				},
 			},
-			timeout: 45 * time.Second,
+			options: &testSwarmNetworkOptions{
+				Timeout: 45 * time.Second,
+			},
+		},
+		{
+			name: "10_nodes_skip_check",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 10,
+				},
+			},
+			options: &testSwarmNetworkOptions{
+				Timeout:   45 * time.Second,
+				SkipCheck: true,
+			},
 		},
 		{
 			name: "100_nodes",
@@ -81,7 +95,22 @@ func TestSwarmNetwork(t *testing.T) {
 					nodeCount: 100,
 				},
 			},
-			timeout:  3 * time.Minute,
+			options: &testSwarmNetworkOptions{
+				Timeout: 3 * time.Minute,
+			},
+			disabled: !*longrunning,
+		},
+		{
+			name: "100_nodes_skip_check",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 100,
+				},
+			},
+			options: &testSwarmNetworkOptions{
+				Timeout:   3 * time.Minute,
+				SkipCheck: true,
+			},
 			disabled: !*longrunning,
 		},
 		{
@@ -97,7 +126,9 @@ func TestSwarmNetwork(t *testing.T) {
 					nodeCount: 10,
 				},
 			},
-			timeout:  90 * time.Second,
+			options: &testSwarmNetworkOptions{
+				Timeout: 90 * time.Second,
+			},
 			disabled: !*longrunning,
 		},
 		{
@@ -113,7 +144,9 @@ func TestSwarmNetwork(t *testing.T) {
 					nodeCount: 3,
 				},
 			},
-			timeout:  90 * time.Second,
+			options: &testSwarmNetworkOptions{
+				Timeout: 90 * time.Second,
+			},
 			disabled: !*longrunning,
 		},
 		{
@@ -129,7 +162,9 @@ func TestSwarmNetwork(t *testing.T) {
 					nodeCount: 10,
 				},
 			},
-			timeout: 90 * time.Second,
+			options: &testSwarmNetworkOptions{
+				Timeout: 90 * time.Second,
+			},
 		},
 		{
 			name: "inc_dec_node_count",
@@ -150,7 +185,34 @@ func TestSwarmNetwork(t *testing.T) {
 					nodeCount: 4,
 				},
 			},
-			timeout:  5 * time.Minute,
+			options: &testSwarmNetworkOptions{
+				Timeout: 5 * time.Minute,
+			},
+			disabled: !*longrunning,
+		},
+		{
+			name: "inc_dec_node_count_skip_check",
+			steps: []testSwarmNetworkStep{
+				{
+					nodeCount: 3,
+				},
+				{
+					nodeCount: 5,
+				},
+				{
+					nodeCount: 25,
+				},
+				{
+					nodeCount: 10,
+				},
+				{
+					nodeCount: 4,
+				},
+			},
+			options: &testSwarmNetworkOptions{
+				Timeout:   5 * time.Minute,
+				SkipCheck: true,
+			},
 			disabled: !*longrunning,
 		},
 	} {
@@ -158,7 +220,7 @@ func TestSwarmNetwork(t *testing.T) {
 			continue
 		}
 		t.Run(tc.name, func(t *testing.T) {
-			testSwarmNetwork(t, tc.timeout, tc.steps...)
+			testSwarmNetwork(t, tc.options, tc.steps...)
 		})
 	}
 }
@@ -184,6 +246,13 @@ type check struct {
 	nodeID discover.NodeID
 }
 
+// testSwarmNetworkOptions contains optional parameters for running
+// testSwarmNetwork.
+type testSwarmNetworkOptions struct {
+	Timeout   time.Duration
+	SkipCheck bool
+}
+
 // testSwarmNetwork is a helper function used for testing different
 // static and dynamic Swarm network simulations.
 // It is responsible for:
@@ -191,17 +260,21 @@ type check struct {
 //  - Uploading a unique file to every node on every step.
 //  - May wait for Kademlia on every node to be healthy.
 //  - Checking if a file is retrievable from all nodes.
-func testSwarmNetwork(t *testing.T, timeout time.Duration, steps ...testSwarmNetworkStep) {
+func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwarmNetworkStep) {
 	dir, err := ioutil.TempDir("", "swarm-network-test")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
+	if o == nil {
+		o = new(testSwarmNetworkOptions)
+	}
+
 	ctx := context.Background()
-	if timeout > 0 {
+	if o.Timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, timeout)
+		ctx, cancel = context.WithTimeout(ctx, o.Timeout)
 		defer cancel()
 	}
 
@@ -225,6 +298,8 @@ func testSwarmNetwork(t *testing.T, timeout time.Duration, steps ...testSwarmNet
 			}
 
 			config.Init(privkey)
+			config.DeliverySkipCheck = o.SkipCheck
+
 			s, err := NewSwarm(nil, nil, config, nil)
 			if err != nil {
 				return nil, err
