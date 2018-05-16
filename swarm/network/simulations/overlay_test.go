@@ -88,7 +88,7 @@ func TestOverlaySim(t *testing.T) {
 	trigger := make(chan discover.NodeID)
 
 	//wait for all nodes to be up
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	//start watching node up events...
