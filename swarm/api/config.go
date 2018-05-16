@@ -50,24 +50,25 @@ type Config struct {
 	Swap *swap.SwapParams
 	Pss  *pss.PssParams
 	//*network.SyncParams
-	Contract        common.Address
-	EnsRoot         common.Address
-	EnsAPIs         []string
-	Path            string
-	ListenAddr      string
-	Port            string
-	PublicKey       string
-	BzzKey          string
-	NodeID          string
-	NetworkId       uint64
-	SwapEnabled     bool
-	SyncEnabled     bool
-	SyncUpdateDelay time.Duration
-	SwapApi         string
-	Cors            string
-	BzzAccount      string
-	BootNodes       string
-	privateKey      *ecdsa.PrivateKey
+	Contract          common.Address
+	EnsRoot           common.Address
+	EnsAPIs           []string
+	Path              string
+	ListenAddr        string
+	Port              string
+	PublicKey         string
+	BzzKey            string
+	NodeID            string
+	NetworkId         uint64
+	SwapEnabled       bool
+	SyncEnabled       bool
+	DeliverySkipCheck bool
+	SyncUpdateDelay   time.Duration
+	SwapApi           string
+	Cors              string
+	BzzAccount        string
+	BootNodes         string
+	privateKey        *ecdsa.PrivateKey
 }
 
 //create a default config with all parameters to set to defaults
@@ -78,19 +79,20 @@ func NewConfig() (self *Config) {
 		DPAParams:        storage.NewDPAParams(),
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
-		Swap:            swap.NewDefaultSwapParams(),
-		Pss:             pss.NewPssParams(),
-		ListenAddr:      DefaultHTTPListenAddr,
-		Port:            DefaultHTTPPort,
-		Path:            node.DefaultDataDir(),
-		EnsAPIs:         nil,
-		EnsRoot:         ens.TestNetAddress,
-		NetworkId:       network.NetworkID,
-		SwapEnabled:     false,
-		SyncEnabled:     true,
-		SyncUpdateDelay: 15 * time.Second,
-		SwapApi:         "",
-		BootNodes:       "",
+		Swap:              swap.NewDefaultSwapParams(),
+		Pss:               pss.NewPssParams(),
+		ListenAddr:        DefaultHTTPListenAddr,
+		Port:              DefaultHTTPPort,
+		Path:              node.DefaultDataDir(),
+		EnsAPIs:           nil,
+		EnsRoot:           ens.TestNetAddress,
+		NetworkId:         network.NetworkID,
+		SwapEnabled:       false,
+		SyncEnabled:       true,
+		DeliverySkipCheck: false,
+		SyncUpdateDelay:   15 * time.Second,
+		SwapApi:           "",
+		BootNodes:         "",
 	}
 
 	return

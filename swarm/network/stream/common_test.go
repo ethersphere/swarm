@@ -413,3 +413,16 @@ func (s *testExternalServer) GetData([]byte) ([]byte, error) {
 }
 
 func (s *testExternalServer) Close() {}
+
+// Sets the global value defaultSkipCheck.
+// It should be used in test function defer to reset the global value
+// to the original value.
+//
+// defer setDefaultSkipCheck(defaultSkipCheck)
+// defaultSkipCheck = skipCheck
+//
+// This works as defer function arguments evaluations are evaluated as ususal,
+// but only the function body invocation is deferred.
+func setDefaultSkipCheck(skipCheck bool) {
+	defaultSkipCheck = skipCheck
+}
