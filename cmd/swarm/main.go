@@ -122,7 +122,7 @@ var (
 		Usage: "Swarm HTTP endpoint",
 		Value: "http://127.0.0.1:8500",
 	}
-	SwarmRecursiveUploadFlag = cli.BoolFlag{
+	SwarmRecursiveFlag = cli.BoolFlag{
 		Name:  "recursive",
 		Usage: "Upload directories recursively",
 	}
@@ -143,7 +143,7 @@ var (
 		Usage: "force mime type",
 	}
 	SwarmEncryptedFlag = cli.BoolFlag{
-		Name:  "encrypted",
+		Name:  "encrypt",
 		Usage: "use encrypted upload",
 	}
 	CorsStringFlag = cli.StringFlag{
@@ -231,6 +231,17 @@ Lists files and directories contained in a manifest.
 Prints the swarm hash of file or directory.
 `,
 		},
+		{
+			Action:    download,
+			Name:      "down",
+			Flags:     []cli.Flag{SwarmRecursiveFlag},
+			Usage:     "downloads a swarm manifest or a file inside a manifest",
+			ArgsUsage: " <uri> [<dir>]",
+			Description: `
+Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.
+`,
+		},
+
 		{
 			Name:      "manifest",
 			Usage:     "update a MANIFEST",
@@ -356,7 +367,7 @@ Remove corrupt entries from a local chunk database.
 		ChequebookAddrFlag,
 		// upload flags
 		SwarmApiFlag,
-		SwarmRecursiveUploadFlag,
+		SwarmRecursiveFlag,
 		SwarmWantManifestFlag,
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
