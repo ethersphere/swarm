@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -159,6 +160,15 @@ func TestClientHandshake(t *testing.T) {
 		got := <-rpssping.InC
 		log.Warn("ok", "idx", i, "got", got)
 		time.Sleep(time.Second)
+	}
+
+	rw := lpsc.peerPool[pss.PingTopic][rpubkey]
+	lpsc.RemovePssPeer(rpubkey, pss.PingProtocol)
+	if err := rw.WriteMsg(p2p.Msg{
+		Size:    3,
+		Payload: bytes.NewReader([]byte("foo")),
+	}); err == nil {
+		t.Fatalf("expected error on write")
 	}
 }
 
