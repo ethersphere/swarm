@@ -500,13 +500,6 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		}
 	}
 
-	//
-	//	if err != nil {
-	//		code, err2 := s.translateResourceError(w, r, "mutable resource update fail", err)
-	//		Respond(w, r, err2.Error(), code)
-	//		return
-	//	}
-
 	// If we have data to return, write this now
 	// \TODO there should always be data to return here
 	if len(outdata) > 0 {
@@ -946,12 +939,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	if err != nil {
-		// cheeky, cheeky hack. See swarm/api/api.go:Api.Get() for an explanation
-		//		if rsrcErr, ok := err.(*api.ErrResourceReturn); ok {
-		//			log.Trace("getting resource proxy", "err", rsrcErr.Key())
-		//			s.handleGetResource(w, r)
-		//			return
-		//		}
 		switch status {
 		case http.StatusNotFound:
 			getFileNotFound.Inc(1)

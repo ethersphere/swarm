@@ -97,7 +97,6 @@ func serverFunc(api *api.Api) testutil.TestServer {
 // and raw retrieve of that hash should return the data
 func TestBzzResourceMultihash(t *testing.T) {
 
-	//t.Skip("fixed in different branch to be merged after this PR")
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
@@ -143,7 +142,6 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//rsrcResp := &resourceResponse{}
 	rsrcResp := &storage.Key{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
@@ -152,7 +150,6 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	correctManifestKeyHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
 	if rsrcResp.Hex() != correctManifestKeyHex {
-		//if !bytes.Equal(rsrcResp.Update, keybyteshash.Bytes()) {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestKeyHex, rsrcResp)
 	}
 
@@ -182,7 +179,6 @@ func TestBzzResource(t *testing.T) {
 
 	// our mutable resource "name"
 	keybytes := "foo.eth"
-	//	keybyteshash := ens.EnsNode(keybytes)
 
 	// data of update 1
 	databytes := make([]byte, 666)

@@ -991,7 +991,7 @@ func getNextPeriod(start uint64, current uint64, frequency uint64) (uint32, erro
 	return uint32(period + 1), nil
 }
 
-// Helper function to create an ascii-only value of a given resource update name
+// ToSafeName is a helper function to create an valid idna of a given resource update name
 func ToSafeName(name string) (string, error) {
 	return idna.ToASCII(name)
 }
@@ -1034,7 +1034,6 @@ func isMultihash(data []byte) int {
 	return cursor + inthashlength
 }
 
-// TODO: this should ideally not be exposed, but swarm/testutil/http.go needs it.
 func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*ResourceHandler, error) {
 	path := filepath.Join(datadir, DbDirName)
 	rh, err := NewResourceHandler(params)
