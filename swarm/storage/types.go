@@ -169,9 +169,9 @@ func (c KeyCollection) Swap(i, j int) {
 
 // ChunkStore is the interface for
 type DPA interface {
-	Get(ref Address) (ch Chunk, fetch func(rctx Request) (Chunk, error), err error)
+	Get(rctx Request, ref Address) (ch Chunk, err error)
 	Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error)
-	Has(ref Address) (waitToStore func(Request) error, err error)
+	Has(ref Address) (waitToStore func(rctx Request) error, err error)
 	Close()
 }
 

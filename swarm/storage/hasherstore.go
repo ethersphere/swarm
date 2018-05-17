@@ -101,20 +101,15 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 // If the data is encrypted and the reference contains an encryption key, it will be decrypted before
 // return.
 func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error) {
-	key, encryptionKey, err := parseReference(ref, h.hashSize)
+	addr, encryptionKey, err := parseReference(ref, h.hashSize)
 	if err != nil {
 		return nil, err
 	}
-	chunk, fetch, err := h.dpa.Get(key)
+
+	rctx := &localRequest{ctx, addr}
+	chunk, err := h.dpa.Get(rctx, addr)
 	if err != nil {
 		return nil, err
-	}
-	if chunk == nil {
-		rctx := &localRequest{ctx, key}
-		chunk, err = fetch(rctx)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	chunkData := ChunkData(chunk.Data())

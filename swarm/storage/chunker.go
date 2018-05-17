@@ -417,7 +417,7 @@ func (self *LazyChunkReader) Size() (n int64, err error) {
 		// }
 		self.chunkData = chunkData
 		s := self.chunkData.Size()
-		log.Warn("lazychunkreader.size", "key", self.key, "size", s)
+		log.Debug("lazychunkreader.size", "key", self.key, "size", s)
 		if s < 0 {
 			panic("corrupt size")
 			return 0, errors.New("corrupt size")
@@ -425,7 +425,7 @@ func (self *LazyChunkReader) Size() (n int64, err error) {
 		return int64(s), nil
 	}
 	s := self.chunkData.Size()
-	log.Warn("lazychunkreader.size", "key", self.key, "size", s)
+	log.Debug("lazychunkreader.size", "key", self.key, "size", s)
 
 	return int64(s), nil
 }
@@ -441,9 +441,9 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 		return 0, nil
 	}
 	size, err := self.Size()
-	log.Warn(">", "size", size)
+	log.Debug(">", "size", size)
 	if err != nil {
-		log.Error("lazychunkreader.readat.size", "size", size, "err", err)
+		log.Debug("lazychunkreader.readat.size", "size", size, "err", err)
 		return 0, err
 	}
 
@@ -473,15 +473,15 @@ func (self *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 
 	err = <-errC
 	if err != nil {
-		log.Error("lazychunkreader.readat.errc", "err", err)
+		log.Debug("lazychunkreader.readat.errc", "err", err)
 		close(quitC)
 		return 0, err
 	}
 	if off+int64(len(b)) >= size {
-		log.Error("lazychunkreader.readat.return at end", "size", size, "off", off)
+		log.Debug("lazychunkreader.readat.return at end", "size", size, "off", off)
 		return int(size - off), io.EOF
 	}
-	log.Error("lazychunkreader.readat.errc", "buff", len(b))
+	log.Debug("lazychunkreader.readat.errc", "buff", len(b))
 	return len(b), nil
 }
 
@@ -534,7 +534,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 			childAddress := chunkData[8+j*self.hashSize : 8+(j+1)*self.hashSize]
 			chunkData, err := self.getter.Get(self.ctx, Reference(childAddress))
 			if err != nil {
-				log.Error("lazychunkreader.join", "key", fmt.Sprintf("%x", childAddress), "err", err)
+				log.Debug("lazychunkreader.join", "key", fmt.Sprintf("%x", childAddress), "err", err)
 				select {
 				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childAddress)):
 				case <-quitC:
@@ -556,7 +556,7 @@ func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
 
 	read, err = self.ReadAt(b, self.off)
 	if err != nil && err != io.EOF {
-		log.Error("lazychunkreader.readat", "read", read, "err", err)
+		log.Debug("lazychunkreader.readat", "read", read, "err", err)
 		metrics.GetOrRegisterCounter("lazychunkreader.read.err", nil).Inc(1)
 	}
 

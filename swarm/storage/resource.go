@@ -121,7 +121,7 @@ type headerGetter interface {
 
 // Mutable resource is an entity which allows updates to a resource
 // without resorting to ENS on each update.
-// The update scheme is built on swarm chunks with chunk keys following
+// The update scheme is built on swarm chunks with chunk addrs following
 // a predictable, versionable pattern.
 //
 // Updates are defined to be periodic in nature, where periods are
@@ -145,7 +145,7 @@ type headerGetter interface {
 // work. A normal chunk of the blocknumber/frequency data can also be created,
 // and pointed to by an external resource (ENS or manifest entry)
 //
-// Actual data updates are also made in the form of swarm chunks. The keys
+// Actual data updates are also made in the form of swarm chunks. The addrs
 // of the updates are the hash of a concatenation of properties as follows:
 //
 // sha256(period|version|namehash)
@@ -232,7 +232,7 @@ func (self *ResourceHandler) SetStore(store *NetStore) {
 // If resource update, owner is checked against ENS record of resource name inferred from chunk data
 // If parsed signature is nil, validates automatically
 // If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
-func (self *ResourceHandler) Validate(key Address, data []byte) bool {
+func (self *ResourceHandler) Validate(addr Address, data []byte) bool {
 	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
 		if len(data) == indexSize {
@@ -242,15 +242,15 @@ func (self *ResourceHandler) Validate(key Address, data []byte) bool {
 		}
 		return false
 	} else if signature == nil {
-		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), key)
+		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), addr)
 	}
 
-	digest := self.keyDataHash(key, parseddata)
-	addr, err := getAddressFromDataSig(digest, *signature)
+	digest := self.keyDataHash(addr, parseddata)
+	address, err := getAddressFromDataSig(digest, *signature)
 	if err != nil {
 		return false
 	}
-	ok, _ := self.checkAccess(name, addr)
+	ok, _ := self.checkAccess(name, address)
 	return ok
 }
 
@@ -260,11 +260,11 @@ func (self *ResourceHandler) IsValidated() bool {
 }
 
 // Create the resource update digest used in signatures
-func (self *ResourceHandler) keyDataHash(key Address, data []byte) common.Hash {
+func (self *ResourceHandler) keyDataHash(addr Address, data []byte) common.Hash {
 	hasher := self.hashPool.Get().(SwarmHash)
 	defer self.hashPool.Put(hasher)
 	hasher.Reset()
-	hasher.Write(key[:])
+	hasher.Write(addr[:])
 	hasher.Write(data)
 	return common.BytesToHash(hasher.Sum(nil))
 }
@@ -352,20 +352,20 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 		return nil, err
 	}
 
-	// chunk with key equal to namehash points to data of first blockheight + update frequency
+	// chunk with addr equal to namehash points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
-	key := Address(nameHash.Bytes())
+	addr := Address(nameHash.Bytes())
 	// root block has first two bytes both, which distinguishes from update bytes
 	data := make([]byte, indexSize)
 	binary.LittleEndian.PutUint64(data[2:10], currentblock)
 	binary.LittleEndian.PutUint64(data[10:18], frequency)
-	chunk := NewChunk(key, data)
+	chunk := NewChunk(addr, data)
 
 	_, err = self.dpa.Put(chunk)
 	if err != nil {
 		return nil, err
 	}
-	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
+	log.Debug("new resource", "name", name, "addr", nameHash, "startBlock", currentblock, "frequency", frequency)
 
 	rsrc := &resource{
 		name:       &name,
@@ -423,7 +423,7 @@ func (self *ResourceHandler) LookupHistorical(rctx Request, nameHash common.Hash
 // at the next update block height
 //
 // It starts at the next period after the current block height, and upon failure
-// tries the corresponding keys of each previous period until one is found
+// tries the corresponding addrs of each previous period until one is found
 // (or startBlock is reached, in which case there are no updates).
 //
 // Version iteration is done as in (*ResourceHandler).LookupHistorical
@@ -503,39 +503,35 @@ func (self *ResourceHandler) lookup(rctx Request, rsrc *resource, period uint32,
 		if maxLookup.Limit && hops > maxLookup.Max {
 			return nil, NewResourceError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
-		key := self.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := self.retrieveResource(rctx, key)
+		addr := self.resourceHash(period, version, rsrc.nameHash)
+		chunk, err := self.retrieveResource(rctx, addr)
 		if err == nil {
 			if specificversion {
 				return self.updateResourceIndex(rsrc, chunk)
 			}
 			// check if we have versions > 1. If a version fails, the previous version is used and returned.
-			log.Trace("rsrc update version 1 found, checking for version updates", "period", period, "key", key)
+			log.Trace("rsrc update version 1 found, checking for version updates", "period", period, "addr", addr)
 			for {
 				newversion := version + 1
-				key := self.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := self.retrieveResource(rctx, key)
+				addr := self.resourceHash(period, newversion, rsrc.nameHash)
+				newchunk, err := self.retrieveResource(rctx, addr)
 				if err != nil {
 					return self.updateResourceIndex(rsrc, chunk)
 				}
 				chunk = newchunk
 				version = newversion
-				log.Trace("version update found, checking next", "version", version, "period", period, "key", key)
+				log.Trace("version update found, checking next", "version", version, "period", period, "addr", addr)
 			}
 		}
-		log.Trace("rsrc update not found, checking previous period", "period", period, "key", key)
+		log.Trace("rsrc update not found, checking previous period", "period", period, "addr", addr)
 		period--
 		hops++
 	}
 	return nil, NewResourceError(ErrNotFound, "no updates found")
 }
 
-func (self *ResourceHandler) retrieveResource(rctx Request, key Address) (Chunk, error) {
-	chunk, fetch, err := self.dpa.Get(key)
-	if fetch == nil {
-		return chunk, err
-	}
-	return fetch(rctx)
+func (self *ResourceHandler) retrieveResource(rctx Request, addr Address) (Chunk, error) {
+	return self.dpa.Get(rctx, addr)
 }
 
 // load existing mutable resource into resource struct
@@ -586,7 +582,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk Chunk) (*
 	if *rsrc.name != name {
 		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, *rsrc.name))
 	}
-	log.Trace("update", "name", *rsrc.name, "rootkey", rsrc.nameHash, "updatekey", chunk.Address, "period", period, "version", version)
+	log.Trace("update", "name", *rsrc.name, "rootaddr", rsrc.nameHash, "updateaddr", chunk.Address, "period", period, "version", version)
 	// check signature (if signer algorithm is present)
 	if signature != nil {
 		digest := self.keyDataHash(chunk.Address(), data)
@@ -604,7 +600,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk Chunk) (*
 	rsrc.data = make([]byte, len(data))
 	rsrc.Multihash = multihash
 	copy(rsrc.data, data)
-	log.Debug("Resource synced", "name", *rsrc.name, "key", chunk.Address, "period", rsrc.lastPeriod, "version", rsrc.version)
+	log.Debug("Resource synced", "name", *rsrc.name, "addr", chunk.Address, "period", rsrc.lastPeriod, "version", rsrc.version)
 	self.setResource(*rsrc.name, rsrc)
 	return rsrc, nil
 }
@@ -748,13 +744,13 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	}
 	version++
 
-	// calculate the chunk key
-	key := self.resourceHash(nextperiod, version, rsrc.nameHash)
+	// calculate the chunk addr
+	addr := self.resourceHash(nextperiod, version, rsrc.nameHash)
 
 	var signature *Signature
 	if self.signer != nil {
-		// sign the data hash with the key
-		digest := self.keyDataHash(key, data)
+		// sign the data hash with the addr
+		digest := self.keyDataHash(addr, data)
 		sig, err := self.signer.Sign(digest)
 		if err != nil {
 			return nil, NewResourceError(ErrInvalidSignature, fmt.Sprintf("Sign fail: %v", err))
@@ -781,7 +777,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	if !multihash {
 		datalength = len(data)
 	}
-	chunk := newUpdateChunk(key, signature, nextperiod, version, name, data, datalength)
+	chunk := newUpdateChunk(addr, signature, nextperiod, version, name, data, datalength)
 
 	// send the chunk
 	ctx, cancel := context.WithTimeout(context.Background(), self.storeTimeout)
@@ -793,14 +789,14 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	if err != nil {
 		return nil, NewResourceError(ErrIO, err.Error())
 	}
-	log.Trace("resource update", "name", name, "key", key, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.Data(), "multihash", multihash)
+	log.Trace("resource update", "name", name, "addr", addr, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.Data(), "multihash", multihash)
 
-	// update our resources map entry and return the new key
+	// update our resources map entry and return the new addr
 	rsrc.lastPeriod = nextperiod
 	rsrc.version = version
 	rsrc.data = make([]byte, len(data))
 	copy(rsrc.data, data)
-	return key, nil
+	return addr, nil
 }
 
 // Closes the datastore.
@@ -840,7 +836,7 @@ func (self *ResourceHandler) setResource(name string, rsrc *resource) {
 	self.resources[name] = rsrc
 }
 
-// used for chunk keys
+// used for chunk addrs
 func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehash common.Hash) Address {
 	// format is: hash(period|version|namehash)
 	hasher := self.hashPool.Get().(SwarmHash)
@@ -868,7 +864,7 @@ func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Ad
 }
 
 // create an update chunk
-func newUpdateChunk(key Address, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *chunk {
+func newUpdateChunk(addr Address, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *chunk {
 
 	// no signatures if no validator
 	var signaturelength int
@@ -912,7 +908,7 @@ func newUpdateChunk(key Address, signature *Signature, period uint32, version ui
 		copy(sdata[cursor:], signature[:])
 	}
 
-	return NewChunk(key, sdata)
+	return NewChunk(addr, sdata)
 }
 
 func getNextPeriod(start uint64, current uint64, frequency uint64) uint32 {

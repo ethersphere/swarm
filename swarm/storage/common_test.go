@@ -303,9 +303,8 @@ type fakeDPA struct {
 	store ChunkStore
 }
 
-func (f *fakeDPA) Get(ref Address) (ch Chunk, fetch func(ctx Request) (Chunk, error), err error) {
-	chunk, err := f.store.Get(ref)
-	return chunk, nil, err
+func (f *fakeDPA) Get(rctx Request, ref Address) (ch Chunk, err error) {
+	return f.store.Get(ref)
 }
 
 func (f *fakeDPA) Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error) {
@@ -314,7 +313,7 @@ func (f *fakeDPA) Put(ch Chunk) (waitToStore func(ctx context.Context) error, er
 
 func (f *fakeDPA) Has(ref Address) (waitToStore func(Request) error, err error) {
 	_, err = f.store.Get(ref)
-	return nil, err
+	return func(Request) error { return nil }, err
 }
 
 func (f *fakeDPA) Close() {

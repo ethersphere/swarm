@@ -42,11 +42,12 @@ func NewMockRetrieve(to time.Duration) *mockRetrieve {
 	return &mockRetrieve{fetchers: make(map[string]int), searchTimeout: to}
 }
 
-func (m *mockRetrieve) retrieve(rctx Request, f *Fetcher) (err error) {
-	log.Warn("mock retrieve called", "addr", f.Address().Hex())
+func (m *mockRetrieve) retrieve(rctx Request, f *Fetcher) error {
+	log.Warn("mock retrieve called", "addr", rctx.Address().Hex())
 	haddr := hex.EncodeToString(rctx.Address())
 	time.Sleep(m.searchTimeout)
 	m.fetchers[haddr] += 1
+	log.Warn("mock retrieve searchtimeout", "addr", rctx.Address().Hex())
 	if m.fetchers[haddr] < 6 {
 		return fmt.Errorf("error %d", m.fetchers[haddr])
 	}
@@ -56,9 +57,9 @@ func (m *mockRetrieve) retrieve(rctx Request, f *Fetcher) (err error) {
 	return nil
 }
 
-func TestNetstoreFailedRequest(t *testing.T) {
+func TestNetstoreRepeatedFailedRequest(t *testing.T) {
 	// setup
-	searchTimeout := 300 * time.Millisecond
+	searchTimeout := 500 * time.Millisecond
 	naddr := network.RandomAddr() // tested peers peer address
 
 	// temp datadir
@@ -83,42 +84,49 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	addr := Address(make([]byte, 32))
 	n := 4
 	for i := 1; i < n; i++ {
-		// timeout := time.Duration(i)*searchTimeout + 20*time.Millisecond
-		timeout := time.Duration(i+1)*searchTimeout + 20*time.Millisecond
+		log.Warn("\n\nIteration", "i", i)
+		timeout := time.Duration(i)*searchTimeout + 300*time.Millisecond
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		// ctx, cancel := context.WithTimeout(context.Background(), time.Duration(i)*searchTimeout+100*time.Millisecond)
-		// forward  call
 		log.Warn("calling netstore get", "timeout", timeout)
-		_, err = Get(ctx, netStore, addr)
+		rctx := &localRequest{ctx, addr}
+		_, err = netStore.Get(rctx, addr)
+		time.Sleep(100 * time.Millisecond)
+		// check the error
 		expErr := fmt.Errorf("context deadline exceeded")
-		if err.Error() != expErr.Error() {
-			t.Fatalf("expected to get %v , but got: %s", expErr, err)
+		if err == nil || err.Error() != expErr.Error() {
+			t.Fatalf("expected to get %v , but got: %v", expErr, err)
 		}
+
+		// check retrieve status
 		status, ok := err.(*errStatus)
 		if !ok {
 			t.Fatalf("expected to get errstatus, got %T", err)
 		}
 		expErr = fmt.Errorf("error %d", i)
-		if status.Status().Error() != expErr.Error() {
-			t.Fatalf("expected to get %v , but got: %s", expErr, status.Status())
+		if status.Status() == nil || status.Status().Error() != expErr.Error() {
+			t.Fatalf("expected to get %v , but got: %v", expErr, status.Status())
 		}
+
+		// check how many times retrieve is called
 		if got := r.fetchers[hex.EncodeToString(addr)]; got != i {
 			t.Fatalf("expected to have called retrieve %v, but got: %v", i, got)
 		}
 		log.Warn("testing get", "timeout", timeout, "status", status.Status(), "err", err)
 		cancel()
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(n)*searchTimeout+100*time.Millisecond)
+
+	// check if eventually the chunk arrives
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(n)*searchTimeout+15*time.Millisecond)
 	defer cancel()
-	// third call
-	chunk, err := Get(ctx, netStore, addr)
+	rctx := &localRequest{ctx, addr}
+	ch, err := netStore.Get(rctx, addr)
 	if got := r.fetchers[hex.EncodeToString(addr)]; got != n {
 		t.Fatalf("expected to have called retrieve %v times, but got: %v", n, got)
 	}
 	if err != nil {
 		t.Fatalf("expected to get a chunk but got: %v", err)
 	}
-	if len(chunk.Data()) != 10 {
-		t.Fatalf("expected to get a chunk with size 10, but got: %v", len(chunk.Data()))
+	if len(ch.Data()) != 2 {
+		t.Fatalf("expected to get a chunk with size 10, but got: %v", len(ch.Data()))
 	}
 }
