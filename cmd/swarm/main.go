@@ -123,6 +123,11 @@ var (
 		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
 		EnvVar: SWARM_ENV_SYNC_UPDATE_DELAY,
 	}
+	SwarmDeliverySkipCheckFlag = cli.BoolFlag{
+		Name:   "delivery-skip-check",
+		Usage:  "Skip chunk delivery check (default false)",
+		EnvVar: SWARM_ENV_DELIVERY_SKIP_CHECK,
+	}
 	EnsAPIFlag = cli.StringSliceFlag{
 		Name:   "ens-api",
 		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
@@ -133,7 +138,7 @@ var (
 		Usage: "Swarm HTTP endpoint",
 		Value: "http://127.0.0.1:8500",
 	}
-	SwarmRecursiveUploadFlag = cli.BoolFlag{
+	SwarmRecursiveFlag = cli.BoolFlag{
 		Name:  "recursive",
 		Usage: "Upload directories recursively",
 	}
@@ -154,7 +159,7 @@ var (
 		Usage: "force mime type",
 	}
 	SwarmEncryptedFlag = cli.BoolFlag{
-		Name:  "encrypted",
+		Name:  "encrypt",
 		Usage: "use encrypted upload",
 	}
 	CorsStringFlag = cli.StringFlag{
@@ -238,7 +243,18 @@ func init() {
 			Description:        "Prints the swarm hash of file or directory",
 		},
 		{
-			Name:               "manifest",
+			Action:    download,
+			Name:      "down",
+			Flags:     []cli.Flag{SwarmRecursiveFlag},
+			Usage:     "downloads a swarm manifest or a file inside a manifest",
+			ArgsUsage: " <uri> [<dir>]",
+			Description: `
+Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.
+`,
+		},
+
+		{
+	    Name:               "manifest",
 			CustomHelpTemplate: helpTemplate,
 			Usage:              "perform operations on swarm manifests",
 			ArgsUsage:          "COMMAND",
@@ -387,6 +403,7 @@ pv(1) tool to get a progress bar:
 		SwarmSwapAPIFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
+		SwarmDeliverySkipCheckFlag,
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
@@ -394,7 +411,7 @@ pv(1) tool to get a progress bar:
 		ChequebookAddrFlag,
 		// upload flags
 		SwarmApiFlag,
-		SwarmRecursiveUploadFlag,
+		SwarmRecursiveFlag,
 		SwarmWantManifestFlag,
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,

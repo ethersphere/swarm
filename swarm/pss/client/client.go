@@ -41,7 +41,7 @@ type Client struct {
 	topicsC chan []byte
 	quitC   chan struct{}
 
-	lock sync.Mutex
+	poolMu sync.Mutex
 }
 
 // implements p2p.MsgReadWriter
@@ -52,6 +52,7 @@ type pssRPCRW struct {
 	addr     pss.PssAddress
 	pubKeyId string
 	lastSeen time.Time
+	closed   bool
 }
 
 func (self *Client) newpssRPCRW(pubkeyid string, addr pss.PssAddress, topicobj pss.Topic) (*pssRPCRW, error) {
@@ -90,6 +91,9 @@ func (rw *pssRPCRW) ReadMsg() (p2p.Msg, error) {
 // - send fails
 func (rw *pssRPCRW) WriteMsg(msg p2p.Msg) error {
 	log.Trace("got writemsg pssclient", "msg", msg)
+	if rw.closed {
+		return fmt.Errorf("connection closed")
+	}
 	rlpdata := make([]byte, msg.Size)
 	msg.Payload.Read(rlpdata)
 	pmsg, err := rlp.EncodeToBytes(pss.ProtocolMsg{
@@ -311,7 +315,9 @@ func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spe
 		if err != nil {
 			return err
 		}
+		self.poolMu.Lock()
 		self.peerPool[topic][pubkeyid] = rw
+		self.poolMu.Unlock()
 		nid, _ := discover.HexID("0x00")
 		p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
 		go self.protos[topic].Run(p, self.peerPool[topic][pubkeyid])
@@ -323,6 +329,10 @@ func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spe
 //
 // TODO: underlying cleanup
 func (self *Client) RemovePssPeer(pubkeyid string, spec *protocols.Spec) {
+	log.Debug("closing pss client peer", "pubkey", pubkeyid, "protoname", spec.Name, "protoversion", spec.Version)
+	self.poolMu.Lock()
+	defer self.poolMu.Unlock()
 	topic := pss.ProtocolTopic(spec)
+	self.peerPool[topic][pubkeyid].closed = true
 	delete(self.peerPool[topic], pubkeyid)
 }

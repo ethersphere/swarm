@@ -69,17 +69,22 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 }
 
 func TestIntervals(t *testing.T) {
-	testIntervals(t, true, nil)
-	testIntervals(t, false, NewRange(9, 26))
-	testIntervals(t, true, NewRange(9, 26))
+	testIntervals(t, true, nil, false)
+	testIntervals(t, false, NewRange(9, 26), false)
+	testIntervals(t, true, NewRange(9, 26), false)
+
+	testIntervals(t, true, nil, true)
+	testIntervals(t, false, NewRange(9, 26), true)
+	testIntervals(t, true, NewRange(9, 26), true)
 }
 
-func testIntervals(t *testing.T, live bool, history *Range) {
+func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	nodes := 2
 	chunkCount := dataChunkCount
-	skipCheck := false
 
+	defer setDefaultSkipCheck(defaultSkipCheck)
 	defaultSkipCheck = skipCheck
+
 	toAddr = network.NewAddrFromNodeID
 	conf := &streamTesting.RunConfig{
 		Adapter:        *adapter,

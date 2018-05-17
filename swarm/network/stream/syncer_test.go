@@ -45,6 +45,7 @@ func TestSyncerSimulation(t *testing.T) {
 }
 
 func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool, po uint8) {
+	defer setDefaultSkipCheck(defaultSkipCheck)
 	defaultSkipCheck = skipCheck
 	createStoreFunc = createTestLocalStorageFromSim
 	registries = make(map[discover.NodeID]*TestRegistry)

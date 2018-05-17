@@ -30,6 +30,7 @@ import (
 	"net/textproto"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -233,6 +234,91 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 			return fmt.Errorf("expected %s to be %d bytes but got %d", hdr.Name, hdr.Size, n)
 		}
 	}
+}
+
+// DownloadFile downloads a single file into the destination directory
+// if the manifest entry does not specify a file name - it will fallback
+// to the hash of the file as a filename
+func (c *Client) DownloadFile(hash, path, dest string) error {
+	hasDestinationFilename := false
+	if stat, err := os.Stat(dest); err == nil {
+		hasDestinationFilename = !stat.IsDir()
+	} else {
+		if os.IsNotExist(err) {
+			// does not exist - should be created
+			hasDestinationFilename = true
+		} else {
+			return fmt.Errorf("could not stat path: %v", err)
+		}
+	}
+
+	manifestList, err := c.List(hash, path)
+	if err != nil {
+		return fmt.Errorf("could not list manifest: %v", err)
+	}
+
+	switch len(manifestList.Entries) {
+	case 0:
+		return fmt.Errorf("could not find path requested at manifest address. make sure the path you've specified is correct")
+	case 1:
+		//continue
+	default:
+		return fmt.Errorf("got too many matches for this path")
+	}
+
+	uri := c.Gateway + "/bzz:/" + hash + "/" + path
+	req, err := http.NewRequest("GET", uri, nil)
+	if err != nil {
+		return err
+	}
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected HTTP status: expected 200 OK, got %d", res.StatusCode)
+	}
+	filename := ""
+	if hasDestinationFilename {
+		filename = dest
+	} else {
+		// try to assert
+		re := regexp.MustCompile("[^/]+$") //everything after last slash
+
+		if results := re.FindAllString(path, -1); len(results) > 0 {
+			filename = results[len(results)-1]
+		} else {
+			if entry := manifestList.Entries[0]; entry.Path != "" && entry.Path != "/" {
+				filename = entry.Path
+			} else {
+				// assume hash as name if there's nothing from the command line
+				filename = hash
+			}
+		}
+		filename = filepath.Join(dest, filename)
+	}
+	filePath, err := filepath.Abs(filename)
+	if err != nil {
+		return err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(filePath), 0777); err != nil {
+		return err
+	}
+
+	dst, err := os.Create(filename)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, res.Body); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // UploadManifest uploads the given manifest to swarm
