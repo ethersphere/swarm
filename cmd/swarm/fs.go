@@ -69,6 +69,7 @@ func unmount(cliContext *cli.Context) {
 	if err != nil {
 		utils.Fatalf("encountered an error calling the RPC endpoint while unmounting: %v", err)
 	}
+	fmt.Printf("%s\n", mf.LatestManifest) //print the latest manifest hash for user reference
 }
 
 func listMounts(cliContext *cli.Context) {
@@ -87,7 +88,7 @@ func listMounts(cliContext *cli.Context) {
 	if len(mf) == 0 {
 		fmt.Print("Could not found any swarmfs mounts. Please make sure you've specified the correct RPC endpoint")
 	} else {
-		fmt.Printf("Found %d swarmfs mounts:\n", len(mf))
+		fmt.Printf("Found %d swarmfs mount(s):\n", len(mf))
 		for i, mountInfo := range mf {
 			fmt.Printf("%d:\n", i)
 			fmt.Printf("\tMount point: %s\n", mountInfo.MountPoint)
