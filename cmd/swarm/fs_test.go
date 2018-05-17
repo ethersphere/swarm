@@ -17,15 +17,24 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	colorable "github.com/mattn/go-colorable"
 )
+
+func init() {
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+}
 
 type testFile struct {
 	filePath string
@@ -42,6 +51,7 @@ func TestCLISwarmFs(t *testing.T) {
 
 	// create a tmp file
 	mountPoint, err := ioutil.TempDir("", "swarm-test")
+	log.Debug(fmt.Sprintf("1st mount: %s", mountPoint))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,17 +77,16 @@ func TestCLISwarmFs(t *testing.T) {
 	dirPath2, err := createDirInDir(dirPath, "AnotherTestSubDir")
 
 	dummyContent := "somerandomtestcontentthatshouldbeasserted"
-	for _, d := range []string{dirPath, dirPath2} {
+	for _, d := range []string{mountPoint, dirPath, dirPath2} {
 		for _, entry := range []string{"f1.tmp", "f2.tmp"} {
 			tFile, err := createTestFileInPath(d, entry, dummyContent)
 			if err != nil {
 				t.Fatal(err)
 			}
-
 			filesToAssert = append(filesToAssert, tFile)
 		}
 	}
-	if len(filesToAssert) != 4 {
+	if len(filesToAssert) != 6 {
 		t.Fatalf("should have 4 files to assert now, got %d", len(filesToAssert))
 	}
 	hashRegexp := `[a-f\d]{64}`
@@ -89,6 +98,7 @@ func TestCLISwarmFs(t *testing.T) {
 	}...)
 	_, matches := lsMounts.ExpectRegexp(hashRegexp)
 	lsMounts.ExpectExit()
+
 	hash := matches[0]
 	if hash == mhash {
 		t.Fatal("this should not be equal")
@@ -103,17 +113,48 @@ func TestCLISwarmFs(t *testing.T) {
 	if len(files) > 0 {
 		t.Fatal("there shouldn't be anything here")
 	}
+	newMountPoint, err := ioutil.TempDir("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	//remount, check files
-
 	newMount := runSwarm(t, []string{
 		"fs",
 		"mount",
 		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		hash, // the latest hash
-		mountPoint,
+		newMountPoint,
 	}...)
+
 	newMount.ExpectExit()
+
+	time.Sleep(10 * time.Second)
+
+	files, err = ioutil.ReadDir(newMountPoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(files) == 0 {
+		t.Fatal("there should be something here")
+	}
+
+	for _, fu := range files {
+		log.Debug(fmt.Sprintf("got some filename: %s", fu.Name()))
+	}
+
+	for _, file := range filesToAssert {
+		file.filePath = strings.Replace(file.filePath, mountPoint, newMountPoint, -1)
+
+		fileBytes, err := ioutil.ReadFile(file.filePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(fileBytes, bytes.NewBufferString(file.content).Bytes()) {
+			t.Fatal("this should be equal")
+		}
+	}
 
 }
 
@@ -156,6 +197,7 @@ func createDirInDir(createInDir string, dirToCreate string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	log.Debug(fmt.Sprintf("dirindir: %s", fullpath))
 	return fullpath, nil
 }
 
@@ -163,6 +205,8 @@ func createTestFileInPath(dir, filename, content string) (*testFile, error) {
 	tFile := &testFile{}
 	filePath := filepath.Join(dir, filename)
 	if file, err := os.Create(filePath); err == nil {
+		log.Debug(fmt.Sprintf("creatingfile: %s", filePath))
+
 		tFile.file = file
 		tFile.content = content
 		tFile.filePath = filePath
