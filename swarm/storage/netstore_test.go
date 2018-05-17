@@ -36,25 +36,49 @@ var (
 type mockRetrieve struct {
 	fetchers      map[string]int
 	searchTimeout time.Duration
+	contextC      chan context.Context
+	errC          chan error
 }
 
 func NewMockRetrieve(to time.Duration) *mockRetrieve {
 	return &mockRetrieve{fetchers: make(map[string]int), searchTimeout: to}
 }
 
-func (m *mockRetrieve) retrieve(rctx Request, f *Fetcher) error {
-	log.Warn("mock retrieve called", "addr", rctx.Address().Hex())
-	haddr := hex.EncodeToString(rctx.Address())
-	time.Sleep(m.searchTimeout)
-	m.fetchers[haddr] += 1
-	log.Warn("mock retrieve searchtimeout", "addr", rctx.Address().Hex())
-	if m.fetchers[haddr] < 6 {
-		return fmt.Errorf("error %d", m.fetchers[haddr])
-	}
+func (m *mockRetrieve) retrieve(rctx Request, f *Fetcher) (context.Context, error) {
+	ctx := <-m.contextC
+	err := <-m.errC
+	return ctx, err
+}
+
+func (m *mockRetrieve) feed(ctx context.Context, err error) {
 	go func() {
-		f.deliver(NewChunk(rctx.Address(), []byte{0, 1}))
+		m.contextC <- ctx
+		m.errC <- err
 	}()
-	return nil
+}
+
+type mockRetrieveContext struct {
+	err   error
+	doneC chan struct{}
+}
+
+func NewMockFailedRetrieveContext(duration time.Time) *mockRetrieveContext {
+	doneC := make(chan struct{})
+	timer := time.NewTimer(duration)
+	go func() {
+		<-timer.C
+		close(doneC)
+	}
+	return &mockRetrieveContext{
+		doneC : doneC,
+		err: errors.New("retrieve aborted"),
+	}
+}
+
+func NewMockRetrieveContext() *mockRetrieveContext {
+	return &mockRetrieveContext{
+		doneC : make(chan struct{}),
+	}
 }
 
 func TestNetstoreRepeatedFailedRequest(t *testing.T) {
@@ -74,6 +98,8 @@ func TestNetstoreRepeatedFailedRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+
 
 	r := NewMockRetrieve(searchTimeout)
 	netStore, err := NewNetStore(localStore, r.retrieve)
