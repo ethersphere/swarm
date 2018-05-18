@@ -60,6 +60,7 @@ type MountInfo struct {
 }
 
 func NewMountInfo(mhash, mpoint string, sapi *api.Api) *MountInfo {
+	log.Debug(fmt.Sprintf("swarmfs: new mount info. hash %s mount point %s", mhash, mpoint))
 	newMountInfo := &MountInfo{
 		MountPoint:     mpoint,
 		StartManifest:  mhash,
@@ -73,7 +74,7 @@ func NewMountInfo(mhash, mpoint string, sapi *api.Api) *MountInfo {
 }
 
 func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
-
+	log.Info(fmt.Sprintf("swarmfs: mounting hash %s at mount point %s", mhash, mountpoint))
 	if mountpoint == "" {
 		return nil, errEmptyMountPoint
 	}
@@ -81,11 +82,13 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	if err != nil {
 		return nil, err
 	}
+	log.Trace(fmt.Sprintf("swarmfs mount: cleanedMountPoint %s", cleanedMountPoint))
 
 	swarmfs.swarmFsLock.Lock()
 	defer swarmfs.swarmFsLock.Unlock()
 
 	noOfActiveMounts := len(swarmfs.activeMounts)
+	log.Debug(fmt.Sprintf("swarmfs mount: # active mounts %d", noOfActiveMounts))
 	if noOfActiveMounts >= maxFuseMounts {
 		return nil, errMaxMountCount
 	}
@@ -94,33 +97,41 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, errAlreadyMounted
 	}
 
-	log.Info(fmt.Sprintf("Attempting to mount %s ", cleanedMountPoint))
+	log.Debug(fmt.Sprintf("swarmfs mount: getting manifest tree"))
 	_, manifestEntryMap, err := swarmfs.swarmApi.BuildDirectoryTree(mhash, true)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Debug(fmt.Sprintf("swarmfs mount: building mount info"))
 	mi := NewMountInfo(mhash, cleanedMountPoint, swarmfs.swarmApi)
 
 	dirTree := map[string]*SwarmDir{}
 	rootDir := NewSwarmDir("/", mi)
+	log.Trace(fmt.Sprintf("swarmfs mount: rootDir %v", rootDir))
 	dirTree["/"] = rootDir
 	mi.rootDir = rootDir
 
+	log.Debug(fmt.Sprintf("swarmfs mount: traversing manifest map"))
 	for suffix, entry := range manifestEntryMap {
+		log.Debug(fmt.Sprintf("swarmfs mount: got entry: %s", entry.Path))
 		key := common.Hex2Bytes(entry.Hash)
 		fullpath := "/" + suffix
 		basepath := filepath.Dir(fullpath)
+		log.Debug(fmt.Sprintf("swarmfs mount: fullpath: %s", fullpath))
 
 		parentDir := rootDir
 		dirUntilNow := ""
 		paths := strings.Split(basepath, "/")
 		for i := range paths {
 			if paths[i] != "" {
+				log.Trace(fmt.Sprintf("swarmfs mount: paths[%d]: %s", i, paths[i]))
 				thisDir := paths[i]
 				dirUntilNow = dirUntilNow + "/" + thisDir
+				log.Trace(fmt.Sprintf("swarmfs mount: dirUntilNow: %s", dirUntilNow))
 
 				if _, ok := dirTree[dirUntilNow]; !ok {
+					log.Trace(fmt.Sprintf("swarmfs mount: newSwarmDir: %s", dirUntilNow))
 					dirTree[dirUntilNow] = NewSwarmDir(dirUntilNow, mi)
 					parentDir.directories = append(parentDir.directories, dirTree[dirUntilNow])
 					parentDir = dirTree[dirUntilNow]
@@ -132,24 +143,25 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		}
 		thisFile := NewSwarmFile(basepath, filepath.Base(fullpath), mi)
 		thisFile.key = key
+		log.Debug(fmt.Sprintf("swarmfile: %s", thisFile.path))
 
 		parentDir.files = append(parentDir.files, thisFile)
 	}
 
 	fconn, err := fuse.Mount(cleanedMountPoint, fuse.FSName("swarmfs"), fuse.VolumeName(mhash))
 	if isFUSEUnsupportedError(err) {
-		log.Warn("Fuse not installed", "mountpoint", cleanedMountPoint, "err", err)
+		log.Error("FUSE not installed", "mountpoint", cleanedMountPoint, "err", err)
 		return nil, err
 	} else if err != nil {
 		fuse.Unmount(cleanedMountPoint)
-		log.Warn("Error mounting swarm manifest", "mountpoint", cleanedMountPoint, "err", err)
+		log.Error("Error mounting swarm manifest", "mountpoint", cleanedMountPoint, "err", err)
 		return nil, err
 	}
 	mi.fuseConnection = fconn
 
 	serverr := make(chan error, 1)
 	go func() {
-		log.Info(fmt.Sprintf("Serving %s at %s", mhash, cleanedMountPoint))
+		log.Info(fmt.Sprintf("serving %s at %s", mhash, cleanedMountPoint))
 		filesys := &SwarmRoot{root: rootDir}
 		if err := fs.Serve(fconn, filesys); err != nil {
 			log.Warn(fmt.Sprintf("Could not Serve SwarmFileSystem error: %v", err))
