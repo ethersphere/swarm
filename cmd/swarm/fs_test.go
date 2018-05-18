@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -47,7 +46,7 @@ type testFile struct {
 func TestCLISwarmFs(t *testing.T) {
 	log.Info("starting 3 node cluster")
 	cluster := newTestCluster(t, 3)
-	//defer cluster.Shutdown()
+	defer cluster.Shutdown()
 
 	// create a tmp file
 	mountPoint, err := ioutil.TempDir("", "swarm-test")
@@ -107,16 +106,16 @@ func TestCLISwarmFs(t *testing.T) {
 
 	files, err := ioutil.ReadDir(mountPoint)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("had an error reading the directory: %v", err)
 	}
 
 	if len(files) > 0 {
 		t.Fatal("there shouldn't be anything here")
 	}
-	newMountPoint, err := ioutil.TempDir("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
+	//newMountPoint, err := ioutil.TempDir("", "swarm-test")
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
 
 	//remount, check files
 	newMount := runSwarm(t, []string{
@@ -124,14 +123,14 @@ func TestCLISwarmFs(t *testing.T) {
 		"mount",
 		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		hash, // the latest hash
-		newMountPoint,
+		mountPoint,
 	}...)
 
 	newMount.ExpectExit()
 
 	time.Sleep(10 * time.Second)
 
-	files, err = ioutil.ReadDir(newMountPoint)
+	files, err = ioutil.ReadDir(mountPoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,8 +144,8 @@ func TestCLISwarmFs(t *testing.T) {
 	}
 
 	for _, file := range filesToAssert {
-		file.filePath = strings.Replace(file.filePath, mountPoint, newMountPoint, -1)
-
+		//	file.filePath = strings.Replace(file.filePath, mountPoint, newMountPoint, -1)
+		fmt.Printf("trying to read filepath: %s", file.filePath)
 		fileBytes, err := ioutil.ReadFile(file.filePath)
 		if err != nil {
 			t.Fatal(err)
@@ -155,7 +154,6 @@ func TestCLISwarmFs(t *testing.T) {
 			t.Fatal("this should be equal")
 		}
 	}
-
 }
 
 func doUploadFile(t *testing.T, node *testNode) string {
