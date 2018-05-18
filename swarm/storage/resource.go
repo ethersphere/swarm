@@ -584,7 +584,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 func (self *ResourceHandler) LoadResource(key Key) (*resource, error) {
 	chunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
 	if err != nil {
-		return nil, err
+		return nil, NewResourceError(ErrNotFound, err.Error())
 	}
 
 	// minimum sanity check for chunk data (an update chunk first two bytes is headerlength uint16, and cannot be 0)

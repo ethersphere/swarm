@@ -406,7 +406,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 		}
 
 		// regardless of resource update manifests or normal manifests we will converge at this point
-		// get the key the mamifest entry points to and serve it if it's unambiguous
+		// get the key the manifest entry points to and serve it if it's unambiguous
 		contentKey = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
