@@ -96,7 +96,7 @@ func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 }
 
 func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	log.Debug(fmt.Sprintf("swarmfs Read: path: %s, req.Dir: %s", sf.path, req.Dir))
+	log.Debug(fmt.Sprintf("swarmfs Read: path: %s, req.String: %s", sf.path, req.String()))
 	sf.lock.RLock()
 	defer sf.lock.RUnlock()
 	if sf.reader == nil {
