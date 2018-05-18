@@ -73,29 +73,27 @@ func NewSwarmFile(path, fname string, minfo *MountInfo) *SwarmFile {
 	return newFile
 }
 
-func (file *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
-
-	a.Inode = file.inode
+func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
+	a.Inode = sf.inode
 	//TODO: need to get permission as argument
 	a.Mode = 0700
 	a.Uid = uint32(os.Getuid())
 	a.Gid = uint32(os.Getegid())
 
-	if file.fileSize == -1 {
-		reader, _ := file.mountInfo.swarmApi.Retrieve(file.key)
+	if sf.fileSize == -1 {
+		reader, _ := sf.mountInfo.swarmApi.Retrieve(sf.key)
 		quitC := make(chan bool)
 		size, err := reader.Size(quitC)
 		if err != nil {
-			log.Warn("Couldnt get size of file %s : %v", file.path, err)
+			log.Warn("Couldnt get size of file %s : %v", sf.path, err)
 		}
-		file.fileSize = size
+		sf.fileSize = size
 	}
-	a.Size = uint64(file.fileSize)
+	a.Size = uint64(sf.fileSize)
 	return nil
 }
 
 func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-
 	sf.lock.RLock()
 	defer sf.lock.RUnlock()
 	if sf.reader == nil {
@@ -113,7 +111,6 @@ func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 }
 
 func (sf *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-
 	if sf.fileSize == 0 && req.Offset == 0 {
 
 		// A new file is created
