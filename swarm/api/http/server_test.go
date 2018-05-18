@@ -98,7 +98,6 @@ func serverFunc(api *api.Api) testutil.TestServer {
 // and raw retrieve of that hash should return the data
 func TestBzzResourceMultihash(t *testing.T) {
 
-	t.Skip("fixed in different branch to be merged after this PR")
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 

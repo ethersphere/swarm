@@ -4,21 +4,6 @@ import (
 	"errors"
 )
 
-const (
-	ErrInit = iota
-	ErrNotFound
-	ErrIO
-	ErrUnauthorized
-	ErrInvalidValue
-	ErrDataOverflow
-	ErrNothingToReturn
-	ErrCorruptData
-	ErrInvalidSignature
-	ErrNotSynced
-	ErrPeriodDepth
-	ErrCnt
-)
-
 var (
 	ErrChunkNotFound    = errors.New("chunk not found")
 	ErrFetching         = errors.New("chunk still fetching")

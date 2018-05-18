@@ -1,4 +1,4 @@
-package storage
+package resource
 
 import (
 	"bytes"
@@ -24,10 +24,12 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 var (
-	testHasher        = MakeHashFunc(SHA3Hash)()
+	loglevel          = flag.Int("loglevel", 3, "loglevel")
+	testHasher        = storage.MakeHashFunc(storage.SHA3Hash)()
 	zeroAddr          = common.Address{}
 	startBlock        = uint64(4200)
 	resourceFrequency = uint64(42)
@@ -163,7 +165,8 @@ func TestResourceHandler(t *testing.T) {
 
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(safeName)
-	chunk, err := rh.chunkStore.localStore.memStore.Get(Key(namehash[:]))
+	//chunk, err := rh.chunkStore.localStore.memStore.Get(Key(namehash[:]))
+	chunk, err := rh.chunkStore.Get(storage.Key(namehash[:]))
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
@@ -187,7 +190,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update halfway to first period
-	resourcekey := make(map[string]Key)
+	resourcekey := make(map[string]storage.Key)
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data := []byte(updates[0])
 	resourcekey[updates[0]], err = rh.Update(ctx, safeName, data)
@@ -233,7 +236,7 @@ func TestResourceHandler(t *testing.T) {
 		EthClient: rh.ethClient,
 	}
 
-	rh.chunkStore.localStore.Close()
+	rh.chunkStore.Close()
 	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -450,7 +453,7 @@ func TestResourceMultihash(t *testing.T) {
 		EnsClient: rh.ensClient,
 	}
 	// test with signed data
-	rh.chunkStore.localStore.Close()
+	rh.chunkStore.Close()
 	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -540,6 +543,57 @@ func TestResourceChunkValidator(t *testing.T) {
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
 	if !rh.Validate(chunk.Key, chunk.SData) {
 		t.Fatal("Chunk validator fail")
+	}
+}
+
+// Tests that notification creation will include latest version
+// and that wire format serializes and parses correctly
+func TestResourceNotify(t *testing.T) {
+
+	// make fake backend, set up rpc and create resourcehandler
+	backend := &fakeBackend{
+		blocknumber: int64(startBlock),
+	}
+	rh, _, teardownTest, err := setupTest(backend, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardownTest()
+
+	// create a new resource
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// updates
+	resourcekey := make(map[string]storage.Key)
+	fwdBlocks(int(resourceFrequency/2), backend)
+	update := "foo"
+	data := []byte(update)
+	resourcekey[update], err = rh.Update(ctx, safeName, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	update = "bar"
+	data = []byte(update)
+	resourcekey[update], err = rh.Update(ctx, safeName, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check notify parse and result
+	notifyBytes, err := rh.CreateNotification(safeName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	period, version, err := rh.ParseNotification(notifyBytes)
+	if err != nil {
+		t.Fatal(err)
+	} else if period != 1 || version != 2 {
+		t.Fatalf("Expected period/version 1.2 got %d.%d", period, version)
 	}
 }
 
@@ -638,8 +692,8 @@ func newTestSigner() (*GenericResourceSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
-	chunk, err := rh.chunkStore.localStore.memStore.Get(key)
+func getUpdateDirect(rh *ResourceHandler, key storage.Key) ([]byte, error) {
+	chunk, err := rh.chunkStore.Get(key)
 	if err != nil {
 		return nil, err
 	}

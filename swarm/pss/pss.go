@@ -334,7 +334,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		return nil
 	}
 	if self.checkFwdCache(pssmsg) {
-		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", self.Overlay.BaseAddr(), pssmsg.To))
 		return nil
 	}
 	self.addFwdCache(pssmsg)
@@ -350,6 +350,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		if qerr != nil {
 			return fmt.Errorf("process fail: processerr %v, queueerr: %v", err, qerr)
 		}
+		log.Trace("process msg fail", "err", err)
 	}
 	return nil
 
@@ -403,7 +404,7 @@ func (self *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, 
 	for f := range handlers {
 		err := (*f)(payload, p, asymmetric, keyid)
 		if err != nil {
-			log.Warn("Pss handler %p failed: %v", f, err)
+			log.Warn("Pss handler failed", "handler", fmt.Sprintf("%p", f), "err", err)
 		}
 	}
 }
@@ -450,7 +451,7 @@ func (self *Pss) SetPeerPublicKey(pubkey *ecdsa.PublicKey, topic Topic, address 
 }
 
 // Automatically generate a new symkey for a topic and address hint
-func (self *Pss) generateSymmetricKey(topic Topic, address *PssAddress, addToCache bool) (string, error) {
+func (self *Pss) GenerateSymmetricKey(topic Topic, address *PssAddress, addToCache bool) (string, error) {
 	keyid, err := self.w.GenerateSymKey()
 	if err != nil {
 		return "", err
@@ -790,7 +791,7 @@ func (self *Pss) forward(msg *PssMsg) error {
 			log.Trace(fmt.Sprintf("Pss keep forwarding: Partial address + full partial match"))
 			return true
 		} else if isproxbin {
-			log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", common.ToHex(op.Address())))
+			log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", op.Address()))
 			return true
 		}
 		// at this point we stop forwarding, and the state is as follows:

@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/resource"
 )
 
 type TestServer interface {
@@ -67,11 +68,11 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *Tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	rhparams := &storage.ResourceHandlerParams{
-		QueryMaxPeriods: &storage.ResourceLookupParams{},
+	rhparams := &resource.ResourceHandlerParams{
+		QueryMaxPeriods: &resource.ResourceLookupParams{},
 		EthClient:       &fakeBackend{},
 	}
-	rh, err := storage.NewTestResourceHandler(resourceDir, rhparams)
+	rh, err := resource.NewTestResourceHandler(resourceDir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}

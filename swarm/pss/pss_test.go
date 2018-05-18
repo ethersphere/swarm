@@ -132,7 +132,7 @@ func TestCache(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ps := newTestPss(privkey, nil, nil)
+	ps := NewTestPss(privkey, nil, nil)
 	pp := NewPssParams().WithPrivateKey(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
@@ -282,7 +282,7 @@ func TestHandlerConditions(t *testing.T) {
 
 	addr := make([]byte, 32)
 	addr[0] = 0x01
-	ps := newTestPss(privkey, network.NewKademlia(addr, network.NewKadParams()), NewPssParams())
+	ps := NewTestPss(privkey, network.NewKademlia(addr, network.NewKadParams()), NewPssParams())
 
 	// message should pass
 	msg := &PssMsg{
@@ -415,7 +415,7 @@ func TestKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to retrieve 'their' private key")
 	}
-	ps := newTestPss(ourprivkey, nil, nil)
+	ps := NewTestPss(ourprivkey, nil, nil)
 
 	// set up peer with mock address, mapped to mocked publicaddress and with mocked symkey
 	addr := make(PssAddress, 32)
@@ -429,7 +429,7 @@ func TestKeys(t *testing.T) {
 	}
 
 	// make a symmetric key that we will send to peer for encrypting messages to us
-	inkeyid, err := ps.generateSymmetricKey(topicobj, &addr, true)
+	inkeyid, err := ps.GenerateSymmetricKey(topicobj, &addr, true)
 	if err != nil {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
@@ -525,7 +525,7 @@ func TestMismatch(t *testing.T) {
 		Expire:  uint32(time.Now().Add(time.Second).Unix()),
 		Payload: &whisper.Envelope{},
 	}
-	ps := newTestPss(privkey, kad, nil)
+	ps := NewTestPss(privkey, kad, nil)
 
 	// run the forward
 	// it is enough that it completes; trying to send to incapable peers would create segfault
@@ -1172,13 +1172,13 @@ func benchmarkSymKeySend(b *testing.B) {
 	defer cancel()
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
-	ps := newTestPss(privkey, nil, nil)
+	ps := NewTestPss(privkey, nil, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
 	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
-	symkeyid, err := ps.generateSymmetricKey(topic, &to, true)
+	symkeyid, err := ps.GenerateSymmetricKey(topic, &to, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
@@ -1216,7 +1216,7 @@ func benchmarkAsymKeySend(b *testing.B) {
 	defer cancel()
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
-	ps := newTestPss(privkey, nil, nil)
+	ps := NewTestPss(privkey, nil, nil)
 	msg := make([]byte, msgsize)
 	rand.Read(msg)
 	topic := BytesToTopic([]byte("foo"))
@@ -1263,15 +1263,15 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
-		ps = newTestPss(privkey, nil, &PssParams{SymKeyCacheCapacity: int(cachesize)})
+		ps = NewTestPss(privkey, nil, &PssParams{SymKeyCacheCapacity: int(cachesize)})
 	} else {
-		ps = newTestPss(privkey, nil, nil)
+		ps = NewTestPss(privkey, nil, nil)
 	}
 	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
 		copy(to[:], network.RandomAddr().Over())
-		keyid, err = ps.generateSymmetricKey(topic, &to, true)
+		keyid, err = ps.GenerateSymmetricKey(topic, &to, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -1346,14 +1346,14 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	keys, err := wapi.NewKeyPair(ctx)
 	privkey, err := w.GetPrivateKey(keys)
 	if cachesize > 0 {
-		ps = newTestPss(privkey, nil, &PssParams{SymKeyCacheCapacity: int(cachesize)})
+		ps = NewTestPss(privkey, nil, &PssParams{SymKeyCacheCapacity: int(cachesize)})
 	} else {
-		ps = newTestPss(privkey, nil, nil)
+		ps = NewTestPss(privkey, nil, nil)
 	}
 	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		copy(addr[i], network.RandomAddr().Over())
-		keyid, err = ps.generateSymmetricKey(topic, &addr[i], true)
+		keyid, err = ps.GenerateSymmetricKey(topic, &addr[i], true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -1392,6 +1392,31 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 			b.Fatalf("pss processing failed: %v", err)
 		}
 	}
+}
+
+// API calls for test/development use
+type APITest struct {
+	*Pss
+}
+
+func NewAPITest(ps *Pss) *APITest {
+	return &APITest{Pss: ps}
+}
+
+func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic Topic, to PssAddress) ([2]string, error) {
+	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &to, true)
+	if err != nil {
+		return [2]string{}, err
+	}
+	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &to, false)
+	if err != nil {
+		return [2]string{}, err
+	}
+	return [2]string{recvsymkeyid, sendsymkeyid}, nil
+}
+
+func (apitest *APITest) Clean() (int, error) {
+	return apitest.Pss.cleanKeys(), nil
 }
 
 // setup simulated network with bzz/discovery and pss services.
@@ -1519,7 +1544,7 @@ func newServices(allowRaw bool) adapters.Services {
 	}
 }
 
-func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *PssParams) *Pss {
+func NewTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *PssParams) *Pss {
 
 	var nid discover.NodeID
 	copy(nid[:], crypto.FromECDSAPub(&privkey.PublicKey))
@@ -1544,29 +1569,4 @@ func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *Pss
 	ps.Start(nil)
 
 	return ps
-}
-
-// API calls for test/development use
-type APITest struct {
-	*Pss
-}
-
-func NewAPITest(ps *Pss) *APITest {
-	return &APITest{Pss: ps}
-}
-
-func (apitest *APITest) SetSymKeys(pubkeyid string, recvsymkey []byte, sendsymkey []byte, limit uint16, topic Topic, to PssAddress) ([2]string, error) {
-	recvsymkeyid, err := apitest.SetSymmetricKey(recvsymkey, topic, &to, true)
-	if err != nil {
-		return [2]string{}, err
-	}
-	sendsymkeyid, err := apitest.SetSymmetricKey(sendsymkey, topic, &to, false)
-	if err != nil {
-		return [2]string{}, err
-	}
-	return [2]string{recvsymkeyid, sendsymkeyid}, nil
-}
-
-func (apitest *APITest) Clean() (int, error) {
-	return apitest.Pss.cleanKeys(), nil
 }

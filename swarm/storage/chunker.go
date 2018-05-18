@@ -173,7 +173,7 @@ func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches
 	return &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
-				chunkSize: chunkSize,
+				chunkSize: DefaultChunkSize,
 				hashSize:  hashSize,
 			},
 			reader: reader,
