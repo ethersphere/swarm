@@ -18,6 +18,7 @@ package swarm
 
 import (
 	"io/ioutil"
+	"os"
 	"path"
 	"testing"
 
@@ -33,6 +34,7 @@ func TestNewSwarm(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer os.RemoveAll(dir)
 
 	// a simple rpc endpoint for testing dialing
 	ipcEndpoint := path.Join(dir, "TestSwarm.ipc")
@@ -150,6 +152,7 @@ func TestNewSwarm(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer os.RemoveAll(dir)
 
 			config.Path = dir
 
