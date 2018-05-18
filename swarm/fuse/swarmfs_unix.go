@@ -143,7 +143,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		}
 		thisFile := NewSwarmFile(basepath, filepath.Base(fullpath), mi)
 		thisFile.key = key
-		log.Debug(fmt.Sprintf("swarmfile: %s", thisFile.path))
+		log.Debug(fmt.Sprintf("swarmfs swarmfile: %s", thisFile.path))
 
 		parentDir.files = append(parentDir.files, thisFile)
 	}
@@ -154,17 +154,17 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, err
 	} else if err != nil {
 		fuse.Unmount(cleanedMountPoint)
-		log.Error("Error mounting swarm manifest", "mountpoint", cleanedMountPoint, "err", err)
+		log.Error("swarmfs error mounting swarm manifest", "mountpoint", cleanedMountPoint, "err", err)
 		return nil, err
 	}
 	mi.fuseConnection = fconn
 
 	serverr := make(chan error, 1)
 	go func() {
-		log.Info(fmt.Sprintf("serving %s at %s", mhash, cleanedMountPoint))
+		log.Info(fmt.Sprintf("swarmfs serving %s at %s", mhash, cleanedMountPoint))
 		filesys := &SwarmRoot{root: rootDir}
 		if err := fs.Serve(fconn, filesys); err != nil {
-			log.Warn(fmt.Sprintf("Could not Serve SwarmFileSystem error: %v", err))
+			log.Warn(fmt.Sprintf("swarmfs could not serve the requested hash: %v", err))
 			serverr <- err
 		}
 
@@ -178,11 +178,11 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 
 	case err := <-serverr:
 		fuse.Unmount(cleanedMountPoint)
-		log.Warn("Error serving swarm FUSE FS", "mountpoint", cleanedMountPoint, "err", err)
+		log.Warn("swarmfs error serving over FUSE", "mountpoint", cleanedMountPoint, "err", err)
 		return nil, err
 
 	case <-fconn.Ready:
-		log.Info("Now serving swarm FUSE FS", "manifest", mhash, "mountpoint", cleanedMountPoint)
+		log.Info("swarmfs now served over FUSE", "manifest", mhash, "mountpoint", cleanedMountPoint)
 	}
 
 	swarmfs.activeMounts[cleanedMountPoint] = mi
@@ -202,13 +202,13 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 	mountInfo := swarmfs.activeMounts[cleanedMountPoint]
 
 	if mountInfo == nil || mountInfo.MountPoint != cleanedMountPoint {
-		return nil, fmt.Errorf("%s is not mounted", cleanedMountPoint)
+		return nil, fmt.Errorf("swarmfs %s is not mounted", cleanedMountPoint)
 	}
 	err = fuse.Unmount(cleanedMountPoint)
 	if err != nil {
 		err1 := externalUnmount(cleanedMountPoint)
 		if err1 != nil {
-			errStr := fmt.Sprintf("UnMount error: %v", err)
+			errStr := fmt.Sprintf("swarmfs unmount error: %v", err)
 			log.Warn(errStr)
 			return nil, err1
 		}
@@ -217,7 +217,7 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 	mountInfo.fuseConnection.Close()
 	delete(swarmfs.activeMounts, cleanedMountPoint)
 
-	succString := fmt.Sprintf("UnMounting %v succeeded", cleanedMountPoint)
+	succString := fmt.Sprintf("swarmfs unmounting %v succeeded", cleanedMountPoint)
 	log.Info(succString)
 
 	return mountInfo, nil
