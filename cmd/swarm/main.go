@@ -253,12 +253,11 @@ Downloads a swarm bzz uri to the given dir. When no dir is provided, working dir
 		},
 
 		{
-			Name:      "manifest",
-			Usage:     "update a MANIFEST",
-			ArgsUsage: "manifest COMMAND",
-			Description: `
-Updates a MANIFEST by adding/removing/updating the hash of a path.
-`,
+			Name:               "manifest",
+			CustomHelpTemplate: helpTemplate,
+			Usage:              "perform operations on swarm manifests",
+			ArgsUsage:          "COMMAND",
+			Description:        "Updates a MANIFEST by adding/removing/updating the hash of a path.\nCOMMAND could be: add, update, remove",
 			Subcommands: []cli.Command{
 				{
 					Action:             add,
