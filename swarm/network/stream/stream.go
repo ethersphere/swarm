@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
+	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -59,6 +60,7 @@ type Registry struct {
 	delivery       *Delivery
 	intervalsStore state.Store
 	doRetrieve     bool
+	swap           *swap.Swap
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.
@@ -77,6 +79,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 	if options.SyncUpdateDelay <= 0 {
 		options.SyncUpdateDelay = 15 * time.Second
 	}
+	// TODO: initialize swap
 	streamer := &Registry{
 		addr:           addr,
 		skipCheck:      options.SkipCheck,

@@ -142,6 +142,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		OverlayAddr:  addr.OAddr,
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
+		Swap:         config.Swap,
+		SwapEnabled:  config.SwapEnabled,
 	}
 
 	// TODO: decide on intervals store file location

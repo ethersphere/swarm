@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
+	"github.com/ethereum/go-ethereum/swarm/services/swap/swap"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -58,6 +59,7 @@ type Peer struct {
 	// that are set on Registry.Subscribe and used
 	// on creating a new client in offered hashes handler.
 	clientParams map[Stream]*clientParams
+	swap         *swap.Swap // swap instance for the peer
 	quit         chan struct{}
 }
 
@@ -70,6 +72,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		servers:      make(map[Stream]*server),
 		clients:      make(map[Stream]*client),
 		clientParams: make(map[Stream]*clientParams),
+		swap:         streamer.swap,
 		quit:         make(chan struct{}),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
