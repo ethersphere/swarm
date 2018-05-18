@@ -229,8 +229,8 @@ func TestResourceHandler(t *testing.T) {
 		QueryMaxPeriods: &ResourceLookupParams{
 			Limit: false,
 		},
-		Signer:    nil,
-		EthClient: rh.ethClient,
+		Signer:       nil,
+		HeaderGetter: rh.headerGetter,
 	}
 
 	rh.chunkStore.localStore.Close()
@@ -445,9 +445,9 @@ func TestResourceMultihash(t *testing.T) {
 		QueryMaxPeriods: &ResourceLookupParams{
 			Limit: false,
 		},
-		Signer:    signer,
-		EthClient: rh.ethClient,
-		EnsClient: rh.ensClient,
+		Signer:         signer,
+		HeaderGetter:   rh.headerGetter,
+		OwnerValidator: rh.ownerValidator,
 	}
 	// test with signed data
 	rh.chunkStore.localStore.Close()
@@ -550,6 +550,18 @@ func fwdBlocks(count int, backend *fakeBackend) {
 	}
 }
 
+type ensOwnerValidator struct {
+	*ens.ENS
+}
+
+func (e ensOwnerValidator) ValidateOwner(name string, address common.Address) (bool, error) {
+	addr, err := e.Owner(ens.EnsNode(name))
+	if err != nil {
+		return false, err
+	}
+	return address == addr, nil
+}
+
 // create rpc and resourcehandler
 func setupTest(backend headerGetter, ensBackend *ens.ENS, signer ResourceSigner) (rh *ResourceHandler, datadir string, teardown func(), err error) {
 
@@ -573,13 +585,18 @@ func setupTest(backend headerGetter, ensBackend *ens.ENS, signer ResourceSigner)
 		os.RemoveAll(datadir)
 	}
 
+	var ov ownerValidator
+	if ensBackend != nil {
+		ov = ensOwnerValidator{ensBackend}
+	}
+
 	rhparams := &ResourceHandlerParams{
 		QueryMaxPeriods: &ResourceLookupParams{
 			Limit: false,
 		},
-		Signer:    signer,
-		EthClient: backend,
-		EnsClient: ensBackend,
+		Signer:         signer,
+		HeaderGetter:   backend,
+		OwnerValidator: ov,
 	}
 	rh, err = NewTestResourceHandler(datadir, rhparams)
 	return rh, datadir, cleanF, err
