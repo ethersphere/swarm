@@ -77,7 +77,7 @@ type notifier struct {
 	muxes       []*sendMux
 	topic       pss.Topic
 	threshold   int
-	contentFunc func() []byte
+	contentFunc func(string) ([]byte, error)
 }
 
 type Controller struct {
@@ -94,7 +94,7 @@ func NewController(ps *pss.Pss) *Controller {
 	return ctrl
 }
 
-func (self *Controller) NewNotifier(name string, threshold int, contentFunc func() []byte) error {
+func (self *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
 	if _, ok := self.notifiers[name]; ok {
 		return fmt.Errorf("%s already exists in controller", name)
 	}
@@ -192,7 +192,10 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 		}
 
 		// send initial notify, will contain symkey to use for consecutive messages
-		notify := self.notifiers[msg.Name].contentFunc()
+		notify, err := self.notifiers[msg.Name].contentFunc(msg.Name)
+		if err != nil {
+			return fmt.Errorf("retrieve current update from source fail: %v", err)
+		}
 		replyMsg := &Msg{
 			Code:    MsgCodeNotifyWithKey,
 			Name:    msg.Name,
