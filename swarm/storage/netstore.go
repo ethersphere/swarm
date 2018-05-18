@@ -19,10 +19,8 @@ package storage
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
@@ -33,18 +31,19 @@ type NetStore struct {
 	mu       sync.Mutex
 	store    ChunkStore
 	fetchers *lru.Cache
-	retrieve func(Request, *Fetcher) (context.Context, error)
+	// retrieve func(Request, *Fetcher) (context.Context, error)
+	newFetcher func(addr Address) Fetcher
 }
 
-func NewNetStore(store ChunkStore, retrieve func(Request, *Fetcher) (context.Context, error)) (*NetStore, error) {
+func NewNetStore(store ChunkStore, newFetcher func(addr Address) Fetcher) (*NetStore, error) {
 	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
 	if err != nil {
 		return nil, err
 	}
 	return &NetStore{
-		store:    store,
-		fetchers: fetchers,
-		retrieve: retrieve,
+		store:      store,
+		fetchers:   fetchers,
+		newFetcher: newFetcher,
 	}, nil
 }
 
@@ -65,7 +64,7 @@ func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
 	f, _ := n.fetchers.Get(ch.Address())
 	// if there is, deliver the chunk to requestors via fetcher
 	if f != nil {
-		f.(*Fetcher).deliver(ch)
+		f.(*fetcher).deliver(ch)
 	}
 	return wait, nil
 }
@@ -93,7 +92,7 @@ func (n *NetStore) Has(ref Address) (func(Request) error, error) {
 // or all Fetcher contexts are done
 // it returns a chunk, a fetcher function and an error
 // if chunk is nil, fetcher needs to be called with a context to return the chunk
-func (n *NetStore) get(ref Address) (Chunk, func(Request) (Chunk, error), error) {
+func (n *NetStore) get(ref Address) (Chunk, func(context.Context) (Chunk, error), error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -111,24 +110,21 @@ func (n *NetStore) get(ref Address) (Chunk, func(Request) (Chunk, error), error)
 // getOrCreateFetcher attempts at retrieving an existing Fetchers
 // if none exists, creates one and saves it in the Fetchers cache
 // caller must hold the lock
-func (n *NetStore) getOrCreateFetcher(ref Address) (*Fetcher, error) {
+func (n *NetStore) getOrCreateFetcher(ref Address) (*fetcher, error) {
 	key := hex.EncodeToString(ref)
 	log.Debug("getOrCreateFetcher", "fetchers.Len", n.fetchers.Len())
-	fetcher, ok := n.fetchers.Get(key)
+	f, ok := n.fetchers.Get(key)
 	if ok {
 		log.Debug("getOrCreateFetcher found fetcher")
-		return fetcher.(*Fetcher), nil
+		return f.(*fetcher), nil
 	}
 	log.Debug("getOrCreateFetcher new fetcher")
-	f := NewFetcher(ref, n.retrieve, func() {
-		log.Debug("removing fetcher")
-		log.Debug("fetchers before remove", "fetchers.Len", n.fetchers.Len())
+	fetcher := newFetcher(n.newFetcher(ref), func() {
 		n.fetchers.Remove(key)
-		log.Debug("fetchers after remove", "fetchers.Len", n.fetchers.Len())
 	})
-	n.fetchers.Add(key, f)
+	n.fetchers.Add(key, fetcher)
 
-	return f, nil
+	return fetcher, nil
 }
 
 // Get retrieves the chunk from the NetStore DPA synchronously
@@ -148,7 +144,7 @@ func (n *NetStore) Get(rctx Request, ref Address) (Chunk, error) {
 
 // // waitAndRemoveFetcher waits till all actual Requests are closed, removes the Fetcher from fetchers
 // // and stops the fetcher.
-// func (n *NetStore) waitAndRemoveFetcher(f *Fetcher) {
+// func (n *NetStore) waitAndRemoveFetcher(f Fetcher) {
 // 	log.Debug("waitAndRemoveFetcher started")
 // 	f.wait()
 // 	log.Debug("waitAndRemoveFetcher after wait")
@@ -168,6 +164,55 @@ type Request interface {
 	Address() Address
 }
 
+type Fetcher interface {
+	Fetch(rctx context.Context) (Chunk, error)
+	Stop()
+	Status() error
+}
+
+type fetcher struct {
+	fetcher    Fetcher
+	chunk      Chunk
+	requestCnt int32
+	deliveredC chan struct{} // chan signalling chunk delivery to requests
+	remove     func()
+}
+
+func newFetcher(f Fetcher, remove func()) *fetcher {
+	return &fetcher{
+		fetcher:    f,
+		deliveredC: make(chan struct{}),
+		remove:     remove,
+	}
+}
+
+func (f *fetcher) fetch(rctx context.Context) (Chunk, error) {
+	atomic.AddInt32(&f.requestCnt, 1)
+	log.Debug("fetch", "requestCnt", f.requestCnt)
+	defer func() {
+		log.Debug("fetch defer", "requestCnt", f.requestCnt)
+		if atomic.AddInt32(&f.requestCnt, -1) == 0 {
+			f.remove()
+			f.fetcher.Stop()
+		}
+	}()
+
+	f.fetcher.Fetch(rctx)
+
+	select {
+	case <-rctx.Done():
+		log.Warn("context done")
+		return nil, &errStatus{rctx.Err(), f.fetcher.Status()}
+	case <-f.deliveredC:
+		return f.chunk, nil
+	}
+}
+
+func (f *fetcher) deliver(ch Chunk) {
+	f.chunk = ch
+	close(f.deliveredC)
+}
+
 type errStatus struct {
 	error
 	status error
@@ -175,150 +220,4 @@ type errStatus struct {
 
 func (e *errStatus) Status() error {
 	return e.status
-}
-
-// Fetcher is created when a chunk is not found locally
-// it starts a request handler loop once and keeps it
-// alive until all active requests complete
-// either because the chunk is delivered or requestor cancelled/timed out
-// fetcher self destroys
-// TODO: cancel all forward requests after termination
-type Fetcher struct {
-	*chunk     // the delivered chunk
-	retrieve   func(Request, *Fetcher) (context.Context, error)
-	remove     func()
-	addr       Address      //
-	requestC   chan Request // incoming requests
-	requestCnt int32
-	deliveredC chan struct{} // chan signalling chunk delivery to requests
-	stoppedC   chan struct{} // closed when terminates
-	// requestsWg sync.WaitGroup // wait group on requests
-	status error // fetching status
-}
-
-// NewFetcher creates a new fetcher for a chunk
-// stored in netstore's fetchers (LRU cache) keyed by address
-func NewFetcher(addr Address, retrieve func(Request, *Fetcher) (context.Context, error), remove func()) *Fetcher {
-	f := &Fetcher{
-		addr:       addr,
-		retrieve:   retrieve,
-		remove:     remove,
-		requestC:   make(chan Request),
-		deliveredC: make(chan struct{}),
-		stoppedC:   make(chan struct{}),
-	}
-	go f.start()
-	return f
-}
-
-// Deliver sets the chunk on the Fetcher and closes the deliveredC channel
-// to signal to individual Fetchers the arrival
-func (f *Fetcher) deliver(ch Chunk) {
-	f.chunk = ch.Chunk()
-	close(f.deliveredC)
-}
-
-// fetch is a synchronous fetcher function returned
-// by NetStore.Get and called if remote fetching is required
-func (f *Fetcher) fetch(rctx Request) (Chunk, error) {
-	atomic.AddInt32(&f.requestCnt, 1)
-	log.Debug("fetch", "requestCnt", f.requestCnt)
-	defer func() {
-		log.Debug("fetch defer", "requestCnt", f.requestCnt)
-		if atomic.AddInt32(&f.requestCnt, -1) == 0 {
-			f.remove()
-			close(f.stoppedC)
-		}
-	}()
-
-	// put rctx on request channel
-	select {
-	case f.requestC <- rctx:
-	case <-f.stoppedC:
-	}
-
-	select {
-	case <-rctx.Done():
-		log.Warn("context done")
-		return nil, &errStatus{rctx.Err(), f.status}
-	case <-f.deliveredC:
-		return f.chunk, nil
-	}
-}
-
-// // wait waits till all actual Requests are closed
-// func (f *Fetcher) wait() {
-// 	<-f.quitC
-// 	// remove the Fetcher from the cache when all Fetchers
-// 	// contexts closed, self-destruct and remove from fetchers
-// }
-
-// // stop stops the Fetcher
-// func (f *Fetcher) stop() {
-// 	close(f.stoppedC)
-// }
-
-// start prepares the Fetcher
-// it keeps the Fetcher alive
-func (f *Fetcher) start() {
-	var (
-		doRetrieve bool               // determines if retrieval is initiated in the current iteration
-		forwardC   = make(chan error) // timeout/error on one of the forwards
-		rctx       Request
-	)
-F:
-	// loop that keeps the Fetcher alive
-	for {
-		// if forwarding is wanted, call netStore
-		if doRetrieve {
-			go func() {
-				ctx, err := f.retrieve(rctx, f)
-				if err != nil {
-					select {
-					case forwardC <- err:
-						log.Warn("forward result", "err", err)
-					case <-f.stoppedC:
-					}
-				} else {
-					go func() {
-						timer := time.NewTimer(searchTimeout)
-						var err error
-						select {
-						case <-ctx.Done():
-							err = ctx.Err()
-						case <-timer.C:
-							err = errors.New("search timed out")
-						case <-f.stoppedC:
-							return
-						}
-						select {
-						case forwardC <- err:
-						case <-f.stoppedC:
-						}
-					}()
-				}
-			}()
-			doRetrieve = false
-		}
-
-		select {
-
-		// ready to receive by accept in a request ()
-		case rctx = <-f.requestC:
-			log.Warn("upstream request received")
-			doRetrieve = true
-
-		// rerequest upon forwardC event
-		case err := <-forwardC: // if forward request completes
-			log.Warn("forward request failed", "err", err)
-			f.status = err
-			doRetrieve = err != nil
-
-		case <-f.stoppedC:
-			log.Warn("quitmain loop")
-			// all Fetcher context closed, can quit
-			break F
-		}
-	}
-
 }
