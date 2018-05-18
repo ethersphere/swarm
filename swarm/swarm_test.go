@@ -17,10 +17,164 @@
 package swarm
 
 import (
+	"io/ioutil"
+	"path"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/api"
 )
+
+// TestNewSwarm validates Swarm fields in repsect to the provided configuration.
+func TestNewSwarm(t *testing.T) {
+	dir, err := ioutil.TempDir("", "swarm")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// a simple rpc endpoint for testing dialing
+	ipcEndpoint := path.Join(dir, "TestSwarm.ipc")
+
+	_, server, err := rpc.StartIPCEndpoint(ipcEndpoint, nil)
+	if err != nil {
+		t.Error(err)
+	}
+	defer server.Stop()
+
+	for _, tc := range []struct {
+		name      string
+		configure func(*api.Config)
+		check     func(*testing.T, *Swarm, *api.Config)
+	}{
+		{
+			name:      "defaults",
+			configure: nil,
+			check: func(t *testing.T, s *Swarm, config *api.Config) {
+				if s.config != config {
+					t.Error("config is not the same object")
+				}
+				if s.backend != nil {
+					t.Error("backend is not nil")
+				}
+				if s.privateKey == nil {
+					t.Error("private key is not set")
+				}
+				if !s.config.HiveParams.Discovery {
+					t.Error("config.HiveParams.Discovery is false, must be true regardless the configuration")
+				}
+				if s.dns != nil {
+					t.Error("dns initialized, but it should not be")
+				}
+				if s.lstore == nil {
+					t.Error("localstore not initialized")
+				}
+				if s.streamer == nil {
+					t.Error("streamer not initialized")
+				}
+				if s.dpa == nil {
+					t.Error("dpa not initialized")
+				}
+				if s.lstore.Validators == nil {
+					t.Error("localstore validators not initialized")
+				}
+				if s.bzz == nil {
+					t.Error("bzz not initialized")
+				}
+				if s.ps == nil {
+					t.Error("pss not initialized")
+				}
+				if s.api == nil {
+					t.Error("api not initialized")
+				}
+				if s.sfs == nil {
+					t.Error("swarm filesystem not initialized")
+				}
+			},
+		},
+		{
+			name: "with swap",
+			configure: func(config *api.Config) {
+				config.SwapApi = ipcEndpoint
+				config.SwapEnabled = true
+			},
+			check: func(t *testing.T, s *Swarm, _ *api.Config) {
+				if s.backend == nil {
+					t.Error("backend is nil")
+				}
+			},
+		},
+		{
+			name: "with swap disabled",
+			configure: func(config *api.Config) {
+				config.SwapApi = ipcEndpoint
+				config.SwapEnabled = false
+			},
+			check: func(t *testing.T, s *Swarm, _ *api.Config) {
+				if s.backend != nil {
+					t.Error("backend is not nil")
+				}
+			},
+		},
+		{
+			name: "with swap enabled and api endpoint blank",
+			configure: func(config *api.Config) {
+				config.SwapApi = ""
+				config.SwapEnabled = true
+			},
+			check: func(t *testing.T, s *Swarm, _ *api.Config) {
+				if s.backend != nil {
+					t.Error("backend is not nil")
+				}
+			},
+		},
+		{
+			name: "ens",
+			configure: func(config *api.Config) {
+				config.EnsAPIs = []string{
+					"http://127.0.0.1:8888",
+				}
+			},
+			check: func(t *testing.T, s *Swarm, _ *api.Config) {
+				if s.dns == nil {
+					t.Error("dns is not initialized")
+				}
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config := api.NewConfig()
+
+			dir, err := ioutil.TempDir("", "swarm")
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			config.Path = dir
+
+			privkey, err := crypto.GenerateKey()
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			config.Init(privkey)
+
+			if tc.configure != nil {
+				tc.configure(config)
+			}
+
+			s, err := NewSwarm(config, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if tc.check != nil {
+				tc.check(t, s, config)
+			}
+		})
+	}
+}
 
 func TestParseEnsAPIAddress(t *testing.T) {
 	for _, x := range []struct {

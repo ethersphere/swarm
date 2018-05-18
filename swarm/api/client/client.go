@@ -314,11 +314,8 @@ func (c *Client) DownloadFile(hash, path, dest string) error {
 	}
 	defer dst.Close()
 
-	if _, err := io.Copy(dst, res.Body); err != nil {
-		return err
-	}
-
-	return nil
+	_, err = io.Copy(dst, res.Body)
+	return err
 }
 
 // UploadManifest uploads the given manifest to swarm
