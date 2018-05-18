@@ -254,7 +254,7 @@ Downloads a swarm bzz uri to the given dir. When no dir is provided, working dir
 		},
 
 		{
-	    Name:               "manifest",
+			Name:               "manifest",
 			CustomHelpTemplate: helpTemplate,
 			Usage:              "perform operations on swarm manifests",
 			ArgsUsage:          "COMMAND",
