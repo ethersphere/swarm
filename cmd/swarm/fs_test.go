@@ -89,33 +89,28 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatalf("should have 4 files to assert now, got %d", len(filesToAssert))
 	}
 	hashRegexp := `[a-f\d]{64}`
-	lsMounts := runSwarm(t, []string{
+	unmount := runSwarm(t, []string{
 		"fs",
 		"unmount",
 		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		mountPoint,
 	}...)
-	_, matches := lsMounts.ExpectRegexp(hashRegexp)
-	lsMounts.ExpectExit()
+	_, matches := unmount.ExpectRegexp(hashRegexp)
+	unmount.ExpectExit()
 
 	hash := matches[0]
 	if hash == mhash {
 		t.Fatal("this should not be equal")
 	}
 	//check that there's nothing in the mount folder
-
 	files, err := ioutil.ReadDir(mountPoint)
 	if err != nil {
 		t.Fatalf("had an error reading the directory: %v", err)
 	}
 
-	if len(files) > 0 {
+	if len(files) != 0 {
 		t.Fatal("there shouldn't be anything here")
 	}
-	//newMountPoint, err := ioutil.TempDir("", "swarm-test")
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
 
 	//remount, check files
 	newMount := runSwarm(t, []string{
@@ -127,8 +122,7 @@ func TestCLISwarmFs(t *testing.T) {
 	}...)
 
 	newMount.ExpectExit()
-
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	files, err = ioutil.ReadDir(mountPoint)
 	if err != nil {
@@ -144,7 +138,6 @@ func TestCLISwarmFs(t *testing.T) {
 	}
 
 	for _, file := range filesToAssert {
-		//	file.filePath = strings.Replace(file.filePath, mountPoint, newMountPoint, -1)
 		fmt.Printf("trying to read filepath: %s", file.filePath)
 		fileBytes, err := ioutil.ReadFile(file.filePath)
 		if err != nil {
