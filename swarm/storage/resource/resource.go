@@ -232,7 +232,6 @@ func (self *ResourceHandler) SetStore(store *storage.NetStore) {
 	self.chunkStore = store
 }
 
-//
 func (self *ResourceHandler) notify(rsrc *resource) error {
 	if self.notifier == nil {
 		return errors.New("Notifications not enabled")
@@ -259,7 +258,7 @@ func (self *ResourceHandler) CreateNotification(name string) ([]byte, error) {
 
 func (self *ResourceHandler) createNotification(rsrc *resource) ([]byte, error) {
 	b := bytes.NewBuffer(nil)
-	ib := make([]byte, 8)
+	ib := make([]byte, 4)
 	period, err := self.GetLastPeriod(*rsrc.name)
 	if err != nil {
 		return nil, err
@@ -278,11 +277,11 @@ func (self *ResourceHandler) createNotification(rsrc *resource) ([]byte, error) 
 // HandleNotification parses a resource handler notification data structure to required metadata for the update
 // it returns period and version
 func (self *ResourceHandler) ParseNotification(data []byte) (period uint32, version uint32, err error) {
-	if len(data) != 16 {
-		return 0, 0, fmt.Errorf("Expected data length 16, have %d", len(data))
+	if len(data) != 8 {
+		return 0, 0, fmt.Errorf("Expected data length 8 have %d", len(data))
 	}
 	period = binary.LittleEndian.Uint32(data)
-	version = binary.LittleEndian.Uint32(data[8:])
+	version = binary.LittleEndian.Uint32(data[4:])
 	return period, version, nil
 }
 
@@ -856,6 +855,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	rsrc.version = version
 	rsrc.data = make([]byte, len(data))
 	copy(rsrc.data, data)
+	self.notify(rsrc)
 	return key, nil
 }
 

@@ -404,7 +404,7 @@ func (self *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, 
 	for f := range handlers {
 		err := (*f)(payload, p, asymmetric, keyid)
 		if err != nil {
-			log.Warn("Pss handler %p failed: %v", f, err)
+			log.Warn("Pss handler failed", "handler", fmt.Sprintf("%p", f), "err", err)
 		}
 	}
 }

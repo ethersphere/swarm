@@ -2,9 +2,11 @@ package notify
 
 import (
 	"bytes"
+	"crypto/ecdsa"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -22,6 +24,7 @@ const (
 )
 
 const (
+	DefaultAddressLength = 1
 	minimumAddressLength = 1
 	symKeyLength         = 32 // this should be gotten from source
 )
@@ -34,9 +37,9 @@ var (
 // when code is MsgCodeNotify, Payload is symkey. If len = 0, keep old key
 // when code is MsgCodeStop, Payload is address
 type Msg struct {
-	Code    byte
 	Name    string
 	Payload []byte
+	Code    byte
 }
 
 func (self *Msg) Serialize() []byte {
@@ -59,7 +62,7 @@ func deserializeMsg(msgbytes []byte) (*Msg, error) {
 	nameLen := binary.LittleEndian.Uint16(msgbytes[1:3])
 	dataLen := binary.LittleEndian.Uint16(msgbytes[3:5])
 	if int(nameLen+dataLen)+5 != len(msgbytes) {
-		return nil, errors.New("Corrupt message")
+		return nil, errors.New("corrupt message")
 	}
 	msg.Name = string(msgbytes[5 : 5+nameLen])
 	msg.Payload = msgbytes[5+nameLen:]
@@ -78,17 +81,21 @@ type notifier struct {
 	topic       pss.Topic
 	threshold   int
 	contentFunc func(string) ([]byte, error)
+	updateFunc  func(string, []byte)
+	mu          sync.Mutex
 }
 
 type Controller struct {
 	pss       *pss.Pss
 	notifiers map[string]*notifier
+	handlers  map[string]func(string, []byte) error
 }
 
 func NewController(ps *pss.Pss) *Controller {
 	ctrl := &Controller{
 		pss:       ps,
 		notifiers: make(map[string]*notifier),
+		handlers:  make(map[string]func(string, []byte) error),
 	}
 	ctrl.pss.Register(&controlTopic, ctrl.Handler)
 	return ctrl
@@ -97,6 +104,18 @@ func NewController(ps *pss.Pss) *Controller {
 func (self *Controller) IsActive(name string) bool {
 	_, ok := self.notifiers[name]
 	return ok
+}
+
+func (self *Controller) Request(name string, pubkey *ecdsa.PublicKey, address pss.PssAddress, handler func(string, []byte) error) error {
+	msg := &Msg{
+		Name:    name,
+		Payload: self.pss.BaseAddr(),
+		Code:    MsgCodeStart,
+	}
+	self.handlers[name] = handler
+	self.pss.SetPeerPublicKey(pubkey, controlTopic, &address)
+	pubkeyid := common.ToHex(crypto.FromECDSAPub(pubkey))
+	return self.pss.SendAsym(pubkeyid, controlTopic, msg.Serialize())
 }
 
 func (self *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
@@ -112,13 +131,13 @@ func (self *Controller) NewNotifier(name string, threshold int, contentFunc func
 }
 
 func (self *Controller) Notify(name string, data []byte) error {
-	msg := Msg{
-		Code:    MsgCodeNotify,
+	msg := &Msg{
 		Name:    name,
 		Payload: data,
+		Code:    MsgCodeNotify,
 	}
 	for _, m := range self.notifiers[name].muxes {
-		log.Trace("sending pss notify", "name", name, "addr", fmt.Sprintf("%x", m.address), "topic", fmt.Sprintf("%x", self.notifiers[name].topic))
+		log.Debug("sending pss notify", "name", name, "addr", fmt.Sprintf("%x", m.address), "topic", fmt.Sprintf("%x", self.notifiers[name].topic), "data", data)
 		err := self.pss.SendSym(m.symKeyId, self.notifiers[name].topic, msg.Serialize())
 		if err != nil {
 			log.Warn("Failed to send notify to addr %x: %v", m.address, err)
@@ -151,13 +170,7 @@ func (self *Controller) addToNotifier(name string, address pss.PssAddress) (stri
 }
 
 func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-
 	log.Debug("notify controller handler", "keyid", keyid)
-	// control messages should be asym
-	if !asymmetric {
-		return errors.New("Control messages must be asymmetric")
-	}
-	pubkey := crypto.ToECDSAPub(common.FromHex(keyid))
 
 	// see if the message is valid
 	msg, err := deserializeMsg(smsg)
@@ -167,6 +180,7 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 
 	switch msg.Code {
 	case MsgCodeStart:
+		pubkey := crypto.ToECDSAPub(common.FromHex(keyid))
 
 		// if name is not registered for notifications we will not react
 		if _, ok := self.notifiers[msg.Name]; !ok {
@@ -202,9 +216,9 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 			return fmt.Errorf("retrieve current update from source fail: %v", err)
 		}
 		replyMsg := &Msg{
-			Code:    MsgCodeNotifyWithKey,
 			Name:    msg.Name,
 			Payload: make([]byte, len(notify)+symKeyLength),
+			Code:    MsgCodeNotifyWithKey,
 		}
 		copy(replyMsg.Payload, notify)
 		copy(replyMsg.Payload[len(notify):], symkey)
@@ -212,6 +226,16 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 		if err != nil {
 			return fmt.Errorf("send start reply fail: %v", err)
 		}
+	case MsgCodeNotifyWithKey:
+		symkey := msg.Payload[len(msg.Payload)-symKeyLength:]
+		topic := pss.BytesToTopic([]byte(msg.Name))
+		// \TODO keep track of and add actual address
+		updaterAddr := pss.PssAddress([]byte{})
+		self.pss.SetSymmetricKey(symkey, topic, &updaterAddr, true)
+		self.pss.Register(&topic, self.Handler)
+		return self.handlers[msg.Name](msg.Name, msg.Payload)
+	case MsgCodeNotify:
+		return self.handlers[msg.Name](msg.Name, msg.Payload)
 	default:
 		return fmt.Errorf("Invalid message code: %d", msg.Code)
 	}

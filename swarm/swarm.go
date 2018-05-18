@@ -47,6 +47,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/pss"
+	"github.com/ethereum/go-ethereum/swarm/pss/notify"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
@@ -73,14 +74,15 @@ type Swarm struct {
 	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
 	streamer *stream.Registry
 	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
-	bzz         *network.Bzz       // the logistic manager
-	backend     chequebook.Backend // simple blockchain Backend
-	privateKey  *ecdsa.PrivateKey
-	corsString  string
-	swapEnabled bool
-	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
-	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
-	ps          *pss.Pss
+	bzz             *network.Bzz       // the logistic manager
+	backend         chequebook.Backend // simple blockchain Backend
+	privateKey      *ecdsa.PrivateKey
+	corsString      string
+	swapEnabled     bool
+	lstore          *storage.LocalStore // local store, needs to store for releasing resources after node stopped
+	sfs             *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
+	ps              *pss.Pss
+	resourceHandler *resource.ResourceHandler
 }
 
 type SwarmAPI struct {
@@ -190,43 +192,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
 
-	var resourceHandler *resource.ResourceHandler
-	rhparams := &resource.ResourceHandlerParams{
-		// TODO: config parameter to set limits
-		QueryMaxPeriods: &resource.ResourceLookupParams{
-			Limit: false,
-		},
-		Signer: &resource.GenericResourceSigner{
-			PrivKey: self.privateKey,
-		},
-		EthClient: resolver,
-		EnsClient: ensresolver,
-	}
-	if resolver != nil {
-		resolver.SetNameHash(ens.EnsNode)
-	} else {
-		log.Warn("No ETH API specified, resource updates will use block height approximation")
-		// TODO: blockestimator should use saved values derived from last time ethclient was connected
-		rhparams.EthClient = resource.NewBlockEstimator()
-	}
-	resourceHandler, err = resource.NewResourceHandler(rhparams)
-	if err != nil {
-		return nil, err
-	}
-	resourceHandler.SetStore(dpaChunkStore)
-
-	var validators []storage.ChunkValidator
-	validators = append(validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)))
-	if resourceHandler != nil {
-		validators = append(validators, resourceHandler)
-	}
-	self.lstore.Validators = validators
-
-	// setup local store
-	log.Debug(fmt.Sprintf("Set up local storage"))
-
-	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
-
 	// Pss = postal service over swarm (devp2p over bzz)
 	config.Pss = config.Pss.WithPrivateKey(self.privateKey)
 	self.ps, err = pss.NewPss(to, config.Pss)
@@ -237,7 +202,46 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)
+	// Enable Mutable Resources
+	// if ENS is not set, update integrity will not be checked, and block height will be simulated
+	rhparams := &resource.ResourceHandlerParams{
+		// TODO: config parameter to set limits
+		QueryMaxPeriods: &resource.ResourceLookupParams{
+			Limit: false,
+		},
+		Signer: &resource.GenericResourceSigner{
+			PrivKey: self.privateKey,
+		},
+		EthClient: resolver,
+		EnsClient: ensresolver,
+		Notifier:  notify.NewController(self.ps),
+	}
+	if resolver != nil {
+		resolver.SetNameHash(ens.EnsNode)
+	} else {
+		log.Warn("No ETH API specified, resource updates will use block height approximation")
+		// TODO: blockestimator should use saved values derived from last time ethclient was connected
+		rhparams.EthClient = resource.NewBlockEstimator()
+	}
+	self.resourceHandler, err = resource.NewResourceHandler(rhparams)
+	if err != nil {
+		return nil, err
+	}
+	self.resourceHandler.SetStore(dpaChunkStore)
+
+	var validators []storage.ChunkValidator
+	validators = append(validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)))
+	if self.resourceHandler != nil {
+		validators = append(validators, self.resourceHandler)
+	}
+	self.lstore.Validators = validators
+
+	// setup local store
+	log.Debug(fmt.Sprintf("Set up local storage"))
+
+	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
+
+	self.api = api.NewApi(self.dpa, self.dns, self.resourceHandler)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
@@ -507,6 +511,13 @@ func (self *Swarm) APIs() []rpc.API {
 			Version:   "0.1",
 			Service:   api.NewFileSystem(self.api),
 			Public:    false,
+		},
+		{
+
+			Namespace: "resource",
+			Version:   "0.1",
+			Service:   resource.NewAPI(self.resourceHandler),
+			Public:    true,
 		},
 		// {Namespace, Version, api.NewAdmin(self), false},
 	}
