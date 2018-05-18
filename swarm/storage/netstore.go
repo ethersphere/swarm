@@ -121,6 +121,11 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	}
 }
 
+// GetWithTimeout makes a single retrieval attempt for a chunk with a explicit timeout parameter
+func (self *NetStore) GetWithTimeout(key Key, timeout time.Duration) (chunk *Chunk, err error) {
+	return self.get(key, timeout)
+}
+
 func (self *NetStore) get(key Key, timeout time.Duration) (chunk *Chunk, err error) {
 	if timeout == 0 {
 		timeout = searchTimeout
@@ -171,4 +176,6 @@ func (self *NetStore) Put(chunk *Chunk) {
 }
 
 // Close chunk store
-func (self *NetStore) Close() {}
+func (self *NetStore) Close() {
+	self.localStore.Close()
+}

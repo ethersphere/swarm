@@ -43,6 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/resource"
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
 )
@@ -421,7 +422,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			return
 		}
 	} else {
-		_, _, err := s.api.ResourceLookup(r.Context(), r.uri.Addr, 0, 0, &storage.ResourceLookupParams{})
+		_, _, err := s.api.ResourceLookup(r.Context(), r.uri.Addr, 0, 0, &resource.ResourceLookupParams{})
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -520,18 +521,18 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supErr string, err error) (int, error) {
 	code := 0
 	defaultErr := fmt.Errorf("%s: %v", supErr, err)
-	rsrcErr, ok := err.(*storage.ResourceError)
+	rsrcErr, ok := err.(*resource.ResourceError)
 	if !ok && rsrcErr != nil {
 		code = rsrcErr.Code()
 	}
 	switch code {
-	case storage.ErrInvalidValue:
+	case resource.ErrInvalidValue:
 		return http.StatusBadRequest, defaultErr
-	case storage.ErrNotFound, storage.ErrNotSynced, storage.ErrNothingToReturn, storage.ErrInit:
+	case resource.ErrNotFound, resource.ErrNotSynced, resource.ErrNothingToReturn, resource.ErrInit:
 		return http.StatusNotFound, defaultErr
-	case storage.ErrUnauthorized, storage.ErrInvalidSignature:
+	case resource.ErrUnauthorized, resource.ErrInvalidSignature:
 		return http.StatusUnauthorized, defaultErr
-	case storage.ErrDataOverflow:
+	case resource.ErrDataOverflow:
 		return http.StatusRequestEntityTooLarge, defaultErr
 	}
 

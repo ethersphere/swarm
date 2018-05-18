@@ -94,8 +94,13 @@ func NewController(ps *pss.Pss) *Controller {
 	return ctrl
 }
 
+func (self *Controller) IsActive(name string) bool {
+	_, ok := self.notifiers[name]
+	return ok
+}
+
 func (self *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
-	if _, ok := self.notifiers[name]; ok {
+	if self.IsActive(name) {
 		return fmt.Errorf("%s already exists in controller", name)
 	}
 	self.notifiers[name] = &notifier{

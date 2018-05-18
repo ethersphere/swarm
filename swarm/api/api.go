@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/resource"
 )
 
 type ErrResourceReturn struct {
@@ -213,13 +214,13 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
-	resource *storage.ResourceHandler
+	resource *resource.ResourceHandler
 	dpa      *storage.DPA
 	dns      Resolver
 }
 
 //the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
+func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *resource.ResourceHandler) (self *Api) {
 	self = &Api{
 		dpa:      dpa,
 		dns:      dns,
@@ -342,7 +343,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.Lazy
 			log.Trace("resource type", "key", manifestKey, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &storage.ResourceLookupParams{})
+			rsrc, err := self.resource.LookupLatestByName(ctx, entry.Hash, true, &resource.ResourceLookupParams{})
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -648,11 +649,11 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (storage.Key, []byte, error) {
+func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *resource.ResourceLookupParams) (storage.Key, []byte, error) {
 	var err error
 	if version != 0 {
 		if period == 0 {
-			return nil, nil, storage.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
+			return nil, nil, resource.NewResourceError(resource.ErrInvalidValue, "Period can't be 0")
 		}
 		_, err = self.resource.LookupVersionByName(ctx, name, period, version, true, maxLookup)
 	} else if period != 0 {
