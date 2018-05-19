@@ -133,10 +133,6 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatal("there should be something here")
 	}
 
-	for _, fu := range files {
-		log.Debug(fmt.Sprintf("got some filename: %s", fu.Name()))
-	}
-
 	for _, file := range filesToAssert {
 		fmt.Printf("trying to read filepath: %s", file.filePath)
 		fileBytes, err := ioutil.ReadFile(file.filePath)
@@ -147,6 +143,20 @@ func TestCLISwarmFs(t *testing.T) {
 			t.Fatal("this should be equal")
 		}
 	}
+
+	unmount = runSwarm(t, []string{
+		"fs",
+		"unmount",
+		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
+		mountPoint,
+	}...)
+	_, matches = unmount.ExpectRegexp(hashRegexp)
+	unmount.ExpectExit()
+
+	if matches[0] != hash {
+		t.Fatal("these should be equal - no changes made")
+	}
+
 }
 
 func doUploadFile(t *testing.T, node *testNode) string {
