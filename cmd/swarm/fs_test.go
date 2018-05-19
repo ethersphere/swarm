@@ -38,7 +38,6 @@ func init() {
 type testFile struct {
 	filePath string
 	content  string
-	file     *os.File
 }
 
 // TestCLISwarmUp tests that running 'swarm up' makes the resulting file
@@ -55,9 +54,11 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(mountPoint)
+
 	handlingNode := cluster.Nodes[0]
 	mhash := doUploadFile(t, handlingNode)
 	log.Debug("Mounting first run...")
+	log.Debug(fmt.Sprintf("ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
 
 	mount := runSwarm(t, []string{
 		"fs",
@@ -91,6 +92,7 @@ func TestCLISwarmFs(t *testing.T) {
 	}
 	hashRegexp := `[a-f\d]{64}`
 	log.Debug("Unmounting first run...")
+	log.Debug(fmt.Sprintf("ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
 
 	unmount := runSwarm(t, []string{
 		"fs",
@@ -117,6 +119,7 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatal("there shouldn't be anything here")
 	}
 	log.Debug("Remounting, second run...")
+	log.Debug(fmt.Sprintf("ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
 
 	//remount, check files
 	newMount := runSwarm(t, []string{
@@ -158,6 +161,7 @@ func TestCLISwarmFs(t *testing.T) {
 	// if err != nil {
 	// 	t.Fatalf("could not exec lsof: %v", err)
 	// }
+	log.Debug(fmt.Sprintf("unmounting second run. ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
 
 	unmountSec := runSwarm(t, []string{
 		"fs",
@@ -223,7 +227,6 @@ func createTestFileInPath(dir, filename, content string) (*testFile, error) {
 	if file, err := os.Create(filePath); err == nil {
 		log.Debug(fmt.Sprintf("creatingfile: %s", filePath))
 
-		tFile.file = file
 		tFile.content = content
 		tFile.filePath = filePath
 
@@ -231,6 +234,7 @@ func createTestFileInPath(dir, filename, content string) (*testFile, error) {
 		if err != nil {
 			return nil, err
 		}
+		file.Close()
 	}
 
 	return tFile, nil
