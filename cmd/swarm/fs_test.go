@@ -23,6 +23,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,6 +119,14 @@ func TestCLISwarmFs(t *testing.T) {
 	if len(files) != 0 {
 		t.Fatal("there shouldn't be anything here")
 	}
+
+	secondMountPoint, err := ioutil.TempDir("", "swarm-test")
+	log.Debug(fmt.Sprintf("2nd mount: %s", secondMountPoint))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(secondMountPoint)
+
 	log.Debug("Remounting, second run...")
 	log.Debug(fmt.Sprintf("ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
 
@@ -127,13 +136,13 @@ func TestCLISwarmFs(t *testing.T) {
 		"mount",
 		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		hash, // the latest hash
-		mountPoint,
+		secondMountPoint,
 	}...)
 
 	newMount.ExpectExit()
 	time.Sleep(5 * time.Second)
 
-	files, err = ioutil.ReadDir(mountPoint)
+	files, err = ioutil.ReadDir(secondMountPoint)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,6 +153,7 @@ func TestCLISwarmFs(t *testing.T) {
 	log.Debug("Traversing file tree to see it matches previous mount")
 
 	for _, file := range filesToAssert {
+		file.filePath = strings.Replace(file.filePath, mountPoint, secondMountPoint, 1)
 		fmt.Printf("trying to read filepath: %s", file.filePath)
 		fileBytes, err := ioutil.ReadFile(file.filePath)
 		if err != nil {
@@ -167,7 +177,7 @@ func TestCLISwarmFs(t *testing.T) {
 		"fs",
 		"unmount",
 		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
-		mountPoint,
+		secondMountPoint,
 	}...)
 
 	_, matches = unmountSec.ExpectRegexp(hashRegexp)
