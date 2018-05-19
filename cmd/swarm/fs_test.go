@@ -57,6 +57,7 @@ func TestCLISwarmFs(t *testing.T) {
 	defer os.RemoveAll(mountPoint)
 	handlingNode := cluster.Nodes[0]
 	mhash := doUploadFile(t, handlingNode)
+	log.Debug("Mounting first run...")
 
 	mount := runSwarm(t, []string{
 		"fs",
@@ -89,6 +90,8 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatalf("should have 4 files to assert now, got %d", len(filesToAssert))
 	}
 	hashRegexp := `[a-f\d]{64}`
+	log.Debug("Unmounting first run...")
+
 	unmount := runSwarm(t, []string{
 		"fs",
 		"unmount",
@@ -102,6 +105,8 @@ func TestCLISwarmFs(t *testing.T) {
 	if hash == mhash {
 		t.Fatal("this should not be equal")
 	}
+	log.Debug("asserting no files in mount point")
+
 	//check that there's nothing in the mount folder
 	files, err := ioutil.ReadDir(mountPoint)
 	if err != nil {
@@ -111,6 +116,7 @@ func TestCLISwarmFs(t *testing.T) {
 	if len(files) != 0 {
 		t.Fatal("there shouldn't be anything here")
 	}
+	log.Debug("Remounting, second run...")
 
 	//remount, check files
 	newMount := runSwarm(t, []string{
@@ -132,6 +138,7 @@ func TestCLISwarmFs(t *testing.T) {
 	if len(files) == 0 {
 		t.Fatal("there should be something here")
 	}
+	log.Debug("Traversing file tree to see it matches previous mount")
 
 	for _, file := range filesToAssert {
 		fmt.Printf("trying to read filepath: %s", file.filePath)
@@ -144,15 +151,23 @@ func TestCLISwarmFs(t *testing.T) {
 		}
 	}
 
-	unmount = runSwarm(t, []string{
+	// cmd := exec.Command("lsof", "+f", "--", mountPoint)
+	// log.Debug("Running command and waiting for it to finish...")
+	// err = cmd.Run()
+	// log.Debug(fmt.Sprintf("Command finished with error: %v", err))
+	// if err != nil {
+	// 	t.Fatalf("could not exec lsof: %v", err)
+	// }
+
+	unmountSec := runSwarm(t, []string{
 		"fs",
 		"unmount",
 		"--ipcpath", filepath.Join(handlingNode.Dir, handlingNode.IpcPath),
 		mountPoint,
 	}...)
-	_, matches = unmount.ExpectRegexp(hashRegexp)
-	unmount.ExpectExit()
-	unmount.WaitExit()
+
+	_, matches = unmountSec.ExpectRegexp(hashRegexp)
+	unmountSec.ExpectExit()
 
 	if matches[0] != hash {
 		t.Fatal("these should be equal - no changes made")
