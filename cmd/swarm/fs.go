@@ -40,6 +40,7 @@ func mount(cliContext *cli.Context) {
 	if err != nil {
 		utils.Fatalf("had an error dailing to RPC endpoint: %v", err)
 	}
+	defer client.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -61,11 +62,13 @@ func unmount(cliContext *cli.Context) {
 	if err != nil {
 		utils.Fatalf("had an error dailing to RPC endpoint: %v", err)
 	}
+	defer client.Close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	mf := &fuse.MountInfo{}
-	err = client.CallContext(ctx, mf, "swarmfs_unmount", args[0])
+	mf := fuse.MountInfo{}
+	err = client.CallContext(ctx, &mf, "swarmfs_unmount", args[0])
 	if err != nil {
 		utils.Fatalf("encountered an error calling the RPC endpoint while unmounting: %v", err)
 	}
@@ -77,6 +80,8 @@ func listMounts(cliContext *cli.Context) {
 	if err != nil {
 		utils.Fatalf("had an error dailing to RPC endpoint: %v", err)
 	}
+	defer client.Close()
+
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 

@@ -152,11 +152,11 @@ func TestCLISwarmFs(t *testing.T) {
 	}...)
 	_, matches = unmount.ExpectRegexp(hashRegexp)
 	unmount.ExpectExit()
+	unmount.WaitExit()
 
 	if matches[0] != hash {
 		t.Fatal("these should be equal - no changes made")
 	}
-
 }
 
 func doUploadFile(t *testing.T, node *testNode) string {
