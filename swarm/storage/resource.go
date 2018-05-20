@@ -127,6 +127,21 @@ func (self *resource) Name() string {
 	return self.name
 }
 
+func (self *resource) UnmarshalBinary(data []byte) error {
+	self.startBlock = binary.LittleEndian.Uint64(data[:8])
+	self.frequency = binary.LittleEndian.Uint64(data[8:16])
+	self.name = string(data[16:])
+	return nil
+}
+
+func (self *resource) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 16+len(self.name))
+	binary.LittleEndian.PutUint64(b, self.startBlock)
+	binary.LittleEndian.PutUint64(b[8:], self.frequency)
+	copy(b[16:], []byte(self.name))
+	return b, nil
+}
+
 type headerGetter interface {
 	HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error)
 }
@@ -407,11 +422,10 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 
 	// create the internal index for the resource and populate it with the data of the first version
 	rsrc := &resource{
-		Reader:     nil,
-		name:       name,
-		nameHash:   nameHash,
 		startBlock: currentblock,
 		frequency:  frequency,
+		name:       name,
+		nameHash:   nameHash,
 		updated:    time.Now(),
 	}
 	self.setResource(nameHash.Hex(), rsrc)
@@ -596,12 +610,8 @@ func (self *ResourceHandler) LoadResource(key Key) (*resource, error) {
 	}
 
 	// create the index entry
-	rsrc := &resource{
-		startBlock: binary.LittleEndian.Uint64(chunk.SData[2:10]),
-		frequency:  binary.LittleEndian.Uint64(chunk.SData[10:18]),
-		name:       string(chunk.SData[18:]),
-	}
-
+	rsrc := &resource{}
+	rsrc.UnmarshalBinary(chunk.SData[2:])
 	rsrc.nameHash = ens.EnsNode(rsrc.name)
 	self.setResource(rsrc.nameHash.Hex(), rsrc)
 	log.Trace("resource index load", "rootkey", key, "name", rsrc.name, "namehash", rsrc.nameHash, "startblock", rsrc.startBlock, "frequency", rsrc.frequency)
