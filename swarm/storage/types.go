@@ -169,13 +169,12 @@ func (c KeyCollection) Swap(i, j int) {
 
 // ChunkStore is the interface for
 type DPA interface {
-	Get(rctx Request, ref Address) (ch Chunk, err error)
+	Get(rctx context.Context, ref Address) (ch Chunk, err error)
 	Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error)
-	Has(ref Address) (waitToStore func(rctx Request) error, err error)
 	Close()
 }
 
-// Chunk interface implemented by requests and data chunks
+// Chunk interface implemented by context.Contexts and data chunks
 type Chunk interface {
 	Address() Address
 	Payload() []byte
@@ -367,13 +366,4 @@ type ChunkStore interface {
 	Get(ref Address) (Chunk, error)
 	Put(ch Chunk) (func(context.Context) error, error)
 	Close()
-}
-
-type localRequest struct {
-	context.Context
-	addr Address
-}
-
-func (l *localRequest) Address() Address {
-	return l.addr
 }

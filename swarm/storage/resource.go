@@ -387,11 +387,11 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 // root chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
 // update root data was retrieved externally, it typically doesn't)
-func (self *ResourceHandler) LookupVersionByName(rctx Request, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupVersionByName(rctx context.Context, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 	return self.LookupVersion(rctx, ens.EnsNode(name), name, period, version, refresh, maxLookup)
 }
 
-func (self *ResourceHandler) LookupVersion(rctx Request, nameHash common.Hash, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupVersion(rctx context.Context, nameHash common.Hash, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 	rsrc, err := self.loadResource(rctx, nameHash, name, refresh)
 	if err != nil {
 		return nil, err
@@ -407,11 +407,11 @@ func (self *ResourceHandler) LookupVersion(rctx Request, nameHash common.Hash, n
 // and returned.
 //
 // See also (*ResourceHandler).LookupVersion
-func (self *ResourceHandler) LookupHistoricalByName(rctx Request, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupHistoricalByName(rctx context.Context, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 	return self.LookupHistorical(rctx, ens.EnsNode(name), name, period, refresh, maxLookup)
 }
 
-func (self *ResourceHandler) LookupHistorical(rctx Request, nameHash common.Hash, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupHistorical(rctx context.Context, nameHash common.Hash, name string, period uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 	rsrc, err := self.loadResource(rctx, nameHash, name, refresh)
 	if err != nil {
 		return nil, err
@@ -429,11 +429,11 @@ func (self *ResourceHandler) LookupHistorical(rctx Request, nameHash common.Hash
 // Version iteration is done as in (*ResourceHandler).LookupHistorical
 //
 // See also (*ResourceHandler).LookupHistorical
-func (self *ResourceHandler) LookupLatestByName(rctx Request, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupLatestByName(rctx context.Context, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 	return self.LookupLatest(rctx, ens.EnsNode(name), name, refresh, maxLookup)
 }
 
-func (self *ResourceHandler) LookupLatest(rctx Request, nameHash common.Hash, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupLatest(rctx context.Context, nameHash common.Hash, name string, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
 	// get our blockheight at this time and the next block of the update period
 	rsrc, err := self.loadResource(rctx, nameHash, name, refresh)
@@ -454,11 +454,11 @@ func (self *ResourceHandler) LookupLatest(rctx Request, nameHash common.Hash, na
 // merely replacing content.
 //
 // Requires a synced resource object
-func (self *ResourceHandler) LookupPreviousByName(rctx Request, name string, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupPreviousByName(rctx context.Context, name string, maxLookup *ResourceLookupParams) (*resource, error) {
 	return self.LookupPrevious(rctx, ens.EnsNode(name), name, maxLookup)
 }
 
-func (self *ResourceHandler) LookupPrevious(rctx Request, nameHash common.Hash, name string, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) LookupPrevious(rctx context.Context, nameHash common.Hash, name string, maxLookup *ResourceLookupParams) (*resource, error) {
 	rsrc := self.getResource(name)
 	if !rsrc.isSynced() {
 		return nil, NewResourceError(ErrNotSynced, "LookupPrevious requires synced resource.")
@@ -475,7 +475,7 @@ func (self *ResourceHandler) LookupPrevious(rctx Request, nameHash common.Hash, 
 }
 
 // base code for public lookup methods
-func (self *ResourceHandler) lookup(rctx Request, rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
+func (self *ResourceHandler) lookup(rctx context.Context, rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
 
 	if self.dpa == nil {
 		return nil, NewResourceError(ErrInit, "Call ResourceHandler.SetStore() before performing lookups")
@@ -530,12 +530,12 @@ func (self *ResourceHandler) lookup(rctx Request, rsrc *resource, period uint32,
 	return nil, NewResourceError(ErrNotFound, "no updates found")
 }
 
-func (self *ResourceHandler) retrieveResource(rctx Request, addr Address) (Chunk, error) {
+func (self *ResourceHandler) retrieveResource(rctx context.Context, addr Address) (Chunk, error) {
 	return self.dpa.Get(rctx, addr)
 }
 
 // load existing mutable resource into resource struct
-func (self *ResourceHandler) loadResource(rctx Request, nameHash common.Hash, name string, refresh bool) (*resource, error) {
+func (self *ResourceHandler) loadResource(rctx context.Context, nameHash common.Hash, name string, refresh bool) (*resource, error) {
 
 	if name == "" {
 		name = nameHash.Hex()

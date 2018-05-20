@@ -106,8 +106,7 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 		return nil, err
 	}
 
-	rctx := &localRequest{ctx, addr}
-	chunk, err := h.dpa.Get(rctx, addr)
+	chunk, err := h.dpa.Get(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
