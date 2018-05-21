@@ -37,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/resource"
 )
 
 type ErrResourceReturn struct {
@@ -213,13 +214,13 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
-	resource *storage.ResourceHandler
+	resource *resource.ResourceHandler
 	dpa      *storage.DPA
 	dns      Resolver
 }
 
 //the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
+func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *resource.ResourceHandler) (self *Api) {
 	self = &Api{
 		dpa:      dpa,
 		dns:      dns,
@@ -654,7 +655,7 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (string, []byte, error) {
+func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *resource.ResourceLookupParams) (storage.Key, []byte, error) {
 	var err error
 	rsrc, err := self.resource.LoadResource(key)
 	if err != nil {
@@ -662,7 +663,7 @@ func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uin
 	}
 	if version != 0 {
 		if period == 0 {
-			return "", nil, storage.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
+			return nil, nil, resource.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
 		}
 		_, err = self.resource.LookupVersion(ctx, rsrc.NameHash(), period, version, true, maxLookup)
 	} else if period != 0 {
