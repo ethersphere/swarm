@@ -573,6 +573,57 @@ func TestResourceChunkValidator(t *testing.T) {
 	}
 }
 
+// Tests that notification creation will include latest version
+// and that wire format serializes and parses correctly
+func TestResourceNotify(t *testing.T) {
+
+	// make fake backend, set up rpc and create resourcehandler
+	backend := &fakeBackend{
+		blocknumber: int64(startBlock),
+	}
+	rh, _, teardownTest, err := setupTest(backend, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer teardownTest()
+
+	// create a new resource
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// updates
+	resourcekey := make(map[string]storage.Key)
+	fwdBlocks(int(resourceFrequency/2), backend)
+	update := "foo"
+	data := []byte(update)
+	resourcekey[update], err = rh.Update(ctx, safeName, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+	update = "bar"
+	data = []byte(update)
+	resourcekey[update], err = rh.Update(ctx, safeName, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// check notify parse and result
+	notifyBytes, err := rh.CreateNotification(safeName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	period, version, err := rh.ParseNotification(notifyBytes)
+	if err != nil {
+		t.Fatal(err)
+	} else if period != 1 || version != 2 {
+		t.Fatalf("Expected period/version 1.2 got %d.%d", period, version)
+	}
+}
+
 // fast-forward blockheight
 func fwdBlocks(count int, backend *fakeBackend) {
 	for i := 0; i < count; i++ {

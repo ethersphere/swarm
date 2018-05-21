@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/pss/notify"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -223,6 +224,7 @@ type ownerValidator interface {
 // TODO: Include modtime in chunk data + signature
 type ResourceHandler struct {
 	chunkStore      *storage.NetStore
+	notifier        *notify.Controller
 	HashSize        int
 	signer          ResourceSigner
 	headerGetter    headerGetter
@@ -239,6 +241,7 @@ type ResourceHandlerParams struct {
 	Signer          ResourceSigner
 	HeaderGetter    headerGetter
 	OwnerValidator  ownerValidator
+	Notifier        *notify.Controller
 }
 
 // Create or open resource update chunk store
@@ -254,6 +257,7 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 		resources:      make(map[string]*resource),
 		storeTimeout:   defaultStoreTimeout,
 		signer:         params.Signer,
+		notifier:       params.Notifier,
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return storage.MakeHashFunc(resourceHash)()
@@ -276,6 +280,59 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 // SetStore sets the store backend for resource updates
 func (self *ResourceHandler) SetStore(store *storage.NetStore) {
 	self.chunkStore = store
+}
+
+func (self *ResourceHandler) notify(rsrc *resource) error {
+	if self.notifier == nil {
+		return errors.New("Notifications not enabled")
+	}
+	if !self.notifier.IsActive(*rsrc.name) {
+		return fmt.Errorf("Notifications for %s not enabled", *rsrc.name)
+	}
+	notificationData, err := self.createNotification(rsrc)
+	if err != nil {
+		return err
+	}
+	self.notifier.Notify(*rsrc.name, notificationData)
+	return nil
+}
+
+// CreateNotification creates a new notification data structure to be sent over the notifier
+func (self *ResourceHandler) CreateNotification(name string) ([]byte, error) {
+	rsrc, ok := self.resources[name]
+	if !ok {
+		return nil, fmt.Errorf("Unknown resource '%s'", name)
+	}
+	return self.createNotification(rsrc)
+}
+
+func (self *ResourceHandler) createNotification(rsrc *resource) ([]byte, error) {
+	b := bytes.NewBuffer(nil)
+	ib := make([]byte, 4)
+	period, err := self.GetLastPeriod(*rsrc.name)
+	if err != nil {
+		return nil, err
+	}
+	binary.LittleEndian.PutUint32(ib, period)
+	b.Write(ib)
+	version, err := self.GetVersion(*rsrc.name)
+	if err != nil {
+		return nil, err
+	}
+	binary.LittleEndian.PutUint32(ib, version)
+	b.Write(ib)
+	return b.Bytes(), nil
+}
+
+// HandleNotification parses a resource handler notification data structure to required metadata for the update
+// it returns period and version
+func (self *ResourceHandler) ParseNotification(data []byte) (period uint32, version uint32, err error) {
+	if len(data) != 8 {
+		return 0, 0, fmt.Errorf("Expected data length 8 have %d", len(data))
+	}
+	period = binary.LittleEndian.Uint32(data)
+	version = binary.LittleEndian.Uint32(data[4:])
+	return period, version, nil
 }
 
 // Validate is a chunk validation method (matches ChunkValidatorFunc signature)
@@ -885,6 +942,7 @@ func (self *ResourceHandler) update(ctx context.Context, name string, data []byt
 	rsrc.version = version
 	rsrc.data = make([]byte, len(data))
 	copy(rsrc.data, data)
+	self.notify(rsrc)
 	return key, nil
 }
 
