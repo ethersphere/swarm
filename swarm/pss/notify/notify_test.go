@@ -6,7 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"reflect"
+	//	"reflect"
 	"testing"
 	"time"
 
@@ -39,26 +39,6 @@ func init() {
 
 	w = whisper.New(&whisper.DefaultConfig)
 	wapi = whisper.NewPublicWhisperAPI(w)
-}
-
-func TestMsgSerialize(t *testing.T) {
-	msg := &Msg{
-		Name:    "foo.eth",
-		Payload: []byte("xyzzy"),
-		Code:    MsgCodeNotify,
-	}
-	smsg := msg.Serialize()
-	serialResult := []byte{MsgCodeNotify, 0x7, 0x0, 0x5, 0x0, 0x66, 0x6f, 0x6f, 0x2e, 0x65, 0x74, 0x68, 0x78, 0x79, 0x7a, 0x7a, 0x79}
-	if !bytes.Equal(smsg, serialResult) {
-		t.Fatalf("Serialize error, expected %x, got %x", serialResult, smsg)
-	}
-
-	dmsg, err := deserializeMsg(smsg)
-	if err != nil {
-		t.Fatal(err)
-	} else if !reflect.DeepEqual(dmsg, msg) {
-		t.Fatal("deserialized message does not equal original")
-	}
 }
 
 func TestStart(t *testing.T) {
@@ -156,8 +136,11 @@ func TestStart(t *testing.T) {
 		Payload: common.FromHex(r_addr),
 		Code:    MsgCodeStart,
 	}
-
-	err = r_rpc.Call(nil, "pss_sendAsym", l_pub, controlTopic, common.ToHex(msg.Serialize()))
+	smsg, err := msg.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = r_rpc.Call(nil, "pss_sendAsym", l_pub, controlTopic, common.ToHex(smsg))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -168,7 +151,8 @@ func TestStart(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	dMsg, err := deserializeMsg(inMsg.Msg)
+	var dMsg Msg
+	err = dMsg.UnmarshalBinary(inMsg.Msg)
 	if err != nil {
 		t.Fatal(err)
 	} else if dMsg.Name != rsrcName {
@@ -190,7 +174,8 @@ func TestStart(t *testing.T) {
 		log.Error("timed out waiting for msg", "topic", fmt.Sprintf("%x", rsrcTopic))
 		t.Fatal(ctx.Err())
 	}
-	dMsg, err = deserializeMsg(inMsg.Msg)
+	dMsg = Msg{}
+	err = dMsg.UnmarshalBinary(inMsg.Msg)
 	if err != nil {
 		t.Fatal(err)
 	} else if dMsg.Name != rsrcName {

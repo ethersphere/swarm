@@ -32,7 +32,6 @@ const (
 
 const (
 	DefaultAddressLength = 1
-	minimumAddressLength = 1
 	symKeyLength         = 32 // this should be gotten from source
 )
 
@@ -52,7 +51,8 @@ type Msg struct {
 }
 
 // Serialize create a message byte string ready to send through pss
-func (self *Msg) Serialize() []byte {
+//func (self *Msg) Serialize() []byte {
+func (self *Msg) MarshalBinary() ([]byte, error) {
 	b := bytes.NewBuffer(nil)
 	b.Write([]byte{self.Code})
 	ib := make([]byte, 2)
@@ -62,22 +62,20 @@ func (self *Msg) Serialize() []byte {
 	b.Write(ib)
 	b.Write([]byte(self.Name))
 	b.Write(self.Payload)
-	return b.Bytes()
+	return b.Bytes(), nil
 }
 
 // reverses Serialize
-func deserializeMsg(msgbytes []byte) (*Msg, error) {
-	msg := &Msg{
-		Code: msgbytes[0],
+func (self *Msg) UnmarshalBinary(data []byte) error {
+	self.Code = data[0]
+	nameLen := binary.LittleEndian.Uint16(data[1:3])
+	dataLen := binary.LittleEndian.Uint16(data[3:5])
+	if int(nameLen+dataLen)+5 != len(data) {
+		return errors.New("corrupt message")
 	}
-	nameLen := binary.LittleEndian.Uint16(msgbytes[1:3])
-	dataLen := binary.LittleEndian.Uint16(msgbytes[3:5])
-	if int(nameLen+dataLen)+5 != len(msgbytes) {
-		return nil, errors.New("corrupt message")
-	}
-	msg.Name = string(msgbytes[5 : 5+nameLen])
-	msg.Payload = msgbytes[5+nameLen:]
-	return msg, nil
+	self.Name = string(data[5 : 5+nameLen])
+	self.Payload = data[5+nameLen:]
+	return nil
 }
 
 // a notifier has one sendmux entry for each address space it sends messages to
@@ -127,7 +125,7 @@ func (self *Controller) IsActive(name string) bool {
 // Request is used by a client to request notifications from a notification service provider
 // It will create a MsgCodeStart message and send asymmetrically to the provider using its public key and routing address
 // The handler function is a callback that will be called when notifications are recieved
-// Fails if the request pss cannot be sent
+// Fails if the request pss cannot be sent or if the update message could not be serialized
 func (self *Controller) Request(name string, pubkey *ecdsa.PublicKey, address pss.PssAddress, handler func(string, []byte) error) error {
 	msg := &Msg{
 		Name:    name,
@@ -137,7 +135,11 @@ func (self *Controller) Request(name string, pubkey *ecdsa.PublicKey, address ps
 	self.handlers[name] = handler
 	self.pss.SetPeerPublicKey(pubkey, controlTopic, &address)
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(pubkey))
-	return self.pss.SendAsym(pubkeyid, controlTopic, msg.Serialize())
+	smsg, err := msg.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("message could not be serialized: %v", err)
+	}
+	return self.pss.SendAsym(pubkeyid, controlTopic, smsg)
 }
 
 // NewNotifier is used by a notification service provider to create a new notification service
@@ -157,7 +159,7 @@ func (self *Controller) NewNotifier(name string, threshold int, contentFunc func
 
 // Notify is called by a notification service provider to issue a new notification
 // It takes the name of the notification service the data to be sent.
-// It fails if a notifier with this name does not exist.
+// It fails if a notifier with this name does not exist or if data could not be serialized
 // Note that it does NOT fail on failure to send a message
 func (self *Controller) Notify(name string, data []byte) error {
 	if !self.IsActive(name) {
@@ -170,7 +172,11 @@ func (self *Controller) Notify(name string, data []byte) error {
 	}
 	for _, m := range self.notifiers[name].bins {
 		log.Debug("sending pss notify", "name", name, "addr", fmt.Sprintf("%x", m.address), "topic", fmt.Sprintf("%x", self.notifiers[name].topic), "data", data)
-		err := self.pss.SendSym(m.symKeyId, self.notifiers[name].topic, msg.Serialize())
+		smsg, err := msg.MarshalBinary()
+		if err != nil {
+			return fmt.Errorf("Failed to serialize message: %v", err)
+		}
+		err = self.pss.SendSym(m.symKeyId, self.notifiers[name].topic, smsg)
 		if err != nil {
 			log.Warn("Failed to send notify to addr %x: %v", m.address, err)
 		}
@@ -208,7 +214,8 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 	log.Debug("notify controller handler", "keyid", keyid)
 
 	// see if the message is valid
-	msg, err := deserializeMsg(smsg)
+	var msg Msg
+	err := msg.UnmarshalBinary(smsg)
 	if err != nil {
 		return fmt.Errorf("Invalid message: %v", err)
 	}
@@ -257,7 +264,11 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 		}
 		copy(replyMsg.Payload, notify)
 		copy(replyMsg.Payload[len(notify):], symkey)
-		err = self.pss.SendAsym(keyid, controlTopic, replyMsg.Serialize())
+		sReplyMsg, err := replyMsg.MarshalBinary()
+		if err != nil {
+			return fmt.Errorf("reply message could not be serialized: %v", err)
+		}
+		err = self.pss.SendAsym(keyid, controlTopic, sReplyMsg)
 		if err != nil {
 			return fmt.Errorf("send start reply fail: %v", err)
 		}
