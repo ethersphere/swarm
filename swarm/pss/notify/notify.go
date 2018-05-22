@@ -3,8 +3,6 @@ package notify
 import (
 	"bytes"
 	"crypto/ecdsa"
-	"encoding/binary"
-	"errors"
 	"fmt"
 	"sync"
 
@@ -12,6 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
@@ -45,37 +44,21 @@ var (
 // when code is MsgCodeNotify, Payload is notification
 // when code is MsgCodeStop, Payload is address
 type Msg struct {
-	Name    string
-	Payload []byte
 	Code    byte
+	Name    []byte
+	Payload []byte
 }
 
-// Serialize create a message byte string ready to send through pss
-//func (self *Msg) Serialize() []byte {
-func (self *Msg) MarshalBinary() ([]byte, error) {
-	b := bytes.NewBuffer(nil)
-	b.Write([]byte{self.Code})
-	ib := make([]byte, 2)
-	binary.LittleEndian.PutUint16(ib, uint16(len(self.Name)))
-	b.Write(ib)
-	binary.LittleEndian.PutUint16(ib, uint16(len(self.Payload)))
-	b.Write(ib)
-	b.Write([]byte(self.Name))
-	b.Write(self.Payload)
-	return b.Bytes(), nil
-}
-
-// reverses Serialize
-func (self *Msg) UnmarshalBinary(data []byte) error {
-	self.Code = data[0]
-	nameLen := binary.LittleEndian.Uint16(data[1:3])
-	dataLen := binary.LittleEndian.Uint16(data[3:5])
-	if int(nameLen+dataLen)+5 != len(data) {
-		return errors.New("corrupt message")
+func NewMsg(code byte, name string, payload []byte) *Msg {
+	return &Msg{
+		Code:    code,
+		Name:    []byte(name),
+		Payload: payload,
 	}
-	self.Name = string(data[5 : 5+nameLen])
-	self.Payload = data[5+nameLen:]
-	return nil
+}
+
+func (self *Msg) GetName() string {
+	return string(self.Name)
 }
 
 // a notifier has one sendmux entry for each address space it sends messages to
@@ -127,15 +110,11 @@ func (self *Controller) IsActive(name string) bool {
 // The handler function is a callback that will be called when notifications are recieved
 // Fails if the request pss cannot be sent or if the update message could not be serialized
 func (self *Controller) Request(name string, pubkey *ecdsa.PublicKey, address pss.PssAddress, handler func(string, []byte) error) error {
-	msg := &Msg{
-		Name:    name,
-		Payload: self.pss.BaseAddr(),
-		Code:    MsgCodeStart,
-	}
+	msg := NewMsg(MsgCodeStart, name, self.pss.BaseAddr())
 	self.handlers[name] = handler
 	self.pss.SetPeerPublicKey(pubkey, controlTopic, &address)
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(pubkey))
-	smsg, err := msg.MarshalBinary()
+	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return fmt.Errorf("message could not be serialized: %v", err)
 	}
@@ -165,14 +144,10 @@ func (self *Controller) Notify(name string, data []byte) error {
 	if !self.IsActive(name) {
 		return fmt.Errorf("Notification service %s doesn't exist", name)
 	}
-	msg := &Msg{
-		Name:    name,
-		Payload: data,
-		Code:    MsgCodeNotify,
-	}
+	msg := NewMsg(MsgCodeNotify, name, data)
 	for _, m := range self.notifiers[name].bins {
 		log.Debug("sending pss notify", "name", name, "addr", fmt.Sprintf("%x", m.address), "topic", fmt.Sprintf("%x", self.notifiers[name].topic), "data", data)
-		smsg, err := msg.MarshalBinary()
+		smsg, err := rlp.EncodeToBytes(msg)
 		if err != nil {
 			return fmt.Errorf("Failed to serialize message: %v", err)
 		}
@@ -214,8 +189,8 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 	log.Debug("notify controller handler", "keyid", keyid)
 
 	// see if the message is valid
-	var msg Msg
-	err := msg.UnmarshalBinary(smsg)
+	msg := &Msg{}
+	err := rlp.DecodeBytes(smsg, msg)
 	if err != nil {
 		return fmt.Errorf("Invalid message: %v", err)
 	}
@@ -225,18 +200,18 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 		pubkey := crypto.ToECDSAPub(common.FromHex(keyid))
 
 		// if name is not registered for notifications we will not react
-		if _, ok := self.notifiers[msg.Name]; !ok {
-			return fmt.Errorf("Subscribe attempted on unknown resource %s", msg.Name)
+		if _, ok := self.notifiers[msg.GetName()]; !ok {
+			return fmt.Errorf("Subscribe attempted on unknown resource %s", msg.GetName())
 		}
 
 		// parse the address from the message and truncate if longer than our mux threshold
 		address := msg.Payload
-		if len(msg.Payload) > self.notifiers[msg.Name].threshold {
-			address = address[:self.notifiers[msg.Name].threshold]
+		if len(msg.Payload) > self.notifiers[msg.GetName()].threshold {
+			address = address[:self.notifiers[msg.GetName()].threshold]
 		}
 
 		// add the address to the notification list
-		symKeyId, err := self.addToNotifier(msg.Name, address)
+		symKeyId, err := self.addToNotifier(msg.GetName(), address)
 		if err != nil {
 			return fmt.Errorf("add address to notifier fail: %v", err)
 		}
@@ -253,18 +228,14 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 		}
 
 		// send initial notify, will contain symkey to use for consecutive messages
-		notify, err := self.notifiers[msg.Name].contentFunc(msg.Name)
+		notify, err := self.notifiers[msg.GetName()].contentFunc(msg.GetName())
 		if err != nil {
 			return fmt.Errorf("retrieve current update from source fail: %v", err)
 		}
-		replyMsg := &Msg{
-			Name:    msg.Name,
-			Payload: make([]byte, len(notify)+symKeyLength),
-			Code:    MsgCodeNotifyWithKey,
-		}
+		replyMsg := NewMsg(MsgCodeNotifyWithKey, msg.GetName(), make([]byte, len(notify)+symKeyLength))
 		copy(replyMsg.Payload, notify)
 		copy(replyMsg.Payload[len(notify):], symkey)
-		sReplyMsg, err := replyMsg.MarshalBinary()
+		sReplyMsg, err := rlp.EncodeToBytes(replyMsg)
 		if err != nil {
 			return fmt.Errorf("reply message could not be serialized: %v", err)
 		}
@@ -274,14 +245,14 @@ func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid
 		}
 	case MsgCodeNotifyWithKey:
 		symkey := msg.Payload[len(msg.Payload)-symKeyLength:]
-		topic := pss.BytesToTopic([]byte(msg.Name))
+		topic := pss.BytesToTopic(msg.Name)
 		// \TODO keep track of and add actual address
 		updaterAddr := pss.PssAddress([]byte{})
 		self.pss.SetSymmetricKey(symkey, topic, &updaterAddr, true)
 		self.pss.Register(&topic, self.Handler)
-		return self.handlers[msg.Name](msg.Name, msg.Payload)
+		return self.handlers[msg.GetName()](msg.GetName(), msg.Payload)
 	case MsgCodeNotify:
-		return self.handlers[msg.Name](msg.Name, msg.Payload)
+		return self.handlers[msg.GetName()](msg.GetName(), msg.Payload)
 	default:
 		return fmt.Errorf("Invalid message code: %d", msg.Code)
 	}

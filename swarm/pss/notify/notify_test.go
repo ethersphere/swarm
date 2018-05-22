@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	//	"reflect"
 	"testing"
 	"time"
 
@@ -16,6 +15,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
@@ -131,12 +131,8 @@ func TestStart(t *testing.T) {
 		return updateMsg, nil
 	})
 
-	msg := &Msg{
-		Name:    rsrcName,
-		Payload: common.FromHex(r_addr),
-		Code:    MsgCodeStart,
-	}
-	smsg, err := msg.MarshalBinary()
+	msg := NewMsg(MsgCodeStart, rsrcName, common.FromHex(r_addr))
+	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,12 +147,12 @@ func TestStart(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	var dMsg Msg
-	err = dMsg.UnmarshalBinary(inMsg.Msg)
+	dMsg := &Msg{}
+	err = rlp.DecodeBytes(inMsg.Msg, dMsg)
 	if err != nil {
 		t.Fatal(err)
-	} else if dMsg.Name != rsrcName {
-		t.Fatalf("expected name %s, got %s", rsrcName, dMsg.Name)
+	} else if dMsg.GetName() != rsrcName {
+		t.Fatalf("expected name %s, got %s", rsrcName, dMsg.GetName())
 	} else if !bytes.Equal(dMsg.Payload[:len(updateMsg)], updateMsg) {
 		t.Fatalf("expected payload first %d bytes '%x', got '%x'", len(updateMsg), updateMsg, dMsg.Payload[:len(updateMsg)])
 	} else if len(updateMsg)+symKeyLength != len(dMsg.Payload) {
@@ -174,12 +170,12 @@ func TestStart(t *testing.T) {
 		log.Error("timed out waiting for msg", "topic", fmt.Sprintf("%x", rsrcTopic))
 		t.Fatal(ctx.Err())
 	}
-	dMsg = Msg{}
-	err = dMsg.UnmarshalBinary(inMsg.Msg)
+	dMsg = &Msg{}
+	err = rlp.DecodeBytes(inMsg.Msg, dMsg)
 	if err != nil {
 		t.Fatal(err)
-	} else if dMsg.Name != rsrcName {
-		t.Fatalf("expected name %s, got %s", rsrcName, dMsg.Name)
+	} else if dMsg.GetName() != rsrcName {
+		t.Fatalf("expected name %s, got %s", rsrcName, dMsg.GetName())
 	} else if !bytes.Equal(dMsg.Payload, nextUpdateMsg) {
 		t.Fatalf("expected payload '%x', got '%x'", nextUpdateMsg, dMsg.Payload)
 	}
