@@ -77,7 +77,6 @@ type notifier struct {
 	topic       pss.Topic
 	threshold   int
 	contentFunc func(string) ([]byte, error)
-	mu          sync.Mutex
 }
 
 // Controller is the interface to control, add and remove notification services
@@ -85,6 +84,7 @@ type Controller struct {
 	pss       *pss.Pss
 	notifiers map[string]*notifier
 	handlers  map[string]func(string, []byte) error
+	mu        sync.Mutex
 }
 
 // NewController creates a new Controller object
@@ -101,6 +101,12 @@ func NewController(ps *pss.Pss) *Controller {
 // IsActive is used to check if a notification service exists for a specified id string
 // Returns true if exists, false if not
 func (self *Controller) IsActive(name string) bool {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	return self.isActive(name)
+}
+
+func (self *Controller) isActive(name string) bool {
 	_, ok := self.notifiers[name]
 	return ok
 }
@@ -110,6 +116,8 @@ func (self *Controller) IsActive(name string) bool {
 // The handler function is a callback that will be called when notifications are recieved
 // Fails if the request pss cannot be sent or if the update message could not be serialized
 func (self *Controller) Request(name string, pubkey *ecdsa.PublicKey, address pss.PssAddress, handler func(string, []byte) error) error {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 	msg := NewMsg(MsgCodeStart, name, self.pss.BaseAddr())
 	self.handlers[name] = handler
 	self.pss.SetPeerPublicKey(pubkey, controlTopic, &address)
@@ -125,7 +133,9 @@ func (self *Controller) Request(name string, pubkey *ecdsa.PublicKey, address ps
 // It takes a name as identifier for the resource, a threshold indicating the granularity of the subscription address bin, and a callback for getting the latest update
 // Fails if a notifier already is registered on the name
 func (self *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
-	if self.IsActive(name) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	if self.isActive(name) {
 		return fmt.Errorf("Notification service %s already exists in controller", name)
 	}
 	self.notifiers[name] = &notifier{
@@ -141,7 +151,9 @@ func (self *Controller) NewNotifier(name string, threshold int, contentFunc func
 // It fails if a notifier with this name does not exist or if data could not be serialized
 // Note that it does NOT fail on failure to send a message
 func (self *Controller) Notify(name string, data []byte) error {
-	if !self.IsActive(name) {
+	self.mu.Lock()
+	defer self.mu.Unlock()
+	if !self.isActive(name) {
 		return fmt.Errorf("Notification service %s doesn't exist", name)
 	}
 	msg := NewMsg(MsgCodeNotify, name, data)
@@ -160,6 +172,7 @@ func (self *Controller) Notify(name string, data []byte) error {
 }
 
 // adds an client address to the corresponding address bin in the notifier service
+// this method is not concurrency safe
 func (self *Controller) addToNotifier(name string, address pss.PssAddress) (string, error) {
 	notifier, ok := self.notifiers[name]
 	if !ok {
@@ -186,6 +199,8 @@ func (self *Controller) addToNotifier(name string, address pss.PssAddress) (stri
 // Handler is the pss topic handler to be used to process notification service messages
 // It should be registered in the pss of both to any notification service provides and clients using the service
 func (self *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+	self.mu.Lock()
+	defer self.mu.Unlock()
 	log.Debug("notify controller handler", "keyid", keyid)
 
 	// see if the message is valid
