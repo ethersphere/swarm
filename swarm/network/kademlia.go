@@ -209,7 +209,7 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 	return nil
 }
 
-func (k *Kademlia) Unregister(opeer OverlayPeer) {
+func (k *Kademlia) Unregister(opeer OverlayAddr) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 

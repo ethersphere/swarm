@@ -244,7 +244,11 @@ func (b *Bzz) runBzz(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	err := b.performHandshake(peer, handshake)
 	if err != nil {
 		log.Warn(fmt.Sprintf("%08x: handshake failed with remote peer %08x: %v", b.localAddr.Over()[:4], ToOverlayAddr(p.ID().Bytes())[:4], err))
-		b.Hive.Unregister(p.ID())
+
+		// get overlay address of p and unregister it from Hive
+		bzzAddr := NewAddrFromNodeID(p.ID())
+		b.Hive.Unregister(bzzAddr)
+
 		return err
 	}
 	// fail if we get another handshake
