@@ -164,7 +164,7 @@ func TestResourceHandler(t *testing.T) {
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(safeName)
 	addr := Address(namehash[:])
-	rctx := &localRequest{ctx, addr}
+	rctx := ctx
 	ch, err := rh.dpa.Get(rctx, addr)
 	if err != nil {
 		t.Fatal(err)
@@ -419,7 +419,7 @@ func TestResourceMultihash(t *testing.T) {
 		t.Fatalf("Expected update to fail with last byte skipped")
 	}
 
-	rctx := &localRequest{ctx, swarmhashkey}
+	rctx := ctx
 	data, err := getUpdateDirect(rctx, rh, swarmhashkey)
 	if err != nil {
 		t.Fatal(err)
@@ -641,7 +641,7 @@ func newTestSigner() (*GenericResourceSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rctx Request, rh *ResourceHandler, addr Address) ([]byte, error) {
+func getUpdateDirect(rctx context.Context, rh *ResourceHandler, addr Address) ([]byte, error) {
 	ch, err := rh.dpa.Get(rctx, addr)
 	if err != nil {
 		return nil, err

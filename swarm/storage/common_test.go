@@ -303,7 +303,7 @@ type fakeDPA struct {
 	store ChunkStore
 }
 
-func (f *fakeDPA) Get(rctx Request, ref Address) (ch Chunk, err error) {
+func (f *fakeDPA) Get(rctx context.Context, ref Address) (ch Chunk, err error) {
 	return f.store.Get(ref)
 }
 
@@ -311,9 +311,9 @@ func (f *fakeDPA) Put(ch Chunk) (waitToStore func(ctx context.Context) error, er
 	return f.store.Put(ch)
 }
 
-func (f *fakeDPA) Has(ref Address) (waitToStore func(Request) error, err error) {
+func (f *fakeDPA) Has(ref Address) (waitToStore func(context.Context) error, err error) {
 	_, err = f.store.Get(ref)
-	return func(Request) error { return nil }, err
+	return func(context.Context) error { return nil }, err
 }
 
 func (f *fakeDPA) Close() {
