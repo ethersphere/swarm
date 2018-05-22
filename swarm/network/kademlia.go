@@ -209,22 +209,6 @@ func (k *Kademlia) Register(peers []OverlayAddr) error {
 	return nil
 }
 
-func (k *Kademlia) Unregister(opeer OverlayAddr) {
-	k.lock.Lock()
-	defer k.lock.Unlock()
-
-	log.Trace("kademlia.unregister", "peer", opeer)
-	pof := pot.DefaultPof(8)
-	var n int
-	found := true
-	removed := -1
-	for found {
-		removed++
-		k.addrs, n, found = pot.Remove(k.addrs, newEntry(opeer), pof)
-	}
-	log.Trace("kademlia.unregister pot.Remove", "n", n, "removed", removed)
-}
-
 // SuggestPeer returns a known peer for the lowest proximity bin for the
 // lowest bincount below depth
 // naturally if there is an empty row it returns a peer for that

@@ -45,8 +45,6 @@ type Overlay interface {
 	Off(OverlayConn)
 	// register peer addresses
 	Register([]OverlayAddr) error
-	// unregister peer address
-	Unregister(OverlayAddr)
 	// iterate over connected peers
 	EachConn([]byte, int, func(OverlayConn, int, bool) bool)
 	// iterate over known peers (address records)
