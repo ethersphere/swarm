@@ -518,6 +518,29 @@ func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
 	return symkey, nil
 }
 
+// Returns all recorded topic and address combination for a specific public key
+func (self *Pss) GetPeer(keyid string) (topic []Topic, address []PssAddress, err error) {
+	self.pubKeyPoolMu.Lock()
+	defer self.pubKeyPoolMu.Unlock()
+	for t, p := range self.pubKeyPool[keyid] {
+		topic = append(topic, t)
+		address = append(address, *p.address)
+	}
+
+	return topic, address, nil
+}
+
+func (self *Pss) getPeerAddress(keyid string, topic Topic) (PssAddress, error) {
+	self.pubKeyPoolMu.Lock()
+	defer self.pubKeyPoolMu.Unlock()
+	if p, ok := self.pubKeyPool[keyid]; ok {
+		if t, ok := p[topic]; ok {
+			return *t.address, nil
+		}
+	}
+	return nil, fmt.Errorf("peer with pubkey %s, topic %x not found", keyid, topic)
+}
+
 // Attempt to decrypt, validate and unpack a
 // symmetrically encrypted message
 // If successful, returns the unpacked whisper ReceivedMessage struct
