@@ -74,7 +74,7 @@ func NewLocalDPA(dataDir string, baseAddr []byte) (DPA, error) {
 		return nil, err
 	}
 	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(DefaultHash)))
-	return NewNetStore(localStore, nil)
+	return NewFakeDPA(localStore), nil
 }
 
 func NewLocalDPAAPI(dataDir string, baseAddr []byte) (*DPAAPI, error) {
@@ -113,4 +113,31 @@ func (self *DPAAPI) Store(ctx context.Context, data io.Reader, size int64, toEnc
 
 func (self *DPAAPI) HashSize() int {
 	return self.hashFunc().Size()
+}
+
+type FakeDPA struct {
+	store ChunkStore
+}
+
+func NewFakeDPA(store ChunkStore) *FakeDPA {
+	return &FakeDPA{
+		store: store,
+	}
+}
+
+func (f *FakeDPA) Get(ctx context.Context, ref Address) (ch Chunk, err error) {
+	return f.store.Get(ref)
+}
+
+func (f *FakeDPA) Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error) {
+	return f.store.Put(ch)
+}
+
+func (f *FakeDPA) Has(ref Address) (waitToStore func(context.Context) error, err error) {
+	_, err = f.store.Get(ref)
+	return func(context.Context) error { return nil }, err
+}
+
+func (f *FakeDPA) Close() {
+
 }

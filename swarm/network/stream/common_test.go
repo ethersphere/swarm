@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -60,7 +61,6 @@ var (
 	chunkSize         = 4096
 	registries        map[discover.NodeID]*TestRegistry
 	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
-	getRetrieveFunc   = defaultRetrieveFunc
 	subscriptionCount = 0
 )
 
@@ -90,14 +90,14 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 		return nil, err
 	}
 	store := stores[id].(*storage.LocalStore)
-	dpa, err := storage.NewNetStore(store, getRetrieveFunc(id))
+	dpa, err := storage.NewNetStore(store, newFakeFetcher)
 	delivery := NewDelivery(kad, dpa)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, dpa, state.NewInmemoryStore(), &RegistryOptions{
+	r := NewRegistry(addr, delivery, store, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,
 	})
-	RegisterSwarmSyncerServer(r, dpa)
+	RegisterSwarmSyncerServer(r, store)
 	RegisterSwarmSyncerClient(r, dpa)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
@@ -108,10 +108,8 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	return testRegistry, nil
 }
 
-func defaultRetrieveFunc(id discover.NodeID) func(context.Context, storage.Address) func(context.Context, []storage.Address) {
-	return func(context.Context, storage.Address) func(context.Context, []storage.Address) {
-		return func(context.Context, []storage.Address) {}
-	}
+func newFakeFetcher(context.Context, storage.Address, sync.Map) storage.FetchFunc {
+	return func(context.Context) {}
 }
 
 func datadirsCleanup() {
@@ -153,12 +151,12 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		return nil, nil, nil, removeDataDir, err
 	}
 
-	dpa, err := storage.NewNetStore(localStore, getRetrieveFunc(addr.ID()))
+	dpa, err := storage.NewNetStore(localStore, newFakeFetcher)
 	if err != nil {
 		return nil, nil, nil, removeDataDir, err
 	}
 	delivery := NewDelivery(to, dpa)
-	streamer := NewRegistry(addr, delivery, dpa, state.NewInmemoryStore(), &RegistryOptions{
+	streamer := NewRegistry(addr, delivery, localStore, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck: defaultSkipCheck,
 	})
 	teardown := func() {
@@ -205,10 +203,10 @@ func (rrs *roundRobinStore) Get(key storage.Address) (storage.Chunk, error) {
 	return nil, errors.New("get not well defined on round robin store")
 }
 
-func (rrs *roundRobinStore) Put(chunk storage.Chunk) {
+func (rrs *roundRobinStore) Put(chunk storage.Chunk) (func(context.Context) error, error) {
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
-	rrs.stores[idx].Put(chunk)
+	return rrs.stores[idx].Put(chunk)
 }
 
 func (rrs *roundRobinStore) Close() {
@@ -341,11 +339,11 @@ func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Str
 
 type testExternalClient struct {
 	hashes               chan []byte
-	dpa                  SyncDPA
+	dpa                  DPA
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(dpa storage.DPA) *testExternalClient {
+func newTestExternalClient(dpa DPA) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
 		dpa:                  dpa,
@@ -359,7 +357,10 @@ func (c *testExternalClient) NeedData(hash []byte) func(context.Context) error {
 		return nil
 	}
 	c.hashes <- hash
-	return wait
+	return func(ctx context.Context) error {
+		_, err := wait(ctx)
+		return err
+	}
 }
 
 func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {

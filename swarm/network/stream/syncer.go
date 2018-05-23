@@ -31,8 +31,8 @@ const (
 	BatchSize = 128
 )
 
-type SyncDPA interface {
-	DPA
+type SyncDB interface {
+	Get(key storage.Address) (chunk storage.Chunk, err error)
 	BinIndex(po uint8) uint64
 	Iterator(from uint64, to uint64, po uint8, f func(storage.Address, uint64) bool) error
 }
@@ -43,35 +43,36 @@ type SyncDPA interface {
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
 	po        uint8
-	dpa       SyncDPA
+	dpa       DPA
+	syncDB    SyncDB
 	sessionAt uint64
 	start     uint64
 	quit      chan struct{}
 }
 
 // NewSwarmSyncerServer is contructor for SwarmSyncerServer
-func NewSwarmSyncerServer(live bool, po uint8, dpa SyncDPA) (*SwarmSyncerServer, error) {
-	sessionAt := dpa.BinIndex(po)
+func NewSwarmSyncerServer(live bool, po uint8, syncDB SyncDB) (*SwarmSyncerServer, error) {
+	sessionAt := syncDB.BinIndex(po)
 	var start uint64
 	if live {
 		start = sessionAt
 	}
 	return &SwarmSyncerServer{
 		po:        po,
-		dpa:       dpa,
+		syncDB:    syncDB,
 		sessionAt: sessionAt,
 		start:     start,
 		quit:      make(chan struct{}),
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, dpa SyncDPA) {
+func RegisterSwarmSyncerServer(streamer *Registry, syncDB SyncDB) {
 	streamer.RegisterServerFunc("SYNC", func(p *Peer, t string, live bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
 			return nil, err
 		}
-		return NewSwarmSyncerServer(live, po, dpa)
+		return NewSwarmSyncerServer(live, po, syncDB)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -84,8 +85,8 @@ func (s *SwarmSyncerServer) Close() {
 }
 
 // GetSection retrieves the actual chunk from localstore
-func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.dpa.Get(ctx, storage.Address(key))
+func (s *SwarmSyncerServer) GetData(key []byte) ([]byte, error) {
+	chunk, err := s.syncDB.Get(storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +123,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		}
 
 		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
-		err := s.dpa.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
+		err := s.syncDB.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
 			batch = append(batch, key[:]...)
 			i++
 			to = idx
@@ -137,7 +138,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		wait = true
 	}
 
-	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.dpa.BinIndex(s.po))
+	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.syncDB.BinIndex(s.po))
 	return batch, from, to, nil, nil
 }
 

@@ -48,7 +48,7 @@ func testDpaRandom(toEncrypt bool, t *testing.T) {
 		DbStore:  db,
 	}
 
-	dpa := NewDPAAPI(&fakeDPA{localStore}, NewDPAParams())
+	dpa := NewDPAAPI(NewFakeDPA(localStore), NewDPAParams())
 	defer os.RemoveAll("/tmp/bzz")
 
 	reader, slice := GenerateRandomData(testDataSize)
@@ -119,7 +119,7 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 		memStore: memStore,
 		DbStore:  db,
 	}
-	dpa := NewDPAAPI(&fakeDPA{localStore}, NewDPAParams())
+	dpa := NewDPAAPI(NewFakeDPA(localStore), NewDPAParams())
 	reader, slice := GenerateRandomData(testDataSize)
 	ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
 	defer cancel()
@@ -149,7 +149,7 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	// Clear memStore
 	memStore.setCapacity(0)
 	// check whether it is, indeed, empty
-	dpa.DPA = &fakeDPA{&chunkMemStore{memStore}}
+	dpa.DPA = NewFakeDPA(&chunkMemStore{memStore})
 	resultReader, isEncrypted = dpa.Retrieve(key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -158,7 +158,7 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 		t.Fatalf("Was able to read %d bytes from an empty memStore.", len(slice))
 	}
 	// check how it works with localStore
-	dpa.DPA = &fakeDPA{localStore}
+	dpa.DPA = NewFakeDPA(localStore)
 	//	localStore.dbStore.setCapacity(0)
 	resultReader, isEncrypted = dpa.Retrieve(key)
 	if isEncrypted != toEncrypt {

@@ -30,21 +30,21 @@ import (
 // on request it initiates remote cloud retrieval using a fetcher
 // fetchers are unique to a chunk and are stored in fetchers LRU memory cache
 type NetStore struct {
-	mu       sync.Mutex
-	store    ChunkStore
-	fetchers *lru.Cache
-	fetch    fetchFuncConstructor
+	mu         sync.Mutex
+	store      ChunkStore
+	fetchers   *lru.Cache
+	newFetcher FetchFuncConstructor
 }
 
-func NewNetStore(store ChunkStore, fetch fetchFuncConstructor) (*NetStore, error) {
+func NewNetStore(store ChunkStore, newFetcher FetchFuncConstructor) (*NetStore, error) {
 	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
 	if err != nil {
 		return nil, err
 	}
 	return &NetStore{
-		store:    store,
-		fetchers: fetchers,
-		fetch:    fetch,
+		store:      store,
+		fetchers:   fetchers,
+		newFetcher: newFetcher,
 	}, nil
 }
 
@@ -108,7 +108,8 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 		// all requests cancelled/timedout or chunk is delivered
 		cancel()
 	}
-	fetcher := newFetcher(ref, n.fetch(ctx, ref), destroy)
+	peers := sync.Map{}
+	fetcher := newFetcher(ref, n.newFetcher(ctx, ref, peers), destroy, peers)
 	n.fetchers.Add(key, fetcher)
 
 	return fetcher
@@ -136,25 +137,26 @@ func (n *NetStore) Close() {
 	n.store.Close()
 }
 
-type fetchFunc func(ctx context.Context, peers []Address)
-type fetchFuncConstructor func(ctx context.Context, peer Address) fetchFunc
+type FetchFunc func(ctx context.Context)
+type FetchFuncConstructor func(ctx context.Context, offer Address, peers sync.Map) FetchFunc
 
 type fetcher struct {
 	addr       Address        // adress of chunk
 	chunk      Chunk          // fetcher can set the chunk on the fetcher
 	requestWg  sync.WaitGroup // count and wait for all upstream peer requests
 	deliveredC chan struct{}  // chan signalling chunk delivery to requests
-	fetch      fetchFunc      // remote fetch function to be called with a request source taken from the context
+	fetch      FetchFunc      // remote fetch function to be called with a request source taken from the context
 	cancel     func()         // cleanup function for the remote fetcher to call when all upstream contexts are called
 	peers      sync.Map
 }
 
-func newFetcher(addr Address, fetch fetchFunc, cancel func()) *fetcher {
+func newFetcher(addr Address, fetch FetchFunc, cancel func(), peers sync.Map) *fetcher {
 	return &fetcher{
 		addr:       addr,
 		deliveredC: make(chan struct{}),
 		fetch:      fetch,
 		cancel:     cancel,
+		peers:      peers,
 	}
 }
 
@@ -167,12 +169,8 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 	if peer != nil {
 		f.peers.Store(peer, true)
 	}
-	var peers []Address
-	f.peers.Range(func(p interface{}, _ interface{}) bool {
-		peers = append(peers, p.(Address))
-		return true
-	})
-	f.fetch(rctx, peers)
+
+	f.fetch(rctx)
 
 	select {
 	case <-rctx.Done():

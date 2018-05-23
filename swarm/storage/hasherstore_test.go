@@ -43,7 +43,7 @@ func TestHasherStore(t *testing.T) {
 
 	for _, tt := range tests {
 		chunkStore := NewMapChunkStore()
-		hasherStore := NewHasherStore(&fakeDPA{chunkStore}, MakeHashFunc(DefaultHash), tt.toEncrypt)
+		hasherStore := NewHasherStore(NewFakeDPA(chunkStore), MakeHashFunc(DefaultHash), tt.toEncrypt)
 
 		// Put two random chunks into the hasherStore
 		chunkData1 := GenerateRandomChunk(int64(tt.chunkLength)).Data()

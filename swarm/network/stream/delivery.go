@@ -19,6 +19,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -143,8 +144,8 @@ func (s *SwarmChunkServer) Close() {
 }
 
 // GetData retrives chunk data from db store
-func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.dpa.Get(ctx, storage.Address(key))
+func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
+	chunk, err := s.dpa.Get(immediately, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
@@ -220,18 +221,25 @@ func (d *Delivery) processReceivedChunks() {
 }
 
 // RequestFromPeers sends a chunk retrieve request to
-func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
+func (d *Delivery) RequestFromPeers(ctx context.Context, addr storage.Address, offer storage.Address, skipCheck bool, peersToSkip sync.Map) (context.Context, error) {
 	var success bool
 	var err error
+	context := context.Background()
 	requestFromPeersCount.Inc(1)
-	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
+
+	// TODO: if there is an offer ask from that
+	if offer != nil {
+		return context, nil
+	}
+
+	d.overlay.EachConn(addr[:], 255, func(p network.OverlayConn, po int, nn bool) bool {
 		spId := p.(network.Peer).ID()
-		for _, p := range peersToSkip {
-			if p == spId {
-				log.Trace("Delivery.RequestFromPeers: skip peer", "peer", spId)
-				return true
-			}
+		spAddr := storage.Address(p.Address())
+		if _, ok := peersToSkip.Load(spAddr); ok {
+			log.Trace("Delivery.RequestFromPeers: skip peer", "peer", spId)
+			return true
 		}
+
 		sp := d.getPeer(spId)
 		if sp == nil {
 			log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
@@ -239,18 +247,21 @@ func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...
 		}
 		// TODO: skip light nodes that do not accept retrieve requests
 		err = sp.SendPriority(&RetrieveRequestMsg{
-			Key:       hash,
+			Key:       addr,
 			SkipCheck: skipCheck,
 		}, Top)
 		if err != nil {
 			return true
 		}
 		requestFromPeersEachCount.Inc(1)
+		context = d.getPeer(spId).context()
 		success = true
 		return false
 	})
+
+	// TODO:
 	if success {
-		return nil
+		return context, nil
 	}
-	return errors.New("no peer found")
+	return nil, errors.New("no peer found")
 }

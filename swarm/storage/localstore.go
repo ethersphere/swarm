@@ -160,6 +160,14 @@ func (self *LocalStore) get(key Address) (chunk Chunk, err error) {
 	return chunk, nil
 }
 
+func (self *LocalStore) BinIndex(po uint8) uint64 {
+	return self.DbStore.BinIndex(po)
+}
+
+func (self *LocalStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
+	return self.DbStore.SyncIterator(from, to, po, f)
+}
+
 // Close the local store
 func (self *LocalStore) Close() {
 	self.DbStore.Close()

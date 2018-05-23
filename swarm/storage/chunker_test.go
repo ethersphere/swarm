@@ -43,7 +43,7 @@ type chunkerTester struct {
 }
 
 func newTestHasherStore(store ChunkStore, hash string) *hasherStore {
-	return NewHasherStore(&fakeDPA{store}, MakeHashFunc(hash), false)
+	return NewHasherStore(NewFakeDPA(store), MakeHashFunc(hash), false)
 }
 
 func testRandomBrokenData(n int, tester *chunkerTester) {

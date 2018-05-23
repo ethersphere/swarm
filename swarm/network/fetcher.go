@@ -18,6 +18,7 @@ package network
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -33,57 +34,52 @@ var searchTimeout = 3000 * time.Millisecond
 // fetcher self destroys
 // TODO: cancel all forward requests after termination
 type Fetcher struct {
-	request func(context.Context, storage.Address, []storage.Address) (context.Context, error) //
-	addr    storage.Address                                                                    //
-	eventC  chan *fetchEvent                                                                   // incoming requests
+	request   func(context.Context, storage.Address, storage.Address, bool, sync.Map) (context.Context, error) //
+	addr      storage.Address                                                                                  //
+	offerC    chan storage.Address
+	skipCheck bool
 }
 
-type fetchEvent struct {
-	offer    *storage.Address
-	requests []storage.Address
-}
-
-func FetchFunc(request func(context.Context, storage.Address, []storage.Address) (context.Context, error)) func(ctx context.Context, addr storage.Address) func(context.Context, []storage.Address) {
-	return func(ctx context.Context, addr storage.Address) (fetch func(context.Context, []storage.Address)) {
-		f := NewFetcher(addr, request)
-		f.start(ctx)
+func FetchFunc(request func(context.Context, storage.Address, storage.Address, bool, sync.Map) (context.Context, error), skipCheck bool) storage.FetchFuncConstructor {
+	return func(ctx context.Context, addr storage.Address, peers sync.Map) (fetch storage.FetchFunc) {
+		f := NewFetcher(addr, request, skipCheck)
+		f.start(ctx, peers)
 		return f.fetch
 	}
 }
 
 // NewFetcher creates a new fetcher for a chunk
 // stored in netstore's fetchers (LRU cache) keyed by address
-func NewFetcher(addr storage.Address, request func(context.Context, storage.Address, []storage.Address) (context.Context, error)) *Fetcher {
+func NewFetcher(addr storage.Address, request func(context.Context, storage.Address, storage.Address, bool, sync.Map) (context.Context, error), skipCheck bool) *Fetcher {
 	return &Fetcher{
-		addr:    addr,
-		request: request,
-		eventC:  make(chan *fetchEvent),
+		addr:      addr,
+		request:   request,
+		offerC:    make(chan storage.Address),
+		skipCheck: skipCheck,
 	}
 }
 
 // fetch is called by NetStore evey time there is a request or offer for a chunk
-func (f *Fetcher) fetch(ctx context.Context, requests []storage.Address) {
+func (f *Fetcher) fetch(ctx context.Context) {
 	// put offer/request
-	var offer *storage.Address
+	var offer storage.Address
 	if offerIF := ctx.Value("offer"); offerIF != nil {
-		offer = offerIF.(*storage.Address)
+		offer = offerIF.(storage.Address)
 	}
-	ev := &fetchEvent{offer, nil}
 	select {
-	case f.eventC <- ev:
+	case f.offerC <- offer:
 	case <-ctx.Done():
 	}
 }
 
 // start prepares the Fetcher
 // it keeps the Fetcher alive
-func (f *Fetcher) start(ctx context.Context) {
+func (f *Fetcher) start(ctx context.Context, peers sync.Map) {
 	var (
 		dorequest bool // determines if retrieval is initiated in the current iteration
 		wait      *time.Timer
 		waitC     <-chan time.Time
 		offers    []storage.Address
-		requests  []storage.Address
 		wanted    bool
 	)
 F:
@@ -94,16 +90,15 @@ F:
 		select {
 
 		// a request or offer
-		case ev := <-f.eventC:
+		case offer := <-f.offerC:
 			log.Warn("dpa event received")
-			if ev.offer != nil {
-				offers = append(offers, *(ev.offer))
+			if offer != nil {
+				offers = append(offers, offer)
 				dorequest = wanted
 			} else {
 				wanted = true
 				dorequest = true
 			}
-			requests = ev.requests
 
 			// search timeout
 		case <-waitC:
@@ -120,13 +115,13 @@ F:
 			var err error
 			var i int
 			for i = 0; i < len(offers); i++ {
-				fctx, err = f.request(ctx, offers[i], requests)
+				fctx, err = f.request(ctx, f.addr, offers[i], f.skipCheck, peers)
 				if err == nil {
 					break
 				}
 			}
 			if i == len(offers) {
-				fctx, err = f.request(ctx, nil, requests)
+				fctx, err = f.request(ctx, f.addr, nil, f.skipCheck, peers)
 			}
 			if err == nil {
 				go func() {

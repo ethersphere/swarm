@@ -140,7 +140,13 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	hash := storage.Address(hash0[:])
 	chunk := storage.NewChunk(hash, hash)
 	wait, err := localStore.Put(chunk)
-	wait(ctx)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = wait(ctx)
+	if err != nil {
+		t.Fatalf("Expected no err got %v", err)
+	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -178,7 +184,10 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	hash = storage.Address(hash1[:])
 	chunk = storage.NewChunk(hash, hash1[:])
 	wait, err = localStore.Put(chunk)
-	wait(ctx)
+	err = wait(ctx)
+	if err != nil {
+		t.Fatalf("Expected no err got %v", err)
+	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -341,11 +350,19 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 
 	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
-	rrdpa := storage.NewDPAAPI(&fakeDPA{newRoundRobinStore(sim.Stores[1:]...)}, storage.NewDPAParams())
+	rrdpa := storage.NewDPAAPI(storage.NewFakeDPA(newRoundRobinStore(sim.Stores[1:]...)), storage.NewDPAParams())
 	size := chunkCount * chunkSize
-	fileHash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	fileHash, wait, err := rrdpa.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// wait until all chunks stored
-	wait()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	err = wait(ctx)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -395,10 +412,12 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		}
 		// create a retriever dpa for the pivot node
 		delivery := deliveries[sim.IDs[0]]
-		retrieveFunc := func(chunk *storage.Chunk) error {
-			return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
+
+		request := func(ctx context.Context, offer storage.Address, peersToSkip sync.Map) (context.Context, error) {
+			return delivery.RequestFromPeers(offer, skipCheck, peersToSkip)
 		}
-		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
+		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore))
+
 		dpa := storage.NewDPA(netStore, storage.NewDPAParams())
 
 		go func() {

@@ -320,7 +320,7 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 
 			hash := hashes[i*HashSize : (i+1)*HashSize]
-			data, err := s.GetData(immediately, hash)
+			data, err := s.GetData(hash)
 			if err != nil {
 				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}

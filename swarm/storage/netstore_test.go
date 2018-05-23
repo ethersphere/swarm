@@ -47,7 +47,7 @@ func newMockFetcher() *mockFetcher {
 	return &mockFetcher{}
 }
 
-func (m *mockFetcher) mockFetch(_ context.Context, _ Address) fetchFunc {
+func (m *mockFetcher) mockFetch(_ context.Context, _ Address) FetchFunc {
 	return m.fetch
 }
 

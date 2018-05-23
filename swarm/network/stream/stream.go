@@ -70,7 +70,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, dpa SyncDPA, intervalsStore state.Store, options *RegistryOptions) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, syncDB SyncDB, intervalsStore state.Store, options *RegistryOptions) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -95,7 +95,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, dpa SyncDPA, interva
 	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
 		return NewSwarmSyncerClient(p, delivery.dpa, NewStream(swarmChunkServerStreamName, t, live))
 	})
-	RegisterSwarmSyncerServer(streamer, dpa)
+	RegisterSwarmSyncerServer(streamer, syncDB)
 	RegisterSwarmSyncerClient(streamer, delivery.dpa)
 
 	if options.DoSync {
@@ -322,8 +322,8 @@ func (r *Registry) Quit(peerId discover.NodeID, s Stream) error {
 	return peer.Send(msg)
 }
 
-func (r *Registry) Retrieve(chunk storage.Chunk) error {
-	return r.delivery.RequestFromPeers(chunk.Address()[:], r.skipCheck)
+func (r *Registry) Retrieve(ctx context.Context, chunk storage.Chunk) (context.Context, error) {
+	return r.delivery.RequestFromPeers(ctx, chunk.Address()[:], nil, r.skipCheck, sync.Map{})
 }
 
 func (r *Registry) NodeInfo() interface{} {
@@ -505,7 +505,7 @@ type server struct {
 // Server interface for outgoing peer Streamer
 type Server interface {
 	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
-	GetData(context.Context, []byte) ([]byte, error)
+	GetData([]byte) ([]byte, error)
 	Close()
 }
 

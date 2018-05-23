@@ -318,6 +318,22 @@ func (p *Peer) removeClientParams(s Stream) error {
 	return nil
 }
 
+func (p *Peer) context() context.Context {
+	var cancel func()
+	ctx := context.Background()
+	ctx, cancel = context.WithCancel(ctx)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-p.quit:
+			cancel()
+		}
+	}()
+
+	return ctx
+}
+
 func (p *Peer) close() {
 	for _, s := range p.servers {
 		s.Close()
