@@ -70,7 +70,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, intervalsStore state.Store, options *RegistryOptions) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, dpa SyncDPA, intervalsStore state.Store, options *RegistryOptions) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -90,13 +90,13 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, db *storage.DBAPI, i
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
-		return NewSwarmChunkServer(delivery.db), nil
+		return NewSwarmChunkServer(delivery.dpa), nil
 	})
 	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
-		return NewSwarmSyncerClient(p, delivery.db, false, NewStream(swarmChunkServerStreamName, t, live))
+		return NewSwarmSyncerClient(p, delivery.dpa, NewStream(swarmChunkServerStreamName, t, live))
 	})
-	RegisterSwarmSyncerServer(streamer, db)
-	RegisterSwarmSyncerClient(streamer, db)
+	RegisterSwarmSyncerServer(streamer, dpa)
+	RegisterSwarmSyncerClient(streamer, delivery.dpa)
 
 	if options.DoSync {
 		// latestIntC function ensures that
@@ -322,8 +322,8 @@ func (r *Registry) Quit(peerId discover.NodeID, s Stream) error {
 	return peer.Send(msg)
 }
 
-func (r *Registry) Retrieve(chunk *storage.Chunk) error {
-	return r.delivery.RequestFromPeers(chunk.Key[:], r.skipCheck)
+func (r *Registry) Retrieve(chunk storage.Chunk) error {
+	return r.delivery.RequestFromPeers(chunk.Address()[:], r.skipCheck)
 }
 
 func (r *Registry) NodeInfo() interface{} {
@@ -505,7 +505,7 @@ type server struct {
 // Server interface for outgoing peer Streamer
 type Server interface {
 	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
-	GetData([]byte) ([]byte, error)
+	GetData(context.Context, []byte) ([]byte, error)
 	Close()
 }
 
@@ -548,7 +548,7 @@ func (c client) NextInterval() (start, end uint64, err error) {
 
 // Client interface for incoming peer Streamer
 type Client interface {
-	NeedData([]byte) func()
+	NeedData([]byte) func(context.Context) error
 	BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error)
 	Close()
 }

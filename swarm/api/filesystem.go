@@ -112,7 +112,7 @@ func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, err
 			f, err := os.Open(entry.Path)
 			if err == nil {
 				stat, _ := f.Stat()
-				var hash storage.Key
+				var hash storage.Address
 				var wait func()
 				hash, wait, err = self.api.dpa.Store(f, stat.Size(), toEncrypt)
 				if hash != nil {
@@ -207,7 +207,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	type downloadListEntry struct {
-		key  storage.Key
+		key  storage.Address
 		path string
 	}
 
@@ -268,7 +268,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 }
 
-func retrieveToFile(quitC chan bool, dpa *storage.DPA, key storage.Key, path string) error {
+func retrieveToFile(quitC chan bool, dpa *DPA, key storage.Address, path string) error {
 	f, err := os.Create(path) // TODO: basePath separators
 	if err != nil {
 		return err

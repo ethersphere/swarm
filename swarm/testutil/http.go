@@ -95,7 +95,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *Tes
 type TestSwarmServer struct {
 	*httptest.Server
 	Hasher  storage.SwarmHash
-	Dpa     *storage.DPA
+	Dpa     *DPA
 	dir     string
 	cleanup func()
 }

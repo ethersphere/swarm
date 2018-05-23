@@ -42,7 +42,7 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 		}
 
 		for i, addr := range addrs {
-			key := storage.Key(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
+			key := storage.Address(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
 			data := []byte(strconv.FormatInt(int64(i)+1, 16))
 			data = append(data, make([]byte, 4096-len(data))...)
 			globalStore.Put(addr, key, data)
@@ -84,7 +84,7 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 		i := 0
 		for addr, store := range nodes {
 			i++
-			key := storage.Key(append(addr[:], []byte(fmt.Sprintf("%x", i))...))
+			key := storage.Address(append(addr[:], []byte(fmt.Sprintf("%x", i))...))
 			data := []byte(strconv.FormatInt(int64(i)+1, 16))
 			data = append(data, make([]byte, 4096-len(data))...)
 			store.Put(key, data)
@@ -134,7 +134,7 @@ func ImportExport(t *testing.T, outStore, inStore mock.GlobalStorer, n int) {
 	}
 
 	for i, addr := range addrs {
-		key := storage.Key(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
+		key := storage.Address(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
 		data := []byte(strconv.FormatInt(int64(i)+1, 16))
 		data = append(data, make([]byte, 4096-len(data))...)
 		outStore.Put(addr, key, data)
@@ -155,7 +155,7 @@ func ImportExport(t *testing.T, outStore, inStore mock.GlobalStorer, n int) {
 	}
 
 	for i, addr := range addrs {
-		key := storage.Key(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
+		key := storage.Address(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
 		data := []byte(strconv.FormatInt(int64(i)+1, 16))
 		data = append(data, make([]byte, 4096-len(data))...)
 		for _, cAddr := range addrs {

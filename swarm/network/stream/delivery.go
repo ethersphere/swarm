@@ -17,12 +17,9 @@
 package stream
 
 import (
-	"bytes"
+	"context"
 	"errors"
-	"fmt"
-	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -43,16 +40,23 @@ var (
 	requestFromPeersEachCount = metrics.NewRegisteredCounter("network.stream.request_from_peers_each.count", nil)
 )
 
+type DPA interface {
+	Put(ch storage.Chunk) (waitToStore func(ctx context.Context) error, err error)
+	Get(rctx context.Context, ref storage.Address) (ch storage.Chunk, err error)
+	Has(addr storage.Address) func(context.Context) (ch storage.Chunk, err error)
+	Close()
+}
+
 type Delivery struct {
-	db       *storage.DBAPI
+	dpa      DPA
 	overlay  network.Overlay
 	receiveC chan *ChunkDeliveryMsg
 	getPeer  func(discover.NodeID) *Peer
 }
 
-func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
+func NewDelivery(overlay network.Overlay, dpa DPA) *Delivery {
 	d := &Delivery{
-		db:       db,
+		dpa:      dpa,
 		overlay:  overlay,
 		receiveC: make(chan *ChunkDeliveryMsg, deliveryCap),
 	}
@@ -65,21 +69,40 @@ func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
 type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
-	db         *storage.DBAPI
+	dpa        DPA
 	currentLen uint64
 	quit       chan struct{}
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
-func NewSwarmChunkServer(db *storage.DBAPI) *SwarmChunkServer {
+func NewSwarmChunkServer(dpa DPA) *SwarmChunkServer {
 	s := &SwarmChunkServer{
 		deliveryC: make(chan []byte, deliveryCap),
 		batchC:    make(chan []byte),
-		db:        db,
+		dpa:       dpa,
 		quit:      make(chan struct{}),
 	}
 	go s.processDeliveries()
 	return s
+}
+
+func (s *SwarmChunkServer) context(req *RetrieveRequestMsg) context.Context {
+	var cancel func()
+	ctx := context.Background()
+	// if req.Timeout > 0 {
+	// ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+	// }
+	ctx, cancel = context.WithCancel(ctx)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-s.quit:
+			cancel()
+		}
+	}()
+
+	return ctx
 }
 
 // processDeliveries handles delivered chunk hashes
@@ -120,19 +143,17 @@ func (s *SwarmChunkServer) Close() {
 }
 
 // GetData retrives chunk data from db store
-func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.db.Get(storage.Key(key))
-	if err == storage.ErrFetching {
-		<-chunk.ReqC
-	} else if err != nil {
+func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
+	chunk, err := s.dpa.Get(ctx, storage.Address(key))
+	if err != nil {
 		return nil, err
 	}
-	return chunk.SData, nil
+	return chunk.Data(), nil
 }
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
 type RetrieveRequestMsg struct {
-	Key       storage.Key
+	Key       storage.Address
 	SkipCheck bool
 }
 
@@ -145,53 +166,27 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 		return err
 	}
 	streamer := s.Server.(*SwarmChunkServer)
-	chunk, created := d.db.GetOrCreateRequest(req.Key)
-	if chunk.ReqC != nil {
-		if created {
-			if err := d.RequestFromPeers(chunk.Key[:], true, sp.ID()); err != nil {
-				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Key, "err", err)
-				chunk.SetErrored(storage.ErrChunkForward)
-				return nil
-			}
+	go func() {
+		chunk, err := d.dpa.Get(streamer.context(req), req.Key)
+		if err != nil {
+			return
 		}
-		go func() {
-			t := time.NewTimer(10 * time.Minute)
-			defer t.Stop()
-
-			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Key, "node", common.Bytes2Hex(d.overlay.BaseAddr()), "created", created)
-			start := time.Now()
-			select {
-			case <-chunk.ReqC:
-				log.Debug("retrieve request ReqC closed", "peer", sp.ID(), "hash", req.Key, "time", time.Since(start))
-			case <-t.C:
-				log.Debug("retrieve request timeout", "peer", sp.ID(), "hash", req.Key)
-				chunk.SetErrored(storage.ErrChunkTimeout)
+		if req.SkipCheck {
+			err = sp.Deliver(chunk, s.priority)
+			if err != nil {
+				log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
+				sp.Drop(err)
 				return
 			}
-			chunk.SetErrored(nil)
+		}
+		streamer.deliveryC <- chunk.Address()[:]
+	}()
 
-			if req.SkipCheck {
-				err := sp.Deliver(chunk, s.priority)
-				if err != nil {
-					log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
-					sp.Drop(err)
-				}
-			}
-			streamer.deliveryC <- chunk.Key[:]
-		}()
-		return nil
-	}
-	// TODO: call the retrieve function of the outgoing syncer
-	if req.SkipCheck {
-		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Key)
-		return sp.Deliver(chunk, s.priority)
-	}
-	streamer.deliveryC <- chunk.Key[:]
 	return nil
 }
 
 type ChunkDeliveryMsg struct {
-	Key   storage.Key
+	Key   storage.Address
 	SData []byte // the stored chunk Data (incl size)
 	peer  *Peer  // set in handleChunkDeliveryMsg
 }
@@ -202,37 +197,25 @@ func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error
 	return nil
 }
 
+var immediately context.Context
+
+func init() {
+	var cancel func()
+	immediately, cancel = context.WithCancel(context.Background())
+	cancel()
+}
+
 func (d *Delivery) processReceivedChunks() {
-R:
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
 
-		// this should be has locally
-		chunk, err := d.db.Get(req.Key)
-		if !bytes.Equal(chunk.Key, req.Key) {
-			panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), req.Key.Hex(), req.peer.ID()))
-		}
-		if err == nil {
-			continue R
-		}
-		if err != storage.ErrFetching {
-			panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
-		}
-		select {
-		case <-chunk.ReqC:
-			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
-			continue R
-		default:
-		}
-		chunk.SData = req.SData
-		d.db.Put(chunk)
-
-		go func(req *ChunkDeliveryMsg) {
-			err := chunk.WaitToStore()
+		_, err := d.dpa.Put(storage.NewChunk(req.Key, req.SData))
+		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				req.peer.Drop(err)
 			}
-		}(req)
+			return
+		}
 	}
 }
 

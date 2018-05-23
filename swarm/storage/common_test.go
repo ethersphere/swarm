@@ -303,7 +303,7 @@ type fakeDPA struct {
 	store ChunkStore
 }
 
-func (f *fakeDPA) Get(rctx context.Context, ref Address) (ch Chunk, err error) {
+func (f *fakeDPA) Get(ctx context.Context, ref Address) (ch Chunk, err error) {
 	return f.store.Get(ref)
 }
 

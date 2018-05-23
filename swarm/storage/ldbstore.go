@@ -491,10 +491,9 @@ func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
 	s.db.Write(batch)
 }
 
-func (s *LDBStore) CurrentBucketStorageIndex(po uint8) uint64 {
+func (s *LDBStore) BinIndex(po uint8) uint64 {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-
 	return s.bucketCnt[po]
 }
 

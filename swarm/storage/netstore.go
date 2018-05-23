@@ -120,13 +120,15 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 // arrived or context is done
 func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 	chunk, fetch, err := n.get(ref)
-	if err != nil {
-		return nil, err
-	}
-	if chunk != nil {
-		return chunk, nil
+	if fetch == nil {
+		return chunk, err
 	}
 	return fetch(rctx)
+}
+
+func (n *NetStore) Has(ref Address) func(context.Context) (Chunk, error) {
+	_, fetch, _ := n.get(ref)
+	return fetch
 }
 
 // Close chunk store

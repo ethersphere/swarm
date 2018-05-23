@@ -62,7 +62,7 @@ func TestApiDirUpload0(t *testing.T) {
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
 
-		key := storage.Key(common.Hex2Bytes(bzzhash))
+		key := storage.Address(common.Hex2Bytes(bzzhash))
 		_, _, _, _, err = api.Get(key, "")
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
@@ -94,7 +94,7 @@ func TestApiDirUploadModify(t *testing.T) {
 			return
 		}
 
-		key := storage.Key(common.Hex2Bytes(bzzhash))
+		key := storage.Address(common.Hex2Bytes(bzzhash))
 		key, err = api.Modify(key, "index.html", "", "")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)

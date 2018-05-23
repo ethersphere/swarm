@@ -371,7 +371,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	reader := [3]*bytes.Reader{}
 
-	key := [3]storage.Key{}
+	key := [3]storage.Address{}
 
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()

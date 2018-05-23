@@ -164,8 +164,7 @@ func TestResourceHandler(t *testing.T) {
 	// check that the new resource is stored correctly
 	namehash := ens.EnsNode(safeName)
 	addr := Address(namehash[:])
-	rctx := ctx
-	ch, err := rh.dpa.Get(rctx, addr)
+	ch, err := rh.dpa.Get(ctx, addr)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(ch.Data()) < 16 {
@@ -240,7 +239,7 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = rh2.LookupLatestByName(rctx, safeName, true, nil)
+	_, err = rh2.LookupLatestByName(ctx, safeName, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,7 +257,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistoricalByName(rctx, safeName, 3, true, rh2.queryMaxPeriods)
+	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -269,7 +268,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersionByName(rctx, safeName, 3, 1, true, rh2.queryMaxPeriods)
+	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +281,7 @@ func TestResourceHandler(t *testing.T) {
 	// we are now at third update
 	// check backwards stepping to the first
 	for i := 1; i >= 0; i-- {
-		rsrc, err := rh2.LookupPreviousByName(rctx, safeName, rh2.queryMaxPeriods)
+		rsrc, err := rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -293,7 +292,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// beyond the first should yield an error
-	rsrc, err = rh2.LookupPreviousByName(rctx, safeName, rh2.queryMaxPeriods)
+	rsrc, err = rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
 	if err == nil {
 		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rh2.resources[domainName].lastPeriod, rh2.resources[domainName].version, rh2.resources[domainName].data)
 	}
@@ -419,8 +418,7 @@ func TestResourceMultihash(t *testing.T) {
 		t.Fatalf("Expected update to fail with last byte skipped")
 	}
 
-	rctx := ctx
-	data, err := getUpdateDirect(rctx, rh, swarmhashkey)
+	data, err := getUpdateDirect(ctx, rh, swarmhashkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -431,7 +429,7 @@ func TestResourceMultihash(t *testing.T) {
 	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
 		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
 	}
-	data, err = getUpdateDirect(rctx, rh, sha1key)
+	data, err = getUpdateDirect(ctx, rh, sha1key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -471,7 +469,7 @@ func TestResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err = getUpdateDirect(rctx, rh2, swarmhashsignedkey)
+	data, err = getUpdateDirect(ctx, rh2, swarmhashsignedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,7 +480,7 @@ func TestResourceMultihash(t *testing.T) {
 	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
 		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
 	}
-	data, err = getUpdateDirect(rctx, rh2, sha1signedkey)
+	data, err = getUpdateDirect(ctx, rh2, sha1signedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -641,8 +639,8 @@ func newTestSigner() (*GenericResourceSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rctx context.Context, rh *ResourceHandler, addr Address) ([]byte, error) {
-	ch, err := rh.dpa.Get(rctx, addr)
+func getUpdateDirect(ctx context.Context, rh *ResourceHandler, addr Address) ([]byte, error) {
+	ch, err := rh.dpa.Get(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

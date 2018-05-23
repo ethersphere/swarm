@@ -68,7 +68,7 @@ type Swarm struct {
 	dns    api.Resolver // DNS registrar
 	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
 	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	dpa *DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
 	streamer *stream.Registry
 	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)

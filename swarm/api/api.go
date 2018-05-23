@@ -214,12 +214,12 @@ it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
 	resource *storage.ResourceHandler
-	dpa      *storage.DPA
+	dpa      *DPA
 	dns      Resolver
 }
 
 //the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
+func NewApi(dpa *DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
 	self = &Api{
 		dpa:      dpa,
 		dns:      dns,
@@ -236,11 +236,11 @@ func (self *Api) Upload(uploadDir, index string, toEncrypt bool) (hash string, e
 }
 
 // DPA reader API
-func (self *Api) Retrieve(key storage.Key) (reader storage.LazySectionReader, isEncrypted bool) {
+func (self *Api) Retrieve(key storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
 	return self.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (key storage.Key, wait func(), err error) {
+func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (key storage.Address, wait func(), err error) {
 	log.Debug("api.store", "size", size)
 	return self.dpa.Store(data, size, toEncrypt)
 }
@@ -248,7 +248,7 @@ func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (key storage.
 type ErrResolve error
 
 // DNS Resolver
-func (self *Api) Resolve(uri *URI) (storage.Key, error) {
+func (self *Api) Resolve(uri *URI) (storage.Address, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
 
@@ -286,7 +286,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 }
 
 // Put provides singleton manifest creation on top of dpa store
-func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key, wait func(), err error) {
+func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Address, wait func(), err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
 	key, waitContent, err := self.dpa.Store(r, int64(len(content)), toEncrypt)
@@ -310,7 +310,7 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.LazyChunkReader, mimeType string, status int, contentKey storage.Key, err error) {
+func (self *Api) Get(manifestKey storage.Address, path string) (reader *storage.LazyChunkReader, mimeType string, status int, contentKey storage.Address, err error) {
 	log.Debug("api.get", "key", manifestKey, "path", path)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(self.dpa, manifestKey, nil)
@@ -372,7 +372,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.Lazy
 					log.Warn(fmt.Sprintf("invalid resource multihash code: %x", decodedMultihash.Code))
 					return reader, mimeType, status, nil, err
 				}
-				manifestKey = storage.Key(decodedMultihash.Digest)
+				manifestKey = storage.Address(decodedMultihash.Digest)
 				log.Trace("resource is multihash", "key", manifestKey)
 
 				// get the manifest the multihash digest points to
@@ -421,7 +421,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader *storage.Lazy
 	return
 }
 
-func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) (storage.Key, error) {
+func (self *Api) Modify(key storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
 	trie, err := loadManifest(self.dpa, key, quitC)
@@ -447,7 +447,7 @@ func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) 
 	return trie.ref, nil
 }
 
-func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
+func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
 	apiAddFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -538,7 +538,7 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 	return newMkey.String(), nil
 }
 
-func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
+func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Address, offset int64, addSize int64, nameresolver bool) (storage.Address, string, error) {
 	apiAppendFileCount.Inc(1)
 
 	buffSize := offset + addSize
@@ -619,7 +619,7 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 }
 
-func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
+func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
@@ -648,7 +648,7 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (storage.Key, []byte, error) {
+func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (storage.Address, []byte, error) {
 	var err error
 	if version != 0 {
 		if period == 0 {
@@ -666,24 +666,24 @@ func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32,
 	return self.resource.GetContent(name)
 }
 
-func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {
+func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Address, error) {
 	rsrc, err := self.resource.NewResource(ctx, name, frequency)
 	if err != nil {
 		return nil, err
 	}
 	h := rsrc.NameHash()
-	return storage.Key(h[:]), nil
+	return storage.Address(h[:]), nil
 }
 
-func (self *Api) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
+func (self *Api) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, uint32, uint32, error) {
 	return self.resourceUpdate(ctx, name, data, true)
 }
-func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
+func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Address, uint32, uint32, error) {
 	return self.resourceUpdate(ctx, name, data, false)
 }
 
-func (self *Api) resourceUpdate(ctx context.Context, name string, data []byte, multihash bool) (storage.Key, uint32, uint32, error) {
-	var key storage.Key
+func (self *Api) resourceUpdate(ctx context.Context, name string, data []byte, multihash bool) (storage.Address, uint32, uint32, error) {
+	var key storage.Address
 	var err error
 	if multihash {
 		key, err = self.resource.UpdateMultihash(ctx, name, data)

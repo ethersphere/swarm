@@ -24,6 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+var searchTimeout = 3000 * time.Millisecond
+
 // Fetcher is created when a chunk is not found locally
 // it starts a request handler loop once and keeps it
 // alive until all active requests complete
@@ -31,19 +33,18 @@ import (
 // fetcher self destroys
 // TODO: cancel all forward requests after termination
 type Fetcher struct {
-	request func(context.Context) (context.Context, error) //
-	addr    storage.Address                                //
-	eventC  chan *fetchEvent                               // incoming requests
+	request func(context.Context, storage.Address, []storage.Address) (context.Context, error) //
+	addr    storage.Address                                                                    //
+	eventC  chan *fetchEvent                                                                   // incoming requests
 }
 
 type fetchEvent struct {
-	typ      fetchEventType
-	offer    storage.Address
+	offer    *storage.Address
 	requests []storage.Address
 }
 
-func FetchFunc(request func(context.Context) (context.Context, error)) func(ctx context.Context, addr storage.Address) func(context.Context, ...storage.Address) {
-	return func(ctx context.Context, addr storage.Address) (fetch func(context.Context, ...storage.Address)) {
+func FetchFunc(request func(context.Context, storage.Address, []storage.Address) (context.Context, error)) func(ctx context.Context, addr storage.Address) func(context.Context, []storage.Address) {
+	return func(ctx context.Context, addr storage.Address) (fetch func(context.Context, []storage.Address)) {
 		f := NewFetcher(addr, request)
 		f.start(ctx)
 		return f.fetch
@@ -52,7 +53,7 @@ func FetchFunc(request func(context.Context) (context.Context, error)) func(ctx 
 
 // NewFetcher creates a new fetcher for a chunk
 // stored in netstore's fetchers (LRU cache) keyed by address
-func NewFetcher(addr storage.Address, request func(context.Context) (context.Context, error)) *Fetcher {
+func NewFetcher(addr storage.Address, request func(context.Context, storage.Address, []storage.Address) (context.Context, error)) *Fetcher {
 	return &Fetcher{
 		addr:    addr,
 		request: request,
@@ -61,10 +62,13 @@ func NewFetcher(addr storage.Address, request func(context.Context) (context.Con
 }
 
 // fetch is called by NetStore evey time there is a request or offer for a chunk
-func (f *Fetcher) fetch(ctx context.Context, requests ...storage.Address) {
+func (f *Fetcher) fetch(ctx context.Context, requests []storage.Address) {
 	// put offer/request
-	offer := ctx.Value(Offer)
-	ev := &fetchEvent{Offer, offer.(storage.Address), requests}
+	var offer *storage.Address
+	if offerIF := ctx.Value("offer"); offerIF != nil {
+		offer = offerIF.(*storage.Address)
+	}
+	ev := &fetchEvent{offer, nil}
 	select {
 	case f.eventC <- ev:
 	case <-ctx.Done():
@@ -79,6 +83,8 @@ func (f *Fetcher) start(ctx context.Context) {
 		wait      *time.Timer
 		waitC     <-chan time.Time
 		offers    []storage.Address
+		requests  []storage.Address
+		wanted    bool
 	)
 F:
 	// loop that keeps the Fetcher alive
@@ -88,10 +94,10 @@ F:
 		select {
 
 		// a request or offer
-		case ev := <-f.events:
+		case ev := <-f.eventC:
 			log.Warn("dpa event received")
 			if ev.offer != nil {
-				offers = append(offers, ev.offer)
+				offers = append(offers, *(ev.offer))
 				dorequest = wanted
 			} else {
 				wanted = true
@@ -134,10 +140,10 @@ F:
 			if wait == nil {
 				wait = time.NewTimer(searchTimeout)
 				defer wait.Stop()
+				waitC = wait.C
 			}
 			wait.Reset(searchTimeout)
 			dorequest = false
-			wait := waitC
 		}
 
 	}

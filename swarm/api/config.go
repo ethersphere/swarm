@@ -44,7 +44,7 @@ const (
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
-	*storage.DPAParams
+	*DPAParams
 	*storage.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.SwapParams
