@@ -195,33 +195,26 @@ func TestCLISwarmFs(t *testing.T) {
 
 func doUploadFile(t *testing.T, node *testNode) string {
 	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
+	tmpDir, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
-
-	// write data to file
-	data := "randomdata"
-	_, err = io.WriteString(tmp, data)
-	if err != nil {
-		t.Fatal(err)
-	}
+	defer os.RemoveAll(tmpDir)
 
 	hashRegexp := `[a-f\d]{64}`
 
 	flags := []string{
 		"--bzzapi", node.URL,
+		"--recursive",
 		"up",
-		tmp.Name()}
+		tmpDir}
 
-	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	log.Info(fmt.Sprintf("uploading dir with 'swarm up'"))
 	up := runSwarm(t, flags...)
 	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 	hash := matches[0]
-	log.Info("file uploaded", "hash", hash)
+	log.Info("dir uploaded", "hash", hash)
 	return hash
 
 }
