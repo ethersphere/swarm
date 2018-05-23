@@ -498,7 +498,7 @@ func TestGetPeer(t *testing.T) {
 	}
 
 	var intopic []Topic
-	err = rpcclient.Call(&intopic, "pss_getPeer", remotepubkeyhex)
+	err = rpcclient.Call(&intopic, "pss_getPeerTopics", remotepubkeyhex)
 	if err != nil {
 		t.Fatal(err)
 	}

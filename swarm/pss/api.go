@@ -138,7 +138,7 @@ func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) err
 	return pssapi.Pss.SendSym(symkeyhex, topic, msg[:])
 }
 
-func (pssapi *API) GetPeer(pubkeyhex string) ([]Topic, error) {
+func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]Topic, error) {
 	topics, _, err := pssapi.Pss.GetPeer(pubkeyhex)
 	return topics, err
 
