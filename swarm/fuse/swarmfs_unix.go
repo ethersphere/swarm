@@ -109,7 +109,6 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	dirTree := map[string]*SwarmDir{}
 	rootDir := NewSwarmDir("/", mi)
 	log.Trace(fmt.Sprintf("swarmfs mount: rootDir %v", rootDir))
-	dirTree["/"] = rootDir
 	mi.rootDir = rootDir
 
 	log.Debug(fmt.Sprintf("swarmfs mount: traversing manifest map"))

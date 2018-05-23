@@ -33,7 +33,7 @@ import (
 
 func init() {
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(6), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
 type testFile struct {
@@ -41,8 +41,7 @@ type testFile struct {
 	content  string
 }
 
-// TestCLISwarmUp tests that running 'swarm up' makes the resulting file
-// available from all nodes via the HTTP API
+// TestCLISwarmFs is a high-level test of swarmfs
 func TestCLISwarmFs(t *testing.T) {
 	log.Info("starting 3 node cluster")
 	cluster := newTestCluster(t, 3)
@@ -72,15 +71,21 @@ func TestCLISwarmFs(t *testing.T) {
 
 	filesToAssert := []*testFile{}
 
-	dirPath, err := createDirInDir(mountPoint, "testSubDir")
-	if err != nil {
-		t.Fatal(err)
-	}
-	dirPath2, err := createDirInDir(dirPath, "AnotherTestSubDir")
+	// dirPath, err := createDirInDir(mountPoint, "testSubDir")
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	//dirPath2, err := createDirInDir(dirPath, "AnotherTestSubDir")
 
 	dummyContent := "somerandomtestcontentthatshouldbeasserted"
-	for _, d := range []string{mountPoint, dirPath, dirPath2} {
-		for _, entry := range []string{"f1.tmp", "f2.tmp"} {
+	dirs := []string{
+		mountPoint,
+		//	dirPath,
+		//dirPath2,
+	}
+	files := []string{"f1.tmp", "f2.tmp"}
+	for _, d := range dirs {
+		for _, entry := range files {
 			tFile, err := createTestFileInPath(d, entry, dummyContent)
 			if err != nil {
 				t.Fatal(err)
@@ -88,8 +93,8 @@ func TestCLISwarmFs(t *testing.T) {
 			filesToAssert = append(filesToAssert, tFile)
 		}
 	}
-	if len(filesToAssert) != 6 {
-		t.Fatalf("should have 4 files to assert now, got %d", len(filesToAssert))
+	if len(filesToAssert) != len(dirs)*len(files) {
+		t.Fatalf("should have %d files to assert now, got %d", len(dirs)*len(files), len(filesToAssert))
 	}
 	hashRegexp := `[a-f\d]{64}`
 	log.Debug("Unmounting first run...")
@@ -111,12 +116,12 @@ func TestCLISwarmFs(t *testing.T) {
 	log.Debug("asserting no files in mount point")
 
 	//check that there's nothing in the mount folder
-	files, err := ioutil.ReadDir(mountPoint)
+	filesInDir, err := ioutil.ReadDir(mountPoint)
 	if err != nil {
 		t.Fatalf("had an error reading the directory: %v", err)
 	}
 
-	if len(files) != 0 {
+	if len(filesInDir) != 0 {
 		t.Fatal("there shouldn't be anything here")
 	}
 
@@ -142,12 +147,12 @@ func TestCLISwarmFs(t *testing.T) {
 	newMount.ExpectExit()
 	time.Sleep(5 * time.Second)
 
-	files, err = ioutil.ReadDir(secondMountPoint)
+	filesInDir, err = ioutil.ReadDir(secondMountPoint)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if len(files) == 0 {
+	if len(filesInDir) == 0 {
 		t.Fatal("there should be something here")
 	}
 	log.Debug("Traversing file tree to see it matches previous mount")
