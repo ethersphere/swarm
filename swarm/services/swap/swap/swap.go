@@ -29,7 +29,7 @@ import (
 //      Swift Automatic  Payments
 // a peer to peer micropayment system
 
-// public swap profile
+// Profile - public swap profile
 // public parameters for SWAP, serializable config struct passed in handshake
 type Profile struct {
 	BuyAt  *big.Int // accepted max price for chunk
@@ -55,34 +55,33 @@ type Params struct {
 	*Strategy
 }
 
-// Promise
-// 3rd party Provable Promise of Payment
+// Promise - 3rd party Provable Promise of Payment
 // issued by outPayment
-// serialisable to send with Protocol
+// serializable to send with Protocol
 type Promise interface{}
 
-// interface for the peer protocol for testing or external alternative payment
+// Protocol interface for the peer protocol for testing or external alternative payment
 type Protocol interface {
 	Pay(int, Promise) // units, payment proof
 	Drop()
 	String() string
 }
 
-// interface for the (delayed) ougoing payment system with autodeposit
+// OutPayment interface for the (delayed) outgoing payment system with auto-deposit
 type OutPayment interface {
 	Issue(amount *big.Int) (promise Promise, err error)
 	AutoDeposit(interval time.Duration, threshold, buffer *big.Int)
 	Stop()
 }
 
-// interface for the (delayed) incoming payment system with autocash
+// InPayment interface for the (delayed) incoming payment system with autocash
 type InPayment interface {
 	Receive(promise Promise) (*big.Int, error)
 	AutoCash(cashInterval time.Duration, maxUncashed *big.Int)
 	Stop()
 }
 
-// swap is the swarm accounting protocol instance
+// Swap is the swarm accounting protocol instance
 // * pairwise accounting and payments
 type Swap struct {
 	lock    sync.Mutex // mutex for balance access
@@ -93,13 +92,14 @@ type Swap struct {
 	Payment
 }
 
+// Payment handlers
 type Payment struct {
 	Out         OutPayment // outgoing payment handler
 	In          InPayment  // incoming  payment handler
 	Buys, Sells bool
 }
 
-// swap constructor
+// New - swap constructor
 func New(local *Params, pm Payment, proto Protocol) (swap *Swap, err error) {
 
 	swap = &Swap{
@@ -113,7 +113,7 @@ func New(local *Params, pm Payment, proto Protocol) (swap *Swap, err error) {
 	return
 }
 
-// entry point for setting remote swap profile (e.g from handshake or other message)
+// SetRemote - entry point for setting remote swap profile (e.g from handshake or other message)
 func (swap *Swap) SetRemote(remote *Profile) {
 	defer swap.lock.Unlock()
 	swap.lock.Lock()
@@ -132,7 +132,7 @@ func (swap *Swap) SetRemote(remote *Profile) {
 
 }
 
-// to set strategy dynamically
+// SetParams - to set strategy dynamically
 func (swap *Swap) SetParams(local *Params) {
 	defer swap.lock.Unlock()
 	swap.lock.Lock()
@@ -140,8 +140,7 @@ func (swap *Swap) SetParams(local *Params) {
 	swap.setParams(local)
 }
 
-// caller holds the lock
-
+// setParams - caller holds the lock
 func (swap *Swap) setParams(local *Params) {
 
 	if swap.Sells {
@@ -158,7 +157,7 @@ func (swap *Swap) setParams(local *Params) {
 	}
 }
 
-// Add(n)
+// Add (n)
 // n > 0 called when promised/provided n units of service
 // n < 0 called when used/requested n units of service
 func (swap *Swap) Add(n int) error {
@@ -184,13 +183,14 @@ func (swap *Swap) Add(n int) error {
 	return nil
 }
 
+// Balance accessor
 func (swap *Swap) Balance() int {
 	defer swap.lock.Unlock()
 	swap.lock.Lock()
 	return swap.balance
 }
 
-// send(units) is called when payment is due
+// send (units) is called when payment is due
 // In case of insolvency no promise is issued and sent, safe against fraud
 // No return value: no error = payment is opportunistic = hang in till dropped
 func (swap *Swap) send() {
@@ -208,7 +208,7 @@ func (swap *Swap) send() {
 	}
 }
 
-// receive(units, promise) is called by the protocol when a payment msg is received
+// Receive (units, promise) is called by the protocol when a payment msg is received
 // returns error if promise is invalid.
 func (swap *Swap) Receive(units int, promise Promise) error {
 	if units <= 0 {
@@ -238,7 +238,7 @@ func (swap *Swap) Receive(units int, promise Promise) error {
 	return nil
 }
 
-// stop() causes autocash loop to terminate.
+// Stop causes autocash loop to terminate.
 // Called after protocol handle loop terminates.
 func (swap *Swap) Stop() {
 	defer swap.lock.Unlock()
