@@ -69,7 +69,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *Tes
 	}
 	rhparams := &storage.ResourceHandlerParams{
 		QueryMaxPeriods: &storage.ResourceLookupParams{},
-		EthClient:       &fakeBackend{},
+		HeaderGetter:    &fakeBackend{},
 	}
 	rh, err := storage.NewTestResourceHandler(resourceDir, rhparams)
 	if err != nil {
