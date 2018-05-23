@@ -49,7 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
-	"github.com/ethereum/go-ethereum/swarm/storage/resource"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 )
 
 var (
@@ -187,13 +187,13 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
 
-	var resourceHandler *resource.ResourceHandler
-	rhparams := &resource.ResourceHandlerParams{
+	var resourceHandler *mru.ResourceHandler
+	rhparams := &mru.ResourceHandlerParams{
 		// TODO: config parameter to set limits
-		QueryMaxPeriods: &resource.ResourceLookupParams{
+		QueryMaxPeriods: &mru.ResourceLookupParams{
 			Limit: false,
 		},
-		Signer: &resource.GenericResourceSigner{
+		Signer: &mru.GenericResourceSigner{
 			PrivKey: self.privateKey,
 		},
 		HeaderGetter:   resolver,
@@ -206,7 +206,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		// TODO: blockestimator should use saved values derived from last time ethclient was connected
 		rhparams.HeaderGetter = storage.NewBlockEstimator()
 	}
-	resourceHandler, err = resource.NewResourceHandler(rhparams)
+	resourceHandler, err = mru.NewResourceHandler(rhparams)
 	if err != nil {
 		return nil, err
 	}

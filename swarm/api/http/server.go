@@ -43,7 +43,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/resource"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 	"github.com/pborman/uuid"
 	"github.com/rs/cors"
 )
@@ -467,7 +467,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestKey, "rootchunkkey", key)
 
-		name, _, err = s.api.ResourceLookup(r.Context(), key, 0, 0, &resource.ResourceLookupParams{})
+		name, _, err = s.api.ResourceLookup(r.Context(), key, 0, 0, &mru.ResourceLookupParams{})
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -600,7 +600,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supErr string, err error) (int, error) {
 	code := 0
 	defaultErr := fmt.Errorf("%s: %v", supErr, err)
-	rsrcErr, ok := err.(*resource.ResourceError)
+	rsrcErr, ok := err.(*mru.ResourceError)
 	if !ok && rsrcErr != nil {
 		code = rsrcErr.Code()
 	}

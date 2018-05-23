@@ -28,7 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/resource"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 )
 
 type TestServer interface {
@@ -74,7 +74,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *Tes
 			blocknumber: 42,
 		},
 	}
-	rh, err := resource.NewTestResourceHandler(resourceDir, rhparams)
+	rh, err := mru.NewTestResourceHandler(resourceDir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
