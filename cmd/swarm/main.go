@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -451,7 +450,7 @@ func bzzd(ctx *cli.Context) error {
 	//due to overriding behavior
 	initSwarmNode(bzzconfig, stack, ctx)
 	//register BZZ as node.Service in the ethereum node
-	registerBzzService(bzzconfig, ctx, stack)
+	registerBzzService(bzzconfig, stack)
 	//start the node
 	utils.StartNode(stack)
 
@@ -478,22 +477,11 @@ func bzzd(ctx *cli.Context) error {
 	return nil
 }
 
-func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.Node) {
-
+func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	//define the swarm service boot function
-	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		var swapClient *ethclient.Client
-		var err error
-		if bzzconfig.SwapApi != "" {
-			log.Info("connecting to SWAP API", "url", bzzconfig.SwapApi)
-			swapClient, err = ethclient.Dial(bzzconfig.SwapApi)
-			if err != nil {
-				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", bzzconfig.SwapApi, err)
-			}
-		}
-
+	boot := func(_ *node.ServiceContext) (node.Service, error) {
 		// In production, mockStore must be always nil.
-		return swarm.NewSwarm(ctx, swapClient, bzzconfig, nil)
+		return swarm.NewSwarm(bzzconfig, nil)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {

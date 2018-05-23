@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -63,15 +62,11 @@ var (
 
 // the swarm stack
 type Swarm struct {
-	config *api.Config  // swarm configuration
-	api    *api.Api     // high level api layer (fs/manifest)
-	dns    api.Resolver // DNS registrar
-	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
-	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	streamer *stream.Registry
-	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
+	config      *api.Config  // swarm configuration
+	api         *api.Api     // high level api layer (fs/manifest)
+	dns         api.Resolver // DNS registrar
+	dpa         *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	streamer    *stream.Registry
 	bzz         *network.Bzz       // the logistic manager
 	backend     chequebook.Backend // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey
@@ -100,13 +95,22 @@ func (self *Swarm) API() *SwarmAPI {
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
+func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
 
 	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
 	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty bzz key")
+	}
+
+	var backend chequebook.Backend
+	if config.SwapApi != "" && config.SwapEnabled {
+		log.Info("connecting to SWAP API", "url", config.SwapApi)
+		backend, err = ethclient.Dial(config.SwapApi)
+		if err != nil {
+			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", config.SwapApi, err)
+		}
 	}
 
 	self = &Swarm{
@@ -116,17 +120,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
-	kp := network.NewKadParams()
-	to := network.NewKademlia(
-		common.FromHex(config.BzzKey),
-		kp,
-	)
-
 	config.HiveParams.Discovery = true
 
-	// setup cloud storage internal access layer
-	//self.cloud = &storage.Forwarder{}
-	//self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 
 	nodeID, err := discover.HexID(config.NodeID)
@@ -144,14 +139,12 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		HiveParams:   config.HiveParams,
 	}
 
-	// TODO: decide on intervals store file location
 	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
 	if err != nil {
 		return
 	}
 
 	// set up high level api
-	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
 	var resolver *api.MultiResolver
 	var ensresolver *ens.ENS
 	if len(config.EnsAPIs) > 0 {
@@ -176,6 +169,10 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 
 	db := storage.NewDBAPI(self.lstore)
+	to := network.NewKademlia(
+		common.FromHex(config.BzzKey),
+		network.NewKadParams(),
+	)
 	delivery := stream.NewDelivery(to, db)
 
 	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{
@@ -228,7 +225,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	config.Pss = config.Pss.WithPrivateKey(self.privateKey)
 	self.ps, err = pss.NewPss(to, config.Pss)
 	if err != nil {
 		return nil, err
