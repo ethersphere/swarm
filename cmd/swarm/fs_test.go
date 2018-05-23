@@ -25,7 +25,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	colorable "github.com/mattn/go-colorable"
@@ -71,17 +70,17 @@ func TestCLISwarmFs(t *testing.T) {
 
 	filesToAssert := []*testFile{}
 
-	// dirPath, err := createDirInDir(mountPoint, "testSubDir")
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	//dirPath2, err := createDirInDir(dirPath, "AnotherTestSubDir")
+	dirPath, err := createDirInDir(mountPoint, "testSubDir")
+	if err != nil {
+		t.Fatal(err)
+	}
+	dirPath2, err := createDirInDir(dirPath, "AnotherTestSubDir")
 
 	dummyContent := "somerandomtestcontentthatshouldbeasserted"
 	dirs := []string{
 		mountPoint,
-		//	dirPath,
-		//dirPath2,
+		dirPath,
+		dirPath2,
 	}
 	files := []string{"f1.tmp", "f2.tmp"}
 	for _, d := range dirs {
@@ -145,7 +144,7 @@ func TestCLISwarmFs(t *testing.T) {
 	}...)
 
 	newMount.ExpectExit()
-	time.Sleep(5 * time.Second)
+	// time.Sleep( 1* time.Second)
 
 	filesInDir, err = ioutil.ReadDir(secondMountPoint)
 	if err != nil {
@@ -155,28 +154,24 @@ func TestCLISwarmFs(t *testing.T) {
 	if len(filesInDir) == 0 {
 		t.Fatal("there should be something here")
 	}
+
 	log.Debug("Traversing file tree to see it matches previous mount")
 
-	for _, file := range filesToAssert {
-		file.filePath = strings.Replace(file.filePath, mountPoint, secondMountPoint, 1)
-		fmt.Printf("trying to read filepath: %s", file.filePath)
+	for i, file := range filesToAssert {
+		file.filePath = strings.Replace(file.filePath, mountPoint, secondMountPoint, -1)
+		log.Trace(fmt.Sprintf("file %d out of %d, trying to read filepath: %s\n", i+1, len(filesToAssert), file.filePath))
 		fileBytes, err := ioutil.ReadFile(file.filePath)
+
 		if err != nil {
 			t.Fatal(err)
 		}
 		if !bytes.Equal(fileBytes, bytes.NewBufferString(file.content).Bytes()) {
 			t.Fatal("this should be equal")
 		}
+		log.Trace("file content equal")
 	}
 
-	// cmd := exec.Command("lsof", "+f", "--", mountPoint)
-	// log.Debug("Running command and waiting for it to finish...")
-	// err = cmd.Run()
-	// log.Debug(fmt.Sprintf("Command finished with error: %v", err))
-	// if err != nil {
-	// 	t.Fatalf("could not exec lsof: %v", err)
-	// }
-	log.Debug(fmt.Sprintf("unmounting second run. ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
+	log.Debug(fmt.Sprintf("success, unmounting second run. ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
 
 	unmountSec := runSwarm(t, []string{
 		"fs",
