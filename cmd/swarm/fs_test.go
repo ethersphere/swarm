@@ -25,6 +25,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	colorable "github.com/mattn/go-colorable"
@@ -144,7 +145,7 @@ func TestCLISwarmFs(t *testing.T) {
 	}...)
 
 	newMount.ExpectExit()
-	// time.Sleep( 1* time.Second)
+	time.Sleep(1 * time.Second)
 
 	filesInDir, err = ioutil.ReadDir(secondMountPoint)
 	if err != nil {
