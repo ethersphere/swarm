@@ -139,7 +139,7 @@ func (pssapi *API) SendSym(symkeyhex string, topic Topic, msg hexutil.Bytes) err
 }
 
 func (pssapi *API) GetPeerTopics(pubkeyhex string) ([]Topic, error) {
-	topics, _, err := pssapi.Pss.GetPeer(pubkeyhex)
+	topics, _, err := pssapi.Pss.GetPublickeyPeers(pubkeyhex)
 	return topics, err
 
 }

@@ -457,7 +457,7 @@ func TestKeys(t *testing.T) {
 	}
 }
 
-func TestGetPeer(t *testing.T) {
+func TestGetPublickeyEntries(t *testing.T) {
 
 	adapter := adapters.NewSimAdapter(newServices(false))
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
