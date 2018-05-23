@@ -20,7 +20,6 @@ package fuse
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"os"
 	"sync"
@@ -75,7 +74,7 @@ func NewSwarmFile(path, fname string, minfo *MountInfo) *SwarmFile {
 }
 
 func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
-	log.Debug(fmt.Sprintf("swarmfs Attr: path: %s", sf.path))
+	log.Debug("swarmfs Attr", "path", sf.path)
 	a.Inode = sf.inode
 	//TODO: need to get permission as argument
 	a.Mode = 0700
@@ -96,7 +95,7 @@ func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 }
 
 func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-	log.Debug(fmt.Sprintf("swarmfs Read: path: %s, req.String: %s", sf.path, req.String()))
+	log.Debug("swarmfs Read", "path", sf.path, "req.String", req.String())
 	sf.lock.RLock()
 	defer sf.lock.RUnlock()
 	if sf.reader == nil {
@@ -109,23 +108,20 @@ func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 	}
 	resp.Data = buf[:n]
 	sf.reader = nil
-	return err
 
+	return err
 }
 
 func (sf *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-	log.Debug(fmt.Sprintf("swarmfs Write: path: %s, req.String: %s", sf.path, req.String()))
+	log.Debug("swarmfs Write", "path", sf.path, "req.String", req.String())
 	if sf.fileSize == 0 && req.Offset == 0 {
-
 		// A new file is created
 		err := addFileToSwarm(sf, req.Data, len(req.Data))
 		if err != nil {
 			return err
 		}
 		resp.Size = len(req.Data)
-
 	} else if req.Offset <= sf.fileSize {
-
 		totalSize := sf.fileSize + int64(len(req.Data))
 		if totalSize > MaxAppendFileSize {
 			log.Warn("swarmfs Append file size reached (%v) : (%v)", sf.fileSize, len(req.Data))
@@ -141,6 +137,5 @@ func (sf *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fu
 		log.Warn("swarmfs Invalid write request size(%v) : off(%v)", sf.fileSize, req.Offset)
 		return errInvalidOffset
 	}
-
 	return nil
 }

@@ -47,7 +47,7 @@ func TestCLISwarmFs(t *testing.T) {
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
 
-	// create a tmp file
+	// create a tmp dir
 	mountPoint, err := ioutil.TempDir("", "swarm-test")
 	log.Debug(fmt.Sprintf("1st mount: %s", mountPoint))
 	if err != nil {
@@ -58,7 +58,7 @@ func TestCLISwarmFs(t *testing.T) {
 	handlingNode := cluster.Nodes[0]
 	mhash := doUploadEmptyDir(t, handlingNode)
 	log.Debug("Mounting first run...")
-	log.Debug(fmt.Sprintf("ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
+	log.Debug("ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	mount := runSwarm(t, []string{
 		"fs",
@@ -98,7 +98,7 @@ func TestCLISwarmFs(t *testing.T) {
 	}
 	hashRegexp := `[a-f\d]{64}`
 	log.Debug("Unmounting first run...")
-	log.Debug(fmt.Sprintf("ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
+	log.Debug("ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	unmount := runSwarm(t, []string{
 		"fs",
@@ -126,14 +126,14 @@ func TestCLISwarmFs(t *testing.T) {
 	}
 
 	secondMountPoint, err := ioutil.TempDir("", "swarm-test")
-	log.Debug(fmt.Sprintf("2nd mount: %s", secondMountPoint))
+	log.Debug("2nd mount point is at", secondMountPoint)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(secondMountPoint)
 
 	log.Debug("Remounting, second run...")
-	log.Debug(fmt.Sprintf("ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
+	log.Debug("ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	//remount, check files
 	newMount := runSwarm(t, []string{
@@ -172,7 +172,7 @@ func TestCLISwarmFs(t *testing.T) {
 		log.Trace("file content equal")
 	}
 
-	log.Debug(fmt.Sprintf("success, unmounting second run. ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
+	log.Debug("success, unmounting second run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	unmountSec := runSwarm(t, []string{
 		"fs",
@@ -190,7 +190,7 @@ func TestCLISwarmFs(t *testing.T) {
 }
 
 func doUploadEmptyDir(t *testing.T, node *testNode) string {
-	// create a tmp file
+	// create a tmp dir
 	tmpDir, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {
 		t.Fatal(err)
@@ -205,14 +205,13 @@ func doUploadEmptyDir(t *testing.T, node *testNode) string {
 		"up",
 		tmpDir}
 
-	log.Info(fmt.Sprintf("uploading dir with 'swarm up'"))
+	log.Info("uploading dir with 'swarm up'")
 	up := runSwarm(t, flags...)
 	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 	hash := matches[0]
 	log.Info("dir uploaded", "hash", hash)
 	return hash
-
 }
 
 func createDirInDir(createInDir string, dirToCreate string) (string, error) {
@@ -221,7 +220,7 @@ func createDirInDir(createInDir string, dirToCreate string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	log.Debug(fmt.Sprintf("dirindir: %s", fullpath))
+	log.Debug("DirInDir", fullpath)
 	return fullpath, nil
 }
 
@@ -229,7 +228,7 @@ func createTestFileInPath(dir, filename, content string) (*testFile, error) {
 	tFile := &testFile{}
 	filePath := filepath.Join(dir, filename)
 	if file, err := os.Create(filePath); err == nil {
-		log.Debug(fmt.Sprintf("creatingfile: %s", filePath))
+		log.Debug("creatingfile", filePath)
 
 		tFile.content = content
 		tFile.filePath = filePath
