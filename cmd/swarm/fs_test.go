@@ -33,7 +33,7 @@ import (
 
 func init() {
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(6), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
 type testFile struct {
@@ -56,7 +56,7 @@ func TestCLISwarmFs(t *testing.T) {
 	defer os.RemoveAll(mountPoint)
 
 	handlingNode := cluster.Nodes[0]
-	mhash := doUploadFile(t, handlingNode)
+	mhash := doUploadEmptyDir(t, handlingNode)
 	log.Debug("Mounting first run...")
 	log.Debug(fmt.Sprintf("ipc path: %s", filepath.Join(handlingNode.Dir, handlingNode.IpcPath)))
 
@@ -189,7 +189,7 @@ func TestCLISwarmFs(t *testing.T) {
 	}
 }
 
-func doUploadFile(t *testing.T, node *testNode) string {
+func doUploadEmptyDir(t *testing.T, node *testNode) string {
 	// create a tmp file
 	tmpDir, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {

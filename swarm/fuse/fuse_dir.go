@@ -151,9 +151,7 @@ func (sd *SwarmDir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 
 func (sd *SwarmDir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
 	log.Debug(fmt.Sprintf("swarmfs Mkdir: path: %s, req.Name: %s", sd.path, req.Name))
-	joinedPath := filepath.Join(sd.path, req.Name)
-	newDir := NewSwarmDir(joinedPath, sd.mountInfo)
-	// newDir := NewSwarmDir(req.Name, sd.mountInfo)
+	newDir := NewSwarmDir(filepath.Join(sd.path, req.Name), sd.mountInfo)
 	sd.lock.Lock()
 	defer sd.lock.Unlock()
 	sd.directories = append(sd.directories, newDir)

@@ -149,7 +149,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 
 	fconn, err := fuse.Mount(cleanedMountPoint, fuse.FSName("swarmfs"), fuse.VolumeName(mhash))
 	if isFUSEUnsupportedError(err) {
-		log.Error("FUSE not installed", "mountpoint", cleanedMountPoint, "err", err)
+		log.Error("swarmfs error - FUSE not installed", "mountpoint", cleanedMountPoint, "err", err)
 		return nil, err
 	} else if err != nil {
 		fuse.Unmount(cleanedMountPoint)

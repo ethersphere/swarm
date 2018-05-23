@@ -35,7 +35,7 @@ import (
 	colorable "github.com/mattn/go-colorable"
 )
 
-var loglevel = flag.Int("loglevel", 6, "verbosity of logs")
+var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
 
 func init() {
 	log.PrintOrigins(true)
