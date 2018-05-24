@@ -471,7 +471,6 @@ func (net *Network) getConn(oneID, otherID discover.NodeID) *Conn {
 // this is cheating as the simulation is used as an oracle and know about
 // remote peers attempt to connect to a node which will then not initiate the connection
 func (net *Network) InitConn(oneID, otherID discover.NodeID) (*Conn, error) {
-	log.Debug(fmt.Sprintf("InitConn(oneID: %v, otherID: %v)", oneID, otherID))
 	net.lock.Lock()
 	defer net.lock.Unlock()
 	if oneID == otherID {
