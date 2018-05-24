@@ -93,7 +93,7 @@ func (p *Peer) Deliver(chunk *storage.Chunk, priority uint8) error {
 
 // SendPriority sends message to the peer using the outgoing priority queue
 func (p *Peer) SendPriority(msg interface{}, priority uint8) error {
-	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("peer.sendpriority.%d", priority), nil).UpdateSince(time.Now())
+	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("peer.sendpriority_t.%d", priority), nil).UpdateSince(time.Now())
 	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.sendpriority.%d", priority), nil).Inc(1)
 	ctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
 	defer cancel()
