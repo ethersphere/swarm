@@ -34,14 +34,14 @@ var searchTimeout = 3000 * time.Millisecond
 // fetcher self destroys
 // TODO: cancel all forward requests after termination
 type Fetcher struct {
-	request   func(context.Context, storage.Address, storage.Address, bool, sync.Map) (context.Context, error) //
-	addr      storage.Address                                                                                  //
+	request   func(context.Context, storage.Address, storage.Address, bool, *sync.Map) (context.Context, error) //
+	addr      storage.Address                                                                                   //
 	offerC    chan storage.Address
 	skipCheck bool
 }
 
-func FetchFunc(request func(context.Context, storage.Address, storage.Address, bool, sync.Map) (context.Context, error), skipCheck bool) storage.FetchFuncConstructor {
-	return func(ctx context.Context, addr storage.Address, peers sync.Map) (fetch storage.FetchFunc) {
+func FetchFunc(request func(context.Context, storage.Address, storage.Address, bool, *sync.Map) (context.Context, error), skipCheck bool) storage.FetchFuncConstructor {
+	return func(ctx context.Context, addr storage.Address, peers *sync.Map) (fetch storage.FetchFunc) {
 		f := NewFetcher(addr, request, skipCheck)
 		f.start(ctx, peers)
 		return f.fetch
@@ -50,7 +50,7 @@ func FetchFunc(request func(context.Context, storage.Address, storage.Address, b
 
 // NewFetcher creates a new fetcher for a chunk
 // stored in netstore's fetchers (LRU cache) keyed by address
-func NewFetcher(addr storage.Address, request func(context.Context, storage.Address, storage.Address, bool, sync.Map) (context.Context, error), skipCheck bool) *Fetcher {
+func NewFetcher(addr storage.Address, request func(context.Context, storage.Address, storage.Address, bool, *sync.Map) (context.Context, error), skipCheck bool) *Fetcher {
 	return &Fetcher{
 		addr:      addr,
 		request:   request,
@@ -74,7 +74,7 @@ func (f *Fetcher) fetch(ctx context.Context) {
 
 // start prepares the Fetcher
 // it keeps the Fetcher alive
-func (f *Fetcher) start(ctx context.Context, peers sync.Map) {
+func (f *Fetcher) start(ctx context.Context, peers *sync.Map) {
 	var (
 		dorequest bool // determines if retrieval is initiated in the current iteration
 		wait      *time.Timer
@@ -93,11 +93,16 @@ F:
 		case offer := <-f.offerC:
 			log.Warn("dpa event received")
 			if offer != nil {
+				// 1) the chunk is offered
+				// launch a request to it iff the chunk is requested
+				wanted = true
 				offers = append(offers, offer)
 				dorequest = wanted
 			} else {
+				// 2) chunk is requested
+				// launch a request iff none been launched yet
+				dorequest = !wanted
 				wanted = true
-				dorequest = true
 			}
 
 			// search timeout

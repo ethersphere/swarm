@@ -108,7 +108,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 		// all requests cancelled/timedout or chunk is delivered
 		cancel()
 	}
-	peers := sync.Map{}
+	peers := &sync.Map{}
 	fetcher := newFetcher(ref, n.newFetcher(ctx, ref, peers), destroy, peers)
 	n.fetchers.Add(key, fetcher)
 
@@ -116,7 +116,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 }
 
 // Get retrieves the chunk from the NetStore DPA synchronously
-// it calls NetStore get. If the chunk is not in local Storage
+// it calls NetStore.get. If the chunk is not in local Storage
 // it calls fetch with the request, which blocks until the chunk
 // arrived or context is done
 func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
@@ -138,7 +138,7 @@ func (n *NetStore) Close() {
 }
 
 type FetchFunc func(ctx context.Context)
-type FetchFuncConstructor func(ctx context.Context, offer Address, peers sync.Map) FetchFunc
+type FetchFuncConstructor func(ctx context.Context, offer Address, peers *sync.Map) FetchFunc
 
 type fetcher struct {
 	addr       Address        // adress of chunk
@@ -147,10 +147,10 @@ type fetcher struct {
 	deliveredC chan struct{}  // chan signalling chunk delivery to requests
 	fetch      FetchFunc      // remote fetch function to be called with a request source taken from the context
 	cancel     func()         // cleanup function for the remote fetcher to call when all upstream contexts are called
-	peers      sync.Map
+	peers      *sync.Map
 }
 
-func newFetcher(addr Address, fetch FetchFunc, cancel func(), peers sync.Map) *fetcher {
+func newFetcher(addr Address, fetch FetchFunc, cancel func(), peers *sync.Map) *fetcher {
 	return &fetcher{
 		addr:       addr,
 		deliveredC: make(chan struct{}),
@@ -168,6 +168,7 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 	peer := rctx.Value("peer")
 	if peer != nil {
 		f.peers.Store(peer, true)
+		defer f.peers.Delete(peer)
 	}
 
 	f.fetch(rctx)

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"io/ioutil"
+	"sync"
 	"testing"
 	"time"
 )
@@ -39,15 +40,15 @@ type mockFetcher struct {
 	peersPerFetch [][]Address
 }
 
-func (m *mockFetcher) fetch(ctx context.Context, peers []Address) {
-	m.peersPerFetch = append(m.peersPerFetch, peers)
+func (m *mockFetcher) fetch(ctx context.Context) {
+	// m.peersPerFetch = append(m.peersPerFetch, peers)
 }
 
 func newMockFetcher() *mockFetcher {
 	return &mockFetcher{}
 }
 
-func (m *mockFetcher) mockFetch(_ context.Context, _ Address) FetchFunc {
+func (m *mockFetcher) mockFetch(_ context.Context, _ Address, _ *sync.Map) FetchFunc {
 	return m.fetch
 }
 
