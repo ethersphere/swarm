@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/hex"
 	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
@@ -141,13 +142,13 @@ type FetchFunc func(ctx context.Context)
 type FetchFuncConstructor func(ctx context.Context, offer Address, peers *sync.Map) FetchFunc
 
 type fetcher struct {
-	addr       Address        // adress of chunk
-	chunk      Chunk          // fetcher can set the chunk on the fetcher
-	requestWg  sync.WaitGroup // count and wait for all upstream peer requests
-	deliveredC chan struct{}  // chan signalling chunk delivery to requests
-	fetch      FetchFunc      // remote fetch function to be called with a request source taken from the context
-	cancel     func()         // cleanup function for the remote fetcher to call when all upstream contexts are called
+	addr       Address       // adress of chunk
+	chunk      Chunk         // fetcher can set the chunk on the fetcher
+	deliveredC chan struct{} // chan signalling chunk delivery to requests
+	fetch      FetchFunc     // remote fetch function to be called with a request source taken from the context
+	cancel     func()        // cleanup function for the remote fetcher to call when all upstream contexts are called
 	peers      *sync.Map
+	requestCnt int32
 }
 
 func newFetcher(addr Address, fetch FetchFunc, cancel func(), peers *sync.Map) *fetcher {
@@ -162,8 +163,12 @@ func newFetcher(addr Address, fetch FetchFunc, cancel func(), peers *sync.Map) *
 
 // synchronous fetcher called by Get every time
 func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
-	f.requestWg.Add(1)
-	defer f.requestWg.Done()
+	atomic.AddInt32(&f.requestCnt, 1)
+	defer func() {
+		if atomic.AddInt32(&f.requestCnt, -1) == 0 {
+			f.cancel()
+		}
+	}()
 
 	peer := rctx.Value("peer")
 	if peer != nil {

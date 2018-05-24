@@ -46,7 +46,8 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 
 	peerID := tester.IDs[0]
 
-	streamer.delivery.RequestFromPeers(hash0[:], true)
+	ctx := context.Background()
+	streamer.delivery.RequestFromPeers(ctx, storage.Address(hash0[:]), true, &sync.Map{})
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -416,7 +417,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		request := func(ctx context.Context, offer storage.Address, peersToSkip sync.Map) (context.Context, error) {
 			return delivery.RequestFromPeers(offer, skipCheck, peersToSkip)
 		}
-		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore))
+		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), Fetch)
 
 		dpa := storage.NewDPA(netStore, storage.NewDPAParams())
 

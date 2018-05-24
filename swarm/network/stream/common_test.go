@@ -108,7 +108,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	return testRegistry, nil
 }
 
-func newFakeFetcher(context.Context, storage.Address, sync.Map) storage.FetchFunc {
+func newFakeFetcher(context.Context, storage.Address, *sync.Map) storage.FetchFunc {
 	return func(context.Context) {}
 }
 

@@ -37,18 +37,27 @@ var (
 // }
 
 type mockFetcher struct {
+	peers         *sync.Map
 	peersPerFetch [][]Address
+	quit          <-chan struct{}
 }
 
 func (m *mockFetcher) fetch(ctx context.Context) {
-	// m.peersPerFetch = append(m.peersPerFetch, peers)
+	var peers []Address
+	m.peers.Range(func(key interface{}, _ interface{}) bool {
+		peers = append(peers, key.(Address))
+		return true
+	})
+	m.peersPerFetch = append(m.peersPerFetch, peers)
 }
 
 func newMockFetcher() *mockFetcher {
 	return &mockFetcher{}
 }
 
-func (m *mockFetcher) mockFetch(_ context.Context, _ Address, _ *sync.Map) FetchFunc {
+func (m *mockFetcher) mockFetch(ctx context.Context, _ Address, peers *sync.Map) FetchFunc {
+	m.peers = peers
+	m.quit = ctx.Done()
 	return m.fetch
 }
 
@@ -115,14 +124,49 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 
 	addr := Address(make([]byte, 32))
 	ctx, _ := context.WithTimeout(context.Background(), searchTimeout)
+	// peers := [][]Address{[]Address{Address(make([]byte, 32))},
+	// 	[]Address{Address(make([]byte, 32)), Address(make([]byte, 32))},
+	// 	[]Address{Address(make([]byte, 32)), Address(make([]byte, 32)), Address(make([]byte, 32))}}
 
-	netStore.Get(ctx, addr)
-	netStore.Get(ctx, addr)
-	netStore.Get(ctx, addr)
-
-	if len(fetcher.peersPerFetch) != 3 {
-		t.Fatal()
+	nrGets := 3
+	errC := make(chan error)
+	for i := 0; i < nrGets; i++ {
+		// ctx = context.WithValue(ctx, "peer", peers[i])
+		go func() {
+			_, err = netStore.Get(ctx, addr)
+			errC <- err
+			// if err == nil {
+			// 	t.Fatalf("Expected error got nil")
+			// }
+			// if chunk != nil {
+			// 	t.Fatalf("Chunk expected nil got %v", err)
+			// }
+		}()
 	}
+
+	expectedErr := "context deadline exceeded"
+	for i := 0; i < nrGets; i++ {
+		err = <-errC
+		if err.Error() != expectedErr {
+			t.Fatalf("Expected \"%v\" error got \"%v\"", expectedErr, err)
+		}
+	}
+
+	select {
+	case <-fetcher.quit:
+	case <-time.After(3 * time.Second):
+		t.Fatalf("MockFetcher not closed after timeout")
+	}
+
+	if len(fetcher.peersPerFetch) != nrGets {
+		t.Fatalf("Expected 3 got %v", len(fetcher.peersPerFetch))
+	}
+
+	// for i, peers := range fetcher.peersPerFetch {
+	// 	if len(peers) < i+1 {
+	// 		t.Fatalf("Expected at least %v got %v", i+1, len(peers))
+	// 	}
+	// }
 
 }
 
