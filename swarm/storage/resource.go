@@ -119,6 +119,10 @@ type headerGetter interface {
 	HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error)
 }
 
+type ownerValidator interface {
+	ValidateOwner(name string, address common.Address) (bool, error)
+}
+
 // Mutable resource is an entity which allows updates to a resource
 // without resorting to ENS on each update.
 // The update scheme is built on swarm chunks with chunk keys following
@@ -174,8 +178,8 @@ type ResourceHandler struct {
 	chunkStore      *NetStore
 	HashSize        int
 	signer          ResourceSigner
-	ethClient       headerGetter
-	ensClient       *ens.ENS
+	headerGetter    headerGetter
+	ownerValidator  ownerValidator
 	resources       map[string]*resource
 	hashPool        sync.Pool
 	resourceLock    sync.RWMutex
@@ -186,8 +190,8 @@ type ResourceHandler struct {
 type ResourceHandlerParams struct {
 	QueryMaxPeriods *ResourceLookupParams
 	Signer          ResourceSigner
-	EthClient       headerGetter
-	EnsClient       *ens.ENS
+	HeaderGetter    headerGetter
+	OwnerValidator  ownerValidator
 }
 
 // Create or open resource update chunk store
@@ -198,11 +202,11 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 		}
 	}
 	rh := &ResourceHandler{
-		ethClient:    params.EthClient,
-		ensClient:    params.EnsClient,
-		resources:    make(map[string]*resource),
-		storeTimeout: defaultStoreTimeout,
-		signer:       params.Signer,
+		headerGetter:   params.HeaderGetter,
+		ownerValidator: params.OwnerValidator,
+		resources:      make(map[string]*resource),
+		storeTimeout:   defaultStoreTimeout,
+		signer:         params.Signer,
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return MakeHashFunc(resourceHash)()
@@ -256,7 +260,7 @@ func (self *ResourceHandler) Validate(key Key, data []byte) bool {
 
 // If no ens client is supplied, resource updates are not validated
 func (self *ResourceHandler) IsValidated() bool {
-	return self.ensClient != nil
+	return self.ownerValidator != nil
 }
 
 // Create the resource update digest used in signatures
@@ -271,11 +275,10 @@ func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
 
 // Checks if current address matches owner address of ENS
 func (self *ResourceHandler) checkAccess(name string, address common.Address) (bool, error) {
-	if self.ensClient == nil {
+	if self.ownerValidator == nil {
 		return true, nil
 	}
-	owneraddress, err := self.ensClient.Owner(ens.EnsNode(name))
-	return (address == owneraddress), err
+	return self.ownerValidator.ValidateOwner(name, address)
 }
 
 // get data from current resource
@@ -815,7 +818,7 @@ func (self *ResourceHandler) Close() {
 }
 
 func (self *ResourceHandler) getBlock(ctx context.Context, name string) (uint64, error) {
-	blockheader, err := self.ethClient.HeaderByNumber(ctx, name, nil)
+	blockheader, err := self.headerGetter.HeaderByNumber(ctx, name, nil)
 	if err != nil {
 		return 0, err
 	}

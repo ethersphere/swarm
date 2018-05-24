@@ -146,7 +146,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	// set up high level api
 	var resolver *api.MultiResolver
-	var ensresolver *ens.ENS
 	if len(config.EnsAPIs) > 0 {
 		opts := []api.MultiResolverOption{}
 		for _, c := range config.EnsAPIs {
@@ -155,7 +154,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			if err != nil {
 				return nil, err
 			}
-			ensresolver = r.ENS
 			opts = append(opts, api.MultiResolverOptionWithResolver(r, tld))
 
 		}
@@ -196,15 +194,15 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		Signer: &storage.GenericResourceSigner{
 			PrivKey: self.privateKey,
 		},
-		EthClient: resolver,
-		EnsClient: ensresolver,
+		HeaderGetter:   resolver,
+		OwnerValidator: resolver,
 	}
 	if resolver != nil {
 		resolver.SetNameHash(ens.EnsNode)
 	} else {
 		log.Warn("No ETH API specified, resource updates will use block height approximation")
 		// TODO: blockestimator should use saved values derived from last time ethclient was connected
-		rhparams.EthClient = storage.NewBlockEstimator()
+		rhparams.HeaderGetter = storage.NewBlockEstimator()
 	}
 	resourceHandler, err = storage.NewResourceHandler(rhparams)
 	if err != nil {
