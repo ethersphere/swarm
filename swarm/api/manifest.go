@@ -61,7 +61,7 @@ type ManifestList struct {
 }
 
 // NewManifest creates and stores a new, empty manifest
-func (a *Api) NewManifest(toEncrypt bool) (storage.Key, error) {
+func (a *API) NewManifest(toEncrypt bool) (storage.Key, error) {
 	var manifest Manifest
 	data, err := json.Marshal(&manifest)
 	if err != nil {
@@ -73,8 +73,8 @@ func (a *Api) NewManifest(toEncrypt bool) (storage.Key, error) {
 }
 
 // Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
-// see swarm/api/api.go:Api.Get() for more information
-func (a *Api) NewResourceManifest(resourceKey string) (storage.Key, error) {
+// see swarm/api/api.go:API.Get() for more information
+func (a *API) NewResourceManifest(resourceKey string) (storage.Key, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
 		Hash:        resourceKey,
@@ -91,12 +91,12 @@ func (a *Api) NewResourceManifest(resourceKey string) (storage.Key, error) {
 
 // ManifestWriter is used to add and remove entries from an underlying manifest
 type ManifestWriter struct {
-	api   *Api
+	api   *API
 	trie  *manifestTrie
 	quitC chan bool
 }
 
-func (a *Api) NewManifestWriter(key storage.Key, quitC chan bool) (*ManifestWriter, error) {
+func (a *API) NewManifestWriter(key storage.Key, quitC chan bool) (*ManifestWriter, error) {
 	trie, err := loadManifest(a.dpa, key, quitC)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", key, err)
@@ -131,12 +131,12 @@ func (m *ManifestWriter) Store() (storage.Key, error) {
 // ManifestWalker is used to recursively walk the entries in the manifest and
 // all of its submanifests
 type ManifestWalker struct {
-	api   *Api
+	api   *API
 	trie  *manifestTrie
 	quitC chan bool
 }
 
-func (a *Api) NewManifestWalker(key storage.Key, quitC chan bool) (*ManifestWalker, error) {
+func (a *API) NewManifestWalker(key storage.Key, quitC chan bool) (*ManifestWalker, error) {
 	trie, err := loadManifest(a.dpa, key, quitC)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", key, err)

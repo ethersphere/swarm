@@ -46,7 +46,7 @@ func (f *fakeBackend) HeaderByNumber(context context.Context, _ string, bigblock
 	}, nil
 }
 
-func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *TestSwarmServer {
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *TestSwarmServer {
 	dir, err := ioutil.TempDir("", "swarm-storage-test")
 	if err != nil {
 		t.Fatal(err)

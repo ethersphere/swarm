@@ -86,7 +86,7 @@ func TestResourcePostMode(t *testing.T) {
 	}
 }
 
-func serverFunc(api *api.Api) testutil.TestServer {
+func serverFunc(api *api.API) testutil.TestServer {
 	return NewServer(api)
 }
 

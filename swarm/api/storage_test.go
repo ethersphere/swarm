@@ -21,7 +21,7 @@ import (
 )
 
 func testStorage(t *testing.T, f func(*Storage, bool)) {
-	testApi(t, func(api *Api, toEncrypt bool) {
+	testApi(t, func(api *API, toEncrypt bool) {
 		f(NewStorage(api), toEncrypt)
 	})
 }
@@ -37,7 +37,7 @@ func TestStoragePutGet(t *testing.T) {
 		}
 		wait()
 		bzzhash := bzzkey.Hex()
-		// to check put against the Api#Get
+		// to check put against the API#Get
 		resp0 := testGet(t, api.api, bzzhash, "")
 		checkResponse(t, resp0, exp)
 
