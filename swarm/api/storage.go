@@ -16,7 +16,11 @@
 
 package api
 
-import "path"
+import (
+	"path"
+
+	"github.com/ethereum/go-ethereum/swarm/storage"
+)
 
 type Response struct {
 	MimeType string
@@ -41,12 +45,8 @@ func NewStorage(api *Api) *Storage {
 // its content type
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *Storage) Put(content, contentType string) (string, error) {
-	key, err := self.api.Put(content, contentType)
-	if err != nil {
-		return "", err
-	}
-	return key.String(), err
+func (self *Storage) Put(content, contentType string, toEncrypt bool) (storage.Key, func(), error) {
+	return self.api.Put(content, contentType, toEncrypt)
 }
 
 // Get retrieves the content from bzzpath and reads the response in full
@@ -66,7 +66,7 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	reader, mimeType, status, err := self.api.Get(key, uri.Path)
+	reader, mimeType, status, _, err := self.api.Get(key, uri.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -100,5 +100,5 @@ func (self *Storage) Modify(rootHash, path, contentHash, contentType string) (ne
 	if err != nil {
 		return "", err
 	}
-	return key.String(), nil
+	return key.Hex(), nil
 }

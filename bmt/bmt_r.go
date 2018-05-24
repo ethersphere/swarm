@@ -29,9 +29,9 @@ import (
 
 // RefHasher is the non-optimized easy to read reference implementation of BMT
 type RefHasher struct {
-	span    int
-	section int
-	cap     int
+	span    int // c * 32, where c = 2 ^ ceil(log2(count)), where count = ceil(length / 32)
+	section int // 64
+	cap     int // 4096
 	h       hash.Hash
 }
 

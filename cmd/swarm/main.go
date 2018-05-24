@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -87,10 +86,6 @@ var (
 		Usage:  "Network identifier (integer, default 3=swarm testnet)",
 		EnvVar: SWARM_ENV_NETWORK_ID,
 	}
-	SwarmConfigPathFlag = cli.StringFlag{
-		Name:  "bzzconfig",
-		Usage: "DEPRECATED: please use --config path/to/TOML-file",
-	}
 	SwarmSwapEnabledFlag = cli.BoolFlag{
 		Name:   "swap",
 		Usage:  "Swarm SWAP enabled (default false)",
@@ -101,10 +96,20 @@ var (
 		Usage:  "URL of the Ethereum API provider to use to settle SWAP payments",
 		EnvVar: SWARM_ENV_SWAP_API,
 	}
-	SwarmSyncEnabledFlag = cli.BoolTFlag{
-		Name:   "sync",
-		Usage:  "Swarm Syncing enabled (default true)",
-		EnvVar: SWARM_ENV_SYNC_ENABLE,
+	SwarmSyncDisabledFlag = cli.BoolTFlag{
+		Name:   "nosync",
+		Usage:  "Disable swarm syncing",
+		EnvVar: SWARM_ENV_SYNC_DISABLE,
+	}
+	SwarmSyncUpdateDelay = cli.DurationFlag{
+		Name:   "sync-update-delay",
+		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
+		EnvVar: SWARM_ENV_SYNC_UPDATE_DELAY,
+	}
+	SwarmDeliverySkipCheckFlag = cli.BoolFlag{
+		Name:   "delivery-skip-check",
+		Usage:  "Skip chunk delivery check (default false)",
+		EnvVar: SWARM_ENV_DELIVERY_SKIP_CHECK,
 	}
 	EnsAPIFlag = cli.StringSliceFlag{
 		Name:   "ens-api",
@@ -116,7 +121,7 @@ var (
 		Usage: "Swarm HTTP endpoint",
 		Value: "http://127.0.0.1:8500",
 	}
-	SwarmRecursiveUploadFlag = cli.BoolFlag{
+	SwarmRecursiveFlag = cli.BoolFlag{
 		Name:  "recursive",
 		Usage: "Upload directories recursively",
 	}
@@ -136,20 +141,29 @@ var (
 		Name:  "mime",
 		Usage: "force mime type",
 	}
+	SwarmEncryptedFlag = cli.BoolFlag{
+		Name:  "encrypt",
+		Usage: "use encrypted upload",
+	}
 	CorsStringFlag = cli.StringFlag{
 		Name:   "corsdomain",
 		Usage:  "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
 		EnvVar: SWARM_ENV_CORS,
 	}
-
-	// the following flags are deprecated and should be removed in the future
-	DeprecatedEthAPIFlag = cli.StringFlag{
-		Name:  "ethapi",
-		Usage: "DEPRECATED: please use --ens-api and --swap-api",
+	SwarmStorePath = cli.StringFlag{
+		Name:   "store.path",
+		Usage:  "Path to leveldb chunk DB (default <$GETH_ENV_DIR>/swarm/bzz-<$BZZ_KEY>/chunks)",
+		EnvVar: SWARM_ENV_STORE_PATH,
 	}
-	DeprecatedEnsAddrFlag = cli.StringFlag{
-		Name:  "ens-addr",
-		Usage: "DEPRECATED: ENS contract address, please use --ens-api with contract address according to its format",
+	SwarmStoreCapacity = cli.Uint64Flag{
+		Name:   "store.size",
+		Usage:  "Number of chunks (5M is roughly 20-25GB) (default 5000000)",
+		EnvVar: SWARM_ENV_STORE_CAPACITY,
+	}
+	SwarmStoreCacheCapacity = cli.UintFlag{
+		Name:   "store.cache.size",
+		Usage:  "Number of recent chunks cached in memory (default 5000)",
+		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
 	}
 )
 
@@ -193,6 +207,7 @@ The output of this command is supposed to be machine-readable.
 			Name:      "up",
 			Usage:     "upload a file or directory to swarm using the HTTP API",
 			ArgsUsage: " <file>",
+			Flags:     []cli.Flag{SwarmEncryptedFlag},
 			Description: `
 "upload a file or directory to swarm using the HTTP API and prints the root hash",
 `,
@@ -215,6 +230,17 @@ Lists files and directories contained in a manifest.
 Prints the swarm hash of file or directory.
 `,
 		},
+		{
+			Action:    download,
+			Name:      "down",
+			Flags:     []cli.Flag{SwarmRecursiveFlag},
+			Usage:     "downloads a swarm manifest or a file inside a manifest",
+			ArgsUsage: " <uri> [<dir>]",
+			Description: `
+Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.
+`,
+		},
+
 		{
 			Name:      "manifest",
 			Usage:     "update a MANIFEST",
@@ -303,17 +329,6 @@ Remove corrupt entries from a local chunk database.
 				},
 			},
 		},
-		{
-			Action: func(ctx *cli.Context) {
-				utils.Fatalf("ERROR: 'swarm cleandb' has been removed, please use 'swarm db clean'.")
-			},
-			Name:      "cleandb",
-			Usage:     "DEPRECATED: use 'swarm db clean'",
-			ArgsUsage: " ",
-			Description: `
-DEPRECATED: use 'swarm db clean'.
-`,
-		},
 		// See config.go
 		DumpConfigCommand,
 	}
@@ -339,10 +354,11 @@ DEPRECATED: use 'swarm db clean'.
 		CorsStringFlag,
 		EnsAPIFlag,
 		SwarmTomlConfigPathFlag,
-		SwarmConfigPathFlag,
 		SwarmSwapEnabledFlag,
 		SwarmSwapAPIFlag,
-		SwarmSyncEnabledFlag,
+		SwarmSyncDisabledFlag,
+		SwarmSyncUpdateDelay,
+		SwarmDeliverySkipCheckFlag,
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
@@ -350,15 +366,24 @@ DEPRECATED: use 'swarm db clean'.
 		ChequebookAddrFlag,
 		// upload flags
 		SwarmApiFlag,
-		SwarmRecursiveUploadFlag,
+		SwarmRecursiveFlag,
 		SwarmWantManifestFlag,
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
 		SwarmUploadMimeType,
-		//deprecated flags
-		DeprecatedEthAPIFlag,
-		DeprecatedEnsAddrFlag,
+		// storage flags
+		SwarmStorePath,
+		SwarmStoreCapacity,
+		SwarmStoreCacheCapacity,
 	}
+	rpcFlags := []cli.Flag{
+		utils.WSEnabledFlag,
+		utils.WSListenAddrFlag,
+		utils.WSPortFlag,
+		utils.WSApiFlag,
+		utils.WSAllowedOriginsFlag,
+	}
+	app.Flags = append(app.Flags, rpcFlags...)
 	app.Flags = append(app.Flags, debug.Flags...)
 	app.Flags = append(app.Flags, swarmmetrics.Flags...)
 	app.Before = func(ctx *cli.Context) error {
@@ -405,6 +430,10 @@ func bzzd(ctx *cli.Context) error {
 	}
 
 	cfg := defaultNodeConfig
+
+	//pss operates on ws
+	cfg.WSModules = append(cfg.WSModules, "pss")
+
 	//geth only supports --datadir via command line
 	//in order to be consistent within swarm, if we pass --datadir via environment variable
 	//or via config file, we get the same directory for geth and swarm
@@ -421,7 +450,7 @@ func bzzd(ctx *cli.Context) error {
 	//due to overriding behavior
 	initSwarmNode(bzzconfig, stack, ctx)
 	//register BZZ as node.Service in the ethereum node
-	registerBzzService(bzzconfig, ctx, stack)
+	registerBzzService(bzzconfig, stack)
 	//start the node
 	utils.StartNode(stack)
 
@@ -448,21 +477,11 @@ func bzzd(ctx *cli.Context) error {
 	return nil
 }
 
-func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.Node) {
-
+func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	//define the swarm service boot function
-	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		var swapClient *ethclient.Client
-		var err error
-		if bzzconfig.SwapApi != "" {
-			log.Info("connecting to SWAP API", "url", bzzconfig.SwapApi)
-			swapClient, err = ethclient.Dial(bzzconfig.SwapApi)
-			if err != nil {
-				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", bzzconfig.SwapApi, err)
-			}
-		}
-
-		return swarm.NewSwarm(ctx, swapClient, bzzconfig)
+	boot := func(_ *node.ServiceContext) (node.Service, error) {
+		// In production, mockStore must be always nil.
+		return swarm.NewSwarm(bzzconfig, nil)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {
