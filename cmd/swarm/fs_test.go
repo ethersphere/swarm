@@ -32,7 +32,7 @@ import (
 
 func init() {
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(7), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
 type testFile struct {
@@ -42,7 +42,6 @@ type testFile struct {
 
 // TestCLISwarmFs is a high-level test of swarmfs
 func TestCLISwarmFs(t *testing.T) {
-	log.Info("swarmfs cli test", "starting 3 node cluster")
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
 
@@ -56,7 +55,7 @@ func TestCLISwarmFs(t *testing.T) {
 
 	handlingNode := cluster.Nodes[0]
 	mhash := doUploadEmptyDir(t, handlingNode)
-	log.Debug("swarmfs cli test", "Mounting first run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
+	log.Debug("swarmfs cli test: mounting first run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	mount := runSwarm(t, []string{
 		"fs",
@@ -95,7 +94,7 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatalf("should have %d files to assert now, got %d", len(dirs)*len(files), len(filesToAssert))
 	}
 	hashRegexp := `[a-f\d]{64}`
-	log.Debug("swarmfs cli test", "Unmounting first run...", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
+	log.Debug("swarmfs cli test: unmounting first run...", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	unmount := runSwarm(t, []string{
 		"fs",
@@ -110,7 +109,7 @@ func TestCLISwarmFs(t *testing.T) {
 	if hash == mhash {
 		t.Fatal("this should not be equal")
 	}
-	log.Debug("swarmfs cli test", "asserting no files in mount point")
+	log.Debug("swarmfs cli test: asserting no files in mount point")
 
 	//check that there's nothing in the mount folder
 	filesInDir, err := ioutil.ReadDir(mountPoint)
@@ -123,13 +122,13 @@ func TestCLISwarmFs(t *testing.T) {
 	}
 
 	secondMountPoint, err := ioutil.TempDir("", "swarm-test")
-	log.Debug("swarmfs cli test", "2nd mount point is at", secondMountPoint)
+	log.Debug("swarmfs cli test", "2nd mount point at", secondMountPoint)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(secondMountPoint)
 
-	log.Debug("swarmfs cli test", "Remounting, second run...", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
+	log.Debug("swarmfs cli test: remounting at second mount point", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	//remount, check files
 	newMount := runSwarm(t, []string{
@@ -152,7 +151,7 @@ func TestCLISwarmFs(t *testing.T) {
 		t.Fatal("there should be something here")
 	}
 
-	log.Debug("swarmfs cli test", "traversing file tree to see it matches previous mount")
+	log.Debug("swarmfs cli test: traversing file tree to see it matches previous mount")
 
 	for _, file := range filesToAssert {
 		file.filePath = strings.Replace(file.filePath, mountPoint, secondMountPoint, -1)
@@ -166,7 +165,7 @@ func TestCLISwarmFs(t *testing.T) {
 		}
 	}
 
-	log.Debug("swarmfs cli test", "unmounting second run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
+	log.Debug("swarmfs cli test: unmounting second run", "ipc path", filepath.Join(handlingNode.Dir, handlingNode.IpcPath))
 
 	unmountSec := runSwarm(t, []string{
 		"fs",
@@ -199,12 +198,12 @@ func doUploadEmptyDir(t *testing.T, node *testNode) string {
 		"up",
 		tmpDir}
 
-	log.Info("swarmfs cli test", "uploading dir with 'swarm up'")
+	log.Info("swarmfs cli test: uploading dir with 'swarm up'")
 	up := runSwarm(t, flags...)
 	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 	hash := matches[0]
-	log.Info("swarmfs cli test", "dir uploaded", "hash", hash)
+	log.Info("swarmfs cli test: dir uploaded", "hash", hash)
 	return hash
 }
 
