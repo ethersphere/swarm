@@ -39,18 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-type ErrResourceReturn struct {
-	key string
-}
-
-func (e *ErrResourceReturn) Error() string {
-	return "resourceupdate"
-}
-
-func (e *ErrResourceReturn) Key() string {
-	return e.key
-}
-
 var (
 	apiResolveCount    = metrics.NewRegisteredCounter("api.resolve.count", nil)
 	apiResolveFail     = metrics.NewRegisteredCounter("api.resolve.fail", nil)
