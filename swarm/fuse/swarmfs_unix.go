@@ -156,7 +156,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		log.Info("swarmfs", "serving hash", mhash, "at", cleanedMountPoint)
 		filesys := &SwarmRoot{root: rootDir}
 		if err := fs.Serve(fconn, filesys); err != nil {
-			log.Warn("swarmfs could not serve the requested hash", err)
+			log.Warn("swarmfs could not serve the requested hash", "error", err)
 			serverr <- err
 		}
 

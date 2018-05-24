@@ -50,7 +50,7 @@ type SwarmDir struct {
 }
 
 func NewSwarmDir(fullpath string, minfo *MountInfo) *SwarmDir {
-	log.Debug("swarmfs NewSwarmDir", fullpath)
+	log.Debug("swarmfs", "NewSwarmDir", fullpath)
 	newdir := &SwarmDir{
 		inode:       NewInode(),
 		name:        filepath.Base(fullpath),
@@ -72,7 +72,7 @@ func (sd *SwarmDir) Attr(ctx context.Context, a *fuse.Attr) error {
 }
 
 func (sd *SwarmDir) Lookup(ctx context.Context, req *fuse.LookupRequest, resp *fuse.LookupResponse) (fs.Node, error) {
-	log.Debug("swarmfs Lookup", req.Name)
+	log.Debug("swarmfs", "Lookup", req.Name)
 	for _, n := range sd.files {
 		if n.name == req.Name {
 			return n, nil
@@ -149,7 +149,7 @@ func (sd *SwarmDir) Remove(ctx context.Context, req *fuse.RemoveRequest) error {
 }
 
 func (sd *SwarmDir) Mkdir(ctx context.Context, req *fuse.MkdirRequest) (fs.Node, error) {
-	log.Debug("swarmfs Mkdir: path", sd.path, "req.Name", req.Name)
+	log.Debug("swarmfs Mkdir", "path", sd.path, "req.Name", req.Name)
 	newDir := NewSwarmDir(filepath.Join(sd.path, req.Name), sd.mountInfo)
 	sd.lock.Lock()
 	defer sd.lock.Unlock()
