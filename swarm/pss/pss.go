@@ -110,9 +110,9 @@ type Pss struct {
 
 	// keys and peers
 	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
-	pubKeyPoolMu               sync.Mutex
+	pubKeyPoolMu               sync.RWMutex
 	symKeyPool                 map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
-	symKeyPoolMu               sync.Mutex
+	symKeyPoolMu               sync.RWMutex
 	symKeyDecryptCache         []*string // fast lookup of symkeys recently used for decryption; last used is on top of stack
 	symKeyDecryptCacheCursor   int       // modular cursor pointing to last used, wraps on symKeyDecryptCache array
 	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
@@ -516,6 +516,29 @@ func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
 		return nil, err
 	}
 	return symkey, nil
+}
+
+// Returns all recorded topic and address combination for a specific public key
+func (self *Pss) GetPublickeyPeers(keyid string) (topic []Topic, address []PssAddress, err error) {
+	self.pubKeyPoolMu.RLock()
+	defer self.pubKeyPoolMu.RUnlock()
+	for t, p := range self.pubKeyPool[keyid] {
+		topic = append(topic, t)
+		address = append(address, *p.address)
+	}
+
+	return topic, address, nil
+}
+
+func (self *Pss) getPeerAddress(keyid string, topic Topic) (PssAddress, error) {
+	self.pubKeyPoolMu.RLock()
+	defer self.pubKeyPoolMu.RUnlock()
+	if p, ok := self.pubKeyPool[keyid]; ok {
+		if t, ok := p[topic]; ok {
+			return *t.address, nil
+		}
+	}
+	return nil, fmt.Errorf("peer with pubkey %s, topic %x not found", keyid, topic)
 }
 
 // Attempt to decrypt, validate and unpack a
