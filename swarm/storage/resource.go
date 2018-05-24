@@ -266,7 +266,7 @@ func (self *ResourceHandler) SetStore(store *NetStore) {
 func (self *ResourceHandler) Validate(key Key, data []byte) bool {
 	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
-		if len(data) == indexSize {
+		if len(data) > indexSize {
 			if bytes.Equal(data[:2], []byte{0, 0}) {
 				return true
 			}
@@ -391,6 +391,25 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 		return nil, nil, err
 	}
 
+	chunk := self.newMetaChunk(name, currentblock, frequency)
+
+	self.chunkStore.Put(chunk)
+	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
+
+	// create the internal index for the resource and populate it with the data of the first version
+	rsrc := &resource{
+		startBlock: currentblock,
+		frequency:  frequency,
+		name:       name,
+		nameHash:   nameHash,
+		updated:    time.Now(),
+	}
+	self.setResource(nameHash.Hex(), rsrc)
+
+	return chunk.Key, rsrc, nil
+}
+
+func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, frequency uint64) *Chunk {
 	// the root chunk points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
 	// it also contains the name of the resource, so we know what resource we are working with
@@ -398,7 +417,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 
 	// root block has first two bytes both set to 0, which distinguishes from update bytes
 	val := make([]byte, 8)
-	binary.LittleEndian.PutUint64(val, currentblock)
+	binary.LittleEndian.PutUint64(val, startBlock)
 	copy(data[2:10], val)
 	binary.LittleEndian.PutUint64(val, frequency)
 	copy(data[10:18], val)
@@ -417,20 +436,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	chunk := NewChunk(key, nil)
 	chunk.SData = make([]byte, indexSize+len(name))
 	copy(chunk.SData, data)
-	self.chunkStore.Put(chunk)
-	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
-
-	// create the internal index for the resource and populate it with the data of the first version
-	rsrc := &resource{
-		startBlock: currentblock,
-		frequency:  frequency,
-		name:       name,
-		nameHash:   nameHash,
-		updated:    time.Now(),
-	}
-	self.setResource(nameHash.Hex(), rsrc)
-
-	return key, rsrc, nil
+	return chunk
 }
 
 // Searches and retrieves the specific version of the resource update identified by `name`

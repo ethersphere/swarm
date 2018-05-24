@@ -541,7 +541,18 @@ func TestResourceChunkValidator(t *testing.T) {
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
 	if !rh.Validate(chunk.Key, chunk.SData) {
-		t.Fatal("Chunk validator fail")
+		t.Fatal("Chunk validator fail on update chunk")
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	startBlock, err := rh.getBlock(ctx, safeName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk = rh.newMetaChunk(safeName, startBlock, resourceFrequency)
+	if !rh.Validate(chunk.Key, chunk.SData) {
+		t.Fatal("Chunk validator fail on metadata chunk")
 	}
 }
 
