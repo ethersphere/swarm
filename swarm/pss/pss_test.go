@@ -459,25 +459,11 @@ func TestKeys(t *testing.T) {
 
 func TestGetPublickeyEntries(t *testing.T) {
 
-	adapter := adapters.NewSimAdapter(newServices(false))
-	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: "bzz",
-	})
-	nodeconf := adapters.RandomNodeConfig()
-	nodeconf.Services = []string{"bzz", pssProtocolName}
-	nod, err := net.NewNodeWithConfig(nodeconf)
+	privkey, err := crypto.GenerateKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = net.Start(nod.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-	rpcclient, err := nod.Client()
-	if err != nil {
-		t.Fatal(err)
-	}
+	ps := newTestPss(privkey, nil, nil)
 
 	peeraddr := network.RandomAddr().Over()
 	topicaddr := make(map[Topic]PssAddress)
@@ -486,19 +472,22 @@ func TestGetPublickeyEntries(t *testing.T) {
 	topicaddr[Topic{0x02, 0x9a}] = []byte{}
 
 	remoteprivkey, err := crypto.GenerateKey()
-	remotepubkeyhex := common.ToHex(crypto.FromECDSAPub(&remoteprivkey.PublicKey))
 	if err != nil {
 		t.Fatal(err)
 	}
+	remotepubkeybytes := crypto.FromECDSAPub(&remoteprivkey.PublicKey)
+	remotepubkeyhex := common.ToHex(remotepubkeybytes)
+
+	pssapi := NewAPI(ps)
+
 	for to, a := range topicaddr {
-		err = rpcclient.Call(nil, "pss_setPeerPublicKey", remotepubkeyhex, to, a)
+		err = pssapi.SetPeerPublicKey(remotepubkeybytes, to, a)
 		if err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	var intopic []Topic
-	err = rpcclient.Call(&intopic, "pss_getPeerTopics", remotepubkeyhex)
+	intopic, err := pssapi.GetPeerTopics(remotepubkeyhex)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -507,8 +496,7 @@ OUTER:
 	for _, tnew := range intopic {
 		for torig, addr := range topicaddr {
 			if bytes.Equal(torig[:], tnew[:]) {
-				var inaddr PssAddress
-				err = rpcclient.Call(&inaddr, "pss_getPeerAddress", remotepubkeyhex, torig)
+				inaddr, err := pssapi.GetPeerAddress(remotepubkeyhex, torig)
 				if err != nil {
 					t.Fatal(err)
 				}
