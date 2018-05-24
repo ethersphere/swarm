@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
+	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 )
 
 const MaxPO = 16
@@ -105,14 +106,14 @@ func IsZeroKey(key Key) bool {
 
 var ZeroKey = Key(common.Hash{}.Bytes())
 
-func MakeHashFunc(hash string) SwarmHasher {
+func MakeHashFunc(hash string) swarmhash.SwarmHasher {
 	switch hash {
 	case "SHA256":
-		return func() SwarmHash { return &HashWithLength{crypto.SHA256.New()} }
+		return func() swarmhash.SwarmHash { return &HashWithLength{crypto.SHA256.New()} }
 	case "SHA3":
-		return func() SwarmHash { return &HashWithLength{sha3.NewKeccak256()} }
+		return func() swarmhash.SwarmHash { return &HashWithLength{sha3.NewKeccak256()} }
 	case "BMT":
-		return func() SwarmHash {
+		return func() swarmhash.SwarmHash {
 			hasher := sha3.NewKeccak256
 			pool := bmt.NewTreePool(hasher, bmt.DefaultSegmentCount, bmt.DefaultPoolSize)
 			return bmt.New(pool)
@@ -265,7 +266,7 @@ func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
 }
 
 type StoreParams struct {
-	Hash                       SwarmHasher `toml:"-"`
+	Hash                       swarmhash.SwarmHasher `toml:"-"`
 	DbCapacity                 uint64
 	CacheCapacity              uint
 	ChunkRequestsCacheCapacity uint
@@ -276,7 +277,7 @@ func NewDefaultStoreParams() *StoreParams {
 	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, defaultChunkRequestsCacheCapacity, nil, nil)
 }
 
-func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
+func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash swarmhash.SwarmHasher, basekey []byte) *StoreParams {
 	if basekey == nil {
 		basekey = make([]byte, 32)
 	}
@@ -328,11 +329,11 @@ type ChunkValidator interface {
 // Provides method for validation of content address in chunks
 // Holds the corresponding hasher to create the address
 type ContentAddressValidator struct {
-	Hasher SwarmHasher
+	Hasher swarmhash.SwarmHasher
 }
 
 // Constructor
-func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
+func NewContentAddressValidator(hasher swarmhash.SwarmHasher) *ContentAddressValidator {
 	return &ContentAddressValidator{
 		Hasher: hasher,
 	}

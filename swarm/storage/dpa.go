@@ -18,6 +18,8 @@ package storage
 
 import (
 	"io"
+
+	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 )
 
 /*
@@ -40,7 +42,7 @@ const (
 
 type DPA struct {
 	ChunkStore
-	hashFunc SwarmHasher
+	hashFunc swarmhash.SwarmHasher
 }
 
 type DPAParams struct {

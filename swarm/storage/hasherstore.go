@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 )
 
@@ -31,7 +32,7 @@ type chunkEncryption struct {
 
 type hasherStore struct {
 	store           ChunkStore
-	hashFunc        SwarmHasher
+	hashFunc        swarmhash.SwarmHasher
 	chunkEncryption *chunkEncryption
 	hashSize        int   // content hash size
 	refSize         int64 // reference size (content hash + possibly encryption key)
@@ -49,7 +50,7 @@ func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
 // With the HasherStore you can put and get chunk data (which is just []byte) into a ChunkStore
 // and the hasherStore will take core of encryption/decryption of data if necessary
-func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
+func NewHasherStore(chunkStore ChunkStore, hashFunc swarmhash.SwarmHasher, toEncrypt bool) *hasherStore {
 	var chunkEncryption *chunkEncryption
 
 	hashSize := hashFunc().Size()

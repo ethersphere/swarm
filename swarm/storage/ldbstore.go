@@ -36,6 +36,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -88,7 +89,7 @@ type LDBStore struct {
 	capacity  uint64
 	bucketCnt []uint64
 
-	hashfunc SwarmHasher
+	hashfunc swarmhash.SwarmHasher
 	po       func(Key) uint8
 
 	batchC   chan bool

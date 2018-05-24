@@ -31,6 +31,10 @@ const (
 	defaultRetrieveTimeout  = 100 * time.Millisecond
 )
 
+func init() {
+
+}
+
 type blockEstimator struct {
 	Start   time.Time
 	Average time.Duration
