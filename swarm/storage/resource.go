@@ -21,14 +21,14 @@ import (
 )
 
 const (
-	signatureLength        = 65
-	indexSize              = 18
-	DbDirName              = "resource"
-	chunkSize              = 4096 // temporary until we implement DPA in the resourcehandler
-	defaultStoreTimeout    = 4000 * time.Millisecond
-	hasherCount            = 8
-	resourceHash           = SHA3Hash
-	defaultRetrieveTimeout = 100 * time.Millisecond
+	signatureLength         = 65
+	metadataChunkOffsetSize = 18 // size of fixed-length portion of metadata chunk; 0x0000 || startblock || frequency
+	DbDirName               = "resource"
+	chunkSize               = 4096 // temporary until we implement DPA in the resourcehandler
+	defaultStoreTimeout     = 4000 * time.Millisecond
+	hasherCount             = 8
+	resourceHash            = SHA3Hash
+	defaultRetrieveTimeout  = 100 * time.Millisecond
 )
 
 type blockEstimator struct {
@@ -164,17 +164,20 @@ type ownerValidator interface {
 // when the resource update was first registered, and
 // the block frequency with which the resource will be updated, both of
 // which are stored as little-endian uint64 values in the database (for a
-// total of 16 bytes).
-
+// total of 16 bytes). It also contains the unique identifier.
+// It is stored in a separate content-addressed chunk (call it the metadata chunk),
+// with the following layout:
+//
+// (0x0000|startblock|frequency|identifier)
+//
+// (The two first zero-value bytes are used for disambiguation by the chunk validator,
+// and update chunk will always have a value > 0 there.)
+//
 // The root entry tells the requester from when the mutable resource was
 // first added (block number) and in which block number to look for the
 // actual updates. Thus, a resource update for identifier "føø.bar"
 // starting at block 4200 with frequency 42 will have updates on block 4242,
 // 4284, 4326 and so on.
-//
-// Note that the root entry is not required for the resource update scheme to
-// work. A normal chunk of the blocknumber/frequency data can also be created,
-// and pointed to by an external resource (ENS or manifest entry)
 //
 // Actual data updates are also made in the form of swarm chunks. The keys
 // of the updates are the hash of a concatenation of properties as follows:
@@ -262,11 +265,11 @@ func (self *ResourceHandler) SetStore(store *NetStore) {
 //
 // If resource update, owner is checked against ENS record of resource name inferred from chunk data
 // If parsed signature is nil, validates automatically
-// If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
+// If not resource update, it validates are metadata chunk if length is metadataChunkOffsetSize and first two bytes are 0
 func (self *ResourceHandler) Validate(key Key, data []byte) bool {
 	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
-		if len(data) > indexSize {
+		if len(data) > metadataChunkOffsetSize { // identifier comes after this byte range, and must be at least one byte
 			if bytes.Equal(data[:2], []byte{0, 0}) {
 				return true
 			}
@@ -410,10 +413,10 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 }
 
 func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, frequency uint64) *Chunk {
-	// the root chunk points to data of first blockheight + update frequency
+	// the metadata chunk points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
 	// it also contains the name of the resource, so we know what resource we are working with
-	data := make([]byte, indexSize+len(name))
+	data := make([]byte, metadataChunkOffsetSize+len(name))
 
 	// root block has first two bytes both set to 0, which distinguishes from update bytes
 	val := make([]byte, 8)
@@ -423,7 +426,7 @@ func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, freque
 	copy(data[10:18], val)
 	copy(data[18:], []byte(name))
 
-	// the key of the root chunk is content-addressed
+	// the key of the metadata chunk is content-addressed
 	// if it wasn't we couldn't replace it later
 	// resolving this relationship is left up to external agents (for example ENS)
 	hasher := self.hashPool.Get().(SwarmHash)
@@ -434,7 +437,7 @@ func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, freque
 
 	// make the chunk and send it to swarm
 	chunk := NewChunk(key, nil)
-	chunk.SData = make([]byte, indexSize+len(name))
+	chunk.SData = make([]byte, metadataChunkOffsetSize+len(name))
 	copy(chunk.SData, data)
 	return chunk
 }
@@ -443,7 +446,7 @@ func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, freque
 // at the specific block height
 //
 // If refresh is set to true, the resource data will be reloaded from the resource update
-// root chunk.
+// metadata chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
 // update root data was retrieved externally, it typically doesn't)
 func (self *ResourceHandler) LookupVersionByName(ctx context.Context, name string, period uint32, version uint32, refresh bool, maxLookup *ResourceLookupParams) (*resource, error) {
@@ -599,7 +602,7 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 	return nil, NewResourceError(ErrNotFound, "no updates found")
 }
 
-// Retrieves a resource root chunk and creates/updates the index entry for it
+// Retrieves a resource metadata chunk and creates/updates the index entry for it
 // with the resulting metadata
 func (self *ResourceHandler) LoadResource(key Key) (*resource, error) {
 	chunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
@@ -610,9 +613,9 @@ func (self *ResourceHandler) LoadResource(key Key) (*resource, error) {
 	// minimum sanity check for chunk data (an update chunk first two bytes is headerlength uint16, and cannot be 0)
 	// \TODO this is not enough to make sure the data isn't bogus. A normal content addressed chunk could still satisfy these criteria
 	if !bytes.Equal(chunk.SData[:2], []byte{0x0, 0x0}) {
-		return nil, NewResourceError(ErrCorruptData, fmt.Sprintf("Chunk is not a resource root chunk"))
-	} else if len(chunk.SData) <= indexSize {
-		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Invalid chunk length %d, should be minimum %d", len(chunk.SData), indexSize+1))
+		return nil, NewResourceError(ErrCorruptData, fmt.Sprintf("Chunk is not a resource metadata chunk"))
+	} else if len(chunk.SData) <= metadataChunkOffsetSize {
+		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Invalid chunk length %d, should be minimum %d", len(chunk.SData), metadataChunkOffsetSize+1))
 	}
 
 	// create the index entry
