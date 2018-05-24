@@ -232,7 +232,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)
+	self.api = api.NewAPI(self.dpa, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 

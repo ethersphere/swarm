@@ -215,8 +215,8 @@ type Api struct {
 	dns      Resolver
 }
 
-// NewApi - the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
+// NewAPI - the api constructor initialises
+func NewAPI(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
 	self = &Api{
 		dpa:      dpa,
 		dns:      dns,

@@ -960,7 +960,7 @@ func TestFUSE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ta := &testAPI{api: api.NewApi(dpa, nil, nil)}
+	ta := &testAPI{api: api.NewAPI(dpa, nil, nil)}
 
 	t.Run("mountListAndUnmountEncrypted", ta.mountListAndUnmountEncrypted)
 	t.Run("mountListAndUnmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)

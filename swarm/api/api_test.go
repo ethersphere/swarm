@@ -42,7 +42,7 @@ func testApi(t *testing.T, f func(*Api, bool)) {
 	if err != nil {
 		return
 	}
-	api := NewApi(dpa, nil, nil)
+	api := NewAPI(dpa, nil, nil)
 	f(api, false)
 	f(api, true)
 }
