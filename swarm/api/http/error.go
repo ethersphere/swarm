@@ -150,6 +150,11 @@ func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
 		log.Output(msg, log.LvlDebug, 3, "ruid", req.ruid, "code", code)
 	}
 
+	if code >= 400 {
+		w.Header().Del("Cache-Control") //avoid sending cache headers for errors!
+		w.Header().Del("ETag")
+	}
+
 	respond(w, &req.Request, &ResponseParams{
 		Code:      code,
 		Msg:       msg,

@@ -32,11 +32,13 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -52,24 +54,21 @@ type resourceResponse struct {
 }
 
 var (
-	postRawCount     = metrics.NewRegisteredCounter("api.http.post.raw.count", nil)
-	postRawFail      = metrics.NewRegisteredCounter("api.http.post.raw.fail", nil)
-	postFilesCount   = metrics.NewRegisteredCounter("api.http.post.files.count", nil)
-	postFilesFail    = metrics.NewRegisteredCounter("api.http.post.files.fail", nil)
-	deleteCount      = metrics.NewRegisteredCounter("api.http.delete.count", nil)
-	deleteFail       = metrics.NewRegisteredCounter("api.http.delete.fail", nil)
-	getCount         = metrics.NewRegisteredCounter("api.http.get.count", nil)
-	getFail          = metrics.NewRegisteredCounter("api.http.get.fail", nil)
-	getFileCount     = metrics.NewRegisteredCounter("api.http.get.file.count", nil)
-	getFileNotFound  = metrics.NewRegisteredCounter("api.http.get.file.notfound", nil)
-	getFileFail      = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
-	getFilesCount    = metrics.NewRegisteredCounter("api.http.get.files.count", nil)
-	getFilesFail     = metrics.NewRegisteredCounter("api.http.get.files.fail", nil)
-	getListCount     = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
-	getListFail      = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
-	htmlRequestCount = metrics.NewRegisteredCounter("http.request.html.count", nil)
-	jsonRequestCount = metrics.NewRegisteredCounter("http.request.json.count", nil)
-	requestTimer     = metrics.NewRegisteredResettingTimer("http.request.time", nil)
+	postRawCount    = metrics.NewRegisteredCounter("api.http.post.raw.count", nil)
+	postRawFail     = metrics.NewRegisteredCounter("api.http.post.raw.fail", nil)
+	postFilesCount  = metrics.NewRegisteredCounter("api.http.post.files.count", nil)
+	postFilesFail   = metrics.NewRegisteredCounter("api.http.post.files.fail", nil)
+	deleteCount     = metrics.NewRegisteredCounter("api.http.delete.count", nil)
+	deleteFail      = metrics.NewRegisteredCounter("api.http.delete.fail", nil)
+	getCount        = metrics.NewRegisteredCounter("api.http.get.count", nil)
+	getFail         = metrics.NewRegisteredCounter("api.http.get.fail", nil)
+	getFileCount    = metrics.NewRegisteredCounter("api.http.get.file.count", nil)
+	getFileNotFound = metrics.NewRegisteredCounter("api.http.get.file.notfound", nil)
+	getFileFail     = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
+	getFilesCount   = metrics.NewRegisteredCounter("api.http.get.files.count", nil)
+	getFilesFail    = metrics.NewRegisteredCounter("api.http.get.files.fail", nil)
+	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
+	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
 
 // ServerConfig is the basic configuration needed for the HTTP server and also
@@ -160,7 +159,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, key)
 }
 
-// HandlePostFiles handles a POST request (or deprecated PUT request) to
+// HandlePostFiles handles a POST request to
 // bzz:/<hash>/<path> which contains either a single file or multiple files
 // (either a tar archive or multipart form), adds those files either to an
 // existing manifest or to a new manifest under <path> and returns the
@@ -363,53 +362,146 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newKey)
 }
 
+// Parses a resource update post url to corresponding action
+// possible combinations:
+// /			add multihash update to existing hash
+// /raw 		add raw update to existing hash
+// /#			create new resource with first update as mulitihash
+// /raw/#		create new resource with first update raw
+func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
+	re, err := regexp.Compile("^(raw)?/?([0-9]+)?$")
+	if err != nil {
+		return isRaw, frequency, err
+	}
+	m := re.FindAllStringSubmatch(path, 2)
+	var freqstr = "0"
+	if len(m) > 0 {
+		if m[0][1] != "" {
+			isRaw = true
+		}
+		if m[0][2] != "" {
+			freqstr = m[0][2]
+		}
+	} else if len(path) > 0 {
+		return isRaw, frequency, fmt.Errorf("invalid path")
+	}
+	frequency, err = strconv.ParseUint(freqstr, 10, 64)
+	return isRaw, frequency, err
+}
+
+// Handles creation of new mutable resources and adding updates to existing mutable resources
+// There are two types of updates available, "raw" and "multihash."
+// If the latter is used, a subsequent bzz:// GET call to the manifest of the resource will return
+// the page that the multihash is pointing to, as if it held a normal swarm content manifest
+//
+// The resource name will be verbatim what is passed as the address part of the url.
+// For example, if a POST is made to /bzz-resource:/foo.eth/raw/13 a new resource with frequency 13
+// and name "foo.eth" will be created
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
-
+	var err error
+	var key storage.Key
+	var name string
 	var outdata []byte
-	if r.uri.Path != "" {
-		frequency, err := strconv.ParseUint(r.uri.Path, 10, 64)
-		if err != nil {
-			Respond(w, r, fmt.Sprintf("cannot parse frequency parameter: %v", err), http.StatusBadRequest)
-			return
-		}
-		key, err := s.api.ResourceCreate(r.Context(), r.uri.Addr, frequency)
+	isRaw, frequency, err := resourcePostMode(r.uri.Path)
+	if err != nil {
+		Respond(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// new mutable resource creation will always have a frequency field larger than 0
+	if frequency > 0 {
+
+		name = r.uri.Addr
+
+		// the key is the content addressed root chunk holding mutable resource metadata information
+		key, err = s.api.ResourceCreate(r.Context(), name, frequency)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
 
 			Respond(w, r, err2.Error(), code)
 			return
 		}
-		m, err := s.api.NewResourceManifest(r.uri.Addr)
+
+		// we create a manifest so we can retrieve the resource with bzz:// later
+		// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
+		// root chunk
+		m, err := s.api.NewResourceManifest(key.Hex())
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return
 		}
-		rsrcResponse := &resourceResponse{
-			Manifest: m,
-			Resource: r.uri.Addr,
-			Update:   key,
-		}
-		outdata, err = json.Marshal(rsrcResponse)
+
+		// the key to the manifest will be passed back to the client
+		// the client can access the root chunk key directly through its Hash member
+		// the manifest key should be set as content in the resolver of the ENS name
+		// \TODO update manifest key automatically in ENS
+		outdata, err = json.Marshal(m)
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
 			return
 		}
+	} else {
+		// to update the resource through http we need to retrieve the key for the mutable resource root chunk
+		// that means that we retrieve the manifest and inspect its Hash member.
+		manifestKey := r.uri.Key()
+		if manifestKey == nil {
+			manifestKey, err = s.api.Resolve(r.uri)
+			if err != nil {
+				getFail.Inc(1)
+				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
+				return
+			}
+		} else {
+			w.Header().Set("Cache-Control", "max-age=2147483648")
+		}
+
+		// get the root chunk key from the manifest
+		key, err = s.api.ResolveResourceManifest(manifestKey)
+		if err != nil {
+			getFail.Inc(1)
+			Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
+			return
+		}
+
+		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestKey, "rootchunkkey", key)
+
+		name, _, err = s.api.ResourceLookup(r.Context(), key, 0, 0, &storage.ResourceLookupParams{})
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusNotFound)
+			return
+		}
 	}
 
+	// Creation and update must send data aswell. This data constitutes the update data itself.
 	data, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_, _, _, err = s.api.ResourceUpdate(r.Context(), r.uri.Addr, data)
-	if err != nil {
-		code, err2 := s.translateResourceError(w, r, "mutable resource update fail", err)
 
-		Respond(w, r, err2.Error(), code)
-		return
+	// Multihash will be passed as hex-encoded data, so we need to parse this to bytes
+	if isRaw {
+		_, _, _, err = s.api.ResourceUpdate(r.Context(), name, data)
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
+	} else {
+		bytesdata, err := hexutil.Decode(string(data))
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
+		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), name, bytesdata)
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusBadRequest)
+			return
+		}
 	}
 
+	// If we have data to return, write this now
+	// \TODO there should always be data to return here
 	if len(outdata) > 0 {
 		w.Header().Add("Content-type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -425,27 +517,53 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 // bzz-resource://<id>/<n>/<m> - get update version m of period n
 // <id> = ens name or hash
 func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
-	s.handleGetResource(w, r, r.uri.Addr)
+	s.handleGetResource(w, r)
 }
 
 // TODO: Enable pass maxPeriod parameter
-func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name string) {
+func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.resource", "ruid", r.ruid)
+	var err error
+
+	// resolve the content key.
+	var manifestKey storage.Key
+	manifestKey = r.uri.Key()
+	if manifestKey == nil {
+		manifestKey, err = s.api.Resolve(r.uri)
+		if err != nil {
+			getFail.Inc(1)
+			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
+			return
+		}
+	} else {
+		w.Header().Set("Cache-Control", "max-age=2147483648")
+	}
+
+	// get the root chunk key from the manifest
+	key, err := s.api.ResolveResourceManifest(manifestKey)
+	if err != nil {
+		getFail.Inc(1)
+		Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
+		return
+	}
+
+	log.Debug("handle.get.resource: resolved", "ruid", r.ruid, "manifestkey", manifestKey, "rootchunk key", key)
+
+	// determine if the query specifies period and version
 	var params []string
 	if len(r.uri.Path) > 0 {
 		params = strings.Split(r.uri.Path, "/")
 	}
-	var updateKey storage.Key
+	var name string
 	var period uint64
 	var version uint64
 	var data []byte
-	var err error
 	now := time.Now()
-	log.Debug("handlegetdb", "name", name, "ruid", r.ruid)
+
 	switch len(params) {
-	case 0:
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, 0, 0, nil)
-	case 2:
+	case 0: // latest only
+		name, data, err = s.api.ResourceLookup(r.Context(), key, 0, 0, nil)
+	case 2: // specific period and version
 		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
 			break
@@ -454,24 +572,26 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request, name strin
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version), nil)
-	case 1:
+		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
+	case 1: // last version of specific period
 		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		updateKey, data, err = s.api.ResourceLookup(r.Context(), name, uint32(period), uint32(version), nil)
-	default:
-		Respond(w, r, "invalid mutable resource request", http.StatusBadRequest)
-		return
+		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
+	default: // bogus
+		err = storage.NewResourceError(storage.ErrInvalidValue, "invalid mutable resource request")
 	}
+
+	// any error from the switch statement will end up here
 	if err != nil {
 		code, err2 := s.translateResourceError(w, r, "mutable resource lookup fail", err)
-
 		Respond(w, r, err2.Error(), code)
 		return
 	}
-	log.Debug("Found update", "key", updateKey, "ruid", r.ruid)
+
+	// All ok, serve the retrieved update
+	log.Debug("Found update", "name", name, "ruid", r.ruid)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, &r.Request, "", now, bytes.NewReader(data))
 }
@@ -505,12 +625,19 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
-	key, err := s.api.Resolve(r.uri)
-	if err != nil {
-		getFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-		return
+	var err error
+	key := r.uri.Key()
+	if key == nil {
+		key, err = s.api.Resolve(r.uri)
+		if err != nil {
+			getFail.Inc(1)
+			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
+			return
+		}
+	} else {
+		w.Header().Set("Cache-Control", "max-age=2147483648, immutable") // url was of type bzz://<hex key>/path, so we are sure it is immutable.
 	}
+
 	log.Debug("handle.get: resolved", "ruid", r.ruid, "key", key)
 
 	// if path is set, interpret <key> as a manifest and return the
@@ -553,6 +680,15 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 		}
 		key = storage.Key(common.Hex2Bytes(entry.Hash))
 	}
+	etag := common.Bytes2Hex(key)
+	noneMatchEtag := r.Header.Get("If-None-Match")
+	w.Header().Set("ETag", etag) // set etag to manifest key or raw entry key.
+	if noneMatchEtag != "" {
+		if bytes.Equal(storage.Key(common.Hex2Bytes(noneMatchEtag)), key) {
+			Respond(w, r, "Not Modified", http.StatusNotModified)
+			return
+		}
+	}
 
 	// check the root chunk exists by retrieving the file's size
 	reader, isEncrypted := s.api.Retrieve(key)
@@ -565,7 +701,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
 
 	switch {
-	case r.uri.Raw() || r.uri.DeprecatedRaw():
+	case r.uri.Raw():
 		// allow the request to overwrite the content type using a query
 		// parameter
 		contentType := "application/octet-stream"
@@ -774,24 +910,35 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		http.Redirect(w, &r.Request, r.URL.Path+"/", http.StatusMovedPermanently)
 		return
 	}
+	var err error
+	manifestKey := r.uri.Key()
 
-	key, err := s.api.Resolve(r.uri)
-	if err != nil {
-		getFileFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-		return
-	}
-	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", key)
-
-	reader, contentType, status, err := s.api.Get(key, r.uri.Path)
-
-	if err != nil {
-		// cheeky, cheeky hack. See swarm/api/api.go:Api.Get() for an explanation
-		if rsrcErr, ok := err.(*api.ErrResourceReturn); ok {
-			log.Trace("getting resource proxy", "err", rsrcErr.Key())
-			s.handleGetResource(w, r, rsrcErr.Key())
+	if manifestKey == nil {
+		manifestKey, err = s.api.Resolve(r.uri)
+		if err != nil {
+			getFileFail.Inc(1)
+			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 			return
 		}
+	} else {
+		w.Header().Set("Cache-Control", "max-age=2147483648, immutable") // url was of type bzz://<hex key>/path, so we are sure it is immutable.
+	}
+
+	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestKey)
+
+	reader, contentType, status, contentKey, err := s.api.Get(manifestKey, r.uri.Path)
+
+	etag := common.Bytes2Hex(contentKey)
+	noneMatchEtag := r.Header.Get("If-None-Match")
+	w.Header().Set("ETag", etag) // set etag to actual content key.
+	if noneMatchEtag != "" {
+		if bytes.Equal(storage.Key(common.Hex2Bytes(noneMatchEtag)), contentKey) {
+			Respond(w, r, "Not Modified", http.StatusNotModified)
+			return
+		}
+	}
+
+	if err != nil {
 		switch status {
 		case http.StatusNotFound:
 			getFileNotFound.Inc(1)
@@ -806,7 +953,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.getManifestList(key, r.uri.Path)
+		list, err := s.getManifestList(manifestKey, r.uri.Path)
 
 		if err != nil {
 			getFileFail.Inc(1)
@@ -828,11 +975,11 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
-
 	http.ServeContent(w, &r.Request, "", time.Now(), reader)
 }
 
 func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
 	req := &Request{Request: *r, ruid: uuid.New()[:8]}
 	metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
 	log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
@@ -860,8 +1007,8 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		json.NewEncoder(w).Encode("Welcome to Swarm!")
 		return
-	}	
-	
+	}
+
 	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 	if err != nil {
 		Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
@@ -874,32 +1021,26 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case "POST":
-		if uri.Raw() || uri.DeprecatedRaw() {
+		if uri.Raw() {
 			log.Debug("handlePostRaw")
 			s.HandlePostRaw(w, req)
 		} else if uri.Resource() {
 			log.Debug("handlePostResource")
 			s.HandlePostResource(w, req)
+		} else if uri.Immutable() || uri.List() || uri.Hash() {
+			log.Debug("POST not allowed on immutable, list or hash")
+			Respond(w, req, fmt.Sprintf("POST method on scheme %s not allowed", uri.Scheme), http.StatusMethodNotAllowed)
 		} else {
 			log.Debug("handlePostFiles")
 			s.HandlePostFiles(w, req)
 		}
 
 	case "PUT":
-		// DEPRECATED:
-		//   clients should send a POST request (the request creates a
-		//   new manifest leaving the existing one intact, so it isn't
-		//   strictly a traditional PUT request which replaces content
-		//   at a URI, and POST is more ubiquitous)
-		if uri.Raw() || uri.DeprecatedRaw() {
-			Respond(w, req, fmt.Sprintf("PUT method to %s not allowed", uri), http.StatusBadRequest)
-			return
-		} else {
-			s.HandlePostFiles(w, req)
-		}
+		Respond(w, req, fmt.Sprintf("PUT method to %s not allowed", uri), http.StatusBadRequest)
+		return
 
 	case "DELETE":
-		if uri.Raw() || uri.DeprecatedRaw() {
+		if uri.Raw() {
 			Respond(w, req, fmt.Sprintf("DELETE method to %s not allowed", uri), http.StatusBadRequest)
 			return
 		}
@@ -912,7 +1053,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		if uri.Raw() || uri.Hash() || uri.DeprecatedRaw() {
+		if uri.Raw() || uri.Hash() {
 			s.HandleGet(w, req)
 			return
 		}

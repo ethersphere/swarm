@@ -21,6 +21,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -43,7 +44,7 @@ type Overlay interface {
 	On(OverlayConn) (depth uint8, changed bool)
 	Off(OverlayConn)
 	// register peer addresses
-	Register([]OverlayAddr) error // used by the
+	Register([]OverlayAddr) error
 	// iterate over connected peers
 	EachConn([]byte, int, func(OverlayConn, int, bool) bool)
 	// iterate over known peers (address records)
@@ -137,6 +138,7 @@ func (h *Hive) Stop() error {
 		p.Drop(nil)
 		return true
 	})
+
 	log.Info(fmt.Sprintf("%08x all peers dropped", h.BaseAddr()[:4]))
 	return nil
 }
@@ -146,7 +148,6 @@ func (h *Hive) Stop() error {
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
 	for range h.ticker.C {
-		log.Trace(fmt.Sprintf("%08x hive connect()", h.BaseAddr()[:4]))
 
 		addr, depth, changed := h.SuggestPeer()
 		if h.Discovery && changed {
@@ -155,6 +156,8 @@ func (h *Hive) connect() {
 		if addr == nil {
 			continue
 		}
+
+		log.Trace(fmt.Sprintf("%08x hive connect() suggested %08x", h.BaseAddr()[:4], addr.Address()[:4]))
 		under, err := discover.ParseNode(string(addr.(Addr).Under()))
 		if err != nil {
 			log.Warn(fmt.Sprintf("%08x unable to connect to bee %08x: invalid node URL: %v", h.BaseAddr()[:4], addr.Address()[:4], err))
@@ -193,7 +196,14 @@ func (h *Hive) NodeInfo() interface{} {
 // PeerInfo function is used by the p2p.server RPC interface to display
 // protocol specific information any connected peer referred to by their NodeID
 func (h *Hive) PeerInfo(id discover.NodeID) interface{} {
-	return NewAddrFromNodeID(id)
+	addr := NewAddrFromNodeID(id)
+	return struct {
+		OAddr hexutil.Bytes
+		UAddr hexutil.Bytes
+	}{
+		OAddr: addr.OAddr,
+		UAddr: addr.UAddr,
+	}
 }
 
 // ToAddr returns the serialisable version of u
@@ -239,7 +249,9 @@ func (h *Hive) savePeers() error {
 			log.Warn(fmt.Sprintf("empty addr: %v", i))
 			return true
 		}
-		peers = append(peers, ToAddr(pa))
+		apa := ToAddr(pa)
+		log.Trace("saving peer", "peer", apa)
+		peers = append(peers, apa)
 		return true
 	})
 	if err := h.Store.Put("peers", peers); err != nil {

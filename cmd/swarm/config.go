@@ -68,6 +68,7 @@ const (
 	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
 	SWARM_ENV_SYNC_DISABLE         = "SWARM_SYNC_DISABLE"
 	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
+	SWARM_ENV_DELIVERY_SKIP_CHECK  = "SWARM_DELIVERY_SKIP_CHECK"
 	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
 	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
 	SWARM_ENV_CORS                 = "SWARM_CORS"
@@ -98,8 +99,6 @@ var tomlSettings = toml.Config{
 
 //before booting the swarm node, build the configuration
 func buildConfig(ctx *cli.Context) (config *bzzapi.Config, err error) {
-	//check for deprecated flags
-	checkDeprecated(ctx)
 	//start by creating a default config
 	config = bzzapi.NewConfig()
 	//first load settings from config file (if provided)
@@ -205,6 +204,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SyncUpdateDelay = d
 	}
 
+	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
+		currentConfig.DeliverySkipCheck = true
+	}
+
 	currentConfig.SwapApi = ctx.GlobalString(SwarmSwapAPIFlag.Name)
 	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
@@ -217,10 +220,6 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 			ensAPIs = nil
 		}
 		currentConfig.EnsAPIs = ensAPIs
-	}
-
-	if ensaddr := ctx.GlobalString(DeprecatedEnsAddrFlag.Name); ensaddr != "" {
-		currentConfig.EnsRoot = common.HexToAddress(ensaddr)
 	}
 
 	if cors := ctx.GlobalString(CorsStringFlag.Name); cors != "" {
@@ -290,6 +289,12 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 		}
 	}
 
+	if v := os.Getenv(SWARM_ENV_DELIVERY_SKIP_CHECK); v != "" {
+		if skipCheck, err := strconv.ParseBool(v); err != nil {
+			currentConfig.DeliverySkipCheck = skipCheck
+		}
+	}
+
 	if v := os.Getenv(SWARM_ENV_SYNC_UPDATE_DELAY); v != "" {
 		if d, err := time.ParseDuration(v); err != nil {
 			currentConfig.SyncUpdateDelay = d
@@ -338,18 +343,6 @@ func dumpConfig(ctx *cli.Context) error {
 	io.WriteString(os.Stdout, comment)
 	os.Stdout.Write(out)
 	return nil
-}
-
-//deprecated flags checked here
-func checkDeprecated(ctx *cli.Context) {
-	// exit if the deprecated --ethapi flag is set
-	if ctx.GlobalString(DeprecatedEthAPIFlag.Name) != "" {
-		utils.Fatalf("--ethapi is no longer a valid command line flag, please use --ens-api and/or --swap-api.")
-	}
-	// warn if --ens-api flag is set
-	if ctx.GlobalString(DeprecatedEnsAddrFlag.Name) != "" {
-		log.Warn("--ens-addr is no longer a valid command line flag, please use --ens-api to specify contract address.")
-	}
 }
 
 //validate configuration parameters

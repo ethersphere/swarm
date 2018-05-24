@@ -26,7 +26,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -34,22 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
-//metrics variables
-var (
-	storeRequestMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.storerequest.count", nil)
-	retrieveRequestMsgCounter = metrics.NewRegisteredCounter("network.protocol.msg.retrieverequest.count", nil)
-	peersMsgCounter           = metrics.NewRegisteredCounter("network.protocol.msg.peers.count", nil)
-	syncRequestMsgCounter     = metrics.NewRegisteredCounter("network.protocol.msg.syncrequest.count", nil)
-	unsyncedKeysMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.unsyncedkeys.count", nil)
-	deliverRequestMsgCounter  = metrics.NewRegisteredCounter("network.protocol.msg.deliverrequest.count", nil)
-	paymentMsgCounter         = metrics.NewRegisteredCounter("network.protocol.msg.payment.count", nil)
-	invalidMsgCounter         = metrics.NewRegisteredCounter("network.protocol.msg.invalid.count", nil)
-	handleStatusMsgCounter    = metrics.NewRegisteredCounter("network.protocol.msg.handlestatus.count", nil)
-)
-
 const (
-	// NetworkID swarm network id
-	NetworkID = 322 // BZZ in l33t
+	DefaultNetworkID = 3
 	// ProtocolMaxMsgSize maximum allowed message size
 	ProtocolMaxMsgSize = 10 * 1024 * 1024
 	// timeout for waiting
@@ -108,11 +93,13 @@ type BzzConfig struct {
 	OverlayAddr  []byte // base address of the overlay network
 	UnderlayAddr []byte // node's underlay address
 	HiveParams   *HiveParams
+	NetworkID    uint64
 }
 
 // Bzz is the swarm protocol bundle
 type Bzz struct {
 	*Hive
+	NetworkID    uint64
 	localAddr    *BzzAddr
 	mtx          sync.Mutex
 	handshakes   map[discover.NodeID]*HandshakeMsg
@@ -128,6 +115,7 @@ type Bzz struct {
 func NewBzz(config *BzzConfig, kad Overlay, store state.Store, streamerSpec *protocols.Spec, streamerRun func(*BzzPeer) error) *Bzz {
 	return &Bzz{
 		Hive:         NewHive(config.HiveParams, kad, store),
+		NetworkID:    config.NetworkID,
 		localAddr:    &BzzAddr{config.OverlayAddr, config.UnderlayAddr},
 		handshakes:   make(map[discover.NodeID]*HandshakeMsg),
 		streamerRun:  streamerRun,
@@ -228,13 +216,13 @@ func (b *Bzz) RunProtocol(spec *protocols.Spec, run func(*BzzPeer) error) func(*
 
 // performHandshake implements the negotiation of the bzz handshake
 // shared among swarm subprotocols
-func performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error {
+func (b *Bzz) performHandshake(p *protocols.Peer, handshake *HandshakeMsg) error {
 	ctx, cancel := context.WithTimeout(context.Background(), bzzHandshakeTimeout)
 	defer func() {
 		close(handshake.done)
 		cancel()
 	}()
-	rsh, err := p.Handshake(ctx, handshake, checkHandshake)
+	rsh, err := p.Handshake(ctx, handshake, b.checkHandshake)
 	if err != nil {
 		handshake.err = err
 		return err
@@ -253,9 +241,10 @@ func (b *Bzz) runBzz(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	close(handshake.init)
 	defer b.removeHandshake(p.ID())
 	peer := protocols.NewPeer(p, rw, BzzSpec)
-	err := performHandshake(peer, handshake)
+	err := b.performHandshake(peer, handshake)
 	if err != nil {
 		log.Warn(fmt.Sprintf("%08x: handshake failed with remote peer %08x: %v", b.localAddr.Over()[:4], ToOverlayAddr(p.ID().Bytes())[:4], err))
+
 		return err
 	}
 	// fail if we get another handshake
@@ -320,10 +309,10 @@ func (bh *HandshakeMsg) String() string {
 }
 
 // Perform initiates the handshake and validates the remote handshake message
-func checkHandshake(hs interface{}) error {
+func (b *Bzz) checkHandshake(hs interface{}) error {
 	rhs := hs.(*HandshakeMsg)
-	if rhs.NetworkID != NetworkID {
-		return fmt.Errorf("network id mismatch %d (!= %d)", rhs.NetworkID, NetworkID)
+	if rhs.NetworkID != b.NetworkID {
+		return fmt.Errorf("network id mismatch %d (!= %d)", rhs.NetworkID, b.NetworkID)
 	}
 	if rhs.Version != uint64(BzzSpec.Version) {
 		return fmt.Errorf("version mismatch %d (!= %d)", rhs.Version, BzzSpec.Version)
@@ -347,7 +336,7 @@ func (b *Bzz) GetHandshake(peerID discover.NodeID) (*HandshakeMsg, bool) {
 	if !found {
 		handshake = &HandshakeMsg{
 			Version:   uint64(BzzSpec.Version),
-			NetworkID: uint64(NetworkID),
+			NetworkID: b.NetworkID,
 			Addr:      b.localAddr,
 			init:      make(chan bool, 1),
 			done:      make(chan struct{}),

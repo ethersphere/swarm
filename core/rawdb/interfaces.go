@@ -1,4 +1,4 @@
-// Copyright 2017 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,23 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package adapters
+package rawdb
 
-type SimStateStore struct {
-	m map[string][]byte
+// DatabaseReader wraps the Has and Get method of a backing data store.
+type DatabaseReader interface {
+	Has(key []byte) (bool, error)
+	Get(key []byte) ([]byte, error)
 }
 
-func (self *SimStateStore) Load(s string) ([]byte, error) {
-	return self.m[s], nil
+// DatabaseWriter wraps the Put method of a backing data store.
+type DatabaseWriter interface {
+	Put(key []byte, value []byte) error
 }
 
-func (self *SimStateStore) Save(s string, data []byte) error {
-	self.m[s] = data
-	return nil
-}
-
-func NewSimStateStore() *SimStateStore {
-	return &SimStateStore{
-		make(map[string][]byte),
-	}
+// DatabaseDeleter wraps the Delete method of a backing data store.
+type DatabaseDeleter interface {
+	Delete(key []byte) error
 }

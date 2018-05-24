@@ -22,6 +22,7 @@ package storage
 import (
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -46,6 +47,8 @@ func NewLDBDatabase(file string) (*LDBDatabase, error) {
 }
 
 func (self *LDBDatabase) Put(key []byte, value []byte) {
+	metrics.GetOrRegisterCounter("ldbdatabase.put", nil).Inc(1)
+
 	err := self.db.Put(key, value, nil)
 	if err != nil {
 		fmt.Println("Error put", err)
@@ -53,6 +56,8 @@ func (self *LDBDatabase) Put(key []byte, value []byte) {
 }
 
 func (self *LDBDatabase) Get(key []byte) ([]byte, error) {
+	metrics.GetOrRegisterCounter("ldbdatabase.get", nil).Inc(1)
+
 	dat, err := self.db.Get(key, nil)
 	if err != nil {
 		return nil, err
@@ -75,10 +80,14 @@ func (self *LDBDatabase) LastKnownTD() []byte {
 }
 
 func (self *LDBDatabase) NewIterator() iterator.Iterator {
+	metrics.GetOrRegisterCounter("ldbdatabase.newiterator", nil).Inc(1)
+
 	return self.db.NewIterator(nil, nil)
 }
 
 func (self *LDBDatabase) Write(batch *leveldb.Batch) error {
+	metrics.GetOrRegisterCounter("ldbdatabase.write", nil).Inc(1)
+
 	return self.db.Write(batch, nil)
 }
 

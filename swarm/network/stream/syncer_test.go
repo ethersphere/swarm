@@ -21,11 +21,13 @@ import (
 	crand "crypto/rand"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
@@ -44,9 +46,34 @@ func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 16, 1, dataChunkCount, true, 1)
 }
 
+func createMockStore(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
+	var err error
+	address := common.BytesToAddress(id.Bytes())
+	mockStore := globalStore.NewNodeStore(address)
+	params := storage.NewDefaultLocalStoreParams()
+	datadirs[id], err = ioutil.TempDir("", "localMockStore-"+id.TerminalString())
+	if err != nil {
+		return nil, err
+	}
+	params.Init(datadirs[id])
+	params.BaseKey = addr.Over()
+	lstore, err := storage.NewLocalStore(params, mockStore)
+	return lstore, nil
+}
+
 func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool, po uint8) {
+	defer setDefaultSkipCheck(defaultSkipCheck)
 	defaultSkipCheck = skipCheck
-	createStoreFunc = createTestLocalStorageFromSim
+	//data directories for each node and store
+	datadirs = make(map[discover.NodeID]string)
+	if *useMockStore {
+		createStoreFunc = createMockStore
+		createGlobalStore()
+	} else {
+		createStoreFunc = createTestLocalStorageFromSim
+	}
+	defer datadirsCleanup()
+
 	registries = make(map[discover.NodeID]*TestRegistry)
 	toAddr = func(id discover.NodeID) *network.BzzAddr {
 		addr := network.NewAddrFromNodeID(id)
@@ -62,6 +89,12 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		Services:        services,
 		EnableMsgEvents: false,
 	}
+	// HACK: these are global variables in the test so that they are available for
+	// the service constructor function
+	// TODO: will this work with exec/docker adapter?
+	// localstore of nodes made available for action and check calls
+	stores = make(map[discover.NodeID]storage.ChunkStore)
+	deliveries = make(map[discover.NodeID]*Delivery)
 	// create context for simulation run
 	timeout := 30 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -79,17 +112,14 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		t.Fatal(err.Error())
 	}
 
-	// HACK: these are global variables in the test so that they are available for
-	// the service constructor function
-	// TODO: will this work with exec/docker adapter?
-	// localstore of nodes made available for action and check calls
-	stores = make(map[discover.NodeID]storage.ChunkStore)
 	nodeIndex := make(map[discover.NodeID]int)
 	for i, id := range sim.IDs {
 		nodeIndex[id] = i
-		stores[id] = sim.Stores[i]
+		if !*useMockStore {
+			stores[id] = sim.Stores[i]
+			sim.Stores[i] = stores[id]
+		}
 	}
-	deliveries = make(map[discover.NodeID]*Delivery)
 	// peerCount function gives the number of peer connections for a nodeID
 	// this is needed for the service run function to wait until
 	// each protocol  instance runs and the streamer peers are available
@@ -100,16 +130,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		return 2
 	}
 	waitPeerErrC = make(chan error)
-
-	// here we distribute chunks of a random file into stores 1...nodes
-	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewDPAParams())
-	size := chunkCount * chunkSize
-	_, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
-	// need to wait cos we then immediately collect the relevant bin content
-	wait()
-	if err != nil {
-		t.Fatal(err.Error())
-	}
 
 	// create DBAPI-s for all nodes
 	dbs := make([]*storage.DBAPI, nodes)
@@ -157,6 +177,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		// each node Subscribes to each other's swarmChunkServerStreamName
 		for j := 0; j < nodes-1; j++ {
 			id := sim.IDs[j]
+			sim.Stores[j] = stores[id]
 			err := sim.CallClient(id, func(client *rpc.Client) error {
 				// report disconnect events to the error channel cos peers should not disconnect
 				doneC, err := streamTesting.WatchDisconnections(id, client, errc, quitC)
@@ -178,6 +199,16 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				return err
 			}
 		}
+		// here we distribute chunks of a random file into stores 1...nodes
+		rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewDPAParams())
+		size := chunkCount * chunkSize
+		_, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		// need to wait cos we then immediately collect the relevant bin content
+		wait()
+		if err != nil {
+			t.Fatal(err.Error())
+		}
+
 		return nil
 	}
 
@@ -193,6 +224,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 
 		i := nodeIndex[id]
 		var total, found int
+
 		for j := i; j < nodes; j++ {
 			total += len(hashes[j])
 			for _, key := range hashes[j] {

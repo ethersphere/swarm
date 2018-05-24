@@ -35,26 +35,15 @@ import (
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
-const (
-	pssServiceName = "pss"
-	bzzServiceName = "bzz"
-)
-
 var (
-	initOnce         = sync.Once{}
-	snapshotfile     string
-	debugdebugflag   = flag.Bool("vv", false, "veryverbose")
-	debugflag        = flag.Bool("v", false, "verbose")
-	snapshotflag     = flag.String("s", "", "snapshot filename")
-	messagesflag     = flag.Int("m", 0, "number of messages to generate (default = number of nodes). Ignored if -s is not set")
-	addresssizeflag  = flag.Int("b", 32, "number of bytes to use for address. Ignored if -s is not set")
-	adaptertypeflag  = flag.String("a", "sim", "Adapter type to use. Ignored if -s is not set")
-	messagedelayflag = flag.Int("d", 1000, "Message max delay period, in ms")
-	w                *whisper.Whisper
-	wapi             *whisper.PublicWhisperAPI
-	psslogmain       log.Logger
-	pssprotocols     map[string]*protoCtrl
-	useHandshake     bool
+	initOnce       = sync.Once{}
+	debugdebugflag = flag.Bool("vv", false, "veryverbose")
+	debugflag      = flag.Bool("v", false, "verbose")
+	w              *whisper.Whisper
+	wapi           *whisper.PublicWhisperAPI
+	psslogmain     log.Logger
+	pssprotocols   map[string]*protoCtrl
+	useHandshake   bool
 )
 
 func init() {
@@ -144,7 +133,7 @@ func TestCache(t *testing.T) {
 		t.Fatal(err)
 	}
 	ps := newTestPss(privkey, nil, nil)
-	pp := NewPssParams(privkey)
+	pp := NewPssParams().WithPrivateKey(privkey)
 	data := []byte("foo")
 	datatwo := []byte("bar")
 	datathree := []byte("baz")
@@ -243,8 +232,11 @@ func TestAddressMatch(t *testing.T) {
 		t.Fatalf("Could not generate private key: %v", err)
 	}
 	privkey, err := w.GetPrivateKey(keys)
-	pssp := NewPssParams(privkey)
-	ps := NewPss(kad, pssp)
+	pssp := NewPssParams().WithPrivateKey(privkey)
+	ps, err := NewPss(kad, pssp)
+	if err != nil {
+		t.Fatal(err.Error())
+	}
 
 	pssmsg := &PssMsg{
 		To:      remoteaddr,
@@ -275,6 +267,128 @@ func TestAddressMatch(t *testing.T) {
 	}
 	if !ps.isSelfPossibleRecipient(pssmsg) {
 		t.Fatalf("isSelfPossibleRecipient false but %x == %x", remoteaddr[:8], localaddr[:8])
+	}
+}
+
+//
+func TestHandlerConditions(t *testing.T) {
+
+	t.Skip("Disabled due to probable faulty logic for outbox expectations")
+	// setup
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	addr := make([]byte, 32)
+	addr[0] = 0x01
+	ps := newTestPss(privkey, network.NewKademlia(addr, network.NewKadParams()), NewPssParams())
+
+	// message should pass
+	msg := &PssMsg{
+		To:     addr,
+		Expire: uint32(time.Now().Add(time.Second * 60).Unix()),
+		Payload: &whisper.Envelope{
+			Topic: [4]byte{},
+			Data:  []byte{0x66, 0x6f, 0x6f},
+		},
+	}
+	if err := ps.handlePssMsg(msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr := time.NewTimer(time.Millisecond * 100)
+	var outmsg *PssMsg
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected outbox empty after full address on msg, but had message %s", msg)
+	}
+
+	// message should pass and queue due to partial length
+	msg.To = addr[0:1]
+	msg.Payload.Data = []byte{0x78, 0x79, 0x80, 0x80, 0x79}
+	if err := ps.handlePssMsg(msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr.Reset(time.Millisecond * 100)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	}
+	if outmsg == nil {
+		t.Fatal("expected message in outbox on encrypt fail, but empty")
+	}
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected only one queued message but also had message %v", msg)
+	}
+
+	// full address mismatch should put message in queue
+	msg.To[0] = 0xff
+	if err := ps.handlePssMsg(msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr.Reset(time.Millisecond * 10)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	}
+	if outmsg == nil {
+		t.Fatal("expected message in outbox on address mismatch, but empty")
+	}
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected only one queued message but also had message %v", msg)
+	}
+
+	// expired message should be dropped
+	msg.Expire = uint32(time.Now().Add(-time.Second).Unix())
+	if err := ps.handlePssMsg(msg); err != nil {
+		t.Fatal(err.Error())
+	}
+	tmr.Reset(time.Millisecond * 10)
+	outmsg = nil
+	select {
+	case outmsg = <-ps.outbox:
+	case <-tmr.C:
+	default:
+	}
+	if outmsg != nil {
+		t.Fatalf("expected empty queue but have message %v", msg)
+	}
+
+	// invalid message should return error
+	fckedupmsg := &struct {
+		pssMsg *PssMsg
+	}{
+		pssMsg: &PssMsg{},
+	}
+	if err := ps.handlePssMsg(fckedupmsg); err == nil {
+		t.Fatalf("expected error from processMsg but error nil")
+	}
+
+	// outbox full should return error
+	msg.Expire = uint32(time.Now().Add(time.Second * 60).Unix())
+	for i := 0; i < defaultOutboxCapacity; i++ {
+		ps.outbox <- msg
+	}
+	msg.Payload.Data = []byte{0x62, 0x61, 0x72}
+	err = ps.handlePssMsg(msg)
+	if err == nil {
+		t.Fatal("expected error when mailbox full, but was nil")
 	}
 }
 
@@ -1352,11 +1466,14 @@ func newServices(allowRaw bool) adapters.Services {
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
-			pssp := NewPssParams(privkey)
+			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.MsgTTL = time.Second * 30
 			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
-			ps := NewPss(pskad, pssp)
+			ps, err := NewPss(pskad, pssp)
+			if err != nil {
+				return nil, err
+			}
 
 			ping := &Ping{
 				OutC: make(chan bool),
@@ -1416,11 +1533,14 @@ func newTestPss(privkey *ecdsa.PrivateKey, overlay network.Overlay, ppextra *Pss
 	}
 
 	// create pss
-	pp := NewPssParams(privkey)
+	pp := NewPssParams().WithPrivateKey(privkey)
 	if ppextra != nil {
 		pp.SymKeyCacheCapacity = ppextra.SymKeyCacheCapacity
 	}
-	ps := NewPss(overlay, pp)
+	ps, err := NewPss(overlay, pp)
+	if err != nil {
+		return nil
+	}
 	ps.Start(nil)
 
 	return ps

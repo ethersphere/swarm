@@ -91,12 +91,13 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	r := NewMockRetrieve()
 	netStore := NewNetStore(localStore, r.retrieve)
 
-	// first call
 	key := Key{}
-	_, err = netStore.Get(key)
-	if err == nil || err != ErrChunkNotFound {
-		t.Fatalf("expected to get ErrChunkNotFound, but got: %s", err)
-	}
+
+	// first call is done by the retry on ErrChunkNotFound, no need to do it here
+	// _, err = netStore.Get(key)
+	// if err == nil || err != ErrChunkNotFound {
+	// 	t.Fatalf("expected to get ErrChunkNotFound, but got: %s", err)
+	// }
 
 	// second call
 	_, err = netStore.Get(key)

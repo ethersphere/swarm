@@ -40,18 +40,21 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock/db"
 	colorable "github.com/mattn/go-colorable"
 )
 
 var (
-	deliveries map[discover.NodeID]*Delivery
-	stores     map[discover.NodeID]storage.ChunkStore
-	toAddr     func(discover.NodeID) *network.BzzAddr
-	peerCount  func(discover.NodeID) int
-	adapter    = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
-	loglevel   = flag.Int("loglevel", 2, "verbosity of logs")
-	nodes      = flag.Int("nodes", 0, "number of nodes")
-	chunks     = flag.Int("chunks", 0, "number of chunks")
+	deliveries   map[discover.NodeID]*Delivery
+	stores       map[discover.NodeID]storage.ChunkStore
+	toAddr       func(discover.NodeID) *network.BzzAddr
+	peerCount    func(discover.NodeID) int
+	adapter      = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
+	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
+	nodes        = flag.Int("nodes", 0, "number of nodes")
+	chunks       = flag.Int("chunks", 0, "number of chunks")
+	useMockStore = flag.Bool("mockstore", false, "disabled mock store (default: enabled)")
 )
 
 var (
@@ -62,6 +65,8 @@ var (
 	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
 	getRetrieveFunc   = defaultRetrieveFunc
 	subscriptionCount = 0
+	globalStore       mock.GlobalStorer
+	globalStoreDir    string
 )
 
 var services = adapters.Services{
@@ -77,6 +82,19 @@ func init() {
 
 	log.PrintOrigins(true)
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+}
+
+func createGlobalStore() {
+	var err error
+	globalStoreDir, err = ioutil.TempDir("", "global.store")
+	if err != nil {
+		log.Error("Error initiating global store temp directory!", "err", err)
+		return
+	}
+	globalStore, err = db.NewGlobalStore(globalStoreDir)
+	if err != nil {
+		log.Error("Error initiating global store!", "err", err)
+	}
 }
 
 // NewStreamerService
@@ -115,6 +133,9 @@ func defaultRetrieveFunc(id discover.NodeID) func(chunk *storage.Chunk) error {
 func datadirsCleanup() {
 	for _, id := range ids {
 		os.RemoveAll(datadirs[id])
+	}
+	if globalStoreDir != "" {
+		os.RemoveAll(globalStoreDir)
 	}
 }
 
@@ -413,3 +434,16 @@ func (s *testExternalServer) GetData([]byte) ([]byte, error) {
 }
 
 func (s *testExternalServer) Close() {}
+
+// Sets the global value defaultSkipCheck.
+// It should be used in test function defer to reset the global value
+// to the original value.
+//
+// defer setDefaultSkipCheck(defaultSkipCheck)
+// defaultSkipCheck = skipCheck
+//
+// This works as defer function arguments evaluations are evaluated as ususal,
+// but only the function body invocation is deferred.
+func setDefaultSkipCheck(skipCheck bool) {
+	defaultSkipCheck = skipCheck
+}

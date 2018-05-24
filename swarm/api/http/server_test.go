@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package http_test
+package http
 
 import (
 	"bytes"
@@ -29,10 +29,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/contracts/ens"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
@@ -43,19 +45,140 @@ func init() {
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
 
-type resourceResponse struct {
-	Manifest storage.Key `json:"manifest"`
-	Resource string      `json:"resource"`
-	Update   storage.Key `json:"update"`
+func TestResourcePostMode(t *testing.T) {
+	path := ""
+	errstr := "resourcePostMode for '%s' should be raw %v frequency %d, was raw %v, frequency %d"
+	r, f, err := resourcePostMode(path)
+	if err != nil {
+		t.Fatal(err)
+	} else if r || f != 0 {
+		t.Fatalf(errstr, path, false, 0, r, f)
+	}
+
+	path = "raw"
+	r, f, err = resourcePostMode(path)
+	if err != nil {
+		t.Fatal(err)
+	} else if !r || f != 0 {
+		t.Fatalf(errstr, path, true, 0, r, f)
+	}
+
+	path = "13"
+	r, f, err = resourcePostMode(path)
+	if err != nil {
+		t.Fatal(err)
+	} else if r || f == 0 {
+		t.Fatalf(errstr, path, false, 13, r, f)
+	}
+
+	path = "raw/13"
+	r, f, err = resourcePostMode(path)
+	if err != nil {
+		t.Fatal(err)
+	} else if !r || f == 0 {
+		t.Fatalf(errstr, path, true, 13, r, f)
+	}
+
+	path = "foo/13"
+	r, f, err = resourcePostMode(path)
+	if err == nil {
+		t.Fatal("resourcePostMode for 'foo/13' should fail, returned error nil")
+	}
 }
 
+func serverFunc(api *api.Api) testutil.TestServer {
+	return NewServer(api)
+}
+
+// test the transparent resolving of multihash resource types with bzz:// scheme
+//
+// first upload data, and store the multihash to the resulting manifest in a resource update
+// retrieving the update with the multihash should return the manifest pointing directly to the data
+// and raw retrieve of that hash should return the data
+func TestBzzResourceMultihash(t *testing.T) {
+
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+
+	// add the data our multihash aliased manifest will point to
+	databytes := "bar"
+	url := fmt.Sprintf("%s/bzz:/", srv.URL)
+	resp, err := http.Post(url, "text/plain", bytes.NewReader([]byte(databytes)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := common.FromHex(string(b))
+	mh, err := multihash.Encode(s, multihash.KECCAK_256)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mhHex := hexutil.Encode(mh)
+	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
+
+	// our mutable resource "name"
+	keybytes := "foo.eth"
+
+	// create the multihash update
+	url = fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, keybytes)
+	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader([]byte(mhHex)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rsrcResp := &storage.Key{}
+	err = json.Unmarshal(b, rsrcResp)
+	if err != nil {
+		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
+	}
+
+	correctManifestKeyHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
+	if rsrcResp.Hex() != correctManifestKeyHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestKeyHex, rsrcResp)
+	}
+
+	// get bzz manifest transparent resource resolve
+	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(b, []byte(databytes)) {
+		t.Fatalf("retrieved data mismatch, expected %x, got %x", databytes, b)
+	}
+}
+
+// Test resource updates using the raw update methods
 func TestBzzResource(t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	// our mutable resource "name"
-	keybytes := "foo"
-	keybyteshash := ens.EnsNode(keybytes)
+	keybytes := "foo.eth"
 
 	// data of update 1
 	databytes := make([]byte, 666)
@@ -65,7 +188,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// creates resource and sets update 1
-	url := fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, []byte(keybytes))
+	url := fmt.Sprintf("%s/bzz-resource:/%s/raw/13", srv.URL, []byte(keybytes))
 	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
 	if err != nil {
 		t.Fatal(err)
@@ -78,17 +201,19 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrcResp := &resourceResponse{}
+	rsrcResp := &storage.Key{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
-	if !bytes.Equal(rsrcResp.Update, keybyteshash.Bytes()) {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash.Hex(), rsrcResp.Update.Hex())
+
+	correctManifestKeyHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
+	if rsrcResp.Hex() != correctManifestKeyHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestKeyHex, rsrcResp.Hex())
 	}
 
-	// get manifest
-	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp.Manifest)
+	// get the manifest
+	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -109,12 +234,14 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	if manifest.Entries[0].Hash != rsrcResp.Resource {
-		t.Fatalf("Expected manifest path '%s', got '%s'", keybyteshash, manifest.Entries[0].Hash)
+
+	correctRootKeyHex := "f667277e004e8486c7a3631fd226802430e84e9a81b6085d31f512a591ae0065"
+	if manifest.Entries[0].Hash != correctRootKeyHex {
+		t.Fatalf("Expected manifest path '%s', got '%s'", correctRootKeyHex, manifest.Entries[0].Hash)
 	}
 
 	// get bzz manifest transparent resource resolve
-	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp.Manifest)
+	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -128,7 +255,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// get non-existent name
+	// get non-existent name, should fail
 	url = fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
 	resp, err = http.Get(url)
 	if err != nil {
@@ -137,7 +264,8 @@ func TestBzzResource(t *testing.T) {
 	resp.Body.Close()
 
 	// get latest update (1.1) through resource directly
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
+	log.Info("get update latest = 1.1", "addr", correctManifestKeyHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -155,7 +283,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// update 2
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
+	log.Info("update 2")
+	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, correctManifestKeyHex)
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
@@ -167,7 +296,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get latest update (1.2) through resource directly
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
+	log.Info("get update 1.2")
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -185,7 +315,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get latest update (1.2) with specified period
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, keybytes)
+	log.Info("get update latest = 1.2")
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -203,7 +334,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get first update (1.1) with specified period and version
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, keybytes)
+	log.Info("get first update 1.1")
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -248,7 +380,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	key := [3]storage.Key{}
 
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	for i, mf := range testmanifest {
@@ -469,7 +601,7 @@ func TestBzzRootRedirectEncrypted(t *testing.T) {
 }
 
 func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t)
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	// create a manifest with some data at the root path
@@ -521,4 +653,32 @@ func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 	if !bytes.Equal(gotData, data) {
 		t.Fatalf("expected response to equal %q, got %q", data, gotData)
 	}
+}
+
+func TestMethodsNotAllowed(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	defer srv.Close()
+	databytes := "bar"
+	for _, c := range []struct {
+		url  string
+		code int
+	}{
+		{
+			url:  fmt.Sprintf("%s/bzz-list:/", srv.URL),
+			code: 405,
+		}, {
+			url:  fmt.Sprintf("%s/bzz-hash:/", srv.URL),
+			code: 405,
+		},
+		{
+			url:  fmt.Sprintf("%s/bzz-immutable:/", srv.URL),
+			code: 405,
+		},
+	} {
+		res, _ := http.Post(c.url, "text/plain", bytes.NewReader([]byte(databytes)))
+		if res.StatusCode != c.code {
+			t.Fatal("should have failed")
+		}
+	}
+
 }

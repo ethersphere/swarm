@@ -34,6 +34,7 @@ var (
 	cleanF            func()
 	domainName        = "føø.bar"
 	safeName          string
+	nameHash          common.Hash
 )
 
 func init() {
@@ -44,6 +45,7 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+	nameHash = ens.EnsNode(safeName)
 }
 
 // simulated backend does not have the blocknumber call
@@ -107,7 +109,7 @@ func TestResourceReverse(t *testing.T) {
 	chunk := newUpdateChunk(key, &sig, period, version, safeName, data, len(data))
 
 	// check that we can recover the owner account from the update chunk's signature
-	checksig, checkperiod, checkversion, checkname, checkdata, err := rh.parseUpdate(chunk.SData)
+	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.SData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,14 +158,13 @@ func TestResourceHandler(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	rootChunkKey, _, err := rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// check that the new resource is stored correctly
-	namehash := ens.EnsNode(safeName)
-	chunk, err := rh.chunkStore.(*LocalStore).memStore.Get(Key(namehash[:]))
+	chunk, err := rh.chunkStore.localStore.memStore.Get(rootChunkKey)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
@@ -178,35 +179,43 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatalf("stored frequency %d does not match provided frequency %d", chunkfrequency, resourceFrequency)
 	}
 
+	// data for updates:
+	updates := []string{
+		"blinky",
+		"pinky",
+		"inky",
+		"clyde",
+	}
+
 	// update halfway to first period
 	resourcekey := make(map[string]Key)
 	fwdBlocks(int(resourceFrequency/2), backend)
-	data := []byte("blinky")
-	resourcekey["blinky"], err = rh.Update(ctx, safeName, data)
+	data := []byte(updates[0])
+	resourcekey[updates[0]], err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// update on first period
 	fwdBlocks(int(resourceFrequency/2), backend)
-	data = []byte("pinky")
-	resourcekey["pinky"], err = rh.Update(ctx, safeName, data)
+	data = []byte(updates[1])
+	resourcekey[updates[1]], err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// update on second period
 	fwdBlocks(int(resourceFrequency), backend)
-	data = []byte("inky")
-	resourcekey["inky"], err = rh.Update(ctx, safeName, data)
+	data = []byte(updates[2])
+	resourcekey[updates[2]], err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// update just after second period
 	fwdBlocks(1, backend)
-	data = []byte("clyde")
-	resourcekey["clyde"], err = rh.Update(ctx, safeName, data)
+	data = []byte(updates[3])
+	resourcekey[updates[3]], err = rh.Update(ctx, safeName, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,51 +230,73 @@ func TestResourceHandler(t *testing.T) {
 		QueryMaxPeriods: &ResourceLookupParams{
 			Limit: false,
 		},
-		Signer:    nil,
-		EthClient: rh.ethClient,
+		Signer:       nil,
+		HeaderGetter: rh.headerGetter,
 	}
+
+	rh.chunkStore.localStore.Close()
 	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = rh2.LookupLatestByName(ctx, safeName, true, nil)
+	rsrc2, err := rh2.LoadResource(rootChunkKey)
+	_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// last update should be "clyde", version two, blockheight startblocknumber + (resourcefrequency * 3)
-	if !bytes.Equal(rh2.resources[safeName].data, []byte("clyde")) {
-		t.Fatalf("resource data was %v, expected %v", rh2.resources[safeName].data, []byte("clyde"))
+	if !bytes.Equal(rsrc2.data, []byte(updates[len(updates)-1])) {
+		t.Fatalf("resource data was %v, expected %v", rsrc2.data, updates[len(updates)-1])
 	}
-	if rh2.resources[safeName].version != 2 {
-		t.Fatalf("resource version was %d, expected 2", rh2.resources[safeName].version)
+	if rsrc2.version != 2 {
+		t.Fatalf("resource version was %d, expected 2", rsrc2.version)
 	}
-	if rh2.resources[safeName].lastPeriod != 3 {
-		t.Fatalf("resource period was %d, expected 3", rh2.resources[safeName].lastPeriod)
+	if rsrc2.lastPeriod != 3 {
+		t.Fatalf("resource period was %d, expected 3", rsrc2.lastPeriod)
 	}
-	log.Debug("Latest lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
+	log.Debug("Latest lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistoricalByName(ctx, safeName, 3, true, rh2.queryMaxPeriods)
+	rsrc, err := rh2.LookupHistorical(ctx, nameHash, 3, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// check data
-	if !bytes.Equal(rsrc.data, []byte("clyde")) {
-		t.Fatalf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, []byte("clyde"))
+	if !bytes.Equal(rsrc.data, []byte(updates[len(updates)-1])) {
+		t.Fatalf("resource data (historical) was %v, expected %v", rsrc2.data, updates[len(updates)-1])
 	}
-	log.Debug("Historical lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
+	log.Debug("Historical lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersionByName(ctx, safeName, 3, 1, true, rh2.queryMaxPeriods)
+	rsrc, err = rh2.LookupVersion(ctx, nameHash, 3, 1, true, rh2.queryMaxPeriods)
 	if err != nil {
 		t.Fatal(err)
 	}
 	// check data
-	if !bytes.Equal(rsrc.data, []byte("inky")) {
-		t.Fatalf("resource data (historical) was %v, expected %v", rh2.resources[domainName].data, []byte("inky"))
+	if !bytes.Equal(rsrc.data, []byte(updates[2])) {
+		t.Fatalf("resource data (historical) was %v, expected %v", rsrc2.data, updates[2])
 	}
-	log.Debug("Specific version lookup", "period", rh2.resources[safeName].lastPeriod, "version", rh2.resources[safeName].version, "data", rh2.resources[safeName].data)
+	log.Debug("Specific version lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
+
+	// we are now at third update
+	// check backwards stepping to the first
+	for i := 1; i >= 0; i-- {
+		rsrc, err := rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(rsrc.data, []byte(updates[i])) {
+			t.Fatalf("resource data (previous) was %v, expected %v", rsrc2.data, updates[i])
+
+		}
+	}
+
+	// beyond the first should yield an error
+	rsrc, err = rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
+	if err == nil {
+		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rsrc2.lastPeriod, rsrc2.version, rsrc2.data)
+	}
 
 }
 
@@ -304,7 +335,7 @@ func TestResourceENSOwner(t *testing.T) {
 	// create new resource when we are owner = ok
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
@@ -351,7 +382,7 @@ func TestResourceMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -416,16 +447,17 @@ func TestResourceMultihash(t *testing.T) {
 		QueryMaxPeriods: &ResourceLookupParams{
 			Limit: false,
 		},
-		Signer:    signer,
-		EthClient: rh.ethClient,
-		EnsClient: rh.ensClient,
+		Signer:         signer,
+		HeaderGetter:   rh.headerGetter,
+		OwnerValidator: rh.ownerValidator,
 	}
 	// test with signed data
+	rh.chunkStore.localStore.Close()
 	rh2, err := NewTestResourceHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = rh2.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh2.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,13 +527,13 @@ func TestResourceChunkValidator(t *testing.T) {
 	// create new resource when we are owner = ok
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rsrc, err := rh.NewResource(ctx, safeName, resourceFrequency)
+	key, rsrc, err := rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
 
 	data := []byte("foo")
-	key := rh.resourceHash(1, 1, rsrc.nameHash)
+	key = rh.resourceHash(1, 1, rsrc.nameHash)
 	digest := rh.keyDataHash(key, data)
 	sig, err := rh.signer.Sign(digest)
 	if err != nil {
@@ -509,7 +541,18 @@ func TestResourceChunkValidator(t *testing.T) {
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
 	if !rh.Validate(chunk.Key, chunk.SData) {
-		t.Fatal("Chunk validator fail")
+		t.Fatal("Chunk validator fail on update chunk")
+	}
+
+	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	startBlock, err := rh.getBlock(ctx, safeName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	chunk = rh.newMetaChunk(safeName, startBlock, resourceFrequency)
+	if !rh.Validate(chunk.Key, chunk.SData) {
+		t.Fatal("Chunk validator fail on metadata chunk")
 	}
 }
 
@@ -518,6 +561,18 @@ func fwdBlocks(count int, backend *fakeBackend) {
 	for i := 0; i < count; i++ {
 		backend.Commit()
 	}
+}
+
+type ensOwnerValidator struct {
+	*ens.ENS
+}
+
+func (e ensOwnerValidator) ValidateOwner(name string, address common.Address) (bool, error) {
+	addr, err := e.Owner(ens.EnsNode(name))
+	if err != nil {
+		return false, err
+	}
+	return address == addr, nil
 }
 
 // create rpc and resourcehandler
@@ -543,16 +598,21 @@ func setupTest(backend headerGetter, ensBackend *ens.ENS, signer ResourceSigner)
 		os.RemoveAll(datadir)
 	}
 
+	var ov ownerValidator
+	if ensBackend != nil {
+		ov = ensOwnerValidator{ensBackend}
+	}
+
 	rhparams := &ResourceHandlerParams{
 		QueryMaxPeriods: &ResourceLookupParams{
 			Limit: false,
 		},
-		Signer:    signer,
-		EthClient: backend,
-		EnsClient: ensBackend,
+		Signer:         signer,
+		HeaderGetter:   backend,
+		OwnerValidator: ov,
 	}
 	rh, err = NewTestResourceHandler(datadir, rhparams)
-	return rh, datadir, cleanF, nil
+	return rh, datadir, cleanF, err
 }
 
 // Set up simulated ENS backend for use with ENSResourceHandler tests
@@ -609,11 +669,11 @@ func newTestSigner() (*GenericResourceSigner, error) {
 }
 
 func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
-	chunk, err := rh.chunkStore.(*LocalStore).memStore.Get(key)
+	chunk, err := rh.chunkStore.localStore.memStore.Get(key)
 	if err != nil {
 		return nil, err
 	}
-	_, _, _, _, data, err := rh.parseUpdate(chunk.SData)
+	_, _, _, _, data, _, err := rh.parseUpdate(chunk.SData)
 	if err != nil {
 		return nil, err
 	}

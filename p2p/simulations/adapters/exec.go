@@ -29,7 +29,6 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -149,10 +148,6 @@ func (n *ExecNode) Addr() []byte {
 func (n *ExecNode) Client() (*rpc.Client, error) {
 	return n.client, nil
 }
-
-// wsAddrPattern is a regex used to read the WebSocket address from the node's
-// log
-var wsAddrPattern = regexp.MustCompile(`ws://[\d.:]+`)
 
 // Start exec's the node passing the ID and service as command line arguments
 // and the node config encoded as JSON in the _P2P_NODE_CONFIG environment
@@ -349,7 +344,7 @@ func ExternalIP() net.IP {
 			return ip.IP
 		}
 	}
-	log.Crit("unable to determine explicit IP address")
+	log.Warn("unable to determine explicit IP address, falling back to loopback")
 	return net.IP{127, 0, 0, 1}
 }
 

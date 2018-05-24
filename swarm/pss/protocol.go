@@ -5,6 +5,7 @@ package pss
 import (
 	"bytes"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -62,6 +63,7 @@ type PssReadWriter struct {
 	topic      *Topic
 	sendFunc   func(string, Topic, []byte) error
 	key        string
+	closed     bool
 }
 
 // Implements p2p.MsgReader
@@ -74,6 +76,9 @@ func (prw *PssReadWriter) ReadMsg() (p2p.Msg, error) {
 // Implements p2p.MsgWriter
 func (prw *PssReadWriter) WriteMsg(msg p2p.Msg) error {
 	log.Trace("pssrw writemsg", "msg", msg)
+	if prw.closed {
+		return fmt.Errorf("connection closed")
+	}
 	rlpdata := make([]byte, msg.Size)
 	msg.Payload.Read(rlpdata)
 	pmsg, err := rlp.EncodeToBytes(ProtocolMsg{
@@ -104,6 +109,7 @@ type Protocol struct {
 	symKeyRWPool map[string]p2p.MsgReadWriter
 	Asymmetric   bool
 	Symmetric    bool
+	RWPoolMu     sync.Mutex
 }
 
 // Activates devp2p emulation over a specific pss topic
@@ -147,7 +153,7 @@ func (self *Protocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid str
 	} else if (!self.isActiveSymKey(keyid, *self.topic) && !asymmetric) ||
 		(!self.isActiveAsymKey(keyid, *self.topic) && asymmetric) {
 
-		rw, err := self.AddPeer(p, self.proto.Run, *self.topic, asymmetric, keyid)
+		rw, err := self.AddPeer(p, *self.topic, asymmetric, keyid)
 		if err != nil {
 			return err
 		}
@@ -197,7 +203,8 @@ func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 // `key` and `asymmetric` specifies what encryption key
 // to link the peer to.
 // The key must exist in the pss store prior to adding the peer.
-func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
+//func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
+func (self *Protocol) AddPeer(p *p2p.Peer, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
 	rw := &PssReadWriter{
 		Pss:   self.Pss,
 		rw:    make(chan p2p.Msg),
@@ -216,20 +223,39 @@ func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter
 			return nil, fmt.Errorf("asym key does not exist: %s", key)
 		}
 		self.Pss.pubKeyPoolMu.Unlock()
+		self.RWPoolMu.Lock()
 		self.pubKeyRWPool[key] = rw
+		self.RWPoolMu.Unlock()
 	} else {
 		self.Pss.symKeyPoolMu.Lock()
 		if _, ok := self.Pss.symKeyPool[key]; !ok {
 			return nil, fmt.Errorf("symkey does not exist: %s", key)
 		}
 		self.Pss.symKeyPoolMu.Unlock()
+		self.RWPoolMu.Lock()
 		self.symKeyRWPool[key] = rw
+		self.RWPoolMu.Unlock()
 	}
 	go func() {
-		err := run(p, rw)
+		err := self.proto.Run(p, rw)
 		log.Warn(fmt.Sprintf("pss vprotocol quit on %v topic %v: %v", p, topic, err))
 	}()
 	return rw, nil
+}
+
+func (self *Protocol) RemovePeer(asymmetric bool, key string) {
+	log.Debug("closing pss peer", "asym", asymmetric, "key", key)
+	self.RWPoolMu.Lock()
+	defer self.RWPoolMu.Unlock()
+	if asymmetric {
+		rw := self.pubKeyRWPool[key].(*PssReadWriter)
+		rw.closed = true
+		delete(self.pubKeyRWPool, key)
+	} else {
+		rw := self.symKeyRWPool[key].(*PssReadWriter)
+		rw.closed = true
+		delete(self.symKeyRWPool, key)
+	}
 }
 
 // Uniform translation of protocol specifiers to topic

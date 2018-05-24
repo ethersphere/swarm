@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -47,25 +48,27 @@ type Config struct {
 	*storage.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.SwapParams
+	Pss  *pss.PssParams
 	//*network.SyncParams
-	Contract        common.Address
-	EnsRoot         common.Address
-	EnsAPIs         []string
-	Path            string
-	ListenAddr      string
-	Port            string
-	PublicKey       string
-	BzzKey          string
-	NodeID          string
-	NetworkId       uint64
-	SwapEnabled     bool
-	SyncEnabled     bool
-	SyncUpdateDelay time.Duration
-	SwapApi         string
-	Cors            string
-	BzzAccount      string
-	BootNodes       string
-	privateKey      *ecdsa.PrivateKey
+	Contract          common.Address
+	EnsRoot           common.Address
+	EnsAPIs           []string
+	Path              string
+	ListenAddr        string
+	Port              string
+	PublicKey         string
+	BzzKey            string
+	NodeID            string
+	NetworkId         uint64
+	SwapEnabled       bool
+	SyncEnabled       bool
+	DeliverySkipCheck bool
+	SyncUpdateDelay   time.Duration
+	SwapApi           string
+	Cors              string
+	BzzAccount        string
+	BootNodes         string
+	privateKey        *ecdsa.PrivateKey
 }
 
 //create a default config with all parameters to set to defaults
@@ -76,18 +79,20 @@ func NewConfig() (self *Config) {
 		DPAParams:        storage.NewDPAParams(),
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
-		Swap:            swap.NewDefaultSwapParams(),
-		ListenAddr:      DefaultHTTPListenAddr,
-		Port:            DefaultHTTPPort,
-		Path:            node.DefaultDataDir(),
-		EnsAPIs:         nil,
-		EnsRoot:         ens.TestNetAddress,
-		NetworkId:       network.NetworkID,
-		SwapEnabled:     false,
-		SyncEnabled:     true,
-		SyncUpdateDelay: 15 * time.Second,
-		SwapApi:         "",
-		BootNodes:       "",
+		Swap:              swap.NewDefaultSwapParams(),
+		Pss:               pss.NewPssParams(),
+		ListenAddr:        DefaultHTTPListenAddr,
+		Port:              DefaultHTTPPort,
+		Path:              node.DefaultDataDir(),
+		EnsAPIs:           nil,
+		EnsRoot:           ens.TestNetAddress,
+		NetworkId:         network.DefaultNetworkID,
+		SwapEnabled:       false,
+		SyncEnabled:       true,
+		DeliverySkipCheck: false,
+		SyncUpdateDelay:   15 * time.Second,
+		SwapApi:           "",
+		BootNodes:         "",
 	}
 
 	return
@@ -120,6 +125,8 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	self.privateKey = prvKey
 	self.LocalStoreParams.Init(self.Path)
 	self.LocalStoreParams.BaseKey = common.FromHex(keyhex)
+
+	self.Pss = self.Pss.WithPrivateKey(self.privateKey)
 }
 
 func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {

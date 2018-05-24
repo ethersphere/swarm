@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -57,8 +58,6 @@ func NewSwarmSyncerServer(live bool, po uint8, db *storage.DBAPI) (*SwarmSyncerS
 		quit:      make(chan struct{}),
 	}, nil
 }
-
-const maxPO = 32
 
 func RegisterSwarmSyncerServer(streamer *Registry, db *storage.DBAPI) {
 	streamer.RegisterServerFunc("SYNC", func(p *Peer, t string, live bool) (Server, error) {
@@ -100,6 +99,11 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		to = math.MaxUint64
 	}
 	var ticker *time.Ticker
+	defer func() {
+		if ticker != nil {
+			ticker.Stop()
+		}
+	}()
 	var wait bool
 	for {
 		if wait {
@@ -112,6 +116,8 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 				return nil, 0, 0, nil, nil
 			}
 		}
+
+		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
 		err := s.db.Iterator(from, to, s.po, func(key storage.Key, idx uint64) bool {
 			batch = append(batch, key[:]...)
 			i++
@@ -125,9 +131,6 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			break
 		}
 		wait = true
-	}
-	if wait {
-		ticker.Stop()
 	}
 
 	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.db.CurrentBucketStorageIndex(s.po))

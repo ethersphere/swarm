@@ -1,6 +1,7 @@
 package client
 
 import (
+	"bytes"
 	"context"
 	"flag"
 	"fmt"
@@ -22,11 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
-)
-
-const (
-	pssServiceName = "pss"
-	bzzServiceName = "bzz"
 )
 
 type protoCtrl struct {
@@ -165,6 +161,15 @@ func TestClientHandshake(t *testing.T) {
 		log.Warn("ok", "idx", i, "got", got)
 		time.Sleep(time.Second)
 	}
+
+	rw := lpsc.peerPool[pss.PingTopic][rpubkey]
+	lpsc.RemovePssPeer(rpubkey, pss.PingProtocol)
+	if err := rw.WriteMsg(p2p.Msg{
+		Size:    3,
+		Payload: bytes.NewReader([]byte("foo")),
+	}); err == nil {
+		t.Fatalf("expected error on write")
+	}
 }
 
 func setupNetwork(numnodes int) (clients []*rpc.Client, err error) {
@@ -233,9 +238,12 @@ func newServices() adapters.Services {
 			defer cancel()
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
-			psparams := pss.NewPssParams(privkey)
+			psparams := pss.NewPssParams().WithPrivateKey(privkey)
 			pskad := kademlia(ctx.Config.ID)
-			ps := pss.NewPss(pskad, psparams)
+			ps, err := pss.NewPss(pskad, psparams)
+			if err != nil {
+				return nil, err
+			}
 			pshparams := pss.NewHandshakeParams()
 			pshparams.SymKeySendLimit = sendLimit
 			err = pss.SetHandshakeController(ps, pshparams)

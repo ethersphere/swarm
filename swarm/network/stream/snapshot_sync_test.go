@@ -48,11 +48,10 @@ const MaxTimeout = 600
 var (
 	pof = pot.DefaultPof(256)
 
-	conf      *synctestConfig
-	startTime time.Time
-	ids       []discover.NodeID
-	datadirs  map[discover.NodeID]string
-	ppmap     map[string]*network.PeerPot
+	conf     *synctestConfig
+	ids      []discover.NodeID
+	datadirs map[discover.NodeID]string
+	ppmap    map[string]*network.PeerPot
 
 	live    bool
 	history bool
@@ -83,7 +82,11 @@ func initSyncTest() {
 		return addr
 	}
 	//global func to create local store
-	createStoreFunc = createTestLocalStorageForId
+	if *useMockStore {
+		createStoreFunc = createMockStore
+	} else {
+		createStoreFunc = createTestLocalStorageForId
+	}
 	//local stores
 	stores = make(map[discover.NodeID]storage.ChunkStore)
 	//data directories for each node and store
@@ -100,6 +103,9 @@ func initSyncTest() {
 			return 1
 		}
 		return 2
+	}
+	if *useMockStore {
+		createGlobalStore()
 	}
 }
 
@@ -409,7 +415,6 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		}
 		log.Trace(fmt.Sprintf("Checking node: %s", id))
 		//select the local store for the given node
-		lstore := stores[id]
 		//if there are more than one chunk, test only succeeds if all expected chunks are found
 		allSuccess := true
 
@@ -421,7 +426,20 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			chunk := conf.hashes[ch]
 			log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
 			//check if the expected chunk is indeed in the localstore
-			if _, err := lstore.Get(chunk); err != nil {
+			var err error
+			if *useMockStore {
+				if globalStore == nil {
+					return false, fmt.Errorf("Something went wrong; using mockStore enabled but globalStore is nil")
+				}
+				//use the globalStore if the mockStore should be used; in that case,
+				//the complete localStore stack is bypassed for getting the chunk
+				_, err = globalStore.Get(common.BytesToAddress(id.Bytes()), chunk)
+			} else {
+				//use the actual localstore
+				lstore := stores[id]
+				_, err = lstore.Get(chunk)
+			}
+			if err != nil {
 				log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
 				allSuccess = false
 			} else {
