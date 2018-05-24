@@ -41,6 +41,10 @@ func init() {
 	wapi = whisper.NewPublicWhisperAPI(w)
 }
 
+// Creates a client node and notifier node
+// Client sends pss notifications requests
+// notifier sends initial notification with symmetric key, and
+// second notifiaction symmetrically encrypted
 func TestStart(t *testing.T) {
 	adapter := adapters.NewSimAdapter(newServices(false))
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
