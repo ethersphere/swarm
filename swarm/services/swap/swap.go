@@ -107,10 +107,10 @@ func NewDefaultSwapParams() *LocalProfile {
 
 // Init this can only finally be set after all config options (file, cmd line, env vars)
 // have been evaluated
-func (localProfile *LocalProfile) Init(contract common.Address, prvkey *ecdsa.PrivateKey) {
+func (lp *LocalProfile) Init(contract common.Address, prvkey *ecdsa.PrivateKey) {
 	pubkey := &prvkey.PublicKey
 
-	localProfile.PayProfile = &PayProfile{
+	lp.PayProfile = &PayProfile{
 		PublicKey:   common.ToHex(crypto.FromECDSAPub(pubkey)),
 		Contract:    contract,
 		Beneficiary: crypto.PubkeyToAddress(*pubkey),
@@ -187,15 +187,15 @@ func NewSwap(localProfile *LocalProfile, remoteProfile *RemoteProfile, backend c
 }
 
 // Chequebook get's chequebook from the localProfile
-func (localProfile *LocalProfile) Chequebook() *chequebook.Chequebook {
-	defer localProfile.lock.Unlock()
-	localProfile.lock.Lock()
-	return localProfile.chbook
+func (lp *LocalProfile) Chequebook() *chequebook.Chequebook {
+	defer lp.lock.Unlock()
+	lp.lock.Lock()
+	return lp.chbook
 }
 
 // PrivateKey accessor
-func (localProfile *LocalProfile) PrivateKey() *ecdsa.PrivateKey {
-	return localProfile.privateKey
+func (lp *LocalProfile) PrivateKey() *ecdsa.PrivateKey {
+	return lp.privateKey
 }
 
 // func (self *LocalProfile) PublicKey() *ecdsa.PublicKey {
@@ -203,30 +203,30 @@ func (localProfile *LocalProfile) PrivateKey() *ecdsa.PrivateKey {
 // }
 
 // SetKey set's private and public key on localProfile
-func (localProfile *LocalProfile) SetKey(prvkey *ecdsa.PrivateKey) {
-	localProfile.privateKey = prvkey
-	localProfile.publicKey = &prvkey.PublicKey
+func (lp *LocalProfile) SetKey(prvkey *ecdsa.PrivateKey) {
+	lp.privateKey = prvkey
+	lp.publicKey = &prvkey.PublicKey
 }
 
 // SetChequebook wraps the chequebook initialiser and sets up autoDeposit to cover spending.
-func (localProfile *LocalProfile) SetChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
-	localProfile.lock.Lock()
-	swapContract := localProfile.Contract
-	localProfile.lock.Unlock()
+func (lp *LocalProfile) SetChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
+	lp.lock.Lock()
+	swapContract := lp.Contract
+	lp.lock.Unlock()
 
 	valid, err := chequebook.ValidateCode(ctx, backend, swapContract)
 	if err != nil {
 		return err
 	} else if valid {
-		return localProfile.newChequebookFromContract(path, backend)
+		return lp.newChequebookFromContract(path, backend)
 	}
-	return localProfile.deployChequebook(ctx, backend, path)
+	return lp.deployChequebook(ctx, backend, path)
 }
 
 // deployChequebook deploys the localProfile Chequebook
-func (localProfile *LocalProfile) deployChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
-	opts := bind.NewKeyedTransactor(localProfile.privateKey)
-	opts.Value = localProfile.AutoDepositBuffer
+func (lp *LocalProfile) deployChequebook(ctx context.Context, backend chequebook.Backend, path string) error {
+	opts := bind.NewKeyedTransactor(lp.privateKey)
+	opts.Value = lp.AutoDepositBuffer
 	opts.Context = ctx
 
 	log.Info(fmt.Sprintf("Deploying new chequebook (owner: %v)", opts.From.Hex()))
@@ -238,10 +238,10 @@ func (localProfile *LocalProfile) deployChequebook(ctx context.Context, backend 
 	log.Info(fmt.Sprintf("new chequebook deployed at %v (owner: %v)", address.Hex(), opts.From.Hex()))
 
 	// need to save config at this point
-	localProfile.lock.Lock()
-	localProfile.Contract = address
-	err = localProfile.newChequebookFromContract(path, backend)
-	localProfile.lock.Unlock()
+	lp.lock.Lock()
+	lp.Contract = address
+	err = lp.newChequebookFromContract(path, backend)
+	lp.lock.Unlock()
 	if err != nil {
 		log.Warn(fmt.Sprintf("error initialising cheque book (owner: %v): %v", opts.From.Hex(), err))
 	}
@@ -270,26 +270,26 @@ func deployChequebookLoop(opts *bind.TransactOpts, backend chequebook.Backend) (
 
 // newChequebookFromContract - initialise the chequebook from a persisted json file or create a new one
 // caller holds the lock
-func (localProfile *LocalProfile) newChequebookFromContract(path string, backend chequebook.Backend) error {
-	hexkey := common.Bytes2Hex(localProfile.Contract.Bytes())
+func (lp *LocalProfile) newChequebookFromContract(path string, backend chequebook.Backend) error {
+	hexkey := common.Bytes2Hex(lp.Contract.Bytes())
 	err := os.MkdirAll(filepath.Join(path, "chequebooks"), os.ModePerm)
 	if err != nil {
 		return fmt.Errorf("unable to create directory for chequebooks: %v", err)
 	}
 
 	chbookpath := filepath.Join(path, "chequebooks", hexkey+".json")
-	localProfile.chbook, err = chequebook.LoadChequebook(chbookpath, localProfile.privateKey, backend, true)
+	lp.chbook, err = chequebook.LoadChequebook(chbookpath, lp.privateKey, backend, true)
 
 	if err != nil {
-		localProfile.chbook, err = chequebook.NewChequebook(chbookpath, localProfile.Contract, localProfile.privateKey, backend)
+		lp.chbook, err = chequebook.NewChequebook(chbookpath, lp.Contract, lp.privateKey, backend)
 		if err != nil {
-			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", localProfile.owner.Hex(), err))
-			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", localProfile.owner.Hex(), err)
+			log.Warn(fmt.Sprintf("unable to initialise chequebook (owner: %v): %v", lp.owner.Hex(), err))
+			return fmt.Errorf("unable to initialise chequebook (owner: %v): %v", lp.owner.Hex(), err)
 		}
 	}
 
-	localProfile.chbook.AutoDeposit(localProfile.AutoDepositInterval, localProfile.AutoDepositThreshold, localProfile.AutoDepositBuffer)
-	log.Info(fmt.Sprintf("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(localProfile.publicKey)).Hex()[:8], localProfile.Contract.Hex()[:8], localProfile.AutoDepositInterval, localProfile.AutoDepositThreshold, localProfile.AutoDepositBuffer))
+	lp.chbook.AutoDeposit(lp.AutoDepositInterval, lp.AutoDepositThreshold, lp.AutoDepositBuffer)
+	log.Info(fmt.Sprintf("auto deposit ON for %v -> %v: interval = %v, threshold = %v, buffer = %v)", crypto.PubkeyToAddress(*(lp.publicKey)).Hex()[:8], lp.Contract.Hex()[:8], lp.AutoDepositInterval, lp.AutoDepositThreshold, lp.AutoDepositBuffer))
 
 	return nil
 }
