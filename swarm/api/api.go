@@ -409,7 +409,7 @@ func (a *Api) Get(manifestKey storage.Key, path string) (reader storage.LazySect
 		contentKey = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
-			apiGetHttp300.Inc(1)
+			apiGetHTTP300.Inc(1)
 			return nil, entry.ContentType, status, contentKey, err
 		} else {
 			mimeType = entry.ContentType
