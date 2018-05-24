@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -348,12 +349,14 @@ func (r *Registry) getPeer(peerId discover.NodeID) *Peer {
 func (r *Registry) setPeer(peer *Peer) {
 	r.peersMu.Lock()
 	r.peers[peer.ID()] = peer
+	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(r.peers)))
 	r.peersMu.Unlock()
 }
 
 func (r *Registry) deletePeer(peer *Peer) {
 	r.peersMu.Lock()
 	delete(r.peers, peer.ID())
+	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(r.peers)))
 	r.peersMu.Unlock()
 }
 

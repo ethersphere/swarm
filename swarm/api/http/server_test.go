@@ -31,7 +31,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
@@ -98,7 +97,6 @@ func serverFunc(api *api.Api) testutil.TestServer {
 // and raw retrieve of that hash should return the data
 func TestBzzResourceMultihash(t *testing.T) {
 
-	t.Skip("fixed in different branch to be merged after this PR")
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
@@ -129,7 +127,6 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	// our mutable resource "name"
 	keybytes := "foo.eth"
-	keybyteshash := ens.EnsNode(keybytes)
 
 	// create the multihash update
 	url = fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, keybytes)
@@ -145,17 +142,19 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrcResp := &resourceResponse{}
+	rsrcResp := &storage.Key{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
-	if !bytes.Equal(rsrcResp.Update, keybyteshash.Bytes()) {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash.Hex(), rsrcResp.Update.Hex())
+
+	correctManifestKeyHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
+	if rsrcResp.Hex() != correctManifestKeyHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestKeyHex, rsrcResp)
 	}
 
 	// get bzz manifest transparent resource resolve
-	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp.Manifest)
+	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -173,14 +172,13 @@ func TestBzzResourceMultihash(t *testing.T) {
 	}
 }
 
-// Test resource updates using the raw methods
-func TestBzzResourceRaw(t *testing.T) {
+// Test resource updates using the raw update methods
+func TestBzzResource(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 
 	// our mutable resource "name"
 	keybytes := "foo.eth"
-	keybyteshash := ens.EnsNode(keybytes)
 
 	// data of update 1
 	databytes := make([]byte, 666)
@@ -203,17 +201,19 @@ func TestBzzResourceRaw(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrcResp := &resourceResponse{}
+	rsrcResp := &storage.Key{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
-	if !bytes.Equal(rsrcResp.Update, keybyteshash.Bytes()) {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", keybyteshash.Hex(), rsrcResp.Update.Hex())
+
+	correctManifestKeyHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
+	if rsrcResp.Hex() != correctManifestKeyHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestKeyHex, rsrcResp.Hex())
 	}
 
-	// get manifest
-	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp.Manifest)
+	// get the manifest
+	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -234,12 +234,14 @@ func TestBzzResourceRaw(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	if manifest.Entries[0].Hash != rsrcResp.Resource {
-		t.Fatalf("Expected manifest path '%s', got '%s'", keybyteshash, manifest.Entries[0].Hash)
+
+	correctRootKeyHex := "f667277e004e8486c7a3631fd226802430e84e9a81b6085d31f512a591ae0065"
+	if manifest.Entries[0].Hash != correctRootKeyHex {
+		t.Fatalf("Expected manifest path '%s', got '%s'", correctRootKeyHex, manifest.Entries[0].Hash)
 	}
 
 	// get bzz manifest transparent resource resolve
-	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp.Manifest)
+	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -253,7 +255,7 @@ func TestBzzResourceRaw(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// get non-existent name
+	// get non-existent name, should fail
 	url = fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
 	resp, err = http.Get(url)
 	if err != nil {
@@ -262,7 +264,8 @@ func TestBzzResourceRaw(t *testing.T) {
 	resp.Body.Close()
 
 	// get latest update (1.1) through resource directly
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
+	log.Info("get update latest = 1.1", "addr", correctManifestKeyHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -280,7 +283,8 @@ func TestBzzResourceRaw(t *testing.T) {
 	}
 
 	// update 2
-	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, keybytes)
+	log.Info("update 2")
+	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, correctManifestKeyHex)
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
@@ -292,7 +296,8 @@ func TestBzzResourceRaw(t *testing.T) {
 	}
 
 	// get latest update (1.2) through resource directly
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, keybytes)
+	log.Info("get update 1.2")
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -310,7 +315,8 @@ func TestBzzResourceRaw(t *testing.T) {
 	}
 
 	// get latest update (1.2) with specified period
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, keybytes)
+	log.Info("get update latest = 1.2")
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -328,7 +334,8 @@ func TestBzzResourceRaw(t *testing.T) {
 	}
 
 	// get first update (1.1) with specified period and version
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, keybytes)
+	log.Info("get first update 1.1")
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
