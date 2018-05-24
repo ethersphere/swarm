@@ -46,7 +46,7 @@ var (
 	apiPutFail         = metrics.NewRegisteredCounter("api.put.fail", nil)
 	apiGetCount        = metrics.NewRegisteredCounter("api.get.count", nil)
 	apiGetNotFound     = metrics.NewRegisteredCounter("api.get.notfound", nil)
-	apiGetHttp300      = metrics.NewRegisteredCounter("api.get.http.300", nil)
+	apiGetHTTP300      = metrics.NewRegisteredCounter("api.get.http.300", nil)
 	apiModifyCount     = metrics.NewRegisteredCounter("api.modify.count", nil)
 	apiModifyFail      = metrics.NewRegisteredCounter("api.modify.fail", nil)
 	apiAddFileCount    = metrics.NewRegisteredCounter("api.addfile.count", nil)
