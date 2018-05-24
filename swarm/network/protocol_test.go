@@ -134,6 +134,7 @@ func newBzzHandshakeTester(t *testing.T, n int, addr *BzzAddr) *bzzTester {
 		OverlayAddr:  addr.Over(),
 		UnderlayAddr: addr.Under(),
 		HiveParams:   NewHiveParams(),
+		NetworkID:    DefaultNetworkID,
 	}
 	kad := NewKademlia(addr.OAddr, NewKadParams())
 	bzz := NewBzz(config, kad, nil, nil, nil)
@@ -186,7 +187,7 @@ func (s *bzzTester) testHandshake(lhs, rhs *HandshakeMsg, disconnects ...*p2ptes
 func correctBzzHandshake(addr *BzzAddr) *HandshakeMsg {
 	return &HandshakeMsg{
 		Version:   3,
-		NetworkID: 322,
+		NetworkID: DefaultNetworkID,
 		Addr:      addr,
 	}
 }
@@ -199,7 +200,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
 		&HandshakeMsg{Version: 3, NetworkID: 321, Addr: NewAddrFromNodeID(id)},
-		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= 322)")},
+		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): network id mismatch 321 (!= 3)")},
 	)
 
 	if err != nil {
@@ -214,7 +215,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 0, NetworkID: 322, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: 0, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
 		&p2ptest.Disconnect{Peer: id, Error: fmt.Errorf("Handshake error: Message handler error: (msg code 0): version mismatch 0 (!= 3)")},
 	)
 
@@ -230,7 +231,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 
 	err := s.testHandshake(
 		correctBzzHandshake(addr),
-		&HandshakeMsg{Version: 3, NetworkID: 322, Addr: NewAddrFromNodeID(id)},
+		&HandshakeMsg{Version: 3, NetworkID: 3, Addr: NewAddrFromNodeID(id)},
 	)
 
 	if err != nil {
