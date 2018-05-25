@@ -17,7 +17,6 @@
 package stream
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"time"
@@ -210,9 +209,6 @@ R:
 		// this should be has locally
 		chunk, err := d.db.Get(req.Key)
 		if err == nil {
-			if !bytes.Equal(chunk.Key, req.Key) {
-				panic(fmt.Errorf("processReceivedChunks: chunk key %s != req key %s (peer %s)", chunk.Key.Hex(), req.Key.Hex(), req.peer.ID()))
-			}
 			continue R
 		}
 		if err != storage.ErrFetching {
