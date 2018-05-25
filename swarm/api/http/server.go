@@ -84,7 +84,7 @@ type ServerConfig struct {
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
 // starts up http server
-func StartHttpServer(api *api.Api, config *ServerConfig) {
+func StartHttpServer(api *api.API, config *ServerConfig) {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(config.CorsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
@@ -100,12 +100,12 @@ func StartHttpServer(api *api.Api, config *ServerConfig) {
 	go http.ListenAndServe(config.Addr, hdlr)
 }
 
-func NewServer(api *api.Api) *Server {
+func NewServer(api *api.API) *Server {
 	return &Server{api}
 }
 
 type Server struct {
-	api *api.Api
+	api *api.API
 }
 
 // Request wraps http.Request and also includes the parsed bzz URI
@@ -526,8 +526,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	var err error
 
 	// resolve the content key.
-	var manifestKey storage.Key
-	manifestKey = r.uri.Key()
+	var manifestKey = r.uri.Key()
 	if manifestKey == nil {
 		manifestKey, err = s.api.Resolve(r.uri)
 		if err != nil {

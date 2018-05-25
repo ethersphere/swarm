@@ -46,7 +46,7 @@ func (f *fakeBackend) HeaderByNumber(context context.Context, _ string, bigblock
 	}, nil
 }
 
-func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *TestSwarmServer {
+func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *TestSwarmServer {
 	dir, err := ioutil.TempDir("", "swarm-storage-test")
 	if err != nil {
 		t.Fatal(err)
@@ -78,7 +78,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *Tes
 		t.Fatal(err)
 	}
 
-	a := api.NewApi(dpa, nil, rh)
+	a := api.NewAPI(dpa, nil, rh)
 	srv := httptest.NewServer(serverFunc(a))
 	return &TestSwarmServer{
 		Server: srv,

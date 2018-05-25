@@ -39,18 +39,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-type ErrResourceReturn struct {
-	key string
-}
-
-func (e *ErrResourceReturn) Error() string {
-	return "resourceupdate"
-}
-
-func (e *ErrResourceReturn) Key() string {
-	return e.key
-}
-
 var (
 	apiResolveCount    = metrics.NewRegisteredCounter("api.resolve.count", nil)
 	apiResolveFail     = metrics.NewRegisteredCounter("api.resolve.fail", nil)
@@ -58,7 +46,7 @@ var (
 	apiPutFail         = metrics.NewRegisteredCounter("api.put.fail", nil)
 	apiGetCount        = metrics.NewRegisteredCounter("api.get.count", nil)
 	apiGetNotFound     = metrics.NewRegisteredCounter("api.get.notfound", nil)
-	apiGetHttp300      = metrics.NewRegisteredCounter("api.get.http.300", nil)
+	apiGetHTTP300      = metrics.NewRegisteredCounter("api.get.http.300", nil)
 	apiModifyCount     = metrics.NewRegisteredCounter("api.modify.count", nil)
 	apiModifyFail      = metrics.NewRegisteredCounter("api.modify.fail", nil)
 	apiAddFileCount    = metrics.NewRegisteredCounter("api.addfile.count", nil)
@@ -70,10 +58,12 @@ var (
 	apiGetInvalid      = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
+// Resolver - used for dns
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
 }
 
+// ResolveValidator used to validate the contained Resolver
 type ResolveValidator interface {
 	Resolver
 	Owner(node [32]byte) (common.Address, error)
@@ -86,10 +76,12 @@ type NoResolverError struct {
 	TLD string
 }
 
+// NewNoResolverError - only used in test's at the time of this writing
 func NewNoResolverError(tld string) *NoResolverError {
 	return &NoResolverError{TLD: tld}
 }
 
+// Error - ENS error
 func (e *NoResolverError) Error() string {
 	if e.TLD == "" {
 		return "no ENS resolver"
@@ -119,6 +111,7 @@ func MultiResolverOptionWithResolver(r ResolveValidator, tld string) MultiResolv
 	}
 }
 
+// MultiResolverOptionWithNameHash - is unused at the time of this writing
 func MultiResolverOptionWithNameHash(nameHash func(string) common.Hash) MultiResolverOption {
 	return func(m *MultiResolver) {
 		m.nameHash = nameHash
@@ -155,6 +148,7 @@ func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	return
 }
 
+// ValidateOwner - checks a MultiResolver Owner
 func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool, error) {
 	rs, err := m.getResolveValidator(name)
 	if err != nil {
@@ -171,6 +165,7 @@ func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool
 	return false, err
 }
 
+// HeaderByNumber - accessor
 func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr *big.Int) (*types.Header, error) {
 	rs, err := m.getResolveValidator(name)
 	if err != nil {
@@ -187,6 +182,7 @@ func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr
 	return nil, err
 }
 
+// getResolveValidator - accessor
 func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, error) {
 	rs := m.resolvers[""]
 	tld := path.Ext(name)
@@ -203,24 +199,25 @@ func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, er
 	return rs, nil
 }
 
+// SetNameHash - on a MultiResolver
 func (m *MultiResolver) SetNameHash(nameHash func(string) common.Hash) {
 	m.nameHash = nameHash
 }
 
 /*
-Api implements webserver/file system related content storage and retrieval
+API implements webserver/file system related content storage and retrieval
 on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
-type Api struct {
+type API struct {
 	resource *storage.ResourceHandler
 	dpa      *storage.DPA
 	dns      Resolver
 }
 
-//the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
-	self = &Api{
+// NewAPI - the api constructor initialises
+func NewAPI(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *API) {
+	self = &API{
 		dpa:      dpa,
 		dns:      dns,
 		resource: resourceHandler,
@@ -228,27 +225,29 @@ func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *storage.ResourceHan
 	return
 }
 
-// to be used only in TEST
-func (self *Api) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
-	fs := NewFileSystem(self)
+// Upload - to be used only in TEST
+func (a *API) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
+	fs := NewFileSystem(a)
 	hash, err = fs.Upload(uploadDir, index, toEncrypt)
 	return hash, err
 }
 
-// DPA reader API
-func (self *Api) Retrieve(key storage.Key) (reader storage.LazySectionReader, isEncrypted bool) {
-	return self.dpa.Retrieve(key)
+// Retrieve - DPA reader API
+func (a *API) Retrieve(key storage.Key) (reader storage.LazySectionReader, isEncrypted bool) {
+	return a.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (key storage.Key, wait func(), err error) {
+// Store DPA store API
+func (a *API) Store(data io.Reader, size int64, toEncrypt bool) (key storage.Key, wait func(), err error) {
 	log.Debug("api.store", "size", size)
-	return self.dpa.Store(data, size, toEncrypt)
+	return a.dpa.Store(data, size, toEncrypt)
 }
 
+// ErrResolve declaration
 type ErrResolve error
 
-// DNS Resolver
-func (self *Api) Resolve(uri *URI) (storage.Key, error) {
+// Resolve - DNS Resolver
+func (a *API) Resolve(uri *URI) (storage.Key, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
 
@@ -262,7 +261,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	}
 
 	// if DNS is not configured, check if the address is a hash
-	if self.dns == nil {
+	if a.dns == nil {
 		key := uri.Key()
 		if key == nil {
 			apiResolveFail.Inc(1)
@@ -272,7 +271,7 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	}
 
 	// try and resolve the address
-	resolved, err := self.dns.Resolve(uri.Addr)
+	resolved, err := a.dns.Resolve(uri.Addr)
 	if err == nil {
 		return resolved[:], nil
 	}
@@ -286,17 +285,17 @@ func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 }
 
 // Put provides singleton manifest creation on top of dpa store
-func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key, wait func(), err error) {
+func (a *API) Put(content, contentType string, toEncrypt bool) (k storage.Key, wait func(), err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
-	key, waitContent, err := self.dpa.Store(r, int64(len(content)), toEncrypt)
+	key, waitContent, err := a.dpa.Store(r, int64(len(content)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := self.dpa.Store(r, int64(len(manifest)), toEncrypt)
+	key, waitManifest, err := a.dpa.Store(r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
@@ -310,10 +309,10 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, contentKey storage.Key, err error) {
+func (a *API) Get(manifestKey storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, contentKey storage.Key, err error) {
 	log.Debug("api.get", "key", manifestKey, "path", path)
 	apiGetCount.Inc(1)
-	trie, err := loadManifest(self.dpa, manifestKey, nil)
+	trie, err := loadManifest(a.dpa, manifestKey, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
@@ -333,7 +332,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 			log.Trace("resource type", "key", manifestKey, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := self.resource.LoadResource(storage.Key(common.FromHex(entry.Hash)))
+			rsrc, err := a.resource.LoadResource(storage.Key(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -342,7 +341,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 			}
 
 			// use this key to retrieve the latest update
-			rsrc, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, &storage.ResourceLookupParams{})
+			rsrc, err = a.resource.LookupLatest(ctx, rsrc.NameHash(), true, &storage.ResourceLookupParams{})
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -355,7 +354,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 			if rsrc.Multihash {
 
 				// get the data of the update
-				_, rsrcData, err := self.resource.GetContent(rsrc.NameHash().Hex())
+				_, rsrcData, err := a.resource.GetContent(rsrc.NameHash().Hex())
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
@@ -380,7 +379,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 				log.Trace("resource is multihash", "key", manifestKey)
 
 				// get the manifest the multihash digest points to
-				trie, err := loadManifest(self.dpa, manifestKey, nil)
+				trie, err := loadManifest(a.dpa, manifestKey, nil)
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
@@ -410,13 +409,14 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 		contentKey = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
-			apiGetHttp300.Inc(1)
+			apiGetHTTP300.Inc(1)
 			return nil, entry.ContentType, status, contentKey, err
-		} else {
-			mimeType = entry.ContentType
-			log.Debug("content lookup key", "key", contentKey, "mimetype", mimeType)
-			reader, _ = self.dpa.Retrieve(contentKey)
 		}
+
+		mimeType = entry.ContentType
+		log.Debug("content lookup key", "key", contentKey, "mimetype", mimeType)
+		reader, _ = a.dpa.Retrieve(contentKey)
+
 	} else {
 		// no entry found
 		status = http.StatusNotFound
@@ -427,10 +427,11 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 	return
 }
 
-func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) (storage.Key, error) {
+// Modify - load's manifest and checks the content hash before recalculating and storing the manifest.
+func (a *API) Modify(key storage.Key, path, contentHash, contentType string) (storage.Key, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
-	trie, err := loadManifest(self.dpa, key, quitC)
+	trie, err := loadManifest(a.dpa, key, quitC)
 	if err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
@@ -453,7 +454,8 @@ func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) 
 	return trie.ref, nil
 }
 
-func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
+// AddFile - creates a new manifest entry, add's it to swarm, then adds a file to swarm.
+func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
 	apiAddFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -461,7 +463,7 @@ func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver
 		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := self.Resolve(uri)
+	mkey, err := a.Resolve(uri)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -480,7 +482,7 @@ func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver
 		ModTime:     time.Now(),
 	}
 
-	mw, err := self.NewManifestWriter(mkey, nil)
+	mw, err := a.NewManifestWriter(mkey, nil)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -503,7 +505,8 @@ func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver
 
 }
 
-func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
+// RemoveFile - remove's a file's entry in a manifest
+func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
 	apiRmFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -511,7 +514,7 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 		apiRmFileFail.Inc(1)
 		return "", err
 	}
-	mkey, err := self.Resolve(uri)
+	mkey, err := a.Resolve(uri)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -522,7 +525,7 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 		path = path[1:]
 	}
 
-	mw, err := self.NewManifestWriter(mkey, nil)
+	mw, err := a.NewManifestWriter(mkey, nil)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -544,7 +547,8 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 	return newMkey.String(), nil
 }
 
-func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
+// AppendFile - remove's old manifest appends file's entry to new manifest and add's it to swarm
+func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
 	apiAppendFileCount.Inc(1)
 
 	buffSize := offset + addSize
@@ -554,7 +558,7 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	buf := make([]byte, buffSize)
 
-	oldReader, _ := self.Retrieve(oldKey)
+	oldReader, _ := a.Retrieve(oldKey)
 	io.ReadAtLeast(oldReader, buf, int(offset))
 
 	newReader := bytes.NewReader(content)
@@ -568,7 +572,7 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 	totalSize := int64(len(buf))
 
 	// TODO(jmozah): to append using pyramid chunker when it is ready
-	//oldReader := self.Retrieve(oldKey)
+	//oldReader := a.Retrieve(oldKey)
 	//newReader := bytes.NewReader(content)
 	//combinedReader := io.MultiReader(oldReader, newReader)
 
@@ -577,7 +581,7 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := self.Resolve(uri)
+	mkey, err := a.Resolve(uri)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -588,7 +592,7 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 		path = path[1:]
 	}
 
-	mw, err := self.NewManifestWriter(mkey, nil)
+	mw, err := a.NewManifestWriter(mkey, nil)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -625,19 +629,20 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 }
 
-func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
+// BuildDirectoryTree - used by swarmfs_unix
+func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
 		return nil, nil, err
 	}
-	key, err = self.Resolve(uri)
+	key, err = a.Resolve(uri)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	quitC := make(chan bool)
-	rootTrie, err := loadManifest(self.dpa, key, quitC)
+	rootTrie, err := loadManifest(a.dpa, key, quitC)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't load manifest %v: %v", key.String(), err)
 	}
@@ -653,10 +658,10 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 	return key, manifestEntryMap, nil
 }
 
-// Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (string, []byte, error) {
+// ResourceLookup - Look up mutable resource updates at specific periods and versions
+func (a *API) ResourceLookup(ctx context.Context, key storage.Key, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (string, []byte, error) {
 	var err error
-	rsrc, err := self.resource.LoadResource(key)
+	rsrc, err := a.resource.LoadResource(key)
 	if err != nil {
 		return "", nil, err
 	}
@@ -664,56 +669,63 @@ func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uin
 		if period == 0 {
 			return "", nil, storage.NewResourceError(storage.ErrInvalidValue, "Period can't be 0")
 		}
-		_, err = self.resource.LookupVersion(ctx, rsrc.NameHash(), period, version, true, maxLookup)
+		_, err = a.resource.LookupVersion(ctx, rsrc.NameHash(), period, version, true, maxLookup)
 	} else if period != 0 {
-		_, err = self.resource.LookupHistorical(ctx, rsrc.NameHash(), period, true, maxLookup)
+		_, err = a.resource.LookupHistorical(ctx, rsrc.NameHash(), period, true, maxLookup)
 	} else {
-		_, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, maxLookup)
+		_, err = a.resource.LookupLatest(ctx, rsrc.NameHash(), true, maxLookup)
 	}
 	if err != nil {
 		return "", nil, err
 	}
-	return self.resource.GetContent(rsrc.NameHash().Hex())
+	return a.resource.GetContent(rsrc.NameHash().Hex())
 }
 
-func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {
-	key, _, err := self.resource.NewResource(ctx, name, frequency)
+// ResourceCreate - create's Resource and returns it's key
+func (a *API) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {
+	key, _, err := a.resource.NewResource(ctx, name, frequency)
 	if err != nil {
 		return nil, err
 	}
 	return key, nil
 }
 
-func (self *Api) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
-	return self.resourceUpdate(ctx, name, data, true)
-}
-func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
-	return self.resourceUpdate(ctx, name, data, false)
+// ResourceUpdateMultihash - updates Multihash resource
+func (a *API) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
+	return a.resourceUpdate(ctx, name, data, true)
 }
 
-func (self *Api) resourceUpdate(ctx context.Context, name string, data []byte, multihash bool) (storage.Key, uint32, uint32, error) {
+// ResourceUpdate - for non 'Multihash' resource
+func (a *API) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
+	return a.resourceUpdate(ctx, name, data, false)
+}
+
+func (a *API) resourceUpdate(ctx context.Context, name string, data []byte, multihash bool) (storage.Key, uint32, uint32, error) {
 	var key storage.Key
 	var err error
 	if multihash {
-		key, err = self.resource.UpdateMultihash(ctx, name, data)
+		key, err = a.resource.UpdateMultihash(ctx, name, data)
 	} else {
-		key, err = self.resource.Update(ctx, name, data)
+		key, err = a.resource.Update(ctx, name, data)
 	}
-	period, _ := self.resource.GetLastPeriod(name)
-	version, _ := self.resource.GetVersion(name)
+	period, _ := a.resource.GetLastPeriod(name)
+	version, _ := a.resource.GetVersion(name)
 	return key, period, version, err
 }
 
-func (self *Api) ResourceHashSize() int {
-	return self.resource.HashSize
+// ResourceHashSize - accessor
+func (a *API) ResourceHashSize() int {
+	return a.resource.HashSize
 }
 
-func (self *Api) ResourceIsValidated() bool {
-	return self.resource.IsValidated()
+// ResourceIsValidated - accessor
+func (a *API) ResourceIsValidated() bool {
+	return a.resource.IsValidated()
 }
 
-func (self *Api) ResolveResourceManifest(key storage.Key) (storage.Key, error) {
-	trie, err := loadManifest(self.dpa, key, nil)
+// ResolveResourceManifest - used in GET and POST server handlers
+func (a *API) ResolveResourceManifest(key storage.Key) (storage.Key, error) {
+	trie, err := loadManifest(a.dpa, key, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}
