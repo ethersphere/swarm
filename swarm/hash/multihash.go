@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -30,12 +30,19 @@ var (
 	multihashTypeCode uint8
 )
 
+// hook used by the master Init() to set the corresponding mulithash code
+// currently we naïvely set KECCAK256 (0x1b)
 func setMultihashCodeByName(typ string) {
 	multihashTypeCode = defaultMultihashTypeCode
 }
 
-// if first byte is the start of a multihash this function will try to parse it
-// if successful it returns the length of multihash data, 0 otherwise
+// check if valid swarm multihash
+func isSwarmMultihashType(code uint8) bool {
+	return code == multihashTypeCode
+}
+
+// GetLength returns the digest length of the provided multihash
+// It will fail if the multihash is not a valid swarm mulithash
 func GetLength(data []byte) (int, error) {
 	cursor := 0
 	typ, c := binary.Uvarint(data)
@@ -60,14 +67,8 @@ func GetLength(data []byte) (int, error) {
 	return inthashlength, nil
 }
 
-func FromMultihash(data []byte) ([]byte, error) {
-	hashLength, err := GetLength(data)
-	if err != nil {
-		return nil, err
-	}
-	return data[len(data)-hashLength:], nil
-}
-
+// NewMultihash hashes the provided data with the default hash function and wraps it as a mulithash
+// It will fail if the hasher is not initialized
 func NewMultihash(data []byte) ([]byte, error) {
 	h := GetHash()
 	if h == nil {
@@ -77,6 +78,17 @@ func NewMultihash(data []byte) ([]byte, error) {
 	return ToMultihash(hs), nil
 }
 
+// FromMulithash returns the digest portion of the multihash
+// It will fail if the multihash is not a valid swarm multihash
+func FromMultihash(data []byte) ([]byte, error) {
+	hashLength, err := GetLength(data)
+	if err != nil {
+		return nil, err
+	}
+	return data[len(data)-hashLength:], nil
+}
+
+// ToMulithash wraps the provided digest data with a swarm mulithash header
 func ToMultihash(hashData []byte) []byte {
 	buf := bytes.NewBuffer(nil)
 	b := make([]byte, 8)
@@ -86,8 +98,4 @@ func ToMultihash(hashData []byte) []byte {
 	buf.Write(b[:c])
 	buf.Write(hashData)
 	return buf.Bytes()
-}
-
-func isSwarmMultihashType(code uint8) bool {
-	return code == multihashTypeCode
 }

@@ -36,7 +36,7 @@ const MaxPO = 16
 const KeyLength = 32
 
 func init() {
-	swarmhash.Add(BMTHash, swarmhash.DefaultWorkerCount, MakeHashFunc(DefaultHash))
+	swarmhash.Add(BMTHash, 0, MakeHashFunc(DefaultHash))
 	swarmhash.Init(BMTHash)
 }
 
