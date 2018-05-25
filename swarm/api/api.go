@@ -364,7 +364,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 				}
 
 				// validate data as multihash
-				decodedMultihash, err := swarmhash.GetHash(rsrcData)
+				decodedMultihash, err := swarmhash.FromMultihash(rsrcData)
 				if err != nil {
 					apiGetInvalid.Inc(1)
 					status = http.StatusUnprocessableEntity

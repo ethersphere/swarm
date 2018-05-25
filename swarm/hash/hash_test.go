@@ -1,7 +1,8 @@
-package hash
+package swarmhash
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/rand"
 	"strconv"
@@ -11,10 +12,18 @@ import (
 )
 
 func TestHasher(t *testing.T) {
-	h := GetHasher("bar")
+	initTest()
+	h := GetHash()
 	dh := h.Hash(data)
 	if !bytes.Equal(dh, dataHash) {
 		t.Fatalf("Expected hash %x, got %x", dataHash, dh)
+	}
+
+	l := make([]byte, 8)
+	binary.LittleEndian.PutUint64(l, uint64(len(data)))
+	dh = h.HashWithLength(l, data)
+	if !bytes.Equal(dh, dataHashWithLength) {
+		t.Fatalf("Expected hashwithlength %x, got %x", dataHash, dh)
 	}
 }
 
@@ -33,6 +42,7 @@ func BenchmarkHash(b *testing.B) {
 }
 
 func benchmarkHash(b *testing.B) {
+	initTest()
 	args := strings.Split(b.Name(), "/")
 	fmt.Println(args)
 	threads, _ := strconv.ParseInt(args[1], 10, 0)
@@ -44,7 +54,7 @@ func benchmarkHash(b *testing.B) {
 		for j := 0; j < int(threads); j++ {
 			wg.Add(1)
 			go func() {
-				h := GetHasher("bar")
+				h := GetHashByName("bar")
 				h.Hash(dataToHash)
 				wg.Done()
 			}()

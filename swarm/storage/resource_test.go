@@ -47,9 +47,6 @@ func init() {
 	}
 	nameHash = ens.EnsNode(safeName)
 
-	// setup the hasher
-	swarmhash.AddHasher("BMT", 1, MakeHashFunc)
-	swarmhash.SetDefaultHash("BMT")
 }
 
 // simulated backend does not have the blocknumber call
@@ -395,7 +392,7 @@ func TestResourceMultihash(t *testing.T) {
 	// if it ever changes this test should also change
 	swarmhashbytes := ens.EnsNode("foo")
 	//swarmhashmulti, err := multihash.Encode(swarmhashbytes.Bytes(), multihash.KECCAK_256)
-	swarmhashmulti := swarmhash.WrapMultihash(swarmhashbytes.Bytes())
+	swarmhashmulti := swarmhash.ToMultihash(swarmhashbytes.Bytes())
 	swarmhashkey, err := rh.UpdateMultihash(ctx, safeName, swarmhashmulti)
 	if err != nil {
 		t.Fatal(err)
@@ -416,7 +413,7 @@ func TestResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 	//swarmhashdecode, err := multihash.Decode(data)
-	swarmhashdecode, err := swarmhash.GetHash(data)
+	swarmhashdecode, err := swarmhash.FromMultihash(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -452,7 +449,7 @@ func TestResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swarmhashdecode, err = swarmhash.GetHash(data)
+	swarmhashdecode, err = swarmhash.FromMultihash(data)
 	if err != nil {
 		t.Fatal(err)
 	}

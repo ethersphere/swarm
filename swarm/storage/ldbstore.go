@@ -89,8 +89,7 @@ type LDBStore struct {
 	capacity  uint64
 	bucketCnt []uint64
 
-	hashfunc swarmhash.SwarmHasher
-	po       func(Key) uint8
+	po func(Key) uint8
 
 	batchC   chan bool
 	batchesC chan struct{}
@@ -112,7 +111,6 @@ type LDBStore struct {
 // a function different from the one that is actually used.
 func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s = new(LDBStore)
-	s.hashfunc = params.Hash
 
 	s.batchC = make(chan bool)
 	s.batchesC = make(chan struct{}, 1)
@@ -406,9 +404,8 @@ func (s *LDBStore) Cleanup() {
 			s.delete(index.Idx, getIndexKey(key[1:]), s.po(Key(key[1:])))
 			errorsFound++
 		} else {
-			hasher := s.hashfunc()
-			hasher.Write(data[32:])
-			hash := hasher.Sum(nil)
+			h := swarmhash.GetHash()
+			hash := h.Hash(data[32:])
 			if !bytes.Equal(hash, key[1:]) {
 				log.Warn(fmt.Sprintf("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:]))
 				s.delete(index.Idx, getIndexKey(key[1:]), s.po(Key(key[1:])))
@@ -433,9 +430,8 @@ func (s *LDBStore) ReIndex() {
 			break
 		}
 		data := it.Value()
-		hasher := s.hashfunc()
-		hasher.Write(data)
-		hash := hasher.Sum(nil)
+		hasher := swarmhash.GetHash()
+		hash := hasher.Hash(data)
 
 		newKey := make([]byte, 10)
 		oldCntKey := make([]byte, 2)

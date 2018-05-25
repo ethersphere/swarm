@@ -42,7 +42,6 @@ const (
 
 type DPA struct {
 	ChunkStore
-	hashFunc swarmhash.SwarmHasher
 }
 
 type DPAParams struct {
@@ -63,15 +62,13 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 	if err != nil {
 		return nil, err
 	}
-	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(DefaultHash)))
+	localStore.Validators = append(localStore.Validators, NewContentAddressValidator())
 	return NewDPA(localStore, NewDPAParams()), nil
 }
 
 func NewDPA(store ChunkStore, params *DPAParams) *DPA {
-	hashFunc := MakeHashFunc(params.Hash)
 	return &DPA{
 		ChunkStore: store,
-		hashFunc:   hashFunc,
 	}
 }
 
@@ -81,8 +78,8 @@ func NewDPA(store ChunkStore, params *DPAParams) *DPA {
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
 func (self *DPA) Retrieve(key Key) (reader *LazyChunkReader, isEncrypted bool) {
-	isEncrypted = len(key) > self.hashFunc().Size()
-	getter := NewHasherStore(self.ChunkStore, self.hashFunc, isEncrypted)
+	isEncrypted = len(key) > swarmhash.GetHashSize()
+	getter := NewHasherStore(self.ChunkStore, isEncrypted)
 	reader = TreeJoin(key, getter, 0)
 	return
 }
@@ -90,10 +87,10 @@ func (self *DPA) Retrieve(key Key) (reader *LazyChunkReader, isEncrypted bool) {
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
 func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (key Key, wait func(), err error) {
-	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
+	putter := NewHasherStore(self.ChunkStore, toEncrypt)
 	return PyramidSplit(data, putter, putter)
 }
 
 func (self *DPA) HashSize() int {
-	return self.hashFunc().Size()
+	return swarmhash.GetHashSize()
 }

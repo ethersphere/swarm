@@ -212,7 +212,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	resourceHandler.SetStore(dpaChunkStore)
 
 	var validators []storage.ChunkValidator
-	validators = append(validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)))
+	validators = append(validators, storage.NewContentAddressValidator())
 	if resourceHandler != nil {
 		validators = append(validators, resourceHandler)
 	}

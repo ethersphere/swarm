@@ -18,6 +18,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 )
 
 const (
@@ -236,25 +237,12 @@ func NewResourceHandler(params *ResourceHandlerParams) (*ResourceHandler, error)
 		}
 	}
 	rh := &ResourceHandler{
-		headerGetter:   params.HeaderGetter,
-		ownerValidator: params.OwnerValidator,
-		resources:      make(map[string]*resource),
-		storeTimeout:   defaultStoreTimeout,
-		signer:         params.Signer,
-		hashPool: sync.Pool{
-			New: func() interface{} {
-				return MakeHashFunc(resourceHash)()
-			},
-		},
+		headerGetter:    params.HeaderGetter,
+		ownerValidator:  params.OwnerValidator,
+		resources:       make(map[string]*resource),
+		storeTimeout:    defaultStoreTimeout,
+		signer:          params.Signer,
 		queryMaxPeriods: params.QueryMaxPeriods,
-	}
-
-	for i := 0; i < hasherCount; i++ {
-		hashfunc := MakeHashFunc(resourceHash)()
-		if rh.HashSize == 0 {
-			rh.HashSize = hashfunc.Size()
-		}
-		rh.hashPool.Put(hashfunc)
 	}
 
 	return rh, nil
@@ -301,12 +289,8 @@ func (self *ResourceHandler) IsValidated() bool {
 
 // Create the resource update digest used in signatures
 func (self *ResourceHandler) keyDataHash(key Key, data []byte) common.Hash {
-	hasher := self.hashPool.Get().(SwarmHash)
-	defer self.hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(key[:])
-	hasher.Write(data)
-	return common.BytesToHash(hasher.Sum(nil))
+	hasher := swarmhash.GetHash()
+	return common.BytesToHash(hasher.Hash(key[:], data))
 }
 
 // Checks if current address matches owner address of ENS
@@ -930,16 +914,12 @@ func (self *ResourceHandler) setResource(nameHash string, rsrc *resource) {
 // Create a new update chunk key
 // format is: hash(period|version|namehash)
 func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehash common.Hash) Key {
-	hasher := self.hashPool.Get().(SwarmHash)
-	defer self.hashPool.Put(hasher)
-	hasher.Reset()
-	b := make([]byte, 4)
+	// format is: hash(period|version|namehash)
+	hasher := swarmhash.GetHash()
+	b := make([]byte, 8)
 	binary.LittleEndian.PutUint32(b, period)
-	hasher.Write(b)
-	binary.LittleEndian.PutUint32(b, version)
-	hasher.Write(b)
-	hasher.Write(namehash[:])
-	return hasher.Sum(nil)
+	binary.LittleEndian.PutUint32(b[4:], version)
+	return hasher.Hash(b, namehash[:])
 }
 
 // Checks if we already have an update on this resource, according to the value in the current state of the resource index

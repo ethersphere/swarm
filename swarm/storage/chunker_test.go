@@ -62,7 +62,7 @@ func (f *fakeChunkStore) Close() {
 }
 
 func newTestHasherStore(chunkStore ChunkStore, hash string) *hasherStore {
-	return NewHasherStore(chunkStore, MakeHashFunc(hash), false)
+	return NewHasherStore(chunkStore, false)
 }
 
 func testRandomBrokenData(n int, tester *chunkerTester) {

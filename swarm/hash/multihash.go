@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package hash
+package swarmhash
 
 import (
 	"bytes"
@@ -23,8 +23,11 @@ import (
 )
 
 const (
-	multihashTypeCode = 0x1b
-	multihashTypeName = "BMT"
+	defaultMultihashTypeCode = 0x1b
+)
+
+var (
+	multihashTypeCode uint8
 )
 
 // if first byte is the start of a multihash this function will try to parse it
@@ -35,7 +38,7 @@ func GetLength(data []byte) (int, error) {
 	if c <= 0 {
 		return 0, fmt.Errorf("unreadable hashtype field")
 	}
-	if !isSwarmMultihashType(int(typ)) {
+	if !isSwarmMultihashType(uint8(typ)) {
 		return 0, fmt.Errorf("hash code %x is not a swarm hashtype", typ)
 	}
 	cursor += c
@@ -53,7 +56,7 @@ func GetLength(data []byte) (int, error) {
 	return inthashlength, nil
 }
 
-func GetHash(data []byte) ([]byte, error) {
+func FromMultihash(data []byte) ([]byte, error) {
 	hashLength, err := GetLength(data)
 	if err != nil {
 		return nil, err
@@ -62,15 +65,15 @@ func GetHash(data []byte) ([]byte, error) {
 }
 
 func NewMultihash(data []byte) ([]byte, error) {
-	h := GetHasher(multihashTypeName)
+	h := GetHash()
 	if h == nil {
-		return nil, fmt.Errorf("hasher for %s not initialized", multihashTypeName)
+		return nil, fmt.Errorf("hasher for %s not initialized", defaultHash)
 	}
 	hs := h.Hash(data)
-	return WrapMultihash(hs), nil
+	return ToMultihash(hs), nil
 }
 
-func WrapMultihash(hashData []byte) []byte {
+func ToMultihash(hashData []byte) []byte {
 	buf := bytes.NewBuffer(nil)
 	b := make([]byte, 8)
 	c := binary.PutUvarint(b, uint64(multihashTypeCode))
@@ -81,6 +84,6 @@ func WrapMultihash(hashData []byte) []byte {
 	return buf.Bytes()
 }
 
-func isSwarmMultihashType(typ int) bool {
-	return typ == multihashTypeCode
+func isSwarmMultihashType(code uint8) bool {
+	return code == multihashTypeCode
 }
