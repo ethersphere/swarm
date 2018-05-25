@@ -36,7 +36,7 @@ import (
 
 var (
 	errEmptyMountPoint      = errors.New("need non-empty mount point")
-	errNoRelativeMountPoint = errors.New("relative mount points are not allowed. please specify an absolute path")
+	errNoRelativeMountPoint = errors.New("invalid path for mount point (need absolute path)")
 	errMaxMountCount        = errors.New("max FUSE mount count reached")
 	errMountTimeout         = errors.New("mount timeout")
 	errAlreadyMounted       = errors.New("mount point is already serving")

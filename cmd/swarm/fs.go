@@ -48,7 +48,7 @@ func mount(cliContext *cli.Context) {
 	mf := &fuse.MountInfo{}
 	mountPoint, err := filepath.Abs(filepath.Clean(args[1]))
 	if err != nil {
-		utils.Fatalf("had an error with getting the mount point: %v", err)
+		utils.Fatalf("error expanding path for mount point: %v", err)
 	}
 	err = client.CallContext(ctx, mf, "swarmfs_mount", args[0], mountPoint)
 	if err != nil {
