@@ -286,20 +286,21 @@ func (self *ResourceHandler) notify(rsrc *resource) error {
 	if self.notifier == nil {
 		return errors.New("Notifications not enabled")
 	}
-	if !self.notifier.IsActive(*rsrc.name) {
-		return fmt.Errorf("Notifications for %s not enabled", *rsrc.name)
+	if !self.notifier.IsActive(rsrc.name) {
+		return fmt.Errorf("Notifications for %s not enabled", rsrc.name)
 	}
 	notificationData, err := self.createNotification(rsrc)
 	if err != nil {
 		return err
 	}
-	self.notifier.Notify(*rsrc.name, notificationData)
+	self.notifier.Notify(rsrc.name, notificationData)
 	return nil
 }
 
 // CreateNotification creates a new notification data structure to be sent over the notifier
 func (self *ResourceHandler) CreateNotification(name string) ([]byte, error) {
-	rsrc, ok := self.resources[name]
+	nameHash := ens.EnsNode(name)
+	rsrc, ok := self.resources[nameHash.Hex()]
 	if !ok {
 		return nil, fmt.Errorf("Unknown resource '%s'", name)
 	}
@@ -309,13 +310,13 @@ func (self *ResourceHandler) CreateNotification(name string) ([]byte, error) {
 func (self *ResourceHandler) createNotification(rsrc *resource) ([]byte, error) {
 	b := bytes.NewBuffer(nil)
 	ib := make([]byte, 4)
-	period, err := self.GetLastPeriod(*rsrc.name)
+	period, err := self.GetLastPeriod(rsrc.nameHash.Hex())
 	if err != nil {
 		return nil, err
 	}
 	binary.LittleEndian.PutUint32(ib, period)
 	b.Write(ib)
-	version, err := self.GetVersion(*rsrc.name)
+	version, err := self.GetVersion(rsrc.nameHash.Hex())
 	if err != nil {
 		return nil, err
 	}
@@ -381,9 +382,11 @@ func (self *ResourceHandler) keyDataHash(key storage.Key, data []byte) common.Ha
 
 // Checks if current address matches owner address of ENS
 func (self *ResourceHandler) checkAccess(name string, address common.Address) (bool, error) {
-	if self.ownerValidator == nil {
+	//if !self.IsValidated() {
+	if fmt.Sprintf("%p", self.ownerValidator) == "0x0" {
 		return true, nil
 	}
+	log.Warn("ownervalidator in mru", "v", self.ownerValidator, "p", fmt.Sprintf("%p", self.ownerValidator))
 	return self.ownerValidator.ValidateOwner(name, address)
 }
 
@@ -986,7 +989,7 @@ func (self *ResourceHandler) setResource(nameHash string, rsrc *resource) {
 	self.resources[nameHash] = rsrc
 }
 
-// used for chunk keys
+// used for update chunk keys
 func (self *ResourceHandler) resourceHash(period uint32, version uint32, namehash common.Hash) storage.Key {
 	// format is: hash(period|version|namehash)
 	hasher := self.hashPool.Get().(storage.SwarmHash)

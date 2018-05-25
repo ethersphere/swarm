@@ -1,4 +1,4 @@
-package resource
+package mru
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/pss"
@@ -50,7 +51,8 @@ func (self *API) RequestNotification(ctx context.Context, name string, pubkeyHex
 // EnableNotifications turns on pss notifications for the specified resource
 // The resource has to be loaded
 func (self *API) EnableNotifications(name string) error {
-	if _, ok := self.resourceHandler.resources[name]; !ok {
+	nameHash := ens.EnsNode(name)
+	if _, ok := self.resourceHandler.resources[nameHash.Hex()]; !ok {
 		return fmt.Errorf("Unknown resource '%s'", name)
 	}
 	self.resourceHandler.notifier.NewNotifier(name, notify.DefaultAddressLength, self.resourceHandler.CreateNotification)

@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -15,13 +16,20 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage/resource"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 )
 
 const (
 	resourceName      = "foo.eth"
 	resourceFrequency = 2
 )
+
+type fakeResolver struct {
+}
+
+func Resolve(addr string) (h common.Hash, err error) {
+	return common.HexToHash("0x0"), nil
+}
 
 func TestResourceNotifyWithSwarm(t *testing.T) {
 	dir, err := ioutil.TempDir("", "swarm-resource-test")
@@ -48,7 +56,7 @@ func TestResourceNotifyWithSwarm(t *testing.T) {
 			}
 
 			config.Init(privkey)
-			s, err := NewSwarm(nil, nil, config, nil)
+			s, err := NewSwarm(config, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -115,7 +123,7 @@ func TestResourceNotifyWithSwarm(t *testing.T) {
 	}
 
 	// turn on notifications
-	err = l_rpc.Call(nil, "resource_enableNotifications", resourceName)
+	err = l_rpc.Call(nil, "mru_enableNotifications", resourceName)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,8 +144,8 @@ func TestResourceNotifyWithSwarm(t *testing.T) {
 
 	time.Sleep(time.Second)
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
-	nC := make(chan resource.Notification)
-	r_sub_rsrc, err := r_rpc.Subscribe(ctx, "resource", nC, "requestNotification", resourceName, l_pubkey, l_addr)
+	nC := make(chan mru.Notification)
+	r_sub_rsrc, err := r_rpc.Subscribe(ctx, "mru", nC, "requestNotification", resourceName, l_pubkey, l_addr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,6 +163,7 @@ func TestResourceNotifyWithSwarm(t *testing.T) {
 	}
 
 	nsg = <-nC
+	log.Warn("nsg", "n", nsg)
 	if nsg.Period != lastPeriod || nsg.Version != lastVersion {
 		t.Fatalf("Expected period/version %d.%d, got %d.%d", lastPeriod, lastVersion, nsg.Period, nsg.Version)
 

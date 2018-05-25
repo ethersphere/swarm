@@ -64,15 +64,11 @@ var (
 
 // the swarm stack
 type Swarm struct {
-	config *api.Config  // swarm configuration
-	api    *api.Api     // high level api layer (fs/manifest)
-	dns    api.Resolver // DNS registrar
-	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
-	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	streamer *stream.Registry
-	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
+	config          *api.Config  // swarm configuration
+	api             *api.Api     // high level api layer (fs/manifest)
+	dns             api.Resolver // DNS registrar
+	dpa             *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	streamer        *stream.Registry
 	bzz             *network.Bzz       // the logistic manager
 	backend         chequebook.Backend // simple blockchain Backend
 	privateKey      *ecdsa.PrivateKey
@@ -205,7 +201,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	// Enable Mutable Resources
 	// if ENS is not set, update integrity will not be checked, and block height will be simulated
-	rhparams := &resource.ResourceHandlerParams{
+	rhparams := &mru.ResourceHandlerParams{
 		// TODO: config parameter to set limits
 		QueryMaxPeriods: &mru.ResourceLookupParams{
 			Limit: false,
@@ -241,15 +237,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	log.Debug(fmt.Sprintf("Set up local storage"))
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
-
-	// Pss = postal service over swarm (devp2p over bzz)
-	self.ps, err = pss.NewPss(to, config.Pss)
-	if err != nil {
-		return nil, err
-	}
-	if pss.IsActiveHandshake {
-		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
-	}
 
 	self.api = api.NewApi(self.dpa, self.dns, self.resourceHandler)
 	// Manifests for Smart Hosting
@@ -524,9 +511,9 @@ func (self *Swarm) APIs() []rpc.API {
 		},
 		{
 
-			Namespace: "resource",
+			Namespace: "mru",
 			Version:   "0.1",
-			Service:   resource.NewAPI(self.resourceHandler),
+			Service:   mru.NewAPI(self.resourceHandler),
 			Public:    true,
 		},
 		// {Namespace, Version, api.NewAdmin(self), false},

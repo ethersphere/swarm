@@ -705,8 +705,9 @@ func (self *Api) resourceUpdate(ctx context.Context, name string, data []byte, m
 	} else {
 		key, err = self.resource.Update(ctx, name, data)
 	}
-	period, _ := self.resource.GetLastPeriod(name)
-	version, _ := self.resource.GetVersion(name)
+	nameHash := ens.EnsNode(name)
+	period, _ := self.resource.GetLastPeriod(nameHash.Hex())
+	version, _ := self.resource.GetVersion(nameHash.Hex())
 	return key, period, version, err
 }
 

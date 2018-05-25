@@ -115,7 +115,11 @@ func (self *Controller) Request(name string, pubkey *ecdsa.PublicKey, address ps
 	self.handlers[name] = handler
 	self.pss.SetPeerPublicKey(pubkey, controlTopic, &address)
 	pubkeyid := common.ToHex(crypto.FromECDSAPub(pubkey))
-	return self.pss.SendAsym(pubkeyid, controlTopic, msg.Serialize())
+	err := self.pss.SendAsym(pubkeyid, controlTopic, msg.Serialize())
+	if err != nil {
+		log.Error("err", "err", err)
+	}
+	return err
 }
 
 func (self *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {

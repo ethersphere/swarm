@@ -52,7 +52,7 @@ func init() {
 
 	flag.Parse()
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.CallerFileHandler(log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))))
 }
 
 // TestSwarmNetwork runs a series of test simulations with

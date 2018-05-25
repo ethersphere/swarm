@@ -590,7 +590,8 @@ func TestResourceNotify(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, err = rh.NewResource(ctx, safeName, resourceFrequency)
+
+	_, _, err = rh.NewResource(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
