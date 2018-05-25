@@ -21,6 +21,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -64,7 +66,7 @@ func (f *Fetcher) fetch(ctx context.Context) {
 	// put offer/request
 	var offer storage.Address
 	if offerIF := ctx.Value("offer"); offerIF != nil {
-		offer = offerIF.(storage.Address)
+		offer = storage.Address(common.FromHex(offerIF.(string)))
 	}
 	select {
 	case f.offerC <- offer:

@@ -214,12 +214,12 @@ it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
 	resource *storage.ResourceHandler
-	dpa      *DPA
+	dpa      *storage.DPAAPI
 	dns      Resolver
 }
 
 //the api constructor initialises
-func NewApi(dpa *DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
+func NewApi(dpa *storage.DPAAPI, dns Resolver, resourceHandler *storage.ResourceHandler) (self *Api) {
 	self = &Api{
 		dpa:      dpa,
 		dns:      dns,
@@ -229,20 +229,20 @@ func NewApi(dpa *DPA, dns Resolver, resourceHandler *storage.ResourceHandler) (s
 }
 
 // to be used only in TEST
-func (self *Api) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
-	fs := NewFileSystem(self)
-	hash, err = fs.Upload(uploadDir, index, toEncrypt)
-	return hash, err
-}
+// func (self *Api) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
+// 	fs := NewFileSystem(self)
+// 	hash, err = fs.Upload(uploadDir, index, toEncrypt)
+// 	return hash, err
+// }
 
 // DPA reader API
 func (self *Api) Retrieve(key storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
 	return self.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (key storage.Address, wait func(), err error) {
+func (self *Api) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (key storage.Address, wait func(context.Context) error, err error) {
 	log.Debug("api.store", "size", size)
-	return self.dpa.Store(data, size, toEncrypt)
+	return self.dpa.Store(ctx, data, size, toEncrypt)
 }
 
 type ErrResolve error
@@ -286,24 +286,27 @@ func (self *Api) Resolve(uri *URI) (storage.Address, error) {
 }
 
 // Put provides singleton manifest creation on top of dpa store
-func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Address, wait func(), err error) {
+func (self *Api) Put(ctx context.Context, content, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
-	key, waitContent, err := self.dpa.Store(r, int64(len(content)), toEncrypt)
+	key, waitContent, err := self.dpa.Store(ctx, r, int64(len(content)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := self.dpa.Store(r, int64(len(manifest)), toEncrypt)
+	key, waitManifest, err := self.dpa.Store(ctx, r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
-	return key, func() {
-		waitContent()
-		waitManifest()
+	return key, func(ctx context.Context) error {
+		err := waitContent(ctx)
+		if err != nil {
+			return err
+		}
+		return waitManifest(ctx)
 	}, nil
 }
 

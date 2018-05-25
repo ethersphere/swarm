@@ -22,6 +22,7 @@ package http
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,7 +50,7 @@ import (
 
 type resourceResponse struct {
 	Manifest storage.Address `json:"manifest"`
-	Resource string      `json:"resource"`
+	Resource string          `json:"resource"`
 	Update   storage.Address `json:"update"`
 }
 
@@ -145,7 +146,10 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		Respond(w, r, "missing Content-Length header in request", http.StatusBadRequest)
 		return
 	}
-	key, _, err := s.api.Store(r.Body, r.ContentLength, toEncrypt)
+
+	// TODO: expose context as parameter, do not instantiate it here
+	ctx := context.Background()
+	key, _, err := s.api.Store(ctx, r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -613,7 +617,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 
 	// check the root chunk exists by retrieving the file's size
 	reader, isEncrypted := s.api.Retrieve(key)
-	if _, err := reader.Size(nil); err != nil {
+	if _, err := reader.Size(); err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("root chunk not found %s: %s", key, err), http.StatusNotFound)
 		return
@@ -678,7 +682,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 
 		// retrieve the entry's key and size
 		reader, isEncrypted := s.api.Retrieve(storage.Address(common.Hex2Bytes(entry.Hash)))
-		size, err := reader.Size(nil)
+		size, err := reader.Size()
 		if err != nil {
 			return err
 		}
@@ -895,7 +899,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	// check the root chunk exists by retrieving the file's size
-	if _, err := reader.Size(nil); err != nil {
+	if _, err := reader.Size(); err != nil {
 		getFileNotFound.Inc(1)
 		Respond(w, r, fmt.Sprintf("file not found %s: %s", r.uri, err), http.StatusNotFound)
 		return

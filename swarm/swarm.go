@@ -68,7 +68,7 @@ type Swarm struct {
 	dns    api.Resolver // DNS registrar
 	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
 	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa *DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	dpa *storage.DPAAPI // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
 	streamer *stream.Registry
 	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
@@ -102,10 +102,10 @@ func (self *Swarm) API() *SwarmAPI {
 // MockStore should be used only for testing.
 func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
 
-	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
+	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroAddress) {
 		return nil, fmt.Errorf("empty public key")
 	}
-	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroKey) {
+	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroAddress) {
 		return nil, fmt.Errorf("empty bzz key")
 	}
 
@@ -175,7 +175,7 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		return
 	}
 
-	db := storage.NewDBAPI(self.lstore)
+	db := storage.NewNetStore(self.lstore)
 	delivery := stream.NewDelivery(to, db)
 
 	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{

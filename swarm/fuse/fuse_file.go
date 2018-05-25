@@ -83,8 +83,7 @@ func (file *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 
 	if file.fileSize == -1 {
 		reader, _ := file.mountInfo.swarmApi.Retrieve(file.key)
-		quitC := make(chan bool)
-		size, err := reader.Size(quitC)
+		size, err := reader.Size()
 		if err != nil {
 			log.Warn("Couldnt get size of file %s : %v", file.path, err)
 		}
