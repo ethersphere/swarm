@@ -204,7 +204,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	} else {
 		log.Warn("No ETH API specified, resource updates will use block height approximation")
 		// TODO: blockestimator should use saved values derived from last time ethclient was connected
-		rhparams.HeaderGetter = storage.NewBlockEstimator()
+		rhparams.HeaderGetter = mru.NewBlockEstimator()
 	}
 	resourceHandler, err = mru.NewResourceHandler(rhparams)
 	if err != nil {

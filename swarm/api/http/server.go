@@ -581,7 +581,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 		}
 		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
 	default: // bogus
-		err = storage.NewResourceError(storage.ErrInvalidValue, "invalid mutable resource request")
+		err = mru.NewResourceError(storage.ErrInvalidValue, "invalid mutable resource request")
 	}
 
 	// any error from the switch statement will end up here

@@ -343,7 +343,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 			}
 
 			// use this key to retrieve the latest update
-			rsrc, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, &storage.ResourceLookupParams{})
+			rsrc, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, &mru.ResourceLookupParams{})
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -655,7 +655,7 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32, version uint32, maxLookup *mru.ResourceLookupParams) (storage.Key, []byte, error) {
+func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uint32, version uint32, maxLookup *mru.ResourceLookupParams) (string, []byte, error) {
 	var err error
 	rsrc, err := self.resource.LoadResource(key)
 	if err != nil {
@@ -663,7 +663,7 @@ func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32,
 	}
 	if version != 0 {
 		if period == 0 {
-			return nil, nil, mru.NewResourceError(mru.ErrInvalidValue, "Period can't be 0")
+			return "", nil, mru.NewResourceError(mru.ErrInvalidValue, "Period can't be 0")
 		}
 		_, err = self.resource.LookupVersion(ctx, rsrc.NameHash(), period, version, true, maxLookup)
 	} else if period != 0 {
@@ -674,7 +674,12 @@ func (self *Api) ResourceLookup(ctx context.Context, name string, period uint32,
 	if err != nil {
 		return "", nil, err
 	}
-	return self.resource.GetContent(rsrc.NameHash().Hex())
+	var data []byte
+	_, data, err = self.resource.GetContent(rsrc.NameHash().Hex())
+	if err != nil {
+		return "", nil, err
+	}
+	return rsrc.Name(), data, nil
 }
 
 func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {

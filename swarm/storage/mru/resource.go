@@ -38,14 +38,14 @@ import (
 )
 
 const (
-	signatureLength        = 65
-	indexSize              = 18
-	DbDirName              = "resource"
-	chunkSize              = 4096 // temporary until we implement DPA in the resourcehandler
-	defaultStoreTimeout    = 4000 * time.Millisecond
-	hasherCount            = 8
-	resourceHash           = storage.SHA3Hash
-	defaultRetrieveTimeout = 100 * time.Millisecond
+	signatureLength         = 65
+	metadataChunkOffsetSize = 18
+	DbDirName               = "resource"
+	chunkSize               = 4096 // temporary until we implement DPA in the resourcehandler
+	defaultStoreTimeout     = 4000 * time.Millisecond
+	hasherCount             = 8
+	resourceHash            = storage.SHA3Hash
+	defaultRetrieveTimeout  = 100 * time.Millisecond
 )
 
 type blockEstimator struct {
@@ -282,7 +282,7 @@ func (self *ResourceHandler) SetStore(store *storage.NetStore) {
 //
 // If resource update, owner is checked against ENS record of resource name inferred from chunk data
 // If parsed signature is nil, validates automatically
-// If not resource update, it validates are root chunk if length is indexSize and first two bytes are 0
+// If not resource update, it validates are root chunk if length is metadataChunkOffsetSize and first two bytes are 0
 func (self *ResourceHandler) Validate(key storage.Key, data []byte) bool {
 	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
@@ -336,7 +336,7 @@ func (self *ResourceHandler) GetContent(name string) (storage.Key, []byte, error
 	if rsrc == nil || !rsrc.isSynced() {
 		return nil, nil, NewResourceError(ErrNotFound, "Resource does not exist or is not synced")
 	}
-	return rsrc.name, rsrc.data, nil
+	return rsrc.lastKey, rsrc.data, nil
 }
 
 // Gets the period of the current data loaded in the resource
@@ -371,7 +371,7 @@ func (self *ResourceHandler) chunkSize() int64 {
 // The signature data should match the hash of the idna-converted name by the validator's namehash function, NOT the raw name bytes.
 //
 // The start block of the resource update will be the actual current block height of the connected network.
-func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequency uint64) (Key, *resource, error) {
+func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequency uint64) (storage.Key, *resource, error) {
 
 	// frequency 0 is invalid
 	if frequency == 0 {
@@ -427,7 +427,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	return chunk.Key, rsrc, nil
 }
 
-func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, frequency uint64) *Chunk {
+func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, frequency uint64) *storage.Chunk {
 	// the metadata chunk points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
 	// it also contains the name of the resource, so we know what resource we are working with
@@ -444,14 +444,14 @@ func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, freque
 	// the key of the metadata chunk is content-addressed
 	// if it wasn't we couldn't replace it later
 	// resolving this relationship is left up to external agents (for example ENS)
-	hasher := self.hashPool.Get().(SwarmHash)
+	hasher := self.hashPool.Get().(storage.SwarmHash)
 	hasher.Reset()
 	hasher.Write(data)
 	key := hasher.Sum(nil)
 	self.hashPool.Put(hasher)
 
 	// make the chunk and send it to swarm
-	chunk := NewChunk(key, nil)
+	chunk := storage.NewChunk(key, nil)
 	chunk.SData = make([]byte, metadataChunkOffsetSize+len(name))
 	copy(chunk.SData, data)
 	return chunk
@@ -619,8 +619,8 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 
 // Retrieves a resource metadata chunk and creates/updates the index entry for it
 // with the resulting metadata
-func (self *ResourceHandler) LoadResource(key Key) (*resource, error) {
-	chunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
+func (self *ResourceHandler) LoadResource(key storage.Key) (*resource, error) {
+	chunk, err := self.chunkStore.GetWithTimeout(key, defaultRetrieveTimeout)
 	if err != nil {
 		return nil, NewResourceError(ErrNotFound, err.Error())
 	}
@@ -1070,7 +1070,7 @@ func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*Res
 	if err != nil {
 		return nil, fmt.Errorf("localstore create fail, path %s: %v", path, err)
 	}
-	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(resourceHash)))
+	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHash)))
 	localStore.Validators = append(localStore.Validators, rh)
 	dpaStore := storage.NewNetStore(localStore, nil)
 	rh.SetStore(dpaStore)
