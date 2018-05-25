@@ -96,13 +96,12 @@ type JoinerParams struct {
 
 type TreeChunker struct {
 	branches int64
-	hashFunc SwarmHasher
 	dataSize int64
 	data     io.Reader
 	// calculated
 	key         Key
 	depth       int
-	hashSize    int64        // self.hashFunc.New().Size()
+	hashSize    int64
 	chunkSize   int64        // hashSize* branches
 	workerCount int64        // the number of worker routines used
 	workerLock  sync.RWMutex // lock for the worker count

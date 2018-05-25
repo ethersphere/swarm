@@ -137,7 +137,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 
 	cacheCap := 200
 	requestsCap := 200
-	memStore := NewMemStore(NewStoreParams(4000, 200, 200, nil, nil), nil)
+	memStore := NewMemStore(NewStoreParams(4000, 200, 200, nil), nil)
 
 	tests := []struct {
 		n         int    // number of chunks to push to memStore

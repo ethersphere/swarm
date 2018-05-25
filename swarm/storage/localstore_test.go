@@ -64,7 +64,7 @@ func TestValidator(t *testing.T) {
 
 	// add content address validator and check puts
 	// bad should fail, good should pass
-	store.Validators = append(store.Validators, NewContentAddressValidator(hashfunc))
+	store.Validators = append(store.Validators, NewContentAddressValidator())
 	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]

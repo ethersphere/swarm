@@ -35,7 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/multihash"
+	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -363,20 +363,15 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 					return reader, mimeType, status, nil, err
 				}
 
-				// validate that data as multihash
-				decodedMultihash, err := multihash.Decode(rsrcData)
+				// validate data as multihash
+				decodedMultihash, err := swarmhash.FromMultihash(rsrcData)
 				if err != nil {
 					apiGetInvalid.Inc(1)
-					status = http.StatusInternalServerError
-					log.Warn(fmt.Sprintf("could not decode resource multihash: %v", err))
-					return reader, mimeType, status, nil, err
-				} else if decodedMultihash.Code != multihash.KECCAK_256 {
-					apiGetInvalid.Inc(1)
 					status = http.StatusUnprocessableEntity
-					log.Warn(fmt.Sprintf("invalid resource multihash code: %x", decodedMultihash.Code))
+					log.Warn(fmt.Sprintf("invalid resource: %v", err))
 					return reader, mimeType, status, nil, err
 				}
-				manifestKey = storage.Key(decodedMultihash.Digest)
+				manifestKey = storage.Key(decodedMultihash)
 				log.Trace("resource is multihash", "key", manifestKey)
 
 				// get the manifest the multihash digest points to
