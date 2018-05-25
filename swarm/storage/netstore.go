@@ -22,7 +22,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/ethereum/go-ethereum/log"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -180,10 +179,8 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 
 	select {
 	case <-rctx.Done():
-		log.Warn("context done")
 		return nil, rctx.Err()
 	case <-f.deliveredC:
-		log.Warn("chunk delivery", "addr", f.addr)
 		return f.chunk, nil
 	}
 }

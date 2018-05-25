@@ -18,11 +18,14 @@ package storage
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"io/ioutil"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/common"
 )
 
 var (
@@ -45,7 +48,7 @@ type mockFetcher struct {
 func (m *mockFetcher) fetch(ctx context.Context) {
 	var peers []Address
 	m.peers.Range(func(key interface{}, _ interface{}) bool {
-		peers = append(peers, key.(Address))
+		peers = append(peers, common.FromHex(key.(string)))
 		return true
 	})
 	m.peersPerFetch = append(m.peersPerFetch, peers)
@@ -122,25 +125,18 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	addr := Address(make([]byte, 32))
-	ctx, _ := context.WithTimeout(context.Background(), searchTimeout)
-	// peers := [][]Address{[]Address{Address(make([]byte, 32))},
-	// 	[]Address{Address(make([]byte, 32)), Address(make([]byte, 32))},
-	// 	[]Address{Address(make([]byte, 32)), Address(make([]byte, 32)), Address(make([]byte, 32))}}
+	addr := randomAddr()
+	peers := []string{randomAddr().Hex(), randomAddr().Hex(), randomAddr().Hex()}
 
-	nrGets := 3
+	ctx, _ := context.WithTimeout(context.Background(), searchTimeout)
 	errC := make(chan error)
+	nrGets := 3
 	for i := 0; i < nrGets; i++ {
-		// ctx = context.WithValue(ctx, "peer", peers[i])
+		peer := peers[i]
 		go func() {
+			ctx = context.WithValue(ctx, "peer", peer)
 			_, err = netStore.Get(ctx, addr)
 			errC <- err
-			// if err == nil {
-			// 	t.Fatalf("Expected error got nil")
-			// }
-			// if chunk != nil {
-			// 	t.Fatalf("Chunk expected nil got %v", err)
-			// }
 		}()
 	}
 
@@ -162,12 +158,18 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 		t.Fatalf("Expected 3 got %v", len(fetcher.peersPerFetch))
 	}
 
-	// for i, peers := range fetcher.peersPerFetch {
-	// 	if len(peers) < i+1 {
-	// 		t.Fatalf("Expected at least %v got %v", i+1, len(peers))
-	// 	}
-	// }
+	for i, peers := range fetcher.peersPerFetch {
+		if len(peers) < i+1 {
+			t.Fatalf("Expected at least %v got %v", i+1, len(peers))
+		}
+	}
 
+}
+
+func randomAddr() Address {
+	addr := make([]byte, 32)
+	rand.Read(addr)
+	return Address(addr)
 }
 
 // func TestNetstoreRepeatedFailedRequest(t *testing.T) {
