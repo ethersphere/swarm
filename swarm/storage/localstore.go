@@ -131,10 +131,8 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	self.memStore.Put(chunk)
 
 	if memChunk != nil && memChunk.ReqC != nil {
-		if _, ok := <-memChunk.ReqC; ok {
-			close(memChunk.ReqC)
-			memChunk.ReqC = nil
-		}
+		close(memChunk.ReqC)
+		memChunk.ReqC = nil
 	}
 
 	self.DbStore.Put(chunk)
