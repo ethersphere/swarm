@@ -7,7 +7,6 @@ import (
 )
 
 const (
-	defaultHashName    = "BMT"
 	DefaultWorkerCount = 32
 )
 
@@ -50,6 +49,7 @@ func Init(typ string) {
 			panic(fmt.Sprintf("hash %s not registered", typ))
 		}
 		defaultHash = typ
+		setMultihashCodeByName(typ)
 	})
 }
 

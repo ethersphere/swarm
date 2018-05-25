@@ -30,6 +30,10 @@ var (
 	multihashTypeCode uint8
 )
 
+func setMultihashCodeByName(typ string) {
+	multihashTypeCode = defaultMultihashTypeCode
+}
+
 // if first byte is the start of a multihash this function will try to parse it
 // if successful it returns the length of multihash data, 0 otherwise
 func GetLength(data []byte) (int, error) {

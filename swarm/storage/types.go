@@ -36,8 +36,8 @@ const MaxPO = 16
 const KeyLength = 32
 
 func init() {
-	swarmhash.Add("BMT", swarmhash.DefaultWorkerCount, MakeHashFunc("BMT"))
-	swarmhash.Init("BMT")
+	swarmhash.Add(BMTHash, swarmhash.DefaultWorkerCount, MakeHashFunc(DefaultHash))
+	swarmhash.Init(BMTHash)
 }
 
 // Peer is the recorded as Source on the chunk
