@@ -35,10 +35,11 @@ import (
 )
 
 var (
-	errEmptyMountPoint = errors.New("need non-empty mount point")
-	errMaxMountCount   = errors.New("max FUSE mount count reached")
-	errMountTimeout    = errors.New("mount timeout")
-	errAlreadyMounted  = errors.New("mount point is already serving")
+	errEmptyMountPoint      = errors.New("need non-empty mount point")
+	errNoRelativeMountPoint = errors.New("relative mount points are not allowed. please specify an absolute path")
+	errMaxMountCount        = errors.New("max FUSE mount count reached")
+	errMountTimeout         = errors.New("mount timeout")
+	errAlreadyMounted       = errors.New("mount point is already serving")
 )
 
 func isFUSEUnsupportedError(err error) bool {
@@ -48,7 +49,7 @@ func isFUSEUnsupportedError(err error) bool {
 	return err == fuse.ErrOSXFUSENotFound
 }
 
-// information about every active mount
+// MountInfo contains information about every active mount
 type MountInfo struct {
 	MountPoint     string
 	StartManifest  string
@@ -77,6 +78,9 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	log.Info("swarmfs", "mounting hash", mhash, "mount point", mountpoint)
 	if mountpoint == "" {
 		return nil, errEmptyMountPoint
+	}
+	if !strings.HasPrefix(mountpoint, "/") {
+		return nil, errNoRelativeMountPoint
 	}
 	cleanedMountPoint, err := filepath.Abs(filepath.Clean(mountpoint))
 	if err != nil {
