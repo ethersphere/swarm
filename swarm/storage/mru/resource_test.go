@@ -181,9 +181,6 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// check that the new resource is stored correctly
-	namehash := ens.EnsNode(safeName)
-	//chunk, err := rh.chunkStore.localStore.memStore.Get(Key(namehash[:]))
 	chunk, err := rh.chunkStore.Get(storage.Key(rootChunkKey))
 	if err != nil {
 		t.Fatal(err)
