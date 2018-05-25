@@ -526,8 +526,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	var err error
 
 	// resolve the content key.
-	var manifestKey storage.Key
-	manifestKey = r.uri.Key()
+	var manifestKey = r.uri.Key()
 	if manifestKey == nil {
 		manifestKey, err = s.api.Resolve(r.uri)
 		if err != nil {
