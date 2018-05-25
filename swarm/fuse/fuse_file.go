@@ -73,29 +73,29 @@ func NewSwarmFile(path, fname string, minfo *MountInfo) *SwarmFile {
 	return newFile
 }
 
-func (file *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
-
-	a.Inode = file.inode
+func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
+	log.Debug("swarmfs Attr", "path", sf.path)
+	a.Inode = sf.inode
 	//TODO: need to get permission as argument
 	a.Mode = 0700
 	a.Uid = uint32(os.Getuid())
 	a.Gid = uint32(os.Getegid())
 
-	if file.fileSize == -1 {
-		reader, _ := file.mountInfo.swarmApi.Retrieve(file.key)
+	if sf.fileSize == -1 {
+		reader, _ := sf.mountInfo.swarmApi.Retrieve(sf.key)
 		quitC := make(chan bool)
 		size, err := reader.Size(quitC)
 		if err != nil {
-			log.Warn("Couldnt get size of file %s : %v", file.path, err)
+			log.Warn("Couldnt get size of file %s : %v", sf.path, err)
 		}
-		file.fileSize = size
+		sf.fileSize = size
 	}
-	a.Size = uint64(file.fileSize)
+	a.Size = uint64(sf.fileSize)
 	return nil
 }
 
 func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse.ReadResponse) error {
-
+	log.Debug("swarmfs Read", "path", sf.path, "req.String", req.String())
 	sf.lock.RLock()
 	defer sf.lock.RUnlock()
 	if sf.reader == nil {
@@ -108,26 +108,23 @@ func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 	}
 	resp.Data = buf[:n]
 	sf.reader = nil
-	return err
 
+	return err
 }
 
 func (sf *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fuse.WriteResponse) error {
-
+	log.Debug("swarmfs Write", "path", sf.path, "req.String", req.String())
 	if sf.fileSize == 0 && req.Offset == 0 {
-
 		// A new file is created
 		err := addFileToSwarm(sf, req.Data, len(req.Data))
 		if err != nil {
 			return err
 		}
 		resp.Size = len(req.Data)
-
 	} else if req.Offset <= sf.fileSize {
-
 		totalSize := sf.fileSize + int64(len(req.Data))
 		if totalSize > MaxAppendFileSize {
-			log.Warn("Append file size reached (%v) : (%v)", sf.fileSize, len(req.Data))
+			log.Warn("swarmfs Append file size reached (%v) : (%v)", sf.fileSize, len(req.Data))
 			return errFileSizeMaxLimixReached
 		}
 
@@ -137,9 +134,8 @@ func (sf *SwarmFile) Write(ctx context.Context, req *fuse.WriteRequest, resp *fu
 		}
 		resp.Size = len(req.Data)
 	} else {
-		log.Warn("Invalid write request size(%v) : off(%v)", sf.fileSize, req.Offset)
+		log.Warn("swarmfs Invalid write request size(%v) : off(%v)", sf.fileSize, req.Offset)
 		return errInvalidOffset
 	}
-
 	return nil
 }
