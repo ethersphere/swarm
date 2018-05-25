@@ -417,11 +417,8 @@ func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, freque
 	// the key of the metadata chunk is content-addressed
 	// if it wasn't we couldn't replace it later
 	// resolving this relationship is left up to external agents (for example ENS)
-	hasher := self.hashPool.Get().(SwarmHash)
-	hasher.Reset()
-	hasher.Write(data)
-	key := hasher.Sum(nil)
-	self.hashPool.Put(hasher)
+	hasher := swarmhash.GetHash()
+	key := hasher.Hash(data)
 
 	// make the chunk and send it to swarm
 	chunk := NewChunk(key, nil)
@@ -1049,7 +1046,7 @@ func NewTestResourceHandler(datadir string, params *ResourceHandlerParams) (*Res
 	if err != nil {
 		return nil, fmt.Errorf("localstore create fail, path %s: %v", path, err)
 	}
-	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(resourceHash)))
+	localStore.Validators = append(localStore.Validators, NewContentAddressValidator())
 	localStore.Validators = append(localStore.Validators, rh)
 	dpaStore := NewNetStore(localStore, nil)
 	rh.SetStore(dpaStore)

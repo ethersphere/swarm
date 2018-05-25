@@ -391,7 +391,6 @@ func TestResourceMultihash(t *testing.T) {
 	// we're naïvely assuming keccak256 for swarm hashes
 	// if it ever changes this test should also change
 	swarmhashbytes := ens.EnsNode("foo")
-	//swarmhashmulti, err := multihash.Encode(swarmhashbytes.Bytes(), multihash.KECCAK_256)
 	swarmhashmulti := swarmhash.ToMultihash(swarmhashbytes.Bytes())
 	swarmhashkey, err := rh.UpdateMultihash(ctx, safeName, swarmhashmulti)
 	if err != nil {
@@ -412,7 +411,6 @@ func TestResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//swarmhashdecode, err := multihash.Decode(data)
 	swarmhashdecode, err := swarmhash.FromMultihash(data)
 	if err != nil {
 		t.Fatal(err)

@@ -117,7 +117,6 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := common.FromHex(string(b))
-	//mh, err := multihash.Encode(s, multihash.KECCAK_256)
 	mh := swarmhash.ToMultihash(s)
 
 	mhHex := hexutil.Encode(mh)
