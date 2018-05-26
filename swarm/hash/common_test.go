@@ -36,7 +36,7 @@ func init() {
 }
 
 func initTest() {
-	Init("bar")
+	Init("bar", 32)
 	multihashTypeCode = defaultMultihashTypeCode
 }
 

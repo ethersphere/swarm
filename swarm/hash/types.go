@@ -59,7 +59,7 @@ func init() {
 // Init sets the default hash to be used when calling GetHash
 // This must be executed before any hashing can commence
 // If no hash functions is registered with the identifier, the function will panic
-func Init(typ string) {
+func Init(typ string, size int) {
 	initFunc.Do(func() {
 		if defaultHash != "" {
 			panic("cannot change default hash after initialization")
@@ -67,7 +67,7 @@ func Init(typ string) {
 			panic(fmt.Sprintf("hash %s not registered", typ))
 		}
 		defaultHash = typ
-		setMultihashCodeByName(typ)
+		setMultihashParamsByName(typ, size)
 	})
 }
 

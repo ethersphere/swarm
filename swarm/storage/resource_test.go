@@ -416,7 +416,7 @@ func TestResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Equal(swarmhashdecode, swarmhashbytes.Bytes()) {
-		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode, swarmhashbytes.Bytes())
+		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", swarmhashdecode, swarmhashbytes.Bytes())
 	}
 	rh.Close()
 

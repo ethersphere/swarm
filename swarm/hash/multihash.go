@@ -23,17 +23,20 @@ import (
 )
 
 const (
+	defaultMultihashLength   = 32
 	defaultMultihashTypeCode = 0x1b
 )
 
 var (
 	multihashTypeCode uint8
+	MultihashLength   uint8
 )
 
 // hook used by the master Init() to set the corresponding mulithash code
 // currently we naïvely set KECCAK256 (0x1b)
-func setMultihashCodeByName(typ string) {
+func setMultihashParamsByName(typ string, length int) {
 	multihashTypeCode = defaultMultihashTypeCode
+	MultihashLength = defaultMultihashLength
 }
 
 // check if valid swarm multihash
@@ -43,28 +46,28 @@ func isSwarmMultihashType(code uint8) bool {
 
 // GetLength returns the digest length of the provided multihash
 // It will fail if the multihash is not a valid swarm mulithash
-func GetLength(data []byte) (int, error) {
+func GetMultihashLength(data []byte) (int, int, error) {
 	cursor := 0
 	typ, c := binary.Uvarint(data)
 	if c <= 0 {
-		return 0, fmt.Errorf("unreadable hashtype field")
+		return 0, 0, fmt.Errorf("unreadable hashtype field")
 	}
 	if !isSwarmMultihashType(uint8(typ)) {
-		return 0, fmt.Errorf("hash code %x is not a swarm hashtype", typ)
+		return 0, 0, fmt.Errorf("hash code %x is not a swarm hashtype", typ)
 	}
 	cursor += c
 	hashlength, c := binary.Uvarint(data[cursor:])
 	if c <= 0 {
-		return 0, fmt.Errorf("unreadable length field")
+		return 0, 0, fmt.Errorf("unreadable length field")
 	}
 	cursor += c
 
 	// we cheekily assume hashlength < maxint
 	inthashlength := int(hashlength)
 	if len(data[c:]) < inthashlength {
-		return 0, fmt.Errorf("length mismatch")
+		return 0, 0, fmt.Errorf("length mismatch")
 	}
-	return inthashlength, nil
+	return inthashlength, cursor, nil
 }
 
 // NewMultihash hashes the provided data with the default hash function and wraps it as a mulithash
@@ -81,7 +84,7 @@ func NewMultihash(data []byte) ([]byte, error) {
 // FromMulithash returns the digest portion of the multihash
 // It will fail if the multihash is not a valid swarm multihash
 func FromMultihash(data []byte) ([]byte, error) {
-	hashLength, err := GetLength(data)
+	hashLength, _, err := GetMultihashLength(data)
 	if err != nil {
 		return nil, err
 	}

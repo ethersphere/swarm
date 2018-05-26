@@ -37,7 +37,7 @@ const KeyLength = 32
 
 func init() {
 	swarmhash.Add(BMTHash, 0, MakeHashFunc(DefaultHash))
-	swarmhash.Init(BMTHash)
+	swarmhash.Init(BMTHash, 32)
 }
 
 // Peer is the recorded as Source on the chunk

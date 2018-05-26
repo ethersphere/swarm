@@ -18,21 +18,13 @@ package swarmhash
 
 import (
 	"bytes"
+	"math/rand"
 	"testing"
 )
 
-var (
-	expected = make([]byte, len(dataHash)+2)
-)
-
-func init() {
-	expected[0] = 0x1b
-	expected[1] = 0x20
-	copy(expected[2:], dataHash)
-}
-
 // hash and wrap as mulithash
 func TestNewMultihash(t *testing.T) {
+	expected := ToMultihash(dataHash)
 	mh, err := NewMultihash(data)
 	if err != nil {
 		t.Fatal(err)
@@ -44,19 +36,30 @@ func TestNewMultihash(t *testing.T) {
 
 // parse multihash, and check that invalid multihashes fail
 func TestCheckMultihash(t *testing.T) {
-	h := GetHash()
-	l, _ := GetLength(expected)
-	if l != h.Size() {
-		t.Fatalf("expected length %d, got %d", h.Size(), l)
+	hashbytes := make([]byte, 32)
+	c, err := rand.Read(hashbytes)
+	if err != nil {
+		t.Fatal(err)
+	} else if c < 32 {
+		t.Fatal("short read")
 	}
-	if _, err := GetLength(expected[1:]); err == nil {
+
+	expected := ToMultihash(hashbytes)
+
+	l, hl, _ := GetMultihashLength(expected)
+	if l != 32 {
+		t.Fatalf("expected length %d, got %d", 32, l)
+	} else if hl != 2 {
+		t.Fatalf("expected header length %d, got %d", 2, hl)
+	}
+	if _, _, err := GetMultihashLength(expected[1:]); err == nil {
 		t.Fatalf("expected failure on corrupt header")
 	}
-	if _, err := GetLength(expected[:len(expected)-2]); err == nil {
+	if _, _, err := GetMultihashLength(expected[:len(expected)-2]); err == nil {
 		t.Fatalf("expected failure on short content")
 	}
 	dh, _ := FromMultihash(expected)
-	if !bytes.Equal(dh, dataHash) {
-		t.Fatalf("expected content hash %x, got %x", dataHash, dh)
+	if !bytes.Equal(dh, hashbytes) {
+		t.Fatalf("expected content hash %x, got %x", hashbytes, dh)
 	}
 }

@@ -368,7 +368,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 				if err != nil {
 					apiGetInvalid.Inc(1)
 					status = http.StatusUnprocessableEntity
-					log.Warn(fmt.Sprintf("invalid resource: %v", err))
+					log.Warn(fmt.Sprintf("invalid resource multihash: %v", err))
 					return reader, mimeType, status, nil, err
 				}
 				manifestKey = storage.Key(decodedMultihash)
