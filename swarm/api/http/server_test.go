@@ -34,7 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	"github.com/ethereum/go-ethereum/swarm/multihash"
+	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
@@ -117,10 +117,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := common.FromHex(string(b))
-	mh, err := multihash.Encode(s, multihash.KECCAK_256)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mh := swarmhash.ToMultihash(s)
 
 	mhHex := hexutil.Encode(mh)
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))

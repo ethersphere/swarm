@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
+	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -286,6 +287,7 @@ func (self *Handler) SetStore(store *storage.NetStore) {
 func (self *Handler) Validate(addr storage.Address, data []byte) bool {
 	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
+		log.Warn("foo", "err", err)
 		if len(data) > metadataChunkOffsetSize { // identifier comes after this byte range, and must be at least one byte
 			if bytes.Equal(data[:2], []byte{0, 0}) {
 				return true
@@ -740,7 +742,14 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 	var intdatalength int
 	var multihash bool
 	if datalength == 0 {
-		intdatalength = isMultihash(chunkdata[cursor:])
+		var intheaderlength int
+		var err error
+		intdatalength, intheaderlength, err = swarmhash.GetMultihashLength(chunkdata[cursor:])
+		if err != nil {
+			log.Error("multihash parse error", "err", err)
+			return nil, 0, 0, "", nil, false, fmt.Errorf("Corrupt multihash data: %v", err)
+		}
+		intdatalength += intheaderlength
 		multihashboundary := cursor + intdatalength
 		if len(chunkdata) != multihashboundary && len(chunkdata) < multihashboundary+signatureLength {
 			log.Debug("multihash error", "chunkdatalen", len(chunkdata), "multihashboundary", multihashboundary)
@@ -773,10 +782,10 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 // It is the caller's responsibility to make sure that this data is not stale.
 //
 // A resource update cannot span chunks, and thus has max length 4096
-
 func (self *Handler) UpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, error) {
-	if isMultihash(data) == 0 {
-		return nil, NewError(ErrNothingToReturn, "Invalid multihash")
+	// \TODO perhaps this check should be in newUpdateChunk()
+	if _, _, err := swarmhash.GetMultihashLength(data); err != nil {
+		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Invalid multihash: %v", err))
 	}
 	return self.update(ctx, name, data, true)
 }
@@ -1032,31 +1041,6 @@ func isSafeName(name string) bool {
 		return false
 	}
 	return validname == name
-}
-
-// if first byte is the start of a multihash this function will try to parse it
-// if successful it returns the length of multihash data, 0 otherwise
-func isMultihash(data []byte) int {
-	cursor := 0
-	_, c := binary.Uvarint(data)
-	if c <= 0 {
-		log.Warn("Corrupt multihash data, hashtype is unreadable")
-		return 0
-	}
-	cursor += c
-	hashlength, c := binary.Uvarint(data[cursor:])
-	if c <= 0 {
-		log.Warn("Corrupt multihash data, hashlength is unreadable")
-		return 0
-	}
-	cursor += c
-	// we cheekily assume hashlength < maxint
-	inthashlength := int(hashlength)
-	if len(data[cursor:]) < inthashlength {
-		log.Warn("Corrupt multihash data, hash does not align with data boundary")
-		return 0
-	}
-	return cursor + inthashlength
 }
 
 func NewTestHandler(datadir string, params *HandlerParams) (*Handler, error) {
