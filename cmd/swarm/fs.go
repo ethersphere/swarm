@@ -19,6 +19,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -45,7 +46,11 @@ func mount(cliContext *cli.Context) {
 	defer cancel()
 
 	mf := &fuse.MountInfo{}
-	err = client.CallContext(ctx, mf, "swarmfs_mount", args[0], args[1])
+	mountPoint, err := filepath.Abs(filepath.Clean(args[1]))
+	if err != nil {
+		utils.Fatalf("error expanding path for mount point: %v", err)
+	}
+	err = client.CallContext(ctx, mf, "swarmfs_mount", args[0], mountPoint)
 	if err != nil {
 		utils.Fatalf("had an error calling the RPC endpoint while mounting: %v", err)
 	}
