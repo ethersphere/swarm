@@ -361,6 +361,7 @@ func (p *Pss) handlePssMsg(msg interface{}) error {
 func (p *Pss) process(pssmsg *PssMsg) error {
 	var err error
 	var recvmsg *whisper.ReceivedMessage
+	var payload []byte
 	var from *PssAddress
 	var asymmetric bool
 	var keyid string
@@ -368,21 +369,25 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
-	if p.allowRaw && psstopic == rawTopic {
-		p.executeHandlers(rawTopic, envelope.Data, nil, false, "")
-		return nil
-	}
 
-	if len(envelope.AESNonce) > 0 { // detect symkey msg according to whisperv5/envelope.go:OpenSymmetric
-		keyFunc = p.processSym
+	if pssmsg.Control[0]&pssControlRaw == pssControlRaw {
+		if !p.allowRaw {
+			return errors.New("raw message support disabled")
+		}
+		payload = pssmsg.Payload.Data
 	} else {
-		asymmetric = true
-		keyFunc = p.processAsym
-	}
+		if pssmsg.Control[0]&pssControlSym == pssControlSym {
+			keyFunc = self.processSym
+		} else {
+			asymmetric = true
+			keyFunc = self.processAsym
+		}
 
-	recvmsg, keyid, from, err = keyFunc(envelope)
-	if err != nil {
-		return errors.New("Decryption failed")
+		recvmsg, keyid, from, err = keyFunc(envelope)
+		if err != nil {
+			return errors.New("Decryption failed")
+		}
+		payload = recvmsg.Payload
 	}
 
 	if len(pssmsg.To) < addressLength {
@@ -649,16 +654,17 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 // Send a raw message (any encryption is responsibility of calling client)
 //
 // Will fail if raw messages are disallowed
-func (p *Pss) SendRaw(msg []byte, address PssAddress) error {
+func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	if !p.allowRaw {
 		return errors.New("Raw messages not enabled")
 	}
 	pssmsg := &PssMsg{
-		To:     address,
-		Expire: uint32(time.Now().Add(p.msgTTL).Unix()),
+		To:      address,
+		Control: []byte{pssControlRaw},
+		Expire:  uint32(time.Now().Add(p.msgTTL).Unix()),
 		Payload: &whisper.Envelope{
 			Data:  msg,
-			Topic: whisper.TopicType(rawTopic),
+			Topic: whisper.TopicType(topic),
 		},
 	}
 	p.addFwdCache(pssmsg)
@@ -752,8 +758,12 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 	// prepare for devp2p transport
 	pssmsg := &PssMsg{
 		To:      to,
+		Control: []byte{0x0},
 		Expire:  uint32(time.Now().Add(p.msgTTL).Unix()),
 		Payload: envelope,
+	}
+	if !asymmetric {
+		pssmsg.Control[0] |= pssControlSym
 	}
 	return p.enqueue(pssmsg)
 }

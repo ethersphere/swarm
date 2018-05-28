@@ -17,6 +17,11 @@ const (
 	defaultWhisperTTL = 6000
 )
 
+const (
+	pssControlSym = 1
+	pssControlRaw = 1 << 1
+)
+
 var (
 	topicHashMutex = sync.Mutex{}
 	topicHashFunc  = storage.MakeHashFunc("SHA256")()
@@ -70,6 +75,7 @@ type pssDigest [digestLength]byte
 // Encapsulates messages transported over pss.
 type PssMsg struct {
 	To      []byte
+	Control []byte
 	Expire  uint32
 	Payload *whisper.Envelope
 }
