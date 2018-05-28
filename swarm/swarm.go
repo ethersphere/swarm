@@ -195,11 +195,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		Signer: &storage.GenericResourceSigner{
 			PrivKey: self.privateKey,
 		},
-		HeaderGetter:   resolver,
-		OwnerValidator: resolver,
 	}
 	if resolver != nil {
 		resolver.SetNameHash(ens.EnsNode)
+		// Set HeaderGetter and OwnerValidator interfaces to resolver only if it is not nil.
+		rhparams.HeaderGetter = resolver
+		rhparams.OwnerValidator = resolver
 	} else {
 		log.Warn("No ETH API specified, resource updates will use block height approximation")
 		// TODO: blockestimator should use saved values derived from last time ethclient was connected
