@@ -21,6 +21,7 @@ package http
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -975,6 +976,15 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
+	var mybuf bytes.Buffer
+	writer := bufio.NewWriter(&mybuf)
+
+	buf := make([]byte, 64000000)
+	written, err := io.CopyBuffer(writer, reader, buf)
+	if err != nil {
+		panic(err)
+	}
+	log.Debug("handle.get.file: written", "ruid", r.ruid, "written", written)
 	http.ServeContent(w, &r.Request, "", time.Now(), reader)
 }
 
