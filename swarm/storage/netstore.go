@@ -71,10 +71,10 @@ func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
 }
 
 // get attempts at retrieving the chunk from LocalStore
-// if it is not found, attempts at retrieving an existing Fetchers
-// if none exists, creates one and saves it in the Fetchers cache
-// From here on, all Get will hit on this Fetcher until the chunk is delivered
-// or all Fetcher contexts are done
+// if it is not found, attempts at retrieving an existing fetchers
+// if none exists, creates one and saves it in the fetchers cache
+// From here on, all Get will hit on this fetcher until the chunk is delivered
+// or all fetcher contexts are done
 // it returns a chunk, a fetcher function and an error
 // if chunk is nil, fetcher needs to be called with a context to return the chunk
 func (n *NetStore) get(ref Address) (Chunk, func(context.Context) (Chunk, error), error) {
@@ -89,8 +89,8 @@ func (n *NetStore) get(ref Address) (Chunk, func(context.Context) (Chunk, error)
 	return nil, f.Fetch, nil
 }
 
-// getOrCreateFetcher attempts at retrieving an existing Fetchers
-// if none exists, creates one and saves it in the Fetchers cache
+// getOrCreateFetcher attempts at retrieving an existing fetchers
+// if none exists, creates one and saves it in the fetchers cache
 // caller must hold the lock
 func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	key := hex.EncodeToString(ref)
