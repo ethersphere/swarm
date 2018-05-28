@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
@@ -24,7 +24,7 @@ import (
 
 var (
 	loglevel = flag.Int("l", 3, "loglevel")
-	psses    []*pss.Pss
+	psses    map[string]*pss.Pss
 	w        *whisper.Whisper
 	wapi     *whisper.PublicWhisperAPI
 	msgSeq   int
@@ -39,6 +39,7 @@ func init() {
 
 	w = whisper.New(&whisper.DefaultConfig)
 	wapi = whisper.NewPublicWhisperAPI(w)
+	psses = make(map[string]*pss.Pss)
 }
 
 // Creates a client node and notifier node
@@ -51,62 +52,63 @@ func TestStart(t *testing.T) {
 		ID:             "0",
 		DefaultService: "bzz",
 	})
-	l_nodeconf := adapters.RandomNodeConfig()
-	l_nodeconf.Services = []string{"bzz", "pss"}
-	l_node, err := net.NewNodeWithConfig(l_nodeconf)
+	leftNodeConf := adapters.RandomNodeConfig()
+	leftNodeConf.Services = []string{"bzz", "pss"}
+	leftNode, err := net.NewNodeWithConfig(leftNodeConf)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = net.Start(l_node.ID())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	r_nodeconf := adapters.RandomNodeConfig()
-	r_nodeconf.Services = []string{"bzz", "pss"}
-	r_node, err := net.NewNodeWithConfig(r_nodeconf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = net.Start(r_node.ID())
+	err = net.Start(leftNode.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = net.Connect(r_node.ID(), l_node.ID())
+	rightNodeConf := adapters.RandomNodeConfig()
+	rightNodeConf.Services = []string{"bzz", "pss"}
+	rightNode, err := net.NewNodeWithConfig(rightNodeConf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = net.Start(rightNode.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	l_rpc, err := l_node.Client()
+	err = net.Connect(rightNode.ID(), leftNode.ID())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	r_rpc, err := r_node.Client()
+	leftRpc, err := leftNode.Client()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var l_addr string
-	err = l_rpc.Call(&l_addr, "pss_baseAddr")
+	rightRpc, err := rightNode.Client()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var r_addr string
-	err = r_rpc.Call(&r_addr, "pss_baseAddr")
+	var leftAddr string
+	err = leftRpc.Call(&leftAddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	var l_pub string
-	err = l_rpc.Call(&l_pub, "pss_getPublicKey")
+	var rightAddr string
+	err = rightRpc.Call(&rightAddr, "pss_baseAddr")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = r_rpc.Call(nil, "pss_setPeerPublicKey", l_pub, controlTopic, l_addr)
+	var leftPub string
+	err = leftRpc.Call(&leftPub, "pss_getPublicKey")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var rightPub string
+	err = rightRpc.Call(&rightPub, "pss_getPublicKey")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -114,36 +116,32 @@ func TestStart(t *testing.T) {
 	rsrcName := "foo.eth"
 	rsrcTopic := pss.BytesToTopic([]byte(rsrcName))
 
+	time.Sleep(time.Second)
+
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
 	defer cancel()
 	rmsgC := make(chan *pss.APIMsg)
-	r_sub, err := r_rpc.Subscribe(ctx, "pss", rmsgC, "receive", controlTopic)
+	rightSub, err := rightRpc.Subscribe(ctx, "pss", rmsgC, "receive", controlTopic)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer r_sub.Unsubscribe()
-	r_sub_update, err := r_rpc.Subscribe(ctx, "pss", rmsgC, "receive", rsrcTopic)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer r_sub_update.Unsubscribe()
+	defer rightSub.Unsubscribe()
 
 	updateMsg := []byte("xyzzy")
-	ctrl := NewController(psses[0])
-	ctrl.NewNotifier("foo.eth", 2, func(name string) ([]byte, error) {
+	ctrlClient := NewController(psses[rightPub])
+	ctrlNotifier := NewController(psses[leftPub])
+	ctrlNotifier.NewNotifier("foo.eth", 2, func(name string) ([]byte, error) {
 		msgSeq++
 		return updateMsg, nil
 	})
 
-	msg := NewMsg(MsgCodeStart, rsrcName, common.FromHex(r_addr))
-	smsg, err := rlp.EncodeToBytes(msg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	err = r_rpc.Call(nil, "pss_sendAsym", l_pub, controlTopic, common.ToHex(smsg))
-	if err != nil {
-		t.Fatal(err)
-	}
+	ctrlClient.Subscribe(rsrcName, crypto.ToECDSAPub(common.FromHex(leftPub)), common.FromHex(leftAddr), func(s string, b []byte) error {
+		if s != "foo.eth" || !bytes.Equal(updateMsg, b) {
+			t.Fatalf("unexpected result in client handler: '%s':'%x'", s, b)
+		}
+		log.Info("client handler receive", "s", s, "b", b)
+		return nil
+	})
 
 	var inMsg *pss.APIMsg
 	select {
@@ -151,37 +149,39 @@ func TestStart(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())
 	}
-	dMsg := &Msg{}
-	err = rlp.DecodeBytes(inMsg.Msg, dMsg)
+
+	dMsg, err := NewMsgFromPayload(inMsg.Msg)
 	if err != nil {
 		t.Fatal(err)
-	} else if dMsg.GetName() != rsrcName {
-		t.Fatalf("expected name %s, got %s", rsrcName, dMsg.GetName())
+	} else if dMsg.namestring != rsrcName {
+		t.Fatalf("expected name '%s', got '%s'", rsrcName, dMsg.namestring)
 	} else if !bytes.Equal(dMsg.Payload[:len(updateMsg)], updateMsg) {
 		t.Fatalf("expected payload first %d bytes '%x', got '%x'", len(updateMsg), updateMsg, dMsg.Payload[:len(updateMsg)])
 	} else if len(updateMsg)+symKeyLength != len(dMsg.Payload) {
 		t.Fatalf("expected payload length %d, have %d", len(updateMsg)+symKeyLength, len(dMsg.Payload))
 	}
 
-	l_pssAddr := pss.PssAddress(common.FromHex(l_addr))
-	psses[1].SetSymmetricKey(dMsg.Payload[len(updateMsg):], rsrcTopic, &l_pssAddr, true)
+	rightSubUpdate, err := rightRpc.Subscribe(ctx, "pss", rmsgC, "receive", rsrcTopic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rightSubUpdate.Unsubscribe()
 
-	nextUpdateMsg := []byte("plugh")
-	ctrl.Notify(rsrcName, nextUpdateMsg)
+	updateMsg = []byte("plugh")
+	ctrlNotifier.Notify(rsrcName, updateMsg)
 	select {
 	case inMsg = <-rmsgC:
 	case <-ctx.Done():
 		log.Error("timed out waiting for msg", "topic", fmt.Sprintf("%x", rsrcTopic))
 		t.Fatal(ctx.Err())
 	}
-	dMsg = &Msg{}
-	err = rlp.DecodeBytes(inMsg.Msg, dMsg)
+	dMsg, err = NewMsgFromPayload(inMsg.Msg)
 	if err != nil {
 		t.Fatal(err)
-	} else if dMsg.GetName() != rsrcName {
-		t.Fatalf("expected name %s, got %s", rsrcName, dMsg.GetName())
-	} else if !bytes.Equal(dMsg.Payload, nextUpdateMsg) {
-		t.Fatalf("expected payload '%x', got '%x'", nextUpdateMsg, dMsg.Payload)
+	} else if dMsg.namestring != rsrcName {
+		t.Fatalf("expected name %s, got %s", rsrcName, dMsg.namestring)
+	} else if !bytes.Equal(dMsg.Payload, updateMsg) {
+		t.Fatalf("expected payload '%x', got '%x'", updateMsg, dMsg.Payload)
 	}
 
 }
@@ -218,7 +218,7 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			psses = append(psses, ps)
+			psses[common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {

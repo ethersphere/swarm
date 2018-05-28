@@ -44,24 +44,32 @@ var (
 // when code is MsgCodeNotify, Payload is notification
 // when code is MsgCodeStop, Payload is address
 type Msg struct {
-	Code    byte
-	Name    []byte
-	Payload []byte
+	Code       byte
+	Name       []byte
+	Payload    []byte
+	namestring string
 }
 
 func NewMsg(code byte, name string, payload []byte) *Msg {
 	return &Msg{
-		Code:    code,
-		Name:    []byte(name),
-		Payload: payload,
+		Code:       code,
+		Name:       []byte(name),
+		Payload:    payload,
+		namestring: name,
 	}
 }
 
-func (c *Msg) GetName() string {
-	return string(c.Name)
+func NewMsgFromPayload(payload []byte) (*Msg, error) {
+	msg := &Msg{}
+	err := rlp.DecodeBytes(payload, msg)
+	if err != nil {
+		return nil, err
+	}
+	msg.namestring = string(msg.Name)
+	return msg, nil
 }
 
-// a notifier has one sendmux entry for each address space it sends messages to
+// a notifier has one sendBin entry for each address space it sends messages to
 type sendBin struct {
 	address  pss.PssAddress
 	symKeyId string
@@ -79,20 +87,26 @@ type notifier struct {
 	contentFunc func(string) ([]byte, error)
 }
 
-// Controller is the interface to control, add and remove notification services
+type subscription struct {
+	pubkeyId string
+	address  pss.PssAddress
+	handler  func(string, []byte) error
+}
+
+// Controller is the interface to control, add and remove notification services and subscriptions
 type Controller struct {
-	pss       *pss.Pss
-	notifiers map[string]*notifier
-	handlers  map[string]func(string, []byte) error
-	mu        sync.Mutex
+	pss           *pss.Pss
+	notifiers     map[string]*notifier
+	subscriptions map[string]*subscription
+	mu            sync.Mutex
 }
 
 // NewController creates a new Controller object
 func NewController(ps *pss.Pss) *Controller {
 	ctrl := &Controller{
-		pss:       ps,
-		notifiers: make(map[string]*notifier),
-		handlers:  make(map[string]func(string, []byte) error),
+		pss:           ps,
+		notifiers:     make(map[string]*notifier),
+		subscriptions: make(map[string]*subscription),
 	}
 	ctrl.pss.Register(&controlTopic, ctrl.Handler)
 	return ctrl
@@ -111,22 +125,52 @@ func (c *Controller) isActive(name string) bool {
 	return ok
 }
 
-// Request is used by a client to request notifications from a notification service provider
+// Subscribe is used by a client to request notifications from a notification service provider
 // It will create a MsgCodeStart message and send asymmetrically to the provider using its public key and routing address
 // The handler function is a callback that will be called when notifications are recieved
 // Fails if the request pss cannot be sent or if the update message could not be serialized
-func (c *Controller) Request(name string, pubkey *ecdsa.PublicKey, address pss.PssAddress, handler func(string, []byte) error) error {
+func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss.PssAddress, handler func(string, []byte) error) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	msg := NewMsg(MsgCodeStart, name, c.pss.BaseAddr())
-	c.handlers[name] = handler
 	c.pss.SetPeerPublicKey(pubkey, controlTopic, &address)
-	pubkeyid := common.ToHex(crypto.FromECDSAPub(pubkey))
+	pubkeyId := common.ToHex(crypto.FromECDSAPub(pubkey))
 	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return fmt.Errorf("message could not be serialized: %v", err)
 	}
-	return c.pss.SendAsym(pubkeyid, controlTopic, smsg)
+	err = c.pss.SendAsym(pubkeyId, controlTopic, smsg)
+	if err != nil {
+		return fmt.Errorf("send subscribe message fail: %v", err)
+	}
+	c.subscriptions[name] = &subscription{
+		pubkeyId: pubkeyId,
+		address:  address,
+		handler:  handler,
+	}
+	return nil
+}
+
+// Unsubscribe, perhaps unsurprisingly, undoes the effects of Subscribe
+// Fails if the subscription does not exist, if the request pss cannot be sent or if the update message could not be serialized
+func (c *Controller) Unsubscribe(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	sub, ok := c.subscriptions[name]
+	if !ok {
+		return fmt.Errorf("Unknown subscription '%s'", name)
+	}
+	msg := NewMsg(MsgCodeStop, name, sub.address)
+	smsg, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		return fmt.Errorf("message could not be serialized: %v", err)
+	}
+	err = c.pss.SendAsym(sub.pubkeyId, controlTopic, smsg)
+	if err != nil {
+		return fmt.Errorf("send unsubscribe message fail: %v", err)
+	}
+	delete(c.subscriptions, name)
+	return nil
 }
 
 // NewNotifier is used by a notification service provider to create a new notification service
@@ -172,11 +216,11 @@ func (c *Controller) Notify(name string, data []byte) error {
 }
 
 // adds an client address to the corresponding address bin in the notifier service
-// this method is not concurrency safe
+// this method is not concurrency safe, and will panic if called with a non-existing notification service name
 func (c *Controller) addToNotifier(name string, address pss.PssAddress) (string, error) {
 	notifier, ok := c.notifiers[name]
 	if !ok {
-		return "", fmt.Errorf("Unknown notifier %s", name)
+		return "", fmt.Errorf("unknown notifier '%s'", name)
 	}
 	for _, m := range notifier.bins {
 		if bytes.Equal(address, m.address) {
@@ -196,6 +240,26 @@ func (c *Controller) addToNotifier(name string, address pss.PssAddress) (string,
 	return symKeyId, nil
 }
 
+// decrements the count of the address bin of the notification service. If it reaches 0 it's deleted
+// this method is not concurrency safe, and will panic if called with a non-existing notification service name
+func (c *Controller) removeFromNotifier(name string, address pss.PssAddress) error {
+	notifier, ok := c.notifiers[name]
+	if !ok {
+		return fmt.Errorf("unknown notifier '%s'", name)
+	}
+	for i, m := range notifier.bins {
+		if bytes.Equal(address, m.address) {
+			m.count--
+			if m.count == 0 { // if no more clients in this bin, remove it
+				notifier.bins[i] = notifier.bins[len(notifier.bins)-1]
+				notifier.bins = notifier.bins[:len(notifier.bins)-1]
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("address %x not found in notifier '%s'", address, name)
+}
+
 // Handler is the pss topic handler to be used to process notification service messages
 // It should be registered in the pss of both to any notification service provides and clients using the service
 func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
@@ -204,8 +268,7 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 	log.Debug("notify controller handler", "keyid", keyid)
 
 	// see if the message is valid
-	msg := &Msg{}
-	err := rlp.DecodeBytes(smsg, msg)
+	msg, err := NewMsgFromPayload(smsg)
 	if err != nil {
 		return fmt.Errorf("Invalid message: %v", err)
 	}
@@ -215,18 +278,18 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 		pubkey := crypto.ToECDSAPub(common.FromHex(keyid))
 
 		// if name is not registered for notifications we will not react
-		if _, ok := c.notifiers[msg.GetName()]; !ok {
-			return fmt.Errorf("Subscribe attempted on unknown resource %s", msg.GetName())
+		if _, ok := c.notifiers[msg.namestring]; !ok {
+			return fmt.Errorf("Subscribe attempted on unknown resource '%s'", msg.namestring)
 		}
 
 		// parse the address from the message and truncate if longer than our mux threshold
 		address := msg.Payload
-		if len(msg.Payload) > c.notifiers[msg.GetName()].threshold {
-			address = address[:c.notifiers[msg.GetName()].threshold]
+		if len(msg.Payload) > c.notifiers[msg.namestring].threshold {
+			address = address[:c.notifiers[msg.namestring].threshold]
 		}
 
 		// add the address to the notification list
-		symKeyId, err := c.addToNotifier(msg.GetName(), address)
+		symKeyId, err := c.addToNotifier(msg.namestring, address)
 		if err != nil {
 			return fmt.Errorf("add address to notifier fail: %v", err)
 		}
@@ -243,11 +306,11 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 		}
 
 		// send initial notify, will contain symkey to use for consecutive messages
-		notify, err := c.notifiers[msg.GetName()].contentFunc(msg.GetName())
+		notify, err := c.notifiers[msg.namestring].contentFunc(msg.namestring)
 		if err != nil {
 			return fmt.Errorf("retrieve current update from source fail: %v", err)
 		}
-		replyMsg := NewMsg(MsgCodeNotifyWithKey, msg.GetName(), make([]byte, len(notify)+symKeyLength))
+		replyMsg := NewMsg(MsgCodeNotifyWithKey, msg.namestring, make([]byte, len(notify)+symKeyLength))
 		copy(replyMsg.Payload, notify)
 		copy(replyMsg.Payload[len(notify):], symkey)
 		sReplyMsg, err := rlp.EncodeToBytes(replyMsg)
@@ -265,9 +328,21 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 		updaterAddr := pss.PssAddress([]byte{})
 		c.pss.SetSymmetricKey(symkey, topic, &updaterAddr, true)
 		c.pss.Register(&topic, c.Handler)
-		return c.handlers[msg.GetName()](msg.GetName(), msg.Payload)
+		return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload[:len(msg.Payload)-symKeyLength])
 	case MsgCodeNotify:
-		return c.handlers[msg.GetName()](msg.GetName(), msg.Payload)
+		return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload)
+	case MsgCodeStop:
+		// if name is not registered for notifications we will not react
+		if _, ok := c.notifiers[msg.namestring]; !ok {
+			return fmt.Errorf("Unsubscribe attempted on unknown resource '%s'", msg.namestring)
+		}
+
+		// parse the address from the message and truncate if longer than our mux threshold
+		address := msg.Payload
+		if len(msg.Payload) > c.notifiers[msg.namestring].threshold {
+			address = address[:c.notifiers[msg.namestring].threshold]
+		}
+		c.removeFromNotifier(msg.namestring, address)
 	default:
 		return fmt.Errorf("Invalid message code: %d", msg.Code)
 	}
