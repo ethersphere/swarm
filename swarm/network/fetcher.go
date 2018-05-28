@@ -42,7 +42,7 @@ type Fetcher struct {
 	skipCheck bool
 }
 
-func FetchFunc(request func(context.Context, storage.Address, storage.Address, bool, *sync.Map) (context.Context, error), skipCheck bool) storage.FetchFuncConstructor {
+func NewFetchFunc(request func(context.Context, storage.Address, storage.Address, bool, *sync.Map) (context.Context, error), skipCheck bool) storage.FetchFuncConstructor {
 	return func(ctx context.Context, addr storage.Address, peers *sync.Map) (fetch storage.FetchFunc) {
 		f := NewFetcher(addr, request, skipCheck)
 		f.start(ctx, peers)
