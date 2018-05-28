@@ -982,7 +982,8 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	buf := make([]byte, 64000000)
 	written, err := io.CopyBuffer(writer, reader, buf)
 	if err != nil {
-		panic(err)
+		log.Error("handle.get.file: written", "ruid", r.ruid, "written", written)
+		Respond(w, r, fmt.Sprintf("file not fully loaded %s: %s", r.uri, err), http.StatusNotFound)
 	}
 	log.Debug("handle.get.file: written", "ruid", r.ruid, "written", written)
 	http.ServeContent(w, &r.Request, "", time.Now(), reader)
