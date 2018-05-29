@@ -24,15 +24,15 @@ import (
 )
 
 // Signs resource updates
-type ResourceSigner interface {
+type Signer interface {
 	Sign(common.Hash) (Signature, error)
 }
 
-type GenericResourceSigner struct {
+type GenericSigner struct {
 	PrivKey *ecdsa.PrivateKey
 }
 
-func (self *GenericResourceSigner) Sign(data common.Hash) (signature Signature, err error) {
+func (self *GenericSigner) Sign(data common.Hash) (signature Signature, err error) {
 	signaturebytes, err := crypto.Sign(data.Bytes(), self.PrivKey)
 	if err != nil {
 		return

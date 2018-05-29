@@ -187,13 +187,13 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
 
-	var resourceHandler *mru.ResourceHandler
-	rhparams := &mru.ResourceHandlerParams{
+	var resourceHandler *mru.Handler
+	rhparams := &mru.HandlerParams{
 		// TODO: config parameter to set limits
-		QueryMaxPeriods: &mru.ResourceLookupParams{
+		QueryMaxPeriods: &mru.LookupParams{
 			Limit: false,
 		},
-		Signer: &mru.GenericResourceSigner{
+		Signer: &mru.GenericSigner{
 			PrivKey: self.privateKey,
 		},
 		HeaderGetter:   resolver,
@@ -206,7 +206,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		// TODO: blockestimator should use saved values derived from last time ethclient was connected
 		rhparams.HeaderGetter = mru.NewBlockEstimator()
 	}
-	resourceHandler, err = mru.NewResourceHandler(rhparams)
+	resourceHandler, err = mru.NewHandler(rhparams)
 	if err != nil {
 		return nil, err
 	}
