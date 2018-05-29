@@ -274,7 +274,6 @@ func BenchmarkMockDbStoreGet_8_5k(b *testing.B) {
 // TestLDBStoreWithoutCollectGarbage tests that we can put a number of random chunks in the LevelDB store, and
 // retrieve them, provided we don't hit the garbage collection
 func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
-	chunkSize := uint64(4096)
 	capacity := 50
 	n := 10
 
@@ -284,7 +283,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 
 	chunks := []*Chunk{}
 	for i := 0; i < n; i++ {
-		c := NewRandomChunk(chunkSize)
+		c := GenerateRandomChunk(DefaultChunkSize)
 		chunks = append(chunks, c)
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
@@ -325,7 +324,6 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 // TestLDBStoreCollectGarbage tests that we can put more chunks than LevelDB's capacity, and
 // retrieve only some of them, because garbage collection must have cleared some of them
 func TestLDBStoreCollectGarbage(t *testing.T) {
-	chunkSize := uint64(4096)
 	capacity := 500
 	n := 2000
 
@@ -335,7 +333,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 
 	chunks := []*Chunk{}
 	for i := 0; i < n; i++ {
-		c := NewRandomChunk(chunkSize)
+		c := GenerateRandomChunk(DefaultChunkSize)
 		chunks = append(chunks, c)
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
@@ -389,7 +387,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 
 	chunks := []*Chunk{}
 	for i := 0; i < n; i++ {
-		c := NewRandomChunk(chunkSize)
+		c := GenerateRandomChunk(DefaultChunkSize)
 		chunks = append(chunks, c)
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
@@ -451,7 +449,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	chunks := []*Chunk{}
 	for i := 0; i < capacity; i++ {
-		c := NewRandomChunk(chunkSize)
+		c := GenerateRandomChunk(DefaultChunkSize)
 		chunks = append(chunks, c)
 		log.Trace("generate random chunk", "idx", i, "chunk", c)
 	}
