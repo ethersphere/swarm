@@ -58,7 +58,7 @@ func initRetrievalTest() {
 	getRetrieveFunc = func(id discover.NodeID) func(chunk *storage.Chunk) error {
 		return func(chunk *storage.Chunk) error {
 			skipCheck := true
-			return deliveries[id].RequestFromPeers(chunk.Key[:], skipCheck)
+			return deliveries[id].RequestFromPeers(chunk.Addr[:], skipCheck)
 		}
 	}
 	//registries, map of discover.NodeID to its streamer
@@ -212,7 +212,7 @@ func runFileRetrievalTest(nodeCount int) error {
 	//map of overlay address to discover ID
 	conf.addrToIdMap = make(map[string]discover.NodeID)
 	//array where the generated chunk hashes will be stored
-	conf.hashes = make([]storage.Key, 0)
+	conf.hashes = make([]storage.Address, 0)
 	//load nodes from the snapshot file
 	net, err := initNetWithSnapshot(nodeCount)
 	if err != nil {
@@ -376,7 +376,7 @@ func runFileRetrievalTest(nodeCount int) error {
 
 		if live {
 			//upload generated files to nodes
-			var hashes []storage.Key
+			var hashes []storage.Address
 			var rfiles []string
 			hashes, rfiles, err = uploadFilesToNodes(nodes)
 			if err != nil {
@@ -495,7 +495,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 	//map of overlay address to discover ID
 	conf.addrToIdMap = make(map[string]discover.NodeID)
 	//array where the generated chunk hashes will be stored
-	conf.hashes = make([]storage.Key, 0)
+	conf.hashes = make([]storage.Address, 0)
 	//load nodes from the snapshot file
 	net, err := initNetWithSnapshot(nodeCount)
 	if err != nil {
@@ -746,13 +746,13 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 
 //upload generated files to nodes
 //every node gets one file uploaded
-func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Key, []string, error) {
+func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Address, []string, error) {
 	nodeCnt := len(nodes)
 	log.Debug(fmt.Sprintf("Uploading %d files to nodes", nodeCnt))
 	//array holding generated files
 	rfiles := make([]string, nodeCnt)
 	//array holding the root hashes of the files
-	rootkeys := make([]storage.Key, nodeCnt)
+	rootAddrs := make([]storage.Address, nodeCnt)
 
 	var err error
 	//for every node, generate a file and upload
@@ -771,9 +771,9 @@ func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Key, []string, err
 		if err != nil {
 			return nil, nil, err
 		}
-		rootkeys[i] = rk
+		rootAddrs[i] = rk
 	}
-	return rootkeys, rfiles, nil
+	return rootAddrs, rfiles, nil
 }
 
 //generate a random file (string)

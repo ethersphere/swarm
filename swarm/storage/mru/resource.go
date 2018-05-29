@@ -294,16 +294,16 @@ func (self *Handler) Validate(key storage.Key, data []byte) bool {
 		log.Error("Invalid resource chunk")
 		return false
 	} else if signature == nil {
-		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), key)
+		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), addr)
 	}
 
-	digest := self.keyDataHash(key, parseddata)
-	addr, err := getAddressFromDataSig(digest, *signature)
+	digest := self.keyDataHash(addr, parseddata)
+	addrSig, err := getAddressFromDataSig(digest, *signature)
 	if err != nil {
 		log.Error("Invalid signature on resource chunk")
 		return false
 	}
-	ok, _ := self.checkAccess(name, addr)
+	ok, _ := self.checkAccess(name, addrSig)
 	return ok
 }
 
@@ -317,7 +317,7 @@ func (self *Handler) keyDataHash(key storage.Key, data []byte) common.Hash {
 	hasher := self.hashPool.Get().(storage.SwarmHash)
 	defer self.hashPool.Put(hasher)
 	hasher.Reset()
-	hasher.Write(key[:])
+	hasher.Write(addr[:])
 	hasher.Write(data)
 	return common.BytesToHash(hasher.Sum(nil))
 }
@@ -424,7 +424,7 @@ func (self *Handler) New(ctx context.Context, name string, frequency uint64) (st
 	}
 	self.set(nameHash.Hex(), rsrc)
 
-	return chunk.Key, rsrc, nil
+	return chunk.Addr, rsrc, nil
 }
 
 func (self *Handler) newMetaChunk(name string, startBlock uint64, frequency uint64) *storage.Chunk {
@@ -650,12 +650,12 @@ func (self *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resourc
 	if rsrc.name != name {
 		return nil, NewError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, rsrc.name))
 	}
-	log.Trace("resource index update", "name", rsrc.name, "namehash", rsrc.nameHash, "updatekey", chunk.Key, "period", period, "version", version)
+	log.Trace("resource index update", "name", rsrc.name, "namehash", rsrc.nameHash, "updatekey", chunk.Addr, "period", period, "version", version)
 
 	// check signature (if signer algorithm is present)
 	// \TODO maybe this check is redundant if also checked upon retrieval of chunk
 	if signature != nil {
-		digest := self.keyDataHash(chunk.Key, data)
+		digest := self.keyDataHash(chunk.Addr, data)
 		_, err = getAddressFromDataSig(digest, *signature)
 		if err != nil {
 			return nil, NewError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
@@ -663,7 +663,7 @@ func (self *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resourc
 	}
 
 	// update our rsrcs entry map
-	rsrc.lastKey = chunk.Key
+	rsrc.lastKey = chunk.Addr
 	rsrc.lastPeriod = period
 	rsrc.version = version
 	rsrc.updated = time.Now()
@@ -775,6 +775,7 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 // A resource update cannot span chunks, and thus has max length 4096
 
 func (self *Handler) UpdateMultihash(ctx context.Context, name string, data []byte) (storage.Key, error) {
+	// \TODO perhaps this check should be in newUpdateChunk()
 	if isMultihash(data) == 0 {
 		return nil, NewError(ErrNothingToReturn, "Invalid multihash")
 	}

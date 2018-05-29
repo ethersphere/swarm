@@ -132,7 +132,7 @@ func TestReverse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := rh.keyDataHash(chunk.Key, checkdata)
+	checkdigest := rh.keyDataHash(chunk.Addr, checkdata)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
@@ -144,8 +144,8 @@ func TestReverse(t *testing.T) {
 		t.Fatalf("addresses dont match: %x != %x", originaladdress, recoveredaddress)
 	}
 
-	if !bytes.Equal(key[:], chunk.Key[:]) {
-		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Key)
+	if !bytes.Equal(key[:], chunk.Addr[:]) {
+		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Addr)
 	}
 	if period != checkperiod {
 		t.Fatalf("Expected period '%d', was '%d'", period, checkperiod)
@@ -558,7 +558,7 @@ func TestChunkValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
-	if !rh.Validate(chunk.Key, chunk.SData) {
+	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on update chunk")
 	}
 
@@ -569,7 +569,7 @@ func TestChunkValidator(t *testing.T) {
 		t.Fatal(err)
 	}
 	chunk = rh.newMetaChunk(safeName, startBlock, resourceFrequency)
-	if !rh.Validate(chunk.Key, chunk.SData) {
+	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on metadata chunk")
 	}
 }
