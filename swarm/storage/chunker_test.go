@@ -53,7 +53,7 @@ func (f *fakeChunkStore) Put(*Chunk) {
 }
 
 // Gut doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Get(Key) (*Chunk, error) {
+func (f *fakeChunkStore) Get(Address) (*Chunk, error) {
 	return nil, errors.New("FakeChunkStore doesn't support Get")
 }
 
@@ -88,7 +88,7 @@ func testRandomBrokenData(n int, tester *chunkerTester) {
 	tester.t.Logf(" Key = %v\n", key)
 }
 
-func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) Key {
+func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) Address {
 	if tester.inputs == nil {
 		tester.inputs = make(map[uint64][]byte)
 	}
@@ -103,7 +103,7 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 
 	putGetter := newTestHasherStore(NewMapChunkStore(), hash)
 
-	var key Key
+	var key Address
 	var wait func()
 	var err error
 	if usePyramid {

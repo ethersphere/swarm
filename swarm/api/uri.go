@@ -47,7 +47,7 @@ type URI struct {
 	Addr string
 
 	// key stores the parsed storage key
-	key storage.Key
+	key storage.Address
 
 	// Path is the path to the content within a swarm manifest
 	Path string
@@ -119,7 +119,7 @@ func (u *URI) String() string {
 	return u.Scheme + ":/" + u.Addr + "/" + u.Path
 }
 
-func (u *URI) Key() storage.Key {
+func (u *URI) Key() storage.Address {
 	if u.key != nil {
 		return u.key
 	}

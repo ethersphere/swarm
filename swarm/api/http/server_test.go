@@ -142,7 +142,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrcResp := &storage.Key{}
+	rsrcResp := &storage.Address{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
@@ -201,7 +201,7 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrcResp := &storage.Key{}
+	rsrcResp := &storage.Address{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
@@ -378,7 +378,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	reader := [3]*bytes.Reader{}
 
-	key := [3]storage.Key{}
+	key := [3]storage.Address{}
 
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()

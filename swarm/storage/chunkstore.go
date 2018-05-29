@@ -30,7 +30,7 @@ ChunkStore interface is implemented by :
 */
 type ChunkStore interface {
 	Put(*Chunk) // effectively there is no error even if there is an error
-	Get(Key) (*Chunk, error)
+	Get(Address) (*Chunk, error)
 	Close()
 }
 
@@ -53,7 +53,7 @@ func (m *MapChunkStore) Put(chunk *Chunk) {
 	chunk.markAsStored()
 }
 
-func (m *MapChunkStore) Get(key Key) (*Chunk, error) {
+func (m *MapChunkStore) Get(key Address) (*Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	chunk := m.chunks[key.Hex()]

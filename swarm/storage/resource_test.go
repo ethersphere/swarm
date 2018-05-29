@@ -188,7 +188,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update halfway to first period
-	resourcekey := make(map[string]Key)
+	resourcekey := make(map[string]Address)
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data := []byte(updates[0])
 	resourcekey[updates[0]], err = rh.Update(ctx, safeName, data)
@@ -668,7 +668,7 @@ func newTestSigner() (*GenericResourceSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
+func getUpdateDirect(rh *ResourceHandler, key Address) ([]byte, error) {
 	chunk, err := rh.chunkStore.localStore.memStore.Get(key)
 	if err != nil {
 		return nil, err

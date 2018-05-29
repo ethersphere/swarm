@@ -66,7 +66,7 @@ type gcItem struct {
 type LDBStoreParams struct {
 	*StoreParams
 	Path string
-	Po   func(Key) uint8
+	Po   func(Address) uint8
 }
 
 // NewLDBStoreParams constructs LDBStoreParams with the specified values.
@@ -74,7 +74,7 @@ func NewLDBStoreParams(storeparams *StoreParams, path string) *LDBStoreParams {
 	return &LDBStoreParams{
 		StoreParams: storeparams,
 		Path:        path,
-		Po:          func(k Key) (ret uint8) { return uint8(Proximity(storeparams.BaseKey[:], k[:])) },
+		Po:          func(k Address) (ret uint8) { return uint8(Proximity(storeparams.BaseKey[:], k[:])) },
 	}
 }
 
@@ -89,7 +89,7 @@ type LDBStore struct {
 	bucketCnt []uint64
 
 	hashfunc SwarmHasher
-	po       func(Key) uint8
+	po       func(Address) uint8
 
 	batchC   chan bool
 	batchesC chan struct{}
@@ -103,7 +103,7 @@ type LDBStore struct {
 	// If getDataFunc is defined, it will be used for
 	// retrieving the chunk data instead from the local
 	// LevelDB database.
-	getDataFunc func(key Key) (data []byte, err error)
+	getDataFunc func(key Address) (data []byte, err error)
 }
 
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
@@ -189,7 +189,7 @@ func (s *LDBStore) updateIndexAccess(index *dpaDBIndex) {
 	index.Access = s.accessCnt
 }
 
-func getIndexKey(hash Key) []byte {
+func getIndexKey(hash Address) []byte {
 	hashSize := len(hash)
 	key := make([]byte, hashSize+1)
 	key[0] = keyIndex
@@ -365,7 +365,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		if err != nil {
 			return count, err
 		}
-		key := Key(keybytes)
+		key := Address(keybytes)
 		chunk := NewChunk(key, nil)
 		chunk.SData = data[32:]
 		s.Put(chunk)
@@ -399,10 +399,10 @@ func (s *LDBStore) Cleanup() {
 			it.Next()
 			continue
 		}
-		data, err := s.db.Get(getDataKey(index.Idx, s.po(Key(key[1:]))))
+		data, err := s.db.Get(getDataKey(index.Idx, s.po(Address(key[1:]))))
 		if err != nil {
 			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v", key[:], err))
-			s.delete(index.Idx, getIndexKey(key[1:]), s.po(Key(key[1:])))
+			s.delete(index.Idx, getIndexKey(key[1:]), s.po(Address(key[1:])))
 			errorsFound++
 		} else {
 			hasher := s.hashfunc()
@@ -410,7 +410,7 @@ func (s *LDBStore) Cleanup() {
 			hash := hasher.Sum(nil)
 			if !bytes.Equal(hash, key[1:]) {
 				log.Warn(fmt.Sprintf("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:]))
-				s.delete(index.Idx, getIndexKey(key[1:]), s.po(Key(key[1:])))
+				s.delete(index.Idx, getIndexKey(key[1:]), s.po(Address(key[1:])))
 			}
 		}
 		it.Next()
@@ -442,9 +442,9 @@ func (s *LDBStore) ReIndex() {
 		oldCntKey[0] = keyDistanceCnt
 		newCntKey[0] = keyDistanceCnt
 		key[0] = keyData
-		key[1] = s.po(Key(key[1:]))
+		key[1] = s.po(Address(key[1:]))
 		oldCntKey[1] = key[1]
-		newCntKey[1] = s.po(Key(newKey[1:]))
+		newCntKey[1] = s.po(Address(newKey[1:]))
 		copy(newKey[2:], key[1:])
 		newValue := append(hash, data...)
 
@@ -618,7 +618,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *LDBStore) Get(key Key) (chunk *Chunk, err error) {
+func (s *LDBStore) Get(key Address) (chunk *Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
 	log.Trace("ldbstore.get", "key", key)
 
@@ -627,7 +627,7 @@ func (s *LDBStore) Get(key Key) (chunk *Chunk, err error) {
 	return s.get(key)
 }
 
-func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
+func (s *LDBStore) get(key Address) (chunk *Chunk, err error) {
 	var indx dpaDBIndex
 
 	if s.tryAccessIdx(getIndexKey(key), &indx) {
@@ -665,8 +665,8 @@ func (s *LDBStore) get(key Key) (chunk *Chunk, err error) {
 // newMockGetFunc returns a function that reads chunk data from
 // the mock database, which is used as the value for DbStore.getFunc
 // to bypass the default functionality of DbStore with a mock store.
-func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Key) (data []byte, err error) {
-	return func(key Key) (data []byte, err error) {
+func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Address) (data []byte, err error) {
+	return func(key Address) (data []byte, err error) {
 		data, err = mockStore.Get(key)
 		if err == mock.ErrNotFound {
 			// preserve ErrChunkNotFound error
@@ -676,7 +676,7 @@ func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Key) (data []byte, e
 	}
 }
 
-func (s *LDBStore) updateAccessCnt(key Key) {
+func (s *LDBStore) updateAccessCnt(key Address) {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -711,7 +711,7 @@ func (s *LDBStore) Close() {
 }
 
 // SyncIterator(start, stop, po, f) calls f on each hash of a bin po from start to stop
-func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key, uint64) bool) error {
+func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(Address, uint64) bool) error {
 	metrics.GetOrRegisterCounter("ldbstore.synciterator", nil).Inc(1)
 
 	sincekey := getDataKey(since, po)
@@ -729,7 +729,7 @@ func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(Key
 		key := make([]byte, 32)
 		val := it.Value()
 		copy(key, val[:32])
-		if !f(Key(key), binary.BigEndian.Uint64(dbkey[2:])) {
+		if !f(Address(key), binary.BigEndian.Uint64(dbkey[2:])) {
 			break
 		}
 	}

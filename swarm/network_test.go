@@ -234,7 +234,7 @@ type testSwarmNetworkStep struct {
 
 // file represents the file uploaded on a particular node.
 type file struct {
-	key    storage.Key
+	key    storage.Address
 	data   string
 	nodeID discover.NodeID
 }
@@ -499,7 +499,7 @@ func removeNodes(count int, net *simulations.Network) error {
 
 // uploadFile, uploads a short file to the swarm instance
 // using the api.Put method.
-func uploadFile(swarm *Swarm) (storage.Key, string, error) {
+func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 	b := make([]byte, 8)
 	_, err := rand.Read(b)
 	if err != nil {

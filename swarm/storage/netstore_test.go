@@ -38,7 +38,7 @@ func NewMockRetrieve() *mockRetrieve {
 	return &mockRetrieve{requests: make(map[string]int)}
 }
 
-func newDummyChunk(key Key) *Chunk {
+func newDummyChunk(key Address) *Chunk {
 	chunk := NewChunk(key, make(chan bool))
 	chunk.SData = []byte{3, 4, 5}
 	chunk.Size = 3
@@ -91,7 +91,7 @@ func TestNetstoreFailedRequest(t *testing.T) {
 	r := NewMockRetrieve()
 	netStore := NewNetStore(localStore, r.retrieve)
 
-	key := Key{}
+	key := Address{}
 
 	// first call is done by the retry on ErrChunkNotFound, no need to do it here
 	// _, err = netStore.Get(key)

@@ -36,7 +36,7 @@ func TestParseURI(t *testing.T) {
 		expectDeprecatedRaw       bool
 		expectDeprecatedImmutable bool
 		expectValidKey            bool
-		expectKey                 storage.Key
+		expectKey                 storage.Address
 	}
 	tests := []test{
 		{
@@ -131,7 +131,7 @@ func TestParseURI(t *testing.T) {
 			},
 			expectValidKey: true,
 			expectRaw:      true,
-			expectKey: storage.Key{67, 120, 209, 156, 38, 89, 15, 26,
+			expectKey: storage.Address{67, 120, 209, 156, 38, 89, 15, 26,
 				129, 142, 215, 214, 166, 44, 56, 9,
 				225, 73, 176, 153, 156, 171, 92, 229,
 				242, 98, 51, 179, 180, 35, 191, 140,

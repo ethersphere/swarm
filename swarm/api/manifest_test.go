@@ -161,7 +161,7 @@ func TestReadManifestOverSizeLimit(t *testing.T) {
 	reader := &storage.LazyTestSectionReader{
 		SectionReader: io.NewSectionReader(bytes.NewReader(manifest), 0, int64(len(manifest))),
 	}
-	_, err := readManifest(reader, storage.Key{}, nil, false, nil)
+	_, err := readManifest(reader, storage.Address{}, nil, false, nil)
 	if err == nil {
 		t.Fatal("got no error from readManifest")
 	}

@@ -50,7 +50,7 @@ type SwarmFile struct {
 	inode    uint64
 	name     string
 	path     string
-	key      storage.Key
+	key      storage.Address
 	fileSize int64
 	reader   storage.LazySectionReader
 

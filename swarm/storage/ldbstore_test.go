@@ -61,7 +61,7 @@ func newTestDbStore(mock bool, trusted bool) (*testDbStore, error) {
 	return &testDbStore{db, dir}, err
 }
 
-func testPoFunc(k Key) (ret uint8) {
+func testPoFunc(k Address) (ret uint8) {
 	basekey := make([]byte, 32)
 	return uint8(Proximity(basekey[:], k[:]))
 }
@@ -195,7 +195,7 @@ func testIterator(t *testing.T, mock bool) {
 	wg.Wait()
 	i = 0
 	for poc = 0; poc <= 255; poc++ {
-		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Key, n uint64) bool {
+		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Address, n uint64) bool {
 			log.Trace(fmt.Sprintf("Got key %v number %d poc %d", k, n, uint8(poc)))
 			chunkkeys_results[n-1] = k
 			i++

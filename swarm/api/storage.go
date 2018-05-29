@@ -45,7 +45,7 @@ func NewStorage(api *Api) *Storage {
 // its content type
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *Storage) Put(content, contentType string, toEncrypt bool) (storage.Key, func(), error) {
+func (self *Storage) Put(content, contentType string, toEncrypt bool) (storage.Address, func(), error) {
 	return self.api.Put(content, contentType, toEncrypt)
 }
 

@@ -56,7 +56,7 @@ func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *Net
 // Get uses get method to retrieve request, but retries if the
 // ErrChunkNotFound is returned by get, until the netStoreRetryTimeout
 // is reached.
-func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
+func (self *NetStore) Get(key Address) (chunk *Chunk, err error) {
 	timer := time.NewTimer(netStoreRetryTimeout)
 	defer timer.Stop()
 
@@ -121,7 +121,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	}
 }
 
-func (self *NetStore) get(key Key, timeout time.Duration) (chunk *Chunk, err error) {
+func (self *NetStore) get(key Address, timeout time.Duration) (chunk *Chunk, err error) {
 	if timeout == 0 {
 		timeout = searchTimeout
 	}

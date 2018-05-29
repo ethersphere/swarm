@@ -120,7 +120,7 @@ func (s *SwarmChunkServer) Close() {
 
 // GetData retrives chunk data from db store
 func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.db.Get(storage.Key(key))
+	chunk, err := s.db.Get(storage.Address(key))
 	if err == storage.ErrFetching {
 		<-chunk.ReqC
 	} else if err != nil {
@@ -131,7 +131,7 @@ func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
 type RetrieveRequestMsg struct {
-	Key       storage.Key
+	Key       storage.Address
 	SkipCheck bool
 }
 
@@ -190,7 +190,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 }
 
 type ChunkDeliveryMsg struct {
-	Key   storage.Key
+	Key   storage.Address
 	SData []byte // the stored chunk Data (incl size)
 	peer  *Peer  // set in handleChunkDeliveryMsg
 }

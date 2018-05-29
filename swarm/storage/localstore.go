@@ -156,14 +156,14 @@ func (self *LocalStore) Put(chunk *Chunk) {
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
+func (self *LocalStore) Get(key Address) (chunk *Chunk, err error) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	return self.get(key)
 }
 
-func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
+func (self *LocalStore) get(key Address) (chunk *Chunk, err error) {
 	chunk, err = self.memStore.Get(key)
 	if err == nil {
 		if chunk.ReqC != nil {
@@ -189,7 +189,7 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 }
 
 // retrieve logic common for local and network chunk retrieval requests
-func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
+func (self *LocalStore) GetOrCreateRequest(key Address) (chunk *Chunk, created bool) {
 	metrics.GetOrRegisterCounter("localstore.getorcreaterequest", nil).Inc(1)
 
 	self.mu.Lock()

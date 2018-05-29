@@ -48,9 +48,9 @@ import (
 )
 
 type resourceResponse struct {
-	Manifest storage.Key `json:"manifest"`
-	Resource string      `json:"resource"`
-	Update   storage.Key `json:"update"`
+	Manifest storage.Address `json:"manifest"`
+	Resource string          `json:"resource"`
+	Update   storage.Address `json:"update"`
 }
 
 var (
@@ -180,7 +180,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		toEncrypt = true
 	}
 
-	var key storage.Key
+	var key storage.Address
 	if r.uri.Addr != "" && r.uri.Addr != "encrypt" {
 		key, err = s.api.Resolve(r.uri)
 		if err != nil {
@@ -400,7 +400,7 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 	var err error
-	var key storage.Key
+	var key storage.Address
 	var name string
 	var outdata []byte
 	isRaw, frequency, err := resourcePostMode(r.uri.Path)
@@ -526,7 +526,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	var err error
 
 	// resolve the content key.
-	var manifestKey storage.Key
+	var manifestKey storage.Address
 	manifestKey = r.uri.Key()
 	if manifestKey == nil {
 		manifestKey, err = s.api.Resolve(r.uri)
@@ -678,13 +678,13 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			Respond(w, r, fmt.Sprintf("manifest entry could not be loaded"), http.StatusNotFound)
 			return
 		}
-		key = storage.Key(common.Hex2Bytes(entry.Hash))
+		key = storage.Address(common.Hex2Bytes(entry.Hash))
 	}
 	etag := common.Bytes2Hex(key)
 	noneMatchEtag := r.Header.Get("If-None-Match")
 	w.Header().Set("ETag", etag) // set etag to manifest key or raw entry key.
 	if noneMatchEtag != "" {
-		if bytes.Equal(storage.Key(common.Hex2Bytes(noneMatchEtag)), key) {
+		if bytes.Equal(storage.Address(common.Hex2Bytes(noneMatchEtag)), key) {
 			Respond(w, r, "Not Modified", http.StatusNotModified)
 			return
 		}
@@ -756,7 +756,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		}
 
 		// retrieve the entry's key and size
-		reader, isEncrypted := s.api.Retrieve(storage.Key(common.Hex2Bytes(entry.Hash)))
+		reader, isEncrypted := s.api.Retrieve(storage.Address(common.Hex2Bytes(entry.Hash)))
 		size, err := reader.Size(nil)
 		if err != nil {
 			return err
@@ -844,7 +844,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	json.NewEncoder(w).Encode(&list)
 }
 
-func (s *Server) getManifestList(key storage.Key, prefix string) (list api.ManifestList, err error) {
+func (s *Server) getManifestList(key storage.Address, prefix string) (list api.ManifestList, err error) {
 	walker, err := s.api.NewManifestWalker(key, nil)
 	if err != nil {
 		return
@@ -932,7 +932,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	noneMatchEtag := r.Header.Get("If-None-Match")
 	w.Header().Set("ETag", etag) // set etag to actual content key.
 	if noneMatchEtag != "" {
-		if bytes.Equal(storage.Key(common.Hex2Bytes(noneMatchEtag)), contentKey) {
+		if bytes.Equal(storage.Address(common.Hex2Bytes(noneMatchEtag)), contentKey) {
 			Respond(w, r, "Not Modified", http.StatusNotModified)
 			return
 		}
@@ -1077,7 +1077,7 @@ func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
 }
 
-func (s *Server) updateManifest(key storage.Key, update func(mw *api.ManifestWriter) error) (storage.Key, error) {
+func (s *Server) updateManifest(key storage.Address, update func(mw *api.ManifestWriter) error) (storage.Address, error) {
 	mw, err := s.api.NewManifestWriter(key, nil)
 	if err != nil {
 		return nil, err

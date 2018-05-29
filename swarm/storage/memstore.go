@@ -68,7 +68,7 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	}
 }
 
-func (m *MemStore) Get(key Key) (*Chunk, error) {
+func (m *MemStore) Get(key Address) (*Chunk, error) {
 	if m.disabled {
 		return nil, ErrChunkNotFound
 	}

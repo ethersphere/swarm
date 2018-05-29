@@ -78,7 +78,7 @@ func NewDPA(store ChunkStore, params *DPAParams) *DPA {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
-func (self *DPA) Retrieve(key Key) (reader *LazyChunkReader, isEncrypted bool) {
+func (self *DPA) Retrieve(key Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(key) > self.hashFunc().Size()
 	getter := NewHasherStore(self.ChunkStore, self.hashFunc, isEncrypted)
 	reader = TreeJoin(key, getter, 0)
@@ -87,7 +87,7 @@ func (self *DPA) Retrieve(key Key) (reader *LazyChunkReader, isEncrypted bool) {
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (key Key, wait func(), err error) {
+func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (key Address, wait func(), err error) {
 	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
 	return PyramidSplit(data, putter, putter)
 }

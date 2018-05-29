@@ -42,17 +42,17 @@ type SwarmHasher func() SwarmHash
 // should probably not be here? but network should wrap chunk object
 type Peer interface{}
 
-type Key []byte
+type Address []byte
 
-func (x Key) Size() uint {
+func (x Address) Size() uint {
 	return uint(len(x))
 }
 
-func (x Key) isEqual(y Key) bool {
+func (x Address) isEqual(y Address) bool {
 	return bytes.Equal(x, y)
 }
 
-func (h Key) bits(i, j uint) uint {
+func (h Address) bits(i, j uint) uint {
 	ii := i >> 3
 	jj := i & 7
 	if ii >= h.Size() {
@@ -99,11 +99,11 @@ func Proximity(one, other []byte) (ret int) {
 	return MaxPO
 }
 
-func IsZeroKey(key Key) bool {
+func IsZeroKey(key Address) bool {
 	return len(key) == 0 || bytes.Equal(key, ZeroKey)
 }
 
-var ZeroKey = Key(common.Hash{}.Bytes())
+var ZeroKey = Address(common.Hash{}.Bytes())
 
 func MakeHashFunc(hash string) SwarmHasher {
 	switch hash {
@@ -121,26 +121,26 @@ func MakeHashFunc(hash string) SwarmHasher {
 	return nil
 }
 
-func (key Key) Hex() string {
+func (key Address) Hex() string {
 	return fmt.Sprintf("%064x", []byte(key[:]))
 }
 
-func (key Key) Log() string {
+func (key Address) Log() string {
 	if len(key[:]) < 8 {
 		return fmt.Sprintf("%x", []byte(key[:]))
 	}
 	return fmt.Sprintf("%016x", []byte(key[:8]))
 }
 
-func (key Key) String() string {
+func (key Address) String() string {
 	return fmt.Sprintf("%064x", []byte(key)[:])
 }
 
-func (key Key) MarshalJSON() (out []byte, err error) {
+func (key Address) MarshalJSON() (out []byte, err error) {
 	return []byte(`"` + key.String() + `"`), nil
 }
 
-func (key *Key) UnmarshalJSON(value []byte) error {
+func (key *Address) UnmarshalJSON(value []byte) error {
 	s := string(value)
 	*key = make([]byte, 32)
 	h := common.Hex2Bytes(s[1 : len(s)-1])
@@ -148,7 +148,7 @@ func (key *Key) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
-type KeyCollection []Key
+type KeyCollection []Address
 
 func NewKeyCollection(l int) KeyCollection {
 	return make(KeyCollection, l)
@@ -172,9 +172,9 @@ func (c KeyCollection) Swap(i, j int) {
 // but the size of the subtree encoded in the chunk
 // 0 if request, to be supplied by the dpa
 type Chunk struct {
-	Key   Key    // always
-	SData []byte // nil if request, to be supplied by dpa
-	Size  int64  // size of the data covered by the subtree encoded in this chunk
+	Key   Address // always
+	SData []byte  // nil if request, to be supplied by dpa
+	Size  int64   // size of the data covered by the subtree encoded in this chunk
 	//Source   Peer           // peer
 	C          chan bool // to signal data delivery by the dpa
 	ReqC       chan bool // to signal the request done
@@ -199,7 +199,7 @@ func (c *Chunk) GetErrored() error {
 	return c.errored
 }
 
-func NewChunk(key Key, reqC chan bool) *Chunk {
+func NewChunk(key Address, reqC chan bool) *Chunk {
 	return &Chunk{
 		Key:        key,
 		ReqC:       reqC,
@@ -322,7 +322,7 @@ func (c ChunkData) Data() []byte {
 }
 
 type ChunkValidator interface {
-	Validate(key Key, data []byte) bool
+	Validate(key Address, data []byte) bool
 }
 
 // Provides method for validation of content address in chunks
@@ -339,7 +339,7 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (self *ContentAddressValidator) Validate(key Key, data []byte) bool {
+func (self *ContentAddressValidator) Validate(key Address, data []byte) bool {
 	hasher := self.Hasher()
 	hasher.ResetWithLength(data[:8])
 	hasher.Write(data[8:])
