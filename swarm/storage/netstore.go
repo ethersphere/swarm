@@ -123,10 +123,10 @@ func (self *NetStore) Get(addr Address) (chunk *Chunk, err error) {
 
 // GetWithTimeout makes a single retrieval attempt for a chunk with a explicit timeout parameter
 func (self *NetStore) GetWithTimeout(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
-	return self.get(key, timeout)
+	return self.get(addr, timeout)
 }
 
-func (self *NetStore) get(key Key, timeout time.Duration) (chunk *Chunk, err error) {
+func (self *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
 	if timeout == 0 {
 		timeout = searchTimeout
 	}
