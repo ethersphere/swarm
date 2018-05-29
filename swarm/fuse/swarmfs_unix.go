@@ -117,7 +117,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 
 	log.Trace("swarmfs mount: traversing manifest map")
 	for suffix, entry := range manifestEntryMap {
-		addr := common.Hex2Bytes(entry.Hash)
+		key := common.Hex2Bytes(entry.Hash)
 		fullpath := "/" + suffix
 		basepath := filepath.Dir(fullpath)
 		parentDir := rootDir
@@ -139,7 +139,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 			}
 		}
 		thisFile := NewSwarmFile(basepath, filepath.Base(fullpath), mi)
-		thisFile.addr = addr
+		thisFile.key = key
 
 		parentDir.files = append(parentDir.files, thisFile)
 	}

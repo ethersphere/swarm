@@ -72,7 +72,7 @@ func TestMemStoreNotFound(t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
 
-	_, err := m.Get(ZeroAddr)
+	_, err := m.Get(ZeroKey)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -200,10 +200,10 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 		}
 
 		for i := 0; i < tt.n; i++ {
-			_, err := memStore.Get(chunks[i].Addr)
+			_, err := memStore.Get(chunks[i].Key)
 			if err != nil {
 				if err == ErrChunkNotFound {
-					_, err := ldb.Get(chunks[i].Addr)
+					_, err := ldb.Get(chunks[i].Key)
 					if err != nil {
 						t.Fatalf("couldn't get chunk %v from ldb, got error: %v", i, err)
 					}
@@ -222,7 +222,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 
 func NewRandomChunk(chunkSize uint64) *Chunk {
 	c := &Chunk{
-		Addr:       make([]byte, 32),
+		Key:        make([]byte, 32),
 		ReqC:       nil,
 		SData:      make([]byte, chunkSize+8), // SData should be chunkSize + 8 bytes reserved for length
 		dbStoredC:  make(chan bool),
@@ -235,7 +235,7 @@ func NewRandomChunk(chunkSize uint64) *Chunk {
 
 	hasher := MakeHashFunc(SHA3Hash)()
 	hasher.Write(c.SData)
-	copy(c.Addr, hasher.Sum(nil))
+	copy(c.Key, hasher.Sum(nil))
 
 	return c
 }

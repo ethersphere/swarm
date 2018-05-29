@@ -68,7 +68,7 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	}
 }
 
-func (m *MemStore) Get(addr Address) (*Chunk, error) {
+func (m *MemStore) Get(key Key) (*Chunk, error) {
 	if m.disabled {
 		return nil, ErrChunkNotFound
 	}
@@ -76,14 +76,14 @@ func (m *MemStore) Get(addr Address) (*Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	r, ok := m.requests.Get(string(addr))
+	r, ok := m.requests.Get(string(key))
 	// it is a request
 	if ok {
 		return r.(*Chunk), nil
 	}
 
 	// it is not a request
-	c, ok := m.cache.Get(string(addr))
+	c, ok := m.cache.Get(string(key))
 	if !ok {
 		return nil, ErrChunkNotFound
 	}
@@ -103,20 +103,20 @@ func (m *MemStore) Put(c *Chunk) {
 		select {
 		case <-c.ReqC:
 			if c.GetErrored() != nil {
-				m.requests.Remove(string(c.Addr))
+				m.requests.Remove(string(c.Key))
 				return
 			}
-			m.cache.Add(string(c.Addr), c)
-			m.requests.Remove(string(c.Addr))
+			m.cache.Add(string(c.Key), c)
+			m.requests.Remove(string(c.Key))
 		default:
-			m.requests.Add(string(c.Addr), c)
+			m.requests.Add(string(c.Key), c)
 		}
 		return
 	}
 
 	// it is not a request
-	m.cache.Add(string(c.Addr), c)
-	m.requests.Remove(string(c.Addr))
+	m.cache.Add(string(c.Key), c)
+	m.requests.Remove(string(c.Key))
 }
 
 func (m *MemStore) setCapacity(n int) {

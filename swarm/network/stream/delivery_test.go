@@ -54,7 +54,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Addr:      hash0[:],
+					Key:       hash0[:],
 					SkipCheck: true,
 				},
 				Peer: peerID,
@@ -76,7 +76,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 
 	peerID := tester.IDs[0]
 
-	chunk := storage.NewChunk(storage.Address(hash0[:]), nil)
+	chunk := storage.NewChunk(storage.Key(hash0[:]), nil)
 
 	peer := streamer.getPeer(peerID)
 
@@ -92,7 +92,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Addr: chunk.Addr[:],
+					Key: chunk.Key[:],
 				},
 				Peer: peerID,
 			},
@@ -137,7 +137,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 		Priority: Top,
 	})
 
-	hash := storage.Address(hash0[:])
+	hash := storage.Key(hash0[:])
 	chunk := storage.NewChunk(hash, nil)
 	chunk.SData = hash
 	localStore.Put(chunk)
@@ -149,7 +149,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Addr: hash,
+					Key: hash,
 				},
 				Peer: peerID,
 			},
@@ -176,7 +176,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hash = storage.Address(hash1[:])
+	hash = storage.Key(hash1[:])
 	chunk = storage.NewChunk(hash, nil)
 	chunk.SData = hash1[:]
 	localStore.Put(chunk)
@@ -188,7 +188,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Addr:      hash,
+					Key:       hash,
 					SkipCheck: true,
 				},
 				Peer: peerID,
@@ -198,7 +198,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			{
 				Code: 6,
 				Msg: &ChunkDeliveryMsg{
-					Addr:  hash,
+					Key:   hash,
 					SData: hash,
 				},
 				Peer: peerID,
@@ -265,7 +265,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 				{
 					Code: 6,
 					Msg: &ChunkDeliveryMsg{
-						Addr:  chunkKey,
+						Key:   chunkKey,
 						SData: chunkData,
 					},
 					Peer: peerID,
@@ -398,7 +398,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		// create a retriever dpa for the pivot node
 		delivery := deliveries[sim.IDs[0]]
 		retrieveFunc := func(chunk *storage.Chunk) error {
-			return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
+			return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
 		}
 		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
 		dpa := storage.NewDPA(netStore, storage.NewDPAParams())
@@ -614,7 +614,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// by now deliveries are set for each node by the streamer service
 	delivery := deliveries[sim.IDs[0]]
 	retrieveFunc := func(chunk *storage.Chunk) error {
-		return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
+		return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
 	}
 	netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
 
@@ -624,7 +624,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 Loop:
 	for i := 0; i < b.N; i++ {
 		// uploading chunkCount random chunks to the last node
-		hashes := make([]storage.Address, chunkCount)
+		hashes := make([]storage.Key, chunkCount)
 		for i := 0; i < chunkCount; i++ {
 			// create actual size real chunks
 			hash, wait, err := remoteDpa.Store(io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
@@ -641,7 +641,7 @@ Loop:
 		b.StartTimer()
 		errs := make(chan error)
 		for _, hash := range hashes {
-			go func(h storage.Address) {
+			go func(h storage.Key) {
 				_, err := netStore.Get(h)
 				log.Warn("test check netstore get", "hash", h, "err", err)
 				errs <- err

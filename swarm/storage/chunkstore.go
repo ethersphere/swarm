@@ -30,7 +30,7 @@ ChunkStore interface is implemented by :
 */
 type ChunkStore interface {
 	Put(*Chunk) // effectively there is no error even if there is an error
-	Get(Address) (*Chunk, error)
+	Get(Key) (*Chunk, error)
 	Close()
 }
 
@@ -49,14 +49,14 @@ func NewMapChunkStore() *MapChunkStore {
 func (m *MapChunkStore) Put(chunk *Chunk) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.chunks[chunk.Addr.Hex()] = chunk
+	m.chunks[chunk.Key.Hex()] = chunk
 	chunk.markAsStored()
 }
 
-func (m *MapChunkStore) Get(addr Address) (*Chunk, error) {
+func (m *MapChunkStore) Get(key Key) (*Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	chunk := m.chunks[addr.Hex()]
+	chunk := m.chunks[key.Hex()]
 	if chunk == nil {
 		return nil, ErrChunkNotFound
 	}

@@ -142,15 +142,15 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrcResp := &storage.Address{}
+	rsrcResp := &storage.Key{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
-	if rsrcResp.Hex() != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp)
+	correctManifestKeyHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
+	if rsrcResp.Hex() != correctManifestKeyHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestKeyHex, rsrcResp)
 	}
 
 	// get bzz manifest transparent resource resolve
@@ -201,15 +201,15 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrcResp := &storage.Address{}
+	rsrcResp := &storage.Key{}
 	err = json.Unmarshal(b, rsrcResp)
 	if err != nil {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
-	if rsrcResp.Hex() != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
+	correctManifestKeyHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
+	if rsrcResp.Hex() != correctManifestKeyHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestKeyHex, rsrcResp.Hex())
 	}
 
 	// get the manifest
@@ -264,8 +264,8 @@ func TestBzzResource(t *testing.T) {
 	resp.Body.Close()
 
 	// get latest update (1.1) through resource directly
-	log.Info("get update latest = 1.1", "addr", correctManifestAddrHex)
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	log.Info("get update latest = 1.1", "addr", correctManifestKeyHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -284,7 +284,7 @@ func TestBzzResource(t *testing.T) {
 
 	// update 2
 	log.Info("update 2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, correctManifestAddrHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, correctManifestKeyHex)
 	data := []byte("foo")
 	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
 	if err != nil {
@@ -297,7 +297,7 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.2) through resource directly
 	log.Info("get update 1.2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -316,7 +316,7 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.2) with specified period
 	log.Info("get update latest = 1.2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, correctManifestAddrHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -335,7 +335,7 @@ func TestBzzResource(t *testing.T) {
 
 	// get first update (1.1) with specified period and version
 	log.Info("get first update 1.1")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, correctManifestAddrHex)
+	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, correctManifestKeyHex)
 	resp, err = http.Get(url)
 	if err != nil {
 		t.Fatal(err)
@@ -378,7 +378,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	reader := [3]*bytes.Reader{}
 
-	addr := [3]storage.Address{}
+	key := [3]storage.Key{}
 
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
@@ -386,9 +386,9 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
 		var wait func()
-		addr[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)), encrypted)
+		key[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)), encrypted)
 		for j := i + 1; j < len(testmanifest); j++ {
-			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), addr[i].Hex(), -1)
+			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), key[i].Hex(), -1)
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -396,7 +396,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 		wait()
 	}
 
-	rootRef := addr[2].Hex()
+	rootRef := key[2].Hex()
 
 	_, err = http.Get(srv.URL + "/bzz-raw:/" + rootRef + "/a")
 	if err != nil {
@@ -450,7 +450,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			t.Fatalf("Read request body: %v", err)
 		}
 
-		if string(respbody) != addr[v].Hex() {
+		if string(respbody) != key[v].Hex() {
 			isexpectedfailrequest := false
 
 			for _, r := range expectedfailrequests {
@@ -459,12 +459,12 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 				}
 			}
 			if !isexpectedfailrequest {
-				t.Fatalf("Response body does not match, expected: %v, got %v", addr[v], string(respbody))
+				t.Fatalf("Response body does not match, expected: %v, got %v", key[v], string(respbody))
 			}
 		}
 	}
 
-	ref := addr[2].Hex()
+	ref := key[2].Hex()
 
 	for _, c := range []struct {
 		path string

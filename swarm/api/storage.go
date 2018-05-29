@@ -45,7 +45,7 @@ func NewStorage(api *Api) *Storage {
 // its content type
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *Storage) Put(content, contentType string, toEncrypt bool) (storage.Address, func(), error) {
+func (self *Storage) Put(content, contentType string, toEncrypt bool) (storage.Key, func(), error) {
 	return self.api.Put(content, contentType, toEncrypt)
 }
 
@@ -62,11 +62,11 @@ func (self *Storage) Get(bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr, err := self.api.Resolve(uri)
+	key, err := self.api.Resolve(uri)
 	if err != nil {
 		return nil, err
 	}
-	reader, mimeType, status, _, err := self.api.Get(addr, uri.Path)
+	reader, mimeType, status, _, err := self.api.Get(key, uri.Path)
 	if err != nil {
 		return nil, err
 	}
@@ -92,13 +92,13 @@ func (self *Storage) Modify(rootHash, path, contentHash, contentType string) (ne
 	if err != nil {
 		return "", err
 	}
-	addr, err := self.api.Resolve(uri)
+	key, err := self.api.Resolve(uri)
 	if err != nil {
 		return "", err
 	}
-	addr, err = self.api.Modify(addr, path, contentHash, contentType)
+	key, err = self.api.Modify(key, path, contentHash, contentType)
 	if err != nil {
 		return "", err
 	}
-	return addr.Hex(), nil
+	return key.Hex(), nil
 }

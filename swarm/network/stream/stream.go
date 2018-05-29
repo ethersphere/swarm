@@ -324,7 +324,7 @@ func (r *Registry) Quit(peerId discover.NodeID, s Stream) error {
 }
 
 func (r *Registry) Retrieve(chunk *storage.Chunk) error {
-	return r.delivery.RequestFromPeers(chunk.Addr[:], r.skipCheck)
+	return r.delivery.RequestFromPeers(chunk.Key[:], r.skipCheck)
 }
 
 func (r *Registry) NodeInfo() interface{} {
