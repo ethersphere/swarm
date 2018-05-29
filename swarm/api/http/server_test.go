@@ -378,7 +378,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	reader := [3]*bytes.Reader{}
 
-	key := [3]storage.Address{}
+	addr := [3]storage.Address{}
 
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
@@ -386,9 +386,9 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
 		var wait func()
-		key[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)), encrypted)
+		addr[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)), encrypted)
 		for j := i + 1; j < len(testmanifest); j++ {
-			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), key[i].Hex(), -1)
+			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), addr[i].Hex(), -1)
 		}
 		if err != nil {
 			t.Fatal(err)
@@ -396,7 +396,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 		wait()
 	}
 
-	rootRef := key[2].Hex()
+	rootRef := addr[2].Hex()
 
 	_, err = http.Get(srv.URL + "/bzz-raw:/" + rootRef + "/a")
 	if err != nil {
@@ -450,7 +450,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			t.Fatalf("Read request body: %v", err)
 		}
 
-		if string(respbody) != key[v].Hex() {
+		if string(respbody) != addr[v].Hex() {
 			isexpectedfailrequest := false
 
 			for _, r := range expectedfailrequests {
@@ -459,12 +459,12 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 				}
 			}
 			if !isexpectedfailrequest {
-				t.Fatalf("Response body does not match, expected: %v, got %v", key[v], string(respbody))
+				t.Fatalf("Response body does not match, expected: %v, got %v", addr[v], string(respbody))
 			}
 		}
 	}
 
-	ref := key[2].Hex()
+	ref := addr[2].Hex()
 
 	for _, c := range []struct {
 		path string

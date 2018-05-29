@@ -38,8 +38,8 @@ func NewMockRetrieve() *mockRetrieve {
 	return &mockRetrieve{requests: make(map[string]int)}
 }
 
-func newDummyChunk(key Address) *Chunk {
-	chunk := NewChunk(key, make(chan bool))
+func newDummyChunk(addr Address) *Chunk {
+	chunk := NewChunk(addr, make(chan bool))
 	chunk.SData = []byte{3, 4, 5}
 	chunk.Size = 3
 
@@ -47,7 +47,7 @@ func newDummyChunk(key Address) *Chunk {
 }
 
 func (m *mockRetrieve) retrieve(chunk *Chunk) error {
-	hkey := hex.EncodeToString(chunk.Key)
+	hkey := hex.EncodeToString(chunk.Addr)
 	m.requests[hkey] += 1
 
 	// on second call return error
@@ -57,7 +57,7 @@ func (m *mockRetrieve) retrieve(chunk *Chunk) error {
 
 	// on third call return data
 	if m.requests[hkey] == 3 {
-		*chunk = *newDummyChunk(chunk.Key)
+		*chunk = *newDummyChunk(chunk.Addr)
 		go func() {
 			time.Sleep(100 * time.Millisecond)
 			close(chunk.ReqC)

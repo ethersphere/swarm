@@ -92,7 +92,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Key: chunk.Key[:],
+					Key: chunk.Addr[:],
 				},
 				Peer: peerID,
 			},
@@ -398,7 +398,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		// create a retriever dpa for the pivot node
 		delivery := deliveries[sim.IDs[0]]
 		retrieveFunc := func(chunk *storage.Chunk) error {
-			return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
+			return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
 		}
 		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
 		dpa := storage.NewDPA(netStore, storage.NewDPAParams())
@@ -614,7 +614,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// by now deliveries are set for each node by the streamer service
 	delivery := deliveries[sim.IDs[0]]
 	retrieveFunc := func(chunk *storage.Chunk) error {
-		return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
+		return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
 	}
 	netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
 

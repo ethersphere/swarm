@@ -96,10 +96,10 @@ type ManifestWriter struct {
 	quitC chan bool
 }
 
-func (a *Api) NewManifestWriter(key storage.Address, quitC chan bool) (*ManifestWriter, error) {
-	trie, err := loadManifest(a.dpa, key, quitC)
+func (a *Api) NewManifestWriter(addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
+	trie, err := loadManifest(a.dpa, addr, quitC)
 	if err != nil {
-		return nil, fmt.Errorf("error loading manifest %s: %s", key, err)
+		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
 	return &ManifestWriter{a, trie, quitC}, nil
 }
@@ -136,10 +136,10 @@ type ManifestWalker struct {
 	quitC chan bool
 }
 
-func (a *Api) NewManifestWalker(key storage.Address, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(a.dpa, key, quitC)
+func (a *Api) NewManifestWalker(addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
+	trie, err := loadManifest(a.dpa, addr, quitC)
 	if err != nil {
-		return nil, fmt.Errorf("error loading manifest %s: %s", key, err)
+		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
 	return &ManifestWalker{a, trie, quitC}, nil
 }

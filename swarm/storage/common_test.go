@@ -88,7 +88,7 @@ func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs [
 	}
 	for i := 0; i < n; i++ {
 		chunk := fa(int64(i))
-		hs = append(hs, chunk.Key)
+		hs = append(hs, chunk.Addr)
 		c <- chunk
 	}
 	close(c)
@@ -163,7 +163,7 @@ func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *te
 func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
 	hs := mputChunks(m, processors, n, chunksize)
 	f := func(h Address, chunk *Chunk) error {
-		if !bytes.Equal(h, chunk.Key) {
+		if !bytes.Equal(h, chunk.Addr) {
 			return fmt.Errorf("key does not match retrieved chunk Key")
 		}
 		hasher := MakeHashFunc(DefaultHash)()

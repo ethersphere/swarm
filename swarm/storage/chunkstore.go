@@ -49,14 +49,14 @@ func NewMapChunkStore() *MapChunkStore {
 func (m *MapChunkStore) Put(chunk *Chunk) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.chunks[chunk.Key.Hex()] = chunk
+	m.chunks[chunk.Addr.Hex()] = chunk
 	chunk.markAsStored()
 }
 
-func (m *MapChunkStore) Get(key Address) (*Chunk, error) {
+func (m *MapChunkStore) Get(addr Address) (*Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
-	chunk := m.chunks[key.Hex()]
+	chunk := m.chunks[addr.Hex()]
 	if chunk == nil {
 		return nil, ErrChunkNotFound
 	}

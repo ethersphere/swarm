@@ -103,7 +103,7 @@ type LDBStore struct {
 	// If getDataFunc is defined, it will be used for
 	// retrieving the chunk data instead from the local
 	// LevelDB database.
-	getDataFunc func(key Address) (data []byte, err error)
+	getDataFunc func(addr Address) (data []byte, err error)
 }
 
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
@@ -224,7 +224,7 @@ func encodeData(chunk *Chunk) []byte {
 	// The chunk.Key array may be used in the returned slice which
 	// may be changed later in the code or by the LevelDB, resulting
 	// that the Key is changed as well.
-	return append(append([]byte{}, chunk.Key[:]...), chunk.SData...)
+	return append(append([]byte{}, chunk.Addr[:]...), chunk.SData...)
 }
 
 func decodeIndex(data []byte, index *dpaDBIndex) error {
@@ -499,16 +499,16 @@ func (s *LDBStore) CurrentStorageIndex() uint64 {
 
 func (s *LDBStore) Put(chunk *Chunk) {
 	metrics.GetOrRegisterCounter("ldbstore.put", nil).Inc(1)
-	log.Trace("ldbstore.put", "key", chunk.Key)
+	log.Trace("ldbstore.put", "key", chunk.Addr)
 
-	ikey := getIndexKey(chunk.Key)
+	ikey := getIndexKey(chunk.Addr)
 	var index dpaDBIndex
 
-	po := s.po(chunk.Key)
+	po := s.po(chunk.Addr)
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Key, "ikey", fmt.Sprintf("%x", ikey))
+	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Addr, "ikey", fmt.Sprintf("%x", ikey))
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		s.doPut(chunk, &index, po)
@@ -518,7 +518,7 @@ func (s *LDBStore) Put(chunk *Chunk) {
 			chunk.markAsStored()
 		}()
 	} else {
-		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Key)
+		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Addr)
 		decodeIndex(idata, &index)
 		chunk.markAsStored()
 	}
@@ -592,10 +592,10 @@ func (s *LDBStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uin
 // not need to store the data, but still need to create the index.
 func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk *Chunk) []byte {
 	return func(chunk *Chunk) []byte {
-		if err := mockStore.Put(chunk.Key, encodeData(chunk)); err != nil {
-			log.Error(fmt.Sprintf("%T: Chunk %v put: %v", mockStore, chunk.Key.Log(), err))
+		if err := mockStore.Put(chunk.Addr, encodeData(chunk)); err != nil {
+			log.Error(fmt.Sprintf("%T: Chunk %v put: %v", mockStore, chunk.Addr.Log(), err))
 		}
-		return chunk.Key[:]
+		return chunk.Addr[:]
 	}
 }
 
@@ -618,41 +618,41 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *LDBStore) Get(key Address) (chunk *Chunk, err error) {
+func (s *LDBStore) Get(addr Address) (chunk *Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
-	log.Trace("ldbstore.get", "key", key)
+	log.Trace("ldbstore.get", "key", addr)
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.get(key)
+	return s.get(addr)
 }
 
-func (s *LDBStore) get(key Address) (chunk *Chunk, err error) {
+func (s *LDBStore) get(addr Address) (chunk *Chunk, err error) {
 	var indx dpaDBIndex
 
-	if s.tryAccessIdx(getIndexKey(key), &indx) {
+	if s.tryAccessIdx(getIndexKey(addr), &indx) {
 		var data []byte
 		if s.getDataFunc != nil {
 			// if getDataFunc is defined, use it to retrieve the chunk data
-			log.Trace("ldbstore.get retrieve with getDataFunc", "key", key)
-			data, err = s.getDataFunc(key)
+			log.Trace("ldbstore.get retrieve with getDataFunc", "key", addr)
+			data, err = s.getDataFunc(addr)
 			if err != nil {
 				return
 			}
 		} else {
 			// default DbStore functionality to retrieve chunk data
-			proximity := s.po(key)
+			proximity := s.po(addr)
 			datakey := getDataKey(indx.Idx, proximity)
 			data, err = s.db.Get(datakey)
-			log.Trace("ldbstore.get retrieve", "key", key, "indexkey", indx.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
+			log.Trace("ldbstore.get retrieve", "key", addr, "indexkey", indx.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
 			if err != nil {
-				log.Trace("ldbstore.get chunk found but could not be accessed", "key", key, "err", err)
-				s.delete(indx.Idx, getIndexKey(key), s.po(key))
+				log.Trace("ldbstore.get chunk found but could not be accessed", "key", addr, "err", err)
+				s.delete(indx.Idx, getIndexKey(addr), s.po(addr))
 				return
 			}
 		}
 
-		chunk = NewChunk(key, nil)
+		chunk = NewChunk(addr, nil)
 		chunk.markAsStored()
 		decodeData(data, chunk)
 	} else {
@@ -665,9 +665,9 @@ func (s *LDBStore) get(key Address) (chunk *Chunk, err error) {
 // newMockGetFunc returns a function that reads chunk data from
 // the mock database, which is used as the value for DbStore.getFunc
 // to bypass the default functionality of DbStore with a mock store.
-func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Address) (data []byte, err error) {
-	return func(key Address) (data []byte, err error) {
-		data, err = mockStore.Get(key)
+func newMockGetDataFunc(mockStore *mock.NodeStore) func(addr Address) (data []byte, err error) {
+	return func(addr Address) (data []byte, err error) {
+		data, err = mockStore.Get(addr)
 		if err == mock.ErrNotFound {
 			// preserve ErrChunkNotFound error
 			err = ErrChunkNotFound
@@ -676,13 +676,13 @@ func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Address) (data []byt
 	}
 }
 
-func (s *LDBStore) updateAccessCnt(key Address) {
+func (s *LDBStore) updateAccessCnt(addr Address) {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	var index dpaDBIndex
-	s.tryAccessIdx(getIndexKey(key), &index) // result_chn == nil, only update access cnt
+	s.tryAccessIdx(getIndexKey(addr), &index) // result_chn == nil, only update access cnt
 
 }
 

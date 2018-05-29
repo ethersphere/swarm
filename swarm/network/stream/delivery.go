@@ -147,8 +147,8 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	chunk, created := d.db.GetOrCreateRequest(req.Key)
 	if chunk.ReqC != nil {
 		if created {
-			if err := d.RequestFromPeers(chunk.Key[:], true, sp.ID()); err != nil {
-				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Key, "err", err)
+			if err := d.RequestFromPeers(chunk.Addr[:], true, sp.ID()); err != nil {
+				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Addr, "err", err)
 				chunk.SetErrored(storage.ErrChunkForward)
 				return nil
 			}
@@ -176,16 +176,16 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 					sp.Drop(err)
 				}
 			}
-			streamer.deliveryC <- chunk.Key[:]
+			streamer.deliveryC <- chunk.Addr[:]
 		}()
 		return nil
 	}
 	// TODO: call the retrieve function of the outgoing syncer
 	if req.SkipCheck {
-		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Key)
+		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Addr)
 		return sp.Deliver(chunk, s.priority)
 	}
-	streamer.deliveryC <- chunk.Key[:]
+	streamer.deliveryC <- chunk.Addr[:]
 	return nil
 }
 
@@ -212,11 +212,11 @@ R:
 			continue R
 		}
 		if err != storage.ErrFetching {
-			panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
+			panic(fmt.Sprintf("not in db? addr %v chunk %v", req.Key, chunk))
 		}
 		select {
 		case <-chunk.ReqC:
-			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
+			log.Error("someone else delivered?", "hash", chunk.Addr.Hex())
 			continue R
 		default:
 		}

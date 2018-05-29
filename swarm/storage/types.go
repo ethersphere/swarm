@@ -99,11 +99,11 @@ func Proximity(one, other []byte) (ret int) {
 	return MaxPO
 }
 
-func IsZeroKey(key Address) bool {
-	return len(key) == 0 || bytes.Equal(key, ZeroKey)
+func IsZeroAddr(addr Address) bool {
+	return len(addr) == 0 || bytes.Equal(addr, ZeroAddr)
 }
 
-var ZeroKey = Address(common.Hash{}.Bytes())
+var ZeroAddr = Address(common.Hash{}.Bytes())
 
 func MakeHashFunc(hash string) SwarmHasher {
 	switch hash {
@@ -121,48 +121,48 @@ func MakeHashFunc(hash string) SwarmHasher {
 	return nil
 }
 
-func (key Address) Hex() string {
-	return fmt.Sprintf("%064x", []byte(key[:]))
+func (addr Address) Hex() string {
+	return fmt.Sprintf("%064x", []byte(addr[:]))
 }
 
-func (key Address) Log() string {
-	if len(key[:]) < 8 {
-		return fmt.Sprintf("%x", []byte(key[:]))
+func (addr Address) Log() string {
+	if len(addr[:]) < 8 {
+		return fmt.Sprintf("%x", []byte(addr[:]))
 	}
-	return fmt.Sprintf("%016x", []byte(key[:8]))
+	return fmt.Sprintf("%016x", []byte(addr[:8]))
 }
 
-func (key Address) String() string {
-	return fmt.Sprintf("%064x", []byte(key)[:])
+func (addr Address) String() string {
+	return fmt.Sprintf("%064x", []byte(addr)[:])
 }
 
-func (key Address) MarshalJSON() (out []byte, err error) {
-	return []byte(`"` + key.String() + `"`), nil
+func (addr Address) MarshalJSON() (out []byte, err error) {
+	return []byte(`"` + addr.String() + `"`), nil
 }
 
-func (key *Address) UnmarshalJSON(value []byte) error {
+func (addr *Address) UnmarshalJSON(value []byte) error {
 	s := string(value)
-	*key = make([]byte, 32)
+	*addr = make([]byte, 32)
 	h := common.Hex2Bytes(s[1 : len(s)-1])
-	copy(*key, h)
+	copy(*addr, h)
 	return nil
 }
 
-type KeyCollection []Address
+type AddressCollection []Address
 
-func NewKeyCollection(l int) KeyCollection {
-	return make(KeyCollection, l)
+func NewAddressCollection(l int) AddressCollection {
+	return make(AddressCollection, l)
 }
 
-func (c KeyCollection) Len() int {
+func (c AddressCollection) Len() int {
 	return len(c)
 }
 
-func (c KeyCollection) Less(i, j int) bool {
+func (c AddressCollection) Less(i, j int) bool {
 	return bytes.Compare(c[i], c[j]) == -1
 }
 
-func (c KeyCollection) Swap(i, j int) {
+func (c AddressCollection) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
@@ -172,7 +172,7 @@ func (c KeyCollection) Swap(i, j int) {
 // but the size of the subtree encoded in the chunk
 // 0 if request, to be supplied by the dpa
 type Chunk struct {
-	Key   Address // always
+	Addr  Address // always
 	SData []byte  // nil if request, to be supplied by dpa
 	Size  int64   // size of the data covered by the subtree encoded in this chunk
 	//Source   Peer           // peer
@@ -199,9 +199,9 @@ func (c *Chunk) GetErrored() error {
 	return c.errored
 }
 
-func NewChunk(key Address, reqC chan bool) *Chunk {
+func NewChunk(addr Address, reqC chan bool) *Chunk {
 	return &Chunk{
-		Key:        key,
+		Addr:       addr,
 		ReqC:       reqC,
 		dbStoredC:  make(chan bool),
 		dbStoredMu: &sync.Mutex{},
@@ -241,8 +241,8 @@ func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(dataSize))
 		hasher.ResetWithLength(chunks[i].SData[:8])
 		hasher.Write(chunks[i].SData[8:])
-		chunks[i].Key = make([]byte, 32)
-		copy(chunks[i].Key, hasher.Sum(nil))
+		chunks[i].Addr = make([]byte, 32)
+		copy(chunks[i].Addr, hasher.Sum(nil))
 	}
 
 	return chunks
@@ -322,7 +322,7 @@ func (c ChunkData) Data() []byte {
 }
 
 type ChunkValidator interface {
-	Validate(key Address, data []byte) bool
+	Validate(addr Address, data []byte) bool
 }
 
 // Provides method for validation of content address in chunks
@@ -339,14 +339,14 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (self *ContentAddressValidator) Validate(key Address, data []byte) bool {
+func (self *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 	hasher := self.Hasher()
 	hasher.ResetWithLength(data[:8])
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
-	if !bytes.Equal(hash, key[:]) {
-		log.Error("invalid content address", "expected", fmt.Sprintf("%x", hash), "have", key)
+	if !bytes.Equal(hash, addr[:]) {
+		log.Error("invalid content address", "expected", fmt.Sprintf("%x", hash), "have", addr)
 		return false
 	}
 	return true

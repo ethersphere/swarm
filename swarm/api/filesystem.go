@@ -189,7 +189,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	if err != nil {
 		return err
 	}
-	key, err := self.api.Resolve(uri)
+	addr, err := self.api.Resolve(uri)
 	if err != nil {
 		return err
 	}
@@ -200,14 +200,14 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	quitC := make(chan bool)
-	trie, err := loadManifest(self.api.dpa, key, quitC)
+	trie, err := loadManifest(self.api.dpa, addr, quitC)
 	if err != nil {
 		log.Warn(fmt.Sprintf("fs.Download: loadManifestTrie error: %v", err))
 		return err
 	}
 
 	type downloadListEntry struct {
-		key  storage.Address
+		addr storage.Address
 		path string
 	}
 
@@ -218,7 +218,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	err = trie.listWithPrefix(path, quitC, func(entry *manifestTrieEntry, suffix string) {
 		log.Trace(fmt.Sprintf("fs.Download: %#v", entry))
 
-		key = common.Hex2Bytes(entry.Hash)
+		addr = common.Hex2Bytes(entry.Hash)
 		path := lpath + "/" + suffix
 		dir := filepath.Dir(path)
 		if dir != prevPath {
@@ -226,7 +226,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 			prevPath = dir
 		}
 		if (mde == nil) && (path != dir+"/") {
-			list = append(list, &downloadListEntry{key: key, path: path})
+			list = append(list, &downloadListEntry{addr: addr, path: path})
 		}
 	})
 	if err != nil {
@@ -245,7 +245,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 		}
 		go func(i int, entry *downloadListEntry) {
 			defer wg.Done()
-			err := retrieveToFile(quitC, self.api.dpa, entry.key, entry.path)
+			err := retrieveToFile(quitC, self.api.dpa, entry.addr, entry.path)
 			if err != nil {
 				select {
 				case errC <- err:
@@ -268,12 +268,12 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 }
 
-func retrieveToFile(quitC chan bool, dpa *storage.DPA, key storage.Address, path string) error {
+func retrieveToFile(quitC chan bool, dpa *storage.DPA, addr storage.Address, path string) error {
 	f, err := os.Create(path) // TODO: basePath separators
 	if err != nil {
 		return err
 	}
-	reader, _ := dpa.Retrieve(key)
+	reader, _ := dpa.Retrieve(addr)
 	writer := bufio.NewWriter(f)
 	size, err := reader.Size(quitC)
 	if err != nil {

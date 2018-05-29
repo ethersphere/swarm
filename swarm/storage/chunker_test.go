@@ -81,11 +81,11 @@ func testRandomBrokenData(n int, tester *chunkerTester) {
 	putGetter := newTestHasherStore(NewMapChunkStore(), SHA3Hash)
 
 	expectedError := fmt.Errorf("Broken reader")
-	key, _, err := TreeSplit(brokendata, int64(n), putGetter)
+	addr, _, err := TreeSplit(brokendata, int64(n), putGetter)
 	if err == nil || err.Error() != expectedError.Error() {
 		tester.t.Fatalf("Not receiving the correct error! Expected %v, received %v", expectedError, err)
 	}
-	tester.t.Logf(" Key = %v\n", key)
+	tester.t.Logf(" Key = %v\n", addr)
 }
 
 func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) Address {
@@ -103,21 +103,21 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 
 	putGetter := newTestHasherStore(NewMapChunkStore(), hash)
 
-	var key Address
+	var addr Address
 	var wait func()
 	var err error
 	if usePyramid {
-		key, wait, err = PyramidSplit(data, putGetter, putGetter)
+		addr, wait, err = PyramidSplit(data, putGetter, putGetter)
 	} else {
-		key, wait, err = TreeSplit(data, int64(n), putGetter)
+		addr, wait, err = TreeSplit(data, int64(n), putGetter)
 	}
 	if err != nil {
 		tester.t.Fatalf(err.Error())
 	}
-	tester.t.Logf(" Key = %v\n", key)
+	tester.t.Logf(" Key = %v\n", addr)
 	wait()
 
-	reader := TreeJoin(key, putGetter, 0)
+	reader := TreeJoin(addr, putGetter, 0)
 	output := make([]byte, n)
 	r, err := reader.Read(output)
 	if r != n || err != io.EOF {
@@ -144,7 +144,7 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 		}
 	}
 
-	return key
+	return addr
 }
 
 func TestSha3ForCorrectness(t *testing.T) {
@@ -200,7 +200,7 @@ func TestDataAppend(t *testing.T) {
 		chunkStore := NewMapChunkStore()
 		putGetter := newTestHasherStore(chunkStore, SHA3Hash)
 
-		key, wait, err := PyramidSplit(data, putGetter, putGetter)
+		addr, wait, err := PyramidSplit(data, putGetter, putGetter)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
@@ -217,13 +217,13 @@ func TestDataAppend(t *testing.T) {
 		}
 
 		putGetter = newTestHasherStore(chunkStore, SHA3Hash)
-		newKey, wait, err := PyramidAppend(key, appendData, putGetter, putGetter)
+		newAddr, wait, err := PyramidAppend(addr, appendData, putGetter, putGetter)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
 		wait()
 
-		reader := TreeJoin(newKey, putGetter, 0)
+		reader := TreeJoin(newAddr, putGetter, 0)
 		newOutput := make([]byte, n+m)
 		r, err := reader.Read(newOutput)
 		if r != (n + m) {

@@ -26,9 +26,9 @@ func NewDBAPI(loc *LocalStore) *DBAPI {
 	return &DBAPI{loc.DbStore, loc}
 }
 
-// to obtain the chunks from key or request db entry only
-func (self *DBAPI) Get(key Address) (*Chunk, error) {
-	return self.loc.Get(key)
+// to obtain the chunks from address or request db entry only
+func (self *DBAPI) Get(addr Address) (*Chunk, error) {
+	return self.loc.Get(addr)
 }
 
 // current storage counter of chunk db
@@ -41,9 +41,9 @@ func (self *DBAPI) Iterator(from uint64, to uint64, po uint8, f func(Address, ui
 	return self.db.SyncIterator(from, to, po, f)
 }
 
-// to obtain the chunks from key or request db entry only
-func (self *DBAPI) GetOrCreateRequest(key Address) (*Chunk, bool) {
-	return self.loc.GetOrCreateRequest(key)
+// to obtain the chunks from address or request db entry only
+func (self *DBAPI) GetOrCreateRequest(addr Address) (*Chunk, bool) {
+	return self.loc.GetOrCreateRequest(addr)
 }
 
 // to obtain the chunks from key or request db entry only

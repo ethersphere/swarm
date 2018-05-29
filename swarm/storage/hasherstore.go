@@ -88,7 +88,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 
 	h.storeChunk(chunk)
 
-	return Reference(append(chunk.Key, encryptionKey...)), nil
+	return Reference(append(chunk.Addr, encryptionKey...)), nil
 }
 
 // Get returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).

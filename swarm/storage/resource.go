@@ -266,7 +266,7 @@ func (self *ResourceHandler) SetStore(store *NetStore) {
 // If resource update, owner is checked against ENS record of resource name inferred from chunk data
 // If parsed signature is nil, validates automatically
 // If not resource update, it validates are metadata chunk if length is metadataChunkOffsetSize and first two bytes are 0
-func (self *ResourceHandler) Validate(key Address, data []byte) bool {
+func (self *ResourceHandler) Validate(addr Address, data []byte) bool {
 	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
 		if len(data) > metadataChunkOffsetSize { // identifier comes after this byte range, and must be at least one byte
@@ -277,16 +277,16 @@ func (self *ResourceHandler) Validate(key Address, data []byte) bool {
 		log.Error("Invalid resource chunk")
 		return false
 	} else if signature == nil {
-		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), key)
+		return bytes.Equal(self.resourceHash(period, version, ens.EnsNode(name)), addr)
 	}
 
-	digest := self.keyDataHash(key, parseddata)
-	addr, err := getAddressFromDataSig(digest, *signature)
+	digest := self.keyDataHash(addr, parseddata)
+	addrSig, err := getAddressFromDataSig(digest, *signature)
 	if err != nil {
 		log.Error("Invalid signature on resource chunk")
 		return false
 	}
-	ok, _ := self.checkAccess(name, addr)
+	ok, _ := self.checkAccess(name, addrSig)
 	return ok
 }
 
@@ -296,11 +296,11 @@ func (self *ResourceHandler) IsValidated() bool {
 }
 
 // Create the resource update digest used in signatures
-func (self *ResourceHandler) keyDataHash(key Address, data []byte) common.Hash {
+func (self *ResourceHandler) keyDataHash(addr Address, data []byte) common.Hash {
 	hasher := self.hashPool.Get().(SwarmHash)
 	defer self.hashPool.Put(hasher)
 	hasher.Reset()
-	hasher.Write(key[:])
+	hasher.Write(addr[:])
 	hasher.Write(data)
 	return common.BytesToHash(hasher.Sum(nil))
 }
@@ -409,7 +409,7 @@ func (self *ResourceHandler) NewResource(ctx context.Context, name string, frequ
 	}
 	self.setResource(nameHash.Hex(), rsrc)
 
-	return chunk.Key, rsrc, nil
+	return chunk.Addr, rsrc, nil
 }
 
 func (self *ResourceHandler) newMetaChunk(name string, startBlock uint64, frequency uint64) *Chunk {
@@ -604,8 +604,8 @@ func (self *ResourceHandler) lookup(rsrc *resource, period uint32, version uint3
 
 // Retrieves a resource metadata chunk and creates/updates the index entry for it
 // with the resulting metadata
-func (self *ResourceHandler) LoadResource(key Address) (*resource, error) {
-	chunk, err := self.chunkStore.get(key, defaultRetrieveTimeout)
+func (self *ResourceHandler) LoadResource(addr Address) (*resource, error) {
+	chunk, err := self.chunkStore.get(addr, defaultRetrieveTimeout)
 	if err != nil {
 		return nil, NewResourceError(ErrNotFound, err.Error())
 	}
@@ -623,7 +623,7 @@ func (self *ResourceHandler) LoadResource(key Address) (*resource, error) {
 	rsrc.UnmarshalBinary(chunk.SData[2:])
 	rsrc.nameHash = ens.EnsNode(rsrc.name)
 	self.setResource(rsrc.nameHash.Hex(), rsrc)
-	log.Trace("resource index load", "rootkey", key, "name", rsrc.name, "namehash", rsrc.nameHash, "startblock", rsrc.startBlock, "frequency", rsrc.frequency)
+	log.Trace("resource index load", "rootkey", addr, "name", rsrc.name, "namehash", rsrc.nameHash, "startblock", rsrc.startBlock, "frequency", rsrc.frequency)
 	return rsrc, nil
 }
 
@@ -635,12 +635,12 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	if rsrc.name != name {
 		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, rsrc.name))
 	}
-	log.Trace("resource index update", "name", rsrc.name, "namehash", rsrc.nameHash, "updatekey", chunk.Key, "period", period, "version", version)
+	log.Trace("resource index update", "name", rsrc.name, "namehash", rsrc.nameHash, "updatekey", chunk.Addr, "period", period, "version", version)
 
 	// check signature (if signer algorithm is present)
 	// \TODO maybe this check is redundant if also checked upon retrieval of chunk
 	if signature != nil {
-		digest := self.keyDataHash(chunk.Key, data)
+		digest := self.keyDataHash(chunk.Addr, data)
 		_, err = getAddressFromDataSig(digest, *signature)
 		if err != nil {
 			return nil, NewResourceError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
@@ -648,7 +648,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	}
 
 	// update our rsrcs entry map
-	rsrc.lastKey = chunk.Key
+	rsrc.lastKey = chunk.Addr
 	rsrc.lastPeriod = period
 	rsrc.version = version
 	rsrc.updated = time.Now()
@@ -656,7 +656,7 @@ func (self *ResourceHandler) updateResourceIndex(rsrc *resource, chunk *Chunk) (
 	rsrc.Multihash = multihash
 	rsrc.Reader = bytes.NewReader(rsrc.data)
 	copy(rsrc.data, data)
-	log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Key, "period", rsrc.lastPeriod, "version", rsrc.version)
+	log.Debug("Resource synced", "name", rsrc.name, "key", chunk.Addr, "period", rsrc.lastPeriod, "version", rsrc.version)
 	self.setResource(rsrc.nameHash.Hex(), rsrc)
 	return rsrc, nil
 }
@@ -952,7 +952,7 @@ func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Ad
 }
 
 // create an update chunk
-func newUpdateChunk(key Address, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *Chunk {
+func newUpdateChunk(addr Address, signature *Signature, period uint32, version uint32, name string, data []byte, datalength int) *Chunk {
 
 	// no signatures if no validator
 	var signaturelength int
@@ -964,7 +964,7 @@ func newUpdateChunk(key Address, signature *Signature, period uint32, version ui
 	headerlength := len(name) + 4 + 4
 
 	actualdatalength := len(data)
-	chunk := NewChunk(key, nil)
+	chunk := NewChunk(addr, nil)
 	chunk.SData = make([]byte, 4+signaturelength+headerlength+actualdatalength) // initial 4 are uint16 length descriptors for headerlength and datalength
 
 	// data header length does NOT include the header length prefix bytes themselves
