@@ -467,7 +467,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestKey, "rootchunkkey", key)
 
-		name, _, err = s.api.ResourceLookup(r.Context(), key, 0, 0, &mru.ResourceLookupParams{})
+		name, _, err = s.api.ResourceLookup(r.Context(), key, 0, 0, &mru.LookupParams{})
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -581,7 +581,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 		}
 		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
 	default: // bogus
-		err = mru.NewResourceError(storage.ErrInvalidValue, "invalid mutable resource request")
+		err = mru.NewError(storage.ErrInvalidValue, "invalid mutable resource request")
 	}
 
 	// any error from the switch statement will end up here
@@ -600,7 +600,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supErr string, err error) (int, error) {
 	code := 0
 	defaultErr := fmt.Errorf("%s: %v", supErr, err)
-	rsrcErr, ok := err.(*mru.ResourceError)
+	rsrcErr, ok := err.(*mru.Error)
 	if !ok && rsrcErr != nil {
 		code = rsrcErr.Code()
 	}

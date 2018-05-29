@@ -214,13 +214,13 @@ on top of the dpa
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type Api struct {
-	resource *mru.ResourceHandler
+	resource *mru.Handler
 	dpa      *storage.DPA
 	dns      Resolver
 }
 
 //the api constructor initialises
-func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *mru.ResourceHandler) (self *Api) {
+func NewApi(dpa *storage.DPA, dns Resolver, resourceHandler *mru.Handler) (self *Api) {
 	self = &Api{
 		dpa:      dpa,
 		dns:      dns,
@@ -334,7 +334,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 			log.Trace("resource type", "key", manifestKey, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := self.resource.LoadResource(storage.Key(common.FromHex(entry.Hash)))
+			rsrc, err := self.resource.Load(storage.Key(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -343,7 +343,7 @@ func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazyS
 			}
 
 			// use this key to retrieve the latest update
-			rsrc, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, &mru.ResourceLookupParams{})
+			rsrc, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, &mru.LookupParams{})
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -655,15 +655,15 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storag
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uint32, version uint32, maxLookup *mru.ResourceLookupParams) (string, []byte, error) {
+func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uint32, version uint32, maxLookup *mru.LookupParams) (string, []byte, error) {
 	var err error
-	rsrc, err := self.resource.LoadResource(key)
+	rsrc, err := self.resource.Load(key)
 	if err != nil {
 		return "", nil, err
 	}
 	if version != 0 {
 		if period == 0 {
-			return "", nil, mru.NewResourceError(mru.ErrInvalidValue, "Period can't be 0")
+			return "", nil, mru.NewError(mru.ErrInvalidValue, "Period can't be 0")
 		}
 		_, err = self.resource.LookupVersion(ctx, rsrc.NameHash(), period, version, true, maxLookup)
 	} else if period != 0 {
@@ -683,7 +683,7 @@ func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uin
 }
 
 func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {
-	key, _, err := self.resource.NewResource(ctx, name, frequency)
+	key, _, err := self.resource.New(ctx, name, frequency)
 	if err != nil {
 		return nil, err
 	}

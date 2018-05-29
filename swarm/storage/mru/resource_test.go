@@ -53,6 +53,7 @@ var (
 	domainName        = "føø.bar"
 	safeName          string
 	nameHash          common.Hash
+	hashfunc          = storage.MakeHashFunc(storage.DefaultHash)
 )
 
 func init() {
@@ -89,7 +90,7 @@ func (f *fakeBackend) HeaderByNumber(context context.Context, name string, bigbl
 }
 
 // check that signature address matches update signer address
-func TestResourceReverse(t *testing.T) {
+func TestReverse(t *testing.T) {
 
 	period := uint32(4)
 	version := uint32(2)
@@ -161,7 +162,7 @@ func TestResourceReverse(t *testing.T) {
 }
 
 // make updates and retrieve them based on periods and versions
-func TestResourceHandler(t *testing.T) {
+func TestHandler(t *testing.T) {
 
 	// make fake backend, set up rpc and create resourcehandler
 	backend := &fakeBackend{
@@ -176,7 +177,7 @@ func TestResourceHandler(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rootChunkKey, _, err := rh.NewResource(ctx, safeName, resourceFrequency)
+	rootChunkKey, _, err := rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,8 +244,8 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startblocknumber + (resourceFrequency * 3)
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
-	rhparams := &ResourceHandlerParams{
-		QueryMaxPeriods: &ResourceLookupParams{
+	rhparams := &HandlerParams{
+		QueryMaxPeriods: &LookupParams{
 			Limit: false,
 		},
 		Signer:       nil,
@@ -252,11 +253,11 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	rh.chunkStore.Close()
-	rh2, err := NewTestResourceHandler(datadir, rhparams)
+	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrc2, err := rh2.LoadResource(rootChunkKey)
+	rsrc2, err := rh2.Load(rootChunkKey)
 	_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -318,7 +319,7 @@ func TestResourceHandler(t *testing.T) {
 }
 
 // create ENS enabled resource update, with and without valid owner
-func TestResourceENSOwner(t *testing.T) {
+func TestENSOwner(t *testing.T) {
 
 	// signer containing private key
 	signer, err := newTestSigner()
@@ -352,7 +353,7 @@ func TestResourceENSOwner(t *testing.T) {
 	// create new resource when we are owner = ok
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, _, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
@@ -376,7 +377,7 @@ func TestResourceENSOwner(t *testing.T) {
 	}
 }
 
-func TestResourceMultihash(t *testing.T) {
+func TestMultihash(t *testing.T) {
 
 	// signer containing private key
 	signer, err := newTestSigner()
@@ -399,7 +400,7 @@ func TestResourceMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, _, err = rh.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -460,8 +461,8 @@ func TestResourceMultihash(t *testing.T) {
 	}
 	rh.Close()
 
-	rhparams := &ResourceHandlerParams{
-		QueryMaxPeriods: &ResourceLookupParams{
+	rhparams := &HandlerParams{
+		QueryMaxPeriods: &LookupParams{
 			Limit: false,
 		},
 		Signer:         signer,
@@ -470,11 +471,11 @@ func TestResourceMultihash(t *testing.T) {
 	}
 	// test with signed data
 	rh.chunkStore.Close()
-	rh2, err := NewTestResourceHandler(datadir, rhparams)
+	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = rh2.NewResource(ctx, safeName, resourceFrequency)
+	_, _, err = rh2.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -511,7 +512,7 @@ func TestResourceMultihash(t *testing.T) {
 	}
 }
 
-func TestResourceChunkValidator(t *testing.T) {
+func TestChunkValidator(t *testing.T) {
 	// signer containing private key
 	signer, err := newTestSigner()
 	if err != nil {
@@ -544,7 +545,7 @@ func TestResourceChunkValidator(t *testing.T) {
 	// create new resource when we are owner = ok
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	key, rsrc, err := rh.NewResource(ctx, safeName, resourceFrequency)
+	key, rsrc, err := rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
@@ -573,6 +574,81 @@ func TestResourceChunkValidator(t *testing.T) {
 	}
 }
 
+// tests that the content address validator correctly checks the data
+// tests that resource update chunks are passed through content address validator
+// the test checking the resouce update validator internal correctness is found in resource_test.go
+func TestValidator(t *testing.T) {
+
+	// set up localstore
+	datadir, err := ioutil.TempDir("", "storage-testresourcevalidator")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(datadir)
+
+	params := storage.NewDefaultLocalStoreParams()
+	params.Init(datadir)
+	store, err := storage.NewLocalStore(params, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// add content address validator and resource validator to validators and check puts
+	// bad should fail, good should pass
+	store.Validators = append(store.Validators, storage.NewContentAddressValidator(hashfunc))
+	rhParams := &HandlerParams{}
+	rh, err := NewHandler(rhParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.Validators = append(store.Validators, rh)
+
+	chunks := storage.GenerateRandomChunks(storage.DefaultChunkSize, 2)
+	goodChunk := chunks[0]
+	badChunk := chunks[1]
+	badChunk.SData = goodChunk.SData
+	key := rh.resourceHash(42, 1, ens.EnsNode("xyzzy.eth"))
+	data := []byte("bar")
+	uglyChunk := newUpdateChunk(key, nil, 42, 1, "xyzzy.eth", data, len(data))
+
+	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
+	if err := goodChunk.GetErrored(); err != nil {
+		t.Fatalf("expected no error on good content address chunk with both validators, but got: %s", err)
+	}
+	if err := badChunk.GetErrored(); err == nil {
+		t.Fatal("expected error on bad chunk address with both validators, but got nil")
+	}
+	if err := uglyChunk.GetErrored(); err != nil {
+		t.Fatalf("expected no error on resource update chunk with both validators, but got: %s", err)
+	}
+
+	// (redundant check)
+	// use only resource validator, and check puts
+	// bad should fail, good should fail, resource should pass
+	store.Validators[0] = store.Validators[1]
+	store.Validators = store.Validators[:1]
+
+	chunks = storage.GenerateRandomChunks(storage.DefaultChunkSize, 2)
+	goodChunk = chunks[0]
+	badChunk = chunks[1]
+	badChunk.SData = goodChunk.SData
+
+	key = rh.resourceHash(42, 2, ens.EnsNode("xyzzy.eth"))
+	data = []byte("baz")
+	uglyChunk = newUpdateChunk(key, nil, 42, 2, "xyzzy.eth", data, len(data))
+
+	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
+	if goodChunk.GetErrored() == nil {
+		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
+	}
+	if badChunk.GetErrored() == nil {
+		t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
+	}
+	if err := uglyChunk.GetErrored(); err != nil {
+		t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
+	}
+}
+
 // fast-forward blockheight
 func fwdBlocks(count int, backend *fakeBackend) {
 	for i := 0; i < count; i++ {
@@ -593,7 +669,7 @@ func (e ensOwnerValidator) ValidateOwner(name string, address common.Address) (b
 }
 
 // create rpc and resourcehandler
-func setupTest(backend headerGetter, ensBackend *ens.ENS, signer ResourceSigner) (rh *ResourceHandler, datadir string, teardown func(), err error) {
+func setupTest(backend headerGetter, ensBackend *ens.ENS, signer Signer) (rh *Handler, datadir string, teardown func(), err error) {
 
 	var fsClean func()
 	var rpcClean func()
@@ -620,19 +696,19 @@ func setupTest(backend headerGetter, ensBackend *ens.ENS, signer ResourceSigner)
 		ov = ensOwnerValidator{ensBackend}
 	}
 
-	rhparams := &ResourceHandlerParams{
-		QueryMaxPeriods: &ResourceLookupParams{
+	rhparams := &HandlerParams{
+		QueryMaxPeriods: &LookupParams{
 			Limit: false,
 		},
 		Signer:         signer,
 		HeaderGetter:   backend,
 		OwnerValidator: ov,
 	}
-	rh, err = NewTestResourceHandler(datadir, rhparams)
+	rh, err = NewTestHandler(datadir, rhparams)
 	return rh, datadir, cleanF, err
 }
 
-// Set up simulated ENS backend for use with ENSResourceHandler tests
+// Set up simulated ENS backend for use with ENSHandler tests
 func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, top string) (common.Address, *fakeBackend, error) {
 
 	// create the domain hash values to pass to the ENS contract methods
@@ -675,17 +751,17 @@ func setupENS(addr common.Address, transactOpts *bind.TransactOpts, sub string, 
 	return contractAddress, contractBackend, nil
 }
 
-func newTestSigner() (*GenericResourceSigner, error) {
+func newTestSigner() (*GenericSigner, error) {
 	privKey, err := crypto.GenerateKey()
 	if err != nil {
 		return nil, err
 	}
-	return &GenericResourceSigner{
+	return &GenericSigner{
 		PrivKey: privKey,
 	}, nil
 }
 
-func getUpdateDirect(rh *ResourceHandler, key storage.Key) ([]byte, error) {
+func getUpdateDirect(rh *Handler, key storage.Key) ([]byte, error) {
 	chunk, err := rh.chunkStore.Get(key)
 	if err != nil {
 		return nil, err
