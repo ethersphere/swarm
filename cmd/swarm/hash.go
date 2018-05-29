@@ -38,11 +38,11 @@ func hash(ctx *cli.Context) {
 	defer f.Close()
 
 	stat, _ := f.Stat()
-	chunker := storage.NewTreeChunker(storage.NewChunkerParams())
-	key, err := chunker.Split(f, stat.Size(), nil, nil, nil)
+	dpa := storage.NewDPA(storage.NewMapChunkStore(), storage.NewDPAParams())
+	addr, _, err := dpa.Store(f, stat.Size(), false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)
 	} else {
-		fmt.Printf("%v\n", key)
+		fmt.Printf("%v\n", addr)
 	}
 }
