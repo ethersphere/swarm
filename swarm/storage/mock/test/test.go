@@ -42,22 +42,22 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 		}
 
 		for i, addr := range addrs {
-			key := storage.Key(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
+			chunkAddr := storage.Address(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
 			data := []byte(strconv.FormatInt(int64(i)+1, 16))
 			data = append(data, make([]byte, 4096-len(data))...)
-			globalStore.Put(addr, key, data)
+			globalStore.Put(addr, chunkAddr, data)
 
 			for _, cAddr := range addrs {
-				cData, err := globalStore.Get(cAddr, key)
+				cData, err := globalStore.Get(cAddr, chunkAddr)
 				if cAddr == addr {
 					if err != nil {
-						t.Fatalf("get data from store %s key %s: %v", cAddr.Hex(), key.Hex(), err)
+						t.Fatalf("get data from store %s key %s: %v", cAddr.Hex(), chunkAddr.Hex(), err)
 					}
 					if !bytes.Equal(data, cData) {
 						t.Fatalf("data on store %s: expected %x, got %x", cAddr.Hex(), data, cData)
 					}
-					if !globalStore.HasKey(cAddr, key) {
-						t.Fatalf("expected key %s on global store for node %s, but it was not found", key.Hex(), cAddr.Hex())
+					if !globalStore.HasKey(cAddr, chunkAddr) {
+						t.Fatalf("expected key %s on global store for node %s, but it was not found", chunkAddr.Hex(), cAddr.Hex())
 					}
 				} else {
 					if err != mock.ErrNotFound {
@@ -66,8 +66,8 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 					if len(cData) > 0 {
 						t.Fatalf("data on store %s: expected nil, got %x", cAddr.Hex(), cData)
 					}
-					if globalStore.HasKey(cAddr, key) {
-						t.Fatalf("not expected key %s on global store for node %s, but it was found", key.Hex(), cAddr.Hex())
+					if globalStore.HasKey(cAddr, chunkAddr) {
+						t.Fatalf("not expected key %s on global store for node %s, but it was found", chunkAddr.Hex(), cAddr.Hex())
 					}
 				}
 			}
@@ -84,22 +84,22 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 		i := 0
 		for addr, store := range nodes {
 			i++
-			key := storage.Key(append(addr[:], []byte(fmt.Sprintf("%x", i))...))
+			chunkAddr := storage.Address(append(addr[:], []byte(fmt.Sprintf("%x", i))...))
 			data := []byte(strconv.FormatInt(int64(i)+1, 16))
 			data = append(data, make([]byte, 4096-len(data))...)
-			store.Put(key, data)
+			store.Put(chunkAddr, data)
 
 			for cAddr, cStore := range nodes {
-				cData, err := cStore.Get(key)
+				cData, err := cStore.Get(chunkAddr)
 				if cAddr == addr {
 					if err != nil {
-						t.Fatalf("get data from store %s key %s: %v", cAddr.Hex(), key.Hex(), err)
+						t.Fatalf("get data from store %s key %s: %v", cAddr.Hex(), chunkAddr.Hex(), err)
 					}
 					if !bytes.Equal(data, cData) {
 						t.Fatalf("data on store %s: expected %x, got %x", cAddr.Hex(), data, cData)
 					}
-					if !globalStore.HasKey(cAddr, key) {
-						t.Fatalf("expected key %s on global store for node %s, but it was not found", key.Hex(), cAddr.Hex())
+					if !globalStore.HasKey(cAddr, chunkAddr) {
+						t.Fatalf("expected key %s on global store for node %s, but it was not found", chunkAddr.Hex(), cAddr.Hex())
 					}
 				} else {
 					if err != mock.ErrNotFound {
@@ -108,8 +108,8 @@ func MockStore(t *testing.T, globalStore mock.GlobalStorer, n int) {
 					if len(cData) > 0 {
 						t.Fatalf("data on store %s: expected nil, got %x", cAddr.Hex(), cData)
 					}
-					if globalStore.HasKey(cAddr, key) {
-						t.Fatalf("not expected key %s on global store for node %s, but it was found", key.Hex(), cAddr.Hex())
+					if globalStore.HasKey(cAddr, chunkAddr) {
+						t.Fatalf("not expected key %s on global store for node %s, but it was found", chunkAddr.Hex(), cAddr.Hex())
 					}
 				}
 			}
@@ -134,10 +134,10 @@ func ImportExport(t *testing.T, outStore, inStore mock.GlobalStorer, n int) {
 	}
 
 	for i, addr := range addrs {
-		key := storage.Key(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
+		chunkAddr := storage.Address(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
 		data := []byte(strconv.FormatInt(int64(i)+1, 16))
 		data = append(data, make([]byte, 4096-len(data))...)
-		outStore.Put(addr, key, data)
+		outStore.Put(addr, chunkAddr, data)
 	}
 
 	r, w := io.Pipe()
@@ -155,20 +155,20 @@ func ImportExport(t *testing.T, outStore, inStore mock.GlobalStorer, n int) {
 	}
 
 	for i, addr := range addrs {
-		key := storage.Key(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
+		chunkAddr := storage.Address(append(addr[:], []byte(strconv.FormatInt(int64(i)+1, 16))...))
 		data := []byte(strconv.FormatInt(int64(i)+1, 16))
 		data = append(data, make([]byte, 4096-len(data))...)
 		for _, cAddr := range addrs {
-			cData, err := inStore.Get(cAddr, key)
+			cData, err := inStore.Get(cAddr, chunkAddr)
 			if cAddr == addr {
 				if err != nil {
-					t.Fatalf("get data from store %s key %s: %v", cAddr.Hex(), key.Hex(), err)
+					t.Fatalf("get data from store %s key %s: %v", cAddr.Hex(), chunkAddr.Hex(), err)
 				}
 				if !bytes.Equal(data, cData) {
 					t.Fatalf("data on store %s: expected %x, got %x", cAddr.Hex(), data, cData)
 				}
-				if !inStore.HasKey(cAddr, key) {
-					t.Fatalf("expected key %s on global store for node %s, but it was not found", key.Hex(), cAddr.Hex())
+				if !inStore.HasKey(cAddr, chunkAddr) {
+					t.Fatalf("expected key %s on global store for node %s, but it was not found", chunkAddr.Hex(), cAddr.Hex())
 				}
 			} else {
 				if err != mock.ErrNotFound {
@@ -177,8 +177,8 @@ func ImportExport(t *testing.T, outStore, inStore mock.GlobalStorer, n int) {
 				if len(cData) > 0 {
 					t.Fatalf("data on store %s: expected nil, got %x", cAddr.Hex(), cData)
 				}
-				if inStore.HasKey(cAddr, key) {
-					t.Fatalf("not expected key %s on global store for node %s, but it was found", key.Hex(), cAddr.Hex())
+				if inStore.HasKey(cAddr, chunkAddr) {
+					t.Fatalf("not expected key %s on global store for node %s, but it was found", chunkAddr.Hex(), cAddr.Hex())
 				}
 			}
 		}

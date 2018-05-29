@@ -138,15 +138,15 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	}
 
 	// collect hashes in po 1 bin for each node
-	hashes := make([][]storage.Key, nodes)
+	hashes := make([][]storage.Address, nodes)
 	totalHashes := 0
 	hashCounts := make([]int, nodes)
 	for i := nodes - 1; i >= 0; i-- {
 		if i < nodes-1 {
 			hashCounts[i] = hashCounts[i+1]
 		}
-		dbs[i].Iterator(0, math.MaxUint64, po, func(key storage.Key, index uint64) bool {
-			hashes[i] = append(hashes[i], key)
+		dbs[i].Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
+			hashes[i] = append(hashes[i], addr)
 			totalHashes++
 			hashCounts[i]++
 			return true

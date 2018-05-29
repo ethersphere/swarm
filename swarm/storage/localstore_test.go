@@ -97,6 +97,6 @@ func TestValidator(t *testing.T) {
 
 type boolTestValidator bool
 
-func (self boolTestValidator) Validate(key Key, data []byte) bool {
+func (self boolTestValidator) Validate(addr Address, data []byte) bool {
 	return bool(self)
 }
