@@ -217,7 +217,7 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 	}
 }
 
-func (rrs *roundRobinStore) Get(key storage.Key) (*storage.Chunk, error) {
+func (rrs *roundRobinStore) Get(addr storage.Address) (*storage.Chunk, error) {
 	return nil, errors.New("get not well defined on round robin store")
 }
 

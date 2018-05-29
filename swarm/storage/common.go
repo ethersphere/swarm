@@ -16,7 +16,7 @@ func PutChunks(store *LocalStore, chunks ...*Chunk) {
 		for _, c := range chunks {
 			<-c.dbStoredC
 			if err := c.GetErrored(); err != nil {
-				log.Error("chunk store fail", "err", err, "key", c.Key)
+				log.Error("chunk store fail", "err", err, "key", c.Addr)
 			}
 			wg.Done()
 		}

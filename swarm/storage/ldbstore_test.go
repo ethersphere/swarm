@@ -61,7 +61,7 @@ func newTestDbStore(mock bool, trusted bool) (*testDbStore, error) {
 	return &testDbStore{db, dir}, err
 }
 
-func testPoFunc(k Key) (ret uint8) {
+func testPoFunc(k Address) (ret uint8) {
 	basekey := make([]byte, 32)
 	return uint8(Proximity(basekey[:], k[:]))
 }
@@ -147,7 +147,7 @@ func testDbStoreNotFound(t *testing.T, mock bool) {
 	}
 	defer db.close()
 
-	_, err = db.Get(ZeroKey)
+	_, err = db.Get(ZeroAddr)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -164,8 +164,8 @@ func testIterator(t *testing.T, mock bool) {
 	var chunkcount int = 32
 	var i int
 	var poc uint
-	chunkkeys := NewKeyCollection(chunkcount)
-	chunkkeys_results := NewKeyCollection(chunkcount)
+	chunkkeys := NewAddressCollection(chunkcount)
+	chunkkeys_results := NewAddressCollection(chunkcount)
 
 	db, err := newTestDbStore(mock, false)
 	if err != nil {
@@ -179,7 +179,7 @@ func testIterator(t *testing.T, mock bool) {
 	wg.Add(len(chunks))
 	for i = 0; i < len(chunks); i++ {
 		db.Put(chunks[i])
-		chunkkeys[i] = chunks[i].Key
+		chunkkeys[i] = chunks[i].Addr
 		j := i
 		go func() {
 			defer wg.Done()
@@ -195,7 +195,7 @@ func testIterator(t *testing.T, mock bool) {
 	wg.Wait()
 	i = 0
 	for poc = 0; poc <= 255; poc++ {
-		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Key, n uint64) bool {
+		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Address, n uint64) bool {
 			log.Trace(fmt.Sprintf("Got key %v number %d poc %d", k, n, uint8(poc)))
 			chunkkeys_results[n-1] = k
 			i++
@@ -300,7 +300,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Key)
+		ret, err := ldb.Get(chunks[i].Addr)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -354,7 +354,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 
 	var missing int
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Key)
+		ret, err := ldb.Get(chunks[i].Addr)
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			missing++
 			continue
@@ -405,7 +405,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 		// delete all even index chunks
 		if i%2 == 0 {
 
-			key := chunks[i].Key
+			key := chunks[i].Addr
 			ikey := getIndexKey(key)
 
 			var indx dpaDBIndex
@@ -418,7 +418,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Key)
+		ret, err := ldb.Get(chunks[i].Addr)
 
 		if i%2 == 0 {
 			// expect even chunks to be missing
@@ -465,7 +465,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	// delete all chunks
 	for i := 0; i < n; i++ {
-		key := chunks[i].Key
+		key := chunks[i].Addr
 		ikey := getIndexKey(key)
 
 		var indx dpaDBIndex
@@ -494,14 +494,14 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	// expect for first chunk to be missing, because it has the smallest access value
 	idx := 0
-	ret, err := ldb.Get(chunks[idx].Key)
+	ret, err := ldb.Get(chunks[idx].Addr)
 	if err == nil || ret != nil {
 		t.Fatal("expected first chunk to be missing, but got no error")
 	}
 
 	// expect for last chunk to be present, as it has the largest access value
 	idx = 9
-	ret, err = ldb.Get(chunks[idx].Key)
+	ret, err = ldb.Get(chunks[idx].Addr)
 	if err != nil {
 		t.Fatalf("expected no error, but got %s", err)
 	}

@@ -120,7 +120,7 @@ func (s *SwarmChunkServer) Close() {
 
 // GetData retrives chunk data from db store
 func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.db.Get(storage.Key(key))
+	chunk, err := s.db.Get(storage.Address(key))
 	if err == storage.ErrFetching {
 		<-chunk.ReqC
 	} else if err != nil {
@@ -131,12 +131,12 @@ func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
 type RetrieveRequestMsg struct {
-	Key       storage.Key
+	Addr      storage.Address
 	SkipCheck bool
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
-	log.Trace("received request", "peer", sp.ID(), "hash", req.Key)
+	log.Trace("received request", "peer", sp.ID(), "hash", req.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
@@ -144,11 +144,11 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 		return err
 	}
 	streamer := s.Server.(*SwarmChunkServer)
-	chunk, created := d.db.GetOrCreateRequest(req.Key)
+	chunk, created := d.db.GetOrCreateRequest(req.Addr)
 	if chunk.ReqC != nil {
 		if created {
-			if err := d.RequestFromPeers(chunk.Key[:], true, sp.ID()); err != nil {
-				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Key, "err", err)
+			if err := d.RequestFromPeers(chunk.Addr[:], true, sp.ID()); err != nil {
+				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Addr, "err", err)
 				chunk.SetErrored(storage.ErrChunkForward)
 				return nil
 			}
@@ -157,13 +157,13 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 			t := time.NewTimer(10 * time.Minute)
 			defer t.Stop()
 
-			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Key, "node", common.Bytes2Hex(d.overlay.BaseAddr()), "created", created)
+			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Addr, "node", common.Bytes2Hex(d.overlay.BaseAddr()), "created", created)
 			start := time.Now()
 			select {
 			case <-chunk.ReqC:
-				log.Debug("retrieve request ReqC closed", "peer", sp.ID(), "hash", req.Key, "time", time.Since(start))
+				log.Debug("retrieve request ReqC closed", "peer", sp.ID(), "hash", req.Addr, "time", time.Since(start))
 			case <-t.C:
-				log.Debug("retrieve request timeout", "peer", sp.ID(), "hash", req.Key)
+				log.Debug("retrieve request timeout", "peer", sp.ID(), "hash", req.Addr)
 				chunk.SetErrored(storage.ErrChunkTimeout)
 				return
 			}
@@ -176,21 +176,21 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 					sp.Drop(err)
 				}
 			}
-			streamer.deliveryC <- chunk.Key[:]
+			streamer.deliveryC <- chunk.Addr[:]
 		}()
 		return nil
 	}
 	// TODO: call the retrieve function of the outgoing syncer
 	if req.SkipCheck {
-		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Key)
+		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Addr)
 		return sp.Deliver(chunk, s.priority)
 	}
-	streamer.deliveryC <- chunk.Key[:]
+	streamer.deliveryC <- chunk.Addr[:]
 	return nil
 }
 
 type ChunkDeliveryMsg struct {
-	Key   storage.Key
+	Addr  storage.Address
 	SData []byte // the stored chunk Data (incl size)
 	peer  *Peer  // set in handleChunkDeliveryMsg
 }
@@ -207,16 +207,16 @@ R:
 		processReceivedChunksCount.Inc(1)
 
 		// this should be has locally
-		chunk, err := d.db.Get(req.Key)
+		chunk, err := d.db.Get(req.Addr)
 		if err == nil {
 			continue R
 		}
 		if err != storage.ErrFetching {
-			panic(fmt.Sprintf("not in db? key %v chunk %v", req.Key, chunk))
+			panic(fmt.Sprintf("not in db? addr %v chunk %v", req.Addr, chunk))
 		}
 		select {
 		case <-chunk.ReqC:
-			log.Error("someone else delivered?", "hash", chunk.Key.Hex())
+			log.Error("someone else delivered?", "hash", chunk.Addr.Hex())
 			continue R
 		default:
 		}
@@ -252,7 +252,7 @@ func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...
 		}
 		// TODO: skip light nodes that do not accept retrieve requests
 		err = sp.SendPriority(&RetrieveRequestMsg{
-			Key:       hash,
+			Addr:      hash,
 			SkipCheck: skipCheck,
 		}, Top)
 		if err != nil {
