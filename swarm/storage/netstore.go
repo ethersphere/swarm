@@ -56,7 +56,7 @@ func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *Net
 // Get uses get method to retrieve request, but retries if the
 // ErrChunkNotFound is returned by get, until the netStoreRetryTimeout
 // is reached.
-func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
+func (self *NetStore) Get(addr Address) (chunk *Chunk, err error) {
 	timer := time.NewTimer(netStoreRetryTimeout)
 	defer timer.Stop()
 
@@ -84,7 +84,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 		defer limiter.Stop()
 
 		for {
-			chunk, err := self.get(key, 0)
+			chunk, err := self.get(addr, 0)
 			if err != ErrChunkNotFound {
 				// break retry only if the error is nil
 				// or other error then ErrChunkNotFound
@@ -109,7 +109,7 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 			}
 			// Reset the limiter for the next iteration.
 			limiter.Reset(netStoreMinRetryDelay)
-			log.Debug("NetStore.Get retry chunk", "key", key)
+			log.Debug("NetStore.Get retry chunk", "key", addr)
 		}
 	}()
 
@@ -121,12 +121,12 @@ func (self *NetStore) Get(key Key) (chunk *Chunk, err error) {
 	}
 }
 
-func (self *NetStore) get(key Key, timeout time.Duration) (chunk *Chunk, err error) {
+func (self *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
 	if timeout == 0 {
 		timeout = searchTimeout
 	}
 	if self.retrieve == nil {
-		chunk, err = self.localStore.Get(key)
+		chunk, err = self.localStore.Get(addr)
 		if err == nil {
 			return chunk, nil
 		}
@@ -135,7 +135,7 @@ func (self *NetStore) get(key Key, timeout time.Duration) (chunk *Chunk, err err
 		}
 	} else {
 		var created bool
-		chunk, created = self.localStore.GetOrCreateRequest(key)
+		chunk, created = self.localStore.GetOrCreateRequest(addr)
 
 		if chunk.ReqC == nil {
 			return chunk, nil

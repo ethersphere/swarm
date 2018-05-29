@@ -113,7 +113,7 @@ func TestResourceReverse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := rh.keyDataHash(chunk.Key, checkdata)
+	checkdigest := rh.keyDataHash(chunk.Addr, checkdata)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
@@ -125,8 +125,8 @@ func TestResourceReverse(t *testing.T) {
 		t.Fatalf("addresses dont match: %x != %x", originaladdress, recoveredaddress)
 	}
 
-	if !bytes.Equal(key[:], chunk.Key[:]) {
-		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Key)
+	if !bytes.Equal(key[:], chunk.Addr[:]) {
+		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Addr)
 	}
 	if period != checkperiod {
 		t.Fatalf("Expected period '%d', was '%d'", period, checkperiod)
@@ -188,7 +188,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update halfway to first period
-	resourcekey := make(map[string]Key)
+	resourcekey := make(map[string]Address)
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data := []byte(updates[0])
 	resourcekey[updates[0]], err = rh.Update(ctx, safeName, data)
@@ -540,7 +540,7 @@ func TestResourceChunkValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
-	if !rh.Validate(chunk.Key, chunk.SData) {
+	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on update chunk")
 	}
 
@@ -551,7 +551,7 @@ func TestResourceChunkValidator(t *testing.T) {
 		t.Fatal(err)
 	}
 	chunk = rh.newMetaChunk(safeName, startBlock, resourceFrequency)
-	if !rh.Validate(chunk.Key, chunk.SData) {
+	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on metadata chunk")
 	}
 }
@@ -668,8 +668,8 @@ func newTestSigner() (*GenericResourceSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rh *ResourceHandler, key Key) ([]byte, error) {
-	chunk, err := rh.chunkStore.localStore.memStore.Get(key)
+func getUpdateDirect(rh *ResourceHandler, addr Address) ([]byte, error) {
+	chunk, err := rh.chunkStore.localStore.memStore.Get(addr)
 	if err != nil {
 		return nil, err
 	}

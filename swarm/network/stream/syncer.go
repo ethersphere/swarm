@@ -79,7 +79,7 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetSection retrieves the actual chunk from localstore
 func (s *SwarmSyncerServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.db.Get(storage.Key(key))
+	chunk, err := s.db.Get(storage.Address(key))
 	if err == storage.ErrFetching {
 		<-chunk.ReqC
 	} else if err != nil {
@@ -118,8 +118,8 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		}
 
 		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
-		err := s.db.Iterator(from, to, s.po, func(key storage.Key, idx uint64) bool {
-			batch = append(batch, key[:]...)
+		err := s.db.Iterator(from, to, s.po, func(addr storage.Address, idx uint64) bool {
+			batch = append(batch, addr[:]...)
 			i++
 			to = idx
 			return i < BatchSize
@@ -141,13 +141,13 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 type SwarmSyncerClient struct {
 	sessionAt     uint64
 	nextC         chan struct{}
-	sessionRoot   storage.Key
+	sessionRoot   storage.Address
 	sessionReader storage.LazySectionReader
 	retrieveC     chan *storage.Chunk
 	storeC        chan *storage.Chunk
 	db            *storage.DBAPI
 	// chunker               storage.Chunker
-	currentRoot           storage.Key
+	currentRoot           storage.Address
 	requestFunc           func(chunk *storage.Chunk)
 	end, start            uint64
 	peer                  *Peer
@@ -234,7 +234,7 @@ func (s *SwarmSyncerClient) BatchDone(stream Stream, from uint64, hashes []byte,
 	return nil
 }
 
-func (s *SwarmSyncerClient) TakeoverProof(stream Stream, from uint64, hashes []byte, root storage.Key) (*TakeoverProof, error) {
+func (s *SwarmSyncerClient) TakeoverProof(stream Stream, from uint64, hashes []byte, root storage.Address) (*TakeoverProof, error) {
 	// for provable syncer currentRoot is non-zero length
 	// TODO: reenable this with putter/getter
 	// if s.chunker != nil {

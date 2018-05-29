@@ -88,7 +88,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 
 	h.storeChunk(chunk)
 
-	return Reference(append(chunk.Key, encryptionKey...)), nil
+	return Reference(append(chunk.Addr, encryptionKey...)), nil
 }
 
 // Get returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).
@@ -131,7 +131,7 @@ func (h *hasherStore) Wait() {
 	h.wg.Wait()
 }
 
-func (h *hasherStore) createHash(chunkData ChunkData) Key {
+func (h *hasherStore) createHash(chunkData ChunkData) Address {
 	hasher := h.hashFunc()
 	hasher.ResetWithLength(chunkData[:8]) // 8 bytes of length
 	hasher.Write(chunkData[8:])           // minus 8 []byte length
@@ -214,14 +214,14 @@ func (h *hasherStore) storeChunk(chunk *Chunk) {
 	h.store.Put(chunk)
 }
 
-func parseReference(ref Reference, hashSize int) (Key, encryption.Key, error) {
+func parseReference(ref Reference, hashSize int) (Address, encryption.Key, error) {
 	encryptedKeyLength := hashSize + encryption.KeyLength
 	switch len(ref) {
 	case KeyLength:
-		return Key(ref), nil, nil
+		return Address(ref), nil, nil
 	case encryptedKeyLength:
 		encKeyIdx := len(ref) - encryption.KeyLength
-		return Key(ref[:encKeyIdx]), encryption.Key(ref[encKeyIdx:]), nil
+		return Address(ref[:encKeyIdx]), encryption.Key(ref[encKeyIdx:]), nil
 	default:
 		return nil, nil, fmt.Errorf("Invalid reference length, expected %v or %v got %v", hashSize, encryptedKeyLength, len(ref))
 	}
