@@ -97,10 +97,10 @@ func (self *Swarm) API() *SwarmAPI {
 // MockStore should be used only for testing.
 func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
 
-	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroAddr) {
+	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty public key")
 	}
-	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroAddr) {
+	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroKey) {
 		return nil, fmt.Errorf("empty bzz key")
 	}
 

@@ -42,12 +42,12 @@ type URI struct {
 	//
 	Scheme string
 
-	// Addr is either a hexadecimal storage address or it an address which
-	// resolves to a storage address
+	// Addr is either a hexadecimal storage key or it an address which
+	// resolves to a storage key
 	Addr string
 
-	// addr stores the parsed storage address
-	addr storage.Address
+	// key stores the parsed storage key
+	key storage.Key
 
 	// Path is the path to the content within a swarm manifest
 	Path string
@@ -119,13 +119,13 @@ func (u *URI) String() string {
 	return u.Scheme + ":/" + u.Addr + "/" + u.Path
 }
 
-func (u *URI) Address() storage.Address {
-	if u.addr != nil {
-		return u.addr
+func (u *URI) Key() storage.Key {
+	if u.key != nil {
+		return u.key
 	}
 	if hashMatcher.MatchString(u.Addr) {
-		u.addr = common.Hex2Bytes(u.Addr)
-		return u.addr
+		u.key = common.Hex2Bytes(u.Addr)
+		return u.key
 	}
 	return nil
 }

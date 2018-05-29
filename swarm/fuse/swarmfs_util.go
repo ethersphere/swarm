@@ -54,7 +54,7 @@ func addFileToSwarm(sf *SwarmFile, content []byte, size int) error {
 
 	sf.lock.Lock()
 	defer sf.lock.Unlock()
-	sf.addr = fkey
+	sf.key = fkey
 	sf.fileSize = int64(size)
 
 	sf.mountInfo.lock.Lock()
@@ -102,14 +102,14 @@ func removeDirectoryFromSwarm(sd *SwarmDir) error {
 }
 
 func appendToExistingFileInSwarm(sf *SwarmFile, content []byte, offset int64, length int64) error {
-	fkey, mhash, err := sf.mountInfo.swarmApi.AppendFile(sf.mountInfo.LatestManifest, sf.path, sf.name, sf.fileSize, content, sf.addr, offset, length, true)
+	fkey, mhash, err := sf.mountInfo.swarmApi.AppendFile(sf.mountInfo.LatestManifest, sf.path, sf.name, sf.fileSize, content, sf.key, offset, length, true)
 	if err != nil {
 		return err
 	}
 
 	sf.lock.Lock()
 	defer sf.lock.Unlock()
-	sf.addr = fkey
+	sf.key = fkey
 	sf.fileSize = sf.fileSize + int64(len(content))
 
 	sf.mountInfo.lock.Lock()

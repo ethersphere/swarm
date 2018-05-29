@@ -236,11 +236,11 @@ func (self *Api) Upload(uploadDir, index string, toEncrypt bool) (hash string, e
 }
 
 // DPA reader API
-func (self *Api) Retrieve(addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
-	return self.dpa.Retrieve(addr)
+func (self *Api) Retrieve(key storage.Key) (reader storage.LazySectionReader, isEncrypted bool) {
+	return self.dpa.Retrieve(key)
 }
 
-func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(), err error) {
+func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (key storage.Key, wait func(), err error) {
 	log.Debug("api.store", "size", size)
 	return self.dpa.Store(data, size, toEncrypt)
 }
@@ -248,13 +248,13 @@ func (self *Api) Store(data io.Reader, size int64, toEncrypt bool) (addr storage
 type ErrResolve error
 
 // DNS Resolver
-func (self *Api) Resolve(uri *URI) (storage.Address, error) {
+func (self *Api) Resolve(uri *URI) (storage.Key, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
 
 	// if the URI is immutable, check if the address looks like a hash
 	if uri.Immutable() {
-		key := uri.Address()
+		key := uri.Key()
 		if key == nil {
 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
 		}
@@ -263,7 +263,7 @@ func (self *Api) Resolve(uri *URI) (storage.Address, error) {
 
 	// if DNS is not configured, check if the address is a hash
 	if self.dns == nil {
-		key := uri.Address()
+		key := uri.Key()
 		if key == nil {
 			apiResolveFail.Inc(1)
 			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
@@ -277,7 +277,7 @@ func (self *Api) Resolve(uri *URI) (storage.Address, error) {
 		return resolved[:], nil
 	}
 
-	key := uri.Address()
+	key := uri.Key()
 	if key == nil {
 		apiResolveFail.Inc(1)
 		return nil, err
@@ -286,7 +286,7 @@ func (self *Api) Resolve(uri *URI) (storage.Address, error) {
 }
 
 // Put provides singleton manifest creation on top of dpa store
-func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Address, wait func(), err error) {
+func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Key, wait func(), err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
 	key, waitContent, err := self.dpa.Store(r, int64(len(content)), toEncrypt)
@@ -310,10 +310,10 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Add
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
-	log.Debug("api.get", "key", manifestAddr, "path", path)
+func (self *Api) Get(manifestKey storage.Key, path string) (reader storage.LazySectionReader, mimeType string, status int, contentKey storage.Key, err error) {
+	log.Debug("api.get", "key", manifestKey, "path", path)
 	apiGetCount.Inc(1)
-	trie, err := loadManifest(self.dpa, manifestAddr, nil)
+	trie, err := loadManifest(self.dpa, manifestKey, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
@@ -321,19 +321,19 @@ func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.
 		return
 	}
 
-	log.Debug("trie getting entry", "key", manifestAddr, "path", path)
+	log.Debug("trie getting entry", "key", manifestKey, "path", path)
 	entry, _ := trie.getEntry(path)
 
 	if entry != nil {
-		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Hash", entry.Hash)
+		log.Debug("trie got entry", "key", manifestKey, "path", path, "entry.Hash", entry.Hash)
 		// we need to do some extra work if this is a mutable resource manifest
 		if entry.ContentType == ResourceContentType {
 
 			// get the resource root chunk key
-			log.Trace("resource type", "key", manifestAddr, "hash", entry.Hash)
+			log.Trace("resource type", "key", manifestKey, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := self.resource.LoadResource(storage.Address(common.FromHex(entry.Hash)))
+			rsrc, err := self.resource.LoadResource(storage.Key(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -376,11 +376,11 @@ func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.
 					log.Warn(fmt.Sprintf("invalid resource multihash code: %x", decodedMultihash.Code))
 					return reader, mimeType, status, nil, err
 				}
-				manifestAddr = storage.Address(decodedMultihash.Digest)
-				log.Trace("resource is multihash", "key", manifestAddr)
+				manifestKey = storage.Key(decodedMultihash.Digest)
+				log.Trace("resource is multihash", "key", manifestKey)
 
 				// get the manifest the multihash digest points to
-				trie, err := loadManifest(self.dpa, manifestAddr, nil)
+				trie, err := loadManifest(self.dpa, manifestKey, nil)
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
@@ -395,7 +395,7 @@ func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.
 					status = http.StatusNotFound
 					apiGetNotFound.Inc(1)
 					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
-					log.Trace("manifest (resource multihash) entry not found", "key", manifestAddr, "path", path)
+					log.Trace("manifest (resource multihash) entry not found", "key", manifestKey, "path", path)
 					return reader, mimeType, status, nil, err
 				}
 
@@ -407,30 +407,30 @@ func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.
 
 		// regardless of resource update manifests or normal manifests we will converge at this point
 		// get the key the manifest entry points to and serve it if it's unambiguous
-		contentAddr = common.Hex2Bytes(entry.Hash)
+		contentKey = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			apiGetHttp300.Inc(1)
-			return nil, entry.ContentType, status, contentAddr, err
+			return nil, entry.ContentType, status, contentKey, err
 		} else {
 			mimeType = entry.ContentType
-			log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-			reader, _ = self.dpa.Retrieve(contentAddr)
+			log.Debug("content lookup key", "key", contentKey, "mimetype", mimeType)
+			reader, _ = self.dpa.Retrieve(contentKey)
 		}
 	} else {
 		// no entry found
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
-		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
+		log.Trace("manifest entry not found", "key", contentKey, "path", path)
 	}
 	return
 }
 
-func (self *Api) Modify(addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
+func (self *Api) Modify(key storage.Key, path, contentHash, contentType string) (storage.Key, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
-	trie, err := loadManifest(self.dpa, addr, quitC)
+	trie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
@@ -453,7 +453,7 @@ func (self *Api) Modify(addr storage.Address, path, contentHash, contentType str
 	return trie.ref, nil
 }
 
-func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
+func (self *Api) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Key, string, error) {
 	apiAddFileCount.Inc(1)
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -544,7 +544,7 @@ func (self *Api) RemoveFile(mhash, path, fname string, nameresolver bool) (strin
 	return newMkey.String(), nil
 }
 
-func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldAddr storage.Address, offset int64, addSize int64, nameresolver bool) (storage.Address, string, error) {
+func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldKey storage.Key, offset int64, addSize int64, nameresolver bool) (storage.Key, string, error) {
 	apiAppendFileCount.Inc(1)
 
 	buffSize := offset + addSize
@@ -554,7 +554,7 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 	buf := make([]byte, buffSize)
 
-	oldReader, _ := self.Retrieve(oldAddr)
+	oldReader, _ := self.Retrieve(oldKey)
 	io.ReadAtLeast(oldReader, buf, int(offset))
 
 	newReader := bytes.NewReader(content)
@@ -625,21 +625,21 @@ func (self *Api) AppendFile(mhash, path, fname string, existingSize int64, conte
 
 }
 
-func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
+func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (key storage.Key, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
 	uri, err := Parse("bzz:/" + mhash)
 	if err != nil {
 		return nil, nil, err
 	}
-	addr, err = self.Resolve(uri)
+	key, err = self.Resolve(uri)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	quitC := make(chan bool)
-	rootTrie, err := loadManifest(self.dpa, addr, quitC)
+	rootTrie, err := loadManifest(self.dpa, key, quitC)
 	if err != nil {
-		return nil, nil, fmt.Errorf("can't load manifest %v: %v", addr.String(), err)
+		return nil, nil, fmt.Errorf("can't load manifest %v: %v", key.String(), err)
 	}
 
 	manifestEntryMap = map[string]*manifestTrieEntry{}
@@ -648,15 +648,15 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (addr stora
 	})
 
 	if err != nil {
-		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", addr.String(), err)
+		return nil, nil, fmt.Errorf("list with prefix failed %v: %v", key.String(), err)
 	}
-	return addr, manifestEntryMap, nil
+	return key, manifestEntryMap, nil
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (self *Api) ResourceLookup(ctx context.Context, addr storage.Address, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (string, []byte, error) {
+func (self *Api) ResourceLookup(ctx context.Context, key storage.Key, period uint32, version uint32, maxLookup *storage.ResourceLookupParams) (string, []byte, error) {
 	var err error
-	rsrc, err := self.resource.LoadResource(addr)
+	rsrc, err := self.resource.LoadResource(key)
 	if err != nil {
 		return "", nil, err
 	}
@@ -676,7 +676,7 @@ func (self *Api) ResourceLookup(ctx context.Context, addr storage.Address, perio
 	return self.resource.GetContent(rsrc.NameHash().Hex())
 }
 
-func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Address, error) {
+func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Key, error) {
 	key, _, err := self.resource.NewResource(ctx, name, frequency)
 	if err != nil {
 		return nil, err
@@ -684,24 +684,24 @@ func (self *Api) ResourceCreate(ctx context.Context, name string, frequency uint
 	return key, nil
 }
 
-func (self *Api) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, uint32, uint32, error) {
+func (self *Api) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
 	return self.resourceUpdate(ctx, name, data, true)
 }
-func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Address, uint32, uint32, error) {
+func (self *Api) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Key, uint32, uint32, error) {
 	return self.resourceUpdate(ctx, name, data, false)
 }
 
-func (self *Api) resourceUpdate(ctx context.Context, name string, data []byte, multihash bool) (storage.Address, uint32, uint32, error) {
-	var addr storage.Address
+func (self *Api) resourceUpdate(ctx context.Context, name string, data []byte, multihash bool) (storage.Key, uint32, uint32, error) {
+	var key storage.Key
 	var err error
 	if multihash {
-		addr, err = self.resource.UpdateMultihash(ctx, name, data)
+		key, err = self.resource.UpdateMultihash(ctx, name, data)
 	} else {
-		addr, err = self.resource.Update(ctx, name, data)
+		key, err = self.resource.Update(ctx, name, data)
 	}
 	period, _ := self.resource.GetLastPeriod(name)
 	version, _ := self.resource.GetVersion(name)
-	return addr, period, version, err
+	return key, period, version, err
 }
 
 func (self *Api) ResourceHashSize() int {
@@ -712,16 +712,16 @@ func (self *Api) ResourceIsValidated() bool {
 	return self.resource.IsValidated()
 }
 
-func (self *Api) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
-	trie, err := loadManifest(self.dpa, addr, nil)
+func (self *Api) ResolveResourceManifest(key storage.Key) (storage.Key, error) {
+	trie, err := loadManifest(self.dpa, key, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}
 
 	entry, _ := trie.getEntry("")
 	if entry.ContentType != ResourceContentType {
-		return nil, fmt.Errorf("not a resource manifest: %s", addr)
+		return nil, fmt.Errorf("not a resource manifest: %s", key)
 	}
 
-	return storage.Address(common.FromHex(entry.Hash)), nil
+	return storage.Key(common.FromHex(entry.Hash)), nil
 }

@@ -50,7 +50,7 @@ type SwarmFile struct {
 	inode    uint64
 	name     string
 	path     string
-	addr     storage.Address
+	key      storage.Key
 	fileSize int64
 	reader   storage.LazySectionReader
 
@@ -63,7 +63,7 @@ func NewSwarmFile(path, fname string, minfo *MountInfo) *SwarmFile {
 		inode:    NewInode(),
 		name:     fname,
 		path:     path,
-		addr:     nil,
+		key:      nil,
 		fileSize: -1, // -1 means , file already exists in swarm and you need to just get the size from swarm
 		reader:   nil,
 
@@ -82,7 +82,7 @@ func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	a.Gid = uint32(os.Getegid())
 
 	if sf.fileSize == -1 {
-		reader, _ := sf.mountInfo.swarmApi.Retrieve(sf.addr)
+		reader, _ := sf.mountInfo.swarmApi.Retrieve(sf.key)
 		quitC := make(chan bool)
 		size, err := reader.Size(quitC)
 		if err != nil {
@@ -99,7 +99,7 @@ func (sf *SwarmFile) Read(ctx context.Context, req *fuse.ReadRequest, resp *fuse
 	sf.lock.RLock()
 	defer sf.lock.RUnlock()
 	if sf.reader == nil {
-		sf.reader, _ = sf.mountInfo.swarmApi.Retrieve(sf.addr)
+		sf.reader, _ = sf.mountInfo.swarmApi.Retrieve(sf.key)
 	}
 	buf := make([]byte, req.Size)
 	n, err := sf.reader.ReadAt(buf, req.Offset)

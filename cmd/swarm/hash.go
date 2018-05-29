@@ -39,10 +39,10 @@ func hash(ctx *cli.Context) {
 
 	stat, _ := f.Stat()
 	dpa := storage.NewDPA(storage.NewMapChunkStore(), storage.NewDPAParams())
-	addr, _, err := dpa.Store(f, stat.Size(), false)
+	key, _, err := dpa.Store(f, stat.Size(), false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)
 	} else {
-		fmt.Printf("%v\n", addr)
+		fmt.Printf("%v\n", key)
 	}
 }

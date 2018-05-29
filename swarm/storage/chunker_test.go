@@ -53,7 +53,7 @@ func (f *fakeChunkStore) Put(*Chunk) {
 }
 
 // Gut doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Get(Address) (*Chunk, error) {
+func (f *fakeChunkStore) Get(Key) (*Chunk, error) {
 	return nil, errors.New("FakeChunkStore doesn't support Get")
 }
 
@@ -81,14 +81,14 @@ func testRandomBrokenData(n int, tester *chunkerTester) {
 	putGetter := newTestHasherStore(NewMapChunkStore(), SHA3Hash)
 
 	expectedError := fmt.Errorf("Broken reader")
-	addr, _, err := TreeSplit(brokendata, int64(n), putGetter)
+	key, _, err := TreeSplit(brokendata, int64(n), putGetter)
 	if err == nil || err.Error() != expectedError.Error() {
 		tester.t.Fatalf("Not receiving the correct error! Expected %v, received %v", expectedError, err)
 	}
-	tester.t.Logf(" Key = %v\n", addr)
+	tester.t.Logf(" Key = %v\n", key)
 }
 
-func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) Address {
+func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) Key {
 	if tester.inputs == nil {
 		tester.inputs = make(map[uint64][]byte)
 	}
@@ -103,21 +103,21 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 
 	putGetter := newTestHasherStore(NewMapChunkStore(), hash)
 
-	var addr Address
+	var key Key
 	var wait func()
 	var err error
 	if usePyramid {
-		addr, wait, err = PyramidSplit(data, putGetter, putGetter)
+		key, wait, err = PyramidSplit(data, putGetter, putGetter)
 	} else {
-		addr, wait, err = TreeSplit(data, int64(n), putGetter)
+		key, wait, err = TreeSplit(data, int64(n), putGetter)
 	}
 	if err != nil {
 		tester.t.Fatalf(err.Error())
 	}
-	tester.t.Logf(" Key = %v\n", addr)
+	tester.t.Logf(" Key = %v\n", key)
 	wait()
 
-	reader := TreeJoin(addr, putGetter, 0)
+	reader := TreeJoin(key, putGetter, 0)
 	output := make([]byte, n)
 	r, err := reader.Read(output)
 	if r != n || err != io.EOF {
@@ -144,7 +144,7 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 		}
 	}
 
-	return addr
+	return key
 }
 
 func TestSha3ForCorrectness(t *testing.T) {
@@ -200,7 +200,7 @@ func TestDataAppend(t *testing.T) {
 		chunkStore := NewMapChunkStore()
 		putGetter := newTestHasherStore(chunkStore, SHA3Hash)
 
-		addr, wait, err := PyramidSplit(data, putGetter, putGetter)
+		key, wait, err := PyramidSplit(data, putGetter, putGetter)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
@@ -217,13 +217,13 @@ func TestDataAppend(t *testing.T) {
 		}
 
 		putGetter = newTestHasherStore(chunkStore, SHA3Hash)
-		newAddr, wait, err := PyramidAppend(addr, appendData, putGetter, putGetter)
+		newKey, wait, err := PyramidAppend(key, appendData, putGetter, putGetter)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
 		wait()
 
-		reader := TreeJoin(newAddr, putGetter, 0)
+		reader := TreeJoin(newKey, putGetter, 0)
 		newOutput := make([]byte, n+m)
 		r, err := reader.Read(newOutput)
 		if r != (n + m) {

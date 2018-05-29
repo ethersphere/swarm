@@ -234,7 +234,7 @@ type testSwarmNetworkStep struct {
 
 // file represents the file uploaded on a particular node.
 type file struct {
-	addr   storage.Address
+	key    storage.Key
 	data   string
 	nodeID discover.NodeID
 }
@@ -352,7 +352,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			}
 			log.Trace("file uploaded", "node", id, "key", key.String())
 			files = append(files, file{
-				addr:   key,
+				key:    key,
 				data:   data,
 				nodeID: id,
 			})
@@ -499,7 +499,7 @@ func removeNodes(count int, net *simulations.Network) error {
 
 // uploadFile, uploads a short file to the swarm instance
 // using the api.Put method.
-func uploadFile(swarm *Swarm) (storage.Address, string, error) {
+func uploadFile(swarm *Swarm) (storage.Key, string, error) {
 	b := make([]byte, 8)
 	_, err := rand.Read(b)
 	if err != nil {
@@ -556,7 +556,7 @@ func retrieve(
 			swarm := swarms[id]
 
 			checkKey := check{
-				key:    f.addr.String(),
+				key:    f.key.String(),
 				nodeID: id,
 			}
 			if n, ok := checkStatusM.Load(checkKey); ok && n.(int) == 0 {
@@ -568,26 +568,26 @@ func retrieve(
 			go func(f file, id discover.NodeID) {
 				defer wg.Done()
 
-				log.Debug("api get: check file", "node", id.String(), "key", f.addr.String(), "total files found", atomic.LoadUint64(totalFoundCount))
+				log.Debug("api get: check file", "node", id.String(), "key", f.key.String(), "total files found", atomic.LoadUint64(totalFoundCount))
 
-				r, _, _, _, err := swarm.api.Get(f.addr, "/")
+				r, _, _, _, err := swarm.api.Get(f.key, "/")
 				if err != nil {
-					errc <- fmt.Errorf("api get: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
+					errc <- fmt.Errorf("api get: node %s, key %s, kademlia %s: %v", id, f.key, swarm.bzz.Hive, err)
 					return
 				}
 				d, err := ioutil.ReadAll(r)
 				if err != nil {
-					errc <- fmt.Errorf("api get: read response: node %s, key %s: kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
+					errc <- fmt.Errorf("api get: read response: node %s, key %s: kademlia %s: %v", id, f.key, swarm.bzz.Hive, err)
 					return
 				}
 				data := string(d)
 				if data != f.data {
-					errc <- fmt.Errorf("file contend missmatch: node %s, key %s, expected %q, got %q", id, f.addr, f.data, data)
+					errc <- fmt.Errorf("file contend missmatch: node %s, key %s, expected %q, got %q", id, f.key, f.data, data)
 					return
 				}
 				checkStatusM.Store(checkKey, 0)
 				atomic.AddUint64(&foundCount, 1)
-				log.Info("api get: file found", "node", id.String(), "key", f.addr.String(), "content", data, "files found", atomic.LoadUint64(&foundCount))
+				log.Info("api get: file found", "node", id.String(), "key", f.key.String(), "content", data, "files found", atomic.LoadUint64(&foundCount))
 			}(f, id)
 		}
 

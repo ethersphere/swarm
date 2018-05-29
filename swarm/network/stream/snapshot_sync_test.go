@@ -61,7 +61,7 @@ var (
 
 type synctestConfig struct {
 	addrs            [][]byte
-	hashes           []storage.Address
+	hashes           []storage.Key
 	idToChunksMap    map[discover.NodeID][]int
 	chunksToNodesMap map[string][]int
 	addrToIdMap      map[string]discover.NodeID
@@ -210,7 +210,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 	//map of overlay address to discover ID
 	conf.addrToIdMap = make(map[string]discover.NodeID)
 	//array where the generated chunk hashes will be stored
-	conf.hashes = make([]storage.Address, 0)
+	conf.hashes = make([]storage.Key, 0)
 	//channel to trigger node checks in the simulation
 	trigger := make(chan discover.NodeID)
 	//channel to check for disconnection errors
@@ -574,22 +574,22 @@ func mapKeysToNodes(conf *synctestConfig) {
 }
 
 //upload a file(chunks) to a single local node store
-func uploadFileToSingleNodeStore(id discover.NodeID, chunkCount int) ([]storage.Address, error) {
+func uploadFileToSingleNodeStore(id discover.NodeID, chunkCount int) ([]storage.Key, error) {
 	log.Debug(fmt.Sprintf("Uploading to node id: %s", id))
 	lstore := stores[id]
 	size := chunkSize
 	dpa := storage.NewDPA(lstore, storage.NewDPAParams())
-	var rootAddrs []storage.Address
+	var rootkeys []storage.Key
 	for i := 0; i < chunkCount; i++ {
 		rk, wait, err := dpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 		wait()
 		if err != nil {
 			return nil, err
 		}
-		rootAddrs = append(rootAddrs, (rk))
+		rootkeys = append(rootkeys, (rk))
 	}
 
-	return rootAddrs, nil
+	return rootkeys, nil
 }
 
 //initialize a network from a snapshot
