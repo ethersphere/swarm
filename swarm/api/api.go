@@ -254,7 +254,7 @@ func (self *Api) Resolve(uri *URI) (storage.Address, error) {
 
 	// if the URI is immutable, check if the address looks like a hash
 	if uri.Immutable() {
-		key := uri.Key()
+		key := uri.Address()
 		if key == nil {
 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
 		}
@@ -263,7 +263,7 @@ func (self *Api) Resolve(uri *URI) (storage.Address, error) {
 
 	// if DNS is not configured, check if the address is a hash
 	if self.dns == nil {
-		key := uri.Key()
+		key := uri.Address()
 		if key == nil {
 			apiResolveFail.Inc(1)
 			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
@@ -277,7 +277,7 @@ func (self *Api) Resolve(uri *URI) (storage.Address, error) {
 		return resolved[:], nil
 	}
 
-	key := uri.Key()
+	key := uri.Address()
 	if key == nil {
 		apiResolveFail.Inc(1)
 		return nil, err
@@ -310,10 +310,10 @@ func (self *Api) Put(content, contentType string, toEncrypt bool) (k storage.Add
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using dpa retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-func (self *Api) Get(manifestKey storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentKey storage.Address, err error) {
-	log.Debug("api.get", "key", manifestKey, "path", path)
+func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
+	log.Debug("api.get", "key", manifestAddr, "path", path)
 	apiGetCount.Inc(1)
-	trie, err := loadManifest(self.dpa, manifestKey, nil)
+	trie, err := loadManifest(self.dpa, manifestAddr, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
@@ -321,16 +321,16 @@ func (self *Api) Get(manifestKey storage.Address, path string) (reader storage.L
 		return
 	}
 
-	log.Debug("trie getting entry", "key", manifestKey, "path", path)
+	log.Debug("trie getting entry", "key", manifestAddr, "path", path)
 	entry, _ := trie.getEntry(path)
 
 	if entry != nil {
-		log.Debug("trie got entry", "key", manifestKey, "path", path, "entry.Hash", entry.Hash)
+		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Hash", entry.Hash)
 		// we need to do some extra work if this is a mutable resource manifest
 		if entry.ContentType == ResourceContentType {
 
 			// get the resource root chunk key
-			log.Trace("resource type", "key", manifestKey, "hash", entry.Hash)
+			log.Trace("resource type", "key", manifestAddr, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			rsrc, err := self.resource.LoadResource(storage.Address(common.FromHex(entry.Hash)))
@@ -376,11 +376,11 @@ func (self *Api) Get(manifestKey storage.Address, path string) (reader storage.L
 					log.Warn(fmt.Sprintf("invalid resource multihash code: %x", decodedMultihash.Code))
 					return reader, mimeType, status, nil, err
 				}
-				manifestKey = storage.Address(decodedMultihash.Digest)
-				log.Trace("resource is multihash", "key", manifestKey)
+				manifestAddr = storage.Address(decodedMultihash.Digest)
+				log.Trace("resource is multihash", "key", manifestAddr)
 
 				// get the manifest the multihash digest points to
-				trie, err := loadManifest(self.dpa, manifestKey, nil)
+				trie, err := loadManifest(self.dpa, manifestAddr, nil)
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
@@ -395,7 +395,7 @@ func (self *Api) Get(manifestKey storage.Address, path string) (reader storage.L
 					status = http.StatusNotFound
 					apiGetNotFound.Inc(1)
 					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
-					log.Trace("manifest (resource multihash) entry not found", "key", manifestKey, "path", path)
+					log.Trace("manifest (resource multihash) entry not found", "key", manifestAddr, "path", path)
 					return reader, mimeType, status, nil, err
 				}
 
@@ -407,22 +407,22 @@ func (self *Api) Get(manifestKey storage.Address, path string) (reader storage.L
 
 		// regardless of resource update manifests or normal manifests we will converge at this point
 		// get the key the manifest entry points to and serve it if it's unambiguous
-		contentKey = common.Hex2Bytes(entry.Hash)
+		contentAddr = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
 		if status == http.StatusMultipleChoices {
 			apiGetHttp300.Inc(1)
-			return nil, entry.ContentType, status, contentKey, err
+			return nil, entry.ContentType, status, contentAddr, err
 		} else {
 			mimeType = entry.ContentType
-			log.Debug("content lookup key", "key", contentKey, "mimetype", mimeType)
-			reader, _ = self.dpa.Retrieve(contentKey)
+			log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
+			reader, _ = self.dpa.Retrieve(contentAddr)
 		}
 	} else {
 		// no entry found
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
-		log.Trace("manifest entry not found", "key", contentKey, "path", path)
+		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
 	}
 	return
 }

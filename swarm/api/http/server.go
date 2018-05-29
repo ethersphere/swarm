@@ -199,7 +199,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		log.Debug("new manifest", "ruid", r.ruid, "key", addr)
 	}
 
-	newKey, err := s.updateManifest(addr, func(mw *api.ManifestWriter) error {
+	newAddr, err := s.updateManifest(addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 
 		case "application/x-tar":
@@ -218,11 +218,11 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	log.Debug("stored content", "ruid", r.ruid, "key", newKey)
+	log.Debug("stored content", "ruid", r.ruid, "key", newAddr)
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprint(w, newKey)
+	fmt.Fprint(w, newAddr)
 }
 
 func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
@@ -444,9 +444,9 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	} else {
 		// to update the resource through http we need to retrieve the key for the mutable resource root chunk
 		// that means that we retrieve the manifest and inspect its Hash member.
-		manifestKey := r.uri.Key()
-		if manifestKey == nil {
-			manifestKey, err = s.api.Resolve(r.uri)
+		manifestAddr := r.uri.Address()
+		if manifestAddr == nil {
+			manifestAddr, err = s.api.Resolve(r.uri)
 			if err != nil {
 				getFail.Inc(1)
 				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -457,14 +457,14 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		}
 
 		// get the root chunk key from the manifest
-		addr, err = s.api.ResolveResourceManifest(manifestKey)
+		addr, err = s.api.ResolveResourceManifest(manifestAddr)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
 			return
 		}
 
-		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestKey, "rootchunkkey", addr)
+		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunkkey", addr)
 
 		name, _, err = s.api.ResourceLookup(r.Context(), addr, 0, 0, &storage.ResourceLookupParams{})
 		if err != nil {
@@ -526,10 +526,10 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	var err error
 
 	// resolve the content key.
-	var manifestKey storage.Address
-	manifestKey = r.uri.Key()
-	if manifestKey == nil {
-		manifestKey, err = s.api.Resolve(r.uri)
+	var manifestAddr storage.Address
+	manifestAddr = r.uri.Address()
+	if manifestAddr == nil {
+		manifestAddr, err = s.api.Resolve(r.uri)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -540,14 +540,14 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	}
 
 	// get the root chunk key from the manifest
-	key, err := s.api.ResolveResourceManifest(manifestKey)
+	key, err := s.api.ResolveResourceManifest(manifestAddr)
 	if err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
 
-	log.Debug("handle.get.resource: resolved", "ruid", r.ruid, "manifestkey", manifestKey, "rootchunk key", key)
+	log.Debug("handle.get.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunk key", key)
 
 	// determine if the query specifies period and version
 	var params []string
@@ -626,7 +626,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
 	var err error
-	addr := r.uri.Key()
+	addr := r.uri.Address()
 	if addr == nil {
 		addr, err = s.api.Resolve(r.uri)
 		if err != nil {
@@ -911,10 +911,10 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		return
 	}
 	var err error
-	manifestKey := r.uri.Key()
+	manifestAddr := r.uri.Address()
 
-	if manifestKey == nil {
-		manifestKey, err = s.api.Resolve(r.uri)
+	if manifestAddr == nil {
+		manifestAddr, err = s.api.Resolve(r.uri)
 		if err != nil {
 			getFileFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -924,9 +924,9 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		w.Header().Set("Cache-Control", "max-age=2147483648, immutable") // url was of type bzz://<hex key>/path, so we are sure it is immutable.
 	}
 
-	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestKey)
+	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestAddr)
 
-	reader, contentType, status, contentKey, err := s.api.Get(manifestKey, r.uri.Path)
+	reader, contentType, status, contentKey, err := s.api.Get(manifestAddr, r.uri.Path)
 
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
@@ -953,7 +953,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.getManifestList(manifestKey, r.uri.Path)
+		list, err := s.getManifestList(manifestAddr, r.uri.Path)
 
 		if err != nil {
 			getFileFail.Inc(1)

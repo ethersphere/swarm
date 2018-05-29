@@ -579,17 +579,17 @@ func uploadFileToSingleNodeStore(id discover.NodeID, chunkCount int) ([]storage.
 	lstore := stores[id]
 	size := chunkSize
 	dpa := storage.NewDPA(lstore, storage.NewDPAParams())
-	var rootkeys []storage.Address
+	var rootAddrs []storage.Address
 	for i := 0; i < chunkCount; i++ {
 		rk, wait, err := dpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 		wait()
 		if err != nil {
 			return nil, err
 		}
-		rootkeys = append(rootkeys, (rk))
+		rootAddrs = append(rootAddrs, (rk))
 	}
 
-	return rootkeys, nil
+	return rootAddrs, nil
 }
 
 //initialize a network from a snapshot

@@ -119,7 +119,7 @@ func (u *URI) String() string {
 	return u.Scheme + ":/" + u.Addr + "/" + u.Path
 }
 
-func (u *URI) Key() storage.Address {
+func (u *URI) Address() storage.Address {
 	if u.addr != nil {
 		return u.addr
 	}

@@ -85,8 +85,8 @@ func expResponse(content string, mimeType string, status int) *Response {
 
 // func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
 func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
-	key := storage.Address(common.Hex2Bytes(bzzhash))
-	reader, mimeType, status, _, err := api.Get(key, path)
+	addr := storage.Address(common.Hex2Bytes(bzzhash))
+	reader, mimeType, status, _, err := api.Get(addr, path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

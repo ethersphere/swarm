@@ -74,10 +74,10 @@ func (a *Api) NewManifest(toEncrypt bool) (storage.Address, error) {
 
 // Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
 // see swarm/api/api.go:Api.Get() for more information
-func (a *Api) NewResourceManifest(resourceKey string) (storage.Address, error) {
+func (a *Api) NewResourceManifest(resourceAddr string) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
-		Hash:        resourceKey,
+		Hash:        resourceAddr,
 		ContentType: ResourceContentType,
 	}
 	manifest.Entries = append(manifest.Entries, entry)

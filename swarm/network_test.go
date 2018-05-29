@@ -234,7 +234,7 @@ type testSwarmNetworkStep struct {
 
 // file represents the file uploaded on a particular node.
 type file struct {
-	key    storage.Address
+	addr   storage.Address
 	data   string
 	nodeID discover.NodeID
 }
@@ -352,7 +352,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			}
 			log.Trace("file uploaded", "node", id, "key", key.String())
 			files = append(files, file{
-				key:    key,
+				addr:   key,
 				data:   data,
 				nodeID: id,
 			})
@@ -556,7 +556,7 @@ func retrieve(
 			swarm := swarms[id]
 
 			checkKey := check{
-				key:    f.key.String(),
+				key:    f.addr.String(),
 				nodeID: id,
 			}
 			if n, ok := checkStatusM.Load(checkKey); ok && n.(int) == 0 {
@@ -568,26 +568,26 @@ func retrieve(
 			go func(f file, id discover.NodeID) {
 				defer wg.Done()
 
-				log.Debug("api get: check file", "node", id.String(), "key", f.key.String(), "total files found", atomic.LoadUint64(totalFoundCount))
+				log.Debug("api get: check file", "node", id.String(), "key", f.addr.String(), "total files found", atomic.LoadUint64(totalFoundCount))
 
-				r, _, _, _, err := swarm.api.Get(f.key, "/")
+				r, _, _, _, err := swarm.api.Get(f.addr, "/")
 				if err != nil {
-					errc <- fmt.Errorf("api get: node %s, key %s, kademlia %s: %v", id, f.key, swarm.bzz.Hive, err)
+					errc <- fmt.Errorf("api get: node %s, key %s, kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
 					return
 				}
 				d, err := ioutil.ReadAll(r)
 				if err != nil {
-					errc <- fmt.Errorf("api get: read response: node %s, key %s: kademlia %s: %v", id, f.key, swarm.bzz.Hive, err)
+					errc <- fmt.Errorf("api get: read response: node %s, key %s: kademlia %s: %v", id, f.addr, swarm.bzz.Hive, err)
 					return
 				}
 				data := string(d)
 				if data != f.data {
-					errc <- fmt.Errorf("file contend missmatch: node %s, key %s, expected %q, got %q", id, f.key, f.data, data)
+					errc <- fmt.Errorf("file contend missmatch: node %s, key %s, expected %q, got %q", id, f.addr, f.data, data)
 					return
 				}
 				checkStatusM.Store(checkKey, 0)
 				atomic.AddUint64(&foundCount, 1)
-				log.Info("api get: file found", "node", id.String(), "key", f.key.String(), "content", data, "files found", atomic.LoadUint64(&foundCount))
+				log.Info("api get: file found", "node", id.String(), "key", f.addr.String(), "content", data, "files found", atomic.LoadUint64(&foundCount))
 			}(f, id)
 		}
 
