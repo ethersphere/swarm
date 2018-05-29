@@ -206,9 +206,13 @@ func (net *Network) watchPeerEvents(id discover.NodeID, events chan *p2p.PeerEve
 
 		// assume the node is now down
 		net.lock.Lock()
+		defer net.lock.Unlock()
 		node := net.getNode(id)
+		if node == nil {
+			log.Error("Can not find node for id", "id", id)
+			return
+		}
 		node.Up = false
-		net.lock.Unlock()
 		net.events.Send(NewEvent(node))
 	}()
 	for {
