@@ -71,18 +71,19 @@ var (
 	apiGetInvalid      = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
+// Resolver - used for dns
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
 }
 
+// ResolveValidator used to validate the contained Resolver
 type ResolveValidator interface {
 	Resolver
 	Owner(node [32]byte) (common.Address, error)
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 }
 
-// NoResolverError is returned by MultiResolver.Resolve if no resolver
-// can be found for the address.
+// NewNoResolverError - only used in test's at the time of this writing
 type NoResolverError struct {
 	TLD string
 }
@@ -91,6 +92,7 @@ func NewNoResolverError(tld string) *NoResolverError {
 	return &NoResolverError{TLD: tld}
 }
 
+// Error - ENS error
 func (e *NoResolverError) Error() string {
 	if e.TLD == "" {
 		return "no ENS resolver"
@@ -120,6 +122,7 @@ func MultiResolverOptionWithResolver(r ResolveValidator, tld string) MultiResolv
 	}
 }
 
+// MultiResolverOptionWithNameHash - is unused at the time of this writing
 func MultiResolverOptionWithNameHash(nameHash func(string) common.Hash) MultiResolverOption {
 	return func(m *MultiResolver) {
 		m.nameHash = nameHash
@@ -156,6 +159,7 @@ func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	return
 }
 
+// ValidateOwner - checks a MultiResolver Owner
 func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool, error) {
 	rs, err := m.getResolveValidator(name)
 	if err != nil {
@@ -172,6 +176,7 @@ func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool
 	return false, err
 }
 
+// HeaderByNumber - accessor
 func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr *big.Int) (*types.Header, error) {
 	rs, err := m.getResolveValidator(name)
 	if err != nil {
@@ -188,6 +193,7 @@ func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr
 	return nil, err
 }
 
+// getResolveValidator - accessor
 func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, error) {
 	rs := m.resolvers[""]
 	tld := path.Ext(name)
@@ -204,6 +210,7 @@ func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, er
 	return rs, nil
 }
 
+// SetNameHash - on a MultiResolver
 func (m *MultiResolver) SetNameHash(nameHash func(string) common.Hash) {
 	m.nameHash = nameHash
 }
@@ -219,7 +226,7 @@ type API struct {
 	dns      Resolver
 }
 
-//the api constructor initialises
+// NewApi - the api constructor initialises
 func NewAPI(dpa *storage.DPA, dns Resolver, resourceHandler *mru.Handler) (self *API) {
 	self = &API{
 		dpa:      dpa,
@@ -229,7 +236,7 @@ func NewAPI(dpa *storage.DPA, dns Resolver, resourceHandler *mru.Handler) (self 
 	return
 }
 
-// to be used only in TEST
+// Upload - to be used only in TEST
 func (a *API) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
 	fs := NewFileSystem(a)
 	hash, err = fs.Upload(uploadDir, index, toEncrypt)
@@ -241,14 +248,16 @@ func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, 
 	return a.dpa.Retrieve(addr)
 }
 
+// Store DPA store API
 func (a *API) Store(data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(), err error) {
 	log.Debug("api.store", "size", size)
 	return a.dpa.Store(data, size, toEncrypt)
 }
 
+// ErrResolve declaration
 type ErrResolve error
 
-// DNS Resolver
+// Resolve - DNS Resolver
 func (a *API) Resolve(uri *URI) (storage.Address, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
@@ -428,6 +437,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 	return
 }
 
+// Modify - load's manifest and checks the content hash before recalculating and storing the manifest.
 func (a *API) Modify(addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
@@ -454,6 +464,7 @@ func (a *API) Modify(addr storage.Address, path, contentHash, contentType string
 	return trie.ref, nil
 }
 
+// AddFile - creates a new manifest entry, add's it to swarm, then adds a file to swarm.
 func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
 	apiAddFileCount.Inc(1)
 
@@ -504,6 +515,7 @@ func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bo
 
 }
 
+// RemoveFile - remove's a file's entry in a manifest
 func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
 	apiRmFileCount.Inc(1)
 
@@ -545,6 +557,7 @@ func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, 
 	return newMkey.String(), nil
 }
 
+// AppendFile - remove's old manifest appends file's entry to new manifest and add's it to swarm
 func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldAddr storage.Address, offset int64, addSize int64, nameresolver bool) (storage.Address, string, error) {
 	apiAppendFileCount.Inc(1)
 
@@ -626,6 +639,7 @@ func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content 
 
 }
 
+// BuildDirectoryTree - used by swarmfs_unix
 func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -654,7 +668,7 @@ func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.
 	return addr, manifestEntryMap, nil
 }
 
-// Look up mutable resource updates at specific periods and versions
+// ResourceLookup - Look up mutable resource updates at specific periods and versions
 func (a *API) ResourceLookup(ctx context.Context, addr storage.Address, period uint32, version uint32, maxLookup *mru.LookupParams) (string, []byte, error) {
 	var err error
 	rsrc, err := a.resource.Load(addr)
@@ -682,6 +696,7 @@ func (a *API) ResourceLookup(ctx context.Context, addr storage.Address, period u
 	return rsrc.Name(), data, nil
 }
 
+// ResourceCreate - create's Resource and returns it's key
 func (a *API) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Address, error) {
 	key, _, err := a.resource.New(ctx, name, frequency)
 	if err != nil {
@@ -690,9 +705,12 @@ func (a *API) ResourceCreate(ctx context.Context, name string, frequency uint64)
 	return key, nil
 }
 
+// ResourceUpdateMultihash - updates Multihash resource
 func (a *API) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, uint32, uint32, error) {
 	return a.resourceUpdate(ctx, name, data, true)
 }
+
+// ResourceUpdate - for non 'Multihash' resource
 func (a *API) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Address, uint32, uint32, error) {
 	return a.resourceUpdate(ctx, name, data, false)
 }
@@ -710,14 +728,17 @@ func (a *API) resourceUpdate(ctx context.Context, name string, data []byte, mult
 	return addr, period, version, err
 }
 
+// ResourceHashSize - accessor
 func (a *API) ResourceHashSize() int {
 	return a.resource.HashSize
 }
 
+// ResourceIsValidated - accessor
 func (a *API) ResourceIsValidated() bool {
 	return a.resource.IsValidated()
 }
 
+// ResolveResourceManifest - used in GET and POST server handlers
 func (a *API) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
 	trie, err := loadManifest(a.dpa, addr, nil)
 	if err != nil {
