@@ -62,8 +62,8 @@ func TestApiDirUpload0(t *testing.T) {
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
 
-		key := storage.Key(common.Hex2Bytes(bzzhash))
-		_, _, _, _, err = api.Get(key, "")
+		addr := storage.Address(common.Hex2Bytes(bzzhash))
+		_, _, _, _, err = api.Get(addr, "")
 		if err == nil {
 			t.Fatalf("expected error: %v", err)
 		}
@@ -94,8 +94,8 @@ func TestApiDirUploadModify(t *testing.T) {
 			return
 		}
 
-		key := storage.Key(common.Hex2Bytes(bzzhash))
-		key, err = api.Modify(key, "index.html", "", "")
+		addr := storage.Address(common.Hex2Bytes(bzzhash))
+		addr, err = api.Modify(addr, "index.html", "", "")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
@@ -111,17 +111,17 @@ func TestApiDirUploadModify(t *testing.T) {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		key, err = api.Modify(key, "index2.html", hash.Hex(), "text/html; charset=utf-8")
+		addr, err = api.Modify(addr, "index2.html", hash.Hex(), "text/html; charset=utf-8")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		key, err = api.Modify(key, "img/logo.png", hash.Hex(), "text/html; charset=utf-8")
+		addr, err = api.Modify(addr, "img/logo.png", hash.Hex(), "text/html; charset=utf-8")
 		if err != nil {
 			t.Errorf("unexpected error: %v", err)
 			return
 		}
-		bzzhash = key.Hex()
+		bzzhash = addr.Hex()
 
 		content := readPath(t, "testdata", "test0", "index.html")
 		resp := testGet(t, api, bzzhash, "index2.html")
@@ -137,7 +137,7 @@ func TestApiDirUploadModify(t *testing.T) {
 		exp = expResponse(content, "text/css", 0)
 		checkResponse(t, resp, exp)
 
-		_, _, _, _, err = api.Get(key, "")
+		_, _, _, _, err = api.Get(addr, "")
 		if err == nil {
 			t.Errorf("expected error: %v", err)
 		}

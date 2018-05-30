@@ -85,7 +85,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 // Deliver sends a storeRequestMsg protocol message to the peer
 func (p *Peer) Deliver(chunk *storage.Chunk, priority uint8) error {
 	msg := &ChunkDeliveryMsg{
-		Key:   chunk.Key,
+		Addr:  chunk.Addr,
 		SData: chunk.SData,
 	}
 	return p.SendPriority(msg, priority)

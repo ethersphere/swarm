@@ -61,7 +61,7 @@ type ManifestList struct {
 }
 
 // NewManifest creates and stores a new, empty manifest
-func (a *API) NewManifest(toEncrypt bool) (storage.Key, error) {
+func (a *Api) NewManifest(toEncrypt bool) (storage.Address, error) {
 	var manifest Manifest
 	data, err := json.Marshal(&manifest)
 	if err != nil {
@@ -73,11 +73,11 @@ func (a *API) NewManifest(toEncrypt bool) (storage.Key, error) {
 }
 
 // Manifest hack for supporting Mutable Resource Updates from the bzz: scheme
-// see swarm/api/api.go:API.Get() for more information
-func (a *API) NewResourceManifest(resourceKey string) (storage.Key, error) {
+// see swarm/api/api.go:Api.Get() for more information
+func (a *Api) NewResourceManifest(resourceAddr string) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
-		Hash:        resourceKey,
+		Hash:        resourceAddr,
 		ContentType: ResourceContentType,
 	}
 	manifest.Entries = append(manifest.Entries, entry)
@@ -91,21 +91,21 @@ func (a *API) NewResourceManifest(resourceKey string) (storage.Key, error) {
 
 // ManifestWriter is used to add and remove entries from an underlying manifest
 type ManifestWriter struct {
-	api   *API
+	api   *Api
 	trie  *manifestTrie
 	quitC chan bool
 }
 
-func (a *API) NewManifestWriter(key storage.Key, quitC chan bool) (*ManifestWriter, error) {
-	trie, err := loadManifest(a.dpa, key, quitC)
+func (a *Api) NewManifestWriter(addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
+	trie, err := loadManifest(a.dpa, addr, quitC)
 	if err != nil {
-		return nil, fmt.Errorf("error loading manifest %s: %s", key, err)
+		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
 	return &ManifestWriter{a, trie, quitC}, nil
 }
 
 // AddEntry stores the given data and adds the resulting key to the manifest
-func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Key, error) {
+func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Address, error) {
 
 	key, _, err := m.api.Store(data, e.Size, m.trie.encrypted)
 	if err != nil {
@@ -124,22 +124,22 @@ func (m *ManifestWriter) RemoveEntry(path string) error {
 }
 
 // Store stores the manifest, returning the resulting storage key
-func (m *ManifestWriter) Store() (storage.Key, error) {
+func (m *ManifestWriter) Store() (storage.Address, error) {
 	return m.trie.ref, m.trie.recalcAndStore()
 }
 
 // ManifestWalker is used to recursively walk the entries in the manifest and
 // all of its submanifests
 type ManifestWalker struct {
-	api   *API
+	api   *Api
 	trie  *manifestTrie
 	quitC chan bool
 }
 
-func (a *API) NewManifestWalker(key storage.Key, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(a.dpa, key, quitC)
+func (a *Api) NewManifestWalker(addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
+	trie, err := loadManifest(a.dpa, addr, quitC)
 	if err != nil {
-		return nil, fmt.Errorf("error loading manifest %s: %s", key, err)
+		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
 	return &ManifestWalker{a, trie, quitC}, nil
 }
@@ -187,7 +187,7 @@ func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) 
 type manifestTrie struct {
 	dpa       *storage.DPA
 	entries   [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
-	ref       storage.Key             // if ref != nil, it is stored
+	ref       storage.Address         // if ref != nil, it is stored
 	encrypted bool
 }
 
@@ -204,7 +204,7 @@ type manifestTrieEntry struct {
 	subtrie *manifestTrie
 }
 
-func loadManifest(dpa *storage.DPA, hash storage.Key, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func loadManifest(dpa *storage.DPA, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 	log.Trace("manifest lookup", "key", hash)
 	// retrieve manifest via DPA
 	manifestReader, isEncrypted := dpa.Retrieve(hash)
@@ -212,7 +212,7 @@ func loadManifest(dpa *storage.DPA, hash storage.Key, quitC chan bool) (trie *ma
 	return readManifest(manifestReader, hash, dpa, isEncrypted, quitC)
 }
 
-func readManifest(manifestReader storage.LazySectionReader, hash storage.Key, dpa *storage.DPA, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func readManifest(manifestReader storage.LazySectionReader, hash storage.Address, dpa *storage.DPA, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
 	size, err := manifestReader.Size(quitC)

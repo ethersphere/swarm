@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func testApi(t *testing.T, f func(*API, bool)) {
+func testApi(t *testing.T, f func(*Api, bool)) {
 	datadir, err := ioutil.TempDir("", "bzz-test")
 	if err != nil {
 		t.Fatalf("unable to create temp dir: %v", err)
@@ -42,7 +42,7 @@ func testApi(t *testing.T, f func(*API, bool)) {
 	if err != nil {
 		return
 	}
-	api := NewAPI(dpa, nil, nil)
+	api := NewApi(dpa, nil, nil)
 	f(api, false)
 	f(api, true)
 }
@@ -83,10 +83,10 @@ func expResponse(content string, mimeType string, status int) *Response {
 	return &Response{mimeType, status, int64(len(content)), content}
 }
 
-// func testGet(t *testing.T, api *API, bzzhash string) *testResponse {
-func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
-	key := storage.Key(common.Hex2Bytes(bzzhash))
-	reader, mimeType, status, _, err := api.Get(key, path)
+// func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
+func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
+	addr := storage.Address(common.Hex2Bytes(bzzhash))
+	reader, mimeType, status, _, err := api.Get(addr, path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -107,16 +107,16 @@ func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
 }
 
 func TestApiPut(t *testing.T) {
-	testApi(t, func(api *API, toEncrypt bool) {
+	testApi(t, func(api *Api, toEncrypt bool) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
-		key, wait, err := api.Put(content, exp.MimeType, toEncrypt)
+		addr, wait, err := api.Put(content, exp.MimeType, toEncrypt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		wait()
-		resp := testGet(t, api, key.Hex(), "")
+		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
 	})
 }
@@ -222,7 +222,7 @@ func TestAPIResolve(t *testing.T) {
 	}
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
-			api := &API{dns: x.dns}
+			api := &Api{dns: x.dns}
 			uri := &URI{Addr: x.addr, Scheme: "bzz"}
 			if x.immutable {
 				uri.Scheme = "bzz-immutable"
