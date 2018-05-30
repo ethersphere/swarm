@@ -231,7 +231,7 @@ func (a *API) Upload(uploadDir, index string, toEncrypt bool) (hash string, err 
 	return hash, err
 }
 
-// DPA reader API
+// Retrieve - DPA reader API
 func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
 	return a.dpa.Retrieve(addr)
 }
