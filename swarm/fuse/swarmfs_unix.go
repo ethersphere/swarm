@@ -155,30 +155,24 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	}
 	mi.fuseConnection = fconn
 
-	serverr := make(chan error, 1)
-	go func() {
-		log.Info("swarmfs", "serving hash", mhash, "at", cleanedMountPoint)
-		filesys := &SwarmRoot{root: rootDir}
-		if err := fs.Serve(fconn, filesys); err != nil {
-			log.Warn("swarmfs could not serve the requested hash", "error", err)
-			serverr <- err
-		}
-
-	}()
-
 	// Check if the mount process has an error to report.
 	select {
 	case <-time.After(mountTimeout):
 		fuse.Unmount(cleanedMountPoint)
 		return nil, errMountTimeout
 
-	case err := <-serverr:
-		fuse.Unmount(cleanedMountPoint)
-		log.Warn("swarmfs error serving over FUSE", "mountpoint", cleanedMountPoint, "err", err)
-		return nil, err
-
 	case <-fconn.Ready:
 		log.Info("swarmfs now served over FUSE", "manifest", mhash, "mountpoint", cleanedMountPoint)
+		go func() {
+			log.Info("swarmfs", "serving hash", mhash, "at", cleanedMountPoint)
+			filesys := &SwarmRoot{root: rootDir}
+			if err := fs.Serve(fconn, filesys); err != nil {
+				log.Warn("swarmfs error serving over FUSE", "mountpoint", cleanedMountPoint, "err", err)
+				fuse.Unmount(cleanedMountPoint)
+				return
+			}
+
+		}()
 	}
 
 	swarmfs.activeMounts[cleanedMountPoint] = mi
@@ -207,6 +201,7 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 			log.Warn(errStr)
 			return nil, err1
 		}
+		return nil, err
 	}
 
 	mountInfo.fuseConnection.Close()
