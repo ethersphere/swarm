@@ -71,11 +71,13 @@ type ResolveValidator interface {
 	HeaderByNumber(context.Context, *big.Int) (*types.Header, error)
 }
 
-// NewNoResolverError - only used in test's at the time of this writing
+// NoResolverError is returned by MultiResolver.Resolve if no resolver
+// can be found for the address.
 type NoResolverError struct {
 	TLD string
 }
 
+// NewNoResolverError - only used in test's at the time of this writing
 func NewNoResolverError(tld string) *NoResolverError {
 	return &NoResolverError{TLD: tld}
 }
