@@ -412,11 +412,10 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 		if status == http.StatusMultipleChoices {
 			apiGetHTTP300.Inc(1)
 			return nil, entry.ContentType, status, contentAddr, err
-		} else {
-			mimeType = entry.ContentType
-			log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-			reader, _ = a.dpa.Retrieve(contentAddr)
 		}
+		mimeType = entry.ContentType
+		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
+		reader, _ = a.dpa.Retrieve(contentAddr)
 	} else {
 		// no entry found
 		status = http.StatusNotFound
