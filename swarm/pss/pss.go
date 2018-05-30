@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -32,7 +33,7 @@ const (
 	defaultWhisperPoW          = 0.0000000001
 	defaultMaxMsgSize          = 1024 * 1024
 	defaultCleanInterval       = time.Second * 60 * 10
-	defaultOutboxCapacity      = 10000
+	defaultOutboxCapacity      = 100000
 	pssProtocolName            = "pss"
 	pssVersion                 = 1
 	hasherCount                = 8
@@ -184,27 +185,30 @@ func NewPss(k network.Overlay, params *PssParams) (*Pss, error) {
 /////////////////////////////////////////////////////////////////////
 
 func (p *Pss) Start(srv *p2p.Server) error {
-	go func() {
-		ticker := time.NewTicker(defaultCleanInterval)
-		cacheTicker := time.NewTicker(p.cacheTTL)
-		defer ticker.Stop()
-		defer cacheTicker.Stop()
-		for {
-			select {
-			case <-cacheTicker.C:
-				p.cleanFwdCache()
-			case <-ticker.C:
-				p.cleanKeys()
-			case <-p.quitC:
-				return
-			}
-		}
-	}()
+	//go func() {
+	//ticker := time.NewTicker(defaultCleanInterval)
+	//cacheTicker := time.NewTicker(p.cacheTTL)
+	//defer ticker.Stop()
+	//defer cacheTicker.Stop()
+	//for {
+	//select {
+	//case <-cacheTicker.C:
+	//p.cleanFwdCache()
+	//case <-ticker.C:
+	//p.cleanKeys()
+	//case <-p.quitC:
+	//return
+	//}
+	//}
+	//}()
 	go func() {
 		for {
 			select {
 			case msg := <-p.outbox:
-				p.forward(msg)
+				err := p.forward(msg)
+				if err != nil {
+					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
+				}
 			case <-p.quitC:
 				return
 			}
@@ -324,12 +328,15 @@ func (p *Pss) getHandlers(topic Topic) map[*Handler]bool {
 // If yes, it CAN be for us, and we process it
 // Only passes error to pss protocol handler if payload is not valid pssmsg
 func (p *Pss) handlePssMsg(msg interface{}) error {
+	metrics.GetOrRegisterCounter("pss.handlepssmsg", nil).Inc(1)
+
 	pssmsg, ok := msg.(*PssMsg)
 
 	if !ok {
 		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
 	}
 	if int64(pssmsg.Expire) < time.Now().Unix() {
+		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
 		log.Trace(fmt.Sprintf("pss filtered expired message FROM %x TO %x", p.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
 		return nil
 	}
@@ -359,6 +366,8 @@ func (p *Pss) handlePssMsg(msg interface{}) error {
 // Attempts symmetric and asymmetric decryption with stored keys.
 // Dispatches message to all handlers matching the message topic
 func (p *Pss) process(pssmsg *PssMsg) error {
+	metrics.GetOrRegisterCounter("pss.process", nil).Inc(1)
+
 	var err error
 	var recvmsg *whisper.ReceivedMessage
 	var from *PssAddress
@@ -548,6 +557,8 @@ func (p *Pss) getPeerAddress(keyid string, topic Topic) (PssAddress, error) {
 // of the symmetric key used to decrypt the message.
 // It fails if decryption of the message fails or if the message is corrupted
 func (p *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
+	metrics.GetOrRegisterCounter("pss.process.sym", nil).Inc(1)
+
 	for i := p.symKeyDecryptCacheCursor; i > p.symKeyDecryptCacheCursor-cap(p.symKeyDecryptCache) && i > 0; i-- {
 		symkeyid := p.symKeyDecryptCache[i%cap(p.symKeyDecryptCache)]
 		symkey, err := p.w.GetSymKey(*symkeyid)
@@ -578,6 +589,8 @@ func (p *Pss) processSym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, 
 // the public key used to decrypt the message.
 // It fails if decryption of message fails, or if the message is corrupted
 func (p *Pss) processAsym(envelope *whisper.Envelope) (*whisper.ReceivedMessage, string, *PssAddress, error) {
+	metrics.GetOrRegisterCounter("pss.process.asym", nil).Inc(1)
+
 	recvmsg, err := envelope.OpenAsymmetric(p.privateKey)
 	if err != nil {
 		return nil, "", nil, fmt.Errorf("could not decrypt message: %s", err)
@@ -712,6 +725,8 @@ func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 // and wraps the message payload in it.
 // TODO: Implement proper message padding
 func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []byte) error {
+	metrics.GetOrRegisterCounter("pss.send", nil).Inc(1)
+
 	if key == nil || bytes.Equal(key, []byte{}) {
 		return fmt.Errorf("Zero length key passed to pss send")
 	}
@@ -762,6 +777,8 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 // The recipient address can be of any length, and the byte slice will be matched to the MSB slice
 // of the peer address of the equivalent length.
 func (p *Pss) forward(msg *PssMsg) error {
+	metrics.GetOrRegisterCounter("pss.forward", nil).Inc(1)
+
 	to := make([]byte, addressLength)
 	copy(to[:len(msg.To)], msg.To)
 
@@ -800,6 +817,8 @@ func (p *Pss) forward(msg *PssMsg) error {
 		// attempt to send the message
 		err := pp.Send(msg)
 		if err != nil {
+			metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
+			log.Error("pp.Send error", "err", err)
 			return true
 		}
 		sent++
@@ -827,6 +846,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 		log.Debug("unable to forward to any peers")
 		time.Sleep(time.Millisecond)
 		if err := p.enqueue(msg); err != nil {
+			metrics.GetOrRegisterCounter("pss.forward.enqueue.error", nil).Inc(1)
 			return err
 		}
 	}
@@ -842,6 +862,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 
 // cleanFwdCache is used to periodically remove expired entries from the forward cache
 func (p *Pss) cleanFwdCache() {
+	metrics.GetOrRegisterCounter("pss.cleanfwdcache", nil).Inc(1)
 	p.fwdCacheMu.Lock()
 	defer p.fwdCacheMu.Unlock()
 	for k, v := range p.fwdCache {
@@ -853,6 +874,8 @@ func (p *Pss) cleanFwdCache() {
 
 // add a message to the cache
 func (p *Pss) addFwdCache(msg *PssMsg) error {
+	metrics.GetOrRegisterCounter("pss.addfwdcache", nil).Inc(1)
+
 	var entry pssCacheEntry
 	var ok bool
 
@@ -870,16 +893,21 @@ func (p *Pss) addFwdCache(msg *PssMsg) error {
 
 // check if message is in the cache
 func (p *Pss) checkFwdCache(msg *PssMsg) bool {
+	metrics.GetOrRegisterCounter("pss.checkfwdcache", nil).Inc(1)
+
 	p.fwdCacheMu.Lock()
 	defer p.fwdCacheMu.Unlock()
 
 	digest := p.digest(msg)
-	entry, ok := p.fwdCache[digest]
+	_, ok := p.fwdCache[digest]
 	if ok {
-		if entry.expiresAt.After(time.Now()) {
-			log.Trace(fmt.Sprintf("unexpired cache for digest %x", digest))
-			return true
-		}
+		//if entry.expiresAt.After(time.Now()) {
+		//metrics.GetOrRegisterCounter("pss.checkfwdcache.if", nil).Inc(1)
+		//log.Trace(fmt.Sprintf("unexpired cache for digest %x", digest))
+		return true
+		//} else {
+		//metrics.GetOrRegisterCounter("pss.checkfwdcache.else", nil).Inc(1)
+		//}
 	}
 	return false
 }

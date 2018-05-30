@@ -42,16 +42,16 @@ type meteredConn struct {
 // returns the original object.
 func newMeteredConn(conn net.Conn, ingress bool) net.Conn {
 	// Short circuit if metrics are disabled
-	if !metrics.Enabled {
-		return conn
-	}
+	//if !metrics.Enabled {
+	return conn
+	//}
 	// Otherwise bump the connection counters and wrap the connection
-	if ingress {
-		ingressConnectMeter.Mark(1)
-	} else {
-		egressConnectMeter.Mark(1)
-	}
-	return &meteredConn{conn.(*net.TCPConn)}
+	//if ingress {
+	//ingressConnectMeter.Mark(1)
+	//} else {
+	//egressConnectMeter.Mark(1)
+	//}
+	//return &meteredConn{conn.(*net.TCPConn)}
 }
 
 // Read delegates a network read to the underlying connection, bumping the ingress
