@@ -330,11 +330,11 @@ func (p *Pss) handlePssMsg(msg interface{}) error {
 		return fmt.Errorf("invalid message type. Expected *PssMsg, got %T ", msg)
 	}
 	if int64(pssmsg.Expire) < time.Now().Unix() {
-		log.Trace(fmt.Sprintf("pss filtered expired message FROM %x TO %x", p.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+		log.Trace(fmt.Sprintf("pss filtered expired message FROM %s TO %s", common.ToHex(p.Overlay.BaseAddr()), common.ToHex(pssmsg.To)))
 		return nil
 	}
 	if p.checkFwdCache(pssmsg) {
-		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", p.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %s TO %s", common.ToHex(p.Overlay.BaseAddr()), common.ToHex(pssmsg.To)))
 		return nil
 	}
 	p.addFwdCache(pssmsg)

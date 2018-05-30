@@ -337,7 +337,7 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 			return fmt.Errorf("Unsubscribe attempted on unknown resource '%s'", msg.namestring)
 		}
 
-		// parse the address from the message and truncate if longer than our mux threshold
+		// parse the address from the message and truncate if longer than our bins' address length threshold
 		address := msg.Payload
 		if len(msg.Payload) > c.notifiers[msg.namestring].threshold {
 			address = address[:c.notifiers[msg.namestring].threshold]
