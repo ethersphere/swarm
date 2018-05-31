@@ -457,6 +457,64 @@ func TestKeys(t *testing.T) {
 	}
 }
 
+func TestGetPublickeyEntries(t *testing.T) {
+
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := newTestPss(privkey, nil, nil)
+
+	peeraddr := network.RandomAddr().Over()
+	topicaddr := make(map[Topic]PssAddress)
+	topicaddr[Topic{0x13}] = peeraddr
+	topicaddr[Topic{0x2a}] = peeraddr[:16]
+	topicaddr[Topic{0x02, 0x9a}] = []byte{}
+
+	remoteprivkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	remotepubkeybytes := crypto.FromECDSAPub(&remoteprivkey.PublicKey)
+	remotepubkeyhex := common.ToHex(remotepubkeybytes)
+
+	pssapi := NewAPI(ps)
+
+	for to, a := range topicaddr {
+		err = pssapi.SetPeerPublicKey(remotepubkeybytes, to, a)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	intopic, err := pssapi.GetPeerTopics(remotepubkeyhex)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+OUTER:
+	for _, tnew := range intopic {
+		for torig, addr := range topicaddr {
+			if bytes.Equal(torig[:], tnew[:]) {
+				inaddr, err := pssapi.GetPeerAddress(remotepubkeyhex, torig)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(addr, inaddr) {
+					t.Fatalf("Address mismatch for topic %x; got %x, expected %x", torig, inaddr, addr)
+				}
+				delete(topicaddr, torig)
+				continue OUTER
+			}
+		}
+		t.Fatalf("received topic %x did not match any existing topics", tnew)
+	}
+
+	if len(topicaddr) != 0 {
+		t.Fatalf("%d topics were not matched", len(topicaddr))
+	}
+}
+
 type pssTestPeer struct {
 	*protocols.Peer
 	addr []byte

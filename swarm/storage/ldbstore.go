@@ -641,43 +641,43 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *LDBStore) Get(key Address) (chunk Chunk, err error) {
+func (s *LDBStore) Get(addr Address) (chunk Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
-	log.Trace("ldbstore.get", "key", key)
+	log.Trace("ldbstore.get", "key", addr)
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	return s.get(key)
+	return s.get(addr)
 }
 
-func (s *LDBStore) get(key Address) (chunk *chunk, err error) {
+func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 	var indx dpaDBIndex
 	if s.closed {
 		return nil, ErrDBClosed
 	}
-	if s.tryAccessIdx(getIndexKey(key), &indx) {
+	if s.tryAccessIdx(getIndexKey(addr), &indx) {
 		var data []byte
 		if s.getDataFunc != nil {
 			// if getDataFunc is defined, use it to retrieve the chunk data
-			log.Trace("ldbstore.get retrieve with getDataFunc", "key", key)
-			data, err = s.getDataFunc(key)
+			log.Trace("ldbstore.get retrieve with getDataFunc", "key", addr)
+			data, err = s.getDataFunc(addr)
 			if err != nil {
 				return
 			}
 		} else {
 			// default DbStore functionality to retrieve chunk data
-			proximity := s.po(key)
+			proximity := s.po(addr)
 			datakey := getDataKey(indx.Idx, proximity)
 			data, err = s.db.Get(datakey)
-			log.Trace("ldbstore.get retrieve", "key", key, "indexkey", indx.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
+			log.Trace("ldbstore.get retrieve", "key", addr, "indexkey", indx.Idx, "datakey", fmt.Sprintf("%x", datakey), "proximity", proximity)
 			if err != nil {
-				log.Trace("ldbstore.get chunk found but could not be accessed", "key", key, "err", err)
-				s.delete(indx.Idx, getIndexKey(key), s.po(key))
+				log.Trace("ldbstore.get chunk found but could not be accessed", "key", addr, "err", err)
+				s.delete(indx.Idx, getIndexKey(addr), s.po(addr))
 				return
 			}
 		}
 
-		return decodeData(key, data)
+		return decodeData(addr, data)
 	} else {
 		err = ErrChunkNotFound
 	}
@@ -688,9 +688,9 @@ func (s *LDBStore) get(key Address) (chunk *chunk, err error) {
 // newMockGetFunc returns a function that reads chunk data from
 // the mock database, which is used as the value for DbStore.getFunc
 // to bypass the default functionality of DbStore with a mock store.
-func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Address) (data []byte, err error) {
-	return func(key Address) (data []byte, err error) {
-		data, err = mockStore.Get(key)
+func newMockGetDataFunc(mockStore *mock.NodeStore) func(addr Address) (data []byte, err error) {
+	return func(addr Address) (data []byte, err error) {
+		data, err = mockStore.Get(addr)
 		if err == mock.ErrNotFound {
 			// preserve ErrChunkNotFound error
 			err = ErrChunkNotFound
@@ -699,13 +699,13 @@ func newMockGetDataFunc(mockStore *mock.NodeStore) func(key Address) (data []byt
 	}
 }
 
-func (s *LDBStore) updateAccessCnt(key Address) {
+func (s *LDBStore) updateAccessCnt(addr Address) {
 
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
 	var index dpaDBIndex
-	s.tryAccessIdx(getIndexKey(key), &index) // result_chn == nil, only update access cnt
+	s.tryAccessIdx(getIndexKey(addr), &index) // result_chn == nil, only update access cnt
 
 }
 

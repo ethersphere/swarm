@@ -154,12 +154,12 @@ func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
 type RetrieveRequestMsg struct {
-	Key       storage.Address
+	Addr      storage.Address
 	SkipCheck bool
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) error {
-	log.Trace("received request", "peer", sp.ID(), "hash", req.Key)
+	log.Trace("received request", "peer", sp.ID(), "hash", req.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
@@ -168,7 +168,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	}
 	streamer := s.Server.(*SwarmChunkServer)
 	go func() {
-		chunk, err := d.dpa.Get(streamer.context(req), req.Key)
+		chunk, err := d.dpa.Get(streamer.context(req), req.Addr)
 		if err != nil {
 			return
 		}
@@ -187,7 +187,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 }
 
 type ChunkDeliveryMsg struct {
-	Key   storage.Address
+	Addr  storage.Address
 	SData []byte // the stored chunk Data (incl size)
 	peer  *Peer  // set in handleChunkDeliveryMsg
 }
@@ -210,7 +210,7 @@ func (d *Delivery) processReceivedChunks() {
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
 
-		_, err := d.dpa.Put(storage.NewChunk(req.Key, req.SData))
+		_, err := d.dpa.Put(storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				req.peer.Drop(err)
@@ -247,7 +247,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, addr storage.Address, o
 		}
 		// TODO: skip light nodes that do not accept retrieve requests
 		err = sp.SendPriority(&RetrieveRequestMsg{
-			Key:       addr,
+			Addr:      addr,
 			SkipCheck: skipCheck,
 		}, Top)
 		if err != nil {

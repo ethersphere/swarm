@@ -55,7 +55,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Key:       hash0[:],
+					Addr:      hash0[:],
 					SkipCheck: true,
 				},
 				Peer: peerID,
@@ -155,7 +155,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Key: hash,
+					Addr: hash,
 				},
 				Peer: peerID,
 			},
@@ -196,7 +196,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Key:       hash,
+					Addr:      hash,
 					SkipCheck: true,
 				},
 				Peer: peerID,
@@ -206,7 +206,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 			{
 				Code: 6,
 				Msg: &ChunkDeliveryMsg{
-					Key:   hash,
+					Addr:  hash,
 					SData: hash,
 				},
 				Peer: peerID,
@@ -273,7 +273,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 				{
 					Code: 6,
 					Msg: &ChunkDeliveryMsg{
-						Key:   chunkKey,
+						Addr:  chunkKey,
 						SData: chunkData,
 					},
 					Peer: peerID,
@@ -632,7 +632,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// by now deliveries are set for each node by the streamer service
 	delivery := deliveries[sim.IDs[0]]
 	retrieveFunc := func(chunk *storage.Chunk) error {
-		return delivery.RequestFromPeers(chunk.Key[:], skipCheck)
+		return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
 	}
 	netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
 

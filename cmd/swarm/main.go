@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -49,6 +48,22 @@ import (
 )
 
 const clientIdentifier = "swarm"
+const helpTemplate = `NAME:
+{{.HelpName}} - {{.Usage}}
+
+USAGE:
+{{if .UsageText}}{{.UsageText}}{{else}}{{.HelpName}}{{if .VisibleFlags}} [command options]{{end}} {{if .ArgsUsage}}{{.ArgsUsage}}{{else}}[arguments...]{{end}}{{end}}{{if .Category}}
+
+CATEGORY:
+{{.Category}}{{end}}{{if .Description}}
+
+DESCRIPTION:
+{{.Description}}{{end}}{{if .VisibleFlags}}
+
+OPTIONS:
+{{range .VisibleFlags}}{{.}}
+{{end}}{{end}}
+`
 
 var (
 	gitCommit        string // Git SHA1 commit hash of the release (set via linker flags)
@@ -107,6 +122,11 @@ var (
 		Usage:  "Duration for sync subscriptions update after no new peers are added (default 15s)",
 		EnvVar: SWARM_ENV_SYNC_UPDATE_DELAY,
 	}
+	SwarmDeliverySkipCheckFlag = cli.BoolFlag{
+		Name:   "delivery-skip-check",
+		Usage:  "Skip chunk delivery check (default false)",
+		EnvVar: SWARM_ENV_DELIVERY_SKIP_CHECK,
+	}
 	EnsAPIFlag = cli.StringSliceFlag{
 		Name:   "ens-api",
 		Usage:  "ENS API endpoint for a TLD and with contract address, can be repeated, format [tld:][contract-addr@]url",
@@ -117,7 +137,7 @@ var (
 		Usage: "Swarm HTTP endpoint",
 		Value: "http://127.0.0.1:8500",
 	}
-	SwarmRecursiveUploadFlag = cli.BoolFlag{
+	SwarmRecursiveFlag = cli.BoolFlag{
 		Name:  "recursive",
 		Usage: "Upload directories recursively",
 	}
@@ -138,7 +158,7 @@ var (
 		Usage: "force mime type",
 	}
 	SwarmEncryptedFlag = cli.BoolFlag{
-		Name:  "encrypted",
+		Name:  "encrypt",
 		Usage: "use encrypted upload",
 	}
 	CorsStringFlag = cli.StringFlag{
@@ -190,92 +210,130 @@ func init() {
 	app.Copyright = "Copyright 2013-2016 The go-ethereum Authors"
 	app.Commands = []cli.Command{
 		{
-			Action:    version,
-			Name:      "version",
-			Usage:     "Print version numbers",
-			ArgsUsage: " ",
-			Description: `
-The output of this command is supposed to be machine-readable.
-`,
+			Action:             version,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "version",
+			Usage:              "Print version numbers",
+			Description:        "The output of this command is supposed to be machine-readable",
 		},
 		{
-			Action:    upload,
-			Name:      "up",
-			Usage:     "upload a file or directory to swarm using the HTTP API",
-			ArgsUsage: " <file>",
-			Flags:     []cli.Flag{SwarmEncryptedFlag},
-			Description: `
-"upload a file or directory to swarm using the HTTP API and prints the root hash",
-`,
+			Action:             upload,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "up",
+			Usage:              "uploads a file or directory to swarm using the HTTP API",
+			ArgsUsage:          "<file>",
+			Flags:              []cli.Flag{SwarmEncryptedFlag},
+			Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
 		},
 		{
-			Action:    list,
-			Name:      "ls",
-			Usage:     "list files and directories contained in a manifest",
-			ArgsUsage: " <manifest> [<prefix>]",
-			Description: `
-Lists files and directories contained in a manifest.
-`,
+			Action:             list,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "ls",
+			Usage:              "list files and directories contained in a manifest",
+			ArgsUsage:          "<manifest> [<prefix>]",
+			Description:        "Lists files and directories contained in a manifest",
 		},
 		{
-			Action:    hash,
-			Name:      "hash",
-			Usage:     "print the swarm hash of a file or directory",
-			ArgsUsage: " <file>",
-			Description: `
-Prints the swarm hash of file or directory.
-`,
+			Action:             hash,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "hash",
+			Usage:              "print the swarm hash of a file or directory",
+			ArgsUsage:          "<file>",
+			Description:        "Prints the swarm hash of file or directory",
 		},
 		{
-			Name:      "manifest",
-			Usage:     "update a MANIFEST",
-			ArgsUsage: "manifest COMMAND",
+			Action:    download,
+			Name:      "down",
+			Flags:     []cli.Flag{SwarmRecursiveFlag},
+			Usage:     "downloads a swarm manifest or a file inside a manifest",
+			ArgsUsage: " <uri> [<dir>]",
 			Description: `
-Updates a MANIFEST by adding/removing/updating the hash of a path.
+Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.
 `,
+		},
+
+		{
+			Name:               "manifest",
+			CustomHelpTemplate: helpTemplate,
+			Usage:              "perform operations on swarm manifests",
+			ArgsUsage:          "COMMAND",
+			Description:        "Updates a MANIFEST by adding/removing/updating the hash of a path.\nCOMMAND could be: add, update, remove",
 			Subcommands: []cli.Command{
 				{
-					Action:    add,
-					Name:      "add",
-					Usage:     "add a new path to the manifest",
-					ArgsUsage: "<MANIFEST> <path> <hash> [<content-type>]",
-					Description: `
-Adds a new path to the manifest
-`,
+					Action:             add,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "add",
+					Usage:              "add a new path to the manifest",
+					ArgsUsage:          "<MANIFEST> <path> <hash> [<content-type>]",
+					Description:        "Adds a new path to the manifest",
 				},
 				{
-					Action:    update,
-					Name:      "update",
-					Usage:     "update the hash for an already existing path in the manifest",
-					ArgsUsage: "<MANIFEST> <path> <newhash> [<newcontent-type>]",
-					Description: `
-Update the hash for an already existing path in the manifest
-`,
+					Action:             update,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "update",
+					Usage:              "update the hash for an already existing path in the manifest",
+					ArgsUsage:          "<MANIFEST> <path> <newhash> [<newcontent-type>]",
+					Description:        "Update the hash for an already existing path in the manifest",
 				},
 				{
-					Action:    remove,
-					Name:      "remove",
-					Usage:     "removes a path from the manifest",
-					ArgsUsage: "<MANIFEST> <path>",
-					Description: `
-Removes a path from the manifest
-`,
+					Action:             remove,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "remove",
+					Usage:              "removes a path from the manifest",
+					ArgsUsage:          "<MANIFEST> <path>",
+					Description:        "Removes a path from the manifest",
 				},
 			},
 		},
 		{
-			Name:      "db",
-			Usage:     "manage the local chunk database",
-			ArgsUsage: "db COMMAND",
-			Description: `
-Manage the local chunk database.
-`,
+			Name:               "fs",
+			CustomHelpTemplate: helpTemplate,
+			Usage:              "perform FUSE operations",
+			ArgsUsage:          "fs COMMAND",
+			Description:        "Performs FUSE operations by mounting/unmounting/listing mount points. This assumes you already have a Swarm node running locally. For all operation you must reference the correct path to bzzd.ipc in order to communicate with the node",
 			Subcommands: []cli.Command{
 				{
-					Action:    dbExport,
-					Name:      "export",
-					Usage:     "export a local chunk database as a tar archive (use - to send to stdout)",
-					ArgsUsage: "<chunkdb> <file>",
+					Action:             mount,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "mount",
+					Flags:              []cli.Flag{utils.IPCPathFlag},
+					Usage:              "mount a swarm hash to a mount point",
+					ArgsUsage:          "swarm fs mount --ipcpath <path to bzzd.ipc> <manifest hash> <mount point>",
+					Description:        "Mounts a Swarm manifest hash to a given mount point. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+				},
+				{
+					Action:             unmount,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "unmount",
+					Flags:              []cli.Flag{utils.IPCPathFlag},
+					Usage:              "unmount a swarmfs mount",
+					ArgsUsage:          "swarm fs unmount --ipcpath <path to bzzd.ipc> <mount point>",
+					Description:        "Unmounts a swarmfs mount residing at <mount point>. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+				},
+				{
+					Action:             listMounts,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "list",
+					Flags:              []cli.Flag{utils.IPCPathFlag},
+					Usage:              "list swarmfs mounts",
+					ArgsUsage:          "swarm fs list --ipcpath <path to bzzd.ipc>",
+					Description:        "Lists all mounted swarmfs volumes. This assumes you already have a Swarm node running locally. You must reference the correct path to your bzzd.ipc file",
+				},
+			},
+		},
+		{
+			Name:               "db",
+			CustomHelpTemplate: helpTemplate,
+			Usage:              "manage the local chunk database",
+			ArgsUsage:          "db COMMAND",
+			Description:        "Manage the local chunk database",
+			Subcommands: []cli.Command{
+				{
+					Action:             dbExport,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "export",
+					Usage:              "export a local chunk database as a tar archive (use - to send to stdout)",
+					ArgsUsage:          "<chunkdb> <file>",
 					Description: `
 Export a local chunk database as a tar archive (use - to send to stdout).
 
@@ -288,10 +346,11 @@ pv(1) tool to get a progress bar:
 `,
 				},
 				{
-					Action:    dbImport,
-					Name:      "import",
-					Usage:     "import chunks from a tar archive into a local chunk database (use - to read from stdin)",
-					ArgsUsage: "<chunkdb> <file>",
+					Action:             dbImport,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "import",
+					Usage:              "import chunks from a tar archive into a local chunk database (use - to read from stdin)",
+					ArgsUsage:          "<chunkdb> <file>",
 					Description: `
 Import chunks from a tar archive into a local chunk database (use - to read from stdin).
 
@@ -304,16 +363,16 @@ pv(1) tool to get a progress bar:
 `,
 				},
 				{
-					Action:    dbClean,
-					Name:      "clean",
-					Usage:     "remove corrupt entries from a local chunk database",
-					ArgsUsage: "<chunkdb>",
-					Description: `
-Remove corrupt entries from a local chunk database.
-`,
+					Action:             dbClean,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "clean",
+					Usage:              "remove corrupt entries from a local chunk database",
+					ArgsUsage:          "<chunkdb>",
+					Description:        "Remove corrupt entries from a local chunk database",
 				},
 			},
 		},
+
 		// See config.go
 		DumpConfigCommand,
 	}
@@ -343,6 +402,7 @@ Remove corrupt entries from a local chunk database.
 		SwarmSwapAPIFlag,
 		SwarmSyncDisabledFlag,
 		SwarmSyncUpdateDelay,
+		SwarmDeliverySkipCheckFlag,
 		SwarmListenAddrFlag,
 		SwarmPortFlag,
 		SwarmAccountFlag,
@@ -350,7 +410,7 @@ Remove corrupt entries from a local chunk database.
 		ChequebookAddrFlag,
 		// upload flags
 		SwarmApiFlag,
-		SwarmRecursiveUploadFlag,
+		SwarmRecursiveFlag,
 		SwarmWantManifestFlag,
 		SwarmUploadDefaultPath,
 		SwarmUpFromStdinFlag,
@@ -434,7 +494,7 @@ func bzzd(ctx *cli.Context) error {
 	//due to overriding behavior
 	initSwarmNode(bzzconfig, stack, ctx)
 	//register BZZ as node.Service in the ethereum node
-	registerBzzService(bzzconfig, ctx, stack)
+	registerBzzService(bzzconfig, stack)
 	//start the node
 	utils.StartNode(stack)
 
@@ -461,22 +521,11 @@ func bzzd(ctx *cli.Context) error {
 	return nil
 }
 
-func registerBzzService(bzzconfig *bzzapi.Config, ctx *cli.Context, stack *node.Node) {
-
+func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	//define the swarm service boot function
-	boot := func(ctx *node.ServiceContext) (node.Service, error) {
-		var swapClient *ethclient.Client
-		var err error
-		if bzzconfig.SwapApi != "" {
-			log.Info("connecting to SWAP API", "url", bzzconfig.SwapApi)
-			swapClient, err = ethclient.Dial(bzzconfig.SwapApi)
-			if err != nil {
-				return nil, fmt.Errorf("error connecting to SWAP API %s: %s", bzzconfig.SwapApi, err)
-			}
-		}
-
+	boot := func(_ *node.ServiceContext) (node.Service, error) {
 		// In production, mockStore must be always nil.
-		return swarm.NewSwarm(ctx, swapClient, bzzconfig, nil)
+		return swarm.NewSwarm(bzzconfig, nil)
 	}
 	//register within the ethereum node
 	if err := stack.Register(boot); err != nil {

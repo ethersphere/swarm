@@ -267,7 +267,7 @@ func retrieveToFile(dpa *storage.DPAAPI, key storage.Address, path string) error
 	if err != nil {
 		return err
 	}
-	reader, _ := dpa.Retrieve(key)
+	reader, _ := dpa.Retrieve(addr)
 	writer := bufio.NewWriter(f)
 	size, err := reader.Size()
 	if err != nil {

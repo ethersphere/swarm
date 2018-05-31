@@ -85,25 +85,25 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 
 	putGetter := newTestHasherStore(NewMapChunkStore(), hash)
 
-	var key Address
+	var addr Address
 	var wait func(context.Context) error
 	var err error
 	ctx := context.Background()
 	if usePyramid {
-		key, wait, err = PyramidSplit(ctx, data, putGetter, putGetter)
+		addr, wait, err = PyramidSplit(ctx, data, putGetter, putGetter)
 	} else {
-		key, wait, err = TreeSplit(ctx, data, int64(n), putGetter)
+		addr, wait, err = TreeSplit(ctx, data, int64(n), putGetter)
 	}
 	if err != nil {
 		tester.t.Fatalf(err.Error())
 	}
-	tester.t.Logf(" Address = %v\n", key)
+	tester.t.Logf(" Address = %v\n", addr)
 	err = wait(ctx)
 	if err != nil {
 		tester.t.Fatalf(err.Error())
 	}
 
-	reader := TreeJoin(key, putGetter, 0)
+	reader := TreeJoin(addr, putGetter, 0)
 	output := make([]byte, n)
 	r, err := reader.Read(output)
 	if r != n || err != io.EOF {
@@ -130,7 +130,7 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 		}
 	}
 
-	return key
+	return addr
 }
 
 func TestSha3ForCorrectness(t *testing.T) {
@@ -188,7 +188,7 @@ func TestDataAppend(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
 		defer cancel()
-		key, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
+		addr, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
@@ -207,7 +207,7 @@ func TestDataAppend(t *testing.T) {
 		}
 
 		putGetter = newTestHasherStore(store, SHA3Hash)
-		newAddress, wait, err := PyramidAppend(ctx, key, appendData, putGetter, putGetter)
+		newAddr, wait, err := PyramidAppend(ctx, addr, appendData, putGetter, putGetter)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
 		}
@@ -216,7 +216,7 @@ func TestDataAppend(t *testing.T) {
 			tester.t.Fatalf(err.Error())
 		}
 
-		reader := TreeJoin(newAddress, putGetter, 0)
+		reader := TreeJoin(newAddr, putGetter, 0)
 		newOutput := make([]byte, n+m)
 		r, err := reader.Read(newOutput)
 		if r != (n + m) {

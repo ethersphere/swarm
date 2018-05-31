@@ -58,7 +58,7 @@ func initRetrievalTest() {
 	getRetrieveFunc = func(id discover.NodeID) func(chunk *storage.Chunk) error {
 		return func(chunk *storage.Chunk) error {
 			skipCheck := true
-			return deliveries[id].RequestFromPeers(chunk.Key[:], skipCheck)
+			return deliveries[id].RequestFromPeers(chunk.Addr[:], skipCheck)
 		}
 	}
 	//registries, map of discover.NodeID to its streamer
@@ -752,7 +752,7 @@ func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Address, []string,
 	//array holding generated files
 	rfiles := make([]string, nodeCnt)
 	//array holding the root hashes of the files
-	rootkeys := make([]storage.Address, nodeCnt)
+	rootAddrs := make([]storage.Address, nodeCnt)
 
 	var err error
 	//for every node, generate a file and upload
@@ -771,9 +771,9 @@ func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Address, []string,
 		if err != nil {
 			return nil, nil, err
 		}
-		rootkeys[i] = rk
+		rootAddrs[i] = rk
 	}
-	return rootkeys, rfiles, nil
+	return rootAddrs, rfiles, nil
 }
 
 //generate a random file (string)

@@ -172,13 +172,14 @@ func (c *testCluster) Cleanup() {
 }
 
 type testNode struct {
-	Name   string
-	Addr   string
-	URL    string
-	Enode  string
-	Dir    string
-	Client *rpc.Client
-	Cmd    *cmdtest.TestCmd
+	Name    string
+	Addr    string
+	URL     string
+	Enode   string
+	Dir     string
+	IpcPath string
+	Client  *rpc.Client
+	Cmd     *cmdtest.TestCmd
 }
 
 const testPassphrase = "swarm-test-passphrase"
@@ -331,6 +332,7 @@ func newTestNode(t *testing.T, dir string) *testNode {
 		t.Fatal(err)
 	}
 	node.Enode = fmt.Sprintf("enode://%s@127.0.0.1:%s", nodeInfo.ID, p2pPort)
+	node.IpcPath = conf.IPCPath
 
 	return node
 }

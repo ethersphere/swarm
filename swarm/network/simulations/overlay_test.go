@@ -43,6 +43,7 @@ var (
 //It also provides a documentation on the steps needed by frontends
 //to use the simulations
 func TestOverlaySim(t *testing.T) {
+	t.Skip("Test is flaky, see: https://github.com/ethersphere/go-ethereum/issues/592")
 	//start the simulation
 	log.Info("Start simulation backend")
 	//get the simulation networ; needed to subscribe for up events
@@ -88,7 +89,7 @@ func TestOverlaySim(t *testing.T) {
 	trigger := make(chan discover.NodeID)
 
 	//wait for all nodes to be up
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	//start watching node up events...

@@ -80,7 +80,7 @@ type PyramidSplitterParams struct {
 	getter Getter
 }
 
-func NewPyramidSplitterParams(key Address, reader io.Reader, putter Putter, getter Getter, chunkSize int64) *PyramidSplitterParams {
+func NewPyramidSplitterParams(addr Address, reader io.Reader, putter Putter, getter Getter, chunkSize int64) *PyramidSplitterParams {
 	hashSize := putter.RefSize()
 	return &PyramidSplitterParams{
 		SplitterParams: SplitterParams{
@@ -90,7 +90,7 @@ func NewPyramidSplitterParams(key Address, reader io.Reader, putter Putter, gett
 			},
 			reader: reader,
 			putter: putter,
-			key:    key,
+			addr:   addr,
 		},
 		getter: getter,
 	}
@@ -104,8 +104,8 @@ func PyramidSplit(ctx context.Context, reader io.Reader, putter Putter, getter G
 	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, DefaultChunkSize)).Split(ctx)
 }
 
-func PyramidAppend(ctx context.Context, key Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(key, reader, putter, getter, DefaultChunkSize)).Append()
+func PyramidAppend(ctx context.Context, addr Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
+	return NewPyramidSplitter(NewPyramidSplitterParams(addr, reader, putter, getter, DefaultChunkSize)).Append()
 }
 
 // Entry to create a tree node
@@ -165,7 +165,7 @@ func NewPyramidSplitter(params *PyramidSplitterParams) (self *PyramidChunker) {
 	self.chunkSize = self.hashSize * self.branches
 	self.putter = params.putter
 	self.getter = params.getter
-	self.key = params.key
+	self.key = params.addr
 	self.workerCount = 0
 	self.jobC = make(chan *chunkJob, 2*ChunkProcessors)
 	self.wg = &sync.WaitGroup{}
@@ -176,9 +176,9 @@ func NewPyramidSplitter(params *PyramidSplitterParams) (self *PyramidChunker) {
 	return
 }
 
-func (self *PyramidChunker) Join(ctx context.Context, key Address, getter Getter, depth int) LazySectionReader {
+func (self *PyramidChunker) Join(ctx context.Context, addr Address, getter Getter, depth int) LazySectionReader {
 	return &LazyChunkReader{
-		key:       key,
+		addr:      addr,
 		depth:     depth,
 		chunkSize: self.chunkSize,
 		branches:  self.branches,

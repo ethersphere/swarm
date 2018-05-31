@@ -1,6 +1,7 @@
 package pss
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"strconv"
@@ -130,5 +131,12 @@ func testProtocol(t *testing.T) {
 	case cerr := <-lctx.Done():
 		t.Fatalf("test message timed out: %v", cerr)
 	}
-
+	rw := pssprotocols[lnodeinfo.ID].protocol.pubKeyRWPool[rpubkey]
+	pssprotocols[lnodeinfo.ID].protocol.RemovePeer(true, rpubkey)
+	if err := rw.WriteMsg(p2p.Msg{
+		Size:    3,
+		Payload: bytes.NewReader([]byte("foo")),
+	}); err == nil {
+		t.Fatalf("expected error on write")
+	}
 }

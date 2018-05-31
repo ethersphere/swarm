@@ -35,7 +35,6 @@ import (
 
 var (
 	loglevel   = flag.Int("loglevel", 3, "verbosity of logs")
-	putTimeout = 30 * time.Second
 	getTimeout = 30 * time.Second
 )
 

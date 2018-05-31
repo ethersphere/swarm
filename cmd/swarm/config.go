@@ -68,6 +68,7 @@ const (
 	SWARM_ENV_SWAP_API             = "SWARM_SWAP_API"
 	SWARM_ENV_SYNC_DISABLE         = "SWARM_SYNC_DISABLE"
 	SWARM_ENV_SYNC_UPDATE_DELAY    = "SWARM_ENV_SYNC_UPDATE_DELAY"
+	SWARM_ENV_DELIVERY_SKIP_CHECK  = "SWARM_DELIVERY_SKIP_CHECK"
 	SWARM_ENV_ENS_API              = "SWARM_ENS_API"
 	SWARM_ENV_ENS_ADDR             = "SWARM_ENS_ADDR"
 	SWARM_ENV_CORS                 = "SWARM_CORS"
@@ -203,6 +204,10 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.SyncUpdateDelay = d
 	}
 
+	if ctx.GlobalIsSet(SwarmDeliverySkipCheckFlag.Name) {
+		currentConfig.DeliverySkipCheck = true
+	}
+
 	currentConfig.SwapApi = ctx.GlobalString(SwarmSwapAPIFlag.Name)
 	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
@@ -281,6 +286,12 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	if syncdisable := os.Getenv(SWARM_ENV_SYNC_DISABLE); syncdisable != "" {
 		if sync, err := strconv.ParseBool(syncdisable); err != nil {
 			currentConfig.SyncEnabled = !sync
+		}
+	}
+
+	if v := os.Getenv(SWARM_ENV_DELIVERY_SKIP_CHECK); v != "" {
+		if skipCheck, err := strconv.ParseBool(v); err != nil {
+			currentConfig.DeliverySkipCheck = skipCheck
 		}
 	}
 

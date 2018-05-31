@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -50,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 )
 
 var (
@@ -63,15 +63,11 @@ var (
 
 // the swarm stack
 type Swarm struct {
-	config *api.Config  // swarm configuration
-	api    *api.Api     // high level api layer (fs/manifest)
-	dns    api.Resolver // DNS registrar
-	//dbAccess    *network.DbAccess      // access to local chunk db iterator and storage counter
-	//storage storage.ChunkStore // internal access to storage, common interface to cloud storage backends
-	dpa *storage.DPAAPI // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	//depo        network.StorageHandler // remote request handler, interface between bzz protocol and the storage
-	streamer *stream.Registry
-	//cloud       storage.CloudStore // procurement, cloud storage backend (can multi-cloud)
+	config      *api.Config     // swarm configuration
+	api         *api.Api        // high level api layer (fs/manifest)
+	dns         api.Resolver    // DNS registrar
+	dpa         *storage.DPAAPI // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	streamer    *stream.Registry
 	bzz         *network.Bzz       // the logistic manager
 	backend     chequebook.Backend // simple blockchain Backend
 	privateKey  *ecdsa.PrivateKey
@@ -100,13 +96,22 @@ func (self *Swarm) API() *SwarmAPI {
 // implements node.Service
 // If mockStore is not nil, it will be used as the storage for chunk data.
 // MockStore should be used only for testing.
-func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
+func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err error) {
 
-	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroAddress) {
+	if bytes.Equal(common.FromHex(config.PublicKey), storage.ZeroAddr) {
 		return nil, fmt.Errorf("empty public key")
 	}
-	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroAddress) {
+	if bytes.Equal(common.FromHex(config.BzzKey), storage.ZeroAddr) {
 		return nil, fmt.Errorf("empty bzz key")
+	}
+
+	var backend chequebook.Backend
+	if config.SwapApi != "" && config.SwapEnabled {
+		log.Info("connecting to SWAP API", "url", config.SwapApi)
+		backend, err = ethclient.Dial(config.SwapApi)
+		if err != nil {
+			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", config.SwapApi, err)
+		}
 	}
 
 	self = &Swarm{
@@ -116,17 +121,8 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 	log.Debug(fmt.Sprintf("Setting up Swarm service components"))
 
-	kp := network.NewKadParams()
-	to := network.NewKademlia(
-		common.FromHex(config.BzzKey),
-		kp,
-	)
-
 	config.HiveParams.Discovery = true
 
-	// setup cloud storage internal access layer
-	//self.cloud = &storage.Forwarder{}
-	//self.storage = storage.NewNetStore(hash, self.lstore, self.cloud, config.StoreParams)
 	log.Debug(fmt.Sprintf("-> swarm net store shared access layer to Swarm Chunk Store"))
 
 	nodeID, err := discover.HexID(config.NodeID)
@@ -139,21 +135,19 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	}
 
 	bzzconfig := &network.BzzConfig{
+		NetworkID:    config.NetworkId,
 		OverlayAddr:  addr.OAddr,
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
 	}
 
-	// TODO: decide on intervals store file location
 	stateStore, err := state.NewDBStore(filepath.Join(config.Path, "state-store.db"))
 	if err != nil {
 		return
 	}
 
 	// set up high level api
-	//transactOpts := bind.NewKeyedTransactor(self.privateKey)
 	var resolver *api.MultiResolver
-	var ensresolver *ens.ENS
 	if len(config.EnsAPIs) > 0 {
 		opts := []api.MultiResolverOption{}
 		for _, c := range config.EnsAPIs {
@@ -162,7 +156,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 			if err != nil {
 				return nil, err
 			}
-			ensresolver = r.ENS
 			opts = append(opts, api.MultiResolverOptionWithResolver(r, tld))
 
 		}
@@ -175,10 +168,16 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 		return
 	}
 
+	// TODO: NetStore needs delivery and delivery needs NetStore, no good order to instantiate them
 	db := storage.NewNetStore(self.lstore)
+	to := network.NewKademlia(
+		common.FromHex(config.BzzKey),
+		network.NewKadParams(),
+	)
 	delivery := stream.NewDelivery(to, db)
 
 	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{
+		SkipCheck:       config.DeliverySkipCheck,
 		DoSync:          config.SyncEnabled,
 		DoRetrieve:      true,
 		SyncUpdateDelay: config.SyncUpdateDelay,
@@ -186,35 +185,30 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 
 	// set up DPA, the cloud storage local access layer
 	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
-	log.Debug(fmt.Sprintf("-> Local Access to Swarm"))
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
-	log.Debug(fmt.Sprintf("-> Content Store API"))
 
-	if ensresolver == nil {
-		log.Warn("No ENS API specified, resource updates will NOT validate resource update chunks")
-	}
-
-	var resourceHandler *storage.ResourceHandler
-	rhparams := &storage.ResourceHandlerParams{
+	var resourceHandler *mru.Handler
+	rhparams := &mru.HandlerParams{
 		// TODO: config parameter to set limits
-		QueryMaxPeriods: &storage.ResourceLookupParams{
+		QueryMaxPeriods: &mru.LookupParams{
 			Limit: false,
 		},
-		Signer: &storage.GenericResourceSigner{
+		Signer: &mru.GenericSigner{
 			PrivKey: self.privateKey,
 		},
-		EthClient: resolver,
-		EnsClient: ensresolver,
 	}
 	if resolver != nil {
 		resolver.SetNameHash(ens.EnsNode)
+		// Set HeaderGetter and OwnerValidator interfaces to resolver only if it is not nil.
+		rhparams.HeaderGetter = resolver
+		rhparams.OwnerValidator = resolver
 	} else {
 		log.Warn("No ETH API specified, resource updates will use block height approximation")
 		// TODO: blockestimator should use saved values derived from last time ethclient was connected
-		rhparams.EthClient = storage.NewBlockEstimator()
+		rhparams.HeaderGetter = mru.NewBlockEstimator()
 	}
-	resourceHandler, err = storage.NewResourceHandler(rhparams)
+	resourceHandler, err = mru.NewHandler(rhparams)
 	if err != nil {
 		return nil, err
 	}
@@ -233,7 +227,6 @@ func NewSwarm(ctx *node.ServiceContext, backend chequebook.Backend, config *api.
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	config.Pss = config.Pss.WithPrivateKey(self.privateKey)
 	self.ps, err = pss.NewPss(to, config.Pss)
 	if err != nil {
 		return nil, err

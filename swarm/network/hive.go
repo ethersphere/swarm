@@ -44,7 +44,7 @@ type Overlay interface {
 	On(OverlayConn) (depth uint8, changed bool)
 	Off(OverlayConn)
 	// register peer addresses
-	Register([]OverlayAddr) error // used by the
+	Register([]OverlayAddr) error
 	// iterate over connected peers
 	EachConn([]byte, int, func(OverlayConn, int, bool) bool)
 	// iterate over known peers (address records)
@@ -249,7 +249,9 @@ func (h *Hive) savePeers() error {
 			log.Warn(fmt.Sprintf("empty addr: %v", i))
 			return true
 		}
-		peers = append(peers, ToAddr(pa))
+		apa := ToAddr(pa)
+		log.Trace("saving peer", "peer", apa)
+		peers = append(peers, apa)
 		return true
 	})
 	if err := h.Store.Put("peers", peers); err != nil {

@@ -35,10 +35,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
+	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -82,7 +82,11 @@ func initSyncTest() {
 		return addr
 	}
 	//global func to create local store
-	createStoreFunc = createTestLocalStorageForId
+	if *useMockStore {
+		createStoreFunc = createMockStore
+	} else {
+		createStoreFunc = createTestLocalStorageForId
+	}
 	//local stores
 	stores = make(map[discover.NodeID]storage.ChunkStore)
 	//data directories for each node and store
@@ -100,6 +104,9 @@ func initSyncTest() {
 		}
 		return 2
 	}
+	if *useMockStore {
+		createGlobalStore()
+	}
 }
 
 //This test is a syncing test for nodes.
@@ -116,15 +123,17 @@ func TestSyncing(t *testing.T) {
 		log.Info(fmt.Sprintf("Running test with %d chunks and %d nodes...", *chunks, *nodes))
 		testSyncing(t, *chunks, *nodes)
 	} else {
-		chnkCnt := []int{128}
-		nodeCnt := []int{32}
+		var nodeCnt []int
+		var chnkCnt []int
 		//if the `longrunning` flag has been provided
 		//run more test combinations
 		if *longrunning {
-			chnkCnt = append(chnkCnt, 256, 1024)
-			nodeCnt = append(nodeCnt, 64, 128, 256)
+			chnkCnt = []int{1, 8, 32, 256, 1024}
+			nodeCnt = []int{16, 32, 64, 128, 256}
 		} else {
 			//default test
+			chnkCnt = []int{4, 32}
+			nodeCnt = []int{32, 16}
 		}
 		for _, chnk := range chnkCnt {
 			for _, n := range nodeCnt {
@@ -406,7 +415,6 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 		}
 		log.Trace(fmt.Sprintf("Checking node: %s", id))
 		//select the local store for the given node
-		lstore := stores[id]
 		//if there are more than one chunk, test only succeeds if all expected chunks are found
 		allSuccess := true
 
@@ -418,8 +426,21 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			chunk := conf.hashes[ch]
 			log.Trace(fmt.Sprintf("node has chunk: %s:", chunk))
 			//check if the expected chunk is indeed in the localstore
-			if _, err := lstore.Get(chunk); err != nil {
-				log.Debug(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
+			var err error
+			if *useMockStore {
+				if globalStore == nil {
+					return false, fmt.Errorf("Something went wrong; using mockStore enabled but globalStore is nil")
+				}
+				//use the globalStore if the mockStore should be used; in that case,
+				//the complete localStore stack is bypassed for getting the chunk
+				_, err = globalStore.Get(common.BytesToAddress(id.Bytes()), chunk)
+			} else {
+				//use the actual localstore
+				lstore := stores[id]
+				_, err = lstore.Get(chunk)
+			}
+			if err != nil {
+				log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))
 				allSuccess = false
 			} else {
 				log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
@@ -558,17 +579,17 @@ func uploadFileToSingleNodeStore(id discover.NodeID, chunkCount int) ([]storage.
 	lstore := stores[id]
 	size := chunkSize
 	dpa := storage.NewDPA(lstore, storage.NewDPAParams())
-	var rootkeys []storage.Address
+	var rootAddrs []storage.Address
 	for i := 0; i < chunkCount; i++ {
 		rk, wait, err := dpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 		wait()
 		if err != nil {
 			return nil, err
 		}
-		rootkeys = append(rootkeys, (rk))
+		rootAddrs = append(rootAddrs, (rk))
 	}
 
-	return rootkeys, nil
+	return rootAddrs, nil
 }
 
 //initialize a network from a snapshot

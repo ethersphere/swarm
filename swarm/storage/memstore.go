@@ -44,12 +44,12 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	}
 }
 
-func (m *MemStore) Get(key Address) (Chunk, error) {
+func (m *MemStore) Get(addr Address) (Chunk, error) {
 	if m.disabled {
 		return nil, ErrChunkNotFound
 	}
 
-	c, ok := m.cache.Get(string(key))
+	c, ok := m.cache.Get(string(addr))
 	if !ok {
 		return nil, ErrChunkNotFound
 	}

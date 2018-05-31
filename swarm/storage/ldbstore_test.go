@@ -148,7 +148,7 @@ func testDbStoreNotFound(t *testing.T, mock bool) {
 	}
 	defer db.close()
 
-	_, err = db.Get(ZeroAddress)
+	_, err = db.Get(ZeroAddr)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -165,8 +165,8 @@ func testIterator(t *testing.T, mock bool) {
 	var chunkcount int = 32
 	var i int
 	var poc uint
-	chunkkeys := NewKeyCollection(chunkcount)
-	chunkkeys_results := NewKeyCollection(chunkcount)
+	chunkkeys := NewAddressCollection(chunkcount)
+	chunkkeys_results := NewAddressCollection(chunkcount)
 
 	db, err := newTestDbStore(mock, false)
 	if err != nil {
@@ -279,7 +279,6 @@ func BenchmarkMockDbStoreGet_8_5k(b *testing.B) {
 // TestLDBStoreWithoutCollectGarbage tests that we can put a number of random chunks in the LevelDB store, and
 // retrieve them, provided we don't hit the garbage collection
 func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
-	chunkSize := uint64(4096)
 	capacity := 50
 	n := 10
 
@@ -287,7 +286,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	addrs, err := mputRandomChunks(ldb, n, int64(chunkSize))
+	addrs, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -313,7 +312,6 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 // TestLDBStoreCollectGarbage tests that we can put more chunks than LevelDB's capacity, and
 // retrieve only some of them, because garbage collection must have cleared some of them
 func TestLDBStoreCollectGarbage(t *testing.T) {
-	chunkSize := uint64(4096)
 	capacity := 500
 	n := 2000
 
@@ -321,7 +319,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	addrs, err := mputRandomChunks(ldb, n, int64(chunkSize))
+	addrs, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -358,7 +356,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	defer cleanup()
 
 	n := 100
-	chunks, err := mputRandomChunks(ldb, n, int64(chunkSize))
+	chunks, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}

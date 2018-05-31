@@ -85,8 +85,8 @@ func expResponse(content string, mimeType string, status int) *Response {
 
 // func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
 func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
-	key := storage.Address(common.Hex2Bytes(bzzhash))
-	reader, mimeType, status, _, err := api.Get(key, path)
+	addr := storage.Address(common.Hex2Bytes(bzzhash))
+	reader, mimeType, status, _, err := api.Get(addr, path)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -111,12 +111,12 @@ func TestApiPut(t *testing.T) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
-		key, wait, err := api.Put(content, exp.MimeType, toEncrypt)
+		addr, wait, err := api.Put(content, exp.MimeType, toEncrypt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
 		wait()
-		resp := testGet(t, api, key.Hex(), "")
+		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
 	})
 }

@@ -36,7 +36,7 @@ func TestParseURI(t *testing.T) {
 		expectDeprecatedRaw       bool
 		expectDeprecatedImmutable bool
 		expectValidKey            bool
-		expectKey                 storage.Address
+		expectAddr                storage.Address
 	}
 	tests := []test{
 		{
@@ -131,7 +131,7 @@ func TestParseURI(t *testing.T) {
 			},
 			expectValidKey: true,
 			expectRaw:      true,
-			expectKey: storage.Address{67, 120, 209, 156, 38, 89, 15, 26,
+			expectAddr: storage.Address{67, 120, 209, 156, 38, 89, 15, 26,
 				129, 142, 215, 214, 166, 44, 56, 9,
 				225, 73, 176, 153, 156, 171, 92, 229,
 				242, 98, 51, 179, 180, 35, 191, 140,
@@ -165,11 +165,11 @@ func TestParseURI(t *testing.T) {
 			t.Fatalf("expected %s hash to be %t, got %t", x.uri, x.expectHash, actual.Hash())
 		}
 		if x.expectValidKey {
-			if actual.Key() == nil {
+			if actual.Address() == nil {
 				t.Fatalf("expected %s to return a valid key, got nil", x.uri)
 			} else {
-				if !bytes.Equal(x.expectKey, actual.Key()) {
-					t.Fatalf("expected %s to be decoded to %v", x.expectURI.Addr, x.expectKey)
+				if !bytes.Equal(x.expectAddr, actual.Address()) {
+					t.Fatalf("expected %s to be decoded to %v", x.expectURI.Addr, x.expectAddr)
 				}
 			}
 		}

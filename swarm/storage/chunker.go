@@ -78,7 +78,7 @@ type SplitterParams struct {
 	ChunkerParams
 	reader io.Reader
 	putter Putter
-	key    Address
+	addr   Address
 }
 
 type TreeSplitterParams struct {
@@ -88,7 +88,7 @@ type TreeSplitterParams struct {
 
 type JoinerParams struct {
 	ChunkerParams
-	key    Address
+	addr   Address
 	getter Getter
 	// TODO: there is a bug, so depth can only be 0 today, see: https://github.com/ethersphere/go-ethereum/issues/344
 	depth int
@@ -100,7 +100,7 @@ type TreeChunker struct {
 	dataSize int64
 	data     io.Reader
 	// calculated
-	key         Address
+	addr        Address
 	depth       int
 	hashSize    int64        // self.hashFunc.New().Size()
 	chunkSize   int64        // hashSize* branches
@@ -126,8 +126,8 @@ type TreeChunker struct {
 	The chunks are not meant to be validated by the chunker when joining. This
 	is because it is left to the DPA to decide which sources are trusted.
 */
-func TreeJoin(key Address, getter Getter, depth int) *LazyChunkReader {
-	return NewTreeJoiner(NewJoinerParams(key, getter, depth, DefaultChunkSize)).Join()
+func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
+	return NewTreeJoiner(NewJoinerParams(addr, getter, depth, DefaultChunkSize)).Join()
 }
 
 /*
@@ -138,14 +138,14 @@ func TreeSplit(ctx context.Context, data io.Reader, size int64, putter Putter) (
 	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultChunkSize)).Split(ctx)
 }
 
-func NewJoinerParams(key Address, getter Getter, depth int, chunkSize int64) *JoinerParams {
-	hashSize := int64(len(key))
+func NewJoinerParams(addr Address, getter Getter, depth int, chunkSize int64) *JoinerParams {
+	hashSize := int64(len(addr))
 	return &JoinerParams{
 		ChunkerParams: ChunkerParams{
 			chunkSize: chunkSize,
 			hashSize:  hashSize,
 		},
-		key:    key,
+		addr:   addr,
 		getter: getter,
 		depth:  depth,
 	}
@@ -155,7 +155,7 @@ func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	self := &TreeChunker{}
 	self.hashSize = params.hashSize
 	self.branches = params.chunkSize / self.hashSize
-	self.key = params.key
+	self.addr = params.addr
 	self.getter = params.getter
 	self.depth = params.depth
 	self.chunkSize = self.hashSize * self.branches
@@ -173,7 +173,7 @@ func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches
 	return &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
-				chunkSize: chunkSize,
+				chunkSize: DefaultChunkSize,
 				hashSize:  hashSize,
 			},
 			reader: reader,
@@ -189,7 +189,7 @@ func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
 	self.dataSize = params.size
 	self.hashSize = params.hashSize
 	self.branches = params.chunkSize / self.hashSize
-	self.key = params.key
+	self.addr = params.addr
 	self.chunkSize = self.hashSize * self.branches
 	self.putter = params.putter
 	self.workerCount = 0
@@ -269,7 +269,7 @@ func (self *TreeChunker) Split(ctx context.Context) (k Address, wait func(contex
 	return key, self.putter.Wait, nil
 }
 
-func (self *TreeChunker) split(depth int, treeSize int64, key Address, size int64, parentWg *sync.WaitGroup) {
+func (self *TreeChunker) split(depth int, treeSize int64, addr Address, size int64, parentWg *sync.WaitGroup) {
 
 	//
 
@@ -292,7 +292,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Address, size int6
 			}
 		}
 		select {
-		case self.jobC <- &hashJob{key, chunkData, size, parentWg}:
+		case self.jobC <- &hashJob{addr, chunkData, size, parentWg}:
 		case <-self.quitC:
 		}
 		return
@@ -335,7 +335,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Address, size int6
 
 	}
 	select {
-	case self.jobC <- &hashJob{key, chunk, size, parentWg}:
+	case self.jobC <- &hashJob{addr, chunk, size, parentWg}:
 	case <-self.quitC:
 	}
 }
@@ -372,7 +372,7 @@ func (self *TreeChunker) Append() (Address, func(), error) {
 
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
-	key       Address // root hash
+	addr      Address // root address
 	chunkData ChunkData
 	off       int64 // offset
 	chunkSize int64 // inherit from chunker
@@ -387,7 +387,7 @@ type LazyChunkReader struct {
 
 func (self *TreeChunker) Join() *LazyChunkReader {
 	return &LazyChunkReader{
-		key:       self.key,
+		addr:      self.addr,
 		chunkSize: self.chunkSize,
 		branches:  self.branches,
 		hashSize:  self.hashSize,
@@ -400,9 +400,9 @@ func (self *TreeChunker) Join() *LazyChunkReader {
 func (self *LazyChunkReader) Size() (n int64, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
 
-	log.Debug("lazychunkreader.size", "key", self.key)
+	log.Debug("lazychunkreader.size", "key", self.addr)
 	if self.chunkData == nil {
-		chunkData, err := self.getter.Get(self.ctx, Reference(self.key))
+		chunkData, err := self.getter.Get(self.ctx, Reference(self.addr))
 		if err != nil {
 			return 0, err
 		}
@@ -417,7 +417,7 @@ func (self *LazyChunkReader) Size() (n int64, err error) {
 		// }
 		self.chunkData = chunkData
 		s := self.chunkData.Size()
-		log.Debug("lazychunkreader.size", "key", self.key, "size", s)
+		log.Debug("lazychunkreader.size", "key", self.addr, "size", s)
 		if s < 0 {
 			panic("corrupt size")
 			return 0, errors.New("corrupt size")
@@ -425,7 +425,7 @@ func (self *LazyChunkReader) Size() (n int64, err error) {
 		return int64(s), nil
 	}
 	s := self.chunkData.Size()
-	log.Debug("lazychunkreader.size", "key", self.key, "size", s)
+	log.Debug("lazychunkreader.size", "key", self.addr, "size", s)
 
 	return int64(s), nil
 }
@@ -551,7 +551,7 @@ func (self *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, tr
 
 // Read keeps a cursor so cannot be called simulateously, see ReadAt
 func (self *LazyChunkReader) Read(b []byte) (read int, err error) {
-	log.Debug("lazychunkreader.read", "key", self.key)
+	log.Debug("lazychunkreader.read", "key", self.addr)
 	metrics.GetOrRegisterCounter("lazychunkreader.read", nil).Inc(1)
 
 	read, err = self.ReadAt(b, self.off)
@@ -571,7 +571,7 @@ var errWhence = errors.New("Seek: invalid whence")
 var errOffset = errors.New("Seek: invalid offset")
 
 func (s *LazyChunkReader) Seek(offset int64, whence int) (int64, error) {
-	log.Debug("lazychunkreader.seek", "key", s.key, "offset", offset)
+	log.Debug("lazychunkreader.seek", "key", s.addr, "offset", offset)
 	switch whence {
 	default:
 		return 0, errWhence

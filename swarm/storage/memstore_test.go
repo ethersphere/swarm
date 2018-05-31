@@ -68,7 +68,7 @@ func TestMemStoreNotFound(t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
 
-	_, err := m.Get(ZeroAddress)
+	_, err := m.Get(ZeroAddr)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
