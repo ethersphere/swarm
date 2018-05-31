@@ -15,9 +15,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
-	"github.com/ethereum/go-ethereum/pot"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
@@ -110,9 +110,9 @@ type Pss struct {
 
 	// keys and peers
 	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
-	pubKeyPoolMu               sync.Mutex
+	pubKeyPoolMu               sync.RWMutex
 	symKeyPool                 map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
-	symKeyPoolMu               sync.Mutex
+	symKeyPoolMu               sync.RWMutex
 	symKeyDecryptCache         []*string // fast lookup of symkeys recently used for decryption; last used is on top of stack
 	symKeyDecryptCacheCursor   int       // modular cursor pointing to last used, wraps on symKeyDecryptCache array
 	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
@@ -518,6 +518,29 @@ func (self *Pss) GetSymmetricKey(symkeyid string) ([]byte, error) {
 	return symkey, nil
 }
 
+// Returns all recorded topic and address combination for a specific public key
+func (self *Pss) GetPublickeyPeers(keyid string) (topic []Topic, address []PssAddress, err error) {
+	self.pubKeyPoolMu.RLock()
+	defer self.pubKeyPoolMu.RUnlock()
+	for t, p := range self.pubKeyPool[keyid] {
+		topic = append(topic, t)
+		address = append(address, *p.address)
+	}
+
+	return topic, address, nil
+}
+
+func (self *Pss) getPeerAddress(keyid string, topic Topic) (PssAddress, error) {
+	self.pubKeyPoolMu.RLock()
+	defer self.pubKeyPoolMu.RUnlock()
+	if p, ok := self.pubKeyPool[keyid]; ok {
+		if t, ok := p[topic]; ok {
+			return *t.address, nil
+		}
+	}
+	return nil, fmt.Errorf("peer with pubkey %s, topic %x not found", keyid, topic)
+}
+
 // Attempt to decrypt, validate and unpack a
 // symmetrically encrypted message
 // If successful, returns the unpacked whisper ReceivedMessage struct
@@ -654,9 +677,9 @@ func (self *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 	psp, ok := self.symKeyPool[symkeyid][topic]
 	self.symKeyPoolMu.Unlock()
 	if !ok {
-		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic, symkeyid)
+		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic.String(), symkeyid)
 	} else if psp.address == nil {
-		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic, symkeyid)
+		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic.String(), symkeyid)
 	}
 	err = self.send(*psp.address, topic, msg, false, symkey)
 	return err
@@ -674,9 +697,9 @@ func (self *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	psp, ok := self.pubKeyPool[pubkeyid][topic]
 	self.pubKeyPoolMu.Unlock()
 	if !ok {
-		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic, pubkeyid)
+		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic.String(), pubkeyid)
 	} else if psp.address == nil {
-		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic, pubkeyid)
+		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic.String(), pubkeyid)
 	}
 	go func() {
 		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))

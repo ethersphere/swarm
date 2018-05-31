@@ -47,7 +47,7 @@ type Config struct {
 	*storage.DPAParams
 	*storage.LocalStoreParams
 	*network.HiveParams
-	Swap *swap.SwapParams
+	Swap *swap.LocalProfile
 	Pss  *pss.PssParams
 	//*network.SyncParams
 	Contract          common.Address

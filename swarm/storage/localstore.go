@@ -99,7 +99,7 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 func (self *LocalStore) Put(chunk *Chunk) {
 	valid := true
 	for _, v := range self.Validators {
-		if valid = v.Validate(chunk.Key, chunk.SData); valid {
+		if valid = v.Validate(chunk.Addr, chunk.SData); valid {
 			break
 		}
 	}
@@ -109,13 +109,13 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		return
 	}
 
-	log.Trace("localstore.put", "key", chunk.Key)
+	log.Trace("localstore.put", "key", chunk.Addr)
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 
-	memChunk, err := self.memStore.Get(chunk.Key)
+	memChunk, err := self.memStore.Get(chunk.Addr)
 	switch err {
 	case nil:
 		if memChunk.ReqC == nil {
@@ -136,7 +136,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 
 	self.DbStore.Put(chunk)
 
-	newc := NewChunk(chunk.Key, nil)
+	newc := NewChunk(chunk.Addr, nil)
 	newc.SData = chunk.SData
 	newc.Size = chunk.Size
 	//newc.dbStored = chunk.dbStored
@@ -156,15 +156,15 @@ func (self *LocalStore) Put(chunk *Chunk) {
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (self *LocalStore) Get(key Key) (chunk *Chunk, err error) {
+func (self *LocalStore) Get(addr Address) (chunk *Chunk, err error) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	return self.get(key)
+	return self.get(addr)
 }
 
-func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
-	chunk, err = self.memStore.Get(key)
+func (self *LocalStore) get(addr Address) (chunk *Chunk, err error) {
+	chunk, err = self.memStore.Get(addr)
 	if err == nil {
 		if chunk.ReqC != nil {
 			select {
@@ -178,7 +178,7 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 		return
 	}
 	metrics.GetOrRegisterCounter("localstore.get.cachemiss", nil).Inc(1)
-	chunk, err = self.DbStore.Get(key)
+	chunk, err = self.DbStore.Get(addr)
 	if err != nil {
 		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
 		return
@@ -189,28 +189,28 @@ func (self *LocalStore) get(key Key) (chunk *Chunk, err error) {
 }
 
 // retrieve logic common for local and network chunk retrieval requests
-func (self *LocalStore) GetOrCreateRequest(key Key) (chunk *Chunk, created bool) {
+func (self *LocalStore) GetOrCreateRequest(addr Address) (chunk *Chunk, created bool) {
 	metrics.GetOrRegisterCounter("localstore.getorcreaterequest", nil).Inc(1)
 
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
 	var err error
-	chunk, err = self.get(key)
+	chunk, err = self.get(addr)
 	if err == nil && chunk.GetErrored() == nil {
 		metrics.GetOrRegisterCounter("localstore.getorcreaterequest.hit", nil).Inc(1)
-		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", key))
+		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", addr))
 		return chunk, false
 	}
 	if err == ErrFetching && chunk.GetErrored() == nil {
 		metrics.GetOrRegisterCounter("localstore.getorcreaterequest.errfetching", nil).Inc(1)
-		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", key, chunk.ReqC))
+		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v hit on an existing request %v", addr, chunk.ReqC))
 		return chunk, false
 	}
 	// no data and no request status
 	metrics.GetOrRegisterCounter("localstore.getorcreaterequest.miss", nil).Inc(1)
-	log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", key))
-	chunk = NewChunk(key, make(chan bool))
+	log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", addr))
+	chunk = NewChunk(addr, make(chan bool))
 	self.memStore.Put(chunk)
 	return chunk, true
 }

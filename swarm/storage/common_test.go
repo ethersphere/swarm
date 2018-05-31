@@ -55,10 +55,10 @@ func brokenLimitReader(data io.Reader, size int, errAt int) *brokenLimitedReader
 	}
 }
 
-func mputChunks(store ChunkStore, processors int, n int, chunksize int64) (hs []Key) {
+func mputChunks(store ChunkStore, processors int, n int, chunksize int64) (hs []Address) {
 	return mput(store, processors, n, GenerateRandomChunk)
 }
-func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs []Key) {
+func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs []Address) {
 	wg := sync.WaitGroup{}
 	wg.Add(processors)
 	c := make(chan *Chunk)
@@ -88,7 +88,7 @@ func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs [
 	}
 	for i := 0; i < n; i++ {
 		chunk := fa(int64(i))
-		hs = append(hs, chunk.Key)
+		hs = append(hs, chunk.Addr)
 		c <- chunk
 	}
 	close(c)
@@ -96,13 +96,13 @@ func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs [
 	return hs
 }
 
-func mget(store ChunkStore, hs []Key, f func(h Key, chunk *Chunk) error) error {
+func mget(store ChunkStore, hs []Address, f func(h Address, chunk *Chunk) error) error {
 	wg := sync.WaitGroup{}
 	wg.Add(len(hs))
 	errc := make(chan error)
 
 	for _, k := range hs {
-		go func(h Key) {
+		go func(h Address) {
 			defer wg.Done()
 			chunk, err := store.Get(h)
 			if err != nil {
@@ -162,8 +162,8 @@ func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *te
 
 func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
 	hs := mputChunks(m, processors, n, chunksize)
-	f := func(h Key, chunk *Chunk) error {
-		if !bytes.Equal(h, chunk.Key) {
+	f := func(h Address, chunk *Chunk) error {
+		if !bytes.Equal(h, chunk.Addr) {
 			return fmt.Errorf("key does not match retrieved chunk Key")
 		}
 		hasher := MakeHashFunc(DefaultHash)()

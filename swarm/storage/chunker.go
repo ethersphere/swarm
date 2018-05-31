@@ -78,7 +78,7 @@ type SplitterParams struct {
 	ChunkerParams
 	reader io.Reader
 	putter Putter
-	key    Key
+	addr   Address
 }
 
 type TreeSplitterParams struct {
@@ -88,7 +88,7 @@ type TreeSplitterParams struct {
 
 type JoinerParams struct {
 	ChunkerParams
-	key    Key
+	addr   Address
 	getter Getter
 	// TODO: there is a bug, so depth can only be 0 today, see: https://github.com/ethersphere/go-ethereum/issues/344
 	depth int
@@ -100,7 +100,7 @@ type TreeChunker struct {
 	dataSize int64
 	data     io.Reader
 	// calculated
-	key         Key
+	addr        Address
 	depth       int
 	hashSize    int64        // self.hashFunc.New().Size()
 	chunkSize   int64        // hashSize* branches
@@ -126,26 +126,26 @@ type TreeChunker struct {
 	The chunks are not meant to be validated by the chunker when joining. This
 	is because it is left to the DPA to decide which sources are trusted.
 */
-func TreeJoin(key Key, getter Getter, depth int) *LazyChunkReader {
-	return NewTreeJoiner(NewJoinerParams(key, getter, depth, DefaultChunkSize)).Join()
+func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
+	return NewTreeJoiner(NewJoinerParams(addr, getter, depth, DefaultChunkSize)).Join()
 }
 
 /*
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func TreeSplit(data io.Reader, size int64, putter Putter) (k Key, wait func(), err error) {
+func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(), err error) {
 	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultChunkSize)).Split()
 }
 
-func NewJoinerParams(key Key, getter Getter, depth int, chunkSize int64) *JoinerParams {
-	hashSize := int64(len(key))
+func NewJoinerParams(addr Address, getter Getter, depth int, chunkSize int64) *JoinerParams {
+	hashSize := int64(len(addr))
 	return &JoinerParams{
 		ChunkerParams: ChunkerParams{
 			chunkSize: chunkSize,
 			hashSize:  hashSize,
 		},
-		key:    key,
+		addr:   addr,
 		getter: getter,
 		depth:  depth,
 	}
@@ -155,7 +155,7 @@ func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	self := &TreeChunker{}
 	self.hashSize = params.hashSize
 	self.branches = params.chunkSize / self.hashSize
-	self.key = params.key
+	self.addr = params.addr
 	self.getter = params.getter
 	self.depth = params.depth
 	self.chunkSize = self.hashSize * self.branches
@@ -173,7 +173,7 @@ func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches
 	return &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
-				chunkSize: chunkSize,
+				chunkSize: DefaultChunkSize,
 				hashSize:  hashSize,
 			},
 			reader: reader,
@@ -189,7 +189,7 @@ func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
 	self.dataSize = params.size
 	self.hashSize = params.hashSize
 	self.branches = params.chunkSize / self.hashSize
-	self.key = params.key
+	self.addr = params.addr
 	self.chunkSize = self.hashSize * self.branches
 	self.putter = params.putter
 	self.workerCount = 0
@@ -203,11 +203,11 @@ func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
 
 // String() for pretty printing
 func (self *Chunk) String() string {
-	return fmt.Sprintf("Key: %v TreeSize: %v Chunksize: %v", self.Key.Log(), self.Size, len(self.SData))
+	return fmt.Sprintf("Key: %v TreeSize: %v Chunksize: %v", self.Addr.Log(), self.Size, len(self.SData))
 }
 
 type hashJob struct {
-	key      Key
+	key      Address
 	chunk    []byte
 	size     int64
 	parentWg *sync.WaitGroup
@@ -231,7 +231,7 @@ func (self *TreeChunker) decrementWorkerCount() {
 	self.workerCount -= 1
 }
 
-func (self *TreeChunker) Split() (k Key, wait func(), err error) {
+func (self *TreeChunker) Split() (k Address, wait func(), err error) {
 	if self.chunkSize <= 0 {
 		panic("chunker must be initialised")
 	}
@@ -274,7 +274,7 @@ func (self *TreeChunker) Split() (k Key, wait func(), err error) {
 	return key, self.putter.Wait, nil
 }
 
-func (self *TreeChunker) split(depth int, treeSize int64, key Key, size int64, parentWg *sync.WaitGroup) {
+func (self *TreeChunker) split(depth int, treeSize int64, addr Address, size int64, parentWg *sync.WaitGroup) {
 
 	//
 
@@ -297,7 +297,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, size int64, p
 			}
 		}
 		select {
-		case self.jobC <- &hashJob{key, chunkData, size, parentWg}:
+		case self.jobC <- &hashJob{addr, chunkData, size, parentWg}:
 		case <-self.quitC:
 		}
 		return
@@ -340,7 +340,7 @@ func (self *TreeChunker) split(depth int, treeSize int64, key Key, size int64, p
 
 	}
 	select {
-	case self.jobC <- &hashJob{key, chunk, size, parentWg}:
+	case self.jobC <- &hashJob{addr, chunk, size, parentWg}:
 	case <-self.quitC:
 	}
 }
@@ -371,13 +371,13 @@ func (self *TreeChunker) runWorker() {
 	}()
 }
 
-func (self *TreeChunker) Append() (Key, func(), error) {
+func (self *TreeChunker) Append() (Address, func(), error) {
 	return nil, nil, errAppendOppNotSuported
 }
 
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
-	key       Key // root key
+	key       Address // root key
 	chunkData ChunkData
 	off       int64 // offset
 	chunkSize int64 // inherit from chunker
@@ -389,7 +389,7 @@ type LazyChunkReader struct {
 
 func (self *TreeChunker) Join() *LazyChunkReader {
 	return &LazyChunkReader{
-		key:       self.key,
+		key:       self.addr,
 		chunkSize: self.chunkSize,
 		branches:  self.branches,
 		hashSize:  self.hashSize,
