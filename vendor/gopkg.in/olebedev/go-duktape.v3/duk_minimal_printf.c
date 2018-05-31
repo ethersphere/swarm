@@ -7,6 +7,10 @@
 #include <stddef.h>  /* size_t */
 #include <stdint.h>  /* SIZE_MAX */
 
+#ifndef SIZE_MAX
+#define SIZE_MAX (1024*1024)
+#endif
+
 /* Write character with bound checking.  Offset 'off' is updated regardless
  * of whether an actual write is made.  This is necessary to satisfy snprintf()
  * return value semantics.
