@@ -261,7 +261,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			bzzconfig.Path = rawStack.DataDir()
 			bzzconfig.Init(bzzkey)
 
-			svc, err := swarm.NewSwarm(ctx, nil, bzzconfig, nil)
+			svc, err := swarm.NewSwarm(bzzconfig, nil)
 			resultNode.Ps = &Pss{ps: *svc.Ps}
 			if err != nil {
 				log.Error("swarm svc", "err", err)
