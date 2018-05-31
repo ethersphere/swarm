@@ -334,7 +334,7 @@ func (self *Pss) handlePssMsg(msg interface{}) error {
 		return nil
 	}
 	if self.checkFwdCache(pssmsg) {
-		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %x", self.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+		log.Trace(fmt.Sprintf("pss relay block-cache match (process): FROM %x TO %s", self.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
 		return nil
 	}
 	self.addFwdCache(pssmsg)
@@ -790,7 +790,7 @@ func (self *Pss) forward(msg *PssMsg) error {
 			log.Trace(fmt.Sprintf("Pss keep forwarding: Partial address + full partial match"))
 			return true
 		} else if isproxbin {
-			log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", common.ToHex(op.Address())))
+			log.Trace(fmt.Sprintf("%s is in proxbin, keep forwarding", common.ToHex(op.Address())))
 			return true
 		}
 		// at this point we stop forwarding, and the state is as follows:
