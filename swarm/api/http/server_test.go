@@ -386,7 +386,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
 		var wait func()
-		addr[i], wait, err = srv.Dpa.Store(reader[i], int64(len(mf)), encrypted)
+		addr[i], wait, err = srv.FileStore.Store(reader[i], int64(len(mf)), encrypted)
 		for j := i + 1; j < len(testmanifest); j++ {
 			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), addr[i].Hex(), -1)
 		}
