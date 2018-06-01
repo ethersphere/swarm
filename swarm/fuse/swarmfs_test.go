@@ -87,8 +87,6 @@ func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[strin
 }
 
 func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash string, mountDir string) *SwarmFS {
-	os.RemoveAll(mountDir)
-	os.MkdirAll(mountDir, 0777)
 	swarmfs := NewSwarmFS(api)
 	_, err := swarmfs.Mount(bzzHash, mountDir)
 	if isFUSEUnsupportedError(err) {
@@ -226,10 +224,22 @@ func (ta *testAPI) mountListAndUnmountNonEncrypted(t *testing.T) {
 
 func (ta *testAPI) mountListAndUnmount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "fuse-source")
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "fuse-dest")
-	defer os.RemoveAll(testUploadDir)
-	defer os.RemoveAll(testMountDir)
+	testDir, err := ioutil.TempDir(os.TempDir(), "mountListAndUnmount")
+	if err != nil {
+		t.Fatalf("Couldn't create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
+	testUploadDir := filepath.Join(testDir, "fuse-source")
+	err = os.MkdirAll(testUploadDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir: %v", err)
+	}
+
+	testMountDir := filepath.Join(testDir, "fuse-dest")
+	err = os.MkdirAll(testMountDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir: %v", err)
+	}
 
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	files["2.txt"] = fileInfo{0711, 333, 444, getRandomBytes(10)}
@@ -256,7 +266,7 @@ func (ta *testAPI) mountListAndUnmount(t *testing.T, toEncrypt bool) {
 	log.Info("Mounted swarm fs")
 
 	// Check unmount
-	_, err := swarmfs.Unmount(testMountDir)
+	_, err = swarmfs.Unmount(testMountDir)
 	if err != nil {
 		t.Fatalf("could not unmount  %v", bzzHash)
 	}
@@ -282,75 +292,105 @@ func (ta *testAPI) maxMountsNonEncrypted(t *testing.T) {
 func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
-	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "max-upload1")
-	defer os.RemoveAll(uploadDir1)
+	testDir, err := ioutil.TempDir(os.TempDir(), "runMaxMounts")
+	if err != nil {
+		t.Fatalf("Couldn't create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
 
-	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1, toEncrypt)
+	testUploadDir := filepath.Join(testDir, "max-upload1")
+	err = os.MkdirAll(testUploadDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir: %v", err)
+	}
+	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir1")
-	mount1, _ := ioutil.TempDir(os.TempDir(), "max-mount1")
-	defer os.RemoveAll(mount1)
-	swarmfs1 := mountDir(t, ta.api, files, bzzHash1, mount1)
+	testMountDir := filepath.Join(testDir, "max-mount1")
+	err = os.MkdirAll(testMountDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir: %v", err)
+	}
+	swarmfs1 := mountDir(t, ta.api, files, bzzHash1, testMountDir)
 	defer swarmfs1.Stop()
 
+	testUploadDir2 := filepath.Join(testDir, "max-upload2")
+	err = os.MkdirAll(testUploadDir2, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir 2: %v", err)
+	}
 	files["2.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
-	uploadDir2, _ := ioutil.TempDir(os.TempDir(), "max-upload2")
-	defer os.RemoveAll(uploadDir2)
-
-	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2, toEncrypt)
+	testMountDir2 := filepath.Join(testDir, "max-mount2")
+	err = os.MkdirAll(testMountDir2, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 2: %v", err)
+	}
+	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir2, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir2")
-	mount2, _ := ioutil.TempDir(os.TempDir(), "max-mount2")
-	defer os.RemoveAll(mount2)
+	_ = mountDir(t, ta.api, files, bzzHash2, testMountDir2)
 
-	swarmfs2 := mountDir(t, ta.api, files, bzzHash2, mount2)
-	defer swarmfs2.Stop()
-
+	testUploadDir3 := filepath.Join(testDir, "max-upload3")
+	err = os.MkdirAll(testUploadDir3, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir 3: %v", err)
+	}
 	files["3.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
-	uploadDir3, _ := ioutil.TempDir(os.TempDir(), "max-upload3")
-	defer os.RemoveAll(uploadDir3)
-
-	bzzHash3 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir3, toEncrypt)
+	testMountDir3 := filepath.Join(testDir, "max-mount3")
+	err = os.MkdirAll(testMountDir3, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 3: %v", err)
+	}
+	bzzHash3 := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir3, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir3")
-	mount3, _ := ioutil.TempDir(os.TempDir(), "max-mount3")
-	defer os.RemoveAll(mount3)
-	swarmfs3 := mountDir(t, ta.api, files, bzzHash3, mount3)
-	defer swarmfs3.Stop()
+	_ = mountDir(t, ta.api, files, bzzHash3, testMountDir3)
 
+	testUploadDir4 := filepath.Join(testDir, "max-upload4")
+	err = os.MkdirAll(testUploadDir4, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir 4: %v", err)
+	}
 	files["4.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
-	uploadDir4, _ := ioutil.TempDir(os.TempDir(), "max-upload4")
-	defer os.RemoveAll(uploadDir4)
-	bzzHash4 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir4, toEncrypt)
+	testMountDir4 := filepath.Join(testDir, "max-mount4")
+	err = os.MkdirAll(testMountDir4, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 4: %v", err)
+	}
+	bzzHash4 := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir4, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir4")
-	mount4, _ := ioutil.TempDir(os.TempDir(), "max-mount4")
-	defer os.RemoveAll(mount4)
+	_ = mountDir(t, ta.api, files, bzzHash4, testMountDir4)
 
-	swarmfs4 := mountDir(t, ta.api, files, bzzHash4, mount4)
-	defer swarmfs4.Stop()
-
+	testUploadDir5 := filepath.Join(testDir, "max-upload5")
+	err = os.MkdirAll(testUploadDir5, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir 5: %v", err)
+	}
 	files["5.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
-	uploadDir5, _ := ioutil.TempDir(os.TempDir(), "max-upload5")
-	defer os.RemoveAll(uploadDir5)
-	bzzHash5 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir5, toEncrypt)
+	testMountDir5 := filepath.Join(testDir, "max-mount5")
+	err = os.MkdirAll(testMountDir5, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 5: %v", err)
+	}
+	bzzHash5 := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir5, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir5")
-	mount5, _ := ioutil.TempDir(os.TempDir(), "max-mount5")
-	defer os.RemoveAll(mount5)
-	swarmfs5 := mountDir(t, ta.api, files, bzzHash5, mount5)
-	defer swarmfs5.Stop()
+	_ = mountDir(t, ta.api, files, bzzHash5, testMountDir5)
 
+	testUploadDir6 := filepath.Join(testDir, "max-upload6")
+	err = os.MkdirAll(testUploadDir6, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir 6: %v", err)
+	}
 	files["6.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
-	uploadDir6, _ := ioutil.TempDir(os.TempDir(), "max-upload6")
-	defer os.RemoveAll(uploadDir6)
-	bzzHash6 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir6, toEncrypt)
+	testMountDir6 := filepath.Join(testDir, "max-mount6")
+	err = os.MkdirAll(testMountDir6, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 5: %v", err)
+	}
+	bzzHash6 := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir6, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir6")
-	mount6, _ := ioutil.TempDir(os.TempDir(), "max-mount6")
-
-	os.RemoveAll(mount6)
-	os.MkdirAll(mount6, 0777)
-	defer os.RemoveAll(mount6)
-	_, err := swarmfs.Mount(bzzHash6, mount6)
+	_, err = swarmfs.Mount(bzzHash6, testMountDir6)
 	if err == nil {
 		t.Fatalf("Error: Going beyond max mounts  %v", bzzHash6)
 	}
-	log.Info("Final mount successful")
+	log.Info("Maximum mount reached, additional mount failed. Correct.")
 }
 
 func (ta *testAPI) remountEncrypted(t *testing.T) {
@@ -367,22 +407,41 @@ func (ta *testAPI) remountNonEncrypted(t *testing.T) {
 func (ta *testAPI) remount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
-	uploadDir1, _ := ioutil.TempDir(os.TempDir(), "re-upload1")
-	defer os.RemoveAll(uploadDir1)
-	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir1, toEncrypt)
+
+	testDir, err := ioutil.TempDir(os.TempDir(), "remount")
+	if err != nil {
+		t.Fatalf("Couldn't create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
+
+	testUploadDir := filepath.Join(testDir, "remount-upload1")
+	err = os.MkdirAll(testUploadDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir: %v", err)
+	}
+	testMountDir := filepath.Join(testDir, "remount-mount1")
+	err = os.MkdirAll(testMountDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 2: %v", err)
+	}
+	bzzHash1 := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir1")
-	testMountDir1, _ := ioutil.TempDir(os.TempDir(), "re-mount1")
-	defer os.RemoveAll(testMountDir1)
-	swarmfs := mountDir(t, ta.api, files, bzzHash1, testMountDir1)
+	swarmfs := mountDir(t, ta.api, files, bzzHash1, testMountDir)
 	defer swarmfs.Stop()
 
-	uploadDir2, _ := ioutil.TempDir(os.TempDir(), "re-upload2")
-	defer os.RemoveAll(uploadDir2)
+	uploadDir2 := filepath.Join(testDir, "remount-upload2")
+	err = os.MkdirAll(uploadDir2, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir: %v", err)
+	}
+	testMountDir2 := filepath.Join(testDir, "remount-mount2")
+	err = os.MkdirAll(testMountDir2, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 2: %v", err)
+	}
 	bzzHash2 := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir2, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir2")
-	testMountDir2, _ := ioutil.TempDir(os.TempDir(), "re-mount2")
-	defer os.RemoveAll(testMountDir2)
-	_, err := swarmfs.Mount(bzzHash1, testMountDir2)
+	_, err = swarmfs.Mount(bzzHash1, testMountDir2)
 	if err != nil {
 		t.Fatalf("Error mounting hash  %v", bzzHash1)
 	}
@@ -390,14 +449,14 @@ func (ta *testAPI) remount(t *testing.T, toEncrypt bool) {
 	log.Info("Remount hash1 successful")
 
 	// mount a different hash in already mounted point
-	_, err = swarmfs.Mount(bzzHash2, testMountDir1)
+	_, err = swarmfs.Mount(bzzHash2, testMountDir)
 	if err == nil {
 		t.Fatalf("Error mounting hash  %v", bzzHash2)
 	}
-	log.Info("Remount hash2 successful")
+	log.Info("Mount on existing mount point failed. Correct.")
 
 	// mount nonexistent hash
-	_, err = swarmfs.Mount("0xfea11223344", testMountDir1)
+	_, err = swarmfs.Mount("0xfea11223344", testMountDir)
 	if err == nil {
 		t.Fatalf("Error mounting hash  %v", bzzHash2)
 	}
@@ -418,21 +477,31 @@ func (ta *testAPI) unmountNonEncrypted(t *testing.T) {
 
 func (ta *testAPI) unmount(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
-	uploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
-	defer os.RemoveAll(uploadDir)
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
-	defer os.RemoveAll(testMountDir)
+	testDir, err := ioutil.TempDir(os.TempDir(), "unmount")
+	if err != nil {
+		t.Fatalf("Couldn't create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
 
+	testUploadDir := filepath.Join(testDir, "ex-upload")
+	err = os.MkdirAll(testUploadDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir: %v", err)
+	}
+	testMountDir := filepath.Join(testDir, "ex-mount")
+	err = os.MkdirAll(testMountDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 2: %v", err)
+	}
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
-	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, uploadDir, toEncrypt)
+	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir")
-
 	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	log.Info("Mounted Dir")
 	defer swarmfs.Stop()
 
 	swarmfs.Unmount(testMountDir)
-	log.Info("Unounted Dir")
+	log.Info("Unmounted Dir")
 
 	mi := swarmfs.Listmounts()
 	log.Debug("Going to list mounts")
@@ -458,32 +527,55 @@ func (ta *testAPI) unmountWhenResourceBusyNonEncrypted(t *testing.T) {
 
 func (ta *testAPI) unmountWhenResourceBusy(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "ex-upload")
-	defer os.RemoveAll(testUploadDir)
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "ex-mount")
-	defer os.RemoveAll(testMountDir)
+	testDir, err := ioutil.TempDir(os.TempDir(), "unmountResourceBusy")
+	if err != nil {
+		t.Fatalf("Couldn't create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
 
+	testUploadDir := filepath.Join(testDir, "ex-upload")
+	err = os.MkdirAll(testUploadDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir: %v", err)
+	}
+	testMountDir := filepath.Join(testDir, "ex-mount")
+	err = os.MkdirAll(testMountDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 2: %v", err)
+	}
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir")
-
 	swarmfs := mountDir(t, ta.api, files, bzzHash, testMountDir)
 	log.Info("Directory mounted")
 	defer swarmfs.Stop()
 
 	actualPath := filepath.Join(testMountDir, "2.txt")
-	d, err := os.OpenFile(actualPath, os.O_RDWR, os.FileMode(0700))
-	d.Write(getRandomBytes(10))
+	//d, err := os.OpenFile(actualPath, os.O_RDWR, os.FileMode(0700))
+	d, err := os.Create(actualPath)
+	if err != nil {
+		t.Fatalf("Couldn't create new file: %v", err)
+	}
+	_, err = d.Write(getRandomBytes(10))
+	if err != nil {
+		t.Fatalf("Couldn't write to file: %v", err)
+	}
 	log.Debug("Bytes written")
 
 	_, err = swarmfs.Unmount(testMountDir)
-	if err != nil {
-		t.Fatalf("could not unmount  %v", bzzHash)
+	if err == nil {
+		t.Fatalf("Expected mount to fail due to resource busy, but it succeeded...")
 	}
-	log.Info("Directory unmounted")
-	d.Close()
+	err = d.Close()
+	if err != nil {
+		t.Fatalf("Couldn't close file!  %v", bzzHash)
+	}
 	log.Debug("File closed")
 
+	_, err = swarmfs.Unmount(testMountDir)
+	if err != nil {
+		t.Fatalf("Expected mount to succeed after freeing resource, but it failed: %v", err)
+	}
 	mi := swarmfs.Listmounts()
 	log.Debug("Going to list mounts")
 	for _, minfo := range mi {
@@ -509,11 +601,22 @@ func (ta *testAPI) seekInMultiChunkFileNonEncrypted(t *testing.T) {
 
 func (ta *testAPI) seekInMultiChunkFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "seek-upload")
-	defer os.RemoveAll(testUploadDir)
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "seek-mount")
-	defer os.RemoveAll(testMountDir)
+	testDir, err := ioutil.TempDir(os.TempDir(), "seekInMultiChunkFile")
+	if err != nil {
+		t.Fatalf("Couldn't create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
 
+	testUploadDir := filepath.Join(testDir, "seek-upload")
+	err = os.MkdirAll(testUploadDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir: %v", err)
+	}
+	testMountDir := filepath.Join(testDir, "seek-mount")
+	err = os.MkdirAll(testMountDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 2: %v", err)
+	}
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10240)}
 	bzzHash := createTestFilesAndUploadToSwarm(t, ta.api, files, testUploadDir, toEncrypt)
 	log.Info("Created test files and uploaded to swarm with uploadDir")
@@ -524,14 +627,23 @@ func (ta *testAPI) seekInMultiChunkFile(t *testing.T, toEncrypt bool) {
 
 	// Create a new file seek the second chunk
 	actualPath := filepath.Join(testMountDir, "1.txt")
-	d, _ := os.OpenFile(actualPath, os.O_RDONLY, os.FileMode(0700))
+	d, err := os.OpenFile(actualPath, os.O_RDONLY, os.FileMode(0700))
+	if err != nil {
+		t.Fatalf("Couldn't open file: %v", err)
+	}
 	log.Debug("Opened file")
 	defer d.Close()
 
-	d.Seek(5000, 0)
+	_, err = d.Seek(5000, 0)
+	if err != nil {
+		t.Fatalf("Error seeking in file: %v", err)
+	}
 
 	contents := make([]byte, 1024)
-	d.Read(contents)
+	_, err = d.Read(contents)
+	if err != nil {
+		t.Fatalf("Error reading file: %v", err)
+	}
 	log.Debug("Read contents")
 	finfo := files["1.txt"]
 
@@ -555,11 +667,22 @@ func (ta *testAPI) createNewFileNonEncrypted(t *testing.T) {
 
 func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	files := make(map[string]fileInfo)
-	testUploadDir, _ := ioutil.TempDir(os.TempDir(), "create-upload")
-	defer os.RemoveAll(testUploadDir)
-	testMountDir, _ := ioutil.TempDir(os.TempDir(), "create-mount")
-	defer os.RemoveAll(testMountDir)
+	testDir, err := ioutil.TempDir(os.TempDir(), "seekInMultiChunkFile")
+	if err != nil {
+		t.Fatalf("Couldn't create test dir: %v", err)
+	}
+	defer os.RemoveAll(testDir)
 
+	testUploadDir := filepath.Join(testDir, "seek-upload")
+	err = os.MkdirAll(testUploadDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create upload dir: %v", err)
+	}
+	testMountDir := filepath.Join(testDir, "seek-mount")
+	err = os.MkdirAll(testMountDir, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 2: %v", err)
+	}
 	files["1.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	files["five.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
 	files["six.txt"] = fileInfo{0700, 333, 444, getRandomBytes(10)}
@@ -567,6 +690,7 @@ func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	log.Info("Created test files and uploaded to swarm with uploadDir")
 
 	swarmfs1 := mountDir(t, ta.api, files, bzzHash, testMountDir)
+	defer swarmfs1.Stop()
 	log.Info("Directory mounted")
 
 	// Create a new file in the root dir and check
@@ -577,11 +701,20 @@ func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	}
 	log.Debug("Opened file")
 	contents := make([]byte, 11)
-	rand.Read(contents)
+	_, err = rand.Read(contents)
+	if err != nil {
+		t.Fatalf("Could not rand read contents %v", err)
+	}
 	log.Debug("content read")
-	d.Write(contents)
+	_, err = d.Write(contents)
+	if err != nil {
+		t.Fatalf("Couldn't write contents: %v", err)
+	}
 	log.Debug("content written")
-	d.Close()
+	err = d.Close()
+	if err != nil {
+		t.Fatalf("Couldn't close file: %v", err)
+	}
 	log.Debug("file closed")
 
 	mi, err2 := swarmfs1.Unmount(testMountDir)
@@ -589,15 +722,16 @@ func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 		t.Fatalf("Could not unmount %v", err2)
 	}
 	log.Info("Directory unmounted")
-	swarmfs1.Stop()
 
-	testMountDir2, _ := ioutil.TempDir(os.TempDir(), "create-mount2")
-	defer os.RemoveAll(testMountDir2)
+	testMountDir2 := filepath.Join(testDir, "create-mount2")
+	err = os.MkdirAll(testMountDir2, 0777)
+	if err != nil {
+		t.Fatalf("Couldn't create mount dir 2: %v", err)
+	}
 	// mount again and see if things are okay
 	files["2.txt"] = fileInfo{0700, 333, 444, contents}
-	swarmfs2 := mountDir(t, ta.api, files, mi.LatestManifest, testMountDir2)
+	_ = mountDir(t, ta.api, files, mi.LatestManifest, testMountDir2)
 	log.Info("Directory mounted again")
-	defer swarmfs2.Stop()
 
 	checkFile(t, testMountDir2, "2.txt", contents)
 	log.Debug("subtest terminated")
