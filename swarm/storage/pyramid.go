@@ -18,7 +18,9 @@ package storage
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
@@ -116,6 +118,11 @@ type TreeEntry struct {
 	key           []byte
 	index         int  // used in append to indicate the index of existing tree entry
 	updatePending bool // indicates if the entry is loaded from existing tree
+}
+
+// TODO: REMOVE. Temporary for debugging.
+func (te *TreeEntry) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%v, %v, %x: %x"`, te.level, te.branchCount, te.key, te.chunk)), nil
 }
 
 func NewTreeEntry(pyramid *PyramidChunker) *TreeEntry {
@@ -387,6 +394,12 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 	log.Debug("pyramid.chunker: prepareChunks", "isAppend", isAppend)
 	defer self.wg.Done()
 
+	// TODO: REMOVE. Temporary for debugging.
+	defer func() {
+		d, _ := json.MarshalIndent(self.chunkLevel, "", "    ")
+		fmt.Println(string(d))
+	}()
+
 	chunkWG := &sync.WaitGroup{}
 
 	self.incrementWorkerCount()
@@ -446,6 +459,9 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 		var res []byte
 		res, err = ioutil.ReadAll(io.LimitReader(self.reader, int64(len(chunkData)-(8+readBytes))))
 
+		// TODO: REMOVE. Temporary for debugging.
+		fmt.Println("res", len(res))
+
 		// hack for ioutil.ReadAll:
 		// a successful call to ioutil.ReadAll returns err == nil, not err == EOF, whereas we
 		// want to propagate the io.EOF error
@@ -463,6 +479,8 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 					// Data is exactly one chunk.. pick the last chunk key as root
 					chunkWG.Wait()
 					lastChunksKey := parent.chunk[8 : 8+self.hashSize]
+
+					// TODO: Fix this for file size 524288 + 4096
 					copy(self.rootKey, lastChunksKey)
 					break
 				}
@@ -474,7 +492,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 		// Data ended in chunk boundary.. just signal to start bulding tree
 		if readBytes == 0 {
-			self.buildTree(isAppend, parent, chunkWG, true)
+			self.buildTree(isAppend, parent, chunkWG, true, nil)
 			break
 		} else {
 			pkey := self.enqueueDataChunk(chunkData, uint64(readBytes), parent, chunkWG)
@@ -489,16 +507,28 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 				// only one data chunk .. so dont add any parent chunk
 				if parent.branchCount <= 1 {
 					chunkWG.Wait()
-					copy(self.rootKey, pkey)
+
+					var depth int
+					for _, l := range self.chunkLevel {
+						if l == nil {
+							break
+						}
+						depth++
+					}
+					if depth == 0 {
+						copy(self.rootKey, pkey)
+					} else {
+						self.buildTree(isAppend, parent, chunkWG, true, pkey)
+					}
 					break
 				}
 
-				self.buildTree(isAppend, parent, chunkWG, true)
+				self.buildTree(isAppend, parent, chunkWG, true, nil)
 				break
 			}
 
 			if parent.branchCount == self.branches {
-				self.buildTree(isAppend, parent, chunkWG, false)
+				self.buildTree(isAppend, parent, chunkWG, false, nil)
 				parent = NewTreeEntry(self)
 			}
 
@@ -514,7 +544,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 }
 
-func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync.WaitGroup, last bool) {
+func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync.WaitGroup, last bool, lonelyKey []byte) {
 	chunkWG.Wait()
 	self.enqueueTreeChunk(ent, chunkWG, last)
 
@@ -594,6 +624,10 @@ func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sy
 					newEntry.subtreeSize += entry.subtreeSize
 					copy(newEntry.chunk[8+(index*self.hashSize):8+((index+1)*self.hashSize)], entry.key[:self.hashSize])
 					index++
+				}
+				if lonelyKey != nil {
+					// Overwrite the last tree chunk key with the lonely data chunk key.
+					copy(newEntry.chunk[int64(len(newEntry.chunk))-self.hashSize:], lonelyKey[:self.hashSize])
 				}
 
 				self.enqueueTreeChunk(newEntry, chunkWG, last)
