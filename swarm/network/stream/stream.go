@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -323,9 +322,9 @@ func (r *Registry) Quit(peerId discover.NodeID, s Stream) error {
 	return peer.Send(msg)
 }
 
-func (r *Registry) Retrieve(ctx context.Context, chunk storage.Chunk) (context.Context, error) {
-	return r.delivery.RequestFromPeers(ctx, chunk.Address()[:], nil, r.skipCheck, sync.Map{})
-}
+// func (r *Registry) Retrieve(ctx context.Context, chunk storage.Chunk) (context.Context, error) {
+// 	return r.delivery.RequestFromPeers(ctx, chunk.Address()[:], nil, r.skipCheck, &sync.Map{})
+// }
 
 func (r *Registry) NodeInfo() interface{} {
 	return nil

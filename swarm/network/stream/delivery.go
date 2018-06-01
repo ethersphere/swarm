@@ -17,8 +17,10 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -221,47 +223,57 @@ func (d *Delivery) processReceivedChunks() {
 }
 
 // RequestFromPeers sends a chunk retrieve request to
-func (d *Delivery) RequestFromPeers(ctx context.Context, addr storage.Address, offer storage.Address, skipCheck bool, peersToSkip sync.Map) (context.Context, error) {
-	var success bool
-	var err error
-	context := context.Background()
+func (d *Delivery) RequestFromPeers(ctx context.Context, addr storage.Address, source storage.Address, skipCheck bool, peersToSkip *sync.Map) (storage.Address, chan struct{}, error) {
 	requestFromPeersCount.Inc(1)
 
-	// TODO: if there is an offer ask from that
-	if offer != nil {
-		return context, nil
+	//
+	var sp *Peer
+	var spAddr storage.Address
+
+	if source != nil {
+		var found bool
+		d.overlay.EachConn(source[:], 256, func(p network.OverlayConn, po int, nn bool) bool {
+			found = bytes.Equal(p.Address(), source[:])
+			spId := p.(network.Peer).ID()
+			sp = d.getPeer(spId)
+			if sp == nil {
+				log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
+				return true
+			}
+			return false
+		})
+		if !found {
+			return nil, nil, fmt.Errorf("source peer %v not found", spAddr.Hex())
+		}
+	} else {
+		d.overlay.EachConn(addr[:], 255, func(p network.OverlayConn, po int, nn bool) bool {
+			spAddr = storage.Address(p.Address())
+			// TODO: skip light nodes that do not accept retrieve requests
+			if _, ok := peersToSkip.Load(spAddr); ok {
+				log.Trace("Delivery.RequestFromPeers: skip peer", "peer addr", spAddr.Hex())
+				return true
+			}
+			spId := p.(network.Peer).ID()
+			sp = d.getPeer(spId)
+			if sp == nil {
+				log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
+				return true
+			}
+			return false
+		})
 	}
 
-	d.overlay.EachConn(addr[:], 255, func(p network.OverlayConn, po int, nn bool) bool {
-		spId := p.(network.Peer).ID()
-		spAddr := storage.Address(p.Address())
-		if _, ok := peersToSkip.Load(spAddr); ok {
-			log.Trace("Delivery.RequestFromPeers: skip peer", "peer", spId)
-			return true
-		}
-
-		sp := d.getPeer(spId)
-		if sp == nil {
-			log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
-			return true
-		}
-		// TODO: skip light nodes that do not accept retrieve requests
-		err = sp.SendPriority(&RetrieveRequestMsg{
-			Addr:      addr,
-			SkipCheck: skipCheck,
-		}, Top)
-		if err != nil {
-			return true
-		}
-		requestFromPeersEachCount.Inc(1)
-		context = d.getPeer(spId).context()
-		success = true
-		return false
-	})
-
-	// TODO:
-	if success {
-		return context, nil
+	if sp == nil {
+		return nil, nil, errors.New("no peer found")
 	}
-	return nil, errors.New("no peer found")
+	err := sp.SendPriority(&RetrieveRequestMsg{
+		Addr:      addr,
+		SkipCheck: skipCheck,
+	}, Top)
+	if err != nil {
+		return nil, nil, err
+	}
+	requestFromPeersEachCount.Inc(1)
+
+	return spAddr, sp.quit, nil
 }

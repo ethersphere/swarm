@@ -70,6 +70,29 @@ func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
 	return wait, nil
 }
 
+// Get retrieves the chunk from the NetStore DPA synchronously
+// it calls NetStore.get. If the chunk is not in local Storage
+// it calls fetch with the request, which blocks until the chunk
+// arrived or context is done
+func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
+	chunk, fetch, err := n.get(ref)
+	if fetch == nil {
+		return chunk, err
+	}
+	return fetch(rctx)
+}
+
+// Has
+func (n *NetStore) Has(ref Address) func(context.Context) (Chunk, error) {
+	_, fetch, _ := n.get(ref)
+	return fetch
+}
+
+// Close chunk store
+func (n *NetStore) Close() {
+	n.store.Close()
+}
+
 // get attempts at retrieving the chunk from LocalStore
 // if it is not found, attempts at retrieving an existing fetchers
 // if none exists, creates one and saves it in the fetchers cache
@@ -113,28 +136,6 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	n.fetchers.Add(key, fetcher)
 
 	return fetcher
-}
-
-// Get retrieves the chunk from the NetStore DPA synchronously
-// it calls NetStore.get. If the chunk is not in local Storage
-// it calls fetch with the request, which blocks until the chunk
-// arrived or context is done
-func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
-	chunk, fetch, err := n.get(ref)
-	if fetch == nil {
-		return chunk, err
-	}
-	return fetch(rctx)
-}
-
-func (n *NetStore) Has(ref Address) func(context.Context) (Chunk, error) {
-	_, fetch, _ := n.get(ref)
-	return fetch
-}
-
-// Close chunk store
-func (n *NetStore) Close() {
-	n.store.Close()
 }
 
 type FetchFunc func(ctx context.Context)

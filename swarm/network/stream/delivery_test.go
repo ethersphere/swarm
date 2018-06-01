@@ -47,7 +47,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	peerID := tester.IDs[0]
 
 	ctx := context.Background()
-	streamer.delivery.RequestFromPeers(ctx, storage.Address(hash0[:]), true, &sync.Map{})
+	streamer.delivery.RequestFromPeers(ctx, storage.Address(hash0[:]), nil, true, &sync.Map{})
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -93,7 +93,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Key: chunk.Address()[:],
+					Addr: chunk.Address()[:],
 				},
 				Peer: peerID,
 			},
@@ -414,12 +414,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		// create a retriever dpa for the pivot node
 		delivery := deliveries[sim.IDs[0]]
 
-		request := func(ctx context.Context, offer storage.Address, peersToSkip sync.Map) (context.Context, error) {
-			return delivery.RequestFromPeers(offer, skipCheck, peersToSkip)
+		netStore, err := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), network.NewFetchFunc(delivery.RequestFromPeers, true))
+		if err != nil {
+			t.Fatal(err)
 		}
-		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), Fetch)
-
-		dpa := storage.NewDPA(netStore, storage.NewDPAParams())
+		dpa := storage.NewDPAAPI(netStore, storage.NewDPAParams())
 
 		go func() {
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
@@ -464,7 +463,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 	startedAt := time.Now()
 	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result, err := sim.Run(ctx, conf)
 	finishedAt := time.Now()
@@ -546,7 +545,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	waitPeerErrC = make(chan error)
 
 	// create a dpa for the last node in the chain which we are gonna write to
-	remoteDpa := storage.NewDPA(sim.Stores[nodes-1], storage.NewDPAParams())
+	remoteDpa := storage.NewDPAAPI(sim.Stores[nodes-1], storage.NewDPAParams())
 
 	// channel to signal simulation initialisation with action call complete
 	// or node disconnections

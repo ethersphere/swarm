@@ -107,11 +107,11 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := stores[id].(*storage.LocalStore)
+	store := stores[id]
 	dpa, err := storage.NewNetStore(store, newFakeFetcher)
 	delivery := NewDelivery(kad, dpa)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, store, state.NewInmemoryStore(), &RegistryOptions{
+	r := NewRegistry(addr, delivery, storage.NewFakeDPA(store), state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,
 	})
@@ -220,7 +220,7 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 	}
 }
 
-func (rrs *roundRobinStore) Get(addr storage.Address) (*storage.Chunk, error) {
+func (rrs *roundRobinStore) Get(addr storage.Address) (storage.Chunk, error) {
 	return nil, errors.New("get not well defined on round robin store")
 }
 
