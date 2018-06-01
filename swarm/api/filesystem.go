@@ -262,7 +262,7 @@ func NewFileSystem(api *Api) *FileSystem {
 // 	}
 // }
 
-func retrieveToFile(dpa *storage.DPAAPI, key storage.Address, path string) error {
+func retrieveToFile(dpa *storage.DPAAPI, addr storage.Address, path string) error {
 	f, err := os.Create(path) // TODO: basePath separators
 	if err != nil {
 		return err

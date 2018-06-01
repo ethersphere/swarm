@@ -337,7 +337,7 @@ func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.
 			log.Trace("resource type", "key", manifestAddr, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := self.resource.Load(storage.Address(common.FromHex(entry.Hash)))
+			rsrc, err := self.resource.Load(ctx, storage.Address(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -660,7 +660,7 @@ func (self *Api) BuildDirectoryTree(mhash string, nameresolver bool) (addr stora
 // Look up mutable resource updates at specific periods and versions
 func (self *Api) ResourceLookup(ctx context.Context, addr storage.Address, period uint32, version uint32, maxLookup *mru.LookupParams) (string, []byte, error) {
 	var err error
-	rsrc, err := self.resource.Load(addr)
+	rsrc, err := self.resource.Load(ctx, addr)
 	if err != nil {
 		return "", nil, err
 	}

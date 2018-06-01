@@ -81,8 +81,8 @@ func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	a.Uid = uint32(os.Getuid())
 	a.Gid = uint32(os.Getegid())
 
-	if file.fileSize == -1 {
-		reader, _ := file.mountInfo.swarmApi.Retrieve(file.addr)
+	if sf.fileSize == -1 {
+		reader, _ := sf.mountInfo.swarmApi.Retrieve(sf.addr)
 		size, err := reader.Size()
 		if err != nil {
 			log.Warn("Couldnt get size of file %s : %v", sf.path, err)

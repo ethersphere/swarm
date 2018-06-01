@@ -133,7 +133,7 @@ func (self *resource) NameHash() common.Hash {
 	return self.nameHash
 }
 
-func (self *resource) Size(chan bool) (int64, error) {
+func (self *resource) Size() (int64, error) {
 	if !self.isSynced() {
 		return 0, NewError(ErrNotSynced, "Not synced")
 	}
@@ -413,7 +413,7 @@ func (self *Handler) New(ctx context.Context, name string, frequency uint64) (st
 
 	_, err = self.dpa.Put(chunk)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	log.Debug("new resource", "name", name, "key", nameHash, "startBlock", currentblock, "frequency", frequency)
 
@@ -489,7 +489,7 @@ func (self *Handler) LookupHistoricalByName(ctx context.Context, name string, pe
 	return self.LookupHistorical(ctx, ens.EnsNode(name), period, refresh, maxLookup)
 }
 
-func (self *Handler) LookupHistorical(ctx context.Context, nameHash common.Hash, period uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
+func (self *Handler) LookupHistorical(rctx context.Context, nameHash common.Hash, period uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
 	rsrc := self.get(nameHash.Hex())
 	if rsrc == nil {
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
@@ -526,7 +526,7 @@ func (self *Handler) LookupLatest(ctx context.Context, nameHash common.Hash, ref
 	if err != nil {
 		return nil, err
 	}
-	return self.lookup(rsrc, nextperiod, 0, refresh, maxLookup)
+	return self.lookup(ctx, rsrc, nextperiod, 0, refresh, maxLookup)
 }
 
 // Returns the resource before the one currently loaded in the resource index
@@ -539,7 +539,7 @@ func (self *Handler) LookupPreviousByName(ctx context.Context, name string, maxL
 	return self.LookupPrevious(ctx, ens.EnsNode(name), maxLookup)
 }
 
-func (self *Handler) LookupPrevious(ctx context.Context, nameHash common.Hash, maxLookup *LookupParams) (*resource, error) {
+func (self *Handler) LookupPrevious(rctx context.Context, nameHash common.Hash, maxLookup *LookupParams) (*resource, error) {
 	rsrc := self.get(nameHash.Hex())
 	if rsrc == nil {
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
@@ -636,7 +636,7 @@ func (self *Handler) Load(rctx context.Context, addr storage.Address) (*resource
 
 	// create the index entry
 	rsrc := &resource{}
-	rsrc.UnmarshalBinary(chunk.SData[2:])
+	rsrc.UnmarshalBinary(chunk.Data()[2:])
 	rsrc.nameHash = ens.EnsNode(rsrc.name)
 	self.set(rsrc.nameHash.Hex(), rsrc)
 	log.Trace("resource index load", "rootkey", addr, "name", rsrc.name, "namehash", rsrc.nameHash, "startblock", rsrc.startBlock, "frequency", rsrc.frequency)
@@ -651,7 +651,7 @@ func (self *Handler) updateIndex(rsrc *resource, chunk storage.Chunk) (*resource
 	if rsrc.name != name {
 		return nil, NewError(ErrNothingToReturn, fmt.Sprintf("Update belongs to '%s', but have '%s'", name, rsrc.name))
 	}
-	log.Trace("resource index update", "name", rsrc.name, "namehash", rsrc.nameHash, "updatekey", chunk.Addr, "period", period, "version", version)
+	log.Trace("resource index update", "name", rsrc.name, "namehash", rsrc.nameHash, "updatekey", chunk.Address(), "period", period, "version", version)
 
 	// check signature (if signer algorithm is present)
 	// \TODO maybe this check is redundant if also checked upon retrieval of chunk
@@ -795,7 +795,7 @@ func (self *Handler) update(ctx context.Context, name string, data []byte, multi
 	}
 
 	// we can't update anything without a store
-	if self.chunkStore == nil {
+	if self.dpa == nil {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")
 	}
 
@@ -886,7 +886,7 @@ func (self *Handler) update(ctx context.Context, name string, data []byte, multi
 		err = wait(ctx)
 	}
 	if err != nil {
-		return nil, NewResourceError(ErrIO, err.Error())
+		return nil, NewError(ErrIO, err.Error())
 	}
 	log.Trace("resource update", "name", name, "addr", addr, "currentblock", currentblock, "lastperiod", nextperiod, "version", version, "data", chunk.Data(), "multihash", multihash)
 
@@ -1011,7 +1011,7 @@ func newUpdateChunk(addr storage.Address, signature *Signature, period uint32, v
 		copy(sdata[cursor:], signature[:])
 	}
 
-	return NewChunk(addr, sdata)
+	return storage.NewChunk(addr, sdata)
 }
 
 // Helper function to calculate the next update period number from the current block, start block and frequency

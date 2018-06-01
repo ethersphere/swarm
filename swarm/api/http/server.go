@@ -697,7 +697,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 
 	// check the root chunk exists by retrieving the file's size
 	reader, isEncrypted := s.api.Retrieve(addr)
-	if _, err := reader.Size(nil); err != nil {
+	if _, err := reader.Size(); err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
 		return
