@@ -910,20 +910,20 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 	}
 }
 
-// params in run name:
-// nodes/msgs/addrbytes/adaptertype
-// if adaptertype is exec uses execadapter, simadapter otherwise
-func TestNetwork(t *testing.T) {
+func enableMetrics() {
 	metrics.Enabled = true
 	go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 1*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
 		"host": "test",
 	})
+}
 
-	log.Root().SetHandler(log.LvlFilterHandler(log.LvlInfo, log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
+// params in run name:
+// nodes/msgs/addrbytes/adaptertype
+// if adaptertype is exec uses execadapter, simadapter otherwise
+func TestNetwork(t *testing.T) {
+	enableMetrics()
 
 	metrics.GetOrRegisterCounter("pss.testnetwork", nil).Inc(1)
-
-	time.Sleep(500 * time.Millisecond)
 
 	t.Run("3/2000/4/sock", testNetwork)
 	t.Run("4/2000/4/sock", testNetwork)
