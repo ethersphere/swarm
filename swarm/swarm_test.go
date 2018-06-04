@@ -279,7 +279,7 @@ func TestParseEnsAPIAddress(t *testing.T) {
 }
 
 // TestLocalStoreAndRetrieve runs multiple tests where different size files are uploaded
-// to a single Swarm instance using API Store and checked against the dontent returned
+// to a single Swarm instance using API Store and checked against the content returned
 // by API Retrieve function.
 //
 // This test is intended to validate functionality of chunker store and join functions
