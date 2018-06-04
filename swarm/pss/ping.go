@@ -24,18 +24,18 @@ type Ping struct {
 	InC  chan bool // optional, report back to calling code
 }
 
-func (self *Ping) pingHandler(msg interface{}) error {
+func (p *Ping) pingHandler(msg interface{}) error {
 	var pingmsg *PingMsg
 	var ok bool
 	if pingmsg, ok = msg.(*PingMsg); !ok {
 		return errors.New("invalid msg")
 	}
-	log.Debug("ping handler", "msg", pingmsg, "outc", self.OutC)
-	if self.InC != nil {
-		self.InC <- pingmsg.Pong
+	log.Debug("ping handler", "msg", pingmsg, "outc", p.OutC)
+	if p.InC != nil {
+		p.InC <- pingmsg.Pong
 	}
-	if self.Pong && !pingmsg.Pong {
-		self.OutC <- true
+	if p.Pong && !pingmsg.Pong {
+		p.OutC <- true
 	}
 	return nil
 }

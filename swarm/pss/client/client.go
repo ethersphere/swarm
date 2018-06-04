@@ -55,14 +55,14 @@ type pssRPCRW struct {
 	closed   bool
 }
 
-func (self *Client) newpssRPCRW(pubkeyid string, addr pss.PssAddress, topicobj pss.Topic) (*pssRPCRW, error) {
+func (c *Client) newpssRPCRW(pubkeyid string, addr pss.PssAddress, topicobj pss.Topic) (*pssRPCRW, error) {
 	topic := topicobj.String()
-	err := self.rpc.Call(nil, "pss_setPeerPublicKey", pubkeyid, topic, hexutil.Encode(addr[:]))
+	err := c.rpc.Call(nil, "pss_setPeerPublicKey", pubkeyid, topic, hexutil.Encode(addr[:]))
 	if err != nil {
 		return nil, fmt.Errorf("setpeer %s %s: %v", topic, pubkeyid, err)
 	}
 	return &pssRPCRW{
-		Client:   self,
+		Client:   c,
 		topic:    topic,
 		msgC:     make(chan []byte),
 		addr:     addr,
@@ -215,17 +215,17 @@ func newClient() (client *Client) {
 //
 // when an incoming message is received from a peer that is not yet known to the client,
 // this peer object is instantiated, and the protocol is run on it.
-func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
+func (c *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error {
 	topicobj := pss.BytesToTopic([]byte(fmt.Sprintf("%s:%d", proto.Name, proto.Version)))
 	topichex := topicobj.String()
 	msgC := make(chan pss.APIMsg)
-	self.peerPool[topicobj] = make(map[string]*pssRPCRW)
-	sub, err := self.rpc.Subscribe(ctx, "pss", msgC, "receive", topichex)
+	c.peerPool[topicobj] = make(map[string]*pssRPCRW)
+	sub, err := c.rpc.Subscribe(ctx, "pss", msgC, "receive", topichex)
 	if err != nil {
 		return fmt.Errorf("pss event subscription failed: %v", err)
 	}
-	self.subs = append(self.subs, sub)
-	err = self.rpc.Call(nil, "pss_addHandshake", topichex)
+	c.subs = append(c.subs, sub)
+	err = c.rpc.Call(nil, "pss_addHandshake", topichex)
 	if err != nil {
 		return fmt.Errorf("pss handshake activation failed: %v", err)
 	}
@@ -242,16 +242,16 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 				// we get passed the symkeyid
 				// need the symkey itself to resolve to peer's pubkey
 				var pubkeyid string
-				err = self.rpc.Call(&pubkeyid, "pss_getHandshakePublicKey", msg.Key)
+				err = c.rpc.Call(&pubkeyid, "pss_getHandshakePublicKey", msg.Key)
 				if err != nil || pubkeyid == "" {
 					log.Trace("proto err or no pubkey", "err", err, "symkeyid", msg.Key)
 					continue
 				}
 				// if we don't have the peer on this protocol already, create it
 				// this is more or less the same as AddPssPeer, less the handshake initiation
-				if self.peerPool[topicobj][pubkeyid] == nil {
+				if c.peerPool[topicobj][pubkeyid] == nil {
 					var addrhex string
-					err := self.rpc.Call(&addrhex, "pss_getAddress", topichex, false, msg.Key)
+					err := c.rpc.Call(&addrhex, "pss_getAddress", topichex, false, msg.Key)
 					if err != nil {
 						log.Trace(err.Error())
 						continue
@@ -262,31 +262,31 @@ func (self *Client) RunProtocol(ctx context.Context, proto *p2p.Protocol) error 
 						break
 					}
 					addr := pss.PssAddress(addrbytes)
-					rw, err := self.newpssRPCRW(pubkeyid, addr, topicobj)
+					rw, err := c.newpssRPCRW(pubkeyid, addr, topicobj)
 					if err != nil {
 						break
 					}
-					self.peerPool[topicobj][pubkeyid] = rw
+					c.peerPool[topicobj][pubkeyid] = rw
 					nid, _ := discover.HexID("0x00")
 					p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
-					go proto.Run(p, self.peerPool[topicobj][pubkeyid])
+					go proto.Run(p, c.peerPool[topicobj][pubkeyid])
 				}
 				go func() {
-					self.peerPool[topicobj][pubkeyid].msgC <- msg.Msg
+					c.peerPool[topicobj][pubkeyid].msgC <- msg.Msg
 				}()
-			case <-self.quitC:
+			case <-c.quitC:
 				return
 			}
 		}
 	}()
 
-	self.protos[topicobj] = proto
+	c.protos[topicobj] = proto
 	return nil
 }
 
 // Always call this to ensure that we exit cleanly
-func (self *Client) Close() error {
-	for _, s := range self.subs {
+func (c *Client) Close() error {
+	for _, s := range c.subs {
 		s.Unsubscribe()
 	}
 	return nil
@@ -301,13 +301,13 @@ func (self *Client) Close() error {
 // The key must exist in the key store of the pss node
 // before the peer is added. The method will return an error
 // if it is not.
-func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spec) error {
+func (c *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spec) error {
 	topic := pss.ProtocolTopic(spec)
-	if self.peerPool[topic] == nil {
+	if c.peerPool[topic] == nil {
 		return errors.New("addpeer on unset topic")
 	}
-	if self.peerPool[topic][pubkeyid] == nil {
-		rw, err := self.newpssRPCRW(pubkeyid, addr, topic)
+	if c.peerPool[topic][pubkeyid] == nil {
+		rw, err := c.newpssRPCRW(pubkeyid, addr, topic)
 		if err != nil {
 			return err
 		}
@@ -315,12 +315,12 @@ func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spe
 		if err != nil {
 			return err
 		}
-		self.poolMu.Lock()
-		self.peerPool[topic][pubkeyid] = rw
-		self.poolMu.Unlock()
+		c.poolMu.Lock()
+		c.peerPool[topic][pubkeyid] = rw
+		c.poolMu.Unlock()
 		nid, _ := discover.HexID("0x00")
 		p := p2p.NewPeer(nid, fmt.Sprintf("%v", addr), []p2p.Cap{})
-		go self.protos[topic].Run(p, self.peerPool[topic][pubkeyid])
+		go c.protos[topic].Run(p, c.peerPool[topic][pubkeyid])
 	}
 	return nil
 }
@@ -328,11 +328,11 @@ func (self *Client) AddPssPeer(pubkeyid string, addr []byte, spec *protocols.Spe
 // Remove a pss peer
 //
 // TODO: underlying cleanup
-func (self *Client) RemovePssPeer(pubkeyid string, spec *protocols.Spec) {
+func (c *Client) RemovePssPeer(pubkeyid string, spec *protocols.Spec) {
 	log.Debug("closing pss client peer", "pubkey", pubkeyid, "protoname", spec.Name, "protoversion", spec.Version)
-	self.poolMu.Lock()
-	defer self.poolMu.Unlock()
+	c.poolMu.Lock()
+	defer c.poolMu.Unlock()
 	topic := pss.ProtocolTopic(spec)
-	self.peerPool[topic][pubkeyid].closed = true
-	delete(self.peerPool[topic], pubkeyid)
+	c.peerPool[topic][pubkeyid].closed = true
+	delete(c.peerPool[topic], pubkeyid)
 }
