@@ -25,7 +25,6 @@ ChunkStore interface is implemented by :
 - DbStore: local disk/db store
 - LocalStore: a combination (sequence of) memStore and dbStore
 - NetStore: cloud storage abstraction layer
-- DPA: local requests for swarm storage and retrieval
 - FakeChunkStore: dummy store which doesn't store anything just implements the interface
 */
 type ChunkStore interface {

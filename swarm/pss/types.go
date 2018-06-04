@@ -87,8 +87,8 @@ func (msg *PssMsg) serialize() []byte {
 }
 
 // String representation of PssMsg
-func (self *PssMsg) String() string {
-	return fmt.Sprintf("PssMsg: Recipient: %x", common.ToHex(self.To))
+func (msg *PssMsg) String() string {
+	return fmt.Sprintf("PssMsg: Recipient: %x", common.ToHex(msg.To))
 }
 
 // Signature for a message handler function for a PssMsg
