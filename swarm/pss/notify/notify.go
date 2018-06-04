@@ -80,11 +80,11 @@ type sendBin struct {
 // every notification has a topic used for pss transfer of symmetrically encrypted notifications
 // contentFunc is the callback to get initial update data from the notifications service provider
 type notifier struct {
-	bins map[string]*sendBin
-	//bins        []*sendBin
-	topic       pss.Topic
-	threshold   int
-	contentFunc func(string) ([]byte, error)
+	bins      map[string]*sendBin
+	topic     pss.Topic
+	threshold int
+	updateC   <-chan []byte
+	quitC     chan struct{}
 }
 
 type subscription struct {
@@ -174,20 +174,51 @@ func (c *Controller) Unsubscribe(name string) error {
 }
 
 // NewNotifier is used by a notification service provider to create a new notification service
-// It takes a name as identifier for the resource, a threshold indicating the granularity of the subscription address bin, and a callback for getting the latest update
+// It takes a name as identifier for the resource, a threshold indicating the granularity of the subscription address bin
+// It then starts an event loop which listens to the supplied update channel and executes notifications on channel receives
 // Fails if a notifier already is registered on the name
-func (c *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
+//func (c *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
+func (c *Controller) NewNotifier(name string, threshold int, updateC <-chan []byte) error {
 	c.mu.Lock()
-	defer c.mu.Unlock()
 	if c.isActive(name) {
+		c.mu.Unlock()
 		return fmt.Errorf("Notification service %s already exists in controller", name)
 	}
+	quitC := make(chan struct{})
 	c.notifiers[name] = &notifier{
-		bins:        make(map[string]*sendBin),
-		topic:       pss.BytesToTopic([]byte(name)),
-		threshold:   threshold,
-		contentFunc: contentFunc,
+		bins:      make(map[string]*sendBin),
+		topic:     pss.BytesToTopic([]byte(name)),
+		threshold: threshold,
+		updateC:   updateC,
+		quitC:     quitC,
+		//contentFunc: contentFunc,
 	}
+	c.mu.Unlock()
+	go func() {
+		for {
+			select {
+			case <-quitC:
+				return
+			case data := <-updateC:
+				c.notify(name, data)
+			}
+		}
+	}()
+
+	return nil
+}
+
+// RemoveNotifier is used to stop a notification service.
+// It cancels the event loop listening to the notification provider's update channel
+func (c *Controller) RemoveNotifier(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	currentNotifier, ok := c.notifiers[name]
+	if !ok {
+		return fmt.Errorf("Unknown notification service %s", name)
+	}
+	currentNotifier.quitC <- struct{}{}
+	delete(c.notifiers, name)
 	return nil
 }
 
@@ -195,7 +226,7 @@ func (c *Controller) NewNotifier(name string, threshold int, contentFunc func(st
 // It takes the name of the notification service the data to be sent.
 // It fails if a notifier with this name does not exist or if data could not be serialized
 // Note that it does NOT fail on failure to send a message
-func (c *Controller) Notify(name string, data []byte) error {
+func (c *Controller) notify(name string, data []byte) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if !c.isActive(name) {
@@ -279,11 +310,8 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 			return fmt.Errorf("add pss peer for reply fail: %v", err)
 		}
 
-		// send initial notify, will contain symkey to use for consecutive messages
-		notify, err := c.notifiers[msg.namestring].contentFunc(msg.namestring)
-		if err != nil {
-			return fmt.Errorf("retrieve current update from source fail: %v", err)
-		}
+		// TODO this is set to zero-length byte pending decision on protocol for initial message, whether it should include message or not, and how to trigger the initial message so that current state of MRU is sent upon subscription
+		notify := []byte{}
 		replyMsg := NewMsg(MsgCodeNotifyWithKey, msg.namestring, make([]byte, len(notify)+symKeyLength))
 		copy(replyMsg.Payload, notify)
 		copy(replyMsg.Payload[len(notify):], symkey)

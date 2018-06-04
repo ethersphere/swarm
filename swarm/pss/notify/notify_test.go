@@ -127,13 +127,11 @@ func TestStart(t *testing.T) {
 	}
 	defer rightSub.Unsubscribe()
 
-	updateMsg := []byte("xyzzy")
+	updateC := make(chan []byte)
+	updateMsg := []byte{}
 	ctrlClient := NewController(psses[rightPub])
 	ctrlNotifier := NewController(psses[leftPub])
-	ctrlNotifier.NewNotifier("foo.eth", 2, func(name string) ([]byte, error) {
-		msgSeq++
-		return updateMsg, nil
-	})
+	ctrlNotifier.NewNotifier("foo.eth", 2, updateC)
 
 	ctrlClient.Subscribe(rsrcName, crypto.ToECDSAPub(common.FromHex(leftPub)), common.FromHex(leftAddr), func(s string, b []byte) error {
 		if s != "foo.eth" || !bytes.Equal(updateMsg, b) {
@@ -168,7 +166,7 @@ func TestStart(t *testing.T) {
 	defer rightSubUpdate.Unsubscribe()
 
 	updateMsg = []byte("plugh")
-	ctrlNotifier.Notify(rsrcName, updateMsg)
+	updateC <- updateMsg
 	select {
 	case inMsg = <-rmsgC:
 	case <-ctx.Done():
