@@ -167,13 +167,6 @@ func (c AddressCollection) Swap(i, j int) {
 	c[i], c[j] = c[j], c[i]
 }
 
-// ChunkStore is the interface for
-type DPA interface {
-	Get(rctx context.Context, ref Address) (ch Chunk, err error)
-	Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error)
-	Close()
-}
-
 // Chunk interface implemented by context.Contexts and data chunks
 type Chunk interface {
 	Address() Address
@@ -363,7 +356,7 @@ func (self *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 }
 
 type ChunkStore interface {
-	Get(ref Address) (Chunk, error)
-	Put(ch Chunk) (func(context.Context) error, error)
+	Get(rctx context.Context, ref Address) (ch Chunk, err error)
+	Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error)
 	Close()
 }

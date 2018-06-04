@@ -31,7 +31,7 @@ type chunkEncryption struct {
 }
 
 type hasherStore struct {
-	dpa             DPA
+	store           ChunkStore
 	hashFunc        SwarmHasher
 	chunkEncryption *chunkEncryption
 	hashSize        int                              // content hash size
@@ -53,7 +53,7 @@ func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
 // With the HasherStore you can put and get chunk data (which is just []byte) into a DPA
 // and the hasherStore will take core of encryption/decryption of data if necessary
-func NewHasherStore(dpa DPA, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
+func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
 	var chunkEncryption *chunkEncryption
 
 	hashSize := hashFunc().Size()
@@ -64,7 +64,7 @@ func NewHasherStore(dpa DPA, hashFunc SwarmHasher, toEncrypt bool) *hasherStore 
 	}
 
 	h := &hasherStore{
-		dpa:             dpa,
+		store:           store,
 		hashFunc:        hashFunc,
 		chunkEncryption: chunkEncryption,
 		hashSize:        hashSize,
@@ -106,7 +106,7 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 		return nil, err
 	}
 
-	chunk, err := h.dpa.Get(ctx, addr)
+	chunk, err := h.store.Get(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
@@ -241,7 +241,7 @@ func (h *hasherStore) RefSize() int64 {
 }
 
 func (h *hasherStore) storeChunk(chunk *chunk) {
-	wait, err := h.dpa.Put(chunk)
+	wait, err := h.store.Put(chunk)
 	atomic.AddUint64(&h.count, 1)
 	if err != nil {
 		select {

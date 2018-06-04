@@ -111,7 +111,7 @@ type ManifestWriter struct {
 }
 
 func (a *Api) NewManifestWriter(addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
-	trie, err := loadManifest(a.dpa, addr, quitC)
+	trie, err := loadManifest(a.fileStore, addr, quitC)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -157,7 +157,7 @@ type ManifestWalker struct {
 }
 
 func (a *Api) NewManifestWalker(addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(a.dpa, addr, quitC)
+	trie, err := loadManifest(a.fileStore, addr, quitC)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -205,7 +205,7 @@ func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) 
 }
 
 type manifestTrie struct {
-	dpa       *storage.DPAAPI
+	fileStore *storage.FileStore
 	entries   [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
 	ref       storage.Address         // if ref != nil, it is stored
 	encrypted bool
@@ -224,15 +224,15 @@ type manifestTrieEntry struct {
 	subtrie *manifestTrie
 }
 
-func loadManifest(dpa *storage.DPAAPI, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func loadManifest(fileStore *storage.FileStore, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 	log.Trace("manifest lookup", "key", hash)
-	// retrieve manifest via DPA
-	manifestReader, isEncrypted := dpa.Retrieve(hash)
+	// retrieve manifest via FileStore
+	manifestReader, isEncrypted := fileStore.Retrieve(hash)
 	log.Trace("reader retrieved", "key", hash)
-	return readManifest(manifestReader, hash, dpa, isEncrypted, quitC)
+	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC)
 }
 
-func readManifest(manifestReader storage.LazySectionReader, hash storage.Address, dpa *storage.DPAAPI, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func readManifest(manifestReader storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
 	size, err := manifestReader.Size()
@@ -271,7 +271,7 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Address
 	log.Trace("manifest entries", "key", hash, "len", len(man.Entries))
 
 	trie = &manifestTrie{
-		dpa:       dpa,
+		fileStore: fileStore,
 		encrypted: isEncrypted,
 	}
 	for _, entry := range man.Entries {
@@ -313,7 +313,7 @@ func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 	commonPrefix := entry.Path[:cpl]
 
 	subtrie := &manifestTrie{
-		dpa:       self.dpa,
+		fileStore: self.fileStore,
 		encrypted: self.encrypted,
 	}
 	entry.Path = entry.Path[cpl:]
@@ -405,7 +405,7 @@ func (self *manifestTrie) recalcAndStore() error {
 	// TODO: expose context as parameter, do not instantiate it here
 	ctx := context.Background()
 
-	key, wait, err2 := self.dpa.Store(ctx, sr, int64(len(manifest)), self.encrypted)
+	key, wait, err2 := self.fileStore.Store(ctx, sr, int64(len(manifest)), self.encrypted)
 	if err2 != nil {
 		return err2
 	}
@@ -417,7 +417,7 @@ func (self *manifestTrie) recalcAndStore() error {
 func (self *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (err error) {
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
-		entry.subtrie, err = loadManifest(self.dpa, hash, quitC)
+		entry.subtrie, err = loadManifest(self.fileStore, hash, quitC)
 		entry.Hash = "" // might not match, should be recalculated
 	}
 	return

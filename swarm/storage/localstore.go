@@ -110,7 +110,7 @@ func (self *LocalStore) Put(chunk Chunk) (func(ctx context.Context) error, error
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	_, err := self.memStore.Get(chunk.Address())
+	_, err := self.memStore.Get(nil, chunk.Address())
 	if err == nil {
 		return nil, nil
 	}
@@ -129,15 +129,15 @@ func (self *LocalStore) Put(chunk Chunk) (func(ctx context.Context) error, error
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (self *LocalStore) Get(addr Address) (chunk Chunk, err error) {
+func (self *LocalStore) Get(ctx context.Context, addr Address) (chunk Chunk, err error) {
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
-	return self.get(addr)
+	return self.get(ctx, addr)
 }
 
-func (self *LocalStore) get(addr Address) (chunk Chunk, err error) {
-	chunk, err = self.memStore.Get(addr)
+func (self *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err error) {
+	chunk, err = self.memStore.Get(ctx, addr)
 
 	if err != nil && err != ErrChunkNotFound {
 		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
@@ -150,7 +150,7 @@ func (self *LocalStore) get(addr Address) (chunk Chunk, err error) {
 	}
 
 	metrics.GetOrRegisterCounter("localstore.get.cachemiss", nil).Inc(1)
-	chunk, err = self.DbStore.Get(addr)
+	chunk, err = self.DbStore.Get(ctx, addr)
 	if err != nil {
 		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
 		return nil, err

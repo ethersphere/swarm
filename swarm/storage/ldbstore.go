@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // disk storage layer for the package bzz
-// DbStore implements the ChunkStore interface and is used by the DPA as
+// DbStore implements the ChunkStore interface and is used by the FileStore as
 // persistent storage of chunks
 // it implements purging based on access count allowing for external control of
 // max capacity
@@ -641,7 +641,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *LDBStore) Get(addr Address) (chunk Chunk, err error) {
+func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
 	log.Trace("ldbstore.get", "key", addr)
 

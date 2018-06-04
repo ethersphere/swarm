@@ -75,7 +75,7 @@ func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
 // it calls fetch with the request, which blocks until the chunk
 // arrived or context is done
 func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
-	chunk, fetch, err := n.get(ref)
+	chunk, fetch, err := n.get(rctx, ref)
 	if fetch == nil {
 		return chunk, err
 	}
@@ -83,8 +83,8 @@ func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 }
 
 // Has
-func (n *NetStore) Has(ref Address) func(context.Context) (Chunk, error) {
-	_, fetch, _ := n.get(ref)
+func (n *NetStore) Has(ctx context.Context, ref Address) func(context.Context) (Chunk, error) {
+	_, fetch, _ := n.get(ctx, ref)
 	return fetch
 }
 
@@ -100,11 +100,11 @@ func (n *NetStore) Close() {
 // or all fetcher contexts are done
 // it returns a chunk, a fetcher function and an error
 // if chunk is nil, fetcher needs to be called with a context to return the chunk
-func (n *NetStore) get(ref Address) (Chunk, func(context.Context) (Chunk, error), error) {
+func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Context) (Chunk, error), error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
-	chunk, err := n.store.Get(ref)
+	chunk, err := n.store.Get(ctx, ref)
 	if err == nil {
 		return chunk, nil, nil
 	}

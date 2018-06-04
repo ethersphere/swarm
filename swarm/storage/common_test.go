@@ -139,7 +139,8 @@ func mget(store ChunkStore, hs []Address, f func(h Address, chunk Chunk) error) 
 	for _, k := range hs {
 		go func(h Address) {
 			defer wg.Done()
-			chunk, err := store.Get(h)
+			// TODO: write timeout with context
+			chunk, err := store.Get(nil, h)
 			if err != nil {
 				errc <- err
 				return
@@ -255,7 +256,7 @@ func (m *MapChunkStore) Put(ch Chunk) (func(context.Context) error, error) {
 	return func(context.Context) error { return nil }, nil
 }
 
-func (m *MapChunkStore) Get(ref Address) (Chunk, error) {
+func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	chunk := m.chunks[ref.Hex()]
@@ -280,7 +281,7 @@ func (f *fakeChunkStore) Put(ch Chunk) (func(context.Context) error, error) {
 }
 
 // Gut doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Get(ref Address) (Chunk, error) {
+func (f *fakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 	panic("FakeChunkStore doesn't support Get")
 }
 

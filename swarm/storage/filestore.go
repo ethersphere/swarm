@@ -23,14 +23,14 @@ import (
 )
 
 /*
-DPA provides the client API entrypoints Store and Retrieve to store and retrieve
+FileStore provides the client API entrypoints Store and Retrieve to store and retrieve
 It can store anything that has a byte slice representation, so files or serialised objects etc.
 
-Storage: DPA calls the Chunker to segment the input datastream of any size to a merkle hashed tree of chunks. The key of the root block is returned to the client.
+Storage: FileStore calls the Chunker to segment the input datastream of any size to a merkle hashed tree of chunks. The key of the root block is returned to the client.
 
-Retrieval: given the key of the root block, the DPA retrieves the block chunks and reconstructs the original data and passes it back as a lazy reader. A lazy reader is a reader with on-demand delayed processing, i.e. the chunks needed to reconstruct a large file are only fetched and processed if that particular part of the document is actually read.
+Retrieval: given the key of the root block, the FileStore retrieves the block chunks and reconstructs the original data and passes it back as a lazy reader. A lazy reader is a reader with on-demand delayed processing, i.e. the chunks needed to reconstruct a large file are only fetched and processed if that particular part of the document is actually read.
 
-As the chunker produces chunks, DPA dispatches them to its own chunk store
+As the chunker produces chunks, FileStore dispatches them to its own chunk store
 implementation for storage or retrieval.
 */
 
@@ -46,49 +46,40 @@ var (
 	retryInterval = 30 * time.Second
 )
 
-type DPAAPI struct {
-	DPA
+type FileStore struct {
+	ChunkStore
 	hashFunc SwarmHasher
 }
 
-type DPAParams struct {
-	Hash     string
-	Local    bool
-	DataDir  string
-	BaseAddr []byte
+type FileStoreParams struct {
+	Hash  string
+	Local bool
 }
 
-func NewDPAParams() *DPAParams {
-	return &DPAParams{
+func NewFileStoreParams() *FileStoreParams {
+	return &FileStoreParams{
 		Hash:  DefaultHash,
 		Local: false,
 	}
 }
 
 // for testing locally
-func NewLocalDPA(dataDir string, baseAddr []byte) (DPA, error) {
+func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
 	params := NewDefaultLocalStoreParams()
-	params.Init(dataDir)
+	params.Init(datadir)
 	localStore, err := NewLocalStore(params, nil)
 	if err != nil {
 		return nil, err
 	}
 	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(DefaultHash)))
-	return NewFakeDPA(localStore), nil
+	return NewFileStore(localStore, NewFileStoreParams()), nil
 }
 
-func NewLocalDPAAPI(dataDir string, baseAddr []byte) (*DPAAPI, error) {
-	dpa, err := NewLocalDPA(dataDir, baseAddr)
-	if err != nil {
-		return nil, err
-	}
-	return NewDPAAPI(dpa, NewDPAParams()), nil
-}
-
-func NewDPAAPI(dpa DPA, params *DPAParams) *DPAAPI {
-	return &DPAAPI{
-		DPA:      dpa,
-		hashFunc: MakeHashFunc(params.Hash),
+func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
+	hashFunc := MakeHashFunc(params.Hash)
+	return &FileStore{
+		ChunkStore: store,
+		hashFunc:   hashFunc,
 	}
 }
 
@@ -97,47 +88,20 @@ func NewDPAAPI(dpa DPA, params *DPAParams) *DPAAPI {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
-func (self *DPAAPI) Retrieve(addr Address) (reader *LazyChunkReader, isEncrypted bool) {
+func (self *FileStore) Retrieve(addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > self.hashFunc().Size()
-	getter := NewHasherStore(self.DPA, self.hashFunc, isEncrypted)
+	getter := NewHasherStore(self.ChunkStore, self.hashFunc, isEncrypted)
 	reader = TreeJoin(addr, getter, 0)
 	return
 }
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPAAPI) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
-	putter := NewHasherStore(self.DPA, self.hashFunc, toEncrypt)
+func (self *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
+	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
 	return PyramidSplit(ctx, data, putter, putter)
 }
 
-func (self *DPAAPI) HashSize() int {
+func (self *FileStore) HashSize() int {
 	return self.hashFunc().Size()
-}
-
-type FakeDPA struct {
-	store ChunkStore
-}
-
-func NewFakeDPA(store ChunkStore) *FakeDPA {
-	return &FakeDPA{
-		store: store,
-	}
-}
-
-func (f *FakeDPA) Get(ctx context.Context, ref Address) (ch Chunk, err error) {
-	return f.store.Get(ref)
-}
-
-func (f *FakeDPA) Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error) {
-	return f.store.Put(ch)
-}
-
-func (f *FakeDPA) Has(ref Address) (waitToStore func(context.Context) error, err error) {
-	_, err = f.store.Get(ref)
-	return func(context.Context) error { return nil }, err
-}
-
-func (f *FakeDPA) Close() {
-
 }

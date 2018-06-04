@@ -125,7 +125,7 @@ A node will also forward to everyone if the address hint provided is in its prox
 
 ### CACHING
 
-pss implements a simple caching mechanism for messages, using the swarm DPA for storage of the messages and generation of the digest keys used in the cache table. The caching is intended to alleviate the following:
+pss implements a simple caching mechanism for messages, using the swarm FileStore for storage of the messages and generation of the digest keys used in the cache table. The caching is intended to alleviate the following:
 
 - save messages so that they can be delivered later if the recipient was not online at the time of sending.
 

@@ -134,7 +134,7 @@ func (self *Pss) String() string {
 // Creates a new Pss instance.
 //
 // In addition to params, it takes a swarm network overlay
-// and a DPA storage for message cache storage.
+// and a FileStore storage for message cache storage.
 func NewPss(k network.Overlay, params *PssParams) (*Pss, error) {
 	if params.privateKey == nil {
 		return nil, errors.New("missing private key for pss")
@@ -677,9 +677,9 @@ func (self *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 	psp, ok := self.symKeyPool[symkeyid][topic]
 	self.symKeyPoolMu.Unlock()
 	if !ok {
-		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic, symkeyid)
+		return fmt.Errorf("invalid topic '%s' for symkey '%s'", topic.String(), symkeyid)
 	} else if psp.address == nil {
-		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic, symkeyid)
+		return fmt.Errorf("no address hint for topic '%s' symkey '%s'", topic.String(), symkeyid)
 	}
 	err = self.send(*psp.address, topic, msg, false, symkey)
 	return err
@@ -697,9 +697,9 @@ func (self *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
 	psp, ok := self.pubKeyPool[pubkeyid][topic]
 	self.pubKeyPoolMu.Unlock()
 	if !ok {
-		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic, pubkeyid)
+		return fmt.Errorf("invalid topic '%s' for pubkey '%s'", topic.String(), pubkeyid)
 	} else if psp.address == nil {
-		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic, pubkeyid)
+		return fmt.Errorf("no address hint for topic '%s' pubkey '%s'", topic.String(), pubkeyid)
 	}
 	go func() {
 		self.send(*psp.address, topic, msg, true, common.FromHex(pubkeyid))

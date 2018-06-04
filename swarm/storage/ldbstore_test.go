@@ -148,7 +148,7 @@ func testDbStoreNotFound(t *testing.T, mock bool) {
 	}
 	defer db.close()
 
-	_, err = db.Get(ZeroAddr)
+	_, err = db.Get(nil, ZeroAddr)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -294,7 +294,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for _, a := range addrs {
-		_, err := ldb.Get(a)
+		_, err := ldb.Get(nil, a)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -330,7 +330,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 
 	var missing int
 	for _, a := range addrs {
-		ret, err := ldb.Get(a)
+		ret, err := ldb.Get(nil, a)
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			missing++
 			continue
@@ -378,7 +378,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		_, err := ldb.Get(chunks[i])
+		_, err := ldb.Get(nil, chunks[i])
 
 		if i%2 == 0 {
 			// expect even chunks to be missing
@@ -437,7 +437,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	}
 	// expect for first chunk to be missing, because it has the smallest access value
 	for i := 0; i < surplus; i++ {
-		_, err = ldb.Get(addrs[i])
+		_, err = ldb.Get(nil, addrs[i])
 		if err == nil {
 			t.Fatal("expected first chunk to be missing, but got no error")
 		}
@@ -445,7 +445,7 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	// expect for last chunk to be present, as it has the largest access value
 	for i := surplus + capacity*1/4; i < surplus+capacity; i++ {
-		_, err = ldb.Get(addrs[i])
+		_, err = ldb.Get(nil, addrs[i])
 		if err != nil {
 			t.Fatalf("chunk %v: expected no error, but got %s", i, err)
 		}

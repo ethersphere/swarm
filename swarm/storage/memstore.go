@@ -18,7 +18,11 @@
 
 package storage
 
-import lru "github.com/hashicorp/golang-lru"
+import (
+	"context"
+
+	lru "github.com/hashicorp/golang-lru"
+)
 
 type MemStore struct {
 	cache    *lru.Cache
@@ -44,7 +48,7 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 	}
 }
 
-func (m *MemStore) Get(addr Address) (Chunk, error) {
+func (m *MemStore) Get(_ context.Context, addr Address) (Chunk, error) {
 	if m.disabled {
 		return nil, ErrChunkNotFound
 	}
@@ -56,12 +60,15 @@ func (m *MemStore) Get(addr Address) (Chunk, error) {
 	return c.(*chunk), nil
 }
 
-func (m *MemStore) Put(c Chunk) {
+func (m *MemStore) Put(c Chunk) (waitToStore func(ctx context.Context) error, err error) {
 	if m.disabled {
 		return
 	}
 
 	m.cache.Add(string(c.Address()), c)
+	return func(_ context.Context) error {
+		return nil
+	}, nil
 }
 
 func (m *MemStore) setCapacity(n int) {

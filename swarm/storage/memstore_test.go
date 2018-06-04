@@ -68,7 +68,7 @@ func TestMemStoreNotFound(t *testing.T) {
 	m := newTestMemStore()
 	defer m.Close()
 
-	_, err := m.Get(ZeroAddr)
+	_, err := m.Get(nil, ZeroAddr)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -169,10 +169,10 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 		}
 
 		for i := 0; i < tt.n; i++ {
-			_, err := memStore.Get(chunks[i].Address())
+			_, err := memStore.Get(nil, chunks[i].Address())
 			if err != nil {
 				if err == ErrChunkNotFound {
-					_, err := ldb.Get(chunks[i].Address())
+					_, err := ldb.Get(nil, chunks[i].Address())
 					if err != nil {
 						t.Fatalf("couldn't get chunk %v from ldb, got error: %v", i, err)
 					}
