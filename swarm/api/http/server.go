@@ -527,8 +527,7 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	var err error
 
 	// resolve the content key.
-	var manifestAddr storage.Address
-	manifestAddr = r.uri.Address()
+	manifestAddr := r.uri.Address()
 	if manifestAddr == nil {
 		manifestAddr, err = s.api.Resolve(r.uri)
 		if err != nil {
