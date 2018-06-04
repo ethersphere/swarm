@@ -475,12 +475,10 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				if parent.branchCount == 1 {
+				if parent.branchCount == 1 && self.depth() == 0 {
 					// Data is exactly one chunk.. pick the last chunk key as root
 					chunkWG.Wait()
 					lastChunksKey := parent.chunk[8 : 8+self.hashSize]
-
-					// TODO: Fix this for file size 524288 + 4096
 					copy(self.rootKey, lastChunksKey)
 					break
 				}
@@ -508,14 +506,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 				if parent.branchCount <= 1 {
 					chunkWG.Wait()
 
-					var depth int
-					for _, l := range self.chunkLevel {
-						if l == nil {
-							break
-						}
-						depth++
-					}
-					if depth == 0 {
+					if self.depth() == 0 {
 						copy(self.rootKey, pkey)
 					} else {
 						self.buildTree(isAppend, parent, chunkWG, true, pkey)
@@ -685,4 +676,14 @@ func (self *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, pare
 
 	return pkey
 
+}
+
+func (self *PyramidChunker) depth() (d int) {
+	for _, l := range self.chunkLevel {
+		if l == nil {
+			return
+		}
+		d++
+	}
+	return
 }

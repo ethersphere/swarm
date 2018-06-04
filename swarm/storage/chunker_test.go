@@ -238,9 +238,6 @@ func TestDataAppend(t *testing.T) {
 }
 
 func TestRandomData(t *testing.T) {
-	// TODO: fix pyramid split for this cases
-	//sizes := []int{524288 + 4096, 7*524288 + 4096}
-
 	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 524288, 524288 + 1, 524288 + 4097, 7 * 524288, 7*524288 + 1, 7*524288 + 4097}
 	tester := &chunkerTester{t: t}
 
