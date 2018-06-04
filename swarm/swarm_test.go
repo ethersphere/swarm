@@ -315,7 +315,7 @@ func TestLocalStoreAndRetrieve(t *testing.T) {
 	}
 }
 
-// testLocalStoreAndRetrieve creates a single Swarm instance, uploads
+// testLocalStoreAndRetrieve is using a single Swarm instance, to upload
 // a file of length n with optional random data using API Store function,
 // and checks the output of API Retrieve function on the same instance.
 // This is a regression test for issue
