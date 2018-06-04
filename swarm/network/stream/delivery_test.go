@@ -46,7 +46,8 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 
 	peerID := tester.IDs[0]
 
-	streamer.delivery.RequestFromPeers(hash0[:], true)
+	ctx := context.Background()
+	streamer.delivery.RequestFromPeers(ctx, storage.Address(hash0[:]), nil, true, &sync.Map{})
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -92,7 +93,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Addr: chunk.Addr[:],
+					Addr: chunk.Address()[:],
 				},
 				Peer: peerID,
 			},
@@ -138,10 +139,15 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	})
 
 	hash := storage.Address(hash0[:])
-	chunk := storage.NewChunk(hash, nil)
-	chunk.SData = hash
-	localStore.Put(chunk)
-	chunk.WaitToStore()
+	chunk := storage.NewChunk(hash, hash)
+	wait, err := localStore.Put(chunk)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	err = wait(ctx)
+	if err != nil {
+		t.Fatalf("Expected no err got %v", err)
+	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -177,10 +183,12 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	}
 
 	hash = storage.Address(hash1[:])
-	chunk = storage.NewChunk(hash, nil)
-	chunk.SData = hash1[:]
-	localStore.Put(chunk)
-	chunk.WaitToStore()
+	chunk = storage.NewChunk(hash, hash1[:])
+	wait, err = localStore.Put(chunk)
+	err = wait(ctx)
+	if err != nil {
+		t.Fatalf("Expected no err got %v", err)
+	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -234,16 +242,16 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 	chunkKey := hash0[:]
 	chunkData := hash1[:]
-	chunk, created := localStore.GetOrCreateRequest(chunkKey)
-
-	if !created {
-		t.Fatal("chunk already exists")
-	}
-	select {
-	case <-chunk.ReqC:
-		t.Fatal("chunk is already received")
-	default:
-	}
+	// chunk, created := localStore.GetOrCreateRequest(chunkKey)
+	//
+	// if !created {
+	// 	t.Fatal("chunk already exists")
+	// }
+	// select {
+	// case <-chunk.ReqC:
+	// 	t.Fatal("chunk is already received")
+	// default:
+	// }
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
@@ -277,20 +285,20 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	timeout := time.NewTimer(1 * time.Second)
-
-	select {
-	case <-timeout.C:
-		t.Fatal("timeout receiving chunk")
-	case <-chunk.ReqC:
-	}
+	// timeout := time.NewTimer(1 * time.Second)
+	//
+	// select {
+	// case <-timeout.C:
+	// 	t.Fatal("timeout receiving chunk")
+	// case <-chunk.ReqC:
+	// }
 
 	storedChunk, err := localStore.Get(chunkKey)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	if !bytes.Equal(storedChunk.SData, chunkData) {
+	if !bytes.Equal(storedChunk.Data(), chunkData) {
 		t.Fatal("Retrieved chunk has different data than original")
 	}
 
@@ -345,9 +353,18 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
 	rrFileStore := storage.NewFileStore(newRoundRobinStore(sim.Stores[1:]...), storage.NewFileStoreParams())
 	size := chunkCount * chunkSize
-	fileHash, wait, err := rrFileStore.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	fileHash, wait, err := rrFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+	fileHash, wait, err := rrdpa.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// wait until all chunks stored
-	wait()
+	if err != nil {
+		t.Fatal(err.Error())
+	}
+
+	err = wait(ctx)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -397,10 +414,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		}
 		// create a retriever FileStore for the pivot node
 		delivery := deliveries[sim.IDs[0]]
-		retrieveFunc := func(chunk *storage.Chunk) error {
-			return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
+
+		netStore, err := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), network.NewFetchFunc(delivery.RequestFromPeers, true))
+		if err != nil {
+			t.Fatal(err)
 		}
-		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
 		fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 
 		go func() {
@@ -446,7 +464,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 	startedAt := time.Now()
 	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel = context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result, err := sim.Run(ctx, conf)
 	finishedAt := time.Now()

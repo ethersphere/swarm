@@ -128,11 +128,11 @@ func TestReverse(t *testing.T) {
 	chunk := newUpdateChunk(key, &sig, period, version, safeName, data, len(data))
 
 	// check that we can recover the owner account from the update chunk's signature
-	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.SData)
+	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.Data())
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := rh.keyDataHash(chunk.Addr, checkdata)
+	checkdigest := rh.keyDataHash(chunk.Address(), checkdata)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
@@ -144,8 +144,8 @@ func TestReverse(t *testing.T) {
 		t.Fatalf("addresses dont match: %x != %x", originaladdress, recoveredaddress)
 	}
 
-	if !bytes.Equal(key[:], chunk.Addr[:]) {
-		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Addr)
+	if !bytes.Equal(key[:], chunk.Address()[:]) {
+		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Address())
 	}
 	if period != checkperiod {
 		t.Fatalf("Expected period '%d', was '%d'", period, checkperiod)
@@ -182,14 +182,15 @@ func TestHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chunk, err := rh.chunkStore.Get(storage.Address(rootChunkKey))
+	addr := storage.Address(rootChunkKey)
+	ch, err := rh.dpa.Get(ctx, addr)
 	if err != nil {
 		t.Fatal(err)
-	} else if len(chunk.SData) < 16 {
-		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(chunk.SData))
+	} else if len(ch.Data()) < 16 {
+		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(ch.Data()))
 	}
-	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[2:10])
-	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[10:])
+	startblocknumber := binary.LittleEndian.Uint64(ch.Data()[2:10])
+	chunkfrequency := binary.LittleEndian.Uint64(ch.Data()[10:])
 	if startblocknumber != uint64(backend.blocknumber) {
 		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber)
 	}
@@ -252,7 +253,8 @@ func TestHandler(t *testing.T) {
 		HeaderGetter: rh.headerGetter,
 	}
 
-	rh.chunkStore.Close()
+	// TODO: why Close doesn't work
+	// rh.dpa.Close()
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -398,7 +400,7 @@ func TestMultihash(t *testing.T) {
 	defer teardownTest()
 
 	// create a new resource
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
 	defer cancel()
 	_, _, err = rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
@@ -437,7 +439,7 @@ func TestMultihash(t *testing.T) {
 		t.Fatalf("Expected update to fail with last byte skipped")
 	}
 
-	data, err := getUpdateDirect(rh, swarmhashkey)
+	data, err := getUpdateDirect(ctx, rh, swarmhashkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -448,7 +450,7 @@ func TestMultihash(t *testing.T) {
 	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
 		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
 	}
-	data, err = getUpdateDirect(rh, sha1key)
+	data, err = getUpdateDirect(ctx, rh, sha1key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -470,7 +472,7 @@ func TestMultihash(t *testing.T) {
 		OwnerValidator: rh.ownerValidator,
 	}
 	// test with signed data
-	rh.chunkStore.Close()
+	// rh.dpa.Close()
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -488,7 +490,7 @@ func TestMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err = getUpdateDirect(rh2, swarmhashsignedkey)
+	data, err = getUpdateDirect(ctx, rh2, swarmhashsignedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,7 +501,7 @@ func TestMultihash(t *testing.T) {
 	if !bytes.Equal(swarmhashdecode.Digest, swarmhashbytes.Bytes()) {
 		t.Fatalf("Decoded SHA1 hash '%x' does not match original hash '%x'", swarmhashdecode.Digest, swarmhashbytes.Bytes())
 	}
-	data, err = getUpdateDirect(rh2, sha1signedkey)
+	data, err = getUpdateDirect(ctx, rh2, sha1signedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -558,7 +560,7 @@ func TestChunkValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
-	if !rh.Validate(chunk.Addr, chunk.SData) {
+	if !rh.Validate(chunk.Address(), chunk.Data()) {
 		t.Fatal("Chunk validator fail on update chunk")
 	}
 
@@ -569,7 +571,7 @@ func TestChunkValidator(t *testing.T) {
 		t.Fatal(err)
 	}
 	chunk = rh.newMetaChunk(safeName, startBlock, resourceFrequency)
-	if !rh.Validate(chunk.Addr, chunk.SData) {
+	if !rh.Validate(chunk.Address(), chunk.Data()) {
 		t.Fatal("Chunk validator fail on metadata chunk")
 	}
 }
@@ -761,12 +763,12 @@ func newTestSigner() (*GenericSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rh *Handler, addr storage.Address) ([]byte, error) {
-	chunk, err := rh.chunkStore.Get(addr)
+func getUpdateDirect(ctx context.Context, rh *Handler, addr storage.Address) ([]byte, error) {
+	ch, err := rh.dpa.Get(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
-	_, _, _, _, data, _, err := rh.parseUpdate(chunk.SData)
+	_, _, _, _, data, _, err := rh.parseUpdate(ch.Data())
 	if err != nil {
 		return nil, err
 	}

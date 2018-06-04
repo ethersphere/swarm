@@ -17,8 +17,9 @@
 package storage
 
 import (
+	"context"
 	"fmt"
-	"sync"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
@@ -33,10 +34,13 @@ type hasherStore struct {
 	store           ChunkStore
 	hashFunc        SwarmHasher
 	chunkEncryption *chunkEncryption
-	hashSize        int   // content hash size
-	refSize         int64 // reference size (content hash + possibly encryption key)
-	wg              *sync.WaitGroup
-	closed          chan struct{}
+	hashSize        int                              // content hash size
+	refSize         int64                            // reference size (content hash + possibly encryption key)
+	count           uint64                           // number of chunks to store
+	errC            chan error                       // global error channel
+	waitC           chan func(context.Context) error // ChunkStore response wait-to-store functions
+	doneC           chan struct{}                    // closed by Close() call to indicate that count is the final number of chunks
+	quitC           chan struct{}                    // closed to quit unterminated routines
 }
 
 func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
@@ -47,9 +51,9 @@ func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
 }
 
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
-// With the HasherStore you can put and get chunk data (which is just []byte) into a ChunkStore
+// With the HasherStore you can put and get chunk data (which is just []byte) into a DPA
 // and the hasherStore will take core of encryption/decryption of data if necessary
-func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
+func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
 	var chunkEncryption *chunkEncryption
 
 	hashSize := hashFunc().Size()
@@ -59,15 +63,19 @@ func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool)
 		chunkEncryption = newChunkEncryption(DefaultChunkSize, refSize)
 	}
 
-	return &hasherStore{
-		store:           chunkStore,
+	h := &hasherStore{
+		store:           store,
 		hashFunc:        hashFunc,
 		chunkEncryption: chunkEncryption,
 		hashSize:        hashSize,
 		refSize:         refSize,
-		wg:              &sync.WaitGroup{},
-		closed:          make(chan struct{}),
+		waitC:           make(chan func(ctx context.Context) error),
+		errC:            make(chan error),
+		doneC:           make(chan struct{}),
+		quitC:           make(chan struct{}),
 	}
+
+	return h
 }
 
 // Put stores the chunkData into the ChunkStore of the hasherStore and returns the reference.
@@ -75,7 +83,6 @@ func NewHasherStore(chunkStore ChunkStore, hashFunc SwarmHasher, toEncrypt bool)
 // Asynchronous function, the data will not necessarily be stored when it returns.
 func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 	c := chunkData
-	size := chunkData.Size()
 	var encryptionKey encryption.Key
 	if h.chunkEncryption != nil {
 		var err error
@@ -84,29 +91,28 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 			return nil, err
 		}
 	}
-	chunk := h.createChunk(c, size)
-
+	chunk := h.createChunk(c)
 	h.storeChunk(chunk)
 
-	return Reference(append(chunk.Addr, encryptionKey...)), nil
+	return Reference(append(chunk.Address(), encryptionKey...)), nil
 }
 
 // Get returns data of the chunk with the given reference (retrieved from the ChunkStore of hasherStore).
 // If the data is encrypted and the reference contains an encryption key, it will be decrypted before
 // return.
-func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
-	key, encryptionKey, err := parseReference(ref, h.hashSize)
+func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error) {
+	addr, encryptionKey, err := parseReference(ref, h.hashSize)
 	if err != nil {
 		return nil, err
 	}
+
+	chunk, err := h.store.Get(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+
+	chunkData := ChunkData(chunk.Data())
 	toDecrypt := (encryptionKey != nil)
-
-	chunk, err := h.store.Get(key)
-	if err != nil {
-		return nil, err
-	}
-
-	chunkData := chunk.SData
 	if toDecrypt {
 		var err error
 		chunkData, err = h.decryptChunkData(chunkData, encryptionKey)
@@ -120,15 +126,47 @@ func (h *hasherStore) Get(ref Reference) (ChunkData, error) {
 // Close indicates that no more chunks will be put with the hasherStore, so the Wait
 // function can return when all the previously put chunks has been stored.
 func (h *hasherStore) Close() {
-	close(h.closed)
+	close(h.doneC)
 }
 
 // Wait returns when
 //    1) the Close() function has been called and
 //    2) all the chunks which has been Put has been stored
-func (h *hasherStore) Wait() {
-	<-h.closed
-	h.wg.Wait()
+func (h *hasherStore) Wait(ctx context.Context) error {
+	go func() {
+		for {
+			select {
+			case wait := <-h.waitC:
+				go func() {
+					select {
+					case h.errC <- wait(ctx):
+					case <-h.quitC:
+					}
+				}()
+			}
+		}
+	}()
+	defer close(h.quitC)
+	var n uint64
+	var done bool
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-h.doneC:
+			done = true
+		case err := <-h.errC:
+			if err != nil {
+				return err
+			}
+			n++
+		}
+		if done {
+			if n >= h.count {
+				return nil
+			}
+		}
+	}
 }
 
 func (h *hasherStore) createHash(chunkData ChunkData) Address {
@@ -138,12 +176,9 @@ func (h *hasherStore) createHash(chunkData ChunkData) Address {
 	return hasher.Sum(nil)
 }
 
-func (h *hasherStore) createChunk(chunkData ChunkData, chunkSize int64) *Chunk {
+func (h *hasherStore) createChunk(chunkData ChunkData) *chunk {
 	hash := h.createHash(chunkData)
-	chunk := NewChunk(hash, nil)
-	chunk.SData = chunkData
-	chunk.Size = chunkSize
-
+	chunk := NewChunk(hash, chunkData)
 	return chunk
 }
 
@@ -187,7 +222,7 @@ func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryp
 	}
 
 	// removing extra bytes which were just added for padding
-	length := ChunkData(decryptedSpan).Size()
+	length := int64(ChunkData(decryptedSpan).Size())
 	for length > DefaultChunkSize {
 		length = length + (DefaultChunkSize - 1)
 		length = length / DefaultChunkSize
@@ -205,25 +240,34 @@ func (h *hasherStore) RefSize() int64 {
 	return h.refSize
 }
 
-func (h *hasherStore) storeChunk(chunk *Chunk) {
-	h.wg.Add(1)
+func (h *hasherStore) storeChunk(chunk *chunk) {
+	wait, err := h.store.Put(chunk)
+	atomic.AddUint64(&h.count, 1)
+	if err != nil {
+		select {
+		case h.errC <- err:
+		case <-h.quitC:
+		}
+		return
+	}
 	go func() {
-		<-chunk.dbStoredC
-		h.wg.Done()
+		select {
+		case h.waitC <- wait:
+		case <-h.quitC:
+		}
 	}()
-	h.store.Put(chunk)
 }
 
 func parseReference(ref Reference, hashSize int) (Address, encryption.Key, error) {
-	encryptedKeyLength := hashSize + encryption.KeyLength
+	encryptedRefLength := hashSize + encryption.KeyLength
 	switch len(ref) {
-	case KeyLength:
+	case AddressLength:
 		return Address(ref), nil, nil
-	case encryptedKeyLength:
+	case encryptedRefLength:
 		encKeyIdx := len(ref) - encryption.KeyLength
 		return Address(ref[:encKeyIdx]), encryption.Key(ref[encKeyIdx:]), nil
 	default:
-		return nil, nil, fmt.Errorf("Invalid reference length, expected %v or %v got %v", hashSize, encryptedKeyLength, len(ref))
+		return nil, nil, fmt.Errorf("Invalid reference length, expected %v or %v got %v", hashSize, encryptedRefLength, len(ref))
 	}
 
 }

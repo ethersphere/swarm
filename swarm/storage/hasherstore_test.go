@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
@@ -45,13 +46,13 @@ func TestHasherStore(t *testing.T) {
 		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt)
 
 		// Put two random chunks into the hasherStore
-		chunkData1 := GenerateRandomChunk(int64(tt.chunkLength)).SData
+		chunkData1 := GenerateRandomChunk(int64(tt.chunkLength)).Data()
 		key1, err := hasherStore.Put(chunkData1)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
 		}
 
-		chunkData2 := GenerateRandomChunk(int64(tt.chunkLength)).SData
+		chunkData2 := GenerateRandomChunk(int64(tt.chunkLength)).Data()
 		key2, err := hasherStore.Put(chunkData2)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
@@ -59,25 +60,34 @@ func TestHasherStore(t *testing.T) {
 
 		hasherStore.Close()
 
+		ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
 		// Wait until chunks are really stored
-		hasherStore.Wait()
+		err = hasherStore.Wait(ctx)
+		if err != nil {
+			cancel()
+			t.Fatalf("Expected no error got \"%v\"", err)
+		}
 
 		// Get the first chunk
-		retrievedChunkData1, err := hasherStore.Get(key1)
+		retrievedChunkData1, err := hasherStore.Get(ctx, key1)
 		if err != nil {
+			cancel()
 			t.Fatalf("Expected no error, got \"%v\"", err)
 		}
 
 		// Retrieved data should be same as the original
 		if !bytes.Equal(chunkData1, retrievedChunkData1) {
+			cancel()
 			t.Fatalf("Expected retrieved chunk data %v, got %v", common.Bytes2Hex(chunkData1), common.Bytes2Hex(retrievedChunkData1))
 		}
 
 		// Get the second chunk
-		retrievedChunkData2, err := hasherStore.Get(key2)
+		retrievedChunkData2, err := hasherStore.Get(ctx, key2)
 		if err != nil {
+			cancel()
 			t.Fatalf("Expected no error, got \"%v\"", err)
 		}
+		cancel()
 
 		// Retrieved data should be same as the original
 		if !bytes.Equal(chunkData2, retrievedChunkData2) {
@@ -101,12 +111,12 @@ func TestHasherStore(t *testing.T) {
 		}
 
 		// Check if chunk data in store is encrypted or not
-		chunkInStore, err := chunkStore.Get(hash1)
+		chunkInStore, err := chunkStore.Get(ctx, hash1)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
 		}
 
-		chunkDataInStore := chunkInStore.SData
+		chunkDataInStore := chunkInStore.Data()
 
 		if tt.toEncrypt && bytes.Equal(chunkData1, chunkDataInStore) {
 			t.Fatalf("Chunk expected to be encrypted but it is stored without encryption")

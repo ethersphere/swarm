@@ -17,11 +17,12 @@
 package stream
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"fmt"
-	"time"
+	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -43,17 +44,17 @@ var (
 )
 
 type Delivery struct {
-	db       *storage.DBAPI
-	overlay  network.Overlay
-	receiveC chan *ChunkDeliveryMsg
-	getPeer  func(discover.NodeID) *Peer
+	fileStore storage.FileStore
+	overlay   network.Overlay
+	receiveC  chan *ChunkDeliveryMsg
+	getPeer   func(discover.NodeID) *Peer
 }
 
-func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
+func NewDelivery(overlay network.Overlay, fileStore FileStore) *Delivery {
 	d := &Delivery{
-		db:       db,
-		overlay:  overlay,
-		receiveC: make(chan *ChunkDeliveryMsg, deliveryCap),
+		fileStore: fileStore,
+		overlay:   overlay,
+		receiveC:  make(chan *ChunkDeliveryMsg, deliveryCap),
 	}
 
 	go d.processReceivedChunks()
@@ -64,21 +65,40 @@ func NewDelivery(overlay network.Overlay, db *storage.DBAPI) *Delivery {
 type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
-	db         *storage.DBAPI
+	fileStore  storage.FileStore
 	currentLen uint64
 	quit       chan struct{}
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
-func NewSwarmChunkServer(db *storage.DBAPI) *SwarmChunkServer {
+func NewSwarmChunkServer(fileStore FileStore) *SwarmChunkServer {
 	s := &SwarmChunkServer{
 		deliveryC: make(chan []byte, deliveryCap),
 		batchC:    make(chan []byte),
-		db:        db,
+		fileStore: FileStore,
 		quit:      make(chan struct{}),
 	}
 	go s.processDeliveries()
 	return s
+}
+
+func (s *SwarmChunkServer) context(req *RetrieveRequestMsg) context.Context {
+	var cancel func()
+	ctx := context.Background()
+	// if req.Timeout > 0 {
+	// ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+	// }
+	ctx, cancel = context.WithCancel(ctx)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-s.quit:
+			cancel()
+		}
+	}()
+
+	return ctx
 }
 
 // processDeliveries handles delivered chunk hashes
@@ -120,13 +140,11 @@ func (s *SwarmChunkServer) Close() {
 
 // GetData retrives chunk data from db store
 func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.db.Get(storage.Address(key))
-	if err == storage.ErrFetching {
-		<-chunk.ReqC
-	} else if err != nil {
+	chunk, err := s.fileStore.Get(immediately, storage.Address(key))
+	if err != nil {
 		return nil, err
 	}
-	return chunk.SData, nil
+	return chunk.Data(), nil
 }
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
@@ -144,48 +162,22 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 		return err
 	}
 	streamer := s.Server.(*SwarmChunkServer)
-	chunk, created := d.db.GetOrCreateRequest(req.Addr)
-	if chunk.ReqC != nil {
-		if created {
-			if err := d.RequestFromPeers(chunk.Addr[:], true, sp.ID()); err != nil {
-				log.Warn("unable to forward chunk request", "peer", sp.ID(), "key", chunk.Addr, "err", err)
-				chunk.SetErrored(storage.ErrChunkForward)
-				return nil
-			}
+	go func() {
+		chunk, err := d.fileStore.Get(streamer.context(req), req.Addr)
+		if err != nil {
+			return
 		}
-		go func() {
-			t := time.NewTimer(10 * time.Minute)
-			defer t.Stop()
-
-			log.Debug("waiting delivery", "peer", sp.ID(), "hash", req.Addr, "node", common.Bytes2Hex(d.overlay.BaseAddr()), "created", created)
-			start := time.Now()
-			select {
-			case <-chunk.ReqC:
-				log.Debug("retrieve request ReqC closed", "peer", sp.ID(), "hash", req.Addr, "time", time.Since(start))
-			case <-t.C:
-				log.Debug("retrieve request timeout", "peer", sp.ID(), "hash", req.Addr)
-				chunk.SetErrored(storage.ErrChunkTimeout)
+		if req.SkipCheck {
+			err = sp.Deliver(chunk, s.priority)
+			if err != nil {
+				log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
+				sp.Drop(err)
 				return
 			}
-			chunk.SetErrored(nil)
+		}
+		streamer.deliveryC <- chunk.Address()[:]
+	}()
 
-			if req.SkipCheck {
-				err := sp.Deliver(chunk, s.priority)
-				if err != nil {
-					log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
-					sp.Drop(err)
-				}
-			}
-			streamer.deliveryC <- chunk.Addr[:]
-		}()
-		return nil
-	}
-	// TODO: call the retrieve function of the outgoing syncer
-	if req.SkipCheck {
-		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Addr)
-		return sp.Deliver(chunk, s.priority)
-	}
-	streamer.deliveryC <- chunk.Addr[:]
 	return nil
 }
 
@@ -201,69 +193,80 @@ func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error
 	return nil
 }
 
+var immediately context.Context
+
+func init() {
+	var cancel func()
+	immediately, cancel = context.WithCancel(context.Background())
+	cancel()
+}
+
 func (d *Delivery) processReceivedChunks() {
-R:
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
 
-		// this should be has locally
-		chunk, err := d.db.Get(req.Addr)
-		if err == nil {
-			continue R
-		}
-		if err != storage.ErrFetching {
-			panic(fmt.Sprintf("not in db? addr %v chunk %v", req.Addr, chunk))
-		}
-		select {
-		case <-chunk.ReqC:
-			log.Error("someone else delivered?", "hash", chunk.Addr.Hex())
-			continue R
-		default:
-		}
-		chunk.SData = req.SData
-		d.db.Put(chunk)
-
-		go func(req *ChunkDeliveryMsg) {
-			err := chunk.WaitToStore()
+		_, err := d.fileStore.Put(storage.NewChunk(req.Addr, req.SData))
+		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				req.peer.Drop(err)
 			}
-		}(req)
+			return
+		}
 	}
 }
 
 // RequestFromPeers sends a chunk retrieve request to
-func (d *Delivery) RequestFromPeers(hash []byte, skipCheck bool, peersToSkip ...discover.NodeID) error {
-	var success bool
-	var err error
+func (d *Delivery) RequestFromPeers(ctx context.Context, addr storage.Address, source storage.Address, skipCheck bool, peersToSkip *sync.Map) (storage.Address, chan struct{}, error) {
 	requestFromPeersCount.Inc(1)
-	d.overlay.EachConn(hash, 255, func(p network.OverlayConn, po int, nn bool) bool {
-		spId := p.(network.Peer).ID()
-		for _, p := range peersToSkip {
-			if p == spId {
-				log.Trace("Delivery.RequestFromPeers: skip peer", "peer", spId)
+
+	//
+	var sp *Peer
+	var spAddr storage.Address
+
+	if source != nil {
+		var found bool
+		d.overlay.EachConn(source[:], 256, func(p network.OverlayConn, po int, nn bool) bool {
+			found = bytes.Equal(p.Address(), source[:])
+			spId := p.(network.Peer).ID()
+			sp = d.getPeer(spId)
+			if sp == nil {
+				log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
 				return true
 			}
+			return false
+		})
+		if !found {
+			return nil, nil, fmt.Errorf("source peer %v not found", spAddr.Hex())
 		}
-		sp := d.getPeer(spId)
-		if sp == nil {
-			log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
-			return true
-		}
-		// TODO: skip light nodes that do not accept retrieve requests
-		err = sp.SendPriority(&RetrieveRequestMsg{
-			Addr:      hash,
-			SkipCheck: skipCheck,
-		}, Top)
-		if err != nil {
-			return true
-		}
-		requestFromPeersEachCount.Inc(1)
-		success = true
-		return false
-	})
-	if success {
-		return nil
+	} else {
+		d.overlay.EachConn(addr[:], 255, func(p network.OverlayConn, po int, nn bool) bool {
+			spAddr = storage.Address(p.Address())
+			// TODO: skip light nodes that do not accept retrieve requests
+			if _, ok := peersToSkip.Load(spAddr); ok {
+				log.Trace("Delivery.RequestFromPeers: skip peer", "peer addr", spAddr.Hex())
+				return true
+			}
+			spId := p.(network.Peer).ID()
+			sp = d.getPeer(spId)
+			if sp == nil {
+				log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
+				return true
+			}
+			return false
+		})
 	}
-	return errors.New("no peer found")
+
+	if sp == nil {
+		return nil, nil, errors.New("no peer found")
+	}
+	err := sp.SendPriority(&RetrieveRequestMsg{
+		Addr:      addr,
+		SkipCheck: skipCheck,
+	}, Top)
+	if err != nil {
+		return nil, nil, err
+	}
+	requestFromPeersEachCount.Inc(1)
+
+	return spAddr, sp.quit, nil
 }

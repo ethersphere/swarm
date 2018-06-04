@@ -17,7 +17,9 @@
 package storage
 
 import (
+	"context"
 	"io"
+	"time"
 )
 
 /*
@@ -34,8 +36,14 @@ implementation for storage or retrieval.
 
 const (
 	defaultLDBCapacity                = 5000000 // capacity for LevelDB, by default 5*10^6*4096 bytes == 20GB
-	defaultCacheCapacity              = 500     // capacity for in-memory chunks' cache
-	defaultChunkRequestsCacheCapacity = 5000000 // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
+	defaultCacheCapacity              = 5000    // capacity for in-memory chunks' cache
+	defaultChunkRequestsCacheCapacity = 5000    // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
+)
+
+var (
+	// timeout interval before retrieval is timed out
+	searchTimeout = 30 * time.Second
+	retryInterval = 30 * time.Second
 )
 
 type FileStore struct {
@@ -44,12 +52,14 @@ type FileStore struct {
 }
 
 type FileStoreParams struct {
-	Hash string
+	Hash  string
+	Local bool
 }
 
 func NewFileStoreParams() *FileStoreParams {
 	return &FileStoreParams{
-		Hash: DefaultHash,
+		Hash:  DefaultHash,
+		Local: false,
 	}
 }
 
@@ -87,9 +97,9 @@ func (self *FileStore) Retrieve(addr Address) (reader *LazyChunkReader, isEncryp
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *FileStore) Store(data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(), err error) {
+func (self *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
 	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
-	return PyramidSplit(data, putter, putter)
+	return PyramidSplit(ctx, data, putter, putter)
 }
 
 func (self *FileStore) HashSize() int {

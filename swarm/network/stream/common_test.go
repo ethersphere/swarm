@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -63,7 +64,6 @@ var (
 	chunkSize         = 4096
 	registries        map[discover.NodeID]*TestRegistry
 	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
-	getRetrieveFunc   = defaultRetrieveFunc
 	subscriptionCount = 0
 	globalStore       mock.GlobalStorer
 	globalStoreDir    string
@@ -107,27 +107,27 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	store := stores[id].(*storage.LocalStore)
-	db := storage.NewDBAPI(store)
-	delivery := NewDelivery(kad, db)
+	store := stores[id]
+	netStore, err := storage.NewNetStore(store, newFakeFetcher)
+	delivery := NewDelivery(kad, dpa)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+	r := NewRegistry(addr, delivery, storage.NewFakeDPA(store), state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,
 	})
-	RegisterSwarmSyncerServer(r, db)
-	RegisterSwarmSyncerClient(r, db)
+	RegisterSwarmSyncerServer(r, store)
+	RegisterSwarmSyncerClient(r, dpa)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	fileStore := storage.NewFileStore(storage.NewNetStore(store, getRetrieveFunc(id)), storage.NewFileStoreParams())
-	testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
+	fileStore := storage.NewFileStore(netStore, storage.NewDPAParams())
+	testRegistry := &TestRegistry{Registry: r, dpaapi: dpaapi}
 	registries[id] = testRegistry
 	return testRegistry, nil
 }
 
-func defaultRetrieveFunc(id discover.NodeID) func(chunk *storage.Chunk) error {
-	return nil
+func newFakeFetcher(context.Context, storage.Address, *sync.Map) storage.FetchFunc {
+	return func(context.Context) {}
 }
 
 func datadirsCleanup() {
@@ -172,9 +172,12 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		return nil, nil, nil, removeDataDir, err
 	}
 
-	db := storage.NewDBAPI(localStore)
-	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+	dpa, err := storage.NewNetStore(localStore, newFakeFetcher)
+	if err != nil {
+		return nil, nil, nil, removeDataDir, err
+	}
+	delivery := NewDelivery(to, dpa)
+	streamer := NewRegistry(addr, delivery, localStore, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck: defaultSkipCheck,
 	})
 	teardown := func() {
@@ -217,14 +220,14 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 	}
 }
 
-func (rrs *roundRobinStore) Get(addr storage.Address) (*storage.Chunk, error) {
+func (rrs *roundRobinStore) Get(addr storage.Address) (storage.Chunk, error) {
 	return nil, errors.New("get not well defined on round robin store")
 }
 
-func (rrs *roundRobinStore) Put(chunk *storage.Chunk) {
+func (rrs *roundRobinStore) Put(chunk storage.Chunk) (func(context.Context) error, error) {
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
-	rrs.stores[idx].Put(chunk)
+	return rrs.stores[idx].Put(chunk)
 }
 
 func (rrs *roundRobinStore) Close() {
@@ -357,26 +360,27 @@ func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Str
 
 type testExternalClient struct {
 	hashes               chan []byte
-	db                   *storage.DBAPI
+	dpa                  DPA
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(db *storage.DBAPI) *testExternalClient {
+func newTestExternalClient(dpa DPA) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
-		db:                   db,
+		dpa:                  dpa,
 		enableNotificationsC: make(chan struct{}),
 	}
 }
 
-func (c *testExternalClient) NeedData(hash []byte) func() {
-	chunk, _ := c.db.GetOrCreateRequest(hash)
-	if chunk.ReqC == nil {
+func (c *testExternalClient) NeedData(hash []byte) func(context.Context) error {
+	wait := c.dpa.Has(storage.Address(hash))
+	if wait == nil {
 		return nil
 	}
 	c.hashes <- hash
-	return func() {
-		chunk.WaitToStore()
+	return func(ctx context.Context) error {
+		_, err := wait(ctx)
+		return err
 	}
 }
 

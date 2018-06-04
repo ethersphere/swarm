@@ -18,6 +18,7 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -74,70 +75,70 @@ func (db *testDbStore) close() {
 	}
 }
 
-func testDbStoreRandom(n int, processors int, chunksize int64, mock bool, t *testing.T) {
+func testDbStoreRandom(n int, chunksize int64, mock bool, t *testing.T) {
 	db, err := newTestDbStore(mock, true)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	defer db.close()
-	testStoreRandom(db, processors, n, chunksize, t)
+	testStoreRandom(db, n, chunksize, t)
 }
 
-func testDbStoreCorrect(n int, processors int, chunksize int64, mock bool, t *testing.T) {
+func testDbStoreCorrect(n int, chunksize int64, mock bool, t *testing.T) {
 	db, err := newTestDbStore(mock, false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	defer db.close()
-	testStoreCorrect(db, processors, n, chunksize, t)
+	testStoreCorrect(db, n, chunksize, t)
 }
 
 func TestDbStoreRandom_1(t *testing.T) {
-	testDbStoreRandom(1, 1, 0, false, t)
+	testDbStoreRandom(1, 0, false, t)
 }
 
 func TestDbStoreCorrect_1(t *testing.T) {
-	testDbStoreCorrect(1, 1, 4096, false, t)
+	testDbStoreCorrect(1, 4096, false, t)
 }
 
 func TestDbStoreRandom_1_5k(t *testing.T) {
-	testDbStoreRandom(8, 5000, 0, false, t)
+	testDbStoreRandom(5000, 0, false, t)
 }
 
 func TestDbStoreRandom_8_5k(t *testing.T) {
-	testDbStoreRandom(8, 5000, 0, false, t)
+	testDbStoreRandom(5000, 0, false, t)
 }
 
 func TestDbStoreCorrect_1_5k(t *testing.T) {
-	testDbStoreCorrect(1, 5000, 4096, false, t)
+	testDbStoreCorrect(5000, 4096, false, t)
 }
 
 func TestDbStoreCorrect_8_5k(t *testing.T) {
-	testDbStoreCorrect(8, 5000, 4096, false, t)
+	testDbStoreCorrect(5000, 4096, false, t)
 }
 
 func TestMockDbStoreRandom_1(t *testing.T) {
-	testDbStoreRandom(1, 1, 0, true, t)
+	testDbStoreRandom(1, 0, true, t)
 }
 
 func TestMockDbStoreCorrect_1(t *testing.T) {
-	testDbStoreCorrect(1, 1, 4096, true, t)
+	testDbStoreCorrect(1, 4096, true, t)
 }
 
 func TestMockDbStoreRandom_1_5k(t *testing.T) {
-	testDbStoreRandom(8, 5000, 0, true, t)
+	testDbStoreRandom(5000, 0, true, t)
 }
 
 func TestMockDbStoreRandom_8_5k(t *testing.T) {
-	testDbStoreRandom(8, 5000, 0, true, t)
+	testDbStoreRandom(5000, 0, true, t)
 }
 
 func TestMockDbStoreCorrect_1_5k(t *testing.T) {
-	testDbStoreCorrect(1, 5000, 4096, true, t)
+	testDbStoreCorrect(5000, 4096, true, t)
 }
 
 func TestMockDbStoreCorrect_8_5k(t *testing.T) {
-	testDbStoreCorrect(8, 5000, 4096, true, t)
+	testDbStoreCorrect(5000, 4096, true, t)
 }
 
 func testDbStoreNotFound(t *testing.T, mock bool) {
@@ -147,7 +148,7 @@ func testDbStoreNotFound(t *testing.T, mock bool) {
 	}
 	defer db.close()
 
-	_, err = db.Get(ZeroAddr)
+	_, err = db.Get(nil, ZeroAddr)
 	if err != ErrChunkNotFound {
 		t.Errorf("Expected ErrChunkNotFound, got %v", err)
 	}
@@ -176,14 +177,18 @@ func testIterator(t *testing.T, mock bool) {
 	chunks := GenerateRandomChunks(DefaultChunkSize, chunkcount)
 
 	wg := &sync.WaitGroup{}
+	ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
+	defer cancel()
 	wg.Add(len(chunks))
 	for i = 0; i < len(chunks); i++ {
-		db.Put(chunks[i])
-		chunkkeys[i] = chunks[i].Addr
-		j := i
+		chunkkeys[i] = chunks[i].Address()
+		wait, err := db.Put(chunks[i])
+		if err != nil {
+			t.Fatalf("dbStore.Put failed: %v", err)
+		}
 		go func() {
 			defer wg.Done()
-			<-chunks[j].dbStoredC
+			err = wait(ctx)
 		}()
 	}
 
@@ -227,7 +232,7 @@ func benchmarkDbStorePut(n int, processors int, chunksize int64, mock bool, b *t
 		b.Fatalf("init dbStore failed: %v", err)
 	}
 	defer db.close()
-	benchmarkStorePut(db, processors, n, chunksize, b)
+	benchmarkStorePut(db, n, chunksize, b)
 }
 
 func benchmarkDbStoreGet(n int, processors int, chunksize int64, mock bool, b *testing.B) {
@@ -236,7 +241,7 @@ func benchmarkDbStoreGet(n int, processors int, chunksize int64, mock bool, b *t
 		b.Fatalf("init dbStore failed: %v", err)
 	}
 	defer db.close()
-	benchmarkStoreGet(db, processors, n, chunksize, b)
+	benchmarkStoreGet(db, n, chunksize, b)
 }
 
 func BenchmarkDbStorePut_1_5k(b *testing.B) {
@@ -281,35 +286,18 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	chunks := []*Chunk{}
-	for i := 0; i < n; i++ {
-		c := GenerateRandomChunk(DefaultChunkSize)
-		chunks = append(chunks, c)
-		log.Trace("generate random chunk", "idx", i, "chunk", c)
-	}
-
-	for i := 0; i < n; i++ {
-		go ldb.Put(chunks[i])
-	}
-
-	// wait for all chunks to be stored
-	for i := 0; i < n; i++ {
-		<-chunks[i].dbStoredC
+	addrs, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
+	if err != nil {
+		t.Fatal(err.Error())
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
-	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Addr)
+	for _, a := range addrs {
+		_, err := ldb.Get(nil, a)
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		if !bytes.Equal(ret.SData, chunks[i].SData) {
-			t.Fatal("expected to get the same data back, but got smth else")
-		}
-
-		log.Info("got back chunk", "chunk", ret)
 	}
 
 	if ldb.entryCnt != uint64(n+1) {
@@ -331,40 +319,24 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	chunks := []*Chunk{}
-	for i := 0; i < n; i++ {
-		c := GenerateRandomChunk(DefaultChunkSize)
-		chunks = append(chunks, c)
-		log.Trace("generate random chunk", "idx", i, "chunk", c)
+	addrs, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
+	if err != nil {
+		t.Fatal(err.Error())
 	}
-
-	for i := 0; i < n; i++ {
-		ldb.Put(chunks[i])
-	}
-
-	// wait for all chunks to be stored
-	for i := 0; i < n; i++ {
-		<-chunks[i].dbStoredC
-	}
-
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	// wait for garbage collection to kick in on the responsible actor
 	time.Sleep(5 * time.Second)
 
 	var missing int
-	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Addr)
+	for _, a := range addrs {
+		ret, err := ldb.Get(nil, a)
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			missing++
 			continue
 		}
 		if err != nil {
 			t.Fatal(err)
-		}
-
-		if !bytes.Equal(ret.SData, chunks[i].SData) {
-			t.Fatal("expected to get the same data back, but got smth else")
 		}
 
 		log.Trace("got back chunk", "chunk", ret)
@@ -384,28 +356,16 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	defer cleanup()
 
 	n := 100
-
-	chunks := []*Chunk{}
-	for i := 0; i < n; i++ {
-		c := GenerateRandomChunk(DefaultChunkSize)
-		chunks = append(chunks, c)
-		log.Trace("generate random chunk", "idx", i, "chunk", c)
-	}
-
-	for i := 0; i < n; i++ {
-		go ldb.Put(chunks[i])
-	}
-
-	// wait for all chunks to be stored before continuing
-	for i := 0; i < n; i++ {
-		<-chunks[i].dbStoredC
+	chunks, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
+	if err != nil {
+		t.Fatalf(err.Error())
 	}
 
 	for i := 0; i < n; i++ {
 		// delete all even index chunks
 		if i%2 == 0 {
 
-			key := chunks[i].Addr
+			key := chunks[i]
 			ikey := getIndexKey(key)
 
 			var indx dpaDBIndex
@@ -418,11 +378,12 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		ret, err := ldb.Get(chunks[i].Addr)
+		_, err := ldb.Get(nil, chunks[i])
 
 		if i%2 == 0 {
 			// expect even chunks to be missing
-			if err == nil || ret != nil {
+			if err == nil {
+				// if err != ErrChunkNotFound {
 				t.Fatal("expected chunk to be missing, but got no error")
 			}
 		} else {
@@ -431,9 +392,9 @@ func TestLDBStoreAddRemove(t *testing.T) {
 				t.Fatalf("expected no error, but got %s", err)
 			}
 
-			if !bytes.Equal(ret.SData, chunks[i].SData) {
-				t.Fatal("expected to get the same data back, but got smth else")
-			}
+			// if !bytes.Equal(ret.Data(), chunks[i].Data()) {
+			// 	t.Fatal("expected to get the same data back, but got smth else")
+			// }
 		}
 	}
 }
@@ -441,72 +402,52 @@ func TestLDBStoreAddRemove(t *testing.T) {
 // TestLDBStoreRemoveThenCollectGarbage tests that we can delete chunks and that we can trigger garbage collection
 func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	capacity := 10
-
+	surplus := 4
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
 
-	n := 7
-
-	chunks := []*Chunk{}
-	for i := 0; i < capacity; i++ {
-		c := GenerateRandomChunk(DefaultChunkSize)
-		chunks = append(chunks, c)
-		log.Trace("generate random chunk", "idx", i, "chunk", c)
-	}
-
-	for i := 0; i < n; i++ {
-		ldb.Put(chunks[i])
-	}
-
-	// wait for all chunks to be stored before continuing
-	for i := 0; i < n; i++ {
-		<-chunks[i].dbStoredC
-	}
-
+	// n := 7
+	//
+	// err := mputChunks(ldb, chunks...)
+	// if err != nil {
+	// 	t.Fatal(err.Error())
+	// }
 	// delete all chunks
-	for i := 0; i < n; i++ {
-		key := chunks[i].Addr
-		ikey := getIndexKey(key)
+	// for i := 0; i < n; i++ {
+	// 	key := chunks[i].Address()
+	// 	ikey := getIndexKey(key)
+	//
+	// 	var indx dpaDBIndex
+	// 	ldb.tryAccessIdx(ikey, &indx)
+	//
+	// 	ldb.delete(indx.Idx, ikey, ldb.po(key))
+	// }
 
-		var indx dpaDBIndex
-		ldb.tryAccessIdx(ikey, &indx)
-
-		ldb.delete(indx.Idx, ikey, ldb.po(key))
-	}
-
-	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
-
-	cleanup()
+	// log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
+	//
+	// cleanup()
 
 	ldb, cleanup = newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
+	defer cleanup()
 
-	n = 10
-
-	for i := 0; i < n; i++ {
-		ldb.Put(chunks[i])
+	addrs, err := mputRandomChunks(ldb, capacity+surplus, DefaultChunkSize)
+	if err != nil {
+		t.Fatal(err.Error())
 	}
-
-	// wait for all chunks to be stored before continuing
-	for i := 0; i < n; i++ {
-		<-chunks[i].dbStoredC
-	}
-
 	// expect for first chunk to be missing, because it has the smallest access value
-	idx := 0
-	ret, err := ldb.Get(chunks[idx].Addr)
-	if err == nil || ret != nil {
-		t.Fatal("expected first chunk to be missing, but got no error")
+	for i := 0; i < surplus; i++ {
+		_, err = ldb.Get(nil, addrs[i])
+		if err == nil {
+			t.Fatal("expected first chunk to be missing, but got no error")
+		}
 	}
 
 	// expect for last chunk to be present, as it has the largest access value
-	idx = 9
-	ret, err = ldb.Get(chunks[idx].Addr)
-	if err != nil {
-		t.Fatalf("expected no error, but got %s", err)
-	}
-
-	if !bytes.Equal(ret.SData, chunks[idx].SData) {
-		t.Fatal("expected to get the same data back, but got smth else")
+	for i := surplus + capacity*1/4; i < surplus+capacity; i++ {
+		_, err = ldb.Get(nil, addrs[i])
+		if err != nil {
+			t.Fatalf("chunk %v: expected no error, but got %s", i, err)
+		}
 	}
 }
