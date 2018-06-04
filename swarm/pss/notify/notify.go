@@ -1,7 +1,6 @@
 package notify
 
 import (
-	"bytes"
 	"crypto/ecdsa"
 	"fmt"
 	"sync"
@@ -81,7 +80,8 @@ type sendBin struct {
 // every notification has a topic used for pss transfer of symmetrically encrypted notifications
 // contentFunc is the callback to get initial update data from the notifications service provider
 type notifier struct {
-	bins        []*sendBin
+	bins map[string]*sendBin
+	//bins        []*sendBin
 	topic       pss.Topic
 	threshold   int
 	contentFunc func(string) ([]byte, error)
@@ -183,6 +183,7 @@ func (c *Controller) NewNotifier(name string, threshold int, contentFunc func(st
 		return fmt.Errorf("Notification service %s already exists in controller", name)
 	}
 	c.notifiers[name] = &notifier{
+		bins:        make(map[string]*sendBin),
 		topic:       pss.BytesToTopic([]byte(name)),
 		threshold:   threshold,
 		contentFunc: contentFunc,
@@ -215,51 +216,6 @@ func (c *Controller) Notify(name string, data []byte) error {
 	return nil
 }
 
-// adds an client address to the corresponding address bin in the notifier service
-// this method is not concurrency safe, and will panic if called with a non-existing notification service name
-func (c *Controller) addToNotifier(name string, address pss.PssAddress) (string, error) {
-	notifier, ok := c.notifiers[name]
-	if !ok {
-		return "", fmt.Errorf("unknown notifier '%s'", name)
-	}
-	for _, m := range notifier.bins {
-		if bytes.Equal(address, m.address) {
-			m.count++
-			return m.symKeyId, nil
-		}
-	}
-	symKeyId, err := c.pss.GenerateSymmetricKey(notifier.topic, &address, false)
-	if err != nil {
-		return "", fmt.Errorf("Generate symkey fail: %v", err)
-	}
-	notifier.bins = append(notifier.bins, &sendBin{
-		address:  address,
-		symKeyId: symKeyId,
-		count:    1,
-	})
-	return symKeyId, nil
-}
-
-// decrements the count of the address bin of the notification service. If it reaches 0 it's deleted
-// this method is not concurrency safe, and will panic if called with a non-existing notification service name
-func (c *Controller) removeFromNotifier(name string, address pss.PssAddress) error {
-	notifier, ok := c.notifiers[name]
-	if !ok {
-		return fmt.Errorf("unknown notifier '%s'", name)
-	}
-	for i, m := range notifier.bins {
-		if bytes.Equal(address, m.address) {
-			m.count--
-			if m.count == 0 { // if no more clients in this bin, remove it
-				notifier.bins[i] = notifier.bins[len(notifier.bins)-1]
-				notifier.bins = notifier.bins[:len(notifier.bins)-1]
-			}
-			return nil
-		}
-	}
-	return fmt.Errorf("address %x not found in notifier '%s'", address, name)
-}
-
 // Handler is the pss topic handler to be used to process notification service messages
 // It should be registered in the pss of both to any notification service provides and clients using the service
 func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
@@ -278,27 +234,45 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 		pubkey := crypto.ToECDSAPub(common.FromHex(keyid))
 
 		// if name is not registered for notifications we will not react
-		if _, ok := c.notifiers[msg.namestring]; !ok {
+		currentNotifier, ok := c.notifiers[msg.namestring]
+		if !ok {
 			return fmt.Errorf("Subscribe attempted on unknown resource '%s'", msg.namestring)
 		}
 
-		// parse the address from the message and truncate if longer than our mux threshold
+		// parse the address from the message and truncate if longer than our bins threshold
 		address := msg.Payload
-		if len(msg.Payload) > c.notifiers[msg.namestring].threshold {
-			address = address[:c.notifiers[msg.namestring].threshold]
+		if len(msg.Payload) > currentNotifier.threshold {
+			address = address[:currentNotifier.threshold]
 		}
 
-		// add the address to the notification list
-		symKeyId, err := c.addToNotifier(msg.namestring, address)
-		if err != nil {
-			return fmt.Errorf("add address to notifier fail: %v", err)
+		// check if we already have the bin
+		// if we do, retreive the symkey from it and increment the count
+		// if we dont make a new symkey and a new bin entry
+		pssAddress := pss.PssAddress(address)
+		hexAddress := fmt.Sprintf("%x", address)
+		var symKeyId string
+		currentBin, ok := currentNotifier.bins[hexAddress]
+		if ok {
+			currentBin.count++
+			symKeyId = currentBin.symKeyId
+		} else {
+			symKeyId, err = c.pss.GenerateSymmetricKey(currentNotifier.topic, &pssAddress, false)
+			if err != nil {
+				return fmt.Errorf("Generate symkey fail: %v", err)
+			}
+			currentNotifier.bins[hexAddress] = &sendBin{
+				address:  address,
+				symKeyId: symKeyId,
+				count:    1,
+			}
+
 		}
+
+		// add to address book for send initial notify
 		symkey, err := c.pss.GetSymmetricKey(symKeyId)
 		if err != nil {
 			return fmt.Errorf("retrieve symkey fail: %v", err)
 		}
-
-		// add to address book for send initial notify
 		pssaddr := pss.PssAddress(address)
 		err = c.pss.SetPeerPublicKey(pubkey, controlTopic, &pssaddr)
 		if err != nil {
@@ -324,6 +298,7 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 	case MsgCodeNotifyWithKey:
 		symkey := msg.Payload[len(msg.Payload)-symKeyLength:]
 		topic := pss.BytesToTopic(msg.Name)
+
 		// \TODO keep track of and add actual address
 		updaterAddr := pss.PssAddress([]byte{})
 		c.pss.SetSymmetricKey(symkey, topic, &updaterAddr, true)
@@ -333,16 +308,28 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 		return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload)
 	case MsgCodeStop:
 		// if name is not registered for notifications we will not react
-		if _, ok := c.notifiers[msg.namestring]; !ok {
+		currentNotifier, ok := c.notifiers[msg.namestring]
+		if !ok {
 			return fmt.Errorf("Unsubscribe attempted on unknown resource '%s'", msg.namestring)
 		}
 
 		// parse the address from the message and truncate if longer than our bins' address length threshold
 		address := msg.Payload
-		if len(msg.Payload) > c.notifiers[msg.namestring].threshold {
-			address = address[:c.notifiers[msg.namestring].threshold]
+		if len(msg.Payload) > currentNotifier.threshold {
+			address = address[:currentNotifier.threshold]
 		}
-		c.removeFromNotifier(msg.namestring, address)
+
+		// remove the entry from the bin if it exists, and remove the bin if it's the last remaining one
+		hexAddress := fmt.Sprintf("%x", address)
+		currentBin, ok := currentNotifier.bins[hexAddress]
+		if !ok {
+			return fmt.Errorf("found no active bin for address %s", hexAddress)
+		}
+		currentBin.count--
+		if currentBin.count == 0 { // if no more clients in this bin, remove it
+			delete(currentNotifier.bins, hexAddress)
+		}
+
 	default:
 		return fmt.Errorf("Invalid message code: %d", msg.Code)
 	}
