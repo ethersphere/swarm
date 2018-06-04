@@ -18,9 +18,7 @@ package storage
 
 import (
 	"encoding/binary"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"sync"
@@ -118,11 +116,6 @@ type TreeEntry struct {
 	key           []byte
 	index         int  // used in append to indicate the index of existing tree entry
 	updatePending bool // indicates if the entry is loaded from existing tree
-}
-
-// TODO: REMOVE. Temporary for debugging.
-func (te *TreeEntry) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"%v, %v, %x: %x"`, te.level, te.branchCount, te.key, te.chunk)), nil
 }
 
 func NewTreeEntry(pyramid *PyramidChunker) *TreeEntry {
@@ -394,12 +387,6 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 	log.Debug("pyramid.chunker: prepareChunks", "isAppend", isAppend)
 	defer self.wg.Done()
 
-	// TODO: REMOVE. Temporary for debugging.
-	defer func() {
-		d, _ := json.MarshalIndent(self.chunkLevel, "", "    ")
-		fmt.Println(string(d))
-	}()
-
 	chunkWG := &sync.WaitGroup{}
 
 	self.incrementWorkerCount()
@@ -458,9 +445,6 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 		var res []byte
 		res, err = ioutil.ReadAll(io.LimitReader(self.reader, int64(len(chunkData)-(8+readBytes))))
-
-		// TODO: REMOVE. Temporary for debugging.
-		fmt.Println("res", len(res))
 
 		// hack for ioutil.ReadAll:
 		// a successful call to ioutil.ReadAll returns err == nil, not err == EOF, whereas we
