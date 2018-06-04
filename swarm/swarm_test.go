@@ -286,23 +286,6 @@ func TestParseEnsAPIAddress(t *testing.T) {
 // and their intergartion into Swarm, without comparing results with ones produced by
 // another chunker implementation, as it is done in swarm/storage tests.
 func TestLocalStoreAndRetrieve(t *testing.T) {
-	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 67298391, 524288, 524288 + 1, 524288 + 4096, 524288 + 4097, 7 * 524288, 7*524288 + 1, 7*524288 + 4096, 7*524288 + 4097, 128*524288 + 1, 128*524288 + 4096, 128*524288 + 4097}
-	for _, n := range sizes {
-		testLocalStoreAndRetrieve(t, n, true)
-		testLocalStoreAndRetrieve(t, n, false)
-	}
-}
-
-// testLocalStoreAndRetrieve creates a single Swarm instance, uploads
-// a file of length n with optional random data using API Store function,
-// and checks the output of API Retrieve function on the same instance.
-// This is a regression test for issue
-// https://github.com/ethersphere/go-ethereum/issues/639
-// where pyramid chunker did not split correctly files with lengths that
-// are edge cases for chunk and tree parameters, depending whether there
-// is a tree chunk with only one data chunk and how the compress functionality
-// changed the tree.
-func testLocalStoreAndRetrieve(t *testing.T, n int, randomData bool) {
 	config := api.NewConfig()
 
 	dir, err := ioutil.TempDir("", "node")
@@ -325,6 +308,23 @@ func testLocalStoreAndRetrieve(t *testing.T, n int, randomData bool) {
 		t.Fatal(err)
 	}
 
+	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 67298391, 524288, 524288 + 1, 524288 + 4096, 524288 + 4097, 7 * 524288, 7*524288 + 1, 7*524288 + 4096, 7*524288 + 4097, 128*524288 + 1, 128*524288 + 4096, 128*524288 + 4097}
+	for _, n := range sizes {
+		testLocalStoreAndRetrieve(t, swarm, n, true)
+		testLocalStoreAndRetrieve(t, swarm, n, false)
+	}
+}
+
+// testLocalStoreAndRetrieve creates a single Swarm instance, uploads
+// a file of length n with optional random data using API Store function,
+// and checks the output of API Retrieve function on the same instance.
+// This is a regression test for issue
+// https://github.com/ethersphere/go-ethereum/issues/639
+// where pyramid chunker did not split correctly files with lengths that
+// are edge cases for chunk and tree parameters, depending whether there
+// is a tree chunk with only one data chunk and how the compress functionality
+// changed the tree.
+func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData bool) {
 	slice := make([]byte, n)
 	if randomData {
 		rand.Seed(time.Now().UnixNano())
