@@ -90,6 +90,9 @@ type NodeConfig struct {
 	PssEnabled  bool
 	PssAccount  string
 	PssPassword string
+
+	// ListenAddr is configurable because of testing on mobile devices.
+	ListenAddr string
 }
 
 // defaultNodeConfig contains the default node configuration values to use if all
@@ -100,6 +103,7 @@ var defaultNodeConfig = &NodeConfig{
 	EthereumEnabled:       true,
 	EthereumNetworkID:     1,
 	EthereumDatabaseCache: 16,
+	ListenAddr:            ":0",
 }
 
 // NewNodeConfig creates a new node option set, initialized to the default values.
@@ -158,7 +162,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			NoDiscovery:      true,
 			DiscoveryV5:      true,
 			BootstrapNodesV5: config.BootstrapNodes.nodes,
-			ListenAddr:       ":0",
+			ListenAddr:       config.ListenAddr,
 			NAT:              nat.Any(),
 			MaxPeers:         config.MaxPeers,
 		},
