@@ -475,7 +475,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				if parent.branchCount == 1 && self.depth() == 0 {
+				if parent.branchCount == 1 && (self.depth() == 0 || isAppend) {
 					// Data is exactly one chunk.. pick the last chunk key as root
 					chunkWG.Wait()
 					lastChunksKey := parent.chunk[8 : 8+self.hashSize]
@@ -506,7 +506,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 				if parent.branchCount <= 1 {
 					chunkWG.Wait()
 
-					if self.depth() == 0 {
+					if isAppend || self.depth() == 0 {
 						copy(self.rootKey, pkey)
 					} else {
 						self.buildTree(isAppend, parent, chunkWG, true, pkey)
