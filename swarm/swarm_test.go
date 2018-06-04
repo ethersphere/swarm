@@ -75,8 +75,8 @@ func TestNewSwarm(t *testing.T) {
 				if s.streamer == nil {
 					t.Error("streamer not initialized")
 				}
-				if s.dpa == nil {
-					t.Error("dpa not initialized")
+				if s.fileStore == nil {
+					t.Error("fileStore not initialized")
 				}
 				if s.lstore.Validators == nil {
 					t.Error("localstore validators not initialized")

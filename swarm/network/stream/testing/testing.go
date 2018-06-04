@@ -213,7 +213,7 @@ func (s *Simulation) Run(ctx context.Context, conf *RunConfig) (*simulations.Ste
 	wg.Wait()
 	log.Info(fmt.Sprintf("simulation with %v nodes", len(s.Addrs)))
 
-	// create an only locally retrieving dpa for the pivot node to test
+	// create an only locally retrieving FileStore for the pivot node to test
 	// if retriee requests have arrived
 	result := simulations.NewSimulation(s.Net).Run(ctx, conf.Step)
 	return result, nil

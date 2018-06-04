@@ -134,7 +134,7 @@ func (self *Pss) String() string {
 // Creates a new Pss instance.
 //
 // In addition to params, it takes a swarm network overlay
-// and a DPA storage for message cache storage.
+// and a FileStore storage for message cache storage.
 func NewPss(k network.Overlay, params *PssParams) (*Pss, error) {
 	if params.privateKey == nil {
 		return nil, errors.New("missing private key for pss")

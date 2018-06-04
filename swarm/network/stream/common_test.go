@@ -120,8 +120,8 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	dpa := storage.NewDPA(storage.NewNetStore(store, getRetrieveFunc(id)), storage.NewDPAParams())
-	testRegistry := &TestRegistry{Registry: r, dpa: dpa}
+	fileStore := storage.NewFileStore(storage.NewNetStore(store, getRetrieveFunc(id)), storage.NewFileStoreParams())
+	testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
 	registries[id] = testRegistry
 	return testRegistry, nil
 }
@@ -235,7 +235,7 @@ func (rrs *roundRobinStore) Close() {
 
 type TestRegistry struct {
 	*Registry
-	dpa *storage.DPA
+	fileStore *storage.FileStore
 }
 
 func (r *TestRegistry) APIs() []rpc.API {
@@ -249,8 +249,8 @@ func (r *TestRegistry) APIs() []rpc.API {
 	return a
 }
 
-func readAll(dpa *storage.DPA, hash []byte) (int64, error) {
-	r, _ := dpa.Retrieve(hash)
+func readAll(fileStore *storage.FileStore, hash []byte) (int64, error) {
+	r, _ := fileStore.Retrieve(hash)
 	buf := make([]byte, 1024)
 	var n int
 	var total int64
@@ -266,7 +266,7 @@ func readAll(dpa *storage.DPA, hash []byte) (int64, error) {
 }
 
 func (r *TestRegistry) ReadAll(hash common.Hash) (int64, error) {
-	return readAll(r.dpa, hash[:])
+	return readAll(r.fileStore, hash[:])
 }
 
 func (r *TestRegistry) Start(server *p2p.Server) error {

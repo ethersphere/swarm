@@ -38,8 +38,8 @@ func hash(ctx *cli.Context) {
 	defer f.Close()
 
 	stat, _ := f.Stat()
-	dpa := storage.NewDPA(storage.NewMapChunkStore(), storage.NewDPAParams())
-	addr, _, err := dpa.Store(f, stat.Size(), false)
+	fileStore := storage.NewFileStore(storage.NewMapChunkStore(), storage.NewFileStoreParams())
+	addr, _, err := fileStore.Store(f, stat.Size(), false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)
 	} else {
