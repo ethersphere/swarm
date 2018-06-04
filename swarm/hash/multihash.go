@@ -42,7 +42,7 @@ func isSwarmMultihashType(code uint8) bool {
 	return code == multihashTypeCode
 }
 
-// GetLength returns the digest length of the provided multihash
+// GetMultihashLength returns the digest length of the provided multihash
 // It will fail if the multihash is not a valid swarm mulithash
 func GetMultihashLength(data []byte) (int, int, error) {
 	cursor := 0
