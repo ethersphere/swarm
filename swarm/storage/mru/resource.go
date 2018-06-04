@@ -785,7 +785,7 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 func (self *Handler) UpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, error) {
 	// \TODO perhaps this check should be in newUpdateChunk()
 	if _, _, err := swarmhash.GetMultihashLength(data); err != nil {
-		return nil, NewResourceError(ErrNothingToReturn, fmt.Sprintf("Invalid multihash: %v", err))
+		return nil, NewError(ErrNothingToReturn, fmt.Sprintf("Invalid multihash: %v", err))
 	}
 	return self.update(ctx, name, data, true)
 }
