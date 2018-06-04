@@ -222,7 +222,7 @@ type ownerValidator interface {
 //
 // TODO: Include modtime in chunk data + signature
 type Handler struct {
-	dpa             storage.DPA
+	chunkStore      *storage.NetStore
 	HashSize        int
 	signer          Signer
 	headerGetter    headerGetter
@@ -274,8 +274,8 @@ func NewHandler(params *HandlerParams) (*Handler, error) {
 }
 
 // SetStore sets the store backend for resource updates
-func (self *Handler) SetStore(store storage.DPA) {
-	self.dpa = store
+func (self *Handler) SetStore(store *storage.NetStore) {
+	self.chunkStore = store
 }
 
 // Validate is a chunk validation method (matches ChunkValidatorFunc signature)
@@ -411,7 +411,7 @@ func (self *Handler) New(ctx context.Context, name string, frequency uint64) (st
 
 	chunk := self.newMetaChunk(name, currentblock, frequency)
 
-	_, err = self.dpa.Put(chunk)
+	_, err = self.chunkStore.Put(chunk)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -564,7 +564,7 @@ func (self *Handler) LookupPrevious(rctx context.Context, nameHash common.Hash, 
 func (self *Handler) lookup(rctx context.Context, rsrc *resource, period uint32, version uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
 
 	// we can't look for anything without a store
-	if self.dpa == nil {
+	if self.chunkStore == nil {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
@@ -592,7 +592,7 @@ func (self *Handler) lookup(rctx context.Context, rsrc *resource, period uint32,
 			return nil, NewError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", maxLookup.Max))
 		}
 		addr := self.resourceHash(period, version, rsrc.nameHash)
-		chunk, err := self.dpa.Get(rctx, addr)
+		chunk, err := self.chunkStore.Get(rctx, addr)
 		if err == nil {
 			if specificversion {
 				return self.updateIndex(rsrc, chunk)
@@ -602,7 +602,7 @@ func (self *Handler) lookup(rctx context.Context, rsrc *resource, period uint32,
 			for {
 				newversion := version + 1
 				addr := self.resourceHash(period, newversion, rsrc.nameHash)
-				newchunk, err := self.dpa.Get(rctx, addr)
+				newchunk, err := self.chunkStore.Get(rctx, addr)
 				if err != nil {
 					return self.updateIndex(rsrc, chunk)
 				}
@@ -621,7 +621,7 @@ func (self *Handler) lookup(rctx context.Context, rsrc *resource, period uint32,
 // Retrieves a resource metadata chunk and creates/updates the index entry for it
 // with the resulting metadata
 func (self *Handler) Load(rctx context.Context, addr storage.Address) (*resource, error) {
-	chunk, err := self.dpa.Get(rctx, addr)
+	chunk, err := self.chunkStore.Get(rctx, addr)
 	if err != nil {
 		return nil, NewError(ErrNotFound, err.Error())
 	}
@@ -795,7 +795,7 @@ func (self *Handler) update(ctx context.Context, name string, data []byte, multi
 	}
 
 	// we can't update anything without a store
-	if self.dpa == nil {
+	if self.chunkStore == nil {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")
 	}
 
@@ -881,7 +881,7 @@ func (self *Handler) update(ctx context.Context, name string, data []byte, multi
 	// send the chunk
 	ctx, cancel := context.WithTimeout(context.Background(), self.storeTimeout)
 	defer cancel()
-	wait, err := self.dpa.Put(chunk)
+	wait, err := self.chunkStore.Put(chunk)
 	if wait != nil {
 		err = wait(ctx)
 	}
@@ -901,7 +901,7 @@ func (self *Handler) update(ctx context.Context, name string, data []byte, multi
 // Closes the datastore.
 // Always call this at shutdown to avoid data corruption.
 func (self *Handler) Close() {
-	self.dpa.Close()
+	self.chunkStore.Close()
 }
 
 // gets the current block height
@@ -1081,7 +1081,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*Handler, error) {
 	}
 	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHash)))
 	localStore.Validators = append(localStore.Validators, rh)
-	netStore := storage.NewNetStore(localStore, nil)
+	netStore, err := storage.NewNetStore(localStore, nil)
 	if err != nil {
 		return nil, err
 	}

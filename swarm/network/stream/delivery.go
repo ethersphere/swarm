@@ -43,25 +43,18 @@ var (
 	requestFromPeersEachCount = metrics.NewRegisteredCounter("network.stream.request_from_peers_each.count", nil)
 )
 
-type DPA interface {
-	Put(ch storage.Chunk) (waitToStore func(ctx context.Context) error, err error)
-	Get(rctx context.Context, ref storage.Address) (ch storage.Chunk, err error)
-	Has(addr storage.Address) func(context.Context) (ch storage.Chunk, err error)
-	Close()
-}
-
 type Delivery struct {
-	dpa      DPA
-	overlay  network.Overlay
-	receiveC chan *ChunkDeliveryMsg
-	getPeer  func(discover.NodeID) *Peer
+	fileStore storage.FileStore
+	overlay   network.Overlay
+	receiveC  chan *ChunkDeliveryMsg
+	getPeer   func(discover.NodeID) *Peer
 }
 
-func NewDelivery(overlay network.Overlay, dpa DPA) *Delivery {
+func NewDelivery(overlay network.Overlay, fileStore FileStore) *Delivery {
 	d := &Delivery{
-		dpa:      dpa,
-		overlay:  overlay,
-		receiveC: make(chan *ChunkDeliveryMsg, deliveryCap),
+		fileStore: fileStore,
+		overlay:   overlay,
+		receiveC:  make(chan *ChunkDeliveryMsg, deliveryCap),
 	}
 
 	go d.processReceivedChunks()
@@ -72,17 +65,17 @@ func NewDelivery(overlay network.Overlay, dpa DPA) *Delivery {
 type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
-	dpa        DPA
+	fileStore  storage.FileStore
 	currentLen uint64
 	quit       chan struct{}
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
-func NewSwarmChunkServer(dpa DPA) *SwarmChunkServer {
+func NewSwarmChunkServer(fileStore FileStore) *SwarmChunkServer {
 	s := &SwarmChunkServer{
 		deliveryC: make(chan []byte, deliveryCap),
 		batchC:    make(chan []byte),
-		dpa:       dpa,
+		fileStore: FileStore,
 		quit:      make(chan struct{}),
 	}
 	go s.processDeliveries()
@@ -147,7 +140,7 @@ func (s *SwarmChunkServer) Close() {
 
 // GetData retrives chunk data from db store
 func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.dpa.Get(immediately, storage.Address(key))
+	chunk, err := s.fileStore.Get(immediately, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +163,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	}
 	streamer := s.Server.(*SwarmChunkServer)
 	go func() {
-		chunk, err := d.dpa.Get(streamer.context(req), req.Addr)
+		chunk, err := d.fileStore.Get(streamer.context(req), req.Addr)
 		if err != nil {
 			return
 		}
@@ -212,7 +205,7 @@ func (d *Delivery) processReceivedChunks() {
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
 
-		_, err := d.dpa.Put(storage.NewChunk(req.Addr, req.SData))
+		_, err := d.fileStore.Put(storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				req.peer.Drop(err)

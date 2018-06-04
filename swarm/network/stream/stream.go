@@ -90,13 +90,13 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, syncDB SyncDB, inter
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 	streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, _ bool) (Server, error) {
-		return NewSwarmChunkServer(delivery.dpa), nil
+		return NewSwarmChunkServer(delivery.fileStore), nil
 	})
 	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
-		return NewSwarmSyncerClient(p, delivery.dpa, NewStream(swarmChunkServerStreamName, t, live))
+		return NewSwarmSyncerClient(p, delivery.fileStore, NewStream(swarmChunkServerStreamName, t, live))
 	})
 	RegisterSwarmSyncerServer(streamer, syncDB)
-	RegisterSwarmSyncerClient(streamer, delivery.dpa)
+	RegisterSwarmSyncerClient(streamer, delivery.fileStore)
 
 	if options.DoSync {
 		// latestIntC function ensures that
