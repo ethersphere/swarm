@@ -73,11 +73,53 @@ func (a *PssAddress) UnmarshalJSON(input []byte) error {
 type pssDigest [digestLength]byte
 
 // Encapsulates messages transported over pss.
+
+type msgParams struct {
+	raw bool
+	sym bool
+}
+
+func newMsgParamsFromBytes(paramBytes []byte) *msgParams {
+	if len(paramBytes) != 1 {
+		return nil
+	}
+	return &msgParams{
+		raw: paramBytes[0]&pssControlRaw > 0,
+		sym: paramBytes[0]&pssControlSym > 0,
+	}
+}
+
+func (m *msgParams) Bytes() (paramBytes []byte) {
+	var b byte
+	if m.raw {
+		b |= pssControlRaw
+	}
+	if m.sym {
+		b |= pssControlSym
+	}
+	paramBytes = append(paramBytes, b)
+	return paramBytes
+}
+
 type PssMsg struct {
 	To      []byte
 	Control []byte
 	Expire  uint32
 	Payload *whisper.Envelope
+}
+
+func newPssMsg(param *msgParams) *PssMsg {
+	return &PssMsg{
+		Control: param.Bytes(),
+	}
+}
+
+func (msg *PssMsg) isRaw() bool {
+	return msg.Control[0]&pssControlRaw > 0
+}
+
+func (msg *PssMsg) isSym() bool {
+	return msg.Control[0]&pssControlSym > 0
 }
 
 // serializes the message for use in cache

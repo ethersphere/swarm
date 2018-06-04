@@ -369,14 +369,13 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
-
-	if pssmsg.Control[0]&pssControlRaw == pssControlRaw {
+	if pssmsg.isRaw() {
 		if !p.allowRaw {
 			return errors.New("raw message support disabled")
 		}
 		payload = pssmsg.Payload.Data
 	} else {
-		if pssmsg.Control[0]&pssControlSym == pssControlSym {
+		if pssmsg.isSym() {
 			keyFunc = self.processSym
 		} else {
 			asymmetric = true
@@ -658,17 +657,19 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	if !p.allowRaw {
 		return errors.New("Raw messages not enabled")
 	}
-	pssmsg := &PssMsg{
-		To:      address,
-		Control: []byte{pssControlRaw},
-		Expire:  uint32(time.Now().Add(p.msgTTL).Unix()),
-		Payload: &whisper.Envelope{
-			Data:  msg,
-			Topic: whisper.TopicType(topic),
-		},
+	pssMsgParams := &msgParams{
+		raw: true,
 	}
-	p.addFwdCache(pssmsg)
-	return p.enqueue(pssmsg)
+	payload := &whisper.Envelope{
+		Data:  msg,
+		Topic: whisper.TopicType(topic),
+	}
+	pssMsg := newPssMsg(pssMsgParams)
+	pssMsg.To = address
+	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
+	pssMsg.Payload = payload
+	self.addFwdCache(pssMsg)
+	return p.enqueue(pssMsg)
 }
 
 // Send a message using symmetric encryption
@@ -755,17 +756,16 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 		return fmt.Errorf("failed to perform whisper encryption: %v", err)
 	}
 	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", common.ToHex(wparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
+
 	// prepare for devp2p transport
-	pssmsg := &PssMsg{
-		To:      to,
-		Control: []byte{0x0},
-		Expire:  uint32(time.Now().Add(p.msgTTL).Unix()),
-		Payload: envelope,
+	pssMsgParams := &msgParams{
+		sym: !asymmetric,
 	}
-	if !asymmetric {
-		pssmsg.Control[0] |= pssControlSym
-	}
-	return p.enqueue(pssmsg)
+	pssMsg := newPssMsg(pssMsgParams)
+	pssMsg.To = to
+	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
+	pssMsg.Payload = envelope
+	return p.enqueue(pssMsg)
 }
 
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct

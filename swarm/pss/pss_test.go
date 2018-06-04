@@ -121,6 +121,29 @@ func TestTopic(t *testing.T) {
 	}
 }
 
+// test bit packing of message control flags
+func TestMsgParams(t *testing.T) {
+	var ctrl byte
+	ctrl |= pssControlRaw
+	p := newMsgParamsFromBytes([]byte{ctrl})
+	m := newPssMsg(p)
+	if !m.isRaw() || m.isSym() {
+		t.Fatal("expected raw=true and sym=false")
+	}
+	ctrl |= pssControlSym
+	p = newMsgParamsFromBytes([]byte{ctrl})
+	m = newPssMsg(p)
+	if !m.isRaw() || !m.isSym() {
+		t.Fatal("expected raw=true and sym=true")
+	}
+	ctrl &= 0xff &^ pssControlRaw
+	p = newMsgParamsFromBytes([]byte{ctrl})
+	m = newPssMsg(p)
+	if m.isRaw() || !m.isSym() {
+		t.Fatal("expected raw=false and sym=true")
+	}
+}
+
 // test if we can insert into cache, match items with cache and cache expiry
 func TestCache(t *testing.T) {
 	var err error
