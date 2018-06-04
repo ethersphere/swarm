@@ -630,7 +630,7 @@ func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sy
 		if !isAppend {
 			chunkWG.Wait()
 			if compress {
-				self.chunkLevel[lvl] = nil
+				self.chunkLevel = append(self.chunkLevel[:lvl], append(self.chunkLevel[lvl+1:], nil)...)
 			}
 		}
 	}
