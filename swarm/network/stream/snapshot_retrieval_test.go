@@ -83,7 +83,7 @@ func TestFileRetrieval(t *testing.T) {
 	if *nodes != 0 {
 		fileRetrievalTest(t, *nodes)
 	} else {
-		nodeCnt := []int{8}
+		nodeCnt := []int{16}
 		//if the `longrunning` flag has been provided
 		//run more test combinations
 		if *longrunning {
