@@ -26,7 +26,7 @@ import (
 const (
 	defaultPaddingByteSize     = 16
 	defaultMsgTTL              = time.Second * 600
-	defaultDigestCacheTTL      = time.Second
+	defaultDigestCacheTTL      = time.Second * 10
 	defaultSymKeyCacheCapacity = 512
 	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
 	defaultWhisperWorkTime     = 3
@@ -185,22 +185,22 @@ func NewPss(k network.Overlay, params *PssParams) (*Pss, error) {
 /////////////////////////////////////////////////////////////////////
 
 func (p *Pss) Start(srv *p2p.Server) error {
-	//go func() {
-	//ticker := time.NewTicker(defaultCleanInterval)
-	//cacheTicker := time.NewTicker(p.cacheTTL)
-	//defer ticker.Stop()
-	//defer cacheTicker.Stop()
-	//for {
-	//select {
-	//case <-cacheTicker.C:
-	//p.cleanFwdCache()
-	//case <-ticker.C:
-	//p.cleanKeys()
-	//case <-p.quitC:
-	//return
-	//}
-	//}
-	//}()
+	go func() {
+		ticker := time.NewTicker(defaultCleanInterval)
+		cacheTicker := time.NewTicker(p.cacheTTL)
+		defer ticker.Stop()
+		defer cacheTicker.Stop()
+		for {
+			select {
+			case <-cacheTicker.C:
+				p.cleanFwdCache()
+			case <-ticker.C:
+				p.cleanKeys()
+			case <-p.quitC:
+				return
+			}
+		}
+	}()
 	go func() {
 		for {
 			select {
@@ -899,15 +899,15 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 	defer p.fwdCacheMu.Unlock()
 
 	digest := p.digest(msg)
-	_, ok := p.fwdCache[digest]
+	entry, ok := p.fwdCache[digest]
 	if ok {
-		//if entry.expiresAt.After(time.Now()) {
-		//metrics.GetOrRegisterCounter("pss.checkfwdcache.if", nil).Inc(1)
-		//log.Trace(fmt.Sprintf("unexpired cache for digest %x", digest))
-		return true
-		//} else {
-		//metrics.GetOrRegisterCounter("pss.checkfwdcache.else", nil).Inc(1)
-		//}
+		if entry.expiresAt.After(time.Now()) {
+			metrics.GetOrRegisterCounter("pss.checkfwdcache.if", nil).Inc(1)
+			log.Trace(fmt.Sprintf("unexpired cache for digest %x", digest))
+			return true
+		} else {
+			metrics.GetOrRegisterCounter("pss.checkfwdcache.else", nil).Inc(1)
+		}
 	}
 	return false
 }
