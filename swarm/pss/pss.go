@@ -376,10 +376,10 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 		payload = pssmsg.Payload.Data
 	} else {
 		if pssmsg.isSym() {
-			keyFunc = self.processSym
+			keyFunc = p.processSym
 		} else {
 			asymmetric = true
-			keyFunc = self.processAsym
+			keyFunc = p.processAsym
 		}
 
 		recvmsg, keyid, from, err = keyFunc(envelope)
@@ -394,7 +394,7 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 			return err
 		}
 	}
-	p.executeHandlers(psstopic, recvmsg.Payload, from, asymmetric, keyid)
+	p.executeHandlers(psstopic, payload, from, asymmetric, keyid)
 
 	return nil
 
@@ -608,7 +608,6 @@ func (p *Pss) cleanKeys() (count int) {
 	for keyid, peertopics := range p.symKeyPool {
 		var expiredtopics []Topic
 		for topic, psp := range peertopics {
-			//log.Trace("check topic", "topic", topic, "id", keyid, "protect", psp.protected, "p", fmt.Sprintf("%p", self.symKeyPool[keyid][topic]))
 			if psp.protected {
 				continue
 			}
@@ -616,7 +615,6 @@ func (p *Pss) cleanKeys() (count int) {
 			var match bool
 			for i := p.symKeyDecryptCacheCursor; i > p.symKeyDecryptCacheCursor-cap(p.symKeyDecryptCache) && i > 0; i-- {
 				cacheid := p.symKeyDecryptCache[i%cap(p.symKeyDecryptCache)]
-				//log.Trace("check cache", "idx", i, "id", *cacheid)
 				if *cacheid == keyid {
 					match = true
 				}
@@ -668,7 +666,7 @@ func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	pssMsg.To = address
 	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
 	pssMsg.Payload = payload
-	self.addFwdCache(pssMsg)
+	p.addFwdCache(pssMsg)
 	return p.enqueue(pssMsg)
 }
 
