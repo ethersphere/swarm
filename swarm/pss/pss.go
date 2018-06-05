@@ -25,7 +25,7 @@ import (
 
 const (
 	defaultPaddingByteSize     = 16
-	defaultMsgTTL              = time.Second * 600
+	defaultMsgTTL              = time.Second * 120
 	defaultDigestCacheTTL      = time.Second * 10
 	defaultSymKeyCacheCapacity = 512
 	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
@@ -207,6 +207,7 @@ func (p *Pss) Start(srv *p2p.Server) error {
 			case msg := <-p.outbox:
 				err := p.forward(msg)
 				if err != nil {
+					log.Error(err.Error())
 					metrics.GetOrRegisterCounter("pss.forward.err", nil).Inc(1)
 				}
 			case <-p.quitC:
@@ -337,7 +338,7 @@ func (p *Pss) handlePssMsg(msg interface{}) error {
 	}
 	if int64(pssmsg.Expire) < time.Now().Unix() {
 		metrics.GetOrRegisterCounter("pss.expire", nil).Inc(1)
-		log.Trace(fmt.Sprintf("pss filtered expired message FROM %x TO %x", p.Overlay.BaseAddr(), common.ToHex(pssmsg.To)))
+		log.Warn("pss filtered expired message", "from", fmt.Sprintf("%x", p.Overlay.BaseAddr()), "to", fmt.Sprintf("%x", common.ToHex(pssmsg.To)))
 		return nil
 	}
 	if p.checkFwdCache(pssmsg) {
@@ -819,7 +820,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 		err := pp.Send(msg)
 		if err != nil {
 			metrics.GetOrRegisterCounter("pss.pp.send.error", nil).Inc(1)
-			log.Error("pp.Send error", "err", err)
+			log.Error(err.Error())
 			return true
 		}
 		sent++
@@ -847,6 +848,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 		log.Debug("unable to forward to any peers")
 		if err := p.enqueue(msg); err != nil {
 			metrics.GetOrRegisterCounter("pss.forward.enqueue.error", nil).Inc(1)
+			log.Error(err.Error())
 			return err
 		}
 	}
@@ -893,8 +895,6 @@ func (p *Pss) addFwdCache(msg *PssMsg) error {
 
 // check if message is in the cache
 func (p *Pss) checkFwdCache(msg *PssMsg) bool {
-	metrics.GetOrRegisterCounter("pss.checkfwdcache", nil).Inc(1)
-
 	p.fwdCacheMu.Lock()
 	defer p.fwdCacheMu.Unlock()
 
@@ -902,11 +902,10 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 	entry, ok := p.fwdCache[digest]
 	if ok {
 		if entry.expiresAt.After(time.Now()) {
-			metrics.GetOrRegisterCounter("pss.checkfwdcache.if", nil).Inc(1)
-			log.Trace(fmt.Sprintf("unexpired cache for digest %x", digest))
+			metrics.GetOrRegisterCounter("pss.checkfwdcache.unexpired", nil).Inc(1)
 			return true
 		} else {
-			metrics.GetOrRegisterCounter("pss.checkfwdcache.else", nil).Inc(1)
+			metrics.GetOrRegisterCounter("pss.checkfwdcache.expired", nil).Inc(1)
 		}
 	}
 	return false

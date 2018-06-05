@@ -123,7 +123,7 @@ func TestTopic(t *testing.T) {
 }
 
 // test if we can insert into cache, match items with cache and cache expiry
-func XTestCache(t *testing.T) {
+func TestCache(t *testing.T) {
 	var err error
 	to, _ := hex.DecodeString("08090a0b0c0d0e0f1011121314150001020304050607161718191a1b1c1d1e1f")
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -920,28 +920,32 @@ func enableMetrics() {
 // params in run name:
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
-func TestNetwork(t *testing.T) {
-	enableMetrics()
-
-	metrics.GetOrRegisterCounter("pss.testnetwork", nil).Inc(1)
+func TestNetwork2000(t *testing.T) {
+	//enableMetrics()
 
 	t.Run("3/2000/4/sock", testNetwork)
 	t.Run("4/2000/4/sock", testNetwork)
 	t.Run("8/2000/4/sock", testNetwork)
 	t.Run("16/2000/4/sock", testNetwork)
 	t.Run("32/2000/4/sock", testNetwork)
+}
+
+func TestNetwork8000(t *testing.T) {
+	//enableMetrics()
 
 	t.Run("3/8000/4/sim", testNetwork)
 	t.Run("4/8000/4/sim", testNetwork)
 	t.Run("8/8000/4/sim", testNetwork)
 	t.Run("16/8000/4/sim", testNetwork)
+}
+
+func TestNetwork18000(t *testing.T) {
+	//enableMetrics()
 
 	t.Run("3/18000/4/sim", testNetwork)
 	t.Run("4/18000/4/sim", testNetwork)
 	t.Run("8/18000/4/sim", testNetwork)
 	t.Run("16/18000/4/sim", testNetwork)
-
-	time.Sleep(1000 * time.Millisecond)
 }
 
 func testNetwork(t *testing.T) {
@@ -1003,6 +1007,7 @@ func testNetwork(t *testing.T) {
 	}
 	err = net.Load(&snap)
 	if err != nil {
+		//TODO: Fix p2p simulation framework to not crash when loading 32-nodes
 		//t.Fatal(err)
 	}
 
@@ -1133,7 +1138,7 @@ outer:
 
 // check that in a network of a -> b -> c -> a
 // a doesn't receive a sent message twice
-func XTestDeduplication(t *testing.T) {
+func TestDeduplication(t *testing.T) {
 	var err error
 
 	clients, err := setupNetwork(3, false)
