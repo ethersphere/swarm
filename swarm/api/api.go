@@ -719,14 +719,9 @@ func (a *API) ResourceHashSize() int {
 	return a.resource.HashSize
 }
 
-// ResourceIsValidated checks if the Mutable Resource has an active content validator.
-func (a *API) ResourceIsValidated() bool {
-	return a.resource.IsValidated()
-}
-
 // ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
-func (a *API) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
-	trie, err := loadManifest(a.fileStore, addr, nil)
+func (a *Api) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
+	trie, err := loadManifest(self.fileStore, addr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}
