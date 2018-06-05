@@ -21,7 +21,7 @@ import (
 )
 
 func testStorage(t *testing.T, f func(*Storage, bool)) {
-	testApi(t, func(api *API, toEncrypt bool) {
+	testAPI(t, func(api *API, toEncrypt bool) {
 		f(NewStorage(api), toEncrypt)
 	})
 }

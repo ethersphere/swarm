@@ -217,7 +217,7 @@ type API struct {
 }
 
 // NewAPI - the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler) (self *Api) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
@@ -233,7 +233,7 @@ func (a *API) Upload(uploadDir, index string, toEncrypt bool) (hash string, err 
 	return hash, err
 }
 
-// FileStore reader API
+// Retrieve - FileStore reader API
 func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
 	return a.fileStore.Retrieve(addr)
 }
@@ -415,7 +415,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 		}
 		mimeType = entry.ContentType
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-		reader, _ = a.dpa.Retrieve(contentAddr)
+		reader, _ = a.fileStore.Retrieve(contentAddr)
 	} else {
 		// no entry found
 		status = http.StatusNotFound
@@ -718,16 +718,19 @@ func (a *API) resourceUpdate(ctx context.Context, name string, data []byte, mult
 	return addr, period, version, err
 }
 
+// ResourceHashSize returned the size of the digest produced by the Mutable Resource hashing function
 func (a *API) ResourceHashSize() int {
 	return a.resource.HashSize
 }
 
-func (self *Api) ResourceIsValidated() bool {
-	return self.resource.IsValidated()
+// ResourceIsValidated checks if the Mutable Resource has an active content validator.
+func (a *API) ResourceIsValidated() bool {
+	return a.resource.IsValidated()
 }
 
-func (self *Api) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
-	trie, err := loadManifest(self.fileStore, addr, nil)
+// ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
+func (a *API) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
+	trie, err := loadManifest(a.fileStore, addr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}
