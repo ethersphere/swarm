@@ -148,20 +148,20 @@ func (r *resource) Name() string {
 	return r.name
 }
 
-func (self *resource) UnmarshalBinary(data []byte) error {
-	self.startBlock = binary.LittleEndian.Uint64(data)
-	self.frequency = binary.LittleEndian.Uint64(data[8:])
-	copy(self.publicKey[:], data[16:16+publicKeyLength])
-	self.name = string(data[16+publicKeyLength:])
+func (r *resource) UnmarshalBinary(data []byte) error {
+	r.startBlock = binary.LittleEndian.Uint64(data)
+	r.frequency = binary.LittleEndian.Uint64(data[8:])
+	copy(r.publicKey[:], data[16:16+publicKeyLength])
+	r.name = string(data[16+publicKeyLength:])
 	return nil
 }
 
-func (self *resource) MarshalBinary() ([]byte, error) {
-	b := make([]byte, 16+len(self.name))
-	binary.LittleEndian.PutUint64(b, self.startBlock)
-	binary.LittleEndian.PutUint64(b[8:], self.frequency)
-	copy(b[16:], self.publicKey[:])
-	copy(b[16+publicKeyLength:], []byte(self.name))
+func (r *resource) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 16+len(r.name))
+	binary.LittleEndian.PutUint64(b, r.startBlock)
+	binary.LittleEndian.PutUint64(b[8:], r.frequency)
+	copy(b[16:], r.publicKey[:])
+	copy(b[16+publicKeyLength:], []byte(r.name))
 	return b, nil
 }
 
@@ -298,7 +298,7 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 		return false
 	}
 
-	digest := self.keyDataHash(addr, parseddata)
+	digest := h.keyDataHash(addr, parseddata)
 	publicKey, err := crypto.SigToPub(digest.Bytes(), signature[:])
 	//addrSig, err := getAddressFromDataSig(digest, *signature)
 	if err != nil {
@@ -308,12 +308,12 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 	nameHash := ens.EnsNode(name)
 	var publicKeyBytes [65]byte
 	copy(publicKeyBytes[:], crypto.FromECDSAPub(publicKey))
-	checkAddr := self.resourceHash(period, version, nameHash, publicKeyBytes)
+	checkAddr := h.resourceHash(period, version, nameHash, publicKeyBytes)
 	if !bytes.Equal(checkAddr, addr) {
 		log.Error("Invalid signature on resource chunk")
 		return false
 	}
-	//ok, _ := self.checkAccess(name, addrSig)
+	//ok, _ := h.checkAccess(name, addrSig)
 	return true
 }
 
@@ -369,7 +369,7 @@ func (h *Handler) chunkSize() int64 {
 //
 // The start block of the resource update will be the actual current block height of the connected network.
 func (h *Handler) New(ctx context.Context, name string, frequency uint64) (storage.Address, *resource, error) {
-	return self.NewWithPublicKey(ctx, name, frequency, self.signer.PublicKey())
+	return h.NewWithPublicKey(ctx, name, frequency, h.signer.PublicKey())
 }
 
 func (h *Handler) NewWithPublicKey(ctx context.Context, name string, frequency uint64, publicKey *ecdsa.PublicKey) (storage.Address, *resource, error) {
