@@ -26,17 +26,22 @@ import (
 // Signs resource updates
 type Signer interface {
 	Sign(common.Hash) (Signature, error)
+	PublicKey() *ecdsa.PublicKey
 }
 
 type GenericSigner struct {
 	PrivKey *ecdsa.PrivateKey
 }
 
-func (self *GenericSigner) Sign(data common.Hash) (signature Signature, err error) {
-	signaturebytes, err := crypto.Sign(data.Bytes(), self.PrivKey)
+func (s *GenericSigner) Sign(data common.Hash) (signature Signature, err error) {
+	signaturebytes, err := crypto.Sign(data.Bytes(), s.PrivKey)
 	if err != nil {
 		return
 	}
 	copy(signature[:], signaturebytes)
 	return
+}
+
+func (s *GenericSigner) PublicKey() *ecdsa.PublicKey {
+	return &s.PrivKey.PublicKey
 }
