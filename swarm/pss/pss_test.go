@@ -930,22 +930,22 @@ func TestNetwork2000(t *testing.T) {
 	t.Run("32/2000/4/sock", testNetwork)
 }
 
-func TestNetwork8000(t *testing.T) {
+func TestNetwork5000(t *testing.T) {
 	//enableMetrics()
 
-	t.Run("3/8000/4/sim", testNetwork)
-	t.Run("4/8000/4/sim", testNetwork)
-	t.Run("8/8000/4/sim", testNetwork)
-	t.Run("16/8000/4/sim", testNetwork)
+	t.Run("3/5000/4/sim", testNetwork)
+	t.Run("4/5000/4/sim", testNetwork)
+	t.Run("8/5000/4/sim", testNetwork)
+	t.Run("16/5000/4/sim", testNetwork)
 }
 
-func TestNetwork18000(t *testing.T) {
+func TestNetwork10000(t *testing.T) {
 	//enableMetrics()
 
-	t.Run("3/18000/4/sim", testNetwork)
-	t.Run("4/18000/4/sim", testNetwork)
-	t.Run("8/18000/4/sim", testNetwork)
-	t.Run("16/18000/4/sim", testNetwork)
+	t.Run("3/10000/4/sim", testNetwork)
+	t.Run("4/10000/4/sim", testNetwork)
+	t.Run("8/10000/4/sim", testNetwork)
+	t.Run("16/10000/4/sim", testNetwork)
 }
 
 func testNetwork(t *testing.T) {
