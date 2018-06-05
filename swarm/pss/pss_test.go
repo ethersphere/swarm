@@ -927,7 +927,6 @@ func TestNetwork2000(t *testing.T) {
 	t.Run("4/2000/4/sock", testNetwork)
 	t.Run("8/2000/4/sock", testNetwork)
 	t.Run("16/2000/4/sock", testNetwork)
-	t.Run("32/2000/4/sock", testNetwork)
 }
 
 func TestNetwork5000(t *testing.T) {
