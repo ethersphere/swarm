@@ -361,6 +361,7 @@ func (p *Pss) handlePssMsg(msg interface{}) error {
 func (p *Pss) process(pssmsg *PssMsg) error {
 	var err error
 	var recvmsg *whisper.ReceivedMessage
+	var payload []byte
 	var from *PssAddress
 	var asymmetric bool
 	var keyid string
@@ -368,21 +369,24 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 
 	envelope := pssmsg.Payload
 	psstopic := Topic(envelope.Topic)
-	if p.allowRaw && psstopic == rawTopic {
-		p.executeHandlers(rawTopic, envelope.Data, nil, false, "")
-		return nil
-	}
-
-	if len(envelope.AESNonce) > 0 { // detect symkey msg according to whisperv5/envelope.go:OpenSymmetric
-		keyFunc = p.processSym
+	if pssmsg.isRaw() {
+		if !p.allowRaw {
+			return errors.New("raw message support disabled")
+		}
+		payload = pssmsg.Payload.Data
 	} else {
-		asymmetric = true
-		keyFunc = p.processAsym
-	}
+		if pssmsg.isSym() {
+			keyFunc = p.processSym
+		} else {
+			asymmetric = true
+			keyFunc = p.processAsym
+		}
 
-	recvmsg, keyid, from, err = keyFunc(envelope)
-	if err != nil {
-		return errors.New("Decryption failed")
+		recvmsg, keyid, from, err = keyFunc(envelope)
+		if err != nil {
+			return errors.New("Decryption failed")
+		}
+		payload = recvmsg.Payload
 	}
 
 	if len(pssmsg.To) < addressLength {
@@ -390,7 +394,7 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 			return err
 		}
 	}
-	p.executeHandlers(psstopic, recvmsg.Payload, from, asymmetric, keyid)
+	p.executeHandlers(psstopic, payload, from, asymmetric, keyid)
 
 	return nil
 
@@ -604,7 +608,6 @@ func (p *Pss) cleanKeys() (count int) {
 	for keyid, peertopics := range p.symKeyPool {
 		var expiredtopics []Topic
 		for topic, psp := range peertopics {
-			//log.Trace("check topic", "topic", topic, "id", keyid, "protect", psp.protected, "p", fmt.Sprintf("%p", self.symKeyPool[keyid][topic]))
 			if psp.protected {
 				continue
 			}
@@ -612,7 +615,6 @@ func (p *Pss) cleanKeys() (count int) {
 			var match bool
 			for i := p.symKeyDecryptCacheCursor; i > p.symKeyDecryptCacheCursor-cap(p.symKeyDecryptCache) && i > 0; i-- {
 				cacheid := p.symKeyDecryptCache[i%cap(p.symKeyDecryptCache)]
-				//log.Trace("check cache", "idx", i, "id", *cacheid)
 				if *cacheid == keyid {
 					match = true
 				}
@@ -649,20 +651,23 @@ func (p *Pss) enqueue(msg *PssMsg) error {
 // Send a raw message (any encryption is responsibility of calling client)
 //
 // Will fail if raw messages are disallowed
-func (p *Pss) SendRaw(msg []byte, address PssAddress) error {
+func (p *Pss) SendRaw(address PssAddress, topic Topic, msg []byte) error {
 	if !p.allowRaw {
 		return errors.New("Raw messages not enabled")
 	}
-	pssmsg := &PssMsg{
-		To:     address,
-		Expire: uint32(time.Now().Add(p.msgTTL).Unix()),
-		Payload: &whisper.Envelope{
-			Data:  msg,
-			Topic: whisper.TopicType(rawTopic),
-		},
+	pssMsgParams := &msgParams{
+		raw: true,
 	}
-	p.addFwdCache(pssmsg)
-	return p.enqueue(pssmsg)
+	payload := &whisper.Envelope{
+		Data:  msg,
+		Topic: whisper.TopicType(topic),
+	}
+	pssMsg := newPssMsg(pssMsgParams)
+	pssMsg.To = address
+	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
+	pssMsg.Payload = payload
+	p.addFwdCache(pssMsg)
+	return p.enqueue(pssMsg)
 }
 
 // Send a message using symmetric encryption
@@ -749,13 +754,16 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 		return fmt.Errorf("failed to perform whisper encryption: %v", err)
 	}
 	log.Trace("pssmsg whisper done", "env", envelope, "wparams payload", common.ToHex(wparams.Payload), "to", common.ToHex(to), "asym", asymmetric, "key", common.ToHex(key))
+
 	// prepare for devp2p transport
-	pssmsg := &PssMsg{
-		To:      to,
-		Expire:  uint32(time.Now().Add(p.msgTTL).Unix()),
-		Payload: envelope,
+	pssMsgParams := &msgParams{
+		sym: !asymmetric,
 	}
-	return p.enqueue(pssmsg)
+	pssMsg := newPssMsg(pssMsgParams)
+	pssMsg.To = to
+	pssMsg.Expire = uint32(time.Now().Add(p.msgTTL).Unix())
+	pssMsg.Payload = envelope
+	return p.enqueue(pssMsg)
 }
 
 // Forwards a pss message to the peer(s) closest to the to recipient address in the PssMsg struct

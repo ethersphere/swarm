@@ -121,6 +121,29 @@ func TestTopic(t *testing.T) {
 	}
 }
 
+// test bit packing of message control flags
+func TestMsgParams(t *testing.T) {
+	var ctrl byte
+	ctrl |= pssControlRaw
+	p := newMsgParamsFromBytes([]byte{ctrl})
+	m := newPssMsg(p)
+	if !m.isRaw() || m.isSym() {
+		t.Fatal("expected raw=true and sym=false")
+	}
+	ctrl |= pssControlSym
+	p = newMsgParamsFromBytes([]byte{ctrl})
+	m = newPssMsg(p)
+	if !m.isRaw() || !m.isSym() {
+		t.Fatal("expected raw=true and sym=true")
+	}
+	ctrl &= 0xff &^ pssControlRaw
+	p = newMsgParamsFromBytes([]byte{ctrl})
+	m = newPssMsg(p)
+	if m.isRaw() || !m.isSym() {
+		t.Fatal("expected raw=false and sym=true")
+	}
+}
+
 // test if we can insert into cache, match items with cache and cache expiry
 func TestCache(t *testing.T) {
 	var err error
@@ -612,7 +635,7 @@ func testSendRaw(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	topic := "0x00000000"
+	topic := "0xdeadbeef"
 
 	var loaddrhex string
 	err = clients[0].Call(&loaddrhex, "pss_baseAddr")
@@ -646,7 +669,7 @@ func testSendRaw(t *testing.T) {
 
 	// send and verify delivery
 	lmsg := []byte("plugh")
-	err = clients[1].Call(nil, "pss_sendRaw", lmsg, loaddrhex)
+	err = clients[1].Call(nil, "pss_sendRaw", loaddrhex, topic, lmsg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -659,7 +682,7 @@ func testSendRaw(t *testing.T) {
 		t.Fatalf("test message (left) timed out: %v", cerr)
 	}
 	rmsg := []byte("xyzzy")
-	err = clients[0].Call(nil, "pss_sendRaw", rmsg, roaddrhex)
+	err = clients[0].Call(nil, "pss_sendRaw", roaddrhex, topic, rmsg)
 	if err != nil {
 		t.Fatal(err)
 	}
