@@ -287,7 +287,7 @@ func (self *Handler) SetStore(store *storage.NetStore) {
 func (self *Handler) Validate(addr storage.Address, data []byte) bool {
 	signature, period, version, name, parseddata, _, err := self.parseUpdate(data)
 	if err != nil {
-		log.Warn("foo", "err", err)
+		log.Warn(err.Error())
 		if len(data) > metadataChunkOffsetSize { // identifier comes after this byte range, and must be at least one byte
 			if bytes.Equal(data[:2], []byte{0, 0}) {
 				return true
@@ -747,7 +747,7 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 		intdatalength, intheaderlength, err = multihash.GetMultihashLength(chunkdata[cursor:])
 		if err != nil {
 			log.Error("multihash parse error", "err", err)
-			return nil, 0, 0, "", nil, false, fmt.Errorf("Corrupt multihash data: %v", err)
+			return nil, 0, 0, "", nil, false, err
 		}
 		intdatalength += intheaderlength
 		multihashboundary := cursor + intdatalength
@@ -785,7 +785,7 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 func (self *Handler) UpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, error) {
 	// \TODO perhaps this check should be in newUpdateChunk()
 	if _, _, err := multihash.GetMultihashLength(data); err != nil {
-		return nil, NewError(ErrNothingToReturn, fmt.Sprintf("Invalid multihash: %v", err))
+		return nil, NewError(ErrNothingToReturn, err)
 	}
 	return self.update(ctx, name, data, true)
 }
