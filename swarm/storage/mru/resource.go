@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -921,18 +920,11 @@ func (h *Handler) set(nameHash string, rsrc *resource) {
 }
 
 // used for chunk keys
-func (h *Handler) resourceHash(period uint32, version uint32, namehash common.Hash, publicKeyBytes [publicKeyLength]byte) storage.Address {
-	// format is: hash(period|version|namehash)
+func (h *Handler) resourceHash(period uint32, version uint32, nameHash common.Hash, publicKeyBytes [publicKeyLength]byte) storage.Address {
 	hasher := h.hashPool.Get().(storage.SwarmHash)
 	defer h.hashPool.Put(hasher)
 	hasher.Reset()
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, period)
-	hasher.Write(b)
-	binary.LittleEndian.PutUint32(b, version)
-	hasher.Write(b)
-	hasher.Write(publicKeyBytes[:])
-	hasher.Write(namehash[:])
+	hasher.Write(NewResourceHash(period, version, nameHash, publicKeyBytes))
 	return hasher.Sum(nil)
 }
 
@@ -1026,21 +1018,16 @@ func isSafeName(name string) bool {
 	return validname == name
 }
 
-func NewTestHandler(datadir string, params *HandlerParams) (*Handler, error) {
-	path := filepath.Join(datadir, DbDirName)
-	rh, err := NewHandler(params)
-	if err != nil {
-		return nil, fmt.Errorf("resource handler create fail: %v", err)
-	}
-	localstoreparams := storage.NewDefaultLocalStoreParams()
-	localstoreparams.Init(path)
-	localStore, err := storage.NewLocalStore(localstoreparams, nil)
-	if err != nil {
-		return nil, fmt.Errorf("localstore create fail, path %s: %v", path, err)
-	}
-	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHash)))
-	localStore.Validators = append(localStore.Validators, rh)
-	netStore := storage.NewNetStore(localStore, nil)
-	rh.SetStore(netStore)
-	return rh, nil
+// NewResourceHash will create a deterministic address from the update metadata
+// format is: hash(period|version|publickey|namehash)
+func NewResourceHash(period uint32, version uint32, namehash common.Hash, publicKeyBytes [publicKeyLength]byte) []byte {
+	buf := bytes.NewBuffer(nil)
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, period)
+	buf.Write(b)
+	binary.LittleEndian.PutUint32(b, version)
+	buf.Write(b)
+	buf.Write(publicKeyBytes[:])
+	buf.Write(namehash[:])
+	return buf.Bytes()
 }
