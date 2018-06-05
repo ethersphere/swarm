@@ -54,52 +54,15 @@ func (m *mockFetcher) fetch(ctx context.Context) {
 	m.peersPerFetch = append(m.peersPerFetch, peers)
 }
 
-func newMockFetcher() *mockFetcher {
-	return &mockFetcher{}
+type mockFetchFuncFactory struct {
+	fetcher *mockFetcher
 }
 
-func (m *mockFetcher) mockFetch(ctx context.Context, _ Address, peers *sync.Map) FetchFunc {
-	m.peers = peers
-	m.quit = ctx.Done()
-	return m.fetch
+func (m *mockFetchFuncFactory) createFetchFunc(ctx context.Context, _ Address, peers *sync.Map) FetchFunc {
+	m.fetcher.peers = peers
+	m.fetcher.quit = ctx.Done()
+	return m.fetcher.fetch
 }
-
-// func (m *mockRetrieve) retrieve(rctx Request, f *Fetcher) (context.Context, error) {
-// 	ctx := <-m.contextC
-// 	err := <-m.errC
-// 	return ctx, err
-// }
-
-// func (m *mockRetrieve) feed(ctx context.Context, err error) {
-// 	go func() {
-// 		m.contextC <- ctx
-// 		m.errC <- err
-// 	}()
-// }
-
-// type mockRetrieveContext struct {
-// 	err   error
-// 	doneC chan struct{}
-// }
-
-// func NewMockFailedRetrieveContext(duration time.Time) *mockRetrieveContext {
-// 	doneC := make(chan struct{})
-// 	timer := time.NewTimer(duration)
-// 	go func() {
-// 		<-timer.C
-// 		close(doneC)
-// 	}
-// 	return &mockRetrieveContext{
-// 		doneC : doneC,
-// 		err: errors.New("retrieve aborted"),
-// 	}
-// }
-
-// func NewMockRetrieveContext() *mockRetrieveContext {
-// 	return &mockRetrieveContext{
-// 		doneC : make(chan struct{}),
-// 	}
-// }
 
 func TestNetStoreFetcherCountPeers(t *testing.T) {
 	// setup
@@ -119,8 +82,11 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	fetcher := newMockFetcher()
-	netStore, err := NewNetStore(localStore, fetcher.mockFetch)
+	fetcher := &mockFetcher{}
+	mockFetchFuncFactory := &mockFetchFuncFactory{
+		fetcher: fetcher,
+	}
+	netStore, err := NewNetStore(localStore, mockFetchFuncFactory)
 	if err != nil {
 		t.Fatal(err)
 	}

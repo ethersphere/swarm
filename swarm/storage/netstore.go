@@ -30,21 +30,21 @@ import (
 // on request it initiates remote cloud retrieval using a fetcher
 // fetchers are unique to a chunk and are stored in fetchers LRU memory cache
 type NetStore struct {
-	mu           sync.Mutex
-	store        ChunkStore
-	fetchers     *lru.Cache
-	newFetchFunc FetchFuncConstructor
+	mu               sync.Mutex
+	store            ChunkStore
+	fetchers         *lru.Cache
+	fetchFuncFactory FetchFuncFactory
 }
 
-func NewNetStore(store ChunkStore, newFetchFunc FetchFuncConstructor) (*NetStore, error) {
+func NewNetStore(store ChunkStore, fetchFuncFactory FetchFuncFactory) (*NetStore, error) {
 	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
 	if err != nil {
 		return nil, err
 	}
 	return &NetStore{
-		store:        store,
-		fetchers:     fetchers,
-		newFetchFunc: newFetchFunc,
+		store:            store,
+		fetchers:         fetchers,
+		fetchFuncFactory: fetchFuncFactory,
 	}, nil
 }
 
@@ -132,14 +132,17 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 		cancel()
 	}
 	peers := &sync.Map{}
-	fetcher := newFetcher(ref, n.newFetchFunc(ctx, ref, peers), destroy, peers)
+	fetcher := newFetcher(ref, n.fetchFuncFactory.createFetchFunc(ctx, ref, peers), destroy, peers)
 	n.fetchers.Add(key, fetcher)
 
 	return fetcher
 }
 
+type FetchFuncFactory interface {
+	createFetchFunc(ctx context.Context, offer Address, peers *sync.Map) FetchFunc
+}
+
 type FetchFunc func(ctx context.Context)
-type FetchFuncConstructor func(ctx context.Context, offer Address, peers *sync.Map) FetchFunc
 
 type fetcher struct {
 	addr       Address       // adress of chunk

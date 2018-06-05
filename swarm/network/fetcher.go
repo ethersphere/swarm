@@ -44,12 +44,22 @@ type Fetcher struct {
 	skipCheck bool
 }
 
-func NewFetchFunc(request RequestFunc, skipCheck bool) storage.FetchFuncConstructor {
-	return func(ctx context.Context, addr storage.Address, peers *sync.Map) (fetch storage.FetchFunc) {
-		f := NewFetcher(addr, request, skipCheck)
-		f.start(ctx, peers)
-		return f.fetch
+type FetcherFactory struct {
+	request   RequestFunc
+	skipCheck bool
+}
+
+func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
+	return &FetcherFactory{
+		request:   request,
+		skipCheck: skipCheck,
 	}
+}
+
+func (f *FetcherFactory) createFetcher(ctx context.Context, offer storage.Address, peers *sync.Map) storage.FetchFunc {
+	fetcher := NewFetcher(offer, f.request, f.skipCheck)
+	fetcher.start(ctx, peers)
+	return fetcher.fetch
 }
 
 // NewFetcher creates a new fetcher for a chunk
