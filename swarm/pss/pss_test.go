@@ -935,13 +935,11 @@ func TestNetwork(t *testing.T) {
 	t.Run("4/8000/4/sim", testNetwork)
 	t.Run("8/8000/4/sim", testNetwork)
 	t.Run("16/8000/4/sim", testNetwork)
-	t.Run("32/8000/4/sim", testNetwork)
 
 	t.Run("3/18000/4/sim", testNetwork)
 	t.Run("4/18000/4/sim", testNetwork)
 	t.Run("8/18000/4/sim", testNetwork)
 	t.Run("16/18000/4/sim", testNetwork)
-	t.Run("32/18000/4/sim", testNetwork)
 
 	time.Sleep(1000 * time.Millisecond)
 }
