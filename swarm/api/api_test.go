@@ -83,7 +83,6 @@ func expResponse(content string, mimeType string, status int) *Response {
 	return &Response{mimeType, status, int64(len(content)), content}
 }
 
-// func testGet(t *testing.T, api *API, bzzhash string) *testResponse {
 func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
 	addr := storage.Address(common.Hex2Bytes(bzzhash))
 	reader, mimeType, status, _, err := api.Get(addr, path)

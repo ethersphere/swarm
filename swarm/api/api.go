@@ -59,12 +59,12 @@ var (
 	apiGetInvalid      = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
-// Resolver - used for dns
+// Resolver - interface resolve a domain name to a hash using ENS
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
 }
 
-// ResolveValidator used to validate the contained Resolver
+// ResolveValidator is used to validate the contained Resolver
 type ResolveValidator interface {
 	Resolver
 	Owner(node [32]byte) (common.Address, error)
@@ -77,12 +77,12 @@ type NoResolverError struct {
 	TLD string
 }
 
-// NewNoResolverError - only used in test's at the time of this writing
+// NewNoResolverError creates a NoResolverError for the given top level domain
 func NewNoResolverError(tld string) *NoResolverError {
 	return &NoResolverError{TLD: tld}
 }
 
-// Error - ENS error
+// Error - NoResolverError implements error
 func (e *NoResolverError) Error() string {
 	if e.TLD == "" {
 		return "no ENS resolver"
@@ -149,7 +149,7 @@ func (m *MultiResolver) Resolve(addr string) (h common.Hash, err error) {
 	return
 }
 
-// ValidateOwner - checks a MultiResolver Owner
+// ValidateOwner checks the ENS to validate that the owner of the given domain is the given eth address
 func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool, error) {
 	rs, err := m.getResolveValidator(name)
 	if err != nil {
@@ -166,7 +166,7 @@ func (m *MultiResolver) ValidateOwner(name string, address common.Address) (bool
 	return false, err
 }
 
-// HeaderByNumber - accessor
+// HeaderByNumber uses the validator of the given domainname and retrieves the header for the given block number
 func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr *big.Int) (*types.Header, error) {
 	rs, err := m.getResolveValidator(name)
 	if err != nil {
@@ -206,8 +206,7 @@ func (m *MultiResolver) SetNameHash(nameHash func(string) common.Hash) {
 }
 
 /*
-API implements webserver/file system related content storage and retrieval
-on top of the dpa
+API implements webserver/file system related content storage and retrieval on top of the FileStore
 it is the public interface of the dpa which is included in the ethereum stack
 */
 type API struct {
@@ -216,7 +215,7 @@ type API struct {
 	dns      Resolver
 }
 
-// NewAPI - the api constructor initialises
+// NewAPI - the api constructor initialises a new API instance.
 func NewAPI(dpa *storage.DPA, dns Resolver, resourceHandler *mru.Handler) (self *API) {
 	self = &API{
 		dpa:      dpa,
@@ -699,7 +698,8 @@ func (a *API) ResourceUpdateMultihash(ctx context.Context, name string, data []b
 	return a.resourceUpdate(ctx, name, data, true)
 }
 
-// ResourceUpdate - for non 'Multihash' resource
+// ResourceUpdate updates a Mutable Resource with arbitrary data.
+// Upon retrieval the update will be retrieved verbatim as bytes.
 func (a *API) ResourceUpdate(ctx context.Context, name string, data []byte) (storage.Address, uint32, uint32, error) {
 	return a.resourceUpdate(ctx, name, data, false)
 }
@@ -717,17 +717,17 @@ func (a *API) resourceUpdate(ctx context.Context, name string, data []byte, mult
 	return addr, period, version, err
 }
 
-// ResourceHashSize - accessor
+// ResourceHashSize returned the size of the digest produced by the Mutable Resource hashing function
 func (a *API) ResourceHashSize() int {
 	return a.resource.HashSize
 }
 
-// ResourceIsValidated - accessor
+// ResourceIsValidated checks if the Mutable Resource has an active content validator.
 func (a *API) ResourceIsValidated() bool {
 	return a.resource.IsValidated()
 }
 
-// ResolveResourceManifest - used in GET and POST server handlers
+// ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
 func (a *API) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
 	trie, err := loadManifest(a.dpa, addr, nil)
 	if err != nil {
