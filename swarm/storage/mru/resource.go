@@ -372,7 +372,11 @@ func (h *Handler) chunkSize() int64 {
 // The signature data should match the hash of the idna-converted name by the validator's namehash function, NOT the raw name bytes.
 //
 // The start block of the resource update will be the actual current block height of the connected network.
-func (h *Handler) New(ctx context.Context, name string, frequency uint64, publicKey *ecdsa.PublicKey) (storage.Address, *resource, error) {
+func (h *Handler) New(ctx context.Context, name string, frequency uint64) (storage.Address, *resource, error) {
+	return self.NewWithPublicKey(ctx, name, frequency, self.signer.PublicKey())
+}
+
+func (h *Handler) NewWithPublicKey(ctx context.Context, name string, frequency uint64, publicKey *ecdsa.PublicKey) (storage.Address, *resource, error) {
 
 	// frequency 0 is invalid
 	if frequency == 0 {
