@@ -844,7 +844,6 @@ func (p *Pss) forward(msg *PssMsg) error {
 
 	if sent == 0 {
 		log.Debug("unable to forward to any peers")
-		time.Sleep(time.Millisecond)
 		if err := p.enqueue(msg); err != nil {
 			metrics.GetOrRegisterCounter("pss.forward.enqueue.error", nil).Inc(1)
 			return err
@@ -922,12 +921,4 @@ func (p *Pss) digest(msg *PssMsg) pssDigest {
 	key := hasher.Sum(nil)
 	copy(digest[:], key[:digestLength])
 	return digest
-}
-
-func (p *Pss) isMsgExpired(msg *PssMsg) bool {
-	msgexp := time.Unix(int64(msg.Expire), 0)
-	if msgexp.Before(time.Now()) || msgexp.After(time.Now().Add(p.msgTTL)) {
-		return true
-	}
-	return false
 }
