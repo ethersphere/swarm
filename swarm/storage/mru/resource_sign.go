@@ -23,16 +23,20 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
-// Signs resource updates
+// Signer signs Mutable Resource update payloads
 type Signer interface {
 	Sign(common.Hash) (Signature, error)
 	PublicKey() *ecdsa.PublicKey
 }
 
+// GenericSigner implements the Signer interface
+// It is the vanilla signer that probably should be used in most cases
 type GenericSigner struct {
 	PrivKey *ecdsa.PrivateKey
 }
 
+// Sign signs the supplied data
+// It wraps the ethereum crypto.Sign() method
 func (s *GenericSigner) Sign(data common.Hash) (signature Signature, err error) {
 	signaturebytes, err := crypto.Sign(data.Bytes(), s.PrivKey)
 	if err != nil {
@@ -42,6 +46,7 @@ func (s *GenericSigner) Sign(data common.Hash) (signature Signature, err error) 
 	return
 }
 
+// PublicKey returns the public key of the signer's private key
 func (s *GenericSigner) PublicKey() *ecdsa.PublicKey {
 	return &s.PrivKey.PublicKey
 }
