@@ -181,7 +181,7 @@ func TestHandler(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rootChunkKey, _, err := rh.New(ctx, safeName, resourceFrequency, signer.PublicKey())
+	rootChunkKey, _, err := rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -344,7 +344,7 @@ func TestMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, _, err = rh.New(ctx, safeName, resourceFrequency, signer.PublicKey())
+	_, _, err = rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -411,7 +411,7 @@ func TestMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = rh2.New(ctx, safeName, resourceFrequency, signer.PublicKey())
+	_, _, err = rh2.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -472,7 +472,7 @@ func TestChunkValidator(t *testing.T) {
 	// create new resource when we are owner = ok
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	key, rsrc, err := rh.New(ctx, safeName, resourceFrequency, signer.PublicKey())
+	key, rsrc, err := rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
