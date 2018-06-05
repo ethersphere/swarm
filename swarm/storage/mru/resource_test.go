@@ -449,7 +449,7 @@ func TestMultihash(t *testing.T) {
 }
 
 // \TODO verify testing of signature validation and enforcement
-func TestChunkValidator(t *testing.T) {
+func TestValidator(t *testing.T) {
 
 	// make fake backend, set up rpc and create resourcehandler
 	backend := &fakeBackend{
@@ -462,6 +462,12 @@ func TestChunkValidator(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// fake signer for false results
+	falseSigner, err := newTestSigner()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// set up rpc and create resourcehandler with ENS sim backend
 	rh, _, teardownTest, err := setupTest(backend, signer)
 	if err != nil {
@@ -469,7 +475,7 @@ func TestChunkValidator(t *testing.T) {
 	}
 	defer teardownTest()
 
-	// create new resource when we are owner = ok
+	// create new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	key, rsrc, err := rh.New(ctx, safeName, resourceFrequency)
@@ -477,6 +483,7 @@ func TestChunkValidator(t *testing.T) {
 		t.Fatalf("Create resource fail: %v", err)
 	}
 
+	// chunk with address
 	data := []byte("foo")
 	var publicKeyBytes [publicKeyLength]byte
 	copy(publicKeyBytes[:], crypto.FromECDSAPub(signer.PublicKey()))
@@ -489,6 +496,19 @@ func TestChunkValidator(t *testing.T) {
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
 	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on update chunk")
+	}
+
+	// chunk with address made from different publickey
+	copy(publicKeyBytes[:], crypto.FromECDSAPub(falseSigner.PublicKey()))
+	key = rh.resourceHash(1, 1, rsrc.nameHash, publicKeyBytes)
+	digest = rh.keyDataHash(key, data)
+	sig, err = rh.signer.Sign(digest)
+	if err != nil {
+		t.Fatalf("sign fail: %v", err)
+	}
+	chunk = newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
+	if rh.Validate(chunk.Addr, chunk.SData) {
+		t.Fatal("Chunk validator did not fail on update chunk with false address")
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
@@ -505,8 +525,9 @@ func TestChunkValidator(t *testing.T) {
 
 // tests that the content address validator correctly checks the data
 // tests that resource update chunks are passed through content address validator
-// the test checking the resouce update validator internal correctness is found in resource_test.go
-func TestValidator(t *testing.T) {
+// there is some redundancy in this test as it also tests content addressed chunks,
+// which should be evaluated as invalid chunks by this validator
+func TestValidatorInStore(t *testing.T) {
 
 	// signer containing private key
 	signer, err := newTestSigner()
@@ -530,9 +551,7 @@ func TestValidator(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// add content address validator and resource validator to validators and check puts
-	// bad should fail, good should pass
-	store.Validators = append(store.Validators, storage.NewContentAddressValidator(hashfunc))
+	// set up resource handler and add is as a validator to the localstore
 	rhParams := &HandlerParams{
 		Signer: signer,
 	}
@@ -542,50 +561,20 @@ func TestValidator(t *testing.T) {
 	}
 	store.Validators = append(store.Validators, rh)
 
+	// create content addressed chunks, one good, one faulty
 	chunks := storage.GenerateRandomChunks(storage.DefaultChunkSize, 2)
 	goodChunk := chunks[0]
 	badChunk := chunks[1]
 	badChunk.SData = goodChunk.SData
+
+	// create a resource update chunk with correct publickey
 	key := rh.resourceHash(42, 1, ens.EnsNode("xyzzy.eth"), publicKeyBytes)
 	data := []byte("bar")
 	digestToSign := rh.keyDataHash(key, data)
 	digestSignature, err := signer.Sign(digestToSign)
-	if err != nil {
-		t.Fatalf("signing of data '%s' failed: %v", data, err)
-	}
 	uglyChunk := newUpdateChunk(key, &digestSignature, 42, 1, "xyzzy.eth", data, len(data))
 
-	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
-	if err := goodChunk.GetErrored(); err != nil {
-		t.Fatalf("expected no error on good content address chunk with both validators, but got: %s", err)
-	}
-	if err := badChunk.GetErrored(); err == nil {
-		t.Fatal("expected error on bad chunk address with both validators, but got nil")
-	}
-	if err := uglyChunk.GetErrored(); err != nil {
-		t.Fatalf("expected no error on resource update chunk with both validators, but got: %s", err)
-	}
-
-	// (redundant check)
-	// use only resource validator, and check puts
-	// bad should fail, good should fail, resource should pass
-	store.Validators[0] = store.Validators[1]
-	store.Validators = store.Validators[:1]
-
-	chunks = storage.GenerateRandomChunks(storage.DefaultChunkSize, 2)
-	goodChunk = chunks[0]
-	badChunk = chunks[1]
-	badChunk.SData = goodChunk.SData
-
-	key = rh.resourceHash(42, 2, ens.EnsNode("xyzzy.eth"), publicKeyBytes)
-	data = []byte("baz")
-	digestToSign = rh.keyDataHash(key, data)
-	digestSignature, err = signer.Sign(digestToSign)
-	if err != nil {
-		t.Fatalf("signing of data '%s' failed: %v", data, err)
-	}
-	uglyChunk = newUpdateChunk(key, &digestSignature, 42, 2, "xyzzy.eth", data, len(data))
-
+	// put the chunks in the store and check their error status
 	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
 	if goodChunk.GetErrored() == nil {
 		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
