@@ -33,8 +33,8 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -740,11 +740,11 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 	// if multihash content is indicated we check the validity of the multihash
 	// \TODO the check above for multihash probably is sufficient also for this case (or can be with a small adjustment) and if so this code should be removed
 	var intdatalength int
-	var multihash bool
+	var ismultihash bool
 	if datalength == 0 {
 		var intheaderlength int
 		var err error
-		intdatalength, intheaderlength, err = swarmhash.GetMultihashLength(chunkdata[cursor:])
+		intdatalength, intheaderlength, err = multihash.GetMultihashLength(chunkdata[cursor:])
 		if err != nil {
 			log.Error("multihash parse error", "err", err)
 			return nil, 0, 0, "", nil, false, fmt.Errorf("Corrupt multihash data: %v", err)
@@ -755,7 +755,7 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 			log.Debug("multihash error", "chunkdatalen", len(chunkdata), "multihashboundary", multihashboundary)
 			return nil, 0, 0, "", nil, false, errors.New("Corrupt multihash data")
 		}
-		multihash = true
+		ismultihash = true
 	} else {
 		intdatalength = int(datalength)
 	}
@@ -773,7 +773,7 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 		}
 	}
 
-	return signature, period, version, name, data, multihash, nil
+	return signature, period, version, name, data, ismultihash, nil
 }
 
 // Adds an actual data update
@@ -784,7 +784,7 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 // A resource update cannot span chunks, and thus has max length 4096
 func (self *Handler) UpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, error) {
 	// \TODO perhaps this check should be in newUpdateChunk()
-	if _, _, err := swarmhash.GetMultihashLength(data); err != nil {
+	if _, _, err := multihash.GetMultihashLength(data); err != nil {
 		return nil, NewError(ErrNothingToReturn, fmt.Sprintf("Invalid multihash: %v", err))
 	}
 	return self.update(ctx, name, data, true)

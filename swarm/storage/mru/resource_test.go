@@ -39,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	swarmhash "github.com/ethereum/go-ethereum/swarm/hash"
+	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -407,51 +407,51 @@ func TestMultihash(t *testing.T) {
 
 	// we're naïvely assuming keccak256 for swarm hashes
 	// if it ever changes this test should also change
-	swarmhashbytes := ens.EnsNode("foo")
-	swarmhashmulti := swarmhash.ToMultihash(swarmhashbytes.Bytes())
-	swarmhashkey, err := rh.UpdateMultihash(ctx, safeName, swarmhashmulti)
+	multihashbytes := ens.EnsNode("foo")
+	multihashmulti := multihash.ToMultihash(multihashbytes.Bytes())
+	multihashkey, err := rh.UpdateMultihash(ctx, safeName, multihashmulti)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	sha1bytes := make([]byte, swarmhash.MultihashLength)
-	sha1multi := swarmhash.ToMultihash(sha1bytes)
+	sha1bytes := make([]byte, multihash.MultihashLength)
+	sha1multi := multihash.ToMultihash(sha1bytes)
 	sha1key, err := rh.UpdateMultihash(ctx, safeName, sha1multi)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// invalid multihashes
-	_, err = rh.UpdateMultihash(ctx, safeName, swarmhashmulti[1:])
+	_, err = rh.UpdateMultihash(ctx, safeName, multihashmulti[1:])
 	if err == nil {
 		t.Fatalf("Expected update to fail with first byte skipped")
 	}
-	_, err = rh.UpdateMultihash(ctx, safeName, swarmhashmulti[:len(swarmhashmulti)-2])
+	_, err = rh.UpdateMultihash(ctx, safeName, multihashmulti[:len(multihashmulti)-2])
 	if err == nil {
 		t.Fatalf("Expected update to fail with last byte skipped")
 	}
 
-	data, err := getUpdateDirect(rh, swarmhashkey)
+	data, err := getUpdateDirect(rh, multihashkey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	swarmhashdecode, err := swarmhash.FromMultihash(data)
+	multihashdecode, err := multihash.FromMultihash(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(swarmhashdecode, swarmhashbytes.Bytes()) {
-		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", swarmhashdecode, swarmhashbytes.Bytes())
+	if !bytes.Equal(multihashdecode, multihashbytes.Bytes()) {
+		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", multihashdecode, multihashbytes.Bytes())
 	}
 	data, err = getUpdateDirect(rh, sha1key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sha1decode, err := swarmhash.FromMultihash(data)
+	shadecode, err := multihash.FromMultihash(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(sha1decode, sha1bytes) {
-		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", sha1decode, sha1bytes)
+	if !bytes.Equal(shadecode, sha1bytes) {
+		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", shadecode, sha1bytes)
 	}
 	rh.Close()
 
@@ -473,7 +473,7 @@ func TestMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	swarmhashsignedkey, err := rh2.UpdateMultihash(ctx, safeName, swarmhashmulti)
+	multihashsignedkey, err := rh2.UpdateMultihash(ctx, safeName, multihashmulti)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -482,27 +482,27 @@ func TestMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err = getUpdateDirect(rh2, swarmhashsignedkey)
+	data, err = getUpdateDirect(rh2, multihashsignedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	swarmhashdecode, err = swarmhash.FromMultihash(data)
+	multihashdecode, err = multihash.FromMultihash(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(swarmhashdecode, swarmhashbytes.Bytes()) {
-		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", swarmhashdecode, swarmhashbytes.Bytes())
+	if !bytes.Equal(multihashdecode, multihashbytes.Bytes()) {
+		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", multihashdecode, multihashbytes.Bytes())
 	}
 	data, err = getUpdateDirect(rh2, sha1signedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sha1decode, err = swarmhash.FromMultihash(data)
+	shadecode, err = multihash.FromMultihash(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(sha1decode, sha1bytes) {
-		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", sha1decode, sha1bytes)
+	if !bytes.Equal(shadecode, sha1bytes) {
+		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", shadecode, sha1bytes)
 	}
 }
 
