@@ -55,6 +55,8 @@ type blockEstimator struct {
 	Average time.Duration
 }
 
+// NewBlockEstimator returns an object that can be used for retrieving an heuristical block height in the absence of a blockchain connection
+// It implements the headerGetter interface
 // TODO: Average must  be adjusted when blockchain connection is present and synced
 func NewBlockEstimator() *blockEstimator {
 	sampleDate, _ := time.Parse(time.RFC3339, "2018-05-04T20:35:22Z")   // from etherscan.io
@@ -70,25 +72,31 @@ func NewBlockEstimator() *blockEstimator {
 	}
 }
 
+// HeaderByNumber retrieves the estimated block number wrapped in a block header struct
 func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
 	return &types.Header{
 		Number: big.NewInt(time.Since(b.Start).Nanoseconds() / b.Average.Nanoseconds()),
 	}, nil
 }
 
+// Error is a the typed error object used for Mutable Resources
 type Error struct {
 	code int
 	err  string
 }
 
+// Error implements the Error interface
 func (e *Error) Error() string {
 	return e.err
 }
 
+// Code returns the error code
+// Error codes are enumerated in the error.go file within the mru package
 func (e *Error) Code() int {
 	return e.code
 }
 
+// NewError creates a new Mutable Resource Error object with the specified code and custom error message
 func NewError(code int, s string) error {
 	if code < 0 || code >= ErrCnt {
 		panic("no such error code!")
@@ -103,14 +111,22 @@ func NewError(code int, s string) error {
 	return r
 }
 
+// Signature is an alias for a static byte array with the size of a signature
 type Signature [signatureLength]byte
 
+// PublicKey is an alias for a static byte array with the size of a public key
+type PublicKey [publicKeyLength]byte
+
+// LookupParams is used to specify constraints when performing an update lookup
+// Limit defines whether or not the lookup should be limited
+// If Limit is set to true then Max defines the amount of hops that can be performed
+// \TODO this is redundant, just use uint32 with 0 for unlimited hops
 type LookupParams struct {
 	Limit bool
 	Max   uint32
 }
 
-// Encapsulates an specific resource update. When synced it contains the most recent
+// encapsulates an specific resource update. When synced it contains the most recent
 // version of the resource update data.
 type resource struct {
 	*bytes.Reader
@@ -136,7 +152,8 @@ func (r *resource) NameHash() common.Hash {
 	return r.nameHash
 }
 
-func (r *resource) Size(chan bool) (int64, error) {
+// implements (which?) interface
+func (r *resource) Size(_ chan bool) (int64, error) {
 	if !r.isSynced() {
 		return 0, NewError(ErrNotSynced, "Not synced")
 	}
@@ -168,60 +185,8 @@ type headerGetter interface {
 	HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error)
 }
 
-// Mutable resource is an entity which allows updates to a resource
-// without resorting to ENS on each update.
-// The update scheme is built on swarm chunks with chunk keys following
-// a predictable, versionable pattern.
-//
-// Updates are defined to be periodic in nature, where periods are
-// expressed in terms of number of blocks.
-//
-// The root entry of a mutable resource is tied to a unique identifier,
-// typically - but not necessarily - an ens name.  The identifier must be
-// an valid IDNA string. It also contains the block number
-// when the resource update was first registered, and
-// the block frequency with which the resource will be updated, both of
-// which are stored as little-endian uint64 values in the database (for a
-// total of 16 bytes). It also contains the unique identifier.
-// It is stored in a separate content-addressed chunk (call it the metadata chunk),
-// with the following layout:
-//
-// (0x0000|startblock|frequency|identifier)
-//
-// (The two first zero-value bytes are used for disambiguation by the chunk validator,
-// and update chunk will always have a value > 0 there.)
-//
-// The root entry tells the requester from when the mutable resource was
-// first added (block number) and in which block number to look for the
-// actual updates. Thus, a resource update for identifier "føø.bar"
-// starting at block 4200 with frequency 42 will have updates on block 4242,
-// 4284, 4326 and so on.
-//
-// Actual data updates are also made in the form of swarm chunks. The keys
-// of the updates are the hash of a concatenation of properties as follows:
-//
-// sha256(period|version|namehash)
-//
-// The period is (currentblock - startblock) / frequency
-//
-// Using our previous example, this means that a period 3 will have 4326 as
-// the block number.
-//
-// If more than one update is made to the same block number, incremental
-// version numbers are used successively.
-//
-// A lookup agent need only know the identifier name in order to get the versions
-//
-// the resourcedata is:
-// headerlength|period|version|identifier|data
-//
-// if a validator is active, the chunk data is:
-// resourcedata|sign(resourcedata)
-// otherwise, the chunk data is the same as the resourcedata
-//
-// headerlength is a 16 bit value containing the byte length of period|version|name
-//
-// TODO: Include modtime in chunk data + signature
+// Handler is the API for Mutable Resources
+// It enables creating, updating, syncing and retrieving resources and their update data
 type Handler struct {
 	chunkStore      *storage.NetStore
 	HashSize        int
@@ -234,13 +199,15 @@ type Handler struct {
 	queryMaxPeriods *LookupParams
 }
 
+// HandlerParams pass parameters to the Handler constructor NewHandler
+// Signer and HeaderGetter are manfatory parameters
 type HandlerParams struct {
 	QueryMaxPeriods *LookupParams
 	Signer          Signer
 	HeaderGetter    headerGetter
 }
 
-// Create or open resource update chunk store
+// NewHandler creates a new Mutable Resource API
 func NewHandler(params *HandlerParams) (*Handler, error) {
 	if params.QueryMaxPeriods == nil {
 		params.QueryMaxPeriods = &LookupParams{
@@ -248,7 +215,10 @@ func NewHandler(params *HandlerParams) (*Handler, error) {
 		}
 	}
 	if params.Signer == nil {
-		return nil, NewError(ErrInit, "signer cannot be nil")
+		return nil, NewError(ErrInit, "Signer cannot be nil")
+	}
+	if params.HeaderGetter == nil {
+		return nil, NewError(ErrInit, "HeaderGetter cannot be nil")
 	}
 	rh := &Handler{
 		headerGetter: params.HeaderGetter,
@@ -275,15 +245,15 @@ func NewHandler(params *HandlerParams) (*Handler, error) {
 	return rh, nil
 }
 
-// SetStore sets the store backend for resource updates
+// SetStore sets the store backend for the Mutable Resource API
 func (h *Handler) SetStore(store *storage.NetStore) {
 	h.chunkStore = store
 }
 
-// Validate is a chunk validation method (matches ChunkValidatorFunc signature)
-//
-// If resource update, owner is checked against ENS record of resource name inferred from chunk data
-// If not resource update, it validates are root chunk if length is metadataChunkOffsetSize and first two bytes are 0
+// Validate is a chunk validation method
+// If it's a resource update, the chunk address is checked against the public key of the update's signature
+// If not a resource update, it validates are root chunk if length is metadataChunkOffsetSize and first two bytes are 0
+// It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 	signature, period, version, name, parseddata, _, err := h.parseUpdate(data)
 	if err != nil {
@@ -316,7 +286,7 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 	return true
 }
 
-// Create the resource update digest used in signatures
+// create the resource update digest used in signatures
 func (h *Handler) keyDataHash(addr storage.Address, data []byte) common.Hash {
 	hasher := h.hashPool.Get().(storage.SwarmHash)
 	defer h.hashPool.Put(hasher)
@@ -326,7 +296,7 @@ func (h *Handler) keyDataHash(addr storage.Address, data []byte) common.Hash {
 	return common.BytesToHash(hasher.Sum(nil))
 }
 
-// get data from current resource
+// GetContent retrieves the data payload of the last synced update of the Mutable Resource
 func (h *Handler) GetContent(name string) (storage.Address, []byte, error) {
 	rsrc := h.get(name)
 	if rsrc == nil || !rsrc.isSynced() {
@@ -335,7 +305,7 @@ func (h *Handler) GetContent(name string) (storage.Address, []byte, error) {
 	return rsrc.lastKey, rsrc.data, nil
 }
 
-// Gets the period of the current data loaded in the resource
+// GetLastPeriod retrieves the period of the last synced update of the Mutable Resource
 func (h *Handler) GetLastPeriod(nameHash string) (uint32, error) {
 	rsrc := h.get(nameHash)
 	if rsrc == nil {
@@ -346,7 +316,7 @@ func (h *Handler) GetLastPeriod(nameHash string) (uint32, error) {
 	return rsrc.lastPeriod, nil
 }
 
-// Gets the version of the current data loaded in the resource
+// GetVersion retrieves the period of the last synced update of the Mutable Resource
 func (h *Handler) GetVersion(nameHash string) (uint32, error) {
 	rsrc := h.get(nameHash)
 	if rsrc == nil {
@@ -362,15 +332,14 @@ func (h *Handler) chunkSize() int64 {
 	return chunkSize
 }
 
-// Creates a new root entry for a mutable resource identified by `name` with the specified `frequency`.
-//
-// The signature data should match the hash of the idna-converted name by the validator's namehash function, NOT the raw name bytes.
-//
+// New creates a new metadata chunk for a Mutable Resource identified by `name` with the specified `frequency`.
+// It uses the public key from the Signer registered with the Handler object
 // The start block of the resource update will be the actual current block height of the connected network.
 func (h *Handler) New(ctx context.Context, name string, frequency uint64) (storage.Address, *resource, error) {
 	return h.NewWithPublicKey(ctx, name, frequency, h.signer.PublicKey())
 }
 
+// NewWithPublicKey performs the same action as New, but enables a custom public key to be used for the Mutable Resource
 func (h *Handler) NewWithPublicKey(ctx context.Context, name string, frequency uint64, publicKey *ecdsa.PublicKey) (storage.Address, *resource, error) {
 
 	// frequency 0 is invalid
@@ -417,6 +386,7 @@ func (h *Handler) NewWithPublicKey(ctx context.Context, name string, frequency u
 	return chunk.Addr, rsrc, nil
 }
 
+// creates a metadata chunk
 func (h *Handler) newMetaChunk(name string, startBlock uint64, frequency uint64, publicKeyBytes [publicKeyLength]byte) *storage.Chunk {
 	// the metadata chunk points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
@@ -448,9 +418,8 @@ func (h *Handler) newMetaChunk(name string, startBlock uint64, frequency uint64,
 	return chunk
 }
 
-// Searches and retrieves the specific version of the resource update identified by `name`
+// LookupVersionByName searches and retrieves the specific version of the resource update identified by `name`
 // at the specific block height
-//
 // If refresh is set to true, the resource data will be reloaded from the resource update
 // metadata chunk.
 // It is the callers responsibility to make sure that this chunk exists (if the resource
@@ -459,6 +428,7 @@ func (h *Handler) LookupVersionByName(ctx context.Context, name string, period u
 	return h.LookupVersion(ctx, ens.EnsNode(name), period, version, refresh, maxLookup)
 }
 
+// LookupVersion performs the same action as LookupVersionByName, but takes the name hash instead of the cleartext name as identifier
 func (h *Handler) LookupVersion(ctx context.Context, nameHash common.Hash, period uint32, version uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
 	rsrc := h.get(nameHash.Hex())
 	if rsrc == nil {
@@ -467,18 +437,17 @@ func (h *Handler) LookupVersion(ctx context.Context, nameHash common.Hash, perio
 	return h.lookup(rsrc, period, version, refresh, maxLookup)
 }
 
-// Retrieves the latest version of the resource update identified by `name`
+// LookupHistoricalByName etrieves the latest version of the resource update identified by `name`
 // at the specified block height
-//
 // If an update is found, version numbers are iterated until failure, and the last
 // successfully retrieved version is copied to the corresponding resources map entry
 // and returned.
-//
-// See also (*Handler).LookupVersion
+// See also (*Handler).LookupVersionByName
 func (h *Handler) LookupHistoricalByName(ctx context.Context, name string, period uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
 	return h.LookupHistorical(ctx, ens.EnsNode(name), period, refresh, maxLookup)
 }
 
+// LookupHistorical performs the same action as LookupHistoricalByName, but takes the name hash instead of the cleartext name as identifier
 func (h *Handler) LookupHistorical(ctx context.Context, nameHash common.Hash, period uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
 	rsrc := h.get(nameHash.Hex())
 	if rsrc == nil {
@@ -487,20 +456,17 @@ func (h *Handler) LookupHistorical(ctx context.Context, nameHash common.Hash, pe
 	return h.lookup(rsrc, period, 0, refresh, maxLookup)
 }
 
-// Retrieves the latest version of the resource update identified by `name`
+// LookupLatestByName retrieves the latest version of the resource update identified by `name`
 // at the next update block height
-//
 // It starts at the next period after the current block height, and upon failure
 // tries the corresponding keys of each previous period until one is found
 // (or startBlock is reached, in which case there are no updates).
-//
-// Version iteration is done as in (*Handler).LookupHistorical
-//
-// See also (*Handler).LookupHistorical
+// See also (*Handler).LookupHistoricalByName
 func (h *Handler) LookupLatestByName(ctx context.Context, name string, refresh bool, maxLookup *LookupParams) (*resource, error) {
 	return h.LookupLatest(ctx, ens.EnsNode(name), refresh, maxLookup)
 }
 
+// LookupLatest performs the same action as LookupLatestByName, but takes the name hash instead of the cleartext name as identifier
 func (h *Handler) LookupLatest(ctx context.Context, nameHash common.Hash, refresh bool, maxLookup *LookupParams) (*resource, error) {
 
 	// get our blockheight at this time and the next block of the update period
@@ -519,16 +485,15 @@ func (h *Handler) LookupLatest(ctx context.Context, nameHash common.Hash, refres
 	return h.lookup(rsrc, nextperiod, 0, refresh, maxLookup)
 }
 
-// Returns the resource before the one currently loaded in the resource index
-//
+// LookupPreviousByName returns the resource before the one currently loaded in the resource index
 // This is useful where resource updates are used incrementally in contrast to
 // merely replacing content.
-//
 // Requires a synced resource object
 func (h *Handler) LookupPreviousByName(ctx context.Context, name string, maxLookup *LookupParams) (*resource, error) {
 	return h.LookupPrevious(ctx, ens.EnsNode(name), maxLookup)
 }
 
+// LookupPrevious performs the same action as LookupPreviousByName, but takes the name hash instead of the cleartext name as identifier
 func (h *Handler) LookupPrevious(ctx context.Context, nameHash common.Hash, maxLookup *LookupParams) (*resource, error) {
 	rsrc := h.get(nameHash.Hex())
 	if rsrc == nil {
@@ -608,8 +573,8 @@ func (h *Handler) lookup(rsrc *resource, period uint32, version uint32, refresh 
 	return nil, NewError(ErrNotFound, "no updates found")
 }
 
-// Retrieves a resource metadata chunk and creates/updates the index entry for it
-// with the resulting metadata
+// Load retrieves the Mutable Resource metadata chunk stored at addr
+// Upon retrieval it creates/updates the index entry for it with metadata corresponding to the chunk contents
 func (h *Handler) Load(addr storage.Address) (*resource, error) {
 	chunk, err := h.chunkStore.GetWithTimeout(addr, defaultRetrieveTimeout)
 	if err != nil {
@@ -782,6 +747,10 @@ func (h *Handler) UpdateMultihash(ctx context.Context, name string, data []byte)
 	return h.update(ctx, name, data, true)
 }
 
+// Update adds an actual data update
+// Uses the Mutable Resource metadata currently loaded in the resources map entry.
+// It is the caller's responsibility to make sure that this data is not stale.
+// Note that a Mutable Resource update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature. An error will be returned if the total length of the chunk payload will exceed this limit.
 func (h *Handler) Update(ctx context.Context, name string, data []byte) (storage.Address, error) {
 	return h.update(ctx, name, data, false)
 }
@@ -875,7 +844,7 @@ func (h *Handler) update(ctx context.Context, name string, data []byte, multihas
 	return key, nil
 }
 
-// Closes the datastore.
+// Close closes the datastore.
 // Always call this at shutdown to avoid data corruption.
 func (h *Handler) Close() {
 	h.chunkStore.Close()
@@ -890,12 +859,12 @@ func (h *Handler) getBlock(ctx context.Context, name string) (uint64, error) {
 	return blockheader.Number.Uint64(), nil
 }
 
-// Calculate the period index (aka major version number) from a given block number
+// BlockToPeriod calculates the period index (aka major version number) from a given block number
 func (h *Handler) BlockToPeriod(name string, blocknumber uint64) (uint32, error) {
 	return getNextPeriod(h.resources[name].startBlock, blocknumber, h.resources[name].frequency)
 }
 
-// Calculate the block number from a given period index (aka major version number)
+// PeriodToBlock calculates the block number from a given period index (aka major version number)
 func (h *Handler) PeriodToBlock(name string, period uint32) uint64 {
 	return h.resources[name].startBlock + (uint64(period) * h.resources[name].frequency)
 }
