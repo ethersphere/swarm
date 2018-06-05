@@ -90,6 +90,11 @@ func TestReverse(t *testing.T) {
 	period := uint32(4)
 	version := uint32(2)
 
+	// make fake backend, set up rpc and create resourcehandler
+	backend := &fakeBackend{
+		blocknumber: int64(startBlock),
+	}
+
 	// signer containing private key
 	signer, err := newTestSigner()
 	if err != nil {
@@ -97,7 +102,7 @@ func TestReverse(t *testing.T) {
 	}
 
 	// set up rpc and create resourcehandler
-	rh, _, teardownTest, err := setupTest(nil, signer)
+	rh, _, teardownTest, err := setupTest(backend, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -529,6 +534,11 @@ func TestValidator(t *testing.T) {
 // which should be evaluated as invalid chunks by this validator
 func TestValidatorInStore(t *testing.T) {
 
+	// make fake backend, set up rpc and create resourcehandler
+	backend := &fakeBackend{
+		blocknumber: int64(startBlock),
+	}
+
 	// signer containing private key
 	signer, err := newTestSigner()
 	if err != nil {
@@ -553,7 +563,8 @@ func TestValidatorInStore(t *testing.T) {
 
 	// set up resource handler and add is as a validator to the localstore
 	rhParams := &HandlerParams{
-		Signer: signer,
+		HeaderGetter: backend,
+		Signer:       signer,
 	}
 	rh, err := NewHandler(rhParams)
 	if err != nil {
