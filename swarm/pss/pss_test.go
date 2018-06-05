@@ -1538,7 +1538,6 @@ func newServices(allowRaw bool) adapters.Services {
 			keys, err := wapi.NewKeyPair(ctxlocal)
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams().WithPrivateKey(privkey)
-			pssp.MsgTTL = time.Second * 30
 			pssp.AllowRaw = allowRaw
 			pskad := kademlia(ctx.Config.ID)
 			ps, err := NewPss(pskad, pssp)
