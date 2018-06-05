@@ -206,21 +206,22 @@ func (m *MultiResolver) SetNameHash(nameHash func(string) common.Hash) {
 }
 
 /*
-API implements webserver/file system related content storage and retrieval on top of the FileStore
-it is the public interface of the dpa which is included in the ethereum stack
+API implements webserver/file system related content storage and retrieval
+on top of the FileStore
+it is the public interface of the FileStore which is included in the ethereum stack
 */
 type API struct {
-	resource *mru.Handler
-	dpa      *storage.DPA
-	dns      Resolver
+	resource  *mru.Handler
+	fileStore *storage.FileStore
+	dns       Resolver
 }
 
 // NewAPI - the api constructor initialises a new API instance.
-func NewAPI(dpa *storage.DPA, dns Resolver, resourceHandler *mru.Handler) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler) (self *Api) {
 	self = &API{
-		dpa:      dpa,
-		dns:      dns,
-		resource: resourceHandler,
+		fileStore: fileStore,
+		dns:       dns,
+		resource:  resourceHandler,
 	}
 	return
 }
@@ -232,15 +233,15 @@ func (a *API) Upload(uploadDir, index string, toEncrypt bool) (hash string, err 
 	return hash, err
 }
 
-// Retrieve - DPA reader API
+// FileStore reader API
 func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
-	return a.dpa.Retrieve(addr)
+	return a.fileStore.Retrieve(addr)
 }
 
 // Store DPA store API
 func (a *API) Store(data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(), err error) {
 	log.Debug("api.store", "size", size)
-	return a.dpa.Store(data, size, toEncrypt)
+	return a.fileStore.Store(data, size, toEncrypt)
 }
 
 // ErrResolve declaration
@@ -284,18 +285,18 @@ func (a *API) Resolve(uri *URI) (storage.Address, error) {
 	return key, nil
 }
 
-// Put provides singleton manifest creation on top of dpa store
+// Put provides singleton manifest creation on top of FileStore store
 func (a *API) Put(content, contentType string, toEncrypt bool) (k storage.Address, wait func(), err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
-	key, waitContent, err := a.dpa.Store(r, int64(len(content)), toEncrypt)
+	key, waitContent, err := a.fileStore.Store(r, int64(len(content)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.dpa.Store(r, int64(len(manifest)), toEncrypt)
+	key, waitManifest, err := a.fileStore.Store(r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
@@ -307,12 +308,12 @@ func (a *API) Put(content, contentType string, toEncrypt bool) (k storage.Addres
 }
 
 // Get uses iterative manifest retrieval and prefix matching
-// to resolve basePath to content using dpa retrieve
+// to resolve basePath to content using FileStore retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
 func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
 	log.Debug("api.get", "key", manifestAddr, "path", path)
 	apiGetCount.Inc(1)
-	trie, err := loadManifest(a.dpa, manifestAddr, nil)
+	trie, err := loadManifest(a.fileStore, manifestAddr, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
@@ -379,7 +380,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 				log.Trace("resource is multihash", "key", manifestAddr)
 
 				// get the manifest the multihash digest points to
-				trie, err := loadManifest(a.dpa, manifestAddr, nil)
+				trie, err := loadManifest(a.fileStore, manifestAddr, nil)
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
@@ -429,7 +430,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 func (a *API) Modify(addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
-	trie, err := loadManifest(a.dpa, addr, quitC)
+	trie, err := loadManifest(a.fileStore, addr, quitC)
 	if err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
@@ -640,7 +641,7 @@ func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.
 	}
 
 	quitC := make(chan bool)
-	rootTrie, err := loadManifest(a.dpa, addr, quitC)
+	rootTrie, err := loadManifest(a.fileStore, addr, quitC)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't load manifest %v: %v", addr.String(), err)
 	}
@@ -717,19 +718,16 @@ func (a *API) resourceUpdate(ctx context.Context, name string, data []byte, mult
 	return addr, period, version, err
 }
 
-// ResourceHashSize returned the size of the digest produced by the Mutable Resource hashing function
 func (a *API) ResourceHashSize() int {
 	return a.resource.HashSize
 }
 
-// ResourceIsValidated checks if the Mutable Resource has an active content validator.
-func (a *API) ResourceIsValidated() bool {
-	return a.resource.IsValidated()
+func (self *Api) ResourceIsValidated() bool {
+	return self.resource.IsValidated()
 }
 
-// ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
-func (a *API) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
-	trie, err := loadManifest(a.dpa, addr, nil)
+func (self *Api) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
+	trie, err := loadManifest(self.fileStore, addr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}

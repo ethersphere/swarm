@@ -343,9 +343,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 
 	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
-	rrdpa := storage.NewDPA(newRoundRobinStore(sim.Stores[1:]...), storage.NewDPAParams())
+	rrFileStore := storage.NewFileStore(newRoundRobinStore(sim.Stores[1:]...), storage.NewFileStoreParams())
 	size := chunkCount * chunkSize
-	fileHash, wait, err := rrdpa.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+	fileHash, wait, err := rrFileStore.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// wait until all chunks stored
 	wait()
 	if err != nil {
@@ -395,18 +395,18 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				return err
 			}
 		}
-		// create a retriever dpa for the pivot node
+		// create a retriever FileStore for the pivot node
 		delivery := deliveries[sim.IDs[0]]
 		retrieveFunc := func(chunk *storage.Chunk) error {
 			return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
 		}
 		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
-		dpa := storage.NewDPA(netStore, storage.NewDPAParams())
+		fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 
 		go func() {
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
 			// we must wait for the peer connections to have started before requesting
-			n, err := readAll(dpa, fileHash)
+			n, err := readAll(fileStore, fileHash)
 			log.Info(fmt.Sprintf("retrieved %v", fileHash), "read", n, "err", err)
 			if err != nil {
 				errc <- fmt.Errorf("requesting chunks action error: %v", err)
@@ -527,8 +527,8 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// wait channel for all nodes all peer connections to set up
 	waitPeerErrC = make(chan error)
 
-	// create a dpa for the last node in the chain which we are gonna write to
-	remoteDpa := storage.NewDPA(sim.Stores[nodes-1], storage.NewDPAParams())
+	// create a FileStore for the last node in the chain which we are gonna write to
+	remoteFileStore := storage.NewFileStore(sim.Stores[nodes-1], storage.NewFileStoreParams())
 
 	// channel to signal simulation initialisation with action call complete
 	// or node disconnections
@@ -610,7 +610,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		b.Fatalf("simulation failed to initialise. expected no error. got %v", err)
 	}
 
-	// create a retriever dpa for the pivot node
+	// create a retriever FileStore for the pivot node
 	// by now deliveries are set for each node by the streamer service
 	delivery := deliveries[sim.IDs[0]]
 	retrieveFunc := func(chunk *storage.Chunk) error {
@@ -627,7 +627,7 @@ Loop:
 		hashes := make([]storage.Address, chunkCount)
 		for i := 0; i < chunkCount; i++ {
 			// create actual size real chunks
-			hash, wait, err := remoteDpa.Store(io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
+			hash, wait, err := remoteFileStore.Store(io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
 			// wait until all chunks stored
 			wait()
 			if err != nil {

@@ -1,3 +1,19 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 // +build !nopssprotocol
 
 package pss
@@ -146,14 +162,14 @@ func RegisterProtocol(ps *Pss, topic *Topic, spec *protocols.Spec, targetprotoco
 // Fails if protocol is not valid for the message encryption scheme,
 // if adding a new peer fails, or if the message is not a serialized
 // p2p.Msg (which it always will be if it is sent from this object).
-func (self *Protocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
+func (p *Protocol) Handle(msg []byte, peer *p2p.Peer, asymmetric bool, keyid string) error {
 	var vrw *PssReadWriter
-	if self.Asymmetric != asymmetric && self.Symmetric == !asymmetric {
+	if p.Asymmetric != asymmetric && p.Symmetric == !asymmetric {
 		return fmt.Errorf("invalid protocol encryption")
-	} else if (!self.isActiveSymKey(keyid, *self.topic) && !asymmetric) ||
-		(!self.isActiveAsymKey(keyid, *self.topic) && asymmetric) {
+	} else if (!p.isActiveSymKey(keyid, *p.topic) && !asymmetric) ||
+		(!p.isActiveAsymKey(keyid, *p.topic) && asymmetric) {
 
-		rw, err := self.AddPeer(p, *self.topic, asymmetric, keyid)
+		rw, err := p.AddPeer(peer, *p.topic, asymmetric, keyid)
 		if err != nil {
 			return err
 		}
@@ -165,22 +181,22 @@ func (self *Protocol) Handle(msg []byte, p *p2p.Peer, asymmetric bool, keyid str
 		return fmt.Errorf("could not decode pssmsg")
 	}
 	if asymmetric {
-		vrw = self.pubKeyRWPool[keyid].(*PssReadWriter)
+		vrw = p.pubKeyRWPool[keyid].(*PssReadWriter)
 	} else {
-		vrw = self.symKeyRWPool[keyid].(*PssReadWriter)
+		vrw = p.symKeyRWPool[keyid].(*PssReadWriter)
 	}
 	vrw.injectMsg(pmsg)
 	return nil
 }
 
 // check if (peer) symmetric key is currently registered with this topic
-func (self *Protocol) isActiveSymKey(key string, topic Topic) bool {
-	return self.symKeyRWPool[key] != nil
+func (p *Protocol) isActiveSymKey(key string, topic Topic) bool {
+	return p.symKeyRWPool[key] != nil
 }
 
 // check if (peer) asymmetric key is currently registered with this topic
-func (self *Protocol) isActiveAsymKey(key string, topic Topic) bool {
-	return self.pubKeyRWPool[key] != nil
+func (p *Protocol) isActiveAsymKey(key string, topic Topic) bool {
+	return p.pubKeyRWPool[key] != nil
 }
 
 // Creates a serialized (non-buffered) version of a p2p.Msg, used in the specialized internal p2p.MsgReadwriter implementations
@@ -203,58 +219,57 @@ func ToP2pMsg(msg []byte) (p2p.Msg, error) {
 // `key` and `asymmetric` specifies what encryption key
 // to link the peer to.
 // The key must exist in the pss store prior to adding the peer.
-//func (self *Protocol) AddPeer(p *p2p.Peer, run func(*p2p.Peer, p2p.MsgReadWriter) error, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
-func (self *Protocol) AddPeer(p *p2p.Peer, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
+func (p *Protocol) AddPeer(peer *p2p.Peer, topic Topic, asymmetric bool, key string) (p2p.MsgReadWriter, error) {
 	rw := &PssReadWriter{
-		Pss:   self.Pss,
+		Pss:   p.Pss,
 		rw:    make(chan p2p.Msg),
-		spec:  self.spec,
-		topic: self.topic,
+		spec:  p.spec,
+		topic: p.topic,
 		key:   key,
 	}
 	if asymmetric {
-		rw.sendFunc = self.Pss.SendAsym
+		rw.sendFunc = p.Pss.SendAsym
 	} else {
-		rw.sendFunc = self.Pss.SendSym
+		rw.sendFunc = p.Pss.SendSym
 	}
 	if asymmetric {
-		self.Pss.pubKeyPoolMu.Lock()
-		if _, ok := self.Pss.pubKeyPool[key]; !ok {
+		p.Pss.pubKeyPoolMu.Lock()
+		if _, ok := p.Pss.pubKeyPool[key]; !ok {
 			return nil, fmt.Errorf("asym key does not exist: %s", key)
 		}
-		self.Pss.pubKeyPoolMu.Unlock()
-		self.RWPoolMu.Lock()
-		self.pubKeyRWPool[key] = rw
-		self.RWPoolMu.Unlock()
+		p.Pss.pubKeyPoolMu.Unlock()
+		p.RWPoolMu.Lock()
+		p.pubKeyRWPool[key] = rw
+		p.RWPoolMu.Unlock()
 	} else {
-		self.Pss.symKeyPoolMu.Lock()
-		if _, ok := self.Pss.symKeyPool[key]; !ok {
+		p.Pss.symKeyPoolMu.Lock()
+		if _, ok := p.Pss.symKeyPool[key]; !ok {
 			return nil, fmt.Errorf("symkey does not exist: %s", key)
 		}
-		self.Pss.symKeyPoolMu.Unlock()
-		self.RWPoolMu.Lock()
-		self.symKeyRWPool[key] = rw
-		self.RWPoolMu.Unlock()
+		p.Pss.symKeyPoolMu.Unlock()
+		p.RWPoolMu.Lock()
+		p.symKeyRWPool[key] = rw
+		p.RWPoolMu.Unlock()
 	}
 	go func() {
-		err := self.proto.Run(p, rw)
-		log.Warn(fmt.Sprintf("pss vprotocol quit on %v topic %v: %v", p, topic, err))
+		err := p.proto.Run(peer, rw)
+		log.Warn(fmt.Sprintf("pss vprotocol quit on %v topic %v: %v", peer, topic, err))
 	}()
 	return rw, nil
 }
 
-func (self *Protocol) RemovePeer(asymmetric bool, key string) {
+func (p *Protocol) RemovePeer(asymmetric bool, key string) {
 	log.Debug("closing pss peer", "asym", asymmetric, "key", key)
-	self.RWPoolMu.Lock()
-	defer self.RWPoolMu.Unlock()
+	p.RWPoolMu.Lock()
+	defer p.RWPoolMu.Unlock()
 	if asymmetric {
-		rw := self.pubKeyRWPool[key].(*PssReadWriter)
+		rw := p.pubKeyRWPool[key].(*PssReadWriter)
 		rw.closed = true
-		delete(self.pubKeyRWPool, key)
+		delete(p.pubKeyRWPool, key)
 	} else {
-		rw := self.symKeyRWPool[key].(*PssReadWriter)
+		rw := p.symKeyRWPool[key].(*PssReadWriter)
 		rw.closed = true
-		delete(self.symKeyRWPool, key)
+		delete(p.symKeyRWPool, key)
 	}
 }
 

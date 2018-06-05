@@ -956,11 +956,11 @@ func TestFUSE(t *testing.T) {
 	}
 	os.RemoveAll(datadir)
 
-	dpa, err := storage.NewLocalDPA(datadir, make([]byte, 32))
+	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32))
 	if err != nil {
 		t.Fatal(err)
 	}
-	ta := &testAPI{api: api.NewAPI(dpa, nil, nil)}
+	ta := &testAPI{api: api.NewAPI(fileStore, nil, nil)}
 
 	t.Run("mountListAndUnmountEncrypted", ta.mountListAndUnmountEncrypted)
 	t.Run("mountListAndUnmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)

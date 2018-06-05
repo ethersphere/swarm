@@ -44,7 +44,7 @@ const (
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
-	*storage.DPAParams
+	*storage.FileStoreParams
 	*storage.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.LocalProfile
@@ -76,7 +76,7 @@ func NewConfig() (self *Config) {
 
 	self = &Config{
 		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
-		DPAParams:        storage.NewDPAParams(),
+		FileStoreParams:  storage.NewFileStoreParams(),
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
 		Swap:              swap.NewDefaultSwapParams(),

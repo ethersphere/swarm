@@ -61,7 +61,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 		os.RemoveAll(dir)
 		t.Fatal(err)
 	}
-	dpa := storage.NewDPA(localStore, storage.NewDPAParams())
+	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
 
 	// mutable resources test setup
 	resourceDir, err := ioutil.TempDir("", "swarm-resource-test")
@@ -79,13 +79,13 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 		t.Fatal(err)
 	}
 
-	a := api.NewAPI(dpa, nil, rh)
+	a := api.NewAPI(fileStore, nil, rh)
 	srv := httptest.NewServer(serverFunc(a))
 	return &TestSwarmServer{
-		Server: srv,
-		Dpa:    dpa,
-		dir:    dir,
-		Hasher: storage.MakeHashFunc(storage.DefaultHash)(),
+		Server:    srv,
+		FileStore: fileStore,
+		dir:       dir,
+		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
 		cleanup: func() {
 			srv.Close()
 			rh.Close()
@@ -97,10 +97,10 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 
 type TestSwarmServer struct {
 	*httptest.Server
-	Hasher  storage.SwarmHash
-	Dpa     *storage.DPA
-	dir     string
-	cleanup func()
+	Hasher    storage.SwarmHash
+	FileStore *storage.FileStore
+	dir       string
+	cleanup   func()
 }
 
 func (t *TestSwarmServer) Close() {

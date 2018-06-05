@@ -38,11 +38,11 @@ func testApi(t *testing.T, f func(*API, bool)) {
 		t.Fatalf("unable to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(datadir)
-	dpa, err := storage.NewLocalDPA(datadir, make([]byte, 32))
+	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32))
 	if err != nil {
 		return
 	}
-	api := NewAPI(dpa, nil, nil)
+	api := NewAPI(fileStore, nil, nil)
 	f(api, false)
 	f(api, true)
 }

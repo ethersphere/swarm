@@ -21,14 +21,14 @@ import (
 )
 
 /*
-DPA provides the client API entrypoints Store and Retrieve to store and retrieve
+FileStore provides the client API entrypoints Store and Retrieve to store and retrieve
 It can store anything that has a byte slice representation, so files or serialised objects etc.
 
-Storage: DPA calls the Chunker to segment the input datastream of any size to a merkle hashed tree of chunks. The key of the root block is returned to the client.
+Storage: FileStore calls the Chunker to segment the input datastream of any size to a merkle hashed tree of chunks. The key of the root block is returned to the client.
 
-Retrieval: given the key of the root block, the DPA retrieves the block chunks and reconstructs the original data and passes it back as a lazy reader. A lazy reader is a reader with on-demand delayed processing, i.e. the chunks needed to reconstruct a large file are only fetched and processed if that particular part of the document is actually read.
+Retrieval: given the key of the root block, the FileStore retrieves the block chunks and reconstructs the original data and passes it back as a lazy reader. A lazy reader is a reader with on-demand delayed processing, i.e. the chunks needed to reconstruct a large file are only fetched and processed if that particular part of the document is actually read.
 
-As the chunker produces chunks, DPA dispatches them to its own chunk store
+As the chunker produces chunks, FileStore dispatches them to its own chunk store
 implementation for storage or retrieval.
 */
 
@@ -38,23 +38,23 @@ const (
 	defaultChunkRequestsCacheCapacity = 5000000 // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
 )
 
-type DPA struct {
+type FileStore struct {
 	ChunkStore
 	hashFunc SwarmHasher
 }
 
-type DPAParams struct {
+type FileStoreParams struct {
 	Hash string
 }
 
-func NewDPAParams() *DPAParams {
-	return &DPAParams{
+func NewFileStoreParams() *FileStoreParams {
+	return &FileStoreParams{
 		Hash: DefaultHash,
 	}
 }
 
 // for testing locally
-func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
+func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
 	params := NewDefaultLocalStoreParams()
 	params.Init(datadir)
 	localStore, err := NewLocalStore(params, nil)
@@ -62,12 +62,12 @@ func NewLocalDPA(datadir string, basekey []byte) (*DPA, error) {
 		return nil, err
 	}
 	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(DefaultHash)))
-	return NewDPA(localStore, NewDPAParams()), nil
+	return NewFileStore(localStore, NewFileStoreParams()), nil
 }
 
-func NewDPA(store ChunkStore, params *DPAParams) *DPA {
+func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 	hashFunc := MakeHashFunc(params.Hash)
-	return &DPA{
+	return &FileStore{
 		ChunkStore: store,
 		hashFunc:   hashFunc,
 	}
@@ -78,7 +78,7 @@ func NewDPA(store ChunkStore, params *DPAParams) *DPA {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
-func (self *DPA) Retrieve(addr Address) (reader *LazyChunkReader, isEncrypted bool) {
+func (self *FileStore) Retrieve(addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > self.hashFunc().Size()
 	getter := NewHasherStore(self.ChunkStore, self.hashFunc, isEncrypted)
 	reader = TreeJoin(addr, getter, 0)
@@ -87,11 +87,11 @@ func (self *DPA) Retrieve(addr Address) (reader *LazyChunkReader, isEncrypted bo
 
 // Public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (self *DPA) Store(data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(), err error) {
+func (self *FileStore) Store(data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(), err error) {
 	putter := NewHasherStore(self.ChunkStore, self.hashFunc, toEncrypt)
 	return PyramidSplit(data, putter, putter)
 }
 
-func (self *DPA) HashSize() int {
+func (self *FileStore) HashSize() int {
 	return self.hashFunc().Size()
 }
