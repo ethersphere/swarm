@@ -159,7 +159,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 		WSOrigins:   []string{"*"},
 		WSModules:   []string{"pss"},
 		P2P: p2p.Config{
-			NoDiscovery:      true,
+			NoDiscovery:      false,
 			DiscoveryV5:      true,
 			BootstrapNodesV5: config.BootstrapNodes.nodes,
 			ListenAddr:       config.ListenAddr,
