@@ -37,7 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-const dataChunkCount = 500
+const dataChunkCount = 200
 
 func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, 1, dataChunkCount, true, 1)
