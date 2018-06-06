@@ -86,7 +86,8 @@ func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 		quitC := make(chan bool)
 		size, err := reader.Size(quitC)
 		if err != nil {
-			log.Warn("Couldnt get size of file %s : %v", sf.path, err)
+			log.Error("Couldnt get size of file %s : %v", sf.path, err)
+			return err
 		}
 		sf.fileSize = size
 	}

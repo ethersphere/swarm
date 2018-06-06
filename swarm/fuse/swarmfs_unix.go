@@ -213,10 +213,12 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 			log.Warn(errStr)
 			return nil, err1
 		}
-		return nil, err
 	}
 
-	mountInfo.fuseConnection.Close()
+	err = mountInfo.fuseConnection.Close()
+	if err != nil {
+		return nil, err
+	}
 	delete(swarmfs.activeMounts, cleanedMountPoint)
 
 	<-mountInfo.serveClose
