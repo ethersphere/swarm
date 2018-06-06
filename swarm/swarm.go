@@ -190,9 +190,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	var resourceHandler *mru.Handler
 	rhparams := &mru.HandlerParams{
 		// TODO: config parameter to set limits
-		QueryMaxPeriods: &mru.LookupParams{
-			Limit: false,
-		},
 		Signer: &mru.GenericSigner{
 			PrivKey: self.privateKey,
 		},
