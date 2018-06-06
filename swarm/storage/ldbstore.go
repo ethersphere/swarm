@@ -95,6 +95,7 @@ type LDBStore struct {
 	batchesC chan struct{}
 	batch    *leveldb.Batch
 	lock     sync.RWMutex
+	quit     chan struct{}
 
 	// Functions encodeDataFunc is used to bypass
 	// the default functionality of DbStore with
@@ -112,6 +113,7 @@ type LDBStore struct {
 func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s = new(LDBStore)
 	s.hashfunc = params.Hash
+	s.quit = make(chan struct{})
 
 	s.batchC = make(chan bool)
 	s.batchesC = make(chan struct{}, 1)
@@ -549,26 +551,44 @@ func (s *LDBStore) doPut(chunk *Chunk, index *dpaDBIndex, po uint8) {
 }
 
 func (s *LDBStore) writeBatches() {
-	for range s.batchesC {
-		s.lock.Lock()
-		b := s.batch
-		e := s.entryCnt
-		d := s.dataIdx
-		a := s.accessCnt
-		c := s.batchC
-		s.batchC = make(chan bool)
-		s.batch = new(leveldb.Batch)
-		err := s.writeBatch(b, e, d, a)
-		// TODO: set this error on the batch, then tell the chunk
-		if err != nil {
-			log.Error(fmt.Sprintf("spawn batch write (%d entries): %v", b.Len(), err))
+mainLoop:
+	for {
+		select {
+		case <-s.quit:
+			break mainLoop
+		case <-s.batchesC:
+			s.lock.Lock()
+			b := s.batch
+			e := s.entryCnt
+			d := s.dataIdx
+			a := s.accessCnt
+			c := s.batchC
+			s.batchC = make(chan bool)
+			s.batch = new(leveldb.Batch)
+			err := s.writeBatch(b, e, d, a)
+			// TODO: set this error on the batch, then tell the chunk
+			if err != nil {
+				log.Error(fmt.Sprintf("spawn batch write (%d entries): %v", b.Len(), err))
+			}
+			close(c)
+			for e > s.capacity {
+				// Collect garbage in a separate goroutine
+				// to be able to interrupt this loop by s.quit.
+				done := make(chan struct{})
+				go func() {
+					s.collectGarbage(gcArrayFreeRatio)
+					close(done)
+				}()
+
+				e = s.entryCnt
+				select {
+				case <-s.quit:
+					break mainLoop
+				case <-done:
+				}
+			}
+			s.lock.Unlock()
 		}
-		close(c)
-		for e > s.capacity {
-			s.collectGarbage(gcArrayFreeRatio)
-			e = s.entryCnt
-		}
-		s.lock.Unlock()
 	}
 	log.Trace(fmt.Sprintf("DbStore: quit batch write loop"))
 }
@@ -707,6 +727,7 @@ func (s *LDBStore) setCapacity(c uint64) {
 }
 
 func (s *LDBStore) Close() {
+	close(s.quit)
 	s.db.Close()
 }
 
