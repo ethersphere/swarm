@@ -785,7 +785,7 @@ func (self *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, 
 func (self *Handler) UpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, error) {
 	// \TODO perhaps this check should be in newUpdateChunk()
 	if _, _, err := multihash.GetMultihashLength(data); err != nil {
-		return nil, NewError(ErrNothingToReturn, err)
+		return nil, NewError(ErrNothingToReturn, err.Error())
 	}
 	return self.update(ctx, name, data, true)
 }
