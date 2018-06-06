@@ -168,12 +168,15 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		mi.serveClose <- struct{}{}
 	}()
 
+	timer := time.NewTimer(mountTimeout)
 	// Check if the mount process has an error to report.
 	select {
-	case <-time.After(mountTimeout):
+	case <-timer.C:
+		/*
+			case <-time.After(mountTimeout):
+		*/
 		fuse.Unmount(cleanedMountPoint)
 		return nil, errMountTimeout
-
 	case err := <-serverr:
 		fuse.Unmount(cleanedMountPoint)
 		log.Warn("swarmfs error serving over FUSE", "mountpoint", cleanedMountPoint, "err", err)
@@ -187,6 +190,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		log.Info("swarmfs now served over FUSE", "manifest", mhash, "mountpoint", cleanedMountPoint)
 	}
 
+	timer.Stop()
 	swarmfs.activeMounts[cleanedMountPoint] = mi
 	return mi, nil
 }
@@ -213,10 +217,12 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 			log.Warn(errStr)
 			return nil, err1
 		}
-		return nil, err
 	}
 
-	mountInfo.fuseConnection.Close()
+	err = mountInfo.fuseConnection.Close()
+	if err != nil {
+		return nil, err
+	}
 	delete(swarmfs.activeMounts, cleanedMountPoint)
 
 	<-mountInfo.serveClose
@@ -230,7 +236,6 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 func (swarmfs *SwarmFS) Listmounts() []*MountInfo {
 	swarmfs.swarmFsLock.RLock()
 	defer swarmfs.swarmFsLock.RUnlock()
-
 	rows := make([]*MountInfo, 0, len(swarmfs.activeMounts))
 	for _, mi := range swarmfs.activeMounts {
 		rows = append(rows, mi)
