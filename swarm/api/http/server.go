@@ -614,7 +614,6 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunkkey", addr)
 
-		//name, _, err = s.api.ResourceLookup(r.Context(), addr, 0, 0, &mru.LookupParams{})
 		params := &mru.LookupParams{
 			Root: addr,
 		}

@@ -901,22 +901,11 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (str
 	if err != nil {
 		return "", nil, err
 	}
-	//	if version != 0 {
-	//		if period == 0 {
-	//			return "", nil, mru.NewError(mru.ErrInvalidValue, "Period can't be 0")
-	//		}
-	//		_, err = self.resource.LookupVersion(ctx, rsrc.NameHash(), period, version, true, maxLookup)
-	//	} else if period != 0 {
-	//		_, err = self.resource.LookupHistorical(ctx, rsrc.NameHash(), period, true, maxLookup)
-	//	} else {
-	//		_, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, maxLookup)
-	//	}
 	_, err = a.resource.Lookup(ctx, params)
 	if err != nil {
 		return "", nil, err
 	}
 	var data []byte
-	//_, data, err = self.resource.GetContent(rsrc.NameHash().Hex())
 	_, data, err = a.resource.GetContent(params.Root)
 	if err != nil {
 		return "", nil, err

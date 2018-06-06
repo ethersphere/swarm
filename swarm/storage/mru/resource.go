@@ -267,9 +267,6 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 	}
 	signAddr := crypto.PubkeyToAddress(*publicKey)
 	nameHash := ens.EnsNode(name)
-	//var publicKeyBytes [65]byte
-	//copy(publicKeyBytes[:], crypto.FromECDSAPub(publicKey))
-	//checkAddr := h.resourceHash(period, version, nameHash, publicKeyBytes)
 	checkAddr := h.resourceHash(period, version, nameHash, signAddr)
 	if !bytes.Equal(checkAddr, addr) {
 		log.Error("Invalid signature on resource chunk")
@@ -403,57 +400,10 @@ func (h *Handler) newMetaChunk(name string, startBlock uint64, frequency uint64,
 	return chunk
 }
 
-// LookupVersionByName searches and retrieves the specific version of the resource update identified by `name`
-// at the specific block height
-// If refresh is set to true, the resource data will be reloaded from the resource update
-// metadata chunk.
-// It is the callers responsibility to make sure that this chunk exists (if the resource
-// update root data was retrieved externally, it typically doesn't)
-//func (h *Handler) LookupVersionByName(ctx context.Context, name string, period uint32, version uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
-//	return h.LookupVersion(ctx, ens.EnsNode(name), period, version, refresh, maxLookup)
-//}
-
-// LookupVersion performs the same action as LookupVersionByName, but takes the name hash instead of the cleartext name as identifier
-//func (h *Handler) LookupVersion(ctx context.Context, params *LookupParams) (*resource, Error) { //nameHash common.Hash, period uint32, version uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
-//	rsrc := h.get(params.Root)
-//	if rsrc == nil {
-//		return nil, NewError(ErrNothingToReturn, "resource not loaded")
-//	}
-//	return h.lookup(rsrc, params.Period, params.Version, param.Limit)
-//}
-
-// LookupHistoricalByName etrieves the latest version of the resource update identified by `name`
-// at the specified block height
-// If an update is found, version numbers are iterated until failure, and the last
-// successfully retrieved version is copied to the corresponding resources map entry
-// and returned.
-// See also (*Handler).LookupVersionByName
-//func (h *Handler) LookupHistoricalByName(ctx context.Context, name string, period uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
-//	return h.LookupHistorical(ctx, ens.EnsNode(name), period, refresh, maxLookup)
-//}
-
-// LookupHistorical performs the same action as LookupHistoricalByName, but takes the name hash instead of the cleartext name as identifier
-//func (h *Handler) LookupHistorical(ctx context.Context, nameHash common.Hash, period uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
-//func (h *Handler) LookupHistorical(ctx context.Context, params *LookupParams) (*resource, error) { //name string, period uint32, refresh bool, maxLookup *LookupParams) (*resource, error) {
-//	rsrc := h.get(params.Root)
-//	if rsrc == nil {
-//		return nil, NewError(ErrNothingToReturn, "resource not loaded")
-//	}
-//	return h.lookup(rsrc, rsrc.Period, 0, param.Limit)
-//}
-
-// LookupLatestByName retrieves the latest version of the resource update identified by `name`
-// at the next update block height
+// LookupLatest retrieves the latest version of the resource update with metadata chunk at params.Root
 // It starts at the next period after the current block height, and upon failure
 // tries the corresponding keys of each previous period until one is found
 // (or startBlock is reached, in which case there are no updates).
-// See also (*Handler).LookupHistoricalByName
-//func (h *Handler) LookupLatestByName(ctx context.Context, name string, refresh bool, maxLookup *LookupParams) (*resource, error) {
-//	return h.LookupLatest(ctx, ens.EnsNode(name), refresh, maxLookup)
-//}
-
-// LookupLatest performs the same action as LookupLatestByName, but takes the name hash instead of the cleartext name as identifier
-//func (h *Handler) LookupLatest(ctx context.Context, nameHash common.Hash, refresh bool, maxLookup *LookupParams) (*resource, error) {
 func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, error) { //nameHash common.Hash, refresh bool, maxLookup *LookupParams) (*resource, error) {
 
 	rsrc := h.get(params.Root.Hex())
@@ -480,11 +430,6 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 // This is useful where resource updates are used incrementally in contrast to
 // merely replacing content.
 // Requires a synced resource object
-//func (h *Handler) LookupPreviousByName(ctx context.Context, name string, maxLookup *LookupParams) (*resource, error) {
-//	return h.LookupPrevious(ctx, ens.EnsNode(name), maxLookup)
-//}
-
-// LookupPrevious performs the same action as LookupPreviousByName, but takes the name hash instead of the cleartext name as identifier
 func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*resource, error) { //nameHash common.Hash, maxLookup *LookupParams) (*resource, error) {
 	rsrc := h.get(params.Root.Hex())
 	if rsrc == nil {
@@ -762,9 +707,6 @@ func (h *Handler) update(ctx context.Context, addr storage.Address, data []byte,
 	}
 
 	// get the cached information
-	//nameHash := ens.EnsNode(name)
-	//nameHashHex := nameHash.Hex()
-	//rsrc := h.get(nameHashHex)
 	addrHex := addr.Hex()
 	rsrc := h.get(addrHex)
 	if rsrc == nil {
