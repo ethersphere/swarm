@@ -1,0 +1,42 @@
+package log
+
+import (
+	l "github.com/ethereum/go-ethereum/log"
+	metrics "github.com/rcrowley/go-metrics"
+)
+
+// Warn is a convenient alias for log.Warn with stats
+func Warn(msg string, ctx ...interface{}) {
+	metrics.GetOrRegisterCounter("warn", nil).Inc(1)
+	l.Warn(msg, ctx...)
+}
+
+// Error is a convenient alias for log.Error with stats
+func Error(msg string, ctx ...interface{}) {
+	metrics.GetOrRegisterCounter("error", nil).Inc(1)
+	l.Error(msg, ctx...)
+}
+
+// Crit is a convenient alias for log.Crit with stats
+func Crit(msg string, ctx ...interface{}) {
+	metrics.GetOrRegisterCounter("crit", nil).Inc(1)
+	l.Crit(msg, ctx...)
+}
+
+// Info is a convenient alias for log.Info with stats
+func Info(msg string, ctx ...interface{}) {
+	metrics.GetOrRegisterCounter("info", nil).Inc(1)
+	l.Info(msg, ctx...)
+}
+
+// Debug is a convenient alias for log.Debug with stats
+func Debug(msg string, ctx ...interface{}) {
+	metrics.GetOrRegisterCounter("debug", nil).Inc(1)
+	l.Debug(msg, ctx...)
+}
+
+// Trace is a convenient alias for log.Trace with stats
+func Trace(msg string, ctx ...interface{}) {
+	metrics.GetOrRegisterCounter("trace", nil).Inc(1)
+	l.Trace(msg, ctx...)
+}
