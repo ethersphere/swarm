@@ -468,7 +468,11 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunkkey", addr)
 
-		name, _, err = s.api.ResourceLookup(r.Context(), addr, 0, 0, &mru.LookupParams{})
+		//name, _, err = s.api.ResourceLookup(r.Context(), addr, 0, 0, &mru.LookupParams{})
+		params := &mru.LookupParams{
+			Root: addr,
+		}
+		name, _, err = s.api.ResourceLookup(r.Context(), params)
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -484,7 +488,8 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 	// Multihash will be passed as hex-encoded data, so we need to parse this to bytes
 	if isRaw {
-		_, _, _, err = s.api.ResourceUpdate(r.Context(), name, data)
+		//_, _, _, err = s.api.ResourceUpdate(r.Context(), name, data)
+		_, _, _, err = s.api.ResourceUpdate(r.Context(), addr, data)
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusBadRequest)
 			return
@@ -495,7 +500,8 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			Respond(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), name, bytesdata)
+		//_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), name, bytesdata)
+		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), addr, bytesdata)
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusBadRequest)
 			return
@@ -556,30 +562,34 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 		params = strings.Split(r.uri.Path, "/")
 	}
 	var name string
-	var period uint64
-	var version uint64
 	var data []byte
 	now := time.Now()
+	lookupParams := &mru.LookupParams{
+		Root: key,
+	}
 
 	switch len(params) {
 	case 0: // latest only
-		name, data, err = s.api.ResourceLookup(r.Context(), key, 0, 0, nil)
+		name, data, err = s.api.ResourceLookup(r.Context(), lookupParams)
 	case 2: // specific period and version
-		version, err = strconv.ParseUint(params[1], 10, 32)
+		version, err := strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
 			break
 		}
-		period, err = strconv.ParseUint(params[0], 10, 32)
+		period, err := strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
+		lookupParams.Version = uint32(version)
+		lookupParams.Period = uint32(period)
+		name, data, err = s.api.ResourceLookup(r.Context(), lookupParams)
 	case 1: // last version of specific period
-		period, err = strconv.ParseUint(params[0], 10, 32)
+		period, err := strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		name, data, err = s.api.ResourceLookup(r.Context(), key, uint32(period), uint32(version), nil)
+		lookupParams.Period = uint32(period)
+		name, data, err = s.api.ResourceLookup(r.Context(), lookupParams)
 	default: // bogus
 		err = mru.NewError(storage.ErrInvalidValue, "invalid mutable resource request")
 	}
