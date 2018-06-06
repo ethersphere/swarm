@@ -1634,6 +1634,8 @@ func (ta *testAPI) appendFileContentsToEnd(t *testing.T, toEncrypt bool) {
 
 //run all the tests
 func TestFUSE(t *testing.T) {
+	//decision 2018-06-06: temporarily disable fuse tests until flakyness is fixed
+	t.Skip("FUSE tests currently disabled")
 	//create a data directory for swarm
 	datadir, err := ioutil.TempDir("", "fuse")
 	if err != nil {
