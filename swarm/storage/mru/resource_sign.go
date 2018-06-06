@@ -26,13 +26,21 @@ import (
 // Signer signs Mutable Resource update payloads
 type Signer interface {
 	Sign(common.Hash) (Signature, error)
-	PublicKey() *ecdsa.PublicKey
+	Address() common.Address
 }
 
 // GenericSigner implements the Signer interface
 // It is the vanilla signer that probably should be used in most cases
 type GenericSigner struct {
 	PrivKey *ecdsa.PrivateKey
+	address common.Address
+}
+
+func NewGenericSigner(privKey *ecdsa.PrivateKey) *GenericSigner {
+	return &GenericSigner{
+		PrivKey: privKey,
+		address: crypto.PubkeyToAddress(privKey.PublicKey),
+	}
 }
 
 // Sign signs the supplied data
@@ -47,6 +55,6 @@ func (s *GenericSigner) Sign(data common.Hash) (signature Signature, err error) 
 }
 
 // PublicKey returns the public key of the signer's private key
-func (s *GenericSigner) PublicKey() *ecdsa.PublicKey {
-	return &s.PrivKey.PublicKey
+func (s *GenericSigner) Address() common.Address {
+	return s.address
 }
