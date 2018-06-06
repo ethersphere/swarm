@@ -43,7 +43,7 @@ const (
 	chunkSize               = 4096 // temporary until we implement FileStore in the resourcehandler
 	defaultStoreTimeout     = 4000 * time.Millisecond
 	hasherCount             = 8
-	resourceHash            = storage.SHA3Hash
+	resourceHash            = storage.DefaultHash
 	defaultRetrieveTimeout  = 100 * time.Millisecond
 )
 
@@ -373,7 +373,8 @@ func (h *Handler) newMetaChunk(name string, startBlock uint64, frequency uint64,
 	// the metadata chunk points to data of first blockheight + update frequency
 	// from this we know from what blockheight we should look for updates, and how often
 	// it also contains the name of the resource, so we know what resource we are working with
-	data := make([]byte, metadataChunkOffsetSize+len(name))
+	metadataChunkLength := metadataChunkOffsetSize + len(name)
+	data := make([]byte, metadataChunkLength)
 
 	// root block has first two bytes both set to 0, which distinguishes from update bytes
 	val := make([]byte, 8)
@@ -383,20 +384,24 @@ func (h *Handler) newMetaChunk(name string, startBlock uint64, frequency uint64,
 	copy(data[8:16], val)
 	copy(data[16:], ownerAddr[:])
 	copy(data[16+common.AddressLength:], []byte(name))
+	binary.LittleEndian.PutUint64(val, uint64(metadataChunkLength))
 
 	// the key of the metadata chunk is content-addressed
 	// if it wasn't we couldn't replace it later
 	// resolving this relationship is left up to external agents (for example ENS)
 	hasher := h.hashPool.Get().(storage.SwarmHash)
-	hasher.Reset()
+	hasher.ResetWithLength(val)
 	hasher.Write(data)
 	key := hasher.Sum(nil)
 	h.hashPool.Put(hasher)
 
 	// make the chunk and send it to swarm
 	chunk := storage.NewChunk(key, nil)
-	chunk.SData = make([]byte, metadataChunkOffsetSize+len(name))
-	copy(chunk.SData, data)
+	chunk.SData = make([]byte, metadataChunkLength+8)
+	copy(chunk.SData[:8], val)
+	copy(chunk.SData[8:], data)
+	//chunk.SData = make([]byte, metadataChunkLength)
+	//copy(chunk.SData[:], data)
 	return chunk
 }
 
@@ -524,7 +529,7 @@ func (h *Handler) Load(ctx context.Context, addr storage.Address) (*resource, er
 
 	// create the index entry
 	rsrc := &resource{}
-	rsrc.UnmarshalBinary(chunk.SData[:])
+	rsrc.UnmarshalBinary(chunk.SData[8:])
 	rsrc.nameHash = ens.EnsNode(rsrc.name)
 	h.set(addr.Hex(), rsrc)
 	log.Trace("resource index load", "rootkey", addr, "name", rsrc.name, "namehash", rsrc.nameHash, "startblock", rsrc.startBlock, "frequency", rsrc.frequency)

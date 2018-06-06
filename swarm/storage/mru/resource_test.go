@@ -195,8 +195,8 @@ func TestResourceHandler(t *testing.T) {
 	} else if len(chunk.SData) < 16 {
 		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(chunk.SData))
 	}
-	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[:8])
-	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[8:16])
+	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[8:16])
+	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[16:24])
 	if startblocknumber != uint64(backend.blocknumber) {
 		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber)
 	}
