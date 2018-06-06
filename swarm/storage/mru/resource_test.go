@@ -216,7 +216,7 @@ func TestResourceHandler(t *testing.T) {
 	resourcekey := make(map[string]storage.Address)
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data := []byte(updates[0])
-	resourcekey[updates[0]], err = rh.Update(ctx, safeName, data)
+	resourcekey[updates[0]], err = rh.Update(ctx, rootChunkKey, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -224,7 +224,7 @@ func TestResourceHandler(t *testing.T) {
 	// update on first period
 	fwdBlocks(int(resourceFrequency/2), backend)
 	data = []byte(updates[1])
-	resourcekey[updates[1]], err = rh.Update(ctx, safeName, data)
+	resourcekey[updates[1]], err = rh.Update(ctx, rootChunkKey, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -232,7 +232,7 @@ func TestResourceHandler(t *testing.T) {
 	// update on second period
 	fwdBlocks(int(resourceFrequency), backend)
 	data = []byte(updates[2])
-	resourcekey[updates[2]], err = rh.Update(ctx, safeName, data)
+	resourcekey[updates[2]], err = rh.Update(ctx, rootChunkKey, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -240,7 +240,7 @@ func TestResourceHandler(t *testing.T) {
 	// update just after second period
 	fwdBlocks(1, backend)
 	data = []byte(updates[3])
-	resourcekey[updates[3]], err = rh.Update(ctx, safeName, data)
+	resourcekey[updates[3]], err = rh.Update(ctx, rootChunkKey, data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -252,9 +252,6 @@ func TestResourceHandler(t *testing.T) {
 	fwdBlocks(int(resourceFrequency*2)-1, backend)
 
 	rhparams := &HandlerParams{
-		QueryMaxPeriods: &LookupParams{
-			Limit: false,
-		},
 		Signer:       signer,
 		HeaderGetter: rh.headerGetter,
 	}
@@ -264,7 +261,14 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	rsrc2, err := rh2.Load(rootChunkKey)
-	_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	//_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
+	lookupParams := &LookupParams{
+		Root: rootChunkKey,
+	}
+	_, err = rh2.Lookup(ctx, lookupParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,7 +286,9 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, latest version
-	rsrc, err := rh2.LookupHistorical(ctx, nameHash, 3, true, rh2.queryMaxPeriods)
+	//rsrc, err := rh2.LookupHistorical(ctx, nameHash, 3, true, rh2.queryMaxPeriods)
+	lookupParams.Period = 3
+	rsrc, err := rh2.Lookup(ctx, lookupParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +299,9 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, specific version
-	rsrc, err = rh2.LookupVersion(ctx, nameHash, 3, 1, true, rh2.queryMaxPeriods)
+	lookupParams.Version = 1
+	//rsrc, err = rh2.LookupVersion(ctx, nameHash, 3, 1, true, rh2.queryMaxPeriods)
+	rsrc, err = rh2.Lookup(ctx, lookupParams)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,7 +314,8 @@ func TestResourceHandler(t *testing.T) {
 	// we are now at third update
 	// check backwards stepping to the first
 	for i := 1; i >= 0; i-- {
-		rsrc, err := rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
+		//rsrc, err := rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
+		rsrc, err := rh2.LookupPrevious(ctx, lookupParams)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -317,7 +326,8 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// beyond the first should yield an error
-	rsrc, err = rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
+	//rsrc, err = rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
+	rsrc, err = rh2.LookupPrevious(ctx, lookupParams)
 	if err == nil {
 		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rsrc2.lastPeriod, rsrc2.version, rsrc2.data)
 	}
@@ -347,7 +357,7 @@ func TestMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	_, _, err = rh.New(ctx, safeName, resourceFrequency)
+	rootChunkAddr, _, err := rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,24 +366,24 @@ func TestMultihash(t *testing.T) {
 	// if it ever changes this test should also change
 	multihashbytes := ens.EnsNode("foo")
 	multihashmulti := multihash.ToMultihash(multihashbytes.Bytes())
-	multihashkey, err := rh.UpdateMultihash(ctx, safeName, multihashmulti)
+	multihashkey, err := rh.UpdateMultihash(ctx, rootChunkAddr, multihashmulti)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	sha1bytes := make([]byte, multihash.MultihashLength)
 	sha1multi := multihash.ToMultihash(sha1bytes)
-	sha1key, err := rh.UpdateMultihash(ctx, safeName, sha1multi)
+	sha1key, err := rh.UpdateMultihash(ctx, rootChunkAddr, sha1multi)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// invalid multihashes
-	_, err = rh.UpdateMultihash(ctx, safeName, multihashmulti[1:])
+	_, err = rh.UpdateMultihash(ctx, rootChunkAddr, multihashmulti[1:])
 	if err == nil {
 		t.Fatalf("Expected update to fail with first byte skipped")
 	}
-	_, err = rh.UpdateMultihash(ctx, safeName, multihashmulti[:len(multihashmulti)-2])
+	_, err = rh.UpdateMultihash(ctx, rootChunkAddr, multihashmulti[:len(multihashmulti)-2])
 	if err == nil {
 		t.Fatalf("Expected update to fail with last byte skipped")
 	}
@@ -403,9 +413,6 @@ func TestMultihash(t *testing.T) {
 	rh.Close()
 
 	rhparams := &HandlerParams{
-		QueryMaxPeriods: &LookupParams{
-			Limit: false,
-		},
 		Signer:       signer,
 		HeaderGetter: rh.headerGetter,
 	}
@@ -414,15 +421,15 @@ func TestMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _, err = rh2.New(ctx, safeName, resourceFrequency)
+	rootChunkAddr, _, err = rh2.New(ctx, safeName, resourceFrequency)
 	if err != nil {
 		t.Fatal(err)
 	}
-	multihashsignedkey, err := rh2.UpdateMultihash(ctx, safeName, multihashmulti)
+	multihashsignedkey, err := rh2.UpdateMultihash(ctx, rootChunkAddr, multihashmulti)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sha1signedkey, err := rh2.UpdateMultihash(ctx, safeName, sha1multi)
+	sha1signedkey, err := rh2.UpdateMultihash(ctx, rootChunkAddr, sha1multi)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -622,9 +629,6 @@ func setupTest(backend headerGetter, signer Signer) (rh *TestHandler, datadir st
 	}
 
 	rhparams := &HandlerParams{
-		QueryMaxPeriods: &LookupParams{
-			Limit: false,
-		},
 		Signer:       signer,
 		HeaderGetter: backend,
 	}
