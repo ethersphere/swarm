@@ -23,9 +23,21 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+const (
+	testDbDirName = "mru"
+)
+
+type TestHandler struct {
+	*Handler
+}
+
+func (t *TestHandler) Close() {
+	t.chunkStore.Close()
+}
+
 // NewTestHandler creates Handler object to be used for testing purposes.
-func NewTestHandler(datadir string, params *HandlerParams) (*Handler, error) {
-	path := filepath.Join(datadir, DbDirName)
+func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
+	path := filepath.Join(datadir, testDbDirName)
 	rh, err := NewHandler(params)
 	if err != nil {
 		return nil, fmt.Errorf("resource handler create fail: %v", err)
@@ -40,5 +52,5 @@ func NewTestHandler(datadir string, params *HandlerParams) (*Handler, error) {
 	localStore.Validators = append(localStore.Validators, rh)
 	netStore := storage.NewNetStore(localStore, nil)
 	rh.SetStore(netStore)
-	return rh, nil
+	return &TestHandler{rh}, nil
 }
