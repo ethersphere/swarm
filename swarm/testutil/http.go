@@ -81,8 +81,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 	}
 	signer := mru.NewGenericSigner(privKey)
 	rhparams := &mru.HandlerParams{
-		QueryMaxPeriods: &mru.LookupParams{},
-		Signer:          signer,
+		Signer: signer,
 		HeaderGetter: &fakeBackend{
 			blocknumber: 42,
 		},
