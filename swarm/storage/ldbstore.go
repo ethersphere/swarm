@@ -583,6 +583,7 @@ mainLoop:
 				e = s.entryCnt
 				select {
 				case <-s.quit:
+					s.lock.Unlock()
 					break mainLoop
 				case <-done:
 				}
