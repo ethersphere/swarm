@@ -13,10 +13,10 @@
 // the block frequency with which the resource will be updated, both of
 // which are stored as little-endian uint64 values in the database (for a
 // total of 16 bytes). It also contains the unique identifier.
-// It is stored in a separate content-addressed chunk (call it the metadata chunk),
-// with the following layout:
+// This MRU info is stored in a separate content-addressed chunk
+// (call it the metadata chunk), with the following layout:
 //
-// (0x0000|startblock|frequency|publickey|identifier)
+// (startblock|frequency|address|identifier)
 //
 // (The two first zero-value bytes are used for disambiguation by the chunk validator,
 // and update chunk will always have a value > 0 there.)
@@ -30,7 +30,7 @@
 // Actual data updates are also made in the form of swarm chunks. The keys
 // of the updates are the hash of a concatenation of properties as follows:
 //
-// sha256(period|version|publickey|namehash)
+// sha256(period|version|address|namehash)
 //
 // The period is (currentblock - startblock) / frequency
 //
