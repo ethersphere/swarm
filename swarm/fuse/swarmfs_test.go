@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 
-	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/log"
 
 	colorable "github.com/mattn/go-colorable"
 )

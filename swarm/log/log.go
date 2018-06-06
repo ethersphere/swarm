@@ -2,7 +2,7 @@ package log
 
 import (
 	l "github.com/ethereum/go-ethereum/log"
-	metrics "github.com/rcrowley/go-metrics"
+	"github.com/ethereum/go-ethereum/metrics"
 )
 
 // Warn is a convenient alias for log.Warn with stats
