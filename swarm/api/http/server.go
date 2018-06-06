@@ -468,7 +468,6 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunkkey", addr)
 
-		//name, _, err = s.api.ResourceLookup(r.Context(), addr, 0, 0, &mru.LookupParams{})
 		params := &mru.LookupParams{
 			Root: addr,
 		}
@@ -488,7 +487,6 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 	// Multihash will be passed as hex-encoded data, so we need to parse this to bytes
 	if isRaw {
-		//_, _, _, err = s.api.ResourceUpdate(r.Context(), name, data)
 		_, _, _, err = s.api.ResourceUpdate(r.Context(), addr, data)
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusBadRequest)
@@ -500,7 +498,6 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			Respond(w, r, err.Error(), http.StatusBadRequest)
 			return
 		}
-		//_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), name, bytesdata)
 		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), addr, bytesdata)
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusBadRequest)

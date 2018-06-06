@@ -264,7 +264,6 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	//_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
 	lookupParams := &LookupParams{
 		Root: rootChunkKey,
 	}
@@ -286,7 +285,6 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, latest version
-	//rsrc, err := rh2.LookupHistorical(ctx, nameHash, 3, true, rh2.queryMaxPeriods)
 	lookupParams.Period = 3
 	rsrc, err := rh2.Lookup(ctx, lookupParams)
 	if err != nil {
@@ -300,7 +298,6 @@ func TestResourceHandler(t *testing.T) {
 
 	// specific block, specific version
 	lookupParams.Version = 1
-	//rsrc, err = rh2.LookupVersion(ctx, nameHash, 3, 1, true, rh2.queryMaxPeriods)
 	rsrc, err = rh2.Lookup(ctx, lookupParams)
 	if err != nil {
 		t.Fatal(err)
@@ -326,7 +323,6 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// beyond the first should yield an error
-	//rsrc, err = rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
 	rsrc, err = rh2.LookupPrevious(ctx, lookupParams)
 	if err == nil {
 		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rsrc2.lastPeriod, rsrc2.version, rsrc2.data)
