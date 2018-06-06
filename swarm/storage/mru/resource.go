@@ -289,8 +289,8 @@ func (h *Handler) keyDataHash(addr storage.Address, data []byte) common.Hash {
 }
 
 // GetContent retrieves the data payload of the last synced update of the Mutable Resource
-func (h *Handler) GetContent(name string) (storage.Address, []byte, error) {
-	rsrc := h.get(name)
+func (h *Handler) GetContent(addr storage.Address) (storage.Address, []byte, error) {
+	rsrc := h.get(addr.Hex())
 	if rsrc == nil || !rsrc.isSynced() {
 		return nil, nil, NewError(ErrNotFound, " does not exist or is not synced")
 	}
@@ -298,8 +298,8 @@ func (h *Handler) GetContent(name string) (storage.Address, []byte, error) {
 }
 
 // GetLastPeriod retrieves the period of the last synced update of the Mutable Resource
-func (h *Handler) GetLastPeriod(nameHash string) (uint32, error) {
-	rsrc := h.get(nameHash)
+func (h *Handler) GetLastPeriod(addr storage.Address) (uint32, error) {
+	rsrc := h.get(addr.Hex())
 	if rsrc == nil {
 		return 0, NewError(ErrNotFound, " does not exist")
 	} else if !rsrc.isSynced() {
@@ -309,8 +309,8 @@ func (h *Handler) GetLastPeriod(nameHash string) (uint32, error) {
 }
 
 // GetVersion retrieves the period of the last synced update of the Mutable Resource
-func (h *Handler) GetVersion(nameHash string) (uint32, error) {
-	rsrc := h.get(nameHash)
+func (h *Handler) GetVersion(addr storage.Address) (uint32, error) {
+	rsrc := h.get(addr.Hex())
 	if rsrc == nil {
 		return 0, NewError(ErrNotFound, " does not exist")
 	} else if !rsrc.isSynced() {
