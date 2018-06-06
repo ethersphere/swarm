@@ -41,8 +41,7 @@ import (
 const (
 	signatureLength         = 65
 	publicKeyLength         = 65
-	metadataChunkOffsetSize = 83
-	DbDirName               = "resource"
+	metadataChunkOffsetSize = 81
 	chunkSize               = 4096 // temporary until we implement FileStore in the resourcehandler
 	defaultStoreTimeout     = 4000 * time.Millisecond
 	hasherCount             = 8
@@ -85,7 +84,7 @@ type Error struct {
 	err  string
 }
 
-// Error implements the Error interface
+// Error implements the error interface
 func (e *Error) Error() string {
 	return e.err
 }
@@ -204,7 +203,7 @@ type Handler struct {
 }
 
 // HandlerParams pass parameters to the Handler constructor NewHandler
-// Signer and HeaderGetter are manfatory parameters
+// Signer and HeaderGetter are mandatory parameters
 type HandlerParams struct {
 	QueryMaxPeriods *LookupParams
 	Signer          Signer
@@ -226,7 +225,6 @@ func NewHandler(params *HandlerParams) (*Handler, error) {
 	}
 	rh := &Handler{
 		headerGetter: params.HeaderGetter,
-		//		ownerValidator: params.OwnerValidator,
 		resources:    make(map[string]*resource),
 		storeTimeout: defaultStoreTimeout,
 		signer:       params.Signer,
@@ -256,24 +254,21 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 
 // Validate is a chunk validation method
 // If it's a resource update, the chunk address is checked against the public key of the update's signature
-// If not a resource update, it validates are root chunk if length is metadataChunkOffsetSize and first two bytes are 0
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(addr storage.Address, data []byte) bool {
+
+	// does the chunk data make sense?
+	// This is not 100% safe evaluation, since content addressed data can coincidentally produce data with length header matching content size
 	signature, period, version, name, parseddata, _, err := h.parseUpdate(data)
 	if err != nil {
-		log.Warn(err.Error())
-		if len(data) > metadataChunkOffsetSize { // identifier comes after this byte range, and must be at least one byte
-			if bytes.Equal(data[:2], []byte{0, 0}) {
-				return true
-			}
-		}
 		log.Error("Invalid resource chunk")
 		return false
 	}
 
+	// Check if signature is valid against the chunk address
+	// Since we force signatures to be used, we can know be sure that this is valid data
 	digest := h.keyDataHash(addr, parseddata)
 	publicKey, err := crypto.SigToPub(digest.Bytes(), signature[:])
-	//addrSig, err := getAddressFromDataSig(digest, *signature)
 	if err != nil {
 		log.Error("Unparseable signature in resource chunk %s", addr)
 		return false
@@ -286,7 +281,6 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 		log.Error("Invalid signature on resource chunk")
 		return false
 	}
-	//ok, _ := h.checkAccess(name, addrSig)
 	return true
 }
 
@@ -400,11 +394,11 @@ func (h *Handler) newMetaChunk(name string, startBlock uint64, frequency uint64,
 	// root block has first two bytes both set to 0, which distinguishes from update bytes
 	val := make([]byte, 8)
 	binary.LittleEndian.PutUint64(val, startBlock)
-	copy(data[2:10], val)
+	copy(data[:8], val)
 	binary.LittleEndian.PutUint64(val, frequency)
-	copy(data[10:18], val)
-	copy(data[18:83], publicKeyBytes[:])
-	copy(data[83:], []byte(name))
+	copy(data[8:16], val)
+	copy(data[16:], publicKeyBytes[:])
+	copy(data[81:], []byte(name))
 
 	// the key of the metadata chunk is content-addressed
 	// if it wasn't we couldn't replace it later
@@ -585,17 +579,14 @@ func (h *Handler) Load(ctx context.Context, addr storage.Address) (*resource, er
 		return nil, NewError(ErrNotFound, err.Error())
 	}
 
-	// minimum sanity check for chunk data (an update chunk first two bytes is headerlength uint16, and cannot be 0)
 	// \TODO this is not enough to make sure the data isn't bogus. A normal content addressed chunk could still satisfy these criteria
-	if !bytes.Equal(chunk.SData[:2], []byte{0x0, 0x0}) {
-		return nil, NewError(ErrCorruptData, fmt.Sprintf("Chunk is not a resource metadata chunk"))
-	} else if len(chunk.SData) <= metadataChunkOffsetSize {
+	if len(chunk.SData) <= metadataChunkOffsetSize {
 		return nil, NewError(ErrNothingToReturn, fmt.Sprintf("Invalid chunk length %d, should be minimum %d", len(chunk.SData), metadataChunkOffsetSize+1))
 	}
 
 	// create the index entry
 	rsrc := &resource{}
-	rsrc.UnmarshalBinary(chunk.SData[2:])
+	rsrc.UnmarshalBinary(chunk.SData[:])
 	rsrc.nameHash = ens.EnsNode(rsrc.name)
 	h.set(rsrc.nameHash.Hex(), rsrc)
 	log.Trace("resource index load", "rootkey", addr, "name", rsrc.name, "namehash", rsrc.nameHash, "startblock", rsrc.startBlock, "frequency", rsrc.frequency)
@@ -649,6 +640,11 @@ func (h *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, str
 	cursor += 2
 	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
 	cursor += 2
+
+	if int(headerlength+datalength) > len(chunkdata) {
+		return nil, 0, 0, "", nil, false, NewError(ErrNothingToReturn, "length specified in header is greater than actual chunk size")
+	}
+
 	var exclsignlength int
 	// we need extra magic if it's a multihash, since we used datalength 0 in header as an indicator of multihash content
 	// retrieve the second varint and set this as the data length
@@ -846,12 +842,6 @@ func (h *Handler) update(ctx context.Context, name string, data []byte, multihas
 	rsrc.data = make([]byte, len(data))
 	copy(rsrc.data, data)
 	return key, nil
-}
-
-// Close closes the datastore.
-// Always call this at shutdown to avoid data corruption.
-func (h *Handler) Close() {
-	h.chunkStore.Close()
 }
 
 // gets the current block height
