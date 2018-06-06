@@ -35,6 +35,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 )
@@ -202,6 +203,9 @@ func NewPeer(p *p2p.Peer, rw p2p.MsgReadWriter, spec *Spec) *Peer {
 func (p *Peer) Run(handler func(msg interface{}) error) error {
 	for {
 		if err := p.handleIncoming(handler); err != nil {
+			metrics.GetOrRegisterCounter("peer.handleincoming.error", nil).Inc(1)
+			log.Error("peer.handleIncoming", "err", err)
+
 			return err
 		}
 	}
