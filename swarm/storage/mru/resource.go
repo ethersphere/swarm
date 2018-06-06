@@ -400,7 +400,7 @@ func (h *Handler) newMetaChunk(name string, startBlock uint64, frequency uint64,
 // It starts at the next period after the current block height, and upon failure
 // tries the corresponding keys of each previous period until one is found
 // (or startBlock is reached, in which case there are no updates).
-func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, error) { //nameHash common.Hash, refresh bool, maxLookup *LookupParams) (*resource, error) {
+func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, error) {
 
 	rsrc := h.get(params.Root.Hex())
 	if rsrc == nil {
@@ -426,7 +426,7 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 // This is useful where resource updates are used incrementally in contrast to
 // merely replacing content.
 // Requires a synced resource object
-func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*resource, error) { //nameHash common.Hash, maxLookup *LookupParams) (*resource, error) {
+func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*resource, error) {
 	rsrc := h.get(params.Root.Hex())
 	if rsrc == nil {
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
