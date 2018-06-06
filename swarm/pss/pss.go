@@ -902,6 +902,7 @@ func (p *Pss) checkFwdCache(msg *PssMsg) bool {
 	entry, ok := p.fwdCache[digest]
 	if ok {
 		if entry.expiresAt.After(time.Now()) {
+			log.Trace("unexpired cache", "digest", fmt.Sprintf("%x", digest))
 			metrics.GetOrRegisterCounter("pss.checkfwdcache.unexpired", nil).Inc(1)
 			return true
 		} else {
