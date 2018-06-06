@@ -79,9 +79,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 	if err != nil {
 		t.Fatal(err)
 	}
-	signer := &mru.GenericSigner{
-		PrivKey: privKey,
-	}
+	signer := mru.NewGenericSigner(privKey)
 	rhparams := &mru.HandlerParams{
 		QueryMaxPeriods: &mru.LookupParams{},
 		Signer:          signer,
