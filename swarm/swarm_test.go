@@ -308,7 +308,13 @@ func TestLocalStoreAndRetrieve(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sizes := []int{1, 60, 83, 179, 253, 1024, 4095, 4096, 4097, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 67298391, 524288, 524288 + 1, 524288 + 4096, 524288 + 4097, 7 * 524288, 7*524288 + 1, 7*524288 + 4096, 7*524288 + 4097, 128*524288 + 1, 128*524288 + 4096, 128*524288 + 4097}
+	// by default, test only the lonely chunk cases
+	sizes := []int{1, 60, 4097, 524288 + 1, 7*524288 + 1, 128*524288 + 1}
+
+	if *longrunning {
+		// test broader set of cases if -longruning flag is set
+		sizes = append(sizes, 83, 179, 253, 1024, 4095, 4096, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 67298391, 524288, 524288+4096, 524288+4097, 7*524288, 7*524288+4096, 7*524288+4097, 128*524288, 128*524288+4096, 128*524288+4097)
+	}
 	for _, n := range sizes {
 		testLocalStoreAndRetrieve(t, swarm, n, true)
 		testLocalStoreAndRetrieve(t, swarm, n, false)
