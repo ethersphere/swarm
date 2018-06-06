@@ -444,7 +444,7 @@ func (r *Registry) updateSyncing() {
 		for stream := range streams {
 			log.Debug("Remove sync server", "peer", id, "stream", stream)
 			err := r.Quit(peer.ID(), stream)
-			if err != nil {
+			if err != nil && err != p2p.ErrShuttingDown {
 				log.Error("quit", "err", err, "peer", peer.ID(), "stream", stream)
 			}
 		}
