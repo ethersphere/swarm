@@ -190,9 +190,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	var resourceHandler *mru.Handler
 	rhparams := &mru.HandlerParams{
 		// TODO: config parameter to set limits
-		Signer: &mru.GenericSigner{
-			PrivKey: self.privateKey,
-		},
+		Signer: mru.NewGenericSigner(self.privateKey),
 	}
 	if resolver != nil {
 		resolver.SetNameHash(ens.EnsNode)
