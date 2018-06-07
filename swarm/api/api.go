@@ -238,13 +238,13 @@ func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, 
 	return a.fileStore.Retrieve(addr)
 }
 
-// Store DPA store API
+// Store wraps the Store API call of the embedded FileStore
 func (a *API) Store(data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(), err error) {
 	log.Debug("api.store", "size", size)
 	return a.fileStore.Store(data, size, toEncrypt)
 }
 
-// ErrResolve declaration
+// ErrResolve is returned when an URI cannot be resolved from ENS.
 type ErrResolve error
 
 // Resolve - DNS Resolver
