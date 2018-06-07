@@ -21,6 +21,7 @@ package http
 
 import (
 	"archive/tar"
+	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -975,7 +976,38 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
-	http.ServeContent(w, &r.Request, "", time.Now(), reader)
+	http.ServeContent(w, &r.Request, "", time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+}
+
+// The size of buffer used for bufio.Reader on LazyChunkReader passed to
+// http.ServeContent in HandleGetFile.
+// Warning: This value influences the number of chunk requests and chunker join goroutines
+// per file request.
+// Recommended value is 4 times the io.Copy default buffer value which is 32kB.
+const getFileBufferSize = 4 * 32 * 1024
+
+// bufferedReadSeeker wraps bufio.Reader to expose Seek method
+// from the provied io.ReadSeeker in newBufferedReadSeeker.
+type bufferedReadSeeker struct {
+	r io.Reader
+	s io.Seeker
+}
+
+// newBufferedReadSeeker creates a new instance of bufferedReadSeeker,
+// out of io.ReadSeeker. Argument `size` is the size of the read buffer.
+func newBufferedReadSeeker(readSeeker io.ReadSeeker, size int) bufferedReadSeeker {
+	return bufferedReadSeeker{
+		r: bufio.NewReaderSize(readSeeker, size),
+		s: readSeeker,
+	}
+}
+
+func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
+	return b.r.Read(p)
+}
+
+func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
+	return b.s.Seek(offset, whence)
 }
 
 func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
