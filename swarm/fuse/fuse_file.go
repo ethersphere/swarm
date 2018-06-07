@@ -75,6 +75,8 @@ func NewSwarmFile(path, fname string, minfo *MountInfo) *SwarmFile {
 
 func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 	log.Debug("swarmfs Attr", "path", sf.path)
+	sf.lock.Lock()
+	defer sf.lock.Unlock()
 	a.Inode = sf.inode
 	//TODO: need to get permission as argument
 	a.Mode = 0700
@@ -90,6 +92,8 @@ func (sf *SwarmFile) Attr(ctx context.Context, a *fuse.Attr) error {
 			return err
 		}
 		sf.fileSize = size
+		log.Trace("swarmfs Attr", "size", size)
+		close(quitC)
 	}
 	a.Size = uint64(sf.fileSize)
 	return nil

@@ -161,6 +161,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	go func() {
 		log.Info("swarmfs", "serving hash", mhash, "at", cleanedMountPoint)
 		filesys := &SwarmRoot{root: rootDir}
+		//start serving the actual file system; see note below
 		if err := fs.Serve(fconn, filesys); err != nil {
 			log.Warn("swarmfs could not serve the requested hash", "error", err)
 			serverr <- err
@@ -168,13 +169,33 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		mi.serveClose <- struct{}{}
 	}()
 
+	/*
+	   IMPORTANT NOTE: the fs.Serve function is blocking;
+	   Serve builds up the actual fuse file system by calling the
+	   Attr functions on each SwarmFile, creating the file inodes;
+	   specifically calling the swarm's LazySectionReader.Size() to set the file size.
+
+	   This can take some time, and it appears that if we access the fuse file system
+	   too early, we can bring the tests to deadlock. The assumption so far is that
+	   at this point, the fuse driver didn't finish to initialize the file system.
+
+	   Accessing files too early not only deadlocks the tests, but locks the access
+	   of the fuse file completely, resulting in blocked resources at OS system level.
+	   Even a simple `ls /tmp/testDir/testMountDir` could deadlock in a shell.
+
+	   Workaround so far is to wait some time to give the OS enough time to initialize
+	   the fuse file system. During tests, this seemed to address the issue.
+
+	   HOWEVER IT SHOULD BE NOTED THAT THIS MAY ONLY BE AN EFFECT,
+	   AND THE DEADLOCK CAUSED BY SOMETHING ELSE BLOCKING ACCESS DUE TO SOME RACE CONDITION
+	   (caused in the bazil.org library and/or the SwarmRoot, SwarmDir and SwarmFile implementations)
+	*/
+	time.Sleep(2 * time.Second)
+
 	timer := time.NewTimer(mountTimeout)
 	// Check if the mount process has an error to report.
 	select {
 	case <-timer.C:
-		/*
-			case <-time.After(mountTimeout):
-		*/
 		fuse.Unmount(cleanedMountPoint)
 		return nil, errMountTimeout
 	case err := <-serverr:
@@ -183,6 +204,8 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, err
 
 	case <-fconn.Ready:
+		//this signals that the actual mount point from the fuse.Mount call is ready;
+		//it does not signal though that the file system from fs.Serve is actually fully built up
 		if err := fconn.MountError; err != nil {
 			log.Error("Mounting error from fuse driver: ", "err", err)
 			return nil, err

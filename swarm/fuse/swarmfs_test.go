@@ -38,8 +38,9 @@ import (
 )
 
 var (
-	loglevel = flag.Int("loglevel", 4, "verbosity of logs")
-	rawlog   = flag.Bool("rawlog", false, "turn off terminal formatting in logs")
+	loglevel    = flag.Int("loglevel", 4, "verbosity of logs")
+	rawlog      = flag.Bool("rawlog", false, "turn off terminal formatting in logs")
+	longrunning = flag.Bool("longrunning", false, "do run long-running tests")
 )
 
 func init() {
@@ -56,7 +57,7 @@ type fileInfo struct {
 }
 
 //create files from the map of name and content provided and upload them to swarm via api
-func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[string]fileInfo, uploadDir string, toEncrypt bool) string {
+func createTestFilesAndUploadToSwarm(t *testing.T, api *api.API, files map[string]fileInfo, uploadDir string, toEncrypt bool) string {
 
 	//iterate the map
 	for fname, finfo := range files {
@@ -81,16 +82,18 @@ func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[strin
 			t.Fatalf("Error writing to file '%v' : %v", filePath, err)
 		}
 		/*
-			    Note @holisticode: It's not clear why the Chown command was added to the test suite.
-			    Some files are initialized with different permissions in the individual test,
-			    resulting in errors in Chown which were not checked.
-			    What's then the reason to have these in the first place?
-			    Disabling for now
+				Note @holisticode: It's not clear why the Chown command was added to the test suite.
+				Some files are initialized with different permissions in the individual test,
+				resulting in errors on Chown which were not checked.
+			  After adding the checks tests would fail.
 
-					err = fd.Chown(finfo.uid, finfo.gid)
-					if err != nil {
-						t.Fatalf("Error chown file '%v' : %v", filePath, err)
-					}
+				What's then the reason to have this check in the first place?
+				Disabling for now
+
+			  err = fd.Chown(finfo.uid, finfo.gid)
+			  if err != nil {
+			    t.Fatalf("Error chown file '%v' : %v", filePath, err)
+				}
 		*/
 		err = fd.Chmod(os.FileMode(finfo.perm))
 		if err != nil {
@@ -116,7 +119,7 @@ func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[strin
 }
 
 //mount a swarm hash as a directory on files system via FUSE
-func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash string, mountDir string) *SwarmFS {
+func mountDir(t *testing.T, api *api.API, files map[string]fileInfo, bzzHash string, mountDir string) *SwarmFS {
 	swarmfs := NewSwarmFS(api)
 	_, err := swarmfs.Mount(bzzHash, mountDir)
 	if isFUSEUnsupportedError(err) {
@@ -283,10 +286,10 @@ func (ta *testAPI) uploadAndMount(dat *testData, t *testing.T) (*testData, error
 	}
 	//upload the file
 	dat.bzzHash = createTestFilesAndUploadToSwarm(t, ta.api, dat.files, dat.testUploadDir, dat.toEncrypt)
-	log.Info("Created test files and uploaded to Swarm")
+	log.Debug("Created test files and uploaded to Swarm")
 	//mount the directory
 	dat.swarmfs = mountDir(t, ta.api, dat.files, dat.bzzHash, dat.testMountDir)
-	log.Info("Mounted swarm fs")
+	log.Debug("Mounted swarm fs")
 	return dat, nil
 }
 
@@ -301,15 +304,15 @@ func addDir(root string, name string) (string, error) {
 }
 
 func (ta *testAPI) mountListAndUnmountEncrypted(t *testing.T) {
-	log.Info("Starting mountListAndUnmountEncrypted test")
+	log.Debug("Starting mountListAndUnmountEncrypted test")
 	ta.mountListAndUnmount(t, true)
-	log.Info("Test mountListAndUnmountEncrypted terminated")
+	log.Debug("Test mountListAndUnmountEncrypted terminated")
 }
 
 func (ta *testAPI) mountListAndUnmountNonEncrypted(t *testing.T) {
-	log.Info("Starting mountListAndUnmountNonEncrypted test")
+	log.Debug("Starting mountListAndUnmountNonEncrypted test")
 	ta.mountListAndUnmount(t, false)
-	log.Info("Test mountListAndUnmountNonEncrypted terminated")
+	log.Debug("Test mountListAndUnmountNonEncrypted terminated")
 }
 
 //mount a directory unmount and check the directory is empty afterwards
@@ -352,7 +355,7 @@ func (ta *testAPI) mountListAndUnmount(t *testing.T, toEncrypt bool) {
 	if err != nil {
 		t.Fatalf("could not unmount  %v", dat.bzzHash)
 	}
-	log.Info("Unmount successful")
+	log.Debug("Unmount successful")
 	if !isDirEmpty(dat.testMountDir) {
 		t.Fatalf("unmount didnt work for %v", dat.testMountDir)
 	}
@@ -360,15 +363,15 @@ func (ta *testAPI) mountListAndUnmount(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) maxMountsEncrypted(t *testing.T) {
-	log.Info("Starting maxMountsEncrypted test")
+	log.Debug("Starting maxMountsEncrypted test")
 	ta.runMaxMounts(t, true)
-	log.Info("Test maxMountsEncrypted terminated")
+	log.Debug("Test maxMountsEncrypted terminated")
 }
 
 func (ta *testAPI) maxMountsNonEncrypted(t *testing.T) {
-	log.Info("Starting maxMountsNonEncrypted test")
+	log.Debug("Starting maxMountsNonEncrypted test")
 	ta.runMaxMounts(t, false)
-	log.Info("Test maxMountsNonEncrypted terminated")
+	log.Debug("Test maxMountsNonEncrypted terminated")
 }
 
 //mount several different directories until the maximum has been reached
@@ -440,23 +443,23 @@ func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 		t.Fatalf("Couldn't create mount dir 5: %v", err)
 	}
 	bzzHash6 := createTestFilesAndUploadToSwarm(t, ta.api, dat.files, testUploadDir6, toEncrypt)
-	log.Info("Created test files and uploaded to swarm with uploadDir6")
+	log.Debug("Created test files and uploaded to swarm with uploadDir6")
 	_, err = dat.swarmfs.Mount(bzzHash6, testMountDir6)
 	if err == nil {
 		t.Fatalf("Expected this mount to fail due to exceeding max number of allowed mounts, but succeeded. %v", bzzHash6)
 	}
-	log.Info("Maximum mount reached, additional mount failed. Correct.")
+	log.Debug("Maximum mount reached, additional mount failed. Correct.")
 }
 
 func (ta *testAPI) remountEncrypted(t *testing.T) {
-	log.Info("Starting remountEncrypted test")
+	log.Debug("Starting remountEncrypted test")
 	ta.remount(t, true)
-	log.Info("Test remountEncrypted terminated")
+	log.Debug("Test remountEncrypted terminated")
 }
 func (ta *testAPI) remountNonEncrypted(t *testing.T) {
-	log.Info("Starting remountNonEncrypted test")
+	log.Debug("Starting remountNonEncrypted test")
 	ta.remount(t, false)
-	log.Info("Test remountNonEncrypted terminated")
+	log.Debug("Test remountNonEncrypted terminated")
 }
 
 //test remounting same hash second time and different hash in already mounted point
@@ -501,7 +504,7 @@ func (ta *testAPI) remount(t *testing.T, toEncrypt bool) {
 	if err == nil {
 		t.Fatalf("Error mounting hash  %v", bzzHash2)
 	}
-	log.Info("Mount on existing mount point failed. Correct.")
+	log.Debug("Mount on existing mount point failed. Correct.")
 
 	// mount nonexistent hash
 	failDir, err3 := addDir(dat.testDir, "remount-fail")
@@ -513,19 +516,19 @@ func (ta *testAPI) remount(t *testing.T, toEncrypt bool) {
 	if err == nil {
 		t.Fatalf("Expected this mount to fail due to non existing hash. But succeeded %v", failHash)
 	}
-	log.Info("Nonexistent hash hasn't been mounted. Correct.")
+	log.Debug("Nonexistent hash hasn't been mounted. Correct.")
 }
 
 func (ta *testAPI) unmountEncrypted(t *testing.T) {
-	log.Info("Starting unmountEncrypted test")
+	log.Debug("Starting unmountEncrypted test")
 	ta.unmount(t, true)
-	log.Info("Test unmountEncrypted terminated")
+	log.Debug("Test unmountEncrypted terminated")
 }
 
 func (ta *testAPI) unmountNonEncrypted(t *testing.T) {
-	log.Info("Starting unmountNonEncrypted test")
+	log.Debug("Starting unmountNonEncrypted test")
 	ta.unmount(t, false)
-	log.Info("Test unmountNonEncrypted terminated")
+	log.Debug("Test unmountNonEncrypted terminated")
 }
 
 //mount then unmount and check that it has been unmounted
@@ -552,7 +555,7 @@ func (ta *testAPI) unmount(t *testing.T, toEncrypt bool) {
 	if err != nil {
 		t.Fatalf("could not unmount  %v", dat.bzzHash)
 	}
-	log.Info("Unmounted Dir")
+	log.Debug("Unmounted Dir")
 
 	mi := swarmfs.Listmounts()
 	log.Debug("Going to list mounts")
@@ -566,14 +569,14 @@ func (ta *testAPI) unmount(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) unmountWhenResourceBusyEncrypted(t *testing.T) {
-	log.Info("Starting unmountWhenResourceBusyEncrypted test")
+	log.Debug("Starting unmountWhenResourceBusyEncrypted test")
 	ta.unmountWhenResourceBusy(t, true)
-	log.Info("Test unmountWhenResourceBusyEncrypted terminated")
+	log.Debug("Test unmountWhenResourceBusyEncrypted terminated")
 }
 func (ta *testAPI) unmountWhenResourceBusyNonEncrypted(t *testing.T) {
-	log.Info("Starting unmountWhenResourceBusyNonEncrypted test")
+	log.Debug("Starting unmountWhenResourceBusyNonEncrypted test")
 	ta.unmountWhenResourceBusy(t, false)
-	log.Info("Test unmountWhenResourceBusyNonEncrypted terminated")
+	log.Debug("Test unmountWhenResourceBusyNonEncrypted terminated")
 }
 
 //unmount while a resource is busy; should fail
@@ -641,15 +644,15 @@ func (ta *testAPI) unmountWhenResourceBusy(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) seekInMultiChunkFileEncrypted(t *testing.T) {
-	log.Info("Starting seekInMultiChunkFileEncrypted test")
+	log.Debug("Starting seekInMultiChunkFileEncrypted test")
 	ta.seekInMultiChunkFile(t, true)
-	log.Info("Test seekInMultiChunkFileEncrypted terminated")
+	log.Debug("Test seekInMultiChunkFileEncrypted terminated")
 }
 
 func (ta *testAPI) seekInMultiChunkFileNonEncrypted(t *testing.T) {
-	log.Info("Starting seekInMultiChunkFileNonEncrypted test")
+	log.Debug("Starting seekInMultiChunkFileNonEncrypted test")
 	ta.seekInMultiChunkFile(t, false)
-	log.Info("Test seekInMultiChunkFileNonEncrypted terminated")
+	log.Debug("Test seekInMultiChunkFileNonEncrypted terminated")
 }
 
 //open a file in a mounted dir and go to a certain position
@@ -706,15 +709,15 @@ func (ta *testAPI) seekInMultiChunkFile(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) createNewFileEncrypted(t *testing.T) {
-	log.Info("Starting createNewFileEncrypted test")
+	log.Debug("Starting createNewFileEncrypted test")
 	ta.createNewFile(t, true)
-	log.Info("Test createNewFileEncrypted terminated")
+	log.Debug("Test createNewFileEncrypted terminated")
 }
 
 func (ta *testAPI) createNewFileNonEncrypted(t *testing.T) {
-	log.Info("Starting createNewFileNonEncrypted test")
+	log.Debug("Starting createNewFileNonEncrypted test")
 	ta.createNewFile(t, false)
-	log.Info("Test createNewFileNonEncrypted terminated")
+	log.Debug("Test createNewFileNonEncrypted terminated")
 }
 
 //create a new file in a mounted swarm directory,
@@ -769,7 +772,7 @@ func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	testMountDir2, err3 := addDir(dat.testDir, "create-mount2")
 	if err3 != nil {
@@ -778,7 +781,7 @@ func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	// mount again and see if things are okay
 	dat.files["2.txt"] = fileInfo{0700, 333, 444, contents}
 	_ = mountDir(t, ta.api, dat.files, mi.LatestManifest, testMountDir2)
-	log.Info("Directory mounted again")
+	log.Debug("Directory mounted again")
 
 	checkFile(t, testMountDir2, "2.txt", contents)
 	_, err2 = dat.swarmfs.Unmount(testMountDir2)
@@ -789,15 +792,15 @@ func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) createNewFileInsideDirectoryEncrypted(t *testing.T) {
-	log.Info("Starting createNewFileInsideDirectoryEncrypted test")
+	log.Debug("Starting createNewFileInsideDirectoryEncrypted test")
 	ta.createNewFileInsideDirectory(t, true)
-	log.Info("Test createNewFileInsideDirectoryEncrypted terminated")
+	log.Debug("Test createNewFileInsideDirectoryEncrypted terminated")
 }
 
 func (ta *testAPI) createNewFileInsideDirectoryNonEncrypted(t *testing.T) {
-	log.Info("Starting createNewFileInsideDirectoryNonEncrypted test")
+	log.Debug("Starting createNewFileInsideDirectoryNonEncrypted test")
 	ta.createNewFileInsideDirectory(t, false)
-	log.Info("Test createNewFileInsideDirectoryNonEncrypted terminated")
+	log.Debug("Test createNewFileInsideDirectoryNonEncrypted terminated")
 }
 
 //create a new file inside a directory inside the mount
@@ -850,7 +853,7 @@ func (ta *testAPI) createNewFileInsideDirectory(t *testing.T, toEncrypt bool) {
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	testMountDir2, err3 := addDir(dat.testDir, "createinsidedir-mount2")
 	if err3 != nil {
@@ -859,7 +862,7 @@ func (ta *testAPI) createNewFileInsideDirectory(t *testing.T, toEncrypt bool) {
 	// mount again and see if things are okay
 	dat.files["one/2.txt"] = fileInfo{0700, 333, 444, contents}
 	_ = mountDir(t, ta.api, dat.files, mi.LatestManifest, testMountDir2)
-	log.Info("Directory mounted again")
+	log.Debug("Directory mounted again")
 
 	checkFile(t, testMountDir2, "one/2.txt", contents)
 	_, err = dat.swarmfs.Unmount(testMountDir2)
@@ -870,15 +873,15 @@ func (ta *testAPI) createNewFileInsideDirectory(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) createNewFileInsideNewDirectoryEncrypted(t *testing.T) {
-	log.Info("Starting createNewFileInsideNewDirectoryEncrypted test")
+	log.Debug("Starting createNewFileInsideNewDirectoryEncrypted test")
 	ta.createNewFileInsideNewDirectory(t, true)
-	log.Info("Test createNewFileInsideNewDirectoryEncrypted terminated")
+	log.Debug("Test createNewFileInsideNewDirectoryEncrypted terminated")
 }
 
 func (ta *testAPI) createNewFileInsideNewDirectoryNonEncrypted(t *testing.T) {
-	log.Info("Starting createNewFileInsideNewDirectoryNonEncrypted test")
+	log.Debug("Starting createNewFileInsideNewDirectoryNonEncrypted test")
 	ta.createNewFileInsideNewDirectory(t, false)
-	log.Info("Test createNewFileInsideNewDirectoryNonEncrypted terminated")
+	log.Debug("Test createNewFileInsideNewDirectoryNonEncrypted terminated")
 }
 
 //create a new directory in mount and a new file
@@ -934,12 +937,12 @@ func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T, toEncrypt bool)
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	// mount again and see if things are okay
 	dat.files["one/2.txt"] = fileInfo{0700, 333, 444, contents}
 	_ = mountDir(t, ta.api, dat.files, mi.LatestManifest, dat.testMountDir)
-	log.Info("Directory mounted again")
+	log.Debug("Directory mounted again")
 
 	checkFile(t, dat.testMountDir, "one/2.txt", contents)
 	_, err2 = dat.swarmfs.Unmount(dat.testMountDir)
@@ -950,15 +953,15 @@ func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T, toEncrypt bool)
 }
 
 func (ta *testAPI) removeExistingFileEncrypted(t *testing.T) {
-	log.Info("Starting removeExistingFileEncrypted test")
+	log.Debug("Starting removeExistingFileEncrypted test")
 	ta.removeExistingFile(t, true)
-	log.Info("Test removeExistingFileEncrypted terminated")
+	log.Debug("Test removeExistingFileEncrypted terminated")
 }
 
 func (ta *testAPI) removeExistingFileNonEncrypted(t *testing.T) {
-	log.Info("Starting removeExistingFileNonEncrypted test")
+	log.Debug("Starting removeExistingFileNonEncrypted test")
 	ta.removeExistingFile(t, false)
-	log.Info("Test removeExistingFileNonEncrypted terminated")
+	log.Debug("Test removeExistingFileNonEncrypted terminated")
 }
 
 //remove existing file in mount
@@ -993,7 +996,7 @@ func (ta *testAPI) removeExistingFile(t *testing.T, toEncrypt bool) {
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	// mount again and see if things are okay
 	delete(dat.files, "five.txt")
@@ -1010,15 +1013,15 @@ func (ta *testAPI) removeExistingFile(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) removeExistingFileInsideDirEncrypted(t *testing.T) {
-	log.Info("Starting removeExistingFileInsideDirEncrypted test")
+	log.Debug("Starting removeExistingFileInsideDirEncrypted test")
 	ta.removeExistingFileInsideDir(t, true)
-	log.Info("Test removeExistingFileInsideDirEncrypted terminated")
+	log.Debug("Test removeExistingFileInsideDirEncrypted terminated")
 }
 
 func (ta *testAPI) removeExistingFileInsideDirNonEncrypted(t *testing.T) {
-	log.Info("Starting removeExistingFileInsideDirNonEncrypted test")
+	log.Debug("Starting removeExistingFileInsideDirNonEncrypted test")
 	ta.removeExistingFileInsideDir(t, false)
-	log.Info("Test removeExistingFileInsideDirNonEncrypted terminated")
+	log.Debug("Test removeExistingFileInsideDirNonEncrypted terminated")
 }
 
 //remove a file inside a directory inside a mount
@@ -1054,7 +1057,7 @@ func (ta *testAPI) removeExistingFileInsideDir(t *testing.T, toEncrypt bool) {
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	// mount again and see if things are okay
 	delete(dat.files, "one/five.txt")
@@ -1078,15 +1081,15 @@ func (ta *testAPI) removeExistingFileInsideDir(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) removeNewlyAddedFileEncrypted(t *testing.T) {
-	log.Info("Starting removeNewlyAddedFileEncrypted test")
+	log.Debug("Starting removeNewlyAddedFileEncrypted test")
 	ta.removeNewlyAddedFile(t, true)
-	log.Info("Test removeNewlyAddedFileEncrypted terminated")
+	log.Debug("Test removeNewlyAddedFileEncrypted terminated")
 }
 
 func (ta *testAPI) removeNewlyAddedFileNonEncrypted(t *testing.T) {
-	log.Info("Starting removeNewlyAddedFileNonEncrypted test")
+	log.Debug("Starting removeNewlyAddedFileNonEncrypted test")
 	ta.removeNewlyAddedFile(t, false)
-	log.Info("Test removeNewlyAddedFileNonEncrypted terminated")
+	log.Debug("Test removeNewlyAddedFileNonEncrypted terminated")
 }
 
 //add a file in mount and then remove it; on remount file should not be there
@@ -1154,7 +1157,7 @@ func (ta *testAPI) removeNewlyAddedFile(t *testing.T, toEncrypt bool) {
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	testMountDir2, err3 := addDir(dat.testDir, "removenew-mount2")
 	if err3 != nil {
@@ -1162,7 +1165,7 @@ func (ta *testAPI) removeNewlyAddedFile(t *testing.T, toEncrypt bool) {
 	}
 	// mount again and see if things are okay
 	_ = mountDir(t, ta.api, dat.files, mi.LatestManifest, testMountDir2)
-	log.Info("Directory mounted again")
+	log.Debug("Directory mounted again")
 
 	if dat.bzzHash != mi.LatestManifest {
 		t.Fatalf("same contents different hash orig(%v): new(%v)", dat.bzzHash, mi.LatestManifest)
@@ -1175,15 +1178,15 @@ func (ta *testAPI) removeNewlyAddedFile(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) addNewFileAndModifyContentsEncrypted(t *testing.T) {
-	log.Info("Starting addNewFileAndModifyContentsEncrypted test")
+	log.Debug("Starting addNewFileAndModifyContentsEncrypted test")
 	ta.addNewFileAndModifyContents(t, true)
-	log.Info("Test addNewFileAndModifyContentsEncrypted terminated")
+	log.Debug("Test addNewFileAndModifyContentsEncrypted terminated")
 }
 
 func (ta *testAPI) addNewFileAndModifyContentsNonEncrypted(t *testing.T) {
-	log.Info("Starting addNewFileAndModifyContentsNonEncrypted test")
+	log.Debug("Starting addNewFileAndModifyContentsNonEncrypted test")
 	ta.addNewFileAndModifyContents(t, false)
-	log.Info("Test addNewFileAndModifyContentsNonEncrypted terminated")
+	log.Debug("Test addNewFileAndModifyContentsNonEncrypted terminated")
 }
 
 //add a new file and modify content; remount and check the modified file is intact
@@ -1239,7 +1242,7 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	//mount on a different dir to see if modified file is correct
 	testMountDir2, err3 := addDir(dat.testDir, "modifyfile-mount2")
@@ -1248,7 +1251,7 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	}
 	dat.files["2.txt"] = fileInfo{0700, 333, 444, line1}
 	_ = mountDir(t, ta.api, dat.files, mi1.LatestManifest, testMountDir2)
-	log.Info("Directory mounted again")
+	log.Debug("Directory mounted again")
 
 	checkFile(t, testMountDir2, "2.txt", line1)
 	log.Debug("file checked")
@@ -1258,7 +1261,7 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	if err4 != nil {
 		t.Fatalf("Could not unmount %v", err4)
 	}
-	log.Info("Directory unmounted again")
+	log.Debug("Directory unmounted again")
 
 	//mount again on original dir and modify the file
 	//let's clean up the mounted dir first: remove...
@@ -1273,7 +1276,7 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	}
 	//now remount
 	_ = mountDir(t, ta.api, dat.files, mi2.LatestManifest, dat.testMountDir)
-	log.Info("Directory mounted yet again")
+	log.Debug("Directory mounted yet again")
 
 	//open the file....
 	fd, err5 := os.OpenFile(actualPath, os.O_RDWR|os.O_APPEND, os.FileMode(0665))
@@ -1309,7 +1312,7 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	if err6 != nil {
 		t.Fatalf("Could not unmount %v", err6)
 	}
-	log.Info("Directory unmounted yet again")
+	log.Debug("Directory unmounted yet again")
 
 	//now remount on a different dir and check that the modified file is ok
 	testMountDir4, err7 := addDir(dat.testDir, "modifyfile-mount4")
@@ -1320,7 +1323,7 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	line1and2 := bytes.Join(b, []byte(""))
 	dat.files["2.txt"] = fileInfo{0700, 333, 444, line1and2}
 	_ = mountDir(t, ta.api, dat.files, mi3.LatestManifest, testMountDir4)
-	log.Info("Directory mounted final time")
+	log.Debug("Directory mounted final time")
 
 	checkFile(t, testMountDir4, "2.txt", line1and2)
 	_, err = dat.swarmfs.Unmount(testMountDir4)
@@ -1331,15 +1334,15 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) removeEmptyDirEncrypted(t *testing.T) {
-	log.Info("Starting removeEmptyDirEncrypted test")
+	log.Debug("Starting removeEmptyDirEncrypted test")
 	ta.removeEmptyDir(t, true)
-	log.Info("Test removeEmptyDirEncrypted terminated")
+	log.Debug("Test removeEmptyDirEncrypted terminated")
 }
 
 func (ta *testAPI) removeEmptyDirNonEncrypted(t *testing.T) {
-	log.Info("Starting removeEmptyDirNonEncrypted test")
+	log.Debug("Starting removeEmptyDirNonEncrypted test")
 	ta.removeEmptyDir(t, false)
-	log.Info("Test removeEmptyDirNonEncrypted terminated")
+	log.Debug("Test removeEmptyDirNonEncrypted terminated")
 }
 
 //remove an empty dir inside mount
@@ -1372,7 +1375,7 @@ func (ta *testAPI) removeEmptyDir(t *testing.T, toEncrypt bool) {
 	if err != nil {
 		t.Fatalf("Could not unmount %v", err)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 	//by just adding an empty dir, the hash doesn't change; test this
 	if dat.bzzHash != mi.LatestManifest {
 		t.Fatalf("same contents different hash orig(%v): new(%v)", dat.bzzHash, mi.LatestManifest)
@@ -1381,14 +1384,14 @@ func (ta *testAPI) removeEmptyDir(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) removeDirWhichHasFilesEncrypted(t *testing.T) {
-	log.Info("Starting removeDirWhichHasFilesEncrypted test")
+	log.Debug("Starting removeDirWhichHasFilesEncrypted test")
 	ta.removeDirWhichHasFiles(t, true)
-	log.Info("Test removeDirWhichHasFilesEncrypted terminated")
+	log.Debug("Test removeDirWhichHasFilesEncrypted terminated")
 }
 func (ta *testAPI) removeDirWhichHasFilesNonEncrypted(t *testing.T) {
-	log.Info("Starting removeDirWhichHasFilesNonEncrypted test")
+	log.Debug("Starting removeDirWhichHasFilesNonEncrypted test")
 	ta.removeDirWhichHasFiles(t, false)
-	log.Info("Test removeDirWhichHasFilesNonEncrypted terminated")
+	log.Debug("Test removeDirWhichHasFilesNonEncrypted terminated")
 }
 
 //remove a directory with a file; check on remount file isn't there
@@ -1424,7 +1427,7 @@ func (ta *testAPI) removeDirWhichHasFiles(t *testing.T, toEncrypt bool) {
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v ", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	//we deleted files in the OS, so let's delete them also in the files map
 	delete(dat.files, "two/five.txt")
@@ -1436,7 +1439,7 @@ func (ta *testAPI) removeDirWhichHasFiles(t *testing.T, toEncrypt bool) {
 		t.Fatalf("Could not unmount %v", err3)
 	}
 	_ = mountDir(t, ta.api, dat.files, mi.LatestManifest, testMountDir2)
-	log.Info("Directory mounted")
+	log.Debug("Directory mounted")
 	actualPath := filepath.Join(dirPath, "five.txt")
 	_, err = os.Stat(actualPath)
 	if err == nil {
@@ -1454,15 +1457,15 @@ func (ta *testAPI) removeDirWhichHasFiles(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) removeDirWhichHasSubDirsEncrypted(t *testing.T) {
-	log.Info("Starting removeDirWhichHasSubDirsEncrypted test")
+	log.Debug("Starting removeDirWhichHasSubDirsEncrypted test")
 	ta.removeDirWhichHasSubDirs(t, true)
-	log.Info("Test removeDirWhichHasSubDirsEncrypted terminated")
+	log.Debug("Test removeDirWhichHasSubDirsEncrypted terminated")
 }
 
 func (ta *testAPI) removeDirWhichHasSubDirsNonEncrypted(t *testing.T) {
-	log.Info("Starting removeDirWhichHasSubDirsNonEncrypted test")
+	log.Debug("Starting removeDirWhichHasSubDirsNonEncrypted test")
 	ta.removeDirWhichHasSubDirs(t, false)
-	log.Info("Test removeDirWhichHasSubDirsNonEncrypted terminated")
+	log.Debug("Test removeDirWhichHasSubDirsNonEncrypted terminated")
 }
 
 //remove a directory with subdirectories inside mount; on remount check they are not there
@@ -1501,7 +1504,7 @@ func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T, toEncrypt bool) {
 	if err2 != nil {
 		t.Fatalf("Could not unmount %v ", err2)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	//we deleted files in the OS, so let's delete them also in the files map
 	delete(dat.files, "two/three/2.txt")
@@ -1516,7 +1519,7 @@ func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T, toEncrypt bool) {
 		t.Fatalf("Could not unmount %v", err3)
 	}
 	_ = mountDir(t, ta.api, dat.files, mi.LatestManifest, testMountDir2)
-	log.Info("Directory mounted again")
+	log.Debug("Directory mounted again")
 	actualPath := filepath.Join(dirPath, "three")
 	actualPath = filepath.Join(actualPath, "2.txt")
 	_, err = os.Stat(actualPath)
@@ -1540,15 +1543,15 @@ func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T, toEncrypt bool) {
 }
 
 func (ta *testAPI) appendFileContentsToEndEncrypted(t *testing.T) {
-	log.Info("Starting appendFileContentsToEndEncrypted test")
+	log.Debug("Starting appendFileContentsToEndEncrypted test")
 	ta.appendFileContentsToEnd(t, true)
-	log.Info("Test appendFileContentsToEndEncrypted terminated")
+	log.Debug("Test appendFileContentsToEndEncrypted terminated")
 }
 
 func (ta *testAPI) appendFileContentsToEndNonEncrypted(t *testing.T) {
-	log.Info("Starting appendFileContentsToEndNonEncrypted test")
+	log.Debug("Starting appendFileContentsToEndNonEncrypted test")
 	ta.appendFileContentsToEnd(t, false)
-	log.Info("Test appendFileContentsToEndNonEncrypted terminated")
+	log.Debug("Test appendFileContentsToEndNonEncrypted terminated")
 }
 
 //append contents to the end of a file; remount and check it's intact
@@ -1610,7 +1613,7 @@ func (ta *testAPI) appendFileContentsToEnd(t *testing.T, toEncrypt bool) {
 	if err5 != nil {
 		t.Fatalf("Could not unmount %v ", err5)
 	}
-	log.Info("Directory unmounted")
+	log.Debug("Directory unmounted")
 
 	// mount again and see if appended file is correct
 	b := [][]byte{line1, line2}
@@ -1621,7 +1624,7 @@ func (ta *testAPI) appendFileContentsToEnd(t *testing.T, toEncrypt bool) {
 		t.Fatalf("Could not unmount %v", err6)
 	}
 	_ = mountDir(t, ta.api, dat.files, mi1.LatestManifest, testMountDir2)
-	log.Info("Directory mounted")
+	log.Debug("Directory mounted")
 
 	checkFile(t, testMountDir2, "1.txt", line1and2)
 
@@ -1647,38 +1650,46 @@ func TestFUSE(t *testing.T) {
 	}
 	ta := &testAPI{api: api.NewAPI(fileStore, nil, nil)}
 
+	//run a short suite of tests
+	//approx time: 28s
 	t.Run("mountListAndUnmountEncrypted", ta.mountListAndUnmountEncrypted)
-	t.Run("mountListAndUnmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)
-	t.Run("maxMountsEncrypted", ta.maxMountsEncrypted)
-	t.Run("maxMountsNonEncrypted", ta.maxMountsNonEncrypted)
 	t.Run("remountEncrypted", ta.remountEncrypted)
-	t.Run("remountNonEncrypted", ta.remountNonEncrypted)
-	t.Run("unmountEncrypted", ta.unmountEncrypted)
-	t.Run("unmountNonEncrypted", ta.unmountNonEncrypted)
-	t.Run("unmountWhenResourceBusyEncrypted", ta.unmountWhenResourceBusyEncrypted)
 	t.Run("unmountWhenResourceBusyNonEncrypted", ta.unmountWhenResourceBusyNonEncrypted)
-	t.Run("seekInMultiChunkFileEncrypted", ta.seekInMultiChunkFileEncrypted)
-	t.Run("seekInMultiChunkFileNonEncrypted", ta.seekInMultiChunkFileNonEncrypted)
-	t.Run("createNewFileEncrypted", ta.createNewFileEncrypted)
-	t.Run("createNewFileNonEncrypted", ta.createNewFileNonEncrypted)
-	t.Run("createNewFileInsideDirectoryEncrypted", ta.createNewFileInsideDirectoryEncrypted)
-	t.Run("createNewFileInsideDirectoryNonEncrypted", ta.createNewFileInsideDirectoryNonEncrypted)
-	t.Run("createNewFileInsideNewDirectoryEncrypted", ta.createNewFileInsideNewDirectoryEncrypted)
-	t.Run("createNewFileInsideNewDirectoryNonEncrypted", ta.createNewFileInsideNewDirectoryNonEncrypted)
 	t.Run("removeExistingFileEncrypted", ta.removeExistingFileEncrypted)
-	t.Run("removeExistingFileNonEncrypted", ta.removeExistingFileNonEncrypted)
-	t.Run("removeExistingFileInsideDirEncrypted", ta.removeExistingFileInsideDirEncrypted)
-	t.Run("removeExistingFileInsideDirNonEncrypted", ta.removeExistingFileInsideDirNonEncrypted)
-	t.Run("removeNewlyAddedFileEncrypted", ta.removeNewlyAddedFileEncrypted)
-	t.Run("removeNewlyAddedFileNonEncrypted", ta.removeNewlyAddedFileNonEncrypted)
-	t.Run("addNewFileAndModifyContentsEncrypted", ta.addNewFileAndModifyContentsEncrypted)
 	t.Run("addNewFileAndModifyContentsNonEncrypted", ta.addNewFileAndModifyContentsNonEncrypted)
-	t.Run("removeEmptyDirEncrypted", ta.removeEmptyDirEncrypted)
-	t.Run("removeEmptyDirNonEncrypted", ta.removeEmptyDirNonEncrypted)
-	t.Run("removeDirWhichHasFilesEncrypted", ta.removeDirWhichHasFilesEncrypted)
 	t.Run("removeDirWhichHasFilesNonEncrypted", ta.removeDirWhichHasFilesNonEncrypted)
-	t.Run("removeDirWhichHasSubDirsEncrypted", ta.removeDirWhichHasSubDirsEncrypted)
-	t.Run("removeDirWhichHasSubDirsNonEncrypted", ta.removeDirWhichHasSubDirsNonEncrypted)
 	t.Run("appendFileContentsToEndEncrypted", ta.appendFileContentsToEndEncrypted)
-	t.Run("appendFileContentsToEndNonEncrypted", ta.appendFileContentsToEndNonEncrypted)
+
+	//provide longrunning flag to execute all tests
+	//approx time with longrunning: 140s
+	if *longrunning {
+		t.Run("mountListAndUnmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)
+		t.Run("maxMountsEncrypted", ta.maxMountsEncrypted)
+		t.Run("maxMountsNonEncrypted", ta.maxMountsNonEncrypted)
+		t.Run("remountNonEncrypted", ta.remountNonEncrypted)
+		t.Run("unmountEncrypted", ta.unmountEncrypted)
+		t.Run("unmountNonEncrypted", ta.unmountNonEncrypted)
+		t.Run("unmountWhenResourceBusyEncrypted", ta.unmountWhenResourceBusyEncrypted)
+		t.Run("unmountWhenResourceBusyNonEncrypted", ta.unmountWhenResourceBusyNonEncrypted)
+		t.Run("seekInMultiChunkFileEncrypted", ta.seekInMultiChunkFileEncrypted)
+		t.Run("seekInMultiChunkFileNonEncrypted", ta.seekInMultiChunkFileNonEncrypted)
+		t.Run("createNewFileEncrypted", ta.createNewFileEncrypted)
+		t.Run("createNewFileNonEncrypted", ta.createNewFileNonEncrypted)
+		t.Run("createNewFileInsideDirectoryEncrypted", ta.createNewFileInsideDirectoryEncrypted)
+		t.Run("createNewFileInsideDirectoryNonEncrypted", ta.createNewFileInsideDirectoryNonEncrypted)
+		t.Run("createNewFileInsideNewDirectoryEncrypted", ta.createNewFileInsideNewDirectoryEncrypted)
+		t.Run("createNewFileInsideNewDirectoryNonEncrypted", ta.createNewFileInsideNewDirectoryNonEncrypted)
+		t.Run("removeExistingFileNonEncrypted", ta.removeExistingFileNonEncrypted)
+		t.Run("removeExistingFileInsideDirEncrypted", ta.removeExistingFileInsideDirEncrypted)
+		t.Run("removeExistingFileInsideDirNonEncrypted", ta.removeExistingFileInsideDirNonEncrypted)
+		t.Run("removeNewlyAddedFileEncrypted", ta.removeNewlyAddedFileEncrypted)
+		t.Run("removeNewlyAddedFileNonEncrypted", ta.removeNewlyAddedFileNonEncrypted)
+		t.Run("addNewFileAndModifyContentsEncrypted", ta.addNewFileAndModifyContentsEncrypted)
+		t.Run("removeEmptyDirEncrypted", ta.removeEmptyDirEncrypted)
+		t.Run("removeEmptyDirNonEncrypted", ta.removeEmptyDirNonEncrypted)
+		t.Run("removeDirWhichHasFilesEncrypted", ta.removeDirWhichHasFilesEncrypted)
+		t.Run("removeDirWhichHasSubDirsEncrypted", ta.removeDirWhichHasSubDirsEncrypted)
+		t.Run("removeDirWhichHasSubDirsNonEncrypted", ta.removeDirWhichHasSubDirsNonEncrypted)
+		t.Run("appendFileContentsToEndNonEncrypted", ta.appendFileContentsToEndNonEncrypted)
+	}
 }

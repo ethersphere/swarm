@@ -64,6 +64,8 @@ func NewSwarmDir(fullpath string, minfo *MountInfo) *SwarmDir {
 }
 
 func (sd *SwarmDir) Attr(ctx context.Context, a *fuse.Attr) error {
+	sd.lock.RLock()
+	defer sd.lock.RUnlock()
 	a.Inode = sd.inode
 	a.Mode = os.ModeDir | 0700
 	a.Uid = uint32(os.Getuid())
