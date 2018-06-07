@@ -183,7 +183,7 @@ func (m *MultiResolver) HeaderByNumber(ctx context.Context, name string, blockNr
 	return nil, err
 }
 
-// getResolveValidator - accessor
+// getResolveValidator uses the hostname to retrieve the resolver associated with the top level domain
 func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, error) {
 	rs := m.resolvers[""]
 	tld := path.Ext(name)
@@ -200,7 +200,7 @@ func (m *MultiResolver) getResolveValidator(name string) ([]ResolveValidator, er
 	return rs, nil
 }
 
-// SetNameHash - on a MultiResolver
+// SetNameHash sets the hasher function that hashes the domain into a name hash that ENS uses
 func (m *MultiResolver) SetNameHash(nameHash func(string) common.Hash) {
 	m.nameHash = nameHash
 }
@@ -247,7 +247,7 @@ func (a *API) Store(data io.Reader, size int64, toEncrypt bool) (addr storage.Ad
 // ErrResolve is returned when an URI cannot be resolved from ENS.
 type ErrResolve error
 
-// Resolve - DNS Resolver
+// Resolve resolves a URI to an Address using the MultiResolver.
 func (a *API) Resolve(uri *URI) (storage.Address, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
@@ -426,7 +426,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 	return
 }
 
-// Modify - load's manifest and checks the content hash before recalculating and storing the manifest.
+// Modify loads manifest and checks the content hash before recalculating and storing the manifest.
 func (a *API) Modify(addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
@@ -453,7 +453,7 @@ func (a *API) Modify(addr storage.Address, path, contentHash, contentType string
 	return trie.ref, nil
 }
 
-// AddFile - creates a new manifest entry, add's it to swarm, then adds a file to swarm.
+// AddFile creates a new manifest entry, adds it to swarm, then adds a file to swarm.
 func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
 	apiAddFileCount.Inc(1)
 
@@ -504,7 +504,7 @@ func (a *API) AddFile(mhash, path, fname string, content []byte, nameresolver bo
 
 }
 
-// RemoveFile - remove's a file's entry in a manifest
+// RemoveFile removes a file entry in a manifest.
 func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, error) {
 	apiRmFileCount.Inc(1)
 
@@ -546,7 +546,7 @@ func (a *API) RemoveFile(mhash, path, fname string, nameresolver bool) (string, 
 	return newMkey.String(), nil
 }
 
-// AppendFile - remove's old manifest appends file's entry to new manifest and add's it to swarm
+// AppendFile removes old manifest, appends file entry to new manifest and adds it to Swarm.
 func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content []byte, oldAddr storage.Address, offset int64, addSize int64, nameresolver bool) (storage.Address, string, error) {
 	apiAppendFileCount.Inc(1)
 
@@ -628,7 +628,7 @@ func (a *API) AppendFile(mhash, path, fname string, existingSize int64, content 
 
 }
 
-// BuildDirectoryTree - used by swarmfs_unix
+// BuildDirectoryTree used by swarmfs_unix
 func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
 	uri, err := Parse("bzz:/" + mhash)
@@ -657,7 +657,7 @@ func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.
 	return addr, manifestEntryMap, nil
 }
 
-// ResourceLookup - Look up mutable resource updates at specific periods and versions
+// ResourceLookup Looks up mutable resource updates at specific periods and versions
 func (a *API) ResourceLookup(ctx context.Context, addr storage.Address, period uint32, version uint32, maxLookup *mru.LookupParams) (string, []byte, error) {
 	var err error
 	rsrc, err := a.resource.Load(addr)
@@ -685,7 +685,7 @@ func (a *API) ResourceLookup(ctx context.Context, addr storage.Address, period u
 	return rsrc.Name(), data, nil
 }
 
-// ResourceCreate - create's Resource and returns it's key
+// ResourceCreate creates Resource and returns its key
 func (a *API) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Address, error) {
 	key, _, err := a.resource.New(ctx, name, frequency)
 	if err != nil {
@@ -694,7 +694,8 @@ func (a *API) ResourceCreate(ctx context.Context, name string, frequency uint64)
 	return key, nil
 }
 
-// ResourceUpdateMultihash - updates Multihash resource
+// ResourceUpdateMultihash updates a Mutable Resource and marks the update's content to be of multihash type, which will be recognized upon retrieval.
+// It will fail if the data is not a valid multihash.
 func (a *API) ResourceUpdateMultihash(ctx context.Context, name string, data []byte) (storage.Address, uint32, uint32, error) {
 	return a.resourceUpdate(ctx, name, data, true)
 }
