@@ -253,7 +253,7 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 	// This is not 100% safe evaluation, since content addressed data can coincidentally produce data with length header matching content size
 	signature, period, version, name, parseddata, _, err := h.parseUpdate(data)
 	if err != nil {
-		log.Error("Invalid resource chunk")
+		log.Warn("Invalid resource chunk")
 		return false
 	}
 
@@ -262,14 +262,14 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 	digest := h.keyDataHash(addr, parseddata)
 	publicKey, err := crypto.SigToPub(digest.Bytes(), signature[:])
 	if err != nil {
-		log.Error("Unparseable signature in resource chunk %s", addr)
+		log.Warn("Unparseable signature in resource chunk %s", addr)
 		return false
 	}
 	signAddr := crypto.PubkeyToAddress(*publicKey)
 	nameHash := ens.EnsNode(name)
 	checkAddr := h.resourceHash(period, version, nameHash, signAddr)
 	if !bytes.Equal(checkAddr, addr) {
-		log.Error("Invalid signature on resource chunk")
+		log.Warn("Invalid signature on resource chunk")
 		return false
 	}
 	return true
