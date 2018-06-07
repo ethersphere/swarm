@@ -18,7 +18,6 @@ package stream
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -215,7 +214,8 @@ R:
 			continue R
 		}
 		if err != storage.ErrFetching {
-			panic(fmt.Sprintf("not in db? addr %v chunk %v", req.Addr, chunk))
+			log.Error("processReceivedChunks db error", "addr", req.Addr, "err", err, "chunk", chunk)
+			continue R
 		}
 		select {
 		case <-chunk.ReqC:
