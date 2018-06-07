@@ -27,59 +27,48 @@ import (
 	"hash"
 )
 
-// RefHasher is the non-optimized easy to read reference implementation of BMT
+// RefHasher is the non-optimized easy-to-read reference implementation of BMT
 type RefHasher struct {
-	span    int // c * 32, where c = 2 ^ ceil(log2(count)), where count = ceil(length / 32)
+	maxSize int // c * 32, where c = 2 ^ ceil(log2(count)), where count = ceil(length / 32)
 	section int // 64
-	cap     int // 4096
-	h       hash.Hash
+	hasher  hash.Hash
 }
 
 // NewRefHasher returns a new RefHasher
 func NewRefHasher(hasher BaseHasher, count int) *RefHasher {
 	h := hasher()
 	hashsize := h.Size()
-	maxsize := hashsize * count
 	c := 2
 	for ; c < count; c *= 2 {
 	}
-	if c > 2 {
-		c /= 2
-	}
 	return &RefHasher{
 		section: 2 * hashsize,
-		span:    c * hashsize,
-		cap:     maxsize,
-		h:       h,
+		maxSize: c * hashsize,
+		hasher:  h,
 	}
 }
 
 // Hash returns the BMT hash of the byte slice
 // implements the SwarmHash interface
 func (rh *RefHasher) Hash(d []byte) []byte {
-	if len(d) > rh.cap {
-		d = d[:rh.cap]
+	data := make([]byte, rh.maxSize)
+	l := len(d)
+	if l > rh.maxSize {
+		l = rh.maxSize
 	}
-
-	return rh.hash(d, rh.span)
+	copy(data, d[:l])
+	return rh.hash(data, rh.maxSize)
 }
 
-func (rh *RefHasher) hash(d []byte, s int) []byte {
-	l := len(d)
-	left := d
-	var right []byte
-	if l > rh.section {
-		for ; s >= l; s /= 2 {
-		}
-		left = rh.hash(d[:s], s)
-		right = d[s:]
-		if l-s > rh.section/2 {
-			right = rh.hash(right, s)
-		}
+func (rh *RefHasher) hash(d []byte, l int) []byte {
+	var section []byte
+	if l == rh.section {
+		section = d
+	} else {
+		l /= 2
+		section = append(rh.hash(d[:l], l), rh.hash(d[l:], l)...)
 	}
-	defer rh.h.Reset()
-	rh.h.Write(left)
-	rh.h.Write(right)
-	h := rh.h.Sum(nil)
-	return h
+	rh.hasher.Reset()
+	rh.hasher.Write(section)
+	return rh.hasher.Sum(nil)
 }
