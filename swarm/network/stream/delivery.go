@@ -183,6 +183,9 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	// TODO: call the retrieve function of the outgoing syncer
 	if req.SkipCheck {
 		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Addr)
+		if length := len(chunk.SData); length < 9 {
+			log.Error("Chunk.SData to deliver is too short", "len(chunk.SData)", length, "address", chunk.Addr)
+		}
 		return sp.Deliver(chunk, s.priority)
 	}
 	streamer.deliveryC <- chunk.Addr[:]
