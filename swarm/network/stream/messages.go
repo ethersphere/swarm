@@ -320,6 +320,9 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 			}
 			chunk := storage.NewChunk(hash, nil)
 			chunk.SData = data
+			if length := len(chunk.SData); length < 9 {
+				log.Error("Chunk.SData to sync is too short", "len(chunk.SData)", length, "address", chunk.Addr)
+			}
 			if err := p.Deliver(chunk, s.priority); err != nil {
 				return err
 			}
