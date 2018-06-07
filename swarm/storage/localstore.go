@@ -131,7 +131,6 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	self.memStore.Put(chunk)
 
 	if memChunk != nil && memChunk.ReqC != nil {
-		log.Debug("closing ReqC", "addr", memChunk.Addr)
 		close(memChunk.ReqC)
 	}
 
