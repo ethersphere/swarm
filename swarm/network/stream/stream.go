@@ -23,12 +23,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/pot"
@@ -444,7 +444,7 @@ func (r *Registry) updateSyncing() {
 		for stream := range streams {
 			log.Debug("Remove sync server", "peer", id, "stream", stream)
 			err := r.Quit(peer.ID(), stream)
-			if err != nil {
+			if err != nil && err != p2p.ErrShuttingDown {
 				log.Error("quit", "err", err, "peer", peer.ID(), "stream", stream)
 			}
 		}

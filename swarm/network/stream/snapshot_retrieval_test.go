@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -83,11 +83,11 @@ func TestFileRetrieval(t *testing.T) {
 	if *nodes != 0 {
 		fileRetrievalTest(t, *nodes)
 	} else {
-		nodeCnt := []int{32}
+		nodeCnt := []int{16}
 		//if the `longrunning` flag has been provided
 		//run more test combinations
 		if *longrunning {
-			nodeCnt = append(nodeCnt, 64, 128)
+			nodeCnt = append(nodeCnt, 32, 64, 128)
 		}
 		for _, n := range nodeCnt {
 			fileRetrievalTest(t, n)

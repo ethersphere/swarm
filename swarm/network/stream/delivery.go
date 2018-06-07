@@ -18,13 +18,12 @@ package stream
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -183,6 +182,9 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	// TODO: call the retrieve function of the outgoing syncer
 	if req.SkipCheck {
 		log.Trace("deliver", "peer", sp.ID(), "hash", chunk.Addr)
+		if length := len(chunk.SData); length < 9 {
+			log.Error("Chunk.SData to deliver is too short", "len(chunk.SData)", length, "address", chunk.Addr)
+		}
 		return sp.Deliver(chunk, s.priority)
 	}
 	streamer.deliveryC <- chunk.Addr[:]
@@ -212,7 +214,8 @@ R:
 			continue R
 		}
 		if err != storage.ErrFetching {
-			panic(fmt.Sprintf("not in db? addr %v chunk %v", req.Addr, chunk))
+			log.Error("processReceivedChunks db error", "addr", req.Addr, "err", err, "chunk", chunk)
+			continue R
 		}
 		select {
 		case <-chunk.ReqC:
