@@ -212,6 +212,7 @@ R:
 			continue R
 		}
 		if err != storage.ErrFetching {
+			log.Error("processReceivedChunks db error", "addr", req.Addr, "err", err, "chunk", chunk)
 			panic(fmt.Sprintf("not in db? addr %v chunk %v", req.Addr, chunk))
 		}
 		select {
