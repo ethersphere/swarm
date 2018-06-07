@@ -58,6 +58,7 @@ type MountInfo struct {
 	fuseConnection *fuse.Conn
 	swarmApi       *api.Api
 	lock           *sync.RWMutex
+	serveClose     chan struct{}
 }
 
 func NewMountInfo(mhash, mpoint string, sapi *api.Api) *MountInfo {
@@ -70,6 +71,7 @@ func NewMountInfo(mhash, mpoint string, sapi *api.Api) *MountInfo {
 		fuseConnection: nil,
 		swarmApi:       sapi,
 		lock:           &sync.RWMutex{},
+		serveClose:     make(chan struct{}),
 	}
 	return newMountInfo
 }
@@ -163,7 +165,7 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 			log.Warn("swarmfs could not serve the requested hash", "error", err)
 			serverr <- err
 		}
-
+		mi.serveClose <- struct{}{}
 	}()
 
 	// Check if the mount process has an error to report.
@@ -178,6 +180,10 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 		return nil, err
 
 	case <-fconn.Ready:
+		if err := fconn.MountError; err != nil {
+			log.Error("Mounting error from fuse driver: ", "err", err)
+			return nil, err
+		}
 		log.Info("swarmfs now served over FUSE", "manifest", mhash, "mountpoint", cleanedMountPoint)
 	}
 
@@ -209,8 +215,13 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 		}
 	}
 
-	mountInfo.fuseConnection.Close()
+	err = mountInfo.fuseConnection.Close()
+	if err != nil {
+		return nil, err
+	}
 	delete(swarmfs.activeMounts, cleanedMountPoint)
+
+	<-mountInfo.serveClose
 
 	succString := fmt.Sprintf("swarmfs unmounting %v succeeded", cleanedMountPoint)
 	log.Info(succString)
