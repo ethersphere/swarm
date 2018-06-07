@@ -59,7 +59,7 @@ var (
 	apiGetInvalid      = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
-// Resolver - interface resolve a domain name to a hash using ENS
+// Resolver interface resolve a domain name to a hash using ENS
 type Resolver interface {
 	Resolve(string) (common.Hash, error)
 }
@@ -82,7 +82,7 @@ func NewNoResolverError(tld string) *NoResolverError {
 	return &NoResolverError{TLD: tld}
 }
 
-// Error - NoResolverError implements error
+// Error NoResolverError implements error
 func (e *NoResolverError) Error() string {
 	if e.TLD == "" {
 		return "no ENS resolver"
@@ -112,7 +112,7 @@ func MultiResolverOptionWithResolver(r ResolveValidator, tld string) MultiResolv
 	}
 }
 
-// MultiResolverOptionWithNameHash - is unused at the time of this writing
+// MultiResolverOptionWithNameHash is unused at the time of this writing
 func MultiResolverOptionWithNameHash(nameHash func(string) common.Hash) MultiResolverOption {
 	return func(m *MultiResolver) {
 		m.nameHash = nameHash
@@ -216,7 +216,7 @@ type API struct {
 	dns       Resolver
 }
 
-// NewAPI - the api constructor initialises a new API instance.
+// NewAPI the api constructor initialises a new API instance.
 func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler) (self *API) {
 	self = &API{
 		fileStore: fileStore,
@@ -226,14 +226,14 @@ func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Han
 	return
 }
 
-// Upload - to be used only in TEST
+// Upload to be used only in TEST
 func (a *API) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
 	fs := NewFileSystem(a)
 	hash, err = fs.Upload(uploadDir, index, toEncrypt)
 	return hash, err
 }
 
-// Retrieve - FileStore reader API
+// Retrieve FileStore reader API
 func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
 	return a.fileStore.Retrieve(addr)
 }
