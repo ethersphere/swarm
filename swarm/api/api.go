@@ -369,7 +369,7 @@ func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.
 				if err != nil {
 					apiGetInvalid.Inc(1)
 					status = http.StatusUnprocessableEntity
-					log.Warn(fmt.Sprintf("invalid resource multihash: %v", err))
+					log.Warn("invalid resource multihash", "err", err)
 					return reader, mimeType, status, nil, err
 				}
 				manifestAddr = storage.Address(decodedMultihash)
