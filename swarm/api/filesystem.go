@@ -27,7 +27,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -42,7 +42,7 @@ func NewFileSystem(api *Api) *FileSystem {
 }
 
 // Upload replicates a local directory as a manifest file and uploads it
-// using dpa store
+// using FileStore store
 // This function waits the chunks to be stored.
 // TODO: localpath should point to a manifest
 //
@@ -114,7 +114,7 @@ func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, err
 				stat, _ := f.Stat()
 				var hash storage.Address
 				var wait func()
-				hash, wait, err = self.api.dpa.Store(f, stat.Size(), toEncrypt)
+				hash, wait, err = self.api.fileStore.Store(f, stat.Size(), toEncrypt)
 				if hash != nil {
 					list[i].Hash = hash.Hex()
 				}
@@ -143,7 +143,7 @@ func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, err
 	}
 
 	trie := &manifestTrie{
-		dpa: self.api.dpa,
+		fileStore: self.api.fileStore,
 	}
 	quitC := make(chan bool)
 	for i, entry := range list {
@@ -200,7 +200,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	quitC := make(chan bool)
-	trie, err := loadManifest(self.api.dpa, addr, quitC)
+	trie, err := loadManifest(self.api.fileStore, addr, quitC)
 	if err != nil {
 		log.Warn(fmt.Sprintf("fs.Download: loadManifestTrie error: %v", err))
 		return err
@@ -245,7 +245,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 		}
 		go func(i int, entry *downloadListEntry) {
 			defer wg.Done()
-			err := retrieveToFile(quitC, self.api.dpa, entry.addr, entry.path)
+			err := retrieveToFile(quitC, self.api.fileStore, entry.addr, entry.path)
 			if err != nil {
 				select {
 				case errC <- err:
@@ -268,12 +268,12 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 }
 
-func retrieveToFile(quitC chan bool, dpa *storage.DPA, addr storage.Address, path string) error {
+func retrieveToFile(quitC chan bool, fileStore *storage.FileStore, addr storage.Address, path string) error {
 	f, err := os.Create(path) // TODO: basePath separators
 	if err != nil {
 		return err
 	}
-	reader, _ := dpa.Retrieve(addr)
+	reader, _ := fileStore.Retrieve(addr)
 	writer := bufio.NewWriter(f)
 	size, err := reader.Size(quitC)
 	if err != nil {

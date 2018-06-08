@@ -33,7 +33,6 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -43,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/fuse"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream"
 	"github.com/ethereum/go-ethereum/swarm/pss"
@@ -63,10 +63,10 @@ var (
 
 // the swarm stack
 type Swarm struct {
-	config      *api.Config  // swarm configuration
-	api         *api.Api     // high level api layer (fs/manifest)
-	dns         api.Resolver // DNS registrar
-	dpa         *storage.DPA // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	config      *api.Config        // swarm configuration
+	api         *api.Api           // high level api layer (fs/manifest)
+	dns         api.Resolver       // DNS registrar
+	fileStore   *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer    *stream.Registry
 	bzz         *network.Bzz       // the logistic manager
 	backend     chequebook.Backend // simple blockchain Backend
@@ -182,10 +182,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		SyncUpdateDelay: config.SyncUpdateDelay,
 	})
 
-	// set up DPA, the cloud storage local access layer
-	dpaChunkStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
+	// set up NetStore, the cloud storage local access layer
+	netStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.dpa = storage.NewDPA(dpaChunkStore, self.config.DPAParams)
+	self.fileStore = storage.NewFileStore(netStore, self.config.FileStoreParams)
 
 	var resourceHandler *mru.Handler
 	rhparams := &mru.HandlerParams{
@@ -211,7 +211,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if err != nil {
 		return nil, err
 	}
-	resourceHandler.SetStore(dpaChunkStore)
+	resourceHandler.SetStore(netStore)
 
 	var validators []storage.ChunkValidator
 	validators = append(validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)))
@@ -241,7 +241,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil
 		})
 
-	self.api = api.NewApi(self.dpa, self.dns, resourceHandler)
+	self.api = api.NewApi(self.fileStore, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 

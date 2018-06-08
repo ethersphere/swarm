@@ -33,7 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -41,7 +41,7 @@ const (
 	signatureLength         = 65
 	metadataChunkOffsetSize = 18
 	DbDirName               = "resource"
-	chunkSize               = 4096 // temporary until we implement DPA in the resourcehandler
+	chunkSize               = 4096 // temporary until we implement FileStore in the resourcehandler
 	defaultStoreTimeout     = 4000 * time.Millisecond
 	hasherCount             = 8
 	resourceHash            = storage.SHA3Hash
@@ -361,7 +361,7 @@ func (self *Handler) GetVersion(nameHash string) (uint32, error) {
 	return rsrc.version, nil
 }
 
-// \TODO should be hashsize * branches from the chosen chunker, implement with dpa
+// \TODO should be hashsize * branches from the chosen chunker, implement with FileStore
 func (self *Handler) chunkSize() int64 {
 	return chunkSize
 }
@@ -1073,7 +1073,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*Handler, error) {
 	}
 	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHash)))
 	localStore.Validators = append(localStore.Validators, rh)
-	dpaStore := storage.NewNetStore(localStore, nil)
-	rh.SetStore(dpaStore)
+	netStore := storage.NewNetStore(localStore, nil)
+	rh.SetStore(netStore)
 	return rh, nil
 }

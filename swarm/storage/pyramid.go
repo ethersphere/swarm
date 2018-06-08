@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 /*
@@ -459,7 +459,8 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				if parent.branchCount == 1 {
+				// Check if we are appending or the chunk is the only one.
+				if parent.branchCount == 1 && (self.depth() == 0 || isAppend) {
 					// Data is exactly one chunk.. pick the last chunk key as root
 					chunkWG.Wait()
 					lastChunksKey := parent.chunk[8 : 8+self.hashSize]
@@ -474,7 +475,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 		// Data ended in chunk boundary.. just signal to start bulding tree
 		if readBytes == 0 {
-			self.buildTree(isAppend, parent, chunkWG, true)
+			self.buildTree(isAppend, parent, chunkWG, true, nil)
 			break
 		} else {
 			pkey := self.enqueueDataChunk(chunkData, uint64(readBytes), parent, chunkWG)
@@ -489,16 +490,26 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 				// only one data chunk .. so dont add any parent chunk
 				if parent.branchCount <= 1 {
 					chunkWG.Wait()
-					copy(self.rootKey, pkey)
+
+					if isAppend || self.depth() == 0 {
+						// No need to build the tree if the depth is 0
+						// or we are appending.
+						// Just use the last key.
+						copy(self.rootKey, pkey)
+					} else {
+						// We need to build the tree and and provide the lonely
+						// chunk key to replace the last tree chunk key.
+						self.buildTree(isAppend, parent, chunkWG, true, pkey)
+					}
 					break
 				}
 
-				self.buildTree(isAppend, parent, chunkWG, true)
+				self.buildTree(isAppend, parent, chunkWG, true, nil)
 				break
 			}
 
 			if parent.branchCount == self.branches {
-				self.buildTree(isAppend, parent, chunkWG, false)
+				self.buildTree(isAppend, parent, chunkWG, false, nil)
 				parent = NewTreeEntry(self)
 			}
 
@@ -514,7 +525,7 @@ func (self *PyramidChunker) prepareChunks(isAppend bool) {
 
 }
 
-func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync.WaitGroup, last bool) {
+func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync.WaitGroup, last bool, lonelyChunkKey []byte) {
 	chunkWG.Wait()
 	self.enqueueTreeChunk(ent, chunkWG, last)
 
@@ -595,6 +606,12 @@ func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sy
 					copy(newEntry.chunk[8+(index*self.hashSize):8+((index+1)*self.hashSize)], entry.key[:self.hashSize])
 					index++
 				}
+				// Lonely chunk key is the key of the last chunk that is only one on the last branch.
+				// In this case, ignore the its tree chunk key and replace it with the lonely chunk key.
+				if lonelyChunkKey != nil {
+					// Overwrite the last tree chunk key with the lonely data chunk key.
+					copy(newEntry.chunk[int64(len(newEntry.chunk))-self.hashSize:], lonelyChunkKey[:self.hashSize])
+				}
 
 				self.enqueueTreeChunk(newEntry, chunkWG, last)
 
@@ -605,7 +622,10 @@ func (self *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sy
 		if !isAppend {
 			chunkWG.Wait()
 			if compress {
-				self.chunkLevel[lvl] = nil
+				// Remove the chunk level by cutting chunkLevel slice.
+				// Do not set the chunkLevel to nil, as it breaks tree building
+				// in edge cases.
+				self.chunkLevel = append(self.chunkLevel[:lvl], append(self.chunkLevel[lvl+1:], nil)...)
 			}
 		}
 	}
@@ -651,4 +671,17 @@ func (self *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, pare
 
 	return pkey
 
+}
+
+// depth returns the number of chunk levels.
+// It is used to detect if there is only one data chunk
+// left for the last branch.
+func (self *PyramidChunker) depth() (d int) {
+	for _, l := range self.chunkLevel {
+		if l == nil {
+			return
+		}
+		d++
+	}
+	return
 }

@@ -18,9 +18,12 @@ package swarm
 
 import (
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"path"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -75,8 +78,8 @@ func TestNewSwarm(t *testing.T) {
 				if s.streamer == nil {
 					t.Error("streamer not initialized")
 				}
-				if s.dpa == nil {
-					t.Error("dpa not initialized")
+				if s.fileStore == nil {
+					t.Error("fileStore not initialized")
 				}
 				if s.lstore.Validators == nil {
 					t.Error("localstore validators not initialized")
@@ -272,5 +275,90 @@ func TestParseEnsAPIAddress(t *testing.T) {
 				t.Errorf("expected TLD %q, got %q", x.tld, tld)
 			}
 		})
+	}
+}
+
+// TestLocalStoreAndRetrieve runs multiple tests where different size files are uploaded
+// to a single Swarm instance using API Store and checked against the content returned
+// by API Retrieve function.
+//
+// This test is intended to validate functionality of chunker store and join functions
+// and their intergartion into Swarm, without comparing results with ones produced by
+// another chunker implementation, as it is done in swarm/storage tests.
+func TestLocalStoreAndRetrieve(t *testing.T) {
+	config := api.NewConfig()
+
+	dir, err := ioutil.TempDir("", "node")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+
+	config.Path = dir
+
+	privkey, err := crypto.GenerateKey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	config.Init(privkey)
+
+	swarm, err := NewSwarm(config, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// by default, test only the lonely chunk cases
+	sizes := []int{1, 60, 4097, 524288 + 1, 7*524288 + 1, 128*524288 + 1}
+
+	if *longrunning {
+		// test broader set of cases if -longruning flag is set
+		sizes = append(sizes, 83, 179, 253, 1024, 4095, 4096, 8191, 8192, 8193, 12287, 12288, 12289, 123456, 2345678, 67298391, 524288, 524288+4096, 524288+4097, 7*524288, 7*524288+4096, 7*524288+4097, 128*524288, 128*524288+4096, 128*524288+4097)
+	}
+	for _, n := range sizes {
+		testLocalStoreAndRetrieve(t, swarm, n, true)
+		testLocalStoreAndRetrieve(t, swarm, n, false)
+	}
+}
+
+// testLocalStoreAndRetrieve is using a single Swarm instance, to upload
+// a file of length n with optional random data using API Store function,
+// and checks the output of API Retrieve function on the same instance.
+// This is a regression test for issue
+// https://github.com/ethersphere/go-ethereum/issues/639
+// where pyramid chunker did not split correctly files with lengths that
+// are edge cases for chunk and tree parameters, depending whether there
+// is a tree chunk with only one data chunk and how the compress functionality
+// changed the tree.
+func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData bool) {
+	slice := make([]byte, n)
+	if randomData {
+		rand.Seed(time.Now().UnixNano())
+		rand.Read(slice)
+	}
+	dataPut := string(slice)
+
+	k, wait, err := swarm.api.Store(strings.NewReader(dataPut), int64(len(dataPut)), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wait != nil {
+		wait()
+	}
+
+	r, _ := swarm.api.Retrieve(k)
+
+	d, err := ioutil.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dataGet := string(d)
+
+	if len(dataPut) != len(dataGet) {
+		t.Fatalf("data not matched: length expected %v, got %v", len(dataPut), len(dataGet))
+	} else {
+		if dataPut != dataGet {
+			t.Fatal("data not matched")
+		}
 	}
 }

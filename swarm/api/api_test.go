@@ -28,7 +28,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -38,11 +38,11 @@ func testApi(t *testing.T, f func(*Api, bool)) {
 		t.Fatalf("unable to create temp dir: %v", err)
 	}
 	defer os.RemoveAll(datadir)
-	dpa, err := storage.NewLocalDPA(datadir, make([]byte, 32))
+	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32))
 	if err != nil {
 		return
 	}
-	api := NewApi(dpa, nil, nil)
+	api := NewApi(fileStore, nil, nil)
 	f(api, false)
 	f(api, true)
 }

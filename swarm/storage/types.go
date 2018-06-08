@@ -28,8 +28,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 const MaxPO = 16

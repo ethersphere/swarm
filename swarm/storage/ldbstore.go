@@ -15,7 +15,7 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 // disk storage layer for the package bzz
-// DbStore implements the ChunkStore interface and is used by the DPA as
+// DbStore implements the ChunkStore interface and is used by the FileStore as
 // persistent storage of chunks
 // it implements purging based on access count allowing for external control of
 // max capacity
@@ -33,9 +33,9 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"

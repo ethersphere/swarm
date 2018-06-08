@@ -1,3 +1,19 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 // +build !nopssprotocol,!nopssping
 
 package pss
@@ -6,9 +22,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 // Generic ping protocol implementation for
@@ -24,18 +40,18 @@ type Ping struct {
 	InC  chan bool // optional, report back to calling code
 }
 
-func (self *Ping) pingHandler(msg interface{}) error {
+func (p *Ping) pingHandler(msg interface{}) error {
 	var pingmsg *PingMsg
 	var ok bool
 	if pingmsg, ok = msg.(*PingMsg); !ok {
 		return errors.New("invalid msg")
 	}
-	log.Debug("ping handler", "msg", pingmsg, "outc", self.OutC)
-	if self.InC != nil {
-		self.InC <- pingmsg.Pong
+	log.Debug("ping handler", "msg", pingmsg, "outc", p.OutC)
+	if p.InC != nil {
+		p.InC <- pingmsg.Pong
 	}
-	if self.Pong && !pingmsg.Pong {
-		self.OutC <- true
+	if p.Pong && !pingmsg.Pong {
+		p.OutC <- true
 	}
 	return nil
 }

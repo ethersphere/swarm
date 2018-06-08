@@ -26,9 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
@@ -44,7 +44,7 @@ const (
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
-	*storage.DPAParams
+	*storage.FileStoreParams
 	*storage.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.LocalProfile
@@ -76,7 +76,7 @@ func NewConfig() (self *Config) {
 
 	self = &Config{
 		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
-		DPAParams:        storage.NewDPAParams(),
+		FileStoreParams:  storage.NewFileStoreParams(),
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
 		Swap:              swap.NewDefaultSwapParams(),

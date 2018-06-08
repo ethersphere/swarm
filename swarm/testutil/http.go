@@ -24,8 +24,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
@@ -61,7 +64,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *Tes
 		os.RemoveAll(dir)
 		t.Fatal(err)
 	}
-	dpa := storage.NewDPA(localStore, storage.NewDPAParams())
+	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams())
 
 	// mutable resources test setup
 	resourceDir, err := ioutil.TempDir("", "swarm-resource-test")
@@ -79,13 +82,13 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *Tes
 		t.Fatal(err)
 	}
 
-	a := api.NewApi(dpa, nil, rh)
+	a := api.NewApi(fileStore, nil, rh)
 	srv := httptest.NewServer(serverFunc(a))
 	return &TestSwarmServer{
-		Server: srv,
-		Dpa:    dpa,
-		dir:    dir,
-		Hasher: storage.MakeHashFunc(storage.DefaultHash)(),
+		Server:    srv,
+		FileStore: fileStore,
+		dir:       dir,
+		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
 		cleanup: func() {
 			srv.Close()
 			rh.Close()
@@ -97,12 +100,20 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.Api) TestServer) *Tes
 
 type TestSwarmServer struct {
 	*httptest.Server
-	Hasher  storage.SwarmHash
-	Dpa     *storage.DPA
-	dir     string
-	cleanup func()
+	Hasher    storage.SwarmHash
+	FileStore *storage.FileStore
+	dir       string
+	cleanup   func()
 }
 
 func (t *TestSwarmServer) Close() {
 	t.cleanup()
+}
+
+// EnableMetrics is starting InfluxDB reporter so that we collect stats when running tests locally
+func EnableMetrics() {
+	metrics.Enabled = true
+	go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 1*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
+		"host": "test",
+	})
 }

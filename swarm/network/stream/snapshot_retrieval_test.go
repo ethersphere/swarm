@@ -26,9 +26,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	streamTesting "github.com/ethereum/go-ethereum/swarm/network/stream/testing"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -83,11 +83,11 @@ func TestFileRetrieval(t *testing.T) {
 	if *nodes != 0 {
 		fileRetrievalTest(t, *nodes)
 	} else {
-		nodeCnt := []int{32}
+		nodeCnt := []int{16}
 		//if the `longrunning` flag has been provided
 		//run more test combinations
 		if *longrunning {
-			nodeCnt = append(nodeCnt, 64, 128)
+			nodeCnt = append(nodeCnt, 32, 64, 128)
 		}
 		for _, n := range nodeCnt {
 			fileRetrievalTest(t, n)
@@ -406,11 +406,11 @@ func runFileRetrievalTest(nodeCount int) error {
 		//if there are more than one chunk, test only succeeds if all expected chunks are found
 		allSuccess := true
 
-		//check on the node's dpa (netstore)
-		dpa := registries[id].dpa
+		//check on the node's FileStore (netstore)
+		fileStore := registries[id].fileStore
 		//check all chunks
 		for i, hash := range conf.hashes {
-			reader, _ := dpa.Retrieve(hash)
+			reader, _ := fileStore.Retrieve(hash)
 			//check that we can read the file size and that it corresponds to the generated file size
 			if s, err := reader.Size(nil); err != nil || s != int64(len(randomFiles[i])) {
 				allSuccess = false
@@ -693,11 +693,11 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		//if there are more than one chunk, test only succeeds if all expected chunks are found
 		allSuccess := true
 
-		//check on the node's dpa (netstore)
-		dpa := registries[id].dpa
+		//check on the node's FileStore (netstore)
+		fileStore := registries[id].fileStore
 		//check all chunks
 		for _, chnk := range conf.hashes {
-			reader, _ := dpa.Retrieve(chnk)
+			reader, _ := fileStore.Retrieve(chnk)
 			//assuming that reading the Size of the chunk is enough to know we found it
 			if s, err := reader.Size(nil); err != nil || s != chunkSize {
 				allSuccess = false
@@ -758,14 +758,14 @@ func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Address, []string,
 	//for every node, generate a file and upload
 	for i, n := range nodes {
 		id := n.ID()
-		dpa := registries[id].dpa
+		fileStore := registries[id].fileStore
 		//generate a file
 		rfiles[i], err = generateRandomFile()
 		if err != nil {
 			return nil, nil, err
 		}
-		//store it (upload it) on the dpa
-		rk, wait, err := dpa.Store(strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
+		//store it (upload it) on the FileStore
+		rk, wait, err := fileStore.Store(strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
 		log.Debug("Uploaded random string file to node")
 		wait()
 		if err != nil {
