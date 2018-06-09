@@ -365,19 +365,14 @@ func (self *Api) Get(manifestAddr storage.Address, path string) (reader storage.
 				}
 
 				// validate that data as multihash
-				decodedMultihash, err := multihash.Decode(rsrcData)
+				decodedMultihash, err := multihash.FromMultihash(rsrcData)
 				if err != nil {
 					apiGetInvalid.Inc(1)
-					status = http.StatusInternalServerError
-					log.Warn(fmt.Sprintf("could not decode resource multihash: %v", err))
-					return reader, mimeType, status, nil, err
-				} else if decodedMultihash.Code != multihash.KECCAK_256 {
-					apiGetInvalid.Inc(1)
 					status = http.StatusUnprocessableEntity
-					log.Warn(fmt.Sprintf("invalid resource multihash code: %x", decodedMultihash.Code))
+					log.Warn("invalid resource multihash", "err", err)
 					return reader, mimeType, status, nil, err
 				}
-				manifestAddr = storage.Address(decodedMultihash.Digest)
+				manifestAddr = storage.Address(decodedMultihash)
 				log.Trace("resource is multihash", "key", manifestAddr)
 
 				// get the manifest the multihash digest points to
