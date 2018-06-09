@@ -58,7 +58,7 @@ type mockFetchFuncFactory struct {
 	fetcher *mockFetcher
 }
 
-func (m *mockFetchFuncFactory) createFetchFunc(ctx context.Context, _ Address, peers *sync.Map) FetchFunc {
+func (m *mockFetchFuncFactory) newFetcherFunc(ctx context.Context, _ Address, peers *sync.Map) FetchFunc {
 	m.fetcher.peers = peers
 	m.fetcher.quit = ctx.Done()
 	return m.fetcher.fetch
@@ -86,7 +86,7 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 	mockFetchFuncFactory := &mockFetchFuncFactory{
 		fetcher: fetcher,
 	}
-	netStore, err := NewNetStore(localStore, mockFetchFuncFactory)
+	netStore, err := NewNetStore(localStore, mockFetchFuncFactory.newFetcherFunc)
 	if err != nil {
 		t.Fatal(err)
 	}

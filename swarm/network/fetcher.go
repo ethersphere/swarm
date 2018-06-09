@@ -44,11 +44,13 @@ type Fetcher struct {
 	skipCheck bool
 }
 
+// FetcherFactory is initialised with a request function and can create fetchers
 type FetcherFactory struct {
 	request   RequestFunc
 	skipCheck bool
 }
 
+// NewFetcherFactory takes a request function and skip check parameter
 func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 	return &FetcherFactory{
 		request:   request,
@@ -56,8 +58,10 @@ func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 	}
 }
 
-func (f *FetcherFactory) createFetcher(ctx context.Context, offer storage.Address, peers *sync.Map) storage.FetchFunc {
-	fetcher := NewFetcher(offer, f.request, f.skipCheck)
+// New contructs a new fetcher, starts it and returns a fetch function
+// to be called by the NetStore when handling requests and offers
+func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peers *sync.Map) storage.FetchFunc {
+	fetcher := NewFetcher(source, f.request, f.skipCheck)
 	fetcher.start(ctx, peers)
 	return fetcher.fetch
 }
@@ -73,7 +77,7 @@ func NewFetcher(addr storage.Address, request RequestFunc, skipCheck bool) *Fetc
 	}
 }
 
-// fetch is called by NetStore evey time there is a request or source for a chunk
+// fetch is called by NetStore evey time there is a request or offer for a chunk
 func (f *Fetcher) fetch(ctx context.Context) {
 	// put source/request
 	var source storage.Address
@@ -87,13 +91,13 @@ func (f *Fetcher) fetch(ctx context.Context) {
 }
 
 // start prepares the Fetcher
-// it keeps the Fetcher alive
+// it keeps the Fetcher alive within the lifecycle of the passed context
 func (f *Fetcher) start(ctx context.Context, peers *sync.Map) {
 	var (
 		doRequest bool              // determines if retrieval is initiated in the current iteration
 		wait      *time.Timer       // timer for search timeout
 		waitC     <-chan time.Time  // timer channel
-		sources   []storage.Address //  known sources, ie. peers that offered the chunk
+		sources   []storage.Address // known sources, ie. peers that offered the chunk
 		requested bool              // true if the chunk was actually requested
 	)
 	gone := make(chan storage.Address) // channel to signal that a peer we requested from disconnected
@@ -107,15 +111,15 @@ func (f *Fetcher) start(ctx context.Context, peers *sync.Map) {
 	for {
 		select {
 
-		// accept a request or offer.
+		// accept a request or source.
 		case source := <-f.sourceC:
 			if source != nil {
 				log.Debug("new source", "peer addr", source, "request addr", f.addr)
 				// 1) the chunk is offered by a syncing peer
-				// adding to known sources
+				// add to known sources
 				requested = true
 				sources = append(sources, source)
-				// launch a request to it iff the chunk was requested (not just expected because its offered by a syncing peer)
+				// launch a request to the source iff the chunk was requested (not just expected because its offered by a syncing peer)
 				doRequest = requested
 			} else {
 				log.Debug("new request", "request addr", f.addr)
@@ -135,7 +139,7 @@ func (f *Fetcher) start(ctx context.Context, peers *sync.Map) {
 		// search timeout: too much time passed since the last request,
 		// extend the search to a new peer if we can find one
 		case <-waitC:
-			log.Debug(" search timed out rerequesting", "request addr", f.addr)
+			log.Debug("search timed out: rerequesting", "request addr", f.addr)
 			doRequest = true
 
 			// all Fetcher context closed, can quit

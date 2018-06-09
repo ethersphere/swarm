@@ -25,26 +25,31 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
+type (
+	FetchFunc    func(ctx context.Context)
+	NewFetchFunc func(ctx context.Context, offer Address, peers *sync.Map) FetchFunc
+)
+
 // NetStore is an extention of local storage
 // it implements the DPA (distributed preimage archive) interface
 // on request it initiates remote cloud retrieval using a fetcher
 // fetchers are unique to a chunk and are stored in fetchers LRU memory cache
 type NetStore struct {
-	mu               sync.Mutex
-	store            ChunkStore
-	fetchers         *lru.Cache
-	fetchFuncFactory FetchFuncFactory
+	mu           sync.Mutex
+	store        ChunkStore
+	fetchers     *lru.Cache
+	newFetchFunc NewFetchFunc
 }
 
-func NewNetStore(store ChunkStore, fetchFuncFactory FetchFuncFactory) (*NetStore, error) {
+func NewNetStore(store ChunkStore, newFetchFunc NewFetchFunc) (*NetStore, error) {
 	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
 	if err != nil {
 		return nil, err
 	}
 	return &NetStore{
-		store:            store,
-		fetchers:         fetchers,
-		fetchFuncFactory: fetchFuncFactory,
+		store:        store,
+		fetchers:     fetchers,
+		newFetchFunc: newFetchFunc,
 	}, nil
 }
 
@@ -132,17 +137,11 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 		cancel()
 	}
 	peers := &sync.Map{}
-	fetcher := newFetcher(ref, n.fetchFuncFactory.createFetchFunc(ctx, ref, peers), destroy, peers)
+	fetcher := newFetcher(ref, n.newFetchFunc(ctx, ref, peers), destroy, peers)
 	n.fetchers.Add(key, fetcher)
 
 	return fetcher
 }
-
-type FetchFuncFactory interface {
-	createFetchFunc(ctx context.Context, offer Address, peers *sync.Map) FetchFunc
-}
-
-type FetchFunc func(ctx context.Context)
 
 type fetcher struct {
 	addr       Address       // adress of chunk

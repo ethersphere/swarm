@@ -160,6 +160,10 @@ func (self *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err
 	return chunk, nil
 }
 
+func (self *LocalStore) Has(ctx context.Context, ref Address) func(context.Context) (Chunk, error) {
+	panic("not implemented")
+}
+
 func (self *LocalStore) BinIndex(po uint8) uint64 {
 	return self.DbStore.BinIndex(po)
 }

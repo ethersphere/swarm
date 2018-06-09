@@ -360,11 +360,11 @@ func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Str
 
 type testExternalClient struct {
 	hashes               chan []byte
-	dpa                  DPA
+	store                storage.ChunkStore
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(dpa DPA) *testExternalClient {
+func newTestExternalClient(store storage.ChunkStore) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
 		dpa:                  dpa,

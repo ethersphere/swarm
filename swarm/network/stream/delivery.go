@@ -50,7 +50,7 @@ type Delivery struct {
 	getPeer   func(discover.NodeID) *Peer
 }
 
-func NewDelivery(overlay network.Overlay, fileStore FileStore) *Delivery {
+func NewDelivery(overlay network.Overlay, fileStore storage.FileStore) *Delivery {
 	d := &Delivery{
 		fileStore: fileStore,
 		overlay:   overlay,
@@ -71,11 +71,11 @@ type SwarmChunkServer struct {
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
-func NewSwarmChunkServer(fileStore FileStore) *SwarmChunkServer {
+func NewSwarmChunkServer(fileStore storage.FileStore) *SwarmChunkServer {
 	s := &SwarmChunkServer{
 		deliveryC: make(chan []byte, deliveryCap),
 		batchC:    make(chan []byte),
-		fileStore: FileStore,
+		fileStore: fileStore,
 		quit:      make(chan struct{}),
 	}
 	go s.processDeliveries()

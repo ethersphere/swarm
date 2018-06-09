@@ -37,13 +37,17 @@ type SyncDB interface {
 	Iterator(from uint64, to uint64, po uint8, f func(storage.Address, uint64) bool) error
 }
 
+type Has interface {
+	Has(ctx context.Context, ref storage.Address) func(context.Context) (storage.Chunk, error)
+}
+
 // SwarmSyncerServer implements an Server for history syncing on bins
 // offered streams:
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
 	po        uint8
-	dpa       DPA
+	store     storage.ChunkStore
 	syncDB    SyncDB
 	sessionAt uint64
 	start     uint64
@@ -150,7 +154,7 @@ type SwarmSyncerClient struct {
 	sessionReader storage.LazySectionReader
 	retrieveC     chan *storage.Chunk
 	storeC        chan *storage.Chunk
-	dpa           DPA
+	store         storage.ChunkStore
 	// chunker               storage.Chunker
 	currentRoot storage.Address
 	requestFunc func(chunk *storage.Chunk)
@@ -160,9 +164,9 @@ type SwarmSyncerClient struct {
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, dpa DPA, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, store storage.ChunkStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		dpa:    dpa,
+		store:  store,
 		peer:   p,
 		stream: stream,
 	}, nil
@@ -206,15 +210,15 @@ func NewSwarmSyncerClient(p *Peer, dpa DPA, stream Stream) (*SwarmSyncerClient, 
 
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, dpa DPA) {
+func RegisterSwarmSyncerClient(streamer *Registry, store storage.ChunkStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
-		return NewSwarmSyncerClient(p, dpa, NewStream("SYNC", t, live))
+		return NewSwarmSyncerClient(p, store, NewStream("SYNC", t, live))
 	})
 }
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(key []byte) (wait func(context.Context) error) {
-	fetch := s.dpa.Has(key)
+	fetch := s.store.(Has).Has(context.TODO(), key)
 	return func(ctx context.Context) error {
 		_, err := fetch(ctx)
 		return err
