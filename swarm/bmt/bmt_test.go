@@ -31,10 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
-var sha3hashFunc = sha3.NewKeccak256
+// the actual data length generated (could be longer than max datalength of the BMT)
+const BufferSize = 4128
 
 func sha3hash(data ...[]byte) []byte {
-	h := sha3hashFunc()
+	h := sha3.NewKeccak256()
 	for _, v := range data {
 		h.Write(v)
 	}
@@ -118,7 +119,7 @@ func TestRefHasher(t *testing.T) {
 						t.Fatal(err)
 					}
 					expected := x.expected(data)
-					actual := NewRefHasher(sha3hashFunc, segmentCount).Hash(data)
+					actual := NewRefHasher(sha3.NewKeccak256, segmentCount).Hash(data)
 					if !bytes.Equal(actual, expected) {
 						t.Fatalf("expected %x, got %x", expected, actual)
 					}
@@ -155,7 +156,7 @@ func testHasher(f func(BaseHasher, []byte, int, int) error) error {
 	return nil
 }
 
-// Tests the use of pool with poolsizes 1 and PoolSize as well as concurrent use
+// Tests that the BMT hasher can be synchronously reused with poolsizes 1 and PoolSize
 func TestHasherReuse(t *testing.T) {
 	t.Run(fmt.Sprintf("poolsize_%d", 1), func(t *testing.T) {
 		testHasherReuse(1, t)
@@ -163,16 +164,15 @@ func TestHasherReuse(t *testing.T) {
 	t.Run(fmt.Sprintf("poolsize_%d", PoolSize), func(t *testing.T) {
 		testHasherReuse(PoolSize, t)
 	})
-	t.Run(fmt.Sprintf("poolsize_%d_concurrent", PoolSize), testHasherReuseConcurrent)
 }
 
 func testHasherReuse(poolsize int, t *testing.T) {
 	hasher := sha3.NewKeccak256
 	pool := NewTreePool(hasher, SegmentCount, poolsize)
 	defer pool.Drain(0)
+	bmt := New(pool)
 
 	for i := 0; i < 100; i++ {
-		bmt := New(pool)
 		data := newData(BufferSize)
 		n := rand.Intn(bmt.DataLength())
 		err := testHasherCorrectness(bmt, hasher, data, n, SegmentCount)
@@ -183,7 +183,7 @@ func testHasherReuse(poolsize int, t *testing.T) {
 }
 
 // Tests if pool can be cleanly reused even in concurrent use
-func testHasherReuseConcurrent(t *testing.T) {
+func TestBMTHasherConcurrentUse(t *testing.T) {
 	hasher := sha3.NewKeccak256
 	pool := NewTreePool(hasher, SegmentCount, PoolSize)
 	defer pool.Drain(0)
@@ -241,12 +241,12 @@ func testHasherCorrectness(bmt *Hasher, hasher BaseHasher, d []byte, n, count in
 	return err
 }
 
-func BenchmarkSHA3_4k(t *testing.B)   { benchmarksha3hash(4096, t) }
-func BenchmarkSHA3_2k(t *testing.B)   { benchmarksha3hash(4096/2, t) }
-func BenchmarkSHA3_1k(t *testing.B)   { benchmarksha3hash(4096/4, t) }
-func BenchmarkSHA3_512b(t *testing.B) { benchmarksha3hash(4096/8, t) }
-func BenchmarkSHA3_256b(t *testing.B) { benchmarksha3hash(4096/16, t) }
-func BenchmarkSHA3_128b(t *testing.B) { benchmarksha3hash(4096/32, t) }
+func BenchmarkSHA3_4k(t *testing.B)   { benchmarkSHA3(4096, t) }
+func BenchmarkSHA3_2k(t *testing.B)   { benchmarkSHA3(4096/2, t) }
+func BenchmarkSHA3_1k(t *testing.B)   { benchmarkSHA3(4096/4, t) }
+func BenchmarkSHA3_512b(t *testing.B) { benchmarkSHA3(4096/8, t) }
+func BenchmarkSHA3_256b(t *testing.B) { benchmarkSHA3(4096/16, t) }
+func BenchmarkSHA3_128b(t *testing.B) { benchmarkSHA3(4096/32, t) }
 
 func BenchmarkBMTBaseline_4k(t *testing.B)   { benchmarkBMTBaseline(4096, t) }
 func BenchmarkBMTBaseline_2k(t *testing.B)   { benchmarkBMTBaseline(4096/2, t) }
@@ -269,22 +269,22 @@ func BenchmarkBMTHasher_512b(t *testing.B) { benchmarkBMTHasher(4096/8, t) }
 func BenchmarkBMTHasher_256b(t *testing.B) { benchmarkBMTHasher(4096/16, t) }
 func BenchmarkBMTHasher_128b(t *testing.B) { benchmarkBMTHasher(4096/32, t) }
 
-func BenchmarkBMTHasherNoReuse_4k(t *testing.B)   { benchmarkBMTHasherReuse(1, 4096, t) }
-func BenchmarkBMTHasherNoReuse_2k(t *testing.B)   { benchmarkBMTHasherReuse(1, 4096/2, t) }
-func BenchmarkBMTHasherNoReuse_1k(t *testing.B)   { benchmarkBMTHasherReuse(1, 4096/4, t) }
-func BenchmarkBMTHasherNoReuse_512b(t *testing.B) { benchmarkBMTHasherReuse(1, 4096/8, t) }
-func BenchmarkBMTHasherNoReuse_256b(t *testing.B) { benchmarkBMTHasherReuse(1, 4096/16, t) }
-func BenchmarkBMTHasherNoReuse_128b(t *testing.B) { benchmarkBMTHasherReuse(1, 4096/32, t) }
+func BenchmarkBMTHasherNoPool_4k(t *testing.B)   { benchmarkBMTHasherPool(1, 4096, t) }
+func BenchmarkBMTHasherNoPool_2k(t *testing.B)   { benchmarkBMTHasherPool(1, 4096/2, t) }
+func BenchmarkBMTHasherNoPool_1k(t *testing.B)   { benchmarkBMTHasherPool(1, 4096/4, t) }
+func BenchmarkBMTHasherNoPool_512b(t *testing.B) { benchmarkBMTHasherPool(1, 4096/8, t) }
+func BenchmarkBMTHasherNoPool_256b(t *testing.B) { benchmarkBMTHasherPool(1, 4096/16, t) }
+func BenchmarkBMTHasherNoPool_128b(t *testing.B) { benchmarkBMTHasherPool(1, 4096/32, t) }
 
-func BenchmarkBMTHasherReuse_4k(t *testing.B)   { benchmarkBMTHasherReuse(PoolSize, 4096, t) }
-func BenchmarkBMTHasherReuse_2k(t *testing.B)   { benchmarkBMTHasherReuse(PoolSize, 4096/2, t) }
-func BenchmarkBMTHasherReuse_1k(t *testing.B)   { benchmarkBMTHasherReuse(PoolSize, 4096/4, t) }
-func BenchmarkBMTHasherReuse_512b(t *testing.B) { benchmarkBMTHasherReuse(PoolSize, 4096/8, t) }
-func BenchmarkBMTHasherReuse_256b(t *testing.B) { benchmarkBMTHasherReuse(PoolSize, 4096/16, t) }
-func BenchmarkBMTHasherReuse_128b(t *testing.B) { benchmarkBMTHasherReuse(PoolSize, 4096/32, t) }
+func BenchmarkBMTHasherPool_4k(t *testing.B)   { benchmarkBMTHasherPool(PoolSize, 4096, t) }
+func BenchmarkBMTHasherPool_2k(t *testing.B)   { benchmarkBMTHasherPool(PoolSize, 4096/2, t) }
+func BenchmarkBMTHasherPool_1k(t *testing.B)   { benchmarkBMTHasherPool(PoolSize, 4096/4, t) }
+func BenchmarkBMTHasherPool_512b(t *testing.B) { benchmarkBMTHasherPool(PoolSize, 4096/8, t) }
+func BenchmarkBMTHasherPool_256b(t *testing.B) { benchmarkBMTHasherPool(PoolSize, 4096/16, t) }
+func BenchmarkBMTHasherPool_128b(t *testing.B) { benchmarkBMTHasherPool(PoolSize, 4096/32, t) }
 
 // benchmarks simple sha3 hash on chunks
-func benchmarksha3hash(n int, t *testing.B) {
+func benchmarkSHA3(n int, t *testing.B) {
 	data := newData(n)
 	hasher := sha3.NewKeccak256
 	h := hasher()
@@ -311,15 +311,16 @@ func benchmarkBMTBaseline(n int, t *testing.B) {
 	t.ReportAllocs()
 	t.ResetTimer()
 	for i := 0; i < t.N; i++ {
-		count := int32(2*((n-1)/hashSize+1) - 1)
+		count := int32((n-1)/hashSize + 1)
 		wg := sync.WaitGroup{}
-		wg.Add(int(count))
+		wg.Add(PoolSize)
 		var i int32
-		for j := int32(0); j < count; j++ {
+		for j := 0; j < PoolSize; j++ {
 			go func() {
 				defer wg.Done()
 				h := hasher()
 				for atomic.AddInt32(&i, 1) < count {
+					h.Reset()
 					h.Write(data)
 					h.Sum(nil)
 				}
@@ -344,7 +345,7 @@ func benchmarkBMTHasher(n int, t *testing.B) {
 }
 
 // benchmarks 100 concurrent bmt hashes with pool capacity
-func benchmarkBMTHasherReuse(poolsize, n int, t *testing.B) {
+func benchmarkBMTHasherPool(poolsize, n int, t *testing.B) {
 	data := newData(n)
 	hasher := sha3.NewKeccak256
 	pool := NewTreePool(hasher, SegmentCount, poolsize)
