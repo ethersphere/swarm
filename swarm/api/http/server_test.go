@@ -145,7 +145,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
+	correctManifestAddrHex := "d689648fb9e00ddc7ebcf474112d5881c5bf7dbc6e394681b1d224b11b59b5e0"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp)
 	}
@@ -204,7 +204,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "b606e1c22cae0b5173caf2c7b2bd429acd925285133b66a50d2999c388c1d48b"
+	correctManifestAddrHex := "d689648fb9e00ddc7ebcf474112d5881c5bf7dbc6e394681b1d224b11b59b5e0"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
