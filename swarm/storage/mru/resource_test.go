@@ -41,7 +41,6 @@ import (
 var (
 	loglevel          = flag.Int("loglevel", 3, "loglevel")
 	testHasher        = storage.MakeHashFunc(storage.SHA3Hash)()
-	zeroAddr          = common.Address{}
 	startBlock        = uint64(4200)
 	resourceFrequency = uint64(42)
 	cleanF            func()
