@@ -109,7 +109,8 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		return
 	}
 
-	log.Trace("localstore.put", "key", chunk.Addr)
+	log.Trace("localstore.put", "addr", chunk.Addr)
+
 	self.mu.Lock()
 	defer self.mu.Unlock()
 
@@ -128,28 +129,19 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		return
 	}
 
-	self.memStore.Put(chunk)
+	self.DbStore.Put(chunk)
+
+	// chunk is no longer a request, but a chunk with data, so replace it in memStore
+	newc := NewChunk(chunk.Addr, nil)
+	newc.SData = chunk.SData
+	newc.Size = chunk.Size
+	newc.dbStoredC = chunk.dbStoredC
+
+	self.memStore.Put(newc)
 
 	if memChunk != nil && memChunk.ReqC != nil {
 		close(memChunk.ReqC)
 	}
-
-	self.DbStore.Put(chunk)
-
-	newc := NewChunk(chunk.Addr, nil)
-	newc.SData = chunk.SData
-	newc.Size = chunk.Size
-	//newc.dbStored = chunk.dbStored
-	newc.dbStoredC = chunk.dbStoredC
-	//newc.dbStoredMu = chunk.dbStoredMu
-	go func() {
-		<-chunk.dbStoredC
-
-		self.mu.Lock()
-		defer self.mu.Unlock()
-
-		self.memStore.Put(newc)
-	}()
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores
