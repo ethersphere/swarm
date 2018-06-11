@@ -147,7 +147,7 @@ func (h *hasherStore) createChunk(chunkData ChunkData, chunkSize int64) *Chunk {
 	return chunk
 }
 
-func (p *hasherStore) encryptChunkData(chunkData ChunkData) (ChunkData, encryption.Key, error) {
+func (h *hasherStore) encryptChunkData(chunkData ChunkData) (ChunkData, encryption.Key, error) {
 	if len(chunkData) < 8 {
 		return nil, nil, fmt.Errorf("Invalid ChunkData, min length 8 got %v", len(chunkData))
 	}
@@ -157,11 +157,11 @@ func (p *hasherStore) encryptChunkData(chunkData ChunkData) (ChunkData, encrypti
 		return nil, nil, err
 	}
 
-	encryptedSpan, err := p.chunkEncryption.spanEncryption.Encrypt(chunkData[:8], encryptionKey)
+	encryptedSpan, err := h.chunkEncryption.spanEncryption.Encrypt(chunkData[:8], encryptionKey)
 	if err != nil {
 		return nil, nil, err
 	}
-	encryptedData, err := p.chunkEncryption.dataEncryption.Encrypt(chunkData[8:], encryptionKey)
+	encryptedData, err := h.chunkEncryption.dataEncryption.Encrypt(chunkData[8:], encryptionKey)
 	if err != nil {
 		return nil, nil, err
 	}
