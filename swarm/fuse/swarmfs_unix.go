@@ -56,11 +56,11 @@ type MountInfo struct {
 	LatestManifest string
 	rootDir        *SwarmDir
 	fuseConnection *fuse.Conn
-	swarmApi       *api.Api
+	swarmApi       *api.API
 	lock           *sync.RWMutex
 }
 
-func NewMountInfo(mhash, mpoint string, sapi *api.Api) *MountInfo {
+func NewMountInfo(mhash, mpoint string, sapi *api.API) *MountInfo {
 	log.Debug("swarmfs NewMountInfo", "hash", mhash, "mount point", mpoint)
 	newMountInfo := &MountInfo{
 		MountPoint:     mpoint,

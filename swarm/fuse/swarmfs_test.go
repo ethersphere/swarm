@@ -54,7 +54,7 @@ type fileInfo struct {
 	contents []byte
 }
 
-func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[string]fileInfo, uploadDir string, toEncrypt bool) string {
+func createTestFilesAndUploadToSwarm(t *testing.T, api *api.API, files map[string]fileInfo, uploadDir string, toEncrypt bool) string {
 	os.RemoveAll(uploadDir)
 
 	for fname, finfo := range files {
@@ -86,7 +86,7 @@ func createTestFilesAndUploadToSwarm(t *testing.T, api *api.Api, files map[strin
 	return bzzhash
 }
 
-func mountDir(t *testing.T, api *api.Api, files map[string]fileInfo, bzzHash string, mountDir string) *SwarmFS {
+func mountDir(t *testing.T, api *api.API, files map[string]fileInfo, bzzHash string, mountDir string) *SwarmFS {
 	os.RemoveAll(mountDir)
 	os.MkdirAll(mountDir, 0777)
 	swarmfs := NewSwarmFS(api)
@@ -208,7 +208,7 @@ func isDirEmpty(name string) bool {
 }
 
 type testAPI struct {
-	api *api.Api
+	api *api.API
 }
 
 func (ta *testAPI) mountListAndUnmountEncrypted(t *testing.T) {
@@ -960,7 +960,7 @@ func TestFUSE(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ta := &testAPI{api: api.NewApi(fileStore, nil, nil)}
+	ta := &testAPI{api: api.NewAPI(fileStore, nil, nil)}
 
 	t.Run("mountListAndUnmountEncrypted", ta.mountListAndUnmountEncrypted)
 	t.Run("mountListAndUnmountNonEncrypted", ta.mountListAndUnmountNonEncrypted)

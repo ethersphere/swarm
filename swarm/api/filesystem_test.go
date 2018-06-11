@@ -30,7 +30,7 @@ import (
 var testDownloadDir, _ = ioutil.TempDir(os.TempDir(), "bzz-test")
 
 func testFileSystem(t *testing.T, f func(*FileSystem, bool)) {
-	testApi(t, func(api *Api, toEncrypt bool) {
+	testAPI(t, func(api *API, toEncrypt bool) {
 		f(NewFileSystem(api), toEncrypt)
 	})
 }
