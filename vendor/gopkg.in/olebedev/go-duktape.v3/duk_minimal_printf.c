@@ -8,7 +8,7 @@
 #include <stdint.h>  /* SIZE_MAX */
 
 #ifndef SIZE_MAX
-#define SIZE_MAX (1024*1024)
+#include <limits.h>
 #endif
 
 /* Write character with bound checking.  Offset 'off' is updated regardless
