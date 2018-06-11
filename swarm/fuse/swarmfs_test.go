@@ -950,6 +950,7 @@ func (ta *testAPI) appendFileContentsToEnd(t *testing.T, toEncrypt bool) {
 }
 
 func TestFUSE(t *testing.T) {
+	t.Skip("disable fuse tests until they are stable")
 	datadir, err := ioutil.TempDir("", "fuse")
 	if err != nil {
 		t.Fatalf("unable to create temp dir: %v", err)
