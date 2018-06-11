@@ -47,7 +47,7 @@ func NewFileSystem(api *API) *FileSystem {
 // TODO: localpath should point to a manifest
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error) {
+func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error) {
 	var list []*manifestTrieEntry
 	localpath, err := filepath.Abs(filepath.Clean(lpath))
 	if err != nil {
@@ -114,7 +114,7 @@ func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, err
 				stat, _ := f.Stat()
 				var hash storage.Address
 				var wait func()
-				hash, wait, err = self.api.fileStore.Store(f, stat.Size(), toEncrypt)
+				hash, wait, err = fs.api.fileStore.Store(f, stat.Size(), toEncrypt)
 				if hash != nil {
 					list[i].Hash = hash.Hex()
 				}
@@ -143,7 +143,7 @@ func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, err
 	}
 
 	trie := &manifestTrie{
-		fileStore: self.api.fileStore,
+		fileStore: fs.api.fileStore,
 	}
 	quitC := make(chan bool)
 	for i, entry := range list {
@@ -174,7 +174,7 @@ func (self *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, err
 // under localpath
 //
 // DEPRECATED: Use the HTTP API instead
-func (self *FileSystem) Download(bzzpath, localpath string) error {
+func (fs *FileSystem) Download(bzzpath, localpath string) error {
 	lpath, err := filepath.Abs(filepath.Clean(localpath))
 	if err != nil {
 		return err
@@ -189,7 +189,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	if err != nil {
 		return err
 	}
-	addr, err := self.api.Resolve(uri)
+	addr, err := fs.api.Resolve(uri)
 	if err != nil {
 		return err
 	}
@@ -200,7 +200,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 	}
 
 	quitC := make(chan bool)
-	trie, err := loadManifest(self.api.fileStore, addr, quitC)
+	trie, err := loadManifest(fs.api.fileStore, addr, quitC)
 	if err != nil {
 		log.Warn(fmt.Sprintf("fs.Download: loadManifestTrie error: %v", err))
 		return err
@@ -245,7 +245,7 @@ func (self *FileSystem) Download(bzzpath, localpath string) error {
 		}
 		go func(i int, entry *downloadListEntry) {
 			defer wg.Done()
-			err := retrieveToFile(quitC, self.api.fileStore, entry.addr, entry.path)
+			err := retrieveToFile(quitC, fs.api.fileStore, entry.addr, entry.path)
 			if err != nil {
 				select {
 				case errC <- err:
