@@ -41,6 +41,6 @@ func NewControl(api *API, hive *network.Hive) *Control {
 //	self.hive.SwapEnabled(on)
 //}
 //
-func (self *Control) Hive() string {
-	return self.hive.String()
+func (c *Control) Hive() string {
+	return c.hive.String()
 }
