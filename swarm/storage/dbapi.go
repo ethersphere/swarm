@@ -27,26 +27,26 @@ func NewDBAPI(loc *LocalStore) *DBAPI {
 }
 
 // to obtain the chunks from address or request db entry only
-func (self *DBAPI) Get(addr Address) (*Chunk, error) {
-	return self.loc.Get(addr)
+func (d *DBAPI) Get(addr Address) (*Chunk, error) {
+	return d.loc.Get(addr)
 }
 
 // current storage counter of chunk db
-func (self *DBAPI) CurrentBucketStorageIndex(po uint8) uint64 {
-	return self.db.CurrentBucketStorageIndex(po)
+func (d *DBAPI) CurrentBucketStorageIndex(po uint8) uint64 {
+	return d.db.CurrentBucketStorageIndex(po)
 }
 
 // iteration storage counter and proximity order
-func (self *DBAPI) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
-	return self.db.SyncIterator(from, to, po, f)
+func (d *DBAPI) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
+	return d.db.SyncIterator(from, to, po, f)
 }
 
 // to obtain the chunks from address or request db entry only
-func (self *DBAPI) GetOrCreateRequest(addr Address) (*Chunk, bool) {
-	return self.loc.GetOrCreateRequest(addr)
+func (d *DBAPI) GetOrCreateRequest(addr Address) (*Chunk, bool) {
+	return d.loc.GetOrCreateRequest(addr)
 }
 
 // to obtain the chunks from key or request db entry only
-func (self *DBAPI) Put(chunk *Chunk) {
-	self.loc.Put(chunk)
+func (d *DBAPI) Put(chunk *Chunk) {
+	d.loc.Put(chunk)
 }
