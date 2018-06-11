@@ -72,9 +72,9 @@ type Config struct {
 }
 
 //create a default config with all parameters to set to defaults
-func NewConfig() (self *Config) {
+func NewConfig() (c *Config) {
 
-	self = &Config{
+	c = &Config{
 		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
 		FileStoreParams:  storage.NewFileStoreParams(),
 		HiveParams:       network.NewHiveParams(),
@@ -100,11 +100,11 @@ func NewConfig() (self *Config) {
 
 //some config params need to be initialized after the complete
 //config building phase is completed (e.g. due to overriding flags)
-func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
+func (c *Config) Init(prvKey *ecdsa.PrivateKey) {
 
 	address := crypto.PubkeyToAddress(prvKey.PublicKey)
-	self.Path = filepath.Join(self.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
-	err := os.MkdirAll(self.Path, os.ModePerm)
+	c.Path = filepath.Join(c.Path, "bzz-"+common.Bytes2Hex(address.Bytes()))
+	err := os.MkdirAll(c.Path, os.ModePerm)
 	if err != nil {
 		log.Error(fmt.Sprintf("Error creating root swarm data directory: %v", err))
 		return
@@ -114,25 +114,25 @@ func (self *Config) Init(prvKey *ecdsa.PrivateKey) {
 	pubkeyhex := common.ToHex(pubkey)
 	keyhex := crypto.Keccak256Hash(pubkey).Hex()
 
-	self.PublicKey = pubkeyhex
-	self.BzzKey = keyhex
-	self.NodeID = discover.PubkeyID(&prvKey.PublicKey).String()
+	c.PublicKey = pubkeyhex
+	c.BzzKey = keyhex
+	c.NodeID = discover.PubkeyID(&prvKey.PublicKey).String()
 
-	if self.SwapEnabled {
-		self.Swap.Init(self.Contract, prvKey)
+	if c.SwapEnabled {
+		c.Swap.Init(c.Contract, prvKey)
 	}
 
-	self.privateKey = prvKey
-	self.LocalStoreParams.Init(self.Path)
-	self.LocalStoreParams.BaseKey = common.FromHex(keyhex)
+	c.privateKey = prvKey
+	c.LocalStoreParams.Init(c.Path)
+	c.LocalStoreParams.BaseKey = common.FromHex(keyhex)
 
-	self.Pss = self.Pss.WithPrivateKey(self.privateKey)
+	c.Pss = c.Pss.WithPrivateKey(c.privateKey)
 }
 
-func (self *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
-	if self.privateKey != nil {
-		privKey = self.privateKey
-		self.privateKey = nil
+func (c *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
+	if c.privateKey != nil {
+		privKey = c.privateKey
+		c.privateKey = nil
 	}
 	return privKey
 }
