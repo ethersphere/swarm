@@ -136,7 +136,7 @@ func TestHasherCorrectness(t *testing.T) {
 	}
 }
 
-func testHasher(f func(BaseHasher, []byte, int, int) error) error {
+func testHasher(f func(BaseHasherFunc, []byte, int, int) error) error {
 	data := newData(BufferSize)
 	hasher := sha3.NewKeccak256
 	size := hasher().Size()
@@ -216,7 +216,7 @@ LOOP:
 }
 
 // helper function that creates  a tree pool
-func testBaseHasher(hasher BaseHasher, d []byte, n, count int) error {
+func testBaseHasher(hasher BaseHasherFunc, d []byte, n, count int) error {
 	pool := NewTreePool(hasher, count, 1)
 	defer pool.Drain(0)
 	bmt := New(pool)
@@ -225,7 +225,7 @@ func testBaseHasher(hasher BaseHasher, d []byte, n, count int) error {
 
 // helper function that compares reference and optimised implementations on
 // correctness
-func testHasherCorrectness(bmt *Hasher, hasher BaseHasher, d []byte, n, count int) (err error) {
+func testHasherCorrectness(bmt *Hasher, hasher BaseHasherFunc, d []byte, n, count int) (err error) {
 	span := make([]byte, 8)
 	if len(d) < n {
 		n = len(d)

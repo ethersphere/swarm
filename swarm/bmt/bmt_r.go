@@ -37,7 +37,7 @@ type RefHasher struct {
 }
 
 // NewRefHasher returns a new RefHasher
-func NewRefHasher(hasher BaseHasher, count int) *RefHasher {
+func NewRefHasher(hasher BaseHasherFunc, count int) *RefHasher {
 	h := hasher()
 	hashsize := h.Size()
 	c := 2
