@@ -388,7 +388,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	// start swarm http proxy server
 	if self.config.Port != "" {
 		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
-		go httpapi.StartHttpServer(self.api, &httpapi.ServerConfig{
+		go httpapi.StartHTTPServer(self.api, &httpapi.ServerConfig{
 			Addr:       addr,
 			CorsString: self.config.Cors,
 		})
