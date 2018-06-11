@@ -44,35 +44,35 @@ type Peer interface{}
 
 type Address []byte
 
-func (x Address) Size() uint {
-	return uint(len(x))
+func (a Address) Size() uint {
+	return uint(len(a))
 }
 
-func (x Address) isEqual(y Address) bool {
-	return bytes.Equal(x, y)
+func (a Address) isEqual(y Address) bool {
+	return bytes.Equal(a, y)
 }
 
-func (h Address) bits(i, j uint) uint {
+func (a Address) bits(i, j uint) uint {
 	ii := i >> 3
 	jj := i & 7
-	if ii >= h.Size() {
+	if ii >= a.Size() {
 		return 0
 	}
 
 	if jj+j <= 8 {
-		return uint((h[ii] >> jj) & ((1 << j) - 1))
+		return uint((a[ii] >> jj) & ((1 << j) - 1))
 	}
 
-	res := uint(h[ii] >> jj)
+	res := uint(a[ii] >> jj)
 	jj = 8 - jj
 	j -= jj
 	for j != 0 {
 		ii++
 		if j < 8 {
-			res += uint(h[ii]&((1<<j)-1)) << jj
+			res += uint(a[ii]&((1<<j)-1)) << jj
 			return res
 		}
-		res += uint(h[ii]) << jj
+		res += uint(a[ii]) << jj
 		jj += 8
 		j -= 8
 	}
@@ -121,30 +121,30 @@ func MakeHashFunc(hash string) SwarmHasher {
 	return nil
 }
 
-func (addr Address) Hex() string {
-	return fmt.Sprintf("%064x", []byte(addr[:]))
+func (a Address) Hex() string {
+	return fmt.Sprintf("%064x", []byte(a[:]))
 }
 
-func (addr Address) Log() string {
-	if len(addr[:]) < 8 {
-		return fmt.Sprintf("%x", []byte(addr[:]))
+func (a Address) Log() string {
+	if len(a[:]) < 8 {
+		return fmt.Sprintf("%x", []byte(a[:]))
 	}
-	return fmt.Sprintf("%016x", []byte(addr[:8]))
+	return fmt.Sprintf("%016x", []byte(a[:8]))
 }
 
-func (addr Address) String() string {
-	return fmt.Sprintf("%064x", []byte(addr)[:])
+func (a Address) String() string {
+	return fmt.Sprintf("%064x", []byte(a)[:])
 }
 
-func (addr Address) MarshalJSON() (out []byte, err error) {
-	return []byte(`"` + addr.String() + `"`), nil
+func (a Address) MarshalJSON() (out []byte, err error) {
+	return []byte(`"` + a.String() + `"`), nil
 }
 
-func (addr *Address) UnmarshalJSON(value []byte) error {
+func (a *Address) UnmarshalJSON(value []byte) error {
 	s := string(value)
-	*addr = make([]byte, 32)
+	*a = make([]byte, 32)
 	h := common.Hex2Bytes(s[1 : len(s)-1])
-	copy(*addr, h)
+	copy(*a, h)
 	return nil
 }
 
@@ -260,8 +260,8 @@ type LazyTestSectionReader struct {
 	*io.SectionReader
 }
 
-func (self *LazyTestSectionReader) Size(chan bool) (int64, error) {
-	return self.SectionReader.Size(), nil
+func (r *LazyTestSectionReader) Size(chan bool) (int64, error) {
+	return r.SectionReader.Size(), nil
 }
 
 type StoreParams struct {
@@ -339,8 +339,8 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 }
 
 // Validate that the given key is a valid content address for the given data
-func (self *ContentAddressValidator) Validate(addr Address, data []byte) bool {
-	hasher := self.Hasher()
+func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
+	hasher := v.Hasher()
 	hasher.ResetWithLength(data[:8])
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
