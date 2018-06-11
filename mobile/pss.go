@@ -2,13 +2,14 @@ package geth
 
 import (
 	"errors"
+
 	"github.com/ethereum/go-ethereum/crypto"
 
 	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
 type Pss struct {
-	ps pss.Pss
+	ps *pss.Pss
 }
 
 func makeTopic(topic []byte) pss.Topic {

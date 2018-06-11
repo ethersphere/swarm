@@ -123,7 +123,6 @@ func NewNode(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *
 func NewNodeWithKeystoreString(datadir string, config *NodeConfig, ksstr string) (stack *Node, _ error) {
 	ks := NewKeyStore(ksstr, keystore.LightScryptN, keystore.LightScryptP)
 	return NewNodeWithKeystore(datadir, config, ks)
-	//ks := rawStack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 }
 
 func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stack *Node, _ error) {
@@ -221,12 +220,10 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 	if config.PssEnabled && ks != nil {
 		log.Debug("pss enabled")
 		bzzSvc := func(ctx *node.ServiceContext) (node.Service, error) {
-			//ks := rawStack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-			log.Warn("keystore", "ks", ks)
+			log.Debug("keystore", "ks", ks)
 			var a accounts.Account
 			var err error
 			if common.IsHexAddress(config.PssAccount) {
-				//a, err = ks.Find(accounts.Account{Address: common.HexToAddress(config.PssAccount)})
 				a = ks.GetAccounts().accounts[0]
 			} else if ix, ixerr := strconv.Atoi(config.PssAccount); ixerr == nil && ix > 0 {
 				if accounts := ks.GetAccounts().accounts; len(accounts) > ix {
@@ -245,14 +242,10 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 				return nil, fmt.Errorf("Can't load swarm account key: %v", err)
 			}
 			var bzzkey *ecdsa.PrivateKey
-			//for i := 0; i < 3; i++ {
-			//	password := getPassPhrase(fmt.Sprintf("Unlocking swarm account %s [%d/3]", a.Address.Hex(), i+1), i, passwords)
-			//key, err := keystore.DecryptKey(keyjson, password)
 			key, err := keystore.DecryptKey(keyjson, config.PssPassword)
 			if err == nil {
 				bzzkey = key.PrivateKey
 			}
-			//}
 			if bzzkey == nil {
 				return nil, fmt.Errorf("Can't decrypt swarm account key")
 			}
@@ -262,10 +255,10 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			bzzconfig.Init(bzzkey)
 
 			svc, err := swarm.NewSwarm(bzzconfig, nil)
-			resultNode.Ps = &Pss{ps: *svc.Ps}
 			if err != nil {
 				log.Error("swarm svc", "err", err)
 			}
+			resultNode.Ps = &Pss{ps: svc.Ps}
 			return svc, err
 		}
 		if err := rawStack.Register(bzzSvc); err != nil {
