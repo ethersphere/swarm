@@ -168,14 +168,14 @@ func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
 func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	w.WriteHeader(params.Code)
 	if r.Header.Get("Accept") == "application/json" {
-		respondJson(w, params)
+		respondJSON(w, params)
 	} else {
-		respondHtml(w, params)
+		respondHTML(w, params)
 	}
 }
 
 //return a HTML page
-func respondHtml(w http.ResponseWriter, params *ResponseParams) {
+func respondHTML(w http.ResponseWriter, params *ResponseParams) {
 	htmlCounter.Inc(1)
 	err := params.template.Execute(w, params)
 	if err != nil {
@@ -184,7 +184,7 @@ func respondHtml(w http.ResponseWriter, params *ResponseParams) {
 }
 
 //return JSON
-func respondJson(w http.ResponseWriter, params *ResponseParams) {
+func respondJSON(w http.ResponseWriter, params *ResponseParams) {
 	jsonCounter.Inc(1)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)
