@@ -127,7 +127,17 @@ type TreeChunker struct {
 	is because it is left to the DPA to decide which sources are trusted.
 */
 func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
-	return NewTreeJoiner(NewJoinerParams(addr, getter, depth, DefaultChunkSize)).Join()
+	jp := &JoinerParams{
+		ChunkerParams: ChunkerParams{
+			chunkSize: DefaultChunkSize,
+			hashSize:  int64(len(addr)),
+		},
+		addr:   addr,
+		getter: getter,
+		depth:  depth,
+	}
+
+	return NewTreeJoiner(jp).Join()
 }
 
 /*
@@ -138,7 +148,8 @@ func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(
 	tsp := &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
-				hashSize: putter.RefSize(),
+				chunkSize: DefaultChunkSize,
+				hashSize:  putter.RefSize(),
 			},
 			reader: data,
 			putter: putter,
@@ -148,26 +159,14 @@ func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(
 	return NewTreeSplitter(tsp).Split()
 }
 
-func NewJoinerParams(addr Address, getter Getter, depth int, chunkSize int64) *JoinerParams {
-	return &JoinerParams{
-		ChunkerParams: ChunkerParams{
-			chunkSize: chunkSize,
-			hashSize:  int64(len(addr)),
-		},
-		addr:   addr,
-		getter: getter,
-		depth:  depth,
-	}
-}
-
 func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	self := &TreeChunker{}
 	self.hashSize = params.hashSize
-	self.branches = params.chunkSize / self.hashSize
+	self.branches = params.chunkSize / params.hashSize
 	self.addr = params.addr
 	self.getter = params.getter
 	self.depth = params.depth
-	self.chunkSize = self.hashSize * self.branches
+	self.chunkSize = params.chunkSize
 	self.workerCount = 0
 	self.jobC = make(chan *hashJob, 2*ChunkProcessors)
 	self.wg = &sync.WaitGroup{}
@@ -182,9 +181,9 @@ func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
 	self.data = params.reader
 	self.dataSize = params.size
 	self.hashSize = params.hashSize
-	self.branches = params.chunkSize / self.hashSize
+	self.branches = params.chunkSize / params.hashSize
 	self.addr = params.addr
-	self.chunkSize = self.hashSize * self.branches
+	self.chunkSize = params.chunkSize
 	self.putter = params.putter
 	self.workerCount = 0
 	self.jobC = make(chan *hashJob, 2*ChunkProcessors)
