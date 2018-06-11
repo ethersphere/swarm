@@ -252,7 +252,6 @@ func TestHandler(t *testing.T) {
 		HeaderGetter: rh.headerGetter,
 	}
 
-	rh.chunkStore.Close()
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -464,7 +463,6 @@ func TestMultihash(t *testing.T) {
 		OwnerValidator: rh.ownerValidator,
 	}
 	// test with signed data
-	rh.chunkStore.Close()
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
