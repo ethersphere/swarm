@@ -426,10 +426,9 @@ func (ctl *HandshakeController) alertHandshake(pubkeyid string, symkeys []string
 			delete(ctl.keyC, pubkeyid)
 		}
 		return nil
-	} else {
-		if _, ok := ctl.keyC[pubkeyid]; !ok {
-			ctl.keyC[pubkeyid] = make(chan []string)
-		}
+	}
+	if _, ok := ctl.keyC[pubkeyid]; !ok {
+		ctl.keyC[pubkeyid] = make(chan []string)
 	}
 	return ctl.keyC[pubkeyid]
 }
