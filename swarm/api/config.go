@@ -64,7 +64,7 @@ type Config struct {
 	SyncEnabled       bool
 	DeliverySkipCheck bool
 	SyncUpdateDelay   time.Duration
-	SwapApi           string
+	SwapAPI           string
 	Cors              string
 	BzzAccount        string
 	BootNodes         string
@@ -91,7 +91,7 @@ func NewConfig() (self *Config) {
 		SyncEnabled:       true,
 		DeliverySkipCheck: false,
 		SyncUpdateDelay:   15 * time.Second,
-		SwapApi:           "",
+		SwapAPI:           "",
 		BootNodes:         "",
 	}
 

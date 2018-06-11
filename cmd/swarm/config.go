@@ -208,8 +208,8 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.DeliverySkipCheck = true
 	}
 
-	currentConfig.SwapApi = ctx.GlobalString(SwarmSwapAPIFlag.Name)
-	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
+	currentConfig.SwapAPI = ctx.GlobalString(SwarmSwapAPIFlag.Name)
+	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
@@ -302,10 +302,10 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if swapapi := os.Getenv(SWARM_ENV_SWAP_API); swapapi != "" {
-		currentConfig.SwapApi = swapapi
+		currentConfig.SwapAPI = swapapi
 	}
 
-	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
+	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
