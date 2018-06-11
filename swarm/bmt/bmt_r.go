@@ -20,66 +20,66 @@
 // This implementation does not take advantage of any paralellisms and uses
 // far more memory than necessary, but it is easy to see that it is correct.
 // It can be used for generating test cases for optimized implementations.
-// see testBMTHasherCorrectness function in bmt_test.go
+// There is extra check on reference hasher correctness in bmt_test.go
+// * TestRefHasher
+// * testBMTHasherCorrectness function
 package bmt
 
 import (
 	"hash"
 )
 
-// RefHasher is the non-optimized easy to read reference implementation of BMT
+// RefHasher is the non-optimized easy-to-read reference implementation of BMT
 type RefHasher struct {
-	span    int // c * 32, where c = 2 ^ ceil(log2(count)), where count = ceil(length / 32)
-	section int // 64
-	cap     int // 4096
-	h       hash.Hash
+	maxDataLength int       // c * hashSize, where c = 2 ^ ceil(log2(count)), where count = ceil(length / hashSize)
+	sectionLength int       // 2 * hashSize
+	hasher        hash.Hash // base hash func (Keccak256 SHA3)
 }
 
 // NewRefHasher returns a new RefHasher
-func NewRefHasher(hasher BaseHasher, count int) *RefHasher {
+func NewRefHasher(hasher BaseHasherFunc, count int) *RefHasher {
 	h := hasher()
 	hashsize := h.Size()
-	maxsize := hashsize * count
 	c := 2
 	for ; c < count; c *= 2 {
 	}
-	if c > 2 {
-		c /= 2
-	}
 	return &RefHasher{
-		section: 2 * hashsize,
-		span:    c * hashsize,
-		cap:     maxsize,
-		h:       h,
+		sectionLength: 2 * hashsize,
+		maxDataLength: c * hashsize,
+		hasher:        h,
 	}
 }
 
 // Hash returns the BMT hash of the byte slice
 // implements the SwarmHash interface
-func (rh *RefHasher) Hash(d []byte) []byte {
-	if len(d) > rh.cap {
-		d = d[:rh.cap]
+func (rh *RefHasher) Hash(data []byte) []byte {
+	// if data is shorter than the base length (maxDataLength), we provide padding with zeros
+	d := make([]byte, rh.maxDataLength)
+	length := len(data)
+	if length > rh.maxDataLength {
+		length = rh.maxDataLength
 	}
-
-	return rh.hash(d, rh.span)
+	copy(d, data[:length])
+	return rh.hash(d, rh.maxDataLength)
 }
 
-func (rh *RefHasher) hash(d []byte, s int) []byte {
-	l := len(d)
-	left := d
-	var right []byte
-	if l > rh.section {
-		for ; s >= l; s /= 2 {
-		}
-		left = rh.hash(d[:s], s)
-		right = d[s:]
-		if l-s > rh.section/2 {
-			right = rh.hash(right, s)
-		}
+// data has length maxDataLength = segmentSize * 2^k
+// hash calls itself recursively on both halves of the given slice
+// concatenates the results, and returns the hash of that
+// if the length of d is 2 * segmentSize then just returns the hash of that section
+func (rh *RefHasher) hash(data []byte, length int) []byte {
+	var section []byte
+	if length == rh.sectionLength {
+		// section contains two data segments (d)
+		section = data
+	} else {
+		// section contains hashes of left and right BMT subtreea
+		// to be calculated by calling hash recursively on left and right half of d
+		length /= 2
+		section = append(rh.hash(data[:length], length), rh.hash(data[length:], length)...)
 	}
-	defer rh.h.Reset()
-	rh.h.Write(left)
-	rh.h.Write(right)
-	h := rh.h.Sum(nil)
-	return h
+	rh.hasher.Reset()
+	rh.hasher.Write(section)
+	s := rh.hasher.Sum(nil)
+	return s
 }
