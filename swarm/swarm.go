@@ -233,13 +233,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if pss.IsActiveHandshake {
 		pss.SetHandshakeController(self.Ps, pss.NewHandshakeParams())
 	}
-	exampleTopic := pss.Topic([4]byte{0x01, 0x01, 0x01, 0x01})
-	self.Ps.Register(
-		&exampleTopic,
-		func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
-			log.Warn("Message received", "payload", msg, "keyid", keyid)
-			return nil
-		})
 
 	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
