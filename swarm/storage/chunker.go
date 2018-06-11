@@ -127,7 +127,17 @@ type TreeChunker struct {
 	is because it is left to the DPA to decide which sources are trusted.
 */
 func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
-	return NewTreeJoiner(NewJoinerParams(addr, getter, depth, DefaultChunkSize)).Join()
+	jp := &JoinerParams{
+		ChunkerParams: ChunkerParams{
+			chunkSize: DefaultChunkSize,
+			hashSize:  int64(len(addr)),
+		},
+		addr:   addr,
+		getter: getter,
+		depth:  depth,
+	}
+
+	return NewTreeJoiner(jp).Join()
 }
 
 /*
@@ -135,30 +145,28 @@ func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
 	New chunks to store are store using the putter which the caller provides.
 */
 func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(), err error) {
-	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultChunkSize)).Split()
-}
-
-func NewJoinerParams(addr Address, getter Getter, depth int, chunkSize int64) *JoinerParams {
-	hashSize := int64(len(addr))
-	return &JoinerParams{
-		ChunkerParams: ChunkerParams{
-			chunkSize: chunkSize,
-			hashSize:  hashSize,
+	tsp := &TreeSplitterParams{
+		SplitterParams: SplitterParams{
+			ChunkerParams: ChunkerParams{
+				chunkSize: DefaultChunkSize,
+				hashSize:  putter.RefSize(),
+			},
+			reader: data,
+			putter: putter,
 		},
-		addr:   addr,
-		getter: getter,
-		depth:  depth,
+		size: size,
 	}
+	return NewTreeSplitter(tsp).Split()
 }
 
 func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	self := &TreeChunker{}
 	self.hashSize = params.hashSize
-	self.branches = params.chunkSize / self.hashSize
+	self.branches = params.chunkSize / params.hashSize
 	self.addr = params.addr
 	self.getter = params.getter
 	self.depth = params.depth
-	self.chunkSize = self.hashSize * self.branches
+	self.chunkSize = params.chunkSize
 	self.workerCount = 0
 	self.jobC = make(chan *hashJob, 2*ChunkProcessors)
 	self.wg = &sync.WaitGroup{}
@@ -168,29 +176,14 @@ func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	return self
 }
 
-func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches int64) *TreeSplitterParams {
-	hashSize := putter.RefSize()
-	return &TreeSplitterParams{
-		SplitterParams: SplitterParams{
-			ChunkerParams: ChunkerParams{
-				chunkSize: DefaultChunkSize,
-				hashSize:  hashSize,
-			},
-			reader: reader,
-			putter: putter,
-		},
-		size: size,
-	}
-}
-
 func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
 	self := &TreeChunker{}
 	self.data = params.reader
 	self.dataSize = params.size
 	self.hashSize = params.hashSize
-	self.branches = params.chunkSize / self.hashSize
+	self.branches = params.chunkSize / params.hashSize
 	self.addr = params.addr
-	self.chunkSize = self.hashSize * self.branches
+	self.chunkSize = params.chunkSize
 	self.putter = params.putter
 	self.workerCount = 0
 	self.jobC = make(chan *hashJob, 2*ChunkProcessors)
