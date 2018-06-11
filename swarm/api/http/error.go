@@ -194,7 +194,6 @@ func respondJson(w http.ResponseWriter, params *ResponseParams) {
 func getTemplate(code int) *template.Template {
 	if val, tmpl := templateMap[code]; tmpl {
 		return val
-	} else {
-		return templateMap[0]
 	}
+	return templateMap[0]
 }
