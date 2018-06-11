@@ -59,7 +59,7 @@ type Config struct {
 	PublicKey         string
 	BzzKey            string
 	NodeID            string
-	NetworkId         uint64
+	NetworkID         uint64
 	SwapEnabled       bool
 	SyncEnabled       bool
 	DeliverySkipCheck bool
@@ -86,7 +86,7 @@ func NewConfig() (self *Config) {
 		Path:              node.DefaultDataDir(),
 		EnsAPIs:           nil,
 		EnsRoot:           ens.TestNetAddress,
-		NetworkId:         network.DefaultNetworkID,
+		NetworkID:         network.DefaultNetworkID,
 		SwapEnabled:       false,
 		SyncEnabled:       true,
 		DeliverySkipCheck: false,

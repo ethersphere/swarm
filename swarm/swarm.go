@@ -135,7 +135,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	bzzconfig := &network.BzzConfig{
-		NetworkID:    config.NetworkId,
+		NetworkID:    config.NetworkID,
 		OverlayAddr:  addr.OAddr,
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,

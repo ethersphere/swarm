@@ -121,8 +121,8 @@ func TestConfigCmdLineOverrides(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != 42 {
-		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkId)
+	if info.NetworkID != 42 {
+		t.Fatalf("Expected network ID to be %d, got %d", 42, info.NetworkID)
 	}
 
 	if info.SyncEnabled {
@@ -154,7 +154,7 @@ func TestConfigFileOverrides(t *testing.T) {
 	//change some values in order to test if they have been loaded
 	defaultConf.SyncEnabled = false
 	defaultConf.DeliverySkipCheck = true
-	defaultConf.NetworkId = 54
+	defaultConf.NetworkID = 54
 	defaultConf.Port = httpPort
 	defaultConf.DbCapacity = 9000000
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
@@ -220,8 +220,8 @@ func TestConfigFileOverrides(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != 54 {
-		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
+	if info.NetworkID != 54 {
+		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkID)
 	}
 
 	if info.SyncEnabled {
@@ -233,7 +233,7 @@ func TestConfigFileOverrides(t *testing.T) {
 	}
 
 	if info.DbCapacity != 9000000 {
-		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkId)
+		t.Fatalf("Expected network ID to be %d, got %d", 54, info.NetworkID)
 	}
 
 	if info.HiveParams.KeepAliveInterval != 6000000000 {
@@ -332,8 +332,8 @@ func TestConfigEnvVars(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != 999 {
-		t.Fatalf("Expected network ID to be %d, got %d", 999, info.NetworkId)
+	if info.NetworkID != 999 {
+		t.Fatalf("Expected network ID to be %d, got %d", 999, info.NetworkID)
 	}
 
 	if info.Cors != "*" {
@@ -365,7 +365,7 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 	defaultConf := api.NewConfig()
 	//change some values in order to test if they have been loaded
 	defaultConf.SyncEnabled = true
-	defaultConf.NetworkId = 54
+	defaultConf.NetworkID = 54
 	defaultConf.Port = "8588"
 	defaultConf.DbCapacity = 9000000
 	defaultConf.HiveParams.KeepAliveInterval = 6000000000
@@ -438,8 +438,8 @@ func TestConfigCmdLineOverridesFile(t *testing.T) {
 		t.Fatalf("Expected port to be %s, got %s", httpPort, info.Port)
 	}
 
-	if info.NetworkId != expectNetworkId {
-		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkId)
+	if info.NetworkID != expectNetworkId {
+		t.Fatalf("Expected network ID to be %d, got %d", expectNetworkId, info.NetworkID)
 	}
 
 	if info.SyncEnabled {

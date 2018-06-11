@@ -512,7 +512,7 @@ func bzzd(ctx *cli.Context) error {
 		bootnodes := strings.Split(bzzconfig.BootNodes, ",")
 		injectBootnodes(stack.Server(), bootnodes)
 	} else {
-		if bzzconfig.NetworkId == 3 {
+		if bzzconfig.NetworkID == 3 {
 			injectBootnodes(stack.Server(), testbetBootNodes)
 		}
 	}

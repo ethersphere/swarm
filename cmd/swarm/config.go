@@ -173,7 +173,7 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
 		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkId = uint64(id)
+			currentConfig.NetworkID = uint64(id)
 		}
 	}
 
@@ -260,7 +260,7 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if networkid := os.Getenv(SWARM_ENV_NETWORK_ID); networkid != "" {
 		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkId = uint64(id)
+			currentConfig.NetworkID = uint64(id)
 		}
 	}
 
