@@ -32,7 +32,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func testApi(t *testing.T, f func(*Api, bool)) {
+func testAPI(t *testing.T, f func(*API, bool)) {
 	datadir, err := ioutil.TempDir("", "bzz-test")
 	if err != nil {
 		t.Fatalf("unable to create temp dir: %v", err)
@@ -42,7 +42,7 @@ func testApi(t *testing.T, f func(*Api, bool)) {
 	if err != nil {
 		return
 	}
-	api := NewApi(fileStore, nil, nil)
+	api := NewAPI(fileStore, nil, nil)
 	f(api, false)
 	f(api, true)
 }
@@ -83,8 +83,7 @@ func expResponse(content string, mimeType string, status int) *Response {
 	return &Response{mimeType, status, int64(len(content)), content}
 }
 
-// func testGet(t *testing.T, api *Api, bzzhash string) *testResponse {
-func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
+func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
 	addr := storage.Address(common.Hex2Bytes(bzzhash))
 	reader, mimeType, status, _, err := api.Get(addr, path)
 	if err != nil {
@@ -107,7 +106,7 @@ func testGet(t *testing.T, api *Api, bzzhash, path string) *testResponse {
 }
 
 func TestApiPut(t *testing.T) {
-	testApi(t, func(api *Api, toEncrypt bool) {
+	testAPI(t, func(api *API, toEncrypt bool) {
 		content := "hello"
 		exp := expResponse(content, "text/plain", 0)
 		// exp := expResponse([]byte(content), "text/plain", 0)
@@ -222,7 +221,7 @@ func TestAPIResolve(t *testing.T) {
 	}
 	for _, x := range tests {
 		t.Run(x.desc, func(t *testing.T) {
-			api := &Api{dns: x.dns}
+			api := &API{dns: x.dns}
 			uri := &URI{Addr: x.addr, Scheme: "bzz"}
 			if x.immutable {
 				uri.Scheme = "bzz-immutable"

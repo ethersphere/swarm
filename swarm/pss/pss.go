@@ -51,7 +51,7 @@ const (
 	defaultCleanInterval       = time.Second * 60 * 10
 	defaultOutboxCapacity      = 100000
 	pssProtocolName            = "pss"
-	pssVersion                 = 1
+	pssVersion                 = 2
 	hasherCount                = 8
 )
 

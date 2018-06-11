@@ -86,7 +86,7 @@ func TestResourcePostMode(t *testing.T) {
 	}
 }
 
-func serverFunc(api *api.Api) testutil.TestServer {
+func serverFunc(api *api.API) testutil.TestServer {
 	return NewServer(api)
 }
 
@@ -117,10 +117,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := common.FromHex(string(b))
-	mh, err := multihash.Encode(s, multihash.KECCAK_256)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mh := multihash.ToMultihash(s)
 
 	mhHex := hexutil.Encode(mh)
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))

@@ -64,7 +64,7 @@ var (
 // the swarm stack
 type Swarm struct {
 	config      *api.Config        // swarm configuration
-	api         *api.Api           // high level api layer (fs/manifest)
+	api         *api.API           // high level api layer (fs/manifest)
 	dns         api.Resolver       // DNS registrar
 	fileStore   *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer    *stream.Registry
@@ -79,7 +79,7 @@ type Swarm struct {
 }
 
 type SwarmAPI struct {
-	Api     *api.Api
+	Api     *api.API
 	Backend chequebook.Backend
 	PrvKey  *ecdsa.PrivateKey
 }
@@ -241,7 +241,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 			return nil
 		})
 
-	self.api = api.NewApi(self.fileStore, self.dns, resourceHandler)
+	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
@@ -468,7 +468,7 @@ func (self *Swarm) RegisterPssProtocol(spec *protocols.Spec, targetprotocol *p2p
 }
 
 // implements node.Service
-// APIs returns the RPC Api descriptors the Swarm implementation offers
+// APIs returns the RPC API descriptors the Swarm implementation offers
 func (self *Swarm) APIs() []rpc.API {
 
 	apis := []rpc.API{
@@ -524,7 +524,7 @@ func (self *Swarm) APIs() []rpc.API {
 	return apis
 }
 
-func (self *Swarm) Api() *api.Api {
+func (self *Swarm) Api() *api.API {
 	return self.api
 }
 

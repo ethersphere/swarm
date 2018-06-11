@@ -30,7 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func serverFunc(api *api.Api) testutil.TestServer {
+func serverFunc(api *api.API) testutil.TestServer {
 	return swarmhttp.NewServer(api)
 }
 
