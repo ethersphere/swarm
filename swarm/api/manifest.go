@@ -144,9 +144,9 @@ func (a *API) NewManifestWalker(addr storage.Address, quitC chan bool) (*Manifes
 	return &ManifestWalker{a, trie, quitC}, nil
 }
 
-// SkipManifest is used as a return value from WalkFn to indicate that the
+// ErrSkipManifest is used as a return value from WalkFn to indicate that the
 // manifest should be skipped
-var SkipManifest = errors.New("skip this manifest")
+var ErrSkipManifest = errors.New("skip this manifest")
 
 // WalkFn is the type of function called for each entry visited by a recursive
 // manifest walk
@@ -166,7 +166,7 @@ func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) 
 		entry.Path = prefix + entry.Path
 		err := walkFn(&entry.ManifestEntry)
 		if err != nil {
-			if entry.ContentType == ManifestType && err == SkipManifest {
+			if entry.ContentType == ManifestType && err == ErrSkipManifest {
 				continue
 			}
 			return err
