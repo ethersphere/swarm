@@ -135,7 +135,7 @@ func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
 	New chunks to store are store using the putter which the caller provides.
 */
 func TreeSplit(data io.Reader, size int64, putter Putter) (k Address, wait func(), err error) {
-	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size, DefaultChunkSize)).Split()
+	return NewTreeSplitter(NewTreeSplitterParams(data, putter, size)).Split()
 }
 
 func NewJoinerParams(addr Address, getter Getter, depth int, chunkSize int64) *JoinerParams {
@@ -168,7 +168,7 @@ func NewTreeJoiner(params *JoinerParams) *TreeChunker {
 	return self
 }
 
-func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64, branches int64) *TreeSplitterParams {
+func NewTreeSplitterParams(reader io.Reader, putter Putter, size int64) *TreeSplitterParams {
 	hashSize := putter.RefSize()
 	return &TreeSplitterParams{
 		SplitterParams: SplitterParams{
