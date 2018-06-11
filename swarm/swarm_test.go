@@ -87,7 +87,7 @@ func TestNewSwarm(t *testing.T) {
 				if s.bzz == nil {
 					t.Error("bzz not initialized")
 				}
-				if s.ps == nil {
+				if s.Ps == nil {
 					t.Error("pss not initialized")
 				}
 				if s.api == nil {
