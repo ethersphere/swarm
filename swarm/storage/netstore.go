@@ -31,9 +31,10 @@ type (
 )
 
 // NetStore is an extention of local storage
-// it implements the DPA (distributed preimage archive) interface
+// it implements the ChunkStore interface
 // on request it initiates remote cloud retrieval using a fetcher
 // fetchers are unique to a chunk and are stored in fetchers LRU memory cache
+// fetchFuncFactory is a factory object to create a fetch function for a specific chunk address
 type NetStore struct {
 	mu           sync.Mutex
 	store        ChunkStore
@@ -41,6 +42,8 @@ type NetStore struct {
 	newFetchFunc NewFetchFunc
 }
 
+// NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
+// constructor function that can create a fetch function for a specific chunk address.
 func NewNetStore(store ChunkStore, newFetchFunc NewFetchFunc) (*NetStore, error) {
 	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
 	if err != nil {
@@ -149,8 +152,8 @@ type fetcher struct {
 	deliveredC chan struct{} // chan signalling chunk delivery to requests
 	fetch      FetchFunc     // remote fetch function to be called with a request source taken from the context
 	cancel     func()        // cleanup function for the remote fetcher to call when all upstream contexts are called
-	peers      *sync.Map
-	requestCnt int32
+	peers      *sync.Map     // the peers which asked for the chunk
+	requestCnt int32         // number of requests on this chunk. If all the requests are done (delivered or context is done) the cancel function is called
 }
 
 func newFetcher(addr Address, fetch FetchFunc, cancel func(), peers *sync.Map) *fetcher {
@@ -163,15 +166,18 @@ func newFetcher(addr Address, fetch FetchFunc, cancel func(), peers *sync.Map) *
 	}
 }
 
-// synchronous fetcher called by Get every time
+// Fetch fetches the chunk synchronously, it is called by NetStore.Get is the chunk is not available
+// locally.
 func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 	atomic.AddInt32(&f.requestCnt, 1)
 	defer func() {
+		// if all the requests are done the fetcher can be cancelled
 		if atomic.AddInt32(&f.requestCnt, -1) == 0 {
 			f.cancel()
 		}
 	}()
 
+	// The peer asking for the chunk. Maybe this should be a function parameter?
 	peer := rctx.Value("peer")
 	if peer != nil {
 		f.peers.Store(peer, true)
@@ -180,6 +186,7 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 
 	f.fetch(rctx)
 
+	// wait until either the chunk is delivered or the context is done
 	select {
 	case <-rctx.Done():
 		return nil, rctx.Err()
