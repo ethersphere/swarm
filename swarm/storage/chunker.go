@@ -522,6 +522,13 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 				}
 				return
 			}
+			if l := len(chunkData); l < 9 {
+				select {
+				case errC <- fmt.Errorf("chunk %v-%v incomplete; key: %s, data length %v", off, off+treeSize, fmt.Sprintf("%x", childKey), l):
+				case <-quitC:
+				}
+				return
+			}
 			if soff < off {
 				soff = off
 			}

@@ -340,6 +340,10 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 
 // Validate that the given key is a valid content address for the given data
 func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
+	if l := len(data); l < 9 {
+		log.Error("incomplete chunk data", "addr", addr, "length", l)
+		return false
+	}
 	hasher := v.Hasher()
 	hasher.ResetWithLength(data[:8])
 	hasher.Write(data[8:])
