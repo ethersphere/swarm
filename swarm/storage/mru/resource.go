@@ -734,6 +734,9 @@ func (h *Handler) parseUpdate(chunkdata []byte) (*Signature, uint32, uint32, str
 	version = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
 	cursor += 4
 	namelength := int(headerlength) - cursor + 4
+	if l := len(chunkdata); l < cursor+namelength {
+		return nil, 0, 0, "", nil, false, NewError(ErrNothingToReturn, fmt.Sprintf("chunk less than %v bytes is too short to read the name", l))
+	}
 	name = string(chunkdata[cursor : cursor+namelength])
 	cursor += namelength
 
