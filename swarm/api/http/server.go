@@ -86,7 +86,7 @@ type ServerConfig struct {
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
 // starts up http server
-func StartHttpServer(api *api.API, config *ServerConfig) {
+func StartHTTPServer(api *api.API, config *ServerConfig) {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(config.CorsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
@@ -672,7 +672,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 				return nil
 			}
 
-			return api.SkipManifest
+			return api.ErrSkipManifest
 		})
 		if entry == nil {
 			getFail.Inc(1)
@@ -888,14 +888,14 @@ func (s *Server) getManifestList(addr storage.Address, prefix string) (list api.
 			suffix := strings.TrimPrefix(entry.Path, prefix)
 			if index := strings.Index(suffix, "/"); index > -1 {
 				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return api.SkipManifest
+				return api.ErrSkipManifest
 			}
 			return nil
 		}
 
 		// the manifest neither has the prefix or needs recursing in to
 		// so just skip it
-		return api.SkipManifest
+		return api.ErrSkipManifest
 	})
 
 	return list, nil

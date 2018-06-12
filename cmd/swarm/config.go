@@ -173,7 +173,7 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 
 	if networkid := ctx.GlobalString(SwarmNetworkIdFlag.Name); networkid != "" {
 		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkId = uint64(id)
+			currentConfig.NetworkID = uint64(id)
 		}
 	}
 
@@ -208,8 +208,8 @@ func cmdLineOverride(currentConfig *bzzapi.Config, ctx *cli.Context) *bzzapi.Con
 		currentConfig.DeliverySkipCheck = true
 	}
 
-	currentConfig.SwapApi = ctx.GlobalString(SwarmSwapAPIFlag.Name)
-	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
+	currentConfig.SwapAPI = ctx.GlobalString(SwarmSwapAPIFlag.Name)
+	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 
@@ -260,7 +260,7 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if networkid := os.Getenv(SWARM_ENV_NETWORK_ID); networkid != "" {
 		if id, _ := strconv.Atoi(networkid); id != 0 {
-			currentConfig.NetworkId = uint64(id)
+			currentConfig.NetworkID = uint64(id)
 		}
 	}
 
@@ -302,10 +302,10 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 	}
 
 	if swapapi := os.Getenv(SWARM_ENV_SWAP_API); swapapi != "" {
-		currentConfig.SwapApi = swapapi
+		currentConfig.SwapAPI = swapapi
 	}
 
-	if currentConfig.SwapEnabled && currentConfig.SwapApi == "" {
+	if currentConfig.SwapEnabled && currentConfig.SwapAPI == "" {
 		utils.Fatalf(SWARM_ERR_SWAP_SET_NO_API)
 	}
 

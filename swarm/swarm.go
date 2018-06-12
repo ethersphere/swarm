@@ -106,11 +106,11 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	var backend chequebook.Backend
-	if config.SwapApi != "" && config.SwapEnabled {
-		log.Info("connecting to SWAP API", "url", config.SwapApi)
-		backend, err = ethclient.Dial(config.SwapApi)
+	if config.SwapAPI != "" && config.SwapEnabled {
+		log.Info("connecting to SWAP API", "url", config.SwapAPI)
+		backend, err = ethclient.Dial(config.SwapAPI)
 		if err != nil {
-			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", config.SwapApi, err)
+			return nil, fmt.Errorf("error connecting to SWAP API %s: %s", config.SwapAPI, err)
 		}
 	}
 
@@ -135,7 +135,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 
 	bzzconfig := &network.BzzConfig{
-		NetworkID:    config.NetworkId,
+		NetworkID:    config.NetworkID,
 		OverlayAddr:  addr.OAddr,
 		UnderlayAddr: addr.UAddr,
 		HiveParams:   config.HiveParams,
@@ -388,7 +388,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	// start swarm http proxy server
 	if self.config.Port != "" {
 		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
-		go httpapi.StartHttpServer(self.api, &httpapi.ServerConfig{
+		go httpapi.StartHTTPServer(self.api, &httpapi.ServerConfig{
 			Addr:       addr,
 			CorsString: self.config.Cors,
 		})

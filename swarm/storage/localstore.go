@@ -41,9 +41,9 @@ func NewDefaultLocalStoreParams() *LocalStoreParams {
 
 //this can only finally be set after all config options (file, cmd line, env vars)
 //have been evaluated
-func (self *LocalStoreParams) Init(path string) {
-	if self.ChunkDbPath == "" {
-		self.ChunkDbPath = filepath.Join(path, "chunks")
+func (p *LocalStoreParams) Init(path string) {
+	if p.ChunkDbPath == "" {
+		p.ChunkDbPath = filepath.Join(path, "chunks")
 	}
 }
 
@@ -96,9 +96,9 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // when the chunk is stored in memstore.
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
-func (self *LocalStore) Put(chunk *Chunk) {
+func (ls *LocalStore) Put(chunk *Chunk) {
 	valid := true
-	for _, v := range self.Validators {
+	for _, v := range ls.Validators {
 		if valid = v.Validate(chunk.Addr, chunk.SData); valid {
 			break
 		}
@@ -111,12 +111,12 @@ func (self *LocalStore) Put(chunk *Chunk) {
 
 	log.Trace("localstore.put", "addr", chunk.Addr)
 
-	self.mu.Lock()
-	defer self.mu.Unlock()
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
 
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
 
-	memChunk, err := self.memStore.Get(chunk.Addr)
+	memChunk, err := ls.memStore.Get(chunk.Addr)
 	switch err {
 	case nil:
 		if memChunk.ReqC == nil {
@@ -129,7 +129,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 		return
 	}
 
-	self.DbStore.Put(chunk)
+	ls.DbStore.Put(chunk)
 
 	// chunk is no longer a request, but a chunk with data, so replace it in memStore
 	newc := NewChunk(chunk.Addr, nil)
@@ -137,7 +137,7 @@ func (self *LocalStore) Put(chunk *Chunk) {
 	newc.Size = chunk.Size
 	newc.dbStoredC = chunk.dbStoredC
 
-	self.memStore.Put(newc)
+	ls.memStore.Put(newc)
 
 	if memChunk != nil && memChunk.ReqC != nil {
 		close(memChunk.ReqC)
@@ -148,15 +148,15 @@ func (self *LocalStore) Put(chunk *Chunk) {
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (self *LocalStore) Get(addr Address) (chunk *Chunk, err error) {
-	self.mu.Lock()
-	defer self.mu.Unlock()
+func (ls *LocalStore) Get(addr Address) (chunk *Chunk, err error) {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
 
-	return self.get(addr)
+	return ls.get(addr)
 }
 
-func (self *LocalStore) get(addr Address) (chunk *Chunk, err error) {
-	chunk, err = self.memStore.Get(addr)
+func (ls *LocalStore) get(addr Address) (chunk *Chunk, err error) {
+	chunk, err = ls.memStore.Get(addr)
 	if err == nil {
 		if chunk.ReqC != nil {
 			select {
@@ -170,25 +170,25 @@ func (self *LocalStore) get(addr Address) (chunk *Chunk, err error) {
 		return
 	}
 	metrics.GetOrRegisterCounter("localstore.get.cachemiss", nil).Inc(1)
-	chunk, err = self.DbStore.Get(addr)
+	chunk, err = ls.DbStore.Get(addr)
 	if err != nil {
 		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
 		return
 	}
 	chunk.Size = int64(binary.LittleEndian.Uint64(chunk.SData[0:8]))
-	self.memStore.Put(chunk)
+	ls.memStore.Put(chunk)
 	return
 }
 
 // retrieve logic common for local and network chunk retrieval requests
-func (self *LocalStore) GetOrCreateRequest(addr Address) (chunk *Chunk, created bool) {
+func (ls *LocalStore) GetOrCreateRequest(addr Address) (chunk *Chunk, created bool) {
 	metrics.GetOrRegisterCounter("localstore.getorcreaterequest", nil).Inc(1)
 
-	self.mu.Lock()
-	defer self.mu.Unlock()
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
 
 	var err error
-	chunk, err = self.get(addr)
+	chunk, err = ls.get(addr)
 	if err == nil && chunk.GetErrored() == nil {
 		metrics.GetOrRegisterCounter("localstore.getorcreaterequest.hit", nil).Inc(1)
 		log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v found locally", addr))
@@ -203,16 +203,16 @@ func (self *LocalStore) GetOrCreateRequest(addr Address) (chunk *Chunk, created 
 	metrics.GetOrRegisterCounter("localstore.getorcreaterequest.miss", nil).Inc(1)
 	log.Trace(fmt.Sprintf("LocalStore.GetOrRetrieve: %v not found locally. open new request", addr))
 	chunk = NewChunk(addr, make(chan bool))
-	self.memStore.Put(chunk)
+	ls.memStore.Put(chunk)
 	return chunk, true
 }
 
 // RequestsCacheLen returns the current number of outgoing requests stored in the cache
-func (self *LocalStore) RequestsCacheLen() int {
-	return self.memStore.requests.Len()
+func (ls *LocalStore) RequestsCacheLen() int {
+	return ls.memStore.requests.Len()
 }
 
 // Close the local store
-func (self *LocalStore) Close() {
-	self.DbStore.Close()
+func (ls *LocalStore) Close() {
+	ls.DbStore.Close()
 }

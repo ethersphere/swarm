@@ -56,7 +56,7 @@ func NewNetStore(localStore *LocalStore, retrieve func(chunk *Chunk) error) *Net
 // Get uses get method to retrieve request, but retries if the
 // ErrChunkNotFound is returned by get, until the netStoreRetryTimeout
 // is reached.
-func (self *NetStore) Get(addr Address) (chunk *Chunk, err error) {
+func (ns *NetStore) Get(addr Address) (chunk *Chunk, err error) {
 	timer := time.NewTimer(netStoreRetryTimeout)
 	defer timer.Stop()
 
@@ -84,7 +84,7 @@ func (self *NetStore) Get(addr Address) (chunk *Chunk, err error) {
 		defer limiter.Stop()
 
 		for {
-			chunk, err := self.get(addr, 0)
+			chunk, err := ns.get(addr, 0)
 			if err != ErrChunkNotFound {
 				// break retry only if the error is nil
 				// or other error then ErrChunkNotFound
@@ -122,16 +122,16 @@ func (self *NetStore) Get(addr Address) (chunk *Chunk, err error) {
 }
 
 // GetWithTimeout makes a single retrieval attempt for a chunk with a explicit timeout parameter
-func (self *NetStore) GetWithTimeout(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
-	return self.get(addr, timeout)
+func (ns *NetStore) GetWithTimeout(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
+	return ns.get(addr, timeout)
 }
 
-func (self *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
+func (ns *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, err error) {
 	if timeout == 0 {
 		timeout = searchTimeout
 	}
-	if self.retrieve == nil {
-		chunk, err = self.localStore.Get(addr)
+	if ns.retrieve == nil {
+		chunk, err = ns.localStore.Get(addr)
 		if err == nil {
 			return chunk, nil
 		}
@@ -140,14 +140,14 @@ func (self *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, er
 		}
 	} else {
 		var created bool
-		chunk, created = self.localStore.GetOrCreateRequest(addr)
+		chunk, created = ns.localStore.GetOrCreateRequest(addr)
 
 		if chunk.ReqC == nil {
 			return chunk, nil
 		}
 
 		if created {
-			err := self.retrieve(chunk)
+			err := ns.retrieve(chunk)
 			if err != nil {
 				// mark chunk request as failed so that we can retry it later
 				chunk.SetErrored(ErrChunkUnavailable)
@@ -171,11 +171,11 @@ func (self *NetStore) get(addr Address, timeout time.Duration) (chunk *Chunk, er
 }
 
 // Put is the entrypoint for local store requests coming from storeLoop
-func (self *NetStore) Put(chunk *Chunk) {
-	self.localStore.Put(chunk)
+func (ns *NetStore) Put(chunk *Chunk) {
+	ns.localStore.Put(chunk)
 }
 
 // Close chunk store
-func (self *NetStore) Close() {
-	self.localStore.Close()
+func (ns *NetStore) Close() {
+	ns.localStore.Close()
 }

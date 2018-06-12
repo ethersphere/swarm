@@ -60,8 +60,8 @@ type handshakeMsg struct {
 
 // internal representation of an individual symmetric key
 type handshakeKey struct {
-	symKeyId  *string
-	pubKeyId  *string
+	symKeyID  *string
+	pubKeyID  *string
 	limit     uint16
 	count     uint16
 	expiredAt time.Time
@@ -165,11 +165,11 @@ func (ctl *HandshakeController) validKeys(pubkeyid string, topic *Topic, in bool
 
 	for _, key := range *keystore {
 		if key.limit <= key.count {
-			ctl.releaseKey(*key.symKeyId, topic)
+			ctl.releaseKey(*key.symKeyID, topic)
 		} else if !key.expiredAt.IsZero() && key.expiredAt.Before(now) {
-			ctl.releaseKey(*key.symKeyId, topic)
+			ctl.releaseKey(*key.symKeyID, topic)
 		} else {
-			validkeys = append(validkeys, key.symKeyId)
+			validkeys = append(validkeys, key.symKeyID)
 		}
 	}
 	return
@@ -200,15 +200,15 @@ func (ctl *HandshakeController) updateKeys(pubkeyid string, topic *Topic, in boo
 	}
 	for i := 0; i < len(symkeyids); i++ {
 		storekey := handshakeKey{
-			symKeyId: &symkeyids[i],
-			pubKeyId: &pubkeyid,
+			symKeyID: &symkeyids[i],
+			pubKeyID: &pubkeyid,
 			limit:    limit,
 		}
 		*keystore = append(*keystore, storekey)
-		ctl.pss.symKeyPool[*storekey.symKeyId][*topic].protected = true
+		ctl.pss.symKeyPool[*storekey.symKeyID][*topic].protected = true
 	}
 	for i := 0; i < len(*keystore); i++ {
-		ctl.symKeyIndex[*(*keystore)[i].symKeyId] = &((*keystore)[i])
+		ctl.symKeyIndex[*(*keystore)[i].symKeyID] = &((*keystore)[i])
 	}
 }
 
@@ -239,8 +239,8 @@ func (ctl *HandshakeController) cleanHandshake(pubkeyid string, topic *Topic, in
 	if in {
 		for i, key := range handshake.inKeys {
 			if key.expiredAt.Before(now) || (key.expiredAt.IsZero() && key.limit <= key.count) {
-				log.Trace("handshake in clean remove", "symkeyid", *key.symKeyId)
-				deletes = append(deletes, *key.symKeyId)
+				log.Trace("handshake in clean remove", "symkeyid", *key.symKeyID)
+				deletes = append(deletes, *key.symKeyID)
 				handshake.inKeys[deletecount] = handshake.inKeys[i]
 				deletecount++
 			}
@@ -251,8 +251,8 @@ func (ctl *HandshakeController) cleanHandshake(pubkeyid string, topic *Topic, in
 		deletecount = 0
 		for i, key := range handshake.outKeys {
 			if key.expiredAt.Before(now) && (key.expiredAt.IsZero() && key.limit <= key.count) {
-				log.Trace("handshake out clean remove", "symkeyid", *key.symKeyId)
-				deletes = append(deletes, *key.symKeyId)
+				log.Trace("handshake out clean remove", "symkeyid", *key.symKeyID)
+				deletes = append(deletes, *key.symKeyID)
 				handshake.outKeys[deletecount] = handshake.outKeys[i]
 				deletecount++
 			}
@@ -426,10 +426,9 @@ func (ctl *HandshakeController) alertHandshake(pubkeyid string, symkeys []string
 			delete(ctl.keyC, pubkeyid)
 		}
 		return nil
-	} else {
-		if _, ok := ctl.keyC[pubkeyid]; !ok {
-			ctl.keyC[pubkeyid] = make(chan []string)
-		}
+	}
+	if _, ok := ctl.keyC[pubkeyid]; !ok {
+		ctl.keyC[pubkeyid] = make(chan []string)
 	}
 	return ctl.keyC[pubkeyid]
 }
@@ -536,7 +535,7 @@ func (api *HandshakeAPI) GetHandshakePublicKey(symkeyid string) (string, error) 
 	if storekey == nil {
 		return "", fmt.Errorf("invalid symkey id %s", symkeyid)
 	}
-	return *storekey.pubKeyId, nil
+	return *storekey.pubKeyID, nil
 }
 
 // Manually expire the given symkey

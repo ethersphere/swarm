@@ -101,7 +101,7 @@ func TestNewSwarm(t *testing.T) {
 		{
 			name: "with swap",
 			configure: func(config *api.Config) {
-				config.SwapApi = ipcEndpoint
+				config.SwapAPI = ipcEndpoint
 				config.SwapEnabled = true
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
@@ -113,7 +113,7 @@ func TestNewSwarm(t *testing.T) {
 		{
 			name: "with swap disabled",
 			configure: func(config *api.Config) {
-				config.SwapApi = ipcEndpoint
+				config.SwapAPI = ipcEndpoint
 				config.SwapEnabled = false
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {
@@ -125,7 +125,7 @@ func TestNewSwarm(t *testing.T) {
 		{
 			name: "with swap enabled and api endpoint blank",
 			configure: func(config *api.Config) {
-				config.SwapApi = ""
+				config.SwapAPI = ""
 				config.SwapEnabled = true
 			},
 			check: func(t *testing.T, s *Swarm, _ *api.Config) {

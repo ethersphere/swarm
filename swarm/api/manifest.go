@@ -144,9 +144,9 @@ func (a *API) NewManifestWalker(addr storage.Address, quitC chan bool) (*Manifes
 	return &ManifestWalker{a, trie, quitC}, nil
 }
 
-// SkipManifest is used as a return value from WalkFn to indicate that the
+// ErrSkipManifest is used as a return value from WalkFn to indicate that the
 // manifest should be skipped
-var SkipManifest = errors.New("skip this manifest")
+var ErrSkipManifest = errors.New("skip this manifest")
 
 // WalkFn is the type of function called for each entry visited by a recursive
 // manifest walk
@@ -166,7 +166,7 @@ func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) 
 		entry.Path = prefix + entry.Path
 		err := walkFn(&entry.ManifestEntry)
 		if err != nil {
-			if entry.ContentType == ManifestType && err == SkipManifest {
+			if entry.ContentType == ManifestType && err == ErrSkipManifest {
 				continue
 			}
 			return err
@@ -260,18 +260,18 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Address
 	return
 }
 
-func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
-	self.ref = nil // trie modified, hash needs to be re-calculated on demand
+func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
+	mt.ref = nil // trie modified, hash needs to be re-calculated on demand
 
 	if len(entry.Path) == 0 {
-		self.entries[256] = entry
+		mt.entries[256] = entry
 		return
 	}
 
 	b := entry.Path[0]
-	oldentry := self.entries[b]
+	oldentry := mt.entries[b]
 	if (oldentry == nil) || (oldentry.Path == entry.Path && oldentry.ContentType != ManifestType) {
-		self.entries[b] = entry
+		mt.entries[b] = entry
 		return
 	}
 
@@ -281,7 +281,7 @@ func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 	}
 
 	if (oldentry.ContentType == ManifestType) && (cpl == len(oldentry.Path)) {
-		if self.loadSubTrie(oldentry, quitC) != nil {
+		if mt.loadSubTrie(oldentry, quitC) != nil {
 			return
 		}
 		entry.Path = entry.Path[cpl:]
@@ -293,22 +293,22 @@ func (self *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 	commonPrefix := entry.Path[:cpl]
 
 	subtrie := &manifestTrie{
-		fileStore: self.fileStore,
-		encrypted: self.encrypted,
+		fileStore: mt.fileStore,
+		encrypted: mt.encrypted,
 	}
 	entry.Path = entry.Path[cpl:]
 	oldentry.Path = oldentry.Path[cpl:]
 	subtrie.addEntry(entry, quitC)
 	subtrie.addEntry(oldentry, quitC)
 
-	self.entries[b] = newManifestTrieEntry(&ManifestEntry{
+	mt.entries[b] = newManifestTrieEntry(&ManifestEntry{
 		Path:        commonPrefix,
 		ContentType: ManifestType,
 	}, subtrie)
 }
 
-func (self *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
-	for _, e := range self.entries {
+func (mt *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
+	for _, e := range mt.entries {
 		if e != nil {
 			cnt++
 			entry = e
@@ -317,27 +317,27 @@ func (self *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
 	return
 }
 
-func (self *manifestTrie) deleteEntry(path string, quitC chan bool) {
-	self.ref = nil // trie modified, hash needs to be re-calculated on demand
+func (mt *manifestTrie) deleteEntry(path string, quitC chan bool) {
+	mt.ref = nil // trie modified, hash needs to be re-calculated on demand
 
 	if len(path) == 0 {
-		self.entries[256] = nil
+		mt.entries[256] = nil
 		return
 	}
 
 	b := path[0]
-	entry := self.entries[b]
+	entry := mt.entries[b]
 	if entry == nil {
 		return
 	}
 	if entry.Path == path {
-		self.entries[b] = nil
+		mt.entries[b] = nil
 		return
 	}
 
 	epl := len(entry.Path)
 	if (entry.ContentType == ManifestType) && (len(path) >= epl) && (path[:epl] == entry.Path) {
-		if self.loadSubTrie(entry, quitC) != nil {
+		if mt.loadSubTrie(entry, quitC) != nil {
 			return
 		}
 		entry.subtrie.deleteEntry(path[epl:], quitC)
@@ -348,13 +348,13 @@ func (self *manifestTrie) deleteEntry(path string, quitC chan bool) {
 			if lastentry != nil {
 				lastentry.Path = entry.Path + lastentry.Path
 			}
-			self.entries[b] = lastentry
+			mt.entries[b] = lastentry
 		}
 	}
 }
 
-func (self *manifestTrie) recalcAndStore() error {
-	if self.ref != nil {
+func (mt *manifestTrie) recalcAndStore() error {
+	if mt.ref != nil {
 		return nil
 	}
 
@@ -362,7 +362,7 @@ func (self *manifestTrie) recalcAndStore() error {
 	buffer.WriteString(`{"entries":[`)
 
 	list := &Manifest{}
-	for _, entry := range self.entries {
+	for _, entry := range mt.entries {
 		if entry != nil {
 			if entry.Hash == "" { // TODO: paralellize
 				err := entry.subtrie.recalcAndStore()
@@ -382,22 +382,22 @@ func (self *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	key, wait, err2 := self.fileStore.Store(sr, int64(len(manifest)), self.encrypted)
+	key, wait, err2 := mt.fileStore.Store(sr, int64(len(manifest)), mt.encrypted)
 	wait()
-	self.ref = key
+	mt.ref = key
 	return err2
 }
 
-func (self *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (err error) {
+func (mt *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (err error) {
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
-		entry.subtrie, err = loadManifest(self.fileStore, hash, quitC)
+		entry.subtrie, err = loadManifest(mt.fileStore, hash, quitC)
 		entry.Hash = "" // might not match, should be recalculated
 	}
 	return
 }
 
-func (self *manifestTrie) listWithPrefixInt(prefix, rp string, quitC chan bool, cb func(entry *manifestTrieEntry, suffix string)) error {
+func (mt *manifestTrie) listWithPrefixInt(prefix, rp string, quitC chan bool, cb func(entry *manifestTrieEntry, suffix string)) error {
 	plen := len(prefix)
 	var start, stop int
 	if plen == 0 {
@@ -414,7 +414,7 @@ func (self *manifestTrie) listWithPrefixInt(prefix, rp string, quitC chan bool, 
 			return fmt.Errorf("aborted")
 		default:
 		}
-		entry := self.entries[i]
+		entry := mt.entries[i]
 		if entry != nil {
 			epl := len(entry.Path)
 			if entry.ContentType == ManifestType {
@@ -423,7 +423,7 @@ func (self *manifestTrie) listWithPrefixInt(prefix, rp string, quitC chan bool, 
 					l = epl
 				}
 				if prefix[:l] == entry.Path[:l] {
-					err := self.loadSubTrie(entry, quitC)
+					err := mt.loadSubTrie(entry, quitC)
 					if err != nil {
 						return err
 					}
@@ -442,22 +442,22 @@ func (self *manifestTrie) listWithPrefixInt(prefix, rp string, quitC chan bool, 
 	return nil
 }
 
-func (self *manifestTrie) listWithPrefix(prefix string, quitC chan bool, cb func(entry *manifestTrieEntry, suffix string)) (err error) {
-	return self.listWithPrefixInt(prefix, "", quitC, cb)
+func (mt *manifestTrie) listWithPrefix(prefix string, quitC chan bool, cb func(entry *manifestTrieEntry, suffix string)) (err error) {
+	return mt.listWithPrefixInt(prefix, "", quitC, cb)
 }
 
-func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manifestTrieEntry, pos int) {
+func (mt *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manifestTrieEntry, pos int) {
 	log.Trace(fmt.Sprintf("findPrefixOf(%s)", path))
 
 	if len(path) == 0 {
-		return self.entries[256], 0
+		return mt.entries[256], 0
 	}
 
 	//see if first char is in manifest entries
 	b := path[0]
-	entry = self.entries[b]
+	entry = mt.entries[b]
 	if entry == nil {
-		return self.entries[256], 0
+		return mt.entries[256], 0
 	}
 
 	epl := len(entry.Path)
@@ -465,7 +465,7 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 	if len(path) <= epl {
 		if entry.Path[:len(path)] == path {
 			if entry.ContentType == ManifestType {
-				err := self.loadSubTrie(entry, quitC)
+				err := mt.loadSubTrie(entry, quitC)
 				if err == nil && entry.subtrie != nil {
 					subentries := entry.subtrie.entries
 					for i := 0; i < len(subentries); i++ {
@@ -486,7 +486,7 @@ func (self *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *man
 		log.Trace(fmt.Sprintf("entry.ContentType = %v", entry.ContentType))
 		//the subentry is a manifest, load subtrie
 		if entry.ContentType == ManifestType && (strings.Contains(entry.Path, path) || strings.Contains(path, entry.Path)) {
-			err := self.loadSubTrie(entry, quitC)
+			err := mt.loadSubTrie(entry, quitC)
 			if err != nil {
 				return nil, 0
 			}
@@ -524,10 +524,10 @@ func RegularSlashes(path string) (res string) {
 	return
 }
 
-func (self *manifestTrie) getEntry(spath string) (entry *manifestTrieEntry, fullpath string) {
+func (mt *manifestTrie) getEntry(spath string) (entry *manifestTrieEntry, fullpath string) {
 	path := RegularSlashes(spath)
 	var pos int
 	quitC := make(chan bool)
-	entry, pos = self.findPrefixOf(path, quitC)
+	entry, pos = mt.findPrefixOf(path, quitC)
 	return entry, path[:pos]
 }
