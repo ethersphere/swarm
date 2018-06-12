@@ -58,6 +58,7 @@ type MountInfo struct {
 	fuseConnection *fuse.Conn
 	swarmApi       *api.API
 	lock           *sync.RWMutex
+	serveClose     chan struct{}
 }
 
 func NewMountInfo(mhash, mpoint string, sapi *api.API) *MountInfo {
@@ -70,6 +71,7 @@ func NewMountInfo(mhash, mpoint string, sapi *api.API) *MountInfo {
 		fuseConnection: nil,
 		swarmApi:       sapi,
 		lock:           &sync.RWMutex{},
+		serveClose:     make(chan struct{}),
 	}
 	return newMountInfo
 }
@@ -159,28 +161,64 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	go func() {
 		log.Info("swarmfs", "serving hash", mhash, "at", cleanedMountPoint)
 		filesys := &SwarmRoot{root: rootDir}
+		//start serving the actual file system; see note below
 		if err := fs.Serve(fconn, filesys); err != nil {
 			log.Warn("swarmfs could not serve the requested hash", "error", err)
 			serverr <- err
 		}
-
+		mi.serveClose <- struct{}{}
 	}()
 
+	/*
+	   IMPORTANT NOTE: the fs.Serve function is blocking;
+	   Serve builds up the actual fuse file system by calling the
+	   Attr functions on each SwarmFile, creating the file inodes;
+	   specifically calling the swarm's LazySectionReader.Size() to set the file size.
+
+	   This can take some time, and it appears that if we access the fuse file system
+	   too early, we can bring the tests to deadlock. The assumption so far is that
+	   at this point, the fuse driver didn't finish to initialize the file system.
+
+	   Accessing files too early not only deadlocks the tests, but locks the access
+	   of the fuse file completely, resulting in blocked resources at OS system level.
+	   Even a simple `ls /tmp/testDir/testMountDir` could deadlock in a shell.
+
+	   Workaround so far is to wait some time to give the OS enough time to initialize
+	   the fuse file system. During tests, this seemed to address the issue.
+
+	   HOWEVER IT SHOULD BE NOTED THAT THIS MAY ONLY BE AN EFFECT,
+	   AND THE DEADLOCK CAUSED BY SOMETHING ELSE BLOCKING ACCESS DUE TO SOME RACE CONDITION
+	   (caused in the bazil.org library and/or the SwarmRoot, SwarmDir and SwarmFile implementations)
+	*/
+	time.Sleep(2 * time.Second)
+
+	timer := time.NewTimer(mountTimeout)
+	defer timer.Stop()
 	// Check if the mount process has an error to report.
 	select {
-	case <-time.After(mountTimeout):
-		fuse.Unmount(cleanedMountPoint)
+	case <-timer.C:
+		log.Warn("swarmfs timed out mounting over FUSE", "mountpoint", cleanedMountPoint, "err", err)
+		err := fuse.Unmount(cleanedMountPoint)
+		if err != nil {
+			return nil, err
+		}
 		return nil, errMountTimeout
-
 	case err := <-serverr:
-		fuse.Unmount(cleanedMountPoint)
 		log.Warn("swarmfs error serving over FUSE", "mountpoint", cleanedMountPoint, "err", err)
+		err = fuse.Unmount(cleanedMountPoint)
 		return nil, err
 
 	case <-fconn.Ready:
+		//this signals that the actual mount point from the fuse.Mount call is ready;
+		//it does not signal though that the file system from fs.Serve is actually fully built up
+		if err := fconn.MountError; err != nil {
+			log.Error("Mounting error from fuse driver: ", "err", err)
+			return nil, err
+		}
 		log.Info("swarmfs now served over FUSE", "manifest", mhash, "mountpoint", cleanedMountPoint)
 	}
 
+	timer.Stop()
 	swarmfs.activeMounts[cleanedMountPoint] = mi
 	return mi, nil
 }
@@ -209,8 +247,13 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 		}
 	}
 
-	mountInfo.fuseConnection.Close()
+	err = mountInfo.fuseConnection.Close()
+	if err != nil {
+		return nil, err
+	}
 	delete(swarmfs.activeMounts, cleanedMountPoint)
+
+	<-mountInfo.serveClose
 
 	succString := fmt.Sprintf("swarmfs unmounting %v succeeded", cleanedMountPoint)
 	log.Info(succString)
@@ -221,7 +264,6 @@ func (swarmfs *SwarmFS) Unmount(mountpoint string) (*MountInfo, error) {
 func (swarmfs *SwarmFS) Listmounts() []*MountInfo {
 	swarmfs.swarmFsLock.RLock()
 	defer swarmfs.swarmFsLock.RUnlock()
-
 	rows := make([]*MountInfo, 0, len(swarmfs.activeMounts))
 	for _, mi := range swarmfs.activeMounts {
 		rows = append(rows, mi)

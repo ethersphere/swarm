@@ -38,7 +38,7 @@ func externalUnmount(mountPoint string) error {
 	// Try FUSE-specific commands if umount didn't work.
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.CommandContext(ctx, "diskutil", "umount", "force", mountPoint).Run()
+		return exec.CommandContext(ctx, "diskutil", "umount", mountPoint).Run()
 	case "linux":
 		return exec.CommandContext(ctx, "fusermount", "-u", mountPoint).Run()
 	default:
