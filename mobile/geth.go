@@ -115,16 +115,17 @@ type Node struct {
 }
 
 // NewNode creates and configures a new Geth node.
-
-func NewNode(datadir string, config *NodeConfig, ks *keystore.KeyStore) (stack *Node, _ error) {
+func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 	return NewNodeWithKeystore(datadir, config, nil)
 }
 
+// NewNodeWithKeystoreString creates and configures a new Geth node, and a keyKeyStorestore.
 func NewNodeWithKeystoreString(datadir string, config *NodeConfig, ksstr string) (stack *Node, _ error) {
 	ks := NewKeyStore(ksstr, keystore.LightScryptN, keystore.LightScryptP)
 	return NewNodeWithKeystore(datadir, config, ks)
 }
 
+// NewNodeWithKeystore creates and configures a new Geth node with an existing KeyStore.
 func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stack *Node, _ error) {
 
 	resultNode := &Node{}
@@ -280,6 +281,7 @@ func (n *Node) Stop() error {
 	return n.node.Stop()
 }
 
+// AddPeer can be used to add a Peer when discovery is disabled.
 func (n *Node) AddPeer(enode string) error {
 	rpcClient, err := n.node.Attach()
 	defer rpcClient.Close()
