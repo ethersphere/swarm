@@ -193,14 +193,19 @@ func (swarmfs *SwarmFS) Mount(mhash, mountpoint string) (*MountInfo, error) {
 	time.Sleep(2 * time.Second)
 
 	timer := time.NewTimer(mountTimeout)
+	defer timer.Stop()
 	// Check if the mount process has an error to report.
 	select {
 	case <-timer.C:
-		fuse.Unmount(cleanedMountPoint)
+		log.Warn("swarmfs timed out mounting over FUSE", "mountpoint", cleanedMountPoint, "err", err)
+		err := fuse.Unmount(cleanedMountPoint)
+		if err != nil {
+			return nil, err
+		}
 		return nil, errMountTimeout
 	case err := <-serverr:
-		fuse.Unmount(cleanedMountPoint)
 		log.Warn("swarmfs error serving over FUSE", "mountpoint", cleanedMountPoint, "err", err)
+		err = fuse.Unmount(cleanedMountPoint)
 		return nil, err
 
 	case <-fconn.Ready:
