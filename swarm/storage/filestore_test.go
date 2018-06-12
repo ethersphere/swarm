@@ -32,11 +32,11 @@ func TestFileStorerandom(t *testing.T) {
 }
 
 func testFileStoreRandom(toEncrypt bool, t *testing.T) {
-	tdb, err := newTestDbStore(false, false)
+	tdb, cleanup, err := newTestDbStore(false, false)
+	defer cleanup()
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
-	defer tdb.close()
 	db := tdb.LDBStore
 	db.setCapacity(50000)
 	memStore := NewMemStore(NewDefaultStoreParams(), db)
@@ -91,17 +91,17 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	}
 }
 
-func TestDPA_capacity(t *testing.T) {
-	testDPA_capacity(false, t)
-	testDPA_capacity(true, t)
+func TestFileStoreCapacity(t *testing.T) {
+	testFileStoreCapacity(false, t)
+	testFileStoreCapacity(true, t)
 }
 
-func testDPA_capacity(toEncrypt bool, t *testing.T) {
-	tdb, err := newTestDbStore(false, false)
+func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
+	tdb, cleanup, err := newTestDbStore(false, false)
+	defer cleanup()
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
-	defer tdb.close()
 	db := tdb.LDBStore
 	memStore := NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{

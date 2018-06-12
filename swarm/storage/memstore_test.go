@@ -52,20 +52,20 @@ func TestMemStoreCorrect_1(t *testing.T) {
 	testMemStoreCorrect(1, 1, 4104, t)
 }
 
-func TestMemStoreRandom_1_10k(t *testing.T) {
-	testMemStoreRandom(1, 5000, 0, t)
+func TestMemStoreRandom_1_1k(t *testing.T) {
+	testMemStoreRandom(1, 1000, 0, t)
 }
 
-func TestMemStoreCorrect_1_10k(t *testing.T) {
-	testMemStoreCorrect(1, 5000, 4096, t)
+func TestMemStoreCorrect_1_1k(t *testing.T) {
+	testMemStoreCorrect(1, 100, 4096, t)
 }
 
-func TestMemStoreRandom_8_10k(t *testing.T) {
-	testMemStoreRandom(8, 5000, 0, t)
+func TestMemStoreRandom_8_1k(t *testing.T) {
+	testMemStoreRandom(8, 1000, 0, t)
 }
 
-func TestMemStoreCorrect_8_10k(t *testing.T) {
-	testMemStoreCorrect(8, 5000, 4096, t)
+func TestMemStoreCorrect_8_1k(t *testing.T) {
+	testMemStoreCorrect(8, 1000, 4096, t)
 }
 
 func TestMemStoreNotFound(t *testing.T) {
@@ -90,20 +90,20 @@ func benchmarkMemStoreGet(n int, processors int, chunksize int64, b *testing.B) 
 	benchmarkStoreGet(m, processors, n, chunksize, b)
 }
 
-func BenchmarkMemStorePut_1_5k(b *testing.B) {
-	benchmarkMemStorePut(5000, 1, 4096, b)
+func BenchmarkMemStorePut_1_500(b *testing.B) {
+	benchmarkMemStorePut(500, 1, 4096, b)
 }
 
-func BenchmarkMemStorePut_8_5k(b *testing.B) {
-	benchmarkMemStorePut(5000, 8, 4096, b)
+func BenchmarkMemStorePut_8_500(b *testing.B) {
+	benchmarkMemStorePut(500, 8, 4096, b)
 }
 
-func BenchmarkMemStoreGet_1_5k(b *testing.B) {
-	benchmarkMemStoreGet(5000, 1, 4096, b)
+func BenchmarkMemStoreGet_1_500(b *testing.B) {
+	benchmarkMemStoreGet(500, 1, 4096, b)
 }
 
-func BenchmarkMemStoreGet_8_5k(b *testing.B) {
-	benchmarkMemStoreGet(5000, 8, 4096, b)
+func BenchmarkMemStoreGet_8_500(b *testing.B) {
+	benchmarkMemStoreGet(500, 8, 4096, b)
 }
 
 func newLDBStore(t *testing.T) (*LDBStore, func()) {

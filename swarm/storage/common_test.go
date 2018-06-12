@@ -55,9 +55,10 @@ func brokenLimitReader(data io.Reader, size int, errAt int) *brokenLimitedReader
 	}
 }
 
-func mputChunks(store ChunkStore, processors int, n int, chunksize int64) (hs []Address) {
+func mputRandomChunks(store ChunkStore, processors int, n int, chunksize int64) (hs []Address) {
 	return mput(store, processors, n, GenerateRandomChunk)
 }
+
 func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs []Address) {
 	wg := sync.WaitGroup{}
 	wg.Add(processors)
@@ -68,11 +69,9 @@ func mput(store ChunkStore, processors int, n int, f func(i int64) *Chunk) (hs [
 			for chunk := range c {
 				wg.Add(1)
 				chunk := chunk
+				store.Put(chunk)
 				go func() {
 					defer wg.Done()
-
-					store.Put(chunk)
-
 					<-chunk.dbStoredC
 				}()
 			}
@@ -153,7 +152,7 @@ func generateRandomData(l int) (r io.Reader, slice []byte) {
 }
 
 func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
-	hs := mputChunks(m, processors, n, chunksize)
+	hs := mputRandomChunks(m, processors, n, chunksize)
 	err := mget(m, hs, nil)
 	if err != nil {
 		t.Fatalf("testStore failed: %v", err)
@@ -161,7 +160,7 @@ func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *te
 }
 
 func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
-	hs := mputChunks(m, processors, n, chunksize)
+	hs := mputRandomChunks(m, processors, n, chunksize)
 	f := func(h Address, chunk *Chunk) error {
 		if !bytes.Equal(h, chunk.Addr) {
 			return fmt.Errorf("key does not match retrieved chunk Key")
@@ -184,13 +183,32 @@ func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int64, t *t
 func benchmarkStorePut(store ChunkStore, processors int, n int, chunksize int64, b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		mputChunks(store, processors, n, chunksize)
+
+	chunks := make([]*Chunk, n)
+	i := 0
+	f := func(dataSize int64) *Chunk {
+		chunk := GenerateRandomChunk(dataSize)
+		chunks[i] = chunk
+		i++
+		return chunk
+	}
+
+	mput(store, processors, n, f)
+
+	f = func(dataSize int64) *Chunk {
+		chunk := chunks[i]
+		i++
+		return chunk
+	}
+
+	for j := 0; j < b.N; j++ {
+		i = 0
+		mput(store, processors, n, f)
 	}
 }
 
 func benchmarkStoreGet(store ChunkStore, processors int, n int, chunksize int64, b *testing.B) {
-	hs := mputChunks(store, processors, n, chunksize)
+	hs := mputRandomChunks(store, processors, n, chunksize)
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
