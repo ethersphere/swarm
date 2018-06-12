@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2018 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -29,19 +29,27 @@ import (
 
 var searchTimeout = 3000 * time.Millisecond
 
-type RequestFunc func(context.Context, storage.Address, storage.Address, bool, *sync.Map) (storage.Address, chan struct{}, error)
+type RequestFunc func(context.Context, *Request) (storage.Address, chan struct{}, error)
 
 // Fetcher is created when a chunk is not found locally
 // it starts a request handler loop once and keeps it
 // alive until all active requests complete
 // either because the chunk is delivered or requestor cancelled/timed out
 // fetcher self destroys
+// NetStore instantiates the
 // TODO: cancel all forward requests after termination
 type Fetcher struct {
 	request   RequestFunc          // request function fetcher calls to issue retrieve request for a chunk
 	addr      storage.Address      // the address of the chunk to be fetched
 	sourceC   chan storage.Address // channel of sources (peer addresses)
 	skipCheck bool
+}
+
+type Request struct {
+	addr        storage.Address // chunk address
+	source      storage.Address // address of peer to request from (can be nil)
+	skipCheck   bool            // whether to offer the chunk first or deliver directly
+	peersToSkip *sync.Map       // peers not to request chunk from (only makes sense if source is nil)
 }
 
 // FetcherFactory is initialised with a request function and can create fetchers
@@ -60,9 +68,9 @@ func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 
 // New contructs a new fetcher, starts it and returns a fetch function
 // to be called by the NetStore when handling requests and offers
-func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peers *sync.Map) storage.FetchFunc {
+func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peersToSkip *sync.Map) storage.FetchFunc {
 	fetcher := NewFetcher(source, f.request, f.skipCheck)
-	fetcher.start(ctx, peers)
+	go fetcher.run(ctx, peersToSkip)
 	return fetcher.fetch
 }
 
@@ -92,7 +100,7 @@ func (f *Fetcher) fetch(ctx context.Context) {
 
 // start prepares the Fetcher
 // it keeps the Fetcher alive within the lifecycle of the passed context
-func (f *Fetcher) start(ctx context.Context, peers *sync.Map) {
+func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 	var (
 		doRequest bool              // determines if retrieval is initiated in the current iteration
 		wait      *time.Timer       // timer for search timeout
@@ -182,38 +190,47 @@ func (f *Fetcher) start(ctx context.Context, peers *sync.Map) {
 // * a go routine is started that reports on the gone channel if the peer is disconnected (or terminated their streamer)
 func (f *Fetcher) doRequest(ctx context.Context, gone chan storage.Address, peersToSkip *sync.Map, sources []storage.Address) ([]storage.Address, error) {
 	var i int
-	var addr storage.Address
+	var sourceAddr storage.Address
 	var quit chan struct{}
 	var err error
 
+	req := &Request{
+		addr:        f.addr,
+		skipCheck:   f.skipCheck,
+		peersToSkip: peersToSkip,
+	}
 	// iterate over known sources
 	for i = 0; i < len(sources); i++ {
-		addr, quit, err = f.request(ctx, f.addr, sources[i], f.skipCheck, peersToSkip)
+		req.source = sources[i]
+		sourceAddr, quit, err = f.request(ctx, req)
 		if err == nil {
 			// remove the peer from known sources
+			// Note: we can modify the source although we are looping on it, because we break from the loop immediately
 			sources = append(sources[:i], sources[i+1:]...)
+			break
 		}
 	}
 
 	// if there are no known sources, or none available, we try request from a closest node
 	if i == len(sources) {
-		addr, quit, err = f.request(ctx, f.addr, nil, f.skipCheck, peersToSkip)
+		req.source = nil
+		sourceAddr, quit, err = f.request(ctx, req)
 		if err != nil {
 			// if no peers found to request from
 			return sources, err
 		}
 	}
 	// add peer to the set of peers to skip from now
-	peersToSkip.Store(addr.Hex(), true)
+	peersToSkip.Store(sourceAddr.Hex(), true)
 
-	// if the quit channel is closed, it indicates that the peer we requested from
+	// if the quit channel is closed, it indicates that the source peer we requested from
 	// disconnected or terminated its streamer
-	// here start a go routine that watches this channel and reports the peer on the gone channel
+	// here start a go routine that watches this channel and reports the source peer on the gone channel
 	// this go routine quits if the fetcher global context is done to prevent process leak
 	go func() {
 		select {
 		case <-quit:
-			gone <- addr
+			gone <- sourceAddr
 		case <-ctx.Done():
 		}
 	}()
