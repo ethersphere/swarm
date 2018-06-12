@@ -219,7 +219,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 	}
 	if config.PssEnabled && ks != nil {
 		log.Debug("pss enabled")
-		bzzSvc := func(ctx *node.ServiceContext) (node.Service, error) {
+		bzzServiceFunc := func(ctx *node.ServiceContext) (node.Service, error) {
 			log.Debug("keystore", "ks", ks)
 			var a accounts.Account
 			var err error
@@ -261,7 +261,7 @@ func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stac
 			resultNode.Ps = &Pss{ps: svc.Ps}
 			return svc, err
 		}
-		if err := rawStack.Register(bzzSvc); err != nil {
+		if err := rawStack.Register(bzzServiceFunc); err != nil {
 			return nil, fmt.Errorf("pss init: %v", err)
 		}
 	}
