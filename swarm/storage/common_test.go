@@ -181,9 +181,6 @@ func testStoreCorrect(m ChunkStore, processors int, n int, chunksize int64, t *t
 }
 
 func benchmarkStorePut(store ChunkStore, processors int, n int, chunksize int64, b *testing.B) {
-	b.ReportAllocs()
-	b.ResetTimer()
-
 	chunks := make([]*Chunk, n)
 	i := 0
 	f := func(dataSize int64) *Chunk {
@@ -200,6 +197,9 @@ func benchmarkStorePut(store ChunkStore, processors int, n int, chunksize int64,
 		i++
 		return chunk
 	}
+
+	b.ReportAllocs()
+	b.ResetTimer()
 
 	for j := 0; j < b.N; j++ {
 		i = 0
