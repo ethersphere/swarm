@@ -22,7 +22,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -52,9 +51,9 @@ type updateRequestJSON struct {
 
 // SignedResourceUpdate contains signature information about a resource update
 type SignedResourceUpdate struct {
-	resourceData
-	signature  *Signature
-	updateAddr storage.Address
+	resourceData // actual content that will be put on the chunk, less signature
+	signature    *Signature
+	updateAddr   storage.Address // resulting chunk address for the update
 }
 
 // Update chunk layout
@@ -85,10 +84,6 @@ type UpdateRequest struct {
 func NewUpdateRequest(name string, frequency, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*UpdateRequest, error) {
 	if !isSafeName(name) {
 		return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s' when creating NewMruRequest", name))
-	}
-
-	if startTime == 0 {
-		startTime = uint64(time.Now().Unix())
 	}
 
 	updateRequest := &UpdateRequest{
