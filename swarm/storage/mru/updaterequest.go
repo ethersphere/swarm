@@ -36,8 +36,8 @@ type Signature [signatureLength]byte
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
-	Name      string `json:"name"`
-	Frequency uint64 `json:"frequency"`
+	Name      string `json:"name,omitempty"`
+	Frequency uint64 `json:"frequency,omitempty"`
 	StartTime uint64 `json:"startTime,omitempty"`
 	OwnerAddr string `json:"ownerAddr"`
 	RootAddr  string `json:"rootAddr,omitempty"`
@@ -218,11 +218,6 @@ func (r *UpdateRequest) SetData(data []byte) {
 // decode takes an update request JSON and returns an UpdateRequest
 func (j *updateRequestJSON) decode() (*UpdateRequest, error) {
 
-	// make sure name only contains ascii values
-	if !isSafeName(j.Name) {
-		return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s'", j.Name))
-	}
-
 	r := &UpdateRequest{
 		SignedResourceUpdate: SignedResourceUpdate{
 			resourceData: resourceData{
@@ -269,8 +264,14 @@ func (j *updateRequestJSON) decode() (*UpdateRequest, error) {
 	}
 
 	if r.frequency > 0 { // we use frequency > 0 to know it is a new resource creation
-		// for new resource creation, rootAddr and metaHash are optional.
-		// however, if the user sent them, we check them.
+		// for new resource creation, rootAddr and metaHash are optional because
+		// we can derive them from the content itself.
+		// however, if the user sent them, we check them for consistency.
+
+		// make sure name only contains ascii values
+		if !isSafeName(j.Name) {
+			return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s'", j.Name))
+		}
 		r.rootAddr, r.metaHash, _ = r.resourceMetadata.hash()
 		if j.RootAddr != "" && !bytes.Equal(declaredRootAddr, r.rootAddr) {
 			return nil, NewError(ErrInvalidValue, "rootAddr does not match resource metadata")
@@ -351,7 +352,7 @@ func resourceUpdateChunkDigest(updateAddr storage.Address, metaHash []byte, data
 }
 
 // resourceUpdateChunkAddr calculates the resource update chunk address (formerly known as resourceHash)
-func resourceUpdateChunkAddr(period uint32, version uint32, rootAddr storage.Address) storage.Address {
+func resourceUpdateChunkAddr(period uint32, version uint32, rootAddr storage.Address) (updateAddr storage.Address) {
 	hasher := hashPool.Get().(storage.SwarmHash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()

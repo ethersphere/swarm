@@ -119,10 +119,7 @@ func TestReverse(t *testing.T) {
 	}
 
 	// signer containing private key
-	signer, err := newTestSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
+	signer := newAliceSigner()
 
 	// set up rpc and create resourcehandler
 	_, _, teardownTest, err := setupTest(timeProvider, signer)
@@ -210,10 +207,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// signer containing private key
-	signer, err := newTestSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
+	signer := newAliceSigner()
 
 	rh, datadir, teardownTest, err := setupTest(timeProvider, signer)
 	if err != nil {
@@ -448,10 +442,7 @@ func TestMultihash(t *testing.T) {
 	}
 
 	// signer containing private key
-	signer, err := newTestSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
+	signer := newAliceSigner()
 
 	// set up rpc and create resourcehandler
 	rh, datadir, teardownTest, err := setupTest(timeProvider, signer)
@@ -644,17 +635,11 @@ func TestValidator(t *testing.T) {
 		currentTime: startTime,
 	}
 
-	// signer containing private key
-	signer, err := newTestSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// signer containing private key. Alice will be the good girl
+	signer := newAliceSigner()
 
-	// fake signer for false results
-	falseSigner, err := newFalseSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// fake signer for false results. Bob will play the bad guy today.
+	falseSigner := newBobSigner()
 
 	// set up  sim timeProvider
 	rh, _, teardownTest, err := setupTest(timeProvider, signer)
@@ -732,10 +717,7 @@ func TestValidatorInStore(t *testing.T) {
 	}
 
 	// signer containing private key
-	signer, err := newTestSigner()
-	if err != nil {
-		t.Fatal(err)
-	}
+	signer := newAliceSigner()
 
 	// set up localstore
 	datadir, err := ioutil.TempDir("", "storage-testresourcevalidator")
@@ -846,20 +828,19 @@ func setupTest(timeProvider timestampProvider, signer Signer) (rh *TestHandler, 
 	return rh, datadir, cleanF, err
 }
 
-func newTestSigner() (*GenericSigner, error) {
-	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
-	if err != nil {
-		return nil, err
-	}
-	return NewGenericSigner(privKey), nil
+func newAliceSigner() *GenericSigner {
+	privKey, _ := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	return NewGenericSigner(privKey)
 }
 
-func newFalseSigner() (*GenericSigner, error) {
-	privKey, err := crypto.HexToECDSA("accedeaccedeaccedeaccedeaccedeaccedeaccedeaccedeaccedeaccedecaca")
-	if err != nil {
-		return nil, err
-	}
-	return NewGenericSigner(privKey), nil
+func newBobSigner() *GenericSigner {
+	privKey, _ := crypto.HexToECDSA("accedeaccedeaccedeaccedeaccedeaccedeaccedeaccedeaccedeaccedecaca")
+	return NewGenericSigner(privKey)
+}
+
+func newCharlieSigner() *GenericSigner {
+	privKey, _ := crypto.HexToECDSA("facadefacadefacadefacadefacadefacadefacadefacadefacadefacadefaca")
+	return NewGenericSigner(privKey)
 }
 
 func getUpdateDirect(rh *Handler, addr storage.Address) ([]byte, error) {
