@@ -1,4 +1,5 @@
-// Mutable resource is an entity which allows updates to a resource
+// Package mru defines Mutable resource updates.
+// A Mutable Resource is an entity which allows updates to a resource
 // without resorting to ENS on each update.
 // The update scheme is built on swarm chunks with chunk keys following
 // a predictable, versionable pattern.
