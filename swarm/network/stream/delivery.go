@@ -44,17 +44,17 @@ var (
 )
 
 type Delivery struct {
-	fileStore storage.FileStore
-	overlay   network.Overlay
-	receiveC  chan *ChunkDeliveryMsg
-	getPeer   func(discover.NodeID) *Peer
+	chunkStore storage.ChunkStore
+	overlay    network.Overlay
+	receiveC   chan *ChunkDeliveryMsg
+	getPeer    func(discover.NodeID) *Peer
 }
 
-func NewDelivery(overlay network.Overlay, fileStore storage.FileStore) *Delivery {
+func NewDelivery(overlay network.Overlay, chunkStore storage.ChunkStore) *Delivery {
 	d := &Delivery{
-		fileStore: fileStore,
-		overlay:   overlay,
-		receiveC:  make(chan *ChunkDeliveryMsg, deliveryCap),
+		chunkStore: chunkStore,
+		overlay:    overlay,
+		receiveC:   make(chan *ChunkDeliveryMsg, deliveryCap),
 	}
 
 	go d.processReceivedChunks()
@@ -65,18 +65,18 @@ func NewDelivery(overlay network.Overlay, fileStore storage.FileStore) *Delivery
 type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
-	fileStore  storage.FileStore
+	chunkStore storage.ChunkStore
 	currentLen uint64
 	quit       chan struct{}
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
-func NewSwarmChunkServer(fileStore storage.FileStore) *SwarmChunkServer {
+func NewSwarmChunkServer(chunkStore storage.ChunkStore) *SwarmChunkServer {
 	s := &SwarmChunkServer{
-		deliveryC: make(chan []byte, deliveryCap),
-		batchC:    make(chan []byte),
-		fileStore: fileStore,
-		quit:      make(chan struct{}),
+		deliveryC:  make(chan []byte, deliveryCap),
+		batchC:     make(chan []byte),
+		chunkStore: chunkStore,
+		quit:       make(chan struct{}),
 	}
 	go s.processDeliveries()
 	return s
@@ -140,7 +140,7 @@ func (s *SwarmChunkServer) Close() {
 
 // GetData retrives chunk data from db store
 func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.fileStore.Get(immediately, storage.Address(key))
+	chunk, err := s.chunkStore.Get(immediately, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 	}
 	streamer := s.Server.(*SwarmChunkServer)
 	go func() {
-		chunk, err := d.fileStore.Get(streamer.context(req), req.Addr)
+		chunk, err := d.chunkStore.Get(streamer.context(req), req.Addr)
 		if err != nil {
 			return
 		}
@@ -205,7 +205,7 @@ func (d *Delivery) processReceivedChunks() {
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
 
-		_, err := d.fileStore.Put(storage.NewChunk(req.Addr, req.SData))
+		_, err := d.chunkStore.Put(storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				req.peer.Drop(err)

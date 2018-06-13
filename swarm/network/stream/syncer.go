@@ -32,7 +32,7 @@ const (
 )
 
 type SyncDB interface {
-	Get(key storage.Address) (chunk storage.Chunk, err error)
+	storage.ChunkStore
 	BinIndex(po uint8) uint64
 	Iterator(from uint64, to uint64, po uint8, f func(storage.Address, uint64) bool) error
 }

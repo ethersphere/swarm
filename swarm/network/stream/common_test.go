@@ -48,7 +48,7 @@ import (
 
 var (
 	deliveries   map[discover.NodeID]*Delivery
-	stores       map[discover.NodeID]storage.ChunkStore
+	stores       map[discover.NodeID]SyncDB
 	toAddr       func(discover.NodeID) *network.BzzAddr
 	peerCount    func(discover.NodeID) int
 	adapter      = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
@@ -63,7 +63,7 @@ var (
 	waitPeerErrC      chan error
 	chunkSize         = 4096
 	registries        map[discover.NodeID]*TestRegistry
-	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
+	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (SyncDB, error)
 	subscriptionCount = 0
 	globalStore       mock.GlobalStorer
 	globalStoreDir    string
@@ -108,20 +108,20 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 		return nil, err
 	}
 	store := stores[id]
-	netStore, err := storage.NewNetStore(store, newFakeFetcher)
-	delivery := NewDelivery(kad, dpa)
+	delivery := NewDelivery(kad, store)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, storage.NewFakeDPA(store), state.NewInmemoryStore(), &RegistryOptions{
+	r := NewRegistry(addr, delivery, store, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,
 	})
 	RegisterSwarmSyncerServer(r, store)
-	RegisterSwarmSyncerClient(r, dpa)
+	RegisterSwarmSyncerClient(r, store)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	fileStore := storage.NewFileStore(netStore, storage.NewDPAParams())
-	testRegistry := &TestRegistry{Registry: r, dpaapi: dpaapi}
+	netStore, err := storage.NewNetStore(store, newFakeFetcher)
+	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
+	testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
 	registries[id] = testRegistry
 	return testRegistry, nil
 }
