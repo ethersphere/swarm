@@ -33,18 +33,37 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	signer := newCharlieSigner()  //Charlie, our good guy
 	falseSigner := newBobSigner() //Bob will play the bad guy again
 
-	// Create a resource to our good guy Charlie's name
-
+	// Create a resource to our good guy Charlie's name, however, Charlie's
+	// keyboard was upside down and generated invalid characters for his resource name
+	// Only plain ASCII characters are allowed.
 	createRequest, err := NewCreateRequest("sɹǝʇɔɐɹɐɥɔ ǝƃuɐɹʇs ɥʇᴉʍ ʇnq 'ǝɔɹnosǝɹ ǝɯosǝʍɐ ʎW",
 		300, 1528900000, signer.Address(), nil, false)
 	if err == nil {
 		t.Fatal("Expected create request to fail since the name contains bad characters")
 	}
 
+	// Now Charlie tries again, this time with a proper resource name
 	createRequest, err = NewCreateRequest("a good resource name",
 		300, 1528900000, signer.Address(), nil, false)
 	if err != nil {
 		t.Fatalf("Error creating resource name: %s", err)
+	}
+
+	// We now encode the create message to simulate we send it over the wire
+	messageRawData, err := EncodeUpdateRequest(createRequest)
+	if err != nil {
+		t.Fatalf("Error encoding create resource request: %s", err)
+	}
+
+	// ... the message arrives and is decoded...
+	recoveredCreateRequest, err := DecodeUpdateRequest(messageRawData)
+	if err != nil {
+		t.Fatalf("Error decoding create resource request: %s", err)
+	}
+
+	// ... but verification should fail because it is not signed!
+	if err := recoveredCreateRequest.Verify(); err == nil {
+		t.Fatal("Expected Verify to fail since the message is not signed")
 	}
 
 	// We now assume that the resource was created and propagated. With rootAddr we can retrieve the resource metadata
@@ -71,7 +90,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		},
 	}
 
-	messageRawData, err := EncodeUpdateRequest(request)
+	messageRawData, err = EncodeUpdateRequest(request)
 	if err != nil {
 		t.Fatalf("Error encoding update request: %s", err)
 	}
