@@ -683,7 +683,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	}
 	etag := common.Bytes2Hex(addr)
 	noneMatchEtag := r.Header.Get("If-None-Match")
-	w.Header().Set("ETag", etag) // set etag to manifest key or raw entry key.
+	w.Header().Set("ETag", fmt.Sprintf("%q", etag)) // set etag to manifest key or raw entry key.
 	if noneMatchEtag != "" {
 		if bytes.Equal(storage.Address(common.Hex2Bytes(noneMatchEtag)), addr) {
 			Respond(w, r, "Not Modified", http.StatusNotModified)
@@ -931,7 +931,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
-	w.Header().Set("ETag", etag) // set etag to actual content key.
+	w.Header().Set("ETag", fmt.Sprintf("%q", etag)) // set etag to actual content key.
 	if noneMatchEtag != "" {
 		if bytes.Equal(storage.Address(common.Hex2Bytes(noneMatchEtag)), contentKey) {
 			Respond(w, r, "Not Modified", http.StatusNotModified)
