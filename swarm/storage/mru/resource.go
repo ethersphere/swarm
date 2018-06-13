@@ -229,13 +229,13 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 // Validate is a chunk validation method
 // If it's a resource update, the chunk address is checked against the ownerAddr of the update's signature
 // It implements the storage.ChunkValidator interface
-func (h *Handler) Validate(addr storage.Address, data []byte) bool {
+func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	//metadata chunks have the first two bytes set to zero
 	if data[0] == 0 && data[1] == 0 && len(data) > common.AddressLength {
 		//metadata chunk
 		rootAddr, _ := metadataHash(data)
-		valid := bytes.Equal(addr, rootAddr)
+		valid := bytes.Equal(chunkAddr, rootAddr)
 		if !valid {
 			log.Warn("Invalid root metadata chunk")
 		}
@@ -246,7 +246,7 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 	// valid signature and proof of ownership of the resource it is trying
 	// to update
 
-	_, err := parseUpdate(addr, data)
+	_, err := parseUpdate(chunkAddr, data)
 	if err != nil {
 		log.Warn("Invalid resource chunk")
 		return false
@@ -256,8 +256,8 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 }
 
 // GetContent retrieves the data payload of the last synced update of the Mutable Resource
-func (h *Handler) GetContent(addr storage.Address) (storage.Address, []byte, error) {
-	rsrc := h.get(addr)
+func (h *Handler) GetContent(rootAddr storage.Address) (storage.Address, []byte, error) {
+	rsrc := h.get(rootAddr)
 	if rsrc == nil || !rsrc.isSynced() {
 		return nil, nil, NewError(ErrNotFound, " does not exist or is not synced")
 	}
@@ -265,8 +265,8 @@ func (h *Handler) GetContent(addr storage.Address) (storage.Address, []byte, err
 }
 
 // GetLastPeriod retrieves the period of the last synced update of the Mutable Resource
-func (h *Handler) GetLastPeriod(addr storage.Address) (uint32, error) {
-	rsrc := h.get(addr)
+func (h *Handler) GetLastPeriod(rootAddr storage.Address) (uint32, error) {
+	rsrc := h.get(rootAddr)
 	if rsrc == nil {
 		return 0, NewError(ErrNotFound, " does not exist")
 	} else if !rsrc.isSynced() {
@@ -276,8 +276,8 @@ func (h *Handler) GetLastPeriod(addr storage.Address) (uint32, error) {
 }
 
 // GetVersion retrieves the period of the last synced update of the Mutable Resource
-func (h *Handler) GetVersion(addr storage.Address) (uint32, error) {
-	rsrc := h.get(addr)
+func (h *Handler) GetVersion(rootAddr storage.Address) (uint32, error) {
+	rsrc := h.get(rootAddr)
 	if rsrc == nil {
 		return 0, NewError(ErrNotFound, " does not exist")
 	} else if !rsrc.isSynced() {
@@ -519,7 +519,7 @@ func (h *Handler) lookup(rsrc *resource, period uint32, version uint32, limit ui
 	return nil, NewError(ErrNotFound, "no updates found")
 }
 
-// Load retrieves the Mutable Resource metadata chunk stored at addr
+// Load retrieves the Mutable Resource metadata chunk stored at rootAddr
 // Upon retrieval it creates/updates the index entry for it with metadata corresponding to the chunk contents
 func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource, error) {
 	chunk, err := h.chunkStore.GetWithTimeout(ctx, rootAddr, defaultRetrieveTimeout)
@@ -570,7 +570,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 
 // retrieve update metadata from chunk data
 // mirrors newUpdateChunk(). TODO: convert to a SignedResourceUpdate method.
-func parseUpdate(chunkAddr storage.Address, chunkdata []byte) (*SignedResourceUpdate, error) {
+func parseUpdate(updateAddr storage.Address, chunkdata []byte) (*SignedResourceUpdate, error) {
 	// for update chunk layout see SignedResourceUpdate definition
 
 	if len(chunkdata) < minimumUpdateDataLength {
@@ -636,6 +636,11 @@ func parseUpdate(chunkAddr storage.Address, chunkdata []byte) (*SignedResourceUp
 	copy(metaHash, chunkdata[cursor:cursor+storage.KeyLength])
 	cursor += storage.KeyLength
 
+	//Verify that the updateAddr key that identifies this chunk matches its contents:
+	if !bytes.Equal(updateAddr, resourceUpdateChunkAddr(period, version, rootAddr)) {
+		return nil, NewError(ErrInvalidSignature, "period,version,rootAddr contained in update chunk do not match updateAddr")
+	}
+
 	// if multihash content is indicated we check the validity of the multihash
 	// \TODO the check above for multihash probably is sufficient also for this case (or can be with a small adjustment) and if so this code should be removed
 	var intdatalength int
@@ -672,7 +677,7 @@ func parseUpdate(chunkAddr storage.Address, chunkdata []byte) (*SignedResourceUp
 
 	r := &SignedResourceUpdate{
 		signature:  signature,
-		updateAddr: chunkAddr,
+		updateAddr: updateAddr,
 		resourceData: resourceData{
 			period:    period,
 			version:   version,
