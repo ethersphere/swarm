@@ -459,6 +459,9 @@ func (pc *PyramidChunker) prepareChunks(isAppend bool) {
 
 		if err != nil {
 			if err == io.EOF || err == io.ErrUnexpectedEOF {
+
+				pc.cleanChunkLevels()
+
 				// Check if we are appending or the chunk is the only one.
 				if parent.branchCount == 1 && (pc.depth() == 0 || isAppend) {
 					// Data is exactly one chunk.. pick the last chunk key as root
@@ -486,6 +489,8 @@ func (pc *PyramidChunker) prepareChunks(isAppend bool) {
 
 			// Data got exhausted... signal to send any parent tree related chunks
 			if int64(readBytes) < pc.chunkSize {
+
+				pc.cleanChunkLevels()
 
 				// only one data chunk .. so dont add any parent chunk
 				if parent.branchCount <= 1 {
@@ -622,10 +627,7 @@ func (pc *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync
 		if !isAppend {
 			chunkWG.Wait()
 			if compress {
-				// Remove the chunk level by cutting chunkLevel slice.
-				// Do not set the chunkLevel to nil, as it breaks tree building
-				// in edge cases.
-				pc.chunkLevel = append(pc.chunkLevel[:lvl], append(pc.chunkLevel[lvl+1:], nil)...)
+				pc.chunkLevel[lvl] = nil
 			}
 		}
 	}
@@ -684,4 +686,14 @@ func (pc *PyramidChunker) depth() (d int) {
 		d++
 	}
 	return
+}
+
+// cleanChunkLevels removes gaps (nil levels) between chunk levels
+// that are not nil.
+func (pc *PyramidChunker) cleanChunkLevels() {
+	for i, l := range pc.chunkLevel {
+		if l == nil {
+			pc.chunkLevel = append(pc.chunkLevel[:i], append(pc.chunkLevel[i+1:], nil)...)
+		}
+	}
 }
