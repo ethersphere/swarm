@@ -14,21 +14,42 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package params
+package pipes
 
-// These are the multipliers for ether denominations.
-// Example: To get the wei value of an amount in 'douglas', use
-//
-//    new(big.Int).Mul(value, big.NewInt(params.Douglas))
-//
-const (
-	Wei      = 1
-	Ada      = 1e3
-	Babbage  = 1e6
-	Shannon  = 1e9
-	Szabo    = 1e12
-	Finney   = 1e15
-	Ether    = 1e18
-	Einstein = 1e21
-	Douglas  = 1e42
+import (
+	"net"
 )
+
+// NetPipe wraps net.Pipe in a signature returning an error
+func NetPipe() (net.Conn, net.Conn, error) {
+	p1, p2 := net.Pipe()
+	return p1, p2, nil
+}
+
+// TCPPipe creates an in process full duplex pipe based on a localhost TCP socket
+func TCPPipe() (net.Conn, net.Conn, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return nil, nil, err
+	}
+	defer l.Close()
+
+	var aconn net.Conn
+	aerr := make(chan error, 1)
+	go func() {
+		var err error
+		aconn, err = l.Accept()
+		aerr <- err
+	}()
+
+	dconn, err := net.Dial("tcp", l.Addr().String())
+	if err != nil {
+		<-aerr
+		return nil, nil, err
+	}
+	if err := <-aerr; err != nil {
+		dconn.Close()
+		return nil, nil, err
+	}
+	return aconn, dconn, nil
+}

@@ -955,10 +955,10 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 func TestNetwork2000(t *testing.T) {
 	//enableMetrics()
 
-	t.Run("3/2000/4/sock", testNetwork)
-	t.Run("4/2000/4/sock", testNetwork)
-	t.Run("8/2000/4/sock", testNetwork)
-	t.Run("16/2000/4/sock", testNetwork)
+	t.Run("3/2000/4/sim", testNetwork)
+	t.Run("4/2000/4/sim", testNetwork)
+	t.Run("8/2000/4/sim", testNetwork)
+	t.Run("16/2000/4/sim", testNetwork)
 }
 
 func TestNetwork5000(t *testing.T) {
@@ -1010,8 +1010,6 @@ func testNetwork(t *testing.T) {
 			t.Fatal(err)
 		}
 		a = adapters.NewExecAdapter(dirname)
-	} else if adapter == "sock" {
-		a = adapters.NewSocketAdapter(newServices(false))
 	} else if adapter == "tcp" {
 		a = adapters.NewTCPAdapter(newServices(false))
 	} else if adapter == "sim" {

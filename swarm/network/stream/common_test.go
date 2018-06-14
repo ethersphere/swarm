@@ -50,7 +50,7 @@ var (
 	stores       map[discover.NodeID]storage.ChunkStore
 	toAddr       func(discover.NodeID) *network.BzzAddr
 	peerCount    func(discover.NodeID) int
-	adapter      = flag.String("adapter", "sim", "type of simulation: sim|socket|exec|docker")
+	adapter      = flag.String("adapter", "sim", "type of simulation: sim|exec|docker")
 	loglevel     = flag.Int("loglevel", 2, "verbosity of logs")
 	nodes        = flag.Int("nodes", 0, "number of nodes")
 	chunks       = flag.Int("chunks", 0, "number of chunks")
