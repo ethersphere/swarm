@@ -688,7 +688,7 @@ func (pc *PyramidChunker) depth() (d int) {
 	return
 }
 
-// cleanChunkLevels removes gaps (nil levles) between chunk levels
+// cleanChunkLevels removes gaps (nil levels) between chunk levels
 // that are not nil.
 func (pc *PyramidChunker) cleanChunkLevels() {
 	for i, l := range pc.chunkLevel {
