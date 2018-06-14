@@ -102,7 +102,7 @@ var debugMode = false
 var prevTime time.Time
 var cntPrev int
 
-func XTestSimulation(t *testing.T) {
+func TestSimulation(t *testing.T) {
 	// create a chain of whisper nodes,
 	// installs the filters with shared (predefined) parameters
 	initialize(t)
