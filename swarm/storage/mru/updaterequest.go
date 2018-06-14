@@ -18,7 +18,6 @@ package mru
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash"
@@ -52,9 +51,9 @@ type updateRequestJSON struct {
 
 // SignedResourceUpdate contains signature information about a resource update
 type SignedResourceUpdate struct {
-	resourceData // actual content that will be put on the chunk, less signature
-	signature    *Signature
-	updateAddr   storage.Address // resulting chunk address for the update
+	resourceUpdate // actual content that will be put on the chunk, less signature
+	signature      *Signature
+	updateAddr     storage.Address // resulting chunk address for the update
 }
 
 // Update chunk layout
@@ -94,11 +93,15 @@ func NewCreateRequest(name string, frequency, startTime uint64, ownerAddr common
 
 	updateRequest := &UpdateRequest{
 		SignedResourceUpdate: SignedResourceUpdate{
-			resourceData: resourceData{
-				version:   1,
-				period:    1,
-				data:      data,
-				multihash: multihash,
+			resourceUpdate: resourceUpdate{
+				updateHeader: updateHeader{
+					UpdateLookup: UpdateLookup{
+						version: 1,
+						period:  1,
+					},
+					multihash: multihash,
+				},
+				data: data,
 			},
 		},
 		resourceMetadata: resourceMetadata{
@@ -129,14 +132,19 @@ func (r *UpdateRequest) Multihash() bool {
 	return r.multihash
 }
 
+// Period returns in which period the resource will be published
+func (r *UpdateRequest) Period() uint32 {
+	return r.period
+}
+
 // Version returns the resource version to publish
 func (r *UpdateRequest) Version() uint32 {
 	return r.version
 }
 
-// Period returns in which period the resource will be published
-func (r *UpdateRequest) Period() uint32 {
-	return r.period
+// RootAddr returns the metadata chunk address
+func (r *UpdateRequest) RootAddr() storage.Address {
+	return r.rootAddr
 }
 
 // StartTime returns the time that the resource was/will be created at
@@ -147,11 +155,6 @@ func (r *UpdateRequest) StartTime() uint64 {
 // OwnerAddr returns the resource owner's address
 func (r *UpdateRequest) OwnerAddr() common.Address {
 	return r.ownerAddr
-}
-
-// RootAddr returns the metadata chunk address
-func (r *UpdateRequest) RootAddr() storage.Address {
-	return r.rootAddr
 }
 
 // Sign executes the signature to validate the resource and sets the owner address field
@@ -180,7 +183,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 		return err
 	}
 
-	if !bytes.Equal(r.updateAddr, resourceUpdateChunkAddr(r.period, r.version, r.rootAddr)) {
+	if !bytes.Equal(r.updateAddr, r.GetUpdateAddr()) {
 		return NewError(ErrInvalidSignature, "Signature address does not match with ownerAddr")
 	}
 
@@ -195,7 +198,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 // Sign executes the signature to validate the resource
 func (r *SignedResourceUpdate) Sign(signer Signer) error {
 
-	updateAddr := resourceUpdateChunkAddr(r.period, r.version, r.rootAddr)
+	updateAddr := r.GetUpdateAddr()
 
 	digest := resourceUpdateChunkDigest(updateAddr, r.metaHash, r.data)
 	signature, err := signer.Sign(digest)
@@ -226,10 +229,14 @@ func (j *updateRequestJSON) decode() (*UpdateRequest, error) {
 
 	r := &UpdateRequest{
 		SignedResourceUpdate: SignedResourceUpdate{
-			resourceData: resourceData{
-				version:   j.Version,
-				period:    j.Period,
-				multihash: j.Multihash,
+			resourceUpdate: resourceUpdate{
+				updateHeader: updateHeader{
+					UpdateLookup: UpdateLookup{
+						version: j.Version,
+						period:  j.Period,
+					},
+					multihash: j.Multihash,
+				},
 			},
 		},
 		resourceMetadata: resourceMetadata{
@@ -300,7 +307,7 @@ func (j *updateRequestJSON) decode() (*UpdateRequest, error) {
 			return nil, NewError(ErrInvalidSignature, "Cannot decode signature")
 		}
 		r.signature = new(Signature)
-		r.updateAddr = resourceUpdateChunkAddr(r.period, r.version, r.rootAddr)
+		r.updateAddr = r.GetUpdateAddr()
 		copy(r.signature[:], sigBytes)
 	}
 	return r, nil
@@ -363,28 +370,6 @@ func resourceUpdateChunkDigest(updateAddr storage.Address, metaHash []byte, data
 	hasher.Write(metaHash)
 	hasher.Write(data)
 	return common.BytesToHash(hasher.Sum(nil))
-}
-
-// resourceUpdateChunkAddr calculates the resource update chunk address (formerly known as resourceHash)
-func resourceUpdateChunkAddr(period uint32, version uint32, rootAddr storage.Address) (updateAddr storage.Address) {
-	hasher := hashPool.Get().(storage.SwarmHash)
-	defer hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(NewResourceHash(period, version, rootAddr))
-	return hasher.Sum(nil)
-}
-
-// NewResourceHash will create a deterministic address from the update metadata
-// format is: hash(period|version|rootAddr)
-func NewResourceHash(period uint32, version uint32, rootAddr storage.Address) []byte {
-	buf := bytes.NewBuffer(nil)
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, period)
-	buf.Write(b)
-	binary.LittleEndian.PutUint32(b, version)
-	buf.Write(b)
-	buf.Write(rootAddr[:])
-	return buf.Bytes()
 }
 
 // getAddressFromDataSig extracts the address of the resource update signer

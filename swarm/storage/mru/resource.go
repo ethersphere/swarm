@@ -107,31 +107,22 @@ func NewError(code int, s string) error {
 	return r
 }
 
-// LookupParams is used to specify constraints when performing an update lookup
-// Limit defines whether or not the lookup should be limited
-// If Limit is set to true then Max defines the amount of hops that can be performed
-// \TODO this is redundant, just use uint32 with 0 for unlimited hops
-type LookupParams struct {
-	Period  uint32
-	Version uint32
-	Root    storage.Address
-	Limit   uint32
+type updateHeader struct {
+	UpdateLookup
+	metaHash  []byte
+	multihash bool
 }
 
-// resourceData encapsulates the information sent as part of a resource update
-type resourceData struct {
-	version   uint32
-	period    uint32
-	multihash bool
-	metaHash  []byte
-	rootAddr  storage.Address
-	data      []byte
+// resourceUpdate encapsulates the information sent as part of a resource update
+type resourceUpdate struct {
+	updateHeader
+	data []byte
 }
 
 // resource caches resource data. When synced it contains the most recent
 // version of the resource data and the metadata of its root chunk.
 type resource struct {
-	resourceData
+	resourceUpdate
 	resourceMetadata
 	*bytes.Reader
 	lastKey storage.Address
@@ -148,7 +139,7 @@ func (r *resource) isSynced() bool {
 }
 
 //Whether the resource data should be interpreted as multihash
-func (r *resourceData) Multihash() bool {
+func (r *resourceUpdate) Multihash() bool {
 	return r.multihash
 }
 
@@ -157,7 +148,7 @@ func (r *resource) Size(ctx context.Context, _ chan bool) (int64, error) {
 	if !r.isSynced() {
 		return 0, NewError(ErrNotSynced, "Not synced")
 	}
-	return int64(len(r.resourceData.data)), nil
+	return int64(len(r.resourceUpdate.data)), nil
 }
 
 //returns the resource's human-readable name
@@ -325,8 +316,12 @@ func (h *Handler) New(ctx context.Context, request *UpdateRequest) error {
 
 	// create the internal index for the resource and populate it with the data of the first version
 	rsrc := &resource{
-		resourceData: resourceData{
-			rootAddr: chunk.Addr,
+		resourceUpdate: resourceUpdate{
+			updateHeader: updateHeader{
+				UpdateLookup: UpdateLookup{
+					rootAddr: chunk.Addr,
+				},
+			},
 		},
 		resourceMetadata: resourceMetadata{
 			name:      request.name,
@@ -362,7 +357,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	if err != nil {
 		return nil, err
 	}
-	if _, err = h.lookup(rsrc, updateRequest.period, 0, 0); err != nil {
+	if _, err = h.lookup(rsrc, LookupLatestVersionInPeriod(rsrc.rootAddr, updateRequest.period)); err != nil {
 		return nil, err
 	}
 
@@ -413,11 +408,11 @@ func (h *Handler) newMetaChunk(metadata *resourceMetadata) (chunk *storage.Chunk
 // (or startBlock is reached, in which case there are no updates).
 func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, error) {
 
-	rsrc := h.get(params.Root)
+	rsrc := h.get(params.rootAddr)
 	if rsrc == nil {
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
 	}
-	if params.Period == 0 {
+	if params.period == 0 {
 		// get our blockheight at this time and the next block of the update period
 		currentblock := h.getCurrentTime(ctx)
 
@@ -426,9 +421,9 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 		if err != nil {
 			return nil, err
 		}
-		params.Period = period
+		params.period = period
 	}
-	return h.lookup(rsrc, params.Period, params.Version, params.Limit)
+	return h.lookup(rsrc, params)
 }
 
 // LookupPreviousByName returns the resource before the one currently loaded in the resource index
@@ -436,7 +431,7 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 // merely replacing content.
 // Requires a synced resource object
 func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*resource, error) {
-	rsrc := h.get(params.Root)
+	rsrc := h.get(params.rootAddr)
 	if rsrc == nil {
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
 	}
@@ -453,62 +448,63 @@ func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*re
 		rsrc.version = 0
 		rsrc.period--
 	}
-	return h.lookup(rsrc, rsrc.period, rsrc.version, params.Limit)
+	return h.lookup(rsrc, NewLookupParams(rsrc.rootAddr, rsrc.period, rsrc.version, params.Limit))
 }
 
 // base code for public lookup methods
-func (h *Handler) lookup(rsrc *resource, period uint32, version uint32, limit uint32) (*resource, error) {
+func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error) {
 
+	lp := *params
 	// we can't look for anything without a store
 	if h.chunkStore == nil {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
 	// period 0 does not exist
-	if period == 0 {
+	if lp.period == 0 {
 		return nil, NewError(ErrInvalidValue, "period must be >0")
 	}
 
 	// start from the last possible block period, and iterate previous ones until we find a match
 	// if we hit startBlock we're out of options
 	var specificversion bool
-	if version > 0 {
+	if lp.version > 0 {
 		specificversion = true
 	} else {
-		version = 1
+		lp.version = 1
 	}
 
 	var hops uint32
-	if limit == 0 {
-		limit = h.queryMaxPeriods
+	if lp.Limit == 0 {
+		lp.Limit = h.queryMaxPeriods
 	}
-	log.Trace("resource lookup", "period", period, "version", version, "limit", limit)
-	for period > 0 {
-		if limit != 0 && hops > limit {
-			return nil, NewError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", limit))
+	log.Trace("resource lookup", "period", lp.period, "version", lp.version, "limit", lp.Limit)
+	for lp.period > 0 {
+		if lp.Limit != 0 && hops > lp.Limit {
+			return nil, NewError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", lp.Limit))
 		}
-		updateAddr := resourceUpdateChunkAddr(period, version, rsrc.rootAddr)
+		updateAddr := lp.GetUpdateAddr()
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
 				return h.updateIndex(rsrc, chunk)
 			}
 			// check if we have versions > 1. If a version fails, the previous version is used and returned.
-			log.Trace("rsrc update version 1 found, checking for version updates", "period", period, "updateAddr", updateAddr)
+			log.Trace("rsrc update version 1 found, checking for version updates", "period", lp.period, "updateAddr", updateAddr)
 			for {
-				newversion := version + 1
-				updateAddr := resourceUpdateChunkAddr(period, newversion, rsrc.rootAddr)
+				newversion := lp.version + 1
+				updateAddr := lp.GetUpdateAddr()
 				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 				if err != nil {
 					return h.updateIndex(rsrc, chunk)
 				}
 				chunk = newchunk
-				version = newversion
-				log.Trace("version update found, checking next", "version", version, "period", period, "updateAddr", updateAddr)
+				lp.version = newversion
+				log.Trace("version update found, checking next", "version", lp.version, "period", lp.period, "updateAddr", updateAddr)
 			}
 		}
-		log.Trace("rsrc update not found, checking previous period", "period", period, "updateAddr", updateAddr)
-		period--
+		log.Trace("rsrc update not found, checking previous period", "period", lp.period, "updateAddr", updateAddr)
+		lp.period--
 		hops++
 	}
 	return nil, NewError(ErrNotFound, "no updates found")
@@ -615,24 +611,23 @@ func parseUpdate(updateAddr storage.Address, chunkdata []byte) (*SignedResourceU
 	}
 
 	// at this point we can be satisfied that the data integrity is ok
-	var period uint32
-	var version uint32
+	var header updateHeader
 
 	var data []byte
-	period = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
+	header.period = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
 	cursor += 4
-	version = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
+	header.version = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
 	cursor += 4
 
-	rootAddr := storage.Address(make([]byte, storage.KeyLength))
-	metaHash := make([]byte, storage.KeyLength)
-	copy(rootAddr, chunkdata[cursor:cursor+storage.KeyLength])
+	header.rootAddr = storage.Address(make([]byte, storage.KeyLength))
+	header.metaHash = make([]byte, storage.KeyLength)
+	copy(header.rootAddr, chunkdata[cursor:cursor+storage.KeyLength])
 	cursor += storage.KeyLength
-	copy(metaHash, chunkdata[cursor:cursor+storage.KeyLength])
+	copy(header.metaHash, chunkdata[cursor:cursor+storage.KeyLength])
 	cursor += storage.KeyLength
 
 	//Verify that the updateAddr key that identifies this chunk matches its contents:
-	if !bytes.Equal(updateAddr, resourceUpdateChunkAddr(period, version, rootAddr)) {
+	if !bytes.Equal(updateAddr, header.GetUpdateAddr()) {
 		return nil, NewError(ErrInvalidSignature, "period,version,rootAddr contained in update chunk do not match updateAddr")
 	}
 
@@ -670,16 +665,14 @@ func parseUpdate(updateAddr storage.Address, chunkdata []byte) (*SignedResourceU
 		copy(signature[:], sigdata)
 	}
 
+	header.multihash = ismultihash
+
 	r := &SignedResourceUpdate{
 		signature:  signature,
 		updateAddr: updateAddr,
-		resourceData: resourceData{
-			period:    period,
-			version:   version,
-			rootAddr:  rootAddr,
-			metaHash:  metaHash,
-			data:      data,
-			multihash: ismultihash,
+		resourceUpdate: resourceUpdate{
+			updateHeader: header,
+			data:         data,
 		},
 	}
 
