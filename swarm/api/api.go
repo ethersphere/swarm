@@ -343,9 +343,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 			}
 
 			// use this key to retrieve the latest update
-			params := &mru.LookupParams{
-				Root: metadataChunkKey,
-			}
+			params := mru.LookupLatest(metadataChunkKey)
 			rsrc, err = a.resource.Lookup(ctx, params)
 			if err != nil {
 				apiGetNotFound.Inc(1)
@@ -659,7 +657,7 @@ func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.
 // Look up mutable resource updates at specific periods and versions
 func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (string, []byte, error) {
 	var err error
-	rsrc, err := a.resource.Load(params.Root)
+	rsrc, err := a.resource.Load(params.RootAddr())
 	if err != nil {
 		return "", nil, err
 	}
@@ -668,7 +666,7 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (str
 		return "", nil, err
 	}
 	var data []byte
-	_, data, err = a.resource.GetContent(params.Root)
+	_, data, err = a.resource.GetContent(params.RootAddr())
 	if err != nil {
 		return "", nil, err
 	}

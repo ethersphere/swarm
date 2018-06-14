@@ -476,10 +476,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunkkey", rootAddr)
 
-		params := &mru.LookupParams{
-			Root: rootAddr,
-		}
-		_, _, err = s.api.ResourceLookup(r.Context(), params)
+		_, _, err = s.api.ResourceLookup(r.Context(), mru.LookupLatest(rootAddr))
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -570,13 +567,10 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 	var name string
 	var data []byte
 	now := time.Now()
-	lookupParams := &mru.LookupParams{
-		Root: rootAddr,
-	}
 
 	switch len(params) {
 	case 0: // latest only
-		name, data, err = s.api.ResourceLookup(r.Context(), lookupParams)
+		name, data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatest(rootAddr))
 	case 2: // specific period and version
 		version, err := strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
@@ -586,16 +580,13 @@ func (s *Server) handleGetResource(w http.ResponseWriter, r *Request) {
 		if err != nil {
 			break
 		}
-		lookupParams.Version = uint32(version)
-		lookupParams.Period = uint32(period)
-		name, data, err = s.api.ResourceLookup(r.Context(), lookupParams)
+		name, data, err = s.api.ResourceLookup(r.Context(), mru.LookupVersion(rootAddr, uint32(period), uint32(version)))
 	case 1: // last version of specific period
 		period, err := strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		lookupParams.Period = uint32(period)
-		name, data, err = s.api.ResourceLookup(r.Context(), lookupParams)
+		name, data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatestVersionInPeriod(rootAddr, uint32(period)))
 	default: // bogus
 		err = mru.NewError(storage.ErrInvalidValue, "invalid mutable resource request")
 	}
