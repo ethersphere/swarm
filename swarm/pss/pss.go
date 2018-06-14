@@ -725,9 +725,8 @@ func (p *Pss) SendSym(symkeyid string, topic Topic, msg []byte) error {
 //
 // Fails if the key id does not match any in of the stored public keys
 func (p *Pss) SendAsym(pubkeyid string, topic Topic, msg []byte) error {
-	pubkey := crypto.ToECDSAPub(common.FromHex(pubkeyid))
-	if pubkey == nil {
-		return fmt.Errorf("Invalid public key id %x", pubkey)
+	if _, err := crypto.UnmarshalPubkey(common.FromHex(pubkeyid)); err != nil {
+		return fmt.Errorf("Cannot unmarshal pubkey: %x", pubkeyid)
 	}
 	p.pubKeyPoolMu.Lock()
 	psp, ok := p.pubKeyPool[pubkeyid][topic]
@@ -770,7 +769,11 @@ func (p *Pss) send(to []byte, topic Topic, msg []byte, asymmetric bool, key []by
 		Padding:  padding,
 	}
 	if asymmetric {
-		wparams.Dst = crypto.ToECDSAPub(key)
+		pk, err := crypto.UnmarshalPubkey(key)
+		if err != nil {
+			return fmt.Errorf("Cannot unmarshal pubkey: %x", key)
+		}
+		wparams.Dst = pk
 	} else {
 		wparams.KeySym = key
 	}
