@@ -30,7 +30,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// swarm resource [--raw] create <name> <frequency> <0x Hexdata>
+// swarm resource [--rawmru] create <name> <frequency> <0x Hexdata>
 // swarm resource update <Manifest Address or ENS domain> <0x Hexdata>
 // swarm resource info <Manifest Address or ENS domain>
 
@@ -51,7 +51,7 @@ func resource(ctx *cli.Context) {
 	switch args[0] {
 	case "create":
 		if len(args) < 4 {
-			utils.Fatalf("Incorrect number of arguments. Syntax: swarm resource [--raw] create <name> <frequency> <0x Hexdata>")
+			utils.Fatalf("Incorrect number of arguments. Syntax: swarm resource [--rawmru] create <name> <frequency> <0x Hexdata>")
 			return
 		}
 		signer := mru.NewGenericSigner(getClientAccount(ctx))
@@ -73,7 +73,7 @@ func resource(ctx *cli.Context) {
 			utils.Fatalf("Error creating resource: %s", err.Error())
 			return
 		}
-		fmt.Println(manifestAddress)
+		fmt.Println(manifestAddress) // output address to the user in a single line (useful for other commands to pick up)
 	case "update":
 		if len(args) < 3 {
 			utils.Fatalf("Incorrect number of arguments. Syntax:swarm resource update <Manifest Address or ENS domain> <0x Hexdata>")
