@@ -604,8 +604,6 @@ func initNetWithSnapshot(nodeCount int) (*simulations.Network, error) {
 			return nil, err
 		}
 		a = adapters.NewExecAdapter(dirname)
-	} else if *adapter == "socket" {
-		a = adapters.NewSocketAdapter(services)
 	} else if *adapter == "tcp" {
 		a = adapters.NewTCPAdapter(services)
 	} else if *adapter == "sim" {

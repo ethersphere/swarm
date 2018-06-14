@@ -17,25 +17,23 @@
 package adapters
 
 import (
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"math"
 	"net"
-	"os"
 	"sync"
-	"syscall"
 
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/simulations/pipes"
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
 // SimAdapter is a NodeAdapter which creates in-memory simulation nodes and
-// connects them using net.Pipe or OS socket connections
+// connects them using net.Pipe
 type SimAdapter struct {
 	pipe     func() (net.Conn, net.Conn, error)
 	mtx      sync.RWMutex
@@ -49,19 +47,7 @@ type SimAdapter struct {
 // the adapter uses a net.Pipe for in-memory simulated network connections
 func NewSimAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
-		pipe:     netPipe,
-		nodes:    make(map[discover.NodeID]*SimNode),
-		services: services,
-	}
-}
-
-// NewSocketAdapter creates a SimAdapter which is capable of running in-memory
-// simulation nodes running any of the given services (the services to run on a
-// particular node are passed to the NewNode function in the NodeConfig)
-// the adapter uses a OS socketpairs for in-memory simulated network connections
-func NewSocketAdapter(services map[string]ServiceFunc) *SimAdapter {
-	return &SimAdapter{
-		pipe:     socketPipe,
+		pipe:     pipes.NetPipe,
 		nodes:    make(map[discover.NodeID]*SimNode),
 		services: services,
 	}
@@ -69,7 +55,7 @@ func NewSocketAdapter(services map[string]ServiceFunc) *SimAdapter {
 
 func NewTCPAdapter(services map[string]ServiceFunc) *SimAdapter {
 	return &SimAdapter{
-		pipe:     tcpPipe,
+		pipe:     pipes.TCPPipe,
 		nodes:    make(map[discover.NodeID]*SimNode),
 		services: services,
 	}
@@ -128,7 +114,7 @@ func (s *SimAdapter) NewNode(config *NodeConfig) (Node, error) {
 }
 
 // Dial implements the p2p.NodeDialer interface by connecting to the node using
-// an in-memory net.Pipe or OS socket connection
+// an in-memory net.Pipe
 func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	node, ok := s.GetNode(dest.ID)
 	if !ok {
@@ -138,7 +124,7 @@ func (s *SimAdapter) Dial(dest *discover.Node) (conn net.Conn, err error) {
 	if srv == nil {
 		return nil, fmt.Errorf("node not running: %s", dest.ID)
 	}
-	// SimAdapter.pipe is either net.Pipe (NewSimAdapter) or socketPipe (NewSocketAdapter)
+	// SimAdapter.pipe is net.Pipe (NewSimAdapter)
 	pipe1, pipe2, err := s.pipe()
 	if err != nil {
 		return nil, err
@@ -173,8 +159,8 @@ func (s *SimAdapter) GetNode(id discover.NodeID) (*SimNode, bool) {
 }
 
 // SimNode is an in-memory simulation node which connects to other nodes using
-// net.Pipe or OS socket connection (see SimAdapter.Dial), running devp2p
-// protocols directly over that pipe
+// net.Pipe (see SimAdapter.Dial), running devp2p protocols directly over that
+// pipe
 type SimNode struct {
 	lock         sync.RWMutex
 	ID           discover.NodeID
@@ -348,34 +334,6 @@ func (sn *SimNode) NodeInfo() *p2p.NodeInfo {
 	return server.NodeInfo()
 }
 
-// socketPipe creates an in process full duplex pipe based on OS sockets
-// credit to @lmars & Flynn
-// https://github.com/flynn/flynn/blob/master/host/containerinit/init.go#L743-L749
-// using this in large simulations requires raising OS's max open file limit
-func socketPipe() (net.Conn, net.Conn, error) {
-	pair, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_STREAM, 0)
-	if err != nil {
-		return nil, nil, err
-	}
-	nameb := make([]byte, 8)
-	_, err = rand.Read(nameb)
-	if err != nil {
-		return nil, nil, err
-	}
-	f1 := os.NewFile(uintptr(pair[0]), string(nameb)+".out")
-	f2 := os.NewFile(uintptr(pair[1]), string(nameb)+".in")
-	pipe1, err := net.FileConn(f1)
-	if err != nil {
-		return nil, nil, err
-	}
-	pipe2, err := net.FileConn(f2)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return pipe1, pipe2, nil
-}
-
 func setSocketBuffer(conn net.Conn, socketReadBuffer int, socketWriteBuffer int) error {
 	switch v := conn.(type) {
 	case *net.UnixConn:
@@ -389,65 +347,4 @@ func setSocketBuffer(conn net.Conn, socketReadBuffer int, socketWriteBuffer int)
 		}
 	}
 	return nil
-}
-
-// netPipe wraps net.Pipe in a signature returning  an error
-func netPipe() (net.Conn, net.Conn, error) {
-	p1, p2 := net.Pipe()
-	return p1, p2, nil
-}
-
-// tcpPipe creates an in process full duplex pipe based on a localhost TCP socket
-func tcpPipe() (net.Conn, net.Conn, error) {
-	type result struct {
-		conn net.Conn
-		err  error
-	}
-
-	cl := make(chan result)
-	cd := make(chan result)
-
-	start := make(chan net.Addr)
-
-	go func(res chan result, start chan net.Addr) {
-		// resolve
-		addr, err := net.ResolveTCPAddr("tcp", "localhost:0")
-		if err != nil {
-			res <- result{err: err}
-			return
-		}
-		// listen
-		l, err := net.ListenTCP("tcp", addr)
-		if err != nil {
-			res <- result{err: err}
-			return
-		}
-		start <- l.Addr()
-		c, err := l.AcceptTCP()
-		if err != nil {
-			res <- result{err: err}
-			return
-		}
-		res <- result{conn: c}
-	}(cl, start)
-
-	go func(res chan result, start chan net.Addr) {
-		addr := <-start
-		c, err := net.DialTCP("tcp", nil, addr.(*net.TCPAddr))
-		if err != nil {
-			res <- result{err: err}
-			return
-		}
-		res <- result{conn: c}
-	}(cd, start)
-
-	a := <-cl
-	if a.err != nil {
-		return nil, nil, a.err
-	}
-	b := <-cd
-	if b.err != nil {
-		return nil, nil, b.err
-	}
-	return a.conn, b.conn, nil
 }

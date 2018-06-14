@@ -79,8 +79,6 @@ func NewAdapter(adapterType string, services adapters.Services) (adapter adapter
 	switch adapterType {
 	case "sim":
 		adapter = adapters.NewSimAdapter(services)
-	case "socket":
-		adapter = adapters.NewSocketAdapter(services)
 	case "exec":
 		baseDir, err0 := ioutil.TempDir("", "swarm-test")
 		if err0 != nil {
@@ -94,7 +92,7 @@ func NewAdapter(adapterType string, services adapters.Services) (adapter adapter
 			return nil, teardown, err
 		}
 	default:
-		return nil, teardown, errors.New("adapter needs to be one of sim, socket, exec, docker")
+		return nil, teardown, errors.New("adapter needs to be one of sim, exec, docker")
 	}
 	return adapter, teardown, nil
 }
