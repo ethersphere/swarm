@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
-	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 const MaxPO = 16
@@ -340,17 +339,12 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 
 // Validate that the given key is a valid content address for the given data
 func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
-	if l := len(data); l < 9 {
-		log.Error("incomplete chunk data", "addr", addr, "length", l)
-		return false
-	}
 	hasher := v.Hasher()
 	hasher.ResetWithLength(data[:8])
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
 	if !bytes.Equal(hash, addr[:]) {
-		log.Trace("invalid content address", "expected", fmt.Sprintf("%x", hash), "have", addr)
 		return false
 	}
 	return true
