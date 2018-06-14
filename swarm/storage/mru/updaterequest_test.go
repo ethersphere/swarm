@@ -79,13 +79,17 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &UpdateRequest{
 		SignedResourceUpdate: SignedResourceUpdate{
-			resourceData: resourceData{
-				version:   1,
-				period:    7,
-				multihash: false,
-				data:      data,
-				metaHash:  metaHash,
-				rootAddr:  rootAddr,
+			resourceUpdate: resourceUpdate{
+				updateHeader: updateHeader{
+					UpdateLookup: UpdateLookup{
+						period:   7,
+						version:  1,
+						rootAddr: rootAddr,
+					},
+					multihash: false,
+					metaHash:  metaHash,
+				},
+				data: data,
 			},
 		},
 	}

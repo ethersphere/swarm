@@ -88,10 +88,15 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 	}
 
 	r := &SignedResourceUpdate{
-		resourceData: resourceData{
-			multihash: false,
-			rootAddr:  make([]byte, 79),
-			metaHash:  nil,
+		resourceUpdate: resourceUpdate{
+			updateHeader: updateHeader{
+				UpdateLookup: UpdateLookup{
+
+					rootAddr: make([]byte, 79),
+				},
+				metaHash:  nil,
+				multihash: false,
+			},
 		},
 	}
 	_, err = newUpdateChunk(r)
@@ -137,9 +142,6 @@ func TestReverse(t *testing.T) {
 
 	rootAddr, metaHash, _ := metadata.hash()
 
-	// generate a hash for block 4200 version 1
-	key := resourceUpdateChunkAddr(period, version, rootAddr)
-
 	// generate some bogus data for the chunk and sign it
 	data := make([]byte, 8)
 	_, err = rand.Read(data)
@@ -150,14 +152,21 @@ func TestReverse(t *testing.T) {
 	testHasher.Write(data)
 
 	update := &SignedResourceUpdate{
-		resourceData: resourceData{
-			period:   period,
-			version:  version,
-			metaHash: metaHash,
-			rootAddr: rootAddr,
-			data:     data,
+		resourceUpdate: resourceUpdate{
+			updateHeader: updateHeader{
+				UpdateLookup: UpdateLookup{
+					period:   period,
+					version:  version,
+					rootAddr: rootAddr,
+				},
+				metaHash: metaHash,
+			},
+			data: data,
 		},
 	}
+	// generate a hash for block 4200 version 1
+	key := update.GetUpdateAddr()
+
 	if err = update.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
@@ -368,10 +377,8 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	lookupParams := &LookupParams{
-		Root: request.rootAddr,
-	}
-	_, err = rh2.Lookup(ctx, lookupParams)
+
+	_, err = rh2.Lookup(ctx, LookupLatest(request.rootAddr))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,8 +396,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, latest version
-	lookupParams.Period = 3
-	rsrc, err := rh2.Lookup(ctx, lookupParams)
+	rsrc, err := rh2.Lookup(ctx, LookupLatestVersionInPeriod(request.rootAddr, 3))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -401,7 +407,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, specific version
-	lookupParams.Version = 1
+	lookupParams := LookupVersion(request.rootAddr, 3, 1)
 	rsrc, err = rh2.Lookup(ctx, lookupParams)
 	if err != nil {
 		t.Fatal(err)
@@ -757,19 +763,25 @@ func TestValidatorInStore(t *testing.T) {
 	})
 
 	// create a resource update chunk with correct publickey
-	key := resourceUpdateChunkAddr(42, 1, rootChunk.Addr)
+	updateLookup := UpdateLookup{
+		period:   42,
+		version:  1,
+		rootAddr: rootChunk.Addr,
+	}
+
+	updateAddr := updateLookup.GetUpdateAddr()
 	data := []byte("bar")
-	digestToSign := resourceUpdateChunkDigest(key, metaHash, data)
+	digestToSign := resourceUpdateChunkDigest(updateAddr, metaHash, data)
 	digestSignature, err := signer.Sign(digestToSign)
 	uglyChunk, err := newUpdateChunk(&SignedResourceUpdate{
-		updateAddr: key,
+		updateAddr: updateAddr,
 		signature:  &digestSignature,
-		resourceData: resourceData{
-			period:   42,
-			version:  1,
-			data:     data,
-			rootAddr: rootChunk.Addr,
-			metaHash: metaHash,
+		resourceUpdate: resourceUpdate{
+			updateHeader: updateHeader{
+				UpdateLookup: updateLookup,
+				metaHash:     metaHash,
+			},
+			data: data,
 		},
 	})
 	if err != nil {
