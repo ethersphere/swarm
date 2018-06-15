@@ -344,8 +344,5 @@ func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 	hasher.Write(data[8:])
 	hash := hasher.Sum(nil)
 
-	if !bytes.Equal(hash, addr[:]) {
-		return false
-	}
-	return true
+	return bytes.Equal(hash, addr[:])
 }
