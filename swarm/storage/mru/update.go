@@ -168,7 +168,7 @@ func (mru *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 }
 
 // retrieve update metadata from chunk data
-func (x *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chunkdata []byte) error {
+func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chunkdata []byte) error {
 	// for update chunk layout see SignedResourceUpdate definition
 
 	if len(chunkdata) < minimumUpdateDataLength {
@@ -190,21 +190,21 @@ func (x *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 	// TODO: merge with isMultihash code
 	if datalength == 0 {
 		uvarintbuf := bytes.NewBuffer(chunkdata[headerlength+4:])
-		r, err := binary.ReadUvarint(uvarintbuf)
+		i, err := binary.ReadUvarint(uvarintbuf)
 		if err != nil {
 			errstr := fmt.Sprintf("corrupt multihash, hash id varint could not be read: %v", err)
 			log.Warn(errstr)
 			return NewError(ErrCorruptData, errstr)
 
 		}
-		r, err = binary.ReadUvarint(uvarintbuf)
+		i, err = binary.ReadUvarint(uvarintbuf)
 		if err != nil {
 			errstr := fmt.Sprintf("corrupt multihash, hash length field could not be read: %v", err)
 			log.Warn(errstr)
 			return NewError(ErrCorruptData, errstr)
 
 		}
-		exclsignlength = int(headerlength + uint16(r))
+		exclsignlength = int(headerlength + uint16(i))
 	} else {
 		exclsignlength = int(headerlength + datalength + 4)
 	}
@@ -274,14 +274,14 @@ func (x *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 
 	header.multihash = ismultihash
 
-	x.signature = signature
-	x.updateAddr = updateAddr
-	x.resourceUpdate = resourceUpdate{
+	r.signature = signature
+	r.updateAddr = updateAddr
+	r.resourceUpdate = resourceUpdate{
 		updateHeader: header,
 		data:         data,
 	}
 
-	if err := x.Verify(); err != nil {
+	if err := r.Verify(); err != nil {
 		return NewError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
 	}
 
