@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	l "github.com/ethereum/go-ethereum/swarm/log"
 )
 
 //templateMap holds a mapping of an HTTP error code to a template
@@ -145,9 +146,9 @@ func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
 	additionalMessage := ValidateCaseErrors(req)
 	switch code {
 	case http.StatusInternalServerError:
-		log.Output(msg, log.LvlError, 3, "ruid", req.ruid, "code", code)
+		log.Output(msg, log.LvlError, l.CallDepth, "ruid", req.ruid, "code", code)
 	default:
-		log.Output(msg, log.LvlDebug, 3, "ruid", req.ruid, "code", code)
+		log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", req.ruid, "code", code)
 	}
 
 	if code >= 400 {
