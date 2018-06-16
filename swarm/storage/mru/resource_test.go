@@ -54,6 +54,7 @@ var (
 	safeName          string
 	nameHash          common.Hash
 	hashfunc          = storage.MakeHashFunc(storage.DefaultHash)
+	getTimeout        = 30 * time.Second
 )
 
 func init() {
@@ -183,7 +184,7 @@ func TestHandler(t *testing.T) {
 	}
 
 	addr := storage.Address(rootChunkKey)
-	ch, err := rh.dpa.Get(ctx, addr)
+	ch, err := rh.chunkStore.Get(ctx, addr)
 	if err != nil {
 		t.Fatal(err)
 	} else if len(ch.Data()) < 16 {
@@ -254,12 +255,15 @@ func TestHandler(t *testing.T) {
 	}
 
 	// TODO: why Close doesn't work
-	// rh.dpa.Close()
+	// rh.chunkStore.Close()
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrc2, err := rh2.Load(rootChunkKey)
+	rsrc2, err := rh2.Load(ctx, rootChunkKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -472,7 +476,7 @@ func TestMultihash(t *testing.T) {
 		OwnerValidator: rh.ownerValidator,
 	}
 	// test with signed data
-	// rh.dpa.Close()
+	// rh.chunkStore.Close()
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
@@ -607,20 +611,23 @@ func TestValidator(t *testing.T) {
 
 	chunks := storage.GenerateRandomChunks(storage.DefaultChunkSize, 2)
 	goodChunk := chunks[0]
-	badChunk := chunks[1]
-	badChunk.SData = goodChunk.SData
+	badChunk := storage.NewChunk(chunks[1].Address(), goodChunk.Data())
 	key := rh.resourceHash(42, 1, ens.EnsNode("xyzzy.eth"))
 	data := []byte("bar")
 	uglyChunk := newUpdateChunk(key, nil, 42, 1, "xyzzy.eth", data, len(data))
 
-	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	_, err = store.Put(goodChunk)
+	if err != nil {
 		t.Fatalf("expected no error on good content address chunk with both validators, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+
+	_, err = store.Put(badChunk)
+	if err == nil {
 		t.Fatal("expected error on bad chunk address with both validators, but got nil")
 	}
-	if err := uglyChunk.GetErrored(); err != nil {
+
+	_, err = store.Put(uglyChunk)
+	if err != nil {
 		t.Fatalf("expected no error on resource update chunk with both validators, but got: %s", err)
 	}
 
@@ -632,21 +639,24 @@ func TestValidator(t *testing.T) {
 
 	chunks = storage.GenerateRandomChunks(storage.DefaultChunkSize, 2)
 	goodChunk = chunks[0]
-	badChunk = chunks[1]
-	badChunk.SData = goodChunk.SData
+	badChunk = storage.NewChunk(chunks[1].Address(), goodChunk.Data())
 
 	key = rh.resourceHash(42, 2, ens.EnsNode("xyzzy.eth"))
 	data = []byte("baz")
 	uglyChunk = newUpdateChunk(key, nil, 42, 2, "xyzzy.eth", data, len(data))
 
-	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
-	if goodChunk.GetErrored() == nil {
+	_, err = store.Put(goodChunk)
+	if err == nil {
 		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
 	}
-	if badChunk.GetErrored() == nil {
+
+	_, err = store.Put(badChunk)
+	if err == nil {
 		t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
 	}
-	if err := uglyChunk.GetErrored(); err != nil {
+
+	_, err = store.Put(uglyChunk)
+	if err != nil {
 		t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
 	}
 }
@@ -764,7 +774,7 @@ func newTestSigner() (*GenericSigner, error) {
 }
 
 func getUpdateDirect(ctx context.Context, rh *Handler, addr storage.Address) ([]byte, error) {
-	ch, err := rh.dpa.Get(ctx, addr)
+	ch, err := rh.chunkStore.Get(ctx, addr)
 	if err != nil {
 		return nil, err
 	}

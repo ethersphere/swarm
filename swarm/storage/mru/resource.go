@@ -222,7 +222,7 @@ type ownerValidator interface {
 //
 // TODO: Include modtime in chunk data + signature
 type Handler struct {
-	chunkStore      *storage.NetStore
+	chunkStore      storage.ChunkStore
 	HashSize        int
 	signer          Signer
 	headerGetter    headerGetter
@@ -274,7 +274,7 @@ func NewHandler(params *HandlerParams) (*Handler, error) {
 }
 
 // SetStore sets the store backend for resource updates
-func (self *Handler) SetStore(store *storage.NetStore) {
+func (self *Handler) SetStore(store storage.ChunkStore) {
 	self.chunkStore = store
 }
 
@@ -1081,10 +1081,6 @@ func NewTestHandler(datadir string, params *HandlerParams) (*Handler, error) {
 	}
 	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHash)))
 	localStore.Validators = append(localStore.Validators, rh)
-	netStore, err := storage.NewNetStore(localStore, nil)
-	if err != nil {
-		return nil, err
-	}
-	rh.SetStore(netStore)
+	rh.SetStore(localStore)
 	return rh, nil
 }
