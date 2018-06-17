@@ -16,6 +16,10 @@
 
 package mru
 
+import (
+	"fmt"
+)
+
 const (
 	ErrInit = iota
 	ErrNotFound
@@ -61,4 +65,8 @@ func NewError(code int, s string) error {
 		r.code = code
 	}
 	return r
+}
+
+func NewErrorf(code int, format string, args ...interface{}) error {
+	return NewError(code, fmt.Sprintf(format, args...))
 }

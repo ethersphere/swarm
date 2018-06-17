@@ -68,20 +68,6 @@ func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*typ
 	}, nil
 }
 
-type updateHeader struct {
-	UpdateLookup
-	metaHash           []byte
-	multihash          bool
-	time               Timestamp
-	previousUpdateAddr storage.Address
-}
-
-// resourceUpdate encapsulates the information sent as part of a resource update
-type resourceUpdate struct {
-	updateHeader
-	data []byte
-}
-
 // resource caches resource data. When synced it contains the most recent
 // version of the resource data and the metadata of its root chunk.
 type resource struct {

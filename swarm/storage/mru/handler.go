@@ -422,10 +422,6 @@ func (h *Handler) Update(ctx context.Context, rootAddr storage.Address, mru *Sig
 // create and commit an update
 func (h *Handler) update(ctx context.Context, rootAddr storage.Address, mru *SignedResourceUpdate) (storage.Address, error) {
 
-	if mru.multihash && isMultihash(mru.data) == 0 {
-		return nil, NewError(ErrNothingToReturn, "Invalid multihash")
-	}
-
 	// we can't update anything without a store
 	if h.chunkStore == nil {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")

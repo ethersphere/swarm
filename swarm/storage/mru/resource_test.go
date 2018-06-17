@@ -79,8 +79,8 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 
 	// Test that parseUpdate fails if the chunk is too small
 	var r SignedResourceUpdate
-	if err := r.parseUpdateChunk(storage.ZeroAddr, make([]byte, 141)); err == nil {
-		t.Fatal("Expected parseUpdate to fail when chunkData contains less than 142 bytes")
+	if err := r.parseUpdateChunk(storage.ZeroAddr, make([]byte, minimumUpdateDataLength-1)); err == nil {
+		t.Fatalf("Expected parseUpdate to fail when chunkData contains less than %d bytes", minimumUpdateDataLength)
 	}
 
 	r = SignedResourceUpdate{}
@@ -111,7 +111,25 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 	r.metaHash = make([]byte, storage.KeyLength)
 	_, err = r.newUpdateChunk()
 	if err == nil {
-		t.Fatal("Expected newUpdateChunk to fail when multihash=false and data length is 0")
+		t.Fatal("Expected newUpdateChunk to fail when there is no data")
+	}
+	r.data = make([]byte, 79)
+	_, err = r.newUpdateChunk()
+	if err == nil {
+		t.Fatal("expected newUpdateChunk to fail when there is no signature", err)
+	}
+
+	r.signature = &Signature{}
+	_, err = r.newUpdateChunk()
+	if err != nil {
+		t.Fatalf("error creating update chunk:%s", err)
+	}
+
+	r.multihash = true
+	r.data[1] = 79
+	_, err = r.newUpdateChunk()
+	if err == nil {
+		t.Fatal("expected newUpdateChunk to fail when an invalid multihash is in data and multihash=true", err)
 	}
 
 }
