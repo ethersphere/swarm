@@ -39,35 +39,6 @@ const (
 	defaultRetrieveTimeout = 100 * time.Millisecond
 )
 
-type blockEstimator struct {
-	Start   time.Time
-	Average time.Duration
-}
-
-// NewBlockEstimator returns an object that can be used for retrieving an heuristical block height in the absence of a blockchain connection
-// It implements the headerGetter interface
-// TODO: Average must  be adjusted when blockchain connection is present and synced
-func NewBlockEstimator() *blockEstimator {
-	sampleDate, _ := time.Parse(time.RFC3339, "2018-05-04T20:35:22Z")   // from etherscan.io
-	sampleBlock := int64(3169691)                                       // from etherscan.io
-	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z") // from etherscan.io
-	ns := sampleDate.Sub(ropstenStart).Nanoseconds()
-	period := int(ns / sampleBlock)
-	parsestring := fmt.Sprintf("%dns", int(float64(period)*1.0005)) // increase the blockcount a little, so we don't overshoot the read block height; if we do, we will never find the updates when getting synced data
-	periodNs, _ := time.ParseDuration(parsestring)
-	return &blockEstimator{
-		Start:   ropstenStart,
-		Average: periodNs,
-	}
-}
-
-// HeaderByNumber retrieves the estimated block number wrapped in a block header struct
-func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
-	return &types.Header{
-		Number: big.NewInt(time.Since(b.Start).Nanoseconds() / b.Average.Nanoseconds()),
-	}, nil
-}
-
 // resource caches resource data. When synced it contains the most recent
 // version of the resource data and the metadata of its root chunk.
 type resource struct {
@@ -156,4 +127,35 @@ func isMultihash(data []byte) int {
 		return 0
 	}
 	return cursor + inthashlength
+}
+
+// old code (TODO: remove this code)
+
+type blockEstimator struct {
+	Start   time.Time
+	Average time.Duration
+}
+
+// NewBlockEstimator returns an object that can be used for retrieving an heuristical block height in the absence of a blockchain connection
+// It implements the headerGetter interface
+// TODO: Average must  be adjusted when blockchain connection is present and synced
+func NewBlockEstimator() *blockEstimator {
+	sampleDate, _ := time.Parse(time.RFC3339, "2018-05-04T20:35:22Z")   // from etherscan.io
+	sampleBlock := int64(3169691)                                       // from etherscan.io
+	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z") // from etherscan.io
+	ns := sampleDate.Sub(ropstenStart).Nanoseconds()
+	period := int(ns / sampleBlock)
+	parsestring := fmt.Sprintf("%dns", int(float64(period)*1.0005)) // increase the blockcount a little, so we don't overshoot the read block height; if we do, we will never find the updates when getting synced data
+	periodNs, _ := time.ParseDuration(parsestring)
+	return &blockEstimator{
+		Start:   ropstenStart,
+		Average: periodNs,
+	}
+}
+
+// HeaderByNumber retrieves the estimated block number wrapped in a block header struct
+func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
+	return &types.Header{
+		Number: big.NewInt(time.Since(b.Start).Nanoseconds() / b.Average.Nanoseconds()),
+	}, nil
 }

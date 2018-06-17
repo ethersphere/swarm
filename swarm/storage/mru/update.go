@@ -110,7 +110,7 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	datalength := int(binary.LittleEndian.Uint16(serializedData[cursor : cursor+2]))
 	cursor += 2
 
-	if int(prefixLength+updateHeaderLength+datalength+signatureLength) != len(serializedData) {
+	if prefixLength+updateHeaderLength+datalength+signatureLength != len(serializedData) {
 		return NewError(ErrNothingToReturn, "length specified in header is different than actual chunk size")
 	}
 
