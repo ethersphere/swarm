@@ -30,16 +30,23 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// Signature is an alias for a static byte array with the size of a signature
-const signatureLength = 65
+type updateHeader struct {
+	UpdateLookup
+	multihash bool
+	metaHash  []byte
 
-type Signature [signatureLength]byte
+	time               Timestamp
+	previousUpdateAddr storage.Address
+	nextUpdateTime     uint64
+}
 
-// SignedResourceUpdate contains signature information about a resource update
-type SignedResourceUpdate struct {
-	resourceUpdate // actual content that will be put on the chunk, less signature
-	signature      *Signature
-	updateAddr     storage.Address // resulting chunk address for the update
+const updateLookupLength = 4 + 4 + storage.KeyLength
+const updateHeaderLength = updateLookupLength + 1 + storage.KeyLength
+
+// resourceUpdate encapsulates the information sent as part of a resource update
+type resourceUpdate struct {
+	updateHeader
+	data []byte
 }
 
 // Update chunk layout
@@ -57,9 +64,21 @@ type SignedResourceUpdate struct {
 // Signature:
 // signature: 65 bytes (signatureLength constant)
 //
-// Minimum size is Header + 1 (minimum data length, enforced) + Signature = 142 bytes
-const minimumUpdateDataLength = 142 // 2 + 2 + 4 + 4 + storage.KeyLength + 32 + storage.KeyLength + timestampLength + 1 + signatureLength
+// Minimum size is Header + 1 (minimum data length, enforced) + Signature
+const minimumUpdateDataLength = updateHeaderLength + 1 + signatureLength
 const maxUpdateDataLength = chunkSize - minimumUpdateDataLength
+
+// Signature is an alias for a static byte array with the size of a signature
+const signatureLength = 65
+
+type Signature [signatureLength]byte
+
+// SignedResourceUpdate contains signature information about a resource update
+type SignedResourceUpdate struct {
+	resourceUpdate // actual content that will be put on the chunk, less signature
+	signature      *Signature
+	updateAddr     storage.Address // resulting chunk address for the update
+}
 
 // Verify checks that signatures are valid and that the signer owns the resource to be updated
 func (r *SignedResourceUpdate) Verify() (err error) {
@@ -116,35 +135,28 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 func (mru *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 
 	if len(mru.rootAddr) != storage.KeyLength || len(mru.metaHash) != storage.KeyLength {
-		log.Warn("Call to newUpdateChunk with nil rootAddr or metaHash")
+		log.Warn("Call to newUpdateChunk with incorrect rootAddr or metaHash")
 		return nil, NewError(ErrInvalidValue, "newUpdateChunk called without rootAddr or metaHash set")
 	}
-	// a datalength field set to 0 means the content is a multihash
-	var datalength int
-	if !mru.multihash {
-		datalength = len(mru.data)
-		if datalength == 0 {
-			return nil, NewError(ErrInvalidValue, "cannot update a resource with no data")
-		}
+
+	datalength := len(mru.data)
+	if datalength == 0 {
+		return nil, NewError(ErrInvalidValue, "cannot update a resource with no data")
 	}
 
-	// prepend version, period, metaHash and rootAddr references
-	headerlength := 4 + 4 + storage.KeyLength + storage.KeyLength
-
-	actualdatalength := len(mru.data)
 	chunk := storage.NewChunk(mru.updateAddr, nil)
-	chunk.SData = make([]byte, 2+2+signatureLength+headerlength+actualdatalength) // initial 4 are uint16 length descriptors for headerlength and datalength
+	chunk.SData = make([]byte, 2+2+signatureLength+updateHeaderLength+datalength) // initial 4 are uint16 length descriptors for updateHeaderLength and datalength
 
 	// data header length does NOT include the header length prefix bytes themselves
 	cursor := 0
-	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(headerlength))
+	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(updateHeaderLength))
 	cursor += 2
 
 	// data length
 	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(datalength))
 	cursor += 2
 
-	// header = period + version + rootAddr + metaHash
+	// header = period + version + multihash flag + rootAddr + metaHash
 	binary.LittleEndian.PutUint32(chunk.SData[cursor:], mru.period)
 	cursor += 4
 
@@ -156,12 +168,24 @@ func (mru *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 	copy(chunk.SData[cursor:], mru.metaHash[:storage.KeyLength])
 	cursor += storage.KeyLength
 
+	if mru.multihash {
+		if isMultihash(mru.data) == 0 {
+			return nil, NewError(ErrInvalidValue, "Invalid multihash")
+		}
+		chunk.SData[cursor] = 0x01
+	}
+	cursor++
+
 	// add the data
 	copy(chunk.SData[cursor:], mru.data)
 
 	// signature is the last item in the chunk data
 
-	cursor += actualdatalength
+	if mru.signature == nil {
+		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature")
+	}
+
+	cursor += datalength
 	copy(chunk.SData[cursor:], mru.signature[:])
 
 	chunk.Size = int64(len(chunk.SData))
@@ -176,46 +200,17 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 		return NewError(ErrNothingToReturn, fmt.Sprintf("chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength))
 	}
 	cursor := 0
-	headerlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
+	declaredHeaderlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
+	if declaredHeaderlength != updateHeaderLength {
+		return NewErrorf(ErrCorruptData, "Invalid header length. Expected %d, got %d", updateHeaderLength, declaredHeaderlength)
+	}
+
 	cursor += 2
-	datalength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
+	datalength := int(binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2]))
 	cursor += 2
 
-	if datalength != 0 && int(2+2+headerlength+datalength+signatureLength) != len(chunkdata) {
+	if int(2+2+updateHeaderLength+datalength+signatureLength) != len(chunkdata) {
 		return NewError(ErrNothingToReturn, "length specified in header is different than actual chunk size")
-	}
-
-	var exclsignlength int
-	// we need extra magic if it's a multihash, since we used datalength 0 in header as an indicator of multihash content
-	// retrieve the second varint and set this as the data length
-	// TODO: merge with isMultihash code
-	if datalength == 0 {
-		uvarintbuf := bytes.NewBuffer(chunkdata[headerlength+4:])
-		i, err := binary.ReadUvarint(uvarintbuf)
-		if err != nil {
-			errstr := fmt.Sprintf("corrupt multihash, hash id varint could not be read: %v", err)
-			log.Warn(errstr)
-			return NewError(ErrCorruptData, errstr)
-
-		}
-		i, err = binary.ReadUvarint(uvarintbuf)
-		if err != nil {
-			errstr := fmt.Sprintf("corrupt multihash, hash length field could not be read: %v", err)
-			log.Warn(errstr)
-			return NewError(ErrCorruptData, errstr)
-
-		}
-		exclsignlength = int(headerlength + uint16(i))
-	} else {
-		exclsignlength = int(headerlength + datalength + 4)
-	}
-
-	// the total length excluding signature is headerlength and datalength fields plus the length of the header and the data given in these fields
-	exclsignlength = int(headerlength + datalength + 4)
-	if exclsignlength > len(chunkdata) || exclsignlength < 14 {
-		return NewError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d longer than actual chunk data length %d", headerlength, exclsignlength, len(chunkdata)))
-	} else if exclsignlength < 14 {
-		return NewError(ErrNothingToReturn, fmt.Sprintf("Reported headerlength %d + datalength %d is smaller than minimum valid resource chunk length %d", headerlength, datalength, 14))
 	}
 
 	// at this point we can be satisfied that the data integrity is ok
@@ -234,46 +229,38 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 	copy(header.metaHash, chunkdata[cursor:cursor+storage.KeyLength])
 	cursor += storage.KeyLength
 
-	//Verify that the updateAddr key that identifies this chunk matches its contents:
+	if chunkdata[cursor] == 0x01 {
+		header.multihash = true
+	}
+	cursor++
+
+	// done parsing header. Now verify that the updateAddr key that identifies this chunk matches its contents:
 	if !bytes.Equal(updateAddr, header.GetUpdateAddr()) {
 		return NewError(ErrInvalidSignature, "period,version,rootAddr contained in update chunk do not match updateAddr")
 	}
 
 	// if multihash content is indicated we check the validity of the multihash
-	// \TODO the check above for multihash probably is sufficient also for this case (or can be with a small adjustment) and if so this code should be removed
-	var intdatalength int
-	var ismultihash bool
-	if datalength == 0 {
-		var intheaderlength int
-		var err error
-		intdatalength, intheaderlength, err = multihash.GetMultihashLength(chunkdata[cursor:])
+	if header.multihash {
+		mhLength, mhHeaderLength, err := multihash.GetMultihashLength(chunkdata[cursor:])
 		if err != nil {
 			log.Error("multihash parse error", "err", err)
 			return err
 		}
-		intdatalength += intheaderlength
-		multihashboundary := cursor + intdatalength
-		if len(chunkdata) != multihashboundary && len(chunkdata) < multihashboundary+signatureLength {
-			log.Debug("multihash error", "chunkdatalen", len(chunkdata), "multihashboundary", multihashboundary)
+		if datalength != mhLength+mhHeaderLength {
+			log.Debug("multihash error", "datalength", datalength, "mhLength", mhLength, "mhHeaderLength", mhHeaderLength)
 			return errors.New("Corrupt multihash data")
 		}
-		ismultihash = true
-	} else {
-		intdatalength = int(datalength)
 	}
-	data = make([]byte, intdatalength)
-	copy(data, chunkdata[cursor:cursor+intdatalength])
+	data = make([]byte, datalength)
+	copy(data, chunkdata[cursor:cursor+datalength])
 
-	// omit signatures if we have no validator
 	var signature *Signature
-	cursor += intdatalength
+	cursor += datalength
 	sigdata := chunkdata[cursor : cursor+signatureLength]
 	if len(sigdata) > 0 {
 		signature = &Signature{}
 		copy(signature[:], sigdata)
 	}
-
-	header.multihash = ismultihash
 
 	r.signature = signature
 	r.updateAddr = updateAddr
