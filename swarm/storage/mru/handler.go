@@ -112,7 +112,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	var r SignedResourceUpdate
 	if err := r.parseUpdateChunk(chunkAddr, data); err != nil {
-		log.Warn("Invalid resource chunk")
+		log.Warn("Invalid resource chunk: " + err.Error())
 		return false
 	}
 

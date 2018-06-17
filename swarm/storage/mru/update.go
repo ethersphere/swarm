@@ -17,14 +17,10 @@
 package mru
 
 import (
-	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -61,187 +57,110 @@ type resourceUpdate struct {
 // 40 bytes Timestamp
 // Data:
 // data (datalength bytes)
-// Signature:
-// signature: 65 bytes (signatureLength constant)
 //
-// Minimum size is Header + 1 (minimum data length, enforced) + Signature
-const minimumUpdateDataLength = updateHeaderLength + 1 + signatureLength
-const maxUpdateDataLength = chunkSize - minimumUpdateDataLength
+// Minimum size is Header + 1 (minimum data length, enforced)
+const minimumUpdateDataLength = updateHeaderLength + 1
+const maxUpdateDataLength = chunkSize - signatureLength - updateHeaderLength
 
-// Signature is an alias for a static byte array with the size of a signature
-const signatureLength = 65
-
-type Signature [signatureLength]byte
-
-// SignedResourceUpdate contains signature information about a resource update
-type SignedResourceUpdate struct {
-	resourceUpdate // actual content that will be put on the chunk, less signature
-	signature      *Signature
-	updateAddr     storage.Address // resulting chunk address for the update
-}
-
-// Verify checks that signatures are valid and that the signer owns the resource to be updated
-func (r *SignedResourceUpdate) Verify() (err error) {
-	if len(r.data) == 0 {
-		return NewError(ErrInvalidValue, "I refuse to waste swarm space for updates with empty values, amigo (data length is 0)")
-	}
-	if r.signature == nil {
-		return NewError(ErrInvalidSignature, "Missing signature field")
-	}
-
-	digest := resourceUpdateChunkDigest(r.updateAddr, r.metaHash, r.data)
-
-	// get the address of the signer (which also checks that it's a valid signature)
-	ownerAddr, err := getAddressFromDataSig(digest, *r.signature)
-	if err != nil {
-		return err
-	}
-
-	if !bytes.Equal(r.updateAddr, r.GetUpdateAddr()) {
-		return NewError(ErrInvalidSignature, "Signature address does not match with ownerAddr")
-	}
-
-	// Check if who signed the resource update really owns the resource
-	if !verifyResourceOwnership(ownerAddr, r.metaHash, r.rootAddr) {
-		return NewError(ErrUnauthorized, fmt.Sprintf("signature is valid but signer does not own the resource: %v", err))
-	}
-
-	return nil
-}
-
-// Sign executes the signature to validate the resource
-func (r *SignedResourceUpdate) Sign(signer Signer) error {
-
-	updateAddr := r.GetUpdateAddr()
-
-	digest := resourceUpdateChunkDigest(updateAddr, r.metaHash, r.data)
-	signature, err := signer.Sign(digest)
-	if err != nil {
-		return err
-	}
-	ownerAddress, err := getAddressFromDataSig(digest, signature)
-	if err != nil {
-		return NewError(ErrInvalidSignature, "Error verifying signature")
-	}
-	if ownerAddress != signer.Address() {
-		return NewError(ErrInvalidSignature, "Signer address does not match private key")
-	}
-	r.signature = &signature
-	r.updateAddr = updateAddr
-	return nil
-}
-
-// create an update chunk.
-func (mru *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
-
-	if len(mru.rootAddr) != storage.KeyLength || len(mru.metaHash) != storage.KeyLength {
+func (r *resourceUpdate) binaryPut(serializedData []byte) error {
+	if len(r.rootAddr) != storage.KeyLength || len(r.metaHash) != storage.KeyLength {
 		log.Warn("Call to newUpdateChunk with incorrect rootAddr or metaHash")
-		return nil, NewError(ErrInvalidValue, "newUpdateChunk called without rootAddr or metaHash set")
+		return NewError(ErrInvalidValue, "newUpdateChunk called without rootAddr or metaHash set")
 	}
 
-	datalength := len(mru.data)
+	datalength := len(r.data)
 	if datalength == 0 {
-		return nil, NewError(ErrInvalidValue, "cannot update a resource with no data")
+		return NewError(ErrInvalidValue, "cannot update a resource with no data")
 	}
 
-	chunk := storage.NewChunk(mru.updateAddr, nil)
-	chunk.SData = make([]byte, 2+2+signatureLength+updateHeaderLength+datalength) // initial 4 are uint16 length descriptors for updateHeaderLength and datalength
+	if datalength > maxUpdateDataLength {
+		return NewErrorf(ErrInvalidValue, "data is too big (length=%d). Max length=%d", datalength, maxUpdateDataLength)
+	}
 
+	if len(serializedData) != r.binaryLength() {
+		return NewError(ErrInvalidValue, "slice passed to putBinary must be of exact size")
+	}
 	// data header length does NOT include the header length prefix bytes themselves
 	cursor := 0
-	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(updateHeaderLength))
+	binary.LittleEndian.PutUint16(serializedData[cursor:], uint16(updateHeaderLength))
 	cursor += 2
 
 	// data length
-	binary.LittleEndian.PutUint16(chunk.SData[cursor:], uint16(datalength))
+	binary.LittleEndian.PutUint16(serializedData[cursor:], uint16(datalength))
 	cursor += 2
 
 	// header = period + version + multihash flag + rootAddr + metaHash
-	binary.LittleEndian.PutUint32(chunk.SData[cursor:], mru.period)
+	binary.LittleEndian.PutUint32(serializedData[cursor:], r.period)
 	cursor += 4
 
-	binary.LittleEndian.PutUint32(chunk.SData[cursor:], mru.version)
+	binary.LittleEndian.PutUint32(serializedData[cursor:], r.version)
 	cursor += 4
 
-	copy(chunk.SData[cursor:], mru.rootAddr[:storage.KeyLength])
+	copy(serializedData[cursor:], r.rootAddr[:storage.KeyLength])
 	cursor += storage.KeyLength
-	copy(chunk.SData[cursor:], mru.metaHash[:storage.KeyLength])
+	copy(serializedData[cursor:], r.metaHash[:storage.KeyLength])
 	cursor += storage.KeyLength
 
-	if mru.multihash {
-		if isMultihash(mru.data) == 0 {
-			return nil, NewError(ErrInvalidValue, "Invalid multihash")
+	if r.multihash {
+		if isMultihash(r.data) == 0 {
+			return NewError(ErrInvalidValue, "Invalid multihash")
 		}
-		chunk.SData[cursor] = 0x01
+		serializedData[cursor] = 0x01
 	}
 	cursor++
 
 	// add the data
-	copy(chunk.SData[cursor:], mru.data)
-
-	// signature is the last item in the chunk data
-
-	if mru.signature == nil {
-		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature")
-	}
-
+	copy(serializedData[cursor:], r.data)
 	cursor += datalength
-	copy(chunk.SData[cursor:], mru.signature[:])
 
-	chunk.Size = int64(len(chunk.SData))
-	return chunk, nil
+	return nil
 }
 
-// retrieve update metadata from chunk data
-func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chunkdata []byte) error {
-	// for update chunk layout see SignedResourceUpdate definition
+func (r *resourceUpdate) binaryLength() int {
+	return 2 + 2 + updateHeaderLength + len(r.data) // initial 4 are uint16 length descriptors for updateHeaderLength and datalength
+}
 
-	if len(chunkdata) < minimumUpdateDataLength {
+func (r *resourceUpdate) binaryGet(serializedData []byte) error {
+	if len(serializedData) < minimumUpdateDataLength {
 		return NewError(ErrNothingToReturn, fmt.Sprintf("chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength))
 	}
 	cursor := 0
-	declaredHeaderlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
+	declaredHeaderlength := binary.LittleEndian.Uint16(serializedData[cursor : cursor+2])
 	if declaredHeaderlength != updateHeaderLength {
 		return NewErrorf(ErrCorruptData, "Invalid header length. Expected %d, got %d", updateHeaderLength, declaredHeaderlength)
 	}
 
 	cursor += 2
-	datalength := int(binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2]))
+	datalength := int(binary.LittleEndian.Uint16(serializedData[cursor : cursor+2]))
 	cursor += 2
 
-	if int(2+2+updateHeaderLength+datalength+signatureLength) != len(chunkdata) {
+	if int(2+2+updateHeaderLength+datalength+signatureLength) != len(serializedData) {
 		return NewError(ErrNothingToReturn, "length specified in header is different than actual chunk size")
 	}
 
 	// at this point we can be satisfied that the data integrity is ok
 	var header updateHeader
 
-	var data []byte
-	header.period = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
+	header.period = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
 	cursor += 4
-	header.version = binary.LittleEndian.Uint32(chunkdata[cursor : cursor+4])
+	header.version = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
 	cursor += 4
 
 	header.rootAddr = storage.Address(make([]byte, storage.KeyLength))
 	header.metaHash = make([]byte, storage.KeyLength)
-	copy(header.rootAddr, chunkdata[cursor:cursor+storage.KeyLength])
+	copy(header.rootAddr, serializedData[cursor:cursor+storage.KeyLength])
 	cursor += storage.KeyLength
-	copy(header.metaHash, chunkdata[cursor:cursor+storage.KeyLength])
+	copy(header.metaHash, serializedData[cursor:cursor+storage.KeyLength])
 	cursor += storage.KeyLength
 
-	if chunkdata[cursor] == 0x01 {
+	if serializedData[cursor] == 0x01 {
 		header.multihash = true
 	}
 	cursor++
 
-	// done parsing header. Now verify that the updateAddr key that identifies this chunk matches its contents:
-	if !bytes.Equal(updateAddr, header.GetUpdateAddr()) {
-		return NewError(ErrInvalidSignature, "period,version,rootAddr contained in update chunk do not match updateAddr")
-	}
-
 	// if multihash content is indicated we check the validity of the multihash
 	if header.multihash {
-		mhLength, mhHeaderLength, err := multihash.GetMultihashLength(chunkdata[cursor:])
+		mhLength, mhHeaderLength, err := multihash.GetMultihashLength(serializedData[cursor:])
 		if err != nil {
 			log.Error("multihash parse error", "err", err)
 			return err
@@ -251,58 +170,11 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 			return errors.New("Corrupt multihash data")
 		}
 	}
-	data = make([]byte, datalength)
-	copy(data, chunkdata[cursor:cursor+datalength])
-
-	var signature *Signature
+	r.updateHeader = header
+	r.data = make([]byte, datalength)
+	copy(r.data, serializedData[cursor:cursor+datalength])
 	cursor += datalength
-	sigdata := chunkdata[cursor : cursor+signatureLength]
-	if len(sigdata) > 0 {
-		signature = &Signature{}
-		copy(signature[:], sigdata)
-	}
-
-	r.signature = signature
-	r.updateAddr = updateAddr
-	r.resourceUpdate = resourceUpdate{
-		updateHeader: header,
-		data:         data,
-	}
-
-	if err := r.Verify(); err != nil {
-		return NewError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
-	}
 
 	return nil
 
-}
-
-// resourceUpdateChunkDigest creates the resource update digest used in signatures (formerly known as keyDataHash)
-func resourceUpdateChunkDigest(updateAddr storage.Address, metaHash []byte, data []byte) common.Hash {
-	hasher := hashPool.Get().(hash.Hash)
-	defer hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(updateAddr)
-	hasher.Write(metaHash)
-	hasher.Write(data)
-	return common.BytesToHash(hasher.Sum(nil))
-}
-
-// getAddressFromDataSig extracts the address of the resource update signer
-func getAddressFromDataSig(digest common.Hash, signature Signature) (common.Address, error) {
-	pub, err := crypto.SigToPub(digest.Bytes(), signature[:])
-	if err != nil {
-		return common.Address{}, err
-	}
-	return crypto.PubkeyToAddress(*pub), nil
-}
-
-func verifyResourceOwnership(ownerAddr common.Address, metaHash []byte, rootAddr storage.Address) bool {
-	hasher := hashPool.Get().(hash.Hash)
-	defer hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(metaHash)
-	hasher.Write(ownerAddr.Bytes())
-	rootAddr2 := hasher.Sum(nil)
-	return bytes.Equal(rootAddr2, rootAddr)
 }
