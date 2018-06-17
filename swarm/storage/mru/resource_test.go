@@ -203,7 +203,7 @@ func TestReverse(t *testing.T) {
 	if err := checkUpdate.parseUpdateChunk(chunk.Addr, chunk.SData); err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := resourceUpdateChunkDigest(chunk.Addr, metaHash, checkUpdate.data)
+	checkdigest := checkUpdate.getDigest(chunk.Addr)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checkUpdate.signature)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
@@ -802,12 +802,9 @@ func TestValidatorInStore(t *testing.T) {
 
 	updateAddr := updateLookup.GetUpdateAddr()
 	data := []byte("bar")
-	digestToSign := resourceUpdateChunkDigest(updateAddr, metaHash, data)
-	digestSignature, err := signer.Sign(digestToSign)
 
 	r := SignedResourceUpdate{
 		updateAddr: updateAddr,
-		signature:  &digestSignature,
 		resourceUpdate: resourceUpdate{
 			updateHeader: updateHeader{
 				UpdateLookup: updateLookup,
@@ -816,6 +813,8 @@ func TestValidatorInStore(t *testing.T) {
 			data: data,
 		},
 	}
+
+	r.Sign(signer)
 
 	uglyChunk, err := r.newUpdateChunk()
 	if err != nil {
