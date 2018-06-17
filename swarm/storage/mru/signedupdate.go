@@ -48,8 +48,10 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 		return NewError(ErrInvalidSignature, "Missing signature field")
 	}
 
-	digest := r.getDigest(r.updateAddr)
-
+	digest, err := r.getDigest(r.updateAddr)
+	if err != nil {
+		return err
+	}
 	// get the address of the signer (which also checks that it's a valid signature)
 	ownerAddr, err := getAddressFromDataSig(digest, *r.signature)
 	if err != nil {
@@ -73,7 +75,11 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 
 	updateAddr := r.GetUpdateAddr()
 
-	digest := r.getDigest(updateAddr)
+	r.binaryData = nil
+	digest, err := r.getDigest(updateAddr)
+	if err != nil {
+		return err
+	}
 	signature, err := signer.Sign(digest)
 	if err != nil {
 		return err
@@ -93,17 +99,13 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 // create an update chunk.
 func (mru *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 
-	if mru.signature == nil {
-		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature")
+	if mru.signature == nil || mru.binaryData == nil {
+		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
 	chunk := storage.NewChunk(mru.updateAddr, nil)
 	resourceUpdateLength := mru.resourceUpdate.binaryLength()
-	chunk.SData = make([]byte, resourceUpdateLength+signatureLength)
-
-	if err := mru.resourceUpdate.binaryPut(chunk.SData[:resourceUpdateLength]); err != nil {
-		return nil, err
-	}
+	chunk.SData = mru.binaryData
 
 	// signature is the last item in the chunk data
 	copy(chunk.SData[resourceUpdateLength:], mru.signature[:])
@@ -134,6 +136,7 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 
 	r.signature = signature
 	r.updateAddr = updateAddr
+	r.binaryData = chunkdata
 
 	if err := r.Verify(); err != nil {
 		return NewError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
@@ -145,18 +148,21 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 
 // getDigest creates the resource update digest used in signatures (formerly known as keyDataHash)
 // the serialized payload is cached in .binaryData
-func (r *SignedResourceUpdate) getDigest(updateAddr storage.Address) (result common.Hash) {
+func (r *SignedResourceUpdate) getDigest(updateAddr storage.Address) (result common.Hash, err error) {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
-	updateData := make([]byte, r.resourceUpdate.binaryLength())
-	if err := r.resourceUpdate.binaryPut(updateData); err != nil {
-		return result
+	dataLength := r.resourceUpdate.binaryLength()
+	if r.binaryData == nil {
+		r.binaryData = make([]byte, dataLength+signatureLength)
+		if err := r.resourceUpdate.binaryPut(r.binaryData[:dataLength]); err != nil {
+			return result, err
+		}
 	}
-	hasher.Write(updateAddr) //lookup key
-	hasher.Write(updateData) //everything except the signature.
+	hasher.Write(updateAddr)                //lookup key
+	hasher.Write(r.binaryData[:dataLength]) //everything except the signature.
 
-	return common.BytesToHash(hasher.Sum(nil))
+	return common.BytesToHash(hasher.Sum(nil)), nil
 }
 
 // getAddressFromDataSig extracts the address of the resource update signer

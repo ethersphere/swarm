@@ -119,7 +119,11 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 		t.Fatal("expected newUpdateChunk to fail when there is no signature", err)
 	}
 
-	r.signature = &Signature{}
+	alice := newAliceSigner()
+	if err := r.Sign(alice); err != nil {
+		t.Fatalf("error signing:%s", err)
+
+	}
 	_, err = r.newUpdateChunk()
 	if err != nil {
 		t.Fatalf("error creating update chunk:%s", err)
@@ -127,11 +131,9 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 
 	r.multihash = true
 	r.data[1] = 79
-	_, err = r.newUpdateChunk()
-	if err == nil {
-		t.Fatal("expected newUpdateChunk to fail when an invalid multihash is in data and multihash=true", err)
+	if err := r.Sign(alice); err == nil {
+		t.Fatal("expected Sign() to fail when an invalid multihash is in data and multihash=true", err)
 	}
-
 }
 
 // check that signature address matches update signer address
@@ -203,7 +205,10 @@ func TestReverse(t *testing.T) {
 	if err := checkUpdate.parseUpdateChunk(chunk.Addr, chunk.SData); err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := checkUpdate.getDigest(chunk.Addr)
+	checkdigest, err := checkUpdate.getDigest(chunk.Addr)
+	if err != nil {
+		t.Fatal(err)
+	}
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checkUpdate.signature)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
