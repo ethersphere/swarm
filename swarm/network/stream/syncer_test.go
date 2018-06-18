@@ -66,12 +66,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	defaultSkipCheck = skipCheck
 	//data directories for each node and store
 	datadirs = make(map[discover.NodeID]string)
-	if *useMockStore {
-		createStoreFunc = createMockStore
-		createGlobalStore()
-	} else {
-		createStoreFunc = createTestLocalStorageFromSim
-	}
 	defer datadirsCleanup()
 
 	registries = make(map[discover.NodeID]*TestRegistry)
@@ -111,14 +105,24 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	if err != nil {
 		t.Fatal(err.Error())
 	}
+	// fetch factories
+	useFakeFetchFunc = true
+	useAPIFakeFetchFunc = true
+	//local stores
+	stores = make(map[discover.NodeID]storage.ChunkStore)
+	for i, id := range sim.IDs {
+		stores[id] = sim.Stores[i]
+	}
+	if *useMockStore {
+		createStoreFunc = createMockStore
+		createGlobalStore()
+	} else {
+		createStoreFunc = nil
+	}
 
 	nodeIndex := make(map[discover.NodeID]int)
 	for i, id := range sim.IDs {
 		nodeIndex[id] = i
-		if !*useMockStore {
-			stores[id] = sim.Stores[i]
-			sim.Stores[i] = stores[id]
-		}
 	}
 	// peerCount function gives the number of peer connections for a nodeID
 	// this is needed for the service run function to wait until
@@ -130,13 +134,6 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		return 2
 	}
 	waitPeerErrC = make(chan error)
-
-	// create DBAPI-s for all nodes
-	dbs := make([]*storage.DBAPI, nodes)
-	for i := 0; i < nodes; i++ {
-		dbs[i] = storage.NewDBAPI(sim.Stores[i].(*storage.LocalStore))
-	}
-
 	// collect hashes in po 1 bin for each node
 	hashes := make([][]storage.Address, nodes)
 	totalHashes := 0
@@ -145,7 +142,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		if i < nodes-1 {
 			hashCounts[i] = hashCounts[i+1]
 		}
-		dbs[i].Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
+		stores[sim.IDs[i]].(SyncDB).Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
 			hashes[i] = append(hashes[i], addr)
 			totalHashes++
 			hashCounts[i]++
@@ -202,9 +199,12 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		// here we distribute chunks of a random file into stores 1...nodes
 		rrFileStore := storage.NewFileStore(newRoundRobinStore(sim.Stores[1:]...), storage.NewFileStoreParams())
 		size := chunkCount * chunkSize
-		_, wait, err := rrFileStore.Store(io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		_, wait, err := rrFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		if err != nil {
+			t.Fatal(err.Error())
+		}
 		// need to wait cos we then immediately collect the relevant bin content
-		wait()
+		err = wait(ctx)
 		if err != nil {
 			t.Fatal(err.Error())
 		}
@@ -228,10 +228,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		for j := i; j < nodes; j++ {
 			total += len(hashes[j])
 			for _, key := range hashes[j] {
-				chunk, err := dbs[i].Get(key)
-				if err == storage.ErrFetching {
-					<-chunk.ReqC
-				} else if err != nil {
+				_, err := stores[ids[i]].Get(ctx, key)
+				if err != nil {
 					continue
 				}
 				// needed for leveldb not to be closed?

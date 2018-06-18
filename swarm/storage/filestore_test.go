@@ -65,7 +65,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	}
 	log.Warn("store complete", "address", key.Hex())
 
-	resultReader, isEncrypted := fileStore.Retrieve(key)
+	resultReader, isEncrypted := fileStore.Retrieve(ctx, key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
@@ -83,7 +83,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
 	localStore.memStore = NewMemStore(NewDefaultStoreParams(), db)
-	resultReader, isEncrypted = fileStore.Retrieve(key)
+	resultReader, isEncrypted = fileStore.Retrieve(ctx, key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
@@ -102,12 +102,12 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	}
 }
 
-func TestDPA_capacity(t *testing.T) {
-	testDPA_capacity(false, t)
-	testDPA_capacity(true, t)
+func TestFileStoreCapacity(t *testing.T) {
+	testFileStoreCapacity(false, t)
+	testFileStoreCapacity(true, t)
 }
 
-func testDPA_capacity(toEncrypt bool, t *testing.T) {
+func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	tdb, err := newTestDbStore(false, false)
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
@@ -131,7 +131,7 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
-	resultReader, isEncrypted := fileStore.Retrieve(key)
+	resultReader, isEncrypted := fileStore.Retrieve(ctx, key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
@@ -150,7 +150,7 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	memStore.setCapacity(0)
 	// check whether it is, indeed, empty
 	fileStore.ChunkStore = memStore
-	resultReader, isEncrypted = fileStore.Retrieve(key)
+	resultReader, isEncrypted = fileStore.Retrieve(ctx, key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
@@ -160,7 +160,7 @@ func testDPA_capacity(toEncrypt bool, t *testing.T) {
 	// check how it works with localStore
 	fileStore.ChunkStore = localStore
 	//	localStore.dbStore.setCapacity(0)
-	resultReader, isEncrypted = fileStore.Retrieve(key)
+	resultReader, isEncrypted = fileStore.Retrieve(ctx, key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}

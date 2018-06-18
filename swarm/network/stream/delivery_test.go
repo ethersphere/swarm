@@ -47,7 +47,12 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	peerID := tester.IDs[0]
 
 	ctx := context.Background()
-	streamer.delivery.RequestFromPeers(ctx, storage.Address(hash0[:]), nil, true, &sync.Map{})
+	req := &network.Request{
+		Addr:        storage.Address(hash0[:]),
+		SkipCheck:   true,
+		PeersToSkip: &sync.Map{},
+	}
+	streamer.delivery.RequestFromPeers(ctx, req)
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -285,15 +290,9 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	// timeout := time.NewTimer(1 * time.Second)
-	//
-	// select {
-	// case <-timeout.C:
-	// 	t.Fatal("timeout receiving chunk")
-	// case <-chunk.ReqC:
-	// }
-
-	storedChunk, err := localStore.Get(chunkKey)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+	storedChunk, err := localStore.Get(ctx, chunkKey)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
@@ -318,7 +317,7 @@ func TestDeliveryFromNodes(t *testing.T) {
 func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
-	createStoreFunc = createTestLocalStorageFromSim
+	// createStoreFunc = createTestLocalStorageFromSim
 	conf := &streamTesting.RunConfig{
 		Adapter:         *adapter,
 		NodeCount:       nodes,
@@ -341,6 +340,13 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
+	if *useMockStore {
+		createStoreFunc = createMockStore
+		createGlobalStore()
+	} else {
+		createStoreFunc = nil
+	}
+
 	registries = make(map[discover.NodeID]*TestRegistry)
 	deliveries = make(map[discover.NodeID]*Delivery)
 	peerCount = func(id discover.NodeID) int {
@@ -354,11 +360,10 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	rrFileStore := storage.NewFileStore(newRoundRobinStore(sim.Stores[1:]...), storage.NewFileStoreParams())
 	size := chunkCount * chunkSize
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	fileHash, wait, err := rrFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
-	fileHash, wait, err := rrdpa.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// wait until all chunks stored
 	if err != nil {
 		t.Fatal(err.Error())
@@ -403,8 +408,6 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 					<-doneC
 					rpcSubscriptionsWg.Done()
 				}()
-				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-				defer cancel()
 				sid := sim.IDs[j+1]
 				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, "", false), NewRange(0, 0), Top)
 			})
@@ -412,14 +415,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				return err
 			}
 		}
-		// create a retriever FileStore for the pivot node
-		delivery := deliveries[sim.IDs[0]]
 
-		netStore, err := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), network.NewFetchFunc(delivery.RequestFromPeers, true))
-		if err != nil {
-			t.Fatal(err)
-		}
-		fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
+		// create a retriever FileStore for the pivot node
+		fileStore := storage.NewFileStore(stores[sim.IDs[0]], storage.NewFileStoreParams())
 
 		go func() {
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
@@ -506,7 +504,10 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
-	createStoreFunc = createTestLocalStorageFromSim
+	useFakeFetchFunc = false
+	useAPIFakeFetchFunc = true
+	stores = make(map[discover.NodeID]storage.ChunkStore)
+	deliveries = make(map[discover.NodeID]*Delivery)
 	registries = make(map[discover.NodeID]*TestRegistry)
 
 	timeout := 300 * time.Second
@@ -531,11 +532,6 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		b.Fatal(err.Error())
 	}
 
-	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
-	for i, id := range sim.IDs {
-		stores[id] = sim.Stores[i]
-	}
 	peerCount = func(id discover.NodeID) int {
 		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
 			return 1
@@ -631,11 +627,10 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// create a retriever FileStore for the pivot node
 	// by now deliveries are set for each node by the streamer service
 	delivery := deliveries[sim.IDs[0]]
-	retrieveFunc := func(chunk *storage.Chunk) error {
-		return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
+	netStore, err := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), network.NewFetcherFactory(delivery.RequestFromPeers, skipCheck).New)
+	if err != nil {
+		b.Fatalf("simulation failed to initialise. expected no error. got %v", err)
 	}
-	netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
-
 	// benchmark loop
 	b.ResetTimer()
 	b.StopTimer()
@@ -645,9 +640,12 @@ Loop:
 		hashes := make([]storage.Address, chunkCount)
 		for i := 0; i < chunkCount; i++ {
 			// create actual size real chunks
-			hash, wait, err := remoteFileStore.Store(io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
+			hash, wait, err := remoteFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
+			if err != nil {
+				b.Fatalf("expected no error. got %v", err)
+			}
 			// wait until all chunks stored
-			wait()
+			err = wait(ctx)
 			if err != nil {
 				b.Fatalf("expected no error. got %v", err)
 			}
@@ -660,7 +658,7 @@ Loop:
 		errs := make(chan error)
 		for _, hash := range hashes {
 			go func(h storage.Address) {
-				_, err := netStore.Get(h)
+				_, err := netStore.Get(ctx, h)
 				log.Warn("test check netstore get", "hash", h, "err", err)
 				errs <- err
 			}(hash)
@@ -710,8 +708,4 @@ Loop:
 	if err != nil {
 		b.Fatalf("expected no error. got %v", err)
 	}
-}
-
-func createTestLocalStorageFromSim(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
-	return stores[id], nil
 }

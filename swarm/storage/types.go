@@ -356,7 +356,7 @@ func (self *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 }
 
 type ChunkStore interface {
-	Get(rctx context.Context, ref Address) (ch Chunk, err error)
 	Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error)
+	Get(rctx context.Context, ref Address) (ch Chunk, err error)
 	Close()
 }

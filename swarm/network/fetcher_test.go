@@ -18,16 +18,15 @@ package network
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-var sourcePeerAddr = randomAddr()
+var sourcePeerID = discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
 
 // mockRequester pushes every request to the requestC channel when its doRequest function is called
 type mockRequester struct {
@@ -44,7 +43,7 @@ func newMockRequester(waitTimes ...time.Duration) *mockRequester {
 	}
 }
 
-func (m *mockRequester) doRequest(ctx context.Context, request *Request) (storage.Address, chan struct{}, error) {
+func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*discover.NodeID, chan struct{}, error) {
 	waitTime := time.Duration(0)
 	if m.ctr < len(m.waitTimes) {
 		waitTime = m.waitTimes[m.ctr]
@@ -52,18 +51,12 @@ func (m *mockRequester) doRequest(ctx context.Context, request *Request) (storag
 	}
 	time.Sleep(waitTime)
 	m.requestC <- request
-	source := request.source
+	source := request.Source
 	if source == nil {
 		fmt.Println("source nil")
-		source = sourcePeerAddr
+		source = &sourcePeerID
 	}
 	return source, make(chan struct{}), nil
-}
-
-func randomAddr() storage.Address {
-	addr := make([]byte, 32)
-	rand.Read(addr)
-	return addr
 }
 
 // This test creates a Fetcher using mockRequester, and run it with a sample set of peers to skip.
@@ -92,13 +85,13 @@ func TestFetcherSingleFetch(t *testing.T) {
 	select {
 	case request := <-requester.requestC:
 		for _, p := range peers {
-			if _, ok := request.peersToSkip.Load(p); !ok {
+			if _, ok := request.PeersToSkip.Load(p); !ok {
 				t.Fatalf("request.peersToSkip misses peer")
 			}
 		}
 		// wait for the source peer to be added to peersToSkip
 		time.Sleep(100 * time.Millisecond)
-		if _, ok := request.peersToSkip.Load(sourcePeerAddr.Hex()); !ok {
+		if _, ok := request.PeersToSkip.Load(sourcePeerID.String()); !ok {
 			t.Fatalf("request.peersToSkip does not contain peer returned by the request function")
 		}
 	case <-time.After(200 * time.Millisecond):

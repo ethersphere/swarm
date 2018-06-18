@@ -201,7 +201,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
 
-		if wait := c.NeedData(hash); wait != nil {
+		if wait := c.NeedData(ctx, hash); wait != nil {
 			want.Set(i/HashSize, true)
 			wg.Add(1)
 			// create request and wait until the chunk data arrives and is stored
@@ -315,12 +315,13 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	if err != nil {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", l, err)
 	}
+	ctx := context.TODO()
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 
 			hash := hashes[i*HashSize : (i+1)*HashSize]
-			data, err := s.GetData(hash)
+			data, err := s.GetData(ctx, hash)
 			if err != nil {
 				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}

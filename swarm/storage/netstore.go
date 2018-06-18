@@ -27,7 +27,7 @@ import (
 
 type (
 	FetchFunc    func(ctx context.Context)
-	NewFetchFunc func(ctx context.Context, offer Address, peers *sync.Map) FetchFunc
+	NewFetchFunc func(ctx context.Context, addr Address, peers *sync.Map) FetchFunc
 )
 
 // NetStore is an extention of local storage
@@ -39,7 +39,7 @@ type NetStore struct {
 	mu           sync.Mutex
 	store        ChunkStore
 	fetchers     *lru.Cache
-	newFetchFunc NewFetchFunc
+	NewFetchFunc NewFetchFunc
 }
 
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
@@ -52,7 +52,7 @@ func NewNetStore(store ChunkStore, newFetchFunc NewFetchFunc) (*NetStore, error)
 	return &NetStore{
 		store:        store,
 		fetchers:     fetchers,
-		newFetchFunc: newFetchFunc,
+		NewFetchFunc: newFetchFunc,
 	}, nil
 }
 
@@ -70,7 +70,8 @@ func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
 		return nil, nil
 	}
 	// if chunk is now put in store, check if there was an active fetcher
-	f, _ := n.fetchers.Get(ch.Address())
+	key := hex.EncodeToString(ch.Address())
+	f, _ := n.fetchers.Get(key)
 	// if there is, deliver the chunk to requestors via fetcher
 	if f != nil {
 		f.(*fetcher).deliver(ch)
@@ -101,6 +102,11 @@ func (n *NetStore) Close() {
 	n.store.Close()
 }
 
+// SyncDB
+func (n *NetStore) Store() ChunkStore {
+	return n.store
+}
+
 // get attempts at retrieving the chunk from LocalStore
 // if it is not found, attempts at retrieving an existing fetchers
 // if none exists, creates one and saves it in the fetchers cache
@@ -114,7 +120,7 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 
 	chunk, err := n.store.Get(ctx, ref)
 	if err == nil {
-		return chunk, nil, nil
+		return chunk, func(context.Context) (Chunk, error) { return chunk, nil }, nil
 	}
 	f := n.getOrCreateFetcher(ref)
 	return nil, f.Fetch, nil
@@ -140,7 +146,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 		cancel()
 	}
 	peers := &sync.Map{}
-	fetcher := newFetcher(ref, n.newFetchFunc(ctx, ref, peers), destroy, peers)
+	fetcher := newFetcher(ref, n.NewFetchFunc(ctx, ref, peers), destroy, peers)
 	n.fetchers.Add(key, fetcher)
 
 	return fetcher

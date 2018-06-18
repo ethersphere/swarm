@@ -507,7 +507,7 @@ type server struct {
 // Server interface for outgoing peer Streamer
 type Server interface {
 	SetNextBatch(uint64, uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error)
-	GetData([]byte) ([]byte, error)
+	GetData(context.Context, []byte) ([]byte, error)
 	Close()
 }
 
@@ -550,7 +550,7 @@ func (c client) NextInterval() (start, end uint64, err error) {
 
 // Client interface for incoming peer Streamer
 type Client interface {
-	NeedData([]byte) func(context.Context) error
+	NeedData(context.Context, []byte) func(context.Context) error
 	BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error)
 	Close()
 }

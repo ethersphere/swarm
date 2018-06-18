@@ -88,10 +88,10 @@ func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
-func (self *FileStore) Retrieve(addr Address) (reader *LazyChunkReader, isEncrypted bool) {
+func (self *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > self.hashFunc().Size()
 	getter := NewHasherStore(self.ChunkStore, self.hashFunc, isEncrypted)
-	reader = TreeJoin(addr, getter, 0)
+	reader = TreeJoin(ctx, addr, getter, 0)
 	return
 }
 

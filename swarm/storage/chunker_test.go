@@ -103,7 +103,7 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 		tester.t.Fatalf(err.Error())
 	}
 
-	reader := TreeJoin(addr, putGetter, 0)
+	reader := TreeJoin(ctx, addr, putGetter, 0)
 	output := make([]byte, n)
 	r, err := reader.Read(output)
 	if r != n || err != io.EOF {
@@ -216,7 +216,7 @@ func TestDataAppend(t *testing.T) {
 			tester.t.Fatalf(err.Error())
 		}
 
-		reader := TreeJoin(newAddr, putGetter, 0)
+		reader := TreeJoin(ctx, newAddr, putGetter, 0)
 		newOutput := make([]byte, n+m)
 		r, err := reader.Read(newOutput)
 		if r != (n + m) {
@@ -284,7 +284,7 @@ func benchmarkSplitJoin(n int, t *testing.B) {
 			t.Fatalf(err.Error())
 		}
 
-		reader := TreeJoin(key, putGetter, 0)
+		reader := TreeJoin(ctx, key, putGetter, 0)
 		benchReadAll(reader)
 	}
 }

@@ -126,8 +126,8 @@ type TreeChunker struct {
 	The chunks are not meant to be validated by the chunker when joining. This
 	is because it is left to the DPA to decide which sources are trusted.
 */
-func TreeJoin(addr Address, getter Getter, depth int) *LazyChunkReader {
-	return NewTreeJoiner(NewJoinerParams(addr, getter, depth, DefaultChunkSize)).Join()
+func TreeJoin(ctx context.Context, addr Address, getter Getter, depth int) *LazyChunkReader {
+	return NewTreeJoiner(NewJoinerParams(addr, getter, depth, DefaultChunkSize)).Join(ctx)
 }
 
 /*
@@ -385,7 +385,7 @@ type LazyChunkReader struct {
 	ctx context.Context
 }
 
-func (self *TreeChunker) Join() *LazyChunkReader {
+func (self *TreeChunker) Join(ctx context.Context) *LazyChunkReader {
 	return &LazyChunkReader{
 		addr:      self.addr,
 		chunkSize: self.chunkSize,
@@ -393,6 +393,7 @@ func (self *TreeChunker) Join() *LazyChunkReader {
 		hashSize:  self.hashSize,
 		depth:     self.depth,
 		getter:    self.getter,
+		ctx:       ctx,
 	}
 }
 

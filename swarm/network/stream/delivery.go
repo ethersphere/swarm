@@ -17,11 +17,9 @@
 package stream
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -139,8 +137,8 @@ func (s *SwarmChunkServer) Close() {
 }
 
 // GetData retrives chunk data from db store
-func (s *SwarmChunkServer) GetData(key []byte) ([]byte, error) {
-	chunk, err := s.chunkStore.Get(immediately, storage.Address(key))
+func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
+	chunk, err := s.chunkStore.Get(ctx, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
@@ -162,8 +160,10 @@ func (d *Delivery) handleRetrieveRequestMsg(sp *Peer, req *RetrieveRequestMsg) e
 		return err
 	}
 	streamer := s.Server.(*SwarmChunkServer)
+	ctx := streamer.context(req)
+	ctx = context.WithValue(ctx, "peer", sp.ID().String())
 	go func() {
-		chunk, err := d.chunkStore.Get(streamer.context(req), req.Addr)
+		chunk, err := d.chunkStore.Get(ctx, req.Addr)
 		if err != nil {
 			return
 		}
@@ -193,14 +193,6 @@ func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error
 	return nil
 }
 
-var immediately context.Context
-
-func init() {
-	var cancel func()
-	immediately, cancel = context.WithCancel(context.Background())
-	cancel()
-}
-
 func (d *Delivery) processReceivedChunks() {
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
@@ -216,57 +208,45 @@ func (d *Delivery) processReceivedChunks() {
 }
 
 // RequestFromPeers sends a chunk retrieve request to
-func (d *Delivery) RequestFromPeers(ctx context.Context, addr storage.Address, source storage.Address, skipCheck bool, peersToSkip *sync.Map) (storage.Address, chan struct{}, error) {
+func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (*discover.NodeID, chan struct{}, error) {
 	requestFromPeersCount.Inc(1)
-
-	//
 	var sp *Peer
-	var spAddr storage.Address
+	spID := req.Source
 
-	if source != nil {
-		var found bool
-		d.overlay.EachConn(source[:], 256, func(p network.OverlayConn, po int, nn bool) bool {
-			found = bytes.Equal(p.Address(), source[:])
-			spId := p.(network.Peer).ID()
-			sp = d.getPeer(spId)
-			if sp == nil {
-				log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
-				return true
-			}
-			return false
-		})
-		if !found {
-			return nil, nil, fmt.Errorf("source peer %v not found", spAddr.Hex())
+	if spID != nil {
+		sp = d.getPeer(*spID)
+		if sp == nil {
+			return nil, nil, fmt.Errorf("source peer %v not found", spID.String())
 		}
 	} else {
-		d.overlay.EachConn(addr[:], 255, func(p network.OverlayConn, po int, nn bool) bool {
-			spAddr = storage.Address(p.Address())
+		d.overlay.EachConn(req.Addr[:], 255, func(p network.OverlayConn, po int, nn bool) bool {
+			id := p.(network.Peer).ID()
 			// TODO: skip light nodes that do not accept retrieve requests
-			if _, ok := peersToSkip.Load(spAddr); ok {
-				log.Trace("Delivery.RequestFromPeers: skip peer", "peer addr", spAddr.Hex())
+			if _, ok := req.PeersToSkip.Load(id.String()); ok {
+				log.Trace("Delivery.RequestFromPeers: skip peer", "peer id", id)
 				return true
 			}
-			spId := p.(network.Peer).ID()
-			sp = d.getPeer(spId)
+			sp = d.getPeer(id)
 			if sp == nil {
-				log.Warn("Delivery.RequestFromPeers: peer not found", "id", spId)
+				log.Warn("Delivery.RequestFromPeers: peer not found", "id", id)
 				return true
 			}
+			spID = &id
 			return false
 		})
+		if sp == nil {
+			return nil, nil, errors.New("no peer found")
+		}
 	}
 
-	if sp == nil {
-		return nil, nil, errors.New("no peer found")
-	}
 	err := sp.SendPriority(&RetrieveRequestMsg{
-		Addr:      addr,
-		SkipCheck: skipCheck,
+		Addr:      req.Addr,
+		SkipCheck: req.SkipCheck,
 	}, Top)
 	if err != nil {
 		return nil, nil, err
 	}
 	requestFromPeersEachCount.Inc(1)
 
-	return spAddr, sp.quit, nil
+	return spID, sp.quit, nil
 }
