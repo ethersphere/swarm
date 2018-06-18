@@ -34,8 +34,8 @@ type Signature [signatureLength]byte
 type SignedResourceUpdate struct {
 	resourceUpdate // actual content that will be put on the chunk, less signature
 	signature      *Signature
-	updateAddr     storage.Address // resulting chunk address for the update
-	binaryData     []byte          // resulting serialized data
+	updateAddr     storage.Address // resulting chunk address for the update (not serialized, for internal use)
+	binaryData     []byte          // resulting serialized data (not serialized, for efficiency/internal use)
 }
 
 // Verify checks that signatures are valid and that the signer owns the resource to be updated
@@ -51,6 +51,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 	if err != nil {
 		return err
 	}
+
 	// get the address of the signer (which also checks that it's a valid signature)
 	ownerAddr, err := getAddressFromDataSig(digest, *r.signature)
 	if err != nil {
@@ -74,22 +75,28 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 
 	updateAddr := r.GetUpdateAddr()
 
-	r.binaryData = nil
-	digest, err := r.getDigest(updateAddr)
+	r.binaryData = nil                     //invalidate serialized data
+	digest, err := r.getDigest(updateAddr) // computes digest and serializes into .binaryData
 	if err != nil {
 		return err
 	}
+
 	signature, err := signer.Sign(digest)
 	if err != nil {
 		return err
 	}
+
+	// Although the Signer interface returns the public address of the signer,
+	// recover it from the signature to see if they match
 	ownerAddress, err := getAddressFromDataSig(digest, signature)
 	if err != nil {
 		return NewError(ErrInvalidSignature, "Error verifying signature")
 	}
-	if ownerAddress != signer.Address() {
+
+	if ownerAddress != signer.Address() { // sanity check to make sure the Signer is declaring the same address used to sign!
 		return NewError(ErrInvalidSignature, "Signer address does not match private key")
 	}
+
 	r.signature = &signature
 	r.updateAddr = updateAddr
 	return nil
@@ -98,6 +105,9 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 // create an update chunk.
 func (r *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 
+	// Check that the update is signed and serialized
+	// For efficiency, data is serialized during signature and cached in
+	// the binaryData field when computing the signature digest in .getDigest()
 	if r.signature == nil || r.binaryData == nil {
 		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
@@ -117,10 +127,12 @@ func (r *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chunkdata []byte) error {
 	// for update chunk layout see SignedResourceUpdate definition
 
+	//deserialize the resource update portion
 	if err := r.resourceUpdate.binaryGet(chunkdata); err != nil {
 		return err
 	}
 
+	// Extract the signature
 	var signature *Signature
 	cursor := r.resourceUpdate.binaryLength()
 	sigdata := chunkdata[cursor : cursor+signatureLength]
@@ -129,6 +141,9 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 		copy(signature[:], sigdata)
 	}
 
+	// check that the lookup information contained in the chunk matches the updateAddr (chunk search key)
+	// that was used to retrieve this chunk
+	// if this validation fails, someone forged a chunk.
 	if !bytes.Equal(updateAddr, r.updateHeader.GetUpdateAddr()) {
 		return NewError(ErrInvalidSignature, "period,version,rootAddr contained in update chunk do not match updateAddr")
 	}
@@ -137,6 +152,9 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 	r.updateAddr = updateAddr
 	r.binaryData = chunkdata
 
+	// Verify signatures and that the signer actually owns the resource
+	// If it fails, it means either the signature is not valid, data is corrupted
+	// or someone is trying to update someone else's resource.
 	if err := r.Verify(); err != nil {
 		return NewErrorf(ErrUnauthorized, "Invalid signature: %v", err)
 	}
@@ -173,6 +191,10 @@ func getAddressFromDataSig(digest common.Hash, signature Signature) (common.Addr
 	return crypto.PubkeyToAddress(*pub), nil
 }
 
+// verifyResourceOwnerhsip checks that the signer of the update actually owns the resource
+// H(ownerAddr, metaHash) is computed. If it matches the rootAddr the update chunk is claiming
+// to update, it is proven that signer of the resource update owns the resource.
+// See metadataHash in metadata.go for a more detailed explanation
 func verifyResourceOwnership(ownerAddr common.Address, metaHash []byte, rootAddr storage.Address) bool {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)

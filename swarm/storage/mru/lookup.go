@@ -65,13 +65,16 @@ func LookupVersion(rootAddr storage.Address, period, version uint32) *LookupPara
 	return NewLookupParams(rootAddr, period, version, 0)
 }
 
-// UpdateLookup represents the components of a resource update search
+// UpdateLookup represents the components of a resource update search key
 type UpdateLookup struct {
 	period   uint32
 	version  uint32
 	rootAddr storage.Address
 }
 
+// 4 bytes period
+// 4 bytes version
+// storage.Keylength for rootAddr
 const updateLookupLength = 4 + 4 + storage.KeyLength
 
 // resourceUpdateChunkAddr calculates the resource update chunk address (formerly known as resourceHash)
@@ -96,6 +99,7 @@ func NewResourceHash(u *UpdateLookup) []byte {
 	return buf.Bytes()
 }
 
+// binaryPut serializes this UpdateLookup instance into the provided slice
 func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 	if len(serializedData) != updateLookupLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))
@@ -110,10 +114,12 @@ func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 	return nil
 }
 
+// binaryLength returns the expected size of this structure when serialized
 func (u *UpdateLookup) binaryLength() int {
 	return updateLookupLength
 }
 
+// binaryGet restores the current instance from the information contained in the passed slice
 func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	if len(serializedData) != updateLookupLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))

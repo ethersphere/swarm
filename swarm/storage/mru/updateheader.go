@@ -21,32 +21,26 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+// updateHeader models the non-payload components of a Resource Update
 type updateHeader struct {
-	UpdateLookup
-	multihash bool
-	metaHash  []byte
-
-	time               Timestamp
-	previousUpdateAddr storage.Address
-	nextUpdateTime     uint64
+	UpdateLookup        // UpdateLookup contains the information required to locate this resource (components of the search key used to find it)
+	multihash    bool   // Whether the data in this Resource Update should be interpreted as multihash
+	metaHash     []byte // SHA3 hash of the metadata chunk (less ownerAddr). Used to prove ownerhsip of the resource.
 }
 
-const updateHeaderLength = updateLookupLength + 1 + storage.KeyLength
+const metaHashLength = 32
 
-// 2 bytes header Length
-// 2 bytes data length
-// 4 bytes period
-// 4 bytes version
-// 32 bytes rootAddr reference
-// 32 bytes metaHash digest
-// 32 bytes previousUpdateAddr reference
-// 40 bytes Timestamp
+// updateLookupLength bytes
+// 1 byte flags (multihash bool for now)
+// 32 bytes metaHash
+const updateHeaderLength = updateLookupLength + 1 + metaHashLength
 
+// binaryPut serializes the resource header information into the given slice
 func (h *updateHeader) binaryPut(serializedData []byte) error {
 	if len(serializedData) != updateHeaderLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize updateHeaderLength. Expected %d, got %d", updateHeaderLength, len(serializedData))
 	}
-	if len(h.metaHash) != storage.KeyLength {
+	if len(h.metaHash) != metaHashLength {
 		log.Warn("Call to updateHeader.binaryPut with incorrect metaHash")
 		return NewError(ErrInvalidValue, "updateHeader.binaryPut called without metaHash set")
 	}
@@ -54,8 +48,8 @@ func (h *updateHeader) binaryPut(serializedData []byte) error {
 		return err
 	}
 	cursor := updateLookupLength
-	copy(serializedData[cursor:], h.metaHash[:storage.KeyLength])
-	cursor += storage.KeyLength
+	copy(serializedData[cursor:], h.metaHash[:metaHashLength])
+	cursor += metaHashLength
 
 	if h.multihash {
 		serializedData[cursor] = 0x01
@@ -65,10 +59,12 @@ func (h *updateHeader) binaryPut(serializedData []byte) error {
 	return nil
 }
 
+// binaryLength returns the expected size of this structure when serialized
 func (h *updateHeader) binaryLength() int {
-	return updateLookupLength
+	return updateHeaderLength
 }
 
+// binaryGet restores the current updateHeader instance from the information contained in the passed slice
 func (h *updateHeader) binaryGet(serializedData []byte) error {
 	if len(serializedData) != updateHeaderLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read updateHeaderLength. Expected %d, got %d", updateHeaderLength, len(serializedData))
@@ -78,9 +74,9 @@ func (h *updateHeader) binaryGet(serializedData []byte) error {
 		return err
 	}
 	cursor := updateLookupLength
-	h.metaHash = make([]byte, storage.KeyLength)
+	h.metaHash = make([]byte, metaHashLength)
 	copy(h.metaHash[:storage.KeyLength], serializedData[cursor:])
-	cursor += storage.KeyLength
+	cursor += metaHashLength
 
 	if serializedData[cursor] == 0x01 {
 		h.multihash = true
