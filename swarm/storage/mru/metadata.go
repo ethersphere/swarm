@@ -73,8 +73,9 @@ func (r *resourceMetadata) marshalBinary() []byte {
 	return chunkData
 }
 
-// hash returns the root chunk addr and metadata hash that help identify and ascertain ownership of this resource
-func (r *resourceMetadata) hash() (rootAddr, metaHash []byte, chunkData []byte) {
+// hashAndSerialize returns the root chunk addr and metadata hash that help identify and ascertain ownership of this resource
+// returns the serialized metadata as a byproduct of having to hash it.
+func (r *resourceMetadata) hashAndSerialize() (rootAddr, metaHash []byte, chunkData []byte) {
 
 	chunkData = r.marshalBinary()
 	rootAddr, metaHash = metadataHash(chunkData)
@@ -83,7 +84,6 @@ func (r *resourceMetadata) hash() (rootAddr, metaHash []byte, chunkData []byte) 
 }
 
 // creates a metadata chunk out of a resourceMetadata structure
-//TODO: refactor to a method of the resourceMetadata structure
 func (metadata *resourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []byte) {
 	// the metadata chunk contains a timestamp of when the resource starts to be valid
 	// and also how frequently it is expected to be updated
@@ -93,7 +93,7 @@ func (metadata *resourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []b
 	// the key (rootAddr) of the metadata chunk is content-addressed
 	// if it wasn't we couldn't replace it later
 	// resolving this relationship is left up to external agents (for example ENS)
-	rootAddr, metaHash, chunkData := metadata.hash()
+	rootAddr, metaHash, chunkData := metadata.hashAndSerialize()
 
 	// make the chunk and send it to swarm
 	chunk = storage.NewChunk(rootAddr, nil)
@@ -103,7 +103,17 @@ func (metadata *resourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []b
 	return chunk, metaHash
 }
 
-// metadataHash returns the root address and metadata hash that help identify and ascertain ownership of this resource
+// metadataHash returns the metadata chunk root address and metadata hash
+// that help identify and ascertain ownership of this resource
+// We compute it as rootAddr = H(ownerAddr, H(metadata))
+// Where H() is SHA3
+// metadata are all the metadata fields, except ownerAddr
+// ownerAddr is the public address of the resource owner
+// Update chunks must carry a rootAddr reference and metaHash in order to be verified
+// This way, a node that receives an update can check the signature, recover the public address
+// and check the ownership by computing H(ownerAddr, metaHash) and comparing it to the rootAddr
+// the resource is claiming to update without having to lookup the metadata chunk.
+// see verifyResourceOwnerhsip in signedupdate.go
 func metadataHash(chunkData []byte) (rootAddr, metaHash []byte) {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)

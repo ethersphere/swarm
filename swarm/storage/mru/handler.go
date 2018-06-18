@@ -217,6 +217,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 		return nil, NewError(ErrInvalidValue, "rootAddr cannot be nil")
 	}
 
+	// Make sure we have a cache of the metadata chunk
 	rsrc, err := h.Load(rootAddr)
 	if err != nil {
 		return nil, err
@@ -242,7 +243,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	updateRequest.metaHash = rsrc.metaHash
 	updateRequest.resourceMetadata = rsrc.resourceMetadata
 
-	// if we already have an update for this block then increment version
+	// if we already have an update for this period then increment version
 	// resource object MUST be in sync for version to be correct, but we checked this earlier in the method already
 	if h.hasUpdate(rootAddr, updateRequest.period) {
 		updateRequest.version = rsrc.version + 1
@@ -440,6 +441,8 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, r *Signe
 		return nil, NewErrorf(ErrDataOverflow, "Data overflow: %d / %d bytes", len(r.data), maxUpdateDataLength)
 	}
 
+	// Check that the update is consecutive, i.e., that the proposed update
+	// occurs exactly after the latest one we know.
 	if rsrc.period == r.period {
 		if r.version != rsrc.version+1 {
 			return nil, NewErrorf(ErrInvalidValue, "Invalid version for this period. Expected version=%d", rsrc.version+1)
@@ -450,7 +453,7 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, r *Signe
 		}
 	}
 
-	chunk, err := r.newUpdateChunk()
+	chunk, err := r.newUpdateChunk() // Serialize the update into a chunk
 	if err != nil {
 		return nil, err
 	}

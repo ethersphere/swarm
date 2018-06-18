@@ -164,7 +164,7 @@ func TestReverse(t *testing.T) {
 		ownerAddr: signer.Address(),
 	}
 
-	rootAddr, metaHash, _ := metadata.hash()
+	rootAddr, metaHash, _ := metadata.hashAndSerialize()
 
 	// generate some bogus data for the chunk and sign it
 	data := make([]byte, 8)
