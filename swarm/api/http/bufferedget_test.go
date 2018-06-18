@@ -88,9 +88,9 @@ func testBufferedGet(t *testing.T, scheme string) {
 
 	// Negative slope indicates that the reported durations are in regression
 	// by raising the buffer.
-	// Value of -0.35 indicates that the slope is steep enough for significant
+	// Value of -0.32 indicates that the slope is steep enough for significant
 	// differences durations.
-	expectedSlope := -0.35
+	expectedSlope := -0.32
 	if slope > expectedSlope {
 		t.Errorf("got slope %v, expected it less then %v", slope, expectedSlope)
 	} else {
@@ -144,10 +144,10 @@ func testUnderbufferedGet(t *testing.T, scheme string) {
 
 	slope, _ := linearRegressionFloat64(durations...)
 
-	if slope > 0.01 || slope < -0.01 {
-		t.Errorf("got slope %v, expected 0 +- 0.01", slope)
+	if slope > 0.05 || slope < -0.05 {
+		t.Errorf("got slope %v, expected 0 +- 0.05", slope)
 	} else {
-		t.Logf("durations slope %v, target 0 +- 0.01", slope)
+		t.Logf("durations slope %v, target 0 +- 0.05", slope)
 	}
 }
 
@@ -197,10 +197,10 @@ func testOverbufferedGet(t *testing.T, scheme string) {
 
 	slope, _ := linearRegressionFloat64(durations...)
 
-	if slope > 0.01 || slope < -0.01 {
-		t.Errorf("got slope %v, expected 0 +- 0.01", slope)
+	if slope > 0.05 || slope < -0.05 {
+		t.Errorf("got slope %v, expected 0 +- 0.05", slope)
 	} else {
-		t.Logf("durations slope %v, target 0 +- 0.01", slope)
+		t.Logf("durations slope %v, target 0 +- 0.05", slope)
 	}
 }
 
