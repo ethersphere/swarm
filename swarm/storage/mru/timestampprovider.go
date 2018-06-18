@@ -23,31 +23,23 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
+// Encodes a point in time as a Unix epoch and provides
+// space for proof the timestamp was not created prior to its time
+type Timestamp struct {
+	Time  uint64      // Unix epoch timestamp, in seconds
+	Proof common.Hash // space to hold proof of the timestamp, e.g., a block hash
+}
+
+// 8 bytes Time
+// 32 bytes hash length
 const timestampLength = 8 + 32
 
-type Timestamp struct {
-	Time  uint64
-	Proof common.Hash
-}
-
+// timestampProvider interface describes a source of timestamp information
 type timestampProvider interface {
-	GetCurrentTimestamp() Timestamp
+	GetCurrentTimestamp() Timestamp // returns the current timestamp information
 }
 
-type DefaultTimestampProvider struct {
-}
-
-func NewDefaultTimestampProvider() *DefaultTimestampProvider {
-	return &DefaultTimestampProvider{}
-}
-
-func (dtp *DefaultTimestampProvider) GetCurrentTimestamp() Timestamp {
-	return Timestamp{
-		Time:  uint64(time.Now().Unix()),
-		Proof: common.Hash{},
-	}
-}
-
+// unmarshalBinary Serializes a Timestamp to a byte slice
 func (t *Timestamp) unmarshalBinary(data []byte) error {
 	if len(data) != timestampLength {
 		return NewError(ErrCorruptData, "timestamp data has the wrong size")
@@ -57,9 +49,26 @@ func (t *Timestamp) unmarshalBinary(data []byte) error {
 	return nil
 }
 
+// marshalBinary populates the timestamp structure from the given byte slice
 func (t *Timestamp) marshalBinary() (data []byte) {
 	data = make([]byte, timestampLength)
 	binary.LittleEndian.PutUint64(data, t.Time)
 	copy(data[8:], t.Proof[:])
 	return data
+}
+
+type DefaultTimestampProvider struct {
+}
+
+// NewDefaultTimestampProvider creates a system clock based timestamp provider
+func NewDefaultTimestampProvider() *DefaultTimestampProvider {
+	return &DefaultTimestampProvider{}
+}
+
+// GetCurrentTimestamp returns the current time according to this provider
+func (dtp *DefaultTimestampProvider) GetCurrentTimestamp() Timestamp {
+	return Timestamp{
+		Time:  uint64(time.Now().Unix()),
+		Proof: common.Hash{},
+	}
 }

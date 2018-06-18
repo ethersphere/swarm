@@ -38,7 +38,7 @@ func TestMarshallingAndUnmarshalling(t *testing.T) {
 		ownerAddr: ownerAddr,
 	}
 
-	rootAddr, metaHash, chunkData := metadata.hash() // creates hashes and marshals, in one go
+	rootAddr, metaHash, chunkData := metadata.hashAndSerialize() // creates hashes and marshals, in one go
 
 	const expectedRootAddr = "0x93970376e8f95e6b598a212fc23448136d8dae83372262903530f92f2c5de628"
 	const expectedMetaHash = "0xdb801ec08c1fa1a93851b9b0ce01d1afa02d07d34cf3a8377dd87f92921f3b78"

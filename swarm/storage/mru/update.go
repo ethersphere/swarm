@@ -27,8 +27,8 @@ import (
 
 // resourceUpdate encapsulates the information sent as part of a resource update
 type resourceUpdate struct {
-	updateHeader
-	data []byte
+	updateHeader        // metainformationa about this resource update
+	data         []byte // actual data payload
 }
 
 // Update chunk layout
@@ -45,6 +45,7 @@ const prefixLength = 2 + 2
 const minimumUpdateDataLength = updateHeaderLength + 1
 const maxUpdateDataLength = chunkSize - signatureLength - updateHeaderLength - prefixLength
 
+// binaryPut serializes the resource update information into the given slice
 func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 	if len(r.rootAddr) != storage.KeyLength || len(r.metaHash) != storage.KeyLength {
 		log.Warn("Call to newUpdateChunk with incorrect rootAddr or metaHash")
@@ -92,10 +93,12 @@ func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 	return nil
 }
 
+// binaryLength returns the expected number of bytes this structure will take to encode
 func (r *resourceUpdate) binaryLength() int {
 	return prefixLength + updateHeaderLength + len(r.data)
 }
 
+// binaryGet populates this instance from the information contained in the passed byte slice
 func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	if len(serializedData) < minimumUpdateDataLength {
 		return NewErrorf(ErrNothingToReturn, "chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength)

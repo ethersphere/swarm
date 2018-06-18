@@ -67,6 +67,7 @@ func NewError(code int, s string) error {
 	return r
 }
 
+// NewErrorf is a convenience version of NewError that incorporates printf-style formatting
 func NewErrorf(code int, format string, args ...interface{}) error {
 	return NewError(code, fmt.Sprintf(format, args...))
 }
