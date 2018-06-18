@@ -149,7 +149,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "47bec48c6f148e9a44d985beb337cea7e0462309715afe5a32f415d75688900b"
+	correctManifestAddrHex := "2a6f57966187ce8d5165c570755e4c4f03c1176ff49ba84e9c654c5fb1ae205e"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp)
 	}
@@ -208,7 +208,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "47bec48c6f148e9a44d985beb337cea7e0462309715afe5a32f415d75688900b"
+	correctManifestAddrHex := "2a6f57966187ce8d5165c570755e4c4f03c1176ff49ba84e9c654c5fb1ae205e"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -235,7 +235,7 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	correctRootKeyHex := "43de91e5b1b02f11bb7cf15d3880bf016f5b2dca265b849cd0aaf1ad47c61a00"
+	correctRootKeyHex := "1117bba54a84a0e85955bd234bae0b84b9f5a629c69a74889f5a93bcc0284dc4"
 	if manifest.Entries[0].Hash != correctRootKeyHex {
 		t.Fatalf("Expected manifest path '%s', got '%s'", correctRootKeyHex, manifest.Entries[0].Hash)
 	}
