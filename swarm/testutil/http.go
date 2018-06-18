@@ -27,8 +27,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
@@ -91,7 +89,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 		t.Fatal(err)
 	}
 
-	a := api.NewApi(fileStore, nil, rh.Handler)
+	a := api.NewAPI(fileStore, nil, rh.Handler)
 	srv := httptest.NewServer(serverFunc(a))
 	return &TestSwarmServer{
 		Server:    srv,

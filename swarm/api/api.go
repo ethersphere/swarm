@@ -659,7 +659,7 @@ func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.
 }
 
 // Look up mutable resource updates at specific periods and versions
-func (a *Api) ResourceLookup(ctx context.Context, params *mru.LookupParams) (string, []byte, error) {
+func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (string, []byte, error) {
 	var err error
 	rsrc, err := a.resource.Load(params.Root)
 	if err != nil {
@@ -688,17 +688,17 @@ func (a *API) ResourceCreate(ctx context.Context, name string, frequency uint64)
 
 // ResourceUpdateMultihash updates a Mutable Resource and marks the update's content to be of multihash type, which will be recognized upon retrieval.
 // It will fail if the data is not a valid multihash.
-func (a *Api) ResourceUpdateMultihash(ctx context.Context, addr storage.Address, data []byte) (storage.Address, uint32, uint32, error) {
+func (a *API) ResourceUpdateMultihash(ctx context.Context, addr storage.Address, data []byte) (storage.Address, uint32, uint32, error) {
 	return a.resourceUpdate(ctx, addr, data, true)
 }
 
 // ResourceUpdate updates a Mutable Resource with arbitrary data.
 // Upon retrieval the update will be retrieved verbatim as bytes.
-func (a *Api) ResourceUpdate(ctx context.Context, addr storage.Address, data []byte) (storage.Address, uint32, uint32, error) {
+func (a *API) ResourceUpdate(ctx context.Context, addr storage.Address, data []byte) (storage.Address, uint32, uint32, error) {
 	return a.resourceUpdate(ctx, addr, data, false)
 }
 
-func (a *Api) resourceUpdate(ctx context.Context, rootAddr storage.Address, data []byte, multihash bool) (storage.Address, uint32, uint32, error) {
+func (a *API) resourceUpdate(ctx context.Context, rootAddr storage.Address, data []byte, multihash bool) (storage.Address, uint32, uint32, error) {
 	var updateAddr storage.Address
 	var err error
 	if multihash {
@@ -717,8 +717,8 @@ func (a *API) ResourceHashSize() int {
 }
 
 // ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
-func (a *Api) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
-	trie, err := loadManifest(self.fileStore, addr, nil)
+func (a *API) ResolveResourceManifest(addr storage.Address) (storage.Address, error) {
+	trie, err := loadManifest(a.fileStore, addr, nil)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}
