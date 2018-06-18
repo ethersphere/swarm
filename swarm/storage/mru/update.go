@@ -115,15 +115,13 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	}
 
 	// at this point we can be satisfied that we have the correct data length to read
-	var header updateHeader
-
-	if err := header.binaryGet(serializedData[cursor : cursor+updateHeaderLength]); err != nil {
+	if err := r.updateHeader.binaryGet(serializedData[cursor : cursor+updateHeaderLength]); err != nil {
 		return err
 	}
 	cursor += updateHeaderLength
 
 	// if multihash content is indicated we check the validity of the multihash
-	if header.multihash {
+	if r.updateHeader.multihash {
 		mhLength, mhHeaderLength, err := multihash.GetMultihashLength(serializedData[cursor:])
 		if err != nil {
 			log.Error("multihash parse error", "err", err)
@@ -134,7 +132,6 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 			return errors.New("Corrupt multihash data")
 		}
 	}
-	r.updateHeader = header
 	r.data = make([]byte, datalength)
 	copy(r.data, serializedData[cursor:cursor+datalength])
 	cursor += datalength
