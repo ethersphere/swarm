@@ -218,7 +218,7 @@ func TestResourceHandler(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	request, err := NewUpdateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, false)
+	request, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +454,7 @@ func TestMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mr, err := NewUpdateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, true)
+	mr, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -564,7 +564,7 @@ func TestMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mr, err = NewUpdateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, true)
+	mr, err = NewCreateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -651,7 +651,7 @@ func TestValidator(t *testing.T) {
 	// create new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mr, err := NewUpdateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, false)
+	mr, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 func areEqualJSON(s1, s2 string) (bool, error) {
@@ -32,19 +30,33 @@ func areEqualJSON(s1, s2 string) (bool, error) {
 // while also checking cryptographically that only the owner of a resource can update it.
 func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
-	// Note: the following is signed by Charlie (see private key in resource_test.go)
-	// the rootAddr refers to a metadata chunk to Charlie's address that we used in resourcemetadata_test.go
-	// Therefore, only Charlie can sign resource updates for this resource.
-
-	metaHash, _ := hexutil.Decode("0x38e401814e98b251612e40f070fddb756315705fa8f674b8ab00b2b5fa091988")
-	rootAddr, _ := hexutil.Decode("0xa884c9583d9f86e8009bfd5fe7d892790071c2d6cf8acd2c3e16e5f17e9b143e")
-	const expectedSignature = "0x83bfd16ad1fd37208f4024d230c74543a6f1d35829d77b8dc189acb8e45ae00002d1649c7f9dbca6eb916e11fab0b456a2425b5cccb0acb2cde80c019f3da66c00"
-
-	const expectedJSON = `{"ownerAddr":"0x0000000000000000000000000000000000000000","rootAddr":"0xa884c9583d9f86e8009bfd5fe7d892790071c2d6cf8acd2c3e16e5f17e9b143e","metaHash":"0x38e401814e98b251612e40f070fddb756315705fa8f674b8ab00b2b5fa091988","version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421","multiHash":false}`
-
 	signer := newCharlieSigner()  //Charlie, our good guy
 	falseSigner := newBobSigner() //Bob will play the bad guy again
 
+	// Create a resource to our good guy Charlie's name
+
+	createRequest, err := NewCreateRequest("sɹǝʇɔɐɹɐɥɔ ǝƃuɐɹʇs ɥʇᴉʍ ʇnq 'ǝɔɹnosǝɹ ǝɯosǝʍɐ ʎW",
+		300, 1528900000, signer.Address(), nil, false)
+	if err == nil {
+		t.Fatal("Expected create request to fail since the name contains bad characters")
+	}
+
+	createRequest, err = NewCreateRequest("a good resource name",
+		300, 1528900000, signer.Address(), nil, false)
+	if err != nil {
+		t.Fatalf("Error creating resource name: %s", err)
+	}
+
+	// We now assume that the resource was created and propagated. With rootAddr we can retrieve the resource metadata
+	// and recover the information above. To sign an update, we need the rootAddr and the metaHash to construct
+	// proof of ownership
+
+	metaHash := createRequest.metaHash
+	rootAddr := createRequest.rootAddr
+	const expectedSignature = "0x7862349bc47bc985ca25f23f7aa61954d27ef94f750a9a30b1fb94e42370b5c83e92ff8a1bf71fec4bff64c23b535d7365700334826e0a4c4457b3e27576c5bc00"
+	const expectedJSON = `{"rootAddr":"0x612dd6ea96897ebed0373432ab5ed902ce811bde8ad7dcf51300007188730a4a","metaHash":"0x1672f55af019dd612e594ee084540c72d6b82073eadf9cb2cc7721f50c833f7d","version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421","multiHash":false}`
+
+	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &UpdateRequest{
 		SignedResourceUpdate: SignedResourceUpdate{
@@ -72,64 +84,74 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatalf("Received a different JSON message. Expected %s, got %s", expectedJSON, string(messageRawData))
 	}
 
+	// now the encoded message messageRawData is sent over the wire and arrives to the signer
+
+	//Attempt to extract an UpdateRequest out of the encoded message
 	recoveredRequest, err := DecodeUpdateRequest(messageRawData)
 	if err != nil {
 		t.Fatalf("Error decoding update request: %s", err)
 	}
 
+	//sign the request and see if it matches our predefined signature above.
 	if err := recoveredRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing request: %s", err)
 	}
 
 	compareByteSliceToExpectedHex(t, "signature", recoveredRequest.signature[:], expectedSignature)
 
-	// mess with the signature
+	// mess with the signature and see what happens. To alter the signature, we briefly decode it as JSON
+	// to alter the signature field.
 	var j updateRequestJSON
 	if err := json.Unmarshal([]byte(expectedJSON), &j); err != nil {
 		t.Fatal("Error unmarshalling test json, check expectedJSON constant")
 	}
 	j.Signature = "Certainly not a signature"
-	corruptMessage, _ := json.Marshal(j)
+	corruptMessage, _ := json.Marshal(j) // encode the message with the bad signature
 	_, err = DecodeUpdateRequest(corruptMessage)
 	if err == nil {
 		t.Fatal("Expected DecodeUpdateRequest to fail when trying to interpret a corrupt message with an invalid signature")
 	}
 
-	// Now encode a signed request to see if it works
-	// note that we are signing it with the attacker's private key
-
+	// Now imagine Evil Bob (why always Bob, poor Bob) attempts to update Charlie's resource,
+	// signing a message with his private key
 	if err := request.Sign(falseSigner); err != nil {
 		t.Fatalf("Error signing: %s", err)
 	}
 
+	// Now Bob encodes the message to send it over the wire...
 	messageRawData, err = EncodeUpdateRequest(request)
 	if err != nil {
 		t.Fatalf("Error encoding message:%s", err)
 	}
 
+	// ... the message arrives to our Swarm node and it is decoded.
 	recoveredRequest, err = DecodeUpdateRequest(messageRawData)
 	if err != nil {
 		t.Fatalf("Error decoding message:%s", err)
 	}
 
-	//mess with the signature big time to see if Verify catches it
-	saveSignature := *recoveredRequest.signature
-	binary.LittleEndian.PutUint64(recoveredRequest.signature[5:], 556845463424)
+	// Before discovering Bob's misdemeanor, let's see what would happen if we mess
+	// with the signature big time to see if Verify catches it
+	savedSignature := *recoveredRequest.signature                               // save the signature for later
+	binary.LittleEndian.PutUint64(recoveredRequest.signature[5:], 556845463424) // write some random data to break the signature
 	if err = recoveredRequest.Verify(); err == nil {
 		t.Fatal("Expected Verify to fail on corrupt signature")
 	}
 
-	// restore the signature with the not corrupt attacker's signature
-	*recoveredRequest.signature = saveSignature
+	// restore the Evil Bob's signature from corruption
+	*recoveredRequest.signature = savedSignature
+
+	// Now the signature is not corrupt, however Verify should now fail because Bob doesn't own the resource
 	if err = recoveredRequest.Verify(); err == nil {
 		t.Fatalf("Expected Verify to fail because this resource belongs to Charlie, not Bob the attacker:%s", err)
 	}
 
-	//Sign with our friend Charlie's private key
+	// Sign with our friend Charlie's private key
 	if err := recoveredRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing with the correct private key: %s", err)
 	}
 
+	// And now, Verify should work since this resource belongs to Charlie
 	if err = recoveredRequest.Verify(); err != nil {
 		t.Fatalf("Error verifying that Charlie, the good guy, can sign his resource:%s", err)
 	}
