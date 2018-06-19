@@ -39,7 +39,7 @@ type updateRequestJSON struct {
 	Name      string `json:"name,omitempty"`
 	Frequency uint64 `json:"frequency,omitempty"`
 	StartTime uint64 `json:"startTime,omitempty"`
-	OwnerAddr string `json:"ownerAddr"`
+	OwnerAddr string `json:"ownerAddr,omitempty"`
 	RootAddr  string `json:"rootAddr,omitempty"`
 	MetaHash  string `json:"metaHash,omitempty"`
 	Version   uint32 `json:"version"`
@@ -80,10 +80,10 @@ type UpdateRequest struct {
 	resourceMetadata
 }
 
-// NewUpdateRequest returns a ready to sign UpdateRequest message to create a new resource
-func NewUpdateRequest(name string, frequency, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*UpdateRequest, error) {
+// NewCreateRequest returns a ready to sign UpdateRequest message to create a new resource
+func NewCreateRequest(name string, frequency, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*UpdateRequest, error) {
 	if !isSafeName(name) {
-		return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s' when creating NewMruRequest", name))
+		return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s' when creating a new UpdateRequest", name))
 	}
 
 	updateRequest := &UpdateRequest{
@@ -233,12 +233,14 @@ func (j *updateRequestJSON) decode() (*UpdateRequest, error) {
 		},
 	}
 
-	ownerAddrBytes, err := hexutil.Decode(j.OwnerAddr)
-	if err != nil || len(ownerAddrBytes) != common.AddressLength {
-		return nil, NewError(ErrInvalidValue, "Cannot decode ownerAddr")
+	if j.OwnerAddr != "" {
+		ownerAddrBytes, err := hexutil.Decode(j.OwnerAddr)
+		if err != nil || len(ownerAddrBytes) != common.AddressLength {
+			return nil, NewError(ErrInvalidValue, "Cannot decode ownerAddr")
+		}
+		copy(r.ownerAddr[:], ownerAddrBytes)
 	}
-	copy(r.ownerAddr[:], ownerAddrBytes)
-
+	var err error
 	if j.Data != "" {
 		r.data, err = hexutil.Decode(j.Data)
 		if err != nil {
@@ -308,30 +310,36 @@ func DecodeUpdateRequest(rawData []byte) (*UpdateRequest, error) {
 }
 
 // EncodeUpdateRequest takes an update request and encodes it as a JSON structure into a byte array
-func EncodeUpdateRequest(mruRequest *UpdateRequest) (rawData []byte, err error) {
+func EncodeUpdateRequest(updateRequest *UpdateRequest) (rawData []byte, err error) {
 	var signatureString, dataHashString, rootAddrString, metaHashString string
-	if mruRequest.signature != nil {
-		signatureString = hexutil.Encode(mruRequest.signature[:])
+	if updateRequest.signature != nil {
+		signatureString = hexutil.Encode(updateRequest.signature[:])
 	}
-	if mruRequest.data != nil {
-		dataHashString = hexutil.Encode(mruRequest.data)
+	if updateRequest.data != nil {
+		dataHashString = hexutil.Encode(updateRequest.data)
 	}
-	if mruRequest.rootAddr != nil {
-		rootAddrString = hexutil.Encode(mruRequest.rootAddr)
+	if updateRequest.rootAddr != nil {
+		rootAddrString = hexutil.Encode(updateRequest.rootAddr)
 	}
-	if mruRequest.metaHash != nil {
-		metaHashString = hexutil.Encode(mruRequest.metaHash)
+	if updateRequest.metaHash != nil {
+		metaHashString = hexutil.Encode(updateRequest.metaHash)
+	}
+	var ownerAddrString string
+	if updateRequest.frequency == 0 {
+		ownerAddrString = ""
+	} else {
+		ownerAddrString = hexutil.Encode(updateRequest.ownerAddr[:])
 	}
 
 	requestJSON := &updateRequestJSON{
-		Name:      mruRequest.name,
-		Frequency: mruRequest.frequency,
-		StartTime: mruRequest.startTime,
-		Version:   mruRequest.version,
-		Period:    mruRequest.period,
-		OwnerAddr: hexutil.Encode(mruRequest.ownerAddr[:]),
+		Name:      updateRequest.name,
+		Frequency: updateRequest.frequency,
+		StartTime: updateRequest.startTime,
+		Version:   updateRequest.version,
+		Period:    updateRequest.period,
+		OwnerAddr: ownerAddrString,
 		Data:      dataHashString,
-		Multihash: mruRequest.multihash,
+		Multihash: updateRequest.multihash,
 		Signature: signatureString,
 		RootAddr:  rootAddrString,
 		MetaHash:  metaHashString,
