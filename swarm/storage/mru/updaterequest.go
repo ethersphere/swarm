@@ -18,6 +18,7 @@ package mru
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"hash"
@@ -25,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -54,6 +56,24 @@ type SignedResourceUpdate struct {
 	signature  *Signature
 	updateAddr storage.Address
 }
+
+// Update chunk layout
+// Header:
+// 2 bytes header Length
+// 2 bytes data length
+// 4 bytes period
+// 4 bytes version
+// 32 bytes rootAddr reference
+// 32 bytes metaHash digest
+// Data:
+// data (datalength bytes)
+// Signature:
+// signature: 65 bytes (signatureLength constant)
+//
+// Minimum size is Header + 1 (minimum data length, enforced) + Signature = 142 bytes
+
+const minimumUpdateDataLength = 142
+const maxUpdateDataLength = chunkSize - minimumUpdateDataLength
 
 // UpdateRequest represents an update and/or resource create message
 type UpdateRequest struct {
@@ -342,4 +362,36 @@ func resourceUpdateChunkAddr(period uint32, version uint32, rootAddr storage.Add
 	hasher.Reset()
 	hasher.Write(NewResourceHash(period, version, rootAddr))
 	return hasher.Sum(nil)
+}
+
+// NewResourceHash will create a deterministic address from the update metadata
+// format is: hash(period|version|rootAddr)
+func NewResourceHash(period uint32, version uint32, rootAddr storage.Address) []byte {
+	buf := bytes.NewBuffer(nil)
+	b := make([]byte, 4)
+	binary.LittleEndian.PutUint32(b, period)
+	buf.Write(b)
+	binary.LittleEndian.PutUint32(b, version)
+	buf.Write(b)
+	buf.Write(rootAddr[:])
+	return buf.Bytes()
+}
+
+// getAddressFromDataSig extracts the address of the resource update signer
+func getAddressFromDataSig(digest common.Hash, signature Signature) (common.Address, error) {
+	pub, err := crypto.SigToPub(digest.Bytes(), signature[:])
+	if err != nil {
+		return common.Address{}, err
+	}
+	return crypto.PubkeyToAddress(*pub), nil
+}
+
+func verifyResourceOwnership(ownerAddr common.Address, metaHash []byte, rootAddr storage.Address) bool {
+	hasher := hashPool.Get().(hash.Hash)
+	defer hashPool.Put(hasher)
+	hasher.Reset()
+	hasher.Write(metaHash)
+	hasher.Write(ownerAddr.Bytes())
+	rootAddr2 := hasher.Sum(nil)
+	return bytes.Equal(rootAddr2, rootAddr)
 }
