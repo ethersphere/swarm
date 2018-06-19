@@ -17,16 +17,15 @@
 package testutil
 
 import (
-	"context"
 	"io/ioutil"
-	"math/big"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
-	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/metrics/influxdb"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
@@ -36,16 +35,17 @@ type TestServer interface {
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 
-type fakeBackend struct {
-	blocknumber int64
+// simulated timeProvider
+type fakeTimeProvider struct {
+	currentTime uint64
 }
 
-func (f *fakeBackend) HeaderByNumber(context context.Context, _ string, bigblock *big.Int) (*types.Header, error) {
-	f.blocknumber++
-	biggie := big.NewInt(f.blocknumber)
-	return &types.Header{
-		Number: biggie,
-	}, nil
+func (f *fakeTimeProvider) Tick() {
+	f.currentTime++
+}
+
+func (f *fakeTimeProvider) GetCurrentTime() uint64 {
+	return f.currentTime
 }
 
 func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *TestSwarmServer {
@@ -70,19 +70,12 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 		t.Fatal(err)
 	}
 
-	// signer
-	privKeyBytes := [32]byte{}
-	privKeyBytes[0] = 0x2a
-	privKey, err := crypto.ToECDSA(privKeyBytes[:])
-	if err != nil {
-		t.Fatal(err)
+	fakeTimeProvider := &fakeTimeProvider{
+		currentTime: 42,
 	}
-	signer := mru.NewGenericSigner(privKey)
+
 	rhparams := &mru.HandlerParams{
-		Signer: signer,
-		HeaderGetter: &fakeBackend{
-			blocknumber: 42,
-		},
+		TimestampProvider: fakeTimeProvider,
 	}
 	rh, err := mru.NewTestHandler(resourceDir, rhparams)
 	if err != nil {
@@ -92,10 +85,11 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 	a := api.NewAPI(fileStore, nil, rh.Handler)
 	srv := httptest.NewServer(serverFunc(a))
 	return &TestSwarmServer{
-		Server:    srv,
-		FileStore: fileStore,
-		dir:       dir,
-		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
+		Server:            srv,
+		FileStore:         fileStore,
+		dir:               dir,
+		Hasher:            storage.MakeHashFunc(storage.DefaultHash)(),
+		timestampProvider: fakeTimeProvider,
 		cleanup: func() {
 			srv.Close()
 			rh.Close()
@@ -107,12 +101,25 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 
 type TestSwarmServer struct {
 	*httptest.Server
-	Hasher    storage.SwarmHash
-	FileStore *storage.FileStore
-	dir       string
-	cleanup   func()
+	Hasher            storage.SwarmHash
+	FileStore         *storage.FileStore
+	dir               string
+	cleanup           func()
+	timestampProvider *fakeTimeProvider
 }
 
 func (t *TestSwarmServer) Close() {
 	t.cleanup()
+}
+
+func (t *TestSwarmServer) GetCurrentTime() uint64 {
+	return t.timestampProvider.GetCurrentTime()
+}
+
+// EnableMetrics is starting InfluxDB reporter so that we collect stats when running tests locally
+func EnableMetrics() {
+	metrics.Enabled = true
+	go influxdb.InfluxDBWithTags(metrics.DefaultRegistry, 1*time.Second, "http://localhost:8086", "metrics", "admin", "admin", "swarm.", map[string]string{
+		"host": "test",
+	})
 }

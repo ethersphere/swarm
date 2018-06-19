@@ -31,12 +31,13 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -91,12 +92,22 @@ func serverFunc(api *api.API) testutil.TestServer {
 	return NewServer(api)
 }
 
+func newTestSigner() (*mru.GenericSigner, error) {
+	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	if err != nil {
+		return nil, err
+	}
+	return mru.NewGenericSigner(privKey), nil
+}
+
 // test the transparent resolving of multihash resource types with bzz:// scheme
 //
 // first upload data, and store the multihash to the resulting manifest in a resource update
 // retrieving the update with the multihash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
 func TestBzzResourceMultihash(t *testing.T) {
+
+	signer, _ := newTestSigner()
 
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
@@ -120,15 +131,25 @@ func TestBzzResourceMultihash(t *testing.T) {
 	s := common.FromHex(string(b))
 	mh := multihash.ToMultihash(s)
 
-	mhHex := hexutil.Encode(mh)
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
 	// our mutable resource "name"
 	keybytes := "foo.eth"
+	updateRequest, err := mru.NewUpdateRequest(keybytes, 13, srv.GetCurrentTime(), signer.Address(), mh, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateRequest.Sign(signer)
+	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
+
+	body, err := mru.EncodeMruRequest(updateRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// create the multihash update
-	url = fmt.Sprintf("%s/bzz-resource:/%s/13", srv.URL, keybytes)
-	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader([]byte(mhHex)))
+	url = fmt.Sprintf("%s/bzz-resource:/", srv.URL)
+	resp, err = http.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,9 +167,9 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "2a6f57966187ce8d5165c570755e4c4f03c1176ff49ba84e9c654c5fb1ae205e"
+	correctManifestAddrHex := "ff19cd3107675f20800c80bd940b501778c08a6a455ad9786f8fa4f81a65a63d"
 	if rsrcResp.Hex() != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp)
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
 
 	// get bzz manifest transparent resource resolve
@@ -173,6 +194,8 @@ func TestBzzResourceMultihash(t *testing.T) {
 // Test resource updates using the raw update methods
 func TestBzzResource(t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	signer, _ := newTestSigner()
+
 	defer srv.Close()
 
 	// our mutable resource "name"
@@ -185,9 +208,20 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	updateRequest, err := mru.NewUpdateRequest(keybytes, 13, srv.GetCurrentTime(), signer.Address(), databytes, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateRequest.Sign(signer)
+
+	body, err := mru.EncodeMruRequest(updateRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	// creates resource and sets update 1
-	url := fmt.Sprintf("%s/bzz-resource:/%s/raw/13", srv.URL, []byte(keybytes))
-	resp, err := http.Post(url, "application/octet-stream", bytes.NewReader(databytes))
+	url := fmt.Sprintf("%s/bzz-resource:/", srv.URL)
+	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +239,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "2a6f57966187ce8d5165c570755e4c4f03c1176ff49ba84e9c654c5fb1ae205e"
+	correctManifestAddrHex := "ff19cd3107675f20800c80bd940b501778c08a6a455ad9786f8fa4f81a65a63d"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -232,7 +266,7 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	correctRootKeyHex := "1117bba54a84a0e85955bd234bae0b84b9f5a629c69a74889f5a93bcc0284dc4"
+	correctRootKeyHex := "0dc8d8ef18f5b84f229e7deadee0073c6e2fc8e903c319df411ec6937ae45f8f"
 	if manifest.Entries[0].Hash != correctRootKeyHex {
 		t.Fatalf("Expected manifest path '%s', got '%s'", correctRootKeyHex, manifest.Entries[0].Hash)
 	}
@@ -258,6 +292,11 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatal("Expected get non-existent resource to fail")
+	}
+
 	resp.Body.Close()
 
 	// get latest update (1.1) through resource directly
@@ -281,9 +320,36 @@ func TestBzzResource(t *testing.T) {
 
 	// update 2
 	log.Info("update 2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/raw", srv.URL, correctManifestAddrHex)
+
+	// 1.- get metadata about this resource
+	url = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(url + "meta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Get resource metadata returned %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateRequest, err = mru.DecodeMruRequest(b)
+	if err != nil {
+		t.Fatalf("Error decoding resource metadata: %s", err)
+	}
 	data := []byte("foo")
-	resp, err = http.Post(url, "application/octet-stream", bytes.NewReader(data))
+	updateRequest.SetData(data)
+	if err = updateRequest.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	body, err = mru.EncodeMruRequest(updateRequest)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err = http.Post(url, "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}

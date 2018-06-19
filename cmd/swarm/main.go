@@ -181,6 +181,10 @@ var (
 		Usage:  "Number of recent chunks cached in memory (default 5000)",
 		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
 	}
+	SwarmResourceRawFlag = cli.BoolFlag{
+		Name:  "raw",
+		Usage: "Determines how to interpret data for a resource update. If not present, data will be interpreted as a multihash",
+	}
 )
 
 //declare a few constant error messages, useful for later error check comparisons in test
@@ -188,6 +192,10 @@ var (
 	SWARM_ERR_NO_BZZACCOUNT   = "bzzaccount option is required but not set; check your config file, command line or environment variables"
 	SWARM_ERR_SWAP_SET_NO_API = "SWAP is enabled but --swap-api is not set"
 )
+
+type AccountManagerProvider interface {
+	AccountManager() *accounts.Manager
+}
 
 var defaultNodeConfig = node.DefaultConfig
 
@@ -224,6 +232,15 @@ func init() {
 			ArgsUsage:          "<file>",
 			Flags:              []cli.Flag{SwarmEncryptedFlag},
 			Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
+		},
+		{
+			Action:             resource,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "resource",
+			Usage:              "(Advanced) Works with Mutable Resource Updates",
+			ArgsUsage:          "<create|update|info>",
+			Description:        "Works with Mutable Resource Updates",
+			Flags:              []cli.Flag{SwarmResourceRawFlag},
 		},
 		{
 			Action:             list,
@@ -529,7 +546,7 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	}
 }
 
-func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
+func getAccount(bzzaccount string, ctx *cli.Context, provider AccountManagerProvider) *ecdsa.PrivateKey {
 	//an account is mandatory
 	if bzzaccount == "" {
 		utils.Fatalf(SWARM_ERR_NO_BZZACCOUNT)
@@ -540,7 +557,7 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 		return key
 	}
 	// Otherwise try getting it from the keystore.
-	am := stack.AccountManager()
+	am := provider.AccountManager()
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	return decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))

@@ -190,17 +190,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	var resourceHandler *mru.Handler
 	rhparams := &mru.HandlerParams{
 		// TODO: config parameter to set limits
-		Signer: mru.NewGenericSigner(self.privateKey),
+
 	}
-	if resolver != nil {
-		resolver.SetNameHash(ens.EnsNode)
-		// Set HeaderGetter to resolver only if it is not nil.
-		rhparams.HeaderGetter = resolver
-	} else {
-		log.Warn("No ETH API specified, resource updates will use block height approximation")
-		// TODO: blockestimator should use saved values derived from last time ethclient was connected
-		rhparams.HeaderGetter = mru.NewBlockEstimator()
-	}
+
 	resourceHandler, err = mru.NewHandler(rhparams)
 	if err != nil {
 		return nil, err
