@@ -1257,10 +1257,7 @@ OUTER:
 // symmetric send performance with varying message sizes
 func BenchmarkSymkeySend(b *testing.B) {
 	b.Run(fmt.Sprintf("%d", 256), benchmarkSymKeySend)
-	b.Run(fmt.Sprintf("%d", 1024), benchmarkSymKeySend)
-	b.Run(fmt.Sprintf("%d", 1024*1024), benchmarkSymKeySend)
-	b.Run(fmt.Sprintf("%d", 1024*1024*10), benchmarkSymKeySend)
-	b.Run(fmt.Sprintf("%d", 1024*1024*100), benchmarkSymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024*4), benchmarkSymKeySend)
 }
 
 func benchmarkSymKeySend(b *testing.B) {
@@ -1301,10 +1298,7 @@ func benchmarkSymKeySend(b *testing.B) {
 // asymmetric send performance with varying message sizes
 func BenchmarkAsymkeySend(b *testing.B) {
 	b.Run(fmt.Sprintf("%d", 256), benchmarkAsymKeySend)
-	b.Run(fmt.Sprintf("%d", 1024), benchmarkAsymKeySend)
-	b.Run(fmt.Sprintf("%d", 1024*1024), benchmarkAsymKeySend)
-	b.Run(fmt.Sprintf("%d", 1024*1024*10), benchmarkAsymKeySend)
-	b.Run(fmt.Sprintf("%d", 1024*1024*100), benchmarkAsymKeySend)
+	b.Run(fmt.Sprintf("%d", 1024*4), benchmarkAsymKeySend)
 }
 
 func benchmarkAsymKeySend(b *testing.B) {
@@ -1333,11 +1327,8 @@ func benchmarkAsymKeySend(b *testing.B) {
 	}
 }
 func BenchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
-	for i := 100; i < 100000; i = i * 10 {
-		for j := 32; j < 10000; j = j * 8 {
-			b.Run(fmt.Sprintf("%d/%d", i, j), benchmarkSymkeyBruteforceChangeaddr)
-		}
-		//b.Run(fmt.Sprintf("%d", i), benchmarkSymkeyBruteforceChangeaddr)
+	for i := 32; i < 100000; i = i * 8 {
+		b.Run(fmt.Sprintf("%d", i), benchmarkSymkeyBruteforceChangeaddr)
 	}
 }
 
@@ -1354,12 +1345,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid count param '%s': %v", keycountstring[1], err)
 	}
-	if len(keycountstring) == 3 {
-		cachesize, err = strconv.ParseInt(keycountstring[2], 10, 0)
-		if err != nil {
-			b.Fatalf("benchmark called with invalid cachesize '%s': %v", keycountstring[2], err)
-		}
-	}
+	cachesize = keycount
 	pssmsgs := make([]*PssMsg, 0, keycount)
 	var keyid string
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -1403,24 +1389,22 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 		ps.Register(&topic, func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 			return nil
 		})
-		pssmsgs = append(pssmsgs, &PssMsg{
-			To:      to,
-			Payload: env,
-		})
+		pssmsg := newPssMsg(&msgParams{sym: true})
+		pssmsg.To = to
+		pssmsg.Payload = env
+		pssmsgs = append(pssmsgs, pssmsg)
 	}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if err := ps.process(pssmsgs[len(pssmsgs)-(i%len(pssmsgs))-1]); err != nil {
-			b.Fatalf("pss processing failed: %v", err)
+		if err := ps.process(pssmsgs[i%int(cachesize)]); err != nil {
+			b.Fatalf("pss processing failed (%d): %v", i, err)
 		}
 	}
 }
 
 func BenchmarkSymkeyBruteforceSameaddr(b *testing.B) {
-	for i := 100; i < 100000; i = i * 10 {
-		for j := 32; j < 10000; j = j * 8 {
-			b.Run(fmt.Sprintf("%d/%d", i, j), benchmarkSymkeyBruteforceSameaddr)
-		}
+	for i := 32; i < 100000; i = i * 8 {
+		b.Run(fmt.Sprintf("%d", i), benchmarkSymkeyBruteforceSameaddr)
 	}
 }
 
@@ -1438,12 +1422,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	if err != nil {
 		b.Fatalf("benchmark called with invalid count param '%s': %v", keycountstring[1], err)
 	}
-	if len(keycountstring) == 3 {
-		cachesize, err = strconv.ParseInt(keycountstring[2], 10, 0)
-		if err != nil {
-			b.Fatalf("benchmark called with invalid cachesize '%s': %v", keycountstring[2], err)
-		}
-	}
+	cachesize = keycount
 	addr := make([]PssAddress, keycount)
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
@@ -1487,10 +1466,9 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	ps.Register(&topic, func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error {
 		return nil
 	})
-	pssmsg := &PssMsg{
-		To:      addr[len(addr)-1][:],
-		Payload: env,
-	}
+	pssmsg := newPssMsg(&msgParams{sym: true})
+	pssmsg.To = addr[len(addr)-1][:]
+	pssmsg.Payload = env
 	for i := 0; i < b.N; i++ {
 		if err := ps.process(pssmsg); err != nil {
 			b.Fatalf("pss processing failed: %v", err)
