@@ -558,7 +558,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 }
 
 // retrieve update metadata from chunk data
-// mirrors newUpdateChunk()
+// mirrors newUpdateChunk(). TODO: convert to a SignedResourceUpdate method.
 func parseUpdate(chunkAddr storage.Address, chunkdata []byte) (*SignedResourceUpdate, error) {
 	// absolute minimum an update chunk can contain:
 	// 14 = header + one byte of name + one byte of data
@@ -734,7 +734,10 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, mru *Sig
 		}
 	}
 
-	chunk := newUpdateChunk(mru)
+	chunk, err := newUpdateChunk(mru)
+	if err != nil {
+		return nil, err
+	}
 
 	// send the chunk
 	h.chunkStore.Put(ctx, chunk)
@@ -810,16 +813,19 @@ func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Ad
 }
 
 // create an update chunk
-func newUpdateChunk(mru *SignedResourceUpdate) *storage.Chunk {
+func newUpdateChunk(mru *SignedResourceUpdate) (*storage.Chunk, error) {
 
-	if mru.rootAddr == nil || mru.metaHash == nil {
+	if len(mru.rootAddr) != storage.KeyLength || len(mru.metaHash) != storage.KeyLength {
 		log.Warn("Call to newUpdateChunk with nil rootAddr or metaHash")
-		return nil
+		return nil, NewError(ErrInvalidValue, "newUpdateChunk called without rootAddr or metaHash set")
 	}
 	// a datalength field set to 0 means the content is a multihash
 	var datalength int
 	if !mru.multihash {
 		datalength = len(mru.data)
+		if datalength == 0 {
+			return nil, NewError(ErrInvalidValue, "cannot update a resource with no data")
+		}
 	}
 
 	// prepend version, period, metaHash and rootAddr references
@@ -859,7 +865,7 @@ func newUpdateChunk(mru *SignedResourceUpdate) *storage.Chunk {
 	copy(chunk.SData[cursor:], mru.signature[:])
 
 	chunk.Size = int64(len(chunk.SData))
-	return chunk
+	return chunk, nil
 }
 
 // Helper function to calculate the next update period number from the current block, start block and frequency
