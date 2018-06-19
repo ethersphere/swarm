@@ -71,6 +71,42 @@ func (f *fakeTimeProvider) GetCurrentTime() uint64 {
 	return f.currentTime
 }
 
+func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
+
+	// Test that parseUpdate fails if the chunk is too small
+	_, err := parseUpdate(storage.ZeroAddr, make([]byte, 141))
+	if err == nil {
+		t.Fatal("Expected parseUpdate to fail when chunkData contains less than 142 bytes")
+	}
+
+	// Test that parseUpdate fails when the length header does not match the data array length
+	fakeChunk := make([]byte, 150)
+	binary.LittleEndian.PutUint16(fakeChunk, 44)
+	_, err = parseUpdate(storage.ZeroAddr, fakeChunk)
+	if err == nil {
+		t.Fatal("Expected parseUpdate to fail when the header length does not match the actual data array passed in")
+	}
+
+	r := &SignedResourceUpdate{
+		resourceData: resourceData{
+			multihash: false,
+			rootAddr:  make([]byte, 79),
+			metaHash:  nil,
+		},
+	}
+	_, err = newUpdateChunk(r)
+	if err == nil {
+		t.Fatal("Expected newUpdateChunk to fail when rootAddr or metaHash have the wrong length")
+	}
+	r.rootAddr = make([]byte, storage.KeyLength)
+	r.metaHash = make([]byte, storage.KeyLength)
+	_, err = newUpdateChunk(r)
+	if err == nil {
+		t.Fatal("Expected newUpdateChunk to fail when multihash=false and data length is 0")
+	}
+
+}
+
 // check that signature address matches update signer address
 func TestReverse(t *testing.T) {
 
@@ -129,7 +165,10 @@ func TestReverse(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chunk := newUpdateChunk(update)
+	chunk, err := newUpdateChunk(update)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// check that we can recover the owner account from the update chunk's signature
 	checkUpdate, err := parseUpdate(chunk.Addr, chunk.SData)
@@ -644,7 +683,10 @@ func TestValidator(t *testing.T) {
 	if err := mr.Sign(signer); err != nil {
 		t.Fatalf("sign fail: %v", err)
 	}
-	chunk := newUpdateChunk(&mr.SignedResourceUpdate)
+	chunk, err := newUpdateChunk(&mr.SignedResourceUpdate)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on update chunk")
 	}
@@ -654,7 +696,11 @@ func TestValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 
-	chunk = newUpdateChunk(&mr.SignedResourceUpdate)
+	chunk, err = newUpdateChunk(&mr.SignedResourceUpdate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	if rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator did not fail on update chunk with false address")
 	}
@@ -733,7 +779,7 @@ func TestValidatorInStore(t *testing.T) {
 	data := []byte("bar")
 	digestToSign := resourceUpdateChunkDigest(key, metaHash, data)
 	digestSignature, err := signer.Sign(digestToSign)
-	uglyChunk := newUpdateChunk(&SignedResourceUpdate{
+	uglyChunk, err := newUpdateChunk(&SignedResourceUpdate{
 		updateAddr: key,
 		signature:  &digestSignature,
 		resourceData: resourceData{
@@ -744,6 +790,9 @@ func TestValidatorInStore(t *testing.T) {
 			metaHash: metaHash,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// put the chunks in the store and check their error status
 	storage.PutChunks(store, goodChunk)
