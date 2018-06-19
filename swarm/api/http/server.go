@@ -710,7 +710,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			contentType = typ
 		}
 		w.Header().Set("Content-Type", contentType)
-		http.ServeContent(w, &r.Request, "", time.Now(), reader)
+		http.ServeContent(w, &r.Request, "", time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
 	case r.uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
@@ -984,7 +984,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 // Warning: This value influences the number of chunk requests and chunker join goroutines
 // per file request.
 // Recommended value is 4 times the io.Copy default buffer value which is 32kB.
-const getFileBufferSize = 4 * 32 * 1024
+var getFileBufferSize = 4 * 32 * 1024
 
 // bufferedReadSeeker wraps bufio.Reader to expose Seek method
 // from the provied io.ReadSeeker in newBufferedReadSeeker.
