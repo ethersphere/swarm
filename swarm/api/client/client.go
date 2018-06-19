@@ -570,17 +570,17 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 // Returns the resulting Mutable Resource manifest address that you can use to include in an ENS Resolver (setContent)
 // or reference future updates (Client.UpdateResource)
 func (c *Client) CreateResource(name string, frequency, startTime uint64, data []byte, multihash bool, signer mru.Signer) (string, error) {
-	mruRequest, err := mru.NewUpdateRequest(name, frequency, startTime, signer.Address(), data, multihash)
+	createRequest, err := mru.NewCreateRequest(name, frequency, startTime, signer.Address(), data, multihash)
 	if err != nil {
 		return "", err
 	}
 
-	mruRequest.Sign(signer)
+	createRequest.Sign(signer)
 	if err != nil {
 		return "", err
 	}
 
-	responseStream, err := c.updateResource(mruRequest, "")
+	responseStream, err := c.updateResource(createRequest, "")
 	if err != nil {
 		return "", err
 	}
@@ -602,22 +602,22 @@ func (c *Client) CreateResource(name string, frequency, startTime uint64, data [
 // manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
 // points to that address
 func (c *Client) UpdateResource(manifestAddressOrDomain string, data []byte, signer mru.Signer) error {
-	mruRequest, err := c.GetResourceMetadata(manifestAddressOrDomain)
+	updateRequest, err := c.GetResourceMetadata(manifestAddressOrDomain)
 	if err != nil {
 		return err
 	}
-	mruRequest.SetData(data)
-	mruRequest.Sign(signer)
+	updateRequest.SetData(data)
+	updateRequest.Sign(signer)
 	if err != nil {
 		return err
 	}
 
-	_, err = c.updateResource(mruRequest, manifestAddressOrDomain)
+	_, err = c.updateResource(updateRequest, manifestAddressOrDomain)
 	return err
 }
 
-func (c *Client) updateResource(mruRequest *mru.UpdateRequest, manifestAddressOrDomain string) (io.ReadCloser, error) {
-	body, err := mru.EncodeUpdateRequest(mruRequest)
+func (c *Client) updateResource(updateRequest *mru.UpdateRequest, manifestAddressOrDomain string) (io.ReadCloser, error) {
+	body, err := mru.EncodeUpdateRequest(updateRequest)
 	if err != nil {
 		return nil, err
 	}

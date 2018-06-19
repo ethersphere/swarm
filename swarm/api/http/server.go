@@ -405,28 +405,30 @@ func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, 
 	var rootAddr storage.Address
 	var outdata []byte
 
-	// Creation and update must send mruRequest JSON structure
+	// Creation and update must send mru.UpdateRequest JSON structure
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	mruRequest, err := mru.DecodeUpdateRequest(body) // decodes request JSON
+	updateRequest, err := mru.DecodeUpdateRequest(body) // decodes request JSON
 	if err != nil {
 		Respond(w, r, err.Error(), http.StatusBadRequest) //TODO: send different status response depending on error
 		return
 	}
 
-	if err = mruRequest.Verify(); err != nil {
+	// Verify that the signature is intact and that the signer is authorized
+	// to update this resource
+	if err = updateRequest.Verify(); err != nil {
 		Respond(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 
 	// new mutable resource creation will always have a frequency field larger than 0
-	if mruRequest.Frequency() > 0 {
+	if updateRequest.Frequency() > 0 {
 
 		// the key is the content addressed root chunk holding mutable resource metadata information
-		rootAddr, err = s.api.ResourceCreate(r.Context(), mruRequest)
+		rootAddr, err = s.api.ResourceCreate(r.Context(), updateRequest)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
 
@@ -486,7 +488,7 @@ func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, 
 	}
 
 	// Creation and update must send data aswell. This data constitutes the update data itself.
-	_, _, _, err = s.api.ResourceUpdate(r.Context(), rootAddr, &mruRequest.SignedResourceUpdate)
+	_, _, _, err = s.api.ResourceUpdate(r.Context(), rootAddr, &updateRequest.SignedResourceUpdate)
 	if err != nil {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
@@ -545,15 +547,15 @@ func (s *Server) handleGetResource(ctx context.Context, w http.ResponseWriter, r
 	var params []string
 	if len(r.uri.Path) > 0 {
 		if r.uri.Path == "meta" {
-			unsignedMruRequest, err := s.api.ResourceNewRequest(r.Context(), rootAddr)
+			unsignedUpdateRequest, err := s.api.ResourceNewRequest(r.Context(), rootAddr)
 			if err != nil {
 				getFail.Inc(1)
 				Respond(w, r, fmt.Sprintf("cannot retrieve resource metadata for rootAddr=%s: %s", rootAddr.Hex(), err), http.StatusNotFound)
 				return
 			}
-			rawResponse, err := mru.EncodeUpdateRequest(unsignedMruRequest)
+			rawResponse, err := mru.EncodeUpdateRequest(unsignedUpdateRequest)
 			if err != nil {
-				Respond(w, r, fmt.Sprintf("cannot encode unsigned MruRequest: %v", err), http.StatusInternalServerError)
+				Respond(w, r, fmt.Sprintf("cannot encode unsigned UpdateRequest: %v", err), http.StatusInternalServerError)
 				return
 			}
 			w.Header().Add("Content-type", "application/json")
