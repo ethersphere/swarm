@@ -23,15 +23,12 @@ import (
 	"encoding/binary"
 	"flag"
 	"io/ioutil"
-	"math/big"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/accounts/abi/bind/backends"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
@@ -40,8 +37,8 @@ import (
 
 var (
 	loglevel          = flag.Int("loglevel", 3, "loglevel")
-	testHasher        = storage.MakeHashFunc(storage.SHA3Hash)()
-	startBlock        = uint64(4200)
+	testHasher        = storage.MakeHashFunc(resourceHashAlgorithm)()
+	startTime         = uint64(4200)
 	resourceFrequency = uint64(42)
 	cleanF            func()
 	domainName        = "føø.bar"
@@ -61,26 +58,17 @@ func init() {
 	nameHash = ens.EnsNode(safeName)
 }
 
-// simulated backend does not have the blocknumber call
-// so we use this wrapper to fake returning the block count
-type fakeBackend struct {
-	*backends.SimulatedBackend
-	blocknumber int64
+// simulated timeProvider
+type fakeTimeProvider struct {
+	currentTime uint64
 }
 
-func (f *fakeBackend) Commit() {
-	if f.SimulatedBackend != nil {
-		f.SimulatedBackend.Commit()
-	}
-	f.blocknumber++
+func (f *fakeTimeProvider) Tick() {
+	f.currentTime++
 }
 
-func (f *fakeBackend) HeaderByNumber(context context.Context, name string, bigblock *big.Int) (*types.Header, error) {
-	f.blocknumber++
-	biggie := big.NewInt(f.blocknumber)
-	return &types.Header{
-		Number: biggie,
-	}, nil
+func (f *fakeTimeProvider) GetCurrentTime() uint64 {
+	return f.currentTime
 }
 
 // check that signature address matches update signer address
@@ -89,9 +77,9 @@ func TestReverse(t *testing.T) {
 	period := uint32(4)
 	version := uint32(2)
 
-	// make fake backend, set up rpc and create resourcehandler
-	backend := &fakeBackend{
-		blocknumber: int64(startBlock),
+	// make fake timeProvider
+	timeProvider := &fakeTimeProvider{
+		currentTime: startTime,
 	}
 
 	// signer containing private key
@@ -101,14 +89,23 @@ func TestReverse(t *testing.T) {
 	}
 
 	// set up rpc and create resourcehandler
-	rh, _, teardownTest, err := setupTest(backend, signer)
+	_, _, teardownTest, err := setupTest(timeProvider, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer teardownTest()
 
+	metadata := resourceMetadata{
+		name:      safeName,
+		startTime: startTime,
+		frequency: resourceFrequency,
+		ownerAddr: signer.Address(),
+	}
+
+	rootAddr, metaHash, _ := metadata.hash()
+
 	// generate a hash for block 4200 version 1
-	key := rh.resourceHash(period, version, ens.EnsNode(safeName), signer.Address())
+	key := resourceHash(period, version, rootAddr)
 
 	// generate some bogus data for the chunk and sign it
 	data := make([]byte, 8)
@@ -118,21 +115,29 @@ func TestReverse(t *testing.T) {
 	}
 	testHasher.Reset()
 	testHasher.Write(data)
-	digest := rh.keyDataHash(key, data)
-	sig, err := rh.signer.Sign(digest)
-	if err != nil {
+
+	update := &SignedResourceUpdate{
+		resourceUpdate: resourceUpdate{
+			period:   period,
+			version:  version,
+			metaHash: metaHash,
+			rootAddr: rootAddr,
+			data:     data,
+		},
+	}
+	if err = update.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
 
-	chunk := newUpdateChunk(key, &sig, period, version, safeName, data, len(data))
+	chunk := newUpdateChunk(update)
 
 	// check that we can recover the owner account from the update chunk's signature
-	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.SData)
+	checkUpdate, err := parseUpdate(chunk.SData)
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := rh.keyDataHash(chunk.Addr, checkdata)
-	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
+	checkdigest := keyDataHash(chunk.Addr, metaHash, checkUpdate.data)
+	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checkUpdate.signature)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
 	}
@@ -146,26 +151,23 @@ func TestReverse(t *testing.T) {
 	if !bytes.Equal(key[:], chunk.Addr[:]) {
 		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Addr)
 	}
-	if period != checkperiod {
-		t.Fatalf("Expected period '%d', was '%d'", period, checkperiod)
+	if period != checkUpdate.period {
+		t.Fatalf("Expected period '%d', was '%d'", period, checkUpdate.period)
 	}
-	if version != checkversion {
-		t.Fatalf("Expected version '%d', was '%d'", version, checkversion)
+	if version != checkUpdate.version {
+		t.Fatalf("Expected version '%d', was '%d'", version, checkUpdate.version)
 	}
-	if safeName != checkname {
-		t.Fatalf("Expected name '%s', was '%s'", safeName, checkname)
-	}
-	if !bytes.Equal(data, checkdata) {
-		t.Fatalf("Expectedn data '%x', was '%x'", data, checkdata)
+	if !bytes.Equal(data, checkUpdate.data) {
+		t.Fatalf("Expectedn data '%x', was '%x'", data, checkUpdate.data)
 	}
 }
 
 // make updates and retrieve them based on periods and versions
 func TestResourceHandler(t *testing.T) {
 
-	// make fake backend, set up rpc and create resourcehandler
-	backend := &fakeBackend{
-		blocknumber: int64(startBlock),
+	// make fake timeProvider
+	timeProvider := &fakeTimeProvider{
+		currentTime: startTime,
 	}
 
 	// signer containing private key
@@ -174,7 +176,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rh, datadir, teardownTest, err := setupTest(backend, signer)
+	rh, datadir, teardownTest, err := setupTest(timeProvider, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,12 +185,20 @@ func TestResourceHandler(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rootChunkKey, _, err := rh.New(ctx, safeName, resourceFrequency)
+	request, err := NewUpdateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Sign(signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = rh.New(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	chunk, err := rh.chunkStore.Get(storage.Address(rootChunkKey))
+	chunk, err := rh.chunkStore.Get(storage.Address(request.rootAddr))
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.SData) < 16 {
@@ -196,8 +206,8 @@ func TestResourceHandler(t *testing.T) {
 	}
 	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[8:16])
 	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[16:24])
-	if startblocknumber != uint64(backend.blocknumber) {
-		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber)
+	if startblocknumber != timeProvider.currentTime {
+		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, timeProvider.currentTime)
 	}
 	if chunkfrequency != resourceFrequency {
 		t.Fatalf("stored frequency %d does not match provided frequency %d", chunkfrequency, resourceFrequency)
@@ -211,60 +221,122 @@ func TestResourceHandler(t *testing.T) {
 		"clyde",
 	}
 
-	// update halfway to first period
+	// update halfway to first period. period=1, version=1
 	resourcekey := make(map[string]storage.Address)
-	fwdBlocks(int(resourceFrequency/2), backend)
+	fwdBlocks(int(resourceFrequency/2), timeProvider)
 	data := []byte(updates[0])
-	resourcekey[updates[0]], err = rh.Update(ctx, rootChunkKey, data)
+	request.SetData(data)
+	if err := request.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	resourcekey[updates[0]], err = rh.Update(ctx, request.rootAddr, &request.SignedResourceUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// update on first period
-	fwdBlocks(int(resourceFrequency/2), backend)
+	// update on first period with version = 1 to make it fail since there is already one update with version=1
+	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.version != 2 || request.period != 1 {
+		t.Fatal("Suggested period should be 1 and version should be 2")
+	}
+
+	request.version = 1 // force version 1 instead of 2 to make it fail
 	data = []byte(updates[1])
-	resourcekey[updates[1]], err = rh.Update(ctx, rootChunkKey, data)
+	request.SetData(data)
+	if err := request.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	resourcekey[updates[1]], err = rh.Update(ctx, request.rootAddr, &request.SignedResourceUpdate)
+	if err == nil {
+		t.Fatal("Expected update to fail since this version already exists")
+	}
+
+	// update on second period with version = 1, correct. period=2, version=1
+	fwdBlocks(int(resourceFrequency/2), timeProvider)
+	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.SetData(data)
+	if err := request.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	resourcekey[updates[1]], err = rh.Update(ctx, request.rootAddr, &request.SignedResourceUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// update on second period
-	fwdBlocks(int(resourceFrequency), backend)
+	// first attempt to update on third period, setting version to something different than 1 to make it fail
+	fwdBlocks(int(resourceFrequency), timeProvider)
+	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.version = 79 //put something different than 1 to make it fail
 	data = []byte(updates[2])
-	resourcekey[updates[2]], err = rh.Update(ctx, rootChunkKey, data)
+	request.SetData(data)
+	if err := request.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	resourcekey[updates[2]], err = rh.Update(ctx, request.rootAddr, &request.SignedResourceUpdate)
+	if err == nil {
+		t.Fatal("Expected update to fail since this is the first version of this period and we didn't set version=1")
+	}
+
+	// second attempt to update on third period, now with version =1 should work since it is the first one
+	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	data = []byte(updates[2])
+	request.SetData(data)
+	if err := request.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	resourcekey[updates[2]], err = rh.Update(ctx, request.rootAddr, &request.SignedResourceUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// update just after second period
-	fwdBlocks(1, backend)
+	fwdBlocks(1, timeProvider)
 	data = []byte(updates[3])
-	resourcekey[updates[3]], err = rh.Update(ctx, rootChunkKey, data)
+	request.SetData(data)
+
+	request.version = 2
+	if err := request.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
+	resourcekey[updates[3]], err = rh.Update(ctx, request.rootAddr, &request.SignedResourceUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	time.Sleep(time.Second)
 	rh.Close()
 
 	// check we can retrieve the updates after close
 	// it will match on second iteration startblocknumber + (resourceFrequency * 3)
-	fwdBlocks(int(resourceFrequency*2)-1, backend)
+	fwdBlocks(int(resourceFrequency*2)-1, timeProvider)
 
 	rhparams := &HandlerParams{
-		Signer:       signer,
-		HeaderGetter: rh.headerGetter,
+		TimestampProvider: timeProvider,
 	}
 
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrc2, err := rh2.Load(rootChunkKey)
+
+	rsrc2, err := rh2.Load(request.rootAddr)
 	if err != nil {
 		t.Fatal(err)
 	}
 	lookupParams := &LookupParams{
-		Root: rootChunkKey,
+		Root: request.rootAddr,
 	}
 	_, err = rh2.Lookup(ctx, lookupParams)
 	if err != nil {
@@ -273,15 +345,15 @@ func TestResourceHandler(t *testing.T) {
 
 	// last update should be "clyde", version two, blockheight startblocknumber + (resourcefrequency * 3)
 	if !bytes.Equal(rsrc2.data, []byte(updates[len(updates)-1])) {
-		t.Fatalf("resource data was %v, expected %v", rsrc2.data, updates[len(updates)-1])
+		t.Fatalf("resource data was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
 	if rsrc2.version != 2 {
 		t.Fatalf("resource version was %d, expected 2", rsrc2.version)
 	}
-	if rsrc2.lastPeriod != 3 {
-		t.Fatalf("resource period was %d, expected 3", rsrc2.lastPeriod)
+	if rsrc2.period != 3 {
+		t.Fatalf("resource period was %d, expected 3", rsrc2.period)
 	}
-	log.Debug("Latest lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
+	log.Debug("Latest lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, latest version
 	lookupParams.Period = 3
@@ -293,7 +365,7 @@ func TestResourceHandler(t *testing.T) {
 	if !bytes.Equal(rsrc.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("resource data (historical) was %v, expected %v", rsrc2.data, updates[len(updates)-1])
 	}
-	log.Debug("Historical lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
+	log.Debug("Historical lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific block, specific version
 	lookupParams.Version = 1
@@ -305,7 +377,7 @@ func TestResourceHandler(t *testing.T) {
 	if !bytes.Equal(rsrc.data, []byte(updates[2])) {
 		t.Fatalf("resource data (historical) was %v, expected %v", rsrc2.data, updates[2])
 	}
-	log.Debug("Specific version lookup", "period", rsrc2.lastPeriod, "version", rsrc2.version, "data", rsrc2.data)
+	log.Debug("Specific version lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
 	// we are now at third update
 	// check backwards stepping to the first
@@ -324,16 +396,16 @@ func TestResourceHandler(t *testing.T) {
 	// beyond the first should yield an error
 	rsrc, err = rh2.LookupPrevious(ctx, lookupParams)
 	if err == nil {
-		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rsrc2.lastPeriod, rsrc2.version, rsrc2.data)
+		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rsrc2.period, rsrc2.version, rsrc2.data)
 	}
 
 }
 
 func TestMultihash(t *testing.T) {
 
-	// make fake backend, set up rpc and create resourcehandler
-	backend := &fakeBackend{
-		blocknumber: int64(startBlock),
+	// make fake timeProvider
+	timeProvider := &fakeTimeProvider{
+		currentTime: startTime,
 	}
 
 	// signer containing private key
@@ -343,7 +415,7 @@ func TestMultihash(t *testing.T) {
 	}
 
 	// set up rpc and create resourcehandler
-	rh, datadir, teardownTest, err := setupTest(backend, signer)
+	rh, datadir, teardownTest, err := setupTest(timeProvider, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -352,7 +424,15 @@ func TestMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	rootChunkAddr, _, err := rh.New(ctx, safeName, resourceFrequency)
+	mr, err := NewUpdateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mr.Sign(signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = rh.New(ctx, mr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -361,24 +441,63 @@ func TestMultihash(t *testing.T) {
 	// if it ever changes this test should also change
 	multihashbytes := ens.EnsNode("foo")
 	multihashmulti := multihash.ToMultihash(multihashbytes.Bytes())
-	multihashkey, err := rh.UpdateMultihash(ctx, rootChunkAddr, multihashmulti)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mr.SetData(multihashmulti)
+	mr.Sign(signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	multihashkey, err := rh.Update(ctx, mr.rootAddr, &mr.SignedResourceUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	sha1bytes := make([]byte, multihash.MultihashLength)
 	sha1multi := multihash.ToMultihash(sha1bytes)
-	sha1key, err := rh.UpdateMultihash(ctx, rootChunkAddr, sha1multi)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mr, err = rh.NewUpdateRequest(ctx, mr.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mr.SetData(sha1multi)
+	mr.Sign(signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sha1key, err := rh.Update(ctx, mr.rootAddr, &mr.SignedResourceUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// invalid multihashes
-	_, err = rh.UpdateMultihash(ctx, rootChunkAddr, multihashmulti[1:])
+	mr, err = rh.NewUpdateRequest(ctx, mr.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mr.SetData(multihashmulti[1:])
+	mr.Sign(signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = rh.Update(ctx, mr.rootAddr, &mr.SignedResourceUpdate)
 	if err == nil {
 		t.Fatalf("Expected update to fail with first byte skipped")
 	}
-	_, err = rh.UpdateMultihash(ctx, rootChunkAddr, multihashmulti[:len(multihashmulti)-2])
+	mr, err = rh.NewUpdateRequest(ctx, mr.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mr.SetData(multihashmulti[:len(multihashmulti)-2])
+	mr.Sign(signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = rh.Update(ctx, mr.rootAddr, &mr.SignedResourceUpdate)
 	if err == nil {
 		t.Fatalf("Expected update to fail with last byte skipped")
 	}
@@ -408,23 +527,48 @@ func TestMultihash(t *testing.T) {
 	rh.Close()
 
 	rhparams := &HandlerParams{
-		Signer:       signer,
-		HeaderGetter: rh.headerGetter,
+		TimestampProvider: rh.timestampProvider,
 	}
 	// test with signed data
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
-	rootChunkAddr, _, err = rh2.New(ctx, safeName, resourceFrequency)
+	mr, err = NewUpdateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	multihashsignedkey, err := rh2.UpdateMultihash(ctx, rootChunkAddr, multihashmulti)
+	mr.Sign(signer)
 	if err != nil {
 		t.Fatal(err)
 	}
-	sha1signedkey, err := rh2.UpdateMultihash(ctx, rootChunkAddr, sha1multi)
+	err = rh2.New(ctx, mr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mr.SetData(multihashmulti)
+	mr.Sign(signer)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	multihashsignedkey, err := rh2.Update(ctx, mr.rootAddr, &mr.SignedResourceUpdate)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mr, err = rh2.NewUpdateRequest(ctx, mr.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mr.SetData(sha1multi)
+	mr.Sign(signer)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	sha1signedkey, err := rh2.Update(ctx, mr.rootAddr, &mr.SignedResourceUpdate)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -456,9 +600,9 @@ func TestMultihash(t *testing.T) {
 // \TODO verify testing of signature validation and enforcement
 func TestValidator(t *testing.T) {
 
-	// make fake backend, set up rpc and create resourcehandler
-	backend := &fakeBackend{
-		blocknumber: int64(startBlock),
+	// make fake timeProvider
+	timeProvider := &fakeTimeProvider{
+		currentTime: startTime,
 	}
 
 	// signer containing private key
@@ -468,13 +612,13 @@ func TestValidator(t *testing.T) {
 	}
 
 	// fake signer for false results
-	falseSigner, err := newTestSigner()
+	falseSigner, err := newFalseSigner()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// set up rpc and create resourcehandler with ENS sim backend
-	rh, _, teardownTest, err := setupTest(backend, signer)
+	// set up  sim timeProvider
+	rh, _, teardownTest, err := setupTest(timeProvider, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -483,44 +627,49 @@ func TestValidator(t *testing.T) {
 	// create new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	key, rsrc, err := rh.New(ctx, safeName, resourceFrequency)
+	mr, err := NewUpdateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mr.Sign(signer)
+
+	err = rh.New(ctx, mr)
 	if err != nil {
 		t.Fatalf("Create resource fail: %v", err)
 	}
 
 	// chunk with address
 	data := []byte("foo")
-	key = rh.resourceHash(1, 1, rsrc.nameHash, signer.Address())
-	digest := rh.keyDataHash(key, data)
-	sig, err := rh.signer.Sign(digest)
-	if err != nil {
+	mr.SetData(data)
+	if err := mr.Sign(signer); err != nil {
 		t.Fatalf("sign fail: %v", err)
 	}
-	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
+	chunk := newUpdateChunk(&mr.SignedResourceUpdate)
 	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on update chunk")
 	}
 
 	// chunk with address made from different publickey
-	key = rh.resourceHash(1, 1, rsrc.nameHash, falseSigner.Address())
-	digest = rh.keyDataHash(key, data)
-	sig, err = rh.signer.Sign(digest)
-	if err != nil {
+	if err := mr.Sign(falseSigner); err != nil {
 		t.Fatalf("sign fail: %v", err)
 	}
-	chunk = newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
+
+	chunk = newUpdateChunk(&mr.SignedResourceUpdate)
 	if rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator did not fail on update chunk with false address")
 	}
 
 	ctx, cancel = context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	startBlock, err := rh.getBlock(ctx, safeName)
-	if err != nil {
-		t.Fatal(err)
-	}
-	chunk = rh.newMetaChunk(safeName, startBlock, resourceFrequency, signer.Address())
-	if rh.Validate(chunk.Addr, chunk.SData) {
+	startTime := rh.getCurrentTime(ctx)
+
+	chunk, _ = rh.newMetaChunk(&resourceMetadata{
+		name:      safeName,
+		startTime: startTime,
+		frequency: resourceFrequency,
+		ownerAddr: signer.Address(),
+	})
+	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on metadata chunk")
 	}
 }
@@ -531,9 +680,9 @@ func TestValidator(t *testing.T) {
 // which should be evaluated as invalid chunks by this validator
 func TestValidatorInStore(t *testing.T) {
 
-	// make fake backend, set up rpc and create resourcehandler
-	backend := &fakeBackend{
-		blocknumber: int64(startBlock),
+	// make fake timeProvider
+	timeProvider := &fakeTimeProvider{
+		currentTime: startTime,
 	}
 
 	// signer containing private key
@@ -558,8 +707,7 @@ func TestValidatorInStore(t *testing.T) {
 
 	// set up resource handler and add is as a validator to the localstore
 	rhParams := &HandlerParams{
-		HeaderGetter: backend,
-		Signer:       signer,
+		TimestampProvider: timeProvider,
 	}
 	rh, err := NewHandler(rhParams)
 	if err != nil {
@@ -573,35 +721,54 @@ func TestValidatorInStore(t *testing.T) {
 	badChunk := chunks[1]
 	badChunk.SData = goodChunk.SData
 
+	rootChunk, metaHash := rh.newMetaChunk(&resourceMetadata{
+		startTime: startTime,
+		name:      "xyzzy",
+		frequency: resourceFrequency,
+		ownerAddr: signer.Address(),
+	})
+
 	// create a resource update chunk with correct publickey
-	key := rh.resourceHash(42, 1, ens.EnsNode("xyzzy.eth"), signer.Address())
+	key := resourceHash(42, 1, rootChunk.Addr)
 	data := []byte("bar")
-	digestToSign := rh.keyDataHash(key, data)
+	digestToSign := keyDataHash(key, metaHash, data)
 	digestSignature, err := signer.Sign(digestToSign)
-	uglyChunk := newUpdateChunk(key, &digestSignature, 42, 1, "xyzzy.eth", data, len(data))
+	uglyChunk := newUpdateChunk(&SignedResourceUpdate{
+		key:       key,
+		signature: &digestSignature,
+		resourceUpdate: resourceUpdate{
+			period:   42,
+			version:  1,
+			data:     data,
+			rootAddr: rootChunk.Addr,
+			metaHash: metaHash,
+		},
+	})
 
 	// put the chunks in the store and check their error status
-	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
+	storage.PutChunks(store, goodChunk)
 	if goodChunk.GetErrored() == nil {
 		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
 	}
+	storage.PutChunks(store, badChunk)
 	if badChunk.GetErrored() == nil {
 		t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
 	}
+	storage.PutChunks(store, uglyChunk)
 	if err := uglyChunk.GetErrored(); err != nil {
 		t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
 	}
 }
 
-// fast-forward blockheight
-func fwdBlocks(count int, backend *fakeBackend) {
+// fast-forward clock
+func fwdBlocks(count int, timeProvider *fakeTimeProvider) {
 	for i := 0; i < count; i++ {
-		backend.Commit()
+		timeProvider.Tick()
 	}
 }
 
 // create rpc and resourcehandler
-func setupTest(backend headerGetter, signer Signer) (rh *TestHandler, datadir string, teardown func(), err error) {
+func setupTest(timeProvider timestampProvider, signer Signer) (rh *TestHandler, datadir string, teardown func(), err error) {
 
 	var fsClean func()
 	var rpcClean func()
@@ -624,15 +791,22 @@ func setupTest(backend headerGetter, signer Signer) (rh *TestHandler, datadir st
 	}
 
 	rhparams := &HandlerParams{
-		Signer:       signer,
-		HeaderGetter: backend,
+		TimestampProvider: timeProvider,
 	}
 	rh, err = NewTestHandler(datadir, rhparams)
 	return rh, datadir, cleanF, err
 }
 
 func newTestSigner() (*GenericSigner, error) {
-	privKey, err := crypto.GenerateKey()
+	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	if err != nil {
+		return nil, err
+	}
+	return NewGenericSigner(privKey), nil
+}
+
+func newFalseSigner() (*GenericSigner, error) {
+	privKey, err := crypto.HexToECDSA("accedeaccedeaccedeaccedeaccedeaccedeaccedeaccedeaccedeaccedecaca")
 	if err != nil {
 		return nil, err
 	}
@@ -644,9 +818,9 @@ func getUpdateDirect(rh *Handler, addr storage.Address) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	_, _, _, _, data, _, err := rh.parseUpdate(chunk.SData)
+	mr, err := parseUpdate(chunk.SData)
 	if err != nil {
 		return nil, err
 	}
-	return data, nil
+	return mr.data, nil
 }

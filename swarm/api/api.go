@@ -346,7 +346,6 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 			params := &mru.LookupParams{
 				Root: metadataChunkKey,
 			}
-			//rsrc, err = self.resource.LookupLatest(ctx, rsrc.NameHash(), true, &mru.LookupParams{})
 			rsrc, err = a.resource.Lookup(ctx, params)
 			if err != nil {
 				apiGetNotFound.Inc(1)
@@ -357,10 +356,9 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 
 			// if it's multihash, we will transparently serve the content this multihash points to
 			// \TODO this resolve is rather expensive all in all, review to see if it can be achieved cheaper
-			if rsrc.Multihash {
+			if rsrc.Multihash() {
 
 				// get the data of the update
-				//_, rsrcData, err := self.resource.GetContent(rsrc.NameHash().Hex())
 				_, rsrcData, err := a.resource.GetContent(metadataChunkKey)
 				if err != nil {
 					apiGetNotFound.Inc(1)
@@ -677,35 +675,30 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (str
 	return rsrc.Name(), data, nil
 }
 
-// ResourceCreate creates Resource and returns its key
-func (a *API) ResourceCreate(ctx context.Context, name string, frequency uint64) (storage.Address, error) {
-	key, _, err := a.resource.New(ctx, name, frequency)
+func (a *API) ResourceCreate(ctx context.Context, mru *mru.UpdateRequest) (storage.Address, error) {
+	err := a.resource.New(ctx, mru)
 	if err != nil {
 		return nil, err
 	}
-	return key, nil
+	return mru.RootAddr(), nil
 }
 
 // ResourceUpdateMultihash updates a Mutable Resource and marks the update's content to be of multihash type, which will be recognized upon retrieval.
 // It will fail if the data is not a valid multihash.
-func (a *API) ResourceUpdateMultihash(ctx context.Context, addr storage.Address, data []byte) (storage.Address, uint32, uint32, error) {
-	return a.resourceUpdate(ctx, addr, data, true)
+func (a *API) ResourceNewRequest(ctx context.Context, rootAddr storage.Address) (*mru.UpdateRequest, error) {
+	return a.resource.NewUpdateRequest(ctx, rootAddr)
 }
 
 // ResourceUpdate updates a Mutable Resource with arbitrary data.
 // Upon retrieval the update will be retrieved verbatim as bytes.
-func (a *API) ResourceUpdate(ctx context.Context, addr storage.Address, data []byte) (storage.Address, uint32, uint32, error) {
-	return a.resourceUpdate(ctx, addr, data, false)
+func (a *API) ResourceUpdate(ctx context.Context, rootAddr storage.Address, mru *mru.SignedResourceUpdate) (storage.Address, uint32, uint32, error) {
+	return a.resourceUpdate(ctx, rootAddr, mru)
 }
 
-func (a *API) resourceUpdate(ctx context.Context, rootAddr storage.Address, data []byte, multihash bool) (storage.Address, uint32, uint32, error) {
+func (a *API) resourceUpdate(ctx context.Context, rootAddr storage.Address, mru *mru.SignedResourceUpdate) (storage.Address, uint32, uint32, error) {
 	var updateAddr storage.Address
 	var err error
-	if multihash {
-		updateAddr, err = a.resource.UpdateMultihash(ctx, rootAddr, data)
-	} else {
-		updateAddr, err = a.resource.Update(ctx, rootAddr, data)
-	}
+	updateAddr, err = a.resource.Update(ctx, rootAddr, mru)
 	period, _ := a.resource.GetLastPeriod(rootAddr)
 	version, _ := a.resource.GetVersion(rootAddr)
 	return updateAddr, period, version, err
