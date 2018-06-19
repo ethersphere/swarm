@@ -119,7 +119,7 @@ type LookupParams struct {
 	Limit   uint32
 }
 
-type resourceUpdate struct {
+type resourceData struct {
 	version   uint32
 	period    uint32
 	multihash bool
@@ -128,10 +128,10 @@ type resourceUpdate struct {
 	data      []byte
 }
 
-// encapsulates an specific resource update. When synced it contains the most recent
-// version of the resource update data.
+// Caches resource data. When synced it contains the most recent
+// version of the resource and its metadata.
 type resource struct {
-	resourceUpdate
+	resourceData
 	resourceMetadata
 	*bytes.Reader
 	lastKey storage.Address
@@ -147,7 +147,8 @@ func (r *resource) isSynced() bool {
 	return !r.updated.IsZero()
 }
 
-func (r *resourceUpdate) Multihash() bool {
+//Whether the resource data should be interpreted as multihash
+func (r *resourceData) Multihash() bool {
 	return r.multihash
 }
 
@@ -156,26 +157,12 @@ func (r *resource) Size(ctx context.Context, _ chan bool) (int64, error) {
 	if !r.isSynced() {
 		return 0, NewError(ErrNotSynced, "Not synced")
 	}
-	return int64(len(r.resourceUpdate.data)), nil
+	return int64(len(r.resourceData.data)), nil
 }
 
+//returns the resource's human-readable name
 func (r *resource) Name() string {
 	return r.name
-}
-
-type timestampProvider interface {
-	GetCurrentTime() uint64
-}
-
-type DefaultTimestampProvider struct {
-}
-
-func NewDefaultTimestampProvider() *DefaultTimestampProvider {
-	return &DefaultTimestampProvider{}
-}
-
-func (dtp *DefaultTimestampProvider) GetCurrentTime() uint64 {
-	return uint64(time.Now().Unix())
 }
 
 // Handler is the API for Mutable Resources
@@ -238,7 +225,7 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 }
 
 // Validate is a chunk validation method
-// If it's a resource update, the chunk address is checked against the public key of the update's signature
+// If it's a resource update, the chunk address is checked against the public updateAddr of the update's signature
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 
@@ -254,38 +241,13 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 
 	// does the chunk data make sense?
 	// This is not 100% safe evaluation, since content addressed data can coincidentally produce data with length header matching content size
-	mru, err := parseUpdate(data)
+	_, err := parseUpdate(addr, data)
 	if err != nil {
 		log.Warn("Invalid resource chunk")
 		return false
 	}
 
-	// Check if signature is valid against the chunk address
-	// Since we force signatures to be used, we can know be sure that this is valid data
-	ownerAddr, err := mru.Verify(addr)
-	if err != nil {
-		log.Warn("Unparseable signature in resource chunk %s", addr)
-		return false
-	}
-
-	// Check if who signed the resource update really owns the resource
-	if !verifyResourceOwnership(ownerAddr, mru.metaHash, mru.rootAddr) {
-		log.Warn("Update signer does not match with resource owner")
-		return false
-	}
-
 	return true
-}
-
-// create the resource update digest used in signatures
-func keyDataHash(addr storage.Address, metaHash []byte, data []byte) common.Hash {
-	hasher := hashPool.Get().(storage.SwarmHash)
-	defer hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(addr)
-	hasher.Write(metaHash)
-	hasher.Write(data)
-	return common.BytesToHash(hasher.Sum(nil))
 }
 
 // GetContent retrieves the data payload of the last synced update of the Mutable Resource
@@ -362,7 +324,7 @@ func (h *Handler) New(ctx context.Context, request *UpdateRequest) error {
 
 	// create the internal index for the resource and populate it with the data of the first version
 	rsrc := &resource{
-		resourceUpdate: resourceUpdate{
+		resourceData: resourceData{
 			rootAddr: chunk.Addr,
 		},
 		resourceMetadata: resourceMetadata{
@@ -391,12 +353,12 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 
 	currentblock := h.getCurrentTime(ctx)
 
-	mru := new(UpdateRequest)
-	mru.period, err = getNextPeriod(rsrc.startTime, currentblock, rsrc.frequency)
+	updateRequest := new(UpdateRequest)
+	updateRequest.period, err = getNextPeriod(rsrc.startTime, currentblock, rsrc.frequency)
 	if err != nil {
 		return nil, err
 	}
-	if _, err = h.lookup(rsrc, mru.period, 0, 0); err != nil {
+	if _, err = h.lookup(rsrc, updateRequest.period, 0, 0); err != nil {
 		return nil, err
 	}
 
@@ -404,21 +366,20 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 		return nil, NewError(ErrNotSynced, fmt.Sprintf("NewMruRequest: object '%s' not in sync", rootAddr.Hex()))
 	}
 
-	mru.name = rsrc.name
-	mru.multihash = rsrc.multihash
-	mru.rootAddr = rsrc.rootAddr
-	mru.metaHash = rsrc.metaHash
-	mru.resourceMetadata = rsrc.resourceMetadata
+	updateRequest.multihash = rsrc.multihash
+	updateRequest.rootAddr = rsrc.rootAddr
+	updateRequest.metaHash = rsrc.metaHash
+	updateRequest.resourceMetadata = rsrc.resourceMetadata
 
 	// if we already have an update for this block then increment version
 	// resource object MUST be in sync for version to be correct, but we checked this earlier in the method already
-	if h.hasUpdate(rootAddr, mru.period) {
-		mru.version = rsrc.version + 1
+	if h.hasUpdate(rootAddr, updateRequest.period) {
+		updateRequest.version = rsrc.version + 1
 	} else {
-		mru.version = 1
+		updateRequest.version = 1
 	}
 
-	return mru, nil
+	return updateRequest, nil
 }
 
 // creates a metadata chunk
@@ -427,7 +388,7 @@ func (h *Handler) newMetaChunk(metadata *resourceMetadata) (chunk *storage.Chunk
 	// from this we know from what blockheight we should look for updates, and how often
 	// it also contains the name of the resource, so we know what resource we are working with
 
-	// the key of the metadata chunk is content-addressed
+	// the key (rootAddr) of the metadata chunk is content-addressed
 	// if it wasn't we couldn't replace it later
 	// resolving this relationship is left up to external agents (for example ENS)
 	rootAddr, metaHash, chunkData := metadata.hash()
@@ -520,27 +481,27 @@ func (h *Handler) lookup(rsrc *resource, period uint32, version uint32, limit ui
 		if limit != 0 && hops > limit {
 			return nil, NewError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", limit))
 		}
-		key := resourceHash(period, version, rsrc.rootAddr)
-		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), key, defaultRetrieveTimeout)
+		updateAddr := resourceUpdateChunkAddr(period, version, rsrc.rootAddr)
+		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
 				return h.updateIndex(rsrc, chunk)
 			}
 			// check if we have versions > 1. If a version fails, the previous version is used and returned.
-			log.Trace("rsrc update version 1 found, checking for version updates", "period", period, "key", key)
+			log.Trace("rsrc update version 1 found, checking for version updates", "period", period, "updateAddr", updateAddr)
 			for {
 				newversion := version + 1
-				key := resourceHash(period, newversion, rsrc.rootAddr)
-				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), key, defaultRetrieveTimeout)
+				updateAddr := resourceUpdateChunkAddr(period, newversion, rsrc.rootAddr)
+				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 				if err != nil {
 					return h.updateIndex(rsrc, chunk)
 				}
 				chunk = newchunk
 				version = newversion
-				log.Trace("version update found, checking next", "version", version, "period", period, "key", key)
+				log.Trace("version update found, checking next", "version", version, "period", period, "updateAddr", updateAddr)
 			}
 		}
-		log.Trace("rsrc update not found, checking previous period", "period", period, "key", key)
+		log.Trace("rsrc update not found, checking previous period", "period", period, "updateAddr", updateAddr)
 		period--
 		hops++
 	}
@@ -562,7 +523,7 @@ func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource
 
 	// create the index entry
 	rsrc := &resource{}
-	rsrc.UnmarshalBinary(chunk.SData)
+	rsrc.unmarshalBinary(chunk.SData)
 	rsrc.rootAddr, rsrc.metaHash = metadataHash(chunk.SData)
 	if !bytes.Equal(rsrc.rootAddr, rootAddr) {
 		return nil, NewError(ErrCorruptData, "Corrupt metadata chunk")
@@ -576,20 +537,11 @@ func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource
 func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, error) {
 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
-	mru, err := parseUpdate(chunk.SData)
-	log.Trace("resource index update", "name", rsrc.name, "updatekey", chunk.Addr, "period", mru.period, "version", mru.version)
-
-	// \TODO maybe this check is redundant if also checked upon retrieval of chunk
-
-	ownerAddr, err := mru.Verify(chunk.Addr)
+	mru, err := parseUpdate(chunk.Addr, chunk.SData)
 	if err != nil {
-		return nil, NewError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
+		return nil, NewError(ErrInvalidSignature, fmt.Sprintf("Invalid resource chunk: %s", err))
 	}
-
-	// Check if who signed the resource update really owns the resource
-	if !verifyResourceOwnership(ownerAddr, mru.metaHash, mru.rootAddr) {
-		return nil, NewError(ErrUnauthorized, fmt.Sprintf("signature is valid but signer does not own the resource: %v", err))
-	}
+	log.Trace("resource index update", "name", rsrc.name, "updatekey", chunk.Addr, "period", mru.period, "version", mru.version)
 
 	// update our rsrcs entry map
 	rsrc.lastKey = chunk.Addr
@@ -600,14 +552,14 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	rsrc.multihash = mru.multihash
 	rsrc.Reader = bytes.NewReader(rsrc.data)
 	copy(rsrc.data, mru.data)
-	log.Debug(" synced", "name", rsrc.name, "key", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
+	log.Debug(" synced", "name", rsrc.name, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
 	h.set(chunk.Addr, rsrc)
 	return rsrc, nil
 }
 
 // retrieve update metadata from chunk data
 // mirrors newUpdateChunk()
-func parseUpdate(chunkdata []byte) (*SignedResourceUpdate, error) {
+func parseUpdate(chunkAddr storage.Address, chunkdata []byte) (*SignedResourceUpdate, error) {
 	// absolute minimum an update chunk can contain:
 	// 14 = header + one byte of name + one byte of data
 
@@ -715,9 +667,10 @@ func parseUpdate(chunkdata []byte) (*SignedResourceUpdate, error) {
 		copy(signature[:], sigdata)
 	}
 
-	return &SignedResourceUpdate{
-		signature: signature,
-		resourceUpdate: resourceUpdate{
+	r := &SignedResourceUpdate{
+		signature:  signature,
+		updateAddr: chunkAddr,
+		resourceData: resourceData{
 			period:    period,
 			version:   version,
 			rootAddr:  rootAddr,
@@ -725,7 +678,14 @@ func parseUpdate(chunkdata []byte) (*SignedResourceUpdate, error) {
 			data:      data,
 			multihash: ismultihash,
 		},
-	}, nil
+	}
+
+	if err := r.Verify(); err != nil {
+		return nil, NewError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
+	}
+
+	return r, nil
+
 }
 
 // Update adds an actual data update
@@ -778,14 +738,14 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, mru *Sig
 
 	// send the chunk
 	h.chunkStore.Put(ctx, chunk)
-	log.Trace("resource update", "key", mru.key, "lastperiod", mru.period, "version", mru.version, "data", chunk.SData, "multihash", mru.multihash)
+	log.Trace("resource update", "updateAddr", mru.updateAddr, "lastperiod", mru.period, "version", mru.version, "data", chunk.SData, "multihash", mru.multihash)
 
-	// update our resources map entry and return the new key
+	// update our resources map entry and return the new updateAddr
 	rsrc.period = mru.period
 	rsrc.version = mru.version
 	rsrc.data = make([]byte, len(mru.data))
 	copy(rsrc.data, mru.data)
-	return mru.key, nil
+	return mru.updateAddr, nil
 }
 
 // gets the current block height
@@ -835,15 +795,6 @@ func (h *Handler) set(rootAddr storage.Address, rsrc *resource) {
 	h.resources[hashKey] = rsrc
 }
 
-// used for chunk keys
-func resourceHash(period uint32, version uint32, rootAddr storage.Address) storage.Address {
-	hasher := hashPool.Get().(storage.SwarmHash)
-	defer hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(NewResourceHash(period, version, rootAddr))
-	return hasher.Sum(nil)
-}
-
 // Checks if we already have an update on this resource, according to the value in the current state of the resource index
 func (h *Handler) hasUpdate(rootAddr storage.Address, period uint32) bool {
 	rsrc := h.get(rootAddr)
@@ -875,7 +826,7 @@ func newUpdateChunk(mru *SignedResourceUpdate) *storage.Chunk {
 	headerlength := 4 + 4 + storage.KeyLength + storage.KeyLength
 
 	actualdatalength := len(mru.data)
-	chunk := storage.NewChunk(mru.key, nil)
+	chunk := storage.NewChunk(mru.updateAddr, nil)
 	chunk.SData = make([]byte, 2+2+signatureLength+headerlength+actualdatalength) // initial 4 are uint16 length descriptors for headerlength and datalength
 
 	// data header length does NOT include the header length prefix bytes themselves

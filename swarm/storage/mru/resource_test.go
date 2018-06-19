@@ -105,7 +105,7 @@ func TestReverse(t *testing.T) {
 	rootAddr, metaHash, _ := metadata.hash()
 
 	// generate a hash for block 4200 version 1
-	key := resourceHash(period, version, rootAddr)
+	key := resourceUpdateChunkAddr(period, version, rootAddr)
 
 	// generate some bogus data for the chunk and sign it
 	data := make([]byte, 8)
@@ -117,7 +117,7 @@ func TestReverse(t *testing.T) {
 	testHasher.Write(data)
 
 	update := &SignedResourceUpdate{
-		resourceUpdate: resourceUpdate{
+		resourceData: resourceData{
 			period:   period,
 			version:  version,
 			metaHash: metaHash,
@@ -132,11 +132,11 @@ func TestReverse(t *testing.T) {
 	chunk := newUpdateChunk(update)
 
 	// check that we can recover the owner account from the update chunk's signature
-	checkUpdate, err := parseUpdate(chunk.SData)
+	checkUpdate, err := parseUpdate(chunk.Addr, chunk.SData)
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := keyDataHash(chunk.Addr, metaHash, checkUpdate.data)
+	checkdigest := resourceUpdateChunkDigest(chunk.Addr, metaHash, checkUpdate.data)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checkUpdate.signature)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
@@ -729,14 +729,14 @@ func TestValidatorInStore(t *testing.T) {
 	})
 
 	// create a resource update chunk with correct publickey
-	key := resourceHash(42, 1, rootChunk.Addr)
+	key := resourceUpdateChunkAddr(42, 1, rootChunk.Addr)
 	data := []byte("bar")
-	digestToSign := keyDataHash(key, metaHash, data)
+	digestToSign := resourceUpdateChunkDigest(key, metaHash, data)
 	digestSignature, err := signer.Sign(digestToSign)
 	uglyChunk := newUpdateChunk(&SignedResourceUpdate{
-		key:       key,
-		signature: &digestSignature,
-		resourceUpdate: resourceUpdate{
+		updateAddr: key,
+		signature:  &digestSignature,
+		resourceData: resourceData{
 			period:   42,
 			version:  1,
 			data:     data,
@@ -818,7 +818,7 @@ func getUpdateDirect(rh *Handler, addr storage.Address) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	mr, err := parseUpdate(chunk.SData)
+	mr, err := parseUpdate(addr, chunk.SData)
 	if err != nil {
 		return nil, err
 	}
