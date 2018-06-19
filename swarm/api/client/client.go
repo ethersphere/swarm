@@ -617,7 +617,7 @@ func (c *Client) UpdateResource(manifestAddressOrDomain string, data []byte, sig
 }
 
 func (c *Client) updateResource(mruRequest *mru.UpdateRequest, manifestAddressOrDomain string) (io.ReadCloser, error) {
-	body, err := mru.EncodeMruRequest(mruRequest)
+	body, err := mru.EncodeUpdateRequest(mruRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -665,7 +665,7 @@ func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.Updat
 		return nil, err
 	}
 
-	metadata, err := mru.DecodeMruRequest(body)
+	metadata, err := mru.DecodeUpdateRequest(body)
 	if err != nil {
 		return nil, err
 	}
