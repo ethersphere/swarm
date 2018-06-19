@@ -32,7 +32,6 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -119,6 +118,7 @@ type LookupParams struct {
 	Limit   uint32
 }
 
+// resourceData encapsulates the information sent as part of a resource update
 type resourceData struct {
 	version   uint32
 	period    uint32
@@ -128,8 +128,8 @@ type resourceData struct {
 	data      []byte
 }
 
-// Caches resource data. When synced it contains the most recent
-// version of the resource and its metadata.
+// resource caches resource data. When synced it contains the most recent
+// version of the resource data and the metadata of its root chunk.
 type resource struct {
 	resourceData
 	resourceMetadata
@@ -184,8 +184,10 @@ type HandlerParams struct {
 	TimestampProvider timestampProvider
 }
 
+// hashPool contains a pool of ready hashers
 var hashPool sync.Pool
 
+// init initializes the package and hashPool
 func init() {
 	hashPool = sync.Pool{
 		New: func() interface{} {
@@ -225,10 +227,11 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 }
 
 // Validate is a chunk validation method
-// If it's a resource update, the chunk address is checked against the public updateAddr of the update's signature
+// If it's a resource update, the chunk address is checked against the ownerAddr of the update's signature
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 
+	//metadata chunks have the first two bytes set to zero
 	if data[0] == 0 && data[1] == 0 && len(data) > common.AddressLength {
 		//metadata chunk
 		rootAddr, _ := metadataHash(data)
@@ -239,8 +242,10 @@ func (h *Handler) Validate(addr storage.Address, data []byte) bool {
 		return valid
 	}
 
-	// does the chunk data make sense?
-	// This is not 100% safe evaluation, since content addressed data can coincidentally produce data with length header matching content size
+	// if it is not a metadata chunk, check if it is an update chunk with
+	// valid signature and proof of ownership of the resource it is trying
+	// to update
+
 	_, err := parseUpdate(addr, data)
 	if err != nil {
 		log.Warn("Invalid resource chunk")
@@ -286,13 +291,12 @@ func (h *Handler) chunkSize() int64 {
 	return chunkSize
 }
 
-// New creates a new metadata chunk for a Mutable Resource identified by `name` with the specified `frequency`.
-// The start block of the resource update will be the actual current block height of the connected network.
+// New creates a new metadata chunk out of the request passed in.
 func (h *Handler) New(ctx context.Context, request *UpdateRequest) error {
 
 	// frequency 0 is invalid
 	if request.frequency == 0 {
-		return NewError(ErrInvalidValue, "frequency cannot be 0")
+		return NewError(ErrInvalidValue, "frequency cannot be 0 when creating a resource")
 	}
 
 	// make sure name only contains ascii values
@@ -300,7 +304,7 @@ func (h *Handler) New(ctx context.Context, request *UpdateRequest) error {
 		return NewError(ErrInvalidValue, fmt.Sprintf("invalid name: '%s'", request.name))
 	}
 
-	// make sure owner is set
+	// make sure owner is set to something
 	var zeroAddr = common.Address{}
 	if request.ownerAddr == zeroAddr {
 		return NewError(ErrInvalidValue, "ownerAddr must be set to create a new metadata chunk")
@@ -310,16 +314,18 @@ func (h *Handler) New(ctx context.Context, request *UpdateRequest) error {
 	if request.startTime == 0 {
 		request.startTime = h.getCurrentTime(ctx)
 	}
-	// create the meta chunk and store it in swarm
 
+	// create the meta chunk and store it in swarm
 	chunk, metaHash := h.newMetaChunk(&request.resourceMetadata)
-	h.chunkStore.Put(ctx, chunk)
+	if request.metaHash != nil && !bytes.Equal(request.metaHash, metaHash) ||
+		request.rootAddr != nil && !bytes.Equal(request.rootAddr, chunk.Addr) {
+		return NewError(ErrInvalidValue, "metaHash in UpdateRequest does not match actual metadata")
+	}
 
 	request.metaHash = metaHash
 	request.rootAddr = chunk.Addr
-	request.period = 1
-	request.version = 1
 
+	h.chunkStore.Put(ctx, chunk)
 	log.Debug("new resource", "name", request.name, "startBlock", request.startTime, "frequency", request.frequency, "owner", request.ownerAddr)
 
 	// create the internal index for the resource and populate it with the data of the first version
@@ -340,6 +346,9 @@ func (h *Handler) New(ctx context.Context, request *UpdateRequest) error {
 	return nil
 }
 
+// NewUpdateRequest prepares an UpdateRequest structure with all the necessary information to
+// just add the desired data and sign it.
+// The resulting structure can then be signed and passed to Handler.Update to be verified and sent
 func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address) (*UpdateRequest, error) {
 
 	if rootAddr == nil {
@@ -382,10 +391,12 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	return updateRequest, nil
 }
 
-// creates a metadata chunk
+// creates a metadata chunk out of a resourceMetadata structure
+//TODO: refactor to a method of the resourceMetadata structure
 func (h *Handler) newMetaChunk(metadata *resourceMetadata) (chunk *storage.Chunk, metaHash []byte) {
-	// the metadata chunk points to data of first blockheight + update frequency
-	// from this we know from what blockheight we should look for updates, and how often
+	// the metadata chunk contains a timestamp of when the resource starts to be valid
+	// and also how frequently it is expected to be updated
+	// from this we know at what time we should look for updates, and how often
 	// it also contains the name of the resource, so we know what resource we are working with
 
 	// the key (rootAddr) of the metadata chunk is content-addressed
@@ -560,18 +571,10 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 // retrieve update metadata from chunk data
 // mirrors newUpdateChunk(). TODO: convert to a SignedResourceUpdate method.
 func parseUpdate(chunkAddr storage.Address, chunkdata []byte) (*SignedResourceUpdate, error) {
-	// absolute minimum an update chunk can contain:
-	// 14 = header + one byte of name + one byte of data
+	// for update chunk layout see SignedResourceUpdate definition
 
-	// 2 bytes header Length
-	// 2 bytes data length
-	// 4 bytes period
-	// 4 bytes version
-	// 32 bytes rootAddr reference
-	// 32 bytes metaHash digest
-
-	if len(chunkdata) < 14 {
-		return nil, NewError(ErrNothingToReturn, "chunk less than 13 bytes cannot be a resource update chunk")
+	if len(chunkdata) < minimumUpdateDataLength {
+		return nil, NewError(ErrNothingToReturn, fmt.Sprintf("chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength))
 	}
 	cursor := 0
 	headerlength := binary.LittleEndian.Uint16(chunkdata[cursor : cursor+2])
@@ -718,10 +721,8 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, mru *Sig
 	}
 
 	// an update can be only one chunk long; data length less header and signature data
-	// 12 = length of header and data length fields (2xuint16) plus period and frequency value fields (2xuint32)
-	datalimit := h.chunkSize() - int64(signatureLength-len(rsrc.name)-12)
-	if int64(len(mru.data)) > datalimit {
-		return nil, NewError(ErrDataOverflow, fmt.Sprintf("Data overflow: %d / %d bytes", len(mru.data), datalimit))
+	if int64(len(mru.data)) > maxUpdateDataLength {
+		return nil, NewError(ErrDataOverflow, fmt.Sprintf("Data overflow: %d / %d bytes", len(mru.data), maxUpdateDataLength))
 	}
 
 	if rsrc.period == mru.period {
@@ -751,36 +752,15 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, mru *Sig
 	return mru.updateAddr, nil
 }
 
-// gets the current block height
+// gets the current time
 func (h *Handler) getCurrentTime(ctx context.Context) uint64 {
-
 	return h.timestampProvider.GetCurrentTime()
-
-	/*
-		blockheader, err := h.headerGetter.HeaderByNumber(ctx, name, nil)
-		if err != nil {
-			return 0, err
-		}
-		return blockheader.Number.Uint64(), nil
-	*/
 }
-
-/** UNUSED functions
-// BlockToPeriod calculates the period index (aka major version number) from a given block number
-func (h *Handler) BlockToPeriod(name string, blocknumber uint64) (uint32, error) {
-	return getNextPeriod(h.resources[name].startBlock, blocknumber, h.resources[name].frequency)
-}
-
-// PeriodToBlock calculates the block number from a given period index (aka major version number)
-func (h *Handler) PeriodToBlock(name string, period uint32) uint64 {
-	return h.resources[name].startBlock + (uint64(period) * h.resources[name].frequency)
-}
-**/
 
 // Retrieves the resource index value for the given nameHash
 func (h *Handler) get(rootAddr storage.Address) *resource {
-	if rootAddr == nil {
-		log.Warn("Handler.get with nil rootAddr")
+	if len(rootAddr) < storage.KeyLength {
+		log.Warn("Handler.get with invalid rootAddr")
 		return nil
 	}
 	hashKey := *(*uint64)(unsafe.Pointer(&rootAddr[0]))
@@ -792,6 +772,10 @@ func (h *Handler) get(rootAddr storage.Address) *resource {
 
 // Sets the resource index value for the given nameHash
 func (h *Handler) set(rootAddr storage.Address, rsrc *resource) {
+	if len(rootAddr) < storage.KeyLength {
+		log.Warn("Handler.set with invalid rootAddr")
+		return
+	}
 	hashKey := *(*uint64)(unsafe.Pointer(&rootAddr[0]))
 	h.resourceLock.Lock()
 	defer h.resourceLock.Unlock()
@@ -804,15 +788,7 @@ func (h *Handler) hasUpdate(rootAddr storage.Address, period uint32) bool {
 	return rsrc != nil && rsrc.period == period
 }
 
-func getAddressFromDataSig(datahash common.Hash, signature Signature) (common.Address, error) {
-	pub, err := crypto.SigToPub(datahash.Bytes(), signature[:])
-	if err != nil {
-		return common.Address{}, err
-	}
-	return crypto.PubkeyToAddress(*pub), nil
-}
-
-// create an update chunk
+// create an update chunk. //TODO: Move to a method of SignedUpdateResource
 func newUpdateChunk(mru *SignedResourceUpdate) (*storage.Chunk, error) {
 
 	if len(mru.rootAddr) != storage.KeyLength || len(mru.metaHash) != storage.KeyLength {
@@ -868,10 +844,10 @@ func newUpdateChunk(mru *SignedResourceUpdate) (*storage.Chunk, error) {
 	return chunk, nil
 }
 
-// Helper function to calculate the next update period number from the current block, start block and frequency
+// Helper function to calculate the next update period number from the current time, start time and frequency
 func getNextPeriod(start uint64, current uint64, frequency uint64) (uint32, error) {
 	if current < start {
-		return 0, NewError(ErrInvalidValue, fmt.Sprintf("given current block value %d < start block %d", current, start))
+		return 0, NewError(ErrInvalidValue, fmt.Sprintf("given current time value %d < start time %d", current, start))
 	}
 	blockdiff := current - start
 	period := blockdiff / frequency
@@ -919,27 +895,4 @@ func isMultihash(data []byte) int {
 		return 0
 	}
 	return cursor + inthashlength
-}
-
-// NewResourceHash will create a deterministic address from the update metadata
-// format is: hash(period|version|publickey|namehash)
-func NewResourceHash(period uint32, version uint32, rootAddr storage.Address) []byte {
-	buf := bytes.NewBuffer(nil)
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, period)
-	buf.Write(b)
-	binary.LittleEndian.PutUint32(b, version)
-	buf.Write(b)
-	buf.Write(rootAddr[:])
-	return buf.Bytes()
-}
-
-func verifyResourceOwnership(ownerAddr common.Address, metaHash []byte, rootAddr storage.Address) bool {
-	hasher := hashPool.Get().(storage.SwarmHash)
-	defer hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(metaHash)
-	hasher.Write(ownerAddr.Bytes())
-	rootAddr2 := hasher.Sum(nil)
-	return bytes.Equal(rootAddr2, rootAddr)
 }
