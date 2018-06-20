@@ -94,8 +94,13 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
+	dataLength := len(data)
+	if dataLength < 2 {
+		return false
+	}
+
 	//metadata chunks have the first two bytes set to zero
-	if data[0] == 0 && data[1] == 0 && len(data) > common.AddressLength {
+	if data[0] == 0 && data[1] == 0 && dataLength > common.AddressLength {
 		//metadata chunk
 		rootAddr, _ := metadataHash(data)
 		valid := bytes.Equal(chunkAddr, rootAddr)
@@ -174,7 +179,10 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 	}
 
 	// create the meta chunk and store it in swarm
-	chunk, metaHash := request.resourceMetadata.newChunk()
+	chunk, metaHash, err := request.resourceMetadata.newChunk()
+	if err != nil {
+		return err
+	}
 	if request.metaHash != nil && !bytes.Equal(request.metaHash, metaHash) ||
 		request.rootAddr != nil && !bytes.Equal(request.rootAddr, chunk.Addr) {
 		return NewError(ErrInvalidValue, "metaHash in UpdateRequest does not match actual metadata")
@@ -370,14 +378,13 @@ func (h *Handler) Load(rootAddr storage.Address) (*resource, error) {
 		return nil, NewError(ErrNotFound, err.Error())
 	}
 
-	// \TODO this is not enough to make sure the data isn't bogus. A normal content addressed chunk could still satisfy these criteria
-	if len(chunk.SData) <= metadataChunkOffsetSize {
-		return nil, NewErrorf(ErrNothingToReturn, "Invalid chunk length %d, should be minimum %d", len(chunk.SData), metadataChunkOffsetSize+1)
-	}
-
 	// create the index entry
 	rsrc := &resource{}
-	rsrc.unmarshalBinary(chunk.SData)
+
+	if err := rsrc.resourceMetadata.binaryGet(chunk.SData); err != nil { // Will fail if this is not really a metadata chunk
+		return nil, err
+	}
+
 	rsrc.rootAddr, rsrc.metaHash = metadataHash(chunk.SData)
 	if !bytes.Equal(rsrc.rootAddr, rootAddr) {
 		return nil, NewError(ErrCorruptData, "Corrupt metadata chunk")

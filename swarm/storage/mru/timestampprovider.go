@@ -39,8 +39,8 @@ type timestampProvider interface {
 	GetCurrentTimestamp() Timestamp // returns the current timestamp information
 }
 
-// unmarshalBinary Serializes a Timestamp to a byte slice
-func (t *Timestamp) unmarshalBinary(data []byte) error {
+// binaryGet populates the timestamp structure from the given byte slice
+func (t *Timestamp) binaryGet(data []byte) error {
 	if len(data) != timestampLength {
 		return NewError(ErrCorruptData, "timestamp data has the wrong size")
 	}
@@ -49,12 +49,14 @@ func (t *Timestamp) unmarshalBinary(data []byte) error {
 	return nil
 }
 
-// marshalBinary populates the timestamp structure from the given byte slice
-func (t *Timestamp) marshalBinary() (data []byte) {
-	data = make([]byte, timestampLength)
+// binaryPut Serializes a Timestamp to a byte slice
+func (t *Timestamp) binaryPut(data []byte) error {
+	if len(data) != timestampLength {
+		return NewError(ErrCorruptData, "timestamp data has the wrong size")
+	}
 	binary.LittleEndian.PutUint64(data, t.Time)
 	copy(data[8:], t.Proof[:])
-	return data
+	return nil
 }
 
 type DefaultTimestampProvider struct {

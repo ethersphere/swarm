@@ -399,7 +399,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 		t.Fatalf("Error creating resource: %s", err)
 	}
 
-	correctManifestAddrHex := "dcf61386109ea7a7a9997b21b315265feeaaff5bdbfc6a86f48059f46ca76880"
+	correctManifestAddrHex := "19e911ba30608cc70af7cad3776501366a7ccf818025f2b3010794d9d66d7eb5"
 	if resourceManifestHash != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
@@ -438,7 +438,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		t.Fatalf("Error creating resource: %s", err)
 	}
 
-	correctManifestAddrHex := "e1950f328b26f9660afb631d997f4ebba3901564aa2d811022eecf1420431e9a"
+	correctManifestAddrHex := "a09bdcc9e0e4762e01d3e0a69a00f673fa67e8ac17e647043ce07672424ba014"
 	if resourceManifestHash != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}

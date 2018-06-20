@@ -164,7 +164,10 @@ func TestReverse(t *testing.T) {
 		ownerAddr: signer.Address(),
 	}
 
-	rootAddr, metaHash, _ := metadata.hashAndSerialize()
+	rootAddr, metaHash, _, err := metadata.hashAndSerialize()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	// generate some bogus data for the chunk and sign it
 	data := make([]byte, 8)
@@ -276,7 +279,7 @@ func TestResourceHandler(t *testing.T) {
 
 	var recoveredMetadata resourceMetadata
 
-	recoveredMetadata.unmarshalBinary(chunk.SData)
+	recoveredMetadata.binaryGet(chunk.SData)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -738,7 +741,10 @@ func TestValidator(t *testing.T) {
 		frequency: resourceFrequency,
 		ownerAddr: signer.Address(),
 	}
-	chunk, _ = metadata.newChunk()
+	chunk, _, err = metadata.newChunk()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	if !rh.Validate(chunk.Addr, chunk.SData) {
 		t.Fatal("Chunk validator fail on metadata chunk")
@@ -796,8 +802,10 @@ func TestValidatorInStore(t *testing.T) {
 		ownerAddr: signer.Address(),
 	}
 
-	rootChunk, metaHash := metadata.newChunk()
-
+	rootChunk, metaHash, err := metadata.newChunk()
+	if err != nil {
+		t.Fatal(err)
+	}
 	// create a resource update chunk with correct publickey
 	updateLookup := UpdateLookup{
 		period:   42,
