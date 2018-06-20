@@ -21,6 +21,7 @@ import (
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // resourceMetadata encapsulates the immutable information about a mutable resource :)
@@ -69,6 +70,27 @@ func (r *resourceMetadata) hash() (rootAddr, metaHash []byte, chunkData []byte) 
 	rootAddr, metaHash = metadataHash(chunkData)
 	return rootAddr, metaHash, chunkData
 
+}
+
+// creates a metadata chunk out of a resourceMetadata structure
+//TODO: refactor to a method of the resourceMetadata structure
+func (metadata *resourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []byte) {
+	// the metadata chunk contains a timestamp of when the resource starts to be valid
+	// and also how frequently it is expected to be updated
+	// from this we know at what time we should look for updates, and how often
+	// it also contains the name of the resource, so we know what resource we are working with
+
+	// the key (rootAddr) of the metadata chunk is content-addressed
+	// if it wasn't we couldn't replace it later
+	// resolving this relationship is left up to external agents (for example ENS)
+	rootAddr, metaHash, chunkData := metadata.hash()
+
+	// make the chunk and send it to swarm
+	chunk = storage.NewChunk(rootAddr, nil)
+	chunk.SData = chunkData
+	chunk.Size = int64(len(chunkData))
+
+	return chunk, metaHash
 }
 
 // metadataHash returns te root address and metadata hash that help identify and ascertain ownership of this resource

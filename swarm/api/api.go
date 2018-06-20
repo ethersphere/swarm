@@ -909,7 +909,7 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (str
 	return rsrc.Name(), data, nil
 }
 
-func (a *API) ResourceCreate(ctx context.Context, mru *mru.UpdateRequest) (storage.Address, error) {
+func (a *API) ResourceCreate(ctx context.Context, mru *mru.Request) (storage.Address, error) {
 	err := a.resource.New(ctx, mru)
 	if err != nil {
 		return nil, err
@@ -919,7 +919,7 @@ func (a *API) ResourceCreate(ctx context.Context, mru *mru.UpdateRequest) (stora
 
 // ResourceUpdateMultihash updates a Mutable Resource and marks the update's content to be of multihash type, which will be recognized upon retrieval.
 // It will fail if the data is not a valid multihash.
-func (a *API) ResourceNewRequest(ctx context.Context, rootAddr storage.Address) (*mru.UpdateRequest, error) {
+func (a *API) ResourceNewRequest(ctx context.Context, rootAddr storage.Address) (*mru.Request, error) {
 	return a.resource.NewUpdateRequest(ctx, rootAddr)
 }
 
