@@ -80,8 +80,11 @@ func NewCreateRequest(name string, frequency uint64, startTime uint64, ownerAddr
 		},
 	}
 
-	request.rootAddr, request.metaHash, _ = request.resourceMetadata.hashAndSerialize()
-
+	var err error
+	request.rootAddr, request.metaHash, _, err = request.resourceMetadata.hashAndSerialize()
+	if err != nil {
+		return nil, err
+	}
 	return request, nil
 }
 
@@ -203,7 +206,10 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 		if !isSafeName(j.Name) {
 			return nil, NewErrorf(ErrInvalidValue, "Invalid name: '%s'", j.Name)
 		}
-		r.rootAddr, r.metaHash, _ = r.resourceMetadata.hashAndSerialize()
+		r.rootAddr, r.metaHash, _, err = r.resourceMetadata.hashAndSerialize()
+		if err != nil {
+			return nil, err
+		}
 		if j.RootAddr != "" && !bytes.Equal(declaredRootAddr, r.rootAddr) {
 			return nil, NewError(ErrInvalidValue, "rootAddr does not match resource metadata")
 		}
