@@ -72,8 +72,8 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
 	metaHash := createRequest.metaHash
 	rootAddr := createRequest.rootAddr
-	const expectedSignature = "0x7862349bc47bc985ca25f23f7aa61954d27ef94f750a9a30b1fb94e42370b5c83e92ff8a1bf71fec4bff64c23b535d7365700334826e0a4c4457b3e27576c5bc00"
-	const expectedJSON = `{"rootAddr":"0x612dd6ea96897ebed0373432ab5ed902ce811bde8ad7dcf51300007188730a4a","metaHash":"0x1672f55af019dd612e594ee084540c72d6b82073eadf9cb2cc7721f50c833f7d","version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421","multiHash":false}`
+	const expectedSignature = "0x375bfe5142004b538f8320f7027b1dc8d8f865b8f7b9743676d8572dbfd124121357185f5d82dfaa402e8241e8f8e547fd5dd66e6ebf4a556e5ad9a6438e233300"
+	const expectedJSON = `{"rootAddr":"0xb17c86a81a55b9cc224cbd49d8a5e83b9bcb985fba286fedd6f1d8dd0b296df2","metaHash":"0x00ca04e6c780d026e85b805d20a708f876f0d2e602e57ae0e28fb6a3800cfe2f","version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421","multiHash":false}`
 
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")

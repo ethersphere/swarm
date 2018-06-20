@@ -36,9 +36,11 @@ import (
 )
 
 var (
-	loglevel          = flag.Int("loglevel", 3, "loglevel")
-	testHasher        = storage.MakeHashFunc(resourceHashAlgorithm)()
-	startTime         = uint64(4200)
+	loglevel   = flag.Int("loglevel", 3, "loglevel")
+	testHasher = storage.MakeHashFunc(resourceHashAlgorithm)()
+	startTime  = Timestamp{
+		Time: uint64(4200),
+	}
 	resourceFrequency = uint64(42)
 	cleanF            func()
 	domainName        = "føø.bar"
@@ -67,8 +69,10 @@ func (f *fakeTimeProvider) Tick() {
 	f.currentTime++
 }
 
-func (f *fakeTimeProvider) GetCurrentTime() uint64 {
-	return f.currentTime
+func (f *fakeTimeProvider) GetCurrentTimestamp() Timestamp {
+	return Timestamp{
+		Time: f.currentTime,
+	}
 }
 
 func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
@@ -120,7 +124,7 @@ func TestReverse(t *testing.T) {
 
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
-		currentTime: startTime,
+		currentTime: startTime.Time,
 	}
 
 	// signer containing private key
@@ -212,7 +216,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
-		currentTime: startTime,
+		currentTime: startTime.Time,
 	}
 
 	// signer containing private key
@@ -227,7 +231,7 @@ func TestResourceHandler(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	request, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, false)
+	request, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,13 +250,18 @@ func TestResourceHandler(t *testing.T) {
 	} else if len(chunk.SData) < 16 {
 		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(chunk.SData))
 	}
-	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[8:16])
-	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[16:24])
-	if startblocknumber != timeProvider.currentTime {
-		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, timeProvider.currentTime)
+
+	var recoveredMetadata resourceMetadata
+
+	recoveredMetadata.unmarshalBinary(chunk.SData)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if chunkfrequency != resourceFrequency {
-		t.Fatalf("stored frequency %d does not match provided frequency %d", chunkfrequency, resourceFrequency)
+	if recoveredMetadata.startTime.Time != timeProvider.currentTime {
+		t.Fatalf("stored block number %d does not match provided block number %d", recoveredMetadata.startTime.Time, timeProvider.currentTime)
+	}
+	if recoveredMetadata.frequency != resourceFrequency {
+		t.Fatalf("stored frequency %d does not match provided frequency %d", recoveredMetadata.frequency, resourceFrequency)
 	}
 
 	// data for updates:
@@ -444,7 +453,7 @@ func TestMultihash(t *testing.T) {
 
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
-		currentTime: startTime,
+		currentTime: startTime.Time,
 	}
 
 	// signer containing private key
@@ -460,7 +469,7 @@ func TestMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mr, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, true)
+	mr, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -570,7 +579,7 @@ func TestMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mr, err = NewCreateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, true)
+	mr, err = NewCreateRequest(safeName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -638,7 +647,7 @@ func TestValidator(t *testing.T) {
 
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
-		currentTime: startTime,
+		currentTime: startTime.Time,
 	}
 
 	// signer containing private key. Alice will be the good girl
@@ -657,7 +666,7 @@ func TestValidator(t *testing.T) {
 	// create new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mr, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.currentTime, signer.Address(), nil, false)
+	mr, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -721,7 +730,7 @@ func TestValidatorInStore(t *testing.T) {
 
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
-		currentTime: startTime,
+		currentTime: startTime.Time,
 	}
 
 	// signer containing private key

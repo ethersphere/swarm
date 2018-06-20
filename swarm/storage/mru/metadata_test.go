@@ -30,17 +30,19 @@ func compareByteSliceToExpectedHex(t *testing.T, variableName string, actualValu
 func TestMarshallingAndUnmarshalling(t *testing.T) {
 	ownerAddr := newCharlieSigner().Address()
 	metadata := resourceMetadata{
-		name:      "world news report, every hour, on the hour",
-		startTime: 1528880400,
+		name: "world news report, every hour, on the hour",
+		startTime: Timestamp{
+			Time: 1528880400,
+		},
 		frequency: 3600,
 		ownerAddr: ownerAddr,
 	}
 
 	rootAddr, metaHash, chunkData := metadata.hash() // creates hashes and marshals, in one go
 
-	const expectedRootAddr = "0xa884c9583d9f86e8009bfd5fe7d892790071c2d6cf8acd2c3e16e5f17e9b143e"
-	const expectedMetaHash = "0x38e401814e98b251612e40f070fddb756315705fa8f674b8ab00b2b5fa091988"
-	const expectedChunkData = "0x00004e000000000010dd205b00000000100e000000000000776f726c64206e657773207265706f72742c20657665727920686f75722c206f6e2074686520686f7572876a8936a7cd0b79ef0735ad0896c1afe278781c"
+	const expectedRootAddr = "0x93970376e8f95e6b598a212fc23448136d8dae83372262903530f92f2c5de628"
+	const expectedMetaHash = "0xdb801ec08c1fa1a93851b9b0ce01d1afa02d07d34cf3a8377dd87f92921f3b78"
+	const expectedChunkData = "0x00006e000000000010dd205b000000000000000000000000000000000000000000000000000000000000000000000000100e000000000000776f726c64206e657773207265706f72742c20657665727920686f75722c206f6e2074686520686f7572876a8936a7cd0b79ef0735ad0896c1afe278781c"
 
 	compareByteSliceToExpectedHex(t, "rootAddr", rootAddr, expectedRootAddr)
 	compareByteSliceToExpectedHex(t, "metaHash", metaHash, expectedMetaHash)
