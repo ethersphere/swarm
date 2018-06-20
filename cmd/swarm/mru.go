@@ -30,12 +30,11 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// swarm resource [--rawmru] create <name> <frequency> <0x Hexdata>
+// swarm resource create <name> <frequency> [--rawmru] <0x Hexdata>
 // swarm resource update <Manifest Address or ENS domain> <0x Hexdata>
 // swarm resource info <Manifest Address or ENS domain>
 
-func resource(ctx *cli.Context) {
-
+func resourceCreate(ctx *cli.Context) {
 	args := ctx.Args()
 	var (
 		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
@@ -43,75 +42,79 @@ func resource(ctx *cli.Context) {
 		rawResource = ctx.Bool(SwarmResourceRawFlag.Name)
 	)
 
+	if len(args) < 3 {
+		fmt.Println("Incorrect number of arguments")
+		cli.ShowCommandHelpAndExit(ctx, "create", 1)
+		return
+	}
+	signer := mru.NewGenericSigner(getClientAccount(ctx))
+
+	name := args[0]
+	frequency, err := strconv.ParseUint(args[1], 10, 64)
+	if err != nil {
+		utils.Fatalf("Frequency formatting error: %s", err.Error())
+		return
+	}
+
+	data, err := hexutil.Decode(args[2])
+	if err != nil {
+		utils.Fatalf("Error parsing data: %s", err.Error())
+		return
+	}
+	manifestAddress, err := client.CreateResource(name, frequency, 0, data, !rawResource, signer)
+	if err != nil {
+		utils.Fatalf("Error creating resource: %s", err.Error())
+		return
+	}
+	fmt.Println(manifestAddress) // output address to the user in a single line (useful for other commands to pick up)
+
+}
+
+func resourceUpdate(ctx *cli.Context) {
+	args := ctx.Args()
+	var (
+		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client = swarm.NewClient(bzzapi)
+	)
+	if len(args) < 2 {
+		fmt.Println("Incorrect number of arguments")
+		cli.ShowCommandHelpAndExit(ctx, "update", 1)
+		return
+	}
+	signer := mru.NewGenericSigner(getClientAccount(ctx))
+	manifestAddressOrDomain := args[1]
+	data, err := hexutil.Decode(args[2])
+	if err != nil {
+		utils.Fatalf("Error parsing data: %s", err.Error())
+		return
+	}
+	err = client.UpdateResource(manifestAddressOrDomain, data, signer)
+	if err != nil {
+		utils.Fatalf("Error updating resource: %s", err.Error())
+		return
+	}
+}
+
+func resourceInfo(ctx *cli.Context) {
+	var (
+		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client = swarm.NewClient(bzzapi)
+	)
+	args := ctx.Args()
 	if len(args) < 1 {
-		utils.Fatalf("Need create, update or info as first argument")
+		fmt.Println("Incorrect number of arguments.")
+		cli.ShowCommandHelpAndExit(ctx, "info", 1)
 		return
 	}
-
-	switch args[0] {
-	case "create":
-		if len(args) < 4 {
-			utils.Fatalf("Incorrect number of arguments. Syntax: swarm resource [--rawmru] create <name> <frequency> <0x Hexdata>")
-			return
-		}
-		signer := mru.NewGenericSigner(getClientAccount(ctx))
-
-		name := args[1]
-		frequency, err := strconv.ParseUint(args[2], 10, 64)
-		if err != nil {
-			utils.Fatalf("Frequency formatting error: %s", err.Error())
-			return
-		}
-
-		data, err := hexutil.Decode(args[3])
-		if err != nil {
-			utils.Fatalf("Error parsing data: %s", err.Error())
-			return
-		}
-		manifestAddress, err := client.CreateResource(name, frequency, 0, data, !rawResource, signer)
-		if err != nil {
-			utils.Fatalf("Error creating resource: %s", err.Error())
-			return
-		}
-		fmt.Println(manifestAddress) // output address to the user in a single line (useful for other commands to pick up)
-	case "update":
-		if len(args) < 3 {
-			utils.Fatalf("Incorrect number of arguments. Syntax:swarm resource update <Manifest Address or ENS domain> <0x Hexdata>")
-			return
-		}
-		signer := mru.NewGenericSigner(getClientAccount(ctx))
-		manifestAddressOrDomain := args[1]
-		data, err := hexutil.Decode(args[2])
-		if err != nil {
-			utils.Fatalf("Error parsing data: %s", err.Error())
-			return
-		}
-		err = client.UpdateResource(manifestAddressOrDomain, data, signer)
-		if err != nil {
-			utils.Fatalf("Error updating resource: %s", err.Error())
-			return
-		}
-	case "info":
-		if len(args) < 2 {
-			utils.Fatalf("Incorrect number of arguments. Syntax: swarm resource info <Manifest Address or ENS domain>")
-			return
-		}
-		manifestAddressOrDomain := args[1]
-		metadata, err := client.GetResourceMetadata(manifestAddressOrDomain)
-		if err != nil {
-			utils.Fatalf("Error retrieving resource metadata: %s", err.Error())
-			return
-		}
-		fmt.Printf("Name: %s\n", metadata.Name())
-		fmt.Printf("Update frequency: %d\n", metadata.Frequency())
-		fmt.Printf("Start time: %d\n", metadata.StartTime())
-		fmt.Printf("Owner: %s\n", metadata.OwnerAddr().Hex())
-		fmt.Printf("Raw: %t\n", !metadata.Multihash())
-		fmt.Printf("Next period: %d\n", metadata.Period())
-		fmt.Printf("Next version: %d\n", metadata.Version())
-
-	default:
-		utils.Fatalf("invalid resource operation")
+	manifestAddressOrDomain := args[0]
+	metadata, err := client.GetResourceMetadata(manifestAddressOrDomain)
+	if err != nil {
+		utils.Fatalf("Error retrieving resource metadata: %s", err.Error())
 		return
 	}
+	encodedMetadata, err := mru.EncodeUpdateRequest(metadata)
+	if err != nil {
+		utils.Fatalf("Error encoding metadata to JSON for display:%s", err)
+	}
+	fmt.Println(string(encodedMetadata))
 }
