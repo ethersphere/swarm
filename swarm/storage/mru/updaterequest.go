@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -84,6 +85,11 @@ type UpdateRequest struct {
 func NewCreateRequest(name string, frequency, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*UpdateRequest, error) {
 	if !isSafeName(name) {
 		return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s' when creating a new UpdateRequest", name))
+	}
+
+	// get the current time
+	if startTime == 0 {
+		startTime = uint64(time.Now().Unix())
 	}
 
 	updateRequest := &UpdateRequest{
