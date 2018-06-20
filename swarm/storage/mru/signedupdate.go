@@ -18,7 +18,6 @@ package mru
 
 import (
 	"bytes"
-	"fmt"
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -64,7 +63,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 
 	// Check if who signed the resource update really owns the resource
 	if !verifyResourceOwnership(ownerAddr, r.metaHash, r.rootAddr) {
-		return NewError(ErrUnauthorized, fmt.Sprintf("signature is valid but signer does not own the resource: %v", err))
+		return NewErrorf(ErrUnauthorized, "signature is valid but signer does not own the resource: %v", err)
 	}
 
 	return nil
@@ -97,18 +96,18 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 }
 
 // create an update chunk.
-func (mru *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
+func (r *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 
-	if mru.signature == nil || mru.binaryData == nil {
+	if r.signature == nil || r.binaryData == nil {
 		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
-	chunk := storage.NewChunk(mru.updateAddr, nil)
-	resourceUpdateLength := mru.resourceUpdate.binaryLength()
-	chunk.SData = mru.binaryData
+	chunk := storage.NewChunk(r.updateAddr, nil)
+	resourceUpdateLength := r.resourceUpdate.binaryLength()
+	chunk.SData = r.binaryData
 
 	// signature is the last item in the chunk data
-	copy(chunk.SData[resourceUpdateLength:], mru.signature[:])
+	copy(chunk.SData[resourceUpdateLength:], r.signature[:])
 
 	chunk.Size = int64(len(chunk.SData))
 	return chunk, nil
@@ -139,7 +138,7 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 	r.binaryData = chunkdata
 
 	if err := r.Verify(); err != nil {
-		return NewError(ErrUnauthorized, fmt.Sprintf("Invalid signature: %v", err))
+		return NewErrorf(ErrUnauthorized, "Invalid signature: %v", err)
 	}
 
 	return nil
