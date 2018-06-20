@@ -38,18 +38,20 @@ func TestMarshallingAndUnmarshalling(t *testing.T) {
 		ownerAddr: ownerAddr,
 	}
 
-	rootAddr, metaHash, chunkData := metadata.hashAndSerialize() // creates hashes and marshals, in one go
-
-	const expectedRootAddr = "0x93970376e8f95e6b598a212fc23448136d8dae83372262903530f92f2c5de628"
-	const expectedMetaHash = "0xdb801ec08c1fa1a93851b9b0ce01d1afa02d07d34cf3a8377dd87f92921f3b78"
-	const expectedChunkData = "0x00006e000000000010dd205b000000000000000000000000000000000000000000000000000000000000000000000000100e000000000000776f726c64206e657773207265706f72742c20657665727920686f75722c206f6e2074686520686f7572876a8936a7cd0b79ef0735ad0896c1afe278781c"
+	rootAddr, metaHash, chunkData, err := metadata.hashAndSerialize() // creates hashes and marshals, in one go
+	if err != nil {
+		t.Fatal(err)
+	}
+	const expectedRootAddr = "0xed0d5141d039eb69a3cc7d6c60ce101f6f80371074df02aedd804fca88ee21b4"
+	const expectedMetaHash = "0x1f1cf772ee37263f90af030ad37a75b08eb750a1915e428f43382192e554111a"
+	const expectedChunkData = "0x00006f0010dd205b000000000000000000000000000000000000000000000000000000000000000000000000100e0000000000002a776f726c64206e657773207265706f72742c20657665727920686f75722c206f6e2074686520686f7572876a8936a7cd0b79ef0735ad0896c1afe278781c"
 
 	compareByteSliceToExpectedHex(t, "rootAddr", rootAddr, expectedRootAddr)
 	compareByteSliceToExpectedHex(t, "metaHash", metaHash, expectedMetaHash)
 	compareByteSliceToExpectedHex(t, "chunkData", chunkData, expectedChunkData)
 
 	recoveredMetadata := resourceMetadata{}
-	recoveredMetadata.unmarshalBinary(chunkData)
+	recoveredMetadata.binaryGet(chunkData)
 
 	if recoveredMetadata != metadata {
 		t.Fatalf("Expected that the recovered metadata equals the marshalled metadata")
