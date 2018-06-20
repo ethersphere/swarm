@@ -21,6 +21,7 @@ import (
 	"encoding/binary"
 	"hash"
 
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -71,6 +72,8 @@ type UpdateLookup struct {
 	rootAddr storage.Address
 }
 
+const updateLookupLength = 4 + 4 + storage.KeyLength
+
 // resourceUpdateChunkAddr calculates the resource update chunk address (formerly known as resourceHash)
 func (u *UpdateLookup) GetUpdateAddr() (updateAddr storage.Address) {
 	hasher := hashPool.Get().(hash.Hash)
@@ -91,4 +94,33 @@ func NewResourceHash(u *UpdateLookup) []byte {
 	buf.Write(b)
 	buf.Write(u.rootAddr[:])
 	return buf.Bytes()
+}
+
+func (u *UpdateLookup) binaryPut(serializedData []byte) error {
+	if len(serializedData) != updateLookupLength {
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))
+	}
+	if len(u.rootAddr) != storage.KeyLength {
+		log.Warn("Call to UpdateLookup.binaryPut with incorrect rootAddr")
+		return NewError(ErrInvalidValue, "UpdateLookup.binaryPut called without rootAddr set")
+	}
+	binary.LittleEndian.PutUint32(serializedData[:4], u.period)
+	binary.LittleEndian.PutUint32(serializedData[4:8], u.version)
+	copy(serializedData[8:], u.rootAddr[:])
+	return nil
+}
+
+func (u *UpdateLookup) binaryLength() int {
+	return updateLookupLength
+}
+
+func (u *UpdateLookup) binaryGet(serializedData []byte) error {
+	if len(serializedData) != updateLookupLength {
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))
+	}
+	u.period = binary.LittleEndian.Uint32(serializedData[:4])
+	u.version = binary.LittleEndian.Uint32(serializedData[4:8])
+	u.rootAddr = storage.Address(make([]byte, storage.KeyLength))
+	copy(u.rootAddr[:], serializedData[8:])
+	return nil
 }

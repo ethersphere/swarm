@@ -19,7 +19,6 @@ package mru
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -52,7 +51,7 @@ type Request struct {
 // NewCreateRequest returns a ready to sign Request message to create a new resource
 func NewCreateRequest(name string, frequency uint64, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*Request, error) {
 	if !isSafeName(name) {
-		return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s' when creating a new UpdateRequest", name))
+		return nil, NewErrorf(ErrInvalidValue, "Invalid name: '%s' when creating a new UpdateRequest", name)
 	}
 
 	// get the current time
@@ -202,7 +201,7 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 
 		// make sure name only contains ascii values
 		if !isSafeName(j.Name) {
-			return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s'", j.Name))
+			return nil, NewErrorf(ErrInvalidValue, "Invalid name: '%s'", j.Name)
 		}
 		r.rootAddr, r.metaHash, _ = r.resourceMetadata.hash()
 		if j.RootAddr != "" && !bytes.Equal(declaredRootAddr, r.rootAddr) {
@@ -245,7 +244,7 @@ func decodeHexSlice(src string, expectedLength int, name string) (bytes []byte, 
 	if src != "" {
 		bytes, err = hexutil.Decode(src)
 		if err != nil || len(bytes) != expectedLength {
-			return nil, NewError(ErrInvalidValue, fmt.Sprintf("Cannot decode %s", name))
+			return nil, NewErrorf(ErrInvalidValue, "Cannot decode %s", name)
 		}
 	}
 	return bytes, nil
