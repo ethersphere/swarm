@@ -29,17 +29,18 @@ import (
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
-	Name      string `json:"name,omitempty"`
-	Frequency uint64 `json:"frequency,omitempty"`
-	StartTime uint64 `json:"startTime,omitempty"`
-	OwnerAddr string `json:"ownerAddr,omitempty"`
-	RootAddr  string `json:"rootAddr,omitempty"`
-	MetaHash  string `json:"metaHash,omitempty"`
-	Version   uint32 `json:"version"`
-	Period    uint32 `json:"period"`
-	Data      string `json:"data,omitempty"`
-	Multihash bool   `json:"multiHash"`
-	Signature string `json:"signature,omitempty"`
+	Name           string `json:"name,omitempty"`
+	Frequency      uint64 `json:"frequency,omitempty"`
+	StartTime      uint64 `json:"startTime,omitempty"`
+	StartTimeProof string `json:"startTimeProof,omitempty"`
+	OwnerAddr      string `json:"ownerAddr,omitempty"`
+	RootAddr       string `json:"rootAddr,omitempty"`
+	MetaHash       string `json:"metaHash,omitempty"`
+	Version        uint32 `json:"version"`
+	Period         uint32 `json:"period"`
+	Data           string `json:"data,omitempty"`
+	Multihash      bool   `json:"multiHash"`
+	Signature      string `json:"signature,omitempty"`
 }
 
 // Request represents an update and/or resource create message
@@ -49,7 +50,7 @@ type Request struct {
 }
 
 // NewCreateRequest returns a ready to sign Request message to create a new resource
-func NewCreateRequest(name string, frequency, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*Request, error) {
+func NewCreateRequest(name string, frequency uint64, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*Request, error) {
 	if !isSafeName(name) {
 		return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid name: '%s' when creating a new UpdateRequest", name))
 	}
@@ -75,7 +76,7 @@ func NewCreateRequest(name string, frequency, startTime uint64, ownerAddr common
 		resourceMetadata: resourceMetadata{
 			name:      name,
 			frequency: frequency,
-			startTime: startTime,
+			startTime: Timestamp{Time: startTime},
 			ownerAddr: ownerAddr,
 		},
 	}
@@ -116,7 +117,7 @@ func (r *Request) RootAddr() storage.Address {
 }
 
 // StartTime returns the time that the resource was/will be created at
-func (r *Request) StartTime() uint64 {
+func (r *Request) StartTime() Timestamp {
 	return r.startTime
 }
 
@@ -159,17 +160,20 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 		resourceMetadata: resourceMetadata{
 			name:      j.Name,
 			frequency: j.Frequency,
-			startTime: j.StartTime,
+			startTime: Timestamp{
+				Time: j.StartTime,
+			},
 		},
 	}
 
-	if j.OwnerAddr != "" {
-		ownerAddrBytes, err := hexutil.Decode(j.OwnerAddr)
-		if err != nil || len(ownerAddrBytes) != common.AddressLength {
-			return nil, NewError(ErrInvalidValue, "Cannot decode ownerAddr")
-		}
-		copy(r.ownerAddr[:], ownerAddrBytes)
+	if err := decodeHexArray(r.startTime.Proof[:], j.StartTimeProof, common.HashLength, "startTimeProof"); err != nil {
+		return nil, err
 	}
+
+	if err := decodeHexArray(r.ownerAddr[:], j.OwnerAddr, common.AddressLength, "ownerAddr"); err != nil {
+		return nil, err
+	}
+
 	var err error
 	if j.Data != "" {
 		r.data, err = hexutil.Decode(j.Data)
@@ -181,18 +185,14 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 	var declaredRootAddr storage.Address
 	var declaredMetaHash []byte
 
-	if j.RootAddr != "" {
-		declaredRootAddr, err = hexutil.Decode(j.RootAddr)
-		if err != nil {
-			return nil, NewError(ErrInvalidValue, "Cannot decode rootAddr")
-		}
+	declaredRootAddr, err = decodeHexSlice(j.RootAddr, storage.KeyLength, "rootAddr")
+	if err != nil {
+		return nil, err
 	}
 
-	if j.MetaHash != "" {
-		declaredMetaHash, err = hexutil.Decode(j.MetaHash)
-		if err != nil {
-			return nil, NewError(ErrInvalidValue, "Cannot decode metaHash")
-		}
+	declaredMetaHash, err = decodeHexSlice(j.MetaHash, 32, "metaHash")
+	if err != nil {
+		return nil, err
 	}
 
 	if r.frequency > 0 { // we use frequency > 0 to know it is a new resource creation
@@ -230,6 +230,27 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 	return r, nil
 }
 
+func decodeHexArray(dst []byte, src string, expectedLength int, name string) error {
+	bytes, err := decodeHexSlice(src, expectedLength, name)
+	if err != nil {
+		return err
+	}
+	if bytes != nil {
+		copy(dst, bytes)
+	}
+	return nil
+}
+
+func decodeHexSlice(src string, expectedLength int, name string) (bytes []byte, err error) {
+	if src != "" {
+		bytes, err = hexutil.Decode(src)
+		if err != nil || len(bytes) != expectedLength {
+			return nil, NewError(ErrInvalidValue, fmt.Sprintf("Cannot decode %s", name))
+		}
+	}
+	return bytes, nil
+}
+
 // DecodeUpdateRequest takes a JSON structure stored in a byte array and returns a live UpdateRequest object
 func DecodeUpdateRequest(rawData []byte) (*Request, error) {
 	var requestJSON updateRequestJSON
@@ -260,19 +281,26 @@ func EncodeUpdateRequest(updateRequest *Request) (rawData []byte, err error) {
 	} else {
 		ownerAddrString = hexutil.Encode(updateRequest.ownerAddr[:])
 	}
+	var startTimeProofString string
+	if updateRequest.startTime.Time == 0 {
+		startTimeProofString = ""
+	} else {
+		startTimeProofString = hexutil.Encode(updateRequest.startTime.Proof[:])
+	}
 
 	requestJSON := &updateRequestJSON{
-		Name:      updateRequest.name,
-		Frequency: updateRequest.frequency,
-		StartTime: updateRequest.startTime,
-		Version:   updateRequest.version,
-		Period:    updateRequest.period,
-		OwnerAddr: ownerAddrString,
-		Data:      dataHashString,
-		Multihash: updateRequest.multihash,
-		Signature: signatureString,
-		RootAddr:  rootAddrString,
-		MetaHash:  metaHashString,
+		Name:           updateRequest.name,
+		Frequency:      updateRequest.frequency,
+		StartTime:      updateRequest.startTime.Time,
+		StartTimeProof: startTimeProofString,
+		Version:        updateRequest.version,
+		Period:         updateRequest.period,
+		OwnerAddr:      ownerAddrString,
+		Data:           dataHashString,
+		Multihash:      updateRequest.multihash,
+		Signature:      signatureString,
+		RootAddr:       rootAddrString,
+		MetaHash:       metaHashString,
 	}
 
 	return json.Marshal(requestJSON)

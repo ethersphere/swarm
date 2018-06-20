@@ -26,20 +26,17 @@ import (
 
 	"golang.org/x/net/idna"
 
-	"github.com/ethereum/go-ethereum/common"
-
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
-	metadataChunkOffsetSize = 16 + common.AddressLength
-	chunkSize               = 4096 // temporary until we implement FileStore in the resourcehandler
-	defaultStoreTimeout     = 4000 * time.Millisecond
-	hasherCount             = 8
-	resourceHashAlgorithm   = storage.SHA3Hash
-	defaultRetrieveTimeout  = 100 * time.Millisecond
+	chunkSize              = 4096 // temporary until we implement FileStore in the resourcehandler
+	defaultStoreTimeout    = 4000 * time.Millisecond
+	hasherCount            = 8
+	resourceHashAlgorithm  = storage.SHA3Hash
+	defaultRetrieveTimeout = 100 * time.Millisecond
 )
 
 type blockEstimator struct {
@@ -73,8 +70,10 @@ func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*typ
 
 type updateHeader struct {
 	UpdateLookup
-	metaHash  []byte
-	multihash bool
+	metaHash           []byte
+	multihash          bool
+	time               Timestamp
+	previousUpdateAddr storage.Address
 }
 
 // resourceUpdate encapsulates the information sent as part of a resource update

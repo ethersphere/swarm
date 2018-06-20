@@ -223,10 +223,10 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 		return nil, err
 	}
 
-	currentblock := h.getCurrentTime(ctx)
+	now := h.getCurrentTime(ctx)
 
 	updateRequest := new(Request)
-	updateRequest.period, err = getNextPeriod(rsrc.startTime, currentblock, rsrc.frequency)
+	updateRequest.period, err = getNextPeriod(rsrc.startTime.Time, now.Time, rsrc.frequency)
 	if err != nil {
 		return nil, err
 	}
@@ -266,10 +266,10 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 	}
 	if params.period == 0 {
 		// get our blockheight at this time and the next block of the update period
-		currentblock := h.getCurrentTime(ctx)
+		now := h.getCurrentTime(ctx)
 
 		var period uint32
-		period, err := getNextPeriod(rsrc.startTime, currentblock, rsrc.frequency)
+		period, err := getNextPeriod(rsrc.startTime.Time, now.Time, rsrc.frequency)
 		if err != nil {
 			return nil, err
 		}
@@ -473,8 +473,8 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, mru *Sig
 }
 
 // gets the current time
-func (h *Handler) getCurrentTime(ctx context.Context) uint64 {
-	return h.timestampProvider.GetCurrentTime()
+func (h *Handler) getCurrentTime(ctx context.Context) Timestamp {
+	return h.timestampProvider.GetCurrentTimestamp()
 }
 
 // Retrieves the resource index value for the given nameHash

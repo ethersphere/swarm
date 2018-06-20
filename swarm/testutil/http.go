@@ -44,8 +44,8 @@ func (f *fakeTimeProvider) Tick() {
 	f.currentTime++
 }
 
-func (f *fakeTimeProvider) GetCurrentTime() uint64 {
-	return f.currentTime
+func (f *fakeTimeProvider) GetCurrentTimestamp() mru.Timestamp {
+	return mru.Timestamp{Time: f.currentTime}
 }
 
 func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *TestSwarmServer {
@@ -112,8 +112,8 @@ func (t *TestSwarmServer) Close() {
 	t.cleanup()
 }
 
-func (t *TestSwarmServer) GetCurrentTime() uint64 {
-	return t.timestampProvider.GetCurrentTime()
+func (t *TestSwarmServer) GetCurrentTime() mru.Timestamp {
+	return t.timestampProvider.GetCurrentTimestamp()
 }
 
 // EnableMetrics is starting InfluxDB reporter so that we collect stats when running tests locally
