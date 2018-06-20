@@ -19,25 +19,11 @@ package mru
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
-type updateHeader struct {
-	UpdateLookup
-	multihash bool
-	metaHash  []byte
-
-	time               Timestamp
-	previousUpdateAddr storage.Address
-	nextUpdateTime     uint64
-}
-
-const updateLookupLength = 4 + 4 + storage.KeyLength
-const updateHeaderLength = updateLookupLength + 1 + storage.KeyLength
 
 // resourceUpdate encapsulates the information sent as part of a resource update
 type resourceUpdate struct {
@@ -46,21 +32,18 @@ type resourceUpdate struct {
 }
 
 // Update chunk layout
-// Header:
-// 2 bytes header Length
+// Prefix:
+// 2 bytes updateHeaderLength
 // 2 bytes data length
-// 4 bytes period
-// 4 bytes version
-// 32 bytes rootAddr reference
-// 32 bytes metaHash digest
-// 32 bytes previousUpdateAddr reference
-// 40 bytes Timestamp
+const prefixLength = 2 + 2
+
+// Header: (see updateHeader)
 // Data:
 // data (datalength bytes)
 //
 // Minimum size is Header + 1 (minimum data length, enforced)
 const minimumUpdateDataLength = updateHeaderLength + 1
-const maxUpdateDataLength = chunkSize - signatureLength - updateHeaderLength
+const maxUpdateDataLength = chunkSize - signatureLength - updateHeaderLength - prefixLength
 
 func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 	if len(r.rootAddr) != storage.KeyLength || len(r.metaHash) != storage.KeyLength {
@@ -80,7 +63,14 @@ func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 	if len(serializedData) != r.binaryLength() {
 		return NewError(ErrInvalidValue, "slice passed to putBinary must be of exact size")
 	}
-	// data header length does NOT include the header length prefix bytes themselves
+
+	if r.multihash {
+		if isMultihash(r.data) == 0 {
+			return NewError(ErrInvalidValue, "Invalid multihash")
+		}
+	}
+
+	// Add prefix: updateHeaderLength and actual data length
 	cursor := 0
 	binary.LittleEndian.PutUint16(serializedData[cursor:], uint16(updateHeaderLength))
 	cursor += 2
@@ -89,25 +79,11 @@ func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 	binary.LittleEndian.PutUint16(serializedData[cursor:], uint16(datalength))
 	cursor += 2
 
-	// header = period + version + multihash flag + rootAddr + metaHash
-	binary.LittleEndian.PutUint32(serializedData[cursor:], r.period)
-	cursor += 4
-
-	binary.LittleEndian.PutUint32(serializedData[cursor:], r.version)
-	cursor += 4
-
-	copy(serializedData[cursor:], r.rootAddr[:storage.KeyLength])
-	cursor += storage.KeyLength
-	copy(serializedData[cursor:], r.metaHash[:storage.KeyLength])
-	cursor += storage.KeyLength
-
-	if r.multihash {
-		if isMultihash(r.data) == 0 {
-			return NewError(ErrInvalidValue, "Invalid multihash")
-		}
-		serializedData[cursor] = 0x01
+	// serialize header (see updateHeader)
+	if err := r.updateHeader.binaryPut(serializedData[cursor : cursor+updateHeaderLength]); err != nil {
+		return err
 	}
-	cursor++
+	cursor += updateHeaderLength
 
 	// add the data
 	copy(serializedData[cursor:], r.data)
@@ -117,12 +93,12 @@ func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 }
 
 func (r *resourceUpdate) binaryLength() int {
-	return 2 + 2 + updateHeaderLength + len(r.data) // initial 4 are uint16 length descriptors for updateHeaderLength and datalength
+	return prefixLength + updateHeaderLength + len(r.data)
 }
 
 func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	if len(serializedData) < minimumUpdateDataLength {
-		return NewError(ErrNothingToReturn, fmt.Sprintf("chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength))
+		return NewErrorf(ErrNothingToReturn, "chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength)
 	}
 	cursor := 0
 	declaredHeaderlength := binary.LittleEndian.Uint16(serializedData[cursor : cursor+2])
@@ -134,29 +110,17 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	datalength := int(binary.LittleEndian.Uint16(serializedData[cursor : cursor+2]))
 	cursor += 2
 
-	if int(2+2+updateHeaderLength+datalength+signatureLength) != len(serializedData) {
+	if int(prefixLength+updateHeaderLength+datalength+signatureLength) != len(serializedData) {
 		return NewError(ErrNothingToReturn, "length specified in header is different than actual chunk size")
 	}
 
-	// at this point we can be satisfied that the data integrity is ok
+	// at this point we can be satisfied that we have the correct data length to read
 	var header updateHeader
 
-	header.period = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
-	cursor += 4
-	header.version = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
-	cursor += 4
-
-	header.rootAddr = storage.Address(make([]byte, storage.KeyLength))
-	header.metaHash = make([]byte, storage.KeyLength)
-	copy(header.rootAddr, serializedData[cursor:cursor+storage.KeyLength])
-	cursor += storage.KeyLength
-	copy(header.metaHash, serializedData[cursor:cursor+storage.KeyLength])
-	cursor += storage.KeyLength
-
-	if serializedData[cursor] == 0x01 {
-		header.multihash = true
+	if err := header.binaryGet(serializedData[cursor : cursor+updateHeaderLength]); err != nil {
+		return err
 	}
-	cursor++
+	cursor += updateHeaderLength
 
 	// if multihash content is indicated we check the validity of the multihash
 	if header.multihash {

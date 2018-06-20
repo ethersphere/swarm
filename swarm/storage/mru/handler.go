@@ -21,7 +21,6 @@ package mru
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"sync"
 	"time"
 	"unsafe"
@@ -165,7 +164,7 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 
 	// make sure name only contains ascii values
 	if !isSafeName(request.name) {
-		return NewError(ErrInvalidValue, fmt.Sprintf("invalid name: '%s'", request.name))
+		return NewErrorf(ErrInvalidValue, "invalid name: '%s'", request.name)
 	}
 
 	// make sure owner is set to something
@@ -235,7 +234,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	}
 
 	if !rsrc.isSynced() {
-		return nil, NewError(ErrNotSynced, fmt.Sprintf("Handler.NewUpdateRequest: object '%s' not in sync", rootAddr.Hex()))
+		return nil, NewErrorf(ErrNotSynced, "Handler.NewUpdateRequest: object '%s' not in sync", rootAddr.Hex())
 	}
 
 	updateRequest.multihash = rsrc.multihash
@@ -333,7 +332,7 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 	log.Trace("resource lookup", "period", lp.period, "version", lp.version, "limit", lp.Limit)
 	for lp.period > 0 {
 		if lp.Limit != 0 && hops > lp.Limit {
-			return nil, NewError(ErrPeriodDepth, fmt.Sprintf("Lookup exceeded max period hops (%d)", lp.Limit))
+			return nil, NewErrorf(ErrPeriodDepth, "Lookup exceeded max period hops (%d)", lp.Limit)
 		}
 		updateAddr := lp.GetUpdateAddr()
 		chunk, err := h.chunkStore.GetWithTimeout(updateAddr, defaultRetrieveTimeout)
@@ -372,7 +371,7 @@ func (h *Handler) Load(rootAddr storage.Address) (*resource, error) {
 
 	// \TODO this is not enough to make sure the data isn't bogus. A normal content addressed chunk could still satisfy these criteria
 	if len(chunk.SData) <= metadataChunkOffsetSize {
-		return nil, NewError(ErrNothingToReturn, fmt.Sprintf("Invalid chunk length %d, should be minimum %d", len(chunk.SData), metadataChunkOffsetSize+1))
+		return nil, NewErrorf(ErrNothingToReturn, "Invalid chunk length %d, should be minimum %d", len(chunk.SData), metadataChunkOffsetSize+1)
 	}
 
 	// create the index entry
@@ -393,7 +392,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
 	var r SignedResourceUpdate
 	if err := r.parseUpdateChunk(chunk.Addr, chunk.SData); err != nil {
-		return nil, NewError(ErrInvalidSignature, fmt.Sprintf("Invalid resource chunk: %s", err))
+		return nil, NewErrorf(ErrInvalidSignature, "Invalid resource chunk: %s", err)
 	}
 	log.Trace("resource index update", "name", rsrc.name, "updatekey", chunk.Addr, "period", r.period, "version", r.version)
 
@@ -415,12 +414,12 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 // Uses the Mutable Resource metadata currently loaded in the resources map entry.
 // It is the caller's responsibility to make sure that this data is not stale.
 // Note that a Mutable Resource update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature. An error will be returned if the total length of the chunk payload will exceed this limit.
-func (h *Handler) Update(ctx context.Context, rootAddr storage.Address, mru *SignedResourceUpdate) (storage.Address, error) {
-	return h.update(ctx, rootAddr, mru)
+func (h *Handler) Update(ctx context.Context, rootAddr storage.Address, r *SignedResourceUpdate) (storage.Address, error) {
+	return h.update(ctx, rootAddr, r)
 }
 
 // create and commit an update
-func (h *Handler) update(ctx context.Context, rootAddr storage.Address, mru *SignedResourceUpdate) (storage.Address, error) {
+func (h *Handler) update(ctx context.Context, rootAddr storage.Address, r *SignedResourceUpdate) (storage.Address, error) {
 
 	// we can't update anything without a store
 	if h.chunkStore == nil {
@@ -431,41 +430,41 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, mru *Sig
 
 	rsrc := h.get(rootAddr)
 	if rsrc == nil {
-		return nil, NewError(ErrNotFound, fmt.Sprintf(" object '%s' not in index", rsrc.name))
+		return nil, NewErrorf(ErrNotFound, " object '%s' not in index", rsrc.name)
 	} else if !rsrc.isSynced() {
 		return nil, NewError(ErrNotSynced, " object not in sync")
 	}
 
 	// an update can be only one chunk long; data length less header and signature data
-	if int64(len(mru.data)) > maxUpdateDataLength {
-		return nil, NewError(ErrDataOverflow, fmt.Sprintf("Data overflow: %d / %d bytes", len(mru.data), maxUpdateDataLength))
+	if int64(len(r.data)) > maxUpdateDataLength {
+		return nil, NewErrorf(ErrDataOverflow, "Data overflow: %d / %d bytes", len(r.data), maxUpdateDataLength)
 	}
 
-	if rsrc.period == mru.period {
-		if mru.version != rsrc.version+1 {
-			return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid version for this period. Expected version=%d", rsrc.version+1))
+	if rsrc.period == r.period {
+		if r.version != rsrc.version+1 {
+			return nil, NewErrorf(ErrInvalidValue, "Invalid version for this period. Expected version=%d", rsrc.version+1)
 		}
 	} else {
-		if !(mru.period > rsrc.period && mru.version == 1) {
-			return nil, NewError(ErrInvalidValue, fmt.Sprintf("Invalid version,period. Expected version=1 and period > %d", rsrc.period))
+		if !(r.period > rsrc.period && r.version == 1) {
+			return nil, NewErrorf(ErrInvalidValue, "Invalid version,period. Expected version=1 and period > %d", rsrc.period)
 		}
 	}
 
-	chunk, err := mru.newUpdateChunk()
+	chunk, err := r.newUpdateChunk()
 	if err != nil {
 		return nil, err
 	}
 
 	// send the chunk
 	h.chunkStore.Put(chunk)
-	log.Trace("resource update", "updateAddr", mru.updateAddr, "lastperiod", mru.period, "version", mru.version, "data", chunk.SData, "multihash", mru.multihash)
+	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.SData, "multihash", r.multihash)
 
 	// update our resources map entry and return the new updateAddr
-	rsrc.period = mru.period
-	rsrc.version = mru.version
-	rsrc.data = make([]byte, len(mru.data))
-	copy(rsrc.data, mru.data)
-	return mru.updateAddr, nil
+	rsrc.period = r.period
+	rsrc.version = r.version
+	rsrc.data = make([]byte, len(r.data))
+	copy(rsrc.data, r.data)
+	return r.updateAddr, nil
 }
 
 // gets the current time

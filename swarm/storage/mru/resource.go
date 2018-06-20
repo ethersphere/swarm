@@ -104,7 +104,7 @@ func (r *resource) Name() string {
 // Helper function to calculate the next update period number from the current time, start time and frequency
 func getNextPeriod(start uint64, current uint64, frequency uint64) (uint32, error) {
 	if current < start {
-		return 0, NewError(ErrInvalidValue, fmt.Sprintf("given current time value %d < start time %d", current, start))
+		return 0, NewErrorf(ErrInvalidValue, "given current time value %d < start time %d", current, start)
 	}
 	blockdiff := current - start
 	period := blockdiff / frequency
