@@ -616,7 +616,7 @@ func (c *Client) UpdateResource(manifestAddressOrDomain string, data []byte, sig
 	return err
 }
 
-func (c *Client) updateResource(updateRequest *mru.UpdateRequest, manifestAddressOrDomain string) (io.ReadCloser, error) {
+func (c *Client) updateResource(updateRequest *mru.Request, manifestAddressOrDomain string) (io.ReadCloser, error) {
 	body, err := mru.EncodeUpdateRequest(updateRequest)
 	if err != nil {
 		return nil, err
@@ -652,7 +652,7 @@ func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, err
 // GetResourceMetadata returns a structure that describes the Mutable Resource
 // manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.UpdateRequest, error) {
+func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.Request, error) {
 
 	responseStream, err := c.GetResource(manifestAddressOrDomain + "/meta")
 	if err != nil {
