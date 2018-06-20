@@ -242,8 +242,7 @@ func GetGenericErrorPage() string {
 
 //This returns the HTML for a 404 Not Found error
 func GetNotFoundErrorPage() string {
-
-  page := `
+	page := `
   <!DOCTYPE html>
   <html lang="en">
 
@@ -297,7 +296,7 @@ func GetNotFoundErrorPage() string {
 //i.e. if user requested bzz:/<hash>/read and the manifest contains "readme.md" and "readinglist.txt",
 //this page is returned with a clickable list the existing disambiguation links in the manifest
 func GetMultipleChoicesErrorPage() string {
-  page := `
+	page := `
   <!DOCTYPE html>
   <html lang="en">
 
