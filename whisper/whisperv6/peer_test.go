@@ -233,7 +233,7 @@ func initialize(t *testing.T) {
 func startServer(t *testing.T, s *p2p.Server) {
 	err := s.Start()
 	if err != nil {
-		t.Fatalf("failed to start the fisrt server.")
+		t.Fatal("failed to start the first server: ", err)
 	}
 
 	atomic.AddInt64(&result.started, 1)
