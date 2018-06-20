@@ -306,11 +306,6 @@ func (h *Handler) New(ctx context.Context, request *UpdateRequest) error {
 		return NewError(ErrInvalidValue, "ownerAddr must be set to create a new metadata chunk")
 	}
 
-	// get the current time
-	if request.startTime == 0 {
-		request.startTime = h.getCurrentTime(ctx)
-	}
-
 	// create the meta chunk and store it in swarm
 	chunk, metaHash := h.newMetaChunk(&request.resourceMetadata)
 	if request.metaHash != nil && !bytes.Equal(request.metaHash, metaHash) ||
