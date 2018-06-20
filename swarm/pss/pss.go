@@ -861,7 +861,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 			log.Trace(fmt.Sprintf("Pss keep forwarding: Partial address + full partial match"))
 			return true
 		} else if isproxbin {
-			log.Trace(fmt.Sprintf("%x is in proxbin, keep forwarding", common.ToHex(op.Address())))
+			log.Trace(fmt.Sprintf("%s is in proxbin, keep forwarding", common.ToHex(op.Address())))
 			return true
 		}
 		// at this point we stop forwarding, and the state is as follows:

@@ -20,10 +20,16 @@
 package geth
 
 import (
+	"crypto/ecdsa"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
+	"strconv"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -31,10 +37,13 @@ import (
 	"github.com/ethereum/go-ethereum/ethstats"
 	"github.com/ethereum/go-ethereum/internal/debug"
 	"github.com/ethereum/go-ethereum/les"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/swarm"
+	swarmapi "github.com/ethereum/go-ethereum/swarm/api"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
@@ -76,6 +85,11 @@ type NodeConfig struct {
 
 	// Listening address of pprof server.
 	PprofAddress string
+	// NB: this is a hack, and very likely not a permanent solution
+	// PssEnabled specifies whether the node should run pss
+	PssEnabled  bool
+	PssAccount  string
+	PssPassword string
 }
 
 // defaultNodeConfig contains the default node configuration values to use if all
@@ -97,10 +111,24 @@ func NewNodeConfig() *NodeConfig {
 // Node represents a Geth Ethereum node instance.
 type Node struct {
 	node *node.Node
+	Ps   *Pss
 }
 
 // NewNode creates and configures a new Geth node.
 func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
+	return NewNodeWithKeystore(datadir, config, nil)
+}
+
+// NewNodeWithKeystoreString creates and configures a new Geth node, and a keyKeyStorestore.
+func NewNodeWithKeystoreString(datadir string, config *NodeConfig, ksstr string) (stack *Node, _ error) {
+	ks := NewKeyStore(ksstr, keystore.LightScryptN, keystore.LightScryptP)
+	return NewNodeWithKeystore(datadir, config, ks)
+}
+
+// NewNodeWithKeystore creates and configures a new Geth node with an existing KeyStore.
+func NewNodeWithKeystore(datadir string, config *NodeConfig, ks *KeyStore) (stack *Node, _ error) {
+
+	resultNode := &Node{}
 	// If no or partial configurations were specified, use defaults
 	if config == nil {
 		config = NewNodeConfig()
@@ -122,6 +150,10 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 		Version:     params.Version,
 		DataDir:     datadir,
 		KeyStoreDir: filepath.Join(datadir, "keystore"), // Mobile should never use internal keystores!
+		WSHost:      "localhost",
+		WSPort:      8546,
+		WSOrigins:   []string{"*"},
+		WSModules:   []string{"pss"},
 		P2P: p2p.Config{
 			NoDiscovery:      true,
 			DiscoveryV5:      true,
@@ -131,6 +163,7 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			MaxPeers:         config.MaxPeers,
 		},
 	}
+
 	rawStack, err := node.New(nodeConf)
 	if err != nil {
 		return nil, err
@@ -185,7 +218,56 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}
-	return &Node{rawStack}, nil
+	if config.PssEnabled && ks != nil {
+		log.Debug("pss enabled")
+		bzzServiceFunc := func(ctx *node.ServiceContext) (node.Service, error) {
+			log.Debug("keystore", "ks", ks)
+			var a accounts.Account
+			var err error
+			if common.IsHexAddress(config.PssAccount) {
+				a = ks.GetAccounts().accounts[0]
+			} else if ix, ixerr := strconv.Atoi(config.PssAccount); ixerr == nil && ix > 0 {
+				if accounts := ks.GetAccounts().accounts; len(accounts) > ix {
+					a = accounts[ix]
+				} else {
+					err = fmt.Errorf("index %d higher than number of accounts %d", ix, len(accounts))
+				}
+			} else {
+				return nil, fmt.Errorf("Can't find swarm account key %s", config.PssAccount)
+			}
+			if err != nil {
+				return nil, fmt.Errorf("Can't find swarm account key: %v - Is the provided bzzaccount(%s) from the right datadir/Path?", err, config.PssAccount)
+			}
+			keyjson, err := ioutil.ReadFile(a.URL.Path)
+			if err != nil {
+				return nil, fmt.Errorf("Can't load swarm account key: %v", err)
+			}
+			var bzzkey *ecdsa.PrivateKey
+			key, err := keystore.DecryptKey(keyjson, config.PssPassword)
+			if err == nil {
+				bzzkey = key.PrivateKey
+			}
+			if bzzkey == nil {
+				return nil, fmt.Errorf("Can't decrypt swarm account key")
+			}
+			bzzconfig := swarmapi.NewConfig()
+			bzzconfig.SyncEnabled = false
+			bzzconfig.Path = rawStack.DataDir()
+			bzzconfig.Init(bzzkey)
+
+			svc, err := swarm.NewSwarm(bzzconfig, nil)
+			if err != nil {
+				log.Error("swarm svc", "err", err)
+			}
+			resultNode.Ps = &Pss{ps: svc.Ps}
+			return svc, err
+		}
+		if err := rawStack.Register(bzzServiceFunc); err != nil {
+			return nil, fmt.Errorf("pss init: %v", err)
+		}
+	}
+	resultNode.node = rawStack
+	return resultNode, nil
 }
 
 // Start creates a live P2P node and starts running it.
@@ -197,6 +279,23 @@ func (n *Node) Start() error {
 // not started, an error is returned.
 func (n *Node) Stop() error {
 	return n.node.Stop()
+}
+
+// AddPeer can be used to add a Peer when discovery is disabled.
+func (n *Node) AddPeer(enode string) error {
+	rpcClient, err := n.node.Attach()
+	defer rpcClient.Close()
+	if err != nil {
+		return fmt.Errorf("could not attach rpc for adding peer %s, %v", enode, err)
+	}
+	var ok bool
+	err = rpcClient.Call(&ok, "admin_addPeer", enode)
+	if err != nil {
+		return fmt.Errorf("could not call rpc for adding peer %s: %v", enode, err)
+	} else if !ok {
+		return fmt.Errorf("could not add peer %s: %v", enode, err)
+	}
+	return nil
 }
 
 // GetEthereumClient retrieves a client to access the Ethereum subsystem.

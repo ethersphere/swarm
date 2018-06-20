@@ -75,7 +75,7 @@ type Swarm struct {
 	swapEnabled bool
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
-	ps          *pss.Pss
+	Ps          *pss.Pss
 }
 
 type SwarmAPI struct {
@@ -226,12 +226,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
-	self.ps, err = pss.NewPss(to, config.Pss)
+	self.Ps, err = pss.NewPss(to, config.Pss)
 	if err != nil {
 		return nil, err
 	}
 	if pss.IsActiveHandshake {
-		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
+		pss.SetHandshakeController(self.Ps, pss.NewHandshakeParams())
 	}
 
 	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler)
@@ -380,8 +380,8 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	}
 	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
 
-	if self.ps != nil {
-		self.ps.Start(srv)
+	if self.Ps != nil {
+		self.Ps.Start(srv)
 		log.Info("Pss started")
 	}
 
@@ -425,8 +425,8 @@ func (self *Swarm) updateGauges() {
 // implements the node.Service interface
 // stops all component services.
 func (self *Swarm) Stop() error {
-	if self.ps != nil {
-		self.ps.Stop()
+	if self.Ps != nil {
+		self.Ps.Stop()
 	}
 	if ch := self.config.Swap.Chequebook(); ch != nil {
 		ch.Stop()
@@ -446,8 +446,8 @@ func (self *Swarm) Stop() error {
 func (self *Swarm) Protocols() (protos []p2p.Protocol) {
 	protos = append(protos, self.bzz.Protocols()...)
 
-	if self.ps != nil {
-		protos = append(protos, self.ps.Protocols()...)
+	if self.Ps != nil {
+		protos = append(protos, self.Ps.Protocols()...)
 	}
 	return
 }
@@ -457,7 +457,7 @@ func (self *Swarm) RegisterPssProtocol(spec *protocols.Spec, targetprotocol *p2p
 		return nil, fmt.Errorf("Pss protocols not available (built with !nopssprotocol tag)")
 	}
 	topic := pss.ProtocolTopic(spec)
-	return pss.RegisterProtocol(self.ps, &topic, spec, targetprotocol, options)
+	return pss.RegisterProtocol(self.Ps, &topic, spec, targetprotocol, options)
 }
 
 // implements node.Service
@@ -510,8 +510,8 @@ func (self *Swarm) APIs() []rpc.API {
 
 	apis = append(apis, self.bzz.APIs()...)
 
-	if self.ps != nil {
-		apis = append(apis, self.ps.APIs()...)
+	if self.Ps != nil {
+		apis = append(apis, self.Ps.APIs()...)
 	}
 
 	return apis
