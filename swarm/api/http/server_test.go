@@ -138,7 +138,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	// our mutable resource "name"
 	keybytes := "foo.eth"
-	updateRequest, err := mru.NewCreateRequest(keybytes, 13, srv.GetCurrentTime(), signer.Address(), mh, true)
+	updateRequest, err := mru.NewCreateRequest(keybytes, 13, srv.GetCurrentTime().Time, signer.Address(), mh, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "ff19cd3107675f20800c80bd940b501778c08a6a455ad9786f8fa4f81a65a63d"
+	correctManifestAddrHex := "dcf61386109ea7a7a9997b21b315265feeaaff5bdbfc6a86f48059f46ca76880"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -211,7 +211,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updateRequest, err := mru.NewCreateRequest(keybytes, 13, srv.GetCurrentTime(), signer.Address(), databytes, false)
+	updateRequest, err := mru.NewCreateRequest(keybytes, 13, srv.GetCurrentTime().Time, signer.Address(), databytes, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,7 +242,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "ff19cd3107675f20800c80bd940b501778c08a6a455ad9786f8fa4f81a65a63d"
+	correctManifestAddrHex := "dcf61386109ea7a7a9997b21b315265feeaaff5bdbfc6a86f48059f46ca76880"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -269,7 +269,7 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	correctRootKeyHex := "0dc8d8ef18f5b84f229e7deadee0073c6e2fc8e903c319df411ec6937ae45f8f"
+	correctRootKeyHex := "a8b0b68fb22bbaece7e619e1e96b03737fa577c1cb539d2f00cdec77dd7cca5e"
 	if manifest.Entries[0].Hash != correctRootKeyHex {
 		t.Fatalf("Expected manifest path '%s', got '%s'", correctRootKeyHex, manifest.Entries[0].Hash)
 	}

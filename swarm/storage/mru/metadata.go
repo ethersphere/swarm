@@ -27,21 +27,29 @@ import (
 // resourceMetadata encapsulates the immutable information about a mutable resource :)
 // once serialized into a chunk, the resource can be retrieved by knowing its content-addressed rootAddr
 type resourceMetadata struct {
-	startTime uint64         // time at which the resource starts to be valid
+	startTime Timestamp      // time at which the resource starts to be valid
 	frequency uint64         // expected update frequency for the resource
 	name      string         // name of the resource, for the reference of the user
 	ownerAddr common.Address // public address of the resource owner
 }
+
+// Timestamp: timestampLength bytes
+// frequency: 8 bytes
+// name (variable, not counted in "offset")
+// ownerAddr: common.AddressLength
+const metadataChunkOffsetSize = timestampLength + 8 + 0 + common.AddressLength
 
 // unmarshalBinary populates the resource metadata from a byte array
 func (r *resourceMetadata) unmarshalBinary(chunkData []byte) error {
 	metadataChunkLength := binary.LittleEndian.Uint16(chunkData[2:6])
 	data := chunkData[8:]
 
-	r.startTime = binary.LittleEndian.Uint64(data[:8])
-	r.frequency = binary.LittleEndian.Uint64(data[8:16])
-	r.name = string(data[16 : 16+metadataChunkLength-metadataChunkOffsetSize])
-	copy(r.ownerAddr[:], data[16+metadataChunkLength-metadataChunkOffsetSize:])
+	if err := r.startTime.unmarshalBinary(data[:40]); err != nil {
+		return err
+	}
+	r.frequency = binary.LittleEndian.Uint64(data[40:48])
+	r.name = string(data[48 : 48+metadataChunkLength-metadataChunkOffsetSize])
+	copy(r.ownerAddr[:], data[48+metadataChunkLength-metadataChunkOffsetSize:])
 
 	return nil
 }
@@ -50,15 +58,17 @@ func (r *resourceMetadata) unmarshalBinary(chunkData []byte) error {
 func (r *resourceMetadata) marshalBinary() []byte {
 	metadataChunkLength := metadataChunkOffsetSize + len(r.name)
 	chunkData := make([]byte, metadataChunkLength+8)
+
+	// root block has first two bytes both set to 0, which distinguishes from update bytes
+	// therefore, skip the first two bytes of a zero-initialized array.
 	binary.LittleEndian.PutUint16(chunkData[2:6], uint16(metadataChunkLength))
 
 	data := chunkData[8:]
 
-	// root block has first two bytes both set to 0, which distinguishes from update bytes
-	binary.LittleEndian.PutUint64(data[:8], r.startTime)
-	binary.LittleEndian.PutUint64(data[8:16], r.frequency)
-	copy(data[16:16+len(r.name)], []byte(r.name))
-	copy(data[16+len(r.name):], r.ownerAddr[:])
+	copy(data[:40], r.startTime.marshalBinary())
+	binary.LittleEndian.PutUint64(data[40:48], r.frequency)
+	copy(data[48:48+len(r.name)], []byte(r.name))
+	copy(data[48+len(r.name):], r.ownerAddr[:])
 
 	return chunkData
 }
@@ -93,7 +103,7 @@ func (metadata *resourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []b
 	return chunk, metaHash
 }
 
-// metadataHash returns te root address and metadata hash that help identify and ascertain ownership of this resource
+// metadataHash returns the root address and metadata hash that help identify and ascertain ownership of this resource
 func metadataHash(chunkData []byte) (rootAddr, metaHash []byte) {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)

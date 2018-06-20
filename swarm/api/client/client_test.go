@@ -394,12 +394,12 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 	// our mutable resource "name"
 	resourceName := "foo.eth"
 
-	resourceManifestHash, err := client.CreateResource(resourceName, 13, srv.GetCurrentTime(), mh, true, signer)
+	resourceManifestHash, err := client.CreateResource(resourceName, 13, srv.GetCurrentTime().Time, mh, true, signer)
 	if err != nil {
 		t.Fatalf("Error creating resource: %s", err)
 	}
 
-	correctManifestAddrHex := "ff19cd3107675f20800c80bd940b501778c08a6a455ad9786f8fa4f81a65a63d"
+	correctManifestAddrHex := "dcf61386109ea7a7a9997b21b315265feeaaff5bdbfc6a86f48059f46ca76880"
 	if resourceManifestHash != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
@@ -433,12 +433,12 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	// our mutable resource name
 	resourceName := "El Quijote"
 
-	resourceManifestHash, err := client.CreateResource(resourceName, 13, srv.GetCurrentTime(), databytes, false, signer)
+	resourceManifestHash, err := client.CreateResource(resourceName, 13, srv.GetCurrentTime().Time, databytes, false, signer)
 	if err != nil {
 		t.Fatalf("Error creating resource: %s", err)
 	}
 
-	correctManifestAddrHex := "0c339bcadcabdfe1cd6486fa7ba025e8c012284be06da91668229da19f10c2fb"
+	correctManifestAddrHex := "e1950f328b26f9660afb631d997f4ebba3901564aa2d811022eecf1420431e9a"
 	if resourceManifestHash != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}

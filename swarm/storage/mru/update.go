@@ -50,14 +50,15 @@ type SignedResourceUpdate struct {
 // 4 bytes version
 // 32 bytes rootAddr reference
 // 32 bytes metaHash digest
+// 32 bytes previousUpdateAddr reference
+// 40 bytes Timestamp
 // Data:
 // data (datalength bytes)
 // Signature:
 // signature: 65 bytes (signatureLength constant)
 //
 // Minimum size is Header + 1 (minimum data length, enforced) + Signature = 142 bytes
-
-const minimumUpdateDataLength = 142
+const minimumUpdateDataLength = 142 // 2 + 2 + 4 + 4 + storage.KeyLength + 32 + storage.KeyLength + timestampLength + 1 + signatureLength
 const maxUpdateDataLength = chunkSize - minimumUpdateDataLength
 
 // Verify checks that signatures are valid and that the signer owns the resource to be updated
@@ -111,7 +112,7 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 	return nil
 }
 
-// create an update chunk. //TODO: Move to a method of SignedUpdateResource
+// create an update chunk.
 func (mru *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 
 	if len(mru.rootAddr) != storage.KeyLength || len(mru.metaHash) != storage.KeyLength {
