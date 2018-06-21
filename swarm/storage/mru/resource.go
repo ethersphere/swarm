@@ -18,12 +18,8 @@ package mru
 
 import (
 	"bytes"
-	"encoding/binary"
 	"time"
 
-	"golang.org/x/net/idna"
-
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -79,34 +75,4 @@ func getNextPeriod(start uint64, current uint64, frequency uint64) (uint32, erro
 	timeDiff := current - start
 	period := timeDiff / frequency
 	return uint32(period + 1), nil
-}
-
-// ToSafeName is a helper function to create an valid idna of a given resource update name
-func ToSafeName(name string) (string, error) {
-	return idna.ToASCII(name)
-}
-
-// if first byte is the start of a multihash this function will try to parse it
-// if successful it returns the length of multihash data, 0 otherwise
-func isMultihash(data []byte) int {
-	cursor := 0
-	_, c := binary.Uvarint(data)
-	if c <= 0 {
-		log.Warn("Corrupt multihash data, hashtype is unreadable")
-		return 0
-	}
-	cursor += c
-	hashlength, c := binary.Uvarint(data[cursor:])
-	if c <= 0 {
-		log.Warn("Corrupt multihash data, hashlength is unreadable")
-		return 0
-	}
-	cursor += c
-	// we cheekily assume hashlength < maxint
-	inthashlength := int(hashlength)
-	if len(data[cursor:]) < inthashlength {
-		log.Warn("Corrupt multihash data, hash does not align with data boundary")
-		return 0
-	}
-	return cursor + inthashlength
 }
