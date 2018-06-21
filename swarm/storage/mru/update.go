@@ -66,7 +66,7 @@ func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 	}
 
 	if r.multihash {
-		if isMultihash(r.data) == 0 {
+		if _, _, err := multihash.GetMultihashLength(r.data); err != nil {
 			return NewError(ErrInvalidValue, "Invalid multihash")
 		}
 	}

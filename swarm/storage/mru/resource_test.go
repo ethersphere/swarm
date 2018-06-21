@@ -27,7 +27,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
@@ -43,21 +42,13 @@ var (
 	}
 	resourceFrequency = uint64(42)
 	cleanF            func()
-	domainName        = "føø.bar"
-	safeName          string
-	nameHash          common.Hash
+	resourceName      = "føø.bar"
 	hashfunc          = storage.MakeHashFunc(storage.DefaultHash)
 )
 
 func init() {
-	var err error
 	flag.Parse()
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
-	safeName, err = ToSafeName(domainName)
-	if err != nil {
-		panic(err)
-	}
-	nameHash = ens.EnsNode(safeName)
 }
 
 // simulated timeProvider
@@ -158,7 +149,7 @@ func TestReverse(t *testing.T) {
 	defer teardownTest()
 
 	metadata := resourceMetadata{
-		name:      safeName,
+		name:      resourceName,
 		startTime: startTime,
 		frequency: resourceFrequency,
 		ownerAddr: signer.Address(),
@@ -257,7 +248,7 @@ func TestResourceHandler(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	request, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, false)
+	request, err := NewCreateRequest(resourceName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -495,7 +486,7 @@ func TestMultihash(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mr, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, true)
+	mr, err := NewCreateRequest(resourceName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -605,7 +596,7 @@ func TestMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mr, err = NewCreateRequest(safeName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, true)
+	mr, err = NewCreateRequest(resourceName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -692,7 +683,7 @@ func TestValidator(t *testing.T) {
 	// create new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	mr, err := NewCreateRequest(safeName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, false)
+	mr, err := NewCreateRequest(resourceName, resourceFrequency, timeProvider.GetCurrentTimestamp().Time, signer.Address(), nil, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -736,7 +727,7 @@ func TestValidator(t *testing.T) {
 	startTime := rh.getCurrentTime(ctx)
 
 	metadata := &resourceMetadata{
-		name:      safeName,
+		name:      resourceName,
 		startTime: startTime,
 		frequency: resourceFrequency,
 		ownerAddr: signer.Address(),
