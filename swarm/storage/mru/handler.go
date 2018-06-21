@@ -187,7 +187,7 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 	request.rootAddr = chunk.Addr
 
 	h.chunkStore.Put(chunk)
-	log.Debug("new resource", "name", request.name, "startBlock", request.startTime, "frequency", request.frequency, "owner", request.ownerAddr)
+	log.Debug("new resource", "name", request.name, "startTime", request.startTime, "frequency", request.frequency, "owner", request.ownerAddr)
 
 	// create the internal index for the resource and populate it with the data of the first version
 	rsrc := &resource{
@@ -258,9 +258,9 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 }
 
 // LookupLatest retrieves the latest version of the resource update with metadata chunk at params.Root
-// It starts at the next period after the current block height, and upon failure
+// It starts at the next period after the current time, and upon failure
 // tries the corresponding keys of each previous period until one is found
-// (or startBlock is reached, in which case there are no updates).
+// (or startTime is reached, in which case there are no updates).
 func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, error) {
 
 	rsrc := h.get(params.rootAddr)
@@ -268,7 +268,7 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
 	}
 	if params.period == 0 {
-		// get our blockheight at this time and the next block of the update period
+		// get the current time and the next period
 		now := h.getCurrentTime(ctx)
 
 		var period uint32
@@ -320,8 +320,8 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 		return nil, NewError(ErrInvalidValue, "period must be >0")
 	}
 
-	// start from the last possible block period, and iterate previous ones until we find a match
-	// if we hit startBlock we're out of options
+	// start from the last possible period, and iterate previous ones until we find a match
+	// if we hit startTime we're out of options
 	var specificversion bool
 	if lp.version > 0 {
 		specificversion = true
@@ -385,7 +385,7 @@ func (h *Handler) Load(rootAddr storage.Address) (*resource, error) {
 		return nil, NewError(ErrCorruptData, "Corrupt metadata chunk")
 	}
 	h.set(rootAddr, rsrc)
-	log.Trace("resource index load", "rootkey", rootAddr, "name", rsrc.name, "startblock", rsrc.startTime, "frequency", rsrc.frequency)
+	log.Trace("resource index load", "rootkey", rootAddr, "name", rsrc.name, "starttime", rsrc.startTime, "frequency", rsrc.frequency)
 	return rsrc, nil
 }
 

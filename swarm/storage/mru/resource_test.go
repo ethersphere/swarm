@@ -191,7 +191,7 @@ func TestReverse(t *testing.T) {
 			data: data,
 		},
 	}
-	// generate a hash for block 4200 version 1
+	// generate a hash for t=4200 version 1
 	key := update.GetUpdateAddr()
 
 	if err = update.Sign(signer); err != nil {
@@ -284,7 +284,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 	if recoveredMetadata.startTime.Time != timeProvider.currentTime {
-		t.Fatalf("stored block number %d does not match provided block number %d", recoveredMetadata.startTime.Time, timeProvider.currentTime)
+		t.Fatalf("stored startTime %d does not match provided startTime %d", recoveredMetadata.startTime.Time, timeProvider.currentTime)
 	}
 	if recoveredMetadata.frequency != resourceFrequency {
 		t.Fatalf("stored frequency %d does not match provided frequency %d", recoveredMetadata.frequency, resourceFrequency)
@@ -300,7 +300,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// update halfway to first period. period=1, version=1
 	resourcekey := make(map[string]storage.Address)
-	fwdBlocks(int(resourceFrequency/2), timeProvider)
+	fwdClock(int(resourceFrequency/2), timeProvider)
 	data := []byte(updates[0])
 	request.SetData(data)
 	if err := request.Sign(signer); err != nil {
@@ -332,7 +332,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update on second period with version = 1, correct. period=2, version=1
-	fwdBlocks(int(resourceFrequency/2), timeProvider)
+	fwdClock(int(resourceFrequency/2), timeProvider)
 	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
 	if err != nil {
 		t.Fatal(err)
@@ -347,7 +347,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// first attempt to update on third period, setting version to something different than 1 to make it fail
-	fwdBlocks(int(resourceFrequency), timeProvider)
+	fwdClock(int(resourceFrequency), timeProvider)
 	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
 	if err != nil {
 		t.Fatal(err)
@@ -379,7 +379,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update just after second period
-	fwdBlocks(1, timeProvider)
+	fwdClock(1, timeProvider)
 	data = []byte(updates[3])
 	request.SetData(data)
 
@@ -396,8 +396,8 @@ func TestResourceHandler(t *testing.T) {
 	rh.Close()
 
 	// check we can retrieve the updates after close
-	// it will match on second iteration startblocknumber + (resourceFrequency * 3)
-	fwdBlocks(int(resourceFrequency*2)-1, timeProvider)
+	// it will match on second iteration startTime + (resourceFrequency * 3)
+	fwdClock(int(resourceFrequency*2)-1, timeProvider)
 
 	rhparams := &HandlerParams{
 		TimestampProvider: timeProvider,
@@ -418,7 +418,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// last update should be "clyde", version two, blockheight startblocknumber + (resourcefrequency * 3)
+	// last update should be "clyde", version two, time= startTime + (resourcefrequency * 3)
 	if !bytes.Equal(rsrc2.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("resource data was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
@@ -430,7 +430,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 	log.Debug("Latest lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
-	// specific block, latest version
+	// specific period, latest version
 	rsrc, err := rh2.Lookup(ctx, LookupLatestVersionInPeriod(request.rootAddr, 3))
 	if err != nil {
 		t.Fatal(err)
@@ -441,7 +441,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 	log.Debug("Historical lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
-	// specific block, specific version
+	// specific period, specific version
 	lookupParams := LookupVersion(request.rootAddr, 3, 1)
 	rsrc, err = rh2.Lookup(ctx, lookupParams)
 	if err != nil {
@@ -850,7 +850,7 @@ func TestValidatorInStore(t *testing.T) {
 }
 
 // fast-forward clock
-func fwdBlocks(count int, timeProvider *fakeTimeProvider) {
+func fwdClock(count int, timeProvider *fakeTimeProvider) {
 	for i := 0; i < count; i++ {
 		timeProvider.Tick()
 	}
