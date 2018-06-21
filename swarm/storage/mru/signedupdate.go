@@ -25,11 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// Signature is an alias for a static byte array with the size of a signature
-const signatureLength = 65
-
-type Signature [signatureLength]byte
-
 // SignedResourceUpdate contains signature information about a resource update
 type SignedResourceUpdate struct {
 	resourceUpdate // actual content that will be put on the chunk, less signature

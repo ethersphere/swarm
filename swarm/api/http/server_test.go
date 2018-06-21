@@ -142,7 +142,9 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest.Sign(signer)
+	if err := updateRequest.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
 	body, err := mru.EncodeUpdateRequest(updateRequest)
@@ -215,8 +217,9 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest.Sign(signer)
-
+	if err := updateRequest.Sign(signer); err != nil {
+		t.Fatal(err)
+	}
 	body, err := mru.EncodeUpdateRequest(updateRequest)
 	if err != nil {
 		t.Fatal(err)
