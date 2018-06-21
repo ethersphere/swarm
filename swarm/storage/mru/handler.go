@@ -237,10 +237,6 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 		return nil, err
 	}
 
-	if !rsrc.isSynced() {
-		return nil, NewErrorf(ErrNotSynced, "Handler.NewUpdateRequest: object '%s' not in sync", rootAddr.Hex())
-	}
-
 	updateRequest.multihash = rsrc.multihash
 	updateRequest.rootAddr = rsrc.rootAddr
 	updateRequest.metaHash = rsrc.metaHash
