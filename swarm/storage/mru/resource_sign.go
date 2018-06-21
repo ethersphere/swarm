@@ -23,6 +23,11 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 )
 
+// Signature is an alias for a static byte array with the size of a signature
+const signatureLength = 65
+
+type Signature [signatureLength]byte
+
 // Signer signs Mutable Resource update payloads
 type Signer interface {
 	Sign(common.Hash) (Signature, error)
