@@ -17,7 +17,6 @@
 package mru
 
 import (
-	"bytes"
 	"encoding/binary"
 	"hash"
 
@@ -79,24 +78,13 @@ const updateLookupLength = 4 + 4 + storage.KeyLength
 
 // resourceUpdateChunkAddr calculates the resource update chunk address (formerly known as resourceHash)
 func (u *UpdateLookup) GetUpdateAddr() (updateAddr storage.Address) {
+	serializedData := make([]byte, updateLookupLength)
+	u.binaryPut(serializedData)
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
-	hasher.Write(NewResourceHash(u))
+	hasher.Write(serializedData)
 	return hasher.Sum(nil)
-}
-
-// NewResourceHash will create a deterministic address from the update metadata
-// format is: hash(period|version|rootAddr)
-func NewResourceHash(u *UpdateLookup) []byte {
-	buf := bytes.NewBuffer(nil)
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, u.period)
-	buf.Write(b)
-	binary.LittleEndian.PutUint32(b, u.version)
-	buf.Write(b)
-	buf.Write(u.rootAddr[:])
-	return buf.Bytes()
 }
 
 // binaryPut serializes this UpdateLookup instance into the provided slice
