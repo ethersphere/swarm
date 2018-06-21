@@ -50,9 +50,6 @@ type Request struct {
 
 // NewCreateRequest returns a ready to sign Request message to create a new resource
 func NewCreateRequest(name string, frequency uint64, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*Request, error) {
-	if !isSafeName(name) {
-		return nil, NewErrorf(ErrInvalidValue, "Invalid name: '%s' when creating a new UpdateRequest", name)
-	}
 
 	// get the current time
 	if startTime == 0 {
@@ -202,10 +199,6 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 		// we can derive them from the content itself.
 		// however, if the user sent them, we check them for consistency.
 
-		// make sure name only contains ascii values
-		if !isSafeName(j.Name) {
-			return nil, NewErrorf(ErrInvalidValue, "Invalid name: '%s'", j.Name)
-		}
 		r.rootAddr, r.metaHash, _, err = r.resourceMetadata.hashAndSerialize()
 		if err != nil {
 			return nil, err

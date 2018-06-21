@@ -33,17 +33,8 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	signer := newCharlieSigner()  //Charlie, our good guy
 	falseSigner := newBobSigner() //Bob will play the bad guy again
 
-	// Create a resource to our good guy Charlie's name, however, Charlie's
-	// keyboard was upside down and generated invalid characters for his resource name
-	// Only plain ASCII characters are allowed.
-	createRequest, err := NewCreateRequest("sɹǝʇɔɐɹɐɥɔ ǝƃuɐɹʇs ɥʇᴉʍ ʇnq 'ǝɔɹnosǝɹ ǝɯosǝʍɐ ʎW",
-		300, 1528900000, signer.Address(), nil, false)
-	if err == nil {
-		t.Fatal("Expected create request to fail since the name contains bad characters")
-	}
-
-	// Now Charlie tries again, this time with a proper resource name
-	createRequest, err = NewCreateRequest("a good resource name",
+	// Create a resource to our good guy Charlie's name
+	createRequest, err := NewCreateRequest("a good resource name",
 		300, 1528900000, signer.Address(), nil, false)
 	if err != nil {
 		t.Fatalf("Error creating resource name: %s", err)

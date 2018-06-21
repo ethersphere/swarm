@@ -167,11 +167,6 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 		return NewError(ErrInvalidValue, "frequency cannot be 0 when creating a resource")
 	}
 
-	// make sure name only contains ascii values
-	if !isSafeName(request.name) {
-		return NewErrorf(ErrInvalidValue, "invalid name: '%s'", request.name)
-	}
-
 	// make sure owner is set to something
 	var zeroAddr = common.Address{}
 	if request.ownerAddr == zeroAddr {
