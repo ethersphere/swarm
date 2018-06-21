@@ -18,15 +18,11 @@ package mru
 
 import (
 	"bytes"
-	"context"
 	"encoding/binary"
-	"fmt"
-	"math/big"
 	"time"
 
 	"golang.org/x/net/idna"
 
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -77,8 +73,11 @@ func getNextPeriod(start uint64, current uint64, frequency uint64) (uint32, erro
 	if current < start {
 		return 0, NewErrorf(ErrInvalidValue, "given current time value %d < start time %d", current, start)
 	}
-	blockdiff := current - start
-	period := blockdiff / frequency
+	if frequency == 0 {
+		return 0, NewError(ErrInvalidValue, "frequency is 0")
+	}
+	timeDiff := current - start
+	period := timeDiff / frequency
 	return uint32(period + 1), nil
 }
 
@@ -110,35 +109,4 @@ func isMultihash(data []byte) int {
 		return 0
 	}
 	return cursor + inthashlength
-}
-
-// old code (TODO: remove this code)
-
-type blockEstimator struct {
-	Start   time.Time
-	Average time.Duration
-}
-
-// NewBlockEstimator returns an object that can be used for retrieving an heuristical block height in the absence of a blockchain connection
-// It implements the headerGetter interface
-// TODO: Average must  be adjusted when blockchain connection is present and synced
-func NewBlockEstimator() *blockEstimator {
-	sampleDate, _ := time.Parse(time.RFC3339, "2018-05-04T20:35:22Z")   // from etherscan.io
-	sampleBlock := int64(3169691)                                       // from etherscan.io
-	ropstenStart, _ := time.Parse(time.RFC3339, "2016-11-20T11:48:50Z") // from etherscan.io
-	ns := sampleDate.Sub(ropstenStart).Nanoseconds()
-	period := int(ns / sampleBlock)
-	parsestring := fmt.Sprintf("%dns", int(float64(period)*1.0005)) // increase the blockcount a little, so we don't overshoot the read block height; if we do, we will never find the updates when getting synced data
-	periodNs, _ := time.ParseDuration(parsestring)
-	return &blockEstimator{
-		Start:   ropstenStart,
-		Average: periodNs,
-	}
-}
-
-// HeaderByNumber retrieves the estimated block number wrapped in a block header struct
-func (b *blockEstimator) HeaderByNumber(context.Context, string, *big.Int) (*types.Header, error) {
-	return &types.Header{
-		Number: big.NewInt(time.Since(b.Start).Nanoseconds() / b.Average.Nanoseconds()),
-	}, nil
 }

@@ -88,7 +88,7 @@ func (r *resourceMetadata) binaryPut(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Need a slice of exactly %d to serialize this metadata, but got a slice of size %d.", metadataChunkLength, len(serializedData))
 	}
 
-	// root block has first two bytes both set to 0, which distinguishes from update bytes
+	// root chunk has first two bytes both set to 0, which distinguishes from update bytes
 	// therefore, skip the first two bytes of a zero-initialized array.
 	cursor := 2
 	binary.LittleEndian.PutUint16(serializedData[cursor:cursor+2], uint16(metadataChunkLength-prefixLength)) // metadataLength does not include the 4 prefix bytes
