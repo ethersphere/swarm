@@ -91,19 +91,6 @@ func ToSafeName(name string) (string, error) {
 	return idna.ToASCII(name)
 }
 
-// check that name identifiers contain valid bytes
-// Strings created using ToSafeName() should satisfy this check
-func isSafeName(name string) bool {
-	if name == "" {
-		return false
-	}
-	validname, err := idna.ToASCII(name)
-	if err != nil {
-		return false
-	}
-	return validname == name
-}
-
 // if first byte is the start of a multihash this function will try to parse it
 // if successful it returns the length of multihash data, 0 otherwise
 func isMultihash(data []byte) int {
