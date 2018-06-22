@@ -48,7 +48,7 @@
 // If more than one update is made in the same period, incremental
 // version numbers are used successively.
 //
-// A lookup agent need only know the rootAddr in order to get the versions
+// A user looking up a resource would only need to know the rootAddr in order to get the versions
 //
 // the resource update data is:
 // resourcedata = headerlength|period|version|metaHash|rootAddr|data
@@ -56,5 +56,5 @@
 // the full update data that goes in the chunk payload is:
 // resourcedata|sign(resourcedata)
 //
-// headerlength is a 16 bit value containing the byte length of period|version|rootAddr|metaHash
+// headerlength is a 16 bit value containing the byte length of period|version|rootAddr|multihash|metaHash
 package mru

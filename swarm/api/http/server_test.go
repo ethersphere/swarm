@@ -297,7 +297,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	if resp.StatusCode != http.StatusNotFound {
-		t.Fatal("Expected get non-existent resource to fail")
+		t.Fatalf("Expected get non-existent resource to fail with StatusNotFound (404), got %d", resp.StatusCode)
 	}
 
 	resp.Body.Close()

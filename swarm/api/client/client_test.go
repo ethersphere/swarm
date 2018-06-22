@@ -419,6 +419,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 
 }
 
+// TestClientCreateUpdateResource will check that mutable resources can be created and updated via the HTTP client.
 func TestClientCreateUpdateResource(t *testing.T) {
 
 	signer, _ := newTestSigner()

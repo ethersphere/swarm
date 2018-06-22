@@ -89,7 +89,7 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 	}
 
 	if ownerAddress != signer.Address() { // sanity check to make sure the Signer is declaring the same address used to sign!
-		return NewError(ErrInvalidSignature, "Signer address does not match private key")
+		return NewError(ErrInvalidSignature, "Signer address does not match ownerAddr")
 	}
 
 	r.signature = &signature
