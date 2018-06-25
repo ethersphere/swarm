@@ -24,13 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// resourceMetadata encapsulates the immutable information about a mutable resource :)
+// ResourceMetadata encapsulates the immutable information about a mutable resource :)
 // once serialized into a chunk, the resource can be retrieved by knowing its content-addressed rootAddr
-type resourceMetadata struct {
-	startTime Timestamp      // time at which the resource starts to be valid
-	frequency uint64         // expected update frequency for the resource
-	name      string         // name of the resource, for the reference of the user
-	ownerAddr common.Address // public address of the resource owner
+type ResourceMetadata struct {
+	StartTime Timestamp      // time at which the resource starts to be valid
+	Frequency uint64         // expected update frequency for the resource
+	Name      string         // name of the resource, for the reference of the user
+	OwnerAddr common.Address // public address of the resource owner
 }
 
 // Resource metadata chunk layout:
@@ -43,7 +43,7 @@ type resourceMetadata struct {
 const minimumMetadataLength = prefixLength + timestampLength + 8 + 1 + common.AddressLength
 
 // binaryGet populates the resource metadata from a byte array
-func (r *resourceMetadata) binaryGet(serializedData []byte) error {
+func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
 	if len(serializedData) < minimumMetadataLength {
 		return NewErrorf(ErrInvalidValue, "Metadata chunk to deserialize is too short. Expected at least %d. Got %d.", minimumMetadataLength, len(serializedData))
 	}
@@ -61,12 +61,12 @@ func (r *resourceMetadata) binaryGet(serializedData []byte) error {
 
 	cursor += 2
 
-	if err := r.startTime.binaryGet(serializedData[cursor : cursor+timestampLength]); err != nil {
+	if err := r.StartTime.binaryGet(serializedData[cursor : cursor+timestampLength]); err != nil {
 		return err
 	}
 	cursor += timestampLength
 
-	r.frequency = binary.LittleEndian.Uint64(serializedData[cursor : cursor+8])
+	r.Frequency = binary.LittleEndian.Uint64(serializedData[cursor : cursor+8])
 	cursor += 8
 
 	nameLength := int(serializedData[cursor])
@@ -74,15 +74,15 @@ func (r *resourceMetadata) binaryGet(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Metadata chunk to deserialize is too short when decoding resource name. Expected at least %d. Got %d.", nameLength+minimumMetadataLength, len(serializedData))
 	}
 	cursor++
-	r.name = string(serializedData[cursor : cursor+nameLength])
+	r.Name = string(serializedData[cursor : cursor+nameLength])
 	cursor += nameLength
 
-	copy(r.ownerAddr[:], serializedData[cursor:])
+	copy(r.OwnerAddr[:], serializedData[cursor:])
 	return nil
 }
 
 // binaryPut encodes the metadata into a byte array
-func (r *resourceMetadata) binaryPut(serializedData []byte) error {
+func (r *ResourceMetadata) binaryPut(serializedData []byte) error {
 	metadataChunkLength := r.binaryLength()
 	if len(serializedData) != metadataChunkLength {
 		return NewErrorf(ErrInvalidValue, "Need a slice of exactly %d to serialize this metadata, but got a slice of size %d.", metadataChunkLength, len(serializedData))
@@ -94,36 +94,36 @@ func (r *resourceMetadata) binaryPut(serializedData []byte) error {
 	binary.LittleEndian.PutUint16(serializedData[cursor:cursor+2], uint16(metadataChunkLength-prefixLength)) // metadataLength does not include the 4 prefix bytes
 	cursor += 2
 
-	r.startTime.binaryPut(serializedData[cursor : cursor+timestampLength])
+	r.StartTime.binaryPut(serializedData[cursor : cursor+timestampLength])
 	cursor += timestampLength
 
-	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+8], r.frequency)
+	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+8], r.Frequency)
 	cursor += 8
 
 	// Encode the name string as a 1 byte length followed by the encoded string.
 	// Longer strings will be truncated.
-	nameLength := len(r.name)
+	nameLength := len(r.Name)
 	if nameLength > 255 {
 		nameLength = 255
 	}
 	serializedData[cursor] = uint8(nameLength)
 	cursor++
-	copy(serializedData[cursor:cursor+nameLength], []byte(r.name[:nameLength]))
+	copy(serializedData[cursor:cursor+nameLength], []byte(r.Name[:nameLength]))
 	cursor += nameLength
 
-	copy(serializedData[cursor:cursor+common.AddressLength], r.ownerAddr[:])
+	copy(serializedData[cursor:cursor+common.AddressLength], r.OwnerAddr[:])
 	cursor += common.AddressLength
 
 	return nil
 }
 
-func (r *resourceMetadata) binaryLength() int {
-	return minimumMetadataLength + len(r.name)
+func (r *ResourceMetadata) binaryLength() int {
+	return minimumMetadataLength + len(r.Name)
 }
 
 // hashAndSerialize returns the root chunk addr and metadata hash that help identify and ascertain ownership of this resource
 // returns the serialized metadata as a byproduct of having to hash it.
-func (r *resourceMetadata) hashAndSerialize() (rootAddr, metaHash []byte, chunkData []byte, err error) {
+func (r *ResourceMetadata) hashAndSerialize() (rootAddr, metaHash []byte, chunkData []byte, err error) {
 
 	chunkData = make([]byte, r.binaryLength())
 	if err := r.binaryPut(chunkData); err != nil {
@@ -135,7 +135,7 @@ func (r *resourceMetadata) hashAndSerialize() (rootAddr, metaHash []byte, chunkD
 }
 
 // creates a metadata chunk out of a resourceMetadata structure
-func (metadata *resourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []byte, err error) {
+func (metadata *ResourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []byte, err error) {
 	// the metadata chunk contains a timestamp of when the resource starts to be valid
 	// and also how frequently it is expected to be updated
 	// from this we know at what time we should look for updates, and how often

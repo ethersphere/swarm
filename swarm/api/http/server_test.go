@@ -135,10 +135,19 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	// our mutable resource "name"
 	keybytes := "foo.eth"
-	updateRequest, err := mru.NewCreateRequest(keybytes, 13, srv.GetCurrentTime().Time, signer.Address(), mh, true)
+
+	updateRequest, err := mru.NewCreateRequest(&mru.ResourceMetadata{
+		Name:      keybytes,
+		Frequency: 13,
+		StartTime: srv.GetCurrentTime(),
+		OwnerAddr: signer.Address(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	updateRequest.SetData(mh,true)
+
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
@@ -210,13 +219,22 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updateRequest, err := mru.NewCreateRequest(keybytes, 13, srv.GetCurrentTime().Time, signer.Address(), databytes, false)
+	updateRequest, err := mru.NewCreateRequest(&mru.ResourceMetadata{
+		Name:      keybytes,
+		Frequency: 13,
+		StartTime: srv.GetCurrentTime(),
+		OwnerAddr: signer.Address(),
+	})
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	updateRequest.SetData(databytes,false)
+
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
+
 	body, err := mru.EncodeUpdateRequest(updateRequest)
 	if err != nil {
 		t.Fatal(err)
@@ -343,7 +361,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("Error decoding resource metadata: %s", err)
 	}
 	data := []byte("foo")
-	updateRequest.SetData(data)
+	updateRequest.SetData(data,false)
 	if err = updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}

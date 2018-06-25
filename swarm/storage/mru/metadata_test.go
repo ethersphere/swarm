@@ -29,13 +29,13 @@ func compareByteSliceToExpectedHex(t *testing.T, variableName string, actualValu
 
 func TestMarshallingAndUnmarshalling(t *testing.T) {
 	ownerAddr := newCharlieSigner().Address()
-	metadata := resourceMetadata{
-		name: "world news report, every hour, on the hour",
-		startTime: Timestamp{
+	metadata := ResourceMetadata{
+		Name: "world news report, every hour, on the hour",
+		StartTime: Timestamp{
 			Time: 1528880400,
 		},
-		frequency: 3600,
-		ownerAddr: ownerAddr,
+		Frequency: 3600,
+		OwnerAddr: ownerAddr,
 	}
 
 	rootAddr, metaHash, chunkData, err := metadata.hashAndSerialize() // creates hashes and marshals, in one go
@@ -50,7 +50,7 @@ func TestMarshallingAndUnmarshalling(t *testing.T) {
 	compareByteSliceToExpectedHex(t, "metaHash", metaHash, expectedMetaHash)
 	compareByteSliceToExpectedHex(t, "chunkData", chunkData, expectedChunkData)
 
-	recoveredMetadata := resourceMetadata{}
+	recoveredMetadata := ResourceMetadata{}
 	recoveredMetadata.binaryGet(chunkData)
 
 	if recoveredMetadata != metadata {

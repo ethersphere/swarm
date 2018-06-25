@@ -45,15 +45,21 @@ type updateRequestJSON struct {
 // Request represents an update and/or resource create message
 type Request struct {
 	SignedResourceUpdate
-	resourceMetadata
+	metadata ResourceMetadata
 }
 
+var zeroAddr = common.Address{}
+
 // NewCreateRequest returns a ready to sign Request message to create a new resource
-func NewCreateRequest(name string, frequency uint64, startTime uint64, ownerAddr common.Address, data []byte, multihash bool) (*Request, error) {
+func NewCreateRequest(metadata *ResourceMetadata) (*Request, error) {
 
 	// get the current time
-	if startTime == 0 {
-		startTime = uint64(time.Now().Unix())
+	if metadata.StartTime.Time == 0 {
+		metadata.StartTime.Time = uint64(time.Now().Unix())
+	}
+
+	if metadata.OwnerAddr == zeroAddr {
+		return nil, NewError(ErrInvalidValue, "OwnerAddr is not set")
 	}
 
 	request := &Request{
@@ -64,21 +70,14 @@ func NewCreateRequest(name string, frequency uint64, startTime uint64, ownerAddr
 						version: 1,
 						period:  1,
 					},
-					multihash: multihash,
 				},
-				data: data,
 			},
 		},
-		resourceMetadata: resourceMetadata{
-			name:      name,
-			frequency: frequency,
-			startTime: Timestamp{Time: startTime},
-			ownerAddr: ownerAddr,
-		},
+		metadata: *metadata,
 	}
 
 	var err error
-	request.rootAddr, request.metaHash, _, err = request.resourceMetadata.hashAndSerialize()
+	request.rootAddr, request.metaHash, _, err = request.metadata.hashAndSerialize()
 	if err != nil {
 		return nil, err
 	}
@@ -87,12 +86,12 @@ func NewCreateRequest(name string, frequency uint64, startTime uint64, ownerAddr
 
 // Frequency Returns the resource expected update frequency
 func (r *Request) Frequency() uint64 {
-	return r.frequency
+	return r.metadata.Frequency
 }
 
 // Name returns the resource human-readable name
 func (r *Request) Name() string {
-	return r.name
+	return r.metadata.Name
 }
 
 // Multihash returns true if the resource data should be interpreted as a multihash
@@ -117,28 +116,47 @@ func (r *Request) RootAddr() storage.Address {
 
 // StartTime returns the time that the resource was/will be created at
 func (r *Request) StartTime() Timestamp {
-	return r.startTime
+	return r.metadata.StartTime
 }
 
 // OwnerAddr returns the resource owner's address
 func (r *Request) OwnerAddr() common.Address {
-	return r.ownerAddr
+	return r.metadata.OwnerAddr
 }
 
 // Sign executes the signature to validate the resource and sets the owner address field
 func (r *Request) Sign(signer Signer) error {
+	if r.metadata.OwnerAddr != zeroAddr && r.metadata.OwnerAddr != signer.Address() {
+		return NewError(ErrInvalidSignature, "Signer does not match current owner of the resource")
+	}
+
 	if err := r.SignedResourceUpdate.Sign(signer); err != nil {
 		return err
 	}
-	r.ownerAddr = signer.Address()
+	r.metadata.OwnerAddr = signer.Address()
 	return nil
 }
 
 // SetData stores the payload data the resource will be updated with
-func (r *Request) SetData(data []byte) {
-	r.signature = nil
+func (r *Request) SetData(data []byte, multihash bool) {
 	r.data = data
-	r.frequency = 0 //mark as update
+	r.multihash = multihash
+	r.dirty()
+}
+
+func (r *Request) dirty() {
+	r.signature = nil
+	if r.period != 1 || r.version != 1 {
+		r.metadata.Frequency = 0 // mark as update if this is not the first request
+	}
+}
+
+func (r *Request) IsNew() bool {
+	return r.metadata.Frequency > 0 && (r.period <= 1 || r.version <= 1)
+}
+
+func (r *Request) IsUpdate() bool {
+	return r.signature != nil
 }
 
 // decode takes an update request JSON and returns an UpdateRequest
@@ -156,20 +174,20 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 				},
 			},
 		},
-		resourceMetadata: resourceMetadata{
-			name:      j.Name,
-			frequency: j.Frequency,
-			startTime: Timestamp{
+		metadata: ResourceMetadata{
+			Name:      j.Name,
+			Frequency: j.Frequency,
+			StartTime: Timestamp{
 				Time: j.StartTime,
 			},
 		},
 	}
 
-	if err := decodeHexArray(r.startTime.Proof[:], j.StartTimeProof, common.HashLength, "startTimeProof"); err != nil {
+	if err := decodeHexArray(r.metadata.StartTime.Proof[:], j.StartTimeProof, common.HashLength, "startTimeProof"); err != nil {
 		return nil, err
 	}
 
-	if err := decodeHexArray(r.ownerAddr[:], j.OwnerAddr, common.AddressLength, "ownerAddr"); err != nil {
+	if err := decodeHexArray(r.metadata.OwnerAddr[:], j.OwnerAddr, common.AddressLength, "ownerAddr"); err != nil {
 		return nil, err
 	}
 
@@ -194,12 +212,12 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 		return nil, err
 	}
 
-	if r.frequency > 0 { // we use frequency > 0 to know it is a new resource creation
+	if r.IsNew() {
 		// for new resource creation, rootAddr and metaHash are optional because
 		// we can derive them from the content itself.
 		// however, if the user sent them, we check them for consistency.
 
-		r.rootAddr, r.metaHash, _, err = r.resourceMetadata.hashAndSerialize()
+		r.rootAddr, r.metaHash, _, err = r.metadata.hashAndSerialize()
 		if err != nil {
 			return nil, err
 		}
@@ -274,22 +292,22 @@ func EncodeUpdateRequest(updateRequest *Request) (rawData []byte, err error) {
 		metaHashString = hexutil.Encode(updateRequest.metaHash)
 	}
 	var ownerAddrString string
-	if updateRequest.frequency == 0 {
+	if updateRequest.metadata.Frequency == 0 {
 		ownerAddrString = ""
 	} else {
-		ownerAddrString = hexutil.Encode(updateRequest.ownerAddr[:])
+		ownerAddrString = hexutil.Encode(updateRequest.metadata.OwnerAddr[:])
 	}
 	var startTimeProofString string
-	if updateRequest.startTime.Time == 0 {
+	if updateRequest.metadata.StartTime.Time == 0 {
 		startTimeProofString = ""
 	} else {
-		startTimeProofString = hexutil.Encode(updateRequest.startTime.Proof[:])
+		startTimeProofString = hexutil.Encode(updateRequest.metadata.StartTime.Proof[:])
 	}
 
 	requestJSON := &updateRequestJSON{
-		Name:           updateRequest.name,
-		Frequency:      updateRequest.frequency,
-		StartTime:      updateRequest.startTime.Time,
+		Name:           updateRequest.metadata.Name,
+		Frequency:      updateRequest.metadata.Frequency,
+		StartTime:      updateRequest.metadata.StartTime.Time,
 		StartTimeProof: startTimeProofString,
 		Version:        updateRequest.version,
 		Period:         updateRequest.period,
