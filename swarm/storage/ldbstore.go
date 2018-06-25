@@ -25,8 +25,10 @@ package storage
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -54,6 +56,10 @@ var (
 	keyDataIdx     = []byte{4}
 	keyData        = byte(6)
 	keyDistanceCnt = byte(7)
+)
+
+var (
+	ErrDBClosed = errors.New("LDBStore closed")
 )
 
 type gcItem struct {
@@ -93,18 +99,29 @@ type LDBStore struct {
 
 	batchC   chan bool
 	batchesC chan struct{}
-	batch    *leveldb.Batch
+	closed   bool
+	batch    *dbBatch
 	lock     sync.RWMutex
 	quit     chan struct{}
 
 	// Functions encodeDataFunc is used to bypass
 	// the default functionality of DbStore with
 	// mock.NodeStore for testing purposes.
-	encodeDataFunc func(chunk *Chunk) []byte
+	encodeDataFunc func(chunk Chunk) []byte
 	// If getDataFunc is defined, it will be used for
 	// retrieving the chunk data instead from the local
 	// LevelDB database.
-	getDataFunc func(addr Address) (data []byte, err error)
+	getDataFunc func(key Address) (data []byte, err error)
+}
+
+type dbBatch struct {
+	*leveldb.Batch
+	err error
+	c   chan struct{}
+}
+
+func newBatch() *dbBatch {
+	return &dbBatch{Batch: new(leveldb.Batch), c: make(chan struct{})}
 }
 
 // TODO: Instead of passing the distance function, just pass the address from which distances are calculated
@@ -115,10 +132,9 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	s.hashfunc = params.Hash
 	s.quit = make(chan struct{})
 
-	s.batchC = make(chan bool)
 	s.batchesC = make(chan struct{}, 1)
 	go s.writeBatches()
-	s.batch = new(leveldb.Batch)
+	s.batch = newBatch()
 	// associate encodeData with default functionality
 	s.encodeDataFunc = encodeData
 
@@ -199,13 +215,14 @@ func getIndexKey(hash Address) []byte {
 	return key
 }
 
-func getOldDataKey(idx uint64) []byte {
-	key := make([]byte, 9)
-	key[0] = keyOldData
-	binary.BigEndian.PutUint64(key[1:9], idx)
-
-	return key
-}
+//
+// func getOldDataKey(idx uint64) []byte {
+// 	key := make([]byte, 9)
+// 	key[0] = keyOldData
+// 	binary.BigEndian.PutUint64(key[1:9], idx)
+//
+// 	return key
+// }
 
 func getDataKey(idx uint64, po uint8) []byte {
 	key := make([]byte, 10)
@@ -221,12 +238,12 @@ func encodeIndex(index *dpaDBIndex) []byte {
 	return data
 }
 
-func encodeData(chunk *Chunk) []byte {
+func encodeData(chunk Chunk) []byte {
 	// Always create a new underlying array for the returned byte slice.
-	// The chunk.Key array may be used in the returned slice which
+	// The chunk.Address array may be used in the returned slice which
 	// may be changed later in the code or by the LevelDB, resulting
-	// that the Key is changed as well.
-	return append(append([]byte{}, chunk.Addr[:]...), chunk.SData...)
+	// that the Address is changed as well.
+	return append(append([]byte{}, chunk.Address()[:]...), chunk.Data()...)
 }
 
 func decodeIndex(data []byte, index *dpaDBIndex) error {
@@ -234,15 +251,15 @@ func decodeIndex(data []byte, index *dpaDBIndex) error {
 	return dec.Decode(index)
 }
 
-func decodeData(data []byte, chunk *Chunk) {
-	chunk.SData = data[32:]
-	chunk.Size = int64(binary.BigEndian.Uint64(data[32:40]))
+func decodeData(addr Address, data []byte) (*chunk, error) {
+	return NewChunk(addr, data[32:]), nil
 }
 
-func decodeOldData(data []byte, chunk *Chunk) {
-	chunk.SData = data
-	chunk.Size = int64(binary.BigEndian.Uint64(data[0:8]))
-}
+//
+// func decodeOldData(data []byte, chunk *chunk) {
+// 	chunk.sdata = data
+// 	chunk.span = int64(binary.BigEndian.Uint64(data[0:8]))
+// }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
@@ -343,7 +360,6 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 	tr := tar.NewReader(in)
 
 	var count int64
-	var wg sync.WaitGroup
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
@@ -368,17 +384,14 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 			return count, err
 		}
 		key := Address(keybytes)
-		chunk := NewChunk(key, nil)
-		chunk.SData = data[32:]
-		s.Put(chunk)
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			<-chunk.dbStoredC
-		}()
+		chunk := NewChunk(key, data[32:])
+		_, err = s.Put(chunk)
+		if err != nil {
+			log.Info("hasherStore.Put:", "chunk", chunk, "err", err)
+			return count, err
+		}
 		count++
 	}
-	wg.Wait()
 	return count, nil
 }
 
@@ -480,10 +493,9 @@ func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
 	s.db.Write(batch)
 }
 
-func (s *LDBStore) CurrentBucketStorageIndex(po uint8) uint64 {
+func (s *LDBStore) BinIndex(po uint8) uint64 {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-
 	return s.bucketCnt[po]
 }
 
@@ -499,43 +511,51 @@ func (s *LDBStore) CurrentStorageIndex() uint64 {
 	return s.dataIdx
 }
 
-func (s *LDBStore) Put(chunk *Chunk) {
+func (s *LDBStore) Put(chunk Chunk) (func(context.Context) error, error) {
 	metrics.GetOrRegisterCounter("ldbstore.put", nil).Inc(1)
-	log.Trace("ldbstore.put", "key", chunk.Addr)
+	log.Trace("ldbstore.put", "key", chunk.Address())
 
-	ikey := getIndexKey(chunk.Addr)
+	ikey := getIndexKey(chunk.Address())
 	var index dpaDBIndex
 
-	po := s.po(chunk.Addr)
+	po := s.po(chunk.Address())
 	s.lock.Lock()
 	defer s.lock.Unlock()
+	if s.closed {
+		return nil, ErrDBClosed
+	}
+	batch := s.batch
 
-	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Addr, "ikey", fmt.Sprintf("%x", ikey))
+	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Address(), "ikey", fmt.Sprintf("%x", ikey))
 	idata, err := s.db.Get(ikey)
 	if err != nil {
 		s.doPut(chunk, &index, po)
-		batchC := s.batchC
-		go func() {
-			<-batchC
-			chunk.markAsStored()
-		}()
 	} else {
-		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Addr)
+		log.Trace("ldbstore.put: chunk already exists, only update access", "key", chunk.Address)
 		decodeIndex(idata, &index)
-		chunk.markAsStored()
 	}
 	index.Access = s.accessCnt
 	s.accessCnt++
 	idata = encodeIndex(&index)
+	wait := func(ctx context.Context) error {
+		select {
+		case <-batch.c:
+			return batch.err
+		case <-ctx.Done():
+			// log.Error("context done", "err", ctx.Err())
+			return ctx.Err()
+		}
+	}
 	s.batch.Put(ikey, idata)
 	select {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
+	return wait, nil
 }
 
 // force putting into db, does not check access index
-func (s *LDBStore) doPut(chunk *Chunk, index *dpaDBIndex, po uint8) {
+func (s *LDBStore) doPut(chunk Chunk, index *dpaDBIndex, po uint8) {
 	data := s.encodeDataFunc(chunk)
 	dkey := getDataKey(s.dataIdx, po)
 	s.batch.Put(dkey, data)
@@ -551,56 +571,61 @@ func (s *LDBStore) doPut(chunk *Chunk, index *dpaDBIndex, po uint8) {
 }
 
 func (s *LDBStore) writeBatches() {
-mainLoop:
 	for {
 		select {
 		case <-s.quit:
-			break mainLoop
+			return
 		case <-s.batchesC:
-			s.lock.Lock()
-			b := s.batch
-			e := s.entryCnt
-			d := s.dataIdx
-			a := s.accessCnt
-			c := s.batchC
-			s.batchC = make(chan bool)
-			s.batch = new(leveldb.Batch)
-			err := s.writeBatch(b, e, d, a)
-			// TODO: set this error on the batch, then tell the chunk
+			err := s.writeCurrentBatch()
 			if err != nil {
-				log.Error(fmt.Sprintf("spawn batch write (%d entries): %v", b.Len(), err))
+				log.Info(err.Error())
+				return
 			}
-			close(c)
-			for e > s.capacity {
-				// Collect garbage in a separate goroutine
-				// to be able to interrupt this loop by s.quit.
-				done := make(chan struct{})
-				go func() {
-					s.collectGarbage(gcArrayFreeRatio)
-					close(done)
-				}()
-
-				e = s.entryCnt
-				select {
-				case <-s.quit:
-					s.lock.Unlock()
-					break mainLoop
-				case <-done:
-				}
-			}
-			s.lock.Unlock()
 		}
 	}
 	log.Trace(fmt.Sprintf("DbStore: quit batch write loop"))
 }
 
+func (s *LDBStore) writeCurrentBatch() error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	b := s.batch
+	l := b.Len()
+	if l == 0 {
+		return nil
+	}
+	e := s.entryCnt
+	d := s.dataIdx
+	a := s.accessCnt
+	s.batch = newBatch()
+	b.err = s.writeBatch(b, e, d, a)
+	close(b.c)
+	for e > s.capacity {
+		// Collect garbage in a separate goroutine
+		// to be able to interrupt this loop by s.quit.
+		done := make(chan struct{})
+		go func() {
+			s.collectGarbage(gcArrayFreeRatio)
+			close(done)
+		}()
+
+		e = s.entryCnt
+		select {
+		case <-s.quit:
+			return errors.New("CollectGarbage terminated due to quit")
+		case <-done:
+		}
+	}
+	return nil
+}
+
 // must be called non concurrently
-func (s *LDBStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uint64) error {
+func (s *LDBStore) writeBatch(b *dbBatch, entryCnt, dataIdx, accessCnt uint64) error {
 	b.Put(keyEntryCnt, U64ToBytes(entryCnt))
 	b.Put(keyDataIdx, U64ToBytes(dataIdx))
 	b.Put(keyAccessCnt, U64ToBytes(accessCnt))
 	l := b.Len()
-	if err := s.db.Write(b); err != nil {
+	if err := s.db.Write(b.Batch); err != nil {
 		return fmt.Errorf("unable to write batch: %v", err)
 	}
 	log.Trace(fmt.Sprintf("batch write (%d entries)", l))
@@ -611,12 +636,12 @@ func (s *LDBStore) writeBatch(b *leveldb.Batch, entryCnt, dataIdx, accessCnt uin
 // to a mock store to bypass the default functionality encodeData.
 // The constructed function always returns the nil data, as DbStore does
 // not need to store the data, but still need to create the index.
-func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk *Chunk) []byte {
-	return func(chunk *Chunk) []byte {
-		if err := mockStore.Put(chunk.Addr, encodeData(chunk)); err != nil {
-			log.Error(fmt.Sprintf("%T: Chunk %v put: %v", mockStore, chunk.Addr.Log(), err))
+func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk Chunk) []byte {
+	return func(chunk Chunk) []byte {
+		if err := mockStore.Put(chunk.Address(), encodeData(chunk)); err != nil {
+			log.Error(fmt.Sprintf("%T: Chunk %v put: %v", mockStore, chunk.Address().Log(), err))
 		}
-		return chunk.Addr[:]
+		return chunk.Address()[:]
 	}
 }
 
@@ -639,7 +664,7 @@ func (s *LDBStore) tryAccessIdx(ikey []byte, index *dpaDBIndex) bool {
 	return true
 }
 
-func (s *LDBStore) Get(addr Address) (chunk *Chunk, err error) {
+func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
 	log.Trace("ldbstore.get", "key", addr)
 
@@ -648,9 +673,11 @@ func (s *LDBStore) Get(addr Address) (chunk *Chunk, err error) {
 	return s.get(addr)
 }
 
-func (s *LDBStore) get(addr Address) (chunk *Chunk, err error) {
+func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 	var indx dpaDBIndex
-
+	if s.closed {
+		return nil, ErrDBClosed
+	}
 	if s.tryAccessIdx(getIndexKey(addr), &indx) {
 		var data []byte
 		if s.getDataFunc != nil {
@@ -673,9 +700,7 @@ func (s *LDBStore) get(addr Address) (chunk *Chunk, err error) {
 			}
 		}
 
-		chunk = NewChunk(addr, nil)
-		chunk.markAsStored()
-		decodeData(data, chunk)
+		return decodeData(addr, data)
 	} else {
 		err = ErrChunkNotFound
 	}
@@ -729,6 +754,12 @@ func (s *LDBStore) setCapacity(c uint64) {
 
 func (s *LDBStore) Close() {
 	close(s.quit)
+	s.lock.Lock()
+	s.closed = true
+	s.lock.Unlock()
+	// force writing out current batch
+	s.writeCurrentBatch()
+	close(s.batchesC)
 	s.db.Close()
 }
 

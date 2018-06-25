@@ -18,6 +18,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,8 +68,14 @@ func (a *API) NewManifest(toEncrypt bool) (storage.Address, error) {
 	if err != nil {
 		return nil, err
 	}
-	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)), toEncrypt)
-	wait()
+	// TODO: expose context as parameter, do not instantiate it here
+	ctx := context.Background()
+
+	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
 	return key, err
 }
 
@@ -85,7 +92,14 @@ func (a *API) NewResourceManifest(resourceAddr string) (storage.Address, error) 
 	if err != nil {
 		return nil, err
 	}
-	key, _, err := a.Store(bytes.NewReader(data), int64(len(data)), false)
+
+	// TODO: expose context as parameter, do not instantiate it here
+	ctx := context.Background()
+	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
 	return key, err
 }
 
@@ -107,7 +121,13 @@ func (a *API) NewManifestWriter(addr storage.Address, quitC chan bool) (*Manifes
 // AddEntry stores the given data and adds the resulting key to the manifest
 func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Address, error) {
 
-	key, _, err := m.api.Store(data, e.Size, m.trie.encrypted)
+	// TODO: expose context as parameter, do not instantiate it here
+	ctx := context.Background()
+	key, wait, err := m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +235,7 @@ func loadManifest(fileStore *storage.FileStore, hash storage.Address, quitC chan
 func readManifest(manifestReader storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
-	size, err := manifestReader.Size(quitC)
+	size, err := manifestReader.Size()
 	if err != nil { // size == 0
 		// can't determine size means we don't have the root chunk
 		log.Trace("manifest not found", "key", hash)
@@ -382,8 +402,14 @@ func (mt *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	key, wait, err2 := mt.fileStore.Store(sr, int64(len(manifest)), mt.encrypted)
-	wait()
+	// TODO: expose context as parameter, do not instantiate it here
+	ctx := context.Background()
+
+	key, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted)
+	if err2 != nil {
+		return err2
+	}
+	err2 = wait(ctx)
 	mt.ref = key
 	return err2
 }

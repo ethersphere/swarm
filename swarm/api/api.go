@@ -226,20 +226,12 @@ func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Han
 	return
 }
 
-// Upload to be used only in TEST
-func (a *API) Upload(uploadDir, index string, toEncrypt bool) (hash string, err error) {
-	fs := NewFileSystem(a)
-	hash, err = fs.Upload(uploadDir, index, toEncrypt)
-	return hash, err
-}
-
 // Retrieve FileStore reader API
 func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
 	return a.fileStore.Retrieve(addr)
 }
 
-// Store wraps the Store API call of the embedded FileStore
-func (a *API) Store(data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(), err error) {
+func (a *Api) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(context.Context) error, err error) {
 	log.Debug("api.store", "size", size)
 	return a.fileStore.Store(data, size, toEncrypt)
 }
@@ -286,24 +278,27 @@ func (a *API) Resolve(uri *URI) (storage.Address, error) {
 }
 
 // Put provides singleton manifest creation on top of FileStore store
-func (a *API) Put(content, contentType string, toEncrypt bool) (k storage.Address, wait func(), err error) {
+func (a *Api) Put(ctx context.Context, content, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
-	key, waitContent, err := a.fileStore.Store(r, int64(len(content)), toEncrypt)
+	key, waitContent, err := a.fileStore.Store(ctx, r, int64(len(content)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.fileStore.Store(r, int64(len(manifest)), toEncrypt)
+	key, waitManifest, err := a.fileStore.Store(ctx, r, int64(len(manifest)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
 		return nil, nil, err
 	}
-	return key, func() {
-		waitContent()
-		waitManifest()
+	return key, func(ctx context.Context) error {
+		err := waitContent(ctx)
+		if err != nil {
+			return err
+		}
+		return waitManifest(ctx)
 	}, nil
 }
 
@@ -333,7 +328,7 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 			log.Trace("resource type", "key", manifestAddr, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := a.resource.Load(storage.Address(common.FromHex(entry.Hash)))
+			rsrc, err := a.resource.Load(ctx, storage.Address(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -655,7 +650,7 @@ func (a *API) BuildDirectoryTree(mhash string, nameresolver bool) (addr storage.
 // ResourceLookup Looks up mutable resource updates at specific periods and versions
 func (a *API) ResourceLookup(ctx context.Context, addr storage.Address, period uint32, version uint32, maxLookup *mru.LookupParams) (string, []byte, error) {
 	var err error
-	rsrc, err := a.resource.Load(addr)
+	rsrc, err := a.resource.Load(ctx, addr)
 	if err != nil {
 		return "", nil, err
 	}

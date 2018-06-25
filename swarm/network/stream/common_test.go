@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -58,15 +59,17 @@ var (
 )
 
 var (
-	defaultSkipCheck  bool
-	waitPeerErrC      chan error
-	chunkSize         = 4096
-	registries        map[discover.NodeID]*TestRegistry
-	createStoreFunc   func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
-	getRetrieveFunc   = defaultRetrieveFunc
-	subscriptionCount = 0
-	globalStore       mock.GlobalStorer
-	globalStoreDir    string
+	useFakeFetchFunc    bool
+	useAPIFakeFetchFunc bool
+	defaultSkipCheck    bool
+	waitPeerErrC        chan error
+	chunkSize           = 4096
+	registries          map[discover.NodeID]*TestRegistry
+	createStoreFunc     func(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error)
+	subscriptionCount   = 0
+	globalStore         mock.GlobalStorer
+	globalStoreDir      string
+	getRetrieveFunc     func(id discover.NodeID) network.RequestFunc
 )
 
 var services = adapters.Services{
@@ -102,32 +105,56 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	var err error
 	id := ctx.Config.ID
 	addr := toAddr(id)
-	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	stores[id], err = createStoreFunc(id, addr)
+	if createStoreFunc != nil {
+		stores[id], err = createStoreFunc(id, addr)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if stores[id] == nil {
+		panic("NIL STORE")
+	}
+	netStore, err := storage.NewNetStore(stores[id], nil)
 	if err != nil {
 		return nil, err
 	}
-	store := stores[id].(*storage.LocalStore)
-	db := storage.NewDBAPI(store)
-	delivery := NewDelivery(kad, db)
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	delivery := NewDelivery(kad, netStore)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+	netStore.NewFetchFunc = newFakeFetchFunc
+	if !useFakeFetchFunc {
+		netStore.NewFetchFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+	}
+	syncDB := netStore.Store().(SyncDB)
+	r := NewRegistry(addr, delivery, syncDB, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,
 	})
-	RegisterSwarmSyncerServer(r, db)
-	RegisterSwarmSyncerClient(r, db)
+	RegisterSwarmSyncerServer(r, syncDB)
+	RegisterSwarmSyncerClient(r, netStore)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
 	}()
-	fileStore := storage.NewFileStore(storage.NewNetStore(store, getRetrieveFunc(id)), storage.NewFileStoreParams())
+
+	APINetStore := netStore
+	if useAPIFakeFetchFunc != useFakeFetchFunc {
+		APINetStore, err = storage.NewNetStore(stores[id], nil)
+		if err != nil {
+			return nil, err
+		}
+		APINetStore.NewFetchFunc = newFakeFetchFunc
+		if !useFakeFetchFunc {
+			netStore.NewFetchFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+		}
+	}
+	fileStore := storage.NewFileStore(APINetStore, storage.NewFileStoreParams())
 	testRegistry := &TestRegistry{Registry: r, fileStore: fileStore}
 	registries[id] = testRegistry
 	return testRegistry, nil
 }
 
-func defaultRetrieveFunc(id discover.NodeID) func(chunk *storage.Chunk) error {
-	return nil
+func newFakeFetchFunc(context.Context, storage.Address, *sync.Map) storage.FetchFunc {
+	return func(context.Context) {}
 }
 
 func datadirsCleanup() {
@@ -172,9 +199,12 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		return nil, nil, nil, removeDataDir, err
 	}
 
-	db := storage.NewDBAPI(localStore)
-	delivery := NewDelivery(to, db)
-	streamer := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+	netStore, err := storage.NewNetStore(localStore, newFakeFetchFunc)
+	if err != nil {
+		return nil, nil, nil, removeDataDir, err
+	}
+	delivery := NewDelivery(to, netStore)
+	streamer := NewRegistry(addr, delivery, localStore, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck: defaultSkipCheck,
 	})
 	teardown := func() {
@@ -217,14 +247,14 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 	}
 }
 
-func (rrs *roundRobinStore) Get(addr storage.Address) (*storage.Chunk, error) {
+func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (storage.Chunk, error) {
 	return nil, errors.New("get not well defined on round robin store")
 }
 
-func (rrs *roundRobinStore) Put(chunk *storage.Chunk) {
+func (rrs *roundRobinStore) Put(chunk storage.Chunk) (func(context.Context) error, error) {
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
-	rrs.stores[idx].Put(chunk)
+	return rrs.stores[idx].Put(chunk)
 }
 
 func (rrs *roundRobinStore) Close() {
@@ -250,7 +280,10 @@ func (r *TestRegistry) APIs() []rpc.API {
 }
 
 func readAll(fileStore *storage.FileStore, hash []byte) (int64, error) {
-	r, _ := fileStore.Retrieve(hash)
+	// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	// defer cancel()
+	ctx := context.TODO()
+	r, _ := fileStore.Retrieve(ctx, hash)
 	buf := make([]byte, 1024)
 	var n int
 	var total int64
@@ -357,26 +390,27 @@ func (r *TestExternalRegistry) EnableNotifications(peerId discover.NodeID, s Str
 
 type testExternalClient struct {
 	hashes               chan []byte
-	db                   *storage.DBAPI
+	store                storage.ChunkStore
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(db *storage.DBAPI) *testExternalClient {
+func newTestExternalClient(store storage.ChunkStore) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
-		db:                   db,
+		store:                store,
 		enableNotificationsC: make(chan struct{}),
 	}
 }
 
-func (c *testExternalClient) NeedData(hash []byte) func() {
-	chunk, _ := c.db.GetOrCreateRequest(hash)
-	if chunk.ReqC == nil {
+func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
+	wait := c.store.(Has).Has(ctx, storage.Address(hash))
+	if wait == nil {
 		return nil
 	}
 	c.hashes <- hash
-	return func() {
-		chunk.WaitToStore()
+	return func(ctx context.Context) error {
+		_, err := wait(ctx)
+		return err
 	}
 }
 
@@ -429,7 +463,7 @@ func (s *testExternalServer) SetNextBatch(from uint64, to uint64) ([]byte, uint6
 	return b, from, to, nil, nil
 }
 
-func (s *testExternalServer) GetData([]byte) ([]byte, error) {
+func (s *testExternalServer) GetData(context.Context, []byte) ([]byte, error) {
 	return make([]byte, 4096), nil
 }
 

@@ -168,7 +168,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		return
 	}
 
-	db := storage.NewDBAPI(self.lstore)
+	// TODO: NetStore needs delivery and delivery needs NetStore, no good order to instantiate them
+	db := storage.NewNetStore(self.lstore)
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),

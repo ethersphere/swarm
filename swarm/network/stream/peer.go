@@ -83,10 +83,10 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (p *Peer) Deliver(chunk *storage.Chunk, priority uint8) error {
+func (p *Peer) Deliver(chunk storage.Chunk, priority uint8) error {
 	msg := &ChunkDeliveryMsg{
-		Addr:  chunk.Addr,
-		SData: chunk.SData,
+		Addr:  chunk.Address(),
+		SData: chunk.Data(),
 	}
 	return p.SendPriority(msg, priority)
 }
@@ -319,6 +319,22 @@ func (p *Peer) removeClientParams(s Stream) error {
 	}
 	delete(p.clientParams, s)
 	return nil
+}
+
+func (p *Peer) context() context.Context {
+	var cancel func()
+	ctx := context.Background()
+	ctx, cancel = context.WithCancel(ctx)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-p.quit:
+			cancel()
+		}
+	}()
+
+	return ctx
 }
 
 func (p *Peer) close() {

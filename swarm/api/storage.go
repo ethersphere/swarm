@@ -17,6 +17,7 @@
 package api
 
 import (
+	"context"
 	"path"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -45,8 +46,10 @@ func NewStorage(api *API) *Storage {
 // its content type
 //
 // DEPRECATED: Use the HTTP API instead
-func (s *Storage) Put(content, contentType string, toEncrypt bool) (storage.Address, func(), error) {
-	return s.api.Put(content, contentType, toEncrypt)
+func (s *Storage) Put(content, contentType string, toEncrypt bool) (storage.Address, func(ctx context.Context) error, error) {
+	// TODO: expose context as parameter, do not instantiate it here
+	ctx := context.Background()
+	return s.api.Put(ctx, content, contentType, toEncrypt)
 }
 
 // Get retrieves the content from bzzpath and reads the response in full
@@ -70,8 +73,7 @@ func (s *Storage) Get(bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	quitC := make(chan bool)
-	expsize, err := reader.Size(quitC)
+	expsize, err := reader.Size()
 	if err != nil {
 		return nil, err
 	}

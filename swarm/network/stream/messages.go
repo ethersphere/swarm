@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
@@ -27,6 +28,8 @@ import (
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
+
+var syncBatchTimeout = 3000 * time.Millisecond
 
 // Stream defines a unique stream identifier.
 type Stream struct {
@@ -194,15 +197,17 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", len(hashes)/HashSize, err)
 	}
 	wg := sync.WaitGroup{}
+	ctx, cancel := context.WithTimeout(context.Background(), syncBatchTimeout)
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
 
-		if wait := c.NeedData(hash); wait != nil {
+		if wait := c.NeedData(ctx, hash); wait != nil {
 			want.Set(i/HashSize, true)
 			wg.Add(1)
 			// create request and wait until the chunk data arrives and is stored
-			go func(w func()) {
-				w()
+			go func(w func(context.Context) error) {
+				err = w(ctx)
+				_ = err
 				wg.Done()
 			}(wait)
 		}
@@ -222,6 +227,7 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	// }()
 	go func() {
 		wg.Wait()
+		cancel()
 		select {
 		case c.next <- c.batchDone(p, req, hashes):
 		case <-c.quit:
@@ -309,20 +315,17 @@ func (p *Peer) handleWantedHashesMsg(req *WantedHashesMsg) error {
 	if err != nil {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", l, err)
 	}
+	ctx := context.TODO()
 	for i := 0; i < l; i++ {
 		if want.Get(i) {
 			metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg.actualget", nil).Inc(1)
 
 			hash := hashes[i*HashSize : (i+1)*HashSize]
-			data, err := s.GetData(hash)
+			data, err := s.GetData(ctx, hash)
 			if err != nil {
 				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}
-			chunk := storage.NewChunk(hash, nil)
-			chunk.SData = data
-			if length := len(chunk.SData); length < 9 {
-				log.Error("Chunk.SData to sync is too short", "len(chunk.SData)", length, "address", chunk.Addr)
-			}
+			chunk := storage.NewChunk(hash, data)
 			if err := p.Deliver(chunk, s.priority); err != nil {
 				return err
 			}
