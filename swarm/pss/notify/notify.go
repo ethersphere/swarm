@@ -76,13 +76,11 @@ type sendBin struct {
 }
 
 // represents a single notification service
-// only subscription address bins that match the address of a notification client have entries. The threshold sets the amount of bytes each address bin uses.
-// every notification has a topic used for pss transfer of symmetrically encrypted notifications
-// contentFunc is the callback to get initial update data from the notifications service provider
+// only subscription address bins that match the address of a notification client have entries.
 type notifier struct {
 	bins      map[string]*sendBin
-	topic     pss.Topic
-	threshold int
+	topic     pss.Topic // identifies the resource for pss receiver
+	threshold int       // amount of address bytes used in bins
 	updateC   <-chan []byte
 	quitC     chan struct{}
 }
@@ -137,11 +135,11 @@ func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss
 	pubkeyId := common.ToHex(crypto.FromECDSAPub(pubkey))
 	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
-		return fmt.Errorf("message could not be serialized: %v", err)
+		return err
 	}
 	err = c.pss.SendAsym(pubkeyId, controlTopic, smsg)
 	if err != nil {
-		return fmt.Errorf("send subscribe message fail: %v", err)
+		return err
 	}
 	c.subscriptions[name] = &subscription{
 		pubkeyId: pubkeyId,
@@ -163,11 +161,11 @@ func (c *Controller) Unsubscribe(name string) error {
 	msg := NewMsg(MsgCodeStop, name, sub.address)
 	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
-		return fmt.Errorf("message could not be serialized: %v", err)
+		return err
 	}
 	err = c.pss.SendAsym(sub.pubkeyId, controlTopic, smsg)
 	if err != nil {
-		return fmt.Errorf("send unsubscribe message fail: %v", err)
+		return err
 	}
 	delete(c.subscriptions, name)
 	return nil
@@ -237,12 +235,124 @@ func (c *Controller) notify(name string, data []byte) error {
 		log.Debug("sending pss notify", "name", name, "addr", fmt.Sprintf("%x", m.address), "topic", fmt.Sprintf("%x", c.notifiers[name].topic), "data", data)
 		smsg, err := rlp.EncodeToBytes(msg)
 		if err != nil {
-			return fmt.Errorf("Failed to serialize message: %v", err)
+			return err
 		}
 		err = c.pss.SendSym(m.symKeyId, c.notifiers[name].topic, smsg)
 		if err != nil {
 			log.Warn("Failed to send notify to addr %x: %v", m.address, err)
 		}
+	}
+	return nil
+}
+
+// check if we already have the bin
+// if we do, retreive the symkey from it and increment the count
+// if we dont make a new symkey and a new bin entry
+func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, pssAddress pss.PssAddress, err error) {
+
+	// parse the address from the message and truncate if longer than our bins threshold
+	if len(address) > ntfr.threshold {
+		address = address[:ntfr.threshold]
+	}
+
+	pssAddress = pss.PssAddress(address)
+	hexAddress := fmt.Sprintf("%x", address)
+	currentBin, ok := ntfr.bins[hexAddress]
+	if ok {
+		currentBin.count++
+		symKeyId = currentBin.symKeyId
+	} else {
+		symKeyId, err = c.pss.GenerateSymmetricKey(ntfr.topic, &pssAddress, false)
+		if err != nil {
+			return "", nil, err
+		}
+		ntfr.bins[hexAddress] = &sendBin{
+			address:  address,
+			symKeyId: symKeyId,
+			count:    1,
+		}
+	}
+	return symKeyId, pssAddress, nil
+}
+
+func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
+
+	pubkey, err := crypto.UnmarshalPubkey(common.FromHex(keyid))
+	if err != nil {
+		return err
+	}
+
+	// if name is not registered for notifications we will not react
+	currentNotifier, ok := c.notifiers[msg.namestring]
+	if !ok {
+		return fmt.Errorf("Subscribe attempted on unknown resource '%s'", msg.namestring)
+	}
+
+	// add to or open new bin
+	symKeyId, pssAddress, err := c.addToBin(currentNotifier, msg.Payload)
+	if err != nil {
+		return err
+	}
+
+	// add to address book for send initial notify
+	symkey, err := c.pss.GetSymmetricKey(symKeyId)
+	if err != nil {
+		return fmt.Errorf("retrieve symkey fail: %v", err)
+	}
+	err = c.pss.SetPeerPublicKey(pubkey, controlTopic, &pssAddress)
+	if err != nil {
+		return fmt.Errorf("add pss peer for reply fail: %v", err)
+	}
+
+	// TODO this is set to zero-length byte pending decision on protocol for initial message, whether it should include message or not, and how to trigger the initial message so that current state of MRU is sent upon subscription
+	notify := []byte{}
+	replyMsg := NewMsg(MsgCodeNotifyWithKey, msg.namestring, make([]byte, len(notify)+symKeyLength))
+	copy(replyMsg.Payload, notify)
+	copy(replyMsg.Payload[len(notify):], symkey)
+	sReplyMsg, err := rlp.EncodeToBytes(replyMsg)
+	if err != nil {
+		return fmt.Errorf("reply message could not be serialized: %v", err)
+	}
+	err = c.pss.SendAsym(keyid, controlTopic, sReplyMsg)
+	if err != nil {
+		return fmt.Errorf("send start reply fail: %v", err)
+	}
+	return nil
+}
+
+func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
+	symkey := msg.Payload[len(msg.Payload)-symKeyLength:]
+	topic := pss.BytesToTopic(msg.Name)
+
+	// \TODO keep track of and add actual address
+	updaterAddr := pss.PssAddress([]byte{})
+	c.pss.SetSymmetricKey(symkey, topic, &updaterAddr, true)
+	c.pss.Register(&topic, c.Handler)
+	return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload[:len(msg.Payload)-symKeyLength])
+}
+
+func (c *Controller) handleStopMsg(msg *Msg) error {
+	// if name is not registered for notifications we will not react
+	currentNotifier, ok := c.notifiers[msg.namestring]
+	if !ok {
+		return fmt.Errorf("Unsubscribe attempted on unknown resource '%s'", msg.namestring)
+	}
+
+	// parse the address from the message and truncate if longer than our bins' address length threshold
+	address := msg.Payload
+	if len(msg.Payload) > currentNotifier.threshold {
+		address = address[:currentNotifier.threshold]
+	}
+
+	// remove the entry from the bin if it exists, and remove the bin if it's the last remaining one
+	hexAddress := fmt.Sprintf("%x", address)
+	currentBin, ok := currentNotifier.bins[hexAddress]
+	if !ok {
+		return fmt.Errorf("found no active bin for address %s", hexAddress)
+	}
+	currentBin.count--
+	if currentBin.count == 0 { // if no more clients in this bin, remove it
+		delete(currentNotifier.bins, hexAddress)
 	}
 	return nil
 }
@@ -257,110 +367,18 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 	// see if the message is valid
 	msg, err := NewMsgFromPayload(smsg)
 	if err != nil {
-		return fmt.Errorf("Invalid message: %v", err)
+		return err
 	}
 
 	switch msg.Code {
 	case MsgCodeStart:
-		pubkey, err := crypto.UnmarshalPubkey(common.FromHex(keyid))
-		if err != nil {
-			return err
-		}
-
-		// if name is not registered for notifications we will not react
-		currentNotifier, ok := c.notifiers[msg.namestring]
-		if !ok {
-			return fmt.Errorf("Subscribe attempted on unknown resource '%s'", msg.namestring)
-		}
-
-		// parse the address from the message and truncate if longer than our bins threshold
-		address := msg.Payload
-		if len(msg.Payload) > currentNotifier.threshold {
-			address = address[:currentNotifier.threshold]
-		}
-
-		// check if we already have the bin
-		// if we do, retreive the symkey from it and increment the count
-		// if we dont make a new symkey and a new bin entry
-		pssAddress := pss.PssAddress(address)
-		hexAddress := fmt.Sprintf("%x", address)
-		var symKeyId string
-		currentBin, ok := currentNotifier.bins[hexAddress]
-		if ok {
-			currentBin.count++
-			symKeyId = currentBin.symKeyId
-		} else {
-			symKeyId, err = c.pss.GenerateSymmetricKey(currentNotifier.topic, &pssAddress, false)
-			if err != nil {
-				return fmt.Errorf("Generate symkey fail: %v", err)
-			}
-			currentNotifier.bins[hexAddress] = &sendBin{
-				address:  address,
-				symKeyId: symKeyId,
-				count:    1,
-			}
-
-		}
-
-		// add to address book for send initial notify
-		symkey, err := c.pss.GetSymmetricKey(symKeyId)
-		if err != nil {
-			return fmt.Errorf("retrieve symkey fail: %v", err)
-		}
-		pssaddr := pss.PssAddress(address)
-		err = c.pss.SetPeerPublicKey(pubkey, controlTopic, &pssaddr)
-		if err != nil {
-			return fmt.Errorf("add pss peer for reply fail: %v", err)
-		}
-
-		// TODO this is set to zero-length byte pending decision on protocol for initial message, whether it should include message or not, and how to trigger the initial message so that current state of MRU is sent upon subscription
-		notify := []byte{}
-		replyMsg := NewMsg(MsgCodeNotifyWithKey, msg.namestring, make([]byte, len(notify)+symKeyLength))
-		copy(replyMsg.Payload, notify)
-		copy(replyMsg.Payload[len(notify):], symkey)
-		sReplyMsg, err := rlp.EncodeToBytes(replyMsg)
-		if err != nil {
-			return fmt.Errorf("reply message could not be serialized: %v", err)
-		}
-		err = c.pss.SendAsym(keyid, controlTopic, sReplyMsg)
-		if err != nil {
-			return fmt.Errorf("send start reply fail: %v", err)
-		}
+		return c.handleStartMsg(msg, keyid)
 	case MsgCodeNotifyWithKey:
-		symkey := msg.Payload[len(msg.Payload)-symKeyLength:]
-		topic := pss.BytesToTopic(msg.Name)
-
-		// \TODO keep track of and add actual address
-		updaterAddr := pss.PssAddress([]byte{})
-		c.pss.SetSymmetricKey(symkey, topic, &updaterAddr, true)
-		c.pss.Register(&topic, c.Handler)
-		return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload[:len(msg.Payload)-symKeyLength])
+		return c.handleNotifyWithKeyMsg(msg)
 	case MsgCodeNotify:
 		return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload)
 	case MsgCodeStop:
-		// if name is not registered for notifications we will not react
-		currentNotifier, ok := c.notifiers[msg.namestring]
-		if !ok {
-			return fmt.Errorf("Unsubscribe attempted on unknown resource '%s'", msg.namestring)
-		}
-
-		// parse the address from the message and truncate if longer than our bins' address length threshold
-		address := msg.Payload
-		if len(msg.Payload) > currentNotifier.threshold {
-			address = address[:currentNotifier.threshold]
-		}
-
-		// remove the entry from the bin if it exists, and remove the bin if it's the last remaining one
-		hexAddress := fmt.Sprintf("%x", address)
-		currentBin, ok := currentNotifier.bins[hexAddress]
-		if !ok {
-			return fmt.Errorf("found no active bin for address %s", hexAddress)
-		}
-		currentBin.count--
-		if currentBin.count == 0 { // if no more clients in this bin, remove it
-			delete(currentNotifier.bins, hexAddress)
-		}
-
+		return c.handleStopMsg(msg)
 	default:
 		return fmt.Errorf("Invalid message code: %d", msg.Code)
 	}
