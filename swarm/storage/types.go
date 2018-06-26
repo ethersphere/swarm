@@ -355,3 +355,29 @@ type ChunkStore interface {
 	Get(rctx context.Context, ref Address) (ch Chunk, err error)
 	Close()
 }
+
+type SyncDB interface {
+	ChunkStore
+	BinIndex(po uint8) uint64
+	Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error
+}
+
+// FakeChunkStore doesn't store anything, just implements the ChunkStore interface
+// It can be used to inject into a hasherStore if you don't want to actually store data just do the
+// hashing
+type FakeChunkStore struct {
+}
+
+// Put doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Put(ch Chunk) (func(context.Context) error, error) {
+	return func(context.Context) error { return nil }, nil
+}
+
+// Gut doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
+	panic("FakeChunkStore doesn't support Get")
+}
+
+// Close doesn't store anything it is just here to implement ChunkStore
+func (f *FakeChunkStore) Close() {
+}

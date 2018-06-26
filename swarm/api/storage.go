@@ -47,9 +47,7 @@ func NewStorage(api *API) *Storage {
 //
 // DEPRECATED: Use the HTTP API instead
 func (s *Storage) Put(content, contentType string, toEncrypt bool) (storage.Address, func(ctx context.Context) error, error) {
-	// TODO: expose context as parameter, do not instantiate it here
-	ctx := context.Background()
-	return s.api.Put(ctx, content, contentType, toEncrypt)
+	return s.api.Put(content, contentType, toEncrypt)
 }
 
 // Get retrieves the content from bzzpath and reads the response in full

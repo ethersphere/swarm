@@ -31,12 +31,6 @@ const (
 	BatchSize = 128
 )
 
-type SyncDB interface {
-	storage.ChunkStore
-	BinIndex(po uint8) uint64
-	Iterator(from uint64, to uint64, po uint8, f func(storage.Address, uint64) bool) error
-}
-
 type Has interface {
 	Has(ctx context.Context, ref storage.Address) func(context.Context) (storage.Chunk, error)
 }
@@ -48,14 +42,14 @@ type Has interface {
 type SwarmSyncerServer struct {
 	po        uint8
 	store     storage.ChunkStore
-	syncDB    SyncDB
+	syncDB    storage.SyncDB
 	sessionAt uint64
 	start     uint64
 	quit      chan struct{}
 }
 
 // NewSwarmSyncerServer is contructor for SwarmSyncerServer
-func NewSwarmSyncerServer(live bool, po uint8, syncDB SyncDB) (*SwarmSyncerServer, error) {
+func NewSwarmSyncerServer(live bool, po uint8, syncDB storage.SyncDB) (*SwarmSyncerServer, error) {
 	sessionAt := syncDB.BinIndex(po)
 	var start uint64
 	if live {
@@ -70,7 +64,7 @@ func NewSwarmSyncerServer(live bool, po uint8, syncDB SyncDB) (*SwarmSyncerServe
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, syncDB SyncDB) {
+func RegisterSwarmSyncerServer(streamer *Registry, syncDB storage.SyncDB) {
 	streamer.RegisterServerFunc("SYNC", func(p *Peer, t string, live bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {

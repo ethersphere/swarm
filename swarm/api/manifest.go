@@ -71,7 +71,7 @@ func (a *API) NewManifest(toEncrypt bool) (storage.Address, error) {
 	// TODO: expose context as parameter, do not instantiate it here
 	ctx := context.Background()
 
-	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
+	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)), toEncrypt)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (a *API) NewResourceManifest(resourceAddr string) (storage.Address, error) 
 
 	// TODO: expose context as parameter, do not instantiate it here
 	ctx := context.Background()
-	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
+	key, wait, err := a.Store(bytes.NewReader(data), int64(len(data)), false)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +123,7 @@ func (m *ManifestWriter) AddEntry(data io.Reader, e *ManifestEntry) (storage.Add
 
 	// TODO: expose context as parameter, do not instantiate it here
 	ctx := context.Background()
-	key, wait, err := m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+	key, wait, err := m.api.Store(data, e.Size, m.trie.encrypted)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +227,8 @@ type manifestTrieEntry struct {
 func loadManifest(fileStore *storage.FileStore, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 	log.Trace("manifest lookup", "key", hash)
 	// retrieve manifest via FileStore
-	manifestReader, isEncrypted := fileStore.Retrieve(hash)
+	ctx := context.TODO()
+	manifestReader, isEncrypted := fileStore.Retrieve(ctx, hash)
 	log.Trace("reader retrieved", "key", hash)
 	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC)
 }

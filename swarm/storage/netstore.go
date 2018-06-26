@@ -152,6 +152,11 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	return fetcher
 }
 
+// RequestsCacheLen returns the current number of outgoing requests stored in the cache
+func (n *NetStore) RequestsCacheLen() int {
+	return n.fetchers.Len()
+}
+
 type fetcher struct {
 	addr       Address       // adress of chunk
 	chunk      Chunk         // fetcher can set the chunk on the fetcher
@@ -206,4 +211,28 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 func (f *fetcher) deliver(ch Chunk) {
 	f.chunk = ch
 	close(f.deliveredC)
+}
+
+type SyncNetStore struct {
+	store SyncDB
+	*NetStore
+}
+
+func NewSyncNetStore(store SyncDB, newFetchFunc NewFetchFunc) (*SyncNetStore, error) {
+	netStore, err := NewNetStore(store, newFetchFunc)
+	if err != nil {
+		return nil, err
+	}
+	return &SyncNetStore{
+		store:    store,
+		NetStore: netStore,
+	}, nil
+}
+
+func (sn *SyncNetStore) BinIndex(po uint8) uint64 {
+	return sn.store.BinIndex(po)
+}
+
+func (sn *SyncNetStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
+	return sn.store.Iterator(from, to, po, f)
 }

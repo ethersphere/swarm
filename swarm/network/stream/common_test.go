@@ -125,7 +125,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	if !useFakeFetchFunc {
 		netStore.NewFetchFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 	}
-	syncDB := netStore.Store().(SyncDB)
+	syncDB := netStore.Store().(storage.SyncDB)
 	r := NewRegistry(addr, delivery, syncDB, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,

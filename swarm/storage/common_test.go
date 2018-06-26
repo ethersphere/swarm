@@ -288,24 +288,24 @@ func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 func (m *MapChunkStore) Close() {
 }
 
-// fakeChunkStore doesn't store anything, just implements the ChunkStore interface
+// FakeChunkStore doesn't store anything, just implements the ChunkStore interface
 // It can be used to inject into a hasherStore if you don't want to actually store data just do the
 // hashing
-type fakeChunkStore struct {
+type FakeChunkStore struct {
 }
 
 // Put doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Put(ch Chunk) (func(context.Context) error, error) {
+func (f *FakeChunkStore) Put(ch Chunk) (func(context.Context) error, error) {
 	return func(context.Context) error { return nil }, nil
 }
 
 // Gut doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
+func (f *FakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 	panic("FakeChunkStore doesn't support Get")
 }
 
 // Close doesn't store anything it is just here to implement ChunkStore
-func (f *fakeChunkStore) Close() {
+func (f *FakeChunkStore) Close() {
 }
 
 func NewRandomChunk(chunkSize uint64) Chunk {

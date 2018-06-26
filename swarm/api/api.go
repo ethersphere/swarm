@@ -228,12 +228,14 @@ func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Han
 
 // Retrieve FileStore reader API
 func (a *API) Retrieve(addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
-	return a.fileStore.Retrieve(addr)
+	ctx := context.TODO()
+	return a.fileStore.Retrieve(ctx, addr)
 }
 
-func (a *Api) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(context.Context) error, err error) {
+func (a *API) Store(data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(context.Context) error, err error) {
 	log.Debug("api.store", "size", size)
-	return a.fileStore.Store(data, size, toEncrypt)
+	ctx := context.TODO()
+	return a.fileStore.Store(ctx, data, size, toEncrypt)
 }
 
 // ErrResolve is returned when an URI cannot be resolved from ENS.
@@ -278,9 +280,10 @@ func (a *API) Resolve(uri *URI) (storage.Address, error) {
 }
 
 // Put provides singleton manifest creation on top of FileStore store
-func (a *Api) Put(ctx context.Context, content, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
+func (a *API) Put(content, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
 	apiPutCount.Inc(1)
 	r := strings.NewReader(content)
+	ctx := context.TODO()
 	key, waitContent, err := a.fileStore.Store(ctx, r, int64(len(content)), toEncrypt)
 	if err != nil {
 		apiPutFail.Inc(1)
@@ -405,7 +408,8 @@ func (a *API) Get(manifestAddr storage.Address, path string) (reader storage.Laz
 		}
 		mimeType = entry.ContentType
 		log.Debug("content lookup key", "key", contentAddr, "mimetype", mimeType)
-		reader, _ = a.fileStore.Retrieve(contentAddr)
+		ctx := context.TODO()
+		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
 		// no entry found
 		status = http.StatusNotFound

@@ -295,7 +295,7 @@ func benchmarkSplitTreeSHA3(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testDataReader(n)
-		putGetter := newTestHasherStore(&fakeChunkStore{}, SHA3Hash)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, SHA3Hash)
 
 		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
 		defer cancel()
@@ -315,7 +315,7 @@ func benchmarkSplitTreeBMT(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testDataReader(n)
-		putGetter := newTestHasherStore(&fakeChunkStore{}, BMTHash)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
 
 		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
 		defer cancel()
@@ -334,7 +334,7 @@ func benchmarkSplitPyramidBMT(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testDataReader(n)
-		putGetter := newTestHasherStore(&fakeChunkStore{}, BMTHash)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
 
 		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
 		defer cancel()
@@ -353,7 +353,7 @@ func benchmarkSplitPyramidSHA3(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testDataReader(n)
-		putGetter := newTestHasherStore(&fakeChunkStore{}, SHA3Hash)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, SHA3Hash)
 
 		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
 		defer cancel()

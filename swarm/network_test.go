@@ -513,7 +513,7 @@ func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 		return nil, "", err
 	}
 	if wait != nil {
-		wait()
+		wait(context.TODO())
 	}
 	return k, data, nil
 }
