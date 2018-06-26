@@ -345,24 +345,8 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// first attempt to update on third period, setting version to something different than 1 to make it fail
 	fwdClock(int(resourceFrequency), timeProvider)
-	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	request.version = 79 //put something different than 1 to make it fail
-	data = []byte(updates[2])
-	request.SetData(data, false)
-	if err := request.Sign(signer); err != nil {
-		t.Fatal(err)
-	}
-	resourcekey[updates[2]], err = rh.Update(ctx, &request.SignedResourceUpdate)
-	if err == nil {
-		t.Fatal("Expected update to fail since this is the first version of this period and we didn't set version=1")
-	}
-
-	// second attempt to update on third period, now with version =1 should work since it is the first one
+	// Update on third period, with version = 1
 	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
 	if err != nil {
 		t.Fatal(err)
@@ -377,12 +361,18 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// update just after second period
+	// update just after third period
 	fwdClock(1, timeProvider)
+	request, err = rh.NewUpdateRequest(ctx, request.rootAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if request.period != 3 || request.version != 2 {
+		t.Fatal("Suggested period should be 3 and version should be 2")
+	}
 	data = []byte(updates[3])
 	request.SetData(data, false)
 
-	request.version = 2
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
@@ -436,7 +426,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 	// check data
 	if !bytes.Equal(rsrc.data, []byte(updates[len(updates)-1])) {
-		t.Fatalf("resource data (historical) was %v, expected %v", rsrc2.data, updates[len(updates)-1])
+		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
 	log.Debug("Historical lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
@@ -448,29 +438,9 @@ func TestResourceHandler(t *testing.T) {
 	}
 	// check data
 	if !bytes.Equal(rsrc.data, []byte(updates[2])) {
-		t.Fatalf("resource data (historical) was %v, expected %v", rsrc2.data, updates[2])
+		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[2])
 	}
 	log.Debug("Specific version lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
-
-	// we are now at third update
-	// check backwards stepping to the first
-	for i := 1; i >= 0; i-- {
-		//rsrc, err := rh2.LookupPreviousByName(ctx, safeName, rh2.queryMaxPeriods)
-		rsrc, err := rh2.LookupPrevious(ctx, lookupParams)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !bytes.Equal(rsrc.data, []byte(updates[i])) {
-			t.Fatalf("resource data (previous) was %v, expected %v", rsrc2.data, updates[i])
-
-		}
-	}
-
-	// beyond the first should yield an error
-	rsrc, err = rh2.LookupPrevious(ctx, lookupParams)
-	if err == nil {
-		t.Fatalf("expeected previous to fail, returned period %d version %d data %v", rsrc2.period, rsrc2.version, rsrc2.data)
-	}
 
 }
 
