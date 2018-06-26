@@ -23,8 +23,6 @@ import (
 	"io/ioutil"
 	"os"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 const testDataSize = 0x1000000
@@ -58,12 +56,10 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
-	log.Warn("store called")
 	err = wait(ctx)
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
-	log.Warn("store complete", "address", key.Hex())
 
 	resultReader, isEncrypted := fileStore.Retrieve(ctx, key)
 	if isEncrypted != toEncrypt {
