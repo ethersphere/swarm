@@ -185,6 +185,14 @@ var (
 		Name:  "rawmru",
 		Usage: "Determines how to interpret data for a resource update. If not present, data will be interpreted as a multihash",
 	}
+	SwarmResourceNameFlag = cli.StringFlag{
+		Name:  "name",
+		Usage: "User-defined name for the new resource",
+	}
+	SwarmResourceDataOnCreateFlag = cli.StringFlag{
+		Name:  "data",
+		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
+	}
 )
 
 //declare a few constant error messages, useful for later error check comparisons in test
@@ -245,9 +253,9 @@ func init() {
 					CustomHelpTemplate: helpTemplate,
 					Name:               "create",
 					Usage:              "creates a new Mutable Resource",
-					ArgsUsage:          "<name> <frequency> [--rawmru] <0x Hex data>",
+					ArgsUsage:          "<frequency>",
 					Description:        "creates a new Mutable Resource",
-					Flags:              []cli.Flag{SwarmResourceRawFlag},
+					Flags:              []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceRawFlag},
 				},
 				{
 					Action:             resourceUpdate,
@@ -256,6 +264,7 @@ func init() {
 					Usage:              "updates the content of an existing Mutable Resource",
 					ArgsUsage:          "<Manifest Address or ENS domain> <0x Hex data>",
 					Description:        "updates the content of an existing Mutable Resource",
+					Flags:              []cli.Flag{SwarmResourceRawFlag},
 				},
 				{
 					Action:             resourceInfo,

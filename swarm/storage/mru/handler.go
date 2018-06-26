@@ -208,7 +208,7 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 // NewUpdateRequest prepares an UpdateRequest structure with all the necessary information to
 // just add the desired data and sign it.
 // The resulting structure can then be signed and passed to Handler.Update to be verified and sent
-func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address) (*Request, error) {
+func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address) (updateRequest *Request, err error) {
 
 	if rootAddr == nil {
 		return nil, NewError(ErrInvalidValue, "rootAddr cannot be nil")
@@ -222,13 +222,16 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 
 	now := h.getCurrentTime(ctx)
 
-	updateRequest := new(Request)
+	updateRequest = new(Request)
 	updateRequest.period, err = getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
 	if err != nil {
 		return nil, err
 	}
+
 	if _, err = h.lookup(rsrc, LookupLatestVersionInPeriod(rsrc.rootAddr, updateRequest.period)); err != nil {
-		return nil, err
+		if err.(*Error).code != ErrNotFound { // not finding updates at all is fine, it means this resource was created
+			return nil, err // and never initialized/updated for the first time
+		}
 	}
 
 	updateRequest.multihash = rsrc.multihash
@@ -269,31 +272,6 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 		params.period = period
 	}
 	return h.lookup(rsrc, params)
-}
-
-// LookupPreviousByName returns the resource before the one currently loaded in the resource index
-// This is useful where resource updates are used incrementally in contrast to
-// merely replacing content.
-// Requires a synced resource object
-func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*resource, error) {
-	rsrc := h.get(params.rootAddr)
-	if rsrc == nil {
-		return nil, NewError(ErrNothingToReturn, "resource not loaded")
-	}
-	if !rsrc.isSynced() {
-		return nil, NewError(ErrNotSynced, "LookupPrevious requires synced resource.")
-	} else if rsrc.period == 0 {
-		return nil, NewError(ErrNothingToReturn, " not found")
-	}
-	if rsrc.version > 1 {
-		rsrc.version--
-	} else if rsrc.period == 1 {
-		return nil, NewError(ErrNothingToReturn, "Current update is the oldest")
-	} else {
-		rsrc.version = 0
-		rsrc.period--
-	}
-	return h.lookup(rsrc, NewLookupParams(rsrc.rootAddr, rsrc.period, rsrc.version, params.Limit))
 }
 
 // base code for public lookup methods
@@ -396,8 +374,8 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	rsrc.updated = time.Now()
 	rsrc.data = make([]byte, len(r.data))
 	rsrc.multihash = r.multihash
-	rsrc.Reader = bytes.NewReader(rsrc.data)
 	copy(rsrc.data, r.data)
+	rsrc.Reader = bytes.NewReader(rsrc.data)
 	log.Debug(" synced", "name", rsrc.ResourceMetadata.Name, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
 	h.set(chunk.Addr, rsrc)
 	return rsrc, nil
@@ -412,7 +390,7 @@ func (h *Handler) Update(ctx context.Context, r *SignedResourceUpdate) (storage.
 }
 
 // create and commit an update
-func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (storage.Address, error) {
+func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAddr storage.Address, err error) {
 
 	// we can't update anything without a store
 	if h.chunkStore == nil {
@@ -420,32 +398,19 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (storage.
 	}
 
 	// get the cached information
-
 	rsrc := h.get(r.rootAddr)
 	if rsrc == nil {
-		return nil, NewErrorf(ErrNotFound, " object '%s' not in index", rsrc.ResourceMetadata.Name)
-	} else if !rsrc.isSynced() {
-		return nil, NewError(ErrNotSynced, " object not in sync")
-	}
-
-	// an update can be only one chunk long; data length less header and signature data
-	if int64(len(r.data)) > maxUpdateDataLength {
-		return nil, NewErrorf(ErrDataOverflow, "Data overflow: %d / %d bytes", len(r.data), maxUpdateDataLength)
-	}
-
-	// Check that the update is consecutive, i.e., that the proposed update
-	// occurs exactly after the latest one we know.
-	if rsrc.period == r.period {
-		if r.version != rsrc.version+1 {
-			return nil, NewErrorf(ErrInvalidValue, "Invalid version for this period. Expected version=%d", rsrc.version+1)
+		rsrc, err = h.Load(r.rootAddr)
+		if err != nil {
+			return nil, NewErrorf(ErrNotFound, "Cannot find resource with rootAddr='%s'", r.rootAddr.Hex())
 		}
 	} else {
-		if !(r.period > rsrc.period && r.version == 1) {
-			return nil, NewErrorf(ErrInvalidValue, "Invalid version,period. Expected version=1 and period > %d", rsrc.period)
+		if rsrc.period == r.period && rsrc.version == r.version { // This is the only cheap check we can do for sure.
+			return nil, NewError(ErrInvalidValue, "An update with this period,version already exists")
 		}
 	}
 
-	chunk, err := r.newUpdateChunk() // Serialize the update into a chunk
+	chunk, err := r.newUpdateChunk() // Serialize the update into a chunk. Fails if data is too big
 	if err != nil {
 		return nil, err
 	}
@@ -454,11 +419,18 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (storage.
 	h.chunkStore.Put(chunk)
 	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.SData, "multihash", r.multihash)
 
-	// update our resources map entry and return the new updateAddr
-	rsrc.period = r.period
-	rsrc.version = r.version
-	rsrc.data = make([]byte, len(r.data))
-	copy(rsrc.data, r.data)
+	// update our resources map entry if the new update is older than the one we have
+	if r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version) {
+		rsrc.period = r.period
+		rsrc.version = r.version
+		rsrc.data = make([]byte, len(r.data))
+		rsrc.updated = time.Now()
+		rsrc.lastKey = r.updateAddr
+		rsrc.multihash = r.multihash
+		copy(rsrc.data, r.data)
+		rsrc.Reader = bytes.NewReader(rsrc.data)
+	}
+
 	return r.updateAddr, nil
 }
 
