@@ -7,9 +7,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 )
 
@@ -297,11 +297,11 @@ func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 	// add to address book for send initial notify
 	symkey, err := c.pss.GetSymmetricKey(symKeyId)
 	if err != nil {
-		return fmt.Errorf("retrieve symkey fail: %v", err)
+		return err
 	}
 	err = c.pss.SetPeerPublicKey(pubkey, controlTopic, &pssAddress)
 	if err != nil {
-		return fmt.Errorf("add pss peer for reply fail: %v", err)
+		return err
 	}
 
 	// TODO this is set to zero-length byte pending decision on protocol for initial message, whether it should include message or not, and how to trigger the initial message so that current state of MRU is sent upon subscription
