@@ -10,13 +10,13 @@ main() {
   fi
 
   info "creating 10 nodes"
-  for i in $(seq 1 10); do
+  for i in $(seq 1 2); do
     p2psim node create --name "$(node_name $i)"
     p2psim node start "$(node_name $i)"
   done
 
   info "connecting node01 to all other nodes"
-  for i in $(seq 2 10); do
+  for i in $(seq 2 2); do
     p2psim node connect "node01" "$(node_name $i)"
   done
 
