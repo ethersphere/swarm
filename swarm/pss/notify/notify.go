@@ -379,9 +379,7 @@ func (c *Controller) Handler(smsg []byte, p *p2p.Peer, asymmetric bool, keyid st
 		return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload)
 	case MsgCodeStop:
 		return c.handleStopMsg(msg)
-	default:
-		return fmt.Errorf("Invalid message code: %d", msg.Code)
 	}
 
-	return nil
+	return fmt.Errorf("Invalid message code: %d", msg.Code)
 }
