@@ -49,6 +49,7 @@ type Msg struct {
 	namestring string
 }
 
+// NewMsg creates a new notification message object
 func NewMsg(code byte, name string, payload []byte) *Msg {
 	return &Msg{
 		Code:       code,
@@ -58,6 +59,7 @@ func NewMsg(code byte, name string, payload []byte) *Msg {
 	}
 }
 
+// NewMsgFromPayload decodes a serialized message payload into a new notification message object
 func NewMsgFromPayload(payload []byte) (*Msg, error) {
 	msg := &Msg{}
 	err := rlp.DecodeBytes(payload, msg)
@@ -85,6 +87,11 @@ type notifier struct {
 	quitC     chan struct{}
 }
 
+func (n *notifier) removeSubscription() {
+	n.quitC <- struct{}{}
+}
+
+// represents an individual subscription made by a public key at a specific address/neighborhood
 type subscription struct {
 	pubkeyId string
 	address  pss.PssAddress
@@ -176,11 +183,11 @@ func (c *Controller) Unsubscribe(name string) error {
 // It then starts an event loop which listens to the supplied update channel and executes notifications on channel receives
 // Fails if a notifier already is registered on the name
 //func (c *Controller) NewNotifier(name string, threshold int, contentFunc func(string) ([]byte, error)) error {
-func (c *Controller) NewNotifier(name string, threshold int, updateC <-chan []byte) error {
+func (c *Controller) NewNotifier(name string, threshold int, updateC <-chan []byte) (func(), error) {
 	c.mu.Lock()
 	if c.isActive(name) {
 		c.mu.Unlock()
-		return fmt.Errorf("Notification service %s already exists in controller", name)
+		return nil, fmt.Errorf("Notification service %s already exists in controller", name)
 	}
 	quitC := make(chan struct{})
 	c.notifiers[name] = &notifier{
@@ -203,7 +210,7 @@ func (c *Controller) NewNotifier(name string, threshold int, updateC <-chan []by
 		}
 	}()
 
-	return nil
+	return c.notifiers[name].removeSubscription, nil
 }
 
 // RemoveNotifier is used to stop a notification service.
@@ -215,13 +222,13 @@ func (c *Controller) RemoveNotifier(name string) error {
 	if !ok {
 		return fmt.Errorf("Unknown notification service %s", name)
 	}
-	currentNotifier.quitC <- struct{}{}
+	currentNotifier.removeSubscription()
 	delete(c.notifiers, name)
 	return nil
 }
 
 // Notify is called by a notification service provider to issue a new notification
-// It takes the name of the notification service the data to be sent.
+// It takes the name of the notification service and the data to be sent.
 // It fails if a notifier with this name does not exist or if data could not be serialized
 // Note that it does NOT fail on failure to send a message
 func (c *Controller) notify(name string, data []byte) error {
@@ -231,16 +238,18 @@ func (c *Controller) notify(name string, data []byte) error {
 		return fmt.Errorf("Notification service %s doesn't exist", name)
 	}
 	msg := NewMsg(MsgCodeNotify, name, data)
+	smsg, err := rlp.EncodeToBytes(msg)
 	for _, m := range c.notifiers[name].bins {
 		log.Debug("sending pss notify", "name", name, "addr", fmt.Sprintf("%x", m.address), "topic", fmt.Sprintf("%x", c.notifiers[name].topic), "data", data)
-		smsg, err := rlp.EncodeToBytes(msg)
 		if err != nil {
 			return err
 		}
-		err = c.pss.SendSym(m.symKeyId, c.notifiers[name].topic, smsg)
-		if err != nil {
-			log.Warn("Failed to send notify to addr %x: %v", m.address, err)
-		}
+		go func() {
+			err = c.pss.SendSym(m.symKeyId, c.notifiers[name].topic, smsg)
+			if err != nil {
+				log.Warn("Failed to send notify to addr %x: %v", m.address, err)
+			}
+		}()
 	}
 	return nil
 }
@@ -248,6 +257,7 @@ func (c *Controller) notify(name string, data []byte) error {
 // check if we already have the bin
 // if we do, retreive the symkey from it and increment the count
 // if we dont make a new symkey and a new bin entry
+// not thread safe
 func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, pssAddress pss.PssAddress, err error) {
 
 	// parse the address from the message and truncate if longer than our bins threshold
@@ -275,6 +285,7 @@ func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, 
 	return symKeyId, pssAddress, nil
 }
 
+// not thread safe
 func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 
 	pubkey, err := crypto.UnmarshalPubkey(common.FromHex(keyid))
@@ -320,6 +331,7 @@ func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 	return nil
 }
 
+// not thread safe
 func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
 	symkey := msg.Payload[len(msg.Payload)-symKeyLength:]
 	topic := pss.BytesToTopic(msg.Name)
@@ -331,6 +343,7 @@ func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
 	return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload[:len(msg.Payload)-symKeyLength])
 }
 
+// not thread safe
 func (c *Controller) handleStopMsg(msg *Msg) error {
 	// if name is not registered for notifications we will not react
 	currentNotifier, ok := c.notifiers[msg.namestring]

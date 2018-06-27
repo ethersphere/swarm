@@ -116,6 +116,7 @@ func TestStart(t *testing.T) {
 	rsrcName := "foo.eth"
 	rsrcTopic := pss.BytesToTopic([]byte(rsrcName))
 
+	// wait for kademlia table to populate
 	time.Sleep(time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*2)
@@ -155,11 +156,14 @@ func TestStart(t *testing.T) {
 	dMsg, err := NewMsgFromPayload(inMsg.Msg)
 	if err != nil {
 		t.Fatal(err)
-	} else if dMsg.namestring != rsrcName {
+	}
+	if dMsg.namestring != rsrcName {
 		t.Fatalf("expected name '%s', got '%s'", rsrcName, dMsg.namestring)
-	} else if !bytes.Equal(dMsg.Payload[:len(updateMsg)], updateMsg) {
+	}
+	if !bytes.Equal(dMsg.Payload[:len(updateMsg)], updateMsg) {
 		t.Fatalf("expected payload first %d bytes '%x', got '%x'", len(updateMsg), updateMsg, dMsg.Payload[:len(updateMsg)])
-	} else if len(updateMsg)+symKeyLength != len(dMsg.Payload) {
+	}
+	if len(updateMsg)+symKeyLength != len(dMsg.Payload) {
 		t.Fatalf("expected payload length %d, have %d", len(updateMsg)+symKeyLength, len(dMsg.Payload))
 	}
 
@@ -180,9 +184,11 @@ func TestStart(t *testing.T) {
 	dMsg, err = NewMsgFromPayload(inMsg.Msg)
 	if err != nil {
 		t.Fatal(err)
-	} else if dMsg.namestring != rsrcName {
+	}
+	if dMsg.namestring != rsrcName {
 		t.Fatalf("expected name %s, got %s", rsrcName, dMsg.namestring)
-	} else if !bytes.Equal(dMsg.Payload, updateMsg) {
+	}
+	if !bytes.Equal(dMsg.Payload, updateMsg) {
 		t.Fatalf("expected payload '%x', got '%x'", updateMsg, dMsg.Payload)
 	}
 
