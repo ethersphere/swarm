@@ -855,7 +855,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *messages.Request) {
 
 		log.Debug(fmt.Sprintf("Multiple choices! --> %v", list), "ruid", r.Ruid)
 		//show a nice page links to available entries
-		views.ShowMultipleChoices(w, r, list)
+		s.ShowMultipleChoices(w, r, list)
 		return
 	}
 
