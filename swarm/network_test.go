@@ -358,24 +358,22 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			})
 		}
 
-		// Prepare PeerPot map for checking Kademlia health
-		var ppmap map[string]*network.PeerPot
-		nIDs := allNodeIDs(net)
-		addrs := make([][]byte, len(nIDs))
-		if *waitKademlia {
-			for i, id := range nIDs {
-				addrs[i] = swarms[id].bzz.BaseAddr()
-			}
-			ppmap = network.NewPeerPotMap(2, addrs)
-		}
-
 		var checkStatusM sync.Map
 		var nodeStatusM sync.Map
 		var totalFoundCount uint64
 
 		result := sim.Run(ctx, &simulations.Step{
 			Action: func(ctx context.Context) error {
+				// Prepare PeerPot map for checking Kademlia health
 				if *waitKademlia {
+					var ppmap map[string]*network.PeerPot
+					nIDs := allNodeIDs(net)
+					addrs := make([][]byte, len(nIDs))
+					for i, id := range nIDs {
+						addrs[i] = swarms[id].bzz.BaseAddr()
+					}
+					ppmap = network.NewPeerPotMap(2, addrs)
+
 					// Wait for healthy Kademlia on every node before checking files
 					ticker := time.NewTicker(200 * time.Millisecond)
 					defer ticker.Stop()

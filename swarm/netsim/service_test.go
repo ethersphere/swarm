@@ -16,6 +16,7 @@
 package netsim
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/node"
@@ -24,8 +25,8 @@ import (
 
 func TestService(t *testing.T) {
 	sim, err := NewSimulation(Options{
-		ServiceFunc: func(_ *adapters.ServiceContext, _ *Bucket) (node.Service, error) {
-			return newNoopService(), nil
+		ServiceFunc: func(_ *adapters.ServiceContext, _ *sync.Map) (node.Service, func(), error) {
+			return newNoopService(), nil, nil
 		},
 	})
 	if err != nil {

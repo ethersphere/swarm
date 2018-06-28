@@ -35,24 +35,29 @@ type Simulation struct {
 	Net *simulations.Network
 
 	pivotNodeID *discover.NodeID
-	buckets     map[discover.NodeID]*Bucket
+	buckets     map[discover.NodeID]*sync.Map
 	mu          sync.RWMutex
 }
 
+var BucketKeyCleanup BucketKey = "cleanup"
+
 type Options struct {
-	ServiceFunc func(ctx *adapters.ServiceContext, bucket *Bucket) (node.Service, error)
+	ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 }
 
 func NewSimulation(o Options) (s *Simulation, err error) {
 	s = &Simulation{
-		buckets: make(map[discover.NodeID]*Bucket),
+		buckets: make(map[discover.NodeID]*sync.Map),
 	}
 	a := adapters.NewSimAdapter(map[string]adapters.ServiceFunc{
 		"service": func(ctx *adapters.ServiceContext) (node.Service, error) {
-			b := newBucket()
-			n, err := o.ServiceFunc(ctx, b)
+			b := new(sync.Map)
+			n, cleanup, err := o.ServiceFunc(ctx, b)
 			if err != nil {
 				return nil, err
+			}
+			if cleanup != nil {
+				b.Store(BucketKeyCleanup, cleanup)
 			}
 			s.mu.Lock()
 			defer s.mu.Unlock()
@@ -67,28 +72,23 @@ func NewSimulation(o Options) (s *Simulation, err error) {
 	return s, nil
 }
 
-func (s *Simulation) Close() error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+var maxParallelCleanups = 10
 
+func (s *Simulation) Close() error {
+	sem := make(chan struct{}, maxParallelCleanups)
 	var wg sync.WaitGroup
-	for _, c := range s.buckets {
-		c := c
+	for _, v := range s.ServicesItems(BucketKeyCleanup) {
+		cleanup, ok := v.(func())
+		if !ok {
+			continue
+		}
 		wg.Add(1)
+		sem <- struct{}{}
 		go func() {
 			defer wg.Done()
+			defer func() { <-sem }()
 
-			c.mu.RLock()
-			defer c.mu.RUnlock()
-
-			for _, s := range c.values {
-				if closer, ok := s.(interface{ Close() }); ok {
-					closer.Close()
-				}
-				if closer, ok := s.(interface{ Close() error }); ok {
-					closer.Close()
-				}
-			}
+			cleanup()
 		}()
 	}
 	wg.Wait()

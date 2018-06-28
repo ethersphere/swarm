@@ -17,51 +17,26 @@
 package netsim
 
 import (
-	"sync"
-
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
 type BucketKey string
 
-type Bucket struct {
-	values map[BucketKey]interface{}
-	mu     sync.RWMutex
-}
-
-func newBucket() *Bucket {
-	return &Bucket{
-		values: make(map[BucketKey]interface{}),
-	}
-}
-
-func (c *Bucket) Get(key BucketKey) (value interface{}) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.values[key]
-}
-
-func (c *Bucket) Set(key BucketKey, value interface{}) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.values[key] = value
-}
-
-func (s *Simulation) ServiceItem(id discover.NodeID, key BucketKey) (value interface{}) {
+func (s *Simulation) ServiceItem(id discover.NodeID, key BucketKey) (value interface{}, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, ok := s.buckets[id]; !ok {
-		return nil
+		return nil, false
 	}
-	return s.buckets[id].Get(key)
+	return s.buckets[id].Load(key)
 }
 
 func (s *Simulation) SetServiceItem(id discover.NodeID, key BucketKey, value interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.buckets[id].Set(key, value)
+	s.buckets[id].Store(key, value)
 }
 
 func (s *Simulation) ServicesItems(key BucketKey) (values []interface{}) {
@@ -74,7 +49,9 @@ func (s *Simulation) ServicesItems(key BucketKey) (values []interface{}) {
 		if _, ok := s.buckets[id]; !ok {
 			continue
 		}
-		values[i] = s.buckets[id].Get(key)
+		if v, ok := s.buckets[id].Load(key); ok {
+			values[i] = v
+		}
 	}
 	return values
 }
@@ -88,7 +65,9 @@ func (s *Simulation) UpServicesItems(key BucketKey) (values []interface{}) {
 		if _, ok := s.buckets[id]; !ok {
 			continue
 		}
-		values = append(values, s.buckets[id].Get(key))
+		if v, ok := s.buckets[id].Load(key); ok {
+			values = append(values, v)
+		}
 	}
 	return values
 }

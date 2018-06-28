@@ -17,6 +17,7 @@
 package netsim
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/node"
@@ -28,9 +29,9 @@ func TestServiceBucket(t *testing.T) {
 	testValue := "Value"
 
 	sim, err := NewSimulation(Options{
-		ServiceFunc: func(_ *adapters.ServiceContext, b *Bucket) (node.Service, error) {
-			b.Set(testKey, testValue)
-			return newNoopService(), nil
+		ServiceFunc: func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+			b.Store(testKey, testValue)
+			return newNoopService(), nil, nil
 		},
 	})
 	if err != nil {
@@ -43,9 +44,9 @@ func TestServiceBucket(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	v := sim.ServiceItem(id, testKey)
-	if v == nil {
-		t.Fatal("bucket item value is nil")
+	v, ok := sim.ServiceItem(id, testKey)
+	if !ok {
+		t.Fatal("bucket item not found")
 	}
 	s, ok := v.(string)
 	if !ok {
