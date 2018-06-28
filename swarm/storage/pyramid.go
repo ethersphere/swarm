@@ -105,7 +105,7 @@ func PyramidSplit(ctx context.Context, reader io.Reader, putter Putter, getter G
 }
 
 func PyramidAppend(ctx context.Context, addr Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
-	return NewPyramidSplitter(NewPyramidSplitterParams(addr, reader, putter, getter, DefaultChunkSize)).Append()
+	return NewPyramidSplitter(NewPyramidSplitterParams(addr, reader, putter, getter, DefaultChunkSize)).Append(ctx)
 }
 
 // Entry to create a tree node
@@ -209,7 +209,7 @@ func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(conte
 	log.Debug("pyramid.chunker: Split()")
 
 	pc.wg.Add(1)
-	pc.prepareChunks(false)
+	pc.prepareChunks(ctx, false)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
@@ -239,13 +239,13 @@ func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(conte
 
 }
 
-func (pc *PyramidChunker) Append() (k Address, wait func(context.Context) error, err error) {
+func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	log.Debug("pyramid.chunker: Append()")
 	// Load the right most unfinished tree chunks in every level
 	pc.loadTree()
 
 	pc.wg.Add(1)
-	pc.prepareChunks(true)
+	pc.prepareChunks(ctx, true)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
@@ -271,7 +271,7 @@ func (pc *PyramidChunker) Append() (k Address, wait func(context.Context) error,
 
 }
 
-func (pc *PyramidChunker) processor(id int64) {
+func (pc *PyramidChunker) processor(ctx context.Context, id int64) {
 	defer pc.decrementWorkerCount()
 	for {
 		select {
@@ -280,17 +280,17 @@ func (pc *PyramidChunker) processor(id int64) {
 			if !ok {
 				return
 			}
-			pc.processChunk(id, job)
+			pc.processChunk(ctx, id, job)
 		case <-pc.quitC:
 			return
 		}
 	}
 }
 
-func (pc *PyramidChunker) processChunk(id int64, job *chunkJob) {
+func (pc *PyramidChunker) processChunk(ctx context.Context, id int64, job *chunkJob) {
 	log.Debug("pyramid.chunker: processChunk()", "id", id)
 
-	ref, err := pc.putter.Put(job.chunk)
+	ref, err := pc.putter.Put(ctx, job.chunk)
 	if err != nil {
 		select {
 		case pc.errC <- err:
@@ -390,7 +390,7 @@ func (pc *PyramidChunker) loadTree() error {
 	return nil
 }
 
-func (pc *PyramidChunker) prepareChunks(isAppend bool) {
+func (pc *PyramidChunker) prepareChunks(ctx context.Context, isAppend bool) {
 	log.Debug("pyramid.chunker: prepareChunks", "isAppend", isAppend)
 	defer pc.wg.Done()
 
@@ -398,7 +398,7 @@ func (pc *PyramidChunker) prepareChunks(isAppend bool) {
 
 	pc.incrementWorkerCount()
 
-	go pc.processor(pc.workerCount)
+	go pc.processor(ctx, pc.workerCount)
 
 	parent := NewTreeEntry(pc)
 	var unfinishedChunkData ChunkData
@@ -530,7 +530,7 @@ func (pc *PyramidChunker) prepareChunks(isAppend bool) {
 		workers := pc.getWorkerCount()
 		if int64(len(pc.jobC)) > workers && workers < ChunkProcessors {
 			pc.incrementWorkerCount()
-			go pc.processor(pc.workerCount)
+			go pc.processor(ctx, pc.workerCount)
 		}
 
 	}

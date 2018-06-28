@@ -224,7 +224,7 @@ func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.
 		panic("chunker must be initialised")
 	}
 
-	tc.runWorker()
+	tc.runWorker(ctx)
 
 	depth := 0
 	treeSize := tc.chunkSize
@@ -239,7 +239,7 @@ func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.
 	// this waitgroup member is released after the root hash is calculated
 	tc.wg.Add(1)
 	//launch actual recursive function passing the waitgroups
-	go tc.split(depth, treeSize/tc.branches, key, tc.dataSize, tc.wg)
+	go tc.split(ctx, depth, treeSize/tc.branches, key, tc.dataSize, tc.wg)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
@@ -262,7 +262,7 @@ func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.
 	return key, tc.putter.Wait, nil
 }
 
-func (tc *TreeChunker) split(depth int, treeSize int64, addr Address, size int64, parentWg *sync.WaitGroup) {
+func (tc *TreeChunker) split(ctx context.Context, depth int, treeSize int64, addr Address, size int64, parentWg *sync.WaitGroup) {
 
 	//
 
@@ -312,7 +312,7 @@ func (tc *TreeChunker) split(depth int, treeSize int64, addr Address, size int64
 		subTreeAddress := chunk[8+i*tc.hashSize : 8+(i+1)*tc.hashSize]
 
 		childrenWg.Add(1)
-		tc.split(depth-1, treeSize/tc.branches, subTreeAddress, secSize, childrenWg)
+		tc.split(ctx, depth-1, treeSize/tc.branches, subTreeAddress, secSize, childrenWg)
 
 		i++
 		pos += treeSize
@@ -324,7 +324,7 @@ func (tc *TreeChunker) split(depth int, treeSize int64, addr Address, size int64
 
 	worker := tc.getWorkerCount()
 	if int64(len(tc.jobC)) > worker && worker < ChunkProcessors {
-		tc.runWorker()
+		tc.runWorker(ctx)
 
 	}
 	select {
@@ -333,7 +333,7 @@ func (tc *TreeChunker) split(depth int, treeSize int64, addr Address, size int64
 	}
 }
 
-func (tc *TreeChunker) runWorker() {
+func (tc *TreeChunker) runWorker(ctx context.Context) {
 	tc.incrementWorkerCount()
 	go func() {
 		defer tc.decrementWorkerCount()
@@ -345,7 +345,7 @@ func (tc *TreeChunker) runWorker() {
 					return
 				}
 
-				h, err := tc.putter.Put(job.chunk)
+				h, err := tc.putter.Put(ctx, job.chunk)
 				if err != nil {
 					tc.errC <- err
 					return

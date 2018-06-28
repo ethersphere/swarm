@@ -95,7 +95,7 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 // when the chunk is stored in memstore.
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
-func (ls *LocalStore) Put(chunk Chunk) (func(ctx context.Context) error, error) {
+func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
 	valid := true
 	for _, v := range ls.Validators {
 		if valid = v.Validate(chunk.Address(), chunk.Data()); valid {
@@ -103,7 +103,7 @@ func (ls *LocalStore) Put(chunk Chunk) (func(ctx context.Context) error, error) 
 		}
 	}
 	if !valid {
-		return nil, ErrChunkInvalid
+		return ErrChunkInvalid
 	}
 
 	log.Trace("localstore.put", "key", chunk.Address())
@@ -112,17 +112,18 @@ func (ls *LocalStore) Put(chunk Chunk) (func(ctx context.Context) error, error) 
 
 	_, err := ls.memStore.Get(nil, chunk.Address())
 	if err == nil {
-		return nil, nil
+		return nil
 	}
 	if err != nil && err != ErrChunkNotFound {
-		return nil, err
+		return err
 	}
-	ls.memStore.Put(chunk)
-	wait, err := ls.DbStore.Put(chunk)
+	ls.memStore.Put(ctx, chunk)
+	wait, err := ls.DbStore.Put(ctx, chunk)
 	if err != nil {
-		return nil, err
+		return err
 	}
-	return wait, nil
+	wait(ctx)
+	return nil
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores

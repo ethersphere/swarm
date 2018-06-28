@@ -359,38 +359,69 @@ func (s *LDBStore) Export(out io.Writer) (int64, error) {
 func (s *LDBStore) Import(in io.Reader) (int64, error) {
 	tr := tar.NewReader(in)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	countC := make(chan int64)
+	errC := make(chan error)
 	var count int64
+	go func() {
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				errC <- err
+			}
+
+			if len(hdr.Name) != 64 {
+				log.Warn("ignoring non-chunk file", "name", hdr.Name)
+				continue
+			}
+
+			keybytes, err := hex.DecodeString(hdr.Name)
+			if err != nil {
+				log.Warn("ignoring invalid chunk file", "name", hdr.Name, "err", err)
+				continue
+			}
+
+			data, err := ioutil.ReadAll(tr)
+			if err != nil {
+				errC <- err
+			}
+			key := Address(keybytes)
+			chunk := NewChunk(key, data[32:])
+
+			go func() {
+				select {
+				case errC <- s.Put(ctx, chunk):
+				case <-ctx.Done():
+				}
+			}()
+
+			count++
+		}
+		countC <- count
+	}()
+
+	// wait for all chunks to be stored
+	i := int64(0)
+	var total int64
 	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		} else if err != nil {
-			return count, err
+		select {
+		case err := <-errC:
+			if err != nil {
+				return count, err
+			}
+			i++
+		case total = <-countC:
+		case <-ctx.Done():
+			return i, ctx.Err()
+		}
+		if total > 0 && i == total {
+			return total, nil
 		}
 
-		if len(hdr.Name) != 64 {
-			log.Warn("ignoring non-chunk file", "name", hdr.Name)
-			continue
-		}
-
-		keybytes, err := hex.DecodeString(hdr.Name)
-		if err != nil {
-			log.Warn("ignoring invalid chunk file", "name", hdr.Name, "err", err)
-			continue
-		}
-
-		data, err := ioutil.ReadAll(tr)
-		if err != nil {
-			return count, err
-		}
-		key := Address(keybytes)
-		chunk := NewChunk(key, data[32:])
-		_, err = s.Put(chunk)
-		if err != nil {
-			log.Info("hasherStore.Put:", "chunk", chunk, "err", err)
-			return count, err
-		}
-		count++
 	}
 	return count, nil
 }
@@ -511,7 +542,7 @@ func (s *LDBStore) CurrentStorageIndex() uint64 {
 	return s.dataIdx
 }
 
-func (s *LDBStore) Put(chunk Chunk) (func(context.Context) error, error) {
+func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	metrics.GetOrRegisterCounter("ldbstore.put", nil).Inc(1)
 	log.Trace("ldbstore.put", "key", chunk.Address())
 
@@ -522,7 +553,7 @@ func (s *LDBStore) Put(chunk Chunk) (func(context.Context) error, error) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if s.closed {
-		return nil, ErrDBClosed
+		return ErrDBClosed
 	}
 	batch := s.batch
 
@@ -537,21 +568,22 @@ func (s *LDBStore) Put(chunk Chunk) (func(context.Context) error, error) {
 	index.Access = s.accessCnt
 	s.accessCnt++
 	idata = encodeIndex(&index)
-	wait := func(ctx context.Context) error {
-		select {
-		case <-batch.c:
-			return batch.err
-		case <-ctx.Done():
-			// log.Error("context done", "err", ctx.Err())
-			return ctx.Err()
-		}
-	}
 	s.batch.Put(ikey, idata)
+
 	select {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
-	return wait, nil
+
+	select {
+	case <-batch.c:
+		return batch.err
+	case <-ctx.Done():
+		// log.Error("context done", "err", ctx.Err())
+		return ctx.Err()
+	}
+
+	return nil
 }
 
 // force putting into db, does not check access index

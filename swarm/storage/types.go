@@ -300,7 +300,7 @@ type Reference []byte
 
 // Putter is responsible to store data and create a reference for it
 type Putter interface {
-	Put(ChunkData) (Reference, error)
+	Put(context.Context, ChunkData) (Reference, error)
 	// RefSize returns the length of the Reference created by this Putter
 	RefSize() int64
 	// Close is to indicate that no more chunk data will be Put on this Putter
@@ -351,7 +351,7 @@ func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
 }
 
 type ChunkStore interface {
-	Put(ch Chunk) (waitToStore func(ctx context.Context) error, err error)
+	Put(ctx context.Context, ch Chunk) (err error)
 	Get(rctx context.Context, ref Address) (ch Chunk, err error)
 	Close()
 }
@@ -369,8 +369,8 @@ type FakeChunkStore struct {
 }
 
 // Put doesn't store anything it is just here to implement ChunkStore
-func (f *FakeChunkStore) Put(ch Chunk) (func(context.Context) error, error) {
-	return func(context.Context) error { return nil }, nil
+func (f *FakeChunkStore) Put(_ context.Context, ch Chunk) error {
+	return nil
 }
 
 // Gut doesn't store anything it is just here to implement ChunkStore

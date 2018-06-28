@@ -34,13 +34,12 @@ type hasherStore struct {
 	store           ChunkStore
 	hashFunc        SwarmHasher
 	chunkEncryption *chunkEncryption
-	hashSize        int                              // content hash size
-	refSize         int64                            // reference size (content hash + possibly encryption key)
-	count           uint64                           // number of chunks to store
-	errC            chan error                       // global error channel
-	waitC           chan func(context.Context) error // ChunkStore response wait-to-store functions
-	doneC           chan struct{}                    // closed by Close() call to indicate that count is the final number of chunks
-	quitC           chan struct{}                    // closed to quit unterminated routines
+	hashSize        int           // content hash size
+	refSize         int64         // reference size (content hash + possibly encryption key)
+	count           uint64        // number of chunks to store
+	errC            chan error    // global error channel
+	doneC           chan struct{} // closed by Close() call to indicate that count is the final number of chunks
+	quitC           chan struct{} // closed to quit unterminated routines
 }
 
 func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
@@ -69,7 +68,6 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 		chunkEncryption: chunkEncryption,
 		hashSize:        hashSize,
 		refSize:         refSize,
-		waitC:           make(chan func(ctx context.Context) error),
 		errC:            make(chan error),
 		doneC:           make(chan struct{}),
 		quitC:           make(chan struct{}),
@@ -81,7 +79,7 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 // Put stores the chunkData into the ChunkStore of the hasherStore and returns the reference.
 // If hasherStore has a chunkEncryption object, the data will be encrypted.
 // Asynchronous function, the data will not necessarily be stored when it returns.
-func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
+func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, error) {
 	c := chunkData
 	var encryptionKey encryption.Key
 	if h.chunkEncryption != nil {
@@ -92,7 +90,7 @@ func (h *hasherStore) Put(chunkData ChunkData) (Reference, error) {
 		}
 	}
 	chunk := h.createChunk(c)
-	h.storeChunk(chunk)
+	h.storeChunk(ctx, chunk)
 
 	return Reference(append(chunk.Address(), encryptionKey...)), nil
 }
@@ -133,28 +131,17 @@ func (h *hasherStore) Close() {
 //    1) the Close() function has been called and
 //    2) all the chunks which has been Put has been stored
 func (h *hasherStore) Wait(ctx context.Context) error {
-	go func() {
-		for {
-			select {
-			case wait := <-h.waitC:
-				go func() {
-					select {
-					case h.errC <- wait(ctx):
-					case <-h.quitC:
-					}
-				}()
-			}
-		}
-	}()
 	defer close(h.quitC)
 	var n uint64
 	var done bool
+	doneC := h.doneC
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-h.doneC:
+		case <-doneC:
 			done = true
+			doneC = nil
 		case err := <-h.errC:
 			if err != nil {
 				return err
@@ -240,19 +227,11 @@ func (h *hasherStore) RefSize() int64 {
 	return h.refSize
 }
 
-func (h *hasherStore) storeChunk(chunk *chunk) {
-	wait, err := h.store.Put(chunk)
+func (h *hasherStore) storeChunk(ctx context.Context, chunk *chunk) {
 	atomic.AddUint64(&h.count, 1)
-	if err != nil {
-		select {
-		case h.errC <- err:
-		case <-h.quitC:
-		}
-		return
-	}
 	go func() {
 		select {
-		case h.waitC <- wait:
+		case h.errC <- h.store.Put(ctx, chunk):
 		case <-h.quitC:
 		}
 	}()

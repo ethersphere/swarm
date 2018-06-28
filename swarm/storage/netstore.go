@@ -58,16 +58,12 @@ func NewNetStore(store ChunkStore, newFetchFunc NewFetchFunc) (*NetStore, error)
 
 // Put stores a chunk in localstore, returns a wait function to wait for
 // storage unless it is found
-func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
+func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-	wait, err := n.store.Put(ch)
+	err := n.store.Put(ctx, ch)
 	if err != nil {
-		return nil, err
-	}
-	// if chunk was already in store (wait f is nil)
-	if wait == nil {
-		return nil, nil
+		return err
 	}
 	// if chunk is now put in store, check if there was an active fetcher
 	key := hex.EncodeToString(ch.Address())
@@ -76,7 +72,7 @@ func (n *NetStore) Put(ch Chunk) (func(ctx context.Context) error, error) {
 	if f != nil {
 		f.(*fetcher).deliver(ch)
 	}
-	return wait, nil
+	return nil
 }
 
 // Get retrieves the chunk from the NetStore DPA synchronously

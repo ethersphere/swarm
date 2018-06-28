@@ -60,15 +60,13 @@ func (m *MemStore) Get(_ context.Context, addr Address) (Chunk, error) {
 	return c.(*chunk), nil
 }
 
-func (m *MemStore) Put(c Chunk) (waitToStore func(ctx context.Context) error, err error) {
+func (m *MemStore) Put(_ context.Context, c Chunk) error {
 	if m.disabled {
-		return
+		return nil
 	}
 
 	m.cache.Add(string(c.Address()), c)
-	return func(_ context.Context) error {
-		return nil
-	}, nil
+	return nil
 }
 
 func (m *MemStore) setCapacity(n int) {

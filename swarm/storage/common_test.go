@@ -101,21 +101,15 @@ func mputChunks(store ChunkStore, chunks ...Chunk) error {
 func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Address, err error) {
 	// put to localstore and wait for stored channel
 	// does not check delivery error state
-	done := make(chan struct{})
 	errc := make(chan error)
-	ctx, _ := context.WithTimeout(context.Background(), putTimeout)
-	// defer cancel()
-	defer close(done)
+	ctx, cancel := context.WithTimeout(context.Background(), putTimeout)
+	defer cancel()
 	for i := int64(0); i < int64(n); i++ {
 		chunk := f(DefaultChunkSize)
-		wait, err := store.Put(chunk)
-		if err != nil {
-			return nil, err
-		}
 		go func() {
 			select {
-			case errc <- wait(ctx):
-			case <-done:
+			case errc <- store.Put(ctx, chunk):
+			case <-ctx.Done():
 			}
 		}()
 		hs = append(hs, chunk.Address())
@@ -268,11 +262,11 @@ func NewMapChunkStore() *MapChunkStore {
 	}
 }
 
-func (m *MapChunkStore) Put(ch Chunk) (func(context.Context) error, error) {
+func (m *MapChunkStore) Put(_ context.Context, ch Chunk) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chunks[ch.Address().Hex()] = ch
-	return func(context.Context) error { return nil }, nil
+	return nil
 }
 
 func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
