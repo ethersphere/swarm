@@ -280,10 +280,7 @@ func (r *TestRegistry) APIs() []rpc.API {
 }
 
 func readAll(fileStore *storage.FileStore, hash []byte) (int64, error) {
-	// ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	// defer cancel()
-	ctx := context.TODO()
-	r, _ := fileStore.Retrieve(ctx, hash)
+	r, _ := fileStore.Retrieve(context.TODO(), hash)
 	buf := make([]byte, 1024)
 	var n int
 	var total int64

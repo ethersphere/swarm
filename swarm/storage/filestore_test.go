@@ -50,18 +50,16 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	defer os.RemoveAll("/tmp/bzz")
 
 	reader, slice := GenerateRandomData(testDataSize)
-	ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-	defer cancel()
-	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(context.TODO(), reader, testDataSize, toEncrypt)
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
-	err = wait(ctx)
+	err = wait(context.TODO())
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
 
-	resultReader, isEncrypted := fileStore.Retrieve(ctx, key)
+	resultReader, isEncrypted := fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
@@ -79,7 +77,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
 	localStore.memStore = NewMemStore(NewDefaultStoreParams(), db)
-	resultReader, isEncrypted = fileStore.Retrieve(ctx, key)
+	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
@@ -117,17 +115,15 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 	reader, slice := GenerateRandomData(testDataSize)
-	ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-	defer cancel()
-	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(context.TODO(), reader, testDataSize, toEncrypt)
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
-	err = wait(ctx)
+	err = wait(context.TODO())
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
-	resultReader, isEncrypted := fileStore.Retrieve(ctx, key)
+	resultReader, isEncrypted := fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
@@ -146,7 +142,7 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	memStore.setCapacity(0)
 	// check whether it is, indeed, empty
 	fileStore.ChunkStore = memStore
-	resultReader, isEncrypted = fileStore.Retrieve(ctx, key)
+	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}
@@ -156,7 +152,7 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	// check how it works with localStore
 	fileStore.ChunkStore = localStore
 	//	localStore.dbStore.setCapacity(0)
-	resultReader, isEncrypted = fileStore.Retrieve(ctx, key)
+	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
 	}

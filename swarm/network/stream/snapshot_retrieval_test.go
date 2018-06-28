@@ -414,7 +414,7 @@ func runFileRetrievalTest(nodeCount int) error {
 		fileStore := registries[id].fileStore
 		//check all chunks
 		for i, hash := range conf.hashes {
-			reader, _ := fileStore.Retrieve(ctx, hash)
+			reader, _ := fileStore.Retrieve(context.TODO(), hash)
 			//check that we can read the file size and that it corresponds to the generated file size
 			if s, err := reader.Size(); err != nil || s != int64(len(randomFiles[i])) {
 				allSuccess = false
@@ -768,15 +768,13 @@ func uploadFilesToNodes(nodes []*simulations.Node) ([]storage.Address, []string,
 		if err != nil {
 			return nil, nil, err
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
 		//store it (upload it) on the FileStore
-		rk, wait, err := fileStore.Store(ctx, strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
+		rk, wait, err := fileStore.Store(context.TODO(), strings.NewReader(rfiles[i]), int64(len(rfiles[i])), false)
 		log.Debug("Uploaded random string file to node")
 		if err != nil {
 			return nil, nil, err
 		}
-		err = wait(ctx)
+		err = wait(context.TODO())
 		if err != nil {
 			return nil, nil, err
 		}

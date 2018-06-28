@@ -147,9 +147,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	chunk := storage.NewChunk(hash, hash)
 	wait, err := localStore.Put(chunk)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-	err = wait(ctx)
+	err = wait(context.TODO())
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -190,7 +188,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	hash = storage.Address(hash1[:])
 	chunk = storage.NewChunk(hash, hash1[:])
 	wait, err = localStore.Put(chunk)
-	err = wait(ctx)
+	err = wait(context.TODO())
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -359,17 +357,13 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	// here we distribute chunks of a random file into Stores of nodes 1 to nodes
 	rrFileStore := storage.NewFileStore(newRoundRobinStore(sim.Stores[1:]...), storage.NewFileStoreParams())
 	size := chunkCount * chunkSize
-
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	fileHash, wait, err := rrFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+	fileHash, wait, err := rrFileStore.Store(context.TODO(), io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	// wait until all chunks stored
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
-	err = wait(ctx)
+	err = wait(context.TODO())
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -462,7 +456,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	}
 	startedAt := time.Now()
 	timeout := 300 * time.Second
-	ctx, cancel = context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	result, err := sim.Run(ctx, conf)
 	finishedAt := time.Now()
@@ -640,12 +634,12 @@ Loop:
 		hashes := make([]storage.Address, chunkCount)
 		for i := 0; i < chunkCount; i++ {
 			// create actual size real chunks
-			hash, wait, err := remoteFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
+			hash, wait, err := remoteFileStore.Store(context.TODO(), io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
 			if err != nil {
 				b.Fatalf("expected no error. got %v", err)
 			}
 			// wait until all chunks stored
-			err = wait(ctx)
+			err = wait(context.TODO())
 			if err != nil {
 				b.Fatalf("expected no error. got %v", err)
 			}

@@ -187,8 +187,6 @@ func testIterator(t *testing.T, mock bool) {
 	chunks := GenerateRandomChunks(DefaultChunkSize, chunkcount)
 
 	wg := &sync.WaitGroup{}
-	ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-	defer cancel()
 	wg.Add(len(chunks))
 	for i = 0; i < len(chunks); i++ {
 		chunkkeys[i] = chunks[i].Address()
@@ -198,7 +196,7 @@ func testIterator(t *testing.T, mock bool) {
 		}
 		go func() {
 			defer wg.Done()
-			err = wait(ctx)
+			err = wait(context.TODO())
 		}()
 	}
 

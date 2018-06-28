@@ -117,13 +117,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 	fileStore := storage.NewFileStore(sim.Stores[0], storage.NewFileStoreParams())
 	size := chunkCount * chunkSize
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
-	defer cancel()
-	_, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+	_, wait, err := fileStore.Store(context.TODO(), io.LimitReader(crand.Reader, int64(size)), int64(size), false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = wait(ctx)
+	err = wait(context.TODO())
 	if err != nil {
 		t.Fatal(err)
 	}

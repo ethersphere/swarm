@@ -891,8 +891,6 @@ func (h *Handler) update(ctx context.Context, name string, data []byte, multihas
 	chunk := newUpdateChunk(addr, signature, nextperiod, version, name, data, datalength)
 
 	// send the chunk
-	ctx, cancel := context.WithTimeout(context.Background(), h.storeTimeout)
-	defer cancel()
 	wait, err := h.chunkStore.Put(chunk)
 	if wait != nil {
 		err = wait(ctx)
