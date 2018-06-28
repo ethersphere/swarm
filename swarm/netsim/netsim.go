@@ -20,6 +20,7 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
@@ -31,36 +32,66 @@ var (
 )
 
 type Simulation struct {
-	Net       *simulations.Network
-	closeFunc func() error
+	Net *simulations.Network
 
 	pivotNodeID *discover.NodeID
-	mu          sync.Mutex
+	buckets     map[discover.NodeID]*Bucket
+	mu          sync.RWMutex
 }
 
 type Options struct {
-	ServiceFunc adapters.ServiceFunc
+	ServiceFunc func(ctx *adapters.ServiceContext, bucket *Bucket) (node.Service, error)
 }
 
 func NewSimulation(o Options) (s *Simulation, err error) {
+	s = &Simulation{
+		buckets: make(map[discover.NodeID]*Bucket),
+	}
 	a := adapters.NewSimAdapter(map[string]adapters.ServiceFunc{
-		"service": o.ServiceFunc,
+		"service": func(ctx *adapters.ServiceContext) (node.Service, error) {
+			b := newBucket()
+			n, err := o.ServiceFunc(ctx, b)
+			if err != nil {
+				return nil, err
+			}
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			s.buckets[ctx.Config.ID] = b
+			return n, nil
+		},
 	})
-	net := simulations.NewNetwork(a, &simulations.NetworkConfig{
+	s.Net = simulations.NewNetwork(a, &simulations.NetworkConfig{
 		ID:             "0",
 		DefaultService: "service",
 	})
-	closeFunc := func() error {
-		net.Shutdown()
-		return nil
-	}
-	s = &Simulation{
-		Net:       net,
-		closeFunc: closeFunc,
-	}
 	return s, nil
 }
 
 func (s *Simulation) Close() error {
-	return s.closeFunc()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	var wg sync.WaitGroup
+	for _, c := range s.buckets {
+		c := c
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+
+			c.mu.RLock()
+			defer c.mu.RUnlock()
+
+			for _, s := range c.values {
+				if closer, ok := s.(interface{ Close() }); ok {
+					closer.Close()
+				}
+				if closer, ok := s.(interface{ Close() error }); ok {
+					closer.Close()
+				}
+			}
+		}()
+	}
+	wg.Wait()
+	s.Net.Shutdown()
+	return nil
 }

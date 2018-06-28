@@ -49,17 +49,18 @@ func (s *Simulation) RandomService() node.Service {
 func (s *Simulation) Services() (services []node.Service) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
+		if !node.Up {
+			continue
+		}
 		simNode, ok := node.Node.(*adapters.SimNode)
 		if !ok {
-			return nil
+			continue
 		}
 		nss := simNode.Services()
 		if len(nss) == 0 {
 			continue
 		}
-		if node.Up {
-			services = append(services, nss[0])
-		}
+		services = append(services, nss[0])
 	}
 	return services
 }

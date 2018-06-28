@@ -13,6 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package netsim
 
 import (
@@ -22,9 +23,13 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-func TestService(t *testing.T) {
+func TestServiceBucket(t *testing.T) {
+	testKey := BucketKey("Key")
+	testValue := "Value"
+
 	sim, err := NewSimulation(Options{
-		ServiceFunc: func(_ *adapters.ServiceContext, _ *Bucket) (node.Service, error) {
+		ServiceFunc: func(_ *adapters.ServiceContext, b *Bucket) (node.Service, error) {
+			b.Set(testKey, testValue)
 			return newNoopService(), nil
 		},
 	})
@@ -38,18 +43,15 @@ func TestService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, ok := sim.Service(id).(*noopService)
-	if !ok {
-		t.Fatalf("service is not of %T type", &noopService{})
+	v := sim.ServiceItem(id, testKey)
+	if v == nil {
+		t.Fatal("bucket item value is nil")
 	}
-
-	_, ok = sim.RandomService().(*noopService)
+	s, ok := v.(string)
 	if !ok {
-		t.Fatalf("service is not of %T type", &noopService{})
+		t.Fatal("bucket item value is not string")
 	}
-
-	_, ok = sim.Services()[0].(*noopService)
-	if !ok {
-		t.Fatalf("service is not of %T type", &noopService{})
+	if s != testValue {
+		t.Fatalf("expected %q, got %q", testValue, s)
 	}
 }
