@@ -26,7 +26,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
-var sourcePeerID = discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+var requestedPeerID = discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+var sourcePeerID = discover.MustHexID("2dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
 
 // mockRequester pushes every request to the requestC channel when its doRequest function is called
 type mockRequester struct {
@@ -54,7 +55,7 @@ func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*disco
 	source := request.Source
 	if source == nil {
 		fmt.Println("source nil")
-		source = &sourcePeerID
+		source = &requestedPeerID
 	}
 	return source, make(chan struct{}), nil
 }
@@ -91,7 +92,7 @@ func TestFetcherSingleFetch(t *testing.T) {
 		}
 		// wait for the source peer to be added to peersToSkip
 		time.Sleep(100 * time.Millisecond)
-		if _, ok := request.PeersToSkip.Load(sourcePeerID.String()); !ok {
+		if _, ok := request.PeersToSkip.Load(requestedPeerID.String()); !ok {
 			t.Fatalf("request.peersToSkip does not contain peer returned by the request function")
 		}
 	case <-time.After(200 * time.Millisecond):
@@ -144,5 +145,54 @@ func TestFetchCancelStopsFetch(t *testing.T) {
 	case <-requester.requestC:
 		t.Fatalf("cancelled fetcher initiated request")
 	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// TestFetchUsesSourceFromContext tests fetcher request behavior when there is a source in the context.
+// In this case there should be 1 (and only one) request initiated, and the source nodeid from the context
+// should appear in the peersToSkip map.
+func TestFetchUsesSourceFromContext(t *testing.T) {
+	requester := newMockRequester(100 * time.Millisecond)
+	addr := make([]byte, 32)
+	fetcher := NewFetcher(addr, requester.doRequest, true)
+
+	peersToSkip := &sync.Map{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go fetcher.run(ctx, peersToSkip)
+
+	rctx := context.WithValue(context.Background(), "source", sourcePeerID.String())
+
+	fetcher.fetch(rctx)
+
+	select {
+	case <-requester.requestC:
+		t.Fatalf("fetcher initiated request")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	rctx = context.Background()
+
+	fetcher.fetch(rctx)
+
+	var request *Request
+	select {
+	case request = <-requester.requestC:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("fetcher did not initiate request")
+	}
+
+	select {
+	case <-requester.requestC:
+		t.Fatalf("Fetcher number of requests expected 1 got 2")
+	case <-time.After(200 * time.Millisecond):
+	}
+
+	// wait for the source peer to be added to peersToSkip
+	time.Sleep(100 * time.Millisecond)
+	if _, ok := request.PeersToSkip.Load(sourcePeerID.String()); !ok {
+		t.Fatalf("SourcePeerId not added to peersToSkip")
 	}
 }

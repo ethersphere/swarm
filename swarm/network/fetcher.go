@@ -126,7 +126,6 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 				log.Debug("new source", "peer addr", source, "request addr", f.addr)
 				// 1) the chunk is offered by a syncing peer
 				// add to known sources
-				requested = true
 				sources = append(sources, source)
 				// launch a request to the source iff the chunk was requested (not just expected because its offered by a syncing peer)
 				doRequest = requested
@@ -193,28 +192,32 @@ func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, pee
 	var i int
 	var sourceID *discover.NodeID
 	var quit chan struct{}
-	var err error
 
 	req := &Request{
 		Addr:        f.addr,
 		SkipCheck:   f.skipCheck,
 		PeersToSkip: peersToSkip,
 	}
+
+	foundSource := false
 	// iterate over known sources
 	for i = 0; i < len(sources); i++ {
 		req.Source = sources[i]
+		var err error
 		sourceID, quit, err = f.request(ctx, req)
 		if err == nil {
 			// remove the peer from known sources
 			// Note: we can modify the source although we are looping on it, because we break from the loop immediately
 			sources = append(sources[:i], sources[i+1:]...)
+			foundSource = true
 			break
 		}
 	}
 
 	// if there are no known sources, or none available, we try request from a closest node
-	if i == len(sources) {
+	if !foundSource {
 		req.Source = nil
+		var err error
 		sourceID, quit, err = f.request(ctx, req)
 		if err != nil {
 			// if no peers found to request from
