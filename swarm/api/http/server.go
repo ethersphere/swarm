@@ -110,8 +110,8 @@ func NewServer(api *api.API) *Server {
 }
 
 type Server struct {
-	controllers.Controller
-	api *api.API
+	controllers.Controller //THIS IS JUST TEMPORARY IN ORDER TO GET TESTS GREEN!
+	api                    *api.API
 }
 
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
