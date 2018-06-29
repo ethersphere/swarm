@@ -255,7 +255,7 @@ func (c *Controller) notify(name string, data []byte) error {
 }
 
 // check if we already have the bin
-// if we do, retreive the symkey from it and increment the count
+// if we do, retrieve the symkey from it and increment the count
 // if we dont make a new symkey and a new bin entry
 // not thread safe
 func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, pssAddress pss.PssAddress, err error) {
