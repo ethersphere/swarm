@@ -56,6 +56,8 @@ type Network struct {
 	Conns   []*Conn `json:"conns"`
 	connMap map[string]int
 
+	RunC chan struct{}
+
 	nodeAdapter adapters.NodeAdapter
 	events      event.Feed
 	lock        sync.RWMutex
@@ -70,6 +72,7 @@ func NewNetwork(nodeAdapter adapters.NodeAdapter, conf *NetworkConfig) *Network 
 		nodeMap:       make(map[discover.NodeID]int),
 		connMap:       make(map[string]int),
 		quitc:         make(chan struct{}),
+		RunC:          make(chan struct{}),
 	}
 }
 
@@ -497,6 +500,7 @@ func (net *Network) Shutdown() {
 			log.Warn(fmt.Sprintf("error stopping node %s", node.ID().TerminalString()), "err", err)
 		}
 	}
+	close(net.RunC)
 	close(net.quitc)
 }
 

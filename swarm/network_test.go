@@ -265,6 +265,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 	}
 
 	sim := netsim.NewSimulation(netsim.Options{
+		WithHTTP: true,
 		ServiceFunc: func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
 

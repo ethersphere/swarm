@@ -279,6 +279,7 @@ func NewServer(network *Network) *Server {
 
 	s.OPTIONS("/", s.Options)
 	s.GET("/", s.GetNetwork)
+	s.POST("/runsim", s.RunSimulation)
 	s.POST("/start", s.StartNetwork)
 	s.POST("/stop", s.StopNetwork)
 	s.POST("/mocker/start", s.StartMocker)
@@ -303,6 +304,14 @@ func NewServer(network *Network) *Server {
 // GetNetwork returns details of the network
 func (s *Server) GetNetwork(w http.ResponseWriter, req *http.Request) {
 	s.JSON(w, http.StatusOK, s.network)
+}
+
+// StartNetwork starts all nodes in the network
+func (s *Server) RunSimulation(w http.ResponseWriter, req *http.Request) {
+	fmt.Println("Received start signalr")
+	s.network.RunC <- struct{}{}
+	fmt.Println("Returning")
+	w.WriteHeader(http.StatusOK)
 }
 
 // StartNetwork starts all nodes in the network

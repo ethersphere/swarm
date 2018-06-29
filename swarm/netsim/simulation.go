@@ -19,9 +19,12 @@ package netsim
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations"
@@ -40,12 +43,17 @@ type Simulation struct {
 	buckets     map[discover.NodeID]*sync.Map
 	shutdownWG  sync.WaitGroup
 	mu          sync.RWMutex
+	httpSrv     *http.Server
 }
 
-var BucketKeyCleanup BucketKey = "cleanup"
+var (
+	BucketKeyCleanup BucketKey = "cleanup"
+	httpSimPort                = ":8888"
+)
 
 type Options struct {
 	ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
+	WithHTTP    bool
 }
 
 func NewSimulation(o Options) (s *Simulation) {
@@ -72,6 +80,19 @@ func NewSimulation(o Options) (s *Simulation) {
 		ID:             "0",
 		DefaultService: "service",
 	})
+	if o.WithHTTP {
+		log.Info(fmt.Sprintf("starting simulation server on 0.0.0.0:%d...", httpSimPort))
+		s.httpSrv = &http.Server{
+			Addr:    httpSimPort,
+			Handler: simulations.NewServer(s.Net),
+		}
+		//start the HTTP server
+		//go s.httpSrv.ListenAndServe(fmt.Sprintf(":%d", httpSimPort), simulations.NewServer(s))
+		go s.httpSrv.ListenAndServe()
+		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
+		<-s.Net.RunC
+		log.Info("Received signal from frontend - starting simulation run.")
+	}
 	return s
 }
 
@@ -83,16 +104,26 @@ type Result struct {
 }
 
 func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
+	defer func() {
+		if s.httpSrv != nil {
+			err := s.httpSrv.Shutdown(ctx)
+			if err != nil {
+				log.Error("Error shutting down HTTP server!", "err", err)
+			}
+		}
+	}()
 	start := time.Now()
 	errc := make(chan error)
 	quit := make(chan struct{})
 	defer close(quit)
+	fmt.Println("asasd")
 	go func() {
 		select {
 		case errc <- f(ctx, s):
 		case <-quit:
 		}
 	}()
+	fmt.Println("bbbbbb")
 	var err error
 	select {
 	case <-ctx.Done():
