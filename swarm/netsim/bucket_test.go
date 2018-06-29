@@ -28,15 +28,12 @@ func TestServiceBucket(t *testing.T) {
 	testKey := BucketKey("Key")
 	testValue := "Value"
 
-	sim, err := NewSimulation(Options{
+	sim := NewSimulation(Options{
 		ServiceFunc: func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			b.Store(testKey, testValue)
 			return newNoopService(), nil, nil
 		},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
 	defer sim.Close()
 
 	id, err := sim.AddNode()
