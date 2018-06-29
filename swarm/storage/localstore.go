@@ -118,11 +118,10 @@ func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
 		return err
 	}
 	ls.memStore.Put(ctx, chunk)
-	wait, err := ls.DbStore.Put(ctx, chunk)
+	err = ls.DbStore.Put(ctx, chunk)
 	if err != nil {
 		return err
 	}
-	wait(ctx)
 	return nil
 }
 
@@ -157,7 +156,7 @@ func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err e
 		return nil, err
 	}
 
-	ls.memStore.Put(chunk)
+	ls.memStore.Put(ctx, chunk)
 	return chunk, nil
 }
 

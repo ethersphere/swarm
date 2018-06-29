@@ -47,20 +47,20 @@ func TestHasherStore(t *testing.T) {
 
 		// Put two random chunks into the hasherStore
 		chunkData1 := GenerateRandomChunk(int64(tt.chunkLength)).Data()
-		key1, err := hasherStore.Put(chunkData1)
+		ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
+		key1, err := hasherStore.Put(ctx, chunkData1)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
 		}
 
 		chunkData2 := GenerateRandomChunk(int64(tt.chunkLength)).Data()
-		key2, err := hasherStore.Put(chunkData2)
+		key2, err := hasherStore.Put(ctx, chunkData2)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
 		}
 
 		hasherStore.Close()
 
-		ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
 		// Wait until chunks are really stored
 		err = hasherStore.Wait(ctx)
 		if err != nil {

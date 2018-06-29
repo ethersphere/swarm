@@ -296,7 +296,7 @@ type chunkMemStore struct {
 	*MemStore
 }
 
-func (m *chunkMemStore) Put(c Chunk) (waitToStore func(ctx context.Context) error, err error) {
-	m.MemStore.Put(c)
-	return func(context.Context) error { return nil }, nil
+func (m *chunkMemStore) Put(ctx context.Context, c Chunk) error {
+	m.MemStore.Put(ctx, c)
+	return nil
 }

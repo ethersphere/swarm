@@ -190,13 +190,12 @@ func testIterator(t *testing.T, mock bool) {
 	wg.Add(len(chunks))
 	for i = 0; i < len(chunks); i++ {
 		chunkkeys[i] = chunks[i].Address()
-		wait, err := db.Put(chunks[i])
-		if err != nil {
-			t.Fatalf("dbStore.Put failed: %v", err)
-		}
 		go func() {
 			defer wg.Done()
-			err = wait(context.TODO())
+			err := db.Put(context.TODO(), chunks[i])
+			if err != nil {
+				t.Fatalf("dbStore.Put failed: %v", err)
+			}
 		}()
 	}
 
