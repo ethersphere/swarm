@@ -34,7 +34,7 @@ func (s *Simulation) ConnectToLastNode(id discover.NodeID) (err error) {
 	ids := s.UpNodeIDs()
 	l := len(ids)
 	if l < 2 {
-		return ErrNodeNotFound
+		return nil
 	}
 	lid := ids[l-1]
 	if lid == id {
@@ -106,6 +106,7 @@ func (s *Simulation) ConnectNodesStar(id discover.NodeID) (err error) {
 	}
 	return nil
 }
+
 func (s *Simulation) ConnectNodesStarPivot() (err error) {
 	id := s.PivotNodeID()
 	if id == nil {

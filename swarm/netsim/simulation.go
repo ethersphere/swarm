@@ -17,8 +17,10 @@
 package netsim
 
 import (
+	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -36,6 +38,7 @@ type Simulation struct {
 
 	pivotNodeID *discover.NodeID
 	buckets     map[discover.NodeID]*sync.Map
+	shutdownWG  sync.WaitGroup
 	mu          sync.RWMutex
 }
 
@@ -45,7 +48,7 @@ type Options struct {
 	ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 }
 
-func NewSimulation(o Options) (s *Simulation, err error) {
+func NewSimulation(o Options) (s *Simulation) {
 	s = &Simulation{
 		buckets: make(map[discover.NodeID]*sync.Map),
 	}
@@ -69,29 +72,58 @@ func NewSimulation(o Options) (s *Simulation, err error) {
 		ID:             "0",
 		DefaultService: "service",
 	})
-	return s, nil
+	return s
+}
+
+type RunFunc func(context.Context, *Simulation) error
+
+type Result struct {
+	Duration time.Duration
+	Error    error
+}
+
+func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
+	start := time.Now()
+	errc := make(chan error)
+	quit := make(chan struct{})
+	defer close(quit)
+	go func() {
+		select {
+		case errc <- f(ctx, s):
+		case <-quit:
+		}
+	}()
+	var err error
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+	case err = <-errc:
+	}
+	return Result{
+		Duration: time.Since(start),
+		Error:    err,
+	}
 }
 
 var maxParallelCleanups = 10
 
-func (s *Simulation) Close() error {
+func (s *Simulation) Close() {
 	sem := make(chan struct{}, maxParallelCleanups)
-	var wg sync.WaitGroup
 	for _, v := range s.ServicesItems(BucketKeyCleanup) {
 		cleanup, ok := v.(func())
 		if !ok {
 			continue
 		}
-		wg.Add(1)
+		s.shutdownWG.Add(1)
 		sem <- struct{}{}
 		go func() {
-			defer wg.Done()
+			defer s.shutdownWG.Done()
 			defer func() { <-sem }()
 
 			cleanup()
 		}()
 	}
-	wg.Wait()
+	s.shutdownWG.Wait()
 	s.Net.Shutdown()
-	return nil
+	return
 }

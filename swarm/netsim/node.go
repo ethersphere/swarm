@@ -43,9 +43,26 @@ func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
 	return ids
 }
 
-func (s *Simulation) AddNode() (id discover.NodeID, err error) {
-	nodeconf := adapters.RandomNodeConfig()
-	node, err := s.Net.NewNodeWithConfig(nodeconf)
+type AddNodeOption func(*adapters.NodeConfig)
+
+func AddNodeWithName(name string) AddNodeOption {
+	return func(o *adapters.NodeConfig) {
+		o.Name = name
+	}
+}
+
+func AddNodeWithMsgEvents(enable bool) AddNodeOption {
+	return func(o *adapters.NodeConfig) {
+		o.EnableMsgEvents = enable
+	}
+}
+
+func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err error) {
+	conf := adapters.RandomNodeConfig()
+	for _, o := range opts {
+		o(conf)
+	}
+	node, err := s.Net.NewNodeWithConfig(conf)
 	if err != nil {
 		return id, err
 	}

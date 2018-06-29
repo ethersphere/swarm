@@ -47,6 +47,7 @@ func (s *Simulation) WaitKademlia(ctx context.Context, kadMinProxSize int) (err 
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
+			healthy := true
 			log.Debug("kademlia health check", "addr count", len(addrs))
 			for i, k := range kademlias {
 				//PeerPot for this node
@@ -60,8 +61,12 @@ func (s *Simulation) WaitKademlia(ctx context.Context, kadMinProxSize int) (err 
 				log.Debug("kademlia", "health", h.GotNN && h.KnowNN && h.Full, "addr", fmt.Sprintf("%x", k.BaseAddr()), "i", i)
 				log.Debug("kademlia", "ill condition", !h.GotNN || !h.Full, "addr", fmt.Sprintf("%x", k.BaseAddr()), "i", i)
 				if !h.GotNN || !h.Full {
-					return nil
+					healthy = false
+					break
 				}
+			}
+			if healthy {
+				return nil
 			}
 		}
 	}
