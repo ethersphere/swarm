@@ -132,7 +132,7 @@ func (c *Controller) isActive(name string) bool {
 
 // Subscribe is used by a client to request notifications from a notification service provider
 // It will create a MsgCodeStart message and send asymmetrically to the provider using its public key and routing address
-// The handler function is a callback that will be called when notifications are recieved
+// The handler function is a callback that will be called when notifications are received
 // Fails if the request pss cannot be sent or if the update message could not be serialized
 func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss.PssAddress, handler func(string, []byte) error) error {
 	c.mu.Lock()
@@ -239,17 +239,17 @@ func (c *Controller) notify(name string, data []byte) error {
 	}
 	msg := NewMsg(MsgCodeNotify, name, data)
 	smsg, err := rlp.EncodeToBytes(msg)
+	if err != nil {
+		return err
+	}
 	for _, m := range c.notifiers[name].bins {
 		log.Debug("sending pss notify", "name", name, "addr", fmt.Sprintf("%x", m.address), "topic", fmt.Sprintf("%x", c.notifiers[name].topic), "data", data)
-		if err != nil {
-			return err
-		}
-		go func() {
+		go func(m *sendBin) {
 			err = c.pss.SendSym(m.symKeyId, c.notifiers[name].topic, smsg)
 			if err != nil {
 				log.Warn("Failed to send notify to addr %x: %v", m.address, err)
 			}
-		}()
+		}(m)
 	}
 	return nil
 }
