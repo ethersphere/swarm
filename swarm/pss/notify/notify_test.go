@@ -27,7 +27,6 @@ var (
 	psses    map[string]*pss.Pss
 	w        *whisper.Whisper
 	wapi     *whisper.PublicWhisperAPI
-	msgSeq   int
 )
 
 func init() {
