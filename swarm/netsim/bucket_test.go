@@ -28,15 +28,12 @@ func TestServiceBucket(t *testing.T) {
 	testKey := BucketKey("Key")
 	testValue := "Value"
 
-	sim, err := NewSimulation(Options{
-		ServiceFunc: func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+	sim := NewSimulation(map[string]ServiceFunc{
+		"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			b.Store(testKey, testValue)
 			return newNoopService(), nil, nil
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	}, &SimulationOptions{})
 	defer sim.Close()
 
 	id, err := sim.AddNode()
@@ -44,7 +41,7 @@ func TestServiceBucket(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	v, ok := sim.ServiceItem(id, testKey)
+	v, ok := sim.NodeItem(id, testKey)
 	if !ok {
 		t.Fatal("bucket item not found")
 	}

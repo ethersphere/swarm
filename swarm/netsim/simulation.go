@@ -31,82 +31,137 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
+// Common errors that are returned by functions in this package.
 var (
 	ErrNodeNotFound    = errors.New("node not found")
 	ErrNoPivotNode     = errors.New("no pivot node set")
-	DefaultHttpSimPort = "8888"
+	DefaultHTTPSimPort = "8888"
 )
 
+// Simulation provides methods on network, nodes and services
+// to manage them.
 type Simulation struct {
 	Net *simulations.Network
 
-	pivotNodeID *discover.NodeID
-	buckets     map[discover.NodeID]*sync.Map
-	shutdownWG  sync.WaitGroup
-	mu          sync.RWMutex
-	httpSrv     *http.Server
+	serviceNames []string
+	cleanupFuncs []func()
+	buckets      map[discover.NodeID]*sync.Map
+	pivotNodeID  *discover.NodeID
+	shutdownWG   sync.WaitGroup
+	mu           sync.RWMutex
+
+	httpSrv *http.Server        //attach a HTTP server via SimulationOptions
+	handler *simulations.Server //HTTP handler for the server
+	runC    chan struct{}       //channel where frontend signals it is ready
 }
 
-var (
-	BucketKeyCleanup BucketKey = "cleanup"
-)
-
-type Options struct {
-	ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
-	WithHTTP    bool
-	HttpSimPort string
+//SimulationOptions defines options for the Simulation
+//Currently only defines options to allow to attach a
+//HTTP server to the simulation (i.e. for sim frontend visualization)
+type SimulationOptions struct {
+	WithHTTP    bool   //set to true to attach a HTTP server
+	HTTPSimPort string //string defining the HTTP server port
 }
 
-func NewSimulation(o Options) (s *Simulation) {
+// ServiceFunc is used in NewSimulation to declare new service constructor.
+// The first argument provides ServiceContext from the adapters package
+// giving for example the access to NodeID. Second argument is the sync.Map
+// where all "global" state related to the service should be kept.
+// All cleanups needed for constructed service and any other constructed
+// objects should ne provided in a single returned cleanup function.
+type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
+
+// NewSimulation creates a new Simulation instance with new
+// simulations.Network initialized with provided services.
+func NewSimulation(services map[string]ServiceFunc, opts *SimulationOptions) (s *Simulation) {
 	s = &Simulation{
 		buckets: make(map[discover.NodeID]*sync.Map),
 	}
-	a := adapters.NewSimAdapter(map[string]adapters.ServiceFunc{
-		"service": func(ctx *adapters.ServiceContext) (node.Service, error) {
+
+	adapterServices := make(map[string]adapters.ServiceFunc, len(services))
+	for name, serviceFunc := range services {
+		s.serviceNames = append(s.serviceNames, name)
+		adapterServices[name] = func(ctx *adapters.ServiceContext) (node.Service, error) {
 			b := new(sync.Map)
-			n, cleanup, err := o.ServiceFunc(ctx, b)
+			service, cleanup, err := serviceFunc(ctx, b)
 			if err != nil {
 				return nil, err
 			}
-			if cleanup != nil {
-				b.Store(BucketKeyCleanup, cleanup)
-			}
 			s.mu.Lock()
 			defer s.mu.Unlock()
+			if cleanup != nil {
+				s.cleanupFuncs = append(s.cleanupFuncs, cleanup)
+			}
 			s.buckets[ctx.Config.ID] = b
-			return n, nil
-		},
-	})
-	s.Net = simulations.NewNetwork(a, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: "service",
-	})
-	if o.WithHTTP {
-		if o.HttpSimPort == "" {
-			o.HttpSimPort = DefaultHttpSimPort
+			return service, nil
 		}
-		log.Info(fmt.Sprintf("starting simulation server on 0.0.0.0:%d...", o.HttpSimPort))
-		s.httpSrv = &http.Server{
-			Addr:    fmt.Sprintf(":%s", o.HttpSimPort),
-			Handler: simulations.NewServer(s.Net),
-		}
-		//start the HTTP server
-		go s.httpSrv.ListenAndServe()
-		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
-		<-s.Net.RunC
-		log.Info("Received signal from frontend - starting simulation run.")
 	}
+
+	s.Net = simulations.NewNetwork(
+		adapters.NewSimAdapter(adapterServices),
+		&simulations.NetworkConfig{ID: "0"},
+	)
 	return s
 }
 
+func (s *Simulation) initHTTPServer(opts *SimulationOptions) {
+	//assign default port if nothing provided
+	if opts.HTTPSimPort == "" {
+		opts.HTTPSimPort = DefaultHTTPSimPort
+	}
+	log.Info(fmt.Sprintf("starting simulation server on 0.0.0.0:%s...", opts.HTTPSimPort))
+	//initialize the HTTP server
+	s.handler = simulations.NewServer(s.Net)
+	s.runC = make(chan struct{})
+	//add swarm specific routes to the HTTP server
+	s.addSimulationRoutes()
+	s.httpSrv = &http.Server{
+		Addr:    fmt.Sprintf(":%s", opts.HTTPSimPort),
+		Handler: s.handler,
+	}
+}
+
+func (s *Simulation) startHTTPServer() {
+	//start the HTTP server
+	if s.httpSrv != nil {
+		go s.httpSrv.ListenAndServe()
+		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
+		//wait for the frontend to connect
+		<-s.runC
+		log.Info("Received signal from frontend - starting simulation run.")
+	}
+}
+
+func (s *Simulation) addSimulationRoutes() {
+	s.handler.POST("/runsim", s.RunSimulation)
+}
+
+// StartNetwork starts all nodes in the network
+func (s *Simulation) RunSimulation(w http.ResponseWriter, req *http.Request) {
+	log.Debug("Waiting for signal from frontend...")
+	s.runC <- struct{}{}
+	log.Debug("Signal received, starting simulation")
+	w.WriteHeader(http.StatusOK)
+}
+
+// RunFunc is the function that will be called
+// on Simulation.Run method call.
 type RunFunc func(context.Context, *Simulation) error
 
+// Result is the returned value of Simulation.Run method.
 type Result struct {
 	Duration time.Duration
 	Error    error
 }
 
+// Run calls the RunFunc function while taking care of
+// cancelation provided through the Context.
 func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
+	//if the option is set to run a HTTP server with the simulation,
+	//init the server and start it
+	if s.httpSrv != nil {
+		s.startHTTPServer()
+	}
 	start := time.Now()
 	errc := make(chan error)
 	quit := make(chan struct{})
@@ -129,23 +184,35 @@ func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
 	}
 }
 
+// Maximal number of parallel calls to cleanup functions on
+// Simulation.Close.
 var maxParallelCleanups = 10
 
+// Close calls all cleanup functions that are returned by
+// ServiceFunc, waits for all of them to finish and other
+// functions that explicitly block shutdownWG
+// (like Simulation.PeerEvents) and shuts down the network
+// at the end. It is used to clean all resources from the
+// simulation.
 func (s *Simulation) Close() {
 	sem := make(chan struct{}, maxParallelCleanups)
-	for _, v := range s.ServicesItems(BucketKeyCleanup) {
-		cleanup, ok := v.(func())
-		if !ok {
-			continue
+	s.mu.RLock()
+	cleanupFuncs := make([]func(), len(s.cleanupFuncs))
+	for i, f := range s.cleanupFuncs {
+		if f != nil {
+			cleanupFuncs[i] = f
 		}
+	}
+	s.mu.RUnlock()
+	for _, cleanup := range cleanupFuncs {
 		s.shutdownWG.Add(1)
 		sem <- struct{}{}
-		go func() {
+		go func(cleanup func()) {
 			defer s.shutdownWG.Done()
 			defer func() { <-sem }()
 
 			cleanup()
-		}()
+		}(cleanup)
 	}
 	if s.httpSrv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
@@ -154,8 +221,8 @@ func (s *Simulation) Close() {
 		if err != nil {
 			log.Error("Error shutting down HTTP server!", "err", err)
 		}
+		close(s.runC)
 	}
 	s.shutdownWG.Wait()
 	s.Net.Shutdown()
-	return
 }
