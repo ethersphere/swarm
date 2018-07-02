@@ -131,5 +131,4 @@ func (s *Simulation) Close() {
 	}
 	s.shutdownWG.Wait()
 	s.Net.Shutdown()
-	return
 }
