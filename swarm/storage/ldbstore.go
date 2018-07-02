@@ -550,12 +550,13 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	var index dpaDBIndex
 
 	po := s.po(chunk.Address())
-	s.lock.Lock()
-	defer s.lock.Unlock()
+
 	if s.closed {
 		return ErrDBClosed
 	}
 	batch := s.batch
+
+	s.lock.Lock()
 
 	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Address(), "ikey", fmt.Sprintf("%x", ikey))
 	idata, err := s.db.Get(ikey)
@@ -574,6 +575,8 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
+
+	s.lock.Unlock()
 
 	select {
 	case <-batch.c:
