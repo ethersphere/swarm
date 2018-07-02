@@ -84,7 +84,7 @@ func NewCreateRequest(metadata *ResourceMetadata) (*Request, error) {
 	return request, nil
 }
 
-// Frequency Returns the resource expected update frequency
+// Frequency returns the resource's expected update frequency
 func (r *Request) Frequency() uint64 {
 	return r.metadata.Frequency
 }
@@ -240,7 +240,7 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 			return nil, NewError(ErrInvalidSignature, "Cannot decode signature")
 		}
 		r.signature = new(Signature)
-		r.updateAddr = r.GetUpdateAddr()
+		r.updateAddr = r.Addr()
 		copy(r.signature[:], sigBytes)
 	}
 	return r, nil

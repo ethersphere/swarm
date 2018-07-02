@@ -25,7 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// SignedResourceUpdate contains signature information about a resource update
+// SignedResourceUpdate represents a resource update with all the necessary information to prove ownership of the resource
 type SignedResourceUpdate struct {
 	resourceUpdate // actual content that will be put on the chunk, less signature
 	signature      *Signature
@@ -53,7 +53,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 		return err
 	}
 
-	if !bytes.Equal(r.updateAddr, r.GetUpdateAddr()) {
+	if !bytes.Equal(r.updateAddr, r.Addr()) {
 		return NewError(ErrInvalidSignature, "Signature address does not match with ownerAddr")
 	}
 
@@ -68,7 +68,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 // Sign executes the signature to validate the resource
 func (r *SignedResourceUpdate) Sign(signer Signer) error {
 
-	updateAddr := r.GetUpdateAddr()
+	updateAddr := r.Addr()
 
 	r.binaryData = nil                     //invalidate serialized data
 	digest, err := r.getDigest(updateAddr) // computes digest and serializes into .binaryData
@@ -139,7 +139,7 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 	// check that the lookup information contained in the chunk matches the updateAddr (chunk search key)
 	// that was used to retrieve this chunk
 	// if this validation fails, someone forged a chunk.
-	if !bytes.Equal(updateAddr, r.updateHeader.GetUpdateAddr()) {
+	if !bytes.Equal(updateAddr, r.updateHeader.Addr()) {
 		return NewError(ErrInvalidSignature, "period,version,rootAddr contained in update chunk do not match updateAddr")
 	}
 

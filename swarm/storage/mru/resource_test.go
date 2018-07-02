@@ -183,7 +183,7 @@ func TestReverse(t *testing.T) {
 		},
 	}
 	// generate a hash for t=4200 version 1
-	key := update.GetUpdateAddr()
+	key := update.Addr()
 
 	if err = update.Sign(signer); err != nil {
 		t.Fatal(err)
@@ -441,6 +441,25 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[2])
 	}
 	log.Debug("Specific version lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
+
+	// we are now at third update
+	// check backwards stepping to the first
+	for i := 1; i >= 0; i-- {
+		rsrc, err := rh2.LookupPrevious(ctx, lookupParams)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(rsrc.data, []byte(updates[i])) {
+			t.Fatalf("resource data (previous) was %v, expected %v", rsrc.data, updates[i])
+
+		}
+	}
+
+	// beyond the first should yield an error
+	rsrc, err = rh2.LookupPrevious(ctx, lookupParams)
+	if err == nil {
+		t.Fatalf("expected previous to fail, returned period %d version %d data %v", rsrc.period, rsrc.version, rsrc.data)
+	}
 
 }
 
@@ -801,7 +820,7 @@ func TestValidatorInStore(t *testing.T) {
 		rootAddr: rootChunk.Addr,
 	}
 
-	updateAddr := updateLookup.GetUpdateAddr()
+	updateAddr := updateLookup.Addr()
 	data := []byte("bar")
 
 	r := SignedResourceUpdate{

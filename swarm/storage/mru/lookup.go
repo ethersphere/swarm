@@ -76,8 +76,8 @@ type UpdateLookup struct {
 // storage.Keylength for rootAddr
 const updateLookupLength = 4 + 4 + storage.KeyLength
 
-// resourceUpdateChunkAddr calculates the resource update chunk address (formerly known as resourceHash)
-func (u *UpdateLookup) GetUpdateAddr() (updateAddr storage.Address) {
+// Addr calculates the resource update chunk address corresponding to this lookup key
+func (u *UpdateLookup) Addr() (updateAddr storage.Address) {
 	serializedData := make([]byte, updateLookupLength)
 	u.binaryPut(serializedData)
 	hasher := hashPool.Get().(hash.Hash)
