@@ -22,6 +22,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
+// Service returns a single Service by name on a particular node
+// with provided id.
 func (s *Simulation) Service(name string, id discover.NodeID) node.Service {
 	simNode, ok := s.Net.GetNode(id).Node.(*adapters.SimNode)
 	if !ok {
@@ -34,6 +36,8 @@ func (s *Simulation) Service(name string, id discover.NodeID) node.Service {
 	return services[name]
 }
 
+// RandomService returns a single Service by name on a
+// randomly chosen node that is up.
 func (s *Simulation) RandomService(name string) node.Service {
 	n := s.randomNode()
 	if n == nil {
@@ -42,6 +46,8 @@ func (s *Simulation) RandomService(name string) node.Service {
 	return n.Service(name)
 }
 
+// Services returns all services with a provided name
+// from nodes that are up.
 func (s *Simulation) Services(name string) (services []node.Service) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {

@@ -21,6 +21,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+// noopService is the service that does not do anything
+// but implemnts node.Service interface.
 type noopService struct{}
 
 func newNoopService() node.Service {

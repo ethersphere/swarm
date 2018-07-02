@@ -41,7 +41,7 @@ func TestServiceBucket(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	v, ok := sim.ServiceItem(id, testKey)
+	v, ok := sim.NodeItem(id, testKey)
 	if !ok {
 		t.Fatal("bucket item not found")
 	}

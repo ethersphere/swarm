@@ -28,11 +28,14 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
+// Common errors that are returned by functions in this package.
 var (
 	ErrNodeNotFound = errors.New("node not found")
 	ErrNoPivotNode  = errors.New("no pivot node set")
 )
 
+// Simulation provides methods on network, nodes and services
+// to manage them.
 type Simulation struct {
 	Net *simulations.Network
 
@@ -44,8 +47,16 @@ type Simulation struct {
 	mu           sync.RWMutex
 }
 
+// ServiceFunc is used in NewSimulation to declare new service constructor.
+// The first argument provides ServiceContext from the adapters package
+// giving for example the access to NodeID. Second argument is the sync.Map
+// where all "global" state related to the service should be kept.
+// All cleanups needed for constructed service and any other constructed
+// objects should ne provided in a single returned cleanup function.
 type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 
+// NewSimulation creates a new Simulation instance with new
+// simulations.Network initialized with provided services.
 func NewSimulation(services map[string]ServiceFunc) (s *Simulation) {
 	s = &Simulation{
 		buckets: make(map[discover.NodeID]*sync.Map),
@@ -77,13 +88,18 @@ func NewSimulation(services map[string]ServiceFunc) (s *Simulation) {
 	return s
 }
 
+// RunFunc is the function that will be called
+// on Simulation.Run method call.
 type RunFunc func(context.Context, *Simulation) error
 
+// Result is the returned value of Simulation.Run method.
 type Result struct {
 	Duration time.Duration
 	Error    error
 }
 
+// Run calls the RunFunc function while taking care of
+// cancelation provided through the Context.
 func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
 	start := time.Now()
 	errc := make(chan error)
@@ -107,8 +123,16 @@ func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
 	}
 }
 
+// Maximal number of parallel calls to cleanup functions on
+// Simulation.Close.
 var maxParallelCleanups = 10
 
+// Close calls all cleanup functions that are returned by
+// ServiceFunc, waits for all of them to finish and other
+// functions that explicitly block shutdownWG
+// (like Simulation.PeerEvents) and shuts down the network
+// at the end. It is used to clean all resources from the
+// simulation.
 func (s *Simulation) Close() {
 	sem := make(chan struct{}, maxParallelCleanups)
 	s.mu.RLock()

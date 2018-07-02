@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
+// NodeIDs returns NodeIDs for all nodes in the network.
 func (s *Simulation) NodeIDs() (ids []discover.NodeID) {
 	nodes := s.Net.GetNodes()
 	ids = make([]discover.NodeID, len(nodes))
@@ -33,6 +34,7 @@ func (s *Simulation) NodeIDs() (ids []discover.NodeID) {
 	return ids
 }
 
+// UpNodeIDs returns NodeIDs for nodeas that are up in the network.
 func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
@@ -43,20 +45,27 @@ func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
 	return ids
 }
 
+// AddNodeOption defines the option that can be passed
+// to Simulation.AddNode method.
 type AddNodeOption func(*adapters.NodeConfig)
 
+// AddNodeWithName sets the optional name for the new node.
 func AddNodeWithName(name string) AddNodeOption {
 	return func(o *adapters.NodeConfig) {
 		o.Name = name
 	}
 }
 
+// AddNodeWithMsgEvents sets the EnableMsgEvents option
+// to NodeConfig.
 func AddNodeWithMsgEvents(enable bool) AddNodeOption {
 	return func(o *adapters.NodeConfig) {
 		o.EnableMsgEvents = enable
 	}
 }
 
+// AddNode creates a new node with random configuration,
+// applies provided options to the config and adds the node to network.
 func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err error) {
 	conf := adapters.RandomNodeConfig()
 	for _, o := range opts {
@@ -70,22 +79,31 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err err
 	return node.ID(), s.Net.Start(node.ID())
 }
 
-func (s *Simulation) PivotNodeID() (id *discover.NodeID) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.pivotNodeID
-}
-
+// SetPivotNode sets the NodeID of the network's pivot node.
+// Pivot node is just a specific node that should be treated
+// differently then other nodes in test. SetPivotNode and
+// PivotNodeID are just a convenient functions to set and
+// retrieve it.
 func (s *Simulation) SetPivotNode(id discover.NodeID) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.pivotNodeID = &id
 }
 
+// PivotNodeID returns NodeID of the pivot node set by
+// Simulation.SetPivotNode method.
+func (s *Simulation) PivotNodeID() (id *discover.NodeID) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.pivotNodeID
+}
+
+// StopNode stops a node by NodeID.
 func (s *Simulation) StopNode(id discover.NodeID) (err error) {
 	return s.Net.GetNode(id).Stop()
 }
 
+// StopRandomNode stops a random node.
 func (s *Simulation) StopRandomNode() (err error) {
 	n := s.randomNode()
 	if n == nil {
@@ -94,10 +112,13 @@ func (s *Simulation) StopRandomNode() (err error) {
 	return n.Stop()
 }
 
+// seed the random generator for Simulation.randomNode.
 func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+// randomNode returns a random SimNode that is up.
+// Arguments are NodeIDs for nodes that should not be returned.
 func (s *Simulation) randomNode(exclude ...discover.NodeID) *adapters.SimNode {
 	ids := s.UpNodeIDs()
 	for _, e := range exclude {
