@@ -36,42 +36,44 @@ var (
 type Simulation struct {
 	Net *simulations.Network
 
-	pivotNodeID *discover.NodeID
-	buckets     map[discover.NodeID]*sync.Map
-	shutdownWG  sync.WaitGroup
-	mu          sync.RWMutex
+	serviceNames []string
+	cleanupFuncs []func()
+	buckets      map[discover.NodeID]*sync.Map
+	pivotNodeID  *discover.NodeID
+	shutdownWG   sync.WaitGroup
+	mu           sync.RWMutex
 }
 
-var BucketKeyCleanup BucketKey = "cleanup"
+type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 
-type Options struct {
-	ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
-}
-
-func NewSimulation(o Options) (s *Simulation) {
+func NewSimulation(services map[string]ServiceFunc) (s *Simulation) {
 	s = &Simulation{
 		buckets: make(map[discover.NodeID]*sync.Map),
 	}
-	a := adapters.NewSimAdapter(map[string]adapters.ServiceFunc{
-		"service": func(ctx *adapters.ServiceContext) (node.Service, error) {
+
+	adapterServices := make(map[string]adapters.ServiceFunc, len(services))
+	for name, serviceFunc := range services {
+		s.serviceNames = append(s.serviceNames, name)
+		adapterServices[name] = func(ctx *adapters.ServiceContext) (node.Service, error) {
 			b := new(sync.Map)
-			n, cleanup, err := o.ServiceFunc(ctx, b)
+			service, cleanup, err := serviceFunc(ctx, b)
 			if err != nil {
 				return nil, err
 			}
-			if cleanup != nil {
-				b.Store(BucketKeyCleanup, cleanup)
-			}
 			s.mu.Lock()
 			defer s.mu.Unlock()
+			if cleanup != nil {
+				s.cleanupFuncs = append(s.cleanupFuncs, cleanup)
+			}
 			s.buckets[ctx.Config.ID] = b
-			return n, nil
-		},
-	})
-	s.Net = simulations.NewNetwork(a, &simulations.NetworkConfig{
-		ID:             "0",
-		DefaultService: "service",
-	})
+			return service, nil
+		}
+	}
+
+	s.Net = simulations.NewNetwork(
+		adapters.NewSimAdapter(adapterServices),
+		&simulations.NetworkConfig{ID: "0"},
+	)
 	return s
 }
 
@@ -109,19 +111,23 @@ var maxParallelCleanups = 10
 
 func (s *Simulation) Close() {
 	sem := make(chan struct{}, maxParallelCleanups)
-	for _, v := range s.ServicesItems(BucketKeyCleanup) {
-		cleanup, ok := v.(func())
-		if !ok {
-			continue
+	s.mu.RLock()
+	cleanupFuncs := make([]func(), len(s.cleanupFuncs))
+	for i, f := range s.cleanupFuncs {
+		if f != nil {
+			cleanupFuncs[i] = f
 		}
+	}
+	s.mu.RUnlock()
+	for _, cleanup := range cleanupFuncs {
 		s.shutdownWG.Add(1)
 		sem <- struct{}{}
-		go func() {
+		go func(cleanup func()) {
 			defer s.shutdownWG.Done()
 			defer func() { <-sem }()
 
 			cleanup()
-		}()
+		}(cleanup)
 	}
 	s.shutdownWG.Wait()
 	s.Net.Shutdown()

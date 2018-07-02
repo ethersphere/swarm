@@ -22,31 +22,27 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
-func (s *Simulation) Service(id discover.NodeID) node.Service {
+func (s *Simulation) Service(name string, id discover.NodeID) node.Service {
 	simNode, ok := s.Net.GetNode(id).Node.(*adapters.SimNode)
 	if !ok {
 		return nil
 	}
-	services := simNode.Services()
+	services := simNode.ServiceMap()
 	if len(services) == 0 {
 		return nil
 	}
-	return services[0]
+	return services[name]
 }
 
-func (s *Simulation) RandomService() node.Service {
+func (s *Simulation) RandomService(name string) node.Service {
 	n := s.randomNode()
 	if n == nil {
 		return nil
 	}
-	services := n.Services()
-	if len(services) == 0 {
-		return nil
-	}
-	return services[0]
+	return n.Service(name)
 }
 
-func (s *Simulation) Services() (services []node.Service) {
+func (s *Simulation) Services(name string) (services []node.Service) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
 		if !node.Up {
@@ -56,11 +52,7 @@ func (s *Simulation) Services() (services []node.Service) {
 		if !ok {
 			continue
 		}
-		nss := simNode.Services()
-		if len(nss) == 0 {
-			continue
-		}
-		services = append(services, nss[0])
+		services = append(services, simNode.Service(name))
 	}
 	return services
 }

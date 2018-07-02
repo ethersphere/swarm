@@ -264,8 +264,8 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		o = new(testSwarmNetworkOptions)
 	}
 
-	sim := netsim.NewSimulation(netsim.Options{
-		ServiceFunc: func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+	sim := netsim.NewSimulation(map[string]netsim.ServiceFunc{
+		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
 
 			dir, err := ioutil.TempDir("", "swarm-network-test-node")
@@ -347,7 +347,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 				nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
 			})
 			for _, id := range nodeIDs {
-				key, data, err := uploadFile(sim.Service(id).(*Swarm))
+				key, data, err := uploadFile(sim.Service("swarm", id).(*Swarm))
 				if err != nil {
 					return err
 				}
@@ -434,7 +434,7 @@ func retrieve(
 
 		var wg sync.WaitGroup
 
-		swarm := sim.Service(id).(*Swarm)
+		swarm := sim.Service("swarm", id).(*Swarm)
 		for _, f := range files {
 
 			checkKey := check{

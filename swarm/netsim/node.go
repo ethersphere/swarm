@@ -62,6 +62,7 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err err
 	for _, o := range opts {
 		o(conf)
 	}
+	conf.Services = s.serviceNames
 	node, err := s.Net.NewNodeWithConfig(conf)
 	if err != nil {
 		return id, err
