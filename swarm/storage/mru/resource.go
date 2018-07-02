@@ -413,7 +413,7 @@ func (h *Handler) New(ctx context.Context, name string, frequency uint64) (stora
 
 	chunk := h.newMetaChunk(name, currentblock, frequency)
 
-	_, err = h.chunkStore.Put(chunk)
+	err = h.chunkStore.Put(ctx, chunk)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -891,10 +891,7 @@ func (h *Handler) update(ctx context.Context, name string, data []byte, multihas
 	chunk := newUpdateChunk(addr, signature, nextperiod, version, name, data, datalength)
 
 	// send the chunk
-	wait, err := h.chunkStore.Put(chunk)
-	if wait != nil {
-		err = wait(ctx)
-	}
+	err = h.chunkStore.Put(ctx, chunk)
 	if err != nil {
 		return nil, NewError(ErrIO, err.Error())
 	}

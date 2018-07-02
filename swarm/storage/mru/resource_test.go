@@ -607,17 +607,17 @@ func TestValidator(t *testing.T) {
 	data := []byte("bar")
 	uglyChunk := newUpdateChunk(key, nil, 42, 1, "xyzzy.eth", data, len(data))
 
-	_, err = store.Put(goodChunk)
+	err = store.Put(context.TODO(), goodChunk)
 	if err != nil {
 		t.Fatalf("expected no error on good content address chunk with both validators, but got: %s", err)
 	}
 
-	_, err = store.Put(badChunk)
+	err = store.Put(context.TODO(), badChunk)
 	if err == nil {
 		t.Fatal("expected error on bad chunk address with both validators, but got nil")
 	}
 
-	_, err = store.Put(uglyChunk)
+	err = store.Put(context.TODO(), uglyChunk)
 	if err != nil {
 		t.Fatalf("expected no error on resource update chunk with both validators, but got: %s", err)
 	}
@@ -636,17 +636,17 @@ func TestValidator(t *testing.T) {
 	data = []byte("baz")
 	uglyChunk = newUpdateChunk(key, nil, 42, 2, "xyzzy.eth", data, len(data))
 
-	_, err = store.Put(goodChunk)
+	err = store.Put(context.TODO(), goodChunk)
 	if err == nil {
 		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
 	}
 
-	_, err = store.Put(badChunk)
+	err = store.Put(context.TODO(), badChunk)
 	if err == nil {
 		t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
 	}
 
-	_, err = store.Put(uglyChunk)
+	err = store.Put(context.TODO(), uglyChunk)
 	if err != nil {
 		t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
 	}
