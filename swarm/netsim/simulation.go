@@ -32,8 +32,9 @@ import (
 )
 
 var (
-	ErrNodeNotFound = errors.New("node not found")
-	ErrNoPivotNode  = errors.New("no pivot node set")
+	ErrNodeNotFound    = errors.New("node not found")
+	ErrNoPivotNode     = errors.New("no pivot node set")
+	DefaultHttpSimPort = "8888"
 )
 
 type Simulation struct {
@@ -48,12 +49,12 @@ type Simulation struct {
 
 var (
 	BucketKeyCleanup BucketKey = "cleanup"
-	httpSimPort                = ":8888"
 )
 
 type Options struct {
 	ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 	WithHTTP    bool
+	HttpSimPort string
 }
 
 func NewSimulation(o Options) (s *Simulation) {
@@ -81,13 +82,15 @@ func NewSimulation(o Options) (s *Simulation) {
 		DefaultService: "service",
 	})
 	if o.WithHTTP {
-		log.Info(fmt.Sprintf("starting simulation server on 0.0.0.0:%d...", httpSimPort))
+		if o.HttpSimPort == "" {
+			o.HttpSimPort = DefaultHttpSimPort
+		}
+		log.Info(fmt.Sprintf("starting simulation server on 0.0.0.0:%d...", o.HttpSimPort))
 		s.httpSrv = &http.Server{
-			Addr:    httpSimPort,
+			Addr:    fmt.Sprintf(":%s", o.HttpSimPort),
 			Handler: simulations.NewServer(s.Net),
 		}
 		//start the HTTP server
-		//go s.httpSrv.ListenAndServe(fmt.Sprintf(":%d", httpSimPort), simulations.NewServer(s))
 		go s.httpSrv.ListenAndServe()
 		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
 		<-s.Net.RunC
@@ -104,26 +107,16 @@ type Result struct {
 }
 
 func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
-	defer func() {
-		if s.httpSrv != nil {
-			err := s.httpSrv.Shutdown(ctx)
-			if err != nil {
-				log.Error("Error shutting down HTTP server!", "err", err)
-			}
-		}
-	}()
 	start := time.Now()
 	errc := make(chan error)
 	quit := make(chan struct{})
 	defer close(quit)
-	fmt.Println("asasd")
 	go func() {
 		select {
 		case errc <- f(ctx, s):
 		case <-quit:
 		}
 	}()
-	fmt.Println("bbbbbb")
 	var err error
 	select {
 	case <-ctx.Done():
@@ -153,6 +146,14 @@ func (s *Simulation) Close() {
 
 			cleanup()
 		}()
+	}
+	if s.httpSrv != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		defer cancel()
+		err := s.httpSrv.Shutdown(ctx)
+		if err != nil {
+			log.Error("Error shutting down HTTP server!", "err", err)
+		}
 	}
 	s.shutdownWG.Wait()
 	s.Net.Shutdown()
