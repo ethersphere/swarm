@@ -56,7 +56,7 @@ func (r *resourceUpdate) Multihash() bool {
 	return r.multihash
 }
 
-// implements (which?) interface
+// implements storage.LazySectionReader
 func (r *resource) Size(ctx context.Context, _ chan bool) (int64, error) {
 	if !r.isSynced() {
 		return 0, NewError(ErrNotSynced, "Not synced")

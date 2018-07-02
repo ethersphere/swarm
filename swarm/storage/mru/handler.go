@@ -21,11 +21,11 @@ package mru
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"time"
 	"unsafe"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -49,6 +49,7 @@ type HandlerParams struct {
 
 // hashPool contains a pool of ready hashers
 var hashPool sync.Pool
+var minimumChunkLength int
 
 // init initializes the package and hashPool
 func init() {
@@ -56,6 +57,11 @@ func init() {
 		New: func() interface{} {
 			return storage.MakeHashFunc(resourceHashAlgorithm)()
 		},
+	}
+	if minimumMetadataLength < minimumUpdateDataLength {
+		minimumChunkLength = minimumMetadataLength
+	} else {
+		minimumChunkLength = minimumMetadataLength
 	}
 }
 
@@ -95,17 +101,17 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	dataLength := len(data)
-	if dataLength < 2 {
+	if dataLength < minimumChunkLength {
 		return false
 	}
 
 	//metadata chunks have the first two bytes set to zero
-	if data[0] == 0 && data[1] == 0 && dataLength > common.AddressLength {
+	if data[0] == 0 && data[1] == 0 && dataLength >= minimumMetadataLength {
 		//metadata chunk
 		rootAddr, _ := metadataHash(data)
 		valid := bytes.Equal(chunkAddr, rootAddr)
 		if !valid {
-			log.Warn("Invalid root metadata chunk")
+			log.Warn(fmt.Sprintf("Invalid root metadata chunk with address: %s", chunkAddr.Hex()))
 		}
 		return valid
 	}
@@ -116,7 +122,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	var r SignedResourceUpdate
 	if err := r.parseUpdateChunk(chunkAddr, data); err != nil {
-		log.Warn("Invalid resource chunk: " + err.Error())
+		log.Warn(fmt.Sprintf("Invalid resource chunk with address %s: %s ", chunkAddr.Hex(), err.Error()))
 		return false
 	}
 
@@ -274,6 +280,31 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 	return h.lookup(rsrc, params)
 }
 
+// LookupPrevious returns the resource before the one currently loaded in the resource index
+// This is useful where resource updates are used incrementally in contrast to
+// merely replacing content.
+// Requires a synced resource object
+func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*resource, error) {
+	rsrc := h.get(params.rootAddr)
+	if rsrc == nil {
+		return nil, NewError(ErrNothingToReturn, "resource not loaded")
+	}
+	if !rsrc.isSynced() {
+		return nil, NewError(ErrNotSynced, "LookupPrevious requires synced resource.")
+	} else if rsrc.period == 0 {
+		return nil, NewError(ErrNothingToReturn, " not found")
+	}
+	if rsrc.version > 1 {
+		rsrc.version--
+	} else if rsrc.period == 1 {
+		return nil, NewError(ErrNothingToReturn, "Current update is the oldest")
+	} else {
+		rsrc.version = 0
+		rsrc.period--
+	}
+	return h.lookup(rsrc, NewLookupParams(rsrc.rootAddr, rsrc.period, rsrc.version, params.Limit))
+}
+
 // base code for public lookup methods
 func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error) {
 
@@ -306,7 +337,7 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 		if lp.Limit != 0 && hops > lp.Limit {
 			return nil, NewErrorf(ErrPeriodDepth, "Lookup exceeded max period hops (%d)", lp.Limit)
 		}
-		updateAddr := lp.GetUpdateAddr()
+		updateAddr := lp.Addr()
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
@@ -316,7 +347,7 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 			log.Trace("rsrc update version 1 found, checking for version updates", "period", lp.period, "updateAddr", updateAddr)
 			for {
 				newversion := lp.version + 1
-				updateAddr := lp.GetUpdateAddr()
+				updateAddr := lp.Addr()
 				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 				if err != nil {
 					return h.updateIndex(rsrc, chunk)
@@ -363,7 +394,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
 	var r SignedResourceUpdate
 	if err := r.parseUpdateChunk(chunk.Addr, chunk.SData); err != nil {
-		return nil, NewErrorf(ErrInvalidSignature, "Invalid resource chunk: %s", err)
+		return nil, err
 	}
 	log.Trace("resource index update", "name", rsrc.ResourceMetadata.Name, "updatekey", chunk.Addr, "period", r.period, "version", r.version)
 

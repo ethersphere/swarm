@@ -890,7 +890,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	return addr, manifestEntryMap, nil
 }
 
-// Look up mutable resource updates at specific periods and versions
+// ResourceLookup finds mutable resource updates at specific periods and versions
 func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (string, []byte, error) {
 	var err error
 	rsrc, err := a.resource.Load(ctx, params.RootAddr())
