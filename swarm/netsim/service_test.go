@@ -24,14 +24,12 @@ import (
 )
 
 func TestService(t *testing.T) {
-	sim, err := NewSimulation(Options{
-		ServiceFunc: func(_ *adapters.ServiceContext, _ *sync.Map) (node.Service, func(), error) {
+	so := &SimulationOptions{}
+	sim := NewSimulation(map[string]ServiceFunc{
+		"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			return newNoopService(), nil, nil
 		},
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	}, so)
 	defer sim.Close()
 
 	id, err := sim.AddNode()
@@ -39,17 +37,17 @@ func TestService(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, ok := sim.Service(id).(*noopService)
+	_, ok := sim.Service("noop", id).(*noopService)
 	if !ok {
 		t.Fatalf("service is not of %T type", &noopService{})
 	}
 
-	_, ok = sim.RandomService().(*noopService)
+	_, ok = sim.RandomService("noop").(*noopService)
 	if !ok {
 		t.Fatalf("service is not of %T type", &noopService{})
 	}
 
-	_, ok = sim.Services()[0].(*noopService)
+	_, ok = sim.Services("noop")[0].(*noopService)
 	if !ok {
 		t.Fatalf("service is not of %T type", &noopService{})
 	}

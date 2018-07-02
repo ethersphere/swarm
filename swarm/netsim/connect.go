@@ -22,6 +22,10 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 )
 
+// ConnectToPivotNode connects the node with provided NodeID
+// to the pivot node, already set by Simulation.SetPivotNode method.
+// It is useful when constructing a star network topology
+// when simulation adds and removes nodes dynamically.
 func (s *Simulation) ConnectToPivotNode(id discover.NodeID) (err error) {
 	pid := s.PivotNodeID()
 	if pid == nil {
@@ -30,6 +34,10 @@ func (s *Simulation) ConnectToPivotNode(id discover.NodeID) (err error) {
 	return s.connect(*pid, id)
 }
 
+// ConnectToLastNode connects the node with provided NodeID
+// to the last node that is up, and avoiding connection to self.
+// It is useful when constructing a chain network topology
+// when simulation adds and removes nodes dynamically.
 func (s *Simulation) ConnectToLastNode(id discover.NodeID) (err error) {
 	ids := s.UpNodeIDs()
 	l := len(ids)
@@ -43,6 +51,8 @@ func (s *Simulation) ConnectToLastNode(id discover.NodeID) (err error) {
 	return s.connect(lid, id)
 }
 
+// ConnectToRandomNode connects the node with provieded NodeID
+// to a random node that is up.
 func (s *Simulation) ConnectToRandomNode(id discover.NodeID) (err error) {
 	n := s.randomNode(id)
 	if n == nil {
@@ -51,6 +61,9 @@ func (s *Simulation) ConnectToRandomNode(id discover.NodeID) (err error) {
 	return s.connect(n.ID, id)
 }
 
+// ConnectNodesFull connects all nodes one to another.
+// It provides a complete connectivity in the network
+// which should be rarely needed.
 func (s *Simulation) ConnectNodesFull() (err error) {
 	ids := s.UpNodeIDs()
 	l := len(ids)
@@ -65,6 +78,7 @@ func (s *Simulation) ConnectNodesFull() (err error) {
 	return nil
 }
 
+// ConnectNodesChain connects all nodes in a chain topology.
 func (s *Simulation) ConnectNodesChain() (err error) {
 	ids := s.UpNodeIDs()
 	l := len(ids)
@@ -77,6 +91,7 @@ func (s *Simulation) ConnectNodesChain() (err error) {
 	return nil
 }
 
+// ConnectNodesRing connects all nodes in a ring topology.
 func (s *Simulation) ConnectNodesRing() (err error) {
 	ids := s.UpNodeIDs()
 	l := len(ids)
@@ -92,6 +107,8 @@ func (s *Simulation) ConnectNodesRing() (err error) {
 	return s.connect(ids[l-1], ids[0])
 }
 
+// ConnectNodesStar connects all nodes in a start topology
+// with the center at provided NodeID.
 func (s *Simulation) ConnectNodesStar(id discover.NodeID) (err error) {
 	ids := s.UpNodeIDs()
 	l := len(ids)
@@ -107,6 +124,8 @@ func (s *Simulation) ConnectNodesStar(id discover.NodeID) (err error) {
 	return nil
 }
 
+// ConnectNodesStar connects all nodes in a start topology
+// with the center at already set pivot node.
 func (s *Simulation) ConnectNodesStarPivot() (err error) {
 	id := s.PivotNodeID()
 	if id == nil {
@@ -115,6 +134,7 @@ func (s *Simulation) ConnectNodesStarPivot() (err error) {
 	return s.ConnectNodesStar(*id)
 }
 
+// connect connects two nodes but ignores already connected error.
 func (s *Simulation) connect(oneID, otherID discover.NodeID) error {
 	return ignoreAlreadyConnectedErr(s.Net.Connect(oneID, otherID))
 }

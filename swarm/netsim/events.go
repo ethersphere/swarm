@@ -24,37 +24,50 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 )
 
+// PeerEvent is the type of the channel returned by Simulation.PeerEvents.
 type PeerEvent struct {
-	Peer  discover.NodeID
+	// Peer is the ID of node that the event is caught on.
+	Peer discover.NodeID
+	// Event is the event that is caught.
 	Event *p2p.PeerEvent
+	// Error is the error that may have happened during event watching.
 	Error error
 }
 
+// PeerEventsFilter defines a filter on PeerEvents to exclude messages with
+// defined properties. Use PeerEventsFilter methods to set required options.
 type PeerEventsFilter struct {
 	t        *p2p.PeerEventType
 	protocol *string
 	msgCode  *uint64
 }
 
+// NewPeerEventsFilter returns a new PeerEventsFilter instance.
 func NewPeerEventsFilter() *PeerEventsFilter {
 	return &PeerEventsFilter{}
 }
 
+// Type sets the filter to only one peer event type.
 func (f *PeerEventsFilter) Type(t p2p.PeerEventType) *PeerEventsFilter {
 	f.t = &t
 	return f
 }
 
+// Protocol sets the filter to only one message protocol.
 func (f *PeerEventsFilter) Protocol(p string) *PeerEventsFilter {
 	f.protocol = &p
 	return f
 }
 
+// MsgCode sets the filter to only one msg code.
 func (f *PeerEventsFilter) MsgCode(c uint64) *PeerEventsFilter {
 	f.msgCode = &c
 	return f
 }
 
+// PeerEvents returns a channel of events that are captured by admin peerEvents
+// subscription nodes with provided NodeIDs. Additional filters can be set to ignore
+// events that are not relevant.
 func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filters ...*PeerEventsFilter) <-chan PeerEvent {
 	eventC := make(chan PeerEvent)
 

@@ -26,8 +26,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
+// BucketKeyKademlia is the key to be used for storing the kademlia
+// instance for particuar node, usually inside the ServiceFunc function.
 var BucketKeyKademlia BucketKey = "kademlia"
 
+// WaitKademlia is blocking until the health of all kademlias is true.
 func (s *Simulation) WaitKademlia(ctx context.Context, kadMinProxSize int) (err error) {
 	// Prepare PeerPot map for checking Kademlia health
 	var ppmap map[string]*network.PeerPot
@@ -72,8 +75,10 @@ func (s *Simulation) WaitKademlia(ctx context.Context, kadMinProxSize int) (err 
 	}
 }
 
+// kademlias returns all Kademlia instances that are set
+// in simulation bucket.
 func (s *Simulation) kademlias() (ks []*network.Kademlia) {
-	for _, v := range s.UpServicesItems(BucketKeyKademlia) {
+	for _, v := range s.UpNodesItems(BucketKeyKademlia) {
 		k, ok := v.(*network.Kademlia)
 		if !ok {
 			continue
