@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
-	"sync"
 	"testing"
 	"time"
 
@@ -186,25 +185,17 @@ func testIterator(t *testing.T, mock bool) {
 
 	chunks := GenerateRandomChunks(DefaultChunkSize, chunkcount)
 
-	wg := &sync.WaitGroup{}
-	wg.Add(len(chunks))
 	for i = 0; i < len(chunks); i++ {
 		chunkkeys[i] = chunks[i].Address()
-		go func() {
-			defer wg.Done()
-			err := db.Put(context.TODO(), chunks[i])
-			if err != nil {
-				t.Fatalf("dbStore.Put failed: %v", err)
-			}
-		}()
+		err := db.Put(context.TODO(), chunks[i])
+		if err != nil {
+			t.Fatalf("dbStore.Put failed: %v", err)
+		}
 	}
-
-	//testSplit(m, l, 128, chunkkeys, t)
 
 	for i = 0; i < len(chunkkeys); i++ {
 		log.Trace(fmt.Sprintf("Chunk array pos %d/%d: '%v'", i, chunkcount, chunkkeys[i]))
 	}
-	wg.Wait()
 	i = 0
 	for poc = 0; poc <= 255; poc++ {
 		err := db.SyncIterator(0, uint64(chunkkeys.Len()), uint8(poc), func(k Address, n uint64) bool {

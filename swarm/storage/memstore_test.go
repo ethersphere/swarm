@@ -145,23 +145,20 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			chunks = append(chunks, c)
 		}
 
-		errc := make(chan error)
 		for i := 0; i < tt.n; i++ {
-			go func() {
-				errc <- ldb.Put(context.TODO(), chunks[i])
-			}()
-			memStore.Put(nil, chunks[i])
+			err := ldb.Put(context.TODO(), chunks[i])
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = memStore.Put(nil, chunks[i])
+			if err != nil {
+				t.Fatal(err)
+			}
 
 			if got := memStore.cache.Len(); got > cacheCap {
 				t.Fatalf("expected to get cache capacity less than %v, but got %v", cacheCap, got)
 			}
 
-		}
-		for i := 0; i < tt.n; i++ {
-			err := <-errc
-			if err != nil {
-				t.Fatal(err)
-			}
 		}
 
 		for i := 0; i < tt.n; i++ {
