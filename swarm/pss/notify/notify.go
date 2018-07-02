@@ -144,10 +144,7 @@ func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss
 	if err != nil {
 		return err
 	}
-	err = c.pss.SendAsym(pubkeyId, controlTopic, smsg)
-	if err != nil {
-		return err
-	}
+	return c.pss.SendAsym(pubkeyId, controlTopic, smsg)
 	c.subscriptions[name] = &subscription{
 		pubkeyId: pubkeyId,
 		address:  address,
