@@ -32,7 +32,7 @@ const (
 )
 
 type Has interface {
-	Has(ctx context.Context, ref storage.Address) func(context.Context) (storage.Chunk, error)
+	Has(ctx context.Context, ref storage.Address) func(context.Context) error
 }
 
 // SwarmSyncerServer implements an Server for history syncing on bins
@@ -212,13 +212,7 @@ func RegisterSwarmSyncerClient(streamer *Registry, store storage.ChunkStore) {
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
-	fetch := s.store.(Has).Has(ctx, key)
-	// return func(ctx context.Context) error {
-	// 	_, err := fetch(ctx)
-	// 	return err
-	// }
-	_ = fetch
-	return nil
+	return s.store.(Has).Has(ctx, key)
 }
 
 // BatchDone

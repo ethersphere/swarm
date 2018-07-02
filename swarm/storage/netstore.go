@@ -70,7 +70,7 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 	f, _ := n.fetchers.Get(key)
 	// if there is, deliver the chunk to requestors via fetcher
 	if f != nil {
-		f.(*fetcher).deliver(ch)
+		f.(*fetcher).deliver(ctx, ch)
 	}
 	return nil
 }
@@ -88,9 +88,12 @@ func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 }
 
 // Has
-func (n *NetStore) Has(ctx context.Context, ref Address) func(context.Context) (Chunk, error) {
+func (n *NetStore) Has(ctx context.Context, ref Address) func(context.Context) error {
 	_, fetch, _ := n.get(ctx, ref)
-	return fetch
+	return func(ctx context.Context) error {
+		_, err := fetch(ctx)
+		return err
+	}
 }
 
 // Close chunk store
@@ -157,6 +160,7 @@ type fetcher struct {
 	addr       Address       // adress of chunk
 	chunk      Chunk         // fetcher can set the chunk on the fetcher
 	deliveredC chan struct{} // chan signalling chunk delivery to requests
+	cancelledC chan struct{} // chan signalling the fetcher has been cancelled (removed from fetchers in NetStore)
 	fetch      FetchFunc     // remote fetch function to be called with a request source taken from the context
 	cancel     func()        // cleanup function for the remote fetcher to call when all upstream contexts are called
 	peers      *sync.Map     // the peers which asked for the chunk
@@ -164,12 +168,20 @@ type fetcher struct {
 }
 
 func newFetcher(addr Address, fetch FetchFunc, cancel func(), peers *sync.Map) *fetcher {
+	cancelOnce := &sync.Once{}
+	cancelledC := make(chan struct{})
 	return &fetcher{
 		addr:       addr,
 		deliveredC: make(chan struct{}),
+		cancelledC: cancelledC,
 		fetch:      fetch,
-		cancel:     cancel,
-		peers:      peers,
+		cancel: func() {
+			cancelOnce.Do(func() {
+				cancel()
+				close(cancelledC)
+			})
+		},
+		peers: peers,
 	}
 }
 
@@ -204,9 +216,14 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 
 // deliver is called by NetStore.Put to notify all pending
 // requests
-func (f *fetcher) deliver(ch Chunk) {
+func (f *fetcher) deliver(ctx context.Context, ch Chunk) {
 	f.chunk = ch
 	close(f.deliveredC)
+	// deliver has to wait until the fetcher is cancelled, otherwise it can be called again
+	select {
+	case <-f.cancelledC:
+	case <-ctx.Done():
+	}
 }
 
 type SyncNetStore struct {

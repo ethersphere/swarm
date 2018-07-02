@@ -145,9 +145,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 
 	hash := storage.Address(hash0[:])
 	chunk := storage.NewChunk(hash, hash)
-	wait, err := localStore.Put(chunk)
-
-	err = wait(context.TODO())
+	err = localStore.Put(context.TODO(), chunk)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -187,8 +185,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 
 	hash = storage.Address(hash1[:])
 	chunk = storage.NewChunk(hash, hash1[:])
-	wait, err = localStore.Put(chunk)
-	err = wait(context.TODO())
+	err = localStore.Put(context.TODO(), chunk)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -245,16 +242,6 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 	chunkKey := hash0[:]
 	chunkData := hash1[:]
-	// chunk, created := localStore.GetOrCreateRequest(chunkKey)
-	//
-	// if !created {
-	// 	t.Fatal("chunk already exists")
-	// }
-	// select {
-	// case <-chunk.ReqC:
-	// 	t.Fatal("chunk is already received")
-	// default:
-	// }
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
@@ -271,7 +258,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		},
 	},
 		p2ptest.Exchange{
-			Label: "ChunkDeliveryRequest message",
+			Label: "ChunkDelivery message",
 			Triggers: []p2ptest.Trigger{
 				{
 					Code: 6,
@@ -287,10 +274,21 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
+
+	// wait for the chunk to get stored
 	storedChunk, err := localStore.Get(ctx, chunkKey)
+	for err != nil {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Chunk is not in localstore after timeout, err: %v", err)
+		default:
+		}
+		storedChunk, err = localStore.Get(ctx, chunkKey)
+		time.Sleep(50 * time.Millisecond)
+	}
+
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}

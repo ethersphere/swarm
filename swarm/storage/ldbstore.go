@@ -551,12 +551,13 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 
 	po := s.po(chunk.Address())
 
+	s.lock.Lock()
+
 	if s.closed {
+		s.lock.Unlock()
 		return ErrDBClosed
 	}
 	batch := s.batch
-
-	s.lock.Lock()
 
 	log.Trace("ldbstore.put: s.db.Get", "key", chunk.Address(), "ikey", fmt.Sprintf("%x", ikey))
 	idata, err := s.db.Get(ikey)
@@ -571,12 +572,12 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	idata = encodeIndex(&index)
 	s.batch.Put(ikey, idata)
 
+	s.lock.Unlock()
+
 	select {
 	case s.batchesC <- struct{}{}:
 	default:
 	}
-
-	s.lock.Unlock()
 
 	select {
 	case <-batch.c:
@@ -585,8 +586,6 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 		// log.Error("context done", "err", ctx.Err())
 		return ctx.Err()
 	}
-
-	return nil
 }
 
 // force putting into db, does not check access index

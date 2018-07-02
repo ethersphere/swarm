@@ -20,7 +20,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -196,41 +195,42 @@ func (p *Peer) handleOfferedHashesMsg(req *OfferedHashesMsg) error {
 	if err != nil {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", len(hashes)/HashSize, err)
 	}
-	wg := sync.WaitGroup{}
+	ctr := 0
+	errC := make(chan error)
 	ctx, cancel := context.WithTimeout(context.Background(), syncBatchTimeout)
+	ctx = context.WithValue(ctx, "source", p.ID().String())
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
-
 		if wait := c.NeedData(ctx, hash); wait != nil {
+			ctr++
 			want.Set(i/HashSize, true)
-			wg.Add(1)
 			// create request and wait until the chunk data arrives and is stored
 			go func(w func(context.Context) error) {
-				err = w(ctx)
-				_ = err
-				wg.Done()
+				errC <- w(ctx)
 			}(wait)
 		}
 	}
-	// done := make(chan bool)
-	// go func() {
-	// 	wg.Wait()
-	// 	close(done)
-	// }()
-	// go func() {
-	// 	select {
-	// 	case <-done:
-	// 		s.next <- s.batchDone(p, req, hashes)
-	// 	case <-time.After(1 * time.Second):
-	// 		p.Drop(errors.New("timeout waiting for batch to be delivered"))
-	// 	}
-	// }()
+
 	go func() {
-		wg.Wait()
-		cancel()
+		defer cancel()
+		for i := 0; i < ctr; i++ {
+			select {
+			case err := <-errC:
+				if err != nil {
+					log.Error("client.handleOfferedHashesMsg() error waiting for chunk", "err", err)
+				}
+			case <-ctx.Done():
+				log.Error("client.handleOfferedHashesMsg() timeout waiting for chunk, dropping peer", "ctx.Err()", ctx.Err())
+				p.Drop(ctx.Err())
+				return
+			}
+		}
 		select {
 		case c.next <- c.batchDone(p, req, hashes):
 		case <-c.quit:
+		case <-ctx.Done():
+			log.Error("client.handleOfferedHashesMsg() timeout waiting for batchDone, dropping peer", "ctx.Err()", ctx.Err())
+			p.Drop(ctx.Err())
 		}
 	}()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived

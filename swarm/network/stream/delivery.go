@@ -198,14 +198,14 @@ func (d *Delivery) processReceivedChunks() {
 	for req := range d.receiveC {
 		processReceivedChunksCount.Inc(1)
 
-		_, err := d.chunkStore.Put(storage.NewChunk(req.Addr, req.SData))
-		if err != nil {
-			log.Debug("processReceivedChunks db error", "addr", req.Addr, "err", err)
-			if err == storage.ErrChunkInvalid {
-				req.peer.Drop(err)
+		go func(msg *ChunkDeliveryMsg) {
+			err := d.chunkStore.Put(context.TODO(), storage.NewChunk(msg.Addr, msg.SData))
+			if err != nil {
+				if err == storage.ErrChunkInvalid {
+					msg.peer.Drop(err)
+				}
 			}
-			return
-		}
+		}(req)
 	}
 }
 

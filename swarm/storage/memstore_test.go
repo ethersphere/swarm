@@ -150,7 +150,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			err = memStore.Put(nil, chunks[i])
+			err = memStore.Put(context.TODO(), chunks[i])
 			if err != nil {
 				t.Fatal(err)
 			}

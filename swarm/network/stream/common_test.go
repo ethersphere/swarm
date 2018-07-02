@@ -251,10 +251,10 @@ func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (stor
 	return nil, errors.New("get not well defined on round robin store")
 }
 
-func (rrs *roundRobinStore) Put(chunk storage.Chunk) (func(context.Context) error, error) {
+func (rrs *roundRobinStore) Put(ctx context.Context, chunk storage.Chunk) error {
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
-	return rrs.stores[idx].Put(chunk)
+	return rrs.stores[idx].Put(ctx, chunk)
 }
 
 func (rrs *roundRobinStore) Close() {
@@ -405,10 +405,7 @@ func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(con
 		return nil
 	}
 	c.hashes <- hash
-	return func(ctx context.Context) error {
-		_, err := wait(ctx)
-		return err
-	}
+	return wait
 }
 
 func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {

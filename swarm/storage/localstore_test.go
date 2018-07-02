@@ -30,7 +30,6 @@ var (
 // tests that resource update chunks are passed through content address validator
 // the test checking the resouce update validator internal correctness is found in resource_test.go
 func TestValidator(t *testing.T) {
-	t.Skip("just for now")
 	// set up localstore
 	datadir, err := ioutil.TempDir("", "storage-testvalidator")
 	if err != nil {
