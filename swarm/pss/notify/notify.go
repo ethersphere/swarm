@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -139,7 +139,7 @@ func (c *Controller) Subscribe(name string, pubkey *ecdsa.PublicKey, address pss
 	defer c.mu.Unlock()
 	msg := NewMsg(MsgCodeStart, name, c.pss.BaseAddr())
 	c.pss.SetPeerPublicKey(pubkey, controlTopic, &address)
-	pubkeyId := common.ToHex(crypto.FromECDSAPub(pubkey))
+	pubkeyId := hexutil.Encode(crypto.FromECDSAPub(pubkey))
 	smsg, err := rlp.EncodeToBytes(msg)
 	if err != nil {
 		return err
@@ -257,7 +257,6 @@ func (c *Controller) notify(name string, data []byte) error {
 // check if we already have the bin
 // if we do, retrieve the symkey from it and increment the count
 // if we dont make a new symkey and a new bin entry
-// not thread safe
 func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, pssAddress pss.PssAddress, err error) {
 
 	// parse the address from the message and truncate if longer than our bins threshold
@@ -285,10 +284,13 @@ func (c *Controller) addToBin(ntfr *notifier, address []byte) (symKeyId string, 
 	return symKeyId, pssAddress, nil
 }
 
-// not thread safe
 func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 
-	pubkey, err := crypto.UnmarshalPubkey(common.FromHex(keyid))
+	keyidbytes, err := hexutil.Decode(keyid)
+	if err != nil {
+		return err
+	}
+	pubkey, err := crypto.UnmarshalPubkey(keyidbytes)
 	if err != nil {
 		return err
 	}
@@ -322,16 +324,15 @@ func (c *Controller) handleStartMsg(msg *Msg, keyid string) (err error) {
 	copy(replyMsg.Payload[len(notify):], symkey)
 	sReplyMsg, err := rlp.EncodeToBytes(replyMsg)
 	if err != nil {
-		return fmt.Errorf("reply message could not be serialized: %v", err)
+		return err
 	}
 	err = c.pss.SendAsym(keyid, controlTopic, sReplyMsg)
 	if err != nil {
-		return fmt.Errorf("send start reply fail: %v", err)
+		return err
 	}
 	return nil
 }
 
-// not thread safe
 func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
 	symkey := msg.Payload[len(msg.Payload)-symKeyLength:]
 	topic := pss.BytesToTopic(msg.Name)
@@ -343,7 +344,6 @@ func (c *Controller) handleNotifyWithKeyMsg(msg *Msg) error {
 	return c.subscriptions[msg.namestring].handler(msg.namestring, msg.Payload[:len(msg.Payload)-symKeyLength])
 }
 
-// not thread safe
 func (c *Controller) handleStopMsg(msg *Msg) error {
 	// if name is not registered for notifications we will not react
 	currentNotifier, ok := c.notifiers[msg.namestring]

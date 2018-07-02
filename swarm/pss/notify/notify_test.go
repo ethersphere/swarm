@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -44,7 +44,7 @@ func init() {
 // Creates a client node and notifier node
 // Client sends pss notifications requests
 // notifier sends initial notification with symmetric key, and
-// second notifiaction symmetrically encrypted
+// second notification symmetrically encrypted
 func TestStart(t *testing.T) {
 	adapter := adapters.NewSimAdapter(newServices(false))
 	net := simulations.NewNetwork(adapter, &simulations.NetworkConfig{
@@ -133,11 +133,19 @@ func TestStart(t *testing.T) {
 	ctrlNotifier := NewController(psses[leftPub])
 	ctrlNotifier.NewNotifier("foo.eth", 2, updateC)
 
-	pubkey, err := crypto.UnmarshalPubkey(common.FromHex(leftPub))
+	pubkeybytes, err := hexutil.Decode(leftPub)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctrlClient.Subscribe(rsrcName, pubkey, common.FromHex(leftAddr), func(s string, b []byte) error {
+	pubkey, err := crypto.UnmarshalPubkey(pubkeybytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	addrbytes, err := hexutil.Decode(leftAddr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctrlClient.Subscribe(rsrcName, pubkey, addrbytes, func(s string, b []byte) error {
 		if s != "foo.eth" || !bytes.Equal(updateMsg, b) {
 			t.Fatalf("unexpected result in client handler: '%s':'%x'", s, b)
 		}
@@ -225,7 +233,8 @@ func newServices(allowRaw bool) adapters.Services {
 			if err != nil {
 				return nil, err
 			}
-			psses[common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
+			//psses[common.ToHex(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
+			psses[hexutil.Encode(crypto.FromECDSAPub(&privkey.PublicKey))] = ps
 			return ps, nil
 		},
 		"bzz": func(ctx *adapters.ServiceContext) (node.Service, error) {
