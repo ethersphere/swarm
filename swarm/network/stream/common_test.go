@@ -113,7 +113,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	if stores[id] == nil {
 		panic("NIL STORE")
 	}
-	netStore, err := storage.NewNetStore(stores[id], nil)
+	netStore, err := storage.NewSyncNetStore(stores[id].(storage.SyncDB), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -124,8 +124,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	if !useFakeFetchFunc {
 		netStore.NewFetchFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 	}
-	syncDB := netStore.Store().(storage.SyncDB)
-	r := NewRegistry(addr, delivery, syncDB, state.NewInmemoryStore(), &RegistryOptions{
+	r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,
 	})
@@ -137,7 +136,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 
 	APINetStore := netStore
 	if useAPIFakeFetchFunc != useFakeFetchFunc {
-		APINetStore, err = storage.NewNetStore(stores[id], nil)
+		APINetStore, err = storage.NewSyncNetStore(stores[id].(storage.SyncDB), nil)
 		if err != nil {
 			return nil, err
 		}

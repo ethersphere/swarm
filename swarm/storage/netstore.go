@@ -75,8 +75,8 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 	return nil
 }
 
-// Get retrieves the chunk from the NetStore DPA synchronously
-// it calls NetStore.get. If the chunk is not in local Storage
+// Get retrieves the chunk from the NetStore DPA synchronously.
+// It calls NetStore.get, and if the chunk is not in local Storage
 // it calls fetch with the request, which blocks until the chunk
 // arrived or context is done
 func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
@@ -87,7 +87,8 @@ func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 	return fetch(rctx)
 }
 
-// Has
+// Has returns nil if the store contains the given address. Otherwise it returns a wait function,
+// which returns after the chunk is available or the context is done
 func (n *NetStore) Has(ctx context.Context, ref Address) func(context.Context) error {
 	_, fetch, _ := n.get(ctx, ref)
 	return func(ctx context.Context) error {
@@ -99,11 +100,6 @@ func (n *NetStore) Has(ctx context.Context, ref Address) func(context.Context) e
 // Close chunk store
 func (n *NetStore) Close() {
 	n.store.Close()
-}
-
-// SyncDB
-func (n *NetStore) Store() ChunkStore {
-	return n.store
 }
 
 // get attempts at retrieving the chunk from LocalStore
