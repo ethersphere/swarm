@@ -124,15 +124,20 @@ func (s *Simulation) initHTTPServer(opts *SimulationOptions) {
 	}
 }
 
-func (s *Simulation) startHTTPServer() {
+func (s *Simulation) startHTTPServer(ctx context.Context) error {
 	//start the HTTP server
 	if s.httpSrv != nil {
 		go s.httpSrv.ListenAndServe()
 		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
 		//wait for the frontend to connect
-		<-s.runC
+		select {
+		case <-s.runC:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 		log.Info("Received signal from frontend - starting simulation run.")
 	}
+	return nil
 }
 
 //register additional HTTP routes
@@ -142,7 +147,7 @@ func (s *Simulation) addSimulationRoutes() {
 
 // StartNetwork starts all nodes in the network
 func (s *Simulation) RunSimulation(w http.ResponseWriter, req *http.Request) {
-	log.Debug("/runsim endpoint running")
+	log.Debug("RunSimulation endpoint running")
 	s.runC <- struct{}{}
 	w.WriteHeader(http.StatusOK)
 }
@@ -162,10 +167,16 @@ type Result struct {
 func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
 	//if the option is set to run a HTTP server with the simulation,
 	//init the server and start it
-	if s.httpSrv != nil {
-		s.startHTTPServer()
-	}
 	start := time.Now()
+	if s.httpSrv != nil {
+		err := s.startHTTPServer(ctx)
+		if err != nil {
+			return Result{
+				Duration: time.Since(start),
+				Error:    err,
+			}
+		}
+	}
 	errc := make(chan error)
 	quit := make(chan struct{})
 	defer close(quit)
@@ -218,7 +229,7 @@ func (s *Simulation) Close() {
 		}(cleanup)
 	}
 	if s.httpSrv != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		err := s.httpSrv.Shutdown(ctx)
 		if err != nil {
