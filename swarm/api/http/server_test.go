@@ -383,7 +383,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 
 	for i, mf := range testmanifest {
 		reader[i] = bytes.NewReader([]byte(mf))
-		var wait func()
+		var wait func(context.Context) error
 		addr[i], wait, err = srv.FileStore.Store(context.TODO(), reader[i], int64(len(mf)), encrypted)
 		for j := i + 1; j < len(testmanifest); j++ {
 			testmanifest[j] = strings.Replace(testmanifest[j], fmt.Sprintf("<key%v>", i), addr[i].Hex(), -1)
@@ -391,7 +391,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		wait()
+		wait(context.TODO())
 	}
 
 	rootRef := addr[2].Hex()
