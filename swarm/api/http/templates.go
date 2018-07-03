@@ -17,16 +17,53 @@
 package http
 
 import (
+	"encoding/json"
+	"fmt"
 	"html/template"
+	"net/http"
 	"path"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 type htmlListData struct {
 	URI  *api.URI
 	List *api.ManifestList
 }
+
+// func RenderIndex(params ... ){
+// 	Render("index",params)
+// }
+
+func RenderBzzList(list *api.ManifestList, w http.ResponseWriter, r *Request) {
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "text/html") {
+		w.Header().Set("Content-Type", "text/html")
+		err := htmlListTemplate.Execute(w, &htmlListData{
+			URI: &api.URI{
+				Scheme: "bzz",
+				Addr:   r.uri.Addr,
+				Path:   r.uri.Path,
+			},
+			List: list,
+		})
+
+		if err != nil {
+			getListFail.Inc(1)
+			log.Error(fmt.Sprintf("error rendering list HTML: %s", err))
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(&list)
+}
+
+// func Render(templateName string, params){
+
+// }
 
 var htmlListTemplate = template.Must(template.New("html-list").Funcs(template.FuncMap{"basename": path.Base}).Parse(`
 <!DOCTYPE html>

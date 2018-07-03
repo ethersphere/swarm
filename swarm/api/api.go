@@ -34,6 +34,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -419,6 +420,81 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
 	}
 	return
+}
+
+// GetManifestList does something important
+func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix string) (list ManifestList, err error) {
+	walker, err := s.api.NewManifestWalker(ctx, addr, nil)
+	if err != nil {
+		return
+	}
+
+	err = walker.Walk(func(entry *api.ManifestEntry) error {
+		// handle non-manifest files
+		if entry.ContentType != api.ManifestType {
+			// ignore the file if it doesn't have the specified prefix
+			if !strings.HasPrefix(entry.Path, prefix) {
+				return nil
+			}
+
+			// if the path after the prefix contains a slash, add a
+			// common prefix to the list, otherwise add the entry
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			if index := strings.Index(suffix, "/"); index > -1 {
+				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
+				return nil
+			}
+			if entry.Path == "" {
+				entry.Path = "/"
+			}
+			list.Entries = append(list.Entries, entry)
+			return nil
+		}
+
+		// if the manifest's path is a prefix of the specified prefix
+		// then just recurse into the manifest by returning nil and
+		// continuing the walk
+		if strings.HasPrefix(prefix, entry.Path) {
+			return nil
+		}
+
+		// if the manifest's path has the specified prefix, then if the
+		// path after the prefix contains a slash, add a common prefix
+		// to the list and skip the manifest, otherwise recurse into
+		// the manifest by returning nil and continuing the walk
+		if strings.HasPrefix(entry.Path, prefix) {
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			if index := strings.Index(suffix, "/"); index > -1 {
+				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
+				return api.ErrSkipManifest
+			}
+			return nil
+		}
+
+		// the manifest neither has the prefix or needs recursing in to
+		// so just skip it
+		return api.ErrSkipManifest
+	})
+
+	return list, nil
+}
+
+func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update func(mw *ManifestWriter) error) (storage.Address, error) {
+	mw, err := a.NewManifestWriter(ctx, addr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := update(mw); err != nil {
+		return nil, err
+	}
+
+	addr, err = mw.Store()
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(fmt.Sprintf("generated manifest %s", addr))
+	return addr, nil
 }
 
 // Modify loads manifest and checks the content hash before recalculating and storing the manifest.
