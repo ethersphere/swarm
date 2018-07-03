@@ -128,7 +128,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 		SkipCheck:  defaultSkipCheck,
 		DoRetrieve: false,
 	})
-	RegisterSwarmSyncerServer(r, syncDB)
+	RegisterSwarmSyncerServer(r, netStore)
 	RegisterSwarmSyncerClient(r, netStore)
 	go func() {
 		waitPeerErrC <- waitForPeers(r, 1*time.Second, peerCount(id))
