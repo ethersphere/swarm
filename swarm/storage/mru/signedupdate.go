@@ -48,17 +48,17 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 	}
 
 	// get the address of the signer (which also checks that it's a valid signature)
-	ownerAddr, err := getAddressFromDataSig(digest, *r.signature)
+	ownerAddr, err := getOwner(digest, *r.signature)
 	if err != nil {
 		return err
 	}
 
-	if !bytes.Equal(r.updateAddr, r.Addr()) {
+	if !bytes.Equal(r.updateAddr, r.UpdateAddr()) {
 		return NewError(ErrInvalidSignature, "Signature address does not match with ownerAddr")
 	}
 
 	// Check if who signed the resource update really owns the resource
-	if !verifyResourceOwnership(ownerAddr, r.metaHash, r.rootAddr) {
+	if !verifyOwner(ownerAddr, r.metaHash, r.rootAddr) {
 		return NewErrorf(ErrUnauthorized, "signature is valid but signer does not own the resource: %v", err)
 	}
 
@@ -68,7 +68,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 // Sign executes the signature to validate the resource
 func (r *SignedResourceUpdate) Sign(signer Signer) error {
 
-	updateAddr := r.Addr()
+	updateAddr := r.UpdateAddr()
 
 	r.binaryData = nil                     //invalidate serialized data
 	digest, err := r.getDigest(updateAddr) // computes digest and serializes into .binaryData
@@ -83,7 +83,7 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 
 	// Although the Signer interface returns the public address of the signer,
 	// recover it from the signature to see if they match
-	ownerAddress, err := getAddressFromDataSig(digest, signature)
+	ownerAddress, err := getOwner(digest, signature)
 	if err != nil {
 		return NewError(ErrInvalidSignature, "Error verifying signature")
 	}
@@ -98,7 +98,7 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 }
 
 // create an update chunk.
-func (r *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
+func (r *SignedResourceUpdate) toChunk() (*storage.Chunk, error) {
 
 	// Check that the update is signed and serialized
 	// For efficiency, data is serialized during signature and cached in
@@ -118,8 +118,8 @@ func (r *SignedResourceUpdate) newUpdateChunk() (*storage.Chunk, error) {
 	return chunk, nil
 }
 
-// retrieve update metadata from chunk data
-func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chunkdata []byte) error {
+// fromChunk populates this structure from chunk data
+func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata []byte) error {
 	// for update chunk layout see SignedResourceUpdate definition
 
 	//deserialize the resource update portion
@@ -139,7 +139,7 @@ func (r *SignedResourceUpdate) parseUpdateChunk(updateAddr storage.Address, chun
 	// check that the lookup information contained in the chunk matches the updateAddr (chunk search key)
 	// that was used to retrieve this chunk
 	// if this validation fails, someone forged a chunk.
-	if !bytes.Equal(updateAddr, r.updateHeader.Addr()) {
+	if !bytes.Equal(updateAddr, r.updateHeader.UpdateAddr()) {
 		return NewError(ErrInvalidSignature, "period,version,rootAddr contained in update chunk do not match updateAddr")
 	}
 
@@ -177,8 +177,8 @@ func (r *SignedResourceUpdate) getDigest(updateAddr storage.Address) (result com
 	return common.BytesToHash(hasher.Sum(nil)), nil
 }
 
-// getAddressFromDataSig extracts the address of the resource update signer
-func getAddressFromDataSig(digest common.Hash, signature Signature) (common.Address, error) {
+// getOwner extracts the address of the resource update signer
+func getOwner(digest common.Hash, signature Signature) (common.Address, error) {
 	pub, err := crypto.SigToPub(digest.Bytes(), signature[:])
 	if err != nil {
 		return common.Address{}, err
@@ -190,7 +190,7 @@ func getAddressFromDataSig(digest common.Hash, signature Signature) (common.Addr
 // H(ownerAddr, metaHash) is computed. If it matches the rootAddr the update chunk is claiming
 // to update, it is proven that signer of the resource update owns the resource.
 // See metadataHash in metadata.go for a more detailed explanation
-func verifyResourceOwnership(ownerAddr common.Address, metaHash []byte, rootAddr storage.Address) bool {
+func verifyOwner(ownerAddr common.Address, metaHash []byte, rootAddr storage.Address) bool {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()

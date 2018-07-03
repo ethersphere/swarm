@@ -38,7 +38,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		Name:      "a good resource name",
 		Frequency: 300,
 		StartTime: Timestamp{Time: 1528900000},
-		OwnerAddr: signer.Address()})
+		Owner:     signer.Address()})
 
 	if err != nil {
 		t.Fatalf("Error creating resource name: %s", err)

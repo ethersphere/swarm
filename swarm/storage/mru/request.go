@@ -32,7 +32,7 @@ type updateRequestJSON struct {
 	Frequency      uint64 `json:"frequency,omitempty"`
 	StartTime      uint64 `json:"startTime,omitempty"`
 	StartTimeProof string `json:"startTimeProof,omitempty"`
-	OwnerAddr      string `json:"ownerAddr,omitempty"`
+	Owner          string `json:"ownerAddr,omitempty"`
 	RootAddr       string `json:"rootAddr,omitempty"`
 	MetaHash       string `json:"metaHash,omitempty"`
 	Version        uint32 `json:"version"`
@@ -58,7 +58,7 @@ func NewCreateRequest(metadata *ResourceMetadata) (*Request, error) {
 		metadata.StartTime.Time = uint64(time.Now().Unix())
 	}
 
-	if metadata.OwnerAddr == zeroAddr {
+	if metadata.Owner == zeroAddr {
 		return nil, NewError(ErrInvalidValue, "OwnerAddr is not set")
 	}
 
@@ -119,21 +119,21 @@ func (r *Request) StartTime() Timestamp {
 	return r.metadata.StartTime
 }
 
-// OwnerAddr returns the resource owner's address
-func (r *Request) OwnerAddr() common.Address {
-	return r.metadata.OwnerAddr
+// Owner returns the resource owner's address
+func (r *Request) Owner() common.Address {
+	return r.metadata.Owner
 }
 
 // Sign executes the signature to validate the resource and sets the owner address field
 func (r *Request) Sign(signer Signer) error {
-	if r.metadata.OwnerAddr != zeroAddr && r.metadata.OwnerAddr != signer.Address() {
+	if r.metadata.Owner != zeroAddr && r.metadata.Owner != signer.Address() {
 		return NewError(ErrInvalidSignature, "Signer does not match current owner of the resource")
 	}
 
 	if err := r.SignedResourceUpdate.Sign(signer); err != nil {
 		return err
 	}
-	r.metadata.OwnerAddr = signer.Address()
+	r.metadata.Owner = signer.Address()
 	return nil
 }
 
@@ -187,7 +187,7 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 		return nil, err
 	}
 
-	if err := decodeHexArray(r.metadata.OwnerAddr[:], j.OwnerAddr, common.AddressLength, "ownerAddr"); err != nil {
+	if err := decodeHexArray(r.metadata.Owner[:], j.Owner, common.AddressLength, "ownerAddr"); err != nil {
 		return nil, err
 	}
 
@@ -240,7 +240,7 @@ func (j *updateRequestJSON) decode() (*Request, error) {
 			return nil, NewError(ErrInvalidSignature, "Cannot decode signature")
 		}
 		r.signature = new(Signature)
-		r.updateAddr = r.Addr()
+		r.updateAddr = r.UpdateAddr()
 		copy(r.signature[:], sigBytes)
 	}
 	return r, nil
@@ -295,7 +295,7 @@ func EncodeUpdateRequest(updateRequest *Request) (rawData []byte, err error) {
 	if updateRequest.metadata.Frequency == 0 {
 		ownerAddrString = ""
 	} else {
-		ownerAddrString = hexutil.Encode(updateRequest.metadata.OwnerAddr[:])
+		ownerAddrString = hexutil.Encode(updateRequest.metadata.Owner[:])
 	}
 	var startTimeProofString string
 	if updateRequest.metadata.StartTime.Time == 0 {
@@ -311,7 +311,7 @@ func EncodeUpdateRequest(updateRequest *Request) (rawData []byte, err error) {
 		StartTimeProof: startTimeProofString,
 		Version:        updateRequest.version,
 		Period:         updateRequest.period,
-		OwnerAddr:      ownerAddrString,
+		Owner:          ownerAddrString,
 		Data:           dataHashString,
 		Multihash:      updateRequest.multihash,
 		Signature:      signatureString,

@@ -30,7 +30,7 @@ type ResourceMetadata struct {
 	StartTime Timestamp      // time at which the resource starts to be valid
 	Frequency uint64         // expected update frequency for the resource
 	Name      string         // name of the resource, for the reference of the user
-	OwnerAddr common.Address // public address of the resource owner
+	Owner     common.Address // public address of the resource owner
 }
 
 // Resource metadata chunk layout:
@@ -77,7 +77,7 @@ func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
 	r.Name = string(serializedData[cursor : cursor+nameLength])
 	cursor += nameLength
 
-	copy(r.OwnerAddr[:], serializedData[cursor:])
+	copy(r.Owner[:], serializedData[cursor:])
 	return nil
 }
 
@@ -111,7 +111,7 @@ func (r *ResourceMetadata) binaryPut(serializedData []byte) error {
 	copy(serializedData[cursor:cursor+nameLength], []byte(r.Name[:nameLength]))
 	cursor += nameLength
 
-	copy(serializedData[cursor:cursor+common.AddressLength], r.OwnerAddr[:])
+	copy(serializedData[cursor:cursor+common.AddressLength], r.Owner[:])
 	cursor += common.AddressLength
 
 	return nil

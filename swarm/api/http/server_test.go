@@ -140,13 +140,13 @@ func TestBzzResourceMultihash(t *testing.T) {
 		Name:      keybytes,
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-		OwnerAddr: signer.Address(),
+		Owner:     signer.Address(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	updateRequest.SetData(mh,true)
+	updateRequest.SetData(mh, true)
 
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
@@ -223,13 +223,13 @@ func TestBzzResource(t *testing.T) {
 		Name:      keybytes,
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-		OwnerAddr: signer.Address(),
+		Owner:     signer.Address(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	updateRequest.SetData(databytes,false)
+	updateRequest.SetData(databytes, false)
 
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
@@ -361,7 +361,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("Error decoding resource metadata: %s", err)
 	}
 	data := []byte("foo")
-	updateRequest.SetData(data,false)
+	updateRequest.SetData(data, false)
 	if err = updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}

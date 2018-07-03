@@ -569,8 +569,8 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 // startTime=0 means "now"
 // Returns the resulting Mutable Resource manifest address that you can use to include in an ENS Resolver (setContent)
 // or reference future updates (Client.UpdateResource)
-func (c *Client) CreateResource(createRequest *mru.Request) (string, error) {
-	responseStream, err := c.updateResource(createRequest)
+func (c *Client) CreateResource(request *mru.Request) (string, error) {
+	responseStream, err := c.updateResource(request)
 	if err != nil {
 		return "", err
 	}
@@ -581,21 +581,21 @@ func (c *Client) CreateResource(createRequest *mru.Request) (string, error) {
 		return "", err
 	}
 
-	var manifestKey string
-	if err = json.Unmarshal(body, &manifestKey); err != nil {
+	var manifestAddress string
+	if err = json.Unmarshal(body, &manifestAddress); err != nil {
 		return "", err
 	}
-	return manifestKey, nil
+	return manifestAddress, nil
 }
 
 // UpdateResource allows you to send a new version of your content
-func (c *Client) UpdateResource(updateRequest *mru.Request) error {
-	_, err := c.updateResource(updateRequest)
+func (c *Client) UpdateResource(request *mru.Request) error {
+	_, err := c.updateResource(request)
 	return err
 }
 
-func (c *Client) updateResource(updateRequest *mru.Request) (io.ReadCloser, error) {
-	body, err := mru.EncodeUpdateRequest(updateRequest)
+func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
+	body, err := mru.EncodeUpdateRequest(request)
 	if err != nil {
 		return nil, err
 	}

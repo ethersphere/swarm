@@ -35,7 +35,7 @@ func TestMarshallingAndUnmarshalling(t *testing.T) {
 			Time: 1528880400,
 		},
 		Frequency: 3600,
-		OwnerAddr: ownerAddr,
+		Owner:     ownerAddr,
 	}
 
 	rootAddr, metaHash, chunkData, err := metadata.hashAndSerialize() // creates hashes and marshals, in one go
