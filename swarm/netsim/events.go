@@ -26,8 +26,8 @@ import (
 
 // PeerEvent is the type of the channel returned by Simulation.PeerEvents.
 type PeerEvent struct {
-	// Peer is the ID of node that the event is caught on.
-	Peer discover.NodeID
+	// NodeID is the ID of node that the event is caught on.
+	NodeID discover.NodeID
 	// Event is the event that is caught.
 	Event *p2p.PeerEvent
 	// Error is the error that may have happened during event watching.
@@ -78,13 +78,13 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 
 			client, err := s.Net.GetNode(id).Client()
 			if err != nil {
-				eventC <- PeerEvent{Peer: id, Error: err}
+				eventC <- PeerEvent{NodeID: id, Error: err}
 				return
 			}
 			events := make(chan *p2p.PeerEvent)
 			sub, err := client.Subscribe(ctx, "admin", events, "peerEvents")
 			if err != nil {
-				eventC <- PeerEvent{Peer: id, Error: err}
+				eventC <- PeerEvent{NodeID: id, Error: err}
 				return
 			}
 			defer sub.Unsubscribe()
@@ -111,7 +111,7 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 					}
 					if match {
 						select {
-						case eventC <- PeerEvent{Peer: id, Event: e}:
+						case eventC <- PeerEvent{NodeID: id, Event: e}:
 						case <-ctx.Done():
 							return
 						}
@@ -119,7 +119,7 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 				case err := <-sub.Err():
 					if err != nil {
 						select {
-						case eventC <- PeerEvent{Peer: id, Error: err}:
+						case eventC <- PeerEvent{NodeID: id, Error: err}:
 						case <-ctx.Done():
 							return
 						}

@@ -64,8 +64,10 @@ func (s *Simulation) ConnectToRandomNode(id discover.NodeID) (err error) {
 // ConnectNodesFull connects all nodes one to another.
 // It provides a complete connectivity in the network
 // which should be rarely needed.
-func (s *Simulation) ConnectNodesFull() (err error) {
-	ids := s.UpNodeIDs()
+func (s *Simulation) ConnectNodesFull(ids []discover.NodeID) (err error) {
+	if ids == nil {
+		ids = s.UpNodeIDs()
+	}
 	l := len(ids)
 	for i := 0; i < l; i++ {
 		for j := i + 1; j < l; j++ {
@@ -79,8 +81,11 @@ func (s *Simulation) ConnectNodesFull() (err error) {
 }
 
 // ConnectNodesChain connects all nodes in a chain topology.
-func (s *Simulation) ConnectNodesChain() (err error) {
-	ids := s.UpNodeIDs()
+// If ids argument is nil, all nodes that are up will be connected.
+func (s *Simulation) ConnectNodesChain(ids []discover.NodeID) (err error) {
+	if ids == nil {
+		ids = s.UpNodeIDs()
+	}
 	l := len(ids)
 	for i := 0; i < l-1; i++ {
 		err = s.connect(ids[i], ids[i+1])
@@ -92,8 +97,11 @@ func (s *Simulation) ConnectNodesChain() (err error) {
 }
 
 // ConnectNodesRing connects all nodes in a ring topology.
-func (s *Simulation) ConnectNodesRing() (err error) {
-	ids := s.UpNodeIDs()
+// If ids argument is nil, all nodes that are up will be connected.
+func (s *Simulation) ConnectNodesRing(ids []discover.NodeID) (err error) {
+	if ids == nil {
+		ids = s.UpNodeIDs()
+	}
 	l := len(ids)
 	if l < 2 {
 		return nil
@@ -109,8 +117,11 @@ func (s *Simulation) ConnectNodesRing() (err error) {
 
 // ConnectNodesStar connects all nodes in a start topology
 // with the center at provided NodeID.
-func (s *Simulation) ConnectNodesStar(id discover.NodeID) (err error) {
-	ids := s.UpNodeIDs()
+// If ids argument is nil, all nodes that are up will be connected.
+func (s *Simulation) ConnectNodesStar(id discover.NodeID, ids []discover.NodeID) (err error) {
+	if ids == nil {
+		ids = s.UpNodeIDs()
+	}
 	l := len(ids)
 	for i := 0; i < l; i++ {
 		if id == ids[i] {
@@ -126,12 +137,13 @@ func (s *Simulation) ConnectNodesStar(id discover.NodeID) (err error) {
 
 // ConnectNodesStar connects all nodes in a start topology
 // with the center at already set pivot node.
-func (s *Simulation) ConnectNodesStarPivot() (err error) {
+// If ids argument is nil, all nodes that are up will be connected.
+func (s *Simulation) ConnectNodesStarPivot(ids []discover.NodeID) (err error) {
 	id := s.PivotNodeID()
 	if id == nil {
 		return ErrNoPivotNode
 	}
-	return s.ConnectNodesStar(*id)
+	return s.ConnectNodesStar(*id, ids)
 }
 
 // connect connects two nodes but ignores already connected error.

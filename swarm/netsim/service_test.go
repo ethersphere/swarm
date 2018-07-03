@@ -24,12 +24,11 @@ import (
 )
 
 func TestService(t *testing.T) {
-	so := &SimulationOptions{}
 	sim := NewSimulation(map[string]ServiceFunc{
 		"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			return newNoopService(), nil, nil
 		},
-	}, so)
+	}, nil)
 	defer sim.Close()
 
 	id, err := sim.AddNode()

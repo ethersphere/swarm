@@ -48,6 +48,7 @@ type Simulation struct {
 	buckets      map[discover.NodeID]*sync.Map
 	pivotNodeID  *discover.NodeID
 	shutdownWG   sync.WaitGroup
+	done         chan struct{}
 	mu           sync.RWMutex
 
 	httpSrv *http.Server        //attach a HTTP server via SimulationOptions
@@ -76,6 +77,7 @@ type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Se
 func NewSimulation(services map[string]ServiceFunc, opts *SimulationOptions) (s *Simulation) {
 	s = &Simulation{
 		buckets: make(map[discover.NodeID]*sync.Map),
+		done:    make(chan struct{}),
 	}
 
 	adapterServices := make(map[string]adapters.ServiceFunc, len(services))
@@ -101,6 +103,10 @@ func NewSimulation(services map[string]ServiceFunc, opts *SimulationOptions) (s 
 		adapters.NewSimAdapter(adapterServices),
 		&simulations.NetworkConfig{ID: "0"},
 	)
+
+	if opts == nil {
+		opts = new(SimulationOptions)
+	}
 	if opts.WithHTTP {
 		s.initHTTPServer(opts)
 	}
@@ -239,4 +245,12 @@ func (s *Simulation) Close() {
 	}
 	s.shutdownWG.Wait()
 	s.Net.Shutdown()
+	close(s.done)
+}
+
+// Done returns a channel that is closed when the simulation
+// is closed by Close method. It is useful for signaling termination
+// of all possible goroutines that are created within the test.
+func (s *Simulation) Done() <-chan struct{} {
+	return s.done
 }

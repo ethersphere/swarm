@@ -319,22 +319,14 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		change := step.nodeCount - len(sim.UpNodeIDs())
 
 		if change > 0 {
-			for i := 0; i < change; i++ {
-				id, err := sim.AddNode()
-				if err != nil {
-					t.Fatal(err)
-				}
-				err = sim.ConnectToLastNode(id)
-				if err != nil {
-					t.Fatal(err)
-				}
+			_, err := sim.AddNodesAndConnectChain(change)
+			if err != nil {
+				t.Fatal(err)
 			}
 		} else if change < 0 {
-			for i := 0; i < -change; i++ {
-				err := sim.StopRandomNode()
-				if err != nil {
-					t.Fatal(err)
-				}
+			_, err := sim.StopRandomNodes(-change)
+			if err != nil {
+				t.Fatal(err)
 			}
 		} else {
 			t.Logf("step %v: no change in nodes", i)

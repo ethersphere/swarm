@@ -33,7 +33,7 @@ func TestServiceBucket(t *testing.T) {
 			b.Store(testKey, testValue)
 			return newNoopService(), nil, nil
 		},
-	}, &SimulationOptions{})
+	}, nil)
 	defer sim.Close()
 
 	id, err := sim.AddNode()

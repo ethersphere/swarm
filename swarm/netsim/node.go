@@ -17,6 +17,7 @@
 package netsim
 
 import (
+	"errors"
 	"math/rand"
 	"time"
 
@@ -34,7 +35,7 @@ func (s *Simulation) NodeIDs() (ids []discover.NodeID) {
 	return ids
 }
 
-// UpNodeIDs returns NodeIDs for nodeas that are up in the network.
+// UpNodeIDs returns NodeIDs for nodes that are up in the network.
 func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
 	nodes := s.Net.GetNodes()
 	for _, node := range nodes {
@@ -48,13 +49,6 @@ func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
 // AddNodeOption defines the option that can be passed
 // to Simulation.AddNode method.
 type AddNodeOption func(*adapters.NodeConfig)
-
-// AddNodeWithName sets the optional name for the new node.
-func AddNodeWithName(name string) AddNodeOption {
-	return func(o *adapters.NodeConfig) {
-		o.Name = name
-	}
-}
 
 // AddNodeWithMsgEvents sets the EnableMsgEvents option
 // to NodeConfig.
@@ -77,6 +71,98 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err err
 		return id, err
 	}
 	return node.ID(), s.Net.Start(node.ID())
+}
+
+// AddNodes creates new nodes with random configurations,
+// applies provided options to the config and adds nodes to network.
+func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+	ids = make([]discover.NodeID, 0, count)
+	for i := 0; i < count; i++ {
+		id, err := s.AddNode(opts...)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// AddNodesAndConnectFull is a helpper method that combines
+// AddNodes and ConnectNodesFull. Only new nodes will be connected.
+func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+	if count < 2 {
+		return nil, errors.New("count of nodes must be at least 2")
+	}
+	ids, err = s.AddNodes(count, opts...)
+	if err != nil {
+		return nil, err
+	}
+	err = s.ConnectNodesFull(ids)
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// AddNodesAndConnectChain is a helpper method that combines
+// AddNodes and ConnectNodesChain. The chain will be continued from the last
+// added node, if there is one in simulation using ConnectToLastNode method.
+func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+	if count < 2 {
+		return nil, errors.New("count of nodes must be at least 2")
+	}
+	id, err := s.AddNode(opts...)
+	if err != nil {
+		return nil, err
+	}
+	err = s.ConnectToLastNode(id)
+	if err != nil {
+		return nil, err
+	}
+	ids, err = s.AddNodes(count-1, opts...)
+	if err != nil {
+		return nil, err
+	}
+	ids = append([]discover.NodeID{id}, ids...)
+	err = s.ConnectNodesChain(ids)
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// AddNodesAndConnectRing is a helpper method that combines
+// AddNodes and ConnectNodesRing.
+func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+	if count < 2 {
+		return nil, errors.New("count of nodes must be at least 2")
+	}
+	ids, err = s.AddNodes(count, opts...)
+	if err != nil {
+		return nil, err
+	}
+	err = s.ConnectNodesRing(ids)
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
+}
+
+// AddNodesAndConnectStar is a helpper method that combines
+// AddNodes and ConnectNodesStar.
+func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (ids []discover.NodeID, err error) {
+	if count < 2 {
+		return nil, errors.New("count of nodes must be at least 2")
+	}
+	ids, err = s.AddNodes(count, opts...)
+	if err != nil {
+		return nil, err
+	}
+	err = s.ConnectNodesStar(ids[0], ids[1:])
+	if err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 // SetPivotNode sets the NodeID of the network's pivot node.
@@ -104,12 +190,25 @@ func (s *Simulation) StopNode(id discover.NodeID) (err error) {
 }
 
 // StopRandomNode stops a random node.
-func (s *Simulation) StopRandomNode() (err error) {
+func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
 	n := s.randomNode()
 	if n == nil {
-		return ErrNodeNotFound
+		return id, ErrNodeNotFound
 	}
-	return n.Stop()
+	return n.ID, n.Stop()
+}
+
+// StopRandomNodes stops random nodes.
+func (s *Simulation) StopRandomNodes(count int) (ids []discover.NodeID, err error) {
+	ids = make([]discover.NodeID, 0, count)
+	for i := 0; i < count; i++ {
+		id, err := s.StopRandomNode()
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
 }
 
 // seed the random generator for Simulation.randomNode.
