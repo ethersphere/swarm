@@ -18,14 +18,60 @@ package netsim_test
 
 import (
 	"context"
+	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/netsim"
+	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
+// Every node can have a Kademlia associated using the node bucket under
+// BucketKeyKademlia key. This allows to use WaitKademlia to block until
+// all nodes have the their Kadmlias healthy.
+func ExampleSimulation_WaitKademlia() {
+	sim := netsim.NewSimulation(map[string]netsim.ServiceFunc{
+		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+			addr := network.NewAddrFromNodeID(ctx.Config.ID)
+			hp := network.NewHiveParams()
+			hp.Discovery = false
+			config := &network.BzzConfig{
+				OverlayAddr:  addr.Over(),
+				UnderlayAddr: addr.Under(),
+				HiveParams:   hp,
+			}
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			// store kademlia in node's bucket under BucketKeyKademlia
+			// so that it can be found by WaitKademlia method.
+			b.Store(netsim.BucketKeyKademlia, kad)
+			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+		},
+	}, nil)
+	defer sim.Close()
+
+	_, err := sim.AddNodesAndConnectRing(10)
+	if err != nil {
+		panic(err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err = sim.WaitKademlia(ctx, 2)
+	if err != nil {
+		panic(err)
+	}
+
+	// continue with the test
+
+	// Output:
+}
+
+// Watch all peer events in the simulation network, buy receiving from a channel.
 func ExampleSimulation_PeerEvents() {
-	sim := netsim.NewSimulation(nil, &netsim.SimulationOptions{})
+	sim := netsim.NewSimulation(nil, nil)
 	defer sim.Close()
 
 	events := sim.PeerEvents(context.Background(), sim.NodeIDs())
@@ -41,8 +87,9 @@ func ExampleSimulation_PeerEvents() {
 	}()
 }
 
-func ExampleSimulation_PeerEvents_Disconnections() {
-	sim := netsim.NewSimulation(nil, &netsim.SimulationOptions{})
+// Detect when a nodes drop a peer.
+func ExampleSimulation_PeerEvents_disconnections() {
+	sim := netsim.NewSimulation(nil, nil)
 	defer sim.Close()
 
 	disconnections := sim.PeerEvents(
@@ -62,8 +109,10 @@ func ExampleSimulation_PeerEvents_Disconnections() {
 	}()
 }
 
-func ExampleSimulation_PeerEvents_MultipleFilters() {
-	sim := netsim.NewSimulation(nil, &netsim.SimulationOptions{})
+// Watch multiple types of events or messages. In this case, they differ only
+// by MsgCode, but filters can be set for different types or protocols, too.
+func ExampleSimulation_PeerEvents_multipleFilters() {
+	sim := netsim.NewSimulation(nil, nil)
 	defer sim.Close()
 
 	msgs := sim.PeerEvents(

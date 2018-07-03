@@ -33,14 +33,20 @@ import (
 
 // Common errors that are returned by functions in this package.
 var (
-	ErrNodeNotFound    = errors.New("node not found")
-	ErrNoPivotNode     = errors.New("no pivot node set")
+	ErrNodeNotFound = errors.New("node not found")
+	ErrNoPivotNode  = errors.New("no pivot node set")
+)
+
+// Package defaults.
+var (
 	DefaultHTTPSimPort = "8888"
 )
 
 // Simulation provides methods on network, nodes and services
 // to manage them.
 type Simulation struct {
+	// Net is exposed as a way to access lower level functionalities
+	// of p2p/simulations.Network.
 	Net *simulations.Network
 
 	serviceNames []string
