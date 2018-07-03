@@ -157,6 +157,19 @@ func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err e
 	return chunk, nil
 }
 
+func (ls *LocalStore) Has(ctx context.Context, addr Address) func(context.Context) error {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	_, err := ls.get(ctx, addr)
+	if err == nil {
+		return nil
+	}
+	return func(context.Context) error {
+		return err
+	}
+}
+
 func (ls *LocalStore) BinIndex(po uint8) uint64 {
 	return ls.DbStore.BinIndex(po)
 }

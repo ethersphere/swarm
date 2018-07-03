@@ -68,7 +68,6 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 }
 
 func TestIntervals(t *testing.T) {
-	t.Skip("not working")
 	testIntervals(t, true, nil, false)
 	testIntervals(t, false, NewRange(9, 26), false)
 	testIntervals(t, true, NewRange(9, 26), false)
