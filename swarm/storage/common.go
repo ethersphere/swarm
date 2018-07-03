@@ -41,8 +41,8 @@ func put(store *LocalStore, n int, f func(i int64) Chunk) (hs []Address, err err
 	// does not check delivery error state
 	done := make(chan struct{})
 	errc := make(chan error)
-	ctx, _ := context.WithTimeout(context.Background(), putTimeout)
-	// defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), putTimeout)
+	defer cancel()
 	defer close(done)
 	for i := int64(0); i < int64(n); i++ {
 		chunk := f(DefaultChunkSize)

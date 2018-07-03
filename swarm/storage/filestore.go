@@ -43,7 +43,6 @@ const (
 var (
 	// timeout interval before retrieval is timed out
 	searchTimeout = 30 * time.Second
-	retryInterval = 30 * time.Second
 )
 
 type FileStore struct {

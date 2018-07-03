@@ -69,7 +69,6 @@ var (
 	subscriptionCount   = 0
 	globalStore         mock.GlobalStorer
 	globalStoreDir      string
-	getRetrieveFunc     func(id discover.NodeID) network.RequestFunc
 )
 
 var services = adapters.Services{

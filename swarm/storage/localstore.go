@@ -119,10 +119,7 @@ func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
 	}
 	ls.memStore.Put(ctx, chunk)
 	err = ls.DbStore.Put(ctx, chunk)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
 
 // Get(chunk *Chunk) looks up a chunk in the local stores

@@ -62,7 +62,6 @@ The hashing itself does use extra copies and allocation though, since it does ne
 
 var (
 	errAppendOppNotSuported = errors.New("Append operation not supported")
-	errOperationTimedOut    = errors.New("operation timed out")
 )
 
 const (
@@ -413,7 +412,6 @@ func (r *LazyChunkReader) Size() (n int64, err error) {
 		s := r.chunkData.Size()
 		log.Debug("lazychunkreader.size", "key", r.addr, "size", s)
 		if s < 0 {
-			panic("corrupt size")
 			return 0, errors.New("corrupt size")
 		}
 		return int64(s), nil

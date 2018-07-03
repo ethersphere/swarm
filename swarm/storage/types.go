@@ -316,7 +316,7 @@ type Getter interface {
 
 // NOTE: this returns invalid data if chunk is encrypted
 func (c ChunkData) Size() uint64 {
-	return uint64(binary.LittleEndian.Uint64(c[:8]))
+	return binary.LittleEndian.Uint64(c[:8])
 }
 
 func (c ChunkData) Data() []byte {

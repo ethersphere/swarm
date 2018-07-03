@@ -46,7 +46,6 @@ const (
 	defaultStoreTimeout     = 4000 * time.Millisecond
 	hasherCount             = 8
 	resourceHash            = storage.SHA3Hash
-	defaultRetrieveTimeout  = 100 * time.Millisecond
 )
 
 type blockEstimator struct {

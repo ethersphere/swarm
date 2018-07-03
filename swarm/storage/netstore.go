@@ -30,7 +30,7 @@ type (
 	NewFetchFunc func(ctx context.Context, addr Address, peers *sync.Map) FetchFunc
 )
 
-// NetStore is an extention of local storage
+// NetStore is an extension of local storage
 // it implements the ChunkStore interface
 // on request it initiates remote cloud retrieval using a fetcher
 // fetchers are unique to a chunk and are stored in fetchers LRU memory cache
@@ -157,7 +157,7 @@ func (n *NetStore) RequestsCacheLen() int {
 }
 
 type fetcher struct {
-	addr       Address       // adress of chunk
+	addr       Address       // address of chunk
 	chunk      Chunk         // fetcher can set the chunk on the fetcher
 	deliveredC chan struct{} // chan signalling chunk delivery to requests
 	cancelledC chan struct{} // chan signalling the fetcher has been cancelled (removed from fetchers in NetStore)

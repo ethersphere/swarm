@@ -19,17 +19,12 @@ package storage
 import (
 	"context"
 	"crypto/rand"
-	"errors"
 	"io/ioutil"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-)
-
-var (
-	errUnknown = errors.New("unknown error")
 )
 
 // type mockRetrieve struct {
@@ -94,7 +89,8 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 	addr := randomAddr()
 	peers := []string{randomAddr().Hex(), randomAddr().Hex(), randomAddr().Hex()}
 
-	ctx, _ := context.WithTimeout(context.Background(), searchTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), searchTimeout)
+	defer cancel()
 	errC := make(chan error)
 	nrGets := 3
 	for i := 0; i < nrGets; i++ {

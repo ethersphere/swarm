@@ -421,9 +421,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		if total > 0 && i == total {
 			return total, nil
 		}
-
 	}
-	return count, nil
 }
 
 func (s *LDBStore) Cleanup() {
@@ -608,16 +606,17 @@ func (s *LDBStore) writeBatches() {
 	for {
 		select {
 		case <-s.quit:
+			log.Info("DbStore: quit batch write loop")
 			return
 		case <-s.batchesC:
 			err := s.writeCurrentBatch()
 			if err != nil {
-				log.Info(err.Error())
+				log.Info("DbStore: quit batch write loop", "err", err.Error())
 				return
 			}
 		}
 	}
-	log.Trace(fmt.Sprintf("DbStore: quit batch write loop"))
+
 }
 
 func (s *LDBStore) writeCurrentBatch() error {

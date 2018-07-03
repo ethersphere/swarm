@@ -370,7 +370,7 @@ func (pc *PyramidChunker) loadTree() error {
 				newEntry := &TreeEntry{
 					level:         lvl - 1,
 					branchCount:   bewBranchCount,
-					subtreeSize:   uint64(newChunkSize),
+					subtreeSize:   newChunkSize,
 					chunk:         newChunkData,
 					key:           key,
 					index:         0,
