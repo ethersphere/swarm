@@ -30,8 +30,8 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// swarm resource create <frequency> [--name <name>] [--data <0x Hexdata> [--rawmru]]
-// swarm resource update <Manifest Address or ENS domain> <0x Hexdata> [--rawmru]
+// swarm resource create <frequency> [--name <name>] [--data <0x Hexdata> [--multihash=false]]
+// swarm resource update <Manifest Address or ENS domain> <0x Hexdata> [--multihash=false]
 // swarm resource info <Manifest Address or ENS domain>
 
 func resourceCreate(ctx *cli.Context) {
@@ -40,7 +40,7 @@ func resourceCreate(ctx *cli.Context) {
 	var (
 		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		client      = swarm.NewClient(bzzapi)
-		rawResource = ctx.Bool(SwarmResourceRawFlag.Name)
+		multihash   = ctx.Bool(SwarmResourceMultihashFlag.Name)
 		initialData = ctx.String(SwarmResourceDataOnCreateFlag.Name)
 		name        = ctx.String(SwarmResourceNameFlag.Name)
 	)
@@ -62,7 +62,7 @@ func resourceCreate(ctx *cli.Context) {
 	newResourceRequest, err := mru.NewCreateRequest(&mru.ResourceMetadata{
 		Name:      name,
 		Frequency: frequency,
-		OwnerAddr: signer.Address(),
+		Owner:     signer.Address(),
 	})
 
 	if err != nil {
@@ -77,7 +77,7 @@ func resourceCreate(ctx *cli.Context) {
 			return
 		}
 
-		newResourceRequest.SetData(initialDataBytes, !rawResource)
+		newResourceRequest.SetData(initialDataBytes, multihash)
 		if err = newResourceRequest.Sign(signer); err != nil {
 			utils.Fatalf("Error signing resource update: %s", err.Error())
 		}
@@ -96,9 +96,9 @@ func resourceUpdate(ctx *cli.Context) {
 	args := ctx.Args()
 
 	var (
-		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client      = swarm.NewClient(bzzapi)
-		rawResource = ctx.Bool(SwarmResourceRawFlag.Name)
+		bzzapi    = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client    = swarm.NewClient(bzzapi)
+		multihash = ctx.Bool(SwarmResourceMultihashFlag.Name)
 	)
 
 	if len(args) < 2 {
@@ -121,7 +121,7 @@ func resourceUpdate(ctx *cli.Context) {
 	}
 
 	// set the new data
-	updateRequest.SetData(data, !rawResource)
+	updateRequest.SetData(data, multihash)
 
 	// sign update
 	if err = updateRequest.Sign(signer); err != nil {

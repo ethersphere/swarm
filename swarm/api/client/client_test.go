@@ -398,7 +398,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 		Name:      resourceName,
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-		OwnerAddr: signer.Address(),
+		Owner:     signer.Address(),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -453,7 +453,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		Name:      resourceName,
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-		OwnerAddr: signer.Address(),
+		Owner:     signer.Address(),
 	})
 	if err != nil {
 		t.Fatal(err)

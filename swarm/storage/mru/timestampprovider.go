@@ -36,7 +36,7 @@ const timestampLength = 8 + 32
 
 // timestampProvider interface describes a source of timestamp information
 type timestampProvider interface {
-	GetCurrentTimestamp() Timestamp // returns the current timestamp information
+	Now() Timestamp // returns the current timestamp information
 }
 
 // binaryGet populates the timestamp structure from the given byte slice
@@ -67,8 +67,8 @@ func NewDefaultTimestampProvider() *DefaultTimestampProvider {
 	return &DefaultTimestampProvider{}
 }
 
-// GetCurrentTimestamp returns the current time according to this provider
-func (dtp *DefaultTimestampProvider) GetCurrentTimestamp() Timestamp {
+// Now returns the current time according to this provider
+func (dtp *DefaultTimestampProvider) Now() Timestamp {
 	return Timestamp{
 		Time:  uint64(time.Now().Unix()),
 		Proof: common.Hash{},

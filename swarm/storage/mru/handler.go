@@ -121,7 +121,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// to update
 
 	var r SignedResourceUpdate
-	if err := r.parseUpdateChunk(chunkAddr, data); err != nil {
+	if err := r.fromChunk(chunkAddr, data); err != nil {
 		log.Warn(fmt.Sprintf("Invalid resource chunk with address %s: %s ", chunkAddr.Hex(), err.Error()))
 		return false
 	}
@@ -174,7 +174,7 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 	}
 
 	// make sure owner is set to something
-	if request.metadata.OwnerAddr == zeroAddr {
+	if request.metadata.Owner == zeroAddr {
 		return NewError(ErrInvalidValue, "ownerAddr must be set to create a new metadata chunk")
 	}
 
@@ -192,7 +192,7 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 	request.rootAddr = chunk.Addr
 
 	h.chunkStore.Put(ctx, chunk)
-	log.Debug("new resource", "name", request.metadata.Name, "startTime", request.metadata.StartTime, "frequency", request.metadata.Frequency, "owner", request.metadata.OwnerAddr)
+	log.Debug("new resource", "name", request.metadata.Name, "startTime", request.metadata.StartTime, "frequency", request.metadata.Frequency, "owner", request.metadata.Owner)
 
 	// create the internal index for the resource and populate it with the data of the first version
 	rsrc := &resource{
@@ -226,7 +226,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 		return nil, err
 	}
 
-	now := h.getCurrentTime(ctx)
+	now := h.Now(ctx)
 
 	updateRequest = new(Request)
 	updateRequest.period, err = getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
@@ -268,7 +268,7 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 	}
 	if params.period == 0 {
 		// get the current time and the next period
-		now := h.getCurrentTime(ctx)
+		now := h.Now(ctx)
 
 		var period uint32
 		period, err := getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
@@ -337,7 +337,7 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 		if lp.Limit != 0 && hops > lp.Limit {
 			return nil, NewErrorf(ErrPeriodDepth, "Lookup exceeded max period hops (%d)", lp.Limit)
 		}
-		updateAddr := lp.Addr()
+		updateAddr := lp.UpdateAddr()
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
@@ -347,7 +347,7 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 			log.Trace("rsrc update version 1 found, checking for version updates", "period", lp.period, "updateAddr", updateAddr)
 			for {
 				newversion := lp.version + 1
-				updateAddr := lp.Addr()
+				updateAddr := lp.UpdateAddr()
 				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 				if err != nil {
 					return h.updateIndex(rsrc, chunk)
@@ -393,7 +393,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
 	var r SignedResourceUpdate
-	if err := r.parseUpdateChunk(chunk.Addr, chunk.SData); err != nil {
+	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		return nil, err
 	}
 	log.Trace("resource index update", "name", rsrc.ResourceMetadata.Name, "updatekey", chunk.Addr, "period", r.period, "version", r.version)
@@ -441,7 +441,7 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 		}
 	}
 
-	chunk, err := r.newUpdateChunk() // Serialize the update into a chunk. Fails if data is too big
+	chunk, err := r.toChunk() // Serialize the update into a chunk. Fails if data is too big
 	if err != nil {
 		return nil, err
 	}
@@ -466,8 +466,8 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 }
 
 // gets the current time
-func (h *Handler) getCurrentTime(ctx context.Context) Timestamp {
-	return h.timestampProvider.GetCurrentTimestamp()
+func (h *Handler) Now(ctx context.Context) Timestamp {
+	return h.timestampProvider.Now()
 }
 
 // Retrieves the resource index value for the given nameHash
