@@ -115,7 +115,7 @@ func (s *Simulation) ConnectNodesRing(ids []discover.NodeID) (err error) {
 	return s.connect(ids[l-1], ids[0])
 }
 
-// ConnectNodesStar connects all nodes in a start topology
+// ConnectNodesStar connects all nodes in a star topology
 // with the center at provided NodeID.
 // If ids argument is nil, all nodes that are up will be connected.
 func (s *Simulation) ConnectNodesStar(id discover.NodeID, ids []discover.NodeID) (err error) {
@@ -135,7 +135,7 @@ func (s *Simulation) ConnectNodesStar(id discover.NodeID, ids []discover.NodeID)
 	return nil
 }
 
-// ConnectNodesStar connects all nodes in a start topology
+// ConnectNodesStar connects all nodes in a star topology
 // with the center at already set pivot node.
 // If ids argument is nil, all nodes that are up will be connected.
 func (s *Simulation) ConnectNodesStarPivot(ids []discover.NodeID) (err error) {
