@@ -221,6 +221,7 @@ var maxParallelCleanups = 10
 // at the end. It is used to clean all resources from the
 // simulation.
 func (s *Simulation) Close() {
+	close(s.done)
 	sem := make(chan struct{}, maxParallelCleanups)
 	s.mu.RLock()
 	cleanupFuncs := make([]func(), len(s.cleanupFuncs))
@@ -251,7 +252,6 @@ func (s *Simulation) Close() {
 	}
 	s.shutdownWG.Wait()
 	s.Net.Shutdown()
-	close(s.done)
 }
 
 // Done returns a channel that is closed when the simulation

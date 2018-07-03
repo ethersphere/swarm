@@ -93,6 +93,8 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 				select {
 				case <-ctx.Done():
 					return
+				case <-s.Done():
+					return
 				case e := <-events:
 					match := len(filters) == 0 // if there are no filters match all events
 					for _, f := range filters {
@@ -114,6 +116,8 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 						case eventC <- PeerEvent{NodeID: id, Event: e}:
 						case <-ctx.Done():
 							return
+						case <-s.Done():
+							return
 						}
 					}
 				case err := <-sub.Err():
@@ -121,6 +125,8 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 						select {
 						case eventC <- PeerEvent{NodeID: id, Error: err}:
 						case <-ctx.Done():
+							return
+						case <-s.Done():
 							return
 						}
 					}
