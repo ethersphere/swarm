@@ -969,7 +969,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	}
 	log.Debug("handle.get.list: resolved", "ruid", r.ruid, "key", addr)
 
-	list, err := s.GetManifestList(r.Context(), addr, r.uri.Path)
+	list, err := s.api.GetManifestList(r.Context(), addr, r.uri.Path)
 
 	if err != nil {
 		getListFail.Inc(1)
@@ -1033,7 +1033,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.GetManifestList(r.Context(), manifestAddr, r.uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), manifestAddr, r.uri.Path)
 
 		if err != nil {
 			getFileFail.Inc(1)

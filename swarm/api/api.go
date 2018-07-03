@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
-	"net/http"
+	gohttp "net/http"
 	"path"
 	"strings"
 
@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -317,7 +316,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
-		status = http.StatusNotFound
+		status = gohttp.StatusNotFound
 		log.Warn(fmt.Sprintf("loadManifestTrie error: %v", err))
 		return
 	}
@@ -337,7 +336,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 			rsrc, err := a.resource.Load(storage.Address(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
-				status = http.StatusNotFound
+				status = gohttp.StatusNotFound
 				log.Debug(fmt.Sprintf("get resource content error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
@@ -346,7 +345,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 			rsrc, err = a.resource.LookupLatest(ctx, rsrc.NameHash(), true, &mru.LookupParams{})
 			if err != nil {
 				apiGetNotFound.Inc(1)
-				status = http.StatusNotFound
+				status = gohttp.StatusNotFound
 				log.Debug(fmt.Sprintf("get resource content error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
@@ -359,7 +358,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 				_, rsrcData, err := a.resource.GetContent(rsrc.NameHash().Hex())
 				if err != nil {
 					apiGetNotFound.Inc(1)
-					status = http.StatusNotFound
+					status = gohttp.StatusNotFound
 					log.Warn(fmt.Sprintf("get resource content error: %v", err))
 					return reader, mimeType, status, nil, err
 				}
@@ -368,7 +367,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 				decodedMultihash, err := multihash.FromMultihash(rsrcData)
 				if err != nil {
 					apiGetInvalid.Inc(1)
-					status = http.StatusUnprocessableEntity
+					status = gohttp.StatusUnprocessableEntity
 					log.Warn("invalid resource multihash", "err", err)
 					return reader, mimeType, status, nil, err
 				}
@@ -379,7 +378,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 				trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
 				if err != nil {
 					apiGetNotFound.Inc(1)
-					status = http.StatusNotFound
+					status = gohttp.StatusNotFound
 					log.Warn(fmt.Sprintf("loadManifestTrie (resource multihash) error: %v", err))
 					return reader, mimeType, status, nil, err
 				}
@@ -388,7 +387,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 				// it will always be the entry on path ""
 				entry, _ = trie.getEntry(path)
 				if entry == nil {
-					status = http.StatusNotFound
+					status = gohttp.StatusNotFound
 					apiGetNotFound.Inc(1)
 					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
 					log.Trace("manifest (resource multihash) entry not found", "key", manifestAddr, "path", path)
@@ -397,7 +396,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 
 			} else {
 				// data is returned verbatim since it's not a multihash
-				return rsrc, "application/octet-stream", http.StatusOK, nil, nil
+				return rsrc, "application/octet-stream", gohttp.StatusOK, nil, nil
 			}
 		}
 
@@ -405,7 +404,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 		// get the key the manifest entry points to and serve it if it's unambiguous
 		contentAddr = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
-		if status == http.StatusMultipleChoices {
+		if status == gohttp.StatusMultipleChoices {
 			apiGetHTTP300.Inc(1)
 			return nil, entry.ContentType, status, contentAddr, err
 		}
@@ -414,7 +413,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
 		// no entry found
-		status = http.StatusNotFound
+		status = gohttp.StatusNotFound
 		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
 		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
@@ -424,14 +423,14 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 
 // GetManifestList does something important
 func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix string) (list ManifestList, err error) {
-	walker, err := s.api.NewManifestWalker(ctx, addr, nil)
+	walker, err := a.NewManifestWalker(ctx, addr, nil)
 	if err != nil {
 		return
 	}
 
-	err = walker.Walk(func(entry *api.ManifestEntry) error {
+	err = walker.Walk(func(entry *ManifestEntry) error {
 		// handle non-manifest files
-		if entry.ContentType != api.ManifestType {
+		if entry.ContentType != ManifestType {
 			// ignore the file if it doesn't have the specified prefix
 			if !strings.HasPrefix(entry.Path, prefix) {
 				return nil
@@ -466,14 +465,14 @@ func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix 
 			suffix := strings.TrimPrefix(entry.Path, prefix)
 			if index := strings.Index(suffix, "/"); index > -1 {
 				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return api.ErrSkipManifest
+				return ErrSkipManifest
 			}
 			return nil
 		}
 
 		// the manifest neither has the prefix or needs recursing in to
 		// so just skip it
-		return api.ErrSkipManifest
+		return ErrSkipManifest
 	})
 
 	return list, nil
