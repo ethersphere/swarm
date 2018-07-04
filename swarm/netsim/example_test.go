@@ -18,6 +18,7 @@ package netsim_test
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -57,11 +58,16 @@ func ExampleSimulation_WaitTillHealthy() {
 		panic(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	err = sim.WaitTillHealthy(ctx, 2)
+	ill, err := sim.WaitTillHealthy(ctx, 2)
 	if err != nil {
-		panic(err)
+		// inspect the latest detected not healthy kademlias
+		for id, kad := range ill {
+			fmt.Println("Node", id)
+			fmt.Println(kad.String())
+		}
+		// handle error...
 	}
 
 	// continue with the test

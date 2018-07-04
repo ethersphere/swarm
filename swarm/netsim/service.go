@@ -48,8 +48,9 @@ func (s *Simulation) RandomService(name string) node.Service {
 
 // Services returns all services with a provided name
 // from nodes that are up.
-func (s *Simulation) Services(name string) (services []node.Service) {
+func (s *Simulation) Services(name string) (services map[discover.NodeID]node.Service) {
 	nodes := s.Net.GetNodes()
+	services = make(map[discover.NodeID]node.Service)
 	for _, node := range nodes {
 		if !node.Up {
 			continue
@@ -58,7 +59,7 @@ func (s *Simulation) Services(name string) (services []node.Service) {
 		if !ok {
 			continue
 		}
-		services = append(services, simNode.Service(name))
+		services[node.ID()] = simNode.Service(name)
 	}
 	return services
 }

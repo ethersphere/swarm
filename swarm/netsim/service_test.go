@@ -46,7 +46,7 @@ func TestService(t *testing.T) {
 		t.Fatalf("service is not of %T type", &noopService{})
 	}
 
-	_, ok = sim.Services("noop")[0].(*noopService)
+	_, ok = sim.Services("noop")[id].(*noopService)
 	if !ok {
 		t.Fatalf("service is not of %T type", &noopService{})
 	}

@@ -43,37 +43,38 @@ func (s *Simulation) SetNodeItem(id discover.NodeID, key BucketKey, value interf
 	s.buckets[id].Store(key, value)
 }
 
-// NodeItems returns a slice of items from all nodes that are all set under the
+// NodeItems returns a map of items from all nodes that are all set under the
 // same BucketKey.
-func (s *Simulation) NodeItems(key BucketKey) (values []interface{}) {
+func (s *Simulation) NodeItems(key BucketKey) (values map[discover.NodeID]interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	ids := s.NodeIDs()
-	values = make([]interface{}, len(ids))
-	for i, id := range ids {
-		if _, ok := s.buckets[id]; !ok {
-			continue
-		}
-		if v, ok := s.buckets[id].Load(key); ok {
-			values[i] = v
-		}
-	}
-	return values
-}
-
-// UpNodesItems returns a slice of items with the same BucketKey from all nodes that are up.
-func (s *Simulation) UpNodesItems(key BucketKey) (values []interface{}) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	ids := s.NodeIDs()
+	values = make(map[discover.NodeID]interface{}, len(ids))
 	for _, id := range ids {
 		if _, ok := s.buckets[id]; !ok {
 			continue
 		}
 		if v, ok := s.buckets[id].Load(key); ok {
-			values = append(values, v)
+			values[id] = v
+		}
+	}
+	return values
+}
+
+// UpNodesItems returns a map of items with the same BucketKey from all nodes that are up.
+func (s *Simulation) UpNodesItems(key BucketKey) (values map[discover.NodeID]interface{}) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	ids := s.UpNodeIDs()
+	values = make(map[discover.NodeID]interface{})
+	for _, id := range ids {
+		if _, ok := s.buckets[id]; !ok {
+			continue
+		}
+		if v, ok := s.buckets[id].Load(key); ok {
+			values[id] = v
 		}
 	}
 	return values
