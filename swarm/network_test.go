@@ -356,7 +356,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			}
 
 			if *waitKademlia {
-				if err := sim.WaitTillHealthy(ctx, 2); err != nil {
+				if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 					return err
 				}
 			}
