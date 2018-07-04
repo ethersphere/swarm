@@ -20,12 +20,10 @@ A really simple http server interface to Swarm
 package http
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -86,6 +84,27 @@ type ServerConfig struct {
 	CorsString string
 }
 
+func NewServer(api *api.API) *Server {
+	return &Server{api}
+}
+
+type Server struct {
+	api *api.API
+}
+
+// Request wraps http.Request and also includes the parsed bzz URI
+type Request struct {
+	http.Request
+
+	uri  *api.URI
+	ruid string // request unique id
+}
+
+type RequestContext struct {
+	uri  *api.URI
+	ruid string // request unique id
+}
+
 // browser API for registering bzz url scheme handlers:
 // https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
 // electron (chromium) api for registering bzz url scheme handlers:
@@ -106,24 +125,28 @@ func StartHTTPServer(api *api.API, config *ServerConfig) {
 
 	mux := http.NewServeMux()
 	server := NewServer(api)
-	mux.HandleFunc("/bzz:/", server.ProcessRequest(c, true, server.HandleBzz))
-	mux.HandleFunc("/bzz-raw:/", server.ProcessRequest(c, true, server.HandleBzzRaw))
-	mux.HandleFunc("/bzz-immutable:/", server.ProcessRequest(c, true, server.HandleBzzImmutable))
-	mux.HandleFunc("/bzz-hash:/", server.ProcessRequest(c, true, server.HandleBzzHash))
-	mux.HandleFunc("/bzz-list:/", server.ProcessRequest(c, true, server.HandleBzzList))
-	mux.HandleFunc("/bzz-resource:/", server.ProcessRequest(c, true, server.HandleBzzResource))
+	mux.HandleFunc("/bzz:/", server.ProcessRequest(true, server.HandleBzz))
+	mux.HandleFunc("/bzz-raw:/", server.ProcessRequest(true, server.HandleBzzRaw))
+	mux.HandleFunc("/bzz-immutable:/", server.ProcessRequest(true, server.HandleBzzImmutable))
+	mux.HandleFunc("/bzz-hash:/", server.ProcessRequest(true, server.HandleBzzHash))
+	mux.HandleFunc("/bzz-list:/", server.ProcessRequest(true, server.HandleBzzList))
+	mux.HandleFunc("/bzz-resource:/", server.ProcessRequest(true, server.HandleBzzResource))
 
-	mux.HandleFunc("/", server.ProcessRequest(c, false, server.HandleRootPaths))
-	mux.HandleFunc("/robots.txt", server.ProcessRequest(c, false, server.HandleRootPaths))
+	mux.HandleFunc("/", server.ProcessRequest(false, server.HandleRootPaths))
+	mux.HandleFunc("/robots.txt", server.ProcessRequest(false, server.HandleRootPaths))
 
 	go http.ListenAndServe(config.Addr, c.Handler(mux))
 }
 
-func (s *Server) ProcessRequest(c *cors.Cors, parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
+type contextKey int
+
+func (s *Server) ProcessRequest(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
 
 		req := &Request{Request: *r, ruid: uuid.New()[:8]}
+		// newCtx := context.WithValue(r.Context(), ruidKey, uuid.New()[:8])
+
 		metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
 		log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
 
@@ -136,12 +159,6 @@ func (s *Server) ProcessRequest(c *cors.Cors, parseBzzUri bool, h func(http.Resp
 				return
 			}
 			req.uri = uri
-
-			// //trailing slash redirect bug
-			// if req.uri.Path == "" && !strings.HasSuffix(req.URL.Path, "/") {
-			// 	http.Redirect(w, &req.Request, r.URL.Path+"/", http.StatusMovedPermanently)
-			// 	return
-			// }
 
 			log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri.Addr", req.uri.Addr, "uri.Path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
 		}
@@ -202,7 +219,7 @@ func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
 		s.HandlePostFiles(w, r)
 	case "DELETE":
 		log.Debug("handleBzzDelete")
-		s.HandleDelete(w, r)
+		s.api.HandleDelete(w, r)
 	default:
 		//method not allowed
 	}
@@ -220,9 +237,20 @@ func (s *Server) HandleBzzRaw(w http.ResponseWriter, r *Request) {
 	}
 }
 func (s *Server) HandleBzzImmutable(w http.ResponseWriter, r *Request) {
+	// if uri.Immutable() {
+	// 	key := uri.Address()
+	// 	if key == nil {
+	// 		return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
+	// 	}
+	// 	return key, nil
+	// }
+
+	// ^^ check that when doing a GET - we are asking about a specific hash, not an ENS name
+
 	switch r.Method {
 	case "GET":
 		log.Debug("handleGetHash")
+
 		s.HandleGetList(w, r)
 	default:
 		//method not allowed
@@ -258,22 +286,6 @@ func (s *Server) HandleBzzResource(w http.ResponseWriter, r *Request) {
 	default:
 		//method not allowed
 	}
-}
-
-func NewServer(api *api.API) *Server {
-	return &Server{api}
-}
-
-type Server struct {
-	api *api.API
-}
-
-// Request wraps http.Request and also includes the parsed bzz URI
-type Request struct {
-	http.Request
-
-	uri  *api.URI
-	ruid string // request unique id
 }
 
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
@@ -343,7 +355,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 
 	var addr storage.Address
 	if r.uri.Addr != "" && r.uri.Addr != "encrypt" {
-		addr, err = s.api.Resolve(r.Context(), r.uri)
+		addr, err = s.api.ResolveURI(r.Context(), r.uri)
 		if err != nil {
 			postFilesFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
@@ -364,13 +376,13 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		switch contentType {
 
 		case "application/x-tar":
-			return s.handleTarUpload(r.Context(), r, mw)
+			return s.handleTarUpload(r, mw)
 
 		case "multipart/form-data":
 			return s.handleMultipartUpload(r.Context(), r, params["boundary"], mw)
 
 		default:
-			return s.handleDirectUpload(r.Context(), r, mw)
+			return s.handleDirectUpload(r, mw)
 		}
 	})
 	if err != nil {
@@ -386,38 +398,10 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newAddr)
 }
 
-func (s *Server) handleTarUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
-	log.Debug("handle.tar.upload", "ruid", req.ruid)
-	tr := tar.NewReader(req.Body)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return fmt.Errorf("error reading tar stream: %s", err)
-		}
+func (s *Server) handleTarUpload(r *Request, mw *api.ManifestWriter) error {
+	log.Debug("handle.tar.upload", "ruid", r.ruid)
 
-		// only store regular files
-		if !hdr.FileInfo().Mode().IsRegular() {
-			continue
-		}
-
-		// add the entry under the path from the request
-		path := path.Join(req.uri.Path, hdr.Name)
-		entry := &api.ManifestEntry{
-			Path:        path,
-			ContentType: hdr.Xattrs["user.swarm.content-type"],
-			Mode:        hdr.Mode,
-			Size:        hdr.Size,
-			ModTime:     hdr.ModTime,
-		}
-		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
-		contentKey, err := mw.AddEntry(ctx, tr, entry)
-		if err != nil {
-			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
-		}
-		log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
-	}
+	return s.api.UploadTar(r.Context(), r.Body, r.uri.Path, mw)
 }
 
 func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, boundary string, mw *api.ManifestWriter) error {
@@ -478,7 +462,7 @@ func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, bounda
 	}
 }
 
-func (s *Server) handleDirectUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
+func (s *Server) APIhandleDirectUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
 	log.Debug("handle.direct.upload", "ruid", req.ruid)
 	key, err := mw.AddEntry(ctx, req.Body, &api.ManifestEntry{
 		Path:        req.uri.Path,
@@ -497,11 +481,11 @@ func (s *Server) handleDirectUpload(ctx context.Context, req *Request, mw *api.M
 // HandleDelete handles a DELETE request to bzz:/<manifest>/<path>, removes
 // <path> from <manifest> and returns the resulting manifest hash as a
 // text/plain response
-func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
+func (s *Server) APIHandleDelete(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.delete", "ruid", r.ruid)
 
 	deleteCount.Inc(1)
-	key, err := s.api.Resolve(r.Context(), r.uri)
+	key, err := s.api.ResolveURI(r.Context(), r.uri)
 	if err != nil {
 		deleteFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
@@ -608,7 +592,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		// that means that we retrieve the manifest and inspect its Hash member.
 		manifestAddr := r.uri.Address()
 		if manifestAddr == nil {
-			manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
+			manifestAddr, err = s.api.ResolveURI(r.Context(), r.uri)
 			if err != nil {
 				getFail.Inc(1)
 				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -685,7 +669,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 	// resolve the content key.
 	manifestAddr := r.uri.Address()
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
+		manifestAddr, err = s.api.ResolveURI(r.Context(), r.uri)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -784,7 +768,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	var err error
 	addr := r.uri.Address()
 	if addr == nil {
-		addr, err = s.api.Resolve(r.Context(), r.uri)
+		addr, err = s.api.ResolveURI(r.Context(), r.uri)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -796,46 +780,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 
 	log.Debug("handle.get: resolved", "ruid", r.ruid, "key", addr)
 
-	// if path is set, interpret <key> as a manifest and return the
-	// raw entry at the given path
-	if r.uri.Path != "" {
-		walker, err := s.api.NewManifestWalker(r.Context(), addr, nil)
-		if err != nil {
-			getFail.Inc(1)
-			Respond(w, r, fmt.Sprintf("%s is not a manifest", addr), http.StatusBadRequest)
-			return
-		}
-		var entry *api.ManifestEntry
-		walker.Walk(func(e *api.ManifestEntry) error {
-			// if the entry matches the path, set entry and stop
-			// the walk
-			if e.Path == r.uri.Path {
-				entry = e
-				// return an error to cancel the walk
-				return errors.New("found")
-			}
-
-			// ignore non-manifest files
-			if e.ContentType != api.ManifestType {
-				return nil
-			}
-
-			// if the manifest's path is a prefix of the
-			// requested path, recurse into it by returning
-			// nil and continuing the walk
-			if strings.HasPrefix(r.uri.Path, e.Path) {
-				return nil
-			}
-
-			return api.ErrSkipManifest
-		})
-		if entry == nil {
-			getFail.Inc(1)
-			Respond(w, r, fmt.Sprintf("manifest entry could not be loaded"), http.StatusNotFound)
-			return
-		}
-		addr = storage.Address(common.Hex2Bytes(entry.Hash))
-	}
 	etag := common.Bytes2Hex(addr)
 	noneMatchEtag := r.Header.Get("If-None-Match")
 	w.Header().Set("ETag", fmt.Sprintf("%q", etag)) // set etag to manifest key or raw entry key.
@@ -876,6 +820,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 // HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
 // header of "application/x-tar" and returns a tar stream of all files
 // contained in the manifest
+//bzz:/theswarm.eth/Swarm_files
 func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.files", "ruid", r.ruid, "uri", r.uri)
 	getFilesCount.Inc(1)
@@ -885,68 +830,12 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	addr, err := s.api.Resolve(r.Context(), r.uri)
+	rdr, err := s.api.GetDirectoryTar(r.Context(), r.uri)
 	if err != nil {
-		getFilesFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-		return
-	}
-	log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", addr)
-
-	walker, err := s.api.NewManifestWalker(r.Context(), addr, nil)
-	if err != nil {
-		getFilesFail.Inc(1)
-		Respond(w, r, err.Error(), http.StatusInternalServerError)
-		return
+		Respond(w, r, "encountered an error downloading directory as tarball: %s", http.StatusInternalServerError)
 	}
 
-	tw := tar.NewWriter(w)
-	defer tw.Close()
-	w.Header().Set("Content-Type", "application/x-tar")
-	w.WriteHeader(http.StatusOK)
-
-	err = walker.Walk(func(entry *api.ManifestEntry) error {
-		// ignore manifests (walk will recurse into them)
-		if entry.ContentType == api.ManifestType {
-			return nil
-		}
-
-		// retrieve the entry's key and size
-		reader, isEncrypted := s.api.Retrieve(r.Context(), storage.Address(common.Hex2Bytes(entry.Hash)))
-		size, err := reader.Size(nil)
-		if err != nil {
-			return err
-		}
-		w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
-
-		// write a tar header for the entry
-		hdr := &tar.Header{
-			Name:    entry.Path,
-			Mode:    entry.Mode,
-			Size:    size,
-			ModTime: entry.ModTime,
-			Xattrs: map[string]string{
-				"user.swarm.content-type": entry.ContentType,
-			},
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-
-		// copy the file into the tar stream
-		n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
-		if err != nil {
-			return err
-		} else if n != size {
-			return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
-		}
-
-		return nil
-	})
-	if err != nil {
-		getFilesFail.Inc(1)
-		log.Error(fmt.Sprintf("error generating tar stream: %s", err))
-	}
+	// log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", addr)
 }
 
 // HandleGetList handles a GET request to bzz-list:/<manifest>/<path> and returns
@@ -961,7 +850,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	addr, err := s.api.Resolve(r.Context(), r.uri)
+	addr, err := s.api.ResolveURI(r.Context(), r.uri)
 	if err != nil {
 		getListFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -994,7 +883,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	manifestAddr := r.uri.Address()
 
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
+		manifestAddr, err = s.api.ResolveURI(r.Context(), r.uri)
 		if err != nil {
 			getFileFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)

@@ -225,7 +225,7 @@ func TestAPIResolve(t *testing.T) {
 			if x.immutable {
 				uri.Scheme = "bzz-immutable"
 			}
-			res, err := api.Resolve(context.TODO(), uri)
+			res, err := api.ResolveURI(context.TODO(), uri)
 			if err == nil {
 				if x.expectErr != nil {
 					t.Fatalf("expected error %q, got result %q", x.expectErr, res)

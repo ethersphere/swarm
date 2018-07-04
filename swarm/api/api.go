@@ -17,11 +17,14 @@
 package api
 
 import (
+	"archive/tar"
+
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
-	gohttp "net/http"
+	"net/http"
 	"path"
 	"strings"
 
@@ -247,42 +250,85 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 // ErrResolve is returned when an URI cannot be resolved from ENS.
 type ErrResolve error
 
-// Resolve resolves a URI to an Address using the MultiResolver.
-func (a *API) Resolve(ctx context.Context, uri *URI) (storage.Address, error) {
-	apiResolveCount.Inc(1)
-	log.Trace("resolving", "uri", uri.Addr)
-
-	// if the URI is immutable, check if the address looks like a hash
-	if uri.Immutable() {
-		key := uri.Address()
-		if key == nil {
-			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
-		}
-		return key, nil
+// Resolve a name into a content-addressed hash
+// where address could be an ENS name, or a content addressed hash
+func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
+	// if its already a hash - return the hash
+	if hashMatcher.MatchString(address) {
+		return common.Hex2Bytes(address), nil
 	}
 
-	// if DNS is not configured, check if the address is a hash
+	// resolving a name
+	// if DNS is not configured, return an error
 	if a.dns == nil {
-		key := uri.Address()
-		if key == nil {
-			apiResolveFail.Inc(1)
-			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
-		}
-		return key, nil
+		apiResolveFail.Inc(1)
+		return nil, fmt.Errorf("no DNS to resolve name: %q", address)
 	}
 
 	// try and resolve the address
-	resolved, err := a.dns.Resolve(uri.Addr)
-	if err == nil {
-		return resolved[:], nil
-	}
-
-	key := uri.Address()
-	if key == nil {
+	resolved, err := a.dns.Resolve(address)
+	if err != nil {
 		apiResolveFail.Inc(1)
 		return nil, err
 	}
-	return key, nil
+	return resolved[:], nil
+
+}
+
+// Resolve resolves a URI to an Address using the MultiResolver.
+func (a *API) ResolveURI(ctx context.Context, uri *URI) (storage.Address, error) {
+	apiResolveCount.Inc(1)
+	log.Trace("resolving", "uri", uri.Addr)
+
+	addr, err := a.Resolve(ctx, uri.Addr)
+	if err != nil {
+		return nil, err
+	}
+
+	if uri.Path == "" {
+		return addr, nil
+	}
+
+	walker, err := a.NewManifestWalker(ctx, addr, nil)
+	if err != nil {
+		// getFail.Inc(1)
+		// Respond(w, r, fmt.Sprintf("%s is not a manifest", addr), http.StatusBadRequest)
+		return nil, err
+	}
+	var entry *ManifestEntry
+
+	walker.Walk(func(e *ManifestEntry) error {
+		// if the entry matches the path, set entry and stop
+		// the walk
+		if e.Path == uri.Path {
+			entry = e
+			// return an error to cancel the walk
+			return errors.New("found")
+		}
+
+		// ignore non-manifest files
+		if e.ContentType != ManifestType {
+			return nil
+		}
+
+		// if the manifest's path is a prefix of the
+		// requested path, recurse into it by returning
+		// nil and continuing the walk
+		if strings.HasPrefix(uri.Path, e.Path) {
+			return nil
+		}
+
+		return ErrSkipManifest
+	})
+
+	if entry == nil {
+		//getFail.Inc(1)
+		// Respond(w, r, fmt.Sprintf("manifest entry could not be loaded"), http.StatusNotFound)
+		return nil, errors.New("not found")
+	}
+	addr = storage.Address(common.Hex2Bytes(entry.Hash))
+
+	return addr, nil
 }
 
 // Put provides singleton manifest creation on top of FileStore store
@@ -316,7 +362,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
 	if err != nil {
 		apiGetNotFound.Inc(1)
-		status = gohttp.StatusNotFound
+		status = http.StatusNotFound
 		log.Warn(fmt.Sprintf("loadManifestTrie error: %v", err))
 		return
 	}
@@ -336,7 +382,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 			rsrc, err := a.resource.Load(storage.Address(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
-				status = gohttp.StatusNotFound
+				status = http.StatusNotFound
 				log.Debug(fmt.Sprintf("get resource content error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
@@ -345,7 +391,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 			rsrc, err = a.resource.LookupLatest(ctx, rsrc.NameHash(), true, &mru.LookupParams{})
 			if err != nil {
 				apiGetNotFound.Inc(1)
-				status = gohttp.StatusNotFound
+				status = http.StatusNotFound
 				log.Debug(fmt.Sprintf("get resource content error: %v", err))
 				return reader, mimeType, status, nil, err
 			}
@@ -358,7 +404,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 				_, rsrcData, err := a.resource.GetContent(rsrc.NameHash().Hex())
 				if err != nil {
 					apiGetNotFound.Inc(1)
-					status = gohttp.StatusNotFound
+					status = http.StatusNotFound
 					log.Warn(fmt.Sprintf("get resource content error: %v", err))
 					return reader, mimeType, status, nil, err
 				}
@@ -367,7 +413,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 				decodedMultihash, err := multihash.FromMultihash(rsrcData)
 				if err != nil {
 					apiGetInvalid.Inc(1)
-					status = gohttp.StatusUnprocessableEntity
+					status = http.StatusUnprocessableEntity
 					log.Warn("invalid resource multihash", "err", err)
 					return reader, mimeType, status, nil, err
 				}
@@ -378,7 +424,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 				trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
 				if err != nil {
 					apiGetNotFound.Inc(1)
-					status = gohttp.StatusNotFound
+					status = http.StatusNotFound
 					log.Warn(fmt.Sprintf("loadManifestTrie (resource multihash) error: %v", err))
 					return reader, mimeType, status, nil, err
 				}
@@ -387,7 +433,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 				// it will always be the entry on path ""
 				entry, _ = trie.getEntry(path)
 				if entry == nil {
-					status = gohttp.StatusNotFound
+					status = http.StatusNotFound
 					apiGetNotFound.Inc(1)
 					err = fmt.Errorf("manifest (resource multihash) entry for '%s' not found", path)
 					log.Trace("manifest (resource multihash) entry not found", "key", manifestAddr, "path", path)
@@ -396,7 +442,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 
 			} else {
 				// data is returned verbatim since it's not a multihash
-				return rsrc, "application/octet-stream", gohttp.StatusOK, nil, nil
+				return rsrc, "application/octet-stream", http.StatusOK, nil, nil
 			}
 		}
 
@@ -404,7 +450,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 		// get the key the manifest entry points to and serve it if it's unambiguous
 		contentAddr = common.Hex2Bytes(entry.Hash)
 		status = entry.Status
-		if status == gohttp.StatusMultipleChoices {
+		if status == http.StatusMultipleChoices {
 			apiGetHTTP300.Inc(1)
 			return nil, entry.ContentType, status, contentAddr, err
 		}
@@ -413,12 +459,85 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 		reader, _ = a.fileStore.Retrieve(ctx, contentAddr)
 	} else {
 		// no entry found
-		status = gohttp.StatusNotFound
+		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
 		err = fmt.Errorf("manifest entry for '%s' not found", path)
 		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
 	}
 	return
+}
+
+// GetDirectoryTar fetches a requested directory as a tarstream
+// it returns an io.Reader and an error
+func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.Reader, error) {
+	addr, err := a.Resolve(ctx, uri.Addr)
+	if err != nil {
+		// getFilesFail.Inc(1)
+		// Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
+		return nil, err
+	}
+	walker, err := a.NewManifestWalker(ctx, addr, nil)
+	if err != nil {
+		// getFilesFail.Inc(1)
+		// Respond(w, r, err.Error(), http.StatusInternalServerError)
+		return nil, err
+	}
+
+	isEncrypted := false
+	piper, pipew := io.Pipe()
+	tw := tar.NewWriter(pipew)
+	defer tw.Close()
+	// w.Header().Set("Content-Type", "application/x-tar")
+	// w.WriteHeader(http.StatusOK)
+
+	err = walker.Walk(func(entry *ManifestEntry) error {
+		// ignore manifests (walk will recurse into them)
+		if entry.ContentType == ManifestType {
+			return nil
+		}
+
+		// retrieve the entry's key and size
+		reader, encrypted := a.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
+		isEncrypted = encrypted
+		size, err := reader.Size(nil)
+		if err != nil {
+			return err
+		}
+		// w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
+
+		// write a tar header for the entry
+		hdr := &tar.Header{
+			Name:    entry.Path,
+			Mode:    entry.Mode,
+			Size:    size,
+			ModTime: entry.ModTime,
+			Xattrs: map[string]string{
+				"user.swarm.content-type": entry.ContentType,
+			},
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+
+		// copy the file into the tar stream
+		n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
+		if err != nil {
+			return err
+		} else if n != size {
+			return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		// getFilesFail.Inc(1)
+		// log.Error(fmt.Sprintf("error generating tar stream: %s", err))
+		return nil, err
+	}
+
+	return piper, nil
+
 }
 
 // GetManifestList does something important
@@ -527,12 +646,7 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
 	apiAddFileCount.Inc(1)
 
-	uri, err := Parse("bzz:/" + mhash)
-	if err != nil {
-		apiAddFileFail.Inc(1)
-		return nil, "", err
-	}
-	mkey, err := a.Resolve(ctx, uri)
+	mkey, err := a.Resolve(ctx, mhash)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -577,12 +691,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname string, nameresolver bool) (string, error) {
 	apiRmFileCount.Inc(1)
 
-	uri, err := Parse("bzz:/" + mhash)
-	if err != nil {
-		apiRmFileFail.Inc(1)
-		return "", err
-	}
-	mkey, err := a.Resolve(ctx, uri)
+	mkey, err := a.Resolve(ctx, mhash)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -644,12 +753,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 	//newReader := bytes.NewReader(content)
 	//combinedReader := io.MultiReader(oldReader, newReader)
 
-	uri, err := Parse("bzz:/" + mhash)
-	if err != nil {
-		apiAppendFileFail.Inc(1)
-		return nil, "", err
-	}
-	mkey, err := a.Resolve(ctx, uri)
+	mkey, err := a.Resolve(ctx, mhash)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -696,14 +800,45 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 	return fkey, newMkey.String(), nil
 }
 
+func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath string, mw *ManifestWriter) error {
+	// log.Debug("handle.tar.upload", "ruid", req.ruid)
+	tr := tar.NewReader(bodyReader)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("error reading tar stream: %s", err)
+		}
+
+		// only store regular files
+		if !hdr.FileInfo().Mode().IsRegular() {
+			continue
+		}
+
+		// add the entry under the path from the request
+		manifestPath := path.Join(manifestPath, hdr.Name)
+		entry := &ManifestEntry{
+			Path:        manifestPath,
+			ContentType: hdr.Xattrs["user.swarm.content-type"],
+			Mode:        hdr.Mode,
+			Size:        hdr.Size,
+			ModTime:     hdr.ModTime,
+		}
+		// log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
+		_, err = mw.AddEntry(ctx, tr, entry)
+		if err != nil {
+			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
+		}
+		// return nil
+		// log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
+	}
+}
+
 // BuildDirectoryTree used by swarmfs_unix
 func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
-	uri, err := Parse("bzz:/" + mhash)
-	if err != nil {
-		return nil, nil, err
-	}
-	addr, err = a.Resolve(ctx, uri)
+	addr, err = a.Resolve(ctx, mhash)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -715,7 +850,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	}
 
 	manifestEntryMap = map[string]*manifestTrieEntry{}
-	err = rootTrie.listWithPrefix(uri.Path, quitC, func(entry *manifestTrieEntry, suffix string) {
+	err = rootTrie.listWithPrefix("", quitC, func(entry *manifestTrieEntry, suffix string) {
 		manifestEntryMap[suffix] = entry
 	})
 

@@ -42,8 +42,8 @@ type URI struct {
 	//
 	Scheme string
 
-	// Addr is either a hexadecimal storage address or it an address which
-	// resolves to a storage address
+	// Addr is either a hexadecimal storage address or it is an address (ENS name, for example)
+	// which resolves to a storage address
 	Addr string
 
 	// addr stores the parsed storage address
