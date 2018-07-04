@@ -36,7 +36,7 @@ type hasherStore struct {
 	chunkEncryption *chunkEncryption
 	hashSize        int           // content hash size
 	refSize         int64         // reference size (content hash + possibly encryption key)
-	count           uint64        // number of chunks to store
+	nrChunks        uint64        // number of chunks to store
 	errC            chan error    // global error channel
 	doneC           chan struct{} // closed by Close() call to indicate that count is the final number of chunks
 	quitC           chan struct{} // closed to quit unterminated routines
@@ -132,24 +132,28 @@ func (h *hasherStore) Close() {
 //    2) all the chunks which has been Put has been stored
 func (h *hasherStore) Wait(ctx context.Context) error {
 	defer close(h.quitC)
-	var n uint64
+	var nrStoredChunks uint64 // number of stored chunks
 	var done bool
 	doneC := h.doneC
 	for {
 		select {
+		// if context is done earlier, just return with the error
 		case <-ctx.Done():
 			return ctx.Err()
+		// doneC is closed if all chunks have been submitted, from then we just wait until all of them are also stored
 		case <-doneC:
 			done = true
 			doneC = nil
+		// a chunk has been stored, if err is nil, then successfully, so increase the stored chunk counter
 		case err := <-h.errC:
 			if err != nil {
 				return err
 			}
-			n++
+			nrStoredChunks++
 		}
+		// if all the chunks have been submitted and all of them are stored, then we can return
 		if done {
-			if n >= h.count {
+			if nrStoredChunks >= h.nrChunks {
 				return nil
 			}
 		}
@@ -228,7 +232,7 @@ func (h *hasherStore) RefSize() int64 {
 }
 
 func (h *hasherStore) storeChunk(ctx context.Context, chunk *chunk) {
-	atomic.AddUint64(&h.count, 1)
+	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
 		select {
 		case h.errC <- h.store.Put(ctx, chunk):
