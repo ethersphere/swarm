@@ -31,12 +31,11 @@ var searchTimeout = 3000 * time.Millisecond
 
 type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{}, error)
 
-// Fetcher is created when a chunk is not found locally
-// it starts a request handler loop once and keeps it
-// alive until all active requests complete
-// either because the chunk is delivered or requestor cancelled/timed out
-// fetcher self destroys
-// NetStore instantiates the
+// Fetcher is created when a chunk is not found locally. It starts a request handler loop once and
+// keeps it alive until all active requests are completed. This can happen:
+//     1. either because the chunk is delivered
+//     2. or becuse the requestor cancelled/timed out
+// Fetcher self destroys itself after it is completed.
 // TODO: cancel all forward requests after termination
 type Fetcher struct {
 	request   RequestFunc           // request function fetcher calls to issue retrieve request for a chunk
@@ -58,7 +57,7 @@ type FetcherFactory struct {
 	skipCheck bool
 }
 
-// NewFetcherFactory takes a request function and skip check parameter
+// NewFetcherFactory takes a request function and skip check parameter and creates a FetcherFactory
 func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 	return &FetcherFactory{
 		request:   request,
@@ -66,16 +65,18 @@ func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 	}
 }
 
-// New contructs a new fetcher, starts it and returns a fetch function
-// to be called by the NetStore when handling requests and offers
+// New contructs a new Fetcher, for the given source. All peers in peersToSkip are not requested to
+// deliver the given chunk. peersToSkip should always contain the peers which are actively requesting
+// this chunk, to make sure we don't request back the chunks from them.
+// The created Fetcher is started the returned function is its fetch funciton. This function is used by
+// NetStore to fetch a chunk which is not available locally.
 func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peersToSkip *sync.Map) storage.FetchFunc {
 	fetcher := NewFetcher(source, f.request, f.skipCheck)
 	go fetcher.run(ctx, peersToSkip)
 	return fetcher.fetch
 }
 
-// NewFetcher creates a new fetcher for a chunk
-// stored in netstore's fetchers (LRU cache) keyed by address
+// NewFetcher creates a new Fetcher for the given chunk address using the given request function.
 func NewFetcher(addr storage.Address, request RequestFunc, skipCheck bool) *Fetcher {
 	return &Fetcher{
 		addr:      addr,
