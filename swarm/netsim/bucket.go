@@ -24,7 +24,7 @@ import (
 type BucketKey string
 
 // NodeItem returns an item set in ServiceFunc function for a particualar node.
-func (s *Simulation) NodeItem(id discover.NodeID, key BucketKey) (value interface{}, ok bool) {
+func (s *Simulation) NodeItem(id discover.NodeID, key interface{}) (value interface{}, ok bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -36,7 +36,7 @@ func (s *Simulation) NodeItem(id discover.NodeID, key BucketKey) (value interfac
 
 // SetNodeItem sets a new item associated with the node with provided NodeID.
 // Buckets should be used to avoid managing separate simulation global state.
-func (s *Simulation) SetNodeItem(id discover.NodeID, key BucketKey, value interface{}) {
+func (s *Simulation) SetNodeItem(id discover.NodeID, key interface{}, value interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -45,7 +45,7 @@ func (s *Simulation) SetNodeItem(id discover.NodeID, key BucketKey, value interf
 
 // NodeItems returns a map of items from all nodes that are all set under the
 // same BucketKey.
-func (s *Simulation) NodeItems(key BucketKey) (values map[discover.NodeID]interface{}) {
+func (s *Simulation) NodeItems(key interface{}) (values map[discover.NodeID]interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -63,7 +63,7 @@ func (s *Simulation) NodeItems(key BucketKey) (values map[discover.NodeID]interf
 }
 
 // UpNodesItems returns a map of items with the same BucketKey from all nodes that are up.
-func (s *Simulation) UpNodesItems(key BucketKey) (values map[discover.NodeID]interface{}) {
+func (s *Simulation) UpNodesItems(key interface{}) (values map[discover.NodeID]interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 

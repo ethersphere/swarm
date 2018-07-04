@@ -25,7 +25,7 @@ import (
 )
 
 func TestServiceBucket(t *testing.T) {
-	testKey := BucketKey("Key")
+	testKey := "Key"
 	testValue := "Value"
 
 	sim := New(map[string]ServiceFunc{
