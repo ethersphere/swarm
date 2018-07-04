@@ -70,7 +70,7 @@ type SimulationOptions struct {
 	HTTPSimPort string //string defining the HTTP server port
 }
 
-// ServiceFunc is used in NewSimulation to declare new service constructor.
+// ServiceFunc is used in New to declare new service constructor.
 // The first argument provides ServiceContext from the adapters package
 // giving for example the access to NodeID. Second argument is the sync.Map
 // where all "global" state related to the service should be kept.
@@ -78,9 +78,9 @@ type SimulationOptions struct {
 // objects should ne provided in a single returned cleanup function.
 type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error)
 
-// NewSimulation creates a new Simulation instance with new
+// New creates a new Simulation instance with new
 // simulations.Network initialized with provided services.
-func NewSimulation(services map[string]ServiceFunc, opts *SimulationOptions) (s *Simulation) {
+func New(services map[string]ServiceFunc, opts *SimulationOptions) (s *Simulation) {
 	s = &Simulation{
 		buckets: make(map[discover.NodeID]*sync.Map),
 		done:    make(chan struct{}),

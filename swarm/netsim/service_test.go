@@ -24,7 +24,7 @@ import (
 )
 
 func TestService(t *testing.T) {
-	sim := NewSimulation(map[string]ServiceFunc{
+	sim := New(map[string]ServiceFunc{
 		"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			return newNoopService(), nil, nil
 		},

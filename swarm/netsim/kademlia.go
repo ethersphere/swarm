@@ -30,8 +30,8 @@ import (
 // instance for particuar node, usually inside the ServiceFunc function.
 var BucketKeyKademlia BucketKey = "kademlia"
 
-// WaitKademlia is blocking until the health of all kademlias is true.
-func (s *Simulation) WaitKademlia(ctx context.Context, kadMinProxSize int) (err error) {
+// WaitTillHealthy is blocking until the health of all kademlias is true.
+func (s *Simulation) WaitTillHealthy(ctx context.Context, kadMinProxSize int) (err error) {
 	// Prepare PeerPot map for checking Kademlia health
 	var ppmap map[string]*network.PeerPot
 	kademlias := s.kademlias()

@@ -268,7 +268,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 	//(no HTTP server for this simulation)
 	so := &netsim.SimulationOptions{}
 
-	sim := netsim.NewSimulation(map[string]netsim.ServiceFunc{
+	sim := netsim.New(map[string]netsim.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
 
@@ -356,7 +356,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			}
 
 			if *waitKademlia {
-				if err := sim.WaitKademlia(ctx, 2); err != nil {
+				if err := sim.WaitTillHealthy(ctx, 2); err != nil {
 					return err
 				}
 			}

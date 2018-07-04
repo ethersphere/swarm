@@ -64,7 +64,7 @@ func (t *noopService) Start(server *p2p.Server) error {
 
 func TestSimulationWithHTTPServer(t *testing.T) {
 	log.Debug("Init simulation")
-	sim := NewSimulation(
+	sim := New(
 		map[string]ServiceFunc{
 			"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 				return newNoopService(), nil, nil

@@ -30,10 +30,10 @@ import (
 )
 
 // Every node can have a Kademlia associated using the node bucket under
-// BucketKeyKademlia key. This allows to use WaitKademlia to block until
+// BucketKeyKademlia key. This allows to use WaitTillHealthy to block until
 // all nodes have the their Kadmlias healthy.
-func ExampleSimulation_WaitKademlia() {
-	sim := netsim.NewSimulation(map[string]netsim.ServiceFunc{
+func ExampleSimulation_WaitTillHealthy() {
+	sim := netsim.New(map[string]netsim.ServiceFunc{
 		"bzz": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			addr := network.NewAddrFromNodeID(ctx.Config.ID)
 			hp := network.NewHiveParams()
@@ -45,7 +45,7 @@ func ExampleSimulation_WaitKademlia() {
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			// store kademlia in node's bucket under BucketKeyKademlia
-			// so that it can be found by WaitKademlia method.
+			// so that it can be found by WaitTillHealthy method.
 			b.Store(netsim.BucketKeyKademlia, kad)
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
@@ -59,7 +59,7 @@ func ExampleSimulation_WaitKademlia() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	err = sim.WaitKademlia(ctx, 2)
+	err = sim.WaitTillHealthy(ctx, 2)
 	if err != nil {
 		panic(err)
 	}
@@ -71,7 +71,7 @@ func ExampleSimulation_WaitKademlia() {
 
 // Watch all peer events in the simulation network, buy receiving from a channel.
 func ExampleSimulation_PeerEvents() {
-	sim := netsim.NewSimulation(nil, nil)
+	sim := netsim.New(nil, nil)
 	defer sim.Close()
 
 	events := sim.PeerEvents(context.Background(), sim.NodeIDs())
@@ -89,7 +89,7 @@ func ExampleSimulation_PeerEvents() {
 
 // Detect when a nodes drop a peer.
 func ExampleSimulation_PeerEvents_disconnections() {
-	sim := netsim.NewSimulation(nil, nil)
+	sim := netsim.New(nil, nil)
 	defer sim.Close()
 
 	disconnections := sim.PeerEvents(
@@ -112,7 +112,7 @@ func ExampleSimulation_PeerEvents_disconnections() {
 // Watch multiple types of events or messages. In this case, they differ only
 // by MsgCode, but filters can be set for different types or protocols, too.
 func ExampleSimulation_PeerEvents_multipleFilters() {
-	sim := netsim.NewSimulation(nil, nil)
+	sim := netsim.New(nil, nil)
 	defer sim.Close()
 
 	msgs := sim.PeerEvents(
