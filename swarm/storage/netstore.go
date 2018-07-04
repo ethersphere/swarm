@@ -257,11 +257,11 @@ func (f *fetcher) deliver(ctx context.Context, ch Chunk) {
 
 // SyncNetStore is a wrapped NetStore with SyncDB functionality
 type SyncNetStore struct {
-	store SyncDB
+	store SyncChunkStore
 	*NetStore
 }
 
-func NewSyncNetStore(store SyncDB, newFetchFunc NewFetchFunc) (*SyncNetStore, error) {
+func NewSyncNetStore(store SyncChunkStore, newFetchFunc NewFetchFunc) (*SyncNetStore, error) {
 	netStore, err := NewNetStore(store, newFetchFunc)
 	if err != nil {
 		return nil, err

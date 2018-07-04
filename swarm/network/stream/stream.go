@@ -71,7 +71,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(addr *network.BzzAddr, delivery *Delivery, syncDB storage.SyncDB, intervalsStore state.Store, options *RegistryOptions) *Registry {
+func NewRegistry(addr *network.BzzAddr, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -96,7 +96,7 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, syncDB storage.SyncD
 	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
 		return NewSwarmSyncerClient(p, delivery.chunkStore, NewStream(swarmChunkServerStreamName, t, live))
 	})
-	RegisterSwarmSyncerServer(streamer, syncDB)
+	RegisterSwarmSyncerServer(streamer, syncChunkStore)
 	RegisterSwarmSyncerClient(streamer, delivery.chunkStore)
 
 	if options.DoSync {

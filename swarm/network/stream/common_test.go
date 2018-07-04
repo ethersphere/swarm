@@ -113,7 +113,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 	if stores[id] == nil {
 		panic("NIL STORE")
 	}
-	netStore, err := storage.NewSyncNetStore(stores[id].(storage.SyncDB), nil)
+	netStore, err := storage.NewSyncNetStore(stores[id].(storage.SyncChunkStore), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func NewStreamerService(ctx *adapters.ServiceContext) (node.Service, error) {
 
 	APINetStore := netStore
 	if useAPIFakeFetchFunc != useFakeFetchFunc {
-		APINetStore, err = storage.NewSyncNetStore(stores[id].(storage.SyncDB), nil)
+		APINetStore, err = storage.NewSyncNetStore(stores[id].(storage.SyncChunkStore), nil)
 		if err != nil {
 			return nil, err
 		}

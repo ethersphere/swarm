@@ -142,7 +142,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 		if i < nodes-1 {
 			hashCounts[i] = hashCounts[i+1]
 		}
-		stores[sim.IDs[i]].(storage.SyncDB).Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
+		stores[sim.IDs[i]].(storage.SyncChunkStore).Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
 			hashes[i] = append(hashes[i], addr)
 			totalHashes++
 			hashCounts[i]++
