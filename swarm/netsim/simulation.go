@@ -19,7 +19,6 @@ package netsim
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 	"time"
@@ -117,51 +116,6 @@ func New(services map[string]ServiceFunc, opts *SimulationOptions) (s *Simulatio
 		s.initHTTPServer(opts)
 	}
 	return s
-}
-
-func (s *Simulation) initHTTPServer(opts *SimulationOptions) {
-	//assign default port if nothing provided
-	if opts.HTTPSimPort == "" {
-		opts.HTTPSimPort = DefaultHTTPSimPort
-	}
-	log.Info(fmt.Sprintf("Initializing simulation server on 0.0.0.0:%s...", opts.HTTPSimPort))
-	//initialize the HTTP server
-	s.handler = simulations.NewServer(s.Net)
-	s.runC = make(chan struct{})
-	//add swarm specific routes to the HTTP server
-	s.addSimulationRoutes()
-	s.httpSrv = &http.Server{
-		Addr:    fmt.Sprintf(":%s", opts.HTTPSimPort),
-		Handler: s.handler,
-	}
-}
-
-func (s *Simulation) startHTTPServer(ctx context.Context) error {
-	//start the HTTP server
-	if s.httpSrv != nil {
-		go s.httpSrv.ListenAndServe()
-		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
-		//wait for the frontend to connect
-		select {
-		case <-s.runC:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		log.Info("Received signal from frontend - starting simulation run.")
-	}
-	return nil
-}
-
-//register additional HTTP routes
-func (s *Simulation) addSimulationRoutes() {
-	s.handler.POST("/runsim", s.RunSimulation)
-}
-
-// StartNetwork starts all nodes in the network
-func (s *Simulation) RunSimulation(w http.ResponseWriter, req *http.Request) {
-	log.Debug("RunSimulation endpoint running")
-	s.runC <- struct{}{}
-	w.WriteHeader(http.StatusOK)
 }
 
 // RunFunc is the function that will be called
