@@ -232,7 +232,7 @@ func (s *Simulation) PivotNodeID() (id *discover.NodeID) {
 
 // StopNode stops a node by NodeID.
 func (s *Simulation) StopNode(id discover.NodeID) (err error) {
-	return s.Net.GetNode(id).Stop()
+	return s.Net.Stop(id)
 }
 
 // StopRandomNode stops a random node.
@@ -241,7 +241,7 @@ func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
 	if n == nil {
 		return id, ErrNodeNotFound
 	}
-	return n.ID, n.Stop()
+	return n.ID, s.Net.Stop(n.ID)
 }
 
 // StopRandomNodes stops random nodes.

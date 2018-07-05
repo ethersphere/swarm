@@ -45,7 +45,7 @@ func (s *Simulation) SetNodeItem(id discover.NodeID, key interface{}, value inte
 
 // NodeItems returns a map of items from all nodes that are all set under the
 // same BucketKey.
-func (s *Simulation) NodeItems(key interface{}) (values map[discover.NodeID]interface{}) {
+func (s *Simulation) NodesItems(key interface{}) (values map[discover.NodeID]interface{}) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
