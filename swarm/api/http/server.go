@@ -77,18 +77,41 @@ var rootPaths = []string{
 	"/robots.txt",
 }
 
-// ServerConfig is the basic configuration needed for the HTTP server and also
-// includes CORS settings.
-type ServerConfig struct {
-	Addr       string
-	CorsString string
+func NewServer(api *api.API, corsString string) *Server {
+	var allowedOrigins []string
+	for _, domain := range strings.Split(corsString, ",") {
+		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
+	}
+	c := cors.New(cors.Options{
+		AllowedOrigins: allowedOrigins,
+		AllowedMethods: []string{"POST", "GET", "DELETE", "PATCH", "PUT"},
+		MaxAge:         600,
+		AllowedHeaders: []string{"*"},
+	})
+
+	mux := http.NewServeMux()
+	server := &Server{api: api}
+	mux.HandleFunc("/bzz:/", server.ProcessRequest(true, server.HandleBzz))
+	mux.HandleFunc("/bzz-raw:/", server.ProcessRequest(true, server.HandleBzzRaw))
+	mux.HandleFunc("/bzz-immutable:/", server.ProcessRequest(true, server.HandleBzzImmutable))
+	mux.HandleFunc("/bzz-hash:/", server.ProcessRequest(true, server.HandleBzzHash))
+	mux.HandleFunc("/bzz-list:/", server.ProcessRequest(true, server.HandleBzzList))
+	mux.HandleFunc("/bzz-resource:/", server.ProcessRequest(true, server.HandleBzzResource))
+
+	mux.HandleFunc("/", server.ProcessRequest(false, server.HandleRootPaths))
+	mux.HandleFunc("/robots.txt", server.ProcessRequest(false, server.HandleRootPaths))
+	mux.HandleFunc("/favicon.ico", server.ProcessRequest(false, server.HandleRootPaths))
+
+	server.Handler = c.Handler(mux)
+	return server
 }
 
-func NewServer(api *api.API) *Server {
-	return &Server{api}
+func (s *Server) ListenAndServe(addr string) error {
+	return http.ListenAndServe(addr, s)
 }
 
 type Server struct {
+	http.Handler
 	api *api.API
 }
 
@@ -97,11 +120,10 @@ type Request struct {
 	http.Request
 
 	uri       *api.URI
-	ruid      string // request unique id
-	encrypted bool   //indicates whether the request is flagged as encrypted
+	encrypted bool //indicates whether the request is flagged as encrypted
 }
 
-func (r *Request) ruidContext() string {
+func (r *Request) ruid() string {
 	v, ok := r.Context().Value(RequestContextKey).(RequestContext)
 	if ok {
 		return v.ruid
@@ -140,35 +162,6 @@ type RequestContext struct {
 // electron (chromium) api for registering bzz url scheme handlers:
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
-// starts up http server
-func StartHTTPServer(api *api.API, config *ServerConfig) {
-	var allowedOrigins []string
-	for _, domain := range strings.Split(config.CorsString, ",") {
-		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
-	}
-	c := cors.New(cors.Options{
-		AllowedOrigins: allowedOrigins,
-		AllowedMethods: []string{"POST", "GET", "DELETE", "PATCH", "PUT"},
-		MaxAge:         600,
-		AllowedHeaders: []string{"*"},
-	})
-
-	mux := http.NewServeMux()
-	server := NewServer(api)
-	mux.HandleFunc("/bzz:/", server.ProcessRequest(true, server.HandleBzz))
-	mux.HandleFunc("/bzz-raw:/", server.ProcessRequest(true, server.HandleBzzRaw))
-	mux.HandleFunc("/bzz-immutable:/", server.ProcessRequest(true, server.HandleBzzImmutable))
-	mux.HandleFunc("/bzz-hash:/", server.ProcessRequest(true, server.HandleBzzHash))
-	mux.HandleFunc("/bzz-list:/", server.ProcessRequest(true, server.HandleBzzList))
-	mux.HandleFunc("/bzz-resource:/", server.ProcessRequest(true, server.HandleBzzResource))
-
-	mux.HandleFunc("/", server.ProcessRequest(false, server.HandleRootPaths))
-	mux.HandleFunc("/robots.txt", server.ProcessRequest(false, server.HandleRootPaths))
-	mux.HandleFunc("/favicon.ico", server.ProcessRequest(false, server.HandleRootPaths))
-
-	go http.ListenAndServe(config.Addr, c.Handler(mux))
-}
-
 func (s *Server) ProcessRequest(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
@@ -192,7 +185,7 @@ func (s *Server) ProcessRequest(parseBzzUri bool, h func(http.ResponseWriter, *R
 		}
 		ctx := context.WithValue(r.Context(), RequestContextKey, requestContext)
 		r = r.WithContext(ctx)
-		req := &Request{Request: *r, ruid: requestContext.ruid}
+		req := &Request{Request: *r}
 
 		h(w, req) // call original
 		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
@@ -322,7 +315,7 @@ func (s *Server) HandleBzzResource(w http.ResponseWriter, r *Request) {
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage address as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
-	log.Debug("handle.post.raw", "ruid", r.ruidContext())
+	log.Debug("handle.post.raw", "ruid", r.ruid())
 
 	postRawCount.Inc(1)
 
@@ -356,7 +349,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	log.Debug("stored content", "ruid", r.ruidContext(), "key", addr)
+	log.Debug("stored content", "ruid", r.ruid(), "key", addr)
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
@@ -494,7 +487,7 @@ func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, bounda
 }
 
 func (s *Server) APIhandleDirectUpload(r *Request, mw *api.ManifestWriter) error {
-	log.Debug("handle.direct.upload", "ruid", r.ruidContext())
+	log.Debug("handle.direct.upload", "ruid", r.ruid())
 	key, err := mw.AddEntry(r.Context(), r.Body, &api.ManifestEntry{
 		Path:        r.uriContext().Path,
 		ContentType: r.Header.Get("Content-Type"),
@@ -505,7 +498,7 @@ func (s *Server) APIhandleDirectUpload(r *Request, mw *api.ManifestWriter) error
 	if err != nil {
 		return err
 	}
-	log.Debug("stored content", "ruid", r.ruidContext(), "key", key)
+	log.Debug("stored content", "ruid", r.ruid(), "key", key)
 	return nil
 }
 

@@ -36,7 +36,7 @@ type htmlListData struct {
 // func RenderIndex(params ... ){
 // 	Render("index",params)
 // }
-var templateMap map[string]*template.Template
+var templateMap = make(map[string]*template.Template)
 
 func init() {
 	InitTemplates()
