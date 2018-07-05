@@ -63,14 +63,28 @@ func AddNodeWithMsgEvents(enable bool) AddNodeOption {
 	}
 }
 
+// AddNodeWithService specifies a service that should be
+// started on a node. This option can be repeated as variadic
+// argument toe AddNode and other add node related methods.
+// If AddNodeWithService is not specified, all services will be started.
+func AddNodeWithService(serviceName string) AddNodeOption {
+	return func(o *adapters.NodeConfig) {
+		o.Services = append(o.Services, serviceName)
+	}
+}
+
 // AddNode creates a new node with random configuration,
 // applies provided options to the config and adds the node to network.
+// By default all services will be started on a node. If one or more
+// AddNodeWithService option are provided, only specified services will be started.
 func (s *Simulation) AddNode(opts ...AddNodeOption) (id discover.NodeID, err error) {
 	conf := adapters.RandomNodeConfig()
 	for _, o := range opts {
 		o(conf)
 	}
-	conf.Services = s.serviceNames
+	if len(conf.Services) == 0 {
+		conf.Services = s.serviceNames
+	}
 	node, err := s.Net.NewNodeWithConfig(conf)
 	if err != nil {
 		return id, err
