@@ -45,19 +45,14 @@ var (
 type Delivery struct {
 	chunkStore storage.ChunkStore
 	overlay    network.Overlay
-	receiveC   chan *ChunkDeliveryMsg
 	getPeer    func(discover.NodeID) *Peer
 }
 
 func NewDelivery(overlay network.Overlay, chunkStore storage.ChunkStore) *Delivery {
-	d := &Delivery{
+	return &Delivery{
 		chunkStore: chunkStore,
 		overlay:    overlay,
-		receiveC:   make(chan *ChunkDeliveryMsg, deliveryCap),
 	}
-
-	go d.processReceivedChunks()
-	return d
 }
 
 // SwarmChunkServer implements Server
@@ -189,24 +184,17 @@ type ChunkDeliveryMsg struct {
 }
 
 func (d *Delivery) handleChunkDeliveryMsg(sp *Peer, req *ChunkDeliveryMsg) error {
-	req.peer = sp
-	d.receiveC <- req
-	return nil
-}
-
-func (d *Delivery) processReceivedChunks() {
-	for req := range d.receiveC {
-		processReceivedChunksCount.Inc(1)
-
-		go func(msg *ChunkDeliveryMsg) {
-			err := d.chunkStore.Put(context.TODO(), storage.NewChunk(msg.Addr, msg.SData))
-			if err != nil {
-				if err == storage.ErrChunkInvalid {
-					msg.peer.Drop(err)
-				}
+	processReceivedChunksCount.Inc(1)
+	go func() {
+		req.peer = sp
+		err := d.chunkStore.Put(context.TODO(), storage.NewChunk(req.Addr, req.SData))
+		if err != nil {
+			if err == storage.ErrChunkInvalid {
+				req.peer.Drop(err)
 			}
-		}(req)
-	}
+		}
+	}()
+	return nil
 }
 
 // RequestFromPeers sends a chunk retrieve request to
