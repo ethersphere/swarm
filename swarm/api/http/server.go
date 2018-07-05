@@ -96,13 +96,43 @@ type Server struct {
 type Request struct {
 	http.Request
 
-	uri  *api.URI
-	ruid string // request unique id
+	uri       *api.URI
+	ruid      string // request unique id
+	encrypted bool   //indicates whether the request is flagged as encrypted
 }
 
+func (r *Request) ruidContext() string {
+	v, ok := r.Context().Value(RequestContextKey).(RequestContext)
+	if ok {
+		return v.ruid
+	}
+	return "ctxRuidErr"
+}
+
+func (r *Request) uriContext() *api.URI {
+	v, ok := r.Context().Value(RequestContextKey).(RequestContext)
+	if ok {
+		return v.uri
+	}
+	return nil
+}
+
+func (r *Request) encryptedContext() bool {
+	v, ok := r.Context().Value(RequestContextKey).(RequestContext)
+	if ok {
+		return v.encrypted
+	}
+	return false
+}
+
+type ContextKey string
+
+const RequestContextKey = ContextKey("SwarmHTTPRequestContext")
+
 type RequestContext struct {
-	uri  *api.URI
-	ruid string // request unique id
+	uri       *api.URI
+	ruid      string // request unique id
+	encrypted bool   //indicates whether the request is flagged as encrypted
 }
 
 // browser API for registering bzz url scheme handlers:
@@ -134,34 +164,35 @@ func StartHTTPServer(api *api.API, config *ServerConfig) {
 
 	mux.HandleFunc("/", server.ProcessRequest(false, server.HandleRootPaths))
 	mux.HandleFunc("/robots.txt", server.ProcessRequest(false, server.HandleRootPaths))
+	mux.HandleFunc("/favicon.ico", server.ProcessRequest(false, server.HandleRootPaths))
 
 	go http.ListenAndServe(config.Addr, c.Handler(mux))
 }
-
-type contextKey int
 
 func (s *Server) ProcessRequest(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
 
-		req := &Request{Request: *r, ruid: uuid.New()[:8]}
-		// newCtx := context.WithValue(r.Context(), ruidKey, uuid.New()[:8])
+		requestContext := &RequestContext{ruid: uuid.New()[:8]}
 
 		metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
-		log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
+		log.Info("serving request", "ruid", requestContext.ruid, "method", r.Method, "url", r.RequestURI)
 
 		// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
 		w := newLoggingResponseWriter(rw)
 		if parseBzzUri {
 			uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
 			if err != nil {
-				Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
+				// Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
 				return
 			}
-			req.uri = uri
 
-			log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri.Addr", req.uri.Addr, "uri.Path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
+			requestContext.uri = uri
+			log.Debug("parsed request path", "ruid", requestContext.ruid, "method", r.Method, "uri.Addr", requestContext.uri.Addr, "uri.Path", requestContext.uri.Path, "uri.Scheme", requestContext.uri.Scheme)
 		}
+		ctx := context.WithValue(r.Context(), RequestContextKey, requestContext)
+		r = r.WithContext(ctx)
+		req := &Request{Request: *r, ruid: requestContext.ruid}
 
 		h(w, req) // call original
 		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
@@ -219,7 +250,7 @@ func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
 		s.HandlePostFiles(w, r)
 	case "DELETE":
 		log.Debug("handleBzzDelete")
-		s.api.HandleDelete(w, r)
+		s.HandleDelete(w, r)
 	default:
 		//method not allowed
 	}
@@ -291,7 +322,7 @@ func (s *Server) HandleBzzResource(w http.ResponseWriter, r *Request) {
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage address as a text/plain response
 func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
-	log.Debug("handle.post.raw", "ruid", r.ruid)
+	log.Debug("handle.post.raw", "ruid", r.ruidContext())
 
 	postRawCount.Inc(1)
 
@@ -306,7 +337,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	if r.uri.Addr != "" && r.uri.Addr != "encrypt" {
+	if r.uri.Addr != "" && r.uriContext().Addr != "encrypt" {
 		postRawFail.Inc(1)
 		Respond(w, r, "raw POST request addr can only be empty or \"encrypt\"", http.StatusBadRequest)
 		return
@@ -325,7 +356,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	log.Debug("stored content", "ruid", r.ruid, "key", addr)
+	log.Debug("stored content", "ruid", r.ruidContext(), "key", addr)
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
@@ -382,7 +413,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 			return s.handleMultipartUpload(r.Context(), r, params["boundary"], mw)
 
 		default:
-			return s.handleDirectUpload(r, mw)
+			return s.APIhandleDirectUpload(r, mw)
 		}
 	})
 	if err != nil {
@@ -462,47 +493,33 @@ func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, bounda
 	}
 }
 
-func (s *Server) APIhandleDirectUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
-	log.Debug("handle.direct.upload", "ruid", req.ruid)
-	key, err := mw.AddEntry(ctx, req.Body, &api.ManifestEntry{
-		Path:        req.uri.Path,
-		ContentType: req.Header.Get("Content-Type"),
+func (s *Server) APIhandleDirectUpload(r *Request, mw *api.ManifestWriter) error {
+	log.Debug("handle.direct.upload", "ruid", r.ruidContext())
+	key, err := mw.AddEntry(r.Context(), r.Body, &api.ManifestEntry{
+		Path:        r.uriContext().Path,
+		ContentType: r.Header.Get("Content-Type"),
 		Mode:        0644,
-		Size:        req.ContentLength,
+		Size:        r.ContentLength,
 		ModTime:     time.Now(),
 	})
 	if err != nil {
 		return err
 	}
-	log.Debug("stored content", "ruid", req.ruid, "key", key)
+	log.Debug("stored content", "ruid", r.ruidContext(), "key", key)
 	return nil
 }
 
 // HandleDelete handles a DELETE request to bzz:/<manifest>/<path>, removes
 // <path> from <manifest> and returns the resulting manifest hash as a
 // text/plain response
-func (s *Server) APIHandleDelete(w http.ResponseWriter, r *Request) {
+func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.delete", "ruid", r.ruid)
 
 	deleteCount.Inc(1)
-	key, err := s.api.ResolveURI(r.Context(), r.uri)
+	newKey, err := s.api.Delete(r.Context(), r.uriContext().Addr, r.uriContext().Path)
 	if err != nil {
-		deleteFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
-		return
+		// do something
 	}
-
-	newKey, err := s.api.UpdateManifest(r.Context(), key, func(mw *api.ManifestWriter) error {
-		log.Debug(fmt.Sprintf("removing %s from manifest %s", r.uri.Path, key.Log()), "ruid", r.ruid)
-		return mw.RemoveEntry(r.uri.Path)
-	})
-
-	if err != nil {
-		deleteFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot update manifest: %s", err), http.StatusInternalServerError)
-		return
-	}
-
 	w.Header().Set("Content-Type", "text/plain")
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newKey)
@@ -834,7 +851,7 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	if err != nil {
 		Respond(w, r, "encountered an error downloading directory as tarball: %s", http.StatusInternalServerError)
 	}
-
+	io.Copy(w, rdr)
 	// log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", addr)
 }
 

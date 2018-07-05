@@ -35,7 +35,7 @@ import (
 )
 
 //templateMap holds a mapping of an HTTP error code to a template
-var templateMap map[int]*template.Template
+// var templateMap map[int]*template.Template
 var caseErrors []CaseError
 
 //metrics variables
@@ -67,22 +67,22 @@ func init() {
 
 func initErrHandling() {
 	//pages are saved as strings - get these strings
-	genErrPage := GetGenericErrorPage()
-	notFoundPage := GetNotFoundErrorPage()
-	multipleChoicesPage := GetMultipleChoicesErrorPage()
-	//map the codes to the available pages
-	tnames := map[int]string{
-		0: genErrPage, //default
-		http.StatusBadRequest:          genErrPage,
-		http.StatusNotFound:            notFoundPage,
-		http.StatusMultipleChoices:     multipleChoicesPage,
-		http.StatusInternalServerError: genErrPage,
-	}
-	templateMap = make(map[int]*template.Template)
-	for code, tname := range tnames {
-		//assign formatted HTML to the code
-		templateMap[code] = template.Must(template.New(fmt.Sprintf("%d", code)).Parse(tname))
-	}
+	// genErrPage := GetGenericErrorPage()
+	// notFoundPage := GetNotFoundErrorPage()
+	// multipleChoicesPage := GetMultipleChoicesErrorPage()
+	// //map the codes to the available pages
+	// // tnames := map[int]string{
+	// // 	0: genErrPage, //default
+	// // 	http.StatusBadRequest:          genErrPage,
+	// // 	http.StatusNotFound:            notFoundPage,
+	// // 	http.StatusMultipleChoices:     multipleChoicesPage,
+	// // 	http.StatusInternalServerError: genErrPage,
+	// // }
+	// templateMap = make(map[string]*template.Template)
+	// for code, tname := range tnames {
+	// 	//assign formatted HTML to the code
+	// 	// templateMap[code] = template.Must(template.New(fmt.Sprintf("%d", code)).Parse(tname))
+	// }
 
 	caseErrors = []CaseError{
 		{
@@ -137,54 +137,75 @@ func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestL
 	Respond(w, req, msg, http.StatusMultipleChoices)
 }
 
+func RespondError(w http.ResponseWriter, req *Request, msg string, code int) {
+
+}
+
+func RespondJSON(w http.ResponseWriter, req *Request, msg string, code int) {
+
+}
+
 //Respond is used to show an HTML page to a client.
 //If there is an `Accept` header of `application/json`, JSON will be returned instead
 //The function just takes a string message which will be displayed in the error page.
 //The code is used to evaluate which template will be displayed
 //(and return the correct HTTP status code)
-func Respond(w http.ResponseWriter, req *Request, msg string, code int) {
-	additionalMessage := ValidateCaseErrors(req)
-	switch code {
-	case http.StatusInternalServerError:
-		log.Output(msg, log.LvlError, l.CallDepth, "ruid", req.ruid, "code", code)
-	case http.StatusMultipleChoices:
-		log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", req.ruid, "code", code)
-		listURI := api.URI{
-			Scheme: "bzz-list",
-			Addr:   req.uri.Addr,
-			Path:   req.uri.Path,
-		}
-		additionalMessage = fmt.Sprintf(`<a href="/%s">multiple choices</a>`, listURI.String())
-	default:
-		log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", req.ruid, "code", code)
-	}
-
-	if code >= 400 {
-		w.Header().Del("Cache-Control") //avoid sending cache headers for errors!
-		w.Header().Del("ETag")
-	}
-
-	respond(w, &req.Request, &ResponseParams{
+func Respond(w http.ResponseWriter, r *Request, msg string, code int) {
+	log.Output(msg, log.LvlError, l.CallDepth, "ruid", r.ruid, "code", code)
+	additionalMessage := ValidateCaseErrors(r)
+	params := &ResponseParams{
 		Code:      code,
 		Msg:       msg,
 		Details:   template.HTML(additionalMessage),
 		Timestamp: time.Now().Format(time.RFC1123),
-		template:  getTemplate(code),
-	})
+	}
+
+	if r.Header.Get("Accept") == "application/json" {
+		respondJSON(w, r, params)
+	} else {
+		respondHTML(w, r, params)
+	}
+
+	// switch code {
+	// case http.StatusInternalServerError:
+	// case http.StatusMultipleChoices:
+	// 	log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", r.ruid, "code", code)
+	// 	listURI := api.URI{
+	// 		Scheme: "bzz-list",
+	// 		Addr:   r.uri.Addr,
+	// 		Path:   r.uri.Path,
+	// 	}
+	// 	additionalMessage = fmt.Sprintf(`<a href="/%s">multiple choices</a>`, listURI.String())
+	// default:
+	// 	log.Output(msg, log.LvlDebug, l.CallDepth, "ruid", r.ruid, "code", code)
+	// }
+
+	// if code >= 400 {
+	// 	w.Header().Del("Cache-Control") //avoid sending cache headers for errors!
+	// 	w.Header().Del("ETag")
+	// }
+
+	// respond(w, &req.Request, &ResponseParams{
+	// 	Code:      code,
+	// 	Msg:       msg,
+	// 	Details:   template.HTML(additionalMessage),
+	// 	Timestamp: time.Now().Format(time.RFC1123),
+	// 	template:  getTemplate(code),
+	// })
 }
 
 //evaluate if client accepts html or json response
-func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
-	w.WriteHeader(params.Code)
-	if r.Header.Get("Accept") == "application/json" {
-		respondJSON(w, params)
-	} else {
-		respondHTML(w, params)
-	}
-}
+// func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
+// 	w.WriteHeader(params.Code)
+// 	if r.Header.Get("Accept") == "application/json" {
+// 		respondJSON(w, params)
+// 	} else {
+// 		respondHTML(w, params)
+// 	}
+// }
 
 //return a HTML page
-func respondHTML(w http.ResponseWriter, params *ResponseParams) {
+func respondHTML(w http.ResponseWriter, r *Request, params *ResponseParams) {
 	htmlCounter.Inc(1)
 	err := params.template.Execute(w, params)
 	if err != nil {
@@ -193,16 +214,8 @@ func respondHTML(w http.ResponseWriter, params *ResponseParams) {
 }
 
 //return JSON
-func respondJSON(w http.ResponseWriter, params *ResponseParams) {
+func respondJSON(w http.ResponseWriter, r *Request, params *ResponseParams) {
 	jsonCounter.Inc(1)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)
-}
-
-//get the HTML template for a given code
-func getTemplate(code int) *template.Template {
-	if val, tmpl := templateMap[code]; tmpl {
-		return val
-	}
-	return templateMap[0]
 }

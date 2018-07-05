@@ -467,6 +467,23 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 	return
 }
 
+func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
+	// log.Debug("handle.delete", "ruid", r.ruid)
+	key, err := a.Resolve(ctx, addr)
+	if err != nil {
+		return nil, err
+	}
+	newKey, err := a.UpdateManifest(ctx, key, func(mw *ManifestWriter) error {
+		log.Debug(fmt.Sprintf("removing %s from manifest %s", path, key.Log()))
+		return mw.RemoveEntry(path)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return newKey, nil
+}
+
 // GetDirectoryTar fetches a requested directory as a tarstream
 // it returns an io.Reader and an error
 func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.Reader, error) {
@@ -483,7 +500,6 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.Reader, error) 
 		return nil, err
 	}
 
-	isEncrypted := false
 	piper, pipew := io.Pipe()
 	tw := tar.NewWriter(pipew)
 	defer tw.Close()
@@ -497,8 +513,7 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.Reader, error) 
 		}
 
 		// retrieve the entry's key and size
-		reader, encrypted := a.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
-		isEncrypted = encrypted
+		reader, _ := a.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
 		size, err := reader.Size(nil)
 		if err != nil {
 			return err
