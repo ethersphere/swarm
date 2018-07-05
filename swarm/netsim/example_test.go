@@ -50,7 +50,7 @@ func ExampleSimulation_WaitTillHealthy() {
 			b.Store(netsim.BucketKeyKademlia, kad)
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
-	}, nil)
+	})
 	defer sim.Close()
 
 	_, err := sim.AddNodesAndConnectRing(10)
@@ -76,7 +76,7 @@ func ExampleSimulation_WaitTillHealthy() {
 
 // Watch all peer events in the simulation network, buy receiving from a channel.
 func ExampleSimulation_PeerEvents() {
-	sim := netsim.New(nil, nil)
+	sim := netsim.New(nil)
 	defer sim.Close()
 
 	events := sim.PeerEvents(context.Background(), sim.NodeIDs())
@@ -94,7 +94,7 @@ func ExampleSimulation_PeerEvents() {
 
 // Detect when a nodes drop a peer.
 func ExampleSimulation_PeerEvents_disconnections() {
-	sim := netsim.New(nil, nil)
+	sim := netsim.New(nil)
 	defer sim.Close()
 
 	disconnections := sim.PeerEvents(
@@ -117,7 +117,7 @@ func ExampleSimulation_PeerEvents_disconnections() {
 // Watch multiple types of events or messages. In this case, they differ only
 // by MsgCode, but filters can be set for different types or protocols, too.
 func ExampleSimulation_PeerEvents_multipleFilters() {
-	sim := netsim.New(nil, nil)
+	sim := netsim.New(nil)
 	defer sim.Close()
 
 	msgs := sim.PeerEvents(

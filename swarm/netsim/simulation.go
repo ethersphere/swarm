@@ -36,11 +36,6 @@ var (
 	ErrNoPivotNode  = errors.New("no pivot node set")
 )
 
-// Package defaults.
-var (
-	DefaultHTTPSimPort = "8888"
-)
-
 // Simulation provides methods on network, nodes and services
 // to manage them.
 type Simulation struct {
@@ -61,14 +56,6 @@ type Simulation struct {
 	runC    chan struct{}       //channel where frontend signals it is ready
 }
 
-//SimulationOptions defines options for the Simulation
-//Currently only defines options to allow to attach a
-//HTTP server to the simulation (i.e. for sim frontend visualization)
-type SimulationOptions struct {
-	WithHTTP    bool   //set to true to attach a HTTP server
-	HTTPSimPort string //string defining the HTTP server port
-}
-
 // ServiceFunc is used in New to declare new service constructor.
 // The first argument provides ServiceContext from the adapters package
 // giving for example the access to NodeID. Second argument is the sync.Map
@@ -79,7 +66,7 @@ type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Se
 
 // New creates a new Simulation instance with new
 // simulations.Network initialized with provided services.
-func New(services map[string]ServiceFunc, opts *SimulationOptions) (s *Simulation) {
+func New(services map[string]ServiceFunc) (s *Simulation) {
 	s = &Simulation{
 		buckets: make(map[discover.NodeID]*sync.Map),
 		done:    make(chan struct{}),
@@ -109,12 +96,11 @@ func New(services map[string]ServiceFunc, opts *SimulationOptions) (s *Simulatio
 		&simulations.NetworkConfig{ID: "0"},
 	)
 
-	if opts == nil {
-		opts = new(SimulationOptions)
-	}
-	if opts.WithHTTP {
-		s.initHTTPServer(opts)
-	}
+	return s
+}
+
+func (s *Simulation) WithServer(ctx context.Context, port string) *Simulation {
+	s.startHTTPServer(port)
 	return s
 }
 
@@ -135,13 +121,17 @@ func (s *Simulation) Run(ctx context.Context, f RunFunc) (r Result) {
 	//init the server and start it
 	start := time.Now()
 	if s.httpSrv != nil {
-		err := s.startHTTPServer(ctx)
-		if err != nil {
+		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
+		//wait for the frontend to connect
+		select {
+		case <-s.runC:
+		case <-ctx.Done():
 			return Result{
 				Duration: time.Since(start),
-				Error:    err,
+				Error:    ctx.Err(),
 			}
 		}
+		log.Info("Received signal from frontend - starting simulation run.")
 	}
 	errc := make(chan error)
 	quit := make(chan struct{})

@@ -197,7 +197,7 @@ func TestUploadSnapshot(t *testing.T) {
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
-	}, nil)
+	})
 	defer s.Close()
 
 	nodeCount := 16

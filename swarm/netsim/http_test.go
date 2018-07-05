@@ -31,16 +31,16 @@ import (
 
 func TestSimulationWithHTTPServer(t *testing.T) {
 	log.Debug("Init simulation")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
 	sim := New(
 		map[string]ServiceFunc{
 			"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 				return newNoopService(), nil, nil
 			},
-		},
-		&SimulationOptions{
-			WithHTTP: true,
-		},
-	)
+		}).WithServer(ctx, DefaultHTTPSimPort)
 	defer sim.Close()
 	log.Debug("Done.")
 
@@ -48,9 +48,6 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
-	defer cancel()
 
 	log.Debug("Starting sim round and let it time out...")
 	//first test that running without sending to the channel will actually
