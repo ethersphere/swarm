@@ -264,10 +264,6 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		o = new(testSwarmNetworkOptions)
 	}
 
-	//provide empty (default options) to the simulation
-	//(no HTTP server for this simulation)
-	so := &netsim.SimulationOptions{}
-
 	sim := netsim.New(map[string]netsim.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
@@ -301,7 +297,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			log.Info("new swarm", "bzzKey", config.BzzKey, "baseAddr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()))
 			return swarm, cleanup, nil
 		},
-	}, so)
+	})
 	defer sim.Close()
 
 	ctx := context.Background()
