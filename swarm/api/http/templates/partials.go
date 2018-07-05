@@ -1,7 +1,17 @@
 package templates
 
+var TemplatesMap = make(map[string]string)
+
+func init() {
+	TemplatesMap["bzz-list-response-template"] = bzzListResponse
+	TemplatesMap["error-template"] = errorResponse
+	TemplatesMap["landing-template"] = landing
+	TemplatesMap["multiple-choice-template"] = multipleChoice
+	TemplatesMap["root-template"] = root
+	TemplatesMap["base-template"] = baseTemplate
+}
+
 const bzzListResponse = `{{ define "content" }}
- 
 <h1>Swarm index of {{ .URI }}</h1>
  <hr>
  <table>
@@ -133,14 +143,10 @@ const baseTemplate = `<html>
   <meta http-equiv="X-UA-Compatible" ww="chrome=1"/>
   <meta name="description" content="{{.Description}}"/>
   <link rel="stylesheet" type="text/css" href="/style.css"/>
-  
   <link rel="shortcut icon" type="image/x-icon" href="{{.Favicon}}">
-
 </head>
-
 <body>
   {{ template "content" . }}
 </body>
-
 </html>
 `

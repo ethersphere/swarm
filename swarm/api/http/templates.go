@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/http/templates"
 	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
@@ -45,31 +46,29 @@ func init() {
 // InitTemplates initializes predefined templates to respond with
 func InitTemplates() {
 	//error page
-	errTmpl := template.Must(template.New("error").ParseFiles(
-		"templates/base.tmpl",
-		"templates/partials/error.tmpl")) // Parse template file.
+	errTmpl := template.Must(template.New("error").Parse(
+		strings.Join([]string{templates.TemplatesMap["base-template"],
+			templates.TemplatesMap["error-template"]}, "\n")))
 
 	templateMap["error"] = errTmpl
 
-	multipleChoiceTmpl := template.Must(template.New("multipleChoice").ParseFiles(
-		"templates/base.tmpl",
-		"templates/partials/multiple_choice.tmpl")) // Parse template file.
+	multipleChoiceTmpl := template.Must(template.New("multipleChoice").Parse(
+		strings.Join([]string{templates.TemplatesMap["base-template"],
+			templates.TemplatesMap["multiple-choice-template"]}, "\n"))) // Parse template file.
 
 	templateMap["multipleChoice"] = multipleChoiceTmpl
 
-	rootTmpl := template.Must(template.New("root").ParseFiles(
-		"templates/base.tmpl",
-		"templates/partials/root.tmpl")) // Parse template file.
+	rootTmpl := template.Must(template.New("root").Parse(
+		strings.Join([]string{templates.TemplatesMap["base-template"],
+			templates.TemplatesMap["root-template"]}, "\n"))) // Parse template file.
 
 	templateMap["root"] = rootTmpl
 
-	bzzList := template.Must(template.New("bzz_list").ParseFiles(
-		"templates/base.tmpl",
-		"templates/partials/bzz_list.tmpl")) // Parse template file.
+	bzzList := template.Must(template.New("bzzList").Funcs(template.FuncMap{"basename": path.Base}).Parse(
+		strings.Join([]string{templates.TemplatesMap["base-template"],
+			templates.TemplatesMap["bzz-list-response-template"]}, "\n"))) // Parse template file.
 
-	templateMap["bzz_list"] = bzzList
-
-	//   t.Execute(w, user) // merge.
+	templateMap["bzz-list"] = bzzList
 
 }
 

@@ -56,8 +56,8 @@ type ResponseParams struct {
 //a custom error case struct that would be used to store validators and
 //additional error info to display with client responses.
 type CaseError struct {
-	Validator func(*Request) bool
-	Msg       func(*Request) string
+	Validator func(*http.Request) bool
+	Msg       func(*http.Request) string
 }
 
 //we init the error handling right on boot time, so lookup and http response is fast
@@ -86,9 +86,13 @@ func initErrHandling() {
 
 	caseErrors = []CaseError{
 		{
-			Validator: func(r *Request) bool { return r.uri != nil && r.uri.Addr != "" && strings.HasPrefix(r.uri.Addr, "0x") },
-			Msg: func(r *Request) string {
-				uriCopy := r.uri
+			Validator: func(r *http.Request) bool {
+				uri := api.GetURI(r.Context())
+				return uri != nil && uri.Addr != "" && strings.HasPrefix(uri.Addr, "0x")
+			},
+			Msg: func(r *http.Request) string {
+				uri := api.GetURI(r.Context())
+				uriCopy := uri
 				uriCopy.Addr = strings.TrimPrefix(uriCopy.Addr, "0x")
 				return fmt.Sprintf(`The requested hash seems to be prefixed with '0x'. You will be redirected to the correct URL within 5 seconds.<br/>
 			Please click <a href='%[1]s'>here</a> if your browser does not redirect you.<script>setTimeout("location.href='%[1]s';",5000);</script>`, "/"+uriCopy.String())
@@ -98,7 +102,7 @@ func initErrHandling() {
 
 //ValidateCaseErrors is a method that process the request object through certain validators
 //that assert if certain conditions are met for further information to log as an error
-func ValidateCaseErrors(r *Request) string {
+func ValidateCaseErrors(r *http.Request) string {
 	for _, err := range caseErrors {
 		if err.Validator(r) {
 			return err.Msg(r)
@@ -114,7 +118,7 @@ func ValidateCaseErrors(r *Request) string {
 //For example, if the user requests bzz:/<hash>/read and that manifest contains entries
 //"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
 //This only applies if the manifest has no default entry
-func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestList) {
+func ShowMultipleChoices(w http.ResponseWriter, req *http.Request, list api.ManifestList) {
 	msg := ""
 	if list.Entries == nil {
 		Respond(w, req, "Could not resolve", http.StatusInternalServerError)
@@ -137,11 +141,11 @@ func ShowMultipleChoices(w http.ResponseWriter, req *Request, list api.ManifestL
 	Respond(w, req, msg, http.StatusMultipleChoices)
 }
 
-func RespondError(w http.ResponseWriter, req *Request, msg string, code int) {
+func RespondError(w http.ResponseWriter, req *http.Request, msg string, code int) {
 
 }
 
-func RespondJSON(w http.ResponseWriter, req *Request, msg string, code int) {
+func RespondJSON(w http.ResponseWriter, req *http.Request, msg string, code int) {
 
 }
 
@@ -150,8 +154,9 @@ func RespondJSON(w http.ResponseWriter, req *Request, msg string, code int) {
 //The function just takes a string message which will be displayed in the error page.
 //The code is used to evaluate which template will be displayed
 //(and return the correct HTTP status code)
-func Respond(w http.ResponseWriter, r *Request, msg string, code int) {
-	log.Output(msg, log.LvlError, l.CallDepth, "ruid", r.ruid, "code", code)
+func Respond(w http.ResponseWriter, r *http.Request, msg string, code int) {
+
+	log.Output(msg, log.LvlError, l.CallDepth, "ruid", api.GetRUID(r.Context()), "code", code)
 	additionalMessage := ValidateCaseErrors(r)
 	params := &ResponseParams{
 		Code:      code,
@@ -205,7 +210,7 @@ func Respond(w http.ResponseWriter, r *Request, msg string, code int) {
 // }
 
 //return a HTML page
-func respondHTML(w http.ResponseWriter, r *Request, params *ResponseParams) {
+func respondHTML(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	htmlCounter.Inc(1)
 	err := params.template.Execute(w, params)
 	if err != nil {
@@ -214,7 +219,7 @@ func respondHTML(w http.ResponseWriter, r *Request, params *ResponseParams) {
 }
 
 //return JSON
-func respondJSON(w http.ResponseWriter, r *Request, params *ResponseParams) {
+func respondJSON(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	jsonCounter.Inc(1)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(params)
