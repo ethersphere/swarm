@@ -27,6 +27,8 @@ import (
 
 var requestedPeerID = discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
 var sourcePeerID = discover.MustHexID("2dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+var sourcePeerID2 = discover.MustHexID("3dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+var sourcePeerID3 = discover.MustHexID("4dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
 
 // mockRequester pushes every request to the requestC channel when its doRequest function is called
 type mockRequester struct {
@@ -172,25 +174,31 @@ func TestFetchUsesSourceFromContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	// start the fetcher
 	go fetcher.run(ctx, peersToSkip)
 
+	// set the source peer on the context and call the fetch function with it
 	rctx := context.WithValue(context.Background(), "source", sourcePeerID.String())
-
 	fetcher.fetch(rctx)
 
+	// fetcher should not initiate request
 	select {
 	case <-requester.requestC:
 		t.Fatalf("fetcher initiated request")
 	case <-time.After(200 * time.Millisecond):
 	}
 
+	// call fetch again with a context without source
 	rctx = context.Background()
-
 	fetcher.fetch(rctx)
 
+	// there should be exactly 1 request coming from fetcher
 	var request *Request
 	select {
 	case request = <-requester.requestC:
+		if *request.Source != sourcePeerID {
+			t.Fatalf("Expected source id %v got %v", sourcePeerID, request.Source)
+		}
 	case <-time.After(200 * time.Millisecond):
 		t.Fatalf("fetcher did not initiate request")
 	}
@@ -201,9 +209,130 @@ func TestFetchUsesSourceFromContext(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	// wait for the source peer to be added to peersToSkip
+	// source peer should be added to peersToSkip eventually
 	time.Sleep(100 * time.Millisecond)
 	if _, ok := request.PeersToSkip.Load(sourcePeerID.String()); !ok {
 		t.Fatalf("SourcePeerId not added to peersToSkip")
 	}
+}
+
+func TestSecondFetchUsesSourceFromContext(t *testing.T) {
+	requester := newMockRequester(100 * time.Millisecond)
+	addr := make([]byte, 32)
+	fetcher := NewFetcher(addr, requester.doRequest, true)
+
+	peersToSkip := &sync.Map{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// start the fetcher
+	go fetcher.run(ctx, peersToSkip)
+
+	// call fetch again with a context without source
+	rctx := context.Background()
+	fetcher.fetch(rctx)
+
+	// there should be a request coming from fetcher
+	var request *Request
+	select {
+	case request = <-requester.requestC:
+		if request.Source != nil {
+			t.Fatalf("Incorrect source peer id, expected nil got %v", request.Source)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("fetcher did not initiate request")
+	}
+
+	// set the source peer on the context and call the fetch function with it
+	rctx = context.WithValue(context.Background(), "source", sourcePeerID.String())
+	fetcher.fetch(rctx)
+
+	// there should be a request coming from fetcher
+	select {
+	case request = <-requester.requestC:
+		if *request.Source != sourcePeerID {
+			t.Fatalf("Incorrect source peer id, expected %v got %v", sourcePeerID, request.Source)
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("fetcher did not initiate request")
+	}
+
+	// source peer should be added to peersToSkip eventually
+	time.Sleep(100 * time.Millisecond)
+	if _, ok := request.PeersToSkip.Load(sourcePeerID.String()); !ok {
+		t.Fatalf("SourcePeerId not added to peersToSkip")
+	}
+}
+
+// TestFetcherRetryOnTimeout tests that fetch retries after searchTimeOut has passed
+func TestFetcherRetryOnTimeout(t *testing.T) {
+	requester := newMockRequester()
+	addr := make([]byte, 32)
+	fetcher := NewFetcher(addr, requester.doRequest, true)
+
+	peersToSkip := &sync.Map{}
+
+	// set searchTimeOut to low value so the test is quicker
+	searchTimeout = 250 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// start the fetcher
+	go fetcher.run(ctx, peersToSkip)
+
+	// call the fetch function with an active context
+	rctx := context.Background()
+	fetcher.fetch(rctx)
+
+	// after 100ms the first request should be initiated
+	time.Sleep(100 * time.Millisecond)
+
+	select {
+	case <-requester.requestC:
+	default:
+		t.Fatalf("fetch did not initiate request")
+	}
+
+	// after another 100ms no new request should be initiated, because search timeout is 250ms
+	time.Sleep(100 * time.Millisecond)
+
+	select {
+	case <-requester.requestC:
+		t.Fatalf("unexpected request from fetcher")
+	default:
+	}
+
+	// after another 200ms search timeout is over, there should be a new request
+	time.Sleep(200 * time.Millisecond)
+
+	select {
+	case <-requester.requestC:
+	default:
+		t.Fatalf("fetch did not retry request")
+	}
+}
+
+// TestFetcherFactory creates a FetcherFactory and checks if the factory really creates and starts
+// a Fetcher when it return a fetch function. We test the fetching functionality just by checking if
+// a request is initiated when the fetch function is called
+func TestFetcherFactory(t *testing.T) {
+	requester := newMockRequester(100 * time.Millisecond)
+	addr := make([]byte, 32)
+	fetcherFactory := NewFetcherFactory(requester.doRequest, false)
+
+	peersToSkip := &sync.Map{}
+
+	fetchFunction := fetcherFactory.New(context.Background(), addr, peersToSkip)
+
+	fetchFunction(context.Background())
+
+	// check if the created fetchFunction really starts a fetcher and initiates a request
+	select {
+	case <-requester.requestC:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("fetch timeout")
+	}
+
 }
