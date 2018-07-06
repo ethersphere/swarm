@@ -393,11 +393,12 @@ func (mt *manifestTrie) recalcAndStore() error {
 	}
 
 	sr := bytes.NewReader(manifest)
-	key, wait, err2 := mt.fileStore.Store(context.TODO(), sr, int64(len(manifest)), mt.encrypted)
+	ctx := context.TODO()
+	key, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted)
 	if err2 != nil {
 		return err2
 	}
-	err2 = wait(context.TODO())
+	err2 = wait(ctx)
 	mt.ref = key
 	return err2
 }

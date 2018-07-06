@@ -50,15 +50,15 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	defer os.RemoveAll("/tmp/bzz")
 
 	reader, slice := GenerateRandomData(testDataSize)
-	key, wait, err := fileStore.Store(context.TODO(), reader, testDataSize, toEncrypt)
+	ctx := context.TODO()
+	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
-	err = wait(context.TODO())
+	err = wait(ctx)
 	if err != nil {
-		t.Fatalf("Store error: %v", err)
+		t.Fatalf("Store waitt error: %v", err.Error())
 	}
-
 	resultReader, isEncrypted := fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -115,11 +115,12 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 	reader, slice := GenerateRandomData(testDataSize)
-	key, wait, err := fileStore.Store(context.TODO(), reader, testDataSize, toEncrypt)
+	ctx := context.TODO()
+	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
 	if err != nil {
-		t.Fatalf("Store error: %v", err)
+		t.Errorf("Store error: %v", err)
 	}
-	err = wait(context.TODO())
+	err = wait(ctx)
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}

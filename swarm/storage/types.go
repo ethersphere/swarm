@@ -306,7 +306,7 @@ type Putter interface {
 	// Close is to indicate that no more chunk data will be Put on this Putter
 	Close()
 	// Wait returns if all data has been store and the Close() was called.
-	Wait(ctx context.Context) error
+	Wait(context.Context) error
 }
 
 // Getter is an interface to retrieve a chunk's data by its reference

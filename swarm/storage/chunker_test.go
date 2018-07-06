@@ -88,14 +88,11 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 	var addr Address
 	var wait func(context.Context) error
 	var err error
-	ctx := context.Background()
+	ctx := context.TODO()
 	if usePyramid {
 		addr, wait, err = PyramidSplit(ctx, data, putGetter, putGetter)
 	} else {
 		addr, wait, err = TreeSplit(ctx, data, int64(n), putGetter)
-	}
-	if err != nil {
-		tester.t.Fatalf(err.Error())
 	}
 	tester.t.Logf(" Address = %v\n", addr)
 	err = wait(ctx)
@@ -186,8 +183,7 @@ func TestDataAppend(t *testing.T) {
 		store := NewMapChunkStore()
 		putGetter := newTestHasherStore(store, SHA3Hash)
 
-		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-		defer cancel()
+		ctx := context.TODO()
 		addr, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
@@ -274,9 +270,8 @@ func benchmarkSplitJoin(n int, t *testing.B) {
 	for i := 0; i < t.N; i++ {
 		data := testDataReader(n)
 
-		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-		defer cancel()
 		putGetter := newTestHasherStore(NewMapChunkStore(), SHA3Hash)
+		ctx := context.TODO()
 		key, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -285,7 +280,6 @@ func benchmarkSplitJoin(n int, t *testing.B) {
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
-
 		reader := TreeJoin(ctx, key, putGetter, 0)
 		benchReadAll(reader)
 	}
