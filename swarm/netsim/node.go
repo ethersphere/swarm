@@ -51,6 +51,17 @@ func (s *Simulation) UpNodeIDs() (ids []discover.NodeID) {
 	return ids
 }
 
+// DownNodeIDs returns NodeIDs for nodes that are stopped in the network.
+func (s *Simulation) DownNodeIDs() (ids []discover.NodeID) {
+	nodes := s.Net.GetNodes()
+	for _, node := range nodes {
+		if !node.Up {
+			ids = append(ids, node.ID())
+		}
+	}
+	return ids
+}
+
 // AddNodeOption defines the option that can be passed
 // to Simulation.AddNode method.
 type AddNodeOption func(*adapters.NodeConfig)
@@ -244,6 +255,33 @@ func (s *Simulation) PivotNodeID() (id *discover.NodeID) {
 	return s.pivotNodeID
 }
 
+// StartNode starts a node by NodeID.
+func (s *Simulation) StartNode(id discover.NodeID) (err error) {
+	return s.Net.Start(id)
+}
+
+// StartRandomNode starts a random node.
+func (s *Simulation) StartRandomNode() (id discover.NodeID, err error) {
+	n := s.randomDownNode()
+	if n == nil {
+		return id, ErrNodeNotFound
+	}
+	return n.ID, s.Net.Start(n.ID)
+}
+
+// StartRandomNodes starts random nodes.
+func (s *Simulation) StartRandomNodes(count int) (ids []discover.NodeID, err error) {
+	ids = make([]discover.NodeID, 0, count)
+	for i := 0; i < count; i++ {
+		id, err := s.StartRandomNode()
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
 // StopNode stops a node by NodeID.
 func (s *Simulation) StopNode(id discover.NodeID) (err error) {
 	return s.Net.Stop(id)
@@ -251,7 +289,7 @@ func (s *Simulation) StopNode(id discover.NodeID) (err error) {
 
 // StopRandomNode stops a random node.
 func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
-	n := s.randomNode()
+	n := s.randomUpNode()
 	if n == nil {
 		return id, ErrNodeNotFound
 	}
@@ -276,10 +314,19 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// randomNode returns a random SimNode that is up.
+// randomUpNode returns a random SimNode that is up.
 // Arguments are NodeIDs for nodes that should not be returned.
-func (s *Simulation) randomNode(exclude ...discover.NodeID) *adapters.SimNode {
-	ids := s.UpNodeIDs()
+func (s *Simulation) randomUpNode(exclude ...discover.NodeID) *adapters.SimNode {
+	return s.randomNode(s.UpNodeIDs(), exclude...)
+}
+
+// randomUpNode returns a random SimNode that is not up.
+func (s *Simulation) randomDownNode(exclude ...discover.NodeID) *adapters.SimNode {
+	return s.randomNode(s.DownNodeIDs(), exclude...)
+}
+
+// randomUpNode returns a random SimNode from the slice of NodeIDs.
+func (s *Simulation) randomNode(ids []discover.NodeID, exclude ...discover.NodeID) *adapters.SimNode {
 	for _, e := range exclude {
 		for i, id := range ids {
 			if id == e {

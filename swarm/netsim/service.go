@@ -39,7 +39,7 @@ func (s *Simulation) Service(name string, id discover.NodeID) node.Service {
 // RandomService returns a single Service by name on a
 // randomly chosen node that is up.
 func (s *Simulation) RandomService(name string) node.Service {
-	n := s.randomNode()
+	n := s.randomUpNode()
 	if n == nil {
 		return nil
 	}

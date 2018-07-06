@@ -54,7 +54,7 @@ func (s *Simulation) ConnectToLastNode(id discover.NodeID) (err error) {
 // ConnectToRandomNode connects the node with provieded NodeID
 // to a random node that is up.
 func (s *Simulation) ConnectToRandomNode(id discover.NodeID) (err error) {
-	n := s.randomNode(id)
+	n := s.randomUpNode(id)
 	if n == nil {
 		return ErrNodeNotFound
 	}

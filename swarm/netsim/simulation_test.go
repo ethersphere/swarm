@@ -16,11 +16,17 @@
 package netsim
 
 import (
+	"context"
+	"errors"
 	"flag"
+	"sync"
+	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -35,8 +41,153 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
+// TestRun tests if Run method calls RunFunc and if it handles context properly.
+func TestRun(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	t.Run("call", func(t *testing.T) {
+		expect := "something"
+		var got string
+		r := sim.Run(context.Background(), func(ctx context.Context, sim *Simulation) error {
+			got = expect
+			return nil
+		})
+
+		if r.Error != nil {
+			t.Errorf("unexpected error: %v", r.Error)
+		}
+		if got != expect {
+			t.Errorf("expected %q, got %q", expect, got)
+		}
+	})
+
+	t.Run("cancelation", func(t *testing.T) {
+		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		defer cancel()
+
+		r := sim.Run(ctx, func(ctx context.Context, sim *Simulation) error {
+			time.Sleep(100 * time.Millisecond)
+			return nil
+		})
+
+		if r.Error != context.DeadlineExceeded {
+			t.Errorf("unexpected error: %v", r.Error)
+		}
+	})
+
+	t.Run("context value and duration", func(t *testing.T) {
+		ctx := context.WithValue(context.Background(), "hey", "there")
+		sleep := 50 * time.Millisecond
+
+		r := sim.Run(ctx, func(ctx context.Context, sim *Simulation) error {
+			if ctx.Value("hey") != "there" {
+				return errors.New("expected context value not passed")
+			}
+			time.Sleep(sleep)
+			return nil
+		})
+
+		if r.Error != nil {
+			t.Errorf("unexpected error: %v", r.Error)
+		}
+		if r.Duration < sleep {
+			t.Errorf("reported run duration less then expected: %s", r.Duration)
+		}
+	})
+}
+
+// TestClose tests are Close method triggers all close functions, are close functions are
+// called in parallel by measuring maximal expected time and are all nodes not up anymore.
+func TestClose(t *testing.T) {
+	var mu sync.Mutex
+	var cleanupCount int
+
+	sleep := 50 * time.Millisecond
+
+	sim := New(map[string]ServiceFunc{
+		"noop": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+			return newNoopService(), func() {
+				time.Sleep(sleep)
+				mu.Lock()
+				defer mu.Unlock()
+				cleanupCount++
+			}, nil
+		},
+	}, nil)
+
+	nodeCount := 30
+
+	_, err := sim.AddNodes(nodeCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var upNodeCount int
+	for _, n := range sim.Net.GetNodes() {
+		if n.Up {
+			upNodeCount++
+		}
+	}
+	if upNodeCount != nodeCount {
+		t.Errorf("all nodes should be up, insted only %v are up", upNodeCount)
+	}
+
+	start := time.Now()
+	sim.Close()
+	if d := time.Since(start); d > time.Duration(nodeCount/maxParallelCleanups+1)*sleep {
+		t.Errorf("close took too much time to execute: %s", d)
+	}
+
+	if cleanupCount != nodeCount {
+		t.Errorf("number of cleanups expected %v, got %v", nodeCount, cleanupCount)
+	}
+
+	upNodeCount = 0
+	for _, n := range sim.Net.GetNodes() {
+		if n.Up {
+			upNodeCount++
+		}
+	}
+	if upNodeCount != 0 {
+		t.Errorf("all nodes should be down, insted %v are up", upNodeCount)
+	}
+}
+
+// TestDone checks if Close method triggers the closing of done channel.
+func TestDone(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	sleep := 50 * time.Millisecond
+	timeout := 100 * time.Millisecond
+
+	start := time.Now()
+	go func() {
+		time.Sleep(sleep)
+		sim.Close()
+	}()
+
+	select {
+	case <-time.After(timeout):
+		t.Error("done channel closing timmed out")
+	case <-sim.Done():
+		if d := time.Since(start); d < sleep {
+			t.Errorf("done channel closed sooner then expected: %s", d)
+		}
+	}
+}
+
+// a helper map for usual services that do not do anyting
+var noopServiceFuncMap = map[string]ServiceFunc{
+	"noop": noopServiceFunc,
+}
+
+// a helper function for most basic noop service
+func noopServiceFunc(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
+	return newNoopService(), nil, nil
+}
+
 // noopService is the service that does not do anything
-// but implemnts node.Service interface.
+// but implements node.Service interface.
 type noopService struct{}
 
 func newNoopService() node.Service {

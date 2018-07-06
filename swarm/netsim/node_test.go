@@ -27,6 +27,91 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
+func TestAddNode(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	id, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n := sim.Net.GetNode(id)
+	if n == nil {
+		t.Fatal("node not found")
+	}
+
+	if !n.Up {
+		t.Error("node not started")
+	}
+}
+
+func TestAddNodeWithMsgEvents(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	id, err := sim.AddNode(AddNodeWithMsgEvents(true))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !sim.Net.GetNode(id).Config.EnableMsgEvents {
+		t.Error("EnableMsgEvents is false")
+	}
+
+	id, err = sim.AddNode(AddNodeWithMsgEvents(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sim.Net.GetNode(id).Config.EnableMsgEvents {
+		t.Error("EnableMsgEvents is true")
+	}
+}
+
+func TestAddNodeWithService(t *testing.T) {
+	sim := New(map[string]ServiceFunc{
+		"noop1": noopServiceFunc,
+		"noop2": noopServiceFunc,
+	}, nil)
+	defer sim.Close()
+
+	id, err := sim.AddNode(AddNodeWithService("noop1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n := sim.Net.GetNode(id).Node.(*adapters.SimNode)
+	if n.Service("noop1") == nil {
+		t.Error("service noop1 not found on node")
+	}
+	if n.Service("noop2") != nil {
+		t.Error("service noop2 should not be found on node")
+	}
+}
+
+func TestAddNodes(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	nodesCount := 12
+
+	ids, err := sim.AddNodes(nodesCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	count := len(ids)
+	if count != nodesCount {
+		t.Errorf("expected %v nodes, got %v", nodesCount, count)
+	}
+
+	count = len(sim.Net.GetNodes())
+	if count != nodesCount {
+		t.Errorf("expected %v nodes, got %v", nodesCount, count)
+	}
+}
+
 //To test that uploading a snapshot works
 func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Creating simulation")
@@ -64,4 +149,77 @@ func TestUploadSnapshot(t *testing.T) {
 		return nil
 	})
 	log.Debug("Done.")
+}
+
+func TestPivotNode(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	id, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id2, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if sim.PivotNodeID() != nil {
+		t.Error("expected no pivot node")
+	}
+
+	sim.SetPivotNode(id)
+
+	pid := sim.PivotNodeID()
+
+	if pid == nil {
+		t.Error("pivot node not set")
+	} else if *pid != id {
+		t.Errorf("expected pivot node %s, got %s", id, *pid)
+	}
+
+	sim.SetPivotNode(id2)
+
+	pid = sim.PivotNodeID()
+
+	if pid == nil {
+		t.Error("pivot node not set")
+	} else if *pid != id2 {
+		t.Errorf("expected pivot node %s, got %s", id2, *pid)
+	}
+}
+
+func TestStartStopNode(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	id, err := sim.AddNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n := sim.Net.GetNode(id)
+	if n == nil {
+		t.Fatal("node not found")
+	}
+	if !n.Up {
+		t.Error("node not started")
+	}
+
+	err = sim.StopNode(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n.Up {
+		t.Error("node not stopped")
+	}
+
+	err = sim.StartNode(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !n.Up {
+		t.Error("node not started")
+	}
 }

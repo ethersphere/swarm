@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
 // TestServiceBucket tests all bucket functionalities using subtests.
@@ -36,16 +35,7 @@ func TestServiceBucket(t *testing.T) {
 	sim := New(map[string]ServiceFunc{
 		"noop": func(ctx *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 			b.Store(testKey, testValue+ctx.Config.ID.String())
-			addr := network.NewAddrFromNodeID(ctx.Config.ID)
-			hp := network.NewHiveParams()
-			hp.Discovery = false
-			config := &network.BzzConfig{
-				OverlayAddr:  addr.Over(),
-				UnderlayAddr: addr.Under(),
-				HiveParams:   hp,
-			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
+			return newNoopService(), nil, nil
 		},
 	}, nil)
 	defer sim.Close()

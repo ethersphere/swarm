@@ -16,19 +16,11 @@
 package netsim
 
 import (
-	"sync"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 )
 
 func TestService(t *testing.T) {
-	sim := New(map[string]ServiceFunc{
-		"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
-			return newNoopService(), nil, nil
-		},
-	}, nil)
+	sim := New(noopServiceFuncMap, nil)
 	defer sim.Close()
 
 	id, err := sim.AddNode()
