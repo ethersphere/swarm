@@ -158,7 +158,7 @@ func TestClose(t *testing.T) {
 func TestDone(t *testing.T) {
 	sim := New(noopServiceFuncMap, nil)
 	sleep := 50 * time.Millisecond
-	timeout := 100 * time.Millisecond
+	timeout := 2 * time.Second
 
 	start := time.Now()
 	go func() {

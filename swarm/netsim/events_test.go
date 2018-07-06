@@ -45,6 +45,9 @@ func TestPeerEvents(t *testing.T) {
 	go func() {
 		for e := range events {
 			if e.Error != nil {
+				if e.Error == context.Canceled {
+					return
+				}
 				t.Error(e.Error)
 				continue
 			}
@@ -76,6 +79,9 @@ func TestPeerEventsTimeout(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		for e := range events {
+			if e.Error == context.Canceled {
+				return
+			}
 			if e.Error == context.DeadlineExceeded {
 				close(done)
 				return
