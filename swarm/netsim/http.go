@@ -26,22 +26,22 @@ import (
 
 // Package defaults.
 var (
-	DefaultHTTPSimPort = "8888"
+	DefaultHTTPSimAddr = ":8888"
 )
 
-func (s *Simulation) startHTTPServer(port string) {
-	//assign default port if nothing provided
-	if port == "" {
-		port = DefaultHTTPSimPort
+func (s *Simulation) startHTTPServer(addr string) {
+	//assign default addr if nothing provided
+	if addr == "" {
+		addr = DefaultHTTPSimAddr
 	}
-	log.Info(fmt.Sprintf("Initializing simulation server on 0.0.0.0:%s...", port))
+	log.Info(fmt.Sprintf("Initializing simulation server on 0.0.0.0%s...", addr))
 	//initialize the HTTP server
 	s.handler = simulations.NewServer(s.Net)
 	s.runC = make(chan struct{})
 	//add swarm specific routes to the HTTP server
 	s.addSimulationRoutes()
 	s.httpSrv = &http.Server{
-		Addr:    fmt.Sprintf(":%s", port),
+		Addr:    fmt.Sprintf("%s", addr),
 		Handler: s.handler,
 	}
 	go s.httpSrv.ListenAndServe()

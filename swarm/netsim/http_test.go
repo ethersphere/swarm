@@ -40,7 +40,7 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 			"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 				return newNoopService(), nil, nil
 			},
-		}).WithServer(ctx, DefaultHTTPSimPort)
+		}).WithServer(ctx, DefaultHTTPSimAddr)
 	defer sim.Close()
 	log.Debug("Done.")
 
@@ -92,7 +92,7 @@ func sendRunSignal(t *testing.T) {
 	//then we can send the signal
 
 	log.Debug("Sending run signal to simulation: POST /runsim...")
-	resp, err := http.Post(fmt.Sprintf("http://localhost:%s/runsim", DefaultHTTPSimPort), "application/json", nil)
+	resp, err := http.Post(fmt.Sprintf("http://localhost%s/runsim", DefaultHTTPSimAddr), "application/json", nil)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
