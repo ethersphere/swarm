@@ -63,7 +63,7 @@ func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr, err := s.api.Resolve(ctx, uri)
+	addr, err := s.api.ResolveURI(ctx, uri)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +89,7 @@ func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 //
 // DEPRECATED: Use the HTTP API instead
 func (s *Storage) Modify(ctx context.Context, rootHash, path, contentHash, contentType string) (newRootHash string, err error) {
-	uri, err := Parse("bzz:/" + rootHash)
-	if err != nil {
-		return "", err
-	}
-	addr, err := s.api.Resolve(ctx, uri)
+	addr, err := s.api.Resolve(ctx, rootHash)
 	if err != nil {
 		return "", err
 	}

@@ -88,7 +88,7 @@ func TestResourcePostMode(t *testing.T) {
 }
 
 func serverFunc(api *api.API) testutil.TestServer {
-	return NewServer(api)
+	return NewServer(api, "")
 }
 
 // test the transparent resolving of multihash resource types with bzz:// scheme
