@@ -23,9 +23,77 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
+
+func TestUpDownNodeIDs(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	ids, err := sim.AddNodes(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotIDs := sim.NodeIDs()
+
+	if !equalNodeIDs(ids, gotIDs) {
+		t.Error("returned nodes are not equal to added ones")
+	}
+
+	stoppedIDs, err := sim.StopRandomNodes(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	gotIDs = sim.UpNodeIDs()
+
+	for _, id := range gotIDs {
+		if !sim.Net.GetNode(id).Up {
+			t.Errorf("node %s should not be down", id)
+		}
+	}
+
+	if !equalNodeIDs(ids, append(gotIDs, stoppedIDs...)) {
+		t.Error("returned nodes are not equal to added ones")
+	}
+
+	gotIDs = sim.DownNodeIDs()
+
+	for _, id := range gotIDs {
+		if sim.Net.GetNode(id).Up {
+			t.Errorf("node %s should not be up", id)
+		}
+	}
+
+	if !equalNodeIDs(stoppedIDs, gotIDs) {
+		t.Error("returned nodes are not equal to the stopped ones")
+	}
+}
+
+func equalNodeIDs(one, other []discover.NodeID) bool {
+	if len(one) != len(other) {
+		return false
+	}
+	var count int
+	for _, a := range one {
+		var found bool
+		for _, b := range other {
+			if a == b {
+				found = true
+				break
+			}
+		}
+		if found {
+			count++
+		} else {
+			return false
+		}
+	}
+	return count == len(one)
+}
 
 func TestAddNode(t *testing.T) {
 	sim := New(noopServiceFuncMap, nil)
@@ -221,5 +289,82 @@ func TestStartStopNode(t *testing.T) {
 	}
 	if !n.Up {
 		t.Error("node not started")
+	}
+}
+
+func TestStartStopRandomNode(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	_, err := sim.AddNodes(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	id, err := sim.StopRandomNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n := sim.Net.GetNode(id)
+	if n == nil {
+		t.Fatal("node not found")
+	}
+	if n.Up {
+		t.Error("node not stopped")
+	}
+
+	id2, err := sim.StopRandomNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	idStarted, err := sim.StartRandomNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if idStarted != id && idStarted != id2 {
+		t.Error("unexpected started node ID")
+	}
+}
+
+func TestStartStopRandomNodes(t *testing.T) {
+	sim := New(noopServiceFuncMap, nil)
+	defer sim.Close()
+
+	_, err := sim.AddNodes(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ids, err := sim.StopRandomNodes(3)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, id := range ids {
+		n := sim.Net.GetNode(id)
+		if n == nil {
+			t.Fatal("node not found")
+		}
+		if n.Up {
+			t.Error("node not stopped")
+		}
+	}
+
+	ids, err = sim.StartRandomNodes(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, id := range ids {
+		n := sim.Net.GetNode(id)
+		if n == nil {
+			t.Fatal("node not found")
+		}
+		if !n.Up {
+			t.Error("node not started")
+		}
 	}
 }

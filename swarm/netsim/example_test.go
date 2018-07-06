@@ -55,6 +55,7 @@ func ExampleSimulation_WaitTillHealthy() {
 
 	_, err := sim.AddNodesAndConnectRing(10)
 	if err != nil {
+		// handle error properly...
 		panic(err)
 	}
 
@@ -71,8 +72,6 @@ func ExampleSimulation_WaitTillHealthy() {
 	}
 
 	// continue with the test
-
-	// Output:
 }
 
 // Watch all peer events in the simulation network, buy receiving from a channel.

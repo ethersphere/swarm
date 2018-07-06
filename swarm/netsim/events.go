@@ -92,6 +92,12 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 			for {
 				select {
 				case <-ctx.Done():
+					if err := ctx.Err(); err != nil {
+						select {
+						case eventC <- PeerEvent{NodeID: id, Error: err}:
+						case <-s.Done():
+						}
+					}
 					return
 				case <-s.Done():
 					return
@@ -115,6 +121,12 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 						select {
 						case eventC <- PeerEvent{NodeID: id, Event: e}:
 						case <-ctx.Done():
+							if err := ctx.Err(); err != nil {
+								select {
+								case eventC <- PeerEvent{NodeID: id, Error: err}:
+								case <-s.Done():
+								}
+							}
 							return
 						case <-s.Done():
 							return
@@ -125,6 +137,12 @@ func (s *Simulation) PeerEvents(ctx context.Context, ids []discover.NodeID, filt
 						select {
 						case eventC <- PeerEvent{NodeID: id, Error: err}:
 						case <-ctx.Done():
+							if err := ctx.Err(); err != nil {
+								select {
+								case eventC <- PeerEvent{NodeID: id, Error: err}:
+								case <-s.Done():
+								}
+							}
 							return
 						case <-s.Done():
 							return
