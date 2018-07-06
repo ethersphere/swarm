@@ -81,33 +81,169 @@ type ServerConfig struct {
 	CorsString string
 }
 
+func NewServer(api *api.API, corsString string) *Server {
+	var allowedOrigins []string
+	for _, domain := range strings.Split(corsString, ",") {
+		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
+	}
+	c := cors.New(cors.Options{
+		AllowedOrigins: allowedOrigins,
+		AllowedMethods: []string{http.MethodPost, http.MethodGet, http.MethodDelete, http.MethodPatch, http.MethodPut},
+		MaxAge:         600,
+		AllowedHeaders: []string{"*"},
+	})
+
+	mux := http.NewServeMux()
+	server := &Server{api: api}
+	mux.HandleFunc("/bzz:/", server.WrapHandler(true, server.HandleBzz))
+	mux.HandleFunc("/bzz-raw:/", server.WrapHandler(true, server.HandleBzzRaw))
+	mux.HandleFunc("/bzz-immutable:/", server.WrapHandler(true, server.HandleBzzImmutable))
+	mux.HandleFunc("/bzz-hash:/", server.WrapHandler(true, server.HandleBzzHash))
+	mux.HandleFunc("/bzz-list:/", server.WrapHandler(true, server.HandleBzzList))
+	mux.HandleFunc("/bzz-resource:/", server.WrapHandler(true, server.HandleBzzResource))
+
+	mux.HandleFunc("/", server.WrapHandler(false, server.HandleRootPaths))
+	mux.HandleFunc("/robots.txt", server.WrapHandler(false, server.HandleRootPaths))
+	mux.HandleFunc("/favicon.ico", server.WrapHandler(false, server.HandleRootPaths))
+
+	server.Handler = c.Handler(mux)
+	return server
+}
+func (s *Server) ListenAndServe(addr string) error {
+	return http.ListenAndServe(addr, s)
+}
+func (s *Server) HandleRootPaths(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		if r.RequestURI == "/" {
+			if strings.Contains(r.Header.Get("Accept"), "text/html") {
+				err := landingPageTemplate.Execute(w, nil)
+				if err != nil {
+					log.Error(fmt.Sprintf("error rendering landing page: %s", err))
+				}
+				return
+			}
+			if strings.Contains(r.Header.Get("Accept"), "application/json") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				json.NewEncoder(w).Encode("Welcome to Swarm!")
+				return
+			}
+		}
+
+		if r.URL.Path == "/robots.txt" {
+			w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
+			fmt.Fprintf(w, "User-agent: *\nDisallow: /")
+			return
+		}
+		Respond(w, r, "Bad Request", http.StatusBadRequest)
+	default:
+		Respond(w, r, "Not Found", http.StatusNotFound)
+	}
+}
+func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetBzz")
+		if r.Header.Get("Accept") == "application/x-tar" {
+			s.HandleGetFiles(w, r)
+			return
+		}
+		s.HandleGetFile(w, r)
+	case http.MethodPost:
+		log.Debug("handlePostFiles")
+		s.HandlePostFiles(w, r)
+	case http.MethodDelete:
+		log.Debug("handleBzzDelete")
+		s.HandleDelete(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzRaw(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetRaw")
+		s.HandleGet(w, r)
+	case http.MethodPost:
+		log.Debug("handlePostRaw")
+		s.HandlePostRaw(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzImmutable(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetHash")
+		s.HandleGetList(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzHash(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetHash")
+		s.HandleGet(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzList(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetHash")
+		s.HandleGetList(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzResource(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetResource")
+		s.HandleGetResource(w, r)
+	case http.MethodPost:
+		log.Debug("handlePostResource")
+		s.HandlePostResource(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
+		req := &Request{Request: *r, ruid: uuid.New()[:8]}
+		metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
+		log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
+
+		// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
+		w := newLoggingResponseWriter(rw)
+		if parseBzzUri {
+			uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
+			if err != nil {
+				Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
+				return
+			}
+			req.uri = uri
+
+			log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri.Addr", req.uri.Addr, "uri.Path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
+		}
+
+		h(w, req) // call original
+		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
+	})
+}
+
 // browser API for registering bzz url scheme handlers:
 // https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
 // electron (chromium) api for registering bzz url scheme handlers:
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
-// starts up http server
-func StartHTTPServer(api *api.API, config *ServerConfig) {
-	var allowedOrigins []string
-	for _, domain := range strings.Split(config.CorsString, ",") {
-		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
-	}
-	c := cors.New(cors.Options{
-		AllowedOrigins: allowedOrigins,
-		AllowedMethods: []string{"POST", "GET", "DELETE", "PATCH", "PUT"},
-		MaxAge:         600,
-		AllowedHeaders: []string{"*"},
-	})
-	hdlr := c.Handler(NewServer(api))
-
-	go http.ListenAndServe(config.Addr, hdlr)
-}
-
-func NewServer(api *api.API) *Server {
-	return &Server{api}
-}
-
 type Server struct {
+	http.Handler
 	api *api.API
 }
 
@@ -121,7 +257,7 @@ type Request struct {
 
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage address as a text/plain response
-func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.raw", "ruid", r.ruid)
 
 	postRawCount.Inc(1)
@@ -148,7 +284,7 @@ func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Re
 		Respond(w, r, "missing Content-Length header in request", http.StatusBadRequest)
 		return
 	}
-	addr, _, err := s.api.Store(ctx, r.Body, r.ContentLength, toEncrypt)
+	addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -167,7 +303,7 @@ func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Re
 // (either a tar archive or multipart form), adds those files either to an
 // existing manifest or to a new manifest under <path> and returns the
 // resulting manifest hash as a text/plain response
-func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.files", "ruid", r.ruid)
 
 	postFilesCount.Inc(1)
@@ -185,7 +321,7 @@ func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *
 
 	var addr storage.Address
 	if r.uri.Addr != "" && r.uri.Addr != "encrypt" {
-		addr, err = s.api.Resolve(ctx, r.uri)
+		addr, err = s.api.Resolve(r.Context(), r.uri)
 		if err != nil {
 			postFilesFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
@@ -193,7 +329,7 @@ func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *
 		}
 		log.Debug("resolved key", "ruid", r.ruid, "key", addr)
 	} else {
-		addr, err = s.api.NewManifest(ctx, toEncrypt)
+		addr, err = s.api.NewManifest(r.Context(), toEncrypt)
 		if err != nil {
 			postFilesFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -202,17 +338,17 @@ func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *
 		log.Debug("new manifest", "ruid", r.ruid, "key", addr)
 	}
 
-	newAddr, err := s.updateManifest(ctx, addr, func(mw *api.ManifestWriter) error {
+	newAddr, err := s.updateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 
 		case "application/x-tar":
-			return s.handleTarUpload(ctx, r, mw)
+			return s.handleTarUpload(r, mw)
 
 		case "multipart/form-data":
-			return s.handleMultipartUpload(ctx, r, params["boundary"], mw)
+			return s.handleMultipartUpload(r, params["boundary"], mw)
 
 		default:
-			return s.handleDirectUpload(ctx, r, mw)
+			return s.handleDirectUpload(r, mw)
 		}
 	})
 	if err != nil {
@@ -228,7 +364,7 @@ func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *
 	fmt.Fprint(w, newAddr)
 }
 
-func (s *Server) handleTarUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
+func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
 	log.Debug("handle.tar.upload", "ruid", req.ruid)
 	tr := tar.NewReader(req.Body)
 	for {
@@ -254,7 +390,7 @@ func (s *Server) handleTarUpload(ctx context.Context, req *Request, mw *api.Mani
 			ModTime:     hdr.ModTime,
 		}
 		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
-		contentKey, err := mw.AddEntry(ctx, tr, entry)
+		contentKey, err := mw.AddEntry(req.Context(), tr, entry)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
@@ -262,7 +398,7 @@ func (s *Server) handleTarUpload(ctx context.Context, req *Request, mw *api.Mani
 	}
 }
 
-func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, boundary string, mw *api.ManifestWriter) error {
+func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
 	log.Debug("handle.multipart.upload", "ruid", req.ruid)
 	mr := multipart.NewReader(req.Body, boundary)
 	for {
@@ -312,7 +448,7 @@ func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, bounda
 			ModTime:     time.Now(),
 		}
 		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
-		contentKey, err := mw.AddEntry(ctx, reader, entry)
+		contentKey, err := mw.AddEntry(req.Context(), reader, entry)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from multipart form: %s", err)
 		}
@@ -320,9 +456,9 @@ func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, bounda
 	}
 }
 
-func (s *Server) handleDirectUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
+func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error {
 	log.Debug("handle.direct.upload", "ruid", req.ruid)
-	key, err := mw.AddEntry(ctx, req.Body, &api.ManifestEntry{
+	key, err := mw.AddEntry(req.Context(), req.Body, &api.ManifestEntry{
 		Path:        req.uri.Path,
 		ContentType: req.Header.Get("Content-Type"),
 		Mode:        0644,
@@ -339,18 +475,18 @@ func (s *Server) handleDirectUpload(ctx context.Context, req *Request, mw *api.M
 // HandleDelete handles a DELETE request to bzz:/<manifest>/<path>, removes
 // <path> from <manifest> and returns the resulting manifest hash as a
 // text/plain response
-func (s *Server) HandleDelete(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.delete", "ruid", r.ruid)
 
 	deleteCount.Inc(1)
-	key, err := s.api.Resolve(ctx, r.uri)
+	key, err := s.api.Resolve(r.Context(), r.uri)
 	if err != nil {
 		deleteFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
 		return
 	}
 
-	newKey, err := s.updateManifest(ctx, key, func(mw *api.ManifestWriter) error {
+	newKey, err := s.updateManifest(r.Context(), key, func(mw *api.ManifestWriter) error {
 		log.Debug(fmt.Sprintf("removing %s from manifest %s", r.uri.Path, key.Log()), "ruid", r.ruid)
 		return mw.RemoveEntry(r.uri.Path)
 	})
@@ -400,7 +536,7 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 // The resource name will be verbatim what is passed as the address part of the url.
 // For example, if a POST is made to /bzz-resource:/foo.eth/raw/13 a new resource with frequency 13
 // and name "foo.eth" will be created
-func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 	var err error
 	var addr storage.Address
@@ -429,7 +565,7 @@ func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, 
 		// we create a manifest so we can retrieve the resource with bzz:// later
 		// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
 		// root chunk
-		m, err := s.api.NewResourceManifest(ctx, addr.Hex())
+		m, err := s.api.NewResourceManifest(r.Context(), addr.Hex())
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return
@@ -449,7 +585,7 @@ func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, 
 		// that means that we retrieve the manifest and inspect its Hash member.
 		manifestAddr := r.uri.Address()
 		if manifestAddr == nil {
-			manifestAddr, err = s.api.Resolve(ctx, r.uri)
+			manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
 			if err != nil {
 				getFail.Inc(1)
 				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -460,7 +596,7 @@ func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, 
 		}
 
 		// get the root chunk key from the manifest
-		addr, err = s.api.ResolveResourceManifest(ctx, manifestAddr)
+		addr, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -519,19 +655,15 @@ func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, 
 // bzz-resource://<id>/<n> - get latest update on period n
 // bzz-resource://<id>/<n>/<m> - get update version m of period n
 // <id> = ens name or hash
-func (s *Server) HandleGetResource(ctx context.Context, w http.ResponseWriter, r *Request) {
-	s.handleGetResource(ctx, w, r)
-}
-
 // TODO: Enable pass maxPeriod parameter
-func (s *Server) handleGetResource(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.resource", "ruid", r.ruid)
 	var err error
 
 	// resolve the content key.
 	manifestAddr := r.uri.Address()
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.Resolve(ctx, r.uri)
+		manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -542,7 +674,7 @@ func (s *Server) handleGetResource(ctx context.Context, w http.ResponseWriter, r
 	}
 
 	// get the root chunk key from the manifest
-	key, err := s.api.ResolveResourceManifest(ctx, manifestAddr)
+	key, err := s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 	if err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -624,13 +756,13 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 //   given storage key
 // - bzz-hash://<key> and responds with the hash of the content stored
 //   at the given storage key as a text/plain response
-func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
 	var err error
 	addr := r.uri.Address()
 	if addr == nil {
-		addr, err = s.api.Resolve(ctx, r.uri)
+		addr, err = s.api.Resolve(r.Context(), r.uri)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -645,7 +777,7 @@ func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Reques
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
 	if r.uri.Path != "" {
-		walker, err := s.api.NewManifestWalker(ctx, addr, nil)
+		walker, err := s.api.NewManifestWalker(r.Context(), addr, nil)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("%s is not a manifest", addr), http.StatusBadRequest)
@@ -693,7 +825,7 @@ func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Reques
 	}
 
 	// check the root chunk exists by retrieving the file's size
-	reader, isEncrypted := s.api.Retrieve(ctx, addr)
+	reader, isEncrypted := s.api.Retrieve(r.Context(), addr)
 	if _, err := reader.Size(nil); err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
@@ -722,7 +854,7 @@ func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Reques
 // HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
 // header of "application/x-tar" and returns a tar stream of all files
 // contained in the manifest
-func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.files", "ruid", r.ruid, "uri", r.uri)
 	getFilesCount.Inc(1)
 	if r.uri.Path != "" {
@@ -731,7 +863,7 @@ func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *R
 		return
 	}
 
-	addr, err := s.api.Resolve(ctx, r.uri)
+	addr, err := s.api.Resolve(r.Context(), r.uri)
 	if err != nil {
 		getFilesFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -739,7 +871,7 @@ func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *R
 	}
 	log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", addr)
 
-	walker, err := s.api.NewManifestWalker(ctx, addr, nil)
+	walker, err := s.api.NewManifestWalker(r.Context(), addr, nil)
 	if err != nil {
 		getFilesFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -758,7 +890,7 @@ func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *R
 		}
 
 		// retrieve the entry's key and size
-		reader, isEncrypted := s.api.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
+		reader, isEncrypted := s.api.Retrieve(r.Context(), storage.Address(common.Hex2Bytes(entry.Hash)))
 		size, err := reader.Size(nil)
 		if err != nil {
 			return err
@@ -798,7 +930,7 @@ func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *R
 // HandleGetList handles a GET request to bzz-list:/<manifest>/<path> and returns
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
-func (s *Server) HandleGetList(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.list", "ruid", r.ruid, "uri", r.uri)
 	getListCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
@@ -807,7 +939,7 @@ func (s *Server) HandleGetList(ctx context.Context, w http.ResponseWriter, r *Re
 		return
 	}
 
-	addr, err := s.api.Resolve(ctx, r.uri)
+	addr, err := s.api.Resolve(r.Context(), r.uri)
 	if err != nil {
 		getListFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -815,7 +947,7 @@ func (s *Server) HandleGetList(ctx context.Context, w http.ResponseWriter, r *Re
 	}
 	log.Debug("handle.get.list: resolved", "ruid", r.ruid, "key", addr)
 
-	list, err := s.getManifestList(ctx, addr, r.uri.Path)
+	list, err := s.getManifestList(r.Context(), addr, r.uri.Path)
 
 	if err != nil {
 		getListFail.Inc(1)
@@ -904,7 +1036,7 @@ func (s *Server) getManifestList(ctx context.Context, addr storage.Address, pref
 
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
-func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.file", "ruid", r.ruid)
 	getFileCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
@@ -916,7 +1048,7 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 	manifestAddr := r.uri.Address()
 
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.Resolve(ctx, r.uri)
+		manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
 		if err != nil {
 			getFileFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -928,7 +1060,7 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 
 	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestAddr)
 
-	reader, contentType, status, contentKey, err := s.api.Get(ctx, manifestAddr, r.uri.Path)
+	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), manifestAddr, r.uri.Path)
 
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
@@ -955,7 +1087,7 @@ func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Re
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.getManifestList(ctx, manifestAddr, r.uri.Path)
+		list, err := s.getManifestList(r.Context(), manifestAddr, r.uri.Path)
 
 		if err != nil {
 			getFileFail.Inc(1)
@@ -1009,107 +1141,6 @@ func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
 
 func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	return b.s.Seek(offset, whence)
-}
-
-func (s *Server) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
-	ctx := context.TODO()
-
-	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
-	req := &Request{Request: *r, ruid: uuid.New()[:8]}
-	metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
-	log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
-
-	// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
-	w := newLoggingResponseWriter(rw)
-
-	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "text/html") {
-
-		err := landingPageTemplate.Execute(w, nil)
-		if err != nil {
-			log.Error(fmt.Sprintf("error rendering landing page: %s", err))
-		}
-		return
-	}
-
-	if r.URL.Path == "/robots.txt" {
-		w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
-		fmt.Fprintf(w, "User-agent: *\nDisallow: /")
-		return
-	}
-
-	if r.RequestURI == "/" && strings.Contains(r.Header.Get("Accept"), "application/json") {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode("Welcome to Swarm!")
-		return
-	}
-
-	uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
-	if err != nil {
-		Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
-		return
-	}
-
-	req.uri = uri
-
-	log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri.Addr", req.uri.Addr, "uri.Path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
-
-	switch r.Method {
-	case "POST":
-		if uri.Raw() {
-			log.Debug("handlePostRaw")
-			s.HandlePostRaw(ctx, w, req)
-		} else if uri.Resource() {
-			log.Debug("handlePostResource")
-			s.HandlePostResource(ctx, w, req)
-		} else if uri.Immutable() || uri.List() || uri.Hash() {
-			log.Debug("POST not allowed on immutable, list or hash")
-			Respond(w, req, fmt.Sprintf("POST method on scheme %s not allowed", uri.Scheme), http.StatusMethodNotAllowed)
-		} else {
-			log.Debug("handlePostFiles")
-			s.HandlePostFiles(ctx, w, req)
-		}
-
-	case "PUT":
-		Respond(w, req, fmt.Sprintf("PUT method to %s not allowed", uri), http.StatusBadRequest)
-		return
-
-	case "DELETE":
-		if uri.Raw() {
-			Respond(w, req, fmt.Sprintf("DELETE method to %s not allowed", uri), http.StatusBadRequest)
-			return
-		}
-		s.HandleDelete(ctx, w, req)
-
-	case "GET":
-
-		if uri.Resource() {
-			s.HandleGetResource(ctx, w, req)
-			return
-		}
-
-		if uri.Raw() || uri.Hash() {
-			s.HandleGet(ctx, w, req)
-			return
-		}
-
-		if uri.List() {
-			s.HandleGetList(ctx, w, req)
-			return
-		}
-
-		if r.Header.Get("Accept") == "application/x-tar" {
-			s.HandleGetFiles(ctx, w, req)
-			return
-		}
-
-		s.HandleGetFile(ctx, w, req)
-
-	default:
-		Respond(w, req, fmt.Sprintf("%s method is not supported", r.Method), http.StatusMethodNotAllowed)
-	}
-
-	log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
 }
 
 func (s *Server) updateManifest(ctx context.Context, addr storage.Address, update func(mw *api.ManifestWriter) error) (storage.Address, error) {
