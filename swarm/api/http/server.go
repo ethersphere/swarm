@@ -334,7 +334,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 
 	var addr storage.Address
 	if r.uri.Addr != "" && r.uri.Addr != "encrypt" {
-		addr, err = s.api.ResolveURI(r.Context(), r.uri)
+		addr, err = s.api.Resolve(r.Context(), r.uri)
 		if err != nil {
 			postFilesFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
@@ -557,7 +557,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		// that means that we retrieve the manifest and inspect its Hash member.
 		manifestAddr := r.uri.Address()
 		if manifestAddr == nil {
-			manifestAddr, err = s.api.ResolveURI(r.Context(), r.uri)
+			manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
 			if err != nil {
 				getFail.Inc(1)
 				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -634,7 +634,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 	// resolve the content key.
 	manifestAddr := r.uri.Address()
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.ResolveURI(r.Context(), r.uri)
+		manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -733,7 +733,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	var err error
 	addr := r.uri.Address()
 	if addr == nil {
-		addr, err = s.api.ResolveURI(r.Context(), r.uri)
+		addr, err = s.api.Resolve(r.Context(), r.uri)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -815,7 +815,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	addr, err := s.api.ResolveURI(r.Context(), r.uri)
+	addr, err := s.api.Resolve(r.Context(), r.uri)
 	if err != nil {
 		getListFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
@@ -876,7 +876,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	manifestAddr := r.uri.Address()
 
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.ResolveURI(r.Context(), r.uri)
+		manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
 		if err != nil {
 			getFileFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
