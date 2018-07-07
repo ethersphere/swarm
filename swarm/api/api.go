@@ -464,7 +464,7 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.Reader, error) 
 
 	piper, pipew := io.Pipe()
 	tw := tar.NewWriter(pipew)
-	defer tw.Close()
+	//defer tw.Close()
 
 	err = walker.Walk(func(entry *ManifestEntry) error {
 		// ignore manifests (walk will recurse into them)
