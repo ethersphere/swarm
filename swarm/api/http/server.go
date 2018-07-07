@@ -91,16 +91,16 @@ func NewServer(api *api.API, corsString string) *Server {
 
 	mux := http.NewServeMux()
 	server := &Server{api: api}
-	mux.HandleFunc("/bzz:/", server.ProcessRequest(true, server.HandleBzz))
-	mux.HandleFunc("/bzz-raw:/", server.ProcessRequest(true, server.HandleBzzRaw))
-	mux.HandleFunc("/bzz-immutable:/", server.ProcessRequest(true, server.HandleBzzImmutable))
-	mux.HandleFunc("/bzz-hash:/", server.ProcessRequest(true, server.HandleBzzHash))
-	mux.HandleFunc("/bzz-list:/", server.ProcessRequest(true, server.HandleBzzList))
-	mux.HandleFunc("/bzz-resource:/", server.ProcessRequest(true, server.HandleBzzResource))
+	mux.HandleFunc("/bzz:/", server.WrapHandler(true, server.HandleBzz))
+	mux.HandleFunc("/bzz-raw:/", server.WrapHandler(true, server.HandleBzzRaw))
+	mux.HandleFunc("/bzz-immutable:/", server.WrapHandler(true, server.HandleBzzImmutable))
+	mux.HandleFunc("/bzz-hash:/", server.WrapHandler(true, server.HandleBzzHash))
+	mux.HandleFunc("/bzz-list:/", server.WrapHandler(true, server.HandleBzzList))
+	mux.HandleFunc("/bzz-resource:/", server.WrapHandler(true, server.HandleBzzResource))
 
-	mux.HandleFunc("/", server.ProcessRequest(false, server.HandleRootPaths))
-	mux.HandleFunc("/robots.txt", server.ProcessRequest(false, server.HandleRootPaths))
-	mux.HandleFunc("/favicon.ico", server.ProcessRequest(false, server.HandleRootPaths))
+	mux.HandleFunc("/", server.WrapHandler(false, server.HandleRootPaths))
+	mux.HandleFunc("/robots.txt", server.WrapHandler(false, server.HandleRootPaths))
+	mux.HandleFunc("/favicon.ico", server.WrapHandler(false, server.HandleRootPaths))
 
 	server.Handler = c.Handler(mux)
 	return server
@@ -129,7 +129,7 @@ type Request struct {
 // electron (chromium) api for registering bzz url scheme handlers:
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
-func (s *Server) ProcessRequest(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
+func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
 		req := &Request{Request: *r, ruid: uuid.New()[:8]}
