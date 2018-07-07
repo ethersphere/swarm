@@ -254,6 +254,7 @@ type ErrResolve error
 // Resolve a name into a content-addressed hash
 // where address could be an ENS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
+
 	// if its already a hash - return the hash
 	if hashMatcher.MatchString(address) {
 		return common.Hex2Bytes(address), nil
@@ -304,7 +305,7 @@ func (a *API) ResolveURI(ctx context.Context, uri *URI) (storage.Address, error)
 		if e.Path == uri.Path {
 			entry = e
 			// return an error to cancel the walk
-			return errors.New("found")
+			return errors.New("found") //why are we not using channels for signalling?
 		}
 
 		// ignore non-manifest files
