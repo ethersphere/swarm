@@ -171,18 +171,18 @@ func TestAPIResolve(t *testing.T) {
 	}
 
 	tests := []*test{
-		// {
-		// 	desc:   "DNS not configured, hash address, returns hash address",
-		// 	dns:    nil,
-		// 	addr:   hashAddr,
-		// 	result: hashAddr,
-		// },
-		// {
-		// 	desc:      "DNS not configured, ENS address, returns error",
-		// 	dns:       nil,
-		// 	addr:      ensAddr,
-		// 	expectErr: errors.New(`no DNS to resolve name: "swarm.eth"`),
-		// },
+		{
+			desc:   "DNS not configured, hash address, returns hash address",
+			dns:    nil,
+			addr:   hashAddr,
+			result: hashAddr,
+		},
+		{
+			desc:      "DNS not configured, ENS address, returns error",
+			dns:       nil,
+			addr:      ensAddr,
+			expectErr: errors.New(`no DNS to resolve name: "swarm.eth"`),
+		},
 		{
 			desc:   "DNS configured, hash address, hash resolves, returns resolved address",
 			dns:    doesResolve,

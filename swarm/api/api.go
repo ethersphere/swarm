@@ -20,7 +20,6 @@ import (
 	"archive/tar"
 
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -255,14 +254,14 @@ type ErrResolve error
 // where address could be an ENS name, or a content addressed hash
 func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
 
-	// if its already a hash - return the hash
-	if hashMatcher.MatchString(address) {
-		return common.Hex2Bytes(address), nil
-	}
-
 	// resolving a name
 	// if DNS is not configured, return an error
 	if a.dns == nil {
+		// if its already a hash - return the hash
+		if hashMatcher.MatchString(address) {
+			return common.Hex2Bytes(address), nil
+		}
+
 		apiResolveFail.Inc(1)
 		return nil, fmt.Errorf("no DNS to resolve name: %q", address)
 	}
@@ -279,59 +278,140 @@ func (a *API) Resolve(ctx context.Context, address string) (storage.Address, err
 
 // Resolve resolves a URI to an Address using the MultiResolver.
 func (a *API) ResolveURI(ctx context.Context, uri *URI) (storage.Address, error) {
+	// apiResolveCount.Inc(1)
+	// log.Trace("resolving", "uri", uri.Addr)
+
+	// // if the URI is immutable, check if the address looks like a hash
+	// if uri.Immutable() {
+	// 	key := uri.Address()
+	// 	if key == nil {
+	// 		return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
+	// 	}
+	// 	return key, nil
+	// }
+
+	// addr, err := a.Resolve(ctx, uri.Addr)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// if uri.Path == "" {
+	// 	return addr, nil
+	// }
+
+	// walker, err := a.NewManifestWalker(ctx, addr, nil)
+	// if err != nil {
+	// 	// getFail.Inc(1)
+	// 	// Respond(w, r, fmt.Sprintf("%s is not a manifest", addr), http.StatusBadRequest)
+	// 	return nil, err
+	// }
+	// var entry *ManifestEntry
+
+	// walker.Walk(func(e *ManifestEntry) error {
+	// 	// if the entry matches the path, set entry and stop
+	// 	// the walk
+	// 	if e.Path == uri.Path {
+	// 		entry = e
+	// 		// return an error to cancel the walk
+	// 		return errors.New("found") //why are we not using channels for signalling?
+	// 	}
+
+	// 	// ignore non-manifest files
+	// 	if e.ContentType != ManifestType {
+	// 		return nil
+	// 	}
+
+	// 	// if the manifest's path is a prefix of the
+	// 	// requested path, recurse into it by returning
+	// 	// nil and continuing the walk
+	// 	if strings.HasPrefix(uri.Path, e.Path) {
+	// 		return nil
+	// 	}
+
+	// 	return ErrSkipManifest
+	// })
+
+	// if entry == nil {
+	// 	//getFail.Inc(1)
+	// 	// Respond(w, r, fmt.Sprintf("manifest entry could not be loaded"), http.StatusNotFound)
+	// 	return nil, errors.New("not found")
+	// }
+	// addr = storage.Address(common.Hex2Bytes(entry.Hash))
+
+	// return addr, nil
+
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
 
-	addr, err := a.Resolve(ctx, uri.Addr)
-	if err != nil {
+	// if the URI is immutable, check if the address looks like a hash
+	if uri.Immutable() {
+		key := uri.Address()
+		if key == nil {
+			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
+		}
+		return key, nil
+	}
+
+	// if DNS is not configured, check if the address is a hash
+	if a.dns == nil {
+		key := uri.Address()
+		if key == nil {
+			apiResolveFail.Inc(1)
+			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
+		}
+		return key, nil
+	}
+
+	// try and resolve the address
+	resolved, err := a.dns.Resolve(uri.Addr)
+	if err == nil {
+		return resolved[:], nil
+	}
+
+	key := uri.Address()
+	if key == nil {
+		apiResolveFail.Inc(1)
 		return nil, err
 	}
-
-	if uri.Path == "" {
-		return addr, nil
-	}
-
-	walker, err := a.NewManifestWalker(ctx, addr, nil)
-	if err != nil {
-		// getFail.Inc(1)
-		// Respond(w, r, fmt.Sprintf("%s is not a manifest", addr), http.StatusBadRequest)
-		return nil, err
-	}
-	var entry *ManifestEntry
-
-	walker.Walk(func(e *ManifestEntry) error {
-		// if the entry matches the path, set entry and stop
-		// the walk
-		if e.Path == uri.Path {
-			entry = e
-			// return an error to cancel the walk
-			return errors.New("found") //why are we not using channels for signalling?
-		}
-
-		// ignore non-manifest files
-		if e.ContentType != ManifestType {
-			return nil
-		}
-
-		// if the manifest's path is a prefix of the
-		// requested path, recurse into it by returning
-		// nil and continuing the walk
-		if strings.HasPrefix(uri.Path, e.Path) {
-			return nil
-		}
-
-		return ErrSkipManifest
-	})
-
-	if entry == nil {
-		//getFail.Inc(1)
-		// Respond(w, r, fmt.Sprintf("manifest entry could not be loaded"), http.StatusNotFound)
-		return nil, errors.New("not found")
-	}
-	addr = storage.Address(common.Hex2Bytes(entry.Hash))
-
-	return addr, nil
+	return key, nil
 }
+
+// func (a *API) Resolve(ctx context.Context, uri *URI) (storage.Address, error) {
+// 	apiResolveCount.Inc(1)
+// 	log.Trace("resolving", "uri", uri.Addr)
+
+// 	// if the URI is immutable, check if the address looks like a hash
+// 	if uri.Immutable() {
+// 		key := uri.Address()
+// 		if key == nil {
+// 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
+// 		}
+// 		return key, nil
+// 	}
+
+// 	// if DNS is not configured, check if the address is a hash
+// 	if a.dns == nil {
+// 		key := uri.Address()
+// 		if key == nil {
+// 			apiResolveFail.Inc(1)
+// 			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
+// 		}
+// 		return key, nil
+// 	}
+
+// 	// try and resolve the address
+// 	resolved, err := a.dns.Resolve(uri.Addr)
+// 	if err == nil {
+// 		return resolved[:], nil
+// 	}
+
+// 	key := uri.Address()
+// 	if key == nil {
+// 		apiResolveFail.Inc(1)
+// 		return nil, err
+// 	}
+// 	return key, nil
+// }
 
 // Put provides singleton manifest creation on top of FileStore store
 func (a *API) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(ctx context.Context) error, err error) {
