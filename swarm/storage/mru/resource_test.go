@@ -155,7 +155,7 @@ func TestReverse(t *testing.T) {
 		Owner:     signer.Address(),
 	}
 
-	rootAddr, metaHash, _, err := metadata.hashAndSerialize()
+	rootAddr, metaHash, _, err := metadata.serializeAndHash()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -20,7 +20,6 @@ import (
 	"encoding/binary"
 	"hash"
 
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -93,7 +92,6 @@ func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))
 	}
 	if len(u.rootAddr) != storage.KeyLength {
-		log.Warn("Call to UpdateLookup.binaryPut with incorrect rootAddr")
 		return NewError(ErrInvalidValue, "UpdateLookup.binaryPut called without rootAddr set")
 	}
 	binary.LittleEndian.PutUint32(serializedData[:4], u.period)

@@ -121,9 +121,9 @@ func (r *ResourceMetadata) binaryLength() int {
 	return minimumMetadataLength + len(r.Name)
 }
 
-// hashAndSerialize returns the root chunk addr and metadata hash that help identify and ascertain ownership of this resource
+// serializeAndHash returns the root chunk addr and metadata hash that help identify and ascertain ownership of this resource
 // returns the serialized metadata as a byproduct of having to hash it.
-func (r *ResourceMetadata) hashAndSerialize() (rootAddr, metaHash []byte, chunkData []byte, err error) {
+func (r *ResourceMetadata) serializeAndHash() (rootAddr, metaHash []byte, chunkData []byte, err error) {
 
 	chunkData = make([]byte, r.binaryLength())
 	if err := r.binaryPut(chunkData); err != nil {
@@ -144,7 +144,7 @@ func (metadata *ResourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []b
 	// the key (rootAddr) of the metadata chunk is content-addressed
 	// if it wasn't we couldn't replace it later
 	// resolving this relationship is left up to external agents (for example ENS)
-	rootAddr, metaHash, chunkData, err := metadata.hashAndSerialize()
+	rootAddr, metaHash, chunkData, err := metadata.serializeAndHash()
 	if err != nil {
 		return nil, nil, err
 	}

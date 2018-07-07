@@ -30,6 +30,10 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
+func NewGenericSigner(ctx *cli.Context) mru.Signer {
+	return mru.NewGenericSigner(getClientAccount(ctx))
+}
+
 // swarm resource create <frequency> [--name <name>] [--data <0x Hexdata> [--multihash=false]]
 // swarm resource update <Manifest Address or ENS domain> <0x Hexdata> [--multihash=false]
 // swarm resource info <Manifest Address or ENS domain>
@@ -50,8 +54,7 @@ func resourceCreate(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "create", 1)
 		return
 	}
-	signer := mru.NewGenericSigner(getClientAccount(ctx))
-
+	signer := NewGenericSigner(ctx)
 	frequency, err := strconv.ParseUint(args[0], 10, 64)
 	if err != nil {
 		fmt.Printf("Frequency formatting error: %s\n", err.Error())
@@ -106,7 +109,7 @@ func resourceUpdate(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "update", 1)
 		return
 	}
-	signer := mru.NewGenericSigner(getClientAccount(ctx))
+	signer := NewGenericSigner(ctx)
 	manifestAddressOrDomain := args[0]
 	data, err := hexutil.Decode(args[1])
 	if err != nil {
@@ -153,7 +156,7 @@ func resourceInfo(ctx *cli.Context) {
 		utils.Fatalf("Error retrieving resource metadata: %s", err.Error())
 		return
 	}
-	encodedMetadata, err := mru.EncodeUpdateRequest(metadata)
+	encodedMetadata, err := mru.Marshal(metadata)
 	if err != nil {
 		utils.Fatalf("Error encoding metadata to JSON for display:%s", err)
 	}

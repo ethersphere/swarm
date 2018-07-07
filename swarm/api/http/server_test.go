@@ -156,7 +156,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 	}
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	body, err := mru.EncodeUpdateRequest(updateRequest)
+	body, err := updateRequest.Marshal()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	body, err := mru.EncodeUpdateRequest(updateRequest)
+	body, err := updateRequest.Marshal()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,8 +359,8 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest, err = mru.DecodeUpdateRequest(b)
-	if err != nil {
+	updateRequest = &mru.Request{}
+	if err = updateRequest.Unmarshal(b); err != nil {
 		t.Fatalf("Error decoding resource metadata: %s", err)
 	}
 	data := []byte("foo")
@@ -368,7 +368,7 @@ func TestBzzResource(t *testing.T) {
 	if err = updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	body, err = mru.EncodeUpdateRequest(updateRequest)
+	body, err = updateRequest.Marshal()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -38,7 +38,7 @@ func TestMarshallingAndUnmarshalling(t *testing.T) {
 		Owner:     ownerAddr,
 	}
 
-	rootAddr, metaHash, chunkData, err := metadata.hashAndSerialize() // creates hashes and marshals, in one go
+	rootAddr, metaHash, chunkData, err := metadata.serializeAndHash() // creates hashes and marshals, in one go
 	if err != nil {
 		t.Fatal(err)
 	}

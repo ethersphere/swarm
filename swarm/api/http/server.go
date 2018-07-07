@@ -553,8 +553,8 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	updateRequest, err := mru.DecodeUpdateRequest(body) // decodes request JSON
-	if err != nil {
+	var updateRequest mru.Request
+	if err := updateRequest.Unmarshal(body); err != nil { // decodes request JSON
 		Respond(w, r, err.Error(), http.StatusBadRequest) //TODO: send different status response depending on error
 		return
 	}
@@ -570,7 +570,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	}
 
 	if updateRequest.IsNew() {
-		err = s.api.ResourceCreate(r.Context(), updateRequest)
+		err = s.api.ResourceCreate(r.Context(), &updateRequest)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
 			Respond(w, r, err2.Error(), code)
@@ -657,7 +657,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 				Respond(w, r, fmt.Sprintf("cannot retrieve resource metadata for rootAddr=%s: %s", rootAddr.Hex(), err), http.StatusNotFound)
 				return
 			}
-			rawResponse, err := mru.EncodeUpdateRequest(unsignedUpdateRequest)
+			rawResponse, err := unsignedUpdateRequest.Marshal()
 			if err != nil {
 				Respond(w, r, fmt.Sprintf("cannot encode unsigned UpdateRequest: %v", err), http.StatusInternalServerError)
 				return
