@@ -272,12 +272,17 @@ func (s *Simulation) StartRandomNode() (id discover.NodeID, err error) {
 // StartRandomNodes starts random nodes.
 func (s *Simulation) StartRandomNodes(count int) (ids []discover.NodeID, err error) {
 	ids = make([]discover.NodeID, 0, count)
+	downIDs := s.DownNodeIDs()
 	for i := 0; i < count; i++ {
-		id, err := s.StartRandomNode()
+		n := s.randomNode(downIDs, ids...)
+		if n == nil {
+			return nil, ErrNodeNotFound
+		}
+		err = s.Net.Start(n.ID)
 		if err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
+		ids = append(ids, n.ID)
 	}
 	return ids, nil
 }
@@ -299,12 +304,17 @@ func (s *Simulation) StopRandomNode() (id discover.NodeID, err error) {
 // StopRandomNodes stops random nodes.
 func (s *Simulation) StopRandomNodes(count int) (ids []discover.NodeID, err error) {
 	ids = make([]discover.NodeID, 0, count)
+	upIDs := s.UpNodeIDs()
 	for i := 0; i < count; i++ {
-		id, err := s.StopRandomNode()
+		n := s.randomNode(upIDs, ids...)
+		if n == nil {
+			return nil, ErrNodeNotFound
+		}
+		err = s.Net.Stop(n.ID)
 		if err != nil {
 			return nil, err
 		}
-		ids = append(ids, id)
+		ids = append(ids, n.ID)
 	}
 	return ids, nil
 }
@@ -328,13 +338,20 @@ func (s *Simulation) randomDownNode(exclude ...discover.NodeID) *adapters.SimNod
 // randomUpNode returns a random SimNode from the slice of NodeIDs.
 func (s *Simulation) randomNode(ids []discover.NodeID, exclude ...discover.NodeID) *adapters.SimNode {
 	for _, e := range exclude {
-		for i, id := range ids {
+		var i int
+		for _, id := range ids {
 			if id == e {
 				ids = append(ids[:i], ids[i+1:]...)
+			} else {
+				i++
 			}
 		}
 	}
-	n := s.Net.GetNode(ids[rand.Intn(len(ids))])
+	l := len(ids)
+	if l == 0 {
+		return nil
+	}
+	n := s.Net.GetNode(ids[rand.Intn(l)])
 	node, _ := n.Node.(*adapters.SimNode)
 	return node
 }

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -283,6 +284,17 @@ func TestStartStopNode(t *testing.T) {
 		t.Error("node not stopped")
 	}
 
+	// Sleep here to ensure that Network.watchPeerEvents defer function
+	// has set the `node.Up = false` before we start the node again.
+	// p2p/simulations/network.go:215
+	//
+	// The same node is stopped and started again, and upon start
+	// watchPeerEvents is started in a goroutine. If the node is stopped
+	// and then very quickly started, that goroutine may be scheduled later
+	// then start and force `node.Up = false` in its defer function.
+	// This will make this test unreliable.
+	time.Sleep(time.Second)
+
 	err = sim.StartNode(id)
 	if err != nil {
 		t.Fatal(err)
@@ -319,6 +331,17 @@ func TestStartStopRandomNode(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Sleep here to ensure that Network.watchPeerEvents defer function
+	// has set the `node.Up = false` before we start the node again.
+	// p2p/simulations/network.go:215
+	//
+	// The same node is stopped and started again, and upon start
+	// watchPeerEvents is started in a goroutine. If the node is stopped
+	// and then very quickly started, that goroutine may be scheduled later
+	// then start and force `node.Up = false` in its defer function.
+	// This will make this test unreliable.
+	time.Sleep(time.Second)
+
 	idStarted, err := sim.StartRandomNode()
 	if err != nil {
 		t.Fatal(err)
@@ -352,6 +375,17 @@ func TestStartStopRandomNodes(t *testing.T) {
 			t.Error("node not stopped")
 		}
 	}
+
+	// Sleep here to ensure that Network.watchPeerEvents defer function
+	// has set the `node.Up = false` before we start the node again.
+	// p2p/simulations/network.go:215
+	//
+	// The same node is stopped and started again, and upon start
+	// watchPeerEvents is started in a goroutine. If the node is stopped
+	// and then very quickly started, that goroutine may be scheduled later
+	// then start and force `node.Up = false` in its defer function.
+	// This will make this test unreliable.
+	time.Sleep(time.Second)
 
 	ids, err = sim.StartRandomNodes(2)
 	if err != nil {
