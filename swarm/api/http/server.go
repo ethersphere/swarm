@@ -878,6 +878,34 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	RenderBzzList(&list, w, r)
 }
 
+func RenderBzzList(list *api.ManifestList, w http.ResponseWriter, r *Request) {
+
+	//        var t *template.Template
+	//    t, _ = template.ParseFiles("layout.html", "red_hello.html")
+
+	accept := r.Header.Get("Accept")
+	if strings.Contains(accept, "text/html") {
+		w.Header().Set("Content-Type", "text/html")
+		err := htmlListTemplate.Execute(w, &htmlListData{
+			URI: &api.URI{
+				Scheme: "bzz",
+				Addr:   r.uri.Addr,
+				Path:   r.uri.Path,
+			},
+			List: list,
+		})
+
+		if err != nil {
+			getListFail.Inc(1)
+			log.Error(fmt.Sprintf("error rendering list HTML: %s", err))
+		}
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(&list)
+}
+
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
