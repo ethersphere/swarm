@@ -454,21 +454,17 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.Reader, error) 
 	addr, err := a.Resolve(ctx, uri)
 	if err != nil {
 		// getFilesFail.Inc(1)
-		// Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
 		return nil, err
 	}
 	walker, err := a.NewManifestWalker(ctx, addr, nil)
 	if err != nil {
 		// getFilesFail.Inc(1)
-		// Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return nil, err
 	}
 
 	piper, pipew := io.Pipe()
 	tw := tar.NewWriter(pipew)
 	defer tw.Close()
-	// w.Header().Set("Content-Type", "application/x-tar")
-	// w.WriteHeader(http.StatusOK)
 
 	err = walker.Walk(func(entry *ManifestEntry) error {
 		// ignore manifests (walk will recurse into them)

@@ -797,9 +797,13 @@ func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 
 	rdr, err := s.api.GetDirectoryTar(r.Context(), r.uri)
 	if err != nil {
-		Respond(w, r, "encountered an error downloading directory as tarball: %s", http.StatusInternalServerError)
+		Respond(w, r, fmt.Sprintf("encountered an error downloading directory as tarball: %v", err), http.StatusInternalServerError)
 	}
+	w.Header().Set("Content-Type", "application/x-tar")
+	w.WriteHeader(http.StatusOK)
+
 	io.Copy(w, rdr)
+
 	// log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", addr)
 }
 
