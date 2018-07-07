@@ -23,7 +23,6 @@ import (
 	"archive/tar"
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -73,13 +72,6 @@ var (
 	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
-
-// ServerConfig is the basic configuration needed for the HTTP server and also
-// includes CORS settings.
-type ServerConfig struct {
-	Addr       string
-	CorsString string
-}
 
 func NewServer(api *api.API, corsString string) *Server {
 	var allowedOrigins []string
@@ -338,7 +330,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		log.Debug("new manifest", "ruid", r.ruid, "key", addr)
 	}
 
-	newAddr, err := s.updateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
+	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 
 		case "application/x-tar":
@@ -364,38 +356,11 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newAddr)
 }
 
-func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
-	log.Debug("handle.tar.upload", "ruid", req.ruid)
-	tr := tar.NewReader(req.Body)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return fmt.Errorf("error reading tar stream: %s", err)
-		}
+func (s *Server) handleTarUpload(r *Request, mw *api.ManifestWriter) error {
+	log.Debug("handle.tar.upload", "ruid", r.ruid)
 
-		// only store regular files
-		if !hdr.FileInfo().Mode().IsRegular() {
-			continue
-		}
+	return s.api.UploadTar(r.Context(), r.Body, r.uri.Path, mw)
 
-		// add the entry under the path from the request
-		path := path.Join(req.uri.Path, hdr.Name)
-		entry := &api.ManifestEntry{
-			Path:        path,
-			ContentType: hdr.Xattrs["user.swarm.content-type"],
-			Mode:        hdr.Mode,
-			Size:        hdr.Size,
-			ModTime:     hdr.ModTime,
-		}
-		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
-		contentKey, err := mw.AddEntry(req.Context(), tr, entry)
-		if err != nil {
-			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
-		}
-		log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
-	}
 }
 
 func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
@@ -479,20 +444,11 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.delete", "ruid", r.ruid)
 
 	deleteCount.Inc(1)
-	key, err := s.api.Resolve(r.Context(), r.uri)
-	if err != nil {
-		deleteFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
-		return
-	}
+	newKey, err := s.api.Delete(r.Context(), r.uri.Addr, r.uri.Path)
 
-	newKey, err := s.updateManifest(r.Context(), key, func(mw *api.ManifestWriter) error {
-		log.Debug(fmt.Sprintf("removing %s from manifest %s", r.uri.Path, key.Log()), "ruid", r.ruid)
-		return mw.RemoveEntry(r.uri.Path)
-	})
 	if err != nil {
 		deleteFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot update manifest: %s", err), http.StatusInternalServerError)
+		Respond(w, r, fmt.Sprintf("could not delete from manifest: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -947,7 +903,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	}
 	log.Debug("handle.get.list: resolved", "ruid", r.ruid, "key", addr)
 
-	list, err := s.getManifestList(r.Context(), addr, r.uri.Path)
+	list, err := s.api.GetManifestList(r.Context(), addr, r.uri.Path)
 
 	if err != nil {
 		getListFail.Inc(1)
@@ -976,62 +932,6 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(&list)
-}
-
-func (s *Server) getManifestList(ctx context.Context, addr storage.Address, prefix string) (list api.ManifestList, err error) {
-	walker, err := s.api.NewManifestWalker(ctx, addr, nil)
-	if err != nil {
-		return
-	}
-
-	err = walker.Walk(func(entry *api.ManifestEntry) error {
-		// handle non-manifest files
-		if entry.ContentType != api.ManifestType {
-			// ignore the file if it doesn't have the specified prefix
-			if !strings.HasPrefix(entry.Path, prefix) {
-				return nil
-			}
-
-			// if the path after the prefix contains a slash, add a
-			// common prefix to the list, otherwise add the entry
-			suffix := strings.TrimPrefix(entry.Path, prefix)
-			if index := strings.Index(suffix, "/"); index > -1 {
-				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return nil
-			}
-			if entry.Path == "" {
-				entry.Path = "/"
-			}
-			list.Entries = append(list.Entries, entry)
-			return nil
-		}
-
-		// if the manifest's path is a prefix of the specified prefix
-		// then just recurse into the manifest by returning nil and
-		// continuing the walk
-		if strings.HasPrefix(prefix, entry.Path) {
-			return nil
-		}
-
-		// if the manifest's path has the specified prefix, then if the
-		// path after the prefix contains a slash, add a common prefix
-		// to the list and skip the manifest, otherwise recurse into
-		// the manifest by returning nil and continuing the walk
-		if strings.HasPrefix(entry.Path, prefix) {
-			suffix := strings.TrimPrefix(entry.Path, prefix)
-			if index := strings.Index(suffix, "/"); index > -1 {
-				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return api.ErrSkipManifest
-			}
-			return nil
-		}
-
-		// the manifest neither has the prefix or needs recursing in to
-		// so just skip it
-		return api.ErrSkipManifest
-	})
-
-	return list, nil
 }
 
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
@@ -1087,7 +987,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.getManifestList(r.Context(), manifestAddr, r.uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), manifestAddr, r.uri.Path)
 
 		if err != nil {
 			getFileFail.Inc(1)
@@ -1141,24 +1041,6 @@ func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
 
 func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	return b.s.Seek(offset, whence)
-}
-
-func (s *Server) updateManifest(ctx context.Context, addr storage.Address, update func(mw *api.ManifestWriter) error) (storage.Address, error) {
-	mw, err := s.api.NewManifestWriter(ctx, addr, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := update(mw); err != nil {
-		return nil, err
-	}
-
-	addr, err = mw.Store()
-	if err != nil {
-		return nil, err
-	}
-	log.Debug(fmt.Sprintf("generated manifest %s", addr))
-	return addr, nil
 }
 
 type loggingResponseWriter struct {

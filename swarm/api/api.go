@@ -17,6 +17,7 @@
 package api
 
 import (
+	"archive/tar"
 	"context"
 	"fmt"
 	"io"
@@ -424,6 +425,171 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 	return
 }
 
+func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
+	// log.Debug("handle.delete", "ruid", r.ruid)
+	uri, err := Parse("bzz:/" + addr)
+	if err != nil {
+		apiAddFileFail.Inc(1)
+		return nil, err
+	}
+	key, err := a.Resolve(ctx, uri)
+
+	if err != nil {
+		return nil, err
+	}
+	newKey, err := a.UpdateManifest(ctx, key, func(mw *ManifestWriter) error {
+		log.Debug(fmt.Sprintf("removing %s from manifest %s", path, key.Log()))
+		return mw.RemoveEntry(path)
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return newKey, nil
+}
+
+// GetDirectoryTar fetches a requested directory as a tarstream
+// it returns an io.Reader and an error
+func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, error) {
+	addr, err := a.Resolve(ctx, uri)
+	if err != nil {
+		// getFilesFail.Inc(1)
+		return nil, err
+	}
+	walker, err := a.NewManifestWalker(ctx, addr, nil)
+	if err != nil {
+		// getFilesFail.Inc(1)
+		return nil, err
+	}
+
+	piper, pipew := io.Pipe()
+	tw := tar.NewWriter(pipew)
+	//defer tw.Close()
+
+	err = walker.Walk(func(entry *ManifestEntry) error {
+		// ignore manifests (walk will recurse into them)
+		if entry.ContentType == ManifestType {
+			return nil
+		}
+
+		// retrieve the entry's key and size
+		reader, _ := a.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
+		size, err := reader.Size(nil)
+		if err != nil {
+			return err
+		}
+		// w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
+
+		// write a tar header for the entry
+		hdr := &tar.Header{
+			Name:    entry.Path,
+			Mode:    entry.Mode,
+			Size:    size,
+			ModTime: entry.ModTime,
+			Xattrs: map[string]string{
+				"user.swarm.content-type": entry.ContentType,
+			},
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+
+		// copy the file into the tar stream
+		n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
+		if err != nil {
+			return err
+		} else if n != size {
+			return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		// getFilesFail.Inc(1)
+		// log.Error(fmt.Sprintf("error generating tar stream: %s", err))
+		return nil, err
+	}
+
+	return piper, nil
+
+}
+
+// GetManifestList does something important
+func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix string) (list ManifestList, err error) {
+	walker, err := a.NewManifestWalker(ctx, addr, nil)
+	if err != nil {
+		return
+	}
+
+	err = walker.Walk(func(entry *ManifestEntry) error {
+		// handle non-manifest files
+		if entry.ContentType != ManifestType {
+			// ignore the file if it doesn't have the specified prefix
+			if !strings.HasPrefix(entry.Path, prefix) {
+				return nil
+			}
+
+			// if the path after the prefix contains a slash, add a
+			// common prefix to the list, otherwise add the entry
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			if index := strings.Index(suffix, "/"); index > -1 {
+				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
+				return nil
+			}
+			if entry.Path == "" {
+				entry.Path = "/"
+			}
+			list.Entries = append(list.Entries, entry)
+			return nil
+		}
+
+		// if the manifest's path is a prefix of the specified prefix
+		// then just recurse into the manifest by returning nil and
+		// continuing the walk
+		if strings.HasPrefix(prefix, entry.Path) {
+			return nil
+		}
+
+		// if the manifest's path has the specified prefix, then if the
+		// path after the prefix contains a slash, add a common prefix
+		// to the list and skip the manifest, otherwise recurse into
+		// the manifest by returning nil and continuing the walk
+		if strings.HasPrefix(entry.Path, prefix) {
+			suffix := strings.TrimPrefix(entry.Path, prefix)
+			if index := strings.Index(suffix, "/"); index > -1 {
+				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
+				return ErrSkipManifest
+			}
+			return nil
+		}
+
+		// the manifest neither has the prefix or needs recursing in to
+		// so just skip it
+		return ErrSkipManifest
+	})
+
+	return list, nil
+}
+
+func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update func(mw *ManifestWriter) error) (storage.Address, error) {
+	mw, err := a.NewManifestWriter(ctx, addr, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := update(mw); err != nil {
+		return nil, err
+	}
+
+	addr, err = mw.Store()
+	if err != nil {
+		return nil, err
+	}
+	log.Debug(fmt.Sprintf("generated manifest %s", addr))
+	return addr, nil
+}
+
 // Modify loads manifest and checks the content hash before recalculating and storing the manifest.
 func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
@@ -499,6 +665,41 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	}
 
 	return fkey, newMkey.String(), nil
+}
+
+func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath string, mw *ManifestWriter) error {
+	// log.Debug("handle.tar.upload", "ruid", req.ruid)
+	tr := tar.NewReader(bodyReader)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			return nil
+		} else if err != nil {
+			return fmt.Errorf("error reading tar stream: %s", err)
+		}
+
+		// only store regular files
+		if !hdr.FileInfo().Mode().IsRegular() {
+			continue
+		}
+
+		// add the entry under the path from the request
+		manifestPath := path.Join(manifestPath, hdr.Name)
+		entry := &ManifestEntry{
+			Path:        manifestPath,
+			ContentType: hdr.Xattrs["user.swarm.content-type"],
+			Mode:        hdr.Mode,
+			Size:        hdr.Size,
+			ModTime:     hdr.ModTime,
+		}
+		// log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
+		_, err = mw.AddEntry(ctx, tr, entry)
+		if err != nil {
+			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
+		}
+		// return nil
+		// log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
+	}
 }
 
 // RemoveFile removes a file entry in a manifest.
