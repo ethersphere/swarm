@@ -41,7 +41,7 @@ import (
 )
 
 func init() {
-	loglevel := flag.Int("loglevel", 2, "loglevel")
+	loglevel := flag.Int("loglevel", 7, "loglevel")
 	flag.Parse()
 	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
 }
@@ -353,7 +353,7 @@ func TestBzzResource(t *testing.T) {
 
 func TestBzzGetPath(t *testing.T) {
 	testBzzGetPath(false, t)
-	testBzzGetPath(true, t)
+	//	testBzzGetPath(true, t)
 }
 
 func testBzzGetPath(encrypted bool, t *testing.T) {
