@@ -97,8 +97,7 @@ func TestRun(t *testing.T) {
 	})
 }
 
-// TestClose tests are Close method triggers all close functions, are close functions are
-// called in parallel by measuring maximal expected time and are all nodes not up anymore.
+// TestClose tests are Close method triggers all close functions and are all nodes not up anymore.
 func TestClose(t *testing.T) {
 	var mu sync.Mutex
 	var cleanupCount int
@@ -133,11 +132,7 @@ func TestClose(t *testing.T) {
 		t.Errorf("all nodes should be up, insted only %v are up", upNodeCount)
 	}
 
-	start := time.Now()
 	sim.Close()
-	if d := time.Since(start); d > time.Duration(nodeCount/maxParallelCleanups+1)*sleep {
-		t.Errorf("close took too much time to execute: %s", d)
-	}
 
 	if cleanupCount != nodeCount {
 		t.Errorf("number of cleanups expected %v, got %v", nodeCount, cleanupCount)
