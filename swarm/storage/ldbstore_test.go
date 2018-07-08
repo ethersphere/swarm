@@ -72,7 +72,7 @@ func newTestDbStore(mock bool, trusted bool) (*testDbStore, func(), error) {
 }
 
 func testPoFunc(k Address) (ret uint8) {
-	basekey := make([]byte, 32)
+	basekey := make([]byte, KeyLength)
 	return uint8(Proximity(basekey[:], k[:]))
 }
 

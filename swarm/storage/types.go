@@ -142,7 +142,7 @@ func (a Address) MarshalJSON() (out []byte, err error) {
 
 func (a *Address) UnmarshalJSON(value []byte) error {
 	s := string(value)
-	*a = make([]byte, 32)
+	*a = make([]byte, KeyLength)
 	h := common.Hex2Bytes(s[1 : len(s)-1])
 	copy(*a, h)
 	return nil
@@ -241,7 +241,7 @@ func GenerateRandomChunks(dataSize int64, count int) (chunks []*Chunk) {
 		binary.LittleEndian.PutUint64(chunks[i].SData[:8], uint64(dataSize))
 		hasher.ResetWithLength(chunks[i].SData[:8])
 		hasher.Write(chunks[i].SData[8:])
-		chunks[i].Addr = make([]byte, 32)
+		chunks[i].Addr = make([]byte, KeyLength)
 		copy(chunks[i].Addr, hasher.Sum(nil))
 	}
 
@@ -278,7 +278,7 @@ func NewDefaultStoreParams() *StoreParams {
 
 func NewStoreParams(ldbCap uint64, cacheCap uint, requestsCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
 	if basekey == nil {
-		basekey = make([]byte, 32)
+		basekey = make([]byte, KeyLength)
 	}
 	if hash == nil {
 		hash = MakeHashFunc(DefaultHash)

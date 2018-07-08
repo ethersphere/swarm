@@ -222,7 +222,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 
 func NewRandomChunk(chunkSize uint64) *Chunk {
 	c := &Chunk{
-		Addr:       make([]byte, 32),
+		Addr:       make([]byte, KeyLength),
 		ReqC:       nil,
 		SData:      make([]byte, chunkSize+8), // SData should be chunkSize + 8 bytes reserved for length
 		dbStoredC:  make(chan bool),

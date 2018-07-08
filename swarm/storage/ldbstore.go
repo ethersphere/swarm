@@ -235,8 +235,8 @@ func decodeIndex(data []byte, index *dpaDBIndex) error {
 }
 
 func decodeData(data []byte, chunk *Chunk) {
-	chunk.SData = data[32:]
-	chunk.Size = int64(binary.BigEndian.Uint64(data[32:40]))
+	chunk.SData = data[KeyLength:]
+	chunk.Size = int64(binary.BigEndian.Uint64(data[KeyLength : KeyLength+8]))
 }
 
 func decodeOldData(data []byte, chunk *Chunk) {
@@ -369,7 +369,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 		}
 		key := Address(keybytes)
 		chunk := NewChunk(key, nil)
-		chunk.SData = data[32:]
+		chunk.SData = data[KeyLength:]
 		s.Put(chunk)
 		wg.Add(1)
 		go func() {
@@ -408,7 +408,7 @@ func (s *LDBStore) Cleanup() {
 			errorsFound++
 		} else {
 			hasher := s.hashfunc()
-			hasher.Write(data[32:])
+			hasher.Write(data[KeyLength:])
 			hash := hasher.Sum(nil)
 			if !bytes.Equal(hash, key[1:]) {
 				log.Warn(fmt.Sprintf("Found invalid chunk. Hash mismatch. hash=%x, key=%x", hash, key[:]))
@@ -748,9 +748,9 @@ func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(Add
 		if dbkey[0] != keyData || dbkey[1] != po || bytes.Compare(untilkey, dbkey) < 0 {
 			break
 		}
-		key := make([]byte, 32)
+		key := make([]byte, KeyLength)
 		val := it.Value()
-		copy(key, val[:32])
+		copy(key, val[:KeyLength])
 		if !f(Address(key), binary.BigEndian.Uint64(dbkey[2:])) {
 			break
 		}
