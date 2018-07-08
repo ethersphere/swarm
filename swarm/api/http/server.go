@@ -442,10 +442,8 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 // text/plain response
 func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.delete", "ruid", r.ruid)
-
 	deleteCount.Inc(1)
 	newKey, err := s.api.Delete(r.Context(), r.uri.Addr, r.uri.Path)
-
 	if err != nil {
 		deleteFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("could not delete from manifest: %v", err), http.StatusInternalServerError)

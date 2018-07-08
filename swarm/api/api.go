@@ -42,22 +42,32 @@ import (
 )
 
 var (
-	apiResolveCount    = metrics.NewRegisteredCounter("api.resolve.count", nil)
-	apiResolveFail     = metrics.NewRegisteredCounter("api.resolve.fail", nil)
-	apiPutCount        = metrics.NewRegisteredCounter("api.put.count", nil)
-	apiPutFail         = metrics.NewRegisteredCounter("api.put.fail", nil)
-	apiGetCount        = metrics.NewRegisteredCounter("api.get.count", nil)
-	apiGetNotFound     = metrics.NewRegisteredCounter("api.get.notfound", nil)
-	apiGetHTTP300      = metrics.NewRegisteredCounter("api.get.http.300", nil)
-	apiModifyCount     = metrics.NewRegisteredCounter("api.modify.count", nil)
-	apiModifyFail      = metrics.NewRegisteredCounter("api.modify.fail", nil)
-	apiAddFileCount    = metrics.NewRegisteredCounter("api.addfile.count", nil)
-	apiAddFileFail     = metrics.NewRegisteredCounter("api.addfile.fail", nil)
-	apiRmFileCount     = metrics.NewRegisteredCounter("api.removefile.count", nil)
-	apiRmFileFail      = metrics.NewRegisteredCounter("api.removefile.fail", nil)
-	apiAppendFileCount = metrics.NewRegisteredCounter("api.appendfile.count", nil)
-	apiAppendFileFail  = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
-	apiGetInvalid      = metrics.NewRegisteredCounter("api.get.invalid", nil)
+	apiResolveCount        = metrics.NewRegisteredCounter("api.resolve.count", nil)
+	apiResolveFail         = metrics.NewRegisteredCounter("api.resolve.fail", nil)
+	apiPutCount            = metrics.NewRegisteredCounter("api.put.count", nil)
+	apiPutFail             = metrics.NewRegisteredCounter("api.put.fail", nil)
+	apiGetCount            = metrics.NewRegisteredCounter("api.get.count", nil)
+	apiGetNotFound         = metrics.NewRegisteredCounter("api.get.notfound", nil)
+	apiGetHTTP300          = metrics.NewRegisteredCounter("api.get.http.300", nil)
+	apiManifestUpdateCount = metrics.NewRegisteredCounter("api.manifestupdate.count", nil)
+	apiManifestUpdateFail  = metrics.NewRegisteredCounter("api.manifestupdate.fail", nil)
+	apiManifestListCount   = metrics.NewRegisteredCounter("api.manifestlist.count", nil)
+	apiManifestListFail    = metrics.NewRegisteredCounter("api.manifestlist.fail", nil)
+	apiDeleteCount         = metrics.NewRegisteredCounter("api.delete.count", nil)
+	apiDeleteFail          = metrics.NewRegisteredCounter("api.delete.fail", nil)
+	apiGetTarCount         = metrics.NewRegisteredCounter("api.gettar.count", nil)
+	apiGetTarFail          = metrics.NewRegisteredCounter("api.gettar.fail", nil)
+	apiUploadTarCount      = metrics.NewRegisteredCounter("api.uploadtar.count", nil)
+	apiUploadTarFail       = metrics.NewRegisteredCounter("api.uploadtar.fail", nil)
+	apiModifyCount         = metrics.NewRegisteredCounter("api.modify.count", nil)
+	apiModifyFail          = metrics.NewRegisteredCounter("api.modify.fail", nil)
+	apiAddFileCount        = metrics.NewRegisteredCounter("api.addfile.count", nil)
+	apiAddFileFail         = metrics.NewRegisteredCounter("api.addfile.fail", nil)
+	apiRmFileCount         = metrics.NewRegisteredCounter("api.removefile.count", nil)
+	apiRmFileFail          = metrics.NewRegisteredCounter("api.removefile.fail", nil)
+	apiAppendFileCount     = metrics.NewRegisteredCounter("api.appendfile.count", nil)
+	apiAppendFileFail      = metrics.NewRegisteredCounter("api.appendfile.fail", nil)
+	apiGetInvalid          = metrics.NewRegisteredCounter("api.get.invalid", nil)
 )
 
 // Resolver interface resolve a domain name to a hash using ENS
@@ -426,10 +436,10 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 }
 
 func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
-	// log.Debug("handle.delete", "ruid", r.ruid)
+	apiDeleteCount.Inc(1)
 	uri, err := Parse("bzz:/" + addr)
 	if err != nil {
-		apiAddFileFail.Inc(1)
+		apiDeleteFail.Inc(1)
 		return nil, err
 	}
 	key, err := a.Resolve(ctx, uri)
@@ -442,6 +452,7 @@ func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Add
 		return mw.RemoveEntry(path)
 	})
 	if err != nil {
+		apiDeleteFail.Inc(1)
 		return nil, err
 	}
 
@@ -449,22 +460,21 @@ func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Add
 }
 
 // GetDirectoryTar fetches a requested directory as a tarstream
-// it returns an io.Reader and an error
+// it returns an io.Reader and an error. Do not forget to Close() the returned ReadCloser
 func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, error) {
+	apiGetTarCount.Inc(1)
 	addr, err := a.Resolve(ctx, uri)
 	if err != nil {
-		// getFilesFail.Inc(1)
 		return nil, err
 	}
 	walker, err := a.NewManifestWalker(ctx, addr, nil)
 	if err != nil {
-		// getFilesFail.Inc(1)
+		apiGetTarFail.Inc(1)
 		return nil, err
 	}
 
 	piper, pipew := io.Pipe()
 	tw := tar.NewWriter(pipew)
-	//defer tw.Close()
 
 	err = walker.Walk(func(entry *ManifestEntry) error {
 		// ignore manifests (walk will recurse into them)
@@ -506,20 +516,20 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, err
 	})
 
 	if err != nil {
-		// getFilesFail.Inc(1)
-		// log.Error(fmt.Sprintf("error generating tar stream: %s", err))
+		apiGetTarFail.Inc(1)
 		return nil, err
 	}
 
 	return piper, nil
-
 }
 
 // GetManifestList does something important
 func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix string) (list ManifestList, err error) {
+	apiManifestListCount.Inc(1)
 	walker, err := a.NewManifestWalker(ctx, addr, nil)
 	if err != nil {
-		return
+		apiManifestListFail.Inc(1)
+		return ManifestList{}, err
 	}
 
 	err = walker.Walk(func(entry *ManifestEntry) error {
@@ -569,21 +579,30 @@ func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix 
 		return ErrSkipManifest
 	})
 
+	if err != nil {
+		apiManifestListFail.Inc(1)
+		return ManifestList{}, err
+	}
+
 	return list, nil
 }
 
 func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update func(mw *ManifestWriter) error) (storage.Address, error) {
+	apiManifestUpdateCount.Inc(1)
 	mw, err := a.NewManifestWriter(ctx, addr, nil)
 	if err != nil {
+		apiManifestUpdateFail.Inc(1)
 		return nil, err
 	}
 
 	if err := update(mw); err != nil {
+		apiManifestUpdateFail.Inc(1)
 		return nil, err
 	}
 
 	addr, err = mw.Store()
 	if err != nil {
+		apiManifestUpdateFail.Inc(1)
 		return nil, err
 	}
 	log.Debug(fmt.Sprintf("generated manifest %s", addr))
