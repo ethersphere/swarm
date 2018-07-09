@@ -56,6 +56,7 @@ var (
 	initOnce       = sync.Once{}
 	debugdebugflag = flag.Bool("vv", false, "veryverbose")
 	debugflag      = flag.Bool("v", false, "verbose")
+	longrunning    = flag.Bool("longrunning", false, "do run long-running tests")
 	w              *whisper.Whisper
 	wapi           *whisper.PublicWhisperAPI
 	psslogmain     log.Logger
@@ -469,7 +470,7 @@ func TestKeys(t *testing.T) {
 	}
 
 	// make a symmetric key that we will send to peer for encrypting messages to us
-	inkeyid, err := ps.generateSymmetricKey(topicobj, &addr, true)
+	inkeyid, err := ps.GenerateSymmetricKey(topicobj, &addr, true)
 	if err != nil {
 		t.Fatalf("failed to set 'our' incoming symmetric key")
 	}
@@ -949,12 +950,19 @@ func worker(id int, jobs <-chan Job, rpcs map[discover.NodeID]*rpc.Client, pubke
 	}
 }
 
+func TestNetwork(t *testing.T) {
+	t.Run("16/1000/4/sim", testNetwork)
+}
+
 // params in run name:
 // nodes/msgs/addrbytes/adaptertype
 // if adaptertype is exec uses execadapter, simadapter otherwise
 func TestNetwork2000(t *testing.T) {
 	//enableMetrics()
 
+	if !*longrunning {
+		t.Skip("run with --longrunning flag to run extensive network tests")
+	}
 	t.Run("3/2000/4/sim", testNetwork)
 	t.Run("4/2000/4/sim", testNetwork)
 	t.Run("8/2000/4/sim", testNetwork)
@@ -964,6 +972,9 @@ func TestNetwork2000(t *testing.T) {
 func TestNetwork5000(t *testing.T) {
 	//enableMetrics()
 
+	if !*longrunning {
+		t.Skip("run with --longrunning flag to run extensive network tests")
+	}
 	t.Run("3/5000/4/sim", testNetwork)
 	t.Run("4/5000/4/sim", testNetwork)
 	t.Run("8/5000/4/sim", testNetwork)
@@ -973,6 +984,9 @@ func TestNetwork5000(t *testing.T) {
 func TestNetwork10000(t *testing.T) {
 	//enableMetrics()
 
+	if !*longrunning {
+		t.Skip("run with --longrunning flag to run extensive network tests")
+	}
 	t.Run("3/10000/4/sim", testNetwork)
 	t.Run("4/10000/4/sim", testNetwork)
 	t.Run("8/10000/4/sim", testNetwork)
@@ -1282,7 +1296,7 @@ func benchmarkSymKeySend(b *testing.B) {
 	topic := BytesToTopic([]byte("foo"))
 	to := make(PssAddress, 32)
 	copy(to[:], network.RandomAddr().Over())
-	symkeyid, err := ps.generateSymmetricKey(topic, &to, true)
+	symkeyid, err := ps.GenerateSymmetricKey(topic, &to, true)
 	if err != nil {
 		b.Fatalf("could not generate symkey: %v", err)
 	}
@@ -1375,7 +1389,7 @@ func benchmarkSymkeyBruteforceChangeaddr(b *testing.B) {
 	for i := 0; i < int(keycount); i++ {
 		to := make(PssAddress, 32)
 		copy(to[:], network.RandomAddr().Over())
-		keyid, err = ps.generateSymmetricKey(topic, &to, true)
+		keyid, err = ps.GenerateSymmetricKey(topic, &to, true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
@@ -1457,7 +1471,7 @@ func benchmarkSymkeyBruteforceSameaddr(b *testing.B) {
 	topic := BytesToTopic([]byte("foo"))
 	for i := 0; i < int(keycount); i++ {
 		copy(addr[i], network.RandomAddr().Over())
-		keyid, err = ps.generateSymmetricKey(topic, &addr[i], true)
+		keyid, err = ps.GenerateSymmetricKey(topic, &addr[i], true)
 		if err != nil {
 			b.Fatalf("cant generate symkey #%d: %v", i, err)
 		}
