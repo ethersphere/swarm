@@ -28,18 +28,17 @@ import (
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
-	Name           string `json:"name,omitempty"`
-	Frequency      uint64 `json:"frequency,omitempty"`
-	StartTime      uint64 `json:"startTime,omitempty"`
-	StartTimeProof string `json:"startTimeProof,omitempty"`
-	Owner          string `json:"ownerAddr,omitempty"`
-	RootAddr       string `json:"rootAddr,omitempty"`
-	MetaHash       string `json:"metaHash,omitempty"`
-	Version        uint32 `json:"version"`
-	Period         uint32 `json:"period"`
-	Data           string `json:"data,omitempty"`
-	Multihash      bool   `json:"multiHash"`
-	Signature      string `json:"signature,omitempty"`
+	Name      string `json:"name,omitempty"`
+	Frequency uint64 `json:"frequency,omitempty"`
+	StartTime uint64 `json:"startTime,omitempty"`
+	Owner     string `json:"ownerAddr,omitempty"`
+	RootAddr  string `json:"rootAddr,omitempty"`
+	MetaHash  string `json:"metaHash,omitempty"`
+	Version   uint32 `json:"version"`
+	Period    uint32 `json:"period"`
+	Data      string `json:"data,omitempty"`
+	Multihash bool   `json:"multiHash"`
+	Signature string `json:"signature,omitempty"`
 }
 
 // Request represents an update and/or resource create message
@@ -169,10 +168,6 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 	r.metadata.Frequency = j.Frequency
 	r.metadata.StartTime.Time = j.StartTime
 
-	if err := decodeHexArray(r.metadata.StartTime.Proof[:], j.StartTimeProof, "startTimeProof"); err != nil {
-		return err
-	}
-
 	if err := decodeHexArray(r.metadata.Owner[:], j.Owner, "ownerAddr"); err != nil {
 		return err
 	}
@@ -282,26 +277,19 @@ func (r *Request) Marshal() (rawData []byte, err error) {
 	} else {
 		ownerAddrString = hexutil.Encode(r.metadata.Owner[:])
 	}
-	var startTimeProofString string
-	if r.metadata.StartTime.Time == 0 {
-		startTimeProofString = ""
-	} else {
-		startTimeProofString = hexutil.Encode(r.metadata.StartTime.Proof[:])
-	}
 
 	requestJSON := &updateRequestJSON{
-		Name:           r.metadata.Name,
-		Frequency:      r.metadata.Frequency,
-		StartTime:      r.metadata.StartTime.Time,
-		StartTimeProof: startTimeProofString,
-		Version:        r.version,
-		Period:         r.period,
-		Owner:          ownerAddrString,
-		Data:           dataHashString,
-		Multihash:      r.multihash,
-		Signature:      signatureString,
-		RootAddr:       rootAddrString,
-		MetaHash:       metaHashString,
+		Name:      r.metadata.Name,
+		Frequency: r.metadata.Frequency,
+		StartTime: r.metadata.StartTime.Time,
+		Version:   r.version,
+		Period:    r.period,
+		Owner:     ownerAddrString,
+		Data:      dataHashString,
+		Multihash: r.multihash,
+		Signature: signatureString,
+		RootAddr:  rootAddrString,
+		MetaHash:  metaHashString,
 	}
 
 	return json.Marshal(requestJSON)

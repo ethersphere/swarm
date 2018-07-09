@@ -19,20 +19,15 @@ package mru
 import (
 	"encoding/binary"
 	"time"
-
-	"github.com/ethereum/go-ethereum/common"
 )
 
-// Encodes a point in time as a Unix epoch and provides
-// space for proof the timestamp was not created prior to its time
+// Encodes a point in time as a Unix epoch
 type Timestamp struct {
-	Time  uint64      // Unix epoch timestamp, in seconds
-	Proof common.Hash // space to hold proof of the timestamp, e.g., a block hash
+	Time uint64 // Unix epoch timestamp, in seconds
 }
 
-// 8 bytes Time
-// 32 bytes hash length
-const timestampLength = 8 + common.HashLength
+// 8 bytes uint64 Time
+const timestampLength = 8
 
 // timestampProvider interface describes a source of timestamp information
 type timestampProvider interface {
@@ -45,7 +40,6 @@ func (t *Timestamp) binaryGet(data []byte) error {
 		return NewError(ErrCorruptData, "timestamp data has the wrong size")
 	}
 	t.Time = binary.LittleEndian.Uint64(data[:8])
-	copy(t.Proof[:], data[8:])
 	return nil
 }
 
@@ -55,7 +49,6 @@ func (t *Timestamp) binaryPut(data []byte) error {
 		return NewError(ErrCorruptData, "timestamp data has the wrong size")
 	}
 	binary.LittleEndian.PutUint64(data, t.Time)
-	copy(data[8:], t.Proof[:])
 	return nil
 }
 
@@ -70,7 +63,6 @@ func NewDefaultTimestampProvider() *DefaultTimestampProvider {
 // Now returns the current time according to this provider
 func (dtp *DefaultTimestampProvider) Now() Timestamp {
 	return Timestamp{
-		Time:  uint64(time.Now().Unix()),
-		Proof: common.Hash{},
+		Time: uint64(time.Now().Unix()),
 	}
 }
