@@ -474,51 +474,56 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, err
 	}
 
 	piper, pipew := io.Pipe()
+
 	tw := tar.NewWriter(pipew)
 
-	err = walker.Walk(func(entry *ManifestEntry) error {
-		// ignore manifests (walk will recurse into them)
-		if entry.ContentType == ManifestType {
+	go func() {
+		err := walker.Walk(func(entry *ManifestEntry) error {
+			// ignore manifests (walk will recurse into them)
+			if entry.ContentType == ManifestType {
+				return nil
+			}
+
+			// retrieve the entry's key and size
+			reader, _ := a.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
+			size, err := reader.Size(nil)
+			if err != nil {
+				return err
+			}
+			// w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
+
+			// write a tar header for the entry
+			hdr := &tar.Header{
+				Name:    entry.Path,
+				Mode:    entry.Mode,
+				Size:    size,
+				ModTime: entry.ModTime,
+				Xattrs: map[string]string{
+					"user.swarm.content-type": entry.ContentType,
+				},
+			}
+
+			if err := tw.WriteHeader(hdr); err != nil {
+				return err
+			}
+
+			// copy the file into the tar stream
+			n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
+			if err != nil {
+				return err
+			} else if n != size {
+				return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
+			}
+
 			return nil
-		}
-
-		// retrieve the entry's key and size
-		reader, _ := a.Retrieve(ctx, storage.Address(common.Hex2Bytes(entry.Hash)))
-		size, err := reader.Size(nil)
+		})
 		if err != nil {
-			return err
+			apiGetTarFail.Inc(1)
+			pipew.CloseWithError(err)
+		} else {
+			pipew.Close()
 		}
-		// w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
-
-		// write a tar header for the entry
-		hdr := &tar.Header{
-			Name:    entry.Path,
-			Mode:    entry.Mode,
-			Size:    size,
-			ModTime: entry.ModTime,
-			Xattrs: map[string]string{
-				"user.swarm.content-type": entry.ContentType,
-			},
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-
-		// copy the file into the tar stream
-		n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
-		if err != nil {
-			return err
-		} else if n != size {
-			return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
-		}
-
-		return nil
-	})
-
-	if err != nil {
-		apiGetTarFail.Inc(1)
-		return nil, err
-	}
+	}()
 
 	return piper, nil
 }
@@ -686,15 +691,17 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	return fkey, newMkey.String(), nil
 }
 
-func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath string, mw *ManifestWriter) error {
+func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath string, mw *ManifestWriter) (storage.Address, error) {
 	// log.Debug("handle.tar.upload", "ruid", req.ruid)
+	var contentKey storage.Address
 	tr := tar.NewReader(bodyReader)
+	defer bodyReader.Close()
 	for {
 		hdr, err := tr.Next()
 		if err == io.EOF {
-			return nil
+			break
 		} else if err != nil {
-			return fmt.Errorf("error reading tar stream: %s", err)
+			return nil, fmt.Errorf("error reading tar stream: %s", err)
 		}
 
 		// only store regular files
@@ -712,13 +719,14 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			ModTime:     hdr.ModTime,
 		}
 		// log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
-		_, err = mw.AddEntry(ctx, tr, entry)
+		contentKey, err = mw.AddEntry(ctx, tr, entry)
 		if err != nil {
-			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
+			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
 		// return nil
 		// log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
 	}
+	return contentKey, nil
 }
 
 // RemoveFile removes a file entry in a manifest.

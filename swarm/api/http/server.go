@@ -138,7 +138,15 @@ func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
 	case http.MethodGet:
 		log.Debug("handleGetBzz")
 		if r.Header.Get("Accept") == "application/x-tar" {
-			s.HandleGetFiles(w, r)
+			reader, err := s.api.GetDirectoryTar(r.Context(), r.uri)
+			if err != nil {
+				Respond(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
+			}
+			defer reader.Close()
+
+			w.Header().Set("Content-Type", "application/x-tar")
+			w.WriteHeader(http.StatusOK)
+			io.Copy(w, reader)
 			return
 		}
 		s.HandleGetFile(w, r)
@@ -334,8 +342,18 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		switch contentType {
 
 		case "application/x-tar":
-			return s.handleTarUpload(r, mw)
+			_, err := s.handleTarUpload(r, mw)
+			if err != nil {
+				Respond(w, r, fmt.Sprintf("error uploading tarball: %v", err), http.StatusInternalServerError)
+				return err
+			}
+			return nil
 
+			// w.Header().Set("Content-Type", "text/plain")
+			// w.WriteHeader(http.StatusOK)
+			// fmt.Fprint(w, key.String())
+
+			return nil
 		case "multipart/form-data":
 			return s.handleMultipartUpload(r, params["boundary"], mw)
 
@@ -356,11 +374,14 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newAddr)
 }
 
-func (s *Server) handleTarUpload(r *Request, mw *api.ManifestWriter) error {
+func (s *Server) handleTarUpload(r *Request, mw *api.ManifestWriter) (storage.Address, error) {
 	log.Debug("handle.tar.upload", "ruid", r.ruid)
 
-	return s.api.UploadTar(r.Context(), r.Body, r.uri.Path, mw)
-
+	key, err := s.api.UploadTar(r.Context(), r.Body, r.uri.Path, mw)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
