@@ -35,7 +35,7 @@ type resourceUpdate struct {
 // Prefix:
 // 2 bytes updateHeaderLength
 // 2 bytes data length
-const prefixLength = 2 + 2
+const chunkPrefixLength = 2 + 2
 
 // Header: (see updateHeader)
 // Data:
@@ -43,7 +43,7 @@ const prefixLength = 2 + 2
 //
 // Minimum size is Header + 1 (minimum data length, enforced)
 const minimumUpdateDataLength = updateHeaderLength + 1
-const maxUpdateDataLength = chunkSize - signatureLength - updateHeaderLength - prefixLength
+const maxUpdateDataLength = chunkSize - signatureLength - updateHeaderLength - chunkPrefixLength
 
 // binaryPut serializes the resource update information into the given slice
 func (r *resourceUpdate) binaryPut(serializedData []byte) error {
@@ -95,7 +95,7 @@ func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 
 // binaryLength returns the expected number of bytes this structure will take to encode
 func (r *resourceUpdate) binaryLength() int {
-	return prefixLength + updateHeaderLength + len(r.data)
+	return chunkPrefixLength + updateHeaderLength + len(r.data)
 }
 
 // binaryGet populates this instance from the information contained in the passed byte slice
@@ -113,7 +113,7 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	datalength := int(binary.LittleEndian.Uint16(serializedData[cursor : cursor+2]))
 	cursor += 2
 
-	if prefixLength+updateHeaderLength+datalength+signatureLength != len(serializedData) {
+	if chunkPrefixLength+updateHeaderLength+datalength+signatureLength != len(serializedData) {
 		return NewError(ErrNothingToReturn, "length specified in header is different than actual chunk size")
 	}
 
@@ -123,9 +123,12 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	}
 	cursor += updateHeaderLength
 
+	data := serializedData[cursor : cursor+datalength]
+	cursor += datalength
+
 	// if multihash content is indicated we check the validity of the multihash
 	if r.updateHeader.multihash {
-		mhLength, mhHeaderLength, err := multihash.GetMultihashLength(serializedData[cursor:])
+		mhLength, mhHeaderLength, err := multihash.GetMultihashLength(data)
 		if err != nil {
 			log.Error("multihash parse error", "err", err)
 			return err
@@ -135,9 +138,10 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 			return errors.New("Corrupt multihash data")
 		}
 	}
+
+	// now that all checks have passed, copy data into structure
 	r.data = make([]byte, datalength)
-	copy(r.data, serializedData[cursor:cursor+datalength])
-	cursor += datalength
+	copy(r.data, data)
 
 	return nil
 

@@ -17,7 +17,6 @@
 package mru
 
 import (
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -28,7 +27,7 @@ type updateHeader struct {
 	metaHash     []byte // SHA3 hash of the metadata chunk (less ownerAddr). Used to prove ownerhsip of the resource.
 }
 
-const metaHashLength = 32
+const metaHashLength = storage.KeyLength
 
 // updateLookupLength bytes
 // 1 byte flags (multihash bool for now)
@@ -41,7 +40,6 @@ func (h *updateHeader) binaryPut(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize updateHeaderLength. Expected %d, got %d", updateHeaderLength, len(serializedData))
 	}
 	if len(h.metaHash) != metaHashLength {
-		log.Warn("Call to updateHeader.binaryPut with incorrect metaHash")
 		return NewError(ErrInvalidValue, "updateHeader.binaryPut called without metaHash set")
 	}
 	if err := h.UpdateLookup.binaryPut(serializedData[:updateLookupLength]); err != nil {
@@ -51,9 +49,12 @@ func (h *updateHeader) binaryPut(serializedData []byte) error {
 	copy(serializedData[cursor:], h.metaHash[:metaHashLength])
 	cursor += metaHashLength
 
+	var flags byte
 	if h.multihash {
-		serializedData[cursor] = 0x01
+		flags |= 0x01
 	}
+
+	serializedData[cursor] = flags
 	cursor++
 
 	return nil
@@ -75,13 +76,13 @@ func (h *updateHeader) binaryGet(serializedData []byte) error {
 	}
 	cursor := updateLookupLength
 	h.metaHash = make([]byte, metaHashLength)
-	copy(h.metaHash[:storage.KeyLength], serializedData[cursor:])
+	copy(h.metaHash[:storage.KeyLength], serializedData[cursor:cursor+storage.KeyLength])
 	cursor += metaHashLength
 
-	if serializedData[cursor] == 0x01 {
-		h.multihash = true
-	}
+	flags := serializedData[cursor]
 	cursor++
+
+	h.multihash = flags&0x01 != 0
 
 	return nil
 }
