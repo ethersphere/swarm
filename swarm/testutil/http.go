@@ -26,6 +26,7 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
@@ -68,8 +69,17 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// signer
+	privKeyBytes := [32]byte{}
+	privKeyBytes[0] = 0x2a
+	privKey, err := crypto.ToECDSA(privKeyBytes[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	signer := mru.NewGenericSigner(privKey)
 	rhparams := &mru.HandlerParams{
-		QueryMaxPeriods: &mru.LookupParams{},
+		Signer: signer,
 		HeaderGetter: &fakeBackend{
 			blocknumber: 42,
 		},
@@ -79,7 +89,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 		t.Fatal(err)
 	}
 
-	a := api.NewAPI(fileStore, nil, rh)
+	a := api.NewAPI(fileStore, nil, rh.Handler)
 	srv := httptest.NewServer(serverFunc(a))
 	return &TestSwarmServer{
 		Server:    srv,
