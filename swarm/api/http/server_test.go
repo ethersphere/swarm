@@ -361,6 +361,7 @@ func TestBzzGetPath(t *testing.T) {
 
 func TestBzzTar(t *testing.T) {
 	testBzzTar(false, t)
+	testBzzTar(true, t)
 }
 
 func testBzzGetPath(encrypted bool, t *testing.T) {
@@ -603,7 +604,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 	srv := testutil.NewTestSwarmServer(t, serverFunc)
 	defer srv.Close()
 	fileNames := []string{"tmp1.txt", "tmp2.lock", "tmp3.rtf"}
-	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isregretfullyaplaintext"}
+	fileContents := []string{"tmp1textfilevalue", "tmp2lockfilelocked", "tmp3isjustaplaintextfile"}
 
 	buf := &bytes.Buffer{}
 	tw := tar.NewWriter(buf)
@@ -633,8 +634,12 @@ func testBzzTar(encrypted bool, t *testing.T) {
 		}
 	}
 
-	//check tar stream now
-	req, err := http.NewRequest("POST", srv.URL+"/bzz:/", buf)
+	//post tar stream
+	url := srv.URL + "/bzz:/"
+	if encrypted {
+		url = url + "encrypt"
+	}
+	req, err := http.NewRequest("POST", url, buf)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -647,15 +652,15 @@ func testBzzTar(encrypted bool, t *testing.T) {
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp2.Status)
 	}
-	b, err := ioutil.ReadAll(resp2.Body)
+	swarmHash, err := ioutil.ReadAll(resp2.Body)
 	resp2.Body.Close()
-	t.Logf("uploaded tarball successfully and got manifest address at %s", string(b))
+	t.Logf("uploaded tarball successfully and got manifest address at %s", string(swarmHash))
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// now do a GET to get a tarball back
-	req, err = http.NewRequest("GET", fmt.Sprintf(srv.URL+"/bzz:/%s", string(b)), nil)
+	req, err = http.NewRequest("GET", fmt.Sprintf(srv.URL+"/bzz:/%s", string(swarmHash)), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

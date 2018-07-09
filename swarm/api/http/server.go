@@ -20,7 +20,6 @@ A simple http server interface to Swarm
 package http
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
 	"encoding/json"
@@ -823,82 +822,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, addr)
-	}
-}
-
-// HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
-// header of "application/x-tar" and returns a tar stream of all files
-// contained in the manifest
-func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
-	log.Debug("handle.get.files", "ruid", r.ruid, "uri", r.uri)
-	getFilesCount.Inc(1)
-	if r.uri.Path != "" {
-		getFilesFail.Inc(1)
-		Respond(w, r, "files request cannot contain a path", http.StatusBadRequest)
-		return
-	}
-
-	addr, err := s.api.Resolve(r.Context(), r.uri)
-	if err != nil {
-		getFilesFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-		return
-	}
-	log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", addr)
-
-	walker, err := s.api.NewManifestWalker(r.Context(), addr, nil)
-	if err != nil {
-		getFilesFail.Inc(1)
-		Respond(w, r, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	tw := tar.NewWriter(w)
-	defer tw.Close()
-	w.Header().Set("Content-Type", "application/x-tar")
-	w.WriteHeader(http.StatusOK)
-
-	err = walker.Walk(func(entry *api.ManifestEntry) error {
-		// ignore manifests (walk will recurse into them)
-		if entry.ContentType == api.ManifestType {
-			return nil
-		}
-
-		// retrieve the entry's key and size
-		reader, isEncrypted := s.api.Retrieve(r.Context(), storage.Address(common.Hex2Bytes(entry.Hash)))
-		size, err := reader.Size(nil)
-		if err != nil {
-			return err
-		}
-		w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
-
-		// write a tar header for the entry
-		hdr := &tar.Header{
-			Name:    entry.Path,
-			Mode:    entry.Mode,
-			Size:    size,
-			ModTime: entry.ModTime,
-			Xattrs: map[string]string{
-				"user.swarm.content-type": entry.ContentType,
-			},
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-
-		// copy the file into the tar stream
-		n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
-		if err != nil {
-			return err
-		} else if n != size {
-			return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
-		}
-
-		return nil
-	})
-	if err != nil {
-		getFilesFail.Inc(1)
-		log.Error(fmt.Sprintf("error generating tar stream: %s", err))
 	}
 }
 
