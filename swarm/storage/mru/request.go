@@ -169,11 +169,11 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 	r.metadata.Frequency = j.Frequency
 	r.metadata.StartTime.Time = j.StartTime
 
-	if err := decodeHexArray(r.metadata.StartTime.Proof[:], j.StartTimeProof, common.HashLength, "startTimeProof"); err != nil {
+	if err := decodeHexArray(r.metadata.StartTime.Proof[:], j.StartTimeProof, "startTimeProof"); err != nil {
 		return err
 	}
 
-	if err := decodeHexArray(r.metadata.Owner[:], j.Owner, common.AddressLength, "ownerAddr"); err != nil {
+	if err := decodeHexArray(r.metadata.Owner[:], j.Owner, "ownerAddr"); err != nil {
 		return err
 	}
 
@@ -231,8 +231,8 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 	return nil
 }
 
-func decodeHexArray(dst []byte, src string, expectedLength int, name string) error {
-	bytes, err := decodeHexSlice(src, expectedLength, name)
+func decodeHexArray(dst []byte, src, name string) error {
+	bytes, err := decodeHexSlice(src, len(dst), name)
 	if err != nil {
 		return err
 	}

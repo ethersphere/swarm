@@ -87,7 +87,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 			updateHeader: updateHeader{
 				UpdateLookup: UpdateLookup{
 
-					rootAddr: make([]byte, 79),
+					rootAddr: make([]byte, 79), // put the wrong length, should be storage.KeyLength
 				},
 				metaHash:  nil,
 				multihash: false,
@@ -104,7 +104,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected newUpdateChunk to fail when there is no data")
 	}
-	r.data = make([]byte, 79)
+	r.data = make([]byte, 79) // put some arbitrary length data
 	_, err = r.toChunk()
 	if err == nil {
 		t.Fatal("expected newUpdateChunk to fail when there is no signature", err)
@@ -121,7 +121,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 	}
 
 	r.multihash = true
-	r.data[1] = 79
+	r.data[1] = 79 // mess with the multihash, corrupting one byte of it.
 	if err := r.Sign(alice); err == nil {
 		t.Fatal("expected Sign() to fail when an invalid multihash is in data and multihash=true", err)
 	}

@@ -33,6 +33,8 @@ type ResourceMetadata struct {
 	Owner     common.Address // public address of the resource owner
 }
 
+const frequencyLength = 8 // sizeof(uint64)
+
 // Resource metadata chunk layout:
 // 4 prefix bytes (prefixLength). The first two set to zero. The second two indicate the length
 // Timestamp: timestampLength bytes
@@ -40,7 +42,7 @@ type ResourceMetadata struct {
 // 1 byte name length
 // name (variable length, can be empty, up to 256 bytes)
 // ownerAddr: common.AddressLength
-const minimumMetadataLength = prefixLength + timestampLength + 8 + 1 + common.AddressLength
+const minimumMetadataLength = chunkPrefixLength + timestampLength + frequencyLength + 1 + common.AddressLength
 
 // binaryGet populates the resource metadata from a byte array
 func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
@@ -55,8 +57,8 @@ func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
 
 	cursor := 2
 	metadataLength := int(binary.LittleEndian.Uint16(serializedData[cursor : cursor+2])) // metadataLength does not include the 4 prefix bytes
-	if metadataLength+prefixLength != len(serializedData) {
-		return NewErrorf(ErrCorruptData, "Incorrect declared metadata length. Expected %d, got %d.", metadataLength+prefixLength, len(serializedData))
+	if metadataLength+chunkPrefixLength != len(serializedData) {
+		return NewErrorf(ErrCorruptData, "Incorrect declared metadata length. Expected %d, got %d.", metadataLength+chunkPrefixLength, len(serializedData))
 	}
 
 	cursor += 2
@@ -66,8 +68,8 @@ func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
 	}
 	cursor += timestampLength
 
-	r.Frequency = binary.LittleEndian.Uint64(serializedData[cursor : cursor+8])
-	cursor += 8
+	r.Frequency = binary.LittleEndian.Uint64(serializedData[cursor : cursor+frequencyLength])
+	cursor += frequencyLength
 
 	nameLength := int(serializedData[cursor])
 	if nameLength+minimumMetadataLength > len(serializedData) {
@@ -91,14 +93,14 @@ func (r *ResourceMetadata) binaryPut(serializedData []byte) error {
 	// root chunk has first two bytes both set to 0, which distinguishes from update bytes
 	// therefore, skip the first two bytes of a zero-initialized array.
 	cursor := 2
-	binary.LittleEndian.PutUint16(serializedData[cursor:cursor+2], uint16(metadataChunkLength-prefixLength)) // metadataLength does not include the 4 prefix bytes
+	binary.LittleEndian.PutUint16(serializedData[cursor:cursor+2], uint16(metadataChunkLength-chunkPrefixLength)) // metadataLength does not include the 4 prefix bytes
 	cursor += 2
 
 	r.StartTime.binaryPut(serializedData[cursor : cursor+timestampLength])
 	cursor += timestampLength
 
-	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+8], r.Frequency)
-	cursor += 8
+	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+frequencyLength], r.Frequency)
+	cursor += frequencyLength
 
 	// Encode the name string as a 1 byte length followed by the encoded string.
 	// Longer strings will be truncated.

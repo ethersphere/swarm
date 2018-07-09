@@ -32,7 +32,7 @@ type Timestamp struct {
 
 // 8 bytes Time
 // 32 bytes hash length
-const timestampLength = 8 + 32
+const timestampLength = 8 + common.HashLength
 
 // timestampProvider interface describes a source of timestamp information
 type timestampProvider interface {
