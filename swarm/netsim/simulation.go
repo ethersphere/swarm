@@ -99,8 +99,8 @@ func New(services map[string]ServiceFunc) (s *Simulation) {
 	return s
 }
 
-func (s *Simulation) WithServer(ctx context.Context, port string) *Simulation {
-	s.startHTTPServer(port)
+func (s *Simulation) WithServer(addr string) *Simulation {
+	s.startHTTPServer(addr)
 	return s
 }
 

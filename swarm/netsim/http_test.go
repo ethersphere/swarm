@@ -40,7 +40,7 @@ func TestSimulationWithHTTPServer(t *testing.T) {
 			"noop": func(_ *adapters.ServiceContext, b *sync.Map) (node.Service, func(), error) {
 				return newNoopService(), nil, nil
 			},
-		}).WithServer(ctx, DefaultHTTPSimAddr)
+		}).WithServer(DefaultHTTPSimAddr)
 	defer sim.Close()
 	log.Debug("Done.")
 

@@ -34,14 +34,14 @@ func (s *Simulation) startHTTPServer(addr string) {
 	if addr == "" {
 		addr = DefaultHTTPSimAddr
 	}
-	log.Info(fmt.Sprintf("Initializing simulation server on 0.0.0.0%s...", addr))
+	log.Info(fmt.Sprintf("Initializing simulation server on %s...", addr))
 	//initialize the HTTP server
 	s.handler = simulations.NewServer(s.Net)
 	s.runC = make(chan struct{})
 	//add swarm specific routes to the HTTP server
 	s.addSimulationRoutes()
 	s.httpSrv = &http.Server{
-		Addr:    fmt.Sprintf("%s", addr),
+		Addr:    addr,
 		Handler: s.handler,
 	}
 	go s.httpSrv.ListenAndServe()

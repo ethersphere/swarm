@@ -43,7 +43,7 @@ func TestWaitTillHealthy(t *testing.T) {
 			b.Store(BucketKeyKademlia, kad)
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
-	}, nil)
+	})
 	defer sim.Close()
 
 	_, err := sim.AddNodesAndConnectRing(10)
