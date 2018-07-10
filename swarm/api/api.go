@@ -692,7 +692,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 }
 
 func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath string, mw *ManifestWriter) (storage.Address, error) {
-	// log.Debug("handle.tar.upload", "ruid", req.ruid)
+	apiUploadTarCount.Inc(1)
 	var contentKey storage.Address
 	tr := tar.NewReader(bodyReader)
 	defer bodyReader.Close()
@@ -701,6 +701,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 		if err == io.EOF {
 			break
 		} else if err != nil {
+			apiUploadTarFail.Inc(1)
 			return nil, fmt.Errorf("error reading tar stream: %s", err)
 		}
 
@@ -718,13 +719,11 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
 		}
-		// log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
 		contentKey, err = mw.AddEntry(ctx, tr, entry)
 		if err != nil {
+			apiUploadTarFail.Inc(1)
 			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
-		// return nil
-		// log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
 	}
 	return contentKey, nil
 }

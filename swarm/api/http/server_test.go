@@ -711,7 +711,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 				}
 			}
 		}
-		if passed != true {
+		if !passed {
 			t.Fatalf("file %s did not pass content assertion", hdr.Name)
 		}
 	}

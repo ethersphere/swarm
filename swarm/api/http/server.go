@@ -22,7 +22,6 @@ package http
 import (
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -67,8 +66,6 @@ var (
 	getFileCount    = metrics.NewRegisteredCounter("api.http.get.file.count", nil)
 	getFileNotFound = metrics.NewRegisteredCounter("api.http.get.file.notfound", nil)
 	getFileFail     = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
-	getFilesCount   = metrics.NewRegisteredCounter("api.http.get.files.count", nil)
-	getFilesFail    = metrics.NewRegisteredCounter("api.http.get.files.fail", nil)
 	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
@@ -257,7 +254,7 @@ type Request struct {
 
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage address as a text/plain response
-func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.raw", "ruid", r.ruid)
 
 	postRawCount.Inc(1)
@@ -285,7 +282,7 @@ func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Re
 		return
 	}
 
-  addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
+	addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -304,7 +301,7 @@ func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Re
 // (either a tar archive or multipart form), adds those files either to an
 // existing manifest or to a new manifest under <path> and returns the
 // resulting manifest hash as a text/plain response
-func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.files", "ruid", r.ruid)
 
 	postFilesCount.Inc(1)
@@ -350,10 +347,10 @@ func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *
 			}
 			return nil
 		case "multipart/form-data":
-			return s.handleMultipartUpload(ctx, r, params["boundary"], mw)
+			return s.handleMultipartUpload(r, params["boundary"], mw)
 
 		default:
-			return s.handleDirectUpload(ctx, r, mw)
+			return s.handleDirectUpload(r, mw)
 		}
 	})
 	if err != nil {
@@ -379,7 +376,7 @@ func (s *Server) handleTarUpload(r *Request, mw *api.ManifestWriter) (storage.Ad
 	return key, nil
 }
 
-func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, boundary string, mw *api.ManifestWriter) error {
+func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
 	log.Debug("handle.multipart.upload", "ruid", req.ruid)
 	mr := multipart.NewReader(req.Body, boundary)
 	for {
@@ -437,7 +434,7 @@ func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, bounda
 	}
 }
 
-func (s *Server) handleDirectUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
+func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error {
 	log.Debug("handle.direct.upload", "ruid", req.ruid)
 	key, err := mw.AddEntry(req.Context(), req.Body, &api.ManifestEntry{
 		Path:        req.uri.Path,
@@ -456,7 +453,7 @@ func (s *Server) handleDirectUpload(ctx context.Context, req *Request, mw *api.M
 // HandleDelete handles a DELETE request to bzz:/<manifest>/<path>, removes
 // <path> from <manifest> and returns the resulting manifest hash as a
 // text/plain response
-func (s *Server) HandleDelete(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.delete", "ruid", r.ruid)
 	deleteCount.Inc(1)
 	newKey, err := s.api.Delete(r.Context(), r.uri.Addr, r.uri.Path)
@@ -506,7 +503,7 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 // The resource name will be verbatim what is passed as the address part of the url.
 // For example, if a POST is made to /bzz-resource:/foo.eth/raw/13 a new resource with frequency 13
 // and name "foo.eth" will be created
-func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 	var err error
 	var addr storage.Address
@@ -726,7 +723,7 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 //   given storage key
 // - bzz-hash://<key> and responds with the hash of the content stored
 //   at the given storage key as a text/plain response
-func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
 	var err error
@@ -824,7 +821,7 @@ func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Reques
 // HandleGetList handles a GET request to bzz-list:/<manifest>/<path> and returns
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
-func (s *Server) HandleGetList(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.list", "ruid", r.ruid, "uri", r.uri)
 	getListCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
@@ -873,7 +870,7 @@ func (s *Server) HandleGetList(ctx context.Context, w http.ResponseWriter, r *Re
 
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
-func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.file", "ruid", r.ruid)
 	getFileCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
