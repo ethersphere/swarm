@@ -24,7 +24,7 @@ import (
 )
 
 func TestPeerEvents(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodes(2)
@@ -64,7 +64,7 @@ func TestPeerEvents(t *testing.T) {
 }
 
 func TestPeerEventsTimeout(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodes(2)

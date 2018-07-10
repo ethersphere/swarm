@@ -20,7 +20,7 @@ import (
 )
 
 func TestService(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode()

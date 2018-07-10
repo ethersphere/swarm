@@ -30,7 +30,7 @@ import (
 )
 
 func TestUpDownNodeIDs(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	ids, err := sim.AddNodes(10)
@@ -97,7 +97,7 @@ func equalNodeIDs(one, other []discover.NodeID) bool {
 }
 
 func TestAddNode(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode()
@@ -116,7 +116,7 @@ func TestAddNode(t *testing.T) {
 }
 
 func TestAddNodeWithMsgEvents(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode(AddNodeWithMsgEvents(true))
@@ -142,7 +142,7 @@ func TestAddNodeWithService(t *testing.T) {
 	sim := New(map[string]ServiceFunc{
 		"noop1": noopServiceFunc,
 		"noop2": noopServiceFunc,
-	}, nil)
+	})
 	defer sim.Close()
 
 	id, err := sim.AddNode(AddNodeWithService("noop1"))
@@ -160,7 +160,7 @@ func TestAddNodeWithService(t *testing.T) {
 }
 
 func TestAddNodes(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	nodesCount := 12
@@ -197,7 +197,7 @@ func TestUploadSnapshot(t *testing.T) {
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
-	}, nil)
+	})
 	defer s.Close()
 
 	nodeCount := 16
@@ -221,7 +221,7 @@ func TestUploadSnapshot(t *testing.T) {
 }
 
 func TestPivotNode(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode()
@@ -260,7 +260,7 @@ func TestPivotNode(t *testing.T) {
 }
 
 func TestStartStopNode(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	id, err := sim.AddNode()
@@ -305,7 +305,7 @@ func TestStartStopNode(t *testing.T) {
 }
 
 func TestStartStopRandomNode(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodes(3)
@@ -353,7 +353,7 @@ func TestStartStopRandomNode(t *testing.T) {
 }
 
 func TestStartStopRandomNodes(t *testing.T) {
-	sim := New(noopServiceFuncMap, nil)
+	sim := New(noopServiceFuncMap)
 	defer sim.Close()
 
 	_, err := sim.AddNodes(10)

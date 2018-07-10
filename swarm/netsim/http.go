@@ -17,7 +17,6 @@
 package netsim
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
@@ -25,37 +24,30 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 )
 
-func (s *Simulation) initHTTPServer(opts *SimulationOptions) {
-	//assign default port if nothing provided
-	if opts.HTTPSimPort == "" {
-		opts.HTTPSimPort = DefaultHTTPSimPort
+// Package defaults.
+var (
+	DefaultHTTPSimAddr = ":8888"
+)
+
+//`With`(builder) pattern constructor for Simulation to
+//start with a HTTP server
+func (s *Simulation) WithServer(addr string) *Simulation {
+	//assign default addr if nothing provided
+	if addr == "" {
+		addr = DefaultHTTPSimAddr
 	}
-	log.Info(fmt.Sprintf("Initializing simulation server on 0.0.0.0:%s...", opts.HTTPSimPort))
+	log.Info(fmt.Sprintf("Initializing simulation server on %s...", addr))
 	//initialize the HTTP server
 	s.handler = simulations.NewServer(s.Net)
 	s.runC = make(chan struct{})
 	//add swarm specific routes to the HTTP server
 	s.addSimulationRoutes()
 	s.httpSrv = &http.Server{
-		Addr:    fmt.Sprintf(":%s", opts.HTTPSimPort),
+		Addr:    addr,
 		Handler: s.handler,
 	}
-}
-
-func (s *Simulation) startHTTPServer(ctx context.Context) error {
-	//start the HTTP server
-	if s.httpSrv != nil {
-		go s.httpSrv.ListenAndServe()
-		log.Info("Waiting for frontend to be ready...(send POST /runsim to HTTP server)")
-		//wait for the frontend to connect
-		select {
-		case <-s.runC:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
-		log.Info("Received signal from frontend - starting simulation run.")
-	}
-	return nil
+	go s.httpSrv.ListenAndServe()
+	return s
 }
 
 //register additional HTTP routes
