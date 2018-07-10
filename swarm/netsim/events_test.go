@@ -23,6 +23,10 @@ import (
 	"time"
 )
 
+// TestPeerEvents creates simulation, adds two nodes,
+// register for peer events, connects nodes in a chain
+// and waits for the number of connection events to
+// be received.
 func TestPeerEvents(t *testing.T) {
 	sim := New(noopServiceFuncMap)
 	defer sim.Close()
