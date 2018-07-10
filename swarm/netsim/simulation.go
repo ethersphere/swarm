@@ -99,11 +99,6 @@ func New(services map[string]ServiceFunc) (s *Simulation) {
 	return s
 }
 
-func (s *Simulation) WithServer(addr string) *Simulation {
-	s.startHTTPServer(addr)
-	return s
-}
-
 // RunFunc is the function that will be called
 // on Simulation.Run method call.
 type RunFunc func(context.Context, *Simulation) error

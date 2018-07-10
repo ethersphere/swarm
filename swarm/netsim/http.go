@@ -29,7 +29,9 @@ var (
 	DefaultHTTPSimAddr = ":8888"
 )
 
-func (s *Simulation) startHTTPServer(addr string) {
+//`With`(builder) pattern constructor for Simulation to
+//start with a HTTP server
+func (s *Simulation) WithServer(addr string) *Simulation {
 	//assign default addr if nothing provided
 	if addr == "" {
 		addr = DefaultHTTPSimAddr
@@ -45,6 +47,7 @@ func (s *Simulation) startHTTPServer(addr string) {
 		Handler: s.handler,
 	}
 	go s.httpSrv.ListenAndServe()
+	return s
 }
 
 //register additional HTTP routes
