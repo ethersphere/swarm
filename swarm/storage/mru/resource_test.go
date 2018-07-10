@@ -319,16 +319,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal("Suggested period should be 1 and version should be 2")
 	}
 
-	request.version = 1 // force version 1 instead of 2 to make it fail
 	data = []byte(updates[1])
-	request.SetData(data, false)
-	if err := request.Sign(signer); err != nil {
-		t.Fatal(err)
-	}
-	resourcekey[updates[1]], err = rh.Update(ctx, &request.SignedResourceUpdate)
-	if err == nil {
-		t.Fatal("Expected update to fail since this version already exists")
-	}
 
 	// update on second period with version = 1, correct. period=2, version=1
 	fwdClock(int(resourceFrequency/2), timeProvider)
