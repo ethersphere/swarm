@@ -676,11 +676,7 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) (str
 
 // Create Mutable resource
 func (a *API) ResourceCreate(ctx context.Context, request *mru.Request) error {
-	err := a.resource.New(ctx, request)
-	if err != nil {
-		return err
-	}
-	return nil
+	return a.resource.New(ctx, request)
 }
 
 // ResourceNewRequest creates a Request object to update a specific mutable resource
