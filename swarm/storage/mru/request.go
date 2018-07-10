@@ -243,8 +243,9 @@ func decodeHexSlice(src string, expectedLength int, name string) (bytes []byte, 
 	return bytes, nil
 }
 
-// Unmarshal takes a JSON structure stored in a byte array and populates the Request object
-func (r *Request) Unmarshal(rawData []byte) error {
+// UnmarshalJSON takes a JSON structure stored in a byte array and populates the Request object
+// Implements json.Unmarshaler interface
+func (r *Request) UnmarshalJSON(rawData []byte) error {
 	var requestJSON updateRequestJSON
 	if err := json.Unmarshal(rawData, &requestJSON); err != nil {
 		return err
@@ -252,8 +253,9 @@ func (r *Request) Unmarshal(rawData []byte) error {
 	return r.fromJSON(&requestJSON)
 }
 
-// Marshal takes an update request and encodes it as a JSON structure into a byte array
-func (r *Request) Marshal() (rawData []byte, err error) {
+// MarshalJSON takes an update request and encodes it as a JSON structure into a byte array
+// Implements json.Marshaler interface
+func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	var signatureString, dataHashString, rootAddrString, metaHashString string
 	if r.signature != nil {
 		signatureString = hexutil.Encode(r.signature[:])

@@ -44,14 +44,14 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	}
 
 	// We now encode the create message to simulate we send it over the wire
-	messageRawData, err := createRequest.Marshal()
+	messageRawData, err := createRequest.MarshalJSON()
 	if err != nil {
 		t.Fatalf("Error encoding create resource request: %s", err)
 	}
 
 	// ... the message arrives and is decoded...
 	var recoveredCreateRequest Request
-	if err := recoveredCreateRequest.Unmarshal(messageRawData); err != nil {
+	if err := recoveredCreateRequest.UnmarshalJSON(messageRawData); err != nil {
 		t.Fatalf("Error decoding create resource request: %s", err)
 	}
 
@@ -88,7 +88,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		},
 	}
 
-	messageRawData, err = request.Marshal()
+	messageRawData, err = request.MarshalJSON()
 	if err != nil {
 		t.Fatalf("Error encoding update request: %s", err)
 	}
@@ -105,7 +105,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
 	//Attempt to extract an UpdateRequest out of the encoded message
 	var recoveredRequest Request
-	if err := recoveredRequest.Unmarshal(messageRawData); err != nil {
+	if err := recoveredRequest.UnmarshalJSON(messageRawData); err != nil {
 		t.Fatalf("Error decoding update request: %s", err)
 	}
 
@@ -125,7 +125,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	j.Signature = "Certainly not a signature"
 	corruptMessage, _ := json.Marshal(j) // encode the message with the bad signature
 	var corruptRequest Request
-	if err = corruptRequest.Unmarshal(corruptMessage); err == nil {
+	if err = corruptRequest.UnmarshalJSON(corruptMessage); err == nil {
 		t.Fatal("Expected DecodeUpdateRequest to fail when trying to interpret a corrupt message with an invalid signature")
 	}
 
@@ -136,14 +136,14 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	}
 
 	// Now Bob encodes the message to send it over the wire...
-	messageRawData, err = request.Marshal()
+	messageRawData, err = request.MarshalJSON()
 	if err != nil {
 		t.Fatalf("Error encoding message:%s", err)
 	}
 
 	// ... the message arrives to our Swarm node and it is decoded.
 	recoveredRequest = Request{}
-	if err := recoveredRequest.Unmarshal(messageRawData); err != nil {
+	if err := recoveredRequest.UnmarshalJSON(messageRawData); err != nil {
 		t.Fatalf("Error decoding message:%s", err)
 	}
 

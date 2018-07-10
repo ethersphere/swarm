@@ -595,7 +595,7 @@ func (c *Client) UpdateResource(request *mru.Request) error {
 }
 
 func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
-	body, err := request.Marshal()
+	body, err := request.MarshalJSON()
 	if err != nil {
 		return nil, err
 	}
@@ -644,7 +644,7 @@ func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.Reque
 	}
 
 	var metadata mru.Request
-	if err := metadata.Unmarshal(body); err != nil {
+	if err := metadata.UnmarshalJSON(body); err != nil {
 		return nil, err
 	}
 	return &metadata, nil
