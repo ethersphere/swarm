@@ -156,7 +156,7 @@ func resourceInfo(ctx *cli.Context) {
 		utils.Fatalf("Error retrieving resource metadata: %s", err.Error())
 		return
 	}
-	encodedMetadata, err := metadata.Marshal()
+	encodedMetadata, err := metadata.MarshalJSON()
 	if err != nil {
 		utils.Fatalf("Error encoding metadata to JSON for display:%s", err)
 	}

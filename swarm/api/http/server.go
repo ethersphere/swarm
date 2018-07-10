@@ -554,7 +554,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		return
 	}
 	var updateRequest mru.Request
-	if err := updateRequest.Unmarshal(body); err != nil { // decodes request JSON
+	if err := updateRequest.UnmarshalJSON(body); err != nil { // decodes request JSON
 		Respond(w, r, err.Error(), http.StatusBadRequest) //TODO: send different status response depending on error
 		return
 	}
@@ -657,7 +657,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 				Respond(w, r, fmt.Sprintf("cannot retrieve resource metadata for rootAddr=%s: %s", rootAddr.Hex(), err), http.StatusNotFound)
 				return
 			}
-			rawResponse, err := unsignedUpdateRequest.Marshal()
+			rawResponse, err := unsignedUpdateRequest.MarshalJSON()
 			if err != nil {
 				Respond(w, r, fmt.Sprintf("cannot encode unsigned UpdateRequest: %v", err), http.StatusInternalServerError)
 				return
