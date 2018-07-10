@@ -257,7 +257,7 @@ type Request struct {
 
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
 // body in swarm and returns the resulting storage address as a text/plain response
-func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.raw", "ruid", r.ruid)
 
 	postRawCount.Inc(1)
@@ -303,7 +303,7 @@ func (s *Server) HandlePostRaw(ctx context.Context, w http.ResponseWriter, r *Re
 // (either a tar archive or multipart form), adds those files either to an
 // existing manifest or to a new manifest under <path> and returns the
 // resulting manifest hash as a text/plain response
-func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.files", "ruid", r.ruid)
 
 	postFilesCount.Inc(1)
@@ -342,13 +342,13 @@ func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *
 		switch contentType {
 
 		case "application/x-tar":
-			return s.handleTarUpload(ctx, r, mw)
+			return s.handleTarUpload(r, mw)
 
 		case "multipart/form-data":
-			return s.handleMultipartUpload(ctx, r, params["boundary"], mw)
+			return s.handleMultipartUpload(r, params["boundary"], mw)
 
 		default:
-			return s.handleDirectUpload(ctx, r, mw)
+			return s.handleDirectUpload(r, mw)
 		}
 	})
 	if err != nil {
@@ -364,7 +364,7 @@ func (s *Server) HandlePostFiles(ctx context.Context, w http.ResponseWriter, r *
 	fmt.Fprint(w, newAddr)
 }
 
-func (s *Server) handleTarUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
+func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
 	log.Debug("handle.tar.upload", "ruid", req.ruid)
 	tr := tar.NewReader(req.Body)
 	for {
@@ -398,7 +398,7 @@ func (s *Server) handleTarUpload(ctx context.Context, req *Request, mw *api.Mani
 	}
 }
 
-func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, boundary string, mw *api.ManifestWriter) error {
+func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
 	log.Debug("handle.multipart.upload", "ruid", req.ruid)
 	mr := multipart.NewReader(req.Body, boundary)
 	for {
@@ -456,7 +456,7 @@ func (s *Server) handleMultipartUpload(ctx context.Context, req *Request, bounda
 	}
 }
 
-func (s *Server) handleDirectUpload(ctx context.Context, req *Request, mw *api.ManifestWriter) error {
+func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error {
 	log.Debug("handle.direct.upload", "ruid", req.ruid)
 	key, err := mw.AddEntry(req.Context(), req.Body, &api.ManifestEntry{
 		Path:        req.uri.Path,
@@ -475,7 +475,7 @@ func (s *Server) handleDirectUpload(ctx context.Context, req *Request, mw *api.M
 // HandleDelete handles a DELETE request to bzz:/<manifest>/<path>, removes
 // <path> from <manifest> and returns the resulting manifest hash as a
 // text/plain response
-func (s *Server) HandleDelete(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.delete", "ruid", r.ruid)
 
 	deleteCount.Inc(1)
@@ -536,7 +536,7 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 // The resource name will be verbatim what is passed as the address part of the url.
 // For example, if a POST is made to /bzz-resource:/foo.eth/raw/13 a new resource with frequency 13
 // and name "foo.eth" will be created
-func (s *Server) HandlePostResource(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 	var err error
 	var addr storage.Address
@@ -756,7 +756,7 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 //   given storage key
 // - bzz-hash://<key> and responds with the hash of the content stored
 //   at the given storage key as a text/plain response
-func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
 	var err error
@@ -854,7 +854,7 @@ func (s *Server) HandleGet(ctx context.Context, w http.ResponseWriter, r *Reques
 // HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
 // header of "application/x-tar" and returns a tar stream of all files
 // contained in the manifest
-func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.files", "ruid", r.ruid, "uri", r.uri)
 	getFilesCount.Inc(1)
 	if r.uri.Path != "" {
@@ -930,7 +930,7 @@ func (s *Server) HandleGetFiles(ctx context.Context, w http.ResponseWriter, r *R
 // HandleGetList handles a GET request to bzz-list:/<manifest>/<path> and returns
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
-func (s *Server) HandleGetList(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.list", "ruid", r.ruid, "uri", r.uri)
 	getListCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
@@ -1035,7 +1035,7 @@ func (s *Server) getManifestList(ctx context.Context, addr storage.Address, pref
 
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
-func (s *Server) HandleGetFile(ctx context.Context, w http.ResponseWriter, r *Request) {
+func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.file", "ruid", r.ruid)
 	getFileCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
@@ -1140,7 +1140,6 @@ func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
 func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	return b.s.Seek(offset, whence)
 }
-
 
 func (s *Server) updateManifest(ctx context.Context, addr storage.Address, update func(mw *api.ManifestWriter) error) (storage.Address, error) {
 	mw, err := s.api.NewManifestWriter(ctx, addr, nil)
