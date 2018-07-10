@@ -428,19 +428,6 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")
 	}
 
-	// get the cached information
-	rsrc := h.get(r.rootAddr)
-	if rsrc == nil {
-		rsrc, err = h.Load(r.rootAddr)
-		if err != nil {
-			return nil, NewErrorf(ErrNotFound, "Cannot find resource with rootAddr='%s'", r.rootAddr.Hex())
-		}
-	} else {
-		if rsrc.period == r.period && rsrc.version == r.version { // This is the only cheap check we can do for sure.
-			return nil, NewError(ErrInvalidValue, "An update with this period,version already exists")
-		}
-	}
-
 	chunk, err := r.toChunk() // Serialize the update into a chunk. Fails if data is too big
 	if err != nil {
 		return nil, err
@@ -450,8 +437,9 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 	h.chunkStore.Put(chunk)
 	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.SData, "multihash", r.multihash)
 
-	// update our resources map entry if the new update is older than the one we have
-	if r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version) {
+	// update our resources map entry if the new update is older than the one we have, if we have it.
+	rsrc := h.get(r.rootAddr)
+	if rsrc != nil && r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version) {
 		rsrc.period = r.period
 		rsrc.version = r.version
 		rsrc.data = make([]byte, len(r.data))
@@ -461,7 +449,6 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 		copy(rsrc.data, r.data)
 		rsrc.Reader = bytes.NewReader(rsrc.data)
 	}
-
 	return r.updateAddr, nil
 }
 
