@@ -51,10 +51,11 @@
 // A user looking up a resource would only need to know the rootAddr in order to get the versions
 //
 // the resource update data is:
-// resourcedata = headerlength|period|version|metaHash|rootAddr|data
+// resourcedata = headerlength|period|version|rootAddr|flags|metaHash
+// where flags is a 1-byte flags field. Flag 0 is set to 1 to indicate multihash
 //
 // the full update data that goes in the chunk payload is:
 // resourcedata|sign(resourcedata)
 //
-// headerlength is a 16 bit value containing the byte length of period|version|rootAddr|multihash|metaHash
+// headerlength is a 16 bit value containing the byte length of period|version|rootAddr|flags|metaHash
 package mru

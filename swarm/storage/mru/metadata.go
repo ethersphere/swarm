@@ -34,15 +34,16 @@ type ResourceMetadata struct {
 }
 
 const frequencyLength = 8 // sizeof(uint64)
+const nameLengthLength = 1
 
 // Resource metadata chunk layout:
-// 4 prefix bytes (prefixLength). The first two set to zero. The second two indicate the length
+// 4 prefix bytes (chunkPrefixLength). The first two set to zero. The second two indicate the length
 // Timestamp: timestampLength bytes
-// frequency: 8 bytes
-// 1 byte name length
-// name (variable length, can be empty, up to 256 bytes)
+// frequency: frequencyLength bytes
+// name length: nameLengthLength bytes
+// name (variable length, can be empty, up to 255 bytes)
 // ownerAddr: common.AddressLength
-const minimumMetadataLength = chunkPrefixLength + timestampLength + frequencyLength + 1 + common.AddressLength
+const minimumMetadataLength = chunkPrefixLength + timestampLength + frequencyLength + nameLengthLength + common.AddressLength
 
 // binaryGet populates the resource metadata from a byte array
 func (r *ResourceMetadata) binaryGet(serializedData []byte) error {

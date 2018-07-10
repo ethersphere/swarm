@@ -140,10 +140,6 @@ func (r *Request) Sign(signer Signer) error {
 func (r *Request) SetData(data []byte, multihash bool) {
 	r.data = data
 	r.multihash = multihash
-	r.dirty()
-}
-
-func (r *Request) dirty() {
 	r.signature = nil
 	if r.period != 1 || r.version != 1 {
 		r.metadata.Frequency = 0 // mark as update if this is not the first request
@@ -158,7 +154,7 @@ func (r *Request) IsUpdate() bool {
 	return r.signature != nil
 }
 
-// decode takes an update request JSON and populates an UpdateRequest
+// fromJSON takes an update request JSON and populates an UpdateRequest
 func (r *Request) fromJSON(j *updateRequestJSON) error {
 
 	r.version = j.Version

@@ -61,7 +61,7 @@ func init() {
 	if minimumMetadataLength < minimumUpdateDataLength {
 		minimumChunkLength = minimumMetadataLength
 	} else {
-		minimumChunkLength = minimumMetadataLength
+		minimumChunkLength = minimumUpdateDataLength
 	}
 }
 
@@ -111,7 +111,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 		rootAddr, _ := metadataHash(data)
 		valid := bytes.Equal(chunkAddr, rootAddr)
 		if !valid {
-			log.Warn(fmt.Sprintf("Invalid root metadata chunk with address: %s", chunkAddr.Hex()))
+			log.Debug(fmt.Sprintf("Invalid root metadata chunk with address: %s", chunkAddr.Hex()))
 		}
 		return valid
 	}
@@ -122,7 +122,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	var r SignedResourceUpdate
 	if err := r.fromChunk(chunkAddr, data); err != nil {
-		log.Warn(fmt.Sprintf("Invalid resource chunk with address %s: %s ", chunkAddr.Hex(), err.Error()))
+		log.Debug(fmt.Sprintf("Invalid resource chunk with address %s: %s ", chunkAddr.Hex(), err.Error()))
 		return false
 	}
 
@@ -407,7 +407,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	rsrc.multihash = r.multihash
 	copy(rsrc.data, r.data)
 	rsrc.Reader = bytes.NewReader(rsrc.data)
-	log.Debug(" synced", "name", rsrc.ResourceMetadata.Name, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
+	log.Debug("resource synced", "name", rsrc.ResourceMetadata.Name, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
 	h.set(chunk.Addr, rsrc)
 	return rsrc, nil
 }
