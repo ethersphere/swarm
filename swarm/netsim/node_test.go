@@ -181,6 +181,63 @@ func TestAddNodes(t *testing.T) {
 	}
 }
 
+func TestAddNodesAndConnectFull(t *testing.T) {
+	sim := New(noopServiceFuncMap)
+	defer sim.Close()
+
+	n := 12
+
+	ids, err := sim.AddNodesAndConnectFull(n)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testFull(t, sim, ids)
+}
+
+func TestAddNodesAndConnectChain(t *testing.T) {
+	sim := New(noopServiceFuncMap)
+	defer sim.Close()
+
+	_, err := sim.AddNodesAndConnectChain(12)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// add another set of nodes to test
+	// if two chains are connected
+	_, err = sim.AddNodesAndConnectChain(7)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testChain(t, sim, sim.UpNodeIDs())
+}
+
+func TestAddNodesAndConnectRing(t *testing.T) {
+	sim := New(noopServiceFuncMap)
+	defer sim.Close()
+
+	ids, err := sim.AddNodesAndConnectRing(12)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testRing(t, sim, ids)
+}
+
+func TestAddNodesAndConnectStar(t *testing.T) {
+	sim := New(noopServiceFuncMap)
+	defer sim.Close()
+
+	ids, err := sim.AddNodesAndConnectStar(12)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testStar(t, sim, ids, 0)
+}
+
 //To test that uploading a snapshot works
 func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Creating simulation")
