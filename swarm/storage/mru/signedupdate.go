@@ -42,7 +42,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 		return NewError(ErrInvalidSignature, "Missing signature field")
 	}
 
-	digest, err := r.getDigest(r.updateAddr)
+	digest, err := r.getDigest()
 	if err != nil {
 		return err
 	}
@@ -68,10 +68,8 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 // Sign executes the signature to validate the resource
 func (r *SignedResourceUpdate) Sign(signer Signer) error {
 
-	updateAddr := r.UpdateAddr()
-
-	r.binaryData = nil                     //invalidate serialized data
-	digest, err := r.getDigest(updateAddr) // computes digest and serializes into .binaryData
+	r.binaryData = nil           //invalidate serialized data
+	digest, err := r.getDigest() // computes digest and serializes into .binaryData
 	if err != nil {
 		return err
 	}
@@ -93,7 +91,7 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 	}
 
 	r.signature = &signature
-	r.updateAddr = updateAddr
+	r.updateAddr = r.UpdateAddr()
 	return nil
 }
 
@@ -160,7 +158,7 @@ func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata [
 
 // getDigest creates the resource update digest used in signatures (formerly known as keyDataHash)
 // the serialized payload is cached in .binaryData
-func (r *SignedResourceUpdate) getDigest(updateAddr storage.Address) (result common.Hash, err error) {
+func (r *SignedResourceUpdate) getDigest() (result common.Hash, err error) {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
@@ -171,7 +169,6 @@ func (r *SignedResourceUpdate) getDigest(updateAddr storage.Address) (result com
 			return result, err
 		}
 	}
-	hasher.Write(updateAddr)                //lookup key
 	hasher.Write(r.binaryData[:dataLength]) //everything except the signature.
 
 	return common.BytesToHash(hasher.Sum(nil)), nil

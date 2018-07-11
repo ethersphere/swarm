@@ -66,7 +66,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
 	metaHash := createRequest.metaHash
 	rootAddr := createRequest.rootAddr
-	const expectedSignature = "0x89315e442c2b5620517ab00d7f3e358207d5d8792d544303093b22b7ff92fb2c36dfe0d53e2f3adf7d17ba0aa2299d2b1e40b86c4d0ad19e4c2729bfc57043e101"
+	const expectedSignature = "0x1c2bab66dc4ed63783d62934e3a628e517888d6949aef0349f3bd677121db9aa09bbfb865904e6c50360e209e0fe6fe757f8a2474cf1b34169c99b95e3fd5a5101"
 	const expectedJSON = `{"rootAddr":"0x6e744a730f7ea0881528576f0354b6268b98e35a6981ef703153ff1b8d32bbef","metaHash":"0x0c0d5c18b89da503af92302a1a64fab6acb60f78e288eb9c3d541655cd359b60","version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421","multiHash":false}`
 
 	//Put together an unsigned update request that we will serialize to send it to the signer.
