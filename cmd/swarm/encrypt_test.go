@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 )
 
 func TestEncrypt(t *testing.T) {
@@ -85,23 +86,29 @@ func TestEncrypt(t *testing.T) {
 		t.Fatalf("stdout not matched")
 	}
 
-	var m api.ManifestEntry
+	var m api.Manifest
 
 	err = json.Unmarshal([]byte(matches[0]), &m)
 	if err != nil {
 		t.Fatalf("unmarshal manifest: %v", err)
 	}
 
-	ct := "application/bzz-manifest+json"
-	if m.ContentType != ct {
-		t.Errorf("expected %q content type, got %q", ct, m.ContentType)
+	if len(m.Entries) != 1 {
+		t.Fatalf("expected one manifest entry, got %v", len(m.Entries))
 	}
 
-	if m.Access == nil {
+	e := m.Entries[0]
+
+	ct := "application/bzz-manifest+json"
+	if e.ContentType != ct {
+		t.Errorf("expected %q content type, got %q", ct, e.ContentType)
+	}
+
+	if e.Access == nil {
 		t.Fatal("manifest access is nil")
 	}
 
-	a := m.Access
+	a := e.Access
 
 	if a.Type != "pass" {
 		t.Errorf(`got access type %q, expected "pass"`, a.Type)
@@ -111,5 +118,17 @@ func TestEncrypt(t *testing.T) {
 	}
 	if a.KdfParams == nil {
 		t.Fatal("manifest access kdf params is nil")
+	}
+
+	client := swarm.NewClient(cluster.Nodes[0].URL)
+
+	hash, err := client.UploadManifest(&m, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = client.Download(hash, "")
+	if err != nil {
+		t.Fatal(err)
 	}
 }
