@@ -48,7 +48,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 	if err != nil {
 		return nil, fmt.Errorf("localstore create fail, path %s: %v", path, err)
 	}
-	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHash)))
+	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHashAlgorithm)))
 	localStore.Validators = append(localStore.Validators, rh)
 	netStore := storage.NewNetStore(localStore, nil)
 	rh.SetStore(netStore)

@@ -25,8 +25,12 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/multihash"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -353,4 +357,123 @@ func TestClientMultipartUpload(t *testing.T) {
 	for _, file := range testDirFiles {
 		checkDownloadFile(file)
 	}
+}
+
+func newTestSigner() (*mru.GenericSigner, error) {
+	privKey, err := crypto.HexToECDSA("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef")
+	if err != nil {
+		return nil, err
+	}
+	return mru.NewGenericSigner(privKey), nil
+}
+
+// test the transparent resolving of multihash resource types with bzz:// scheme
+//
+// first upload data, and store the multihash to the resulting manifest in a resource update
+// retrieving the update with the multihash should return the manifest pointing directly to the data
+// and raw retrieve of that hash should return the data
+func TestClientCreateResourceMultihash(t *testing.T) {
+
+	signer, _ := newTestSigner()
+
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	client := NewClient(srv.URL)
+	defer srv.Close()
+
+	// add the data our multihash aliased manifest will point to
+	databytes := []byte("bar")
+
+	swarmHash, err := client.UploadRaw(bytes.NewReader(databytes), int64(len(databytes)), false)
+	if err != nil {
+		t.Fatalf("Error uploading raw test data: %s", err)
+	}
+
+	s := common.FromHex(swarmHash)
+	mh := multihash.ToMultihash(s)
+
+	// our mutable resource "name"
+	resourceName := "foo.eth"
+
+	resourceManifestHash, err := client.CreateResource(resourceName, 13, srv.GetCurrentTime(), mh, true, signer)
+	if err != nil {
+		t.Fatalf("Error creating resource: %s", err)
+	}
+
+	correctManifestAddrHex := "ff19cd3107675f20800c80bd940b501778c08a6a455ad9786f8fa4f81a65a63d"
+	if resourceManifestHash != correctManifestAddrHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+	}
+
+	reader, err := client.GetResource(correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving resource: %s", err)
+	}
+	defer reader.Close()
+	gotData, err := ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(mh, gotData) {
+		t.Fatalf("Expected: %v, got %v", mh, gotData)
+	}
+
+}
+
+func TestClientCreateUpdateResource(t *testing.T) {
+
+	signer, _ := newTestSigner()
+
+	srv := testutil.NewTestSwarmServer(t, serverFunc)
+	client := NewClient(srv.URL)
+	defer srv.Close()
+
+	// set raw data for the resource
+	databytes := []byte("En un lugar de La Mancha, de cuyo nombre no quiero acordarme...")
+
+	// our mutable resource name
+	resourceName := "El Quijote"
+
+	resourceManifestHash, err := client.CreateResource(resourceName, 13, srv.GetCurrentTime(), databytes, false, signer)
+	if err != nil {
+		t.Fatalf("Error creating resource: %s", err)
+	}
+
+	correctManifestAddrHex := "0c339bcadcabdfe1cd6486fa7ba025e8c012284be06da91668229da19f10c2fb"
+	if resourceManifestHash != correctManifestAddrHex {
+		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+	}
+
+	reader, err := client.GetResource(correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving resource: %s", err)
+	}
+	defer reader.Close()
+	gotData, err := ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
+	}
+
+	// define different data
+	databytes = []byte("... no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero ...")
+
+	if err = client.UpdateResource(correctManifestAddrHex, databytes, signer); err != nil {
+		t.Fatalf("Error updating resource: %s", err)
+	}
+
+	reader, err = client.GetResource(correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving resource: %s", err)
+	}
+	defer reader.Close()
+	gotData, err = ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
+	}
+
 }

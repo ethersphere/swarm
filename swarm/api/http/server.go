@@ -38,7 +38,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -548,22 +547,31 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	defer sp.Finish()
 
 	var err error
-	var addr storage.Address
-	var name string
+	var rootAddr storage.Address
 	var outdata []byte
-	isRaw, frequency, err := resourcePostMode(r.uri.Path)
+
+	// Creation and update must send mruRequest JSON structure
+	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		Respond(w, r, err.Error(), http.StatusBadRequest)
+		Respond(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	mruRequest, err := mru.DecodeMruRequest(body) // decodes request JSON
+	if err != nil {
+		Respond(w, r, err.Error(), http.StatusBadRequest) //TODO: send different status response depending on error
+		return
+	}
+
+	if err = mruRequest.Verify(); err != nil {
+		Respond(w, r, err.Error(), http.StatusForbidden)
 		return
 	}
 
 	// new mutable resource creation will always have a frequency field larger than 0
-	if frequency > 0 {
-
-		name = r.uri.Addr
+	if mruRequest.Frequency() > 0 {
 
 		// the key is the content addressed root chunk holding mutable resource metadata information
-		addr, err = s.api.ResourceCreate(ctx, name, frequency)
+		rootAddr, err = s.api.ResourceCreate(r.Context(), mruRequest)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
 
@@ -574,7 +582,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		// we create a manifest so we can retrieve the resource with bzz:// later
 		// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
 		// root chunk
-		m, err := s.api.NewResourceManifest(r.Context(), addr.Hex())
+		m, err := s.api.NewResourceManifest(r.Context(), rootAddr.Hex())
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return
@@ -600,24 +608,22 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
 				return
 			}
-		} else {
-			w.Header().Set("Cache-Control", "max-age=2147483648")
 		}
 
 		// get the root chunk key from the manifest
-		addr, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
+		rootAddr, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 		if err != nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
 			return
 		}
 
-		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunkkey", addr)
+		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunkkey", rootAddr)
 
 		params := &mru.LookupParams{
-			Root: addr,
+			Root: rootAddr,
 		}
-		name, _, err = s.api.ResourceLookup(r.Context(), params)
+		_, _, err = s.api.ResourceLookup(r.Context(), params)
 		if err != nil {
 			Respond(w, r, err.Error(), http.StatusNotFound)
 			return
@@ -625,30 +631,10 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	}
 
 	// Creation and update must send data aswell. This data constitutes the update data itself.
-	data, err := ioutil.ReadAll(r.Body)
+	_, _, _, err = s.api.ResourceUpdate(r.Context(), rootAddr, &mruRequest.SignedResourceUpdate)
 	if err != nil {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
-	}
-
-	// Multihash will be passed as hex-encoded data, so we need to parse this to bytes
-	if isRaw {
-		_, _, _, err = s.api.ResourceUpdate(r.Context(), addr, data)
-		if err != nil {
-			Respond(w, r, err.Error(), http.StatusBadRequest)
-			return
-		}
-	} else {
-		bytesdata, err := hexutil.Decode(string(data))
-		if err != nil {
-			Respond(w, r, err.Error(), http.StatusBadRequest)
-			return
-		}
-		_, _, _, err = s.api.ResourceUpdateMultihash(r.Context(), addr, bytesdata)
-		if err != nil {
-			Respond(w, r, err.Error(), http.StatusBadRequest)
-			return
-		}
 	}
 
 	// If we have data to return, write this now
@@ -666,6 +652,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 // bzz-resource://<id> - get latest update
 // bzz-resource://<id>/<n> - get latest update on period n
 // bzz-resource://<id>/<n>/<m> - get update version m of period n
+// bzz-resource://<id>/meta - get metadata and next version information
 // <id> = ens name or hash
 // TODO: Enable pass maxPeriod parameter
 func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
@@ -685,26 +672,46 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 		w.Header().Set("Cache-Control", "max-age=2147483648")
 	}
 
-	// get the root chunk key from the manifest
-	key, err := s.api.ResolveResourceManifest(r.Context(), manifestAddr)
+	// get the root chunk rootAddr from the manifest
+	rootAddr, err := s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 	if err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
 		return
 	}
 
-	log.Debug("handle.get.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunk key", key)
+	log.Debug("handle.get.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunk addr", rootAddr)
 
-	// determine if the query specifies period and version
+	// determine if the query specifies period and version or it is a metadata query
 	var params []string
 	if len(r.uri.Path) > 0 {
+		if r.uri.Path == "meta" {
+			unsignedMruRequest, err := s.api.ResourceNewRequest(r.Context(), rootAddr)
+			if err != nil {
+				getFail.Inc(1)
+				Respond(w, r, fmt.Sprintf("cannot retrieve resource metadata for rootAddr=%s: %s", rootAddr.Hex(), err), http.StatusNotFound)
+				return
+			}
+			rawResponse, err := mru.EncodeMruRequest(unsignedMruRequest)
+			if err != nil {
+				Respond(w, r, fmt.Sprintf("cannot encode unsigned MruRequest: %v", err), http.StatusInternalServerError)
+				return
+			}
+			w.Header().Add("Content-type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			fmt.Fprint(w, string(rawResponse))
+			return
+
+		}
+
 		params = strings.Split(r.uri.Path, "/")
+
 	}
 	var name string
 	var data []byte
 	now := time.Now()
 	lookupParams := &mru.LookupParams{
-		Root: key,
+		Root: rootAddr,
 	}
 
 	switch len(params) {
