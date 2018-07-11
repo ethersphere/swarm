@@ -46,13 +46,27 @@ type Manifest struct {
 
 // ManifestEntry represents an entry in a swarm manifest
 type ManifestEntry struct {
-	Hash        string    `json:"hash,omitempty"`
-	Path        string    `json:"path,omitempty"`
-	ContentType string    `json:"contentType,omitempty"`
-	Mode        int64     `json:"mode,omitempty"`
-	Size        int64     `json:"size,omitempty"`
-	ModTime     time.Time `json:"mod_time,omitempty"`
-	Status      int       `json:"status,omitempty"`
+	Hash        string       `json:"hash,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	ContentType string       `json:"contentType,omitempty"`
+	Mode        int64        `json:"mode,omitempty"`
+	Size        int64        `json:"size,omitempty"`
+	ModTime     time.Time    `json:"mod_time,omitempty"`
+	Status      int          `json:"status,omitempty"`
+	Access      *AccessEntry `json:"access,omitempty"`
+}
+type AccessEntry struct {
+	Type      string     `json:"type"`
+	Publisher string     `json:"publisher"`
+	Salt      string     `json:"salt"`
+	Act       string     `json:"act"`
+	KdfParams *KdfParams `json:"kdf_params,omitempty"`
+}
+
+type KdfParams struct {
+	N int `json:"n"`
+	P int `json:"p"`
+	R int `json:"r"`
 }
 
 // ManifestList represents the result of listing files in a manifest
