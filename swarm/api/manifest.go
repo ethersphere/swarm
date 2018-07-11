@@ -77,7 +77,7 @@ const AccessTypeACT = AccessType("act")
 
 func NewPasswordAccessEntry(salt string, kdfParams *KdfParams) (*AccessEntry, error) {
 	if len(salt) != 32 {
-		return nil, fmt.Errorf("salt should be 32 bytes long")
+		return nil, fmt.Errorf("salt should be 32 characters long")
 	}
 	return &AccessEntry{
 		Type:      AccessTypePass,
@@ -88,10 +88,10 @@ func NewPasswordAccessEntry(salt string, kdfParams *KdfParams) (*AccessEntry, er
 
 func NewPKAccessEntry(publisher, salt string) (*AccessEntry, error) {
 	if len(publisher) != 66 {
-		return nil, fmt.Errorf("publisher should be 66 bytes long")
+		return nil, fmt.Errorf("publisher should be 66 characters long")
 	}
 	if len(salt) != 32 {
-		return nil, fmt.Errorf("salt should be 32 bytes long")
+		return nil, fmt.Errorf("salt should be 32 characters long")
 	}
 	return &AccessEntry{
 		Type:      AccessTypePK,
@@ -102,10 +102,10 @@ func NewPKAccessEntry(publisher, salt string) (*AccessEntry, error) {
 
 func NewACTAccessEntry(publisher, salt string, act *URI, kdfParams *KdfParams) (*AccessEntry, error) {
 	if len(salt) != 32 {
-		return nil, fmt.Errorf("salt should be 32 bytes long")
+		return nil, fmt.Errorf("salt should be 32 characters long")
 	}
 	if len(publisher) != 66 {
-		return nil, fmt.Errorf("publisher should be 66 bytes long")
+		return nil, fmt.Errorf("publisher should be 66 characters long")
 	}
 
 	return &AccessEntry{
