@@ -24,10 +24,8 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -58,8 +56,12 @@ func encrypt(ctx *cli.Context) {
 	}
 
 	// encrypt ref with derivedKey
-	enc := encryption.New(0, 0, sha3.NewKeccak256)
+	enc := api.NewRefEncryption(len(ref))
 	encrypted, err := enc.Encrypt([]byte(ref), derivedKey)
+	if err != nil {
+		utils.Fatalf("Error: %v", err)
+		return
+	}
 
 	m := api.ManifestEntry{
 		Hash:        hex.EncodeToString(encrypted),
@@ -69,14 +71,13 @@ func encrypt(ctx *cli.Context) {
 		Access:  ae,
 	}
 
-	_, err = json.Marshal(m)
+	js, err := json.Marshal(m)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 		return
 	}
 
-	//fmt.Println(string(js))
-	fmt.Println("smth")
+	fmt.Println(string(js))
 }
 
 // readPassword reads a single line from stdin, trimming it from the trailing new
