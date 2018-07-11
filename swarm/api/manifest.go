@@ -19,6 +19,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -58,11 +59,56 @@ type ManifestEntry struct {
 	Access      *AccessEntry `json:"access,omitempty"`
 }
 type AccessEntry struct {
-	Type      AccessType `json:"type,omitempty"`
-	Publisher string     `json:"publisher,omitempty"`
-	Salt      string     `json:"salt,omitempty"`
-	Act       *URI       `json:"act,omitempty"`
-	KdfParams *KdfParams `json:"kdf_params,omitempty"`
+	Type      AccessType
+	Publisher string
+	Salt      []byte
+	Act       *URI
+	KdfParams *KdfParams
+}
+
+func (a *AccessEntry) MarshalJSON() (out []byte, err error) {
+
+	return json.Marshal(struct {
+		Type      AccessType `json:"type,omitempty"`
+		Publisher string     `json:"publisher,omitempty"`
+		Salt      string     `json:"salt,omitempty"`
+		Act       *URI       `json:"act,omitempty"`
+		KdfParams *KdfParams `json:"kdf_params,omitempty"`
+	}{
+		Type:      a.Type,
+		Publisher: a.Publisher,
+		Salt:      hex.EncodeToString(a.Salt),
+		Act:       a.Act,
+		KdfParams: a.KdfParams,
+	})
+
+}
+
+func (a *AccessEntry) UnmarshalJSON(value []byte) error {
+	v := struct {
+		Type      AccessType `json:"type,omitempty"`
+		Publisher string     `json:"publisher,omitempty"`
+		Salt      string     `json:"salt,omitempty"`
+		Act       *URI       `json:"act,omitempty"`
+		KdfParams *KdfParams `json:"kdf_params,omitempty"`
+	}{}
+
+	err := json.Unmarshal(value, &v)
+	if err != nil {
+		return err
+	}
+	a.Act = v.Act
+	a.KdfParams = v.KdfParams
+	a.Publisher = v.Publisher
+	a.Salt, err = hex.DecodeString(v.Salt)
+	if err != nil {
+		return err
+	}
+	if len(a.Salt) != 32 {
+		return errors.New("salt should be 32 bytes long")
+	}
+	a.Type = v.Type
+	return nil
 }
 
 type KdfParams struct {
@@ -77,9 +123,9 @@ const AccessTypePass = AccessType("pass")
 const AccessTypePK = AccessType("pk")
 const AccessTypeACT = AccessType("act")
 
-func NewAccessEntryPassword(salt string, kdfParams *KdfParams) (*AccessEntry, error) {
+func NewAccessEntryPassword(salt []byte, kdfParams *KdfParams) (*AccessEntry, error) {
 	if len(salt) != 32 {
-		return nil, fmt.Errorf("salt should be 32 characters long")
+		return nil, fmt.Errorf("salt should be 32 bytes long")
 	}
 	return &AccessEntry{
 		Type:      AccessTypePass,
@@ -88,12 +134,12 @@ func NewAccessEntryPassword(salt string, kdfParams *KdfParams) (*AccessEntry, er
 	}, nil
 }
 
-func NewAccessEntryPK(publisher, salt string) (*AccessEntry, error) {
+func NewAccessEntryPK(publisher string, salt []byte) (*AccessEntry, error) {
 	if len(publisher) != 66 {
 		return nil, fmt.Errorf("publisher should be 66 characters long")
 	}
 	if len(salt) != 32 {
-		return nil, fmt.Errorf("salt should be 32 characters long")
+		return nil, fmt.Errorf("salt should be 32 bytes long")
 	}
 	return &AccessEntry{
 		Type:      AccessTypePK,
@@ -102,9 +148,9 @@ func NewAccessEntryPK(publisher, salt string) (*AccessEntry, error) {
 	}, nil
 }
 
-func NewAccessEntryACT(publisher, salt string, act *URI, kdfParams *KdfParams) (*AccessEntry, error) {
+func NewAccessEntryACT(publisher string, salt []byte, act *URI, kdfParams *KdfParams) (*AccessEntry, error) {
 	if len(salt) != 32 {
-		return nil, fmt.Errorf("salt should be 32 characters long")
+		return nil, fmt.Errorf("salt should be 32 bytes long")
 	}
 	if len(publisher) != 66 {
 		return nil, fmt.Errorf("publisher should be 66 characters long")
