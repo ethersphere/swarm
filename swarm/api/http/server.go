@@ -533,9 +533,7 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 // If the latter is used, a subsequent bzz:// GET call to the manifest of the resource will return
 // the page that the multihash is pointing to, as if it held a normal swarm content manifest
 //
-// The resource name will be verbatim what is passed as the address part of the url.
-// For example, if a POST is made to /bzz-resource:/foo.eth/raw/13 a new resource with frequency 13
-// and name "foo.eth" will be created
+// The POST request admits a JSON structure as defined in the mru package: `mru.updateRequestJSON`
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 
@@ -550,7 +548,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	var rootAddr storage.Address
 	var outdata []byte
 
-	// Creation and update must send mru.UpdateRequest JSON structure
+	// Creation and update must send mru.updateRequestJSON JSON structure
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -572,7 +570,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	// new mutable resource creation will always have a frequency field larger than 0
 	if updateRequest.Frequency() > 0 {
 
-		// the key is the content addressed root chunk holding mutable resource metadata information
+		// rootAddr is the content addressed root chunk holding mutable resource metadata information
 		rootAddr, err = s.api.ResourceCreate(r.Context(), updateRequest)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
@@ -583,7 +581,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 
 		// we create a manifest so we can retrieve the resource with bzz:// later
 		// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
-		// root chunk
+		// metadata chunk (rootAddr)
 		m, err := s.api.NewResourceManifest(r.Context(), rootAddr.Hex())
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
@@ -612,7 +610,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 			}
 		}
 
-		// get the root chunk key from the manifest
+		// get the metadata rootAddr from the manifest
 		rootAddr, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 		if err != nil {
 			getFail.Inc(1)
@@ -639,7 +637,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	// If we have data to return, write this now
 	// \TODO there should always be data to return here
 	if len(outdata) > 0 {
-		w.Header().Add("Content-type", "text/plain")
+		w.Header().Add("Content-type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, string(outdata))
 		return
