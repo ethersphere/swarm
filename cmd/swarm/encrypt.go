@@ -55,9 +55,15 @@ func encrypt(ctx *cli.Context) {
 		return
 	}
 
+	refBytes, err := hex.DecodeString(ref)
+	if err != nil {
+		utils.Fatalf("Error: %v", err)
+		return
+	}
+
 	// encrypt ref with derivedKey
-	enc := api.NewRefEncryption(len(ref))
-	encrypted, err := enc.Encrypt([]byte(ref), derivedKey)
+	enc := api.NewRefEncryption(len(refBytes))
+	encrypted, err := enc.Encrypt(refBytes, derivedKey)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 		return
