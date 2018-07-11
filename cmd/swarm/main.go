@@ -226,6 +226,14 @@ func init() {
 			Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
 		},
 		{
+			Action:             encrypt,
+			CustomHelpTemplate: helpTemplate,
+			Name:               "encrypt",
+			Usage:              "encrypts a reference and embeds it into a root manifest",
+			ArgsUsage:          "<ref>",
+			Description:        "encrypts a reference and embeds it into a root manifest",
+		},
+		{
 			Action:             list,
 			CustomHelpTemplate: helpTemplate,
 			Name:               "ls",
