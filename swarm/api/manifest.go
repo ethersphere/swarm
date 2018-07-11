@@ -27,6 +27,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/scrypt"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -75,7 +77,7 @@ const AccessTypePass = AccessType("pass")
 const AccessTypePK = AccessType("pk")
 const AccessTypeACT = AccessType("act")
 
-func NewPasswordAccessEntry(salt string, kdfParams *KdfParams) (*AccessEntry, error) {
+func NewAccessEntryPassword(salt string, kdfParams *KdfParams) (*AccessEntry, error) {
 	if len(salt) != 32 {
 		return nil, fmt.Errorf("salt should be 32 characters long")
 	}
@@ -86,7 +88,7 @@ func NewPasswordAccessEntry(salt string, kdfParams *KdfParams) (*AccessEntry, er
 	}, nil
 }
 
-func NewPKAccessEntry(publisher, salt string) (*AccessEntry, error) {
+func NewAccessEntryPK(publisher, salt string) (*AccessEntry, error) {
 	if len(publisher) != 66 {
 		return nil, fmt.Errorf("publisher should be 66 characters long")
 	}
@@ -100,7 +102,7 @@ func NewPKAccessEntry(publisher, salt string) (*AccessEntry, error) {
 	}, nil
 }
 
-func NewACTAccessEntry(publisher, salt string, act *URI, kdfParams *KdfParams) (*AccessEntry, error) {
+func NewAccessEntryACT(publisher, salt string, act *URI, kdfParams *KdfParams) (*AccessEntry, error) {
 	if len(salt) != 32 {
 		return nil, fmt.Errorf("salt should be 32 characters long")
 	}
@@ -124,6 +126,29 @@ func NewKdfParams(n, p, r int) *KdfParams {
 		N: n,
 		P: p,
 		R: r,
+	}
+}
+
+func NewAccessSessionKey(password string, actEntry *AccessEntry) ([]byte, error) {
+	switch actEntry.Type {
+	case AccessTypePass:
+		return scrypt.Key(
+			[]byte(password),
+			[]byte(actEntry.Salt),
+			actEntry.KdfParams.N,
+			actEntry.KdfParams.R,
+			actEntry.KdfParams.P,
+			32,
+		)
+	case AccessTypePK:
+		return nil, fmt.Errorf("not implemented")
+
+	case AccessTypeACT:
+		return nil, fmt.Errorf("not implemented")
+
+	default:
+		return nil, fmt.Errorf("unknown access type")
+
 	}
 }
 
