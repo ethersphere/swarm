@@ -56,10 +56,10 @@ type ManifestEntry struct {
 	Access      *AccessEntry `json:"access,omitempty"`
 }
 type AccessEntry struct {
-	Type      string     `json:"type"`
-	Publisher string     `json:"publisher"`
-	Salt      string     `json:"salt"`
-	Act       string     `json:"act"`
+	Type      AccessType `json:"type,omitempty"`
+	Publisher string     `json:"publisher,omitempty"`
+	Salt      string     `json:"salt,omitempty"`
+	Act       *URI       `json:"act,omitempty"`
 	KdfParams *KdfParams `json:"kdf_params,omitempty"`
 }
 
@@ -67,6 +67,64 @@ type KdfParams struct {
 	N int `json:"n"`
 	P int `json:"p"`
 	R int `json:"r"`
+}
+
+type AccessType string
+
+const AccessTypePass = AccessType("pass")
+const AccessTypePK = AccessType("pk")
+const AccessTypeACT = AccessType("act")
+
+func NewPasswordAccessEntry(salt string, kdfParams *KdfParams) (*AccessEntry, error) {
+	if len(salt) != 32 {
+		return nil, fmt.Errorf("salt should be 32 bytes long")
+	}
+	return &AccessEntry{
+		Type:      AccessTypePass,
+		Salt:      salt,
+		KdfParams: kdfParams,
+	}, nil
+}
+
+func NewPKAccessEntry(publisher, salt string) (*AccessEntry, error) {
+	if len(publisher) != 66 {
+		return nil, fmt.Errorf("publisher should be 66 bytes long")
+	}
+	if len(salt) != 32 {
+		return nil, fmt.Errorf("salt should be 32 bytes long")
+	}
+	return &AccessEntry{
+		Type:      AccessTypePK,
+		Publisher: publisher,
+		Salt:      salt,
+	}, nil
+}
+
+func NewACTAccessEntry(publisher, salt string, act *URI, kdfParams *KdfParams) (*AccessEntry, error) {
+	if len(salt) != 32 {
+		return nil, fmt.Errorf("salt should be 32 bytes long")
+	}
+	if len(publisher) != 66 {
+		return nil, fmt.Errorf("publisher should be 66 bytes long")
+	}
+
+	return &AccessEntry{
+		Type:      AccessTypeACT,
+		Publisher: publisher,
+		Salt:      salt,
+		Act:       act,
+	}, nil
+}
+
+var DefaultKdfParams = NewKdfParams(262144, 1, 8)
+
+func NewKdfParams(n, p, r int) *KdfParams {
+
+	return &KdfParams{
+		N: n,
+		P: p,
+		R: r,
+	}
 }
 
 // ManifestList represents the result of listing files in a manifest
