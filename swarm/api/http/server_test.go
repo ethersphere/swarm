@@ -696,8 +696,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 		} else if err != nil {
 			t.Fatalf("error reading tar stream: %s", err)
 		}
-		size := hdr.Size
-		bb := make([]byte, size)
+		bb := make([]byte, hdr.Size)
 		_, err = tr.Read(bb)
 		if err != nil && err != io.EOF {
 			t.Fatal(err)
