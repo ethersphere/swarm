@@ -130,21 +130,21 @@ func (s *Server) HandleRootPaths(w http.ResponseWriter, r *Request) {
 		Respond(w, r, "Not Found", http.StatusNotFound)
 	}
 }
-func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {git§
+func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
 	switch r.Method {
 	case http.MethodGet:
 		log.Debug("handleGetBzz")
 		if r.Header.Get("Accept") == "application/x-tar" {
-			                       reader, err := s.api.GetDirectoryTar(r.Context(), r.uri)
-			                       if err != nil {
-			                               Respond(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
-			                       }
-			                       defer reader.Close()
-			
-			                       w.Header().Set("Content-Type", "application/x-tar")
-								   w.WriteHeader(http.StatusOK)
-								   io.Copy(w, reader)
-						return
+			reader, err := s.api.GetDirectoryTar(r.Context(), r.uri)
+			if err != nil {
+				Respond(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
+			}
+			defer reader.Close()
+
+			w.Header().Set("Content-Type", "application/x-tar")
+			w.WriteHeader(http.StatusOK)
+			io.Copy(w, reader)
+			return
 		}
 		s.HandleGetFile(w, r)
 	case http.MethodPost:
