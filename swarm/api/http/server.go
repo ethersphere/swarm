@@ -20,10 +20,8 @@ A simple http server interface to Swarm
 package http
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
-	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -68,18 +66,9 @@ var (
 	getFileCount    = metrics.NewRegisteredCounter("api.http.get.file.count", nil)
 	getFileNotFound = metrics.NewRegisteredCounter("api.http.get.file.notfound", nil)
 	getFileFail     = metrics.NewRegisteredCounter("api.http.get.file.fail", nil)
-	getFilesCount   = metrics.NewRegisteredCounter("api.http.get.files.count", nil)
-	getFilesFail    = metrics.NewRegisteredCounter("api.http.get.files.fail", nil)
 	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
-
-// ServerConfig is the basic configuration needed for the HTTP server and also
-// includes CORS settings.
-type ServerConfig struct {
-	Addr       string
-	CorsString string
-}
 
 func NewServer(api *api.API, corsString string) *Server {
 	var allowedOrigins []string
@@ -146,7 +135,15 @@ func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
 	case http.MethodGet:
 		log.Debug("handleGetBzz")
 		if r.Header.Get("Accept") == "application/x-tar" {
-			s.HandleGetFiles(w, r)
+			reader, err := s.api.GetDirectoryTar(r.Context(), r.uri)
+			if err != nil {
+				Respond(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
+			}
+			defer reader.Close()
+
+			w.Header().Set("Content-Type", "application/x-tar")
+			w.WriteHeader(http.StatusOK)
+			io.Copy(w, reader)
 			return
 		}
 		s.HandleGetFile(w, r)
@@ -211,7 +208,6 @@ func (s *Server) HandleBzzResource(w http.ResponseWriter, r *Request) {
 		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
-
 func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
 	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
 		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
@@ -236,6 +232,11 @@ func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Requ
 		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
 	})
 }
+
+// browser API for registering bzz url scheme handlers:
+// https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
+// electron (chromium) api for registering bzz url scheme handlers:
+// https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
 // browser API for registering bzz url scheme handlers:
 // https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
@@ -284,6 +285,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		Respond(w, r, "missing Content-Length header in request", http.StatusBadRequest)
 		return
 	}
+
 	addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
@@ -338,12 +340,16 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 		log.Debug("new manifest", "ruid", r.ruid, "key", addr)
 	}
 
-	newAddr, err := s.updateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
+	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 
 		case "application/x-tar":
-			return s.handleTarUpload(r, mw)
-
+			_, err := s.handleTarUpload(r, mw)
+			if err != nil {
+				Respond(w, r, fmt.Sprintf("error uploading tarball: %v", err), http.StatusInternalServerError)
+				return err
+			}
+			return nil
 		case "multipart/form-data":
 			return s.handleMultipartUpload(r, params["boundary"], mw)
 
@@ -364,38 +370,14 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *Request) {
 	fmt.Fprint(w, newAddr)
 }
 
-func (s *Server) handleTarUpload(req *Request, mw *api.ManifestWriter) error {
-	log.Debug("handle.tar.upload", "ruid", req.ruid)
-	tr := tar.NewReader(req.Body)
-	for {
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			return nil
-		} else if err != nil {
-			return fmt.Errorf("error reading tar stream: %s", err)
-		}
+func (s *Server) handleTarUpload(r *Request, mw *api.ManifestWriter) (storage.Address, error) {
+	log.Debug("handle.tar.upload", "ruid", r.ruid)
 
-		// only store regular files
-		if !hdr.FileInfo().Mode().IsRegular() {
-			continue
-		}
-
-		// add the entry under the path from the request
-		path := path.Join(req.uri.Path, hdr.Name)
-		entry := &api.ManifestEntry{
-			Path:        path,
-			ContentType: hdr.Xattrs["user.swarm.content-type"],
-			Mode:        hdr.Mode,
-			Size:        hdr.Size,
-			ModTime:     hdr.ModTime,
-		}
-		log.Debug("adding path to new manifest", "ruid", req.ruid, "bytes", entry.Size, "path", entry.Path)
-		contentKey, err := mw.AddEntry(req.Context(), tr, entry)
-		if err != nil {
-			return fmt.Errorf("error adding manifest entry from tar stream: %s", err)
-		}
-		log.Debug("stored content", "ruid", req.ruid, "key", contentKey)
+	key, err := s.api.UploadTar(r.Context(), r.Body, r.uri.Path, mw)
+	if err != nil {
+		return nil, err
 	}
+	return key, nil
 }
 
 func (s *Server) handleMultipartUpload(req *Request, boundary string, mw *api.ManifestWriter) error {
@@ -477,22 +459,11 @@ func (s *Server) handleDirectUpload(req *Request, mw *api.ManifestWriter) error 
 // text/plain response
 func (s *Server) HandleDelete(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.delete", "ruid", r.ruid)
-
 	deleteCount.Inc(1)
-	key, err := s.api.Resolve(r.Context(), r.uri)
+	newKey, err := s.api.Delete(r.Context(), r.uri.Addr, r.uri.Path)
 	if err != nil {
 		deleteFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusInternalServerError)
-		return
-	}
-
-	newKey, err := s.updateManifest(r.Context(), key, func(mw *api.ManifestWriter) error {
-		log.Debug(fmt.Sprintf("removing %s from manifest %s", r.uri.Path, key.Log()), "ruid", r.ruid)
-		return mw.RemoveEntry(r.uri.Path)
-	})
-	if err != nil {
-		deleteFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot update manifest: %s", err), http.StatusInternalServerError)
+		Respond(w, r, fmt.Sprintf("could not delete from manifest: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -851,82 +822,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	}
 }
 
-// HandleGetFiles handles a GET request to bzz:/<manifest> with an Accept
-// header of "application/x-tar" and returns a tar stream of all files
-// contained in the manifest
-func (s *Server) HandleGetFiles(w http.ResponseWriter, r *Request) {
-	log.Debug("handle.get.files", "ruid", r.ruid, "uri", r.uri)
-	getFilesCount.Inc(1)
-	if r.uri.Path != "" {
-		getFilesFail.Inc(1)
-		Respond(w, r, "files request cannot contain a path", http.StatusBadRequest)
-		return
-	}
-
-	addr, err := s.api.Resolve(r.Context(), r.uri)
-	if err != nil {
-		getFilesFail.Inc(1)
-		Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-		return
-	}
-	log.Debug("handle.get.files: resolved", "ruid", r.ruid, "key", addr)
-
-	walker, err := s.api.NewManifestWalker(r.Context(), addr, nil)
-	if err != nil {
-		getFilesFail.Inc(1)
-		Respond(w, r, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	tw := tar.NewWriter(w)
-	defer tw.Close()
-	w.Header().Set("Content-Type", "application/x-tar")
-	w.WriteHeader(http.StatusOK)
-
-	err = walker.Walk(func(entry *api.ManifestEntry) error {
-		// ignore manifests (walk will recurse into them)
-		if entry.ContentType == api.ManifestType {
-			return nil
-		}
-
-		// retrieve the entry's key and size
-		reader, isEncrypted := s.api.Retrieve(r.Context(), storage.Address(common.Hex2Bytes(entry.Hash)))
-		size, err := reader.Size(nil)
-		if err != nil {
-			return err
-		}
-		w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
-
-		// write a tar header for the entry
-		hdr := &tar.Header{
-			Name:    entry.Path,
-			Mode:    entry.Mode,
-			Size:    size,
-			ModTime: entry.ModTime,
-			Xattrs: map[string]string{
-				"user.swarm.content-type": entry.ContentType,
-			},
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-
-		// copy the file into the tar stream
-		n, err := io.Copy(tw, io.LimitReader(reader, hdr.Size))
-		if err != nil {
-			return err
-		} else if n != size {
-			return fmt.Errorf("error writing %s: expected %d bytes but sent %d", entry.Path, size, n)
-		}
-
-		return nil
-	})
-	if err != nil {
-		getFilesFail.Inc(1)
-		log.Error(fmt.Sprintf("error generating tar stream: %s", err))
-	}
-}
-
 // HandleGetList handles a GET request to bzz-list:/<manifest>/<path> and returns
 // a list of all files contained in <manifest> under <path> grouped into
 // common prefixes using "/" as a delimiter
@@ -947,7 +842,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	}
 	log.Debug("handle.get.list: resolved", "ruid", r.ruid, "key", addr)
 
-	list, err := s.getManifestList(r.Context(), addr, r.uri.Path)
+	list, err := s.api.GetManifestList(r.Context(), addr, r.uri.Path)
 	if err != nil {
 		getListFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -977,62 +872,6 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	json.NewEncoder(w).Encode(&list)
 }
 
-func (s *Server) getManifestList(ctx context.Context, addr storage.Address, prefix string) (list api.ManifestList, err error) {
-	walker, err := s.api.NewManifestWalker(ctx, addr, nil)
-	if err != nil {
-		return
-	}
-
-	err = walker.Walk(func(entry *api.ManifestEntry) error {
-		// handle non-manifest files
-		if entry.ContentType != api.ManifestType {
-			// ignore the file if it doesn't have the specified prefix
-			if !strings.HasPrefix(entry.Path, prefix) {
-				return nil
-			}
-
-			// if the path after the prefix contains a slash, add a
-			// common prefix to the list, otherwise add the entry
-			suffix := strings.TrimPrefix(entry.Path, prefix)
-			if index := strings.Index(suffix, "/"); index > -1 {
-				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return nil
-			}
-			if entry.Path == "" {
-				entry.Path = "/"
-			}
-			list.Entries = append(list.Entries, entry)
-			return nil
-		}
-
-		// if the manifest's path is a prefix of the specified prefix
-		// then just recurse into the manifest by returning nil and
-		// continuing the walk
-		if strings.HasPrefix(prefix, entry.Path) {
-			return nil
-		}
-
-		// if the manifest's path has the specified prefix, then if the
-		// path after the prefix contains a slash, add a common prefix
-		// to the list and skip the manifest, otherwise recurse into
-		// the manifest by returning nil and continuing the walk
-		if strings.HasPrefix(entry.Path, prefix) {
-			suffix := strings.TrimPrefix(entry.Path, prefix)
-			if index := strings.Index(suffix, "/"); index > -1 {
-				list.CommonPrefixes = append(list.CommonPrefixes, prefix+suffix[:index+1])
-				return api.ErrSkipManifest
-			}
-			return nil
-		}
-
-		// the manifest neither has the prefix or needs recursing in to
-		// so just skip it
-		return api.ErrSkipManifest
-	})
-
-	return list, nil
-}
-
 // HandleGetFile handles a GET request to bzz://<manifest>/<path> and responds
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
@@ -1058,7 +897,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestAddr)
-
 	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), manifestAddr, r.uri.Path)
 
 	etag := common.Bytes2Hex(contentKey)
@@ -1086,7 +924,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.getManifestList(r.Context(), manifestAddr, r.uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), manifestAddr, r.uri.Path)
 		if err != nil {
 			getFileFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -1139,24 +977,6 @@ func (b bufferedReadSeeker) Read(p []byte) (n int, err error) {
 
 func (b bufferedReadSeeker) Seek(offset int64, whence int) (int64, error) {
 	return b.s.Seek(offset, whence)
-}
-
-func (s *Server) updateManifest(ctx context.Context, addr storage.Address, update func(mw *api.ManifestWriter) error) (storage.Address, error) {
-	mw, err := s.api.NewManifestWriter(ctx, addr, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := update(mw); err != nil {
-		return nil, err
-	}
-
-	addr, err = mw.Store()
-	if err != nil {
-		return nil, err
-	}
-	log.Debug(fmt.Sprintf("generated manifest %s", addr))
-	return addr, nil
 }
 
 type loggingResponseWriter struct {
