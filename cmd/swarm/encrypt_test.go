@@ -27,7 +27,7 @@ import (
 
 func TestEncrypt(t *testing.T) {
 	log.Info("starting 3 node cluster")
-	cluster := newTestCluster(t, 3)
+	cluster := newTestCluster(t, 1)
 	defer cluster.Shutdown()
 
 	// create a tmp file
@@ -45,22 +45,38 @@ func TestEncrypt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hashRegexp := `[a-f\d]{64}`
-	flags := []string{
-		"--bzzapi", cluster.Nodes[0].URL,
-		"up",
-		tmp.Name()}
-	if toEncrypt {
-		hashRegexp = `[a-f\d]{128}`
-		flags = []string{
-			"--bzzapi", cluster.Nodes[0].URL,
-			"up",
-			"--encrypt",
-			tmp.Name()}
-	}
+	hashRegexp := `[a-f\d]{128}`
+
 	// upload the file with 'swarm up' and expect a hash
 	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
-	up := runSwarm(t, flags...)
+	up := runSwarm(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"up",
+		"--encrypt",
+		tmp.Name())
 	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
+
+	if len(matches) < 1 {
+		t.Fatal("no matches found")
+	}
+
+	ref := matches[0]
+
+	t.Log("ref", ref)
+
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up = runSwarm(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"encrypt",
+		ref,
+	)
+	up.InputLine("test")
+
+	_, matches = up.ExpectRegexp(".*")
+
+	fmt.Println(matches)
 }
