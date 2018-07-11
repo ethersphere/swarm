@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"golang.org/x/crypto/scrypt"
 	"golang.org/x/crypto/ssh/terminal"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -54,11 +53,7 @@ func encrypt(ctx *cli.Context) {
 		return
 	}
 
-	passArray := []byte(pass)
-
-	scryptDKLen := 32
-
-	derivedKey, err := scrypt.Key(passArray, salt, api.DefaultKdfParams.N, api.DefaultKdfParams.R, api.DefaultKdfParams.P, scryptDKLen)
+	derivedKey, err := api.NewAccessSessionKey(pass, ae)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 		return
