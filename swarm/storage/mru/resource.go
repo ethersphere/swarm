@@ -36,7 +36,7 @@ const (
 // version of the resource data and the metadata of its root chunk.
 type resource struct {
 	resourceUpdate
-	resourceMetadata
+	ResourceMetadata
 	*bytes.Reader
 	lastKey storage.Address
 	updated time.Time
@@ -66,7 +66,7 @@ func (r *resource) Size(ctx context.Context, _ chan bool) (int64, error) {
 
 //returns the resource's human-readable name
 func (r *resource) Name() string {
-	return r.name
+	return r.ResourceMetadata.Name
 }
 
 // Helper function to calculate the next update period number from the current time, start time and frequency

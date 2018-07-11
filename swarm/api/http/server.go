@@ -534,6 +534,7 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 // the page that the multihash is pointing to, as if it held a normal swarm content manifest
 //
 // The POST request admits a JSON structure as defined in the mru package: `mru.updateRequestJSON`
+// The requests can be to a) create a resource, b) update a resource or c) both a+b: create a resource and set the initial content
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.post.resource", "ruid", r.ruid)
 
@@ -545,8 +546,6 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 	defer sp.Finish()
 
 	var err error
-	var rootAddr storage.Address
-	var outdata []byte
 
 	// Creation and update must send mru.updateRequestJSON JSON structure
 	body, err := ioutil.ReadAll(r.Body)
@@ -560,29 +559,41 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	// Verify that the signature is intact and that the signer is authorized
-	// to update this resource
-	if err = updateRequest.Verify(); err != nil {
-		Respond(w, r, err.Error(), http.StatusForbidden)
-		return
+	if updateRequest.IsUpdate() {
+		// Verify that the signature is intact and that the signer is authorized
+		// to update this resource
+		// Check this early, to avoid creating a resource and then not being able to set its first update.
+		if err = updateRequest.Verify(); err != nil {
+			Respond(w, r, err.Error(), http.StatusForbidden)
+			return
+		}
 	}
 
-	// new mutable resource creation will always have a frequency field larger than 0
-	if updateRequest.Frequency() > 0 {
-
-		// rootAddr is the content addressed root chunk holding mutable resource metadata information
-		rootAddr, err = s.api.ResourceCreate(r.Context(), updateRequest)
+	if updateRequest.IsNew() {
+		err = s.api.ResourceCreate(r.Context(), updateRequest)
 		if err != nil {
 			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
-
 			Respond(w, r, err2.Error(), code)
 			return
 		}
+	}
 
+	if updateRequest.IsUpdate() {
+		_, err = s.api.ResourceUpdate(r.Context(), &updateRequest.SignedResourceUpdate)
+		if err != nil {
+			Respond(w, r, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	// at this point both possible operations (create, update or both) were successful
+	// so in case it was a new resource, then create a manifest and send it over.
+
+	if updateRequest.IsNew() {
 		// we create a manifest so we can retrieve the resource with bzz:// later
 		// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
 		// metadata chunk (rootAddr)
-		m, err := s.api.NewResourceManifest(r.Context(), rootAddr.Hex())
+		m, err := s.api.NewResourceManifest(r.Context(), updateRequest.RootAddr().Hex())
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return
@@ -592,57 +603,14 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *Request) {
 		// the client can access the root chunk key directly through its Hash member
 		// the manifest key should be set as content in the resolver of the ENS name
 		// \TODO update manifest key automatically in ENS
-		outdata, err = json.Marshal(m)
+		outdata, err := json.Marshal(m)
 		if err != nil {
 			Respond(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
 			return
 		}
-	} else {
-		// to update the resource through http we need to retrieve the key for the mutable resource root chunk
-		// that means that we retrieve the manifest and inspect its Hash member.
-		manifestAddr := r.uri.Address()
-		if manifestAddr == nil {
-			manifestAddr, err = s.api.Resolve(r.Context(), r.uri)
-			if err != nil {
-				getFail.Inc(1)
-				Respond(w, r, fmt.Sprintf("cannot resolve %s: %s", r.uri.Addr, err), http.StatusNotFound)
-				return
-			}
-		}
-
-		// get the metadata rootAddr from the manifest
-		rootAddr, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
-		if err != nil {
-			getFail.Inc(1)
-			Respond(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", r.uri.Addr, err), http.StatusNotFound)
-			return
-		}
-
-		log.Debug("handle.post.resource: resolved", "ruid", r.ruid, "manifestkey", manifestAddr, "rootchunkkey", rootAddr)
-
-		_, _, err = s.api.ResourceLookup(r.Context(), mru.LookupLatest(rootAddr))
-		if err != nil {
-			Respond(w, r, err.Error(), http.StatusNotFound)
-			return
-		}
-	}
-
-	// Creation and update must send data aswell. This data constitutes the update data itself.
-	_, _, _, err = s.api.ResourceUpdate(r.Context(), rootAddr, &updateRequest.SignedResourceUpdate)
-	if err != nil {
-		Respond(w, r, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	// If we have data to return, write this now
-	// \TODO there should always be data to return here
-	if len(outdata) > 0 {
-		w.Header().Add("Content-type", "application/json")
-		w.WriteHeader(http.StatusOK)
 		fmt.Fprint(w, string(outdata))
-		return
 	}
-	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-type", "application/json")
 }
 
 // Retrieve mutable resource updates:

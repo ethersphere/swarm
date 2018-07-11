@@ -163,18 +163,17 @@ func (h *Handler) chunkSize() int64 {
 func (h *Handler) New(ctx context.Context, request *Request) error {
 
 	// frequency 0 is invalid
-	if request.frequency == 0 {
+	if request.metadata.Frequency == 0 {
 		return NewError(ErrInvalidValue, "frequency cannot be 0 when creating a resource")
 	}
 
 	// make sure owner is set to something
-	var zeroAddr = common.Address{}
-	if request.ownerAddr == zeroAddr {
+	if request.metadata.OwnerAddr == zeroAddr {
 		return NewError(ErrInvalidValue, "ownerAddr must be set to create a new metadata chunk")
 	}
 
 	// create the meta chunk and store it in swarm
-	chunk, metaHash, err := request.resourceMetadata.newChunk()
+	chunk, metaHash, err := request.metadata.newChunk()
 	if err != nil {
 		return err
 	}
@@ -187,7 +186,7 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 	request.rootAddr = chunk.Addr
 
 	h.chunkStore.Put(ctx, chunk)
-	log.Debug("new resource", "name", request.name, "startTime", request.startTime, "frequency", request.frequency, "owner", request.ownerAddr)
+	log.Debug("new resource", "name", request.metadata.Name, "startTime", request.metadata.StartTime, "frequency", request.metadata.Frequency, "owner", request.metadata.OwnerAddr)
 
 	// create the internal index for the resource and populate it with the data of the first version
 	rsrc := &resource{
@@ -198,14 +197,9 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 				},
 			},
 		},
-		resourceMetadata: resourceMetadata{
-			name:      request.name,
-			startTime: request.startTime,
-			frequency: request.frequency,
-		},
-		updated: time.Now(),
+		ResourceMetadata: request.metadata,
+		updated:          time.Now(),
 	}
-	copy(rsrc.ownerAddr[:], request.ownerAddr[:])
 	h.set(chunk.Addr, rsrc)
 
 	return nil
@@ -229,7 +223,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	now := h.getCurrentTime(ctx)
 
 	updateRequest := new(Request)
-	updateRequest.period, err = getNextPeriod(rsrc.startTime.Time, now.Time, rsrc.frequency)
+	updateRequest.period, err = getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
 	if err != nil {
 		return nil, err
 	}
@@ -240,7 +234,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	updateRequest.multihash = rsrc.multihash
 	updateRequest.rootAddr = rsrc.rootAddr
 	updateRequest.metaHash = rsrc.metaHash
-	updateRequest.resourceMetadata = rsrc.resourceMetadata
+	updateRequest.metadata = rsrc.ResourceMetadata
 
 	// if we already have an update for this period then increment version
 	// resource object MUST be in sync for version to be correct, but we checked this earlier in the method already
@@ -268,7 +262,7 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 		now := h.getCurrentTime(ctx)
 
 		var period uint32
-		period, err := getNextPeriod(rsrc.startTime.Time, now.Time, rsrc.frequency)
+		period, err := getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
 		if err != nil {
 			return nil, err
 		}
@@ -372,7 +366,7 @@ func (h *Handler) Load(rootAddr storage.Address) (*resource, error) {
 	// create the index entry
 	rsrc := &resource{}
 
-	if err := rsrc.resourceMetadata.binaryGet(chunk.SData); err != nil { // Will fail if this is not really a metadata chunk
+	if err := rsrc.ResourceMetadata.binaryGet(chunk.SData); err != nil { // Will fail if this is not really a metadata chunk
 		return nil, err
 	}
 
@@ -381,7 +375,7 @@ func (h *Handler) Load(rootAddr storage.Address) (*resource, error) {
 		return nil, NewError(ErrCorruptData, "Corrupt metadata chunk")
 	}
 	h.set(rootAddr, rsrc)
-	log.Trace("resource index load", "rootkey", rootAddr, "name", rsrc.name, "starttime", rsrc.startTime, "frequency", rsrc.frequency)
+	log.Trace("resource index load", "rootkey", rootAddr, "name", rsrc.ResourceMetadata.Name, "starttime", rsrc.ResourceMetadata.StartTime, "frequency", rsrc.ResourceMetadata.Frequency)
 	return rsrc, nil
 }
 
@@ -393,7 +387,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	if err := r.parseUpdateChunk(chunk.Addr, chunk.SData); err != nil {
 		return nil, NewErrorf(ErrInvalidSignature, "Invalid resource chunk: %s", err)
 	}
-	log.Trace("resource index update", "name", rsrc.name, "updatekey", chunk.Addr, "period", r.period, "version", r.version)
+	log.Trace("resource index update", "name", rsrc.ResourceMetadata.Name, "updatekey", chunk.Addr, "period", r.period, "version", r.version)
 
 	// update our rsrcs entry map
 	rsrc.lastKey = chunk.Addr
@@ -404,7 +398,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	rsrc.multihash = r.multihash
 	rsrc.Reader = bytes.NewReader(rsrc.data)
 	copy(rsrc.data, r.data)
-	log.Debug(" synced", "name", rsrc.name, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
+	log.Debug(" synced", "name", rsrc.ResourceMetadata.Name, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
 	h.set(chunk.Addr, rsrc)
 	return rsrc, nil
 }
@@ -413,12 +407,12 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 // Uses the Mutable Resource metadata currently loaded in the resources map entry.
 // It is the caller's responsibility to make sure that this data is not stale.
 // Note that a Mutable Resource update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature. An error will be returned if the total length of the chunk payload will exceed this limit.
-func (h *Handler) Update(ctx context.Context, rootAddr storage.Address, r *SignedResourceUpdate) (storage.Address, error) {
-	return h.update(ctx, rootAddr, r)
+func (h *Handler) Update(ctx context.Context, r *SignedResourceUpdate) (storage.Address, error) {
+	return h.update(ctx, r)
 }
 
 // create and commit an update
-func (h *Handler) update(ctx context.Context, rootAddr storage.Address, r *SignedResourceUpdate) (storage.Address, error) {
+func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (storage.Address, error) {
 
 	// we can't update anything without a store
 	if h.chunkStore == nil {
@@ -427,9 +421,9 @@ func (h *Handler) update(ctx context.Context, rootAddr storage.Address, r *Signe
 
 	// get the cached information
 
-	rsrc := h.get(rootAddr)
+	rsrc := h.get(r.rootAddr)
 	if rsrc == nil {
-		return nil, NewErrorf(ErrNotFound, " object '%s' not in index", rsrc.name)
+		return nil, NewErrorf(ErrNotFound, " object '%s' not in index", rsrc.ResourceMetadata.Name)
 	} else if !rsrc.isSynced() {
 		return nil, NewError(ErrNotSynced, " object not in sync")
 	}

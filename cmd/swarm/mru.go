@@ -61,7 +61,24 @@ func resourceCreate(ctx *cli.Context) {
 		utils.Fatalf("Error parsing data: %s", err.Error())
 		return
 	}
-	manifestAddress, err := client.CreateResource(name, frequency, 0, data, !rawResource, signer)
+
+	newResourceRequest, err := mru.NewCreateRequest(&mru.ResourceMetadata{
+		Name:      name,
+		Frequency: frequency,
+		StartTime: mru.Timestamp{Time: 0},
+		OwnerAddr: signer.Address(),
+	})
+
+	if err != nil {
+		utils.Fatalf("Error creating new resource request: %s", err)
+	}
+
+	newResourceRequest.SetData(data, !rawResource)
+	if err = newResourceRequest.Sign(signer); err != nil {
+		utils.Fatalf("Error signing resource update: %s", err.Error())
+	}
+
+	manifestAddress, err := client.CreateResource(newResourceRequest)
 	if err != nil {
 		utils.Fatalf("Error creating resource: %s", err.Error())
 		return
@@ -82,13 +99,29 @@ func resourceUpdate(ctx *cli.Context) {
 		return
 	}
 	signer := mru.NewGenericSigner(getClientAccount(ctx))
-	manifestAddressOrDomain := args[1]
-	data, err := hexutil.Decode(args[2])
+	manifestAddressOrDomain := args[0]
+	data, err := hexutil.Decode(args[1])
 	if err != nil {
 		utils.Fatalf("Error parsing data: %s", err.Error())
 		return
 	}
-	err = client.UpdateResource(manifestAddressOrDomain, data, signer)
+
+	// Retrieve resource status and metadata out of the manifest
+	updateRequest, err := client.GetResourceMetadata(manifestAddressOrDomain)
+	if err != nil {
+		utils.Fatalf("Error retrieving resource status: %s", err.Error())
+	}
+
+	// set the new data
+	updateRequest.SetData(data, updateRequest.Multihash()) // set data, keep current multihash setting
+
+	// sign update
+	if err = updateRequest.Sign(signer); err != nil {
+		utils.Fatalf("Error signing resource update: %s", err.Error())
+	}
+
+	// post update
+	err = client.UpdateResource(updateRequest)
 	if err != nil {
 		utils.Fatalf("Error updating resource: %s", err.Error())
 		return
