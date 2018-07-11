@@ -490,7 +490,6 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, err
 			if err != nil {
 				return err
 			}
-			// w.Header().Set("X-Decrypted", fmt.Sprintf("%v", isEncrypted))
 
 			// write a tar header for the entry
 			hdr := &tar.Header{

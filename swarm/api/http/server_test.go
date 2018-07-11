@@ -356,7 +356,7 @@ func TestBzzResource(t *testing.T) {
 
 func TestBzzGetPath(t *testing.T) {
 	testBzzGetPath(false, t)
-	//testBzzGetPath(true, t)
+	testBzzGetPath(true, t)
 }
 
 func TestBzzTar(t *testing.T) {
