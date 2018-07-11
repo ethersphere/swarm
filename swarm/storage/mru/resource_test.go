@@ -735,7 +735,7 @@ func TestValidator(t *testing.T) {
 
 	metadata = &ResourceMetadata{
 		Name:      resourceName,
-		StartTime: rh.Now(ctx),
+		StartTime: rh.Now(),
 		Frequency: resourceFrequency,
 		Owner:     signer.Address(),
 	}

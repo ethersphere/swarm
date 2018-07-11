@@ -226,7 +226,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 		return nil, err
 	}
 
-	now := h.Now(ctx)
+	now := h.Now()
 
 	updateRequest = new(Request)
 	updateRequest.period, err = getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
@@ -256,26 +256,19 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	return updateRequest, nil
 }
 
-// LookupLatest retrieves the latest version of the resource update with metadata chunk at params.Root
-// It starts at the next period after the current time, and upon failure
-// tries the corresponding keys of each previous period until one is found
+// Lookup retrieves a specific or latest version of the resource update with metadata chunk at params.Root
+// Lookup works differently depending on the configuration of `LookupParams`
+// See the `LookupParams` documentation and helper functions:
+// `LookupLatest`, `LookupLatestVersionInPeriod` and `LookupVersion`
+// When looking for the latest update, it starts at the next period after the current time.
+// upon failure tries the corresponding keys of each previous period until one is found
 // (or startTime is reached, in which case there are no updates).
+
 func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, error) {
 
 	rsrc := h.get(params.rootAddr)
 	if rsrc == nil {
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
-	}
-	if params.period == 0 {
-		// get the current time and the next period
-		now := h.Now(ctx)
-
-		var period uint32
-		period, err := getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
-		if err != nil {
-			return nil, err
-		}
-		params.period = period
 	}
 	return h.lookup(rsrc, params)
 }
@@ -314,13 +307,24 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
-	// period 0 does not exist
-	if lp.period == 0 {
-		return nil, NewError(ErrInvalidValue, "period must be >0")
+	var specificperiod bool
+	if lp.period > 0 {
+		specificperiod = true
+	} else {
+		// get the current time and the next period
+		now := h.Now()
+
+		var period uint32
+		period, err := getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
+		if err != nil {
+			return nil, err
+		}
+		lp.period = period
 	}
 
-	// start from the last possible period, and iterate previous ones until we find a match
-	// if we hit startTime we're out of options
+	// start from the last possible period, and iterate previous ones
+	// (unless we want a specific period only) until we find a match.
+	// If we hit startTime we're out of options
 	var specificversion bool
 	if lp.version > 0 {
 		specificversion = true
@@ -356,6 +360,9 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 				lp.version = newversion
 				log.Trace("version update found, checking next", "version", lp.version, "period", lp.period, "updateAddr", updateAddr)
 			}
+		}
+		if specificperiod {
+			break
 		}
 		log.Trace("rsrc update not found, checking previous period", "period", lp.period, "updateAddr", updateAddr)
 		lp.period--
@@ -453,7 +460,7 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 }
 
 // gets the current time
-func (h *Handler) Now(ctx context.Context) Timestamp {
+func (h *Handler) Now() Timestamp {
 	return h.timestampProvider.Now()
 }
 
