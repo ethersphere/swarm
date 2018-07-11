@@ -19,6 +19,7 @@ package api
 import (
 	"archive/tar"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -324,7 +325,7 @@ func (a *API) Put(ctx context.Context, content string, contentType string, toEnc
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using FileStore retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
+func (a *API) Get(ctx context.Context, decryptor func(*ManifestEntry) (*ManifestEntry, error), manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
 	log.Debug("api.get", "key", manifestAddr, "path", path)
 	apiGetCount.Inc(1)
 	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
@@ -340,6 +341,20 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 
 	if entry != nil {
 		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Hash", entry.Hash)
+
+		if entry.ManifestEntry.Access != nil {
+			if decryptor == nil {
+				return nil, "", 0, nil, errors.New("dont have decryptor")
+			}
+
+			me, err := decryptor(&entry.ManifestEntry)
+			if err != nil {
+				return nil, "", 0, nil, err
+			}
+
+			entry.ManifestEntry = *me
+		}
+
 		// we need to do some extra work if this is a mutable resource manifest
 		if entry.ContentType == ResourceContentType {
 

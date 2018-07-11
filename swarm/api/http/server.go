@@ -48,6 +48,11 @@ import (
 	"github.com/rs/cors"
 )
 
+var (
+	ErrDecrypt           = errors.New("cant decrypt - forbidden")
+	ErrUnknownAccessType = errors.New("unknown access type (or not implemented)")
+)
+
 type resourceResponse struct {
 	Manifest storage.Address `json:"manifest"`
 	Resource string          `json:"resource"`
@@ -911,7 +916,25 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestAddr)
-	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), manifestAddr, r.uri.Path)
+
+	decryptor := func(m *api.ManifestEntry) (*api.ManifestEntry, error) {
+		if m.Access == nil {
+			return m, nil
+		}
+
+		if m.Access.Type == "pass" {
+			_, _, ok := r.BasicAuth()
+			if ok {
+				// decrypt
+				return nil, ErrDecrypt
+			} else {
+				return nil, ErrDecrypt
+			}
+		}
+		return nil, ErrUnknownAccessType
+	}
+
+	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), decryptor, manifestAddr, r.uri.Path)
 
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
@@ -924,6 +947,11 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	if err != nil {
+		if err == ErrDecrypt {
+			Respond(w, r, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
 		switch status {
 		case http.StatusNotFound:
 			getFileNotFound.Inc(1)

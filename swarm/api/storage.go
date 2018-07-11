@@ -67,7 +67,7 @@ func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	reader, mimeType, status, _, err := s.api.Get(ctx, addr, uri.Path)
+	reader, mimeType, status, _, err := s.api.Get(ctx, nil, addr, uri.Path)
 	if err != nil {
 		return nil, err
 	}
