@@ -233,6 +233,87 @@ func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Requ
 		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
 	})
 }
+func (s *Server) HandleBzzRaw(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetRaw")
+		s.HandleGet(w, r)
+	case http.MethodPost:
+		log.Debug("handlePostRaw")
+		s.HandlePostRaw(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzImmutable(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetHash")
+		s.HandleGetList(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzHash(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetHash")
+		s.HandleGet(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzList(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetHash")
+		s.HandleGetList(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+func (s *Server) HandleBzzResource(w http.ResponseWriter, r *Request) {
+	switch r.Method {
+	case http.MethodGet:
+		log.Debug("handleGetResource")
+		s.HandleGetResource(w, r)
+	case http.MethodPost:
+		log.Debug("handlePostResource")
+		s.HandlePostResource(w, r)
+	default:
+		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
+	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
+		req := &Request{Request: *r, ruid: uuid.New()[:8]}
+		metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
+		log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
+
+		// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
+		w := newLoggingResponseWriter(rw)
+		if parseBzzUri {
+			uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
+			if err != nil {
+				Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
+				return
+			}
+			req.uri = uri
+
+			log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri.Addr", req.uri.Addr, "uri.Path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
+		}
+
+		h(w, req) // call original
+		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
+	})
+}
+
+// browser API for registering bzz url scheme handlers:
+// https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
+// electron (chromium) api for registering bzz url scheme handlers:
+// https://github.com/atom/electron/blob/master/docs/api/protocol.md
 
 // browser API for registering bzz url scheme handlers:
 // https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
@@ -282,7 +363,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-	addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
+  addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
@@ -921,7 +1002,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
 		list, err := s.api.GetManifestList(r.Context(), manifestAddr, r.uri.Path)
-
 		if err != nil {
 			getFileFail.Inc(1)
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
