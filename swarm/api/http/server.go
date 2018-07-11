@@ -363,7 +363,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *Request) {
 		return
 	}
 
-  addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
+	addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
 		Respond(w, r, err.Error(), http.StatusInternalServerError)

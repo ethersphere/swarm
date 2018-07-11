@@ -527,7 +527,8 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, err
 	return piper, nil
 }
 
-// GetManifestList does something important
+// GetManifestList lists the manifest entries for the specified address and prefix
+// and returns it as a ManifestList
 func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix string) (list ManifestList, err error) {
 	apiManifestListCount.Inc(1)
 	walker, err := a.NewManifestWalker(ctx, addr, nil)
