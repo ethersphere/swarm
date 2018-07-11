@@ -730,6 +730,8 @@ func (s *Server) translateResourceError(w http.ResponseWriter, r *Request, supEr
 func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get", "ruid", r.ruid, "uri", r.uri)
 	getCount.Inc(1)
+	_, _, hasAuth := r.BasicAuth()
+
 	var err error
 	addr := r.uri.Address()
 	if addr == nil {
@@ -755,11 +757,15 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			return
 		}
 		var entry *api.ManifestEntry
+		authError := false
 		walker.Walk(func(e *api.ManifestEntry) error {
 			// if the entry matches the path, set entry and stop
 			// the walk
 			if e.Path == r.uri.Path {
 				entry = e
+				if e.Access != nil && !hasAuth {
+					authError = true
+				}
 				// return an error to cancel the walk
 				return errors.New("found")
 			}
@@ -773,6 +779,9 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			// requested path, recurse into it by returning
 			// nil and continuing the walk
 			if strings.HasPrefix(r.uri.Path, e.Path) {
+				if e.Access != nil && !hasAuth {
+					authError = true
+				}
 				return nil
 			}
 
@@ -781,6 +790,11 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 		if entry == nil {
 			getFail.Inc(1)
 			Respond(w, r, fmt.Sprintf("manifest entry could not be loaded"), http.StatusNotFound)
+			return
+		}
+		if authError {
+			getFail.Inc(1)
+			Respond(w, r, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		addr = storage.Address(common.Hex2Bytes(entry.Hash))

@@ -53,7 +53,7 @@ func encrypt(ctx *cli.Context) {
 		return
 	}
 
-	derivedKey, err := api.NewAccessSessionKey(pass, ae)
+	derivedKey, err := api.NewSessionKeyPassword(pass, ae)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 		return
