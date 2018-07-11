@@ -26,7 +26,7 @@ import (
 )
 
 func TestEncrypt(t *testing.T) {
-	log.Info("starting 3 node cluster")
+	log.Info("starting 1 swarm node")
 	cluster := newTestCluster(t, 1)
 	defer cluster.Shutdown()
 
@@ -64,19 +64,8 @@ func TestEncrypt(t *testing.T) {
 
 	ref := matches[0]
 
-	t.Log("ref", ref)
-
 	// upload the file with 'swarm up' and expect a hash
-	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
-	up = runSwarm(t,
-		"--bzzapi",
-		cluster.Nodes[0].URL,
-		"encrypt",
-		ref,
-	)
-	up.InputLine("test")
+	log.Info(fmt.Sprintf("encrypting ref with 'swarm encrypt'"))
 
-	_, matches = up.ExpectRegexp(".*")
-
-	fmt.Println(matches)
+	t.Log("ref", ref)
 }
