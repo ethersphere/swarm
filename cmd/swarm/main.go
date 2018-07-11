@@ -161,6 +161,11 @@ var (
 		Name:  "encrypt",
 		Usage: "use encrypted upload",
 	}
+	SwarmEncryptPasswordFlag = cli.StringFlag{
+		Name:   "password",
+		Usage:  "Password",
+		EnvVar: SWARM_ENCRYPT_PASSWORD,
+	}
 	CorsStringFlag = cli.StringFlag{
 		Name:   "corsdomain",
 		Usage:  "Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ',')",
@@ -228,6 +233,7 @@ func init() {
 		{
 			Action:             encrypt,
 			CustomHelpTemplate: helpTemplate,
+			Flags:              []cli.Flag{SwarmEncryptPasswordFlag},
 			Name:               "encrypt",
 			Usage:              "encrypts a reference and embeds it into a root manifest",
 			ArgsUsage:          "<ref>",

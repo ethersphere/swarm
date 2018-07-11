@@ -39,7 +39,11 @@ func encrypt(ctx *cli.Context) {
 
 	ref := args[0]
 
-	pass := readPassword()
+	pass := ctx.String(SwarmEncryptPasswordFlag.Name)
+	if pass == "" {
+		utils.Fatalf("Password in needed", "")
+		return
+	}
 
 	salt := randentropy.GetEntropyCSPRNG(32)
 
