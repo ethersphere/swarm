@@ -175,27 +175,18 @@ func NewKdfParams(n, p, r int) *KdfParams {
 	}
 }
 
-func NewAccessSessionKey(password string, actEntry *AccessEntry) ([]byte, error) {
-	switch actEntry.Type {
-	case AccessTypePass:
-		return scrypt.Key(
-			[]byte(password),
-			[]byte(actEntry.Salt),
-			actEntry.KdfParams.N,
-			actEntry.KdfParams.R,
-			actEntry.KdfParams.P,
-			32,
-		)
-	case AccessTypePK:
-		return nil, fmt.Errorf("not implemented")
-
-	case AccessTypeACT:
-		return nil, fmt.Errorf("not implemented")
-
-	default:
-		return nil, fmt.Errorf("unknown access type")
-
+func NewSessionKeyPassword(password string, accessEntry *AccessEntry) ([]byte, error) {
+	if accessEntry.Type != AccessTypePass {
+		return nil, errors.New("incorrect access entry type")
 	}
+	return scrypt.Key(
+		[]byte(password),
+		accessEntry.Salt,
+		accessEntry.KdfParams.N,
+		accessEntry.KdfParams.R,
+		accessEntry.KdfParams.P,
+		32,
+	)
 }
 
 // ManifestList represents the result of listing files in a manifest
