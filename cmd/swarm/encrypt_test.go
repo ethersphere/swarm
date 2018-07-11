@@ -16,6 +16,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -23,10 +24,10 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/api"
 )
 
 func TestEncrypt(t *testing.T) {
-	log.Info("starting 1 swarm node")
 	cluster := newTestCluster(t, 1)
 	defer cluster.Shutdown()
 
@@ -64,8 +65,51 @@ func TestEncrypt(t *testing.T) {
 
 	ref := matches[0]
 
-	// upload the file with 'swarm up' and expect a hash
-	log.Info(fmt.Sprintf("encrypting ref with 'swarm encrypt'"))
-
 	t.Log("ref", ref)
+
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up = runSwarm(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"encrypt",
+		"--password",
+		"smth",
+		ref,
+	)
+
+	_, matches = up.ExpectRegexp(".+")
+	up.ExpectExit()
+
+	if len(matches) == 0 {
+		t.Fatalf("stdout not matched")
+	}
+
+	var m api.ManifestEntry
+
+	err = json.Unmarshal([]byte(matches[0]), &m)
+	if err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+
+	ct := "application/bzz-manifest+json"
+	if m.ContentType != ct {
+		t.Errorf("expected %q content type, got %q", ct, m.ContentType)
+	}
+
+	if m.Access == nil {
+		t.Fatal("manifest access is nil")
+	}
+
+	a := m.Access
+
+	if a.Type != "pass" {
+		t.Errorf(`got access type %q, expected "pass"`, a.Type)
+	}
+	if len(a.Salt) < 32 {
+		t.Errorf(`got salt with length %v, expected not less the 32 bytes`, len(a.Salt))
+	}
+	if a.KdfParams == nil {
+		t.Fatal("manifest access kdf params is nil")
+	}
 }
