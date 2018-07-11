@@ -73,12 +73,16 @@ func encrypt(ctx *cli.Context) {
 		return
 	}
 
-	m := api.ManifestEntry{
-		Hash:        hex.EncodeToString(encrypted),
-		ContentType: api.ManifestType,
-		//Size:        123, // ?
-		ModTime: time.Now(),
-		Access:  ae,
+	m := api.Manifest{
+		Entries: []api.ManifestEntry{
+			api.ManifestEntry{
+				Hash:        hex.EncodeToString(encrypted),
+				ContentType: api.ManifestType,
+				//Size:        123, // ?
+				ModTime: time.Now(),
+				Access:  ae,
+			},
+		},
 	}
 
 	js, err := json.Marshal(m)
