@@ -19,14 +19,15 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/console"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"golang.org/x/crypto/ssh/terminal"
+	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -42,9 +43,6 @@ func encrypt(ctx *cli.Context) {
 
 	pass := readPassword()
 
-	fmt.Println(ref)
-	fmt.Println(pass)
-
 	salt := randentropy.GetEntropyCSPRNG(32)
 
 	ae, err := api.NewAccessEntryPassword(salt, api.DefaultKdfParams)
@@ -59,34 +57,39 @@ func encrypt(ctx *cli.Context) {
 		return
 	}
 
-	encryptKey := derivedKey[:16]
+	// encrypt ref with derivedKey
+	enc := encryption.New(0, 0, sha3.NewKeccak256)
+	encrypted, err := enc.Encrypt([]byte(ref), derivedKey)
 
 	m := api.ManifestEntry{
-		Hash:        hex.EncodeToString(encryptKey),
+		Hash:        hex.EncodeToString(encrypted),
 		ContentType: api.ManifestType,
 		//Size:        123, // ?
 		ModTime: time.Now(),
 		Access:  ae,
 	}
 
-	js, err := json.Marshal(m)
+	_, err = json.Marshal(m)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 		return
 	}
 
-	fmt.Println(string(js))
+	//fmt.Println(string(js))
+	fmt.Println("smth")
 }
 
 // readPassword reads a single line from stdin, trimming it from the trailing new
 // line and returns it. The input will not be echoed.
 func readPassword() string {
-	fmt.Println("Enter password:")
-	fmt.Printf("> ")
-	text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	//text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
+	//if err != nil {
+	//}
+
+	test, err := console.Stdin.PromptPassword("Enter password: ")
 	if err != nil {
 		log.Crit("Failed to read password", "err", err)
 	}
-	fmt.Println()
-	return string(text)
+
+	return string(test)
 }
