@@ -19,8 +19,6 @@ package api
 import (
 	"archive/tar"
 	"context"
-	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -326,10 +324,10 @@ func (a *API) Put(ctx context.Context, content string, contentType string, toEnc
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using FileStore retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
-func (a *API) Get(ctx context.Context, decryptor func(*ManifestEntry) (*ManifestEntry, error), manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
+func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage.Address, path string) (reader storage.LazySectionReader, mimeType string, status int, contentAddr storage.Address, err error) {
 	log.Debug("api.get", "key", manifestAddr, "path", path)
 	apiGetCount.Inc(1)
-	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
+	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, decrypt)
 	if err != nil {
 		apiGetNotFound.Inc(1)
 		status = http.StatusNotFound
@@ -342,31 +340,6 @@ func (a *API) Get(ctx context.Context, decryptor func(*ManifestEntry) (*Manifest
 
 	if entry != nil {
 		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Hash", entry.Hash)
-
-		if entry.ManifestEntry.Access != nil {
-			if decryptor == nil {
-				return nil, "", 0, nil, errors.New("dont have decryptor")
-			}
-
-			me, err := decryptor(&entry.ManifestEntry)
-			if err != nil {
-				return nil, "", 0, nil, err
-			}
-
-			entry.ManifestEntry = *me
-
-			sa, err := hex.DecodeString(entry.ManifestEntry.Hash)
-			if err != nil {
-				panic(err)
-			}
-
-			tr, err := loadManifest(ctx, a.fileStore, sa, nil)
-			if err != nil {
-				panic(err)
-			}
-
-			entry, _ = tr.getEntry(path)
-		}
 
 		// we need to do some extra work if this is a mutable resource manifest
 		if entry.ContentType == ResourceContentType {
@@ -417,7 +390,7 @@ func (a *API) Get(ctx context.Context, decryptor func(*ManifestEntry) (*Manifest
 				log.Trace("resource is multihash", "key", manifestAddr)
 
 				// get the manifest the multihash digest points to
-				trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil)
+				trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, decrypt)
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound
@@ -646,7 +619,7 @@ func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update f
 func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, nil) // TODO: decrypt function
 	if err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
@@ -892,7 +865,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	}
 
 	quitC := make(chan bool)
-	rootTrie, err := loadManifest(ctx, a.fileStore, addr, quitC)
+	rootTrie, err := loadManifest(ctx, a.fileStore, addr, quitC, nil) // TODO: decrypt function
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't load manifest %v: %v", addr.String(), err)
 	}
@@ -982,7 +955,7 @@ func (a *API) ResourceIsValidated() bool {
 
 // ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
 func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address) (storage.Address, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, nil)
+	trie, err := loadManifest(ctx, a.fileStore, addr, nil, nil) // TODO: decrypt function
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}

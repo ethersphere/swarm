@@ -69,8 +69,6 @@ func TestEncrypt(t *testing.T) {
 
 	password := "smth"
 
-	// upload the file with 'swarm up' and expect a hash
-	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
 	up = runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,

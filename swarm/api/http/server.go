@@ -918,9 +918,9 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestAddr)
 
-	decryptor := func(m *api.ManifestEntry) (*api.ManifestEntry, error) {
+	decryptor := func(m *api.ManifestEntry) error {
 		if m.Access == nil {
-			return m, nil
+			return nil
 		}
 
 		if m.Access.Type == "pass" {
@@ -929,28 +929,28 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 				// decrypt
 				key, err := api.NewSessionKeyPassword(password, m.Access)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				ref, err := hex.DecodeString(m.Hash)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				enc := api.NewRefEncryption(len(ref) - 8)
 				decodedRef, err := enc.Decrypt(ref, key)
 				if err != nil {
-					return nil, err
+					return err
 				}
 
 				m.Hash = hex.EncodeToString(decodedRef)
 				m.Access = nil
-				return m, nil
+				return nil
 			} else {
-				return nil, ErrDecrypt
+				return ErrDecrypt
 			}
 		}
-		return nil, ErrUnknownAccessType
+		return ErrUnknownAccessType
 	}
 
 	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), decryptor, manifestAddr, r.uri.Path)
