@@ -22,6 +22,7 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -923,10 +924,28 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 		}
 
 		if m.Access.Type == "pass" {
-			_, _, ok := r.BasicAuth()
+			_, password, ok := r.BasicAuth()
 			if ok {
 				// decrypt
-				return nil, ErrDecrypt
+				key, err := api.NewSessionKeyPassword(password, m.Access)
+				if err != nil {
+					return nil, err
+				}
+
+				ref, err := hex.DecodeString(m.Hash)
+				if err != nil {
+					return nil, err
+				}
+
+				enc := api.NewRefEncryption(len(ref) - 8)
+				decodedRef, err := enc.Decrypt(ref, key)
+				if err != nil {
+					return nil, err
+				}
+
+				m.Hash = hex.EncodeToString(decodedRef)
+				m.Access = nil
+				return m, nil
 			} else {
 				return nil, ErrDecrypt
 			}
