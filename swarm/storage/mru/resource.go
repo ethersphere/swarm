@@ -51,11 +51,6 @@ func (r *resource) isSynced() bool {
 	return !r.updated.IsZero()
 }
 
-//Whether the resource data should be interpreted as multihash
-func (r *resourceUpdate) Multihash() bool {
-	return r.multihash
-}
-
 // implements storage.LazySectionReader
 func (r *resource) Size(ctx context.Context, _ chan bool) (int64, error) {
 	if !r.isSynced() {

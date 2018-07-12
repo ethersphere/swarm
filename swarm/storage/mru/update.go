@@ -146,3 +146,8 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	return nil
 
 }
+
+// Multihash specifies whether the resource data should be interpreted as multihash
+func (r *resourceUpdate) Multihash() bool {
+	return r.multihash
+}
