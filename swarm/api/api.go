@@ -19,6 +19,7 @@ package api
 import (
 	"archive/tar"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"math/big"
@@ -340,6 +341,15 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 
 	if entry != nil {
 		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Hash", entry.Hash)
+
+		if entry.ContentType == ManifestType {
+			log.Debug("entry is manifest", "key", manifestAddr, "new key", entry.Hash)
+			adr, err := hex.DecodeString(entry.Hash)
+			if err != nil {
+				return nil, "", 0, nil, err
+			}
+			return a.Get(ctx, decrypt, adr, entry.Path)
+		}
 
 		// we need to do some extra work if this is a mutable resource manifest
 		if entry.ContentType == ResourceContentType {
