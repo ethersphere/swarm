@@ -21,6 +21,9 @@ import (
 	"time"
 )
 
+// TimestampProvider sets the time source of the mru package
+var TimestampProvider timestampProvider = NewDefaultTimestampProvider()
+
 // Encodes a point in time as a Unix epoch
 type Timestamp struct {
 	Time uint64 // Unix epoch timestamp, in seconds

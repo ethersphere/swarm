@@ -256,7 +256,7 @@ func TestResourceHandler(t *testing.T) {
 		Owner:     signer.Address(),
 	}
 
-	request, err := NewCreateRequest(metadata)
+	request, err := NewCreateUpdateRequest(metadata)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -379,9 +379,7 @@ func TestResourceHandler(t *testing.T) {
 	// it will match on second iteration startTime + (resourceFrequency * 3)
 	fwdClock(int(resourceFrequency*2)-1, timeProvider)
 
-	rhparams := &HandlerParams{
-		TimestampProvider: timeProvider,
-	}
+	rhparams := &HandlerParams{}
 
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
@@ -486,10 +484,6 @@ func TestMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mr.Sign(signer)
-	if err != nil {
-		t.Fatal(err)
-	}
 	err = rh.New(ctx, mr)
 	if err != nil {
 		t.Fatal(err)
@@ -584,19 +578,13 @@ func TestMultihash(t *testing.T) {
 	}
 	rh.Close()
 
-	rhparams := &HandlerParams{
-		TimestampProvider: rh.timestampProvider,
-	}
+	rhparams := &HandlerParams{}
 	// test with signed data
 	rh2, err := NewTestHandler(datadir, rhparams)
 	if err != nil {
 		t.Fatal(err)
 	}
 	mr, err = NewCreateRequest(metadata)
-	if err != nil {
-		t.Fatal(err)
-	}
-	mr.Sign(signer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -735,7 +723,7 @@ func TestValidator(t *testing.T) {
 
 	metadata = &ResourceMetadata{
 		Name:      resourceName,
-		StartTime: rh.Now(),
+		StartTime: TimestampProvider.Now(),
 		Frequency: resourceFrequency,
 		Owner:     signer.Address(),
 	}
@@ -756,7 +744,7 @@ func TestValidator(t *testing.T) {
 func TestValidatorInStore(t *testing.T) {
 
 	// make fake timeProvider
-	timeProvider := &fakeTimeProvider{
+	TimestampProvider = &fakeTimeProvider{
 		currentTime: startTime.Time,
 	}
 
@@ -778,9 +766,7 @@ func TestValidatorInStore(t *testing.T) {
 	}
 
 	// set up resource handler and add is as a validator to the localstore
-	rhParams := &HandlerParams{
-		TimestampProvider: timeProvider,
-	}
+	rhParams := &HandlerParams{}
 	rh, err := NewHandler(rhParams)
 	if err != nil {
 		t.Fatal(err)
@@ -877,9 +863,8 @@ func setupTest(timeProvider timestampProvider, signer Signer) (rh *TestHandler, 
 		os.RemoveAll(datadir)
 	}
 
-	rhparams := &HandlerParams{
-		TimestampProvider: timeProvider,
-	}
+	TimestampProvider = timeProvider
+	rhparams := &HandlerParams{}
 	rh, err = NewTestHandler(datadir, rhparams)
 	return rh, datadir, cleanF, err
 }

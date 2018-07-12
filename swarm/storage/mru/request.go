@@ -19,7 +19,6 @@ package mru
 import (
 	"bytes"
 	"encoding/json"
-	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -34,8 +33,8 @@ type updateRequestJSON struct {
 	Owner     string `json:"ownerAddr,omitempty"`
 	RootAddr  string `json:"rootAddr,omitempty"`
 	MetaHash  string `json:"metaHash,omitempty"`
-	Version   uint32 `json:"version"`
-	Period    uint32 `json:"period"`
+	Version   uint32 `json:"version,omitempty"`
+	Period    uint32 `json:"period,omitempty"`
 	Data      string `json:"data,omitempty"`
 	Multihash bool   `json:"multiHash"`
 	Signature string `json:"signature,omitempty"`
@@ -45,41 +44,49 @@ type updateRequestJSON struct {
 type Request struct {
 	SignedResourceUpdate
 	metadata ResourceMetadata
+	isNew    bool
 }
 
 var zeroAddr = common.Address{}
 
-// NewCreateRequest returns a ready to sign Request message to create a new resource
-func NewCreateRequest(metadata *ResourceMetadata) (*Request, error) {
+// NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
+func NewCreateUpdateRequest(metadata *ResourceMetadata) (*Request, error) {
+
+	request, err := NewCreateRequest(metadata)
+	if err != nil {
+		return nil, err
+	}
 
 	// get the current time
-	if metadata.StartTime.Time == 0 {
-		metadata.StartTime.Time = uint64(time.Now().Unix())
+	now := TimestampProvider.Now().Time
+
+	request.version = 1
+	request.period, err = getNextPeriod(metadata.StartTime.Time, now, metadata.Frequency)
+	if err != nil {
+		return nil, err
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return request, nil
+}
+
+// NewCreateRequest returns a request to create a new resource
+func NewCreateRequest(metadata *ResourceMetadata) (request *Request, err error) {
+	if metadata.StartTime.Time == 0 { // get the current time
+		metadata.StartTime = TimestampProvider.Now()
 	}
 
 	if metadata.Owner == zeroAddr {
 		return nil, NewError(ErrInvalidValue, "OwnerAddr is not set")
 	}
 
-	request := &Request{
-		SignedResourceUpdate: SignedResourceUpdate{
-			resourceUpdate: resourceUpdate{
-				updateHeader: updateHeader{
-					UpdateLookup: UpdateLookup{
-						version: 1,
-						period:  1,
-					},
-				},
-			},
-		},
+	request = &Request{
 		metadata: *metadata,
 	}
-
-	var err error
 	request.rootAddr, request.metaHash, _, err = request.metadata.serializeAndHash()
-	if err != nil {
-		return nil, err
-	}
+	request.isNew = true
 	return request, nil
 }
 
@@ -141,8 +148,8 @@ func (r *Request) SetData(data []byte, multihash bool) {
 	r.data = data
 	r.multihash = multihash
 	r.signature = nil
-	if r.period != 1 || r.version != 1 {
-		r.metadata.Frequency = 0 // mark as update if this is not the first request
+	if !r.isNew {
+		r.metadata.Frequency = 0 // mark as update
 	}
 }
 

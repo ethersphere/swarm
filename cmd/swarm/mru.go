@@ -62,16 +62,13 @@ func resourceCreate(ctx *cli.Context) {
 		return
 	}
 
-	newResourceRequest, err := mru.NewCreateRequest(&mru.ResourceMetadata{
+	metadata := mru.ResourceMetadata{
 		Name:      name,
 		Frequency: frequency,
 		Owner:     signer.Address(),
-	})
-
-	if err != nil {
-		utils.Fatalf("Error creating new resource request: %s", err)
 	}
 
+	var newResourceRequest *mru.Request
 	if initialData != "" {
 		initialDataBytes, err := hexutil.Decode(initialData)
 		if err != nil {
@@ -79,10 +76,18 @@ func resourceCreate(ctx *cli.Context) {
 			cli.ShowCommandHelpAndExit(ctx, "create", 1)
 			return
 		}
-
+		newResourceRequest, err = mru.NewCreateUpdateRequest(&metadata)
+		if err != nil {
+			utils.Fatalf("Error creating new resource request: %s", err)
+		}
 		newResourceRequest.SetData(initialDataBytes, multihash)
 		if err = newResourceRequest.Sign(signer); err != nil {
 			utils.Fatalf("Error signing resource update: %s", err.Error())
+		}
+	} else {
+		newResourceRequest, err = mru.NewCreateRequest(&metadata)
+		if err != nil {
+			utils.Fatalf("Error creating new resource request: %s", err)
 		}
 	}
 

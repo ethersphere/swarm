@@ -139,7 +139,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 	// our mutable resource "name"
 	keybytes := "foo.eth"
 
-	updateRequest, err := mru.NewCreateRequest(&mru.ResourceMetadata{
+	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
 		Name:      keybytes,
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
@@ -148,7 +148,6 @@ func TestBzzResourceMultihash(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	updateRequest.SetData(mh, true)
 
 	if err := updateRequest.Sign(signer); err != nil {
@@ -222,7 +221,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updateRequest, err := mru.NewCreateRequest(&mru.ResourceMetadata{
+	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
 		Name:      keybytes,
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
@@ -231,7 +230,6 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	updateRequest.SetData(databytes, false)
 
 	if err := updateRequest.Sign(signer); err != nil {

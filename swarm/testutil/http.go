@@ -73,10 +73,8 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 	fakeTimeProvider := &fakeTimeProvider{
 		currentTime: 42,
 	}
-
-	rhparams := &mru.HandlerParams{
-		TimestampProvider: fakeTimeProvider,
-	}
+	mru.TimestampProvider = fakeTimeProvider
+	rhparams := &mru.HandlerParams{}
 	rh, err := mru.NewTestHandler(resourceDir, rhparams)
 	if err != nil {
 		t.Fatal(err)

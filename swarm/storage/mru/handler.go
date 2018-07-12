@@ -31,20 +31,18 @@ import (
 )
 
 type Handler struct {
-	chunkStore        *storage.NetStore
-	HashSize          int
-	timestampProvider timestampProvider
-	resources         map[uint64]*resource
-	resourceLock      sync.RWMutex
-	storeTimeout      time.Duration
-	queryMaxPeriods   uint32
+	chunkStore      *storage.NetStore
+	HashSize        int
+	resources       map[uint64]*resource
+	resourceLock    sync.RWMutex
+	storeTimeout    time.Duration
+	queryMaxPeriods uint32
 }
 
 // HandlerParams pass parameters to the Handler constructor NewHandler
 // Signer and TimestampProvider are mandatory parameters
 type HandlerParams struct {
-	QueryMaxPeriods   uint32
-	TimestampProvider timestampProvider
+	QueryMaxPeriods uint32
 }
 
 // hashPool contains a pool of ready hashers
@@ -69,14 +67,9 @@ func init() {
 func NewHandler(params *HandlerParams) (*Handler, error) {
 
 	rh := &Handler{
-		timestampProvider: params.TimestampProvider,
-		resources:         make(map[uint64]*resource),
-		storeTimeout:      defaultStoreTimeout,
-		queryMaxPeriods:   params.QueryMaxPeriods,
-	}
-
-	if rh.timestampProvider == nil {
-		rh.timestampProvider = NewDefaultTimestampProvider()
+		resources:       make(map[uint64]*resource),
+		storeTimeout:    defaultStoreTimeout,
+		queryMaxPeriods: params.QueryMaxPeriods,
 	}
 
 	for i := 0; i < hasherCount; i++ {
@@ -226,7 +219,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 		return nil, err
 	}
 
-	now := h.Now()
+	now := TimestampProvider.Now()
 
 	updateRequest = new(Request)
 	updateRequest.period, err = getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
@@ -312,7 +305,7 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 		specificperiod = true
 	} else {
 		// get the current time and the next period
-		now := h.Now()
+		now := TimestampProvider.Now()
 
 		var period uint32
 		period, err := getNextPeriod(rsrc.StartTime.Time, now.Time, rsrc.Frequency)
@@ -457,11 +450,6 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 		rsrc.Reader = bytes.NewReader(rsrc.data)
 	}
 	return r.updateAddr, nil
-}
-
-// gets the current time
-func (h *Handler) Now() Timestamp {
-	return h.timestampProvider.Now()
 }
 
 // Retrieves the resource index value for the given nameHash
