@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"testing"
 
@@ -127,8 +128,19 @@ func TestEncrypt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err = client.Download(hash, "")
+	httpClient := &http.Client{}
+
+	url := cluster.Nodes[0].URL + "/" + "bzz:/" + hash
+	response, err := httpClient.Get(url)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatal("should be a 401")
+	}
+	authHeader := response.Header.Get("WWW-Authenticate")
+	if authHeader == "" {
+		t.Fatal("should be something here")
+	}
+
 }
