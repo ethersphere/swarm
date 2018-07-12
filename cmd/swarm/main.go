@@ -189,6 +189,15 @@ var (
 	SWARM_ERR_SWAP_SET_NO_API = "SWAP is enabled but --swap-api is not set"
 )
 
+// this help command gets added to any subcommand that does not define it explicitly
+var defaultSubcommandHelp = cli.Command{
+	Action:             func(ctx *cli.Context) { cli.ShowCommandHelpAndExit(ctx, "", 1) },
+	CustomHelpTemplate: helpTemplate,
+	Name:               "help",
+	Usage:              "shows this help",
+	Hidden:             true,
+}
+
 var defaultNodeConfig = node.DefaultConfig
 
 // This init function sets defaults so cmd/swarm can run alongside geth.
@@ -375,6 +384,15 @@ pv(1) tool to get a progress bar:
 
 		// See config.go
 		DumpConfigCommand,
+	}
+
+	// append a hidden help subcommand to all commands that have subcommands
+	// if a help command was already defined above, that one will take precedence.
+	for i := range app.Commands {
+		cmd := &app.Commands[i]
+		if cmd.Subcommands != nil {
+			cmd.Subcommands = append(cmd.Subcommands, defaultSubcommandHelp)
+		}
 	}
 	sort.Sort(cli.CommandsByName(app.Commands))
 
