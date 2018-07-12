@@ -967,6 +967,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	if err != nil {
 		if err == ErrDecrypt {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
 			Respond(w, r, err.Error(), http.StatusUnauthorized)
 			return
 		}

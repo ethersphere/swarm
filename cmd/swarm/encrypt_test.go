@@ -67,7 +67,7 @@ func TestEncrypt(t *testing.T) {
 
 	ref := matches[0]
 
-	t.Log("ref", ref)
+	password := "smth"
 
 	// upload the file with 'swarm up' and expect a hash
 	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
@@ -76,7 +76,7 @@ func TestEncrypt(t *testing.T) {
 		cluster.Nodes[0].URL,
 		"encrypt",
 		"--password",
-		"smth",
+		password,
 		ref,
 	)
 
@@ -143,4 +143,26 @@ func TestEncrypt(t *testing.T) {
 		t.Fatal("should be something here")
 	}
 
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.SetBasicAuth("", password)
+
+	response, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		t.Errorf("expected status %v, got %v", http.StatusOK, response.StatusCode)
+	}
+	d, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(d) != data {
+		t.Errorf("expected decrypted data %q, got %q", data, string(d))
+	}
 }
