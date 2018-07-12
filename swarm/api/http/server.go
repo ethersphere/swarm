@@ -680,17 +680,20 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 	case 0: // latest only
 		name, data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatest(rootAddr))
 	case 2: // specific period and version
-		version, err := strconv.ParseUint(params[1], 10, 32)
+		var version uint64
+		var period uint64
+		version, err = strconv.ParseUint(params[1], 10, 32)
 		if err != nil {
 			break
 		}
-		period, err := strconv.ParseUint(params[0], 10, 32)
+		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
 		name, data, err = s.api.ResourceLookup(r.Context(), mru.LookupVersion(rootAddr, uint32(period), uint32(version)))
 	case 1: // last version of specific period
-		period, err := strconv.ParseUint(params[0], 10, 32)
+		var period uint64
+		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
