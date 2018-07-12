@@ -428,6 +428,13 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")
 	}
 
+	rsrc := h.get(r.rootAddr)
+	if rsrc != nil && rsrc.period != 0 && rsrc.version != 0 && // This is the only cheap check we can do for sure
+		rsrc.period == r.period && rsrc.version >= r.version { // without having to lookup update chunks
+
+		return nil, NewError(ErrInvalidValue, "A former update in this period is already known to exist")
+	}
+
 	chunk, err := r.toChunk() // Serialize the update into a chunk. Fails if data is too big
 	if err != nil {
 		return nil, err
@@ -438,7 +445,6 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.SData, "multihash", r.multihash)
 
 	// update our resources map entry if the new update is older than the one we have, if we have it.
-	rsrc := h.get(r.rootAddr)
 	if rsrc != nil && r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version) {
 		rsrc.period = r.period
 		rsrc.version = r.version
