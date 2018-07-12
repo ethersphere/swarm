@@ -19,6 +19,7 @@ package api
 import (
 	"archive/tar"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -353,6 +354,18 @@ func (a *API) Get(ctx context.Context, decryptor func(*ManifestEntry) (*Manifest
 			}
 
 			entry.ManifestEntry = *me
+
+			sa, err := hex.DecodeString(entry.ManifestEntry.Hash)
+			if err != nil {
+				panic(err)
+			}
+
+			tr, err := loadManifest(ctx, a.fileStore, sa, nil)
+			if err != nil {
+				panic(err)
+			}
+
+			entry, _ = tr.getEntry(path)
 		}
 
 		// we need to do some extra work if this is a mutable resource manifest
