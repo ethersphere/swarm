@@ -393,24 +393,38 @@ func readManifest(manifestReader storage.LazySectionReader, hash storage.Address
 		decrypt:   decrypt,
 	}
 	for _, entry := range man.Entries {
-		trie.addEntry(entry, quitC)
+		err = trie.addEntry(entry, quitC)
+		if err != nil {
+			return
+		}
 	}
 	return
 }
 
-func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
+func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) error {
 	mt.ref = nil // trie modified, hash needs to be re-calculated on demand
+
+	if entry.ManifestEntry.Access != nil {
+		if mt.decrypt == nil {
+			return errors.New("dont have decryptor")
+		}
+
+		err := mt.decrypt(&entry.ManifestEntry)
+		if err != nil {
+			return err
+		}
+	}
 
 	if len(entry.Path) == 0 {
 		mt.entries[256] = entry
-		return
+		return nil
 	}
 
 	b := entry.Path[0]
 	oldentry := mt.entries[b]
 	if (oldentry == nil) || (oldentry.Path == entry.Path && oldentry.ContentType != ManifestType) {
 		mt.entries[b] = entry
-		return
+		return nil
 	}
 
 	cpl := 0
@@ -420,12 +434,12 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 
 	if (oldentry.ContentType == ManifestType) && (cpl == len(oldentry.Path)) {
 		if mt.loadSubTrie(oldentry, quitC) != nil {
-			return
+			return nil
 		}
 		entry.Path = entry.Path[cpl:]
 		oldentry.subtrie.addEntry(entry, quitC)
 		oldentry.Hash = ""
-		return
+		return nil
 	}
 
 	commonPrefix := entry.Path[:cpl]
@@ -443,6 +457,7 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 		Path:        commonPrefix,
 		ContentType: ManifestType,
 	}, subtrie)
+	return nil
 }
 
 func (mt *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
