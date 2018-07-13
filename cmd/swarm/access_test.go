@@ -29,7 +29,7 @@ import (
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 )
 
-func TestEncrypt(t *testing.T) {
+func TestAccess(t *testing.T) {
 	cluster := newTestCluster(t, 1)
 	defer cluster.Shutdown()
 
@@ -72,7 +72,9 @@ func TestEncrypt(t *testing.T) {
 	up = runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
-		"encrypt",
+		"access",
+		"new",
+		"--dry-run",
 		"--password",
 		password,
 		ref,

@@ -161,10 +161,14 @@ var (
 		Name:  "encrypt",
 		Usage: "use encrypted upload",
 	}
-	SwarmEncryptPasswordFlag = cli.StringFlag{
+	SwarmAccessPasswordFlag = cli.StringFlag{
 		Name:   "password",
 		Usage:  "Password",
-		EnvVar: SWARM_ENCRYPT_PASSWORD,
+		EnvVar: SWARM_ACCESS_PASSWORD,
+	}
+	SwarmDryRunFlag = cli.BoolFlag{
+		Name:  "dry-run",
+		Usage: "dry-run",
 	}
 	CorsStringFlag = cli.StringFlag{
 		Name:   "corsdomain",
@@ -231,13 +235,24 @@ func init() {
 			Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
 		},
 		{
-			Action:             encrypt,
+			// Action:             access,
 			CustomHelpTemplate: helpTemplate,
-			Flags:              []cli.Flag{SwarmEncryptPasswordFlag},
-			Name:               "encrypt",
-			Usage:              "encrypts a reference and embeds it into a root manifest",
-			ArgsUsage:          "<ref>",
-			Description:        "encrypts a reference and embeds it into a root manifest",
+			// Flags:              []cli.Flag{SwarmAccessPasswordFlag},
+			Name:        "access",
+			Usage:       "encrypts a reference and embeds it into a root manifest",
+			ArgsUsage:   "<ref>",
+			Description: "encrypts a reference and embeds it into a root manifest",
+			Subcommands: []cli.Command{
+				{
+					Action:             access,
+					CustomHelpTemplate: helpTemplate,
+					Flags:              []cli.Flag{SwarmAccessPasswordFlag, SwarmDryRunFlag},
+					Name:               "new",
+					Usage:              "encrypts a reference and embeds it into a root manifest",
+					ArgsUsage:          "<ref>",
+					Description:        "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+				},
+			},
 		},
 		{
 			Action:             list,

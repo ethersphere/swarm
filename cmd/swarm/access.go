@@ -19,6 +19,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -26,12 +27,13 @@ import (
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 
-func encrypt(ctx *cli.Context) {
+func access(ctx *cli.Context) {
 	args := ctx.Args()
-
+	dryRun := ctx.Bool(SwarmDryRunFlag.Name)
 	if len(args) != 1 {
 		utils.Fatalf("Expected 1 argument - the ref", "")
 		return
@@ -39,10 +41,9 @@ func encrypt(ctx *cli.Context) {
 
 	ref := args[0]
 
-	pass := ctx.String(SwarmEncryptPasswordFlag.Name)
+	pass := ctx.String(SwarmAccessPasswordFlag.Name)
 	if pass == "" {
-		utils.Fatalf("Password in needed", "")
-		return
+		pass = readPassword()
 	}
 
 	salt := randentropy.GetEntropyCSPRNG(32)
@@ -85,13 +86,23 @@ func encrypt(ctx *cli.Context) {
 		},
 	}
 
-	js, err := json.Marshal(m)
-	if err != nil {
-		utils.Fatalf("Error: %v", err)
-		return
-	}
+	if dryRun {
+		js, err := json.Marshal(m)
+		if err != nil {
+			utils.Fatalf("Error: %v", err)
+		}
 
-	fmt.Println(string(js))
+		fmt.Println(string(js))
+	} else {
+		bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client := client.NewClient(bzzapi)
+
+		key, err := client.UploadManifest(&m, false)
+		if err != nil {
+			utils.Fatalf("Error uploading manifest: %v", err)
+		}
+		fmt.Println(key)
+	}
 }
 
 // readPassword reads a single line from stdin, trimming it from the trailing new
