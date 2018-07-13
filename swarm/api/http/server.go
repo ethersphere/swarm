@@ -1064,7 +1064,9 @@ func decryptor(r *Request) api.DecryptFunc {
 				enc := api.NewRefEncryption(len(ref) - 8)
 				decodedRef, err := enc.Decrypt(ref, key)
 				if err != nil {
-					return err
+					// Return ErrDecrypt to be able to detect
+					// invalid decryption in hinger levels of code.
+					return ErrDecrypt
 				}
 
 				m.Hash = hex.EncodeToString(decodedRef)

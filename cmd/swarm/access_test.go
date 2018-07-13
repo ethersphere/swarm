@@ -165,4 +165,32 @@ func TestAccess(t *testing.T) {
 	if string(d) != data {
 		t.Errorf("expected decrypted data %q, got %q", data, string(d))
 	}
+
+	log.Info(fmt.Sprintf("download file with 'swarm down'"))
+	up = runSwarm(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"down",
+		"bzz:/"+hash,
+		tmp.Name(),
+		"--password",
+		password)
+
+	up.ExpectExit()
+
+	log.Info(fmt.Sprintf("download file with 'swarm down' with wrong password"))
+	up = runSwarm(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"down",
+		"bzz:/"+hash,
+		tmp.Name(),
+		"--password",
+		"just wr0ng")
+
+	_, matches = up.ExpectRegexp("unauthorized")
+	if len(matches) != 1 && matches[0] != "unauthorized" {
+		t.Fatal(`"unauthorized" not found in output"`)
+	}
+	up.ExpectExit()
 }

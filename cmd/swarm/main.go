@@ -273,7 +273,7 @@ func init() {
 		{
 			Action:    download,
 			Name:      "down",
-			Flags:     []cli.Flag{SwarmRecursiveFlag},
+			Flags:     []cli.Flag{SwarmRecursiveFlag, SwarmAccessPasswordFlag},
 			Usage:     "downloads a swarm manifest or a file inside a manifest",
 			ArgsUsage: " <uri> [<dir>]",
 			Description: `
