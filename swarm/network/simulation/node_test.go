@@ -13,7 +13,8 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-package netsim
+
+package simulation
 
 import (
 	"context"
@@ -259,7 +260,7 @@ func TestUploadSnapshot(t *testing.T) {
 
 	nodeCount := 16
 	log.Debug("Uploading snapshot")
-	err := s.UploadSnapshot(fmt.Sprintf("../network/stream/testing/snapshot_%d.json", nodeCount))
+	err := s.UploadSnapshot(fmt.Sprintf("../stream/testing/snapshot_%d.json", nodeCount))
 	if err != nil {
 		t.Fatalf("Error uploading snapshot to simulation network: %v", err)
 	}

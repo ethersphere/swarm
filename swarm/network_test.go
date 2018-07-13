@@ -34,8 +34,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/netsim"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -264,7 +264,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		o = new(testSwarmNetworkOptions)
 	}
 
-	sim := netsim.New(map[string]netsim.ServiceFunc{
+	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"swarm": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			config := api.NewConfig()
 
@@ -293,7 +293,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			if err != nil {
 				return nil, cleanup, err
 			}
-			bucket.Store(netsim.BucketKeyKademlia, swarm.bzz.Hive.Overlay.(*network.Kademlia))
+			bucket.Store(simulation.BucketKeyKademlia, swarm.bzz.Hive.Overlay.(*network.Kademlia))
 			log.Info("new swarm", "bzzKey", config.BzzKey, "baseAddr", fmt.Sprintf("%x", swarm.bzz.BaseAddr()))
 			return swarm, cleanup, nil
 		},
@@ -333,7 +333,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		var nodeStatusM sync.Map
 		var totalFoundCount uint64
 
-		result := sim.Run(ctx, func(ctx context.Context, sim *netsim.Simulation) error {
+		result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 			nodeIDs := sim.UpNodeIDs()
 			shuffle(len(nodeIDs), func(i, j int) {
 				nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
@@ -398,7 +398,7 @@ func uploadFile(swarm *Swarm) (storage.Address, string, error) {
 // retrieve is the function that is used for checking the availability of
 // uploaded files in testSwarmNetwork test helper function.
 func retrieve(
-	sim *netsim.Simulation,
+	sim *simulation.Simulation,
 	files []file,
 	checkStatusM *sync.Map,
 	nodeStatusM *sync.Map,
