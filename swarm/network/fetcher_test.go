@@ -160,6 +160,16 @@ func TestFetchCancelStopsFetch(t *testing.T) {
 		t.Fatalf("cancelled fetch function initiated request")
 	case <-time.After(200 * time.Millisecond):
 	}
+
+	// if there is another fetch with active context, there should be a request, because the fetcher itself is not cancelled
+	rctx = context.Background()
+	fetcher.fetch(rctx)
+
+	select {
+	case <-requester.requestC:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("expected request")
+	}
 }
 
 // TestFetchUsesSourceFromContext tests Fetcher request behavior when there is a source in the context.
