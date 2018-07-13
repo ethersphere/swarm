@@ -179,7 +179,7 @@ func (c *Client) UploadDirectory(dir, defaultPath, manifest string, toEncrypt bo
 
 // DownloadDirectory downloads the files contained in a swarm manifest under
 // the given path into a local directory (existing files will be overwritten)
-func (c *Client) DownloadDirectory(hash, path, destDir string) error {
+func (c *Client) DownloadDirectory(hash, path, destDir, credentials string) error {
 	stat, err := os.Stat(destDir)
 	if err != nil {
 		return err
@@ -191,6 +191,9 @@ func (c *Client) DownloadDirectory(hash, path, destDir string) error {
 	req, err := http.NewRequest("GET", uri, nil)
 	if err != nil {
 		return err
+	}
+	if credentials != "" {
+		req.SetBasicAuth("", credentials)
 	}
 	req.Header.Set("Accept", "application/x-tar")
 	res, err := http.DefaultClient.Do(req)

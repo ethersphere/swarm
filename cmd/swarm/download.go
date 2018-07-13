@@ -70,7 +70,7 @@ func download(ctx *cli.Context) {
 
 	// assume behaviour according to --recursive switch
 	if isRecursive {
-		if err := client.DownloadDirectory(uri.Addr, uri.Path, dest); err != nil {
+		if err := client.DownloadDirectory(uri.Addr, uri.Path, dest, ""); err != nil {
 			utils.Fatalf("encoutered an error while downloading directory: %v", err)
 		}
 	} else {

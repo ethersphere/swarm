@@ -272,8 +272,8 @@ type ManifestWalker struct {
 	quitC chan bool
 }
 
-func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, nil) // TODO: decrypt function
+func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, decrypt DecryptFunc, quitC chan bool) (*ManifestWalker, error) {
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, decrypt) // TODO: decrypt function
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}

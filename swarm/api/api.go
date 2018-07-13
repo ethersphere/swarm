@@ -472,13 +472,13 @@ func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Add
 
 // GetDirectoryTar fetches a requested directory as a tarstream
 // it returns an io.Reader and an error. Do not forget to Close() the returned ReadCloser
-func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, error) {
+func (a *API) GetDirectoryTar(ctx context.Context, decrypt DecryptFunc, uri *URI) (io.ReadCloser, error) {
 	apiGetTarCount.Inc(1)
 	addr, err := a.Resolve(ctx, uri)
 	if err != nil {
 		return nil, err
 	}
-	walker, err := a.NewManifestWalker(ctx, addr, nil)
+	walker, err := a.NewManifestWalker(ctx, addr, decrypt, nil)
 	if err != nil {
 		apiGetTarFail.Inc(1)
 		return nil, err
@@ -540,9 +540,9 @@ func (a *API) GetDirectoryTar(ctx context.Context, uri *URI) (io.ReadCloser, err
 
 // GetManifestList lists the manifest entries for the specified address and prefix
 // and returns it as a ManifestList
-func (a *API) GetManifestList(ctx context.Context, addr storage.Address, prefix string) (list ManifestList, err error) {
+func (a *API) GetManifestList(ctx context.Context, decryptor DecryptFunc, addr storage.Address, prefix string) (list ManifestList, err error) {
 	apiManifestListCount.Inc(1)
-	walker, err := a.NewManifestWalker(ctx, addr, nil)
+	walker, err := a.NewManifestWalker(ctx, addr, decryptor, nil)
 	if err != nil {
 		apiManifestListFail.Inc(1)
 		return ManifestList{}, err

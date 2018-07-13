@@ -141,9 +141,15 @@ func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
 	case http.MethodGet:
 		log.Debug("handleGetBzz")
 		if r.Header.Get("Accept") == "application/x-tar" {
-			reader, err := s.api.GetDirectoryTar(r.Context(), r.uri)
+			reader, err := s.api.GetDirectoryTar(r.Context(), decryptor(r), r.uri)
 			if err != nil {
+				if isDecryptError(err) {
+					w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", r.uri.Address().String()))
+					Respond(w, r, err.Error(), http.StatusUnauthorized)
+					return
+				}
 				Respond(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
+				return
 			}
 			defer reader.Close()
 
@@ -756,9 +762,15 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
 	if r.uri.Path != "" {
-		walker, err := s.api.NewManifestWalker(r.Context(), addr, nil)
+		walker, err := s.api.NewManifestWalker(r.Context(), addr, decryptor(r), nil)
 		if err != nil {
 			getFail.Inc(1)
+			if isDecryptError(err) {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", addr.String()))
+				Respond(w, r, err.Error(), http.StatusUnauthorized)
+				return
+			}
+
 			Respond(w, r, fmt.Sprintf("%s is not a manifest", addr), http.StatusBadRequest)
 			return
 		}
@@ -862,9 +874,14 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	}
 	log.Debug("handle.get.list: resolved", "ruid", r.ruid, "key", addr)
 
-	list, err := s.api.GetManifestList(r.Context(), addr, r.uri.Path)
+	list, err := s.api.GetManifestList(r.Context(), decryptor(r), addr, r.uri.Path)
 	if err != nil {
 		getListFail.Inc(1)
+		if isDecryptError(err) {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", addr.String()))
+			Respond(w, r, err.Error(), http.StatusUnauthorized)
+			return
+		}
 		Respond(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -918,42 +935,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestAddr)
 
-	decryptor := func(m *api.ManifestEntry) error {
-		if m.Access == nil {
-			return nil
-		}
-
-		if m.Access.Type == "pass" {
-			_, password, ok := r.BasicAuth()
-			if ok {
-				// decrypt
-				key, err := api.NewSessionKeyPassword(password, m.Access)
-				if err != nil {
-					return err
-				}
-
-				ref, err := hex.DecodeString(m.Hash)
-				if err != nil {
-					return err
-				}
-
-				enc := api.NewRefEncryption(len(ref) - 8)
-				decodedRef, err := enc.Decrypt(ref, key)
-				if err != nil {
-					return err
-				}
-
-				m.Hash = hex.EncodeToString(decodedRef)
-				m.Access = nil
-				return nil
-			} else {
-				return ErrDecrypt
-			}
-		}
-		return ErrUnknownAccessType
-	}
-
-	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), decryptor, manifestAddr, r.uri.Path)
+	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), decryptor(r), manifestAddr, r.uri.Path)
 
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
@@ -966,7 +948,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	}
 
 	if err != nil {
-		if err == ErrDecrypt {
+		if isDecryptError(err) {
 			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
 			Respond(w, r, err.Error(), http.StatusUnauthorized)
 			return
@@ -986,9 +968,14 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.api.GetManifestList(r.Context(), manifestAddr, r.uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), decryptor(r), manifestAddr, r.uri.Path)
 		if err != nil {
 			getFileFail.Inc(1)
+			if isDecryptError(err) {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
+				Respond(w, r, err.Error(), http.StatusUnauthorized)
+				return
+			}
 			Respond(w, r, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -1053,4 +1040,44 @@ func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
 func (lrw *loggingResponseWriter) WriteHeader(code int) {
 	lrw.statusCode = code
 	lrw.ResponseWriter.WriteHeader(code)
+}
+func decryptor(r *Request) api.DecryptFunc {
+	return func(m *api.ManifestEntry) error {
+		if m.Access == nil {
+			return nil
+		}
+
+		if m.Access.Type == "pass" {
+			_, password, ok := r.BasicAuth()
+			if ok {
+				// decrypt
+				key, err := api.NewSessionKeyPassword(password, m.Access)
+				if err != nil {
+					return err
+				}
+
+				ref, err := hex.DecodeString(m.Hash)
+				if err != nil {
+					return err
+				}
+
+				enc := api.NewRefEncryption(len(ref) - 8)
+				decodedRef, err := enc.Decrypt(ref, key)
+				if err != nil {
+					return err
+				}
+
+				m.Hash = hex.EncodeToString(decodedRef)
+				m.Access = nil
+				return nil
+			} else {
+				return ErrDecrypt
+			}
+		}
+		return ErrUnknownAccessType
+	}
+}
+
+func isDecryptError(err error) bool {
+	return strings.Contains(err.Error(), ErrDecrypt.Error())
 }
