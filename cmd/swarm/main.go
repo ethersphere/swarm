@@ -388,12 +388,8 @@ pv(1) tool to get a progress bar:
 
 	// append a hidden help subcommand to all commands that have subcommands
 	// if a help command was already defined above, that one will take precedence.
-	for i := range app.Commands {
-		cmd := &app.Commands[i]
-		if cmd.Subcommands != nil {
-			cmd.Subcommands = append(cmd.Subcommands, defaultSubcommandHelp)
-		}
-	}
+	addDefaultHelpSubcommands(app.Commands)
+
 	sort.Sort(cli.CommandsByName(app.Commands))
 
 	app.Flags = []cli.Flag{
@@ -626,5 +622,18 @@ func injectBootnodes(srv *p2p.Server, nodes []string) {
 			continue
 		}
 		srv.AddPeer(n)
+	}
+}
+
+// addDefaultHelpSubcommand scans through defined CLI commands and adds
+// a basic help subcommand to each
+// if a help command is already defined, it will take precedence over the default.
+func addDefaultHelpSubcommands(commands []cli.Command) {
+	for i := range commands {
+		cmd := &commands[i]
+		if cmd.Subcommands != nil {
+			cmd.Subcommands = append(cmd.Subcommands, defaultSubcommandHelp)
+			addDefaultHelpSubcommands(cmd.Subcommands)
+		}
 	}
 }
