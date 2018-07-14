@@ -81,14 +81,12 @@ type Swarm struct {
 type SwarmAPI struct {
 	Api     *api.API
 	Backend chequebook.Backend
-	PrvKey  *ecdsa.PrivateKey
 }
 
 func (self *Swarm) API() *SwarmAPI {
 	return &SwarmAPI{
 		Api:     self.api,
 		Backend: self.backend,
-		PrvKey:  self.privateKey,
 	}
 }
 
