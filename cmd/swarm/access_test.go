@@ -16,6 +16,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -24,6 +26,9 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/randentropy"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
@@ -166,7 +171,7 @@ func TestAccess(t *testing.T) {
 		t.Errorf("expected decrypted data %q, got %q", data, string(d))
 	}
 
-	log.Info(fmt.Sprintf("download file with 'swarm down'"))
+	log.Info("download file with 'swarm down'")
 	up = runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
@@ -178,7 +183,7 @@ func TestAccess(t *testing.T) {
 
 	up.ExpectExit()
 
-	log.Info(fmt.Sprintf("download file with 'swarm down' with wrong password"))
+	log.Info("download file with 'swarm down' with wrong password")
 	up = runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
@@ -193,4 +198,128 @@ func TestAccess(t *testing.T) {
 		t.Fatal(`"unauthorized" not found in output"`)
 	}
 	up.ExpectExit()
+}
+
+func TestAccessPK(t *testing.T) {
+	// Setup Swarm and upload a test file to it
+	// srv := testutil.NewTestSwarmServer(t, serverFunc)
+	// defer srv.Close()
+	cluster := newTestCluster(t, 1)
+	defer cluster.Shutdown()
+	// swarmClient := swarm.NewClient(srv.URL)
+
+	// create a tmp file
+	tmp, err := ioutil.TempFile("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmp.Close()
+	defer os.Remove(tmp.Name())
+
+	// write data to file
+	data := "notsorandomdata"
+	_, err = io.WriteString(tmp, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hashRegexp := `[a-f\d]{128}`
+
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up := runSwarm(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"up",
+		"--encrypt",
+		tmp.Name())
+	_, matches := up.ExpectRegexp(hashRegexp)
+	up.ExpectExit()
+
+	if len(matches) < 1 {
+		t.Fatal("no matches found")
+	}
+
+	ref := matches[0]
+
+	up = runSwarm(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"access",
+		"new",
+		"--dry-run",
+		"--pk",
+		"--grant-pk",
+		"some random public key",
+		ref,
+	)
+
+	_, matches = up.ExpectRegexp(".+")
+	up.ExpectExit()
+
+	if len(matches) == 0 {
+		t.Fatalf("stdout not matched")
+	}
+	fmt.Println(matches[0])
+	hash := matches[0]
+	httpClient := &http.Client{}
+
+	url := cluster.Nodes[0].URL + "/" + "bzz:/" + hash
+	response, err := httpClient.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatal("should be a 200")
+	}
+	d, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(d) != data {
+		t.Errorf("expected decrypted data %q, got %q", data, string(d))
+	}
+
+}
+
+func TestAccessPKUnit(t *testing.T) {
+	salt := randentropy.GetEntropyCSPRNG(32)
+	sharedSecret := "a85586744a1ddd56a7ed9f33fa24f40dd745b3a941be296a0d60e329dbdb896d"
+
+	for i, v := range []struct {
+		publisherPriv string
+		granteePub    string
+	}{
+		{
+			publisherPriv: "ec5541555f3bc6376788425e9d1a62f55a82901683fd7062c5eddcc373a73459",
+			granteePub:    "0226f213613e843a413ad35b40f193910d26eb35f00154afcde9ded57479a6224a",
+		},
+		{
+			publisherPriv: "70c7a73011aa56584a0009ab874794ee7e5652fd0c6911cd02f8b6267dd82d2d",
+			granteePub:    "02e6f8d5e28faaa899744972bb847b6eb805a160494690c9ee7197ae9f619181db",
+		},
+	} {
+		b, _ := hex.DecodeString(v.granteePub)
+		granteePub, _ := crypto.DecompressPubkey(b)
+		publisherPrivate, _ := crypto.HexToECDSA(v.publisherPriv)
+
+		ssKey, err := getSessionKeyPK(publisherPrivate, granteePub, salt)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		hasher := sha3.NewKeccak256()
+		hasher.Write(salt)
+		shared, err := hex.DecodeString(sharedSecret)
+		if err != nil {
+			t.Fatal(err)
+		}
+		hasher.Write(shared)
+		sum := hasher.Sum(nil)
+
+		if !bytes.Equal(ssKey, sum) {
+			t.Fatalf("%d: got a session key mismatch", i)
+		}
+	}
+
 }

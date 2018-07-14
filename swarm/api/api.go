@@ -19,6 +19,7 @@ package api
 import (
 	"archive/tar"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -226,6 +227,7 @@ type API struct {
 	resource  *mru.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
+	Pk        *ecdsa.PrivateKey
 }
 
 // NewAPI the api constructor initialises a new API instance.

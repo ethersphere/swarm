@@ -191,6 +191,19 @@ func NewSessionKeyPassword(password string, accessEntry *AccessEntry) ([]byte, e
 	)
 }
 
+// func NewSessionKeyPK(sessionKey []byte, accessEntry *AccessEntry) ([]byte, error) {
+
+// 	if accessEntry.Type != AccessTypePK {
+// 		return nil, errors.New("incorrect access entry type")
+// 	}
+
+// 	return scrypt.Key(
+// 		sessionKey,
+// 		accessEntry.Salt,
+// 		32,
+// 	)
+// }
+
 // ManifestList represents the result of listing files in a manifest
 type ManifestList struct {
 	CommonPrefixes []string         `json:"common_prefixes,omitempty"`

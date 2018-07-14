@@ -149,6 +149,14 @@ var (
 		Name:  "defaultpath",
 		Usage: "path to file served for empty url path (none)",
 	}
+	SwarmAccessPKFlag = cli.BoolFlag{
+		Name:  "pk",
+		Usage: "enables PK encryption for access control tries",
+	}
+	SwarmAccessGrantPKFlag = cli.StringFlag{
+		Name:  "grant-pk",
+		Usage: "grants a given pk string access to an ACT",
+	}
 	SwarmUpFromStdinFlag = cli.BoolFlag{
 		Name:  "stdin",
 		Usage: "reads data to be uploaded from stdin",
@@ -246,7 +254,7 @@ func init() {
 				{
 					Action:             access,
 					CustomHelpTemplate: helpTemplate,
-					Flags:              []cli.Flag{SwarmAccessPasswordFlag, SwarmDryRunFlag},
+					Flags:              []cli.Flag{SwarmAccessPasswordFlag, SwarmDryRunFlag, SwarmAccessPKFlag, SwarmAccessGrantPKFlag},
 					Name:               "new",
 					Usage:              "encrypts a reference and embeds it into a root manifest",
 					ArgsUsage:          "<ref>",
@@ -515,6 +523,7 @@ func bzzd(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
 	}
+
 	//a few steps need to be done after the config phase is completed,
 	//due to overriding behavior
 	initSwarmNode(bzzconfig, stack, ctx)

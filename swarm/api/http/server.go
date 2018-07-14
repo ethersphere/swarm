@@ -141,7 +141,7 @@ func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
 	case http.MethodGet:
 		log.Debug("handleGetBzz")
 		if r.Header.Get("Accept") == "application/x-tar" {
-			reader, err := s.api.GetDirectoryTar(r.Context(), decryptor(r), r.uri)
+			reader, err := s.api.GetDirectoryTar(r.Context(), s.decryptor(r), r.uri)
 			if err != nil {
 				if isDecryptError(err) {
 					w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", r.uri.Address().String()))
@@ -762,7 +762,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
 	if r.uri.Path != "" {
-		walker, err := s.api.NewManifestWalker(r.Context(), addr, decryptor(r), nil)
+		walker, err := s.api.NewManifestWalker(r.Context(), addr, s.decryptor(r), nil)
 		if err != nil {
 			getFail.Inc(1)
 			if isDecryptError(err) {
@@ -874,7 +874,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 	}
 	log.Debug("handle.get.list: resolved", "ruid", r.ruid, "key", addr)
 
-	list, err := s.api.GetManifestList(r.Context(), decryptor(r), addr, r.uri.Path)
+	list, err := s.api.GetManifestList(r.Context(), s.decryptor(r), addr, r.uri.Path)
 	if err != nil {
 		getListFail.Inc(1)
 		if isDecryptError(err) {
@@ -913,6 +913,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *Request) {
 // with the content of the file at <path> from the given <manifest>
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	log.Debug("handle.get.file", "ruid", r.ruid)
+
 	getFileCount.Inc(1)
 	// ensure the root path has a trailing slash so that relative URLs work
 	if r.uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
@@ -935,7 +936,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 
 	log.Debug("handle.get.file: resolved", "ruid", r.ruid, "key", manifestAddr)
 
-	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), decryptor(r), manifestAddr, r.uri.Path)
+	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), s.decryptor(r), manifestAddr, r.uri.Path)
 
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
@@ -968,7 +969,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.api.GetManifestList(r.Context(), decryptor(r), manifestAddr, r.uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), s.decryptor(r), manifestAddr, r.uri.Path)
 		if err != nil {
 			getFileFail.Inc(1)
 			if isDecryptError(err) {
@@ -1041,13 +1042,14 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 	lrw.statusCode = code
 	lrw.ResponseWriter.WriteHeader(code)
 }
-func decryptor(r *Request) api.DecryptFunc {
+func (s *Server) decryptor(r *Request) api.DecryptFunc {
 	return func(m *api.ManifestEntry) error {
 		if m.Access == nil {
 			return nil
 		}
 
-		if m.Access.Type == "pass" {
+		switch m.Access.Type {
+		case "pass":
 			_, password, ok := r.BasicAuth()
 			if ok {
 				// decrypt
@@ -1075,9 +1077,18 @@ func decryptor(r *Request) api.DecryptFunc {
 			} else {
 				return ErrDecrypt
 			}
+		case "pk":
+			// sessio
+
+		case "act":
+
 		}
 		return ErrUnknownAccessType
 	}
+}
+
+func doDecrypt() {
+
 }
 
 func isDecryptError(err error) bool {

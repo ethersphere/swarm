@@ -16,59 +16,133 @@
 package main
 
 import (
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
+	crypto "github.com/ethereum/go-ethereum/crypto"
+	ecies "github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
 
+// var defaultNodeConfig = node.DefaultConfig
+
+// This init function sets defaults so cmd/swarm can run alongside geth.
+func init() {
+	defaultNodeConfig.Name = clientIdentifier
+	defaultNodeConfig.Version = params.VersionWithCommit(gitCommit)
+	defaultNodeConfig.P2P.ListenAddr = ":30399"
+	defaultNodeConfig.IPCPath = "bzzd.ipc"
+	// Set flag defaults for --help display.
+	utils.ListenPortFlag.Value = 30399
+}
+
 func access(ctx *cli.Context) {
+	bzzconfig, err := buildConfig(ctx)
+	if err != nil {
+		utils.Fatalf("unable to configure swarm: %v", err)
+	}
+	cfg := defaultNodeConfig
+
+	//pss operates on ws
+	cfg.WSModules = append(cfg.WSModules, "pss")
+
+	//geth only supports --datadir via command line
+	//in order to be consistent within swarm, if we pass --datadir via environment variable
+	//or via config file, we get the same directory for geth and swarm
+	if _, err := os.Stat(bzzconfig.Path); err == nil {
+		cfg.DataDir = bzzconfig.Path
+	}
+	//setup the ethereum node
+	utils.SetNodeConfig(ctx, &cfg)
+	stack, err := node.New(&cfg)
+	if err != nil {
+		utils.Fatalf("can't create node: %v", err)
+	}
+
+	//a few steps need to be done after the config phase is completed,
+	//due to overriding behavior
+	initSwarmNode(bzzconfig, stack, ctx)
+	prvkey := getAccount(bzzconfig.BzzAccount, ctx, stack)
+
+	//set the resolved config path (geth --datadir)
+
+	granteePubKey := ctx.String(SwarmAccessGrantPKFlag.Name)
+
 	args := ctx.Args()
 	dryRun := ctx.Bool(SwarmDryRunFlag.Name)
 	if len(args) != 1 {
 		utils.Fatalf("Expected 1 argument - the ref", "")
 		return
 	}
+	pk := ctx.Bool(SwarmAccessPKFlag.Name)
 
 	ref := args[0]
 
 	pass := ctx.String(SwarmAccessPasswordFlag.Name)
-	if pass == "" {
+	if pass == "" && !pk /* && !act*/ {
 		pass = readPassword()
 	}
-
+	var ae *api.AccessEntry
+	var sessionKey []byte
 	salt := randentropy.GetEntropyCSPRNG(32)
 
-	ae, err := api.NewAccessEntryPassword(salt, api.DefaultKdfParams)
-	if err != nil {
-		utils.Fatalf("Error: %v", err)
-		return
-	}
+	if pk {
+		if granteePubKey == "" {
+			utils.Fatalf("need a grantee Public Key")
+		}
+		b, err := hex.DecodeString(granteePubKey)
+		if err != nil {
+			utils.Fatalf("error decoding grantee public key: %v", err)
+		}
+		granteePub, err := crypto.UnmarshalPubkey(b)
+		if err != nil {
+			utils.Fatalf("%v", err)
+		}
 
-	derivedKey, err := api.NewSessionKeyPassword(pass, ae)
-	if err != nil {
-		utils.Fatalf("Error: %v", err)
-		return
-	}
+		sessionKey, err = getSessionKeyPK(prvkey, granteePub, salt)
+		if err != nil {
+			utils.Fatalf("err %v", err)
+		}
+		ae, err = api.NewAccessEntryPK(hex.EncodeToString(crypto.FromECDSAPub(&prvkey.PublicKey)), salt)
+		if err != nil {
+			utils.Fatalf("err %v", err)
+		}
+	} else {
+		//password
+		ae, err = api.NewAccessEntryPassword(salt, api.DefaultKdfParams)
+		if err != nil {
+			utils.Fatalf("Error: %v", err)
+			return
+		}
 
+		sessionKey, err = api.NewSessionKeyPassword(pass, ae)
+		if err != nil {
+			utils.Fatalf("Error: %v", err)
+			return
+		}
+
+	}
 	refBytes, err := hex.DecodeString(ref)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 		return
 	}
-
-	// encrypt ref with derivedKey
+	// encrypt ref with sessionKey
 	enc := api.NewRefEncryption(len(refBytes))
-	encrypted, err := enc.Encrypt(refBytes, derivedKey)
+	encrypted, err := enc.Encrypt(refBytes, sessionKey)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 		return
@@ -108,14 +182,23 @@ func access(ctx *cli.Context) {
 // readPassword reads a single line from stdin, trimming it from the trailing new
 // line and returns it. The input will not be echoed.
 func readPassword() string {
-	//text, err := terminal.ReadPassword(int(os.Stdin.Fd()))
-	//if err != nil {
-	//}
-
 	test, err := console.Stdin.PromptPassword("Enter password: ")
 	if err != nil {
 		log.Crit("Failed to read password", "err", err)
 	}
 
 	return string(test)
+}
+
+func getSessionKeyPK(publisherPrivKey *ecdsa.PrivateKey, granteePubKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
+	granteePubEcies := ecies.ImportECDSAPublic(granteePubKey)
+	privateKey := ecies.ImportECDSA(publisherPrivKey)
+
+	bytes, err := privateKey.GenerateShared(granteePubEcies, 16, 16)
+	if err != nil {
+		return nil, err
+	}
+	bytes = append(salt, bytes...)
+	sessionKey := crypto.Keccak256(bytes)
+	return sessionKey, nil
 }
