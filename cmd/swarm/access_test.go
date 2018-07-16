@@ -243,6 +243,8 @@ func TestAccessPK(t *testing.T) {
 	ref := matches[0]
 
 	up = runSwarm(t,
+		"--bzzaccount",
+		cluster.Nodes[0].Addr,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
 		"access",

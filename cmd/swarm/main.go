@@ -243,16 +243,14 @@ func init() {
 			Description:        "uploads a file or directory to swarm using the HTTP API and prints the root hash",
 		},
 		{
-			// Action:             access,
 			CustomHelpTemplate: helpTemplate,
-			// Flags:              []cli.Flag{SwarmAccessPasswordFlag},
-			Name:        "access",
-			Usage:       "encrypts a reference and embeds it into a root manifest",
-			ArgsUsage:   "<ref>",
-			Description: "encrypts a reference and embeds it into a root manifest",
+			Name:               "access",
+			Usage:              "encrypts a reference and embeds it into a root manifest",
+			ArgsUsage:          "<ref>",
+			Description:        "encrypts a reference and embeds it into a root manifest",
 			Subcommands: []cli.Command{
 				{
-					Action:             access,
+					Action:             accessNew,
 					CustomHelpTemplate: helpTemplate,
 					Flags:              []cli.Flag{SwarmAccessPasswordFlag, SwarmDryRunFlag, SwarmAccessPKFlag, SwarmAccessGrantPKFlag},
 					Name:               "new",

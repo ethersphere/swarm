@@ -19,6 +19,7 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -49,103 +50,44 @@ func init() {
 	utils.ListenPortFlag.Value = 30399
 }
 
-func access(ctx *cli.Context) {
-	bzzconfig, err := buildConfig(ctx)
-	if err != nil {
-		utils.Fatalf("unable to configure swarm: %v", err)
-	}
-	cfg := defaultNodeConfig
+func accessNew(ctx *cli.Context) {
+	var (
+		ae         *api.AccessEntry
+		sessionKey []byte
+		err        error
+		salt       = randentropy.GetEntropyCSPRNG(32)
+		args       = ctx.Args()
+		dryRun     = ctx.Bool(SwarmDryRunFlag.Name)
+		pk         = ctx.Bool(SwarmAccessPKFlag.Name)
+	)
 
-	//pss operates on ws
-	cfg.WSModules = append(cfg.WSModules, "pss")
-
-	//geth only supports --datadir via command line
-	//in order to be consistent within swarm, if we pass --datadir via environment variable
-	//or via config file, we get the same directory for geth and swarm
-	if _, err := os.Stat(bzzconfig.Path); err == nil {
-		cfg.DataDir = bzzconfig.Path
-	}
-	//setup the ethereum node
-	utils.SetNodeConfig(ctx, &cfg)
-	stack, err := node.New(&cfg)
-	if err != nil {
-		utils.Fatalf("can't create node: %v", err)
-	}
-
-	//a few steps need to be done after the config phase is completed,
-	//due to overriding behavior
-	initSwarmNode(bzzconfig, stack, ctx)
-	prvkey := getAccount(bzzconfig.BzzAccount, ctx, stack)
-
-	//set the resolved config path (geth --datadir)
-
-	granteePubKey := ctx.String(SwarmAccessGrantPKFlag.Name)
-
-	args := ctx.Args()
-	dryRun := ctx.Bool(SwarmDryRunFlag.Name)
 	if len(args) != 1 {
 		utils.Fatalf("Expected 1 argument - the ref", "")
 		return
 	}
-	pk := ctx.Bool(SwarmAccessPKFlag.Name)
 
 	ref := args[0]
 
-	pass := ctx.String(SwarmAccessPasswordFlag.Name)
-	if pass == "" && !pk /* && !act*/ {
-		pass = readPassword()
-	}
-	var ae *api.AccessEntry
-	var sessionKey []byte
-	salt := randentropy.GetEntropyCSPRNG(32)
-
 	if pk {
-		if granteePubKey == "" {
-			utils.Fatalf("need a grantee Public Key")
-		}
-		b, err := hex.DecodeString(granteePubKey)
+		sessionKey, ae, err = doPKNew(ctx, salt)
 		if err != nil {
-			utils.Fatalf("error decoding grantee public key: %v", err)
-		}
-		granteePub, err := crypto.UnmarshalPubkey(b)
-		if err != nil {
-			utils.Fatalf("%v", err)
-		}
-
-		sessionKey, err = getSessionKeyPK(prvkey, granteePub, salt)
-		if err != nil {
-			utils.Fatalf("err %v", err)
-		}
-		ae, err = api.NewAccessEntryPK(hex.EncodeToString(crypto.FromECDSAPub(&prvkey.PublicKey)), salt)
-		if err != nil {
-			utils.Fatalf("err %v", err)
+			utils.Fatalf("error getting session key: %v", err)
 		}
 	} else {
-		//password
-		ae, err = api.NewAccessEntryPassword(salt, api.DefaultKdfParams)
+		sessionKey, ae, err = doPasswordNew(ctx, salt)
 		if err != nil {
-			utils.Fatalf("Error: %v", err)
-			return
+			utils.Fatalf("error getting session key: %v", err)
 		}
-
-		sessionKey, err = api.NewSessionKeyPassword(pass, ae)
-		if err != nil {
-			utils.Fatalf("Error: %v", err)
-			return
-		}
-
 	}
 	refBytes, err := hex.DecodeString(ref)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
-		return
 	}
 	// encrypt ref with sessionKey
 	enc := api.NewRefEncryption(len(refBytes))
 	encrypted, err := enc.Encrypt(refBytes, sessionKey)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
-		return
 	}
 
 	m := api.Manifest{
@@ -201,4 +143,74 @@ func getSessionKeyPK(publisherPrivKey *ecdsa.PrivateKey, granteePubKey *ecdsa.Pu
 	bytes = append(salt, bytes...)
 	sessionKey := crypto.Keccak256(bytes)
 	return sessionKey, nil
+}
+
+func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
+	bzzconfig, err := buildConfig(ctx)
+	if err != nil {
+		utils.Fatalf("unable to configure swarm: %v", err)
+	}
+	cfg := defaultNodeConfig
+
+	//geth only supports --datadir via command line
+	//in order to be consistent within swarm, if we pass --datadir via environment variable
+	//or via config file, we get the same directory for geth and swarm
+	if _, err := os.Stat(bzzconfig.Path); err == nil {
+		cfg.DataDir = bzzconfig.Path
+	}
+	//setup the ethereum node
+	utils.SetNodeConfig(ctx, &cfg)
+	stack, err := node.New(&cfg)
+	if err != nil {
+		utils.Fatalf("can't create node: %v", err)
+	}
+	initSwarmNode(bzzconfig, stack, ctx)
+	privateKey := getAccount(bzzconfig.BzzAccount, ctx, stack)
+
+	granteePublicKey := ctx.String(SwarmAccessGrantPKFlag.Name)
+
+	if granteePublicKey == "" {
+		return nil, nil, errors.New("need a grantee Public Key")
+	}
+	b, err := hex.DecodeString(granteePublicKey)
+	if err != nil {
+		log.Error("error decoding grantee public key", "err", err)
+		return nil, nil, err
+	}
+	granteePub, err := crypto.UnmarshalPubkey(b)
+	if err != nil {
+		log.Error("error unmarshaling grantee public key", "err", err)
+		return nil, nil, err
+	}
+
+	sessionKey, err = getSessionKeyPK(privateKey, granteePub, salt)
+	if err != nil {
+		log.Error("error getting session key", "err", err)
+		return nil, nil, err
+	}
+
+	ae, err = api.NewAccessEntryPK(hex.EncodeToString(crypto.FromECDSAPub(&privateKey.PublicKey)), salt)
+	if err != nil {
+		log.Error("error generating access entry", "err", err)
+		return nil, nil, err
+	}
+
+	return sessionKey, ae, nil
+}
+
+func doPasswordNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
+	pass := ctx.String(SwarmAccessPasswordFlag.Name)
+	if pass == "" {
+		pass = readPassword()
+	}
+	ae, err = api.NewAccessEntryPassword(salt, api.DefaultKdfParams)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	sessionKey, err = api.NewSessionKeyPassword(pass, ae)
+	if err != nil {
+		return nil, nil, err
+	}
+	return sessionKey, ae, nil
 }
