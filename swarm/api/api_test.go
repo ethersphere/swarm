@@ -42,7 +42,7 @@ func testAPI(t *testing.T, f func(*API, bool)) {
 	if err != nil {
 		return
 	}
-	api := NewAPI(fileStore, nil, nil)
+	api := NewAPI(fileStore, nil, nil, nil)
 	f(api, false)
 	f(api, true)
 }

@@ -250,11 +250,35 @@ func TestAccessPK(t *testing.T) {
 		FOR ACCESS.GO - USE THE CODE FROM GETH ACCOUNT MODIFY TO UNLOCK THE KEYSTORE AND GET THE PRIVATE KEY
 	*/
 
+	// ks := keystore.NewKeyStore(cluster.Nodes[0].Dir, 1<<18, 1)
+
+	// acct := ks.Accounts()[0].Address
+	// pk := decryptStoreAccount(ks, acct.String(), []string{"swarm-test-passphrase"})
+	pk := cluster.Nodes[0].PrivateKey
+	// granteePubKey := crypto.CompressPubkey()
+	granteePubKey := crypto.FromECDSAPub(&pk.PublicKey)
+
+	// pubString := string()
+	// t.Fatal(pubString)
+	publisherDir, err := ioutil.TempDir("", "swarm-account-dir-temp")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, publisherAccount := getTestAccount(t, publisherDir)
+	//_, granteeAccount := getTestAccount(t, cluster.Nodes[0].Dir)
+
+	// 	ks:= keystore.NewKeyStore(cluster.Nodes[0].Dir, 1<<18, 1),
+	// ks.TimedUnlock()
+
+	// cluster.Nodes[0].Client.Call
 	up = runSwarm(t,
 		"--bzzaccount",
-		"0xaddrToUnlock",
+		publisherAccount.Address.String(),
 		"--password",
-		"passwordfile",
+		"/tmp/passFile",
+		"--datadir",
+		publisherDir,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
 		"access",
@@ -262,7 +286,7 @@ func TestAccessPK(t *testing.T) {
 		"pk",
 		"--dry-run",
 		"--grant-pk",
-		"some random public key",
+		hex.EncodeToString(granteePubKey),
 		ref,
 	)
 

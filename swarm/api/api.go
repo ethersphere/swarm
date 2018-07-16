@@ -19,7 +19,6 @@ package api
 import (
 	"archive/tar"
 	"context"
-	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -227,15 +226,16 @@ type API struct {
 	resource  *mru.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
-	Pk        *ecdsa.PrivateKey
+	config    *Config
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler, config *Config) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
 		resource:  resourceHandler,
+		config:    config,
 	}
 	return
 }

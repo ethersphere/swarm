@@ -144,6 +144,7 @@ func readPassword() string {
 }
 
 func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
+	log.Error("password", "passwd", ctx.GlobalString("password"))
 	bzzconfig, err := buildConfig(ctx)
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
@@ -175,6 +176,7 @@ func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEn
 		log.Error("error decoding grantee public key", "err", err)
 		return nil, nil, err
 	}
+
 	granteePub, err := crypto.UnmarshalPubkey(b)
 	if err != nil {
 		log.Error("error unmarshaling grantee public key", "err", err)

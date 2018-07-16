@@ -40,6 +40,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -781,9 +782,15 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			// the walk
 			if e.Path == r.uri.Path {
 				entry = e
-				if e.Access != nil && !hasAuth {
-					authError = true
+				if e.Access != nil {
+					switch e.Access.Type {
+					case api.AccessTypePass:
+						authError = !hasAuth
+					case api.AccessTypePK:
+
+					}
 				}
+
 				// return an error to cancel the walk
 				return errors.New("found")
 			}
@@ -815,6 +822,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 			Respond(w, r, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
+
 		addr = storage.Address(common.Hex2Bytes(entry.Hash))
 	}
 	etag := common.Bytes2Hex(addr)
@@ -1078,10 +1086,35 @@ func (s *Server) decryptor(r *Request) api.DecryptFunc {
 				return ErrDecrypt
 			}
 		case "pk":
-			// sessio
+			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
+			if err != nil {
+				return ErrDecrypt
+			}
+			publisher, err := crypto.DecompressPubkey(publisherBytes)
+			if err != nil {
+				return ErrDecrypt
+			}
+			key, err := s.api.NodeSessionKey(publisher, m.Access.Salt)
+			if err != nil {
+				return ErrDecrypt
+			}
+			ref, err := hex.DecodeString(m.Hash)
+			if err != nil {
+				return err
+			}
 
+			enc := api.NewRefEncryption(len(ref) - 8)
+			decodedRef, err := enc.Decrypt(ref, key)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+
+			m.Hash = hex.EncodeToString(decodedRef)
+			m.Access = nil
+			return nil
 		case "act":
-
 		}
 		return ErrUnknownAccessType
 	}

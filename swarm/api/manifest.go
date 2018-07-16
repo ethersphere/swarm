@@ -197,9 +197,9 @@ func NewSessionKeyPassword(password string, accessEntry *AccessEntry) ([]byte, e
 }
 
 // NewSessionKeyPK creates a new ACT Session Key using an ECDH shared secret for the given key pair and the given salt value
-func NewSessionKeyPK(publisherPrivateKey *ecdsa.PrivateKey, granteePubKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
-	granteePubEcies := ecies.ImportECDSAPublic(granteePubKey)
-	privateKey := ecies.ImportECDSA(publisherPrivateKey)
+func NewSessionKeyPK(private *ecdsa.PrivateKey, public *ecdsa.PublicKey, salt []byte) ([]byte, error) {
+	granteePubEcies := ecies.ImportECDSAPublic(public)
+	privateKey := ecies.ImportECDSA(private)
 
 	bytes, err := privateKey.GenerateShared(granteePubEcies, 16, 16)
 	if err != nil {
@@ -208,6 +208,10 @@ func NewSessionKeyPK(publisherPrivateKey *ecdsa.PrivateKey, granteePubKey *ecdsa
 	bytes = append(salt, bytes...)
 	sessionKey := crypto.Keccak256(bytes)
 	return sessionKey, nil
+}
+
+func (a *API) NodeSessionKey(publicKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
+	return NewSessionKeyPK(a.config.privateKey, publicKey, salt)
 }
 
 // ManifestList represents the result of listing files in a manifest
