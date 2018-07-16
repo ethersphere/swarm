@@ -19,6 +19,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -31,6 +32,8 @@ import (
 	"golang.org/x/crypto/scrypt"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -177,6 +180,8 @@ func NewKdfParams(n, p, r int) *KdfParams {
 	}
 }
 
+// NewSessionKeyPassword creates a session key based on a shared secret (password) and the given salt
+// and kdf parameters in the access entry
 func NewSessionKeyPassword(password string, accessEntry *AccessEntry) ([]byte, error) {
 	if accessEntry.Type != AccessTypePass {
 		return nil, errors.New("incorrect access entry type")
@@ -191,18 +196,19 @@ func NewSessionKeyPassword(password string, accessEntry *AccessEntry) ([]byte, e
 	)
 }
 
-// func NewSessionKeyPK(sessionKey []byte, accessEntry *AccessEntry) ([]byte, error) {
+// NewSessionKeyPK creates a new ACT Session Key using an ECDH shared secret for the given key pair and the given salt value
+func NewSessionKeyPK(publisherPrivateKey *ecdsa.PrivateKey, granteePubKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
+	granteePubEcies := ecies.ImportECDSAPublic(granteePubKey)
+	privateKey := ecies.ImportECDSA(publisherPrivateKey)
 
-// 	if accessEntry.Type != AccessTypePK {
-// 		return nil, errors.New("incorrect access entry type")
-// 	}
-
-// 	return scrypt.Key(
-// 		sessionKey,
-// 		accessEntry.Salt,
-// 		32,
-// 	)
-// }
+	bytes, err := privateKey.GenerateShared(granteePubEcies, 16, 16)
+	if err != nil {
+		return nil, err
+	}
+	bytes = append(salt, bytes...)
+	sessionKey := crypto.Keccak256(bytes)
+	return sessionKey, nil
+}
 
 // ManifestList represents the result of listing files in a manifest
 type ManifestList struct {

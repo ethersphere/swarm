@@ -16,7 +16,6 @@
 package main
 
 import (
-	"crypto/ecdsa"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -28,7 +27,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/console"
 	crypto "github.com/ethereum/go-ethereum/crypto"
-	ecies "github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
@@ -145,19 +143,6 @@ func readPassword() string {
 	return string(test)
 }
 
-func getSessionKeyPK(publisherPrivKey *ecdsa.PrivateKey, granteePubKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
-	granteePubEcies := ecies.ImportECDSAPublic(granteePubKey)
-	privateKey := ecies.ImportECDSA(publisherPrivKey)
-
-	bytes, err := privateKey.GenerateShared(granteePubEcies, 16, 16)
-	if err != nil {
-		return nil, err
-	}
-	bytes = append(salt, bytes...)
-	sessionKey := crypto.Keccak256(bytes)
-	return sessionKey, nil
-}
-
 func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
 	bzzconfig, err := buildConfig(ctx)
 	if err != nil {
@@ -196,7 +181,7 @@ func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEn
 		return nil, nil, err
 	}
 
-	sessionKey, err = getSessionKeyPK(privateKey, granteePub, salt)
+	sessionKey, err = api.NewSessionKeyPK(privateKey, granteePub, salt)
 	if err != nil {
 		log.Error("error getting session key", "err", err)
 		return nil, nil, err

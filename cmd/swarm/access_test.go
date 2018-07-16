@@ -315,7 +315,7 @@ func TestAccessPKUnit(t *testing.T) {
 		granteePub, _ := crypto.DecompressPubkey(b)
 		publisherPrivate, _ := crypto.HexToECDSA(v.publisherPriv)
 
-		ssKey, err := getSessionKeyPK(publisherPrivate, granteePub, salt)
+		ssKey, err := api.NewSessionKeyPK(publisherPrivate, granteePub, salt)
 		if err != nil {
 			t.Fatal(err)
 		}
