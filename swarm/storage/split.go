@@ -17,57 +17,88 @@
 package storage
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"io"
+
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 // SimpleSplitter implements the io.ReaderFrom interface for synchronous read from data
 // as data is written to it, it chops the input stream to section size buffers
 // and calls the section write on the SectionHasher
 type SimpleSplitter struct {
-	hasher  Hash
-	bufsize int
-	result  chan []byte
-}
-
-func (s *SimpleSplitter) Hash(ctx context.Context, r io.Reader) ([]byte, error) {
-	errc := make(chan error)
-	go func() {
-		select {
-		case errc <- s.ReadFrom(r):
-			return nil, err
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		}
-	}()
-
+	hasher       SectionHasher
+	sectionCount int
+	count        int64
+	result       chan []byte
+	readBuffer   []byte
+	writeBuffer  []byte
 }
 
 //
-func NewSimpleSplitter(h Hash, bufsize int) *SimpleSplitter {
+func NewSimpleSplitter(h SectionHasher, bufferSize int) *SimpleSplitter {
+	writeBufferBytes := make([]byte, 0, h.BlockSize())
 	return &SimpleSplitter{
-		hasher:  h,
-		bufsize: bufsize,
-		result:  make(chan []byte),
+		hasher:      h,
+		result:      make(chan []byte),
+		readBuffer:  make([]byte, bufferSize),
+		writeBuffer: bytes.NewBuffer(writeBufferBytes),
 	}
 }
 
-//
-func (s *SimpleSplitter) ReadFrom(r io.Reader) error {
-	var read int64
-	buf := make([]byte, s.bufsize)
+func (s *SimpleSplitter) Write(buf []byte) (int, error) {
+	for len(buf) > 0 {
+		sectionOffset := s.section - s.hasher.BlockSize()
+		writeBuffer := s.hasher.getBuffer(s.count)
+		c := len(buf)
+		if c > len(s.hasher.BlockSize()) {
+			c = len(s.hasher.BlockSize())
+		}
+		s.hasher.Write(s.sectionCount, s.writeBuffer.Bytes())
+		s.count += c
+		s.sectionCount++
+		log.Debug("writer", "c", c)
+		buf = buf[c:]
+		s.sectionCount++
+	}
+	return int(s.count), nil
+}
+
+func (s *SimpleSplitter) Close() error {
+	if s.writeBuffer.Len() > 0 {
+		log.Debug("writer flush on close", "c", s.writeBuffer.Len())
+		s.hasher.Write(s.sectionCount, s.writeBuffer.Bytes())
+	}
+	s.count = 0
+	return nil
+}
+
+func (s *SimpleSplitter) ReadFrom(r io.Reader) (int64, error) {
+	//lastChunkIndex := -1
+	var buf []byte
 	for {
+		//chunkIndex := (s.count - 1) / s.hasher.ChunkSize()
+		//if lastChunkIndex != chunkIndex {
+		buf = s.hasher.getBuffer(s.count)
+		//}
 		n, err := r.Read(buf)
 		if err != nil && err != io.EOF {
-			return err
+			return s.count, err
 		}
-		s.hasher.Write(buf[:n])
-		read += int64(n)
+		//s.Write(s.readBuffer[:n])
+		s.count += n
+		s.sectionCount++
+		log.Debug("readfrom", "c", n)
 		if err == io.EOF {
+			s.Close()
 			go func() {
-				s.result <- s.hasher.Sum(read)
+				meta := make([]byte, 8)
+				binary.BigEndian.PutUint64(meta, uint64(s.count))
+				s.result <- s.hasher.Sum(nil, int(s.count), meta)
 			}()
-			return nil
+			return s.count, nil
 		}
 	}
 }

@@ -37,6 +37,7 @@ var listCommand = cli.Command{
 }
 
 func list(ctx *cli.Context) {
+	fmt.Println("foo\n", ctx.GlobalString("password"))
 	args := ctx.Args()
 
 	if len(args) < 1 {

@@ -17,45 +17,96 @@
 package storage
 
 import (
+	"bytes"
 	"context"
+	crand "crypto/rand"
+	"fmt"
 	"io"
+	"testing"
 )
 
 const DefaultChunkCount = 2
+
 var MaxExcessSize = DefaultChunkCount
 
-func TestAsyncWriteFromReaderCorrectness(t *testing.T) {
-  data := make([]byte, DefaultChunkSize*DefaultChunkCount+rand.Intn(MaxExcessSize))
-  reader := bytes.NewReader(b)
-  fh := &fakeHasher{}
-  splitter := NewSimpleSplitter(fh, bufsize)
+func TestFakeHasher(t *testing.T) {
+	sectionSize := 32
+	sizes := []int{0, sectionSize - 1, sectionSize, sectionSize + 1, sectionSize * 4, sectionSize*4 + 1}
+	bufSizes := []int{7, sectionSize / 2, sectionSize, sectionSize + 1, sectionSize*4 + 1}
+	for _, bsz := range bufSizes {
+		for _, sz := range sizes {
+			t.Run(fmt.Sprintf("fh-buffersize%d-bytesize%d", bsz, sz), func(t *testing.T) {
+				fh := newFakeHasher(bsz, sectionSize, 2*sectionSize)
+				s := NewSimpleSplitter(fh, bsz)
+				buf := make([]byte, bsz)
+				_, err := io.ReadFull(crand.Reader, buf)
+				if err != nil {
+					t.Fatal(err.Error())
+				}
+				r := bytes.NewReader(buf)
+				_, err = s.ReadFrom(r)
+				if err != nil {
+					t.Fatal(err.Error())
+				}
+				h, err := s.Sum(context.TODO())
+				if err != nil {
+					t.Fatal(err.Error())
+				}
+				if !bytes.Equal(h, fh.output) {
+					t.Fatalf("no match, daddyo, expected %x, got %x", fh.output, h)
+				}
+			})
+		}
 
-  n, err := io.Copy(splitter, reader)
-  if err != nil {
-    if err == io.EOF {
-      got = <-fh.result
-  }
-
+	}
 }
-
-type fakeBaseHasherJoiner struct {
-  input []byte
-}
-
-func (fh *fakeBaseHasherJoiner) Reset() { fh.input = nil; return}
-func (fh *fakeBaseHasherJoiner) Write(b []byte) { fh.input = append(fh.input, b...) }
-func (fh *fakeBaseHasherJoiner) Sum([]byte) []byte { return fh.input }
-func (fh *fakeBaseHasherJoiner) BlockSize() int { return 64 }
-func (fh *fakeBaseHasherJoiner) Size() int { return 32 }
 
 type fakeHasher struct {
-  input []byte
-  output []byte
+	output      []byte
+	sectionSize int
+	chunkSize   int
+	count       int
+	doneC       chan struct{}
 }
 
-func newFakeHasher() *fakeHasher {
-  return &fakeHasher{}
+func newFakeHasher(byteSize int, sectionSize int, chunkSize int) *fakeHasher {
+	count := 0
+	if byteSize > 0 {
+		count = ((byteSize - 1) / sectionSize) + 1
+	}
+	return &fakeHasher{
+		sectionSize: sectionSize,
+		output:      make([]byte, byteSize),
+		count:       count,
+		chunkSize:   chunkSize,
+		doneC:       make(chan struct{}, count),
+	}
+
 }
 
-func (fh *fakeHasher) Reset() { fh.input = nil; return}
-func (fh *fakeHasher) Write([]byte)
+func (fh *fakeHasher) ChunkSize() int {
+	return fh.chunkSize
+}
+
+func (fh *fakeHasher) Reset() { fh.output = nil; return }
+
+func (fh *fakeHasher) Write(section int, data []byte) {
+	pos := section * fh.sectionSize
+	copy(fh.output[pos:], data)
+	fh.doneC <- struct{}{}
+}
+
+func (fh *fakeHasher) Size() int {
+	return 42
+}
+
+func (fh *fakeHasher) BlockSize() int {
+	return fh.sectionSize
+}
+
+func (fh *fakeHasher) Sum(hash []byte, length int, meta []byte) []byte {
+	for i := 0; i < fh.count; i++ {
+		<-fh.doneC
+	}
+	return fh.output
+}

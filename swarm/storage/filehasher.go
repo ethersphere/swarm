@@ -28,26 +28,23 @@ import (
 type SectionHasher interface {
 	Reset()
 	Write(idx int, section []byte)
-	SectionSize() int
+	Size() int
+	BlockSize() int
+	ChunkSize() int
 	Sum(b []byte, length int, meta []byte) []byte
 }
 
 // FileHasher is instantiated each time a file is swarm hashed
 // itself implements the ChunkHasher interface
 type FileHasher struct {
-	mtx         sync.Mutex           // RW lock to add/read levels push and unshift batches
-	pool        sync.Pool            // batch resource pool
-	levels      []*level             // levels of the swarm hash tree
-	secsize     int                  // section size
-	chunks      int                  // number of chunks read
-	offset      int                  // byte offset (cursor) within chunk
-	read        int                  // length of input data read
-	length      int                  // known length of input data
-	branches    int                  // branching factor
-	hasherFunc  func() SectionHasher // hasher constructor
-	result      chan []byte          // channel to put hash asynchronously
-	lastSection []byte               // last section to record
-	lastSecPos  int                  // pos of section within last section
+	mtx        sync.Mutex           // RW lock to add/read levels push and unshift batches
+	pool       sync.Pool            // batch resource pool
+	levels     []*level             // levels of the swarm hash tree
+	secsize    int                  // section size
+	branches   int                  // branching factor
+	hasherFunc func() SectionHasher // hasher constructor
+	result     chan []byte          // channel to put hash asynchronously
+	size       int
 }
 
 func New(hasherFunc func() SectionHasher, branches int) *FileHasher {
@@ -60,15 +57,17 @@ func New(hasherFunc func() SectionHasher, branches int) *FileHasher {
 			return sh.newBatch()
 		},
 	}
+	sh.size = hasherFunc().Size()
 	return sh
 }
 
 // level captures one level of chunks in the swarm hash tree
 // singletons are attached to the lowest level
 type level struct {
-	lev         int      // which level of the swarm hash tree
-	batches     []*batch // active batches on the level
-	*FileHasher          // pointer to the underlying hasher
+	levelIndex int // which level of the swarm hash tree
+	//batches     []*batch // active batches on the level
+	batches     sync.Map
+	*FileHasher // pointer to the underlying hasher
 }
 
 // batch records chunks subsumed under the same parent intermediate chunk
@@ -76,16 +75,16 @@ type batch struct {
 	nodes  []*node // nodes of the batches
 	index  int     // offset of the node
 	parent *node   // pointer to containing
-	*level         // pointer to containing level
+	buffer *bytes.Buffer
+	*level // pointer to containing level
 }
 
 // node represent a chunk and embeds an async interface to the chunk hash used
 type node struct {
-	hasher    SectionHasher // async hasher
-	pos       int           // index of the node chunk within its batch
-	secCnt    int32         // number of sections written
-	maxSecCnt int32         // maximum number of sections written
-	*batch                  // pointer to containing batch
+	hasher SectionHasher // async hasher
+	pos    int           // index of the node chunk within its batch
+	secCnt int32         // number of sections written
+	*batch               // pointer to containing batch
 }
 
 // getParentLevel retrieves or creates the next level up from a node/batch/level
@@ -95,59 +94,29 @@ func (lev *level) getLevel(pl int) (par *level) {
 		return lev.levels[pl]
 	}
 	par = &level{
-		lev: pl,
+		levelIndex: pl,
 	}
 	lev.levels = append(lev.levels, par)
 	return par
 }
 
-// getParent retrieves the parent node for the batch, creating a new batch if needed
-// allownil set to true will return a nil if parent
-func (b *batch) getParent(allowNil bool) (n *node) {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-	if b.parent != nil || allowNil {
-		return b.parent
+func (lev *level) getBatch(index int) *batch {
+	pbi, ok := lev.batches.Load(index)
+	if !ok {
+		return nil
 	}
-	b.parent = b.getParentNode()
-	return b.parent
+	return pbi.(*batch)
 }
 
-// getBatch looks up the parent batch on the next level up
-// caller must hold the lock
-func (lev *level) getBatch(index int) (pb *batch) {
-	// parent batch is memoised and typically expect 1 or 2 batches
-	// so this simple way of getting the appropriate batch is ok
-	for _, pb = range lev.batches {
-		if pb.index == index {
-			return pb
-		}
+// retrieve the batch within a level corresponding to the given index
+// if it does not currently exist, create it
+func (lev *level) getOrCreateBatch(index int) *batch {
+	pb := lev.getBatch(index)
+	if pb == nil {
+		pb = lev.pool.Get().(*batch)
+		lev.batches.Store(index, pb)
 	}
-	return nil
-}
-
-// getParentNode retrieves the parent node based on the batch indexes
-// if a new level or batch is required it creates them
-// caller must hold the lock
-func (b *batch) getParentNode() *node {
-	pos := b.index % b.branches
-	pi := 0
-	if b.index > 0 {
-		pi = (b.index - 1) / b.branches
-	}
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-	pl := b.getLevel(b.lev + 1)
-	pb := pl.getBatch(pi)
-	if pb != nil {
-		return pb.nodes[pos]
-	}
-	pb = b.pool.Get().(*batch)
-	pb.level = pl
-	pb.index = b.index / b.branches
-
-	pl.batches = append(pl.batches, pb)
-	return pb.nodes[pos]
+	return pb
 }
 
 // delink unshifts the levels batches
@@ -157,167 +126,163 @@ func (b *batch) getParentNode() *node {
 func (b *batch) delink() {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
-	first := b.batches[0]
-	if first.index != b.index {
-		panic("non-initial batch finished first")
-	}
-	b.pool.Put(first)
-	b.batches = b.batches[1:]
+	b.batches.Delete(b.index)
+	b.pool.Put(b)
+}
+
+// returns the digest size of the underlying hasher
+func (fh *FileHasher) Size() int {
+	return fh.size
 }
 
 // newBatch constructs a reuseable batch
-func (sh *FileHasher) newBatch() *batch {
+func (sh *FileHasher) newBatch() (bt *batch) {
 	nodes := make([]*node, sh.branches)
-	for i, _ := range nodes {
+	chunkSize := sh.ChunkSize()
+	bt = &batch{
+		buffer: make([]byte, sh.branches*chunkSize),
+		//buffer: bytes.NewBuffer(make([]byte, 0, sh.branches*sh.ChunkSize())),
+	}
+	for i := range nodes {
+		offset := chunkSize * i
 		nodes[i] = &node{
 			pos:    i,
 			hasher: sh.hasherFunc(),
+			buffer: batch[offset : offset+chunkSize],
 		}
 	}
-	return &batch{
-		nodes: nodes,
+	batch.nodes = nodes
+	return bt
+}
+
+func (sh *FileHasher) getNodeSectionBuffer(globalCount int) ([]byte, func()) {
+	batchIndex := globalCount / sh.branches * sh.ChunkSize()
+	batchPos := globalCount % sh.branches * sh.ChunkSize()
+	batchNodeIndex := batchPos / sh.ChunkSize()
+	batchNodePos := batchPosIndex % sh.ChunkSize()
+	return sh.batches[batchIndex].nodes[batchNodeIndex].getSectionBuffer(batchNodePos)
+}
+
+func (n *node) getSectionBuffer(p int) (int, func()) {
+	currentCount := atomic.AddInt32(&n.secCnt, 1)
+	nodeSectionByteOffset := (batchNodePos / sh.BlockSize()) * sh.BlockSize()
+	var doneFunc func()
+	if currentCount == int32(n.branches) {
+		doneFunc = n.done
+	}
+	return n.buffer[nodeSectionByteOffset : nodeSectionByteOffset+sh.BlockSize()], batchNodeIndex, doneFunc
+}
+
+// dataSpan returns the size of data encoded under the current node, serialized as big endian uint64
+func (n *node) dataSpan() []byte {
+	//secsize := n.hasher.BlockSize()
+	span := uint64(n.hasher.ChunkSize())
+	for l := 0; l < n.levelIndex; l++ {
+		span *= uint64(n.branches)
+	}
+	meta := make([]byte, 8)
+	binary.BigEndian.PutUint64(meta, span)
+	return meta
+}
+
+func (n *node) Write(sectionIndex int, section []byte) {
+	n.write(sectionIndex, section)
+}
+
+func (n *node) write(sectionIndex int, section []byte) {
+	currentCount := atomic.AddInt32(&n.secCnt, 1)
+	n.hasher.Write(sectionIndex, section)
+	if currentCount == int32(n.branches) {
+		n.node()
 	}
 }
 
-// dataSpan returns the
-func (n *node) dataSpan() int64 {
-	secsize := n.hasher.SectionSize()
-	span := int64(4096 / secsize)
-	for l := 0; l < n.lev; l++ {
-		span *= int64(n.branches)
-	}
-	return span
+func (n *node) done() {
+	go func() {
+		parentBatchIndex := n.index / n.branches
+		parentBatch := n.levels[n.levelIndex+1].getBatch(parentBatchIndex)
+		parentNodeIndex := n.index % n.branches
+		parentNode := parentBatch.nodes[parentNodeIndex]
+		parentNode.write(n.pos, n.hasher.Sum(nil, n.hasher.ChunkSize(), parentNode.dataSpan()))
+	}()
 }
 
-// SimpleSplitter implements the hash.Hash interface for synchronous read from data
-// as data is written to it, it chops the input stream to section size buffers
-// and calls the section write on the SectionHasher
+// length is global length
+func (n *node) sum(length int, nodeSpan int) {
+
+	// nodeSpan is the total byte size of a complete tree under the current node
+	nodeSpan *= n.branches
+
+	// if a new batch would be started
+	batchSpan := nodeSpan * n.branches
+	nodeIndex := length % batchSpan
+	var parentNode *node
+	if nodeIndex == 0 && len(n.levels) > n.levelIndex+1 {
+		batchIndex := (length-1)/batchSpan + 1
+		parentNode = n.levels[n.levelIndex+1].getBatch(batchIndex).nodes[nodeIndex]
+		parentNode.sum(length, nodeSpan)
+		return
+	}
+
+	// dataLength is the actual length of data under the current node
+	dataLength := uint64(length % nodeSpan)
+
+	// meta is the length of actual data in the nodespan
+	meta := make([]byte, 8)
+	binary.BigEndian.PutUint64(meta, dataLength)
+
+	// bmtLength is the actual length of bytes in the chunk
+	// if the node is an intermediate node (level != 0 && len(levels) > 1), bmtLength will be a multiple 32 bytes
+	var bmtLength uint64
+	if n.levelIndex == 0 {
+		bmtLength = dataLength
+	} else {
+		bmtLength = ((dataLength - 1) / uint64((nodeSpan/n.branches+1)*n.hasher.BlockSize()))
+	}
+
+	hash := n.hasher.Sum(nil, int(bmtLength), meta)
+
+	// are we on the root level?
+	if parentNode != nil {
+		parentNode.sum(length, nodeSpan)
+		return
+	}
+
+	n.result <- hash
+}
+
+func (fh *FileHasher) ChunkSize() int {
+	return fh.branches * fh.secsize
+}
+
+// Louis note to self: secsize is the same as the size of the reference
+// Invoked after we know the actual length of the file
+// Will create the last node on the data level of the hash tree matching the length
+func (fh *FileHasher) Sum(b []byte, length int, meta []byte) []byte {
+
+	// handle edge case where the file is empty
+	if length == 0 {
+		return fh.hasherFunc().Sum(nil, 0, make([]byte, 8))
+	}
+
+	// calculate the index the last batch
+	lastBatchIndexInFile := (length - 1) / fh.ChunkSize() * fh.branches
+
+	// calculate the node index within the last batch
+	byteIndexInLastBatch := length - lastBatchIndexInFile*fh.ChunkSize()*fh.branches
+	nodeIndexInLastBatch := (byteIndexInLastBatch - 1) / fh.ChunkSize()
+
+	// get the last node
+	lastNode := fh.levels[0].getBatch(lastBatchIndexInFile).nodes[nodeIndexInLastBatch]
+
+	// asynchronously call sum on this node and wait for the final result
+	go lastNode.sum(length, fh.ChunkSize())
+	return <-fh.result
+}
 
 // Reset puts FileHasher in a (re)useable state
 func (sh *FileHasher) Reset() {
 	sh.mtx.Lock()
 	defer sh.mtx.Unlock()
 	sh.levels = nil
-}
-
-// //
-// func (sh *FileHasher) Write(buf []byte) {
-// 	chunkSize := sh.secsize * sh.branches
-// 	start := sh.offset / sh.secsize
-// 	pos := sh.sections % sh.branches
-// 	n := sh.getLevel(0).getBatch(sh.chunks).nodes[pos]
-// 	read := chunkSize - sh.offset
-// 	copy(n.chunk[sh.offset:], buf)
-// 	var canBeFinal, isFinal bool
-// 	// assuming input never exceeds set length
-// 	if len(buf) <= read {
-// 		read = len(buf)
-// 		canBeFinal = true
-// 		sh.mtx.Lock()
-// 		sizeKnown := sh.length > 0
-// 		if sizeKnown {
-// 			isFinal = sh.chunks*chunkSize-sh.length <= chunkSize
-// 		} else {
-// 			canBeFinal = false
-// 			sh.mtx.Unlock()
-// 		}
-// 	}
-// 	end := start + (sh.offset%sh.secsize+read)/sh.secsize - 1
-// 	// if current chunk reaches the end
-// 	// write the final section
-// 	if canBeFinal {
-// 		end--
-// 		lastSecSize := (sh.offset + read) % sh.secsize
-// 		lastSecOffset := end * sh.secsize
-// 		sh.lastSection = n.chunk[lastSecOffset : lastSecOffset+lastSecSize]
-// 		sh.lastSecPos = end
-// 		// lock should be kept until lastSection and
-// 		sh.mtx.Unlock()
-// 		if isFinal {
-// 			n.write(end, sh.lastSection, true)
-// 		}
-// 	}
-// 	f := func() {
-// 		for i := start; i < end; i++ {
-// 			n.write(i, n.chunk[i*sh.secsize:(i+1)*sh.secsize], false)
-// 		}
-// 	}
-//
-// 	sh.offset = (sh.offset + read) % sh.secsize * sh.branches
-// 	rest := buf[read:]
-// 	if len(rest) == 0 {
-// 		go f()
-// 		return
-// 	}
-// 	sh.Write(rest)
-// }
-
-// Sum
-func (sh *FileHasher) Sum(b []byte, length int, meta []byte) []byte {
-	chunkSize := sh.secsize * sh.branches
-	sh.mtx.Lock()
-	if sh.read >= sh.length {
-		n := sh.getNode(sh.lastSecPos)
-		n.write(sh.lastSecPos, sh.lastSection, true)
-	}
-	sh.mtx.Unlock()
-	return <-sh.result
-}
-
-// write writes the section to the node at section idx
-// the final parameter indicates that the section is final
-// i.e., the read input buffer has been consumed
-func (n *node) write(idx int, section []byte, final bool) {
-	// write the section to the hasher
-	n.hasher.Write(idx, section)
-	var inferred bool
-	var maxSecCnt int32
-	if final {
-		// set number of chunks based on last index and save it
-		maxSecCnt = int32(idx + 1)
-		atomic.StoreInt32(&n.maxSecCnt, maxSecCnt)
-	} else {
-		// load max number of sections (known from a previous call to final or hash)
-		maxSecCnt = atomic.LoadInt32(&n.maxSecCnt)
-		if maxSecCnt == 0 {
-			inferred = true
-			maxSecCnt = int32(n.branches)
-		}
-	}
-
-	// another section is written, increment secCnt
-	secCnt := atomic.AddInt32(&n.secCnt, 1)
-
-	// if all branches been written do sum
-	// since secCnt is > 0 by now, the condition  is not satisfied iff
-	// * maxSecCnt is set and reached or
-	// * secCnt is n.branches
-	if secCnt%maxSecCnt > 0 {
-		return
-	}
-	// final flag either because
-	// * argument explicit about it OR
-	// * was set earlier by a call to final
-	go func() {
-		defer n.batch.delink()
-		final = final || !inferred
-		corr := n.hasher.SectionSize() - len(section)
-		length := int(maxSecCnt)*n.hasher.SectionSize() - corr
-		// can subtract corr directly from span assuming that shorter sections can only occur on level 0
-		span := n.dataSpan()*int64(maxSecCnt) - int64(corr)
-		meta := make([]byte, 8)
-		binary.BigEndian.PutUint64(meta, uint64(span))
-		// blocking call to Sum (releases resource, so node hasher is reusable)
-		hash := n.hasher.Sum(nil, length, meta)
-		// before return, delink the batch
-		defer n.delink()
-		// if the final section is batch 0 / pos 0 then it is
-		allowNil := final && n.index == 0 && n.pos == 0
-		pn := n.getParent(allowNil)
-		if pn == nil {
-			n.result <- hash
-			return
-		}
-		pn.write(n.pos, hash, final)
-	}()
 }
