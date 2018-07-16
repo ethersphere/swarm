@@ -250,13 +250,32 @@ func init() {
 			Description:        "encrypts a reference and embeds it into a root manifest",
 			Subcommands: []cli.Command{
 				{
-					Action:             accessNew,
 					CustomHelpTemplate: helpTemplate,
 					Flags:              []cli.Flag{SwarmAccessPasswordFlag, SwarmDryRunFlag, SwarmAccessPKFlag, SwarmAccessGrantPKFlag},
 					Name:               "new",
 					Usage:              "encrypts a reference and embeds it into a root manifest",
 					ArgsUsage:          "<ref>",
 					Description:        "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+					Subcommands: []cli.Command{
+						{
+							Action:             accessNewPass,
+							CustomHelpTemplate: helpTemplate,
+							Flags:              []cli.Flag{SwarmAccessPasswordFlag, SwarmDryRunFlag, SwarmAccessPKFlag, SwarmAccessGrantPKFlag},
+							Name:               "pass",
+							Usage:              "encrypts a reference with a password and embeds it into a root manifest",
+							ArgsUsage:          "<ref>",
+							Description:        "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+						},
+						{
+							Action:             accessNewPK,
+							CustomHelpTemplate: helpTemplate,
+							Flags:              []cli.Flag{SwarmAccessPasswordFlag, SwarmDryRunFlag, SwarmAccessPKFlag, SwarmAccessGrantPKFlag},
+							Name:               "pk",
+							Usage:              "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
+							ArgsUsage:          "<ref>",
+							Description:        "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+						},
+					},
 				},
 			},
 		},

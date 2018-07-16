@@ -38,7 +38,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-// var defaultNodeConfig = node.DefaultConfig
+var salt = randentropy.GetEntropyCSPRNG(32)
 
 // This init function sets defaults so cmd/swarm can run alongside geth.
 func init() {
@@ -50,35 +50,48 @@ func init() {
 	utils.ListenPortFlag.Value = 30399
 }
 
-func accessNew(ctx *cli.Context) {
-	var (
-		ae         *api.AccessEntry
-		sessionKey []byte
-		err        error
-		salt       = randentropy.GetEntropyCSPRNG(32)
-		args       = ctx.Args()
-		dryRun     = ctx.Bool(SwarmDryRunFlag.Name)
-		pk         = ctx.Bool(SwarmAccessPKFlag.Name)
-	)
-
+func accessNewPass(ctx *cli.Context) {
+	args := ctx.Args()
 	if len(args) != 1 {
 		utils.Fatalf("Expected 1 argument - the ref", "")
 		return
 	}
 
-	ref := args[0]
-
-	if pk {
-		sessionKey, ae, err = doPKNew(ctx, salt)
-		if err != nil {
-			utils.Fatalf("error getting session key: %v", err)
-		}
-	} else {
-		sessionKey, ae, err = doPasswordNew(ctx, salt)
-		if err != nil {
-			utils.Fatalf("error getting session key: %v", err)
-		}
+	var (
+		ae         *api.AccessEntry
+		sessionKey []byte
+		err        error
+		ref        = args[0]
+	)
+	sessionKey, ae, err = doPasswordNew(ctx, salt)
+	if err != nil {
+		utils.Fatalf("error getting session key: %v", err)
 	}
+	generateAccessControlManifest(ctx, ref, sessionKey, ae)
+}
+
+func accessNewPK(ctx *cli.Context) {
+	args := ctx.Args()
+	if len(args) != 1 {
+		utils.Fatalf("Expected 1 argument - the ref", "")
+		return
+	}
+
+	var (
+		ae         *api.AccessEntry
+		sessionKey []byte
+		err        error
+		ref        = args[0]
+	)
+	sessionKey, ae, err = doPKNew(ctx, salt)
+	if err != nil {
+		utils.Fatalf("error getting session key: %v", err)
+	}
+	generateAccessControlManifest(ctx, ref, sessionKey, ae)
+}
+
+func generateAccessControlManifest(ctx *cli.Context, ref string, sessionKey []byte, ae *api.AccessEntry) {
+	dryRun := ctx.Bool(SwarmDryRunFlag.Name)
 	refBytes, err := hex.DecodeString(ref)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
