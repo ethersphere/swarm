@@ -242,10 +242,19 @@ func TestAccessPK(t *testing.T) {
 	}
 
 	ref := matches[0]
+	/*
+		TODO: CREATE A TEMPORARY DIRECTORY
+		IN THE TEMPDIR CREATE 1 ACCOUNT/KEYSTORE - USE THE CODE FROM GETH ACCOUNT NEW
+		IN THE TEST - PROVIDE ACCOUNT TO UNLOCK
+		GENERATE RANDOM PUBLIC KEY FOR THE GRANTEE
+		FOR ACCESS.GO - USE THE CODE FROM GETH ACCOUNT MODIFY TO UNLOCK THE KEYSTORE AND GET THE PRIVATE KEY
+	*/
 
 	up = runSwarm(t,
 		"--bzzaccount",
-		cluster.Nodes[0].Addr,
+		"0xaddrToUnlock",
+		"--password",
+		"passwordfile",
 		"--bzzapi",
 		cluster.Nodes[0].URL,
 		"access",
