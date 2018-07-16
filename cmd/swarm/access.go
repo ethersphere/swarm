@@ -20,12 +20,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/console"
 	crypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/ethereum/go-ethereum/log"
@@ -52,7 +52,6 @@ func accessNewPass(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) != 1 {
 		utils.Fatalf("Expected 1 argument - the ref", "")
-		return
 	}
 
 	var (
@@ -72,7 +71,6 @@ func accessNewPK(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) != 1 {
 		utils.Fatalf("Expected 1 argument - the ref", "")
-		return
 	}
 
 	var (
@@ -132,17 +130,6 @@ func generateAccessControlManifest(ctx *cli.Context, ref string, sessionKey []by
 	}
 }
 
-// readPassword reads a single line from stdin, trimming it from the trailing new
-// line and returns it. The input will not be echoed.
-func readPassword() string {
-	test, err := console.Stdin.PromptPassword("Enter password: ")
-	if err != nil {
-		log.Crit("Failed to read password", "err", err)
-	}
-
-	return string(test)
-}
-
 func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
 	log.Error("password", "passwd", ctx.GlobalString("password"))
 	bzzconfig, err := buildConfig(ctx)
@@ -199,18 +186,40 @@ func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEn
 }
 
 func doPasswordNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
-	pass := ctx.String(SwarmAccessPasswordFlag.Name)
-	if pass == "" {
-		pass = readPassword()
-	}
+	password := getPassPhrase("", 0, makePasswordList(ctx))
 	ae, err = api.NewAccessEntryPassword(salt, api.DefaultKdfParams)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	sessionKey, err = api.NewSessionKeyPassword(pass, ae)
+	sessionKey, err = api.NewSessionKeyPassword(password, ae)
 	if err != nil {
 		return nil, nil, err
 	}
 	return sessionKey, ae, nil
+}
+
+// makePasswordList reads password lines from the file specified by the global --password flag
+// and also by the same subcommand --password flag.
+// This function ia a fork of utils.MakePasswordList to lookup cli context for subcommand.
+// Function ctx.SetGlobal is not setting the global flag value that can be accessed
+// by ctx.GlobalString using the current version of cli package.
+func makePasswordList(ctx *cli.Context) []string {
+	path := ctx.GlobalString(utils.PasswordFileFlag.Name)
+	if path == "" {
+		path = ctx.String(utils.PasswordFileFlag.Name)
+		if path == "" {
+			return nil
+		}
+	}
+	text, err := ioutil.ReadFile(path)
+	if err != nil {
+		utils.Fatalf("Failed to read password file: %v", err)
+	}
+	lines := strings.Split(string(text), "\n")
+	// Sanitise DOS line endings.
+	for i := range lines {
+		lines[i] = strings.TrimRight(lines[i], "\r")
+	}
+	return lines
 }

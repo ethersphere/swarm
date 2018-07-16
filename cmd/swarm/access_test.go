@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -39,16 +40,17 @@ func TestAccess(t *testing.T) {
 	defer cluster.Shutdown()
 
 	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
+	tmp, err := ioutil.TempDir("", "swarm-test")
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
+	defer os.RemoveAll(tmp)
 
 	// write data to file
 	data := "notsorandomdata"
-	_, err = io.WriteString(tmp, data)
+	dataFilename := filepath.Join(tmp, "data.txt")
+
+	err = ioutil.WriteFile(dataFilename, []byte(data), 0666)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +64,7 @@ func TestAccess(t *testing.T) {
 		cluster.Nodes[0].URL,
 		"up",
 		"--encrypt",
-		tmp.Name())
+		dataFilename)
 	_, matches := up.ExpectRegexp(hashRegexp)
 	up.ExpectExit()
 
@@ -74,6 +76,13 @@ func TestAccess(t *testing.T) {
 
 	password := "smth"
 
+	passwordFilename := filepath.Join(tmp, "password.txt")
+
+	err = ioutil.WriteFile(passwordFilename, []byte(password), 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	up = runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
@@ -82,7 +91,7 @@ func TestAccess(t *testing.T) {
 		"pass",
 		"--dry-run",
 		"--password",
-		password,
+		passwordFilename,
 		ref,
 	)
 
@@ -178,11 +187,18 @@ func TestAccess(t *testing.T) {
 		cluster.Nodes[0].URL,
 		"down",
 		"bzz:/"+hash,
-		tmp.Name(),
+		tmp,
 		"--password",
-		password)
+		passwordFilename)
 
 	up.ExpectExit()
+
+	wrongPasswordFilename := filepath.Join(tmp, "password-wrong.txt")
+
+	err = ioutil.WriteFile(wrongPasswordFilename, []byte("just wr0ng"), 0666)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	log.Info("download file with 'swarm down' with wrong password")
 	up = runSwarm(t,
@@ -190,9 +206,9 @@ func TestAccess(t *testing.T) {
 		cluster.Nodes[0].URL,
 		"down",
 		"bzz:/"+hash,
-		tmp.Name(),
+		tmp,
 		"--password",
-		"just wr0ng")
+		wrongPasswordFilename)
 
 	_, matches = up.ExpectRegexp("unauthorized")
 	if len(matches) != 1 && matches[0] != "unauthorized" {

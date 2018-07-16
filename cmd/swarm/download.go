@@ -94,11 +94,8 @@ func download(ctx *cli.Context) {
 
 	err = dl("")
 	if err == swarm.ErrUnauthorized {
-		pass := ctx.String(SwarmAccessPasswordFlag.Name)
-		if pass == "" {
-			pass = readPassword()
-		}
-		err = dl(pass)
+		password := getPassPhrase(fmt.Sprintf("Downloading %s is restricted", uri), 0, makePasswordList(ctx))
+		err = dl(password)
 	}
 	if err != nil {
 		utils.Fatalf("download: %v", err)
