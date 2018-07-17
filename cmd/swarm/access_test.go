@@ -265,12 +265,24 @@ func TestAccessPK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	passFile, err := ioutil.TempFile("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer passFile.Close()
+	defer os.Remove(passFile.Name())
+	_, err = io.WriteString(passFile, testPassphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	_, publisherAccount := getTestAccount(t, publisherDir)
 	up = runSwarm(t,
 		"--bzzaccount",
 		publisherAccount.Address.String(),
 		"--password",
-		"/tmp/passFile",
+		passFile.Name(),
 		"--datadir",
 		publisherDir,
 		"--bzzapi",
