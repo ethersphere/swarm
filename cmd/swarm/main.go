@@ -149,13 +149,9 @@ var (
 		Name:  "defaultpath",
 		Usage: "path to file served for empty url path (none)",
 	}
-	SwarmAccessPKFlag = cli.BoolFlag{
-		Name:  "pk",
-		Usage: "enables PK encryption for access control tries",
-	}
 	SwarmAccessGrantPKFlag = cli.StringFlag{
 		Name:  "grant-pk",
-		Usage: "grants a given pk string access to an ACT",
+		Usage: "grants a given public key access to an ACT",
 	}
 	SwarmUpFromStdinFlag = cli.BoolFlag{
 		Name:  "stdin",
@@ -251,12 +247,10 @@ func init() {
 			Subcommands: []cli.Command{
 				{
 					CustomHelpTemplate: helpTemplate,
-						SwarmDryRunFlag,
-					},
-					Name:        "new",
-					Usage:       "encrypts a reference and embeds it into a root manifest",
-					ArgsUsage:   "<ref>",
-					Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+					Name:               "new",
+					Usage:              "encrypts a reference and embeds it into a root manifest",
+					ArgsUsage:          "<ref>",
+					Description:        "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
 					Subcommands: []cli.Command{
 						{
 							Action:             accessNewPass,
@@ -276,7 +270,6 @@ func init() {
 							Flags: []cli.Flag{
 								utils.PasswordFileFlag,
 								SwarmDryRunFlag,
-								SwarmAccessPKFlag,
 								SwarmAccessGrantPKFlag,
 							},
 							Name:        "pk",
@@ -608,10 +601,7 @@ func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.Pr
 	// Otherwise try getting it from the keystore.
 	am := stack.AccountManager()
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
-	v := utils.MakePasswordList(ctx)
 
-	log.Error("passwords", "passwordFlag", ctx.GlobalString(utils.PasswordFileFlag.Name), "localString", ctx.String(utils.PasswordFileFlag.Name))
-	panic(v)
 	return decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
 }
 

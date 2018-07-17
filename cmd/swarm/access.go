@@ -131,20 +131,15 @@ func generateAccessControlManifest(ctx *cli.Context, ref string, sessionKey []by
 }
 
 func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
-	log.Error("password", "passwd", ctx.GlobalString("password"))
+	// booting up the swarm node just as we do in bzzd action
 	bzzconfig, err := buildConfig(ctx)
 	if err != nil {
 		utils.Fatalf("unable to configure swarm: %v", err)
 	}
 	cfg := defaultNodeConfig
-
-	//geth only supports --datadir via command line
-	//in order to be consistent within swarm, if we pass --datadir via environment variable
-	//or via config file, we get the same directory for geth and swarm
 	if _, err := os.Stat(bzzconfig.Path); err == nil {
 		cfg.DataDir = bzzconfig.Path
 	}
-	//setup the ethereum node
 	utils.SetNodeConfig(ctx, &cfg)
 	stack, err := node.New(&cfg)
 	if err != nil {
@@ -176,7 +171,7 @@ func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEn
 		return nil, nil, err
 	}
 
-	ae, err = api.NewAccessEntryPK(hex.EncodeToString(crypto.FromECDSAPub(&privateKey.PublicKey)), salt)
+	ae, err = api.NewAccessEntryPK(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)), salt)
 	if err != nil {
 		log.Error("error generating access entry", "err", err)
 		return nil, nil, err

@@ -219,11 +219,8 @@ func TestAccess(t *testing.T) {
 
 func TestAccessPK(t *testing.T) {
 	// Setup Swarm and upload a test file to it
-	// srv := testutil.NewTestSwarmServer(t, serverFunc)
-	// defer srv.Close()
 	cluster := newTestCluster(t, 1)
 	defer cluster.Shutdown()
-	// swarmClient := swarm.NewClient(srv.URL)
 
 	// create a tmp file
 	tmp, err := ioutil.TempFile("", "swarm-test")
@@ -258,20 +255,8 @@ func TestAccessPK(t *testing.T) {
 	}
 
 	ref := matches[0]
-	/*
-		TODO: CREATE A TEMPORARY DIRECTORY
-		IN THE TEMPDIR CREATE 1 ACCOUNT/KEYSTORE - USE THE CODE FROM GETH ACCOUNT NEW
-		IN THE TEST - PROVIDE ACCOUNT TO UNLOCK
-		GENERATE RANDOM PUBLIC KEY FOR THE GRANTEE
-		FOR ACCESS.GO - USE THE CODE FROM GETH ACCOUNT MODIFY TO UNLOCK THE KEYSTORE AND GET THE PRIVATE KEY
-	*/
 
-	// ks := keystore.NewKeyStore(cluster.Nodes[0].Dir, 1<<18, 1)
-
-	// acct := ks.Accounts()[0].Address
-	// pk := decryptStoreAccount(ks, acct.String(), []string{"swarm-test-passphrase"})
 	pk := cluster.Nodes[0].PrivateKey
-	// granteePubKey := crypto.CompressPubkey()
 	granteePubKey := crypto.FromECDSAPub(&pk.PublicKey)
 
 	// pubString := string()
@@ -280,14 +265,7 @@ func TestAccessPK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	_, publisherAccount := getTestAccount(t, publisherDir)
-	//_, granteeAccount := getTestAccount(t, cluster.Nodes[0].Dir)
-
-	// 	ks:= keystore.NewKeyStore(cluster.Nodes[0].Dir, 1<<18, 1),
-	// ks.TimedUnlock()
-
-	// cluster.Nodes[0].Client.Call
 	up = runSwarm(t,
 		"--bzzaccount",
 		publisherAccount.Address.String(),
@@ -312,8 +290,48 @@ func TestAccessPK(t *testing.T) {
 	if len(matches) == 0 {
 		t.Fatalf("stdout not matched")
 	}
-	fmt.Println(matches[0])
-	hash := matches[0]
+
+	var m api.Manifest
+
+	err = json.Unmarshal([]byte(matches[0]), &m)
+	if err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+
+	if len(m.Entries) != 1 {
+		t.Fatalf("expected one manifest entry, got %v", len(m.Entries))
+	}
+
+	e := m.Entries[0]
+
+	ct := "application/bzz-manifest+json"
+	if e.ContentType != ct {
+		t.Errorf("expected %q content type, got %q", ct, e.ContentType)
+	}
+
+	if e.Access == nil {
+		t.Fatal("manifest access is nil")
+	}
+
+	a := e.Access
+
+	if a.Type != "pk" {
+		t.Errorf(`got access type %q, expected "pk"`, a.Type)
+	}
+	if len(a.Salt) < 32 {
+		t.Errorf(`got salt with length %v, expected not less the 32 bytes`, len(a.Salt))
+	}
+	if a.KdfParams != nil {
+		t.Fatal("manifest access kdf params should be nil")
+	}
+
+	client := swarm.NewClient(cluster.Nodes[0].URL)
+
+	hash, err := client.UploadManifest(&m, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	httpClient := &http.Client{}
 
 	url := cluster.Nodes[0].URL + "/" + "bzz:/" + hash

@@ -141,7 +141,7 @@ func NewAccessEntryPassword(salt []byte, kdfParams *KdfParams) (*AccessEntry, er
 
 func NewAccessEntryPK(publisher string, salt []byte) (*AccessEntry, error) {
 	if len(publisher) != 66 {
-		return nil, fmt.Errorf("publisher should be 66 characters long")
+		return nil, fmt.Errorf("publisher should be 66 characters long, got %d", len(publisher))
 	}
 	if len(salt) != 32 {
 		return nil, fmt.Errorf("salt should be 32 bytes long")
