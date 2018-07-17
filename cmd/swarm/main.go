@@ -277,6 +277,18 @@ func init() {
 							ArgsUsage:   "<ref>",
 							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
 						},
+						{
+							Action:             accessNewACT,
+							CustomHelpTemplate: helpTemplate,
+							Flags: []cli.Flag{
+								SwarmAccessGrantPKFlag,
+								SwarmDryRunFlag,
+							},
+							Name:        "act",
+							Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",
+							ArgsUsage:   "<ref>",
+							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
+						},
 					},
 				},
 			},
@@ -520,7 +532,6 @@ func version(ctx *cli.Context) error {
 func bzzd(ctx *cli.Context) error {
 	//build a valid bzzapi.Config from all available sources:
 	//default config, file config, command line and env vars
-	log.Error("shit", "passwd", ctx.GlobalString("password-test"))
 
 	bzzconfig, err := buildConfig(ctx)
 	if err != nil {

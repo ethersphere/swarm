@@ -86,6 +86,25 @@ func accessNewPK(ctx *cli.Context) {
 	generateAccessControlManifest(ctx, ref, sessionKey, ae)
 }
 
+func accessNewACT(ctx *cli.Context) {
+	args := ctx.Args()
+	if len(args) != 1 {
+		utils.Fatalf("Expected 1 argument - the ref", "")
+	}
+
+	var (
+		ae         *api.AccessEntry
+		sessionKey []byte
+		err        error
+		ref        = args[0]
+	)
+	sessionKey, ae, err = doACTNew(ctx, salt)
+	if err != nil {
+		utils.Fatalf("error getting session key: %v", err)
+	}
+	generateAccessControlManifest(ctx, ref, sessionKey, ae)
+}
+
 func generateAccessControlManifest(ctx *cli.Context, ref string, sessionKey []byte, ae *api.AccessEntry) {
 	dryRun := ctx.Bool(SwarmDryRunFlag.Name)
 	refBytes, err := hex.DecodeString(ref)
@@ -131,6 +150,56 @@ func generateAccessControlManifest(ctx *cli.Context, ref string, sessionKey []by
 }
 
 func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
+	// booting up the swarm node just as we do in bzzd action
+	bzzconfig, err := buildConfig(ctx)
+	if err != nil {
+		utils.Fatalf("unable to configure swarm: %v", err)
+	}
+	cfg := defaultNodeConfig
+	if _, err := os.Stat(bzzconfig.Path); err == nil {
+		cfg.DataDir = bzzconfig.Path
+	}
+	utils.SetNodeConfig(ctx, &cfg)
+	stack, err := node.New(&cfg)
+	if err != nil {
+		utils.Fatalf("can't create node: %v", err)
+	}
+	initSwarmNode(bzzconfig, stack, ctx)
+	privateKey := getAccount(bzzconfig.BzzAccount, ctx, stack)
+
+	granteePublicKey := ctx.String(SwarmAccessGrantPKFlag.Name)
+
+	if granteePublicKey == "" {
+		return nil, nil, errors.New("need a grantee Public Key")
+	}
+	b, err := hex.DecodeString(granteePublicKey)
+	if err != nil {
+		log.Error("error decoding grantee public key", "err", err)
+		return nil, nil, err
+	}
+
+	granteePub, err := crypto.UnmarshalPubkey(b)
+	if err != nil {
+		log.Error("error unmarshaling grantee public key", "err", err)
+		return nil, nil, err
+	}
+
+	sessionKey, err = api.NewSessionKeyPK(privateKey, granteePub, salt)
+	if err != nil {
+		log.Error("error getting session key", "err", err)
+		return nil, nil, err
+	}
+
+	ae, err = api.NewAccessEntryPK(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)), salt)
+	if err != nil {
+		log.Error("error generating access entry", "err", err)
+		return nil, nil, err
+	}
+
+	return sessionKey, ae, nil
+}
+
+func doACTNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
 	// booting up the swarm node just as we do in bzzd action
 	bzzconfig, err := buildConfig(ctx)
 	if err != nil {

@@ -259,8 +259,6 @@ func TestAccessPK(t *testing.T) {
 	pk := cluster.Nodes[0].PrivateKey
 	granteePubKey := crypto.FromECDSAPub(&pk.PublicKey)
 
-	// pubString := string()
-	// t.Fatal(pubString)
 	publisherDir, err := ioutil.TempDir("", "swarm-account-dir-temp")
 	if err != nil {
 		t.Fatal(err)
@@ -328,6 +326,153 @@ func TestAccessPK(t *testing.T) {
 	a := e.Access
 
 	if a.Type != "pk" {
+		t.Errorf(`got access type %q, expected "pk"`, a.Type)
+	}
+	if len(a.Salt) < 32 {
+		t.Errorf(`got salt with length %v, expected not less the 32 bytes`, len(a.Salt))
+	}
+	if a.KdfParams != nil {
+		t.Fatal("manifest access kdf params should be nil")
+	}
+
+	client := swarm.NewClient(cluster.Nodes[0].URL)
+
+	hash, err := client.UploadManifest(&m, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	httpClient := &http.Client{}
+
+	url := cluster.Nodes[0].URL + "/" + "bzz:/" + hash
+	response, err := httpClient.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if response.StatusCode != http.StatusOK {
+		t.Fatal("should be a 200")
+	}
+	d, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(d) != data {
+		t.Errorf("expected decrypted data %q, got %q", data, string(d))
+	}
+
+}
+
+func TestAccessACT(t *testing.T) {
+	// Setup Swarm and upload a test file to it
+	cluster := newTestCluster(t, 1)
+	defer cluster.Shutdown()
+
+	// create a tmp file
+	tmp, err := ioutil.TempFile("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tmp.Close()
+	defer os.Remove(tmp.Name())
+
+	// write data to file
+	data := "notsorandomdata"
+	_, err = io.WriteString(tmp, data)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hashRegexp := `[a-f\d]{128}`
+
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
+	up := runSwarm(t,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"up",
+		"--encrypt",
+		tmp.Name())
+	_, matches := up.ExpectRegexp(hashRegexp)
+	up.ExpectExit()
+
+	if len(matches) < 1 {
+		t.Fatal("no matches found")
+	}
+
+	ref := matches[0]
+
+	pk := cluster.Nodes[0].PrivateKey
+	granteePubKey := crypto.FromECDSAPub(&pk.PublicKey)
+
+	publisherDir, err := ioutil.TempDir("", "swarm-account-dir-temp")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	passFile, err := ioutil.TempFile("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer passFile.Close()
+	defer os.Remove(passFile.Name())
+	_, err = io.WriteString(passFile, testPassphrase)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, publisherAccount := getTestAccount(t, publisherDir)
+	up = runSwarm(t,
+		"--bzzaccount",
+		publisherAccount.Address.String(),
+		"--password",
+		passFile.Name(),
+		"--datadir",
+		publisherDir,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"access",
+		"new",
+		"act",
+		"--dry-run",
+		"--grant-pk",
+		hex.EncodeToString(granteePubKey)+"123",
+		"--grant-pk",
+		hex.EncodeToString(granteePubKey),
+		ref,
+	)
+
+	_, matches = up.ExpectRegexp(".+")
+	up.ExpectExit()
+
+	if len(matches) == 0 {
+		t.Fatalf("stdout not matched")
+	}
+
+	var m api.Manifest
+
+	err = json.Unmarshal([]byte(matches[0]), &m)
+	if err != nil {
+		t.Fatalf("unmarshal manifest: %v", err)
+	}
+
+	if len(m.Entries) != 1 {
+		t.Fatalf("expected one manifest entry, got %v", len(m.Entries))
+	}
+
+	e := m.Entries[0]
+
+	ct := "application/bzz-manifest+json"
+	if e.ContentType != ct {
+		t.Errorf("expected %q content type, got %q", ct, e.ContentType)
+	}
+
+	if e.Access == nil {
+		t.Fatal("manifest access is nil")
+	}
+
+	a := e.Access
+
+	if a.Type != "act" {
 		t.Errorf(`got access type %q, expected "pk"`, a.Type)
 	}
 	if len(a.Salt) < 32 {
