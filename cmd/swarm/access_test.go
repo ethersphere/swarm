@@ -435,9 +435,7 @@ func TestAccessACT(t *testing.T) {
 		"act",
 		"--dry-run",
 		"--grant-pk",
-		hex.EncodeToString(granteePubKey)+"123",
-		"--grant-pk",
-		hex.EncodeToString(granteePubKey),
+		"PUB_KEY_FILE/CSV",
 		ref,
 	)
 

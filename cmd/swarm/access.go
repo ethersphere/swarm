@@ -55,16 +55,16 @@ func accessNewPass(ctx *cli.Context) {
 	}
 
 	var (
-		ae         *api.AccessEntry
-		sessionKey []byte
-		err        error
-		ref        = args[0]
+		ae        *api.AccessEntry
+		accessKey []byte
+		err       error
+		ref       = args[0]
 	)
-	sessionKey, ae, err = doPasswordNew(ctx, salt)
+	accessKey, ae, err = doPasswordNew(ctx, salt)
 	if err != nil {
 		utils.Fatalf("error getting session key: %v", err)
 	}
-	generateAccessControlManifest(ctx, ref, sessionKey, ae)
+	generateAccessControlManifest(ctx, ref, accessKey, ae)
 }
 
 func accessNewPK(ctx *cli.Context) {
@@ -93,27 +93,27 @@ func accessNewACT(ctx *cli.Context) {
 	}
 
 	var (
-		ae         *api.AccessEntry
-		sessionKey []byte
-		err        error
-		ref        = args[0]
+		ae        *api.AccessEntry
+		accessKey []byte
+		err       error
+		ref       = args[0]
 	)
-	sessionKey, ae, err = doACTNew(ctx, salt)
+	accessKey, ae, err = doACTNew(ctx, salt)
 	if err != nil {
 		utils.Fatalf("error getting session key: %v", err)
 	}
-	generateAccessControlManifest(ctx, ref, sessionKey, ae)
+	generateAccessControlManifest(ctx, ref, accessKey, ae)
 }
 
-func generateAccessControlManifest(ctx *cli.Context, ref string, sessionKey []byte, ae *api.AccessEntry) {
+func generateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byte, ae *api.AccessEntry) {
 	dryRun := ctx.Bool(SwarmDryRunFlag.Name)
 	refBytes, err := hex.DecodeString(ref)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 	}
-	// encrypt ref with sessionKey
+	// encrypt ref with accessKey
 	enc := api.NewRefEncryption(len(refBytes))
-	encrypted, err := enc.Encrypt(refBytes, sessionKey)
+	encrypted, err := enc.Encrypt(refBytes, accessKey)
 	if err != nil {
 		utils.Fatalf("Error: %v", err)
 	}
@@ -217,8 +217,35 @@ func doACTNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessE
 	initSwarmNode(bzzconfig, stack, ctx)
 	privateKey := getAccount(bzzconfig.BzzAccount, ctx, stack)
 
-	granteePublicKey := ctx.String(SwarmAccessGrantPKFlag.Name)
+	granteePublicKeyArray := "1231232" //this should be an array of public keys
+	//create session keys for each public/private keypair
+	//construct manifest
+	/*
+				create slice of session struct or whatever
+				create array of lookup keys by hashing 0 to all of these session keys
+				sha3(session +"0") => lookup key = sha3(append(sessionkey,0)) => check that output is different, maybe create unit test with sanity checks for known hashes
+				access key encryption key = sha3(append(sessionKey,1))
+				create access key = random32Bytes
+				create encrypted accesskeys: encrypt access key using access key encryption keys:
+					enc := api.NewRefEncryption(len(encrypted accesskey))
+					encryptedAccessKey, err := enc.Encrypt(random32Bytes,accesskey encryption key)
+				construct manifest where the path i is the lookup key and the manifest entry entry sitting at that path contains
+				the metadata which contains the encrypted access key
 
+
+				=========
+		root access manifest with meta
+		see that its act and match on it
+
+		take private key + public key from the metadata
+		create shared secret
+		create sessionkey+lookup key by hashing 1+0 with it then concat the act url + lookup key
+		this with bzz/bzz-raw
+		create access key decryption key by hashing 1 to session key
+		decrypt what's in the manifest with this
+		then try to decrypt the reference whicnh was in the original manigfest
+
+	*/
 	if granteePublicKey == "" {
 		return nil, nil, errors.New("need a grantee Public Key")
 	}
