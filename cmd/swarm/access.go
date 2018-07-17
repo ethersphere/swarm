@@ -237,7 +237,7 @@ func doACTNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessE
 		root access manifest with meta
 		see that its act and match on it
 
-		take private key + public key from the metadata
+		take private key + public key from the metadata (fallback to password when this doesnt work)
 		create shared secret
 		create sessionkey+lookup key by hashing 1+0 with it then concat the act url + lookup key
 		this with bzz/bzz-raw
