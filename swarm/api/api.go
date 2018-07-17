@@ -631,7 +631,7 @@ func (a *API) UpdateManifest(ctx context.Context, addr storage.Address, update f
 func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHash, contentType string) (storage.Address, error) {
 	apiModifyCount.Inc(1)
 	quitC := make(chan bool)
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, nil) // TODO: decrypt function
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, NOOPDecrypt)
 	if err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
@@ -877,7 +877,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	}
 
 	quitC := make(chan bool)
-	rootTrie, err := loadManifest(ctx, a.fileStore, addr, quitC, nil) // TODO: decrypt function
+	rootTrie, err := loadManifest(ctx, a.fileStore, addr, quitC, NOOPDecrypt)
 	if err != nil {
 		return nil, nil, fmt.Errorf("can't load manifest %v: %v", addr.String(), err)
 	}
@@ -967,7 +967,7 @@ func (a *API) ResourceIsValidated() bool {
 
 // ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the address of the metadata chunk.
 func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address) (storage.Address, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, nil, nil) // TODO: decrypt function
+	trie, err := loadManifest(ctx, a.fileStore, addr, nil, NOOPDecrypt)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
 	}

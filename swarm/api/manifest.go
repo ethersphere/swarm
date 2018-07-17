@@ -169,6 +169,10 @@ func NewAccessEntryACT(publisher string, salt []byte, act *URI, kdfParams *KdfPa
 	}, nil
 }
 
+func NOOPDecrypt(*ManifestEntry) error {
+	return nil
+}
+
 var DefaultKdfParams = NewKdfParams(262144, 1, 8)
 
 func NewKdfParams(n, p, r int) *KdfParams {
@@ -257,7 +261,7 @@ type ManifestWriter struct {
 }
 
 func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, nil) // TODO: decrypt function
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, NOOPDecrypt)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -296,7 +300,7 @@ type ManifestWalker struct {
 }
 
 func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, decrypt DecryptFunc, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, decrypt) // TODO: decrypt function
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, decrypt)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
