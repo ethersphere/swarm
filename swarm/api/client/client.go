@@ -588,7 +588,7 @@ func (c *Client) CreateResource(request *mru.Request) (string, error) {
 	return manifestAddress, nil
 }
 
-// UpdateResource allows you to send a new version of your content
+// UpdateResource allows you to set a new version of your content
 func (c *Client) UpdateResource(request *mru.Request) error {
 	_, err := c.updateResource(request)
 	return err

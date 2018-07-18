@@ -30,6 +30,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+const chunkSize = 4096 // temporary until we implement FileStore in the resourcehandler
+
 type Handler struct {
 	chunkStore      *storage.NetStore
 	HashSize        int
@@ -89,7 +91,7 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 }
 
 // Validate is a chunk validation method
-// If it's a resource update, the chunk address is checked against the ownerAddr of the update's signature
+// If it looks like a resource update, the chunk address is checked against the ownerAddr of the update's signature
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
@@ -187,7 +189,7 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 	h.chunkStore.Put(ctx, chunk)
 	log.Debug("new resource", "name", request.metadata.Name, "startTime", request.metadata.StartTime, "frequency", request.metadata.Frequency, "owner", request.metadata.Owner)
 
-	// create the internal index for the resource and populate it with the data of the first version
+	// create the internal index for the resource and populate it with its metadata
 	rsrc := &resource{
 		resourceUpdate: resourceUpdate{
 			updateHeader: updateHeader{
@@ -228,9 +230,11 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	}
 
 	if _, err = h.lookup(rsrc, LookupLatestVersionInPeriod(rsrc.rootAddr, updateRequest.period)); err != nil {
-		if err.(*Error).code != ErrNotFound { // not finding updates at all is fine, it means this resource was created
-			return nil, err // and never initialized/updated for the first time
+		if err.(*Error).code != ErrNotFound {
+			return nil, err
 		}
+		// not finding updates means that there is a network error
+		// or that the resource really does not have updates in this period.
 	}
 
 	updateRequest.multihash = rsrc.multihash
@@ -266,10 +270,10 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 	return h.lookup(rsrc, params)
 }
 
-// LookupPrevious returns the resource before the one currently loaded in the resource index
+// LookupPrevious returns the resource before the one currently loaded in the resource cache
 // This is useful where resource updates are used incrementally in contrast to
 // merely replacing content.
-// Requires a synced resource object
+// Requires a cached resource object to determine the current state of the resource.
 func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*resource, error) {
 	rsrc := h.get(params.rootAddr)
 	if rsrc == nil {
@@ -280,15 +284,17 @@ func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*re
 	} else if rsrc.period == 0 {
 		return nil, NewError(ErrNothingToReturn, " not found")
 	}
+	var version, period uint32
 	if rsrc.version > 1 {
-		rsrc.version--
+		version = rsrc.version - 1
+		period = rsrc.period
 	} else if rsrc.period == 1 {
 		return nil, NewError(ErrNothingToReturn, "Current update is the oldest")
 	} else {
-		rsrc.version = 0
-		rsrc.period--
+		version = 0
+		period = rsrc.period - 1
 	}
-	return h.lookup(rsrc, NewLookupParams(rsrc.rootAddr, rsrc.period, rsrc.version, params.Limit))
+	return h.lookup(rsrc, NewLookupParams(rsrc.rootAddr, period, version, params.Limit))
 }
 
 // base code for public lookup methods
@@ -416,6 +422,8 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 // Uses the Mutable Resource metadata currently loaded in the resources map entry.
 // It is the caller's responsibility to make sure that this data is not stale.
 // Note that a Mutable Resource update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature. An error will be returned if the total length of the chunk payload will exceed this limit.
+// Update can only check if the caller is trying to overwrite the very last known version, otherwise it just puts the update
+// on the network.
 func (h *Handler) Update(ctx context.Context, r *SignedResourceUpdate) (storage.Address, error) {
 	return h.update(ctx, r)
 }

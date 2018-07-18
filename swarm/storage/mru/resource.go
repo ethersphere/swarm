@@ -25,7 +25,6 @@ import (
 )
 
 const (
-	chunkSize              = 4096 // temporary until we implement FileStore in the resourcehandler
 	defaultStoreTimeout    = 4000 * time.Millisecond
 	hasherCount            = 8
 	resourceHashAlgorithm  = storage.SHA3Hash
