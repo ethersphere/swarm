@@ -211,10 +211,6 @@ var defaultSubcommandHelp = cli.Command{
 	Hidden:             true,
 }
 
-type AccountManagerProvider interface {
-	AccountManager() *accounts.Manager
-}
-
 var defaultNodeConfig = node.DefaultConfig
 
 // This init function sets defaults so cmd/swarm can run alongside geth.
@@ -597,7 +593,7 @@ func registerBzzService(bzzconfig *bzzapi.Config, stack *node.Node) {
 	}
 }
 
-func getAccount(bzzaccount string, ctx *cli.Context, provider AccountManagerProvider) *ecdsa.PrivateKey {
+func getAccount(bzzaccount string, ctx *cli.Context, stack *node.Node) *ecdsa.PrivateKey {
 	//an account is mandatory
 	if bzzaccount == "" {
 		utils.Fatalf(SWARM_ERR_NO_BZZACCOUNT)
@@ -608,10 +604,30 @@ func getAccount(bzzaccount string, ctx *cli.Context, provider AccountManagerProv
 		return key
 	}
 	// Otherwise try getting it from the keystore.
-	am := provider.AccountManager()
+	am := stack.AccountManager()
 	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 
 	return decryptStoreAccount(ks, bzzaccount, utils.MakePasswordList(ctx))
+}
+
+// getPrivKey returns the private key of the specified bzzaccount
+// Used only by client commands, such as `resource`
+func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
+	// booting up the swarm node just as we do in bzzd action
+	bzzconfig, err := buildConfig(ctx)
+	if err != nil {
+		utils.Fatalf("unable to configure swarm: %v", err)
+	}
+	cfg := defaultNodeConfig
+	if _, err := os.Stat(bzzconfig.Path); err == nil {
+		cfg.DataDir = bzzconfig.Path
+	}
+	utils.SetNodeConfig(ctx, &cfg)
+	stack, err := node.New(&cfg)
+	if err != nil {
+		utils.Fatalf("can't create node: %v", err)
+	}
+	return getAccount(bzzconfig.BzzAccount, ctx, stack)
 }
 
 func decryptStoreAccount(ks *keystore.KeyStore, account string, passwords []string) *ecdsa.PrivateKey {

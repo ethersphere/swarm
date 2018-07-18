@@ -31,7 +31,7 @@ import (
 )
 
 func NewGenericSigner(ctx *cli.Context) mru.Signer {
-	return mru.NewGenericSigner(getClientAccount(ctx))
+	return mru.NewGenericSigner(getPrivKey(ctx))
 }
 
 // swarm resource create <frequency> [--name <name>] [--data <0x Hexdata> [--multihash=false]]
