@@ -48,15 +48,14 @@ func newIntervalsStreamerService(ctx *adapters.ServiceContext) (node.Service, er
 	addr := toAddr(id)
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	store := stores[id].(*storage.LocalStore)
-	db := storage.NewDBAPI(store)
-	delivery := NewDelivery(kad, db)
+	delivery := NewDelivery(kad, store)
 	deliveries[id] = delivery
-	r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+	r := NewRegistry(addr, delivery, store, state.NewInmemoryStore(), &RegistryOptions{
 		SkipCheck: defaultSkipCheck,
 	})
 
 	r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
-		return newTestExternalClient(db), nil
+		return newTestExternalClient(store), nil
 	})
 	r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
 		return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
@@ -303,9 +302,9 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	}
 	startedAt := time.Now()
 	timeout := 300 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-	result, err := sim.Run(ctx, conf)
+	sctx, scancel := context.WithTimeout(context.Background(), timeout)
+	defer scancel()
+	result, err := sim.Run(sctx, conf)
 	finishedAt := time.Now()
 	if err != nil {
 		t.Fatalf("Setting up simulation failed: %v", err)

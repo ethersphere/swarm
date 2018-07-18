@@ -69,7 +69,10 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 		return nil, err
 	}
 	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
-	wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
 	return key, err
 }
 
@@ -86,7 +89,11 @@ func (a *API) NewResourceManifest(ctx context.Context, resourceAddr string) (sto
 	if err != nil {
 		return nil, err
 	}
-	key, _, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
+	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
 	return key, err
 }
 
@@ -107,7 +114,11 @@ func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC
 
 // AddEntry stores the given data and adds the resulting key to the manifest
 func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (storage.Address, error) {
-	key, _, err := m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+	key, wait, err := m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -215,7 +226,7 @@ func loadManifest(ctx context.Context, fileStore *storage.FileStore, hash storag
 func readManifest(manifestReader storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
-	size, err := manifestReader.Size(quitC)
+	size, err := manifestReader.Size()
 	if err != nil { // size == 0
 		// can't determine size means we don't have the root chunk
 		log.Trace("manifest not found", "key", hash)

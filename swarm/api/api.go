@@ -237,13 +237,6 @@ func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Han
 	return
 }
 
-// Upload to be used only in TEST
-func (a *API) Upload(ctx context.Context, uploadDir, index string, toEncrypt bool) (hash string, err error) {
-	fs := NewFileSystem(a)
-	hash, err = fs.Upload(uploadDir, index, toEncrypt)
-	return hash, err
-}
-
 // Retrieve FileStore reader API
 func (a *API) Retrieve(ctx context.Context, addr storage.Address) (reader storage.LazySectionReader, isEncrypted bool) {
 	return a.fileStore.Retrieve(ctx, addr)
@@ -347,7 +340,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 			log.Trace("resource type", "key", manifestAddr, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			rsrc, err := a.resource.Load(storage.Address(common.FromHex(entry.Hash)))
+			rsrc, err := a.resource.Load(ctx, storage.Address(common.FromHex(entry.Hash)))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -883,7 +876,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 // ResourceLookup Looks up mutable resource updates at specific periods and versions
 func (a *API) ResourceLookup(ctx context.Context, addr storage.Address, period uint32, version uint32, maxLookup *mru.LookupParams) (string, []byte, error) {
 	var err error
-	rsrc, err := a.resource.Load(addr)
+	rsrc, err := a.resource.Load(ctx, addr)
 	if err != nil {
 		return "", nil, err
 	}

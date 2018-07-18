@@ -19,6 +19,7 @@ package storage
 import (
 	"context"
 	"io"
+	"time"
 )
 
 /*
@@ -39,18 +40,25 @@ const (
 	defaultChunkRequestsCacheCapacity = 5000000 // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
 )
 
+var (
+	// timeout interval before retrieval is timed out
+	searchTimeout = 30 * time.Second
+)
+
 type FileStore struct {
 	ChunkStore
 	hashFunc SwarmHasher
 }
 
 type FileStoreParams struct {
-	Hash string
+	Hash  string
+	Local bool
 }
 
 func NewFileStoreParams() *FileStoreParams {
 	return &FileStoreParams{
-		Hash: DefaultHash,
+		Hash:  DefaultHash,
+		Local: false,
 	}
 }
 

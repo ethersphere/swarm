@@ -46,7 +46,13 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 
 	peerID := tester.IDs[0]
 
-	streamer.delivery.RequestFromPeers(hash0[:], true)
+	ctx := context.Background()
+	req := &network.Request{
+		Addr:        storage.Address(hash0[:]),
+		SkipCheck:   true,
+		PeersToSkip: &sync.Map{},
+	}
+	streamer.delivery.RequestFromPeers(ctx, req)
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -92,7 +98,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 			{
 				Code: 5,
 				Msg: &RetrieveRequestMsg{
-					Addr: chunk.Addr[:],
+					Addr: chunk.Address()[:],
 				},
 				Peer: peerID,
 			},
@@ -138,10 +144,11 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	})
 
 	hash := storage.Address(hash0[:])
-	chunk := storage.NewChunk(hash, nil)
-	chunk.SData = hash
-	localStore.Put(chunk)
-	chunk.WaitToStore()
+	chunk := storage.NewChunk(hash, hash)
+	err = localStore.Put(context.TODO(), chunk)
+	if err != nil {
+		t.Fatalf("Expected no err got %v", err)
+	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -177,10 +184,11 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	}
 
 	hash = storage.Address(hash1[:])
-	chunk = storage.NewChunk(hash, nil)
-	chunk.SData = hash1[:]
-	localStore.Put(chunk)
-	chunk.WaitToStore()
+	chunk = storage.NewChunk(hash, hash1[:])
+	err = localStore.Put(context.TODO(), chunk)
+	if err != nil {
+		t.Fatalf("Expected no err got %v", err)
+	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "RetrieveRequestMsg",
@@ -234,16 +242,6 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 	chunkKey := hash0[:]
 	chunkData := hash1[:]
-	chunk, created := localStore.GetOrCreateRequest(chunkKey)
-
-	if !created {
-		t.Fatal("chunk already exists")
-	}
-	select {
-	case <-chunk.ReqC:
-		t.Fatal("chunk is already received")
-	default:
-	}
 
 	err = tester.TestExchanges(p2ptest.Exchange{
 		Label: "Subscribe message",
@@ -260,7 +258,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 		},
 	},
 		p2ptest.Exchange{
-			Label: "ChunkDeliveryRequest message",
+			Label: "ChunkDelivery message",
 			Triggers: []p2ptest.Trigger{
 				{
 					Code: 6,
@@ -276,21 +274,26 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
 
-	timeout := time.NewTimer(1 * time.Second)
-
-	select {
-	case <-timeout.C:
-		t.Fatal("timeout receiving chunk")
-	case <-chunk.ReqC:
+	// wait for the chunk to get stored
+	storedChunk, err := localStore.Get(ctx, chunkKey)
+	for err != nil {
+		select {
+		case <-ctx.Done():
+			t.Fatalf("Chunk is not in localstore after timeout, err: %v", err)
+		default:
+		}
+		storedChunk, err = localStore.Get(ctx, chunkKey)
+		time.Sleep(50 * time.Millisecond)
 	}
 
-	storedChunk, err := localStore.Get(chunkKey)
 	if err != nil {
 		t.Fatalf("Expected no error, got %v", err)
 	}
 
-	if !bytes.Equal(storedChunk.SData, chunkData) {
+	if !bytes.Equal(storedChunk.Data(), chunkData) {
 		t.Fatal("Retrieved chunk has different data than original")
 	}
 
@@ -310,7 +313,7 @@ func TestDeliveryFromNodes(t *testing.T) {
 func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
-	createStoreFunc = createTestLocalStorageFromSim
+	// createStoreFunc = createTestLocalStorageFromSim
 	conf := &streamTesting.RunConfig{
 		Adapter:         *adapter,
 		NodeCount:       nodes,
@@ -333,6 +336,13 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	for i, id := range sim.IDs {
 		stores[id] = sim.Stores[i]
 	}
+	if *useMockStore {
+		createStoreFunc = createMockStore
+		createGlobalStore()
+	} else {
+		createStoreFunc = nil
+	}
+
 	registries = make(map[discover.NodeID]*TestRegistry)
 	deliveries = make(map[discover.NodeID]*Delivery)
 	peerCount = func(id discover.NodeID) int {
@@ -390,8 +400,6 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 					<-doneC
 					rpcSubscriptionsWg.Done()
 				}()
-				ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
-				defer cancel()
 				sid := sim.IDs[j+1]
 				return client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream(swarmChunkServerStreamName, "", false), NewRange(0, 0), Top)
 			})
@@ -399,13 +407,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				return err
 			}
 		}
+
 		// create a retriever FileStore for the pivot node
-		delivery := deliveries[sim.IDs[0]]
-		retrieveFunc := func(chunk *storage.Chunk) error {
-			return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
-		}
-		netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
-		fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
+		fileStore := storage.NewFileStore(stores[sim.IDs[0]], storage.NewFileStoreParams())
 
 		go func() {
 			// start the retrieval on the pivot node - this will spawn retrieve requests for missing chunks
@@ -492,7 +496,10 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
 	defaultSkipCheck = skipCheck
 	toAddr = network.NewAddrFromNodeID
-	createStoreFunc = createTestLocalStorageFromSim
+	useFakeFetchFunc = false
+	useAPIFakeFetchFunc = true
+	stores = make(map[discover.NodeID]storage.ChunkStore)
+	deliveries = make(map[discover.NodeID]*Delivery)
 	registries = make(map[discover.NodeID]*TestRegistry)
 
 	timeout := 300 * time.Second
@@ -517,11 +524,6 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 		b.Fatal(err.Error())
 	}
 
-	stores = make(map[discover.NodeID]storage.ChunkStore)
-	deliveries = make(map[discover.NodeID]*Delivery)
-	for i, id := range sim.IDs {
-		stores[id] = sim.Stores[i]
-	}
 	peerCount = func(id discover.NodeID) int {
 		if sim.IDs[0] == id || sim.IDs[nodes-1] == id {
 			return 1
@@ -617,11 +619,10 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	// create a retriever FileStore for the pivot node
 	// by now deliveries are set for each node by the streamer service
 	delivery := deliveries[sim.IDs[0]]
-	retrieveFunc := func(chunk *storage.Chunk) error {
-		return delivery.RequestFromPeers(chunk.Addr[:], skipCheck)
+	netStore, err := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), network.NewFetcherFactory(delivery.RequestFromPeers, skipCheck).New)
+	if err != nil {
+		b.Fatalf("simulation failed to initialise. expected no error. got %v", err)
 	}
-	netStore := storage.NewNetStore(sim.Stores[0].(*storage.LocalStore), retrieveFunc)
-
 	// benchmark loop
 	b.ResetTimer()
 	b.StopTimer()
@@ -650,7 +651,7 @@ Loop:
 		errs := make(chan error)
 		for _, hash := range hashes {
 			go func(h storage.Address) {
-				_, err := netStore.Get(h)
+				_, err := netStore.Get(ctx, h)
 				log.Warn("test check netstore get", "hash", h, "err", err)
 				errs <- err
 			}(hash)
@@ -700,8 +701,4 @@ Loop:
 	if err != nil {
 		b.Fatalf("expected no error. got %v", err)
 	}
-}
-
-func createTestLocalStorageFromSim(id discover.NodeID, addr *network.BzzAddr) (storage.ChunkStore, error) {
-	return stores[id], nil
 }

@@ -54,6 +54,7 @@ var (
 	safeName          string
 	nameHash          common.Hash
 	hashfunc          = storage.MakeHashFunc(storage.DefaultHash)
+	getTimeout        = 30 * time.Second
 )
 
 func init() {
@@ -128,11 +129,11 @@ func TestReverse(t *testing.T) {
 	chunk := newUpdateChunk(key, &sig, period, version, safeName, data, len(data))
 
 	// check that we can recover the owner account from the update chunk's signature
-	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.SData)
+	checksig, checkperiod, checkversion, checkname, checkdata, _, err := rh.parseUpdate(chunk.Data())
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkdigest := rh.keyDataHash(chunk.Addr, checkdata)
+	checkdigest := rh.keyDataHash(chunk.Address(), checkdata)
 	recoveredaddress, err := getAddressFromDataSig(checkdigest, *checksig)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
@@ -144,8 +145,8 @@ func TestReverse(t *testing.T) {
 		t.Fatalf("addresses dont match: %x != %x", originaladdress, recoveredaddress)
 	}
 
-	if !bytes.Equal(key[:], chunk.Addr[:]) {
-		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Addr)
+	if !bytes.Equal(key[:], chunk.Address()[:]) {
+		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Address())
 	}
 	if period != checkperiod {
 		t.Fatalf("Expected period '%d', was '%d'", period, checkperiod)
@@ -182,14 +183,15 @@ func TestHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	chunk, err := rh.chunkStore.Get(storage.Address(rootChunkKey))
+	addr := storage.Address(rootChunkKey)
+	ch, err := rh.chunkStore.Get(ctx, addr)
 	if err != nil {
 		t.Fatal(err)
-	} else if len(chunk.SData) < 16 {
-		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(chunk.SData))
+	} else if len(ch.Data()) < 16 {
+		t.Fatalf("chunk data must be minimum 16 bytes, is %d", len(ch.Data()))
 	}
-	startblocknumber := binary.LittleEndian.Uint64(chunk.SData[2:10])
-	chunkfrequency := binary.LittleEndian.Uint64(chunk.SData[10:])
+	startblocknumber := binary.LittleEndian.Uint64(ch.Data()[2:10])
+	chunkfrequency := binary.LittleEndian.Uint64(ch.Data()[10:])
 	if startblocknumber != uint64(backend.blocknumber) {
 		t.Fatalf("stored block number %d does not match provided block number %d", startblocknumber, backend.blocknumber)
 	}
@@ -256,7 +258,10 @@ func TestHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	rsrc2, err := rh2.Load(rootChunkKey)
+	rsrc2, err := rh2.Load(ctx, rootChunkKey)
+	if err != nil {
+		t.Fatal(err)
+	}
 	_, err = rh2.LookupLatest(ctx, nameHash, true, nil)
 	if err != nil {
 		t.Fatal(err)
@@ -397,7 +402,7 @@ func TestMultihash(t *testing.T) {
 	defer teardownTest()
 
 	// create a new resource
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
 	defer cancel()
 	_, _, err = rh.New(ctx, safeName, resourceFrequency)
 	if err != nil {
@@ -430,7 +435,7 @@ func TestMultihash(t *testing.T) {
 		t.Fatalf("Expected update to fail with last byte skipped")
 	}
 
-	data, err := getUpdateDirect(rh, multihashkey)
+	data, err := getUpdateDirect(ctx, rh, multihashkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -441,7 +446,7 @@ func TestMultihash(t *testing.T) {
 	if !bytes.Equal(multihashdecode, multihashbytes.Bytes()) {
 		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", multihashdecode, multihashbytes.Bytes())
 	}
-	data, err = getUpdateDirect(rh, sha1key)
+	data, err = getUpdateDirect(ctx, rh, sha1key)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -480,7 +485,7 @@ func TestMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	data, err = getUpdateDirect(rh2, multihashsignedkey)
+	data, err = getUpdateDirect(ctx, rh2, multihashsignedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,7 +496,7 @@ func TestMultihash(t *testing.T) {
 	if !bytes.Equal(multihashdecode, multihashbytes.Bytes()) {
 		t.Fatalf("Decoded hash '%x' does not match original hash '%x'", multihashdecode, multihashbytes.Bytes())
 	}
-	data, err = getUpdateDirect(rh2, sha1signedkey)
+	data, err = getUpdateDirect(ctx, rh2, sha1signedkey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -550,7 +555,7 @@ func TestChunkValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 	chunk := newUpdateChunk(key, &sig, 1, 1, safeName, data, len(data))
-	if !rh.Validate(chunk.Addr, chunk.SData) {
+	if !rh.Validate(chunk.Address(), chunk.Data()) {
 		t.Fatal("Chunk validator fail on update chunk")
 	}
 
@@ -561,7 +566,7 @@ func TestChunkValidator(t *testing.T) {
 		t.Fatal(err)
 	}
 	chunk = rh.newMetaChunk(safeName, startBlock, resourceFrequency)
-	if !rh.Validate(chunk.Addr, chunk.SData) {
+	if !rh.Validate(chunk.Address(), chunk.Data()) {
 		t.Fatal("Chunk validator fail on metadata chunk")
 	}
 }
@@ -597,20 +602,23 @@ func TestValidator(t *testing.T) {
 
 	chunks := storage.GenerateRandomChunks(storage.DefaultChunkSize, 2)
 	goodChunk := chunks[0]
-	badChunk := chunks[1]
-	badChunk.SData = goodChunk.SData
+	badChunk := storage.NewChunk(chunks[1].Address(), goodChunk.Data())
 	key := rh.resourceHash(42, 1, ens.EnsNode("xyzzy.eth"))
 	data := []byte("bar")
 	uglyChunk := newUpdateChunk(key, nil, 42, 1, "xyzzy.eth", data, len(data))
 
-	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	err = store.Put(context.TODO(), goodChunk)
+	if err != nil {
 		t.Fatalf("expected no error on good content address chunk with both validators, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+
+	err = store.Put(context.TODO(), badChunk)
+	if err == nil {
 		t.Fatal("expected error on bad chunk address with both validators, but got nil")
 	}
-	if err := uglyChunk.GetErrored(); err != nil {
+
+	err = store.Put(context.TODO(), uglyChunk)
+	if err != nil {
 		t.Fatalf("expected no error on resource update chunk with both validators, but got: %s", err)
 	}
 
@@ -622,21 +630,24 @@ func TestValidator(t *testing.T) {
 
 	chunks = storage.GenerateRandomChunks(storage.DefaultChunkSize, 2)
 	goodChunk = chunks[0]
-	badChunk = chunks[1]
-	badChunk.SData = goodChunk.SData
+	badChunk = storage.NewChunk(chunks[1].Address(), goodChunk.Data())
 
 	key = rh.resourceHash(42, 2, ens.EnsNode("xyzzy.eth"))
 	data = []byte("baz")
 	uglyChunk = newUpdateChunk(key, nil, 42, 2, "xyzzy.eth", data, len(data))
 
-	storage.PutChunks(store, goodChunk, badChunk, uglyChunk)
-	if goodChunk.GetErrored() == nil {
+	err = store.Put(context.TODO(), goodChunk)
+	if err == nil {
 		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
 	}
-	if badChunk.GetErrored() == nil {
+
+	err = store.Put(context.TODO(), badChunk)
+	if err == nil {
 		t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
 	}
-	if err := uglyChunk.GetErrored(); err != nil {
+
+	err = store.Put(context.TODO(), uglyChunk)
+	if err != nil {
 		t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
 	}
 }
@@ -753,12 +764,12 @@ func newTestSigner() (*GenericSigner, error) {
 	}, nil
 }
 
-func getUpdateDirect(rh *Handler, addr storage.Address) ([]byte, error) {
-	chunk, err := rh.chunkStore.Get(addr)
+func getUpdateDirect(ctx context.Context, rh *Handler, addr storage.Address) ([]byte, error) {
+	ch, err := rh.chunkStore.Get(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
-	_, _, _, _, data, _, err := rh.parseUpdate(chunk.SData)
+	_, _, _, _, data, _, err := rh.parseUpdate(ch.Data())
 	if err != nil {
 		return nil, err
 	}

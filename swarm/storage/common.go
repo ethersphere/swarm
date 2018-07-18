@@ -16,28 +16,32 @@
 package storage
 
 import (
-	"sync"
-
-	"github.com/ethereum/go-ethereum/swarm/log"
+	"context"
+	"time"
 )
+
+var putTimeout = 30 * time.Second
 
 // PutChunks adds chunks  to localstore
 // It waits for receive on the stored channel
 // It logs but does not fail on delivery error
-func PutChunks(store *LocalStore, chunks ...*Chunk) {
-	wg := sync.WaitGroup{}
-	wg.Add(len(chunks))
-	go func() {
-		for _, c := range chunks {
-			<-c.dbStoredC
-			if err := c.GetErrored(); err != nil {
-				log.Error("chunk store fail", "err", err, "key", c.Addr)
-			}
-			wg.Done()
-		}
-	}()
-	for _, c := range chunks {
-		go store.Put(c)
+func PutChunks(store *LocalStore, chunks ...Chunk) []error {
+	i := 0
+	f := func(n int64) Chunk {
+		chunk := chunks[i]
+		i++
+		return chunk
 	}
-	wg.Wait()
+	_, errs := put(store, len(chunks), f)
+	return errs
+}
+
+func put(store *LocalStore, n int, f func(i int64) Chunk) (hs []Address, errs []error) {
+	for i := int64(0); i < int64(n); i++ {
+		chunk := f(DefaultChunkSize)
+		err := store.Put(context.TODO(), chunk)
+		errs = append(errs, err)
+		hs = append(hs, chunk.Address())
+	}
+	return hs, errs
 }

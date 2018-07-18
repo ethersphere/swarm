@@ -81,14 +81,17 @@ func initSyncTest() {
 		addr := network.NewAddrFromNodeID(id)
 		return addr
 	}
-	//global func to create local store
+	// fetch factories
+	useFakeFetchFunc = true
+	useAPIFakeFetchFunc = true
+	//local stores
+	stores = make(map[discover.NodeID]storage.ChunkStore)
 	if *useMockStore {
 		createStoreFunc = createMockStore
+		createGlobalStore()
 	} else {
 		createStoreFunc = createTestLocalStorageForId
 	}
-	//local stores
-	stores = make(map[discover.NodeID]storage.ChunkStore)
 	//data directories for each node and store
 	datadirs = make(map[discover.NodeID]string)
 	//deliveries for each node
@@ -437,7 +440,7 @@ func runSyncTest(chunkCount int, nodeCount int, live bool, history bool) error {
 			} else {
 				//use the actual localstore
 				lstore := stores[id]
-				_, err = lstore.Get(chunk)
+				_, err = lstore.Get(ctx, chunk)
 			}
 			if err != nil {
 				log.Warn(fmt.Sprintf("Chunk %s NOT found for id %s", chunk, id))

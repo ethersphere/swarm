@@ -71,8 +71,7 @@ func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	quitC := make(chan bool)
-	expsize, err := reader.Size(quitC)
+	expsize, err := reader.Size()
 	if err != nil {
 		return nil, err
 	}
