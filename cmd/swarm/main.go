@@ -182,9 +182,9 @@ var (
 		Usage:  "Number of recent chunks cached in memory (default 5000)",
 		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
 	}
-	SwarmResourceMultihashFlag = cli.BoolTFlag{
+	SwarmResourceMultihashFlag = cli.BoolFlag{
 		Name:  "multihash",
-		Usage: "Determines how to interpret data for a resource update. If not present, data will be interpreted as a multihash",
+		Usage: "Determines how to interpret data for a resource update. If not present, data will be interpreted as raw, literal data that will be included in the resource",
 	}
 	SwarmResourceNameFlag = cli.StringFlag{
 		Name:  "name",
