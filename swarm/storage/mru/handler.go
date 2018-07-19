@@ -117,7 +117,15 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	var r SignedResourceUpdate
 	if err := r.fromChunk(chunkAddr, data); err != nil {
-		log.Debug(fmt.Sprintf("Invalid resource chunk with address %s: %s ", chunkAddr.Hex(), err.Error()))
+		log.Debug("Invalid resource chunk with address %s: %s ", chunkAddr.Hex(), err.Error())
+		return false
+	}
+
+	// Verify signatures and that the signer actually owns the resource
+	// If it fails, it means either the signature is not valid, data is corrupted
+	// or someone is trying to update someone else's resource.
+	if err := r.Verify(); err != nil {
+		log.Debug("Invalid signature: %v", err)
 		return false
 	}
 

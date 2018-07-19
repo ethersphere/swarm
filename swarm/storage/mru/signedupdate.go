@@ -116,7 +116,7 @@ func (r *SignedResourceUpdate) toChunk() (*storage.Chunk, error) {
 	return chunk, nil
 }
 
-// fromChunk populates this structure from chunk data
+// fromChunk populates this structure from chunk data. It does not verify the signature is valid.
 func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata []byte) error {
 	// for update chunk layout see SignedResourceUpdate definition
 
@@ -144,13 +144,6 @@ func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata [
 	r.signature = signature
 	r.updateAddr = updateAddr
 	r.binaryData = chunkdata
-
-	// Verify signatures and that the signer actually owns the resource
-	// If it fails, it means either the signature is not valid, data is corrupted
-	// or someone is trying to update someone else's resource.
-	if err := r.Verify(); err != nil {
-		return NewErrorf(ErrUnauthorized, "Invalid signature: %v", err)
-	}
 
 	return nil
 
