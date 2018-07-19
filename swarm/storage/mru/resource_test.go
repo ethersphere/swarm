@@ -199,7 +199,7 @@ func TestReverse(t *testing.T) {
 	if err := checkUpdate.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		t.Fatal(err)
 	}
-	checkdigest, err := checkUpdate.getDigest()
+	checkdigest, err := checkUpdate.GetDigest()
 	if err != nil {
 		t.Fatal(err)
 	}
