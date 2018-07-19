@@ -192,10 +192,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.fileStore = storage.NewFileStore(netStore, self.config.FileStoreParams)
 
 	var resourceHandler *mru.Handler
-	rhparams := &mru.HandlerParams{
-		// TODO: config parameter to set limits
-
-	}
+	rhparams := &mru.HandlerParams{}
 
 	resourceHandler, err = mru.NewHandler(rhparams)
 	if err != nil {

@@ -31,8 +31,7 @@ const (
 	defaultRetrieveTimeout = 100 * time.Millisecond
 )
 
-// resource caches resource data. When synced it contains the most recent
-// version of the resource data and the metadata of its root chunk.
+// resource caches resource data and the metadata of its root chunk.
 type resource struct {
 	resourceUpdate
 	ResourceMetadata

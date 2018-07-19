@@ -29,7 +29,7 @@ import (
 type ResourceMetadata struct {
 	StartTime Timestamp      // time at which the resource starts to be valid
 	Frequency uint64         // expected update frequency for the resource
-	Name      string         // name of the resource, for the reference of the user
+	Name      string         // name of the resource, for the reference of the user or to disambiguate resources with same starttime, frequency, owneraddr
 	Owner     common.Address // public address of the resource owner
 }
 

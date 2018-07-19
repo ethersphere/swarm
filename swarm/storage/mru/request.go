@@ -65,10 +65,6 @@ func NewCreateUpdateRequest(metadata *ResourceMetadata) (*Request, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	if err != nil {
-		return nil, err
-	}
 	return request, nil
 }
 

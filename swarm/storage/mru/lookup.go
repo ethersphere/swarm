@@ -26,7 +26,6 @@ import (
 // LookupParams is used to specify constraints when performing an update lookup
 // Limit defines whether or not the lookup should be limited
 // If Limit is set to true then Max defines the amount of hops that can be performed
-// \TODO this is redundant, just use uint32 with 0 for unlimited hops
 type LookupParams struct {
 	UpdateLookup
 	Limit uint32
