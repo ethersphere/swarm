@@ -81,6 +81,10 @@ func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
 	cursor += nameLength
 
 	copy(r.Owner[:], serializedData[cursor:])
+	cursor += common.AddressLength
+	if cursor != len(serializedData) {
+		return NewErrorf(ErrInvalidValue, "Metadata chunk has leftover data after deserialization. %d left to read", len(serializedData)-cursor)
+	}
 	return nil
 }
 
@@ -88,7 +92,7 @@ func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
 func (r *ResourceMetadata) binaryPut(serializedData []byte) error {
 	metadataChunkLength := r.binaryLength()
 	if len(serializedData) != metadataChunkLength {
-		return NewErrorf(ErrInvalidValue, "Need a slice of exactly %d to serialize this metadata, but got a slice of size %d.", metadataChunkLength, len(serializedData))
+		return NewErrorf(ErrInvalidValue, "Need a slice of exactly %d bytes to serialize this metadata, but got a slice of size %d.", metadataChunkLength, len(serializedData))
 	}
 
 	// root chunk has first two bytes both set to 0, which distinguishes from update bytes

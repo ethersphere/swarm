@@ -27,16 +27,19 @@ func compareByteSliceToExpectedHex(t *testing.T, variableName string, actualValu
 	}
 }
 
-func TestMarshallingAndUnmarshalling(t *testing.T) {
-	ownerAddr := newCharlieSigner().Address()
-	metadata := ResourceMetadata{
+func getTestMetadata() *ResourceMetadata {
+	return &ResourceMetadata{
 		Name: "world news report, every hour, on the hour",
 		StartTime: Timestamp{
 			Time: 1528880400,
 		},
 		Frequency: 3600,
-		Owner:     ownerAddr,
+		Owner:     newCharlieSigner().Address(),
 	}
+}
+
+func TestMetadataSerializerDeserializer(t *testing.T) {
+	metadata := *getTestMetadata()
 
 	rootAddr, metaHash, chunkData, err := metadata.serializeAndHash() // creates hashes and marshals, in one go
 	if err != nil {
@@ -56,4 +59,68 @@ func TestMarshallingAndUnmarshalling(t *testing.T) {
 	if recoveredMetadata != metadata {
 		t.Fatalf("Expected that the recovered metadata equals the marshalled metadata")
 	}
+
+	// we are going to mess with the data, so create a backup to go back to it for the next test
+	backup := make([]byte, len(chunkData))
+	copy(backup, chunkData)
+
+	chunkData = []byte{1, 2, 3}
+	if err := recoveredMetadata.binaryGet(chunkData); err == nil {
+		t.Fatal("Expected binaryGet to fail since chunk is too small")
+	}
+
+	// restore backup
+	chunkData = make([]byte, len(backup))
+	copy(chunkData, backup)
+
+	// mess with the prefix so it is not zero
+	chunkData[0] = 7
+	chunkData[1] = 9
+
+	if err := recoveredMetadata.binaryGet(chunkData); err == nil {
+		t.Fatal("Expected binaryGet to fail since prefix bytes are not zero")
+	}
+
+	// restore backup
+	chunkData = make([]byte, len(backup))
+	copy(chunkData, backup)
+
+	// mess with the length header to trigger an error
+	chunkData[2] = 255
+	chunkData[3] = 44
+	if err := recoveredMetadata.binaryGet(chunkData); err == nil {
+		t.Fatal("Expected binaryGet to fail since header length does not match")
+	}
+
+	// restore backup
+	chunkData = make([]byte, len(backup))
+	copy(chunkData, backup)
+
+	// mess with name length header to trigger a chunk too short error
+	chunkData[20] = 255
+	if err := recoveredMetadata.binaryGet(chunkData); err == nil {
+		t.Fatal("Expected binaryGet to fail since name length is incorrect")
+	}
+
+	// restore backup
+	chunkData = make([]byte, len(backup))
+	copy(chunkData, backup)
+
+	// mess with name length header to trigger an leftover bytes to read error
+	chunkData[20] = 3
+	if err := recoveredMetadata.binaryGet(chunkData); err == nil {
+		t.Fatal("Expected binaryGet to fail since name length is too small")
+	}
+}
+
+func TestMetadataSerializerLengthCheck(t *testing.T) {
+	metadata := *getTestMetadata()
+
+	// make a slice that is too small to contain the metadata
+	serializedMetadata := make([]byte, 4)
+
+	if err := metadata.binaryPut(serializedMetadata); err == nil {
+		t.Fatal("Expected metadata.binaryPut to fail, since target slice is too small")
+	}
+
 }
