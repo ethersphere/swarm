@@ -111,13 +111,22 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 		return valid
 	}
 
-	// if it is not a metadata chunk, check if it is an update chunk with
+	// if it is not a metadata chunk, check if it is a properly formatted update chunk with
 	// valid signature and proof of ownership of the resource it is trying
 	// to update
 
+	// First, deserialize the chunk
 	var r SignedResourceUpdate
 	if err := r.fromChunk(chunkAddr, data); err != nil {
 		log.Debug("Invalid resource chunk with address %s: %s ", chunkAddr.Hex(), err.Error())
+		return false
+	}
+
+	// check that the lookup information contained in the chunk matches the updateAddr (chunk search key)
+	// that was used to retrieve this chunk
+	// if this validation fails, someone forged a chunk.
+	if !bytes.Equal(chunkAddr, r.updateHeader.UpdateAddr()) {
+		log.Debug("period,version,rootAddr contained in update chunk do not match updateAddr %s", chunkAddr.Hex())
 		return false
 	}
 
@@ -224,7 +233,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	}
 
 	// Make sure we have a cache of the metadata chunk
-	rsrc, err := h.Load(rootAddr)
+	rsrc, err := h.Load(ctx, rootAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +277,6 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 // When looking for the latest update, it starts at the next period after the current time.
 // upon failure tries the corresponding keys of each previous period until one is found
 // (or startTime is reached, in which case there are no updates).
-
 func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, error) {
 
 	rsrc := h.get(params.rootAddr)
@@ -380,8 +388,8 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 
 // Load retrieves the Mutable Resource metadata chunk stored at rootAddr
 // Upon retrieval it creates/updates the index entry for it with metadata corresponding to the chunk contents
-func (h *Handler) Load(rootAddr storage.Address) (*resource, error) {
-	chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), rootAddr, defaultRetrieveTimeout)
+func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource, error) {
+	chunk, err := h.chunkStore.GetWithTimeout(ctx, rootAddr, defaultRetrieveTimeout)
 	if err != nil {
 		return nil, NewError(ErrNotFound, err.Error())
 	}

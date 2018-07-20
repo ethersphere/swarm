@@ -351,12 +351,12 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 		// we need to do some extra work if this is a mutable resource manifest
 		if entry.ContentType == ResourceContentType {
 
-			// get the resource root chunk key
-			log.Trace("resource type", "key", manifestAddr, "hash", entry.Hash)
+			// get the resource rootAddr
+			log.Trace("resource type", "menifestAddr", manifestAddr, "hash", entry.Hash)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
-			metadataChunkKey := storage.Address(common.FromHex(entry.Hash))
-			rsrc, err := a.resource.Load(ctx, metadataChunkKey)
+			rootAddr := storage.Address(common.FromHex(entry.Hash))
+			rsrc, err := a.resource.Load(ctx, rootAddr)
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -365,7 +365,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 			}
 
 			// use this key to retrieve the latest update
-			params := mru.LookupLatest(metadataChunkKey)
+			params := mru.LookupLatest(rootAddr)
 			rsrc, err = a.resource.Lookup(ctx, params)
 			if err != nil {
 				apiGetNotFound.Inc(1)
@@ -379,7 +379,7 @@ func (a *API) Get(ctx context.Context, manifestAddr storage.Address, path string
 			if rsrc.Multihash() {
 
 				// get the data of the update
-				_, rsrcData, err := a.resource.GetContent(metadataChunkKey)
+				_, rsrcData, err := a.resource.GetContent(rootAddr)
 				if err != nil {
 					apiGetNotFound.Inc(1)
 					status = http.StatusNotFound

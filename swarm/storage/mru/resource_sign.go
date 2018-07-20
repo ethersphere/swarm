@@ -41,6 +41,7 @@ type GenericSigner struct {
 	address common.Address
 }
 
+// NewGenericSigner builds a signer that will sign everything with the provided private key
 func NewGenericSigner(privKey *ecdsa.PrivateKey) *GenericSigner {
 	return &GenericSigner{
 		PrivKey: privKey,

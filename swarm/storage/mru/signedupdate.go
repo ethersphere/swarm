@@ -36,7 +36,7 @@ type SignedResourceUpdate struct {
 // Verify checks that signatures are valid and that the signer owns the resource to be updated
 func (r *SignedResourceUpdate) Verify() (err error) {
 	if len(r.data) == 0 {
-		return NewError(ErrInvalidValue, "I refuse to waste swarm space for updates with empty values, amigo (data length is 0)")
+		return NewError(ErrInvalidValue, "Update does not contain data")
 	}
 	if r.signature == nil {
 		return NewError(ErrInvalidSignature, "Missing signature field")
@@ -132,13 +132,6 @@ func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata [
 	if len(sigdata) > 0 {
 		signature = &Signature{}
 		copy(signature[:], sigdata)
-	}
-
-	// check that the lookup information contained in the chunk matches the updateAddr (chunk search key)
-	// that was used to retrieve this chunk
-	// if this validation fails, someone forged a chunk.
-	if !bytes.Equal(updateAddr, r.updateHeader.UpdateAddr()) {
-		return NewError(ErrInvalidSignature, "period,version,rootAddr contained in update chunk do not match updateAddr")
 	}
 
 	r.signature = signature
