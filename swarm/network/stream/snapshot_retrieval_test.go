@@ -200,10 +200,8 @@ func runFileRetrievalTest(nodeCount int) error {
 		if err != nil {
 			return err
 		}
-		if *waitKademlia {
-			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-				return err
-			}
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
 		}
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
@@ -357,10 +355,8 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 		if err != nil {
 			return err
 		}
-		if *waitKademlia {
-			if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-				return err
-			}
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
 		}
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
