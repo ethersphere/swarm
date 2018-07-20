@@ -8,7 +8,8 @@ import (
 )
 
 func getTestUpdateLookup() *UpdateLookup {
-	rootAddr, _ := hexutil.Decode("0xDEADC0DEDEADC0DEDEADC0DEDEADC0DEDEADC0DEDEADC0DEDEADC0DEDEADC0DE")
+	metadata := *getTestMetadata()
+	rootAddr, _, _, _ := metadata.serializeAndHash()
 	return &UpdateLookup{
 		period:   79,
 		version:  2010,
@@ -25,7 +26,7 @@ func compareUpdateLookup(a, b *UpdateLookup) bool {
 func TestUpdateLookupUpdateAddr(t *testing.T) {
 	ul := getTestUpdateLookup()
 	updateAddr := ul.UpdateAddr()
-	compareByteSliceToExpectedHex(t, "updateAddr", updateAddr, "0xd8aece4abcee948c3d2cc726966eb96c8d89a214c86a703bf9824e216f5089f3")
+	compareByteSliceToExpectedHex(t, "updateAddr", updateAddr, "0x8fbc8d4777ef6da790257eda80ab4321fabd08cbdbe67e4e3da6caca386d64e0")
 }
 
 func TestUpdateLookupSerializer(t *testing.T) {
@@ -34,7 +35,7 @@ func TestUpdateLookupSerializer(t *testing.T) {
 	if err := ul.binaryPut(serializedUpdateLookup); err != nil {
 		t.Fatal(err)
 	}
-	compareByteSliceToExpectedHex(t, "serializedUpdateLookup", serializedUpdateLookup, "0x4f000000da070000deadc0dedeadc0dedeadc0dedeadc0dedeadc0dedeadc0dedeadc0dedeadc0de")
+	compareByteSliceToExpectedHex(t, "serializedUpdateLookup", serializedUpdateLookup, "0x4f000000da070000fb0ed7efa696bdb0b54cd75554cc3117ffc891454317df7dd6fefad978e2f2fb")
 
 	// set receiving slice to the wrong size
 	serializedUpdateLookup = make([]byte, updateLookupLength+7)
@@ -51,7 +52,7 @@ func TestUpdateLookupSerializer(t *testing.T) {
 }
 
 func TestUpdateLookupDeserializer(t *testing.T) {
-	serializedUpdateLookup, _ := hexutil.Decode("0x4f000000da070000deadc0dedeadc0dedeadc0dedeadc0dedeadc0dedeadc0dedeadc0dedeadc0de")
+	serializedUpdateLookup, _ := hexutil.Decode("0x4f000000da070000fb0ed7efa696bdb0b54cd75554cc3117ffc891454317df7dd6fefad978e2f2fb")
 	var recoveredUpdateLookup UpdateLookup
 	if err := recoveredUpdateLookup.binaryGet(serializedUpdateLookup); err != nil {
 		t.Fatal(err)
