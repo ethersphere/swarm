@@ -7,13 +7,13 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-const serializedUpdateHeaderHex = "0x4f000000da070000fb0ed7efa696bdb0b54cd75554cc3117ffc891454317df7dd6fefad978e2f2fbf74a10ce8f26ffc8bfaa07c3031a34b2c61f517955e7deb1592daccf96c69cf001"
+const serializedUpdateHeaderMultihashHex = "0x4f000000da070000fb0ed7efa696bdb0b54cd75554cc3117ffc891454317df7dd6fefad978e2f2fbf74a10ce8f26ffc8bfaa07c3031a34b2c61f517955e7deb1592daccf96c69cf001"
 
-func getTestUpdateHeader() (header *updateHeader) {
+func getTestUpdateHeader(multihash bool) (header *updateHeader) {
 	_, metaHash, _, _ := getTestMetadata().serializeAndHash()
 	return &updateHeader{
 		UpdateLookup: *getTestUpdateLookup(),
-		multihash:    true,
+		multihash:    multihash,
 		metaHash:     metaHash,
 	}
 }
@@ -25,12 +25,12 @@ func compareUpdateHeader(a, b *updateHeader) bool {
 }
 
 func TestUpdateHeaderSerializer(t *testing.T) {
-	header := getTestUpdateHeader()
+	header := getTestUpdateHeader(true)
 	serializedHeader := make([]byte, updateHeaderLength)
 	if err := header.binaryPut(serializedHeader); err != nil {
 		t.Fatal(err)
 	}
-	compareByteSliceToExpectedHex(t, "serializedHeader", serializedHeader, serializedUpdateHeaderHex)
+	compareByteSliceToExpectedHex(t, "serializedHeader", serializedHeader, serializedUpdateHeaderMultihashHex)
 
 	// trigger incorrect slice length error passing a slice that is 1 byte too big
 	if err := header.binaryPut(make([]byte, updateHeaderLength+1)); err == nil {
@@ -45,8 +45,8 @@ func TestUpdateHeaderSerializer(t *testing.T) {
 }
 
 func TestUpdateHeaderDeserializer(t *testing.T) {
-	originalUpdate := getTestUpdateHeader()
-	serializedData, _ := hexutil.Decode(serializedUpdateHeaderHex)
+	originalUpdate := getTestUpdateHeader(true)
+	serializedData, _ := hexutil.Decode(serializedUpdateHeaderMultihashHex)
 	var retrievedUpdate updateHeader
 	if err := retrievedUpdate.binaryGet(serializedData); err != nil {
 		t.Fatal(err)

@@ -22,7 +22,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // resourceUpdate encapsulates the information sent as part of a resource update
@@ -47,11 +46,6 @@ const maxUpdateDataLength = chunkSize - signatureLength - updateHeaderLength - c
 
 // binaryPut serializes the resource update information into the given slice
 func (r *resourceUpdate) binaryPut(serializedData []byte) error {
-	if len(r.rootAddr) != storage.KeyLength || len(r.metaHash) != storage.KeyLength {
-		log.Warn("Call to newUpdateChunk with incorrect rootAddr or metaHash")
-		return NewError(ErrInvalidValue, "newUpdateChunk called without rootAddr or metaHash set")
-	}
-
 	datalength := len(r.data)
 	if datalength == 0 {
 		return NewError(ErrInvalidValue, "cannot update a resource with no data")
@@ -62,7 +56,7 @@ func (r *resourceUpdate) binaryPut(serializedData []byte) error {
 	}
 
 	if len(serializedData) != r.binaryLength() {
-		return NewError(ErrInvalidValue, "slice passed to putBinary must be of exact size")
+		return NewErrorf(ErrInvalidValue, "slice passed to putBinary must be of exact size. Expected %d bytes", r.binaryLength())
 	}
 
 	if r.multihash {
