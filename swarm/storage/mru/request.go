@@ -43,14 +43,14 @@ type updateRequestJSON struct {
 // Request represents an update and/or resource create message
 type Request struct {
 	SignedResourceUpdate
-	metadata ResourceMetadata
+	metadata ResourceID
 	isNew    bool
 }
 
 var zeroAddr = common.Address{}
 
 // NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
-func NewCreateUpdateRequest(metadata *ResourceMetadata) (*Request, error) {
+func NewCreateUpdateRequest(metadata *ResourceID) (*Request, error) {
 
 	request, err := NewCreateRequest(metadata)
 	if err != nil {
@@ -69,7 +69,7 @@ func NewCreateUpdateRequest(metadata *ResourceMetadata) (*Request, error) {
 }
 
 // NewCreateRequest returns a request to create a new resource
-func NewCreateRequest(metadata *ResourceMetadata) (request *Request, err error) {
+func NewCreateRequest(metadata *ResourceID) (request *Request, err error) {
 	if metadata.StartTime.Time == 0 { // get the current time
 		metadata.StartTime = TimestampProvider.Now()
 	}
@@ -93,7 +93,7 @@ func (r *Request) Frequency() uint64 {
 
 // Name returns the resource human-readable name
 func (r *Request) Name() string {
-	return r.metadata.Name
+	return r.metadata.Topic
 }
 
 // Multihash returns true if the resource data should be interpreted as a multihash
@@ -163,7 +163,7 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 	r.version = j.Version
 	r.period = j.Period
 	r.multihash = j.Multihash
-	r.metadata.Name = j.Name
+	r.metadata.Topic = j.Name
 	r.metadata.Frequency = j.Frequency
 	r.metadata.StartTime.Time = j.StartTime
 
@@ -280,7 +280,7 @@ func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	}
 
 	requestJSON := &updateRequestJSON{
-		Name:      r.metadata.Name,
+		Name:      r.metadata.Topic,
 		Frequency: r.metadata.Frequency,
 		StartTime: r.metadata.StartTime.Time,
 		Version:   r.version,

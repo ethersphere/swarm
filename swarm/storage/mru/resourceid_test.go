@@ -27,9 +27,9 @@ func compareByteSliceToExpectedHex(t *testing.T, variableName string, actualValu
 	}
 }
 
-func getTestMetadata() *ResourceMetadata {
-	return &ResourceMetadata{
-		Name: "world news report, every hour, on the hour",
+func getTestMetadata() *ResourceID {
+	return &ResourceID{
+		Topic: "world news report, every hour, on the hour",
 		StartTime: Timestamp{
 			Time: 1528880400,
 		},
@@ -53,7 +53,7 @@ func TestMetadataSerializerDeserializer(t *testing.T) {
 	compareByteSliceToExpectedHex(t, "metaHash", metaHash, expectedMetaHash)
 	compareByteSliceToExpectedHex(t, "chunkData", chunkData, expectedChunkData)
 
-	recoveredMetadata := ResourceMetadata{}
+	recoveredMetadata := ResourceID{}
 	recoveredMetadata.binaryGet(chunkData)
 
 	if recoveredMetadata != metadata {

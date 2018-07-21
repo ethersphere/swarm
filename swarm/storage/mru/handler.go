@@ -195,7 +195,7 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 	request.rootAddr = chunk.Addr
 
 	h.chunkStore.Put(ctx, chunk)
-	log.Debug("new resource", "name", request.metadata.Name, "startTime", request.metadata.StartTime, "frequency", request.metadata.Frequency, "owner", request.metadata.Owner)
+	log.Debug("new resource", "name", request.metadata.Topic, "startTime", request.metadata.StartTime, "frequency", request.metadata.Frequency, "owner", request.metadata.Owner)
 
 	// create the internal index for the resource and populate it with its metadata
 	rsrc := &resource{
@@ -206,8 +206,8 @@ func (h *Handler) New(ctx context.Context, request *Request) error {
 				},
 			},
 		},
-		ResourceMetadata: request.metadata,
-		updated:          time.Now(),
+		ResourceID: request.metadata,
+		updated:    time.Now(),
 	}
 	h.set(chunk.Addr, rsrc)
 
@@ -248,7 +248,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, rootAddr storage.Address
 	updateRequest.multihash = rsrc.multihash
 	updateRequest.rootAddr = rsrc.rootAddr
 	updateRequest.metaHash = rsrc.metaHash
-	updateRequest.metadata = rsrc.ResourceMetadata
+	updateRequest.metadata = rsrc.ResourceID
 
 	// if we already have an update for this period then increment version
 	// resource object MUST be in sync for version to be correct, but we checked this earlier in the method already
@@ -388,7 +388,7 @@ func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource
 	// create the index entry
 	rsrc := &resource{}
 
-	if err := rsrc.ResourceMetadata.binaryGet(chunk.SData); err != nil { // Will fail if this is not really a metadata chunk
+	if err := rsrc.ResourceID.binaryGet(chunk.SData); err != nil { // Will fail if this is not really a metadata chunk
 		return nil, err
 	}
 
@@ -397,7 +397,7 @@ func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource
 		return nil, NewError(ErrCorruptData, "Corrupt metadata chunk")
 	}
 	h.set(rootAddr, rsrc)
-	log.Trace("resource index load", "rootkey", rootAddr, "name", rsrc.ResourceMetadata.Name, "starttime", rsrc.ResourceMetadata.StartTime, "frequency", rsrc.ResourceMetadata.Frequency)
+	log.Trace("resource index load", "rootkey", rootAddr, "name", rsrc.ResourceID.Topic, "starttime", rsrc.ResourceID.StartTime, "frequency", rsrc.ResourceID.Frequency)
 	return rsrc, nil
 }
 
@@ -409,7 +409,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		return nil, err
 	}
-	log.Trace("resource index update", "name", rsrc.ResourceMetadata.Name, "updatekey", chunk.Addr, "period", r.period, "version", r.version)
+	log.Trace("resource index update", "name", rsrc.ResourceID.Topic, "updatekey", chunk.Addr, "period", r.period, "version", r.version)
 
 	// update our rsrcs entry map
 	rsrc.lastKey = chunk.Addr
@@ -420,7 +420,7 @@ func (h *Handler) updateIndex(rsrc *resource, chunk *storage.Chunk) (*resource, 
 	rsrc.multihash = r.multihash
 	copy(rsrc.data, r.data)
 	rsrc.Reader = bytes.NewReader(rsrc.data)
-	log.Debug("resource synced", "name", rsrc.ResourceMetadata.Name, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
+	log.Debug("resource synced", "name", rsrc.ResourceID.Topic, "updateAddr", chunk.Addr, "period", rsrc.period, "version", rsrc.version)
 	h.set(chunk.Addr, rsrc)
 	return rsrc, nil
 }

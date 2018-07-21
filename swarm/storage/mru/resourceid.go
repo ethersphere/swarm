@@ -24,12 +24,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// ResourceMetadata encapsulates the immutable information about a mutable resource :)
-// once serialized into a chunk, the resource can be retrieved by knowing its content-addressed rootAddr
-type ResourceMetadata struct {
+// ResourceID encapsulates the immutable information about a mutable resource :)
+type ResourceID struct {
 	StartTime Timestamp      // time at which the resource starts to be valid
 	Frequency uint64         // expected update frequency for the resource
-	Name      string         // name of the resource, for the reference of the user or to disambiguate resources with same starttime, frequency, owneraddr
+	Topic     string         // name of the resource, for the reference of the user or to disambiguate resources with same starttime, frequency, owneraddr
 	Owner     common.Address // public address of the resource owner
 }
 
@@ -46,7 +45,7 @@ const nameLengthLength = 1
 const minimumMetadataLength = chunkPrefixLength + timestampLength + frequencyLength + nameLengthLength + common.AddressLength
 
 // binaryGet populates the resource metadata from a byte array
-func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
+func (r *ResourceID) binaryGet(serializedData []byte) error {
 	if len(serializedData) < minimumMetadataLength {
 		return NewErrorf(ErrInvalidValue, "Metadata chunk to deserialize is too short. Expected at least %d. Got %d.", minimumMetadataLength, len(serializedData))
 	}
@@ -77,7 +76,7 @@ func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Metadata chunk to deserialize is too short when decoding resource name. Expected at least %d. Got %d.", nameLength+minimumMetadataLength, len(serializedData))
 	}
 	cursor++
-	r.Name = string(serializedData[cursor : cursor+nameLength])
+	r.Topic = string(serializedData[cursor : cursor+nameLength])
 	cursor += nameLength
 
 	copy(r.Owner[:], serializedData[cursor:])
@@ -89,7 +88,7 @@ func (r *ResourceMetadata) binaryGet(serializedData []byte) error {
 }
 
 // binaryPut encodes the metadata into a byte array
-func (r *ResourceMetadata) binaryPut(serializedData []byte) error {
+func (r *ResourceID) binaryPut(serializedData []byte) error {
 	metadataChunkLength := r.binaryLength()
 	if len(serializedData) != metadataChunkLength {
 		return NewErrorf(ErrInvalidValue, "Need a slice of exactly %d bytes to serialize this metadata, but got a slice of size %d.", metadataChunkLength, len(serializedData))
@@ -109,13 +108,13 @@ func (r *ResourceMetadata) binaryPut(serializedData []byte) error {
 
 	// Encode the name string as a 1 byte length followed by the encoded string.
 	// Longer strings will be truncated.
-	nameLength := len(r.Name)
+	nameLength := len(r.Topic)
 	if nameLength > 255 {
 		nameLength = 255
 	}
 	serializedData[cursor] = uint8(nameLength)
 	cursor++
-	copy(serializedData[cursor:cursor+nameLength], []byte(r.Name[:nameLength]))
+	copy(serializedData[cursor:cursor+nameLength], []byte(r.Topic[:nameLength]))
 	cursor += nameLength
 
 	copy(serializedData[cursor:cursor+common.AddressLength], r.Owner[:])
@@ -124,13 +123,13 @@ func (r *ResourceMetadata) binaryPut(serializedData []byte) error {
 	return nil
 }
 
-func (r *ResourceMetadata) binaryLength() int {
-	return minimumMetadataLength + len(r.Name)
+func (r *ResourceID) binaryLength() int {
+	return minimumMetadataLength + len(r.Topic)
 }
 
 // serializeAndHash returns the root chunk addr and metadata hash that help identify and ascertain ownership of this resource
 // returns the serialized metadata as a byproduct of having to hash it.
-func (r *ResourceMetadata) serializeAndHash() (rootAddr, metaHash []byte, chunkData []byte, err error) {
+func (r *ResourceID) serializeAndHash() (rootAddr, metaHash []byte, chunkData []byte, err error) {
 
 	chunkData = make([]byte, r.binaryLength())
 	if err := r.binaryPut(chunkData); err != nil {
@@ -142,7 +141,7 @@ func (r *ResourceMetadata) serializeAndHash() (rootAddr, metaHash []byte, chunkD
 }
 
 // creates a metadata chunk out of a resourceMetadata structure
-func (metadata *ResourceMetadata) newChunk() (chunk *storage.Chunk, metaHash []byte, err error) {
+func (metadata *ResourceID) newChunk() (chunk *storage.Chunk, metaHash []byte, err error) {
 	// the metadata chunk contains a timestamp of when the resource starts to be valid
 	// and also how frequently it is expected to be updated
 	// from this we know at what time we should look for updates, and how often

@@ -394,8 +394,8 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 	// our mutable resource "name"
 	resourceName := "foo.eth"
 
-	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
-		Name:      resourceName,
+	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
+		Topic:     resourceName,
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
 		Owner:     signer.Address(),
@@ -449,8 +449,8 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	// our mutable resource name
 	resourceName := "El Quijote"
 
-	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceMetadata{
-		Name:      resourceName,
+	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
+		Topic:     resourceName,
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
 		Owner:     signer.Address(),

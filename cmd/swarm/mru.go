@@ -62,8 +62,8 @@ func resourceCreate(ctx *cli.Context) {
 		return
 	}
 
-	metadata := mru.ResourceMetadata{
-		Name:      name,
+	metadata := mru.ResourceID{
+		Topic:     name,
 		Frequency: frequency,
 		Owner:     signer.Address(),
 	}

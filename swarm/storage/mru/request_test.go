@@ -33,8 +33,8 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	falseSigner := newBobSigner() //Bob will play the bad guy again
 
 	// Create a resource to our good guy Charlie's name
-	createRequest, err := NewCreateRequest(&ResourceMetadata{
-		Name:      "a good resource name",
+	createRequest, err := NewCreateRequest(&ResourceID{
+		Topic:     "a good resource name",
 		Frequency: 300,
 		StartTime: Timestamp{Time: 1528900000},
 		Owner:     signer.Address()})
