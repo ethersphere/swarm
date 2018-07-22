@@ -31,7 +31,7 @@ func testBinarySerializerRecovery(t *testing.T, bin binarySerializer, expectedHe
 		t.Fatalf("Expected that the recovered %s equals the marshalled %s", name, name)
 	}
 
-	serializedWrongLength := make([]byte, bin.binaryLength()+7)
+	serializedWrongLength := make([]byte, 1)
 	copy(serializedWrongLength[:], serialized)
 	if err := recovered.binaryGet(serializedWrongLength); err == nil {
 		t.Fatalf("Expected %s.binaryGet to fail since data is too small", name)

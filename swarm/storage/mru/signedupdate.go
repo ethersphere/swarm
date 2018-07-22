@@ -33,6 +33,11 @@ type SignedResourceUpdate struct {
 	binaryData     []byte          // resulting serialized data (not serialized, for efficiency/internal use)
 }
 
+// SignedResourceUpdate layout
+// resourceUpdate bytes
+// SignatureLength bytes
+const minimumSignedUpdateLength = minimumUpdateDataLength + signatureLength
+
 // Verify checks that signatures are valid and that the signer owns the resource to be updated
 func (r *SignedResourceUpdate) Verify() (err error) {
 	if len(r.data) == 0 {
@@ -48,18 +53,16 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 	}
 
 	// get the address of the signer (which also checks that it's a valid signature)
-	ownerAddr, err := getOwner(digest, *r.signature)
+	r.viewID.ownerAddr, err = getOwner(digest, *r.signature)
 	if err != nil {
 		return err
 	}
 
+	// check that the lookup information contained in the chunk matches the updateAddr (chunk search key)
+	// that was used to retrieve this chunk
+	// if this validation fails, someone forged a chunk.
 	if !bytes.Equal(r.updateAddr, r.UpdateAddr()) {
-		return NewError(ErrInvalidSignature, "Signature address does not match with ownerAddr")
-	}
-
-	// Check if who signed the resource update really owns the resource
-	if !verifyOwner(ownerAddr, r.metaHash, r.rootAddr) {
-		return NewErrorf(ErrUnauthorized, "signature is valid but signer does not own the resource: %v", err)
+		return NewError(ErrInvalidSignature, "Signature address does not match with update ownerAddr")
 	}
 
 	return nil
@@ -102,7 +105,7 @@ func (r *SignedResourceUpdate) toChunk() (*storage.Chunk, error) {
 	// For efficiency, data is serialized during signature and cached in
 	// the binaryData field when computing the signature digest in .getDigest()
 	if r.signature == nil || r.binaryData == nil {
-		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature or payload data. Call .Sign() first.")
+		return nil, NewError(ErrInvalidSignature, "toChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
 	chunk := storage.NewChunk(r.updateAddr, nil)
@@ -121,7 +124,7 @@ func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata [
 	// for update chunk layout see SignedResourceUpdate definition
 
 	//deserialize the resource update portion
-	if err := r.resourceUpdate.binaryGet(chunkdata); err != nil {
+	if err := r.resourceUpdate.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
 		return err
 	}
 
@@ -142,7 +145,7 @@ func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata [
 
 }
 
-// GetDigest creates the resource update digest used in signatures (formerly known as keyDataHash)
+// GetDigest creates the resource update digest used in signatures
 // the serialized payload is cached in .binaryData
 func (r *SignedResourceUpdate) GetDigest() (result common.Hash, err error) {
 	hasher := hashPool.Get().(hash.Hash)
@@ -167,18 +170,4 @@ func getOwner(digest common.Hash, signature Signature) (common.Address, error) {
 		return common.Address{}, err
 	}
 	return crypto.PubkeyToAddress(*pub), nil
-}
-
-// verifyResourceOwnerhsip checks that the signer of the update actually owns the resource
-// H(ownerAddr, metaHash) is computed. If it matches the rootAddr the update chunk is claiming
-// to update, it is proven that signer of the resource update owns the resource.
-// See metadataHash in metadata.go for a more detailed explanation
-func verifyOwner(ownerAddr common.Address, metaHash []byte, rootAddr storage.Address) bool {
-	hasher := hashPool.Get().(hash.Hash)
-	defer hashPool.Put(hasher)
-	hasher.Reset()
-	hasher.Write(metaHash)
-	hasher.Write(ownerAddr.Bytes())
-	rootAddr2 := hasher.Sum(nil)
-	return bytes.Equal(rootAddr2, rootAddr)
 }
