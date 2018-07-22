@@ -17,13 +17,15 @@ func testBinarySerializerRecovery(t *testing.T, bin binarySerializer, expectedHe
 	name := reflect.TypeOf(bin).Elem().Name()
 	serialized := make([]byte, bin.binaryLength())
 	if err := bin.binaryPut(serialized); err != nil {
-		t.Fatal(err)
+		t.Fatalf("%s.binaryPut error when trying to serialize structure: %s", name, err)
 	}
 
 	compareByteSliceToExpectedHex(t, name, serialized, expectedHex)
 
 	recovered := reflect.New(reflect.TypeOf(bin).Elem()).Interface().(binarySerializer)
-	recovered.binaryGet(serialized)
+	if err := recovered.binaryGet(serialized); err != nil {
+		t.Fatalf("%s.binaryGet error when trying to deserialize structure: %s", name, err)
+	}
 
 	if !reflect.DeepEqual(bin, recovered) {
 		t.Fatalf("Expected that the recovered %s equals the marshalled %s", name, name)
