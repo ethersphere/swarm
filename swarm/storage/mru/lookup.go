@@ -32,47 +32,49 @@ type LookupParams struct {
 }
 
 // RootAddr returns the metadata chunk address
-func (r *LookupParams) RootAddr() storage.Address {
-	return r.rootAddr
+func (r *LookupParams) ViewID() *ResourceViewID {
+	return &r.viewID
 }
 
-func NewLookupParams(rootAddr storage.Address, period, version uint32, limit uint32) *LookupParams {
+func NewLookupParams(viewID *ResourceViewID, period, version uint32, limit uint32) *LookupParams {
 	return &LookupParams{
 		UpdateLookup: UpdateLookup{
-			period:   period,
-			version:  version,
-			rootAddr: rootAddr,
+			period:  period,
+			version: version,
+			viewID:  *viewID,
 		},
 		Limit: limit,
 	}
 }
 
 // LookupLatest generates lookup parameters that look for the latest version of a resource
-func LookupLatest(rootAddr storage.Address) *LookupParams {
-	return NewLookupParams(rootAddr, 0, 0, 0)
+func LookupLatest(viewID *ResourceViewID) *LookupParams {
+	return NewLookupParams(viewID, 0, 0, 0)
 }
 
 // LookupLatestVersionInPeriod generates lookup parameters that look for the latest version of a resource in a given period
-func LookupLatestVersionInPeriod(rootAddr storage.Address, period uint32) *LookupParams {
-	return NewLookupParams(rootAddr, period, 0, 0)
+func LookupLatestVersionInPeriod(viewID *ResourceViewID, period uint32) *LookupParams {
+	return NewLookupParams(viewID, period, 0, 0)
 }
 
 // LookupVersion generates lookup parameters that look for a specific version of a resource
-func LookupVersion(rootAddr storage.Address, period, version uint32) *LookupParams {
-	return NewLookupParams(rootAddr, period, version, 0)
+func LookupVersion(viewID *ResourceViewID, period, version uint32) *LookupParams {
+	return NewLookupParams(viewID, period, version, 0)
 }
 
 // UpdateLookup represents the components of a resource update search key
 type UpdateLookup struct {
-	period   uint32
-	version  uint32
-	rootAddr storage.Address
+	viewID  ResourceViewID
+	period  uint32
+	version uint32
 }
 
+// UpdateLookup layout:
+// ResourceIDLength bytes
+// ownerAddr common.AddressLength bytes
 // 4 bytes period
 // 4 bytes version
-// storage.Keylength for rootAddr
-const updateLookupLength = 4 + 4 + storage.KeyLength
+const updateLookupLength = resourceViewIDLength + 4 + 4
 
 // UpdateAddr calculates the resource update chunk address corresponding to this lookup key
 func (u *UpdateLookup) UpdateAddr() (updateAddr storage.Address) {
@@ -90,12 +92,18 @@ func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 	if len(serializedData) != updateLookupLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))
 	}
-	if len(u.rootAddr) != storage.KeyLength {
-		return NewError(ErrInvalidValue, "UpdateLookup.binaryPut called without rootAddr set")
+	var cursor int
+	if err := u.viewID.binaryPut(serializedData[cursor : cursor+resourceViewIDLength]); err != nil {
+		return err
 	}
-	binary.LittleEndian.PutUint32(serializedData[:4], u.period)
-	binary.LittleEndian.PutUint32(serializedData[4:8], u.version)
-	copy(serializedData[8:], u.rootAddr[:])
+	cursor += resourceViewIDLength
+
+	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.period)
+	cursor += 4
+
+	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.version)
+	cursor += 4
+
 	return nil
 }
 
@@ -109,9 +117,18 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	if len(serializedData) != updateLookupLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))
 	}
-	u.period = binary.LittleEndian.Uint32(serializedData[:4])
-	u.version = binary.LittleEndian.Uint32(serializedData[4:8])
-	u.rootAddr = storage.Address(make([]byte, storage.KeyLength))
-	copy(u.rootAddr[:], serializedData[8:])
+
+	var cursor int
+	if err := u.viewID.binaryGet(serializedData[cursor : cursor+resourceViewIDLength]); err != nil {
+		return err
+	}
+	cursor += resourceViewIDLength
+
+	u.period = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
+	cursor += 4
+
+	u.version = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
+	cursor += 4
+
 	return nil
 }
