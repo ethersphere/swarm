@@ -29,15 +29,15 @@ func areEqualJSON(s1, s2 string) (bool, error) {
 // while also checking cryptographically that only the owner of a resource can update it.
 func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
-	signer := newCharlieSigner()  //Charlie, our good guy
-	falseSigner := newBobSigner() //Bob will play the bad guy again
+	charlie := newCharlieSigner() //Charlie
+	bob := newBobSigner()         //Bob
 
 	// Create a resource to our good guy Charlie's name
 	createRequest, err := NewCreateRequest(&ResourceID{
-		Topic:     "a good resource name",
+		Topic:     NewTopic("a good resource name", nil),
 		Frequency: 300,
 		StartTime: Timestamp{Time: 1528900000},
-		Owner:     signer.Address()})
+	})
 
 	if err != nil {
 		t.Fatalf("Error creating resource name: %s", err)
@@ -64,10 +64,8 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	// and recover the information above. To sign an update, we need the rootAddr and the metaHash to construct
 	// proof of ownership
 
-	metaHash := createRequest.metaHash
-	rootAddr := createRequest.rootAddr
-	const expectedSignature = "0x1c2bab66dc4ed63783d62934e3a628e517888d6949aef0349f3bd677121db9aa09bbfb865904e6c50360e209e0fe6fe757f8a2474cf1b34169c99b95e3fd5a5101"
-	const expectedJSON = `{"rootAddr":"0x6e744a730f7ea0881528576f0354b6268b98e35a6981ef703153ff1b8d32bbef","metaHash":"0x0c0d5c18b89da503af92302a1a64fab6acb60f78e288eb9c3d541655cd359b60","version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421","multiHash":false}`
+	const expectedSignature = "0x4d1a7790f06379a3f9ccc1c3952017ebb9aba1aee4b4b767806598663d9472c743f97dc1eaa4aab4ed5db8784346ff681e379160175aebdbc4812167f93a8ec600"
+	const expectedJSON = `{"topic":"0x6120676f6f64207265736f75726365206e616d65000000000000000000000000","frequency":300,"startTime":1528900000,"ownerAddr":"0x0000000000000000000000000000000000000000","version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
 
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
@@ -76,12 +74,10 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 			resourceUpdate: resourceUpdate{
 				updateHeader: updateHeader{
 					UpdateLookup: UpdateLookup{
-						period:   7,
-						version:  1,
-						rootAddr: rootAddr,
+						period:  7,
+						version: 1,
+						viewID:  createRequest.resourceUpdate.viewID,
 					},
-					multihash: false,
-					metaHash:  metaHash,
 				},
 				data: data,
 			},
@@ -110,7 +106,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	}
 
 	//sign the request and see if it matches our predefined signature above.
-	if err := recoveredRequest.Sign(signer); err != nil {
+	if err := recoveredRequest.Sign(charlie); err != nil {
 		t.Fatalf("Error signing request: %s", err)
 	}
 
@@ -129,9 +125,9 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatal("Expected DecodeUpdateRequest to fail when trying to interpret a corrupt message with an invalid signature")
 	}
 
-	// Now imagine Evil Bob (why always Bob, poor Bob) attempts to update Charlie's resource,
+	// Now imagine Bob wants to create an update of his own about the same resource,
 	// signing a message with his private key
-	if err := request.Sign(falseSigner); err != nil {
+	if err := request.Sign(bob); err != nil {
 		t.Fatalf("Error signing: %s", err)
 	}
 
@@ -147,7 +143,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatalf("Error decoding message:%s", err)
 	}
 
-	// Before discovering Bob's misdemeanor, let's see what would happen if we mess
+	// Before checking what happened with Bob's update, let's see what would happen if we mess
 	// with the signature big time to see if Verify catches it
 	savedSignature := *recoveredRequest.signature                               // save the signature for later
 	binary.LittleEndian.PutUint64(recoveredRequest.signature[5:], 556845463424) // write some random data to break the signature
@@ -155,21 +151,27 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatal("Expected Verify to fail on corrupt signature")
 	}
 
-	// restore the Evil Bob's signature from corruption
+	// restore the Bob's signature from corruption
 	*recoveredRequest.signature = savedSignature
 
-	// Now the signature is not corrupt, however Verify should now fail because Bob doesn't own the resource
-	if err = recoveredRequest.Verify(); err == nil {
-		t.Fatalf("Expected Verify to fail because this resource belongs to Charlie, not Bob the attacker:%s", err)
+	// Now the signature is not corrupt
+	if err = recoveredRequest.Verify(); err != nil {
+		t.Fatal(err)
 	}
 
-	// Sign with our friend Charlie's private key
-	if err := recoveredRequest.Sign(signer); err != nil {
+	// Reuse object and sign with our friend Charlie's private key
+	if err := recoveredRequest.Sign(charlie); err != nil {
 		t.Fatalf("Error signing with the correct private key: %s", err)
 	}
 
-	// And now, Verify should work since this resource belongs to Charlie
+	// And now, Verify should work since this update now belongs to Charlie
 	if err = recoveredRequest.Verify(); err != nil {
-		t.Fatalf("Error verifying that Charlie, the good guy, can sign his resource:%s", err)
+		t.Fatalf("Error verifying that Charlie, can sign a reused request object:%s", err)
+	}
+
+	// mess with the lookup key to make sure Verify fails:
+	recoveredRequest.version = 999
+	if err = recoveredRequest.Verify(); err == nil {
+		t.Fatalf("Expected Verify to fail since the lookup key has been altered")
 	}
 }

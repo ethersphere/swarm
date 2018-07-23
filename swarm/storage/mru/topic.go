@@ -23,15 +23,15 @@ func NewTopic(name string, relatedContent storage.Address) Topic {
 	return topic
 }
 
-func (t Topic) Hex() string {
+func (t *Topic) Hex() string {
 	return hexutil.Encode(t[:])
 }
 
-func (t Topic) FromHex(hex string) error {
+func (t *Topic) FromHex(hex string) error {
 	return decodeHexArray(t[:], hex, "Topic")
 }
 
-func (t Topic) Name(relatedContent storage.Address) string {
+func (t *Topic) Name(relatedContent storage.Address) string {
 	nameBytes := t
 	bitutil.XORBytes(nameBytes[:], t[:], relatedContent)
 	z := bytes.IndexByte(nameBytes[:], 0)
