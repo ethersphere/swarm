@@ -70,7 +70,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 
 // Sign executes the signature to validate the resource
 func (r *SignedResourceUpdate) Sign(signer Signer) error {
-
+	r.viewID.ownerAddr = signer.Address()
 	r.binaryData = nil           //invalidate serialized data
 	digest, err := r.GetDigest() // computes digest and serializes into .binaryData
 	if err != nil {

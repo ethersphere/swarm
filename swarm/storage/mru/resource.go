@@ -25,7 +25,6 @@ import (
 )
 
 const (
-	defaultStoreTimeout    = 4000 * time.Millisecond
 	hasherCount            = 8
 	resourceHashAlgorithm  = storage.SHA3Hash
 	defaultRetrieveTimeout = 100 * time.Millisecond
@@ -34,32 +33,18 @@ const (
 // resource caches resource data and the metadata of its root chunk.
 type resource struct {
 	resourceUpdate
-	ResourceID
 	*bytes.Reader
 	lastKey storage.Address
-	updated time.Time
-}
-
-func (r *resource) Context() context.Context {
-	return context.TODO()
-}
-
-// TODO Expire content after a defined period (to force resync)
-func (r *resource) isSynced() bool {
-	return !r.updated.IsZero()
 }
 
 // implements storage.LazySectionReader
 func (r *resource) Size(ctx context.Context, _ chan bool) (int64, error) {
-	if !r.isSynced() {
-		return 0, NewError(ErrNotSynced, "Not synced")
-	}
 	return int64(len(r.resourceUpdate.data)), nil
 }
 
-//returns the resource's human-readable name
-func (r *resource) Name() string {
-	return r.ResourceID.Topic
+//returns the resource's topic
+func (r *resource) Topic() Topic {
+	return r.viewID.resourceID.Topic
 }
 
 // Helper function to calculate the next update period number from the current time, start time and frequency
