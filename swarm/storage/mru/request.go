@@ -25,14 +25,11 @@ import (
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
-	Topic     string `json:"topic,omitempty"`
-	Frequency uint64 `json:"frequency,omitempty"`
-	StartTime uint64 `json:"startTime,omitempty"`
-	Owner     string `json:"ownerAddr,omitempty"`
-	Version   uint32 `json:"version,omitempty"`
-	Period    uint32 `json:"period,omitempty"`
-	Data      string `json:"data,omitempty"`
-	Signature string `json:"signature,omitempty"`
+	ViewID    *ResourceViewID `json:"viewId"`
+	Version   uint32          `json:"version,omitempty"`
+	Period    uint32          `json:"period,omitempty"`
+	Data      string          `json:"data,omitempty"`
+	Signature string          `json:"signature,omitempty"`
 }
 
 // Request represents an update and/or resource create message
@@ -144,16 +141,7 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 
 	r.version = j.Version
 	r.period = j.Period
-	r.viewID.resourceID.Frequency = j.Frequency
-	r.viewID.resourceID.StartTime.Time = j.StartTime
-
-	if err := r.viewID.resourceID.Topic.FromHex(j.Topic); err != nil {
-		return err
-	}
-
-	if err := decodeHexArray(r.viewID.ownerAddr[:], j.Owner, "ownerAddr"); err != nil {
-		return err
-	}
+	r.viewID = *j.ViewID
 
 	var err error
 	if j.Data != "" {
@@ -216,20 +204,11 @@ func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	if r.data != nil {
 		dataString = hexutil.Encode(r.data)
 	}
-	var ownerAddrString string
-	if r.viewID.resourceID.Frequency == 0 {
-		ownerAddrString = ""
-	} else {
-		ownerAddrString = hexutil.Encode(r.viewID.ownerAddr[:])
-	}
 
 	requestJSON := &updateRequestJSON{
-		Topic:     r.viewID.resourceID.Topic.Hex(),
-		Frequency: r.viewID.resourceID.Frequency,
-		StartTime: r.viewID.resourceID.StartTime.Time,
+		ViewID:    &r.viewID,
 		Version:   r.version,
 		Period:    r.period,
-		Owner:     ownerAddrString,
 		Data:      dataString,
 		Signature: signatureString,
 	}

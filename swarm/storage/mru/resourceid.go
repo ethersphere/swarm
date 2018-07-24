@@ -22,9 +22,9 @@ import (
 
 // ResourceID encapsulates the immutable information about a mutable resource :)
 type ResourceID struct {
-	StartTime Timestamp // time at which the resource starts to be valid
-	Frequency uint64    // expected update frequency for the resource
-	Topic     Topic     // resource topic, for the reference of the user, to disambiguate resources with same starttime, frequency or to reference another hash
+	StartTime Timestamp `json:"startTime"` // time at which the resource starts to be valid
+	Frequency uint64    `json:"frequency"` // expected update frequency for the resource
+	Topic     Topic     `json:"topic"`     // resource topic, for the reference of the user, to disambiguate resources with same starttime, frequency or to reference another hash
 }
 
 const frequencyLength = 8 // sizeof(uint64)
@@ -51,7 +51,7 @@ func (r *ResourceID) binaryGet(serializedData []byte) error {
 	r.Frequency = binary.LittleEndian.Uint64(serializedData[cursor : cursor+frequencyLength])
 	cursor += frequencyLength
 
-	copy(r.Topic[:], serializedData[cursor:cursor+topicLength])
+	copy(r.Topic.content[:], serializedData[cursor:cursor+topicLength])
 	cursor += topicLength
 	return nil
 }
@@ -68,7 +68,7 @@ func (r *ResourceID) binaryPut(serializedData []byte) error {
 	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+frequencyLength], r.Frequency)
 	cursor += frequencyLength
 
-	copy(serializedData[cursor:cursor+topicLength], r.Topic[:topicLength])
+	copy(serializedData[cursor:cursor+topicLength], r.Topic.content[:topicLength])
 	cursor += topicLength
 
 	return nil

@@ -1,15 +1,17 @@
 package mru
 
 import (
+	"encoding/json"
 	"hash"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 // ResourceViewID represents a particular user's view of a resource ID
 type ResourceViewID struct {
-	resourceID ResourceID
-	ownerAddr  common.Address
+	resourceID ResourceID     `json:"resourceId"`
+	ownerAddr  common.Address `json:"ownerAddr"`
 }
 
 type ViewIDAddr []byte
@@ -68,4 +70,32 @@ func (u *ResourceViewID) binaryGet(serializedData []byte) error {
 	cursor += common.AddressLength
 
 	return nil
+}
+
+func (u *ResourceViewID) Hex() string {
+	serializedData := make([]byte, resourceViewIDLength)
+	u.binaryPut(serializedData)
+	return hexutil.Encode(serializedData)
+}
+
+type resourceViewIDJSON struct {
+	ResourceID ResourceID     `json:"resourceId"`
+	OwnerAddr  common.Address `json:"ownerAddr"`
+}
+
+func (u *ResourceViewID) UnmarshalJSON(data []byte) error {
+	var j resourceViewIDJSON
+	if err := json.Unmarshal(data, &j); err != nil {
+		return err
+	}
+	u.resourceID = j.ResourceID
+	u.ownerAddr = j.OwnerAddr
+	return nil
+}
+
+func (u *ResourceViewID) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&resourceViewIDJSON{
+		ResourceID: u.resourceID,
+		OwnerAddr:  u.ownerAddr,
+	})
 }
