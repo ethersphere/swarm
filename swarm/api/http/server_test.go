@@ -887,7 +887,7 @@ func TestMethodsNotAllowed(t *testing.T) {
 	} {
 		res, _ := http.Post(c.url, "text/plain", bytes.NewReader([]byte(databytes)))
 		if res.StatusCode != c.code {
-			t.Fatal("should have failed")
+			t.Fatalf("should have failed. requested url: %s, expected code %d, got %d", c.url, c.code, res.StatusCode)
 		}
 	}
 

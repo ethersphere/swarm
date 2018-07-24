@@ -72,6 +72,19 @@ var (
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
 
+type methodHandler map[string]http.HandlerFunc
+
+func (m methodHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
+	v, ok := m[r.Method]
+	if ok {
+		v(rw, r)
+		return
+	}
+	rw.WriteHeader(http.StatusMethodNotAllowed)
+
+	//method not allowed
+}
+
 func NewServer(api *api.API, corsString string) *Server {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(corsString, ",") {
@@ -84,20 +97,44 @@ func NewServer(api *api.API, corsString string) *Server {
 		AllowedHeaders: []string{"*"},
 	})
 
-	mux := http.NewServeMux()
 	server := &Server{api: api}
-	mux.HandleFunc("/bzz:/", server.WrapHandler(true, server.HandleBzz))
-	mux.HandleFunc("/bzz-raw:/", server.WrapHandler(true, server.HandleBzzRaw))
-	mux.HandleFunc("/bzz-immutable:/", server.WrapHandler(true, server.HandleBzzImmutable))
-	mux.HandleFunc("/bzz-hash:/", server.WrapHandler(true, server.HandleBzzHash))
-	mux.HandleFunc("/bzz-list:/", server.WrapHandler(true, server.HandleBzzList))
-	mux.HandleFunc("/bzz-resource:/", server.WrapHandler(true, server.HandleBzzResource))
 
-	mux.HandleFunc("/", server.WrapHandler(false, server.HandleRootPaths))
-	mux.HandleFunc("/robots.txt", server.WrapHandler(false, server.HandleRootPaths))
-	mux.HandleFunc("/favicon.ico", server.WrapHandler(false, server.HandleRootPaths))
+	mux := http.NewServeMux()
+	mux.Handle("/bzz:/", methodHandler{
+		"GET":    server.WrapHandler(true, server.HandleBzzGet),
+		"POST":   server.WrapHandler(true, server.HandleBzzPost),
+		"DELETE": server.WrapHandler(true, server.HandleBzzDelete),
+	})
+	mux.Handle("/bzz-raw:/", methodHandler{
+		"GET":  server.WrapHandler(true, server.HandleBzzRawGet),
+		"POST": server.WrapHandler(true, server.HandleBzzRawPost),
+	})
+	mux.Handle("/bzz-immutable:/", methodHandler{
+		"GET": server.WrapHandler(true, server.HandleBzzImmutableGet),
+	})
+	mux.Handle("/bzz-hash:/", methodHandler{
+		"GET": server.WrapHandler(true, server.HandleBzzHashGet),
+	})
+	mux.Handle("/bzz-list:/", methodHandler{
+		"GET": server.WrapHandler(true, server.HandleBzzListGet),
+	})
+	mux.Handle("/bzz-resource:/", methodHandler{
+		"GET":  server.WrapHandler(true, server.HandleBzzResourceGet),
+		"POST": server.WrapHandler(true, server.HandleBzzResourcePost),
+	})
+
+	mux.Handle("/", methodHandler{
+		"GET": server.WrapHandler(true, server.HandleRootPaths),
+	})
+	mux.Handle("/robots.txt", methodHandler{
+		"GET": server.WrapHandler(true, server.HandleRootPaths),
+	})
+	mux.Handle("/favicon.ico", methodHandler{
+		"GET": server.WrapHandler(true, server.HandleRootPaths),
+	})
 
 	server.Handler = c.Handler(mux)
+
 	return server
 }
 
@@ -105,116 +142,8 @@ func (s *Server) ListenAndServe(addr string) error {
 	return http.ListenAndServe(addr, s)
 }
 
-func (s *Server) HandleRootPaths(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		if r.RequestURI == "/" {
-			if strings.Contains(r.Header.Get("Accept"), "text/html") {
-				err := landingPageTemplate.Execute(w, nil)
-				if err != nil {
-					log.Error(fmt.Sprintf("error rendering landing page: %s", err))
-				}
-				return
-			}
-			if strings.Contains(r.Header.Get("Accept"), "application/json") {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusOK)
-				json.NewEncoder(w).Encode("Welcome to Swarm!")
-				return
-			}
-		}
-
-		if r.URL.Path == "/robots.txt" {
-			w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
-			fmt.Fprintf(w, "User-agent: *\nDisallow: /")
-			return
-		}
-		Respond(w, r, "Bad Request", http.StatusBadRequest)
-	default:
-		Respond(w, r, "Not Found", http.StatusNotFound)
-	}
-}
-
-func (s *Server) HandleBzz(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetBzz")
-		if r.Header.Get("Accept") == "application/x-tar" {
-			reader, err := s.api.GetDirectoryTar(r.Context(), r.uri)
-			if err != nil {
-				Respond(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
-			}
-			defer reader.Close()
-
-			w.Header().Set("Content-Type", "application/x-tar")
-			w.WriteHeader(http.StatusOK)
-			io.Copy(w, reader)
-			return
-		}
-		s.HandleGetFile(w, r)
-	case http.MethodPost:
-		log.Debug("handlePostFiles")
-		s.HandlePostFiles(w, r)
-	case http.MethodDelete:
-		log.Debug("handleBzzDelete")
-		s.HandleDelete(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) HandleBzzRaw(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetRaw")
-		s.HandleGet(w, r)
-	case http.MethodPost:
-		log.Debug("handlePostRaw")
-		s.HandlePostRaw(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) HandleBzzImmutable(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetHash")
-		s.HandleGetList(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) HandleBzzHash(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetHash")
-		s.HandleGet(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) HandleBzzList(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetHash")
-		s.HandleGetList(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) HandleBzzResource(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetResource")
-		s.HandleGetResource(w, r)
-	case http.MethodPost:
-		log.Debug("handlePostResource")
-		s.HandlePostResource(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
 func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
+	return func(rw http.ResponseWriter, r *http.Request) {
 		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
 		req := &Request{Request: *r, ruid: uuid.New()[:8]}
 		metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
@@ -235,7 +164,7 @@ func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Requ
 
 		h(w, req) // call original
 		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
-	})
+	}
 }
 
 // browser API for registering bzz url scheme handlers:
