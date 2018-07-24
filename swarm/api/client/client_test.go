@@ -395,15 +395,14 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 	resourceName := "foo.eth"
 
 	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
-		Topic:     resourceName,
+		Topic:     mru.NewTopic(resourceName, nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-		Owner:     signer.Address(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	createRequest.SetData(mh, true)
+	createRequest.SetData(mh)
 	if err := createRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
@@ -414,9 +413,9 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 		t.Fatalf("Error creating resource: %s", err)
 	}
 
-	correctManifestAddrHex := "6d3bc4664c97d8b821cb74bcae43f592494fb46d2d9cd31e69f3c7c802bbbd8e"
+	correctManifestAddrHex := "c29a2902d0ae16a015e220a376001c1f36c426e6419bd3b1aabdcffe6f3cdf06"
 	if resourceManifestHash != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
 
 	reader, err := client.GetResource(correctManifestAddrHex)
@@ -450,24 +449,23 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	resourceName := "El Quijote"
 
 	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
-		Topic:     resourceName,
+		Topic:     mru.NewTopic(resourceName, nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-		Owner:     signer.Address(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	createRequest.SetData(databytes, false)
+	createRequest.SetData(databytes)
 	if err := createRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
 
 	resourceManifestHash, err := client.CreateResource(createRequest)
 
-	correctManifestAddrHex := "cc7904c17b49f9679e2d8006fe25e87e3f5c2072c2b49cab50f15e544471b30a"
+	correctManifestAddrHex := "98c5984ef8d27cf6d15a46cd3115114d74e87e0d3556c654ee541f1bd334a510"
 	if resourceManifestHash != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
+		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
 
 	reader, err := client.GetResource(correctManifestAddrHex)
@@ -491,7 +489,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		t.Fatalf("Error retrieving update request template: %s", err)
 	}
 
-	updateRequest.SetData(databytes, false)
+	updateRequest.SetData(databytes)
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
 	}
@@ -512,5 +510,4 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	if !bytes.Equal(databytes, gotData) {
 		t.Fatalf("Expected: %v, got %v", databytes, gotData)
 	}
-
 }

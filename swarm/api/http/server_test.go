@@ -138,19 +138,15 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	// our mutable resource "name"
-	keybytes := "foo.eth"
-
 	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
-		Topic:     keybytes,
+		Topic:     mru.NewTopic("foo.eth", nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-		Owner:     signer.Address(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest.SetData(mh, true)
+	updateRequest.SetData(mh)
 
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
@@ -182,7 +178,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "6d3bc4664c97d8b821cb74bcae43f592494fb46d2d9cd31e69f3c7c802bbbd8e"
+	correctManifestAddrHex := "c29a2902d0ae16a015e220a376001c1f36c426e6419bd3b1aabdcffe6f3cdf06"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -213,9 +209,6 @@ func TestBzzResource(t *testing.T) {
 
 	defer srv.Close()
 
-	// our mutable resource "name"
-	keybytes := "foo.eth"
-
 	// data of update 1
 	databytes := make([]byte, 666)
 	_, err := rand.Read(databytes)
@@ -224,15 +217,14 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
-		Topic:     keybytes,
+		Topic:     mru.NewTopic("foo.eth", nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-		Owner:     signer.Address(),
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest.SetData(databytes, false)
+	updateRequest.SetData(databytes)
 
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
@@ -263,9 +255,9 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "6d3bc4664c97d8b821cb74bcae43f592494fb46d2d9cd31e69f3c7c802bbbd8e"
+	correctManifestAddrHex := "c29a2902d0ae16a015e220a376001c1f36c426e6419bd3b1aabdcffe6f3cdf06"
 	if rsrcResp.Hex() != correctManifestAddrHex {
-		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
+		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
 
 	// get the manifest
@@ -290,9 +282,9 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	correctRootKeyHex := "68f7ba07ac8867a4c841a4d4320e3cdc549df23702dc7285fcb6acf65df48562"
-	if manifest.Entries[0].Hash != correctRootKeyHex {
-		t.Fatalf("Expected manifest path '%s', got '%s'", correctRootKeyHex, manifest.Entries[0].Hash)
+	correctViewIDHex := "0x2a000000000000000d00000000000000666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
+	if manifest.Entries[0].ResourceViewID.Hex() != correctViewIDHex {
+		t.Fatalf("Expected manifest ResourceViewID '%s', got '%s'", correctViewIDHex, manifest.Entries[0].ResourceViewID.Hex())
 	}
 
 	// get bzz manifest transparent resource resolve
@@ -302,8 +294,8 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("err %s", resp.Status)
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("Expected error status since resource is not multihash. Received 200 OK")
 	}
 	b, err = ioutil.ReadAll(resp.Body)
 	if err != nil {
@@ -364,7 +356,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("Error decoding resource metadata: %s", err)
 	}
 	data := []byte("foo")
-	updateRequest.SetData(data, false)
+	updateRequest.SetData(data)
 	if err = updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}

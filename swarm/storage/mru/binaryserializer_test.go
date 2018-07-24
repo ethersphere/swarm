@@ -47,3 +47,32 @@ func testBinarySerializerLengthCheck(t *testing.T, bin binarySerializer) {
 		t.Fatalf("Expected %s.binaryPut to fail, since target slice is too small", name)
 	}
 }
+
+/*
+type Perry struct {
+	A      string          `json:"A,omitempty"`
+	B      int             `json:"B,omitempty"`
+	ViewID *ResourceViewID `json:"view,omitempty"`
+}
+
+func TestTest(t *testing.T) {
+
+	viewID := getTestResourceViewID()
+
+	s := &Perry{
+		A:      "hola",
+		B:      7,
+		ViewID: viewID,
+	}
+
+	b, err := json.Marshal(&s)
+
+	var x Perry
+	json.Unmarshal(b, &x)
+
+	log.Fatalf("%s", x.ViewID.resourceID.Topic.Name(nil))
+
+	log.Fatalf("error:%s, json:%s", err, string(b))
+
+}
+*/
