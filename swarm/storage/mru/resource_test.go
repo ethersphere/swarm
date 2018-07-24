@@ -296,7 +296,7 @@ func TestValidator(t *testing.T) {
 		},
 		ownerAddr: signer.Address(),
 	}
-	mr, err := NewCreateRequest(&viewID.resourceID)
+	mr, err := NewCreateUpdateRequest(&viewID.resourceID)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -43,7 +43,7 @@ var zeroAddr = common.Address{}
 // NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
 func NewCreateUpdateRequest(metadata *ResourceID) (*Request, error) {
 
-	request, err := NewCreateRequest(metadata)
+	request, err := NewCreateRequest(metadata, zeroAddr)
 	if err != nil {
 		return nil, err
 	}
@@ -60,13 +60,14 @@ func NewCreateUpdateRequest(metadata *ResourceID) (*Request, error) {
 }
 
 // NewCreateRequest returns a request to create a new resource
-func NewCreateRequest(metadata *ResourceID) (request *Request, err error) {
+func NewCreateRequest(metadata *ResourceID, ownerAddr common.Address) (request *Request, err error) {
 	if metadata.StartTime.Time == 0 { // get the current time
 		metadata.StartTime = TimestampProvider.Now()
 	}
 
 	request = new(Request)
 	request.viewID.resourceID = *metadata
+	request.viewID.ownerAddr = ownerAddr
 	request.isNew = true
 	return request, nil
 }

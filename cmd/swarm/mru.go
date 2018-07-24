@@ -42,11 +42,11 @@ func resourceCreate(ctx *cli.Context) {
 	args := ctx.Args()
 
 	var (
-		bzzapi      = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client      = swarm.NewClient(bzzapi)
-		multihash   = ctx.Bool(SwarmResourceMultihashFlag.Name)
-		initialData = ctx.String(SwarmResourceDataOnCreateFlag.Name)
-		name        = ctx.String(SwarmResourceNameFlag.Name)
+		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client       = swarm.NewClient(bzzapi)
+		initialData  = ctx.String(SwarmResourceDataOnCreateFlag.Name)
+		name         = ctx.String(SwarmResourceNameFlag.Name)
+		relatedTopic = ctx.String(SwarmResourceTopicFlag.Name)
 	)
 
 	if len(args) < 1 {
@@ -62,10 +62,11 @@ func resourceCreate(ctx *cli.Context) {
 		return
 	}
 
-	metadata := mru.ResourceID{
-		Topic:     name,
+	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
+
+	viewID := &mru.ResourceID{
+		Topic:     mru.NewTopic(name, relatedTopicBytes),
 		Frequency: frequency,
-		Owner:     signer.Address(),
 	}
 
 	var newResourceRequest *mru.Request
@@ -76,16 +77,16 @@ func resourceCreate(ctx *cli.Context) {
 			cli.ShowCommandHelpAndExit(ctx, "create", 1)
 			return
 		}
-		newResourceRequest, err = mru.NewCreateUpdateRequest(&metadata)
+		newResourceRequest, err = mru.NewCreateUpdateRequest(viewID)
 		if err != nil {
 			utils.Fatalf("Error creating new resource request: %s", err)
 		}
-		newResourceRequest.SetData(initialDataBytes, multihash)
+		newResourceRequest.SetData(initialDataBytes)
 		if err = newResourceRequest.Sign(signer); err != nil {
 			utils.Fatalf("Error signing resource update: %s", err.Error())
 		}
 	} else {
-		newResourceRequest, err = mru.NewCreateRequest(&metadata)
+		newResourceRequest, err = mru.NewCreateRequest(viewID, signer.Address())
 		if err != nil {
 			utils.Fatalf("Error creating new resource request: %s", err)
 		}
@@ -104,9 +105,8 @@ func resourceUpdate(ctx *cli.Context) {
 	args := ctx.Args()
 
 	var (
-		bzzapi    = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client    = swarm.NewClient(bzzapi)
-		multihash = ctx.Bool(SwarmResourceMultihashFlag.Name)
+		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client = swarm.NewClient(bzzapi)
 	)
 
 	if len(args) < 2 {
@@ -129,7 +129,7 @@ func resourceUpdate(ctx *cli.Context) {
 	}
 
 	// set the new data
-	updateRequest.SetData(data, multihash)
+	updateRequest.SetData(data)
 
 	// sign update
 	if err = updateRequest.Sign(signer); err != nil {

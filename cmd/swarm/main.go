@@ -196,13 +196,13 @@ var (
 		Usage:  "Number of recent chunks cached in memory (default 5000)",
 		EnvVar: SWARM_ENV_STORE_CACHE_CAPACITY,
 	}
-	SwarmResourceMultihashFlag = cli.BoolFlag{
-		Name:  "multihash",
-		Usage: "Determines how to interpret data for a resource update. If not present, data will be interpreted as raw, literal data that will be included in the resource",
-	}
 	SwarmResourceNameFlag = cli.StringFlag{
 		Name:  "name",
 		Usage: "User-defined name for the new resource",
+	}
+	SwarmResourceTopicFlag = cli.StringFlag{
+		Name:  "topic",
+		Usage: "User-defined topic this resource is tracking",
 	}
 	SwarmResourceDataOnCreateFlag = cli.StringFlag{
 		Name:  "data",
@@ -330,7 +330,7 @@ func init() {
 					Usage:              "creates a new Mutable Resource",
 					ArgsUsage:          "<frequency>",
 					Description:        "creates a new Mutable Resource",
-					Flags:              []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceMultihashFlag},
+					Flags:              []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceTopicFlag},
 				},
 				{
 					Action:             resourceUpdate,
@@ -339,7 +339,6 @@ func init() {
 					Usage:              "updates the content of an existing Mutable Resource",
 					ArgsUsage:          "<Manifest Address or ENS domain> <0x Hex data>",
 					Description:        "updates the content of an existing Mutable Resource",
-					Flags:              []cli.Flag{SwarmResourceMultihashFlag},
 				},
 				{
 					Action:             resourceInfo,
