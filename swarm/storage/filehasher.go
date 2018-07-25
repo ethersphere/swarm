@@ -18,8 +18,12 @@ package storage
 
 import (
 	"encoding/binary"
+	"errors"
+	"math"
 	"sync"
 	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 // SectionHasher is an asynchronous writer interface to a hash
@@ -31,6 +35,7 @@ type SectionHasher interface {
 	Size() int
 	BlockSize() int
 	ChunkSize() int
+	GetBuffer(count int64) ([]byte, error)
 	Sum(b []byte, length int, meta []byte) []byte
 }
 
@@ -45,20 +50,24 @@ type FileHasher struct {
 	hasherFunc func() SectionHasher // hasher constructor
 	result     chan []byte          // channel to put hash asynchronously
 	size       int
+	lnBranches float64
 }
 
-func New(hasherFunc func() SectionHasher, branches int) *FileHasher {
-	sh := &FileHasher{
+func NewFileHasher(hasherFunc func() SectionHasher, branches int, secSize int) *FileHasher {
+	fh := &FileHasher{
 		hasherFunc: hasherFunc,
 		result:     make(chan []byte),
+		branches:   branches,
+		secsize:    secSize,
 	}
-	sh.pool = sync.Pool{
+	fh.lnBranches = math.Log(float64(branches))
+	fh.pool = sync.Pool{
 		New: func() interface{} {
-			return sh.newBatch()
+			return fh.newBatch()
 		},
 	}
-	sh.size = hasherFunc().Size()
-	return sh
+	fh.size = hasherFunc().Size()
+	return fh
 }
 
 // level captures one level of chunks in the swarm hash tree
@@ -72,19 +81,20 @@ type level struct {
 
 // batch records chunks subsumed under the same parent intermediate chunk
 type batch struct {
-	nodes  []*node // nodes of the batches
-	index  int     // offset of the node
-	parent *node   // pointer to containing
-	buffer *bytes.Buffer
-	*level // pointer to containing level
+	nodes       []*node // nodes of the batches
+	index       int     // offset of the node
+	parent      *node   // pointer to containing
+	batchBuffer []byte
+	*level      // pointer to containing level
 }
 
 // node represent a chunk and embeds an async interface to the chunk hash used
 type node struct {
-	hasher SectionHasher // async hasher
-	pos    int           // index of the node chunk within its batch
-	secCnt int32         // number of sections written
-	*batch               // pointer to containing batch
+	hasher     SectionHasher // async hasher
+	pos        int           // index of the node chunk within its batch
+	secCnt     int32         // number of sections written
+	nodeBuffer []byte
+	*batch     // pointer to containing batch
 }
 
 // getParentLevel retrieves or creates the next level up from a node/batch/level
@@ -140,37 +150,45 @@ func (sh *FileHasher) newBatch() (bt *batch) {
 	nodes := make([]*node, sh.branches)
 	chunkSize := sh.ChunkSize()
 	bt = &batch{
-		buffer: make([]byte, sh.branches*chunkSize),
+		batchBuffer: make([]byte, sh.branches*chunkSize),
 		//buffer: bytes.NewBuffer(make([]byte, 0, sh.branches*sh.ChunkSize())),
 	}
 	for i := range nodes {
 		offset := chunkSize * i
 		nodes[i] = &node{
-			pos:    i,
-			hasher: sh.hasherFunc(),
-			buffer: batch[offset : offset+chunkSize],
+			pos:        i,
+			hasher:     sh.hasherFunc(),
+			nodeBuffer: bt.batchBuffer[offset : offset+chunkSize],
 		}
 	}
-	batch.nodes = nodes
+	bt.nodes = nodes
 	return bt
 }
 
-func (sh *FileHasher) getNodeSectionBuffer(globalCount int) ([]byte, func()) {
-	batchIndex := globalCount / sh.branches * sh.ChunkSize()
-	batchPos := globalCount % sh.branches * sh.ChunkSize()
-	batchNodeIndex := batchPos / sh.ChunkSize()
-	batchNodePos := batchPosIndex % sh.ChunkSize()
-	return sh.batches[batchIndex].nodes[batchNodeIndex].getSectionBuffer(batchNodePos)
+// \TODO if translate to sections, they must also be expd not only sections
+func (fh *FileHasher) OffsetToLevel(c int) int {
+	chunkCount := c / fh.ChunkSize()
+	log.Warn("chunksize", "offset", c, "c", fh.ChunkSize(), "b", fh.branches, "s", fh.secsize, "count", chunkCount)
+	return int(math.Log(float64(chunkCount)) / fh.lnBranches)
 }
 
-func (n *node) getSectionBuffer(p int) (int, func()) {
-	currentCount := atomic.AddInt32(&n.secCnt, 1)
-	nodeSectionByteOffset := (batchNodePos / sh.BlockSize()) * sh.BlockSize()
-	var doneFunc func()
-	if currentCount == int32(n.branches) {
-		doneFunc = n.done
+func (fh *FileHasher) GetBuffer(globalCount int) ([]byte, error) {
+	batchIndex := globalCount / fh.branches * fh.ChunkSize()
+	batchPos := globalCount % fh.branches * fh.ChunkSize()
+	batchNodeIndex := batchPos / fh.ChunkSize()
+	batchNodePos := batchPos % fh.ChunkSize()
+	lvl := fh.OffsetToLevel(globalCount)
+	bt, ok := fh.levels[lvl].batches.Load(batchIndex)
+	if !ok {
+		return nil, errors.New("count out of bounds")
 	}
-	return n.buffer[nodeSectionByteOffset : nodeSectionByteOffset+sh.BlockSize()], batchNodeIndex, doneFunc
+	return bt.(*batch).nodes[batchNodeIndex].getSectionBuffer(batchNodePos), nil
+}
+
+func (n *node) getSectionBuffer(p int) []byte {
+	//currentCount := atomic.AddInt32(&n.secCnt, 1)
+	nodeSectionByteOffset := (p / n.secsize) * n.secsize
+	return n.nodeBuffer[nodeSectionByteOffset : nodeSectionByteOffset+n.secsize]
 }
 
 // dataSpan returns the size of data encoded under the current node, serialized as big endian uint64
@@ -193,7 +211,7 @@ func (n *node) write(sectionIndex int, section []byte) {
 	currentCount := atomic.AddInt32(&n.secCnt, 1)
 	n.hasher.Write(sectionIndex, section)
 	if currentCount == int32(n.branches) {
-		n.node()
+		n.done()
 	}
 }
 
@@ -205,6 +223,7 @@ func (n *node) done() {
 		parentNode := parentBatch.nodes[parentNodeIndex]
 		parentNode.write(n.pos, n.hasher.Sum(nil, n.hasher.ChunkSize(), parentNode.dataSpan()))
 	}()
+
 }
 
 // length is global length
@@ -265,6 +284,7 @@ func (fh *FileHasher) Sum(b []byte, length int, meta []byte) []byte {
 		return fh.hasherFunc().Sum(nil, 0, make([]byte, 8))
 	}
 
+	log.Debug("fh sum", "length", length)
 	// calculate the index the last batch
 	lastBatchIndexInFile := (length - 1) / fh.ChunkSize() * fh.branches
 
