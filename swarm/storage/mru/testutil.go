@@ -17,8 +17,10 @@
 package mru
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -33,6 +35,17 @@ type TestHandler struct {
 
 func (t *TestHandler) Close() {
 	t.chunkStore.Close()
+}
+
+type mockNetFetcher struct{}
+
+func (m *mockNetFetcher) Request(ctx context.Context) {
+}
+func (m *mockNetFetcher) Offer(ctx context.Context) {
+}
+
+func newFakeFetchFunc(context.Context, storage.Address, *sync.Map) storage.NetFetcher {
+	return &mockNetFetcher{}
 }
 
 // NewTestHandler creates Handler object to be used for testing purposes.
@@ -50,7 +63,11 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 	}
 	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(resourceHashAlgorithm)))
 	localStore.Validators = append(localStore.Validators, rh)
-	netStore := storage.NewNetStore(localStore, nil)
+	netStore, err := storage.NewSyncNetStore(localStore, nil)
+	if err != nil {
+		return nil, err
+	}
+	netStore.NewNetFetcherFunc = newFakeFetchFunc
 	rh.SetStore(netStore)
 	return &TestHandler{rh}, nil
 }

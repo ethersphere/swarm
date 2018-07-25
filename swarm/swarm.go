@@ -75,8 +75,8 @@ type Swarm struct {
 	privateKey  *ecdsa.PrivateKey
 	corsString  string
 	swapEnabled bool
-	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
-	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
+	netStore    *storage.SyncNetStore
+	sfs         *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps          *pss.Pss
 
 	tracerClose io.Closer
@@ -168,29 +168,32 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.dns = resolver
 	}
 
-	self.lstore, err = storage.NewLocalStore(config.LocalStoreParams, mockStore)
+	lstore, err := storage.NewLocalStore(config.LocalStoreParams, mockStore)
 	if err != nil {
-		return
+		return nil, err
 	}
 
-	db := storage.NewDBAPI(self.lstore)
+	self.netStore, err = storage.NewSyncNetStore(lstore, nil)
+	if err != nil {
+		return nil, err
+	}
+
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	delivery := stream.NewDelivery(to, db)
+	delivery := stream.NewDelivery(to, self.netStore)
+	self.netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, config.DeliverySkipCheck).New
 
-	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{
+	self.streamer = stream.NewRegistry(addr, delivery, self.netStore, stateStore, &stream.RegistryOptions{
 		SkipCheck:       config.DeliverySkipCheck,
 		DoSync:          config.SyncEnabled,
 		DoRetrieve:      true,
 		SyncUpdateDelay: config.SyncUpdateDelay,
 	})
 
-	// set up NetStore, the cloud storage local access layer
-	netStore := storage.NewNetStore(self.lstore, self.streamer.Retrieve)
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.fileStore = storage.NewFileStore(netStore, self.config.FileStoreParams)
+	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
 
 	var resourceHandler *mru.Handler
 	rhparams := &mru.HandlerParams{}
@@ -199,17 +202,17 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if err != nil {
 		return nil, err
 	}
-	resourceHandler.SetStore(netStore)
+	resourceHandler.SetStore(self.netStore)
 
 	var validators []storage.ChunkValidator
 	validators = append(validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)))
 	if resourceHandler != nil {
 		validators = append(validators, resourceHandler)
 	}
-	self.lstore.Validators = validators
+	lstore.Validators = validators
 
 	// setup local store
-	log.Debug(fmt.Sprintf("Set up local storage"))
+	log.Debug("Setup local storage")
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
@@ -224,10 +227,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
-	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
+	log.Debug("Web3 virtual server API")
 
 	self.sfs = fuse.NewSwarmFS(self.api)
-	log.Debug("-> Initializing Fuse file system")
+	log.Debug("Initializing Fuse file system")
 
 	return self, nil
 }
@@ -361,14 +364,14 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
 	}
 
-	log.Warn(fmt.Sprintf("Starting Swarm service"))
+	log.Info("Starting Swarm service")
 
 	err := self.bzz.Start(srv)
 	if err != nil {
 		log.Error("bzz failed", "err", err)
 		return err
 	}
-	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
+	log.Info("Swarm network started", "bzz", fmt.Sprintf("%x", self.bzz.Hive.Overlay.BaseAddr()))
 
 	if self.ps != nil {
 		self.ps.Start(srv)
@@ -408,7 +411,7 @@ func (self *Swarm) periodicallyUpdateGauges() {
 
 func (self *Swarm) updateGauges() {
 	uptimeGauge.Update(time.Since(startTime).Nanoseconds())
-	requestsCacheGauge.Update(int64(self.lstore.RequestsCacheLen()))
+	requestsCacheGauge.Update(int64(self.netStore.RequestsCacheLen()))
 }
 
 // implements the node.Service interface
@@ -429,8 +432,8 @@ func (self *Swarm) Stop() error {
 		ch.Save()
 	}
 
-	if self.lstore != nil {
-		self.lstore.DbStore.Close()
+	if self.netStore != nil {
+		self.netStore.Close()
 	}
 	self.sfs.Stop()
 	stopCounter.Inc(1)
@@ -487,21 +490,6 @@ func (self *Swarm) APIs() []rpc.API {
 			Service:   self.sfs,
 			Public:    false,
 		},
-		// storage APIs
-		// DEPRECATED: Use the HTTP API instead
-		{
-			Namespace: "bzz",
-			Version:   "0.1",
-			Service:   api.NewStorage(self.api),
-			Public:    true,
-		},
-		{
-			Namespace: "bzz",
-			Version:   "0.1",
-			Service:   api.NewFileSystem(self.api),
-			Public:    false,
-		},
-		// {Namespace, Version, api.NewAdmin(self), false},
 	}
 
 	apis = append(apis, self.bzz.APIs()...)

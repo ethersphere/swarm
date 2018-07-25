@@ -150,15 +150,26 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 	}
 }
 
-func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (*storage.Chunk, error) {
+func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (storage.Chunk, error) {
 	return nil, errors.New("get not well defined on round robin store")
 }
 
-func (rrs *roundRobinStore) Put(ctx context.Context, chunk *storage.Chunk) {
+func (rrs *roundRobinStore) Put(ctx context.Context, chunk storage.Chunk) error {
 	i := atomic.AddUint32(&rrs.index, 1)
 	idx := int(i) % len(rrs.stores)
-	rrs.stores[idx].Put(ctx, chunk)
+	return rrs.stores[idx].Put(ctx, chunk)
 }
+
+//>>>>>>> master
+//func (rrs *roundRobinStore) Get(ctx context.Context, addr storage.Address) (*storage.Chunk, error) {
+//return nil, errors.New("get not well defined on round robin store")
+//}
+
+//func (rrs *roundRobinStore) Put(ctx context.Context, chunk *storage.Chunk) {
+//i := atomic.AddUint32(&rrs.index, 1)
+//idx := int(i) % len(rrs.stores)
+//rrs.stores[idx].Put(ctx, chunk)
+//}
 
 func (rrs *roundRobinStore) Close() {
 	for _, store := range rrs.stores {

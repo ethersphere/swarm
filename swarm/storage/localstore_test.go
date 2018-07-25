@@ -48,13 +48,13 @@ func TestValidator(t *testing.T) {
 	chunks := GenerateRandomChunks(259, 2)
 	goodChunk := chunks[0]
 	badChunk := chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs := PutChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk in spite of no validation, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err != nil {
+	if errs[1] != nil {
 		t.Fatalf("expected no error on bad content address chunk in spite of no validation, but got: %s", err)
 	}
 
@@ -64,13 +64,13 @@ func TestValidator(t *testing.T) {
 	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = PutChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+	if errs[1] == nil {
 		t.Fatal("expected error on bad content address chunk with content address validator only, but got nil")
 	}
 
@@ -82,13 +82,13 @@ func TestValidator(t *testing.T) {
 	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = PutChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err == nil {
+	if errs[1] == nil {
 		t.Fatal("expected error on bad content address chunk with content address validator only, but got nil")
 	}
 
@@ -100,15 +100,16 @@ func TestValidator(t *testing.T) {
 	chunks = GenerateRandomChunks(DefaultChunkSize, 2)
 	goodChunk = chunks[0]
 	badChunk = chunks[1]
-	copy(badChunk.SData, goodChunk.SData)
+	copy(badChunk.Data(), goodChunk.Data())
 
-	PutChunks(store, goodChunk, badChunk)
-	if err := goodChunk.GetErrored(); err != nil {
+	errs = PutChunks(store, goodChunk, badChunk)
+	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
-	if err := badChunk.GetErrored(); err != nil {
-		t.Fatalf("expected no error on bad content address chunk with content address validator only, but got: %s", err)
+	if errs[1] != nil {
+		t.Fatalf("expected no error on bad content address chunk in spite of no validation, but got: %s", err)
 	}
+
 }
 
 type boolTestValidator bool
