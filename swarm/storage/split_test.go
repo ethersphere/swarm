@@ -23,6 +23,8 @@ import (
 	"fmt"
 	"io"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 const DefaultChunkCount = 2
@@ -32,7 +34,7 @@ var MaxExcessSize = DefaultChunkCount
 func TestFakeHasher(t *testing.T) {
 	sectionSize := 32
 	sizes := []int{0, sectionSize - 1, sectionSize, sectionSize + 1, sectionSize * 4, sectionSize*4 + 1}
-	bufSizes := []int{7, sectionSize / 2, sectionSize, sectionSize + 1, sectionSize*4 + 1}
+	bufSizes := []int{32, 7, sectionSize / 2, sectionSize, sectionSize + 1, sectionSize*4 + 1}
 	for _, bsz := range bufSizes {
 		for _, sz := range sizes {
 			t.Run(fmt.Sprintf("fh-buffersize%d-bytesize%d", bsz, sz), func(t *testing.T) {
@@ -66,21 +68,33 @@ type fakeHasher struct {
 	sectionSize int
 	chunkSize   int
 	count       int
+	cap         int
 	doneC       chan struct{}
 }
 
 func newFakeHasher(byteSize int, sectionSize int, chunkSize int) *fakeHasher {
-	count := 0
+	var count int
 	if byteSize > 0 {
 		count = ((byteSize - 1) / sectionSize) + 1
 	}
-	return &fakeHasher{
+	fh := &fakeHasher{
 		sectionSize: sectionSize,
 		output:      make([]byte, byteSize),
-		count:       count,
+		cap:         count,
 		chunkSize:   chunkSize,
 		doneC:       make(chan struct{}, count),
 	}
+	log.Debug("fakehasher create", "cap", count)
+	return fh
+}
+
+func (fh *fakeHasher) GetBuffer(p int64) ([]byte, error) {
+	if fh.count < fh.cap {
+		log.Debug("fakehasher cc", "cap", fh.cap, "count", fh.count)
+		fh.doneC <- struct{}{}
+	}
+	fh.count++
+	return make([]byte, fh.sectionSize), nil
 
 }
 
@@ -91,6 +105,7 @@ func (fh *fakeHasher) ChunkSize() int {
 func (fh *fakeHasher) Reset() { fh.output = nil; return }
 
 func (fh *fakeHasher) Write(section int, data []byte) {
+	log.Warn("wrigint to hasher", "src", section, "data", data)
 	pos := section * fh.sectionSize
 	copy(fh.output[pos:], data)
 	fh.doneC <- struct{}{}
@@ -105,7 +120,9 @@ func (fh *fakeHasher) BlockSize() int {
 }
 
 func (fh *fakeHasher) Sum(hash []byte, length int, meta []byte) []byte {
-	for i := 0; i < fh.count; i++ {
+	for i := 0; i < fh.cap; i++ {
+
+		log.Debug("sum", "count", fh.count, "length", length, "i", i)
 		<-fh.doneC
 	}
 	return fh.output
