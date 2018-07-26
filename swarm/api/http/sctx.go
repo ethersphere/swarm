@@ -14,6 +14,7 @@ const (
 	requestErrorKey
 	requestCodeKey
 	decryptedKey
+	resolvedContentKey
 )
 
 func GetRUID(ctx context.Context) string {
@@ -24,12 +25,19 @@ func GetRUID(ctx context.Context) string {
 	return "xxxxxxxx"
 }
 
+func SetRUID(ctx context.Context, ruid string) context.Context {
+	return context.WithValue(ctx, sctx.HTTPRequestIDKey, ruid)
+}
+
 func GetURI(ctx context.Context) *api.URI {
 	v, ok := ctx.Value(uriKey).(*api.URI)
 	if ok {
 		return v
 	}
 	return nil
+}
+func SetURI(ctx context.Context, uri *api.URI) context.Context {
+	return context.WithValue(ctx, uriKey, uri)
 }
 
 // func GetEncrypted(ctx context.Context) bool {

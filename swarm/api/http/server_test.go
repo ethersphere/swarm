@@ -443,11 +443,6 @@ func TestBzzGetPath(t *testing.T) {
 	testBzzGetPath(true, t)
 }
 
-func TestBzzTar(t *testing.T) {
-	testBzzTar(false, t)
-	testBzzTar(true, t)
-}
-
 func testBzzGetPath(encrypted bool, t *testing.T) {
 	var err error
 
@@ -682,6 +677,11 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			t.Fatalf("Non-Hash response body does not match, expected: %v, got: %v", nonhashresponses[i], string(respbody))
 		}
 	}
+}
+
+func TestBzzTar(t *testing.T) {
+	testBzzTar(false, t)
+	testBzzTar(true, t)
 }
 
 func testBzzTar(encrypted bool, t *testing.T) {
