@@ -25,6 +25,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/crypto/sha3"
+
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	crypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/randentropy"
@@ -98,7 +100,14 @@ func accessNewACT(ctx *cli.Context) {
 		err       error
 		ref       = args[0]
 	)
-	accessKey, ae, err = doACTNew(ctx, salt)
+
+	grantees := []string{}
+
+	accessKey, ae, err = doACTNew(ctx, salt, grantees)
+	if err != nil {
+		utils.Fatalf("error generating ACT manifest: %v", err)
+	}
+
 	if err != nil {
 		utils.Fatalf("error getting session key: %v", err)
 	}
@@ -123,9 +132,8 @@ func generateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byt
 			api.ManifestEntry{
 				Hash:        hex.EncodeToString(encrypted),
 				ContentType: api.ManifestType,
-				//Size:        123, // ?
-				ModTime: time.Now(),
-				Access:  ae,
+				ModTime:     time.Now(),
+				Access:      ae,
 			},
 		},
 	}
@@ -199,7 +207,7 @@ func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEn
 	return sessionKey, ae, nil
 }
 
-func doACTNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
+func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (accessKey []byte, ae *api.AccessEntry, err error) {
 	// booting up the swarm node just as we do in bzzd action
 	bzzconfig, err := buildConfig(ctx)
 	if err != nil {
@@ -217,11 +225,79 @@ func doACTNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessE
 	initSwarmNode(bzzconfig, stack, ctx)
 	privateKey := getAccount(bzzconfig.BzzAccount, ctx, stack)
 
-	granteePublicKeyArray := "1231232" //this should be an array of public keys
+	accessKey = randentropy.GetEntropyCSPRNG(32)
+
+	lookupPathEncryptedAccessKeyMap := make(map[string]string)
+	for _, v := range granteesPublicKeys {
+		if v == "" {
+			return nil, nil, errors.New("need a grantee Public Key")
+		}
+		b, err := hex.DecodeString(v)
+		if err != nil {
+			log.Error("error decoding grantee public key", "err", err)
+			return nil, nil, err
+		}
+
+		granteePub, err := crypto.UnmarshalPubkey(b)
+		if err != nil {
+			log.Error("error unmarshaling grantee public key", "err", err)
+			return nil, nil, err
+		}
+		sessionKey, err := api.NewSessionKeyPK(privateKey, granteePub, salt)
+
+		hasher := sha3.NewKeccak256()
+		hasher.Write(append(sessionKey, 0))
+		lookupKey := hasher.Sum(nil)
+
+		hasher.Reset()
+		hasher.Write(append(sessionKey, 1))
+
+		accessKeyEncryptionKey := hasher.Sum(nil)
+
+		enc := api.NewRefEncryption(len(accessKey))
+		encryptedAccessKey, err := enc.Encrypt(accessKey, accessKeyEncryptionKey)
+
+		lookupPathEncryptedAccessKeyMap[hex.EncodeToString(lookupKey)] = hex.EncodeToString(encryptedAccessKey)
+
+	}
+	m := api.Manifest{
+		Entries: []api.ManifestEntry{},
+	}
+
+	for k, v := range lookupPathEncryptedAccessKeyMap {
+		m.Entries = append(m.Entries, api.ManifestEntry{
+			Path:        k,
+			Hash:        v,
+			ContentType: api.ManifestType,
+		})
+	}
+
+	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+	client := client.NewClient(bzzapi)
+
+	key, err := client.UploadManifest(&m, false)
+	if err != nil {
+		utils.Fatalf("Error uploading manifest: %v", err)
+	}
+
+	uri, err := api.Parse("bzz://" + key)
+	if err != nil {
+		log.Error("error creating swarm URI from key", "err", err)
+		return nil, nil, err
+	}
+
+	ae, err = api.NewAccessEntryACT(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)), salt, uri)
+	if err != nil {
+		log.Error("error generating access entry", "err", err)
+		return nil, nil, err
+	}
+
+	return accessKey, ae, nil
+
 	//create session keys for each public/private keypair
 	//construct manifest
 	/*
-				create slice of session struct or whatever
+				create slice of session struct
 				create array of lookup keys by hashing 0 to all of these session keys
 				sha3(session +"0") => lookup key = sha3(append(sessionkey,0)) => check that output is different, maybe create unit test with sanity checks for known hashes
 				access key encryption key = sha3(append(sessionKey,1))
@@ -229,9 +305,8 @@ func doACTNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessE
 				create encrypted accesskeys: encrypt access key using access key encryption keys:
 					enc := api.NewRefEncryption(len(encrypted accesskey))
 					encryptedAccessKey, err := enc.Encrypt(random32Bytes,accesskey encryption key)
-				construct manifest where the path i is the lookup key and the manifest entry entry sitting at that path contains
-				the metadata which contains the encrypted access key
-
+				construct manifest where the path i is the lookup key and the manifest entry
+				sitting at that path contains the
 
 				=========
 		root access manifest with meta
@@ -246,34 +321,14 @@ func doACTNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessE
 		then try to decrypt the reference whicnh was in the original manigfest
 
 	*/
-	if granteePublicKey == "" {
-		return nil, nil, errors.New("need a grantee Public Key")
-	}
-	b, err := hex.DecodeString(granteePublicKey)
-	if err != nil {
-		log.Error("error decoding grantee public key", "err", err)
-		return nil, nil, err
-	}
 
-	granteePub, err := crypto.UnmarshalPubkey(b)
-	if err != nil {
-		log.Error("error unmarshaling grantee public key", "err", err)
-		return nil, nil, err
-	}
+	// ae, err = api.NewAccessEntryACT(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)), salt)
+	// if err != nil {
+	// 	log.Error("error generating access entry", "err", err)
+	// 	return nil, nil, err
+	// }
 
-	sessionKey, err = api.NewSessionKeyPK(privateKey, granteePub, salt)
-	if err != nil {
-		log.Error("error getting session key", "err", err)
-		return nil, nil, err
-	}
-
-	ae, err = api.NewAccessEntryPK(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)), salt)
-	if err != nil {
-		log.Error("error generating access entry", "err", err)
-		return nil, nil, err
-	}
-
-	return sessionKey, ae, nil
+	// return sessionKey, ae, nil
 }
 
 func doPasswordNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {

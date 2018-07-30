@@ -153,7 +153,7 @@ func NewAccessEntryPK(publisher string, salt []byte) (*AccessEntry, error) {
 	}, nil
 }
 
-func NewAccessEntryACT(publisher string, salt []byte, act *URI, kdfParams *KdfParams) (*AccessEntry, error) {
+func NewAccessEntryACT(publisher string, salt []byte, act *URI) (*AccessEntry, error) {
 	if len(salt) != 32 {
 		return nil, fmt.Errorf("salt should be 32 bytes long")
 	}
