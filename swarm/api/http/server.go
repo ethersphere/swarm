@@ -569,7 +569,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	viewID, err := s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 	if err != nil {
 		getFail.Inc(1)
-		RespondError(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", uri.Addr, err), http.StatusNotFound)
+		RespondError(w, r, fmt.Sprintf("error resolving resource view ID for %s: %s", uri.Addr, err), http.StatusNotFound)
 		return
 	}
 

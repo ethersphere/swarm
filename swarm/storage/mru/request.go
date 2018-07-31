@@ -109,10 +109,6 @@ func (r *Request) Owner() common.Address {
 
 // Sign executes the signature to validate the resource and sets the owner address field
 func (r *Request) Sign(signer Signer) error {
-	/*	if r.viewID.ownerAddr != zeroAddr && r.viewID.ownerAddr != signer.Address() {
-		return NewError(ErrInvalidSignature, "Signer does not match current owner of the resource")
-	}*/
-
 	if err := r.SignedResourceUpdate.Sign(signer); err != nil {
 		return err
 	}
@@ -123,10 +119,6 @@ func (r *Request) Sign(signer Signer) error {
 func (r *Request) SetData(data []byte) {
 	r.data = data
 	r.signature = nil
-	/*	if !r.isNew {
-			r.viewID.resourceID.Frequency = 0 // mark as update
-		}
-	*/
 }
 
 func (r *Request) IsNew() bool {

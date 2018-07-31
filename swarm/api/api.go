@@ -427,7 +427,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 				return reader, mimeType, status, nil, err
 			}
 
-			// validate that data as multihash
+			// extract multihash
 			decodedMultihash, err := multihash.FromMultihash(rsrcData)
 			if err != nil {
 				apiGetInvalid.Inc(1)

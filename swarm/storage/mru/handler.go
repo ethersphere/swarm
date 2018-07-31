@@ -23,7 +23,6 @@ import (
 	"context"
 	"sync"
 	"time"
-	"unsafe"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -137,54 +136,6 @@ func (h *Handler) GetVersion(viewID *ResourceViewID) (uint32, error) {
 	}
 	return rsrc.version, nil
 }
-
-/*
-// New creates a new metadata chunk out of the request passed in.
-func (h *Handler) New(ctx context.Context, request *Request) error {
-
-	// frequency 0 is invalid
-	if request.metadata.Frequency == 0 {
-		return NewError(ErrInvalidValue, "frequency cannot be 0 when creating a resource")
-	}
-
-	// make sure owner is set to something
-	if request.metadata.Owner == zeroAddr {
-		return NewError(ErrInvalidValue, "ownerAddr must be set to create a new metadata chunk")
-	}
-
-	// create the meta chunk and store it in swarm
-	chunk, metaHash, err := request.metadata.newChunk()
-	if err != nil {
-		return err
-	}
-	if request.metaHash != nil && !bytes.Equal(request.metaHash, metaHash) ||
-		request.rootAddr != nil && !bytes.Equal(request.rootAddr, chunk.Addr) {
-		return NewError(ErrInvalidValue, "metaHash in UpdateRequest does not match actual metadata")
-	}
-
-	request.metaHash = metaHash
-	request.rootAddr = chunk.Addr
-
-	h.chunkStore.Put(ctx, chunk)
-	log.Debug("new resource", "name", request.metadata.Topic, "startTime", request.metadata.StartTime, "frequency", request.metadata.Frequency, "owner", request.metadata.Owner)
-
-	// create the internal index for the resource and populate it with its metadata
-	rsrc := &resource{
-		resourceUpdate: resourceUpdate{
-			updateHeader: updateHeader{
-				UpdateLookup: UpdateLookup{
-					rootAddr: chunk.Addr,
-				},
-			},
-		},
-		ResourceID: request.metadata,
-		updated:    time.Now(),
-	}
-	h.set(chunk.Addr, rsrc)
-
-	return nil
-}
-*/
 
 // NewUpdateRequest prepares an UpdateRequest structure with all the necessary information to
 // just add the desired data and sign it.
@@ -306,7 +257,7 @@ func (h *Handler) lookup(params *LookupParams) (*resource, error) {
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
-				return h.updateIndex(&params.viewID, chunk)
+				return h.updateCache(&params.viewID, chunk)
 			}
 			// check if we have versions > 1. If a version fails, the previous version is used and returned.
 			log.Trace("rsrc update version 1 found, checking for version updates", "period", lp.period, "updateAddr", updateAddr)
@@ -315,7 +266,7 @@ func (h *Handler) lookup(params *LookupParams) (*resource, error) {
 				updateAddr := lp.UpdateAddr()
 				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 				if err != nil {
-					return h.updateIndex(&params.viewID, chunk)
+					return h.updateCache(&params.viewID, chunk)
 				}
 				chunk = newchunk
 				lp.version = newversion
@@ -332,41 +283,15 @@ func (h *Handler) lookup(params *LookupParams) (*resource, error) {
 	return nil, NewError(ErrNotFound, "no updates found")
 }
 
-/*
-// Load retrieves the Mutable Resource metadata chunk stored at rootAddr
-// Upon retrieval it creates/updates the index entry for it with metadata corresponding to the chunk contents
-func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource, error) {
-	chunk, err := h.chunkStore.GetWithTimeout(ctx, rootAddr, defaultRetrieveTimeout)
-	if err != nil {
-		return nil, NewError(ErrNotFound, err.Error())
-	}
-
-	// create the index entry
-	rsrc := &resource{}
-
-	if err := rsrc.ResourceID.binaryGet(chunk.SData); err != nil { // Will fail if this is not really a metadata chunk
-		return nil, err
-	}rootAddr
-
-	rsrc.rootAddr, rsrc.metaHash = metadataHash(chunk.SData)
-	if !bytes.Equal(rsrc.rootAddr, rootAddr) {
-		return nil, NewError(ErrCorruptData, "Corrupt metadata chunk")
-	}
-	h.set(rootAddr, rsrc)
-	log.Trace("resource index load", "rootkey", rootAddr, "name", rsrc.ResourceID.Topic, "starttime", rsrc.ResourceID.StartTime, "frequency", rsrc.ResourceID.Frequency)
-	return rsrc, nil
-}
-*/
-
-// update mutable resource index map with specified content
-func (h *Handler) updateIndex(viewID *ResourceViewID, chunk *storage.Chunk) (*resource, error) {
+// update mutable resource cache map with specified content
+func (h *Handler) updateCache(viewID *ResourceViewID, chunk *storage.Chunk) (*resource, error) {
 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
 	var r SignedResourceUpdate
 	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		return nil, err
 	}
-	log.Trace("resource index update", "topic", viewID.resourceID.Topic.Hex(), "updatekey", chunk.Addr, "period", r.period, "version", r.version)
+	log.Trace("resource cache update", "topic", viewID.resourceID.Topic.Hex(), "updatekey", chunk.Addr, "period", r.period, "version", r.version)
 
 	rsrc := h.get(viewID)
 	if rsrc == nil {
@@ -415,7 +340,7 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 	h.chunkStore.Put(ctx, chunk)
 	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.SData)
 
-	// update our resources map entry if the new update is older than the one we have, if we have it.
+	// update our resources map cache entry if the new update is older than the one we have, if we have it.
 	if rsrc != nil && (r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version)) {
 		rsrc.period = r.period
 		rsrc.version = r.version
@@ -427,34 +352,32 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 	return r.updateAddr, nil
 }
 
-// Retrieves the resource index value for the given nameHash
+// Retrieves the resource cache value for the given nameHash
 func (h *Handler) get(viewID *ResourceViewID) *resource {
 	if viewID == nil {
 		log.Warn("Handler.get with invalid ViewID")
 		return nil
 	}
-	viewIDKey := viewID.ResourceViewIDAddr()
-	hashKey := *(*uint64)(unsafe.Pointer(&viewIDKey[0]))
+	mapKey := viewID.mapKey()
 	h.resourceLock.RLock()
 	defer h.resourceLock.RUnlock()
-	rsrc := h.resources[hashKey]
+	rsrc := h.resources[mapKey]
 	return rsrc
 }
 
-// Sets the resource index value for the given nameHash
+// Sets the resource cache value for the given viewID
 func (h *Handler) set(viewID *ResourceViewID, rsrc *resource) {
 	if viewID == nil {
 		log.Warn("Handler.set with invalid ViewID")
 		return
 	}
-	viewIDKey := viewID.ResourceViewIDAddr()
-	hashKey := *(*uint64)(unsafe.Pointer(&viewIDKey[0]))
+	mapKey := viewID.mapKey()
 	h.resourceLock.Lock()
 	defer h.resourceLock.Unlock()
-	h.resources[hashKey] = rsrc
+	h.resources[mapKey] = rsrc
 }
 
-// Checks if we already have an update on this resource, according to the value in the current state of the resource index
+// Checks if we already have an update on this resource, according to the value in the current state of the resource cache
 func (h *Handler) hasUpdate(viewID *ResourceViewID, period uint32) bool {
 	rsrc := h.get(viewID)
 	return rsrc != nil && rsrc.period == period

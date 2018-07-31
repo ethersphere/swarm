@@ -3,6 +3,7 @@ package mru
 import (
 	"encoding/json"
 	"hash"
+	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -14,25 +15,24 @@ type ResourceViewID struct {
 	ownerAddr  common.Address `json:"ownerAddr"`
 }
 
-type ViewIDAddr []byte
-
 // ResourceViewID layout:
 // ResourceIDLength bytes
 // ownerAddr common.AddressLength bytes
 const resourceViewIDLength = ResourceIDLength + common.AddressLength
 
-// ResourceAddr calculates the resource owner id
-func (u *ResourceViewID) ResourceViewIDAddr() ViewIDAddr {
+// mapKey calculates a unique id for this view for the cache map in `Handler`
+func (u *ResourceViewID) mapKey() uint64 {
 	serializedData := make([]byte, resourceViewIDLength)
 	u.binaryPut(serializedData)
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
 	hasher.Write(serializedData)
-	return hasher.Sum(nil)
+	hash := hasher.Sum(nil)
+	return *(*uint64)(unsafe.Pointer(&hash[0]))
 }
 
-// binaryPut serializes this UpdateLookup instance into the provided slice
+// binaryPut serializes this ResourceViewID instance into the provided slice
 func (u *ResourceViewID) binaryPut(serializedData []byte) error {
 	if len(serializedData) != resourceViewIDLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize ResourceViewID. Expected %d, got %d", resourceViewIDLength, len(serializedData))
