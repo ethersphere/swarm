@@ -11,10 +11,6 @@ type contextKey int
 
 const (
 	uriKey contextKey = iota
-	requestErrorKey
-	requestCodeKey
-	decryptedKey
-	resolvedContentKey
 )
 
 func GetRUID(ctx context.Context) string {
@@ -36,22 +32,7 @@ func GetURI(ctx context.Context) *api.URI {
 	}
 	return nil
 }
+
 func SetURI(ctx context.Context, uri *api.URI) context.Context {
 	return context.WithValue(ctx, uriKey, uri)
-}
-
-// func GetEncrypted(ctx context.Context) bool {
-// 	v, ok := ctx.Value(requestContextKey).(RequestContext)
-// 	if ok {
-// 		return v.Encrypted
-// 	}
-// 	return false
-// }
-
-func GetDecrypted(ctx context.Context) bool {
-	v, ok := ctx.Value(decryptedKey).(bool)
-	if ok {
-		return v
-	}
-	return false
 }
