@@ -880,6 +880,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	ctx, sp = spancontext.StartSpan(
 		ctx,
 		"http.get.file")
+	defer sp.Finish()
 
 	// ensure the root path has a trailing slash so that relative URLs work
 	if uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
@@ -925,7 +926,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 			getFileFail.Inc(1)
 			RespondError(w, r, err.Error(), http.StatusInternalServerError)
 		}
-		sp.Finish()
 		return
 	}
 
@@ -943,7 +943,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		log.Debug(fmt.Sprintf("Multiple choices! --> %v", list), "ruid", ruid)
 		//show a nice page links to available entries
 		ShowMultipleChoices(w, r, list)
-		sp.Finish()
 		return
 	}
 
