@@ -18,6 +18,7 @@ package http
 
 import (
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
@@ -30,13 +31,14 @@ import (
 
 //metrics variables
 var (
-	htmlCounter = metrics.NewRegisteredCounter("api.http.errorpage.html.count", nil)
-	jsonCounter = metrics.NewRegisteredCounter("api.http.errorpage.json.count", nil)
+	htmlCounter      = metrics.NewRegisteredCounter("api.http.errorpage.html.count", nil)
+	jsonCounter      = metrics.NewRegisteredCounter("api.http.errorpage.json.count", nil)
+	plaintextCounter = metrics.NewRegisteredCounter("api.http.errorpage.plaintext.count", nil)
 )
 
 //parameters needed for formatting the correct HTML page
 type ResponseParams struct {
-	Msg       string
+	Msg       template.HTML
 	Code      int
 	Timestamp string
 	template  *template.Template
@@ -50,60 +52,60 @@ type ResponseParams struct {
 //"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
 //This only applies if the manifest has no default entry
 func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.ManifestList) {
+	log.Error("ShowMultipleChoices", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	msg := ""
 	if list.Entries == nil {
 		RespondError(w, r, "Could not resolve", http.StatusInternalServerError)
 		return
 	}
-	//make links relative
-	//requestURI comes with the prefix of the ambiguous path, e.g. "read" for "readme.md" and "readinglist.txt"
-	//to get clickable links, need to remove the ambiguous path, i.e. "read"
-	idx := strings.LastIndex(r.RequestURI, "/")
-	if idx == -1 {
-		RespondError(w, r, "Internal Server Error", http.StatusInternalServerError)
-		return
+	requestUri := strings.TrimPrefix(r.RequestURI, "/")
+
+	uri, err := api.Parse(requestUri)
+	if err != nil {
+		RespondError(w, r, "Bad Request", http.StatusBadRequest)
 	}
-	//remove ambiguous part
-	base := r.RequestURI[:idx+1]
-	for _, e := range list.Entries {
-		//create clickable link for each entry
-		msg += "<a href='" + base + e.Path + "'>" + e.Path + "</a><br/>"
-	}
-	RespondTemplate(w, r, "multiple-choice", msg, http.StatusMultipleChoices)
+
+	uri.Scheme = "bzz-list"
+	//request the same url just with bzz-list
+	msg += fmt.Sprintf("Disambiguation:<br/>Your request may refer to multiple choices.<br/>Click <a class=\"swarm-link\" href='"+"/"+uri.String()+"'>here</a> if your browser does not redirect you within 5 seconds.<script>setTimeout(\"location.href='%s';\",5000);</script><br/>", "/"+uri.String())
+	RespondTemplate(w, r, "error", msg, http.StatusMultipleChoices)
 }
 
 func RespondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg string, code int) {
+	log.Error("RespondTemplate", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	respond(w, r, &ResponseParams{
 		Code:      code,
-		Msg:       msg,
+		Msg:       template.HTML(msg),
 		Timestamp: time.Now().Format(time.RFC1123),
 		template:  TemplatesMap[templateName],
 	})
 }
 
 func RespondError(w http.ResponseWriter, r *http.Request, msg string, code int) {
+	log.Error("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	RespondTemplate(w, r, "error", msg, code)
 }
 
 //evaluate if client accepts html or json response
 func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	w.WriteHeader(params.Code)
-	switch r.Header.Get("Accept") {
-	case "application/json":
-		respondJSON(w, params)
-
-	case "text/plain":
-		//curl
-
-	default:
-		respondHTML(w, params)
+	acceptHeader := r.Header.Get("Accept")
+	// this cannot be in a switch form since an Accept header can be in the form of "Accept: */*, text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8"
+	if strings.Contains(acceptHeader, "application/json") {
+		if err := respondJSON(w, r, params); err != nil {
+			RespondError(w, r, "Internal server error", http.StatusInternalServerError)
+		}
+	} else if strings.Contains(acceptHeader, "text/html") {
+		respondHTML(w, r, params)
+	} else {
+		respondPlaintext(w, r, params) //returns nice errors for curl
 	}
-
 }
 
 //return a HTML page
-func respondHTML(w http.ResponseWriter, params *ResponseParams) {
+func respondHTML(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	htmlCounter.Inc(1)
+	log.Error("respondHTML", "ruid", GetRUID(r.Context()))
 	err := params.template.Execute(w, params)
 	if err != nil {
 		log.Error(err.Error())
@@ -111,8 +113,22 @@ func respondHTML(w http.ResponseWriter, params *ResponseParams) {
 }
 
 //return JSON
-func respondJSON(w http.ResponseWriter, params *ResponseParams) {
+func respondJSON(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
 	jsonCounter.Inc(1)
+	log.Error("respondJSON", "ruid", GetRUID(r.Context()))
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(params)
+	return json.NewEncoder(w).Encode(params)
+}
+
+//return JSON
+func respondPlaintext(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
+	plaintextCounter.Inc(1)
+	log.Error("respondPlaintext", "ruid", GetRUID(r.Context()))
+	w.Header().Set("Content-Type", "text/plain")
+	strToWrite := "Code: " + fmt.Sprintf("%d", params.Code) + "\n"
+	strToWrite += "Message: " + string(params.Msg) + "\n"
+	strToWrite += "Timestamp: " + params.Timestamp + "\n"
+	log.Error("str", "towrite", strToWrite)
+	_, err := w.Write([]byte(strToWrite))
+	return err
 }

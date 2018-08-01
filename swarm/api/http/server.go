@@ -96,86 +96,71 @@ func NewServer(api *api.API, corsString string) *Server {
 
 	server := &Server{api: api}
 
+	defaultMiddlewares := []Adapter{
+		SetRequestID,
+		InitLoggingResponseWriter,
+		ParseURI,
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/bzz:/", methodHandler{
 		"GET": Adapt(
-			server.HandleBzzGet(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandleBzzGet),
+			defaultMiddlewares...,
 		),
 		"POST": Adapt(
-			server.HandleBzzPost(),
-
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandlePostFiles),
+			defaultMiddlewares...,
 		),
 		"DELETE": Adapt(
-			server.HandleBzzDelete(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandleDelete),
+			defaultMiddlewares...,
 		),
 	})
 	mux.Handle("/bzz-raw:/", methodHandler{
 		"GET": Adapt(
-			server.HandleBzzRawGet(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandleGet),
+			defaultMiddlewares...,
 		),
 		"POST": Adapt(
-			server.HandleBzzRawPost(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandlePostRaw),
+			defaultMiddlewares...,
 		),
 	})
 	mux.Handle("/bzz-immutable:/", methodHandler{
 		"GET": Adapt(
-			server.HandleBzzImmutableGet(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandleGet),
+			defaultMiddlewares...,
 		),
 	})
 	mux.Handle("/bzz-hash:/", methodHandler{
 		"GET": Adapt(
-			server.HandleBzzHashGet(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandleGet),
+			defaultMiddlewares...,
 		),
 	})
 	mux.Handle("/bzz-list:/", methodHandler{
 		"GET": Adapt(
-			server.HandleBzzListGet(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandleGetList),
+			defaultMiddlewares...,
 		),
 	})
 	mux.Handle("/bzz-resource:/", methodHandler{
 		"GET": Adapt(
-			server.HandleBzzResourceGet(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandleGetResource),
+			defaultMiddlewares...,
 		),
 		"POST": Adapt(
-			server.HandleBzzResourcePost(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
-			ParseURI(),
+			http.HandlerFunc(server.HandlePostResource),
+			defaultMiddlewares...,
 		),
 	})
 
 	mux.Handle("/", methodHandler{
 		"GET": Adapt(
-			server.HandleRootPaths(),
-			SetRequestID(),
-			InitLoggingResponseWriter(),
+			http.HandlerFunc(server.HandleRootPaths),
+			SetRequestID,
+			InitLoggingResponseWriter,
 		),
 	})
 	server.Handler = c.Handler(mux)
@@ -187,31 +172,6 @@ func (s *Server) ListenAndServe(addr string) error {
 	return http.ListenAndServe(addr, s)
 }
 
-// func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
-// 	return func(rw http.ResponseWriter, r *http.Request) {
-// 		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
-// 		req := &Request{Request: *r, ruid: uuid.New()[:8]}
-// 		metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
-// 		log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
-
-// 		// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
-// 		w := newLoggingResponseWriter(rw)
-// 		if parseBzzUri {
-// 			uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
-// 			if err != nil {
-// 				RespondError(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
-// 				return
-// 			}
-// 			req.uri = uri
-
-// 			log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri.Addr", req.uri.Addr, "uri.Path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
-// 		}
-
-// 		h(w, req) // call original
-// 		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
-// 	}
-// }
-
 // browser API for registering bzz url scheme handlers:
 // https://developer.mozilla.org/en/docs/Web-based_protocol_handlers
 // electron (chromium) api for registering bzz url scheme handlers:
@@ -219,6 +179,41 @@ func (s *Server) ListenAndServe(addr string) error {
 type Server struct {
 	http.Handler
 	api *api.API
+}
+
+func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
+	log.Debug("handleGetBzz")
+	if r.Header.Get("Accept") == "application/x-tar" {
+		uri := GetURI(r.Context())
+		reader, err := s.api.GetDirectoryTar(r.Context(), uri)
+		if err != nil {
+			RespondError(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
+		}
+		defer reader.Close()
+
+		w.Header().Set("Content-Type", "application/x-tar")
+		w.WriteHeader(http.StatusOK)
+		io.Copy(w, reader)
+		return
+	}
+
+	s.HandleGetFile(w, r)
+}
+
+func (s *Server) HandleRootPaths(w http.ResponseWriter, r *http.Request) {
+	switch r.RequestURI {
+	case "/":
+		RespondTemplate(w, r, "landing-page", "Swarm: Please request a valid ENS or swarm hash with the appropriate bzz scheme", 200)
+		return
+	case "/robots.txt":
+		w.Header().Set("Last-Modified", time.Now().Format(http.TimeFormat))
+		fmt.Fprintf(w, "User-agent: *\nDisallow: /")
+	case "/favicon.ico":
+		w.WriteHeader(http.StatusOK)
+		w.Write(faviconBytes)
+	default:
+		RespondError(w, r, "Not Found", http.StatusNotFound)
+	}
 }
 
 // HandlePostRaw handles a POST request to a raw bzz-raw:/ URI, stores the request
