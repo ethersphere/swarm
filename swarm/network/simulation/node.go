@@ -141,20 +141,20 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
+	ids, err = s.AddNodes(count-1, opts...)
+	if err != nil {
+		return nil, err
+	}
+	//ids = append([]discover.NodeID{id}, ids...)
+	err = s.ConnectNodesChain(ids)
+	if err != nil {
+		return nil, err
+	}
 	id, err := s.AddNode(opts...)
 	if err != nil {
 		return nil, err
 	}
 	err = s.ConnectToLastNode(id)
-	if err != nil {
-		return nil, err
-	}
-	ids, err = s.AddNodes(count-1, opts...)
-	if err != nil {
-		return nil, err
-	}
-	ids = append([]discover.NodeID{id}, ids...)
-	err = s.ConnectNodesChain(ids)
 	if err != nil {
 		return nil, err
 	}
