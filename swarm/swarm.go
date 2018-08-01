@@ -212,7 +212,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	lstore.Validators = validators
 
 	// setup local store
-	log.Debug("Setup local storage")
+	log.Debug(fmt.Sprintf("Set up local storage"))
 
 	self.bzz = network.NewBzz(bzzconfig, to, stateStore, stream.Spec, self.streamer.Run)
 
@@ -227,10 +227,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
-	log.Debug("Web3 virtual server API")
+	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
 
 	self.sfs = fuse.NewSwarmFS(self.api)
-	log.Debug("Initializing Fuse file system")
+	log.Debug("-> Initializing Fuse file system")
 
 	return self, nil
 }
@@ -364,14 +364,14 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 		log.Debug(fmt.Sprintf("SWAP disabled: no cheque book set"))
 	}
 
-	log.Info("Starting Swarm service")
+	log.Warn(fmt.Sprintf("Starting Swarm service"))
 
 	err := self.bzz.Start(srv)
 	if err != nil {
 		log.Error("bzz failed", "err", err)
 		return err
 	}
-	log.Info("Swarm network started", "bzz", fmt.Sprintf("%x", self.bzz.Hive.Overlay.BaseAddr()))
+	log.Info(fmt.Sprintf("Swarm network started on bzz address: %x", self.bzz.Hive.Overlay.BaseAddr()))
 
 	if self.ps != nil {
 		self.ps.Start(srv)

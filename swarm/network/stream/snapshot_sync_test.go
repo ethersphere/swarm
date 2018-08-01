@@ -135,11 +135,15 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 				store.Close()
 			}
 			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
+			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				DoSync:          true,
 				SyncUpdateDelay: 3 * time.Second,
 			})
@@ -293,14 +297,18 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 				store.Close()
 			}
 			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
+			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil)
+			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), nil)
 			bucket.Store(bucketKeyRegistry, r)
 
-			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
+			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
 
 			return r, cleanup, nil

@@ -327,19 +327,20 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				store.Close()
 			}
 			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
+			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+
+			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck: skipCheck,
 			})
 			bucket.Store(bucketKeyRegistry, r)
 
-			retrieveFunc := func(ctx context.Context, chunk *storage.Chunk) error {
-				return delivery.RequestFromPeers(ctx, chunk.Addr[:], skipCheck)
-			}
-			netStore := storage.NewNetStore(localStore, retrieveFunc)
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
 
@@ -513,20 +514,20 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 				store.Close()
 			}
 			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
+			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck:       skipCheck,
 				DoSync:          true,
 				SyncUpdateDelay: 0,
 			})
 
-			retrieveFunc := func(ctx context.Context, chunk *storage.Chunk) error {
-				return delivery.RequestFromPeers(ctx, chunk.Addr[:], skipCheck)
-			}
-			netStore := storage.NewNetStore(localStore, retrieveFunc)
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
 

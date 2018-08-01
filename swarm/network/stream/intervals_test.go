@@ -70,17 +70,21 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 				os.RemoveAll(datadir)
 			}
 			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
+			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck: skipCheck,
 			})
 			bucket.Store(bucketKeyRegistry, r)
 
 			r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
-				return newTestExternalClient(db), nil
+				return newTestExternalClient(netStore), nil
 			})
 			r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
 				return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
@@ -302,21 +306,21 @@ func enableNotifications(r *Registry, peerID discover.NodeID, s Stream) error {
 
 type testExternalClient struct {
 	hashes               chan []byte
-	db                   *storage.DBAPI
+	store                storage.SyncChunkStore
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(db *storage.DBAPI) *testExternalClient {
+func newTestExternalClient(store storage.SyncChunkStore) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
-		db:                   db,
+		store:                store,
 		enableNotificationsC: make(chan struct{}),
 	}
 }
 
-func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func() {
-	chunk, _ := c.db.GetOrCreateRequest(ctx, hash)
-	if chunk.ReqC == nil {
+func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
+	wait := c.store.(Has).Has(ctx, storage.Address(hash))
+	if wait == nil {
 		return nil
 	}
 	c.hashes <- hash
@@ -329,7 +333,7 @@ func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func() {
 			return chunk.WaitToStore()
 		}
 	*/
-	return nil
+	return wait
 }
 
 func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
