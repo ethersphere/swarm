@@ -52,7 +52,7 @@ type ResponseParams struct {
 //"readme.md" and "readinglist.txt", a HTML page is returned with this two links.
 //This only applies if the manifest has no default entry
 func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.ManifestList) {
-	log.Error("ShowMultipleChoices", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
+	log.Debug("ShowMultipleChoices", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	msg := ""
 	if list.Entries == nil {
 		RespondError(w, r, "Could not resolve", http.StatusInternalServerError)
@@ -72,7 +72,7 @@ func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.Manife
 }
 
 func RespondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg string, code int) {
-	log.Error("RespondTemplate", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
+	log.Debug("RespondTemplate", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	respond(w, r, &ResponseParams{
 		Code:      code,
 		Msg:       template.HTML(msg),
@@ -82,7 +82,7 @@ func RespondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg s
 }
 
 func RespondError(w http.ResponseWriter, r *http.Request, msg string, code int) {
-	log.Error("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
+	log.Debug("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	RespondTemplate(w, r, "error", msg, code)
 }
 
@@ -105,7 +105,7 @@ func respond(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 //return a HTML page
 func respondHTML(w http.ResponseWriter, r *http.Request, params *ResponseParams) {
 	htmlCounter.Inc(1)
-	log.Error("respondHTML", "ruid", GetRUID(r.Context()))
+	log.Debug("respondHTML", "ruid", GetRUID(r.Context()))
 	err := params.template.Execute(w, params)
 	if err != nil {
 		log.Error(err.Error())
@@ -115,7 +115,7 @@ func respondHTML(w http.ResponseWriter, r *http.Request, params *ResponseParams)
 //return JSON
 func respondJSON(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
 	jsonCounter.Inc(1)
-	log.Error("respondJSON", "ruid", GetRUID(r.Context()))
+	log.Debug("respondJSON", "ruid", GetRUID(r.Context()))
 	w.Header().Set("Content-Type", "application/json")
 	return json.NewEncoder(w).Encode(params)
 }
@@ -123,12 +123,11 @@ func respondJSON(w http.ResponseWriter, r *http.Request, params *ResponseParams)
 //return JSON
 func respondPlaintext(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
 	plaintextCounter.Inc(1)
-	log.Error("respondPlaintext", "ruid", GetRUID(r.Context()))
+	log.Debug("respondPlaintext", "ruid", GetRUID(r.Context()))
 	w.Header().Set("Content-Type", "text/plain")
 	strToWrite := "Code: " + fmt.Sprintf("%d", params.Code) + "\n"
 	strToWrite += "Message: " + string(params.Msg) + "\n"
 	strToWrite += "Timestamp: " + params.Timestamp + "\n"
-	log.Error("str", "towrite", strToWrite)
 	_, err := w.Write([]byte(strToWrite))
 	return err
 }
