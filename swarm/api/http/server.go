@@ -39,7 +39,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -187,77 +186,12 @@ func (s *Server) HandleBzzRaw(w http.ResponseWriter, r *Request) {
 		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
 	}
 }
-func (s *Server) HandleBzzImmutable(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetHash")
-		s.HandleGetList(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) HandleBzzHash(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetHash")
-		s.HandleGet(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
+
 func (s *Server) HandleBzzList(w http.ResponseWriter, r *Request) {
 	switch r.Method {
 	case http.MethodGet:
 		log.Debug("handleGetHash")
 		s.HandleGetList(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) HandleBzzResource(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetResource")
-		s.HandleGetResource(w, r)
-	case http.MethodPost:
-		log.Debug("handlePostResource")
-		s.HandlePostResource(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Request)) http.HandlerFunc {
-	return http.HandlerFunc(func(rw http.ResponseWriter, r *http.Request) {
-		defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).UpdateSince(time.Now())
-		req := &Request{Request: *r, ruid: uuid.New()[:8]}
-		metrics.GetOrRegisterCounter(fmt.Sprintf("http.request.%s", r.Method), nil).Inc(1)
-		log.Info("serving request", "ruid", req.ruid, "method", r.Method, "url", r.RequestURI)
-
-		// wrapping the ResponseWriter, so that we get the response code set by http.ServeContent
-		w := newLoggingResponseWriter(rw)
-		if parseBzzUri {
-			uri, err := api.Parse(strings.TrimLeft(r.URL.Path, "/"))
-			if err != nil {
-				Respond(w, req, fmt.Sprintf("invalid URI %q", r.URL.Path), http.StatusBadRequest)
-				return
-			}
-			req.uri = uri
-
-			log.Debug("parsed request path", "ruid", req.ruid, "method", req.Method, "uri.Addr", req.uri.Addr, "uri.Path", req.uri.Path, "uri.Scheme", req.uri.Scheme)
-		}
-
-		h(w, req) // call original
-		log.Info("served response", "ruid", req.ruid, "code", w.statusCode)
-	})
-}
-func (s *Server) HandleBzzRaw(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetRaw")
-		s.HandleGet(w, r)
-	case http.MethodPost:
-		log.Debug("handlePostRaw")
-		s.HandlePostRaw(w, r)
 	default:
 		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -276,15 +210,6 @@ func (s *Server) HandleBzzHash(w http.ResponseWriter, r *Request) {
 	case http.MethodGet:
 		log.Debug("handleGetHash")
 		s.HandleGet(w, r)
-	default:
-		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
-	}
-}
-func (s *Server) HandleBzzList(w http.ResponseWriter, r *Request) {
-	switch r.Method {
-	case http.MethodGet:
-		log.Debug("handleGetHash")
-		s.HandleGetList(w, r)
 	default:
 		Respond(w, r, "Method not allowed", http.StatusMethodNotAllowed)
 	}
@@ -719,7 +644,6 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *Request) {
 		w.Header().Set("Cache-Control", "max-age=2147483648")
 	}
 
-
 	// get the root chunk rootAddr from the manifest
 	rootAddr, err := s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 	if err != nil {
@@ -928,7 +852,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *Request) {
 
 	// check the root chunk exists by retrieving the file's size
 	reader, isEncrypted := s.api.Retrieve(r.Context(), addr)
-	if _, err := reader.Size(ctx,nil); err != nil {
+	if _, err := reader.Size(ctx, nil); err != nil {
 		getFail.Inc(1)
 		Respond(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
 		return
@@ -1222,6 +1146,7 @@ func (s *Server) decryptor(r *Request) api.DecryptFunc {
 			m.Access = nil
 			return nil
 		case "act":
+
 		}
 		return ErrUnknownAccessType
 	}

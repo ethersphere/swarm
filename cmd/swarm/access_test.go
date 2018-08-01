@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -25,10 +26,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -361,10 +362,9 @@ func TestAccessPK(t *testing.T) {
 	}
 
 }
-
 func TestAccessACT(t *testing.T) {
 	// Setup Swarm and upload a test file to it
-	cluster := newTestCluster(t, 1)
+	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
 
 	// create a tmp file
@@ -401,8 +401,25 @@ func TestAccessACT(t *testing.T) {
 
 	ref := matches[0]
 
-	pk := cluster.Nodes[0].PrivateKey
-	granteePubKey := crypto.FromECDSAPub(&pk.PublicKey)
+	grantees := []string{}
+	for _, v := range cluster.Nodes {
+		pk := cluster.Nodes[0].PrivateKey
+		granteePubKey := crypto.FromECDSAPub(&pk.PublicKey)
+		grantees = append(grantees, hex.EncodeToString(granteePubKey))
+	}
+
+	pubkeyListFile, err := ioutil.TempFile("", "grantees-pubkey-list.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Fatal(pubkeyListFile.Name())
+	//	defer pubkeyListFile.Close()
+	defer os.Remove(pubkeyListFile)
+
+	_, err := pubkeyListFile.WriteString(strings.Join(grantees, "\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	publisherDir, err := ioutil.TempDir("", "swarm-account-dir-temp")
 	if err != nil {
@@ -434,7 +451,7 @@ func TestAccessACT(t *testing.T) {
 		"new",
 		"act",
 		"--dry-run",
-		"--grant-pk",
+		"--grantees",
 		"PUB_KEY_FILE/CSV",
 		ref,
 	)
@@ -508,7 +525,10 @@ func TestAccessACT(t *testing.T) {
 }
 
 func TestAccessPKUnit(t *testing.T) {
-	salt := randentropy.GetEntropyCSPRNG(32)
+	salt := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		panic("reading from crypto/rand failed: " + err.Error())
+	}
 	sharedSecret := "a85586744a1ddd56a7ed9f33fa24f40dd745b3a941be296a0d60e329dbdb896d"
 
 	for i, v := range []struct {

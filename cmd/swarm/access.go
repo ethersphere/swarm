@@ -16,10 +16,12 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -29,7 +31,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	crypto "github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/randentropy"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/params"
@@ -38,7 +39,7 @@ import (
 	"gopkg.in/urfave/cli.v1"
 )
 
-var salt = randentropy.GetEntropyCSPRNG(32)
+var salt = make([]byte, 32)
 
 // This init function sets defaults so cmd/swarm can run alongside geth.
 func init() {
@@ -48,6 +49,10 @@ func init() {
 	defaultNodeConfig.IPCPath = "bzzd.ipc"
 	// Set flag defaults for --help display.
 	utils.ListenPortFlag.Value = 30399
+
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		panic("reading from crypto/rand failed: " + err.Error())
+	}
 }
 
 func accessNewPass(ctx *cli.Context) {
