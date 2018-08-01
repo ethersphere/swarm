@@ -403,23 +403,23 @@ func TestAccessACT(t *testing.T) {
 
 	grantees := []string{}
 	for _, v := range cluster.Nodes {
-		pk := cluster.Nodes[0].PrivateKey
-		granteePubKey := crypto.FromECDSAPub(&pk.PublicKey)
+		pk := v.PrivateKey
+		granteePubKey := crypto.CompressPubkey(&pk.PublicKey)
 		grantees = append(grantees, hex.EncodeToString(granteePubKey))
 	}
 
-	pubkeyListFile, err := ioutil.TempFile("", "grantees-pubkey-list.csv")
+	granteesPubkeyListFile, err := ioutil.TempFile("", "grantees-pubkey-list.csv")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Fatal(pubkeyListFile.Name())
-	//	defer pubkeyListFile.Close()
-	defer os.Remove(pubkeyListFile)
 
-	_, err := pubkeyListFile.WriteString(strings.Join(grantees, "\n"))
+	_, err = granteesPubkeyListFile.WriteString(strings.Join(grantees, "\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	defer granteesPubkeyListFile.Close()
+	defer os.Remove(granteesPubkeyListFile.Name())
 
 	publisherDir, err := ioutil.TempDir("", "swarm-account-dir-temp")
 	if err != nil {
@@ -451,8 +451,8 @@ func TestAccessACT(t *testing.T) {
 		"new",
 		"act",
 		"--dry-run",
-		"--grantees",
-		"PUB_KEY_FILE/CSV",
+		"--grant-keys",
+		granteesPubkeyListFile.Name(),
 		ref,
 	)
 
@@ -488,10 +488,10 @@ func TestAccessACT(t *testing.T) {
 	a := e.Access
 
 	if a.Type != "act" {
-		t.Errorf(`got access type %q, expected "pk"`, a.Type)
+		t.Fatalf(`got access type %q, expected "act"`, a.Type)
 	}
 	if len(a.Salt) < 32 {
-		t.Errorf(`got salt with length %v, expected not less the 32 bytes`, len(a.Salt))
+		t.Fatalf(`got salt with length %v, expected not less the 32 bytes`, len(a.Salt))
 	}
 	if a.KdfParams != nil {
 		t.Fatal("manifest access kdf params should be nil")

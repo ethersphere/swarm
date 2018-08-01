@@ -154,6 +154,10 @@ var (
 		Name:  "grant-pk",
 		Usage: "grants a given public key access to an ACT",
 	}
+	SwarmAccessGrantKeysFlag = cli.StringFlag{
+		Name:  "grant-keys",
+		Usage: "grants a given list of public keys in the following file (separated by line breaks) access to an ACT",
+	}
 	SwarmUpFromStdinFlag = cli.BoolFlag{
 		Name:  "stdin",
 		Usage: "reads data to be uploaded from stdin",
@@ -303,7 +307,7 @@ func init() {
 							Action:             accessNewACT,
 							CustomHelpTemplate: helpTemplate,
 							Flags: []cli.Flag{
-								SwarmAccessGrantPKFlag,
+								SwarmAccessGrantKeysFlag,
 								SwarmDryRunFlag,
 							},
 							Name:        "act",
@@ -312,6 +316,8 @@ func init() {
 							Description: "encrypts a reference and embeds it into a root access manifest and prints the resulting manifest",
 						},
 					},
+				},
+			},
 		},
 		{
 			CustomHelpTemplate: helpTemplate,
@@ -365,16 +371,13 @@ func init() {
 			Description:        "Prints the swarm hash of file or directory",
 		},
 		{
-			Action:    download,
-			Name:      "down",
-			Flags:     []cli.Flag{SwarmRecursiveFlag, SwarmAccessPasswordFlag},
-			Usage:     "downloads a swarm manifest or a file inside a manifest",
-			ArgsUsage: " <uri> [<dir>]",
-			Description: `
-Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.
-`,
+			Action:      download,
+			Name:        "down",
+			Flags:       []cli.Flag{SwarmRecursiveFlag, SwarmAccessPasswordFlag},
+			Usage:       "downloads a swarm manifest or a file inside a manifest",
+			ArgsUsage:   " <uri> [<dir>]",
+			Description: `Downloads a swarm bzz uri to the given dir. When no dir is provided, working directory is assumed. --recursive flag is expected when downloading a manifest with multiple entries.`,
 		},
-
 		{
 			Name:               "manifest",
 			CustomHelpTemplate: helpTemplate,
@@ -474,16 +477,14 @@ pv(1) tool to get a progress bar:
 					Name:               "import",
 					Usage:              "import chunks from a tar archive into a local chunk database (use - to read from stdin)",
 					ArgsUsage:          "<chunkdb> <file>",
-					Description: `
-Import chunks from a tar archive into a local chunk database (use - to read from stdin).
+					Description: `Import chunks from a tar archive into a local chunk database (use - to read from stdin).
 
     swarm db import ~/.ethereum/swarm/bzz-KEY/chunks chunks.tar
 
 The import may be quite large, consider piping the input through the Unix
 pv(1) tool to get a progress bar:
 
-    pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -
-`,
+    pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -`,
 				},
 				{
 					Action:             dbClean,

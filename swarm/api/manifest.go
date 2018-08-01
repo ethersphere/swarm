@@ -65,7 +65,7 @@ type AccessEntry struct {
 	Type      AccessType
 	Publisher string
 	Salt      []byte
-	Act       *URI
+	Act       string
 	KdfParams *KdfParams
 }
 
@@ -77,7 +77,7 @@ func (a *AccessEntry) MarshalJSON() (out []byte, err error) {
 		Type      AccessType `json:"type,omitempty"`
 		Publisher string     `json:"publisher,omitempty"`
 		Salt      string     `json:"salt,omitempty"`
-		Act       *URI       `json:"act,omitempty"`
+		Act       string     `json:"act,omitempty"`
 		KdfParams *KdfParams `json:"kdf_params,omitempty"`
 	}{
 		Type:      a.Type,
@@ -94,7 +94,7 @@ func (a *AccessEntry) UnmarshalJSON(value []byte) error {
 		Type      AccessType `json:"type,omitempty"`
 		Publisher string     `json:"publisher,omitempty"`
 		Salt      string     `json:"salt,omitempty"`
-		Act       *URI       `json:"act,omitempty"`
+		Act       string     `json:"act,omitempty"`
 		KdfParams *KdfParams `json:"kdf_params,omitempty"`
 	}{}
 
@@ -153,7 +153,7 @@ func NewAccessEntryPK(publisher string, salt []byte) (*AccessEntry, error) {
 	}, nil
 }
 
-func NewAccessEntryACT(publisher string, salt []byte, act *URI) (*AccessEntry, error) {
+func NewAccessEntryACT(publisher string, salt []byte, act string) (*AccessEntry, error) {
 	if len(salt) != 32 {
 		return nil, fmt.Errorf("salt should be 32 bytes long")
 	}

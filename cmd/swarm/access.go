@@ -230,7 +230,10 @@ func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (acces
 	initSwarmNode(bzzconfig, stack, ctx)
 	privateKey := getAccount(bzzconfig.BzzAccount, ctx, stack)
 
-	accessKey = randentropy.GetEntropyCSPRNG(32)
+	accessKey = make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
+		panic("reading from crypto/rand failed: " + err.Error())
+	}
 
 	lookupPathEncryptedAccessKeyMap := make(map[string]string)
 	for _, v := range granteesPublicKeys {
@@ -291,7 +294,7 @@ func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (acces
 		return nil, nil, err
 	}
 
-	ae, err = api.NewAccessEntryACT(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)), salt, uri)
+	ae, err = api.NewAccessEntryACT(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)), salt, uri.Addr)
 	if err != nil {
 		log.Error("error generating access entry", "err", err)
 		return nil, nil, err
