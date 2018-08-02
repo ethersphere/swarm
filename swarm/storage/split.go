@@ -73,17 +73,12 @@ func (s *SimpleSplitter) Close() error {
 func (s *SimpleSplitter) ReadFrom(r io.Reader) (int64, error) {
 	//lastChunkIndex := -1
 	for {
-		buf, err := s.hasher.GetBuffer(s.count)
+		c, err := s.hasher.WriteBuffer(s.count, r)
 		if err != nil {
 			return s.count, err
 		}
-		n, err := r.Read(buf)
-		if err != nil && err != io.EOF {
-			return s.count, err
-		}
-		s.count += int64(n)
+		s.count += int64(c)
 		s.sectionCount++
-		log.Debug("readfrom", "c", n)
 		if err == io.EOF {
 			log.Debug("have eof")
 			//s.Close()

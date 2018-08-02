@@ -69,6 +69,7 @@ type fakeHasher struct {
 	chunkSize   int
 	count       int
 	cap         int
+	length      int64
 	doneC       chan struct{}
 }
 
@@ -102,13 +103,22 @@ func (fh *fakeHasher) ChunkSize() int {
 	return fh.chunkSize
 }
 
+func (fh *fakeHasher) SetLength(c int64) {
+	fh.length = c
+}
+
 func (fh *fakeHasher) Reset() { fh.output = nil; return }
 
-func (fh *fakeHasher) Write(section int, data []byte) {
+func (fh *fakeHasher) WriteBuffer(offset int64, r io.Reader) (int, error) {
+	return 0, nil
+}
+
+func (fh *fakeHasher) WriteSection(section int64, data []byte) int {
 	log.Warn("wrigint to hasher", "src", section, "data", data)
-	pos := section * fh.sectionSize
+	pos := section * int64(fh.sectionSize)
 	copy(fh.output[pos:], data)
 	fh.doneC <- struct{}{}
+	return len(data)
 }
 
 func (fh *fakeHasher) Size() int {
