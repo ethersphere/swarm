@@ -60,7 +60,7 @@ type synctestConfig struct {
 func TestSyncingViaGlobalSync(t *testing.T) {
 	// this test fails often on Travis, but not locally
 	// TODO: fix it
-	t.Skip()
+	//t.Skip()
 	//if nodes/chunks have been provided via commandline,
 	//run the tests with these values
 	if *nodes != 0 && *chunks != 0 {
@@ -185,6 +185,10 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 			conf.addrToIDMap[string(a)] = n
 		}
 
+		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+			return err
+		}
+
 		//get the the node at that index
 		//this is the node selected for upload
 		node := sim.RandomUpNode()
@@ -200,9 +204,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
 
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-			return err
-		}
+		time.Sleep(1 * time.Second)
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
