@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
-	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -89,25 +88,6 @@ func RecoverPanic(h http.Handler) http.Handler {
 		defer func() {
 			if err := recover(); err != nil {
 				log.Error("panic recovery!", "stack trace", debug.Stack(), "url", r.URL.String(), "headers", r.Header)
-			}
-		}()
-		h.ServeHTTP(w, r)
-	})
-}
-func HeaderControl(h http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer func() {
-			if w.Header().Get("Status") == "" {
-				return
-			}
-			code, err := strconv.Atoi(w.Header().Get("Status"))
-			if err != nil {
-				log.Error("had an error parsing the string to int")
-				panic(err)
-			}
-			if code >= 400 {
-				w.Header().Del("Cache-Control") //avoid sending cache headers for errors!
-				w.Header().Del("ETag")
 			}
 		}()
 		h.ServeHTTP(w, r)

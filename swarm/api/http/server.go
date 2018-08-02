@@ -96,7 +96,6 @@ func NewServer(api *api.API, corsString string) *Server {
 
 	defaultMiddlewares := []Adapter{
 		RecoverPanic,
-		HeaderControl,
 		SetRequestID,
 		InitLoggingResponseWriter,
 		ParseURI,
