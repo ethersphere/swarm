@@ -28,6 +28,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/textproto"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -649,13 +650,24 @@ func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
 // manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
 // points to that address
 func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, error) {
-
 	res, err := http.Get(c.Gateway + "/bzz-resource:/" + manifestAddressOrDomain)
 	if err != nil {
 		return nil, err
 	}
 	return res.Body, nil
+}
 
+func (c *Client) QueryResource(lookup *mru.LookupParams) (io.ReadCloser, error) {
+	URL, err := url.Parse(c.Gateway + "/bzz-resource:/")
+	if err != nil {
+		return nil, err
+	}
+	lookup.ToURL(URL)
+	res, err := http.Get(URL.String())
+	if err != nil {
+		return nil, err
+	}
+	return res.Body, nil
 }
 
 // GetResourceMetadata returns a structure that describes the Mutable Resource

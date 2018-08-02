@@ -29,6 +29,7 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -236,8 +237,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// creates resource and sets update 1
-	url := fmt.Sprintf("%s/bzz-resource:/", srv.URL)
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	testUrl := fmt.Sprintf("%s/bzz-resource:/", srv.URL)
+	resp, err := http.Post(testUrl, "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -261,8 +262,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get the manifest
-	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(url)
+	testUrl = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -288,8 +289,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get bzz manifest transparent resource resolve
-	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(url)
+	testUrl = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,8 +304,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get non-existent name, should fail
-	url = fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
-	resp, err = http.Get(url)
+	testUrl = fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
+	resp, err = http.Get(testUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,8 +318,8 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.1) through resource directly
 	log.Info("get update latest = 1.1", "addr", correctManifestAddrHex)
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url)
+	testUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,8 +339,8 @@ func TestBzzResource(t *testing.T) {
 	log.Info("update 2")
 
 	// 1.- get metadata about this resource
-	url = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url + "meta")
+	testUrl = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testUrl + "meta")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -365,7 +366,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	resp, err = http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err = http.Post(testUrl, "application/json", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,8 +377,8 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.2) through resource directly
 	log.Info("get update 1.2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url)
+	testUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,8 +396,8 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.2) with specified period
 	log.Info("get update latest = 1.2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url)
+	testUrl = fmt.Sprintf("%s/bzz-resource:/%s/?period=1", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -414,8 +415,8 @@ func TestBzzResource(t *testing.T) {
 
 	// get first update (1.1) with specified period and version
 	log.Info("get first update 1.1")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url)
+	testUrl = fmt.Sprintf("%s/bzz-resource:/%s?period=1&version=1", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,6 +431,30 @@ func TestBzzResource(t *testing.T) {
 	if !bytes.Equal(databytes, b) {
 		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
 	}
+
+	// test manifest-less queries
+	log.Info("get first update 1.1 via direct query")
+	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/?period=1&version=1", srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	updateRequest.ViewID().ToURL(urlq) // this adds viewID query parameters
+	resp, err = http.Get(urlq.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, b) {
+		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	}
+
 }
 
 func TestBzzGetPath(t *testing.T) {

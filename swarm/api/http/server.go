@@ -541,8 +541,8 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 
 // Retrieve mutable resource updates:
 // bzz-resource://<id> - get latest update
-// bzz-resource://<id>/<n> - get latest update on period n
-// bzz-resource://<id>/<n>/<m> - get update version m of period n
+// bzz-resource://<id>/?period=n - get latest update on period n
+// bzz-resource://<id>/?period=n&version=m - get update version m of period n
 // bzz-resource://<id>/meta - get metadata and next version information
 // <id> = ens name or hash
 // TODO: Enable pass maxPeriod parameter
@@ -552,82 +552,66 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.get.resource", "ruid", ruid)
 	var err error
 
-	// resolve the content key.
-	manifestAddr := uri.Address()
-	if manifestAddr == nil {
-		manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr)
+	var viewID *mru.ResourceViewID
+
+	if uri.Addr != "" {
+		// resolve the content key.
+		manifestAddr := uri.Address()
+		if manifestAddr == nil {
+			manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr)
+			if err != nil {
+				getFail.Inc(1)
+				RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
+				return
+			}
+		} else {
+			w.Header().Set("Cache-Control", "max-age=2147483648")
+		}
+
+		// get the resource ViewID from the manifest
+		viewID, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 		if err != nil {
 			getFail.Inc(1)
-			RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
+			RespondError(w, r, fmt.Sprintf("error resolving resource view ID for %s: %s", uri.Addr, err), http.StatusNotFound)
 			return
 		}
+		log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "viewID", viewID.Hex())
 	} else {
-		w.Header().Set("Cache-Control", "max-age=2147483648")
+		var v mru.ResourceViewID
+		if err := v.FromURL(r.URL); err != nil {
+			getFail.Inc(1)
+			RespondError(w, r, fmt.Sprintf("error parsing view ID parameters: %s", err), http.StatusBadRequest)
+			return
+		}
+		viewID = &v
 	}
 
-	// get the resource ViewID from the manifest
-	viewID, err := s.api.ResolveResourceManifest(r.Context(), manifestAddr)
-	if err != nil {
-		getFail.Inc(1)
-		RespondError(w, r, fmt.Sprintf("error resolving resource view ID for %s: %s", uri.Addr, err), http.StatusNotFound)
+	// determine if the query specifies period and version or it is a metadata query
+	if uri.Path == "meta" {
+		unsignedUpdateRequest, err := s.api.ResourceNewRequest(r.Context(), viewID)
+		if err != nil {
+			getFail.Inc(1)
+			RespondError(w, r, fmt.Sprintf("cannot retrieve resource metadata for viewID=%s: %s", viewID.Hex(), err), http.StatusNotFound)
+			return
+		}
+		rawResponse, err := unsignedUpdateRequest.MarshalJSON()
+		if err != nil {
+			RespondError(w, r, fmt.Sprintf("cannot encode unsigned UpdateRequest: %v", err), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Add("Content-type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, string(rawResponse))
 		return
 	}
 
-	log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "viewID", viewID.Hex())
-
-	// determine if the query specifies period and version or it is a metadata query
-	var params []string
-	if len(uri.Path) > 0 {
-		if uri.Path == "meta" {
-			unsignedUpdateRequest, err := s.api.ResourceNewRequest(r.Context(), viewID)
-			if err != nil {
-				getFail.Inc(1)
-				RespondError(w, r, fmt.Sprintf("cannot retrieve resource metadata for viewID=%s: %s", viewID.Hex(), err), http.StatusNotFound)
-				return
-			}
-			rawResponse, err := unsignedUpdateRequest.MarshalJSON()
-			if err != nil {
-				RespondError(w, r, fmt.Sprintf("cannot encode unsigned UpdateRequest: %v", err), http.StatusInternalServerError)
-				return
-			}
-			w.Header().Add("Content-type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			fmt.Fprint(w, string(rawResponse))
-			return
-
-		}
-
-		params = strings.Split(uri.Path, "/")
-
+	lookupParams := mru.NewLookupParams(viewID, 0, 0, 0)
+	if err = lookupParams.FromURL(r.URL, false); err != nil { // àrse period, version
+		RespondError(w, r, fmt.Sprintf("invalid mutable resource request:%s", err), http.StatusBadRequest)
+		return
 	}
-	var data []byte
-	now := time.Now()
 
-	switch len(params) {
-	case 0: // latest only
-		data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatest(viewID))
-	case 2: // specific period and version
-		var version uint64
-		var period uint64
-		version, err = strconv.ParseUint(params[1], 10, 32)
-		if err != nil {
-			break
-		}
-		period, err = strconv.ParseUint(params[0], 10, 32)
-		if err != nil {
-			break
-		}
-		data, err = s.api.ResourceLookup(r.Context(), mru.LookupVersion(viewID, uint32(period), uint32(version)))
-	case 1: // last version of specific period
-		var period uint64
-		period, err = strconv.ParseUint(params[0], 10, 32)
-		if err != nil {
-			break
-		}
-		data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatestVersionInPeriod(viewID, uint32(period)))
-	default: // bogus
-		err = mru.NewError(storage.ErrInvalidValue, "invalid mutable resource request")
-	}
+	data, err := s.api.ResourceLookup(r.Context(), lookupParams)
 
 	// any error from the switch statement will end up here
 	if err != nil {
@@ -639,7 +623,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	// All ok, serve the retrieved update
 	log.Debug("Found update", "viewID", viewID.Hex(), "ruid", ruid)
 	w.Header().Set("Content-Type", "application/octet-stream")
-	http.ServeContent(w, r, "", now, bytes.NewReader(data))
+	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
 }
 
 func (s *Server) translateResourceError(w http.ResponseWriter, r *http.Request, supErr string, err error) (int, error) {

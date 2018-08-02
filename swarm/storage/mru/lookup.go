@@ -18,7 +18,10 @@ package mru
 
 import (
 	"encoding/binary"
+	"fmt"
 	"hash"
+	"net/url"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -32,8 +35,41 @@ type LookupParams struct {
 }
 
 // RootAddr returns the metadata chunk address
-func (r *LookupParams) ViewID() *ResourceViewID {
-	return &r.viewID
+func (lp *LookupParams) ViewID() *ResourceViewID {
+	return &lp.viewID
+}
+
+func (lp *LookupParams) FromURL(url *url.URL, parseView bool) error {
+	query := url.Query()
+	version, _ := strconv.ParseUint(query.Get("version"), 10, 32)
+	period, _ := strconv.ParseUint(query.Get("period"), 10, 32)
+	limit, _ := strconv.ParseUint(query.Get("limit"), 10, 32)
+
+	if period == 0 && version != 0 {
+		return NewError(ErrInvalidValue, "cannot have version !=0 if period is 0")
+	}
+	lp.version = uint32(version)
+	lp.period = uint32(period)
+	lp.Limit = uint32(limit)
+	if parseView {
+		return lp.viewID.FromURL(url)
+	}
+	return nil
+}
+
+func (lp *LookupParams) ToURL(url *url.URL) {
+	query := url.Query()
+	if lp.period != 0 {
+		query.Set("period", fmt.Sprintf("%d", lp.period))
+	}
+	if lp.version != 0 {
+		query.Set("version", fmt.Sprintf("%d", lp.version))
+	}
+	if lp.Limit != 0 {
+		query.Set("limit", fmt.Sprintf("%d", lp.version))
+	}
+	url.RawQuery = query.Encode()
+	lp.viewID.ToURL(url)
 }
 
 func NewLookupParams(viewID *ResourceViewID, period, version uint32, limit uint32) *LookupParams {

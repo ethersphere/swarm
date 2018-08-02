@@ -447,12 +447,12 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	// our mutable resource name
 	resourceName := "El Quijote"
-
-	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
+	resourceID := &mru.ResourceID{
 		Topic:     mru.NewTopic(resourceName, nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
-	})
+	}
+	createRequest, err := mru.NewCreateUpdateRequest(resourceID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -499,6 +499,23 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	}
 
 	reader, err = client.GetResource(correctManifestAddrHex)
+	if err != nil {
+		t.Fatalf("Error retrieving resource: %s", err)
+	}
+	defer reader.Close()
+	gotData, err = ioutil.ReadAll(reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(databytes, gotData) {
+		t.Fatalf("Expected: %v, got %v", databytes, gotData)
+	}
+
+	// now try retrieving resource without a manifest
+
+	viewID := mru.NewViewID(resourceID, signer.Address())
+	lookupParams := mru.LookupLatest(viewID)
+	reader, err = client.QueryResource(lookupParams)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)
 	}

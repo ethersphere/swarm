@@ -2,7 +2,10 @@ package mru
 
 import (
 	"encoding/json"
+	"fmt"
 	"hash"
+	"net/url"
+	"strconv"
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -19,6 +22,13 @@ type ResourceViewID struct {
 // ResourceIDLength bytes
 // ownerAddr common.AddressLength bytes
 const resourceViewIDLength = ResourceIDLength + common.AddressLength
+
+func NewViewID(resourceID *ResourceID, owner common.Address) *ResourceViewID {
+	return &ResourceViewID{
+		resourceID: *resourceID,
+		ownerAddr:  owner,
+	}
+}
 
 // mapKey calculates a unique id for this view for the cache map in `Handler`
 func (u *ResourceViewID) mapKey() uint64 {
@@ -98,4 +108,32 @@ func (u *ResourceViewID) MarshalJSON() ([]byte, error) {
 		ResourceID: u.resourceID,
 		OwnerAddr:  u.ownerAddr,
 	})
+}
+
+func (u *ResourceViewID) FromURL(url *url.URL) error {
+	query := url.Query()
+	startTime, err := strconv.ParseUint(query.Get("starttime"), 10, 64)
+	if err != nil {
+		return err
+	}
+	frequency, err := strconv.ParseUint(query.Get("frequency"), 10, 64)
+	if err != nil {
+		return err
+	}
+	if err = u.resourceID.Topic.FromHex(query.Get("topic")); err != nil {
+		return err
+	}
+	u.ownerAddr = common.HexToAddress(query.Get("owner"))
+	u.resourceID.Frequency = frequency
+	u.resourceID.StartTime.Time = startTime
+	return nil
+}
+
+func (u *ResourceViewID) ToURL(url *url.URL) {
+	query := url.Query()
+	query.Set("starttime", fmt.Sprintf("%d", u.resourceID.StartTime.Time))
+	query.Set("frequency", fmt.Sprintf("%d", u.resourceID.Frequency))
+	query.Set("topic", u.resourceID.Topic.Hex())
+	query.Set("owner", u.ownerAddr.Hex())
+	url.RawQuery = query.Encode()
 }
