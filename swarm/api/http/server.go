@@ -41,10 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
-	opentracing "github.com/opentracing/opentracing-go"
 
 	"github.com/rs/cors"
 )
@@ -97,9 +95,12 @@ func NewServer(api *api.API, corsString string) *Server {
 	server := &Server{api: api}
 
 	defaultMiddlewares := []Adapter{
+		RecoverPanic,
+		HeaderControl,
 		SetRequestID,
 		InitLoggingResponseWriter,
 		ParseURI,
+		InstrumentOpenTracing,
 	}
 
 	mux := http.NewServeMux()
@@ -182,7 +183,7 @@ type Server struct {
 }
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
-	log.Debug("handleGetBzz")
+	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()))
 	if r.Header.Get("Accept") == "application/x-tar" {
 		uri := GetURI(r.Context())
 		reader, err := s.api.GetDirectoryTar(r.Context(), uri)
@@ -224,13 +225,6 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 
 	postRawCount.Inc(1)
 
-	ctx := r.Context()
-	var sp opentracing.Span
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"http.post.raw")
-	defer sp.Finish()
-
 	toEncrypt := false
 	uri := GetURI(r.Context())
 	if uri.Addr == "encrypt" {
@@ -255,7 +249,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr, _, err := s.api.Store(ctx, r.Body, r.ContentLength, toEncrypt)
+	addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
 		RespondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -278,13 +272,6 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
-
-	var sp opentracing.Span
-	ctx := r.Context()
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"http.post.files")
-	defer sp.Finish()
 
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
@@ -318,7 +305,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		log.Debug("new manifest", "ruid", ruid, "key", addr)
 	}
 
-	newAddr, err := s.api.UpdateManifest(ctx, addr, func(mw *api.ManifestWriter) error {
+	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 		case "application/x-tar":
 			_, err := s.handleTarUpload(r, mw)
@@ -491,14 +478,6 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.post.resource", "ruid", ruid)
-
-	var sp opentracing.Span
-	ctx := r.Context()
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"http.post.resource")
-	defer sp.Finish()
-
 	var err error
 
 	// Creation and update must send mru.updateRequestJSON JSON structure
@@ -703,13 +682,6 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.get", "ruid", ruid, "uri", uri)
 	getCount.Inc(1)
 
-	var sp opentracing.Span
-	ctx := r.Context()
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"http.get")
-	defer sp.Finish()
-
 	var err error
 	addr := uri.Address()
 	if addr == nil {
@@ -776,8 +748,8 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check the root chunk exists by retrieving the file's size
-	reader, isEncrypted := s.api.Retrieve(ctx, addr)
-	if _, err := reader.Size(ctx, nil); err != nil {
+	reader, isEncrypted := s.api.Retrieve(r.Context(), addr)
+	if _, err := reader.Size(r.Context(), nil); err != nil {
 		getFail.Inc(1)
 		RespondError(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
 		return
@@ -811,13 +783,6 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.get.list", "ruid", ruid, "uri", uri)
 	getListCount.Inc(1)
 
-	var sp opentracing.Span
-	ctx := r.Context()
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"http.get.list")
-	defer sp.Finish()
-
 	// ensure the root path has a trailing slash so that relative URLs work
 	if uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
 		http.Redirect(w, r, r.URL.Path+"/", http.StatusMovedPermanently)
@@ -832,7 +797,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Debug("handle.get.list: resolved", "ruid", ruid, "key", addr)
 
-	list, err := s.api.GetManifestList(ctx, addr, uri.Path)
+	list, err := s.api.GetManifestList(r.Context(), addr, uri.Path)
 	if err != nil {
 		getListFail.Inc(1)
 		RespondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -870,17 +835,9 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.get.file", "ruid", ruid)
 	getFileCount.Inc(1)
 
-	var sp opentracing.Span
-	ctx := r.Context()
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"http.get.file")
-	defer sp.Finish()
-
 	// ensure the root path has a trailing slash so that relative URLs work
 	if uri.Path == "" && !strings.HasSuffix(r.URL.Path, "/") {
 		http.Redirect(w, r, r.URL.Path+"/", http.StatusMovedPermanently)
-		sp.Finish()
 		return
 	}
 	var err error
@@ -891,7 +848,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			getFileFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
-			sp.Finish()
 			return
 		}
 	} else {
@@ -907,7 +863,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	if noneMatchEtag != "" {
 		if bytes.Equal(storage.Address(common.Hex2Bytes(noneMatchEtag)), contentKey) {
 			w.WriteHeader(http.StatusNotModified)
-			sp.Finish()
 			return
 		}
 	}
@@ -927,11 +882,10 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.api.GetManifestList(ctx, manifestAddr, uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), manifestAddr, uri.Path)
 		if err != nil {
 			getFileFail.Inc(1)
 			RespondError(w, r, err.Error(), http.StatusInternalServerError)
-			sp.Finish()
 			return
 		}
 
@@ -942,10 +896,9 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check the root chunk exists by retrieving the file's size
-	if _, err := reader.Size(ctx, nil); err != nil {
+	if _, err := reader.Size(r.Context(), nil); err != nil {
 		getFileNotFound.Inc(1)
 		RespondError(w, r, fmt.Sprintf("file not found %s: %s", uri, err), http.StatusNotFound)
-		sp.Finish()
 		return
 	}
 
@@ -953,12 +906,10 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		getFileNotFound.Inc(1)
 		RespondError(w, r, fmt.Sprintf("file not found %s: %s", uri, err), http.StatusNotFound)
-		sp.Finish()
 		return
 	}
 
 	log.Debug("got response in buffer", "len", len(buf), "ruid", ruid)
-	sp.Finish()
 
 	w.Header().Set("Content-Type", contentType)
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(buf))

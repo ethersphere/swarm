@@ -3,20 +3,25 @@ package http
 import (
 	"fmt"
 	"net/http"
+	"runtime/debug"
 	"strconv"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/pborman/uuid"
 )
 
+// Adapt chains h (main request handler) main handler to adapters (middleware handlers)
+// Please note that the order of execution for `adapters` is FIFO (adapters[0] will be executed first)
 func Adapt(h http.Handler, adapters ...Adapter) http.Handler {
-	for _, adapter := range adapters {
+	for i, _ := range adapters {
+		adapter := adapters[len(adapters)-1-i]
 		h = adapter(h)
 	}
-	return HeaderControl(h)
+	return h
 }
 
 type Adapter func(http.Handler) http.Handler
@@ -51,7 +56,6 @@ func ParseURI(h http.Handler) http.Handler {
 
 		ctx := r.Context()
 		r = r.WithContext(SetURI(ctx, uri))
-
 		log.Debug("parsed request path", "ruid", GetRUID(r.Context()), "method", r.Method, "uri.Addr", uri.Addr, "uri.Path", uri.Path, "uri.Scheme", uri.Scheme)
 
 		h.ServeHTTP(w, r)
@@ -66,12 +70,30 @@ func InitLoggingResponseWriter(h http.Handler) http.Handler {
 	})
 }
 
-func InitMetrics(h http.Handler) http.Handler {
+func InstrumentOpenTracing(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		h.ServeHTTP(w, r)
+		uri := GetURI(r.Context())
+		if uri == nil || r.Method == "" || (uri != nil && uri.Scheme == "") {
+			h.ServeHTTP(w, r) // soft fail
+			return
+		}
+		spanName := fmt.Sprintf("http.%s.%s", r.Method, uri.Scheme)
+		ctx, sp := spancontext.StartSpan(r.Context(), spanName)
+		defer sp.Finish()
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 
+func RecoverPanic(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if err := recover(); err != nil {
+				log.Error("panic recovery!", "stack trace", debug.Stack(), "url", r.URL.String(), "headers", r.Header)
+			}
+		}()
+		h.ServeHTTP(w, r)
+	})
+}
 func HeaderControl(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		defer func() {
