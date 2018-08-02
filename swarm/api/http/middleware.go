@@ -17,7 +17,7 @@ import (
 // Adapt chains h (main request handler) main handler to adapters (middleware handlers)
 // Please note that the order of execution for `adapters` is FIFO (adapters[0] will be executed first)
 func Adapt(h http.Handler, adapters ...Adapter) http.Handler {
-	for i, _ := range adapters {
+	for i := range adapters {
 		adapter := adapters[len(adapters)-1-i]
 		h = adapter(h)
 	}
