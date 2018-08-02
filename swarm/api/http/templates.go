@@ -78,7 +78,7 @@ const bzzList = `{{ define "content" }}
     {{ range .List.CommonPrefixes }}
     <tr>
       <td>
-        <a href="{{ basename . }}/">{{ basename . }}/</a>
+        <a class="normal-link" href="{{ basename . }}/">{{ basename . }}/</a>
       </td>
       <td>DIR</td>
       <td>-</td>
@@ -189,7 +189,6 @@ a, a:visited, a:active {
 a.normal-link, a.normal-link:active { color: #0000EE; }
 a.normal-link:visited { color: #551A8B; }
 
-
 table {
   border-collapse: separate;
 }
@@ -231,18 +230,12 @@ td {
   padding: 20px 20px 0;
 }
 
-
-
 .logo {
   margin: 100px 80px 0;
 }
 
 .logo a img {
   max-width: 140px;
-}
-
-.swarm-link {
-  color: darkorange;
 }
 
 /* Tablet < 600p*/

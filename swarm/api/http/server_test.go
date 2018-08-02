@@ -565,7 +565,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			json: `{"common_prefixes":["a/"]}`,
 			pageFragments: []string{
 				fmt.Sprintf("Swarm index of bzz:/%s/", ref),
-				`<a href="a/">a/</a>`,
+				`<a class="normal-link" href="a/">a/</a>`,
 			},
 		},
 		{
@@ -573,7 +573,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 			json: `{"common_prefixes":["a/b/"],"entries":[{"hash":"011b4d03dd8c01f1049143cf9c4c817e4b167f1d1b83e5c6f0f10d89ba1e7bce","path":"a/a","mod_time":"0001-01-01T00:00:00Z"}]}`,
 			pageFragments: []string{
 				fmt.Sprintf("Swarm index of bzz:/%s/a/", ref),
-				`<a href="b/">b/</a>`,
+				`<a class="normal-link" href="b/">b/</a>`,
 				`<a class="normal-link" href="a">a</a>`,
 			},
 		},

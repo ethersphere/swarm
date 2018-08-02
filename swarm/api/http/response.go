@@ -67,7 +67,7 @@ func ShowMultipleChoices(w http.ResponseWriter, r *http.Request, list api.Manife
 
 	uri.Scheme = "bzz-list"
 	//request the same url just with bzz-list
-	msg += fmt.Sprintf("Disambiguation:<br/>Your request may refer to multiple choices.<br/>Click <a class=\"swarm-link\" href='"+"/"+uri.String()+"'>here</a> if your browser does not redirect you within 5 seconds.<script>setTimeout(\"location.href='%s';\",5000);</script><br/>", "/"+uri.String())
+	msg += fmt.Sprintf("Disambiguation:<br/>Your request may refer to multiple choices.<br/>Click <a class=\"orange\" href='"+"/"+uri.String()+"'>here</a> if your browser does not redirect you within 5 seconds.<script>setTimeout(\"location.href='%s';\",5000);</script><br/>", "/"+uri.String())
 	RespondTemplate(w, r, "error", msg, http.StatusMultipleChoices)
 }
 
@@ -126,7 +126,7 @@ func respondJSON(w http.ResponseWriter, r *http.Request, params *ResponseParams)
 	return json.NewEncoder(w).Encode(params)
 }
 
-//return JSON
+//return plaintext
 func respondPlaintext(w http.ResponseWriter, r *http.Request, params *ResponseParams) error {
 	plaintextCounter.Inc(1)
 	log.Debug("respondPlaintext", "ruid", GetRUID(r.Context()))
