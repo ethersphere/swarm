@@ -22,6 +22,8 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/p2p/discover"
+
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -41,10 +43,10 @@ type mockNetFetcher struct{}
 
 func (m *mockNetFetcher) Request(ctx context.Context) {
 }
-func (m *mockNetFetcher) Offer(ctx context.Context) {
+func (m *mockNetFetcher) Offer(ctx context.Context, source *discover.NodeID) {
 }
 
-func newFakeFetchFunc(context.Context, storage.Address, *sync.Map) storage.NetFetcher {
+func newFakeNetFetcher(context.Context, storage.Address, *sync.Map) storage.NetFetcher {
 	return &mockNetFetcher{}
 }
 
@@ -67,7 +69,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 	if err != nil {
 		return nil, err
 	}
-	netStore.NewNetFetcherFunc = newFakeFetchFunc
+	netStore.NewNetFetcherFunc = newFakeNetFetcher
 	rh.SetStore(netStore)
 	return &TestHandler{rh}, nil
 }

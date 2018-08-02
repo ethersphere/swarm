@@ -22,6 +22,8 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/p2p/discover"
+
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -31,7 +33,7 @@ type (
 
 type NetFetcher interface {
 	Request(ctx context.Context)
-	Offer(ctx context.Context)
+	Offer(ctx context.Context, source *discover.NodeID)
 }
 
 // NetStore is an extension of local storage
@@ -235,7 +237,16 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 		defer f.peers.Delete(peer)
 	}
 
-	f.netFetcher.Request(rctx)
+	// If there is a source in the context then it is an offer, otherwise a request
+	sourceIF := rctx.Value("source")
+	if sourceIF != nil {
+		var source *discover.NodeID
+		id := discover.MustHexID(sourceIF.(string))
+		source = &id
+		f.netFetcher.Offer(rctx, source)
+	} else {
+		f.netFetcher.Request(rctx)
+	}
 
 	// wait until either the chunk is delivered or the context is done
 	select {

@@ -63,11 +63,11 @@ func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*disco
 	return source, make(chan struct{}), nil
 }
 
-// TestFetcherSingleFetch creates a Fetcher using mockRequester, and run it with a sample set of peers to skip.
+// TestFetcherSingleRequest creates a Fetcher using mockRequester, and run it with a sample set of peers to skip.
 // mockRequester pushes a Request on a channel every time the request function is called. Using
-// this channel we test if calling Fetcher.fetch calls the request function, and whether it uses
+// this channel we test if calling Fetcher.Request calls the request function, and whether it uses
 // the correct peers to skip which we provided for the fetcher.run function.
-func TestFetcherSingleFetch(t *testing.T) {
+func TestFetcherSingleRequest(t *testing.T) {
 	requester := newMockRequester()
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
@@ -123,7 +123,7 @@ func TestCancelStopsFetcher(t *testing.T) {
 
 	rctx, rcancel := context.WithTimeout(ctx, 100*time.Millisecond)
 	defer rcancel()
-	// we call fetch with an active context
+	// we call Request with an active context
 	fetcher.Request(rctx)
 
 	// fetcher should not initiate request, we can only check by waiting a bit and making sure no request is happening
@@ -134,8 +134,8 @@ func TestCancelStopsFetcher(t *testing.T) {
 	}
 }
 
-// TestFetchCancelStopsFetch tests that calling a fetch function with a cancelled context does not initiate a request
-func TestFetchCancelStopsFetch(t *testing.T) {
+// TestFetchCancelStopsRequest tests that calling a Request function with a cancelled context does not initiate a request
+func TestFetchCancelStopsRequest(t *testing.T) {
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
@@ -151,7 +151,7 @@ func TestFetchCancelStopsFetch(t *testing.T) {
 	rctx, rcancel := context.WithCancel(context.Background())
 	rcancel()
 
-	// we call fetch with a cancelled context
+	// we call Request with a cancelled context
 	fetcher.Request(rctx)
 
 	// fetcher should not initiate request, we can only check by waiting a bit and making sure no request is happening
@@ -161,7 +161,7 @@ func TestFetchCancelStopsFetch(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	// if there is another fetch with active context, there should be a request, because the fetcher itself is not cancelled
+	// if there is another Request with active context, there should be a request, because the fetcher itself is not cancelled
 	rctx = context.Background()
 	fetcher.Request(rctx)
 
@@ -172,10 +172,10 @@ func TestFetchCancelStopsFetch(t *testing.T) {
 	}
 }
 
-// TestFetchUsesSourceFromContext tests Fetcher request behavior when there is a source in the context.
+// TestOfferUsesSource tests Fetcher Offer behavior.
 // In this case there should be 1 (and only one) request initiated from the source peer, and the
-// source nodeid from the context should appear in the peersToSkip map.
-func TestFetchUsesSourceFromContext(t *testing.T) {
+// source nodeid should appear in the peersToSkip map.
+func TestOfferUsesSource(t *testing.T) {
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
@@ -188,9 +188,9 @@ func TestFetchUsesSourceFromContext(t *testing.T) {
 	// start the fetcher
 	go fetcher.run(ctx, peersToSkip)
 
-	// set the source peer on the context and call the fetch function with it
-	rctx := context.WithValue(context.Background(), "source", sourcePeerID.String())
-	fetcher.Request(rctx)
+	rctx := context.Background()
+	// call the Offer function with the source peer
+	fetcher.Offer(rctx, &sourcePeerID)
 
 	// fetcher should not initiate request
 	select {
@@ -199,7 +199,7 @@ func TestFetchUsesSourceFromContext(t *testing.T) {
 	case <-time.After(200 * time.Millisecond):
 	}
 
-	// call fetch again with a context without source
+	// call Request after the Offer
 	rctx = context.Background()
 	fetcher.Request(rctx)
 
@@ -227,7 +227,7 @@ func TestFetchUsesSourceFromContext(t *testing.T) {
 	}
 }
 
-func TestSecondFetchUsesSourceFromContext(t *testing.T) {
+func TestOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
@@ -240,7 +240,7 @@ func TestSecondFetchUsesSourceFromContext(t *testing.T) {
 	// start the fetcher
 	go fetcher.run(ctx, peersToSkip)
 
-	// call fetch again with a context without source
+	// call Request first
 	rctx := context.Background()
 	fetcher.Request(rctx)
 
@@ -255,9 +255,8 @@ func TestSecondFetchUsesSourceFromContext(t *testing.T) {
 		t.Fatalf("fetcher did not initiate request")
 	}
 
-	// set the source peer on the context and call the fetch function with it
-	rctx = context.WithValue(context.Background(), "source", sourcePeerID.String())
-	fetcher.Request(rctx)
+	// after the Request call Offer
+	fetcher.Offer(context.Background(), &sourcePeerID)
 
 	// there should be a request coming from fetcher
 	select {

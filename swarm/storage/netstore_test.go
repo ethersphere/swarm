@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/p2p/discover"
+
 	"github.com/ethereum/go-ethereum/common"
 )
 
@@ -33,7 +35,7 @@ type mockNetFetcher struct {
 	quit            <-chan struct{}
 }
 
-func (m *mockNetFetcher) Offer(ctx context.Context) {
+func (m *mockNetFetcher) Offer(ctx context.Context, source *discover.NodeID) {
 
 }
 

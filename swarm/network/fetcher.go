@@ -40,7 +40,8 @@ type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{
 type Fetcher struct {
 	protoRequestFunc RequestFunc           // request function fetcher calls to issue retrieve request for a chunk
 	addr             storage.Address       // the address of the chunk to be fetched
-	sourceC          chan *discover.NodeID // channel of sources (peer node id strings)
+	offerC           chan *discover.NodeID // channel of sources (peer node id strings)
+	requestC         chan struct{}
 	skipCheck        bool
 }
 
@@ -81,24 +82,24 @@ func NewFetcher(addr storage.Address, rf RequestFunc, skipCheck bool) *Fetcher {
 	return &Fetcher{
 		addr:             addr,
 		protoRequestFunc: rf,
-		sourceC:          make(chan *discover.NodeID),
+		offerC:           make(chan *discover.NodeID),
+		requestC:         make(chan struct{}),
 		skipCheck:        skipCheck,
 	}
 }
 
-func (f *Fetcher) Offer(ctx context.Context) {
+func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
+	// put source
+	select {
+	case f.offerC <- source:
+	case <-ctx.Done():
+	}
 }
 
 // fetch is called by NetStore evey time there is a request or offer for a chunk
 func (f *Fetcher) Request(ctx context.Context) {
-	// put source/request
-	var source *discover.NodeID
-	if sourceIF := ctx.Value("source"); sourceIF != nil {
-		id := discover.MustHexID(sourceIF.(string))
-		source = &id
-	}
 	select {
-	case f.sourceC <- source:
+	case f.requestC <- struct{}{}:
 	case <-ctx.Done():
 	}
 }
@@ -124,22 +125,22 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 	for {
 		select {
 
-		// accept a request or source.
-		case source := <-f.sourceC:
-			if source != nil {
-				log.Debug("new source", "peer addr", source, "request addr", f.addr)
-				// 1) the chunk is offered by a syncing peer
-				// add to known sources
-				sources = append(sources, source)
-				// launch a request to the source iff the chunk was requested (not just expected because its offered by a syncing peer)
-				doRequest = requested
-			} else {
-				log.Debug("new request", "request addr", f.addr)
-				// 2) chunk is requested, set requested flag
-				// launch a request iff none been launched yet
-				doRequest = !requested
-				requested = true
-			}
+		// incoming offer
+		case source := <-f.offerC:
+			log.Debug("new source", "peer addr", source, "request addr", f.addr)
+			// 1) the chunk is offered by a syncing peer
+			// add to known sources
+			sources = append(sources, source)
+			// launch a request to the source iff the chunk was requested (not just expected because its offered by a syncing peer)
+			doRequest = requested
+
+		// incoming request
+		case <-f.requestC:
+			log.Debug("new request", "request addr", f.addr)
+			// 2) chunk is requested, set requested flag
+			// launch a request iff none been launched yet
+			doRequest = !requested
+			requested = true
 
 			// peer we requested from is gone. fall back to another
 			// and remove the peer from the peers map
