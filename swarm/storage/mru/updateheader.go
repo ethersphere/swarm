@@ -53,3 +53,11 @@ func (h *updateHeader) binaryGet(serializedData []byte) error {
 	}
 	return nil
 }
+
+func (h *updateHeader) FromValues(values Values, parseView bool) error {
+	return h.UpdateLookup.FromValues(values, parseView)
+}
+
+func (h *updateHeader) ToValues(values Values) {
+	h.UpdateLookup.ToValues(values)
+}

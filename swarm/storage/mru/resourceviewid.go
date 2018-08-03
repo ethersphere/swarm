@@ -3,7 +3,6 @@ package mru
 import (
 	"fmt"
 	"hash"
-	"net/url"
 	"strconv"
 	"unsafe"
 
@@ -87,30 +86,27 @@ func (u *View) Hex() string {
 	return hexutil.Encode(serializedData)
 }
 
-func (u *View) FromURL(url *url.URL) error {
-	query := url.Query()
-	startTime, err := strconv.ParseUint(query.Get("starttime"), 10, 64)
+func (u *View) FromValues(values Values) error {
+	startTime, err := strconv.ParseUint(values.Get("starttime"), 10, 64)
 	if err != nil {
 		return err
 	}
-	frequency, err := strconv.ParseUint(query.Get("frequency"), 10, 64)
+	frequency, err := strconv.ParseUint(values.Get("frequency"), 10, 64)
 	if err != nil {
 		return err
 	}
-	if err = u.Topic.FromHex(query.Get("topic")); err != nil {
+	if err = u.Topic.FromHex(values.Get("topic")); err != nil {
 		return err
 	}
-	u.User = common.HexToAddress(query.Get("user"))
+	u.User = common.HexToAddress(values.Get("user"))
 	u.Frequency = frequency
 	u.StartTime.Time = startTime
 	return nil
 }
 
-func (u *View) ToURL(url *url.URL) {
-	query := url.Query()
-	query.Set("starttime", fmt.Sprintf("%d", u.StartTime.Time))
-	query.Set("frequency", fmt.Sprintf("%d", u.Frequency))
-	query.Set("topic", u.Topic.Hex())
-	query.Set("user", u.User.Hex())
-	url.RawQuery = query.Encode()
+func (u *View) ToValues(values Values) {
+	values.Set("starttime", fmt.Sprintf("%d", u.StartTime.Time))
+	values.Set("frequency", fmt.Sprintf("%d", u.Frequency))
+	values.Set("topic", u.Topic.Hex())
+	values.Set("user", u.User.Hex())
 }

@@ -156,6 +156,14 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 	return nil
 }
 
+func (r *Request) FromValues(values Values, data []byte, parseView bool) error {
+	return r.SignedResourceUpdate.FromValues(values, data, parseView)
+}
+
+func (r *Request) ToValues(values Values) []byte {
+	return r.SignedResourceUpdate.ToValues(values)
+}
+
 func decodeHexArray(dst []byte, src, name string) error {
 	bytes, err := decodeHexSlice(src, len(dst), name)
 	if err != nil {

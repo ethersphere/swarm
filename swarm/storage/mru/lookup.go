@@ -34,42 +34,28 @@ type LookupParams struct {
 	Limit uint32
 }
 
+type Values interface {
+	Get(key string) string
+	Set(key, value string)
+}
+
 // RootAddr returns the metadata chunk address
 func (lp *LookupParams) View() *View {
 	return &lp.view
 }
 
-func (lp *LookupParams) FromURL(url *url.URL, parseView bool) error {
-	query := url.Query()
-	version, _ := strconv.ParseUint(query.Get("version"), 10, 32)
-	period, _ := strconv.ParseUint(query.Get("period"), 10, 32)
-	limit, _ := strconv.ParseUint(query.Get("limit"), 10, 32)
+func (lp *LookupParams) FromValues(values Values, parseView bool) error {
+	limit, _ := strconv.ParseUint(values.Get("limit"), 10, 32)
 
-	if period == 0 && version != 0 {
-		return NewError(ErrInvalidValue, "cannot have version !=0 if period is 0")
-	}
-	lp.version = uint32(version)
-	lp.period = uint32(period)
 	lp.Limit = uint32(limit)
-	if parseView {
-		return lp.view.FromURL(url)
-	}
-	return nil
+	return lp.UpdateLookup.FromValues(values, parseView)
 }
 
-func (lp *LookupParams) ToURL(url *url.URL) {
-	query := url.Query()
-	if lp.period != 0 {
-		query.Set("period", fmt.Sprintf("%d", lp.period))
-	}
-	if lp.version != 0 {
-		query.Set("version", fmt.Sprintf("%d", lp.version))
-	}
+func (lp *LookupParams) ToValues(values url.Values) {
 	if lp.Limit != 0 {
-		query.Set("limit", fmt.Sprintf("%d", lp.version))
+		values.Set("limit", fmt.Sprintf("%d", lp.version))
 	}
-	url.RawQuery = query.Encode()
-	lp.view.ToURL(url)
+	lp.UpdateLookup.ToValues(values)
 }
 
 func NewLookupParams(view *View, period, version uint32, limit uint32) *LookupParams {
@@ -167,4 +153,29 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	cursor += 4
 
 	return nil
+}
+
+func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
+	version, _ := strconv.ParseUint(values.Get("version"), 10, 32)
+	period, _ := strconv.ParseUint(values.Get("period"), 10, 32)
+
+	if period == 0 && version != 0 {
+		return NewError(ErrInvalidValue, "cannot have version !=0 if period is 0")
+	}
+	u.version = uint32(version)
+	u.period = uint32(period)
+	if parseView {
+		return u.view.FromValues(values)
+	}
+	return nil
+}
+
+func (u *UpdateLookup) ToValues(values Values) {
+	if u.period != 0 {
+		values.Set("period", fmt.Sprintf("%d", u.period))
+	}
+	if u.version != 0 {
+		values.Set("version", fmt.Sprintf("%d", u.version))
+	}
+	u.view.ToValues(values)
 }

@@ -578,7 +578,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 		log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "view", view.Hex())
 	} else {
 		var v mru.View
-		if err := v.FromURL(r.URL); err != nil {
+		if err := v.FromValues(r.URL.Query()); err != nil {
 			getFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("error parsing view ID parameters: %s", err), http.StatusBadRequest)
 			return
@@ -606,7 +606,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lookupParams := mru.NewLookupParams(view, 0, 0, 0)
-	if err = lookupParams.FromURL(r.URL, false); err != nil { // àrse period, version
+	if err = lookupParams.FromValues(r.URL.Query(), false); err != nil { // parse period, version
 		RespondError(w, r, fmt.Sprintf("invalid mutable resource request:%s", err), http.StatusBadRequest)
 		return
 	}

@@ -662,7 +662,9 @@ func (c *Client) QueryResource(lookup *mru.LookupParams) (io.ReadCloser, error) 
 	if err != nil {
 		return nil, err
 	}
-	lookup.ToURL(URL)
+	values := URL.Query()
+	lookup.ToValues(values) //adds query parameters
+	URL.RawQuery = values.Encode()
 	res, err := http.Get(URL.String())
 	if err != nil {
 		return nil, err

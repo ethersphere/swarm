@@ -91,3 +91,13 @@ func (r *resourceUpdate) binaryGet(serializedData []byte) error {
 	return nil
 
 }
+
+func (r *resourceUpdate) FromValues(values Values, data []byte, parseView bool) error {
+	r.data = data
+	return r.updateHeader.FromValues(values, parseView)
+}
+
+func (r *resourceUpdate) ToValues(values Values) []byte {
+	r.updateHeader.ToValues(values)
+	return r.data
+}

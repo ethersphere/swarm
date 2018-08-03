@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"hash"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -161,6 +163,23 @@ func (r *SignedResourceUpdate) GetDigest() (result common.Hash, err error) {
 	hasher.Write(r.binaryData[:dataLength]) //everything except the signature.
 
 	return common.BytesToHash(hasher.Sum(nil)), nil
+}
+
+func (r *SignedResourceUpdate) FromValues(values Values, data []byte, parseView bool) error {
+	signatureBytes, err := hexutil.Decode(values.Get("signature"))
+	if err != nil {
+		r.signature = nil
+	}
+	if len(signatureBytes) != signatureLength {
+		return NewError(ErrInvalidSignature, "Incorrect signature length")
+	}
+	copy(r.signature[:], signatureBytes)
+	return r.resourceUpdate.FromValues(values, data, parseView)
+}
+
+func (r *SignedResourceUpdate) ToValues(values Values) []byte {
+	values.Set("signature", hexutil.Encode(r.signature[:]))
+	return r.resourceUpdate.ToValues(values)
 }
 
 // getUserAddr extracts the address of the resource update signer
