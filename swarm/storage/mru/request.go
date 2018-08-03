@@ -25,11 +25,11 @@ import (
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
-	ViewID    *ResourceViewID `json:"viewId"`
-	Version   uint32          `json:"version,omitempty"`
-	Period    uint32          `json:"period,omitempty"`
-	Data      string          `json:"data,omitempty"`
-	Signature string          `json:"signature,omitempty"`
+	View      *View  `json:"view"`
+	Version   uint32 `json:"version,omitempty"`
+	Period    uint32 `json:"period,omitempty"`
+	Data      string `json:"data,omitempty"`
+	Signature string `json:"signature,omitempty"`
 }
 
 // Request represents an update and/or resource create message
@@ -41,7 +41,7 @@ type Request struct {
 var zeroAddr = common.Address{}
 
 // NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
-func NewCreateUpdateRequest(metadata *ResourceID) (*Request, error) {
+func NewCreateUpdateRequest(metadata *Resource) (*Request, error) {
 
 	request, err := NewCreateRequest(metadata, zeroAddr)
 	if err != nil {
@@ -60,26 +60,26 @@ func NewCreateUpdateRequest(metadata *ResourceID) (*Request, error) {
 }
 
 // NewCreateRequest returns a request to create a new resource
-func NewCreateRequest(metadata *ResourceID, ownerAddr common.Address) (request *Request, err error) {
+func NewCreateRequest(metadata *Resource, userAddr common.Address) (request *Request, err error) {
 	if metadata.StartTime.Time == 0 { // get the current time
 		metadata.StartTime = TimestampProvider.Now()
 	}
 
 	request = new(Request)
-	request.viewID.resourceID = *metadata
-	request.viewID.ownerAddr = ownerAddr
+	request.view.Resource = *metadata
+	request.view.User = userAddr
 	request.isNew = true
 	return request, nil
 }
 
 // Frequency returns the resource's expected update frequency
 func (r *Request) Frequency() uint64 {
-	return r.viewID.resourceID.Frequency
+	return r.view.Frequency
 }
 
 // Topic returns the resource's topic
 func (r *Request) Topic() Topic {
-	return r.viewID.resourceID.Topic
+	return r.view.Topic
 }
 
 // Period returns in which period the resource will be published
@@ -92,19 +92,19 @@ func (r *Request) Version() uint32 {
 	return r.version
 }
 
-// ViewID returns the resource's view ID
-func (r *Request) ViewID() *ResourceViewID {
-	return &r.viewID
+// View returns the resource's view ID
+func (r *Request) View() *View {
+	return &r.view
 }
 
 // StartTime returns the time that the resource was/will be created at
 func (r *Request) StartTime() Timestamp {
-	return r.viewID.resourceID.StartTime
+	return r.view.StartTime
 }
 
 // Owner returns the resource owner's address
 func (r *Request) Owner() common.Address {
-	return r.viewID.ownerAddr
+	return r.view.User
 }
 
 // Sign executes the signature to validate the resource and sets the owner address field
@@ -122,7 +122,7 @@ func (r *Request) SetData(data []byte) {
 }
 
 func (r *Request) IsNew() bool {
-	return r.viewID.resourceID.Frequency > 0 && (r.period <= 1 || r.version <= 1)
+	return r.view.Frequency > 0 && (r.period <= 1 || r.version <= 1)
 }
 
 func (r *Request) IsUpdate() bool {
@@ -134,7 +134,7 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 
 	r.version = j.Version
 	r.period = j.Period
-	r.viewID = *j.ViewID
+	r.view = *j.View
 
 	var err error
 	if j.Data != "" {
@@ -199,7 +199,7 @@ func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	}
 
 	requestJSON := &updateRequestJSON{
-		ViewID:    &r.viewID,
+		View:      &r.view,
 		Version:   r.version,
 		Period:    r.period,
 		Data:      dataString,

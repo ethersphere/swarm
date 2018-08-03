@@ -520,14 +520,14 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	// we create a manifest so we can retrieve the resource with bzz:// later
 	// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
 	// metadata chunk (rootAddr)
-	m, err := s.api.NewResourceManifest(r.Context(), updateRequest.ViewID())
+	m, err := s.api.NewResourceManifest(r.Context(), updateRequest.View())
 	if err != nil {
 		RespondError(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	// the key to the manifest will be passed back to the client
-	// the client can access the view ID directly through its viewID member
+	// the client can access the view  directly through its resourceView member
 	// the manifest key can be set as content in the resolver of the ENS name
 	outdata, err := json.Marshal(m)
 	if err != nil {
@@ -552,7 +552,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.get.resource", "ruid", ruid)
 	var err error
 
-	var viewID *mru.ResourceViewID
+	var view *mru.View
 
 	if uri.Addr != "" {
 		// resolve the content key.
@@ -568,30 +568,30 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Cache-Control", "max-age=2147483648")
 		}
 
-		// get the resource ViewID from the manifest
-		viewID, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
+		// get the resource view from the manifest
+		view, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 		if err != nil {
 			getFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("error resolving resource view ID for %s: %s", uri.Addr, err), http.StatusNotFound)
 			return
 		}
-		log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "viewID", viewID.Hex())
+		log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "view", view.Hex())
 	} else {
-		var v mru.ResourceViewID
+		var v mru.View
 		if err := v.FromURL(r.URL); err != nil {
 			getFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("error parsing view ID parameters: %s", err), http.StatusBadRequest)
 			return
 		}
-		viewID = &v
+		view = &v
 	}
 
 	// determine if the query specifies period and version or it is a metadata query
 	if uri.Path == "meta" {
-		unsignedUpdateRequest, err := s.api.ResourceNewRequest(r.Context(), viewID)
+		unsignedUpdateRequest, err := s.api.ResourceNewRequest(r.Context(), view)
 		if err != nil {
 			getFail.Inc(1)
-			RespondError(w, r, fmt.Sprintf("cannot retrieve resource metadata for viewID=%s: %s", viewID.Hex(), err), http.StatusNotFound)
+			RespondError(w, r, fmt.Sprintf("cannot retrieve resource metadata for view=%s: %s", view.Hex(), err), http.StatusNotFound)
 			return
 		}
 		rawResponse, err := unsignedUpdateRequest.MarshalJSON()
@@ -605,7 +605,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lookupParams := mru.NewLookupParams(viewID, 0, 0, 0)
+	lookupParams := mru.NewLookupParams(view, 0, 0, 0)
 	if err = lookupParams.FromURL(r.URL, false); err != nil { // àrse period, version
 		RespondError(w, r, fmt.Sprintf("invalid mutable resource request:%s", err), http.StatusBadRequest)
 		return
@@ -621,7 +621,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// All ok, serve the retrieved update
-	log.Debug("Found update", "viewID", viewID.Hex(), "ruid", ruid)
+	log.Debug("Found update", "view", view.Hex(), "ruid", ruid)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
 }

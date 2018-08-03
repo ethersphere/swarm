@@ -30,21 +30,21 @@ const (
 	defaultRetrieveTimeout = 100 * time.Millisecond
 )
 
-// resource caches resource data and the metadata of its root chunk.
-type resource struct {
+// cacheEntry caches resource data and the metadata of its root chunk.
+type cacheEntry struct {
 	resourceUpdate
 	*bytes.Reader
 	lastKey storage.Address
 }
 
 // implements storage.LazySectionReader
-func (r *resource) Size(ctx context.Context, _ chan bool) (int64, error) {
+func (r *cacheEntry) Size(ctx context.Context, _ chan bool) (int64, error) {
 	return int64(len(r.resourceUpdate.data)), nil
 }
 
 //returns the resource's topic
-func (r *resource) Topic() Topic {
-	return r.viewID.resourceID.Topic
+func (r *cacheEntry) Topic() Topic {
+	return r.view.Topic
 }
 
 // Helper function to calculate the next update period number from the current time, start time and frequency

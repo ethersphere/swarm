@@ -53,7 +53,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 	}
 
 	// get the address of the signer (which also checks that it's a valid signature)
-	r.viewID.ownerAddr, err = getOwner(digest, *r.signature)
+	r.view.User, err = getUserAddr(digest, *r.signature)
 	if err != nil {
 		return err
 	}
@@ -62,7 +62,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 	// that was used to retrieve this chunk
 	// if this validation fails, someone forged a chunk.
 	if !bytes.Equal(r.updateAddr, r.UpdateAddr()) {
-		return NewError(ErrInvalidSignature, "Signature address does not match with update ownerAddr")
+		return NewError(ErrInvalidSignature, "Signature address does not match with update user address")
 	}
 
 	return nil
@@ -70,7 +70,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 
 // Sign executes the signature to validate the resource
 func (r *SignedResourceUpdate) Sign(signer Signer) error {
-	r.viewID.ownerAddr = signer.Address()
+	r.view.User = signer.Address()
 	r.binaryData = nil           //invalidate serialized data
 	digest, err := r.GetDigest() // computes digest and serializes into .binaryData
 	if err != nil {
@@ -84,13 +84,13 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 
 	// Although the Signer interface returns the public address of the signer,
 	// recover it from the signature to see if they match
-	ownerAddress, err := getOwner(digest, signature)
+	userAddr, err := getUserAddr(digest, signature)
 	if err != nil {
 		return NewError(ErrInvalidSignature, "Error verifying signature")
 	}
 
-	if ownerAddress != signer.Address() { // sanity check to make sure the Signer is declaring the same address used to sign!
-		return NewError(ErrInvalidSignature, "Signer address does not match ownerAddr")
+	if userAddr != signer.Address() { // sanity check to make sure the Signer is declaring the same address used to sign!
+		return NewError(ErrInvalidSignature, "Signer address does not match update user address")
 	}
 
 	r.signature = &signature
@@ -163,8 +163,8 @@ func (r *SignedResourceUpdate) GetDigest() (result common.Hash, err error) {
 	return common.BytesToHash(hasher.Sum(nil)), nil
 }
 
-// getOwner extracts the address of the resource update signer
-func getOwner(digest common.Hash, signature Signature) (common.Address, error) {
+// getUserAddr extracts the address of the resource update signer
+func getUserAddr(digest common.Hash, signature Signature) (common.Address, error) {
 	pub, err := crypto.SigToPub(digest.Bytes(), signature[:])
 	if err != nil {
 		return common.Address{}, err

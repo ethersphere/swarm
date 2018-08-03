@@ -408,10 +408,10 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 
 		// we need to do some extra work if this is a mutable resource manifest
 		if entry.ContentType == ResourceContentType {
-			if entry.ResourceViewID == nil {
-				return reader, mimeType, status, nil, fmt.Errorf("Cannot decode ResourceViewID in manifest")
+			if entry.ResourceView == nil {
+				return reader, mimeType, status, nil, fmt.Errorf("Cannot decode ResourceView in manifest")
 			}
-			_, err := a.resource.Lookup(ctx, mru.LookupLatest(entry.ResourceViewID))
+			_, err := a.resource.Lookup(ctx, mru.LookupLatest(entry.ResourceView))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -419,7 +419,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 				return reader, mimeType, status, nil, err
 			}
 			// get the data of the update
-			_, rsrcData, err := a.resource.GetContent(entry.ResourceViewID)
+			_, rsrcData, err := a.resource.GetContent(entry.ResourceView)
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound
@@ -956,7 +956,7 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) ([]b
 		return nil, err
 	}
 	var data []byte
-	_, data, err = a.resource.GetContent(params.ViewID())
+	_, data, err = a.resource.GetContent(params.View())
 	if err != nil {
 		return nil, err
 	}
@@ -964,8 +964,8 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) ([]b
 }
 
 // ResourceNewRequest creates a Request object to update a specific mutable resource
-func (a *API) ResourceNewRequest(ctx context.Context, viewID *mru.ResourceViewID) (*mru.Request, error) {
-	return a.resource.NewUpdateRequest(ctx, viewID)
+func (a *API) ResourceNewRequest(ctx context.Context, view *mru.View) (*mru.Request, error) {
+	return a.resource.NewUpdateRequest(ctx, view)
 }
 
 // ResourceUpdate updates a Mutable Resource with arbitrary data.
@@ -980,7 +980,7 @@ func (a *API) ResourceHashSize() int {
 }
 
 // ResolveResourceManifest retrieves the Mutable Resource manifest for the given address, and returns the Resource's view ID.
-func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address) (*mru.ResourceViewID, error) {
+func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address) (*mru.View, error) {
 	trie, err := loadManifest(ctx, a.fileStore, addr, nil, NOOPDecrypt)
 	if err != nil {
 		return nil, fmt.Errorf("cannot load resource manifest: %v", err)
@@ -991,5 +991,5 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 		return nil, fmt.Errorf("not a resource manifest: %s", addr)
 	}
 
-	return entry.ResourceViewID, nil
+	return entry.ResourceView, nil
 }

@@ -85,16 +85,16 @@ func TestResourceHandler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	viewID := ResourceViewID{
-		resourceID: ResourceID{
+	view := View{
+		Resource: Resource{
 			Topic:     NewTopic("Mess with mru code and see what ghost catches you", nil),
 			StartTime: startTime,
 			Frequency: resourceFrequency,
 		},
-		ownerAddr: signer.Address(),
+		User: signer.Address(),
 	}
 
-	request, err := NewCreateUpdateRequest(&viewID.resourceID)
+	request, err := NewCreateUpdateRequest(&view.Resource)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update on first period with version = 1 to make it fail since there is already one update with version=1
-	request, err = rh.NewUpdateRequest(ctx, &request.viewID)
+	request, err = rh.NewUpdateRequest(ctx, &request.view)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// update on second period with version = 1, correct. period=2, version=1
 	fwdClock(int(resourceFrequency/2), timeProvider)
-	request, err = rh.NewUpdateRequest(ctx, &request.viewID)
+	request, err = rh.NewUpdateRequest(ctx, &request.view)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestResourceHandler(t *testing.T) {
 
 	fwdClock(int(resourceFrequency), timeProvider)
 	// Update on third period, with version = 1
-	request, err = rh.NewUpdateRequest(ctx, &request.viewID)
+	request, err = rh.NewUpdateRequest(ctx, &request.view)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,7 +177,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// update just after third period
 	fwdClock(1, timeProvider)
-	request, err = rh.NewUpdateRequest(ctx, &request.viewID)
+	request, err = rh.NewUpdateRequest(ctx, &request.view)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsrc2, err := rh2.Lookup(ctx, LookupLatest(&request.viewID))
+	rsrc2, err := rh2.Lookup(ctx, LookupLatest(&request.view))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -227,7 +227,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific period, latest version
-	rsrc, err := rh2.Lookup(ctx, LookupLatestVersionInPeriod(&request.viewID, 3))
+	rsrc, err := rh2.Lookup(ctx, LookupLatestVersionInPeriod(&request.view, 3))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -238,7 +238,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
 
 	// specific period, specific version
-	lookupParams := LookupVersion(&request.viewID, 3, 1)
+	lookupParams := LookupVersion(&request.view, 3, 1)
 	rsrc, err = rh2.Lookup(ctx, lookupParams)
 	if err != nil {
 		t.Fatal(err)
@@ -288,15 +288,15 @@ func TestValidator(t *testing.T) {
 	defer teardownTest()
 
 	// create new resource
-	viewID := ResourceViewID{
-		resourceID: ResourceID{
+	view := View{
+		Resource: Resource{
 			Topic:     NewTopic(resourceName, nil),
 			StartTime: timeProvider.Now(),
 			Frequency: resourceFrequency,
 		},
-		ownerAddr: signer.Address(),
+		User: signer.Address(),
 	}
-	mr, err := NewCreateUpdateRequest(&viewID.resourceID)
+	mr, err := NewCreateUpdateRequest(&view.Resource)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -364,20 +364,20 @@ func TestValidatorInStore(t *testing.T) {
 	badChunk := chunks[1]
 	badChunk.SData = goodChunk.SData
 
-	viewID := ResourceViewID{
-		resourceID: ResourceID{
+	view := View{
+		Resource: Resource{
 			Topic:     NewTopic("xyzzy", nil),
 			StartTime: startTime,
 			Frequency: resourceFrequency,
 		},
-		ownerAddr: signer.Address(),
+		User: signer.Address(),
 	}
 
 	// create a resource update chunk with correct publickey
 	updateLookup := UpdateLookup{
 		period:  42,
 		version: 1,
-		viewID:  viewID,
+		view:    view,
 	}
 
 	updateAddr := updateLookup.UpdateAddr()

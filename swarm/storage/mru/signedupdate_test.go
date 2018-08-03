@@ -78,19 +78,19 @@ func TestReverse(t *testing.T) {
 	}
 	defer teardownTest()
 
-	viewID := ResourceViewID{
-		resourceID: ResourceID{
+	view := View{
+		Resource: Resource{
 			Topic:     NewTopic("Cervantes quotes", nil),
 			StartTime: startTime,
 			Frequency: resourceFrequency,
 		},
-		ownerAddr: signer.Address(),
+		User: signer.Address(),
 	}
 
 	data := []byte("Donde una puerta se cierra, otra se abre")
 
 	update := new(SignedResourceUpdate)
-	update.viewID = viewID
+	update.view = view
 	update.period = period
 	update.version = version
 	update.data = data
@@ -116,7 +116,7 @@ func TestReverse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recoveredaddress, err := getOwner(checkdigest, *checkUpdate.signature)
+	recoveredaddress, err := getUserAddr(checkdigest, *checkUpdate.signature)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
 	}

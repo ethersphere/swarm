@@ -31,7 +31,7 @@ import (
 type Handler struct {
 	chunkStore      *storage.NetStore
 	HashSize        int
-	resources       map[uint64]*resource
+	resources       map[uint64]*cacheEntry
 	resourceLock    sync.RWMutex
 	storeTimeout    time.Duration
 	queryMaxPeriods uint32
@@ -58,7 +58,7 @@ func init() {
 // NewHandler creates a new Mutable Resource API
 func NewHandler(params *HandlerParams) *Handler {
 	rh := &Handler{
-		resources:       make(map[uint64]*resource),
+		resources:       make(map[uint64]*cacheEntry),
 		queryMaxPeriods: params.QueryMaxPeriods,
 	}
 
@@ -79,7 +79,7 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 }
 
 // Validate is a chunk validation method
-// If it looks like a resource update, the chunk address is checked against the ownerAddr of the update's signature
+// If it looks like a resource update, the chunk address is checked against the userAddr of the update's signature
 // It implements the storage.ChunkValidator interface
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	dataLength := len(data)
@@ -110,8 +110,8 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 }
 
 // GetContent retrieves the data payload of the last synced update of the Mutable Resource
-func (h *Handler) GetContent(viewID *ResourceViewID) (storage.Address, []byte, error) {
-	rsrc := h.get(viewID)
+func (h *Handler) GetContent(view *View) (storage.Address, []byte, error) {
+	rsrc := h.get(view)
 	if rsrc == nil {
 		return nil, nil, NewError(ErrNotFound, " does not exist")
 	}
@@ -119,8 +119,8 @@ func (h *Handler) GetContent(viewID *ResourceViewID) (storage.Address, []byte, e
 }
 
 // GetLastPeriod retrieves the period of the last synced update of the Mutable Resource
-func (h *Handler) GetLastPeriod(viewID *ResourceViewID) (uint32, error) {
-	rsrc := h.get(viewID)
+func (h *Handler) GetLastPeriod(view *View) (uint32, error) {
+	rsrc := h.get(view)
 	if rsrc == nil {
 		return 0, NewError(ErrNotFound, " does not exist")
 	}
@@ -129,8 +129,8 @@ func (h *Handler) GetLastPeriod(viewID *ResourceViewID) (uint32, error) {
 }
 
 // GetVersion retrieves the period of the last synced update of the Mutable Resource
-func (h *Handler) GetVersion(viewID *ResourceViewID) (uint32, error) {
-	rsrc := h.get(viewID)
+func (h *Handler) GetVersion(view *View) (uint32, error) {
+	rsrc := h.get(view)
 	if rsrc == nil {
 		return 0, NewError(ErrNotFound, " does not exist")
 	}
@@ -140,23 +140,23 @@ func (h *Handler) GetVersion(viewID *ResourceViewID) (uint32, error) {
 // NewUpdateRequest prepares an UpdateRequest structure with all the necessary information to
 // just add the desired data and sign it.
 // The resulting structure can then be signed and passed to Handler.Update to be verified and sent
-func (h *Handler) NewUpdateRequest(ctx context.Context, viewID *ResourceViewID) (updateRequest *Request, err error) {
+func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateRequest *Request, err error) {
 
-	if viewID == nil {
-		return nil, NewError(ErrInvalidValue, "viewID cannot be nil")
+	if view == nil {
+		return nil, NewError(ErrInvalidValue, "view cannot be nil")
 	}
 
 	now := TimestampProvider.Now()
 
 	updateRequest = new(Request)
-	updateRequest.period, err = getNextPeriod(viewID.resourceID.StartTime.Time, now.Time, viewID.resourceID.Frequency)
+	updateRequest.period, err = getNextPeriod(view.StartTime.Time, now.Time, view.Frequency)
 	if err != nil {
 		return nil, err
 	}
 
 	// check if there is already an update in this period
 
-	rsrc, err := h.lookup(LookupLatestVersionInPeriod(viewID, updateRequest.period))
+	rsrc, err := h.lookup(LookupLatestVersionInPeriod(view, updateRequest.period))
 	if err != nil {
 		if err.(*Error).code != ErrNotFound {
 			return nil, err
@@ -165,7 +165,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, viewID *ResourceViewID) 
 		// or that the resource really does not have updates in this period.
 	}
 
-	updateRequest.viewID = *viewID
+	updateRequest.view = *view
 
 	// if we already have an update for this period then increment version
 	if rsrc != nil {
@@ -184,7 +184,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, viewID *ResourceViewID) 
 // When looking for the latest update, it starts at the next period after the current time.
 // upon failure tries the corresponding keys of each previous period until one is found
 // (or startTime is reached, in which case there are no updates).
-func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, error) {
+func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*cacheEntry, error) {
 	return h.lookup(params)
 }
 
@@ -192,8 +192,8 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*resource, 
 // This is useful where resource updates are used incrementally in contrast to
 // merely replacing content.
 // Requires a cached resource object to determine the current state of the resource.
-func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*resource, error) {
-	rsrc := h.get(&params.viewID)
+func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*cacheEntry, error) {
+	rsrc := h.get(&params.view)
 	if rsrc == nil {
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
 	}
@@ -207,11 +207,11 @@ func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*re
 		version = 0
 		period = rsrc.period - 1
 	}
-	return h.lookup(NewLookupParams(&params.viewID, period, version, params.Limit))
+	return h.lookup(NewLookupParams(&params.view, period, version, params.Limit))
 }
 
 // base code for public lookup methods
-func (h *Handler) lookup(params *LookupParams) (*resource, error) {
+func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 
 	lp := *params
 	// we can't look for anything without a store
@@ -227,7 +227,7 @@ func (h *Handler) lookup(params *LookupParams) (*resource, error) {
 		now := TimestampProvider.Now()
 
 		var period uint32
-		period, err := getNextPeriod(params.viewID.resourceID.StartTime.Time, now.Time, params.viewID.resourceID.Frequency)
+		period, err := getNextPeriod(params.view.StartTime.Time, now.Time, params.view.Frequency)
 		if err != nil {
 			return nil, err
 		}
@@ -257,7 +257,7 @@ func (h *Handler) lookup(params *LookupParams) (*resource, error) {
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
-				return h.updateCache(&params.viewID, chunk)
+				return h.updateCache(&params.view, chunk)
 			}
 			// check if we have versions > 1. If a version fails, the previous version is used and returned.
 			log.Trace("rsrc update version 1 found, checking for version updates", "period", lp.period, "updateAddr", updateAddr)
@@ -266,7 +266,7 @@ func (h *Handler) lookup(params *LookupParams) (*resource, error) {
 				updateAddr := lp.UpdateAddr()
 				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 				if err != nil {
-					return h.updateCache(&params.viewID, chunk)
+					return h.updateCache(&params.view, chunk)
 				}
 				chunk = newchunk
 				lp.version = newversion
@@ -284,19 +284,19 @@ func (h *Handler) lookup(params *LookupParams) (*resource, error) {
 }
 
 // update mutable resource cache map with specified content
-func (h *Handler) updateCache(viewID *ResourceViewID, chunk *storage.Chunk) (*resource, error) {
+func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, error) {
 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
 	var r SignedResourceUpdate
 	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		return nil, err
 	}
-	log.Trace("resource cache update", "topic", viewID.resourceID.Topic.Hex(), "updatekey", chunk.Addr, "period", r.period, "version", r.version)
+	log.Trace("resource cache update", "topic", view.Topic.Hex(), "updatekey", chunk.Addr, "period", r.period, "version", r.version)
 
-	rsrc := h.get(viewID)
+	rsrc := h.get(view)
 	if rsrc == nil {
-		rsrc = &resource{}
-		h.set(viewID, rsrc)
+		rsrc = &cacheEntry{}
+		h.set(view, rsrc)
 	}
 
 	// update our rsrcs entry map
@@ -324,7 +324,7 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")
 	}
 
-	rsrc := h.get(&r.viewID)
+	rsrc := h.get(&r.view)
 	if rsrc != nil && rsrc.period != 0 && rsrc.version != 0 && // This is the only cheap check we can do for sure
 		rsrc.period == r.period && rsrc.version >= r.version {
 
@@ -353,32 +353,32 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 }
 
 // Retrieves the resource cache value for the given nameHash
-func (h *Handler) get(viewID *ResourceViewID) *resource {
-	if viewID == nil {
-		log.Warn("Handler.get with invalid ViewID")
+func (h *Handler) get(view *View) *cacheEntry {
+	if view == nil {
+		log.Warn("Handler.get with invalid View")
 		return nil
 	}
-	mapKey := viewID.mapKey()
+	mapKey := view.mapKey()
 	h.resourceLock.RLock()
 	defer h.resourceLock.RUnlock()
 	rsrc := h.resources[mapKey]
 	return rsrc
 }
 
-// Sets the resource cache value for the given viewID
-func (h *Handler) set(viewID *ResourceViewID, rsrc *resource) {
-	if viewID == nil {
-		log.Warn("Handler.set with invalid ViewID")
+// Sets the resource cache value for the given View
+func (h *Handler) set(view *View, rsrc *cacheEntry) {
+	if view == nil {
+		log.Warn("Handler.set with invalid View")
 		return
 	}
-	mapKey := viewID.mapKey()
+	mapKey := view.mapKey()
 	h.resourceLock.Lock()
 	defer h.resourceLock.Unlock()
 	h.resources[mapKey] = rsrc
 }
 
 // Checks if we already have an update on this resource, according to the value in the current state of the resource cache
-func (h *Handler) hasUpdate(viewID *ResourceViewID, period uint32) bool {
-	rsrc := h.get(viewID)
+func (h *Handler) hasUpdate(view *View, period uint32) bool {
+	rsrc := h.get(view)
 	return rsrc != nil && rsrc.period == period
 }

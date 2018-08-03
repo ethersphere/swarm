@@ -20,8 +20,8 @@ import (
 	"encoding/binary"
 )
 
-// ResourceID encapsulates the immutable information about a mutable resource :)
-type ResourceID struct {
+// Resource encapsulates the immutable information about a mutable resource :)
+type Resource struct {
 	StartTime Timestamp `json:"startTime"` // time at which the resource starts to be valid
 	Frequency uint64    `json:"frequency"` // expected update frequency for the resource
 	Topic     Topic     `json:"topic"`     // resource topic, for the reference of the user, to disambiguate resources with same starttime, frequency or to reference another hash
@@ -34,12 +34,12 @@ const nameLengthLength = 1
 // StartTime Timestamp: timestampLength bytes
 // frequency: frequencyLength bytes
 // TopicLength: topicLength bytes
-const ResourceIDLength = timestampLength + frequencyLength + topicLength
+const ResourceLength = timestampLength + frequencyLength + topicLength
 
 // binaryGet populates the resource metadata from a byte array
-func (r *ResourceID) binaryGet(serializedData []byte) error {
-	if len(serializedData) != ResourceIDLength {
-		return NewErrorf(ErrInvalidValue, "ResourceID to deserialize has an invalid length. Expected it to be exactly %d. Got %d.", ResourceIDLength, len(serializedData))
+func (r *Resource) binaryGet(serializedData []byte) error {
+	if len(serializedData) != ResourceLength {
+		return NewErrorf(ErrInvalidValue, "Resource to deserialize has an invalid length. Expected it to be exactly %d. Got %d.", ResourceLength, len(serializedData))
 	}
 
 	var cursor int
@@ -57,9 +57,9 @@ func (r *ResourceID) binaryGet(serializedData []byte) error {
 }
 
 // binaryPut encodes the metadata into a byte array
-func (r *ResourceID) binaryPut(serializedData []byte) error {
-	if len(serializedData) != ResourceIDLength {
-		return NewErrorf(ErrInvalidValue, "ResourceID to serialize has an invalid length. Expected it to be exactly %d. Got %d.", ResourceIDLength, len(serializedData))
+func (r *Resource) binaryPut(serializedData []byte) error {
+	if len(serializedData) != ResourceLength {
+		return NewErrorf(ErrInvalidValue, "Resource to serialize has an invalid length. Expected it to be exactly %d. Got %d.", ResourceLength, len(serializedData))
 	}
 	var cursor int
 	r.StartTime.binaryPut(serializedData[cursor : cursor+timestampLength])
@@ -74,6 +74,6 @@ func (r *ResourceID) binaryPut(serializedData []byte) error {
 	return nil
 }
 
-func (r *ResourceID) binaryLength() int {
-	return ResourceIDLength
+func (r *Resource) binaryLength() int {
+	return ResourceLength
 }

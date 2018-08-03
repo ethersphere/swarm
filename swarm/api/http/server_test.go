@@ -139,7 +139,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
+	updateRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
 		Topic:     mru.NewTopic("foo.eth", nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
@@ -179,7 +179,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "c29a2902d0ae16a015e220a376001c1f36c426e6419bd3b1aabdcffe6f3cdf06"
+	correctManifestAddrHex := "36651b0613c3fbdba7b83175e282dd2b1b4842c884b794da01ab4b4b14d80179"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -217,7 +217,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
+	updateRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
 		Topic:     mru.NewTopic("foo.eth", nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
@@ -256,7 +256,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "c29a2902d0ae16a015e220a376001c1f36c426e6419bd3b1aabdcffe6f3cdf06"
+	correctManifestAddrHex := "36651b0613c3fbdba7b83175e282dd2b1b4842c884b794da01ab4b4b14d80179"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -283,9 +283,9 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	correctViewIDHex := "0x2a000000000000000d00000000000000666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
-	if manifest.Entries[0].ResourceViewID.Hex() != correctViewIDHex {
-		t.Fatalf("Expected manifest ResourceViewID '%s', got '%s'", correctViewIDHex, manifest.Entries[0].ResourceViewID.Hex())
+	correctViewHex := "0x2a000000000000000d00000000000000666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
+	if manifest.Entries[0].ResourceView.Hex() != correctViewHex {
+		t.Fatalf("Expected manifest Resource View '%s', got '%s'", correctViewHex, manifest.Entries[0].ResourceView.Hex())
 	}
 
 	// get bzz manifest transparent resource resolve
@@ -438,7 +438,7 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest.ViewID().ToURL(urlq) // this adds viewID query parameters
+	updateRequest.View().ToURL(urlq) // this adds view query parameters
 	resp, err = http.Get(urlq.String())
 	if err != nil {
 		t.Fatal(err)

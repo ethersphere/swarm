@@ -64,7 +64,7 @@ func resourceCreate(ctx *cli.Context) {
 
 	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
 
-	viewID := &mru.ResourceID{
+	resource := &mru.Resource{
 		Topic:     mru.NewTopic(name, relatedTopicBytes),
 		Frequency: frequency,
 	}
@@ -77,7 +77,7 @@ func resourceCreate(ctx *cli.Context) {
 			cli.ShowCommandHelpAndExit(ctx, "create", 1)
 			return
 		}
-		newResourceRequest, err = mru.NewCreateUpdateRequest(viewID)
+		newResourceRequest, err = mru.NewCreateUpdateRequest(resource)
 		if err != nil {
 			utils.Fatalf("Error creating new resource request: %s", err)
 		}
@@ -86,7 +86,7 @@ func resourceCreate(ctx *cli.Context) {
 			utils.Fatalf("Error signing resource update: %s", err.Error())
 		}
 	} else {
-		newResourceRequest, err = mru.NewCreateRequest(viewID, signer.Address())
+		newResourceRequest, err = mru.NewCreateRequest(resource, signer.Address())
 		if err != nil {
 			utils.Fatalf("Error creating new resource request: %s", err)
 		}

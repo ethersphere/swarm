@@ -394,7 +394,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 	// our mutable resource "name"
 	resourceName := "foo.eth"
 
-	createRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
+	createRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
 		Topic:     mru.NewTopic(resourceName, nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
@@ -413,7 +413,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 		t.Fatalf("Error creating resource: %s", err)
 	}
 
-	correctManifestAddrHex := "c29a2902d0ae16a015e220a376001c1f36c426e6419bd3b1aabdcffe6f3cdf06"
+	correctManifestAddrHex := "36651b0613c3fbdba7b83175e282dd2b1b4842c884b794da01ab4b4b14d80179"
 	if resourceManifestHash != correctManifestAddrHex {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
@@ -447,7 +447,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	// our mutable resource name
 	resourceName := "El Quijote"
-	resourceID := &mru.ResourceID{
+	resourceID := &mru.Resource{
 		Topic:     mru.NewTopic(resourceName, nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
@@ -463,7 +463,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	resourceManifestHash, err := client.CreateResource(createRequest)
 
-	correctManifestAddrHex := "98c5984ef8d27cf6d15a46cd3115114d74e87e0d3556c654ee541f1bd334a510"
+	correctManifestAddrHex := "db81418f37cc98aa4509a4f5556b00d703f81f1d36e038fa4267251635cf9979"
 	if resourceManifestHash != correctManifestAddrHex {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
@@ -513,8 +513,8 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	// now try retrieving resource without a manifest
 
-	viewID := mru.NewViewID(resourceID, signer.Address())
-	lookupParams := mru.LookupLatest(viewID)
+	view := mru.NewView(resourceID, signer.Address())
+	lookupParams := mru.LookupLatest(view)
 	reader, err = client.QueryResource(lookupParams)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)

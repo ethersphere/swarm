@@ -1,7 +1,6 @@
 package mru
 
 import (
-	"encoding/json"
 	"fmt"
 	"hash"
 	"net/url"
@@ -12,27 +11,27 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
-// ResourceViewID represents a particular user's view of a resource ID
-type ResourceViewID struct {
-	resourceID ResourceID     `json:"resourceId"`
-	ownerAddr  common.Address `json:"ownerAddr"`
+// View represents a particular user's view of a resource
+type View struct {
+	Resource `json:"resource"`
+	User     common.Address `json:"user"`
 }
 
-// ResourceViewID layout:
-// ResourceIDLength bytes
-// ownerAddr common.AddressLength bytes
-const resourceViewIDLength = ResourceIDLength + common.AddressLength
+// View layout:
+// ResourceLength bytes
+// userAddr common.AddressLength bytes
+const viewLength = ResourceLength + common.AddressLength
 
-func NewViewID(resourceID *ResourceID, owner common.Address) *ResourceViewID {
-	return &ResourceViewID{
-		resourceID: *resourceID,
-		ownerAddr:  owner,
+func NewView(resource *Resource, owner common.Address) *View {
+	return &View{
+		Resource: *resource,
+		User:     owner,
 	}
 }
 
 // mapKey calculates a unique id for this view for the cache map in `Handler`
-func (u *ResourceViewID) mapKey() uint64 {
-	serializedData := make([]byte, resourceViewIDLength)
+func (u *View) mapKey() uint64 {
+	serializedData := make([]byte, viewLength)
 	u.binaryPut(serializedData)
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
@@ -42,75 +41,53 @@ func (u *ResourceViewID) mapKey() uint64 {
 	return *(*uint64)(unsafe.Pointer(&hash[0]))
 }
 
-// binaryPut serializes this ResourceViewID instance into the provided slice
-func (u *ResourceViewID) binaryPut(serializedData []byte) error {
-	if len(serializedData) != resourceViewIDLength {
-		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize ResourceViewID. Expected %d, got %d", resourceViewIDLength, len(serializedData))
+// binaryPut serializes this View instance into the provided slice
+func (u *View) binaryPut(serializedData []byte) error {
+	if len(serializedData) != viewLength {
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize View. Expected %d, got %d", viewLength, len(serializedData))
 	}
 	var cursor int
-	if err := u.resourceID.binaryPut(serializedData[cursor : cursor+ResourceIDLength]); err != nil {
+	if err := u.Resource.binaryPut(serializedData[cursor : cursor+ResourceLength]); err != nil {
 		return err
 	}
-	cursor += ResourceIDLength
+	cursor += ResourceLength
 
-	copy(serializedData[cursor:cursor+common.AddressLength], u.ownerAddr[:])
+	copy(serializedData[cursor:cursor+common.AddressLength], u.User[:])
 	cursor += common.AddressLength
 
 	return nil
 }
 
 // binaryLength returns the expected size of this structure when serialized
-func (u *ResourceViewID) binaryLength() int {
-	return resourceViewIDLength
+func (u *View) binaryLength() int {
+	return viewLength
 }
 
 // binaryGet restores the current instance from the information contained in the passed slice
-func (u *ResourceViewID) binaryGet(serializedData []byte) error {
-	if len(serializedData) != resourceViewIDLength {
-		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read ResourceViewID. Expected %d, got %d", resourceViewIDLength, len(serializedData))
+func (u *View) binaryGet(serializedData []byte) error {
+	if len(serializedData) != viewLength {
+		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read View. Expected %d, got %d", viewLength, len(serializedData))
 	}
 
 	var cursor int
-	if err := u.resourceID.binaryGet(serializedData[cursor : cursor+ResourceIDLength]); err != nil {
+	if err := u.Resource.binaryGet(serializedData[cursor : cursor+ResourceLength]); err != nil {
 		return err
 	}
-	cursor += ResourceIDLength
+	cursor += ResourceLength
 
-	copy(u.ownerAddr[:], serializedData[cursor:cursor+common.AddressLength])
+	copy(u.User[:], serializedData[cursor:cursor+common.AddressLength])
 	cursor += common.AddressLength
 
 	return nil
 }
 
-func (u *ResourceViewID) Hex() string {
-	serializedData := make([]byte, resourceViewIDLength)
+func (u *View) Hex() string {
+	serializedData := make([]byte, viewLength)
 	u.binaryPut(serializedData)
 	return hexutil.Encode(serializedData)
 }
 
-type resourceViewIDJSON struct {
-	ResourceID ResourceID     `json:"resourceId"`
-	OwnerAddr  common.Address `json:"ownerAddr"`
-}
-
-func (u *ResourceViewID) UnmarshalJSON(data []byte) error {
-	var j resourceViewIDJSON
-	if err := json.Unmarshal(data, &j); err != nil {
-		return err
-	}
-	u.resourceID = j.ResourceID
-	u.ownerAddr = j.OwnerAddr
-	return nil
-}
-
-func (u *ResourceViewID) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&resourceViewIDJSON{
-		ResourceID: u.resourceID,
-		OwnerAddr:  u.ownerAddr,
-	})
-}
-
-func (u *ResourceViewID) FromURL(url *url.URL) error {
+func (u *View) FromURL(url *url.URL) error {
 	query := url.Query()
 	startTime, err := strconv.ParseUint(query.Get("starttime"), 10, 64)
 	if err != nil {
@@ -120,20 +97,20 @@ func (u *ResourceViewID) FromURL(url *url.URL) error {
 	if err != nil {
 		return err
 	}
-	if err = u.resourceID.Topic.FromHex(query.Get("topic")); err != nil {
+	if err = u.Topic.FromHex(query.Get("topic")); err != nil {
 		return err
 	}
-	u.ownerAddr = common.HexToAddress(query.Get("owner"))
-	u.resourceID.Frequency = frequency
-	u.resourceID.StartTime.Time = startTime
+	u.User = common.HexToAddress(query.Get("user"))
+	u.Frequency = frequency
+	u.StartTime.Time = startTime
 	return nil
 }
 
-func (u *ResourceViewID) ToURL(url *url.URL) {
+func (u *View) ToURL(url *url.URL) {
 	query := url.Query()
-	query.Set("starttime", fmt.Sprintf("%d", u.resourceID.StartTime.Time))
-	query.Set("frequency", fmt.Sprintf("%d", u.resourceID.Frequency))
-	query.Set("topic", u.resourceID.Topic.Hex())
-	query.Set("owner", u.ownerAddr.Hex())
+	query.Set("starttime", fmt.Sprintf("%d", u.StartTime.Time))
+	query.Set("frequency", fmt.Sprintf("%d", u.Frequency))
+	query.Set("topic", u.Topic.Hex())
+	query.Set("user", u.User.Hex())
 	url.RawQuery = query.Encode()
 }

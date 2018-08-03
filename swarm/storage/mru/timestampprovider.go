@@ -18,6 +18,7 @@ package mru
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"time"
 )
 
@@ -53,6 +54,14 @@ func (t *Timestamp) binaryPut(data []byte) error {
 	}
 	binary.LittleEndian.PutUint64(data, t.Time)
 	return nil
+}
+
+func (t *Timestamp) UnmarshalJSON(data []byte) error {
+	return json.Unmarshal(data, &t.Time)
+}
+
+func (t *Timestamp) MarshalJSON() ([]byte, error) {
+	return json.Marshal(t.Time)
 }
 
 type DefaultTimestampProvider struct {
