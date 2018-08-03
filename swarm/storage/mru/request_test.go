@@ -70,17 +70,15 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &Request{
-		SignedResourceUpdate: SignedResourceUpdate{
-			ResourceUpdate: ResourceUpdate{
-				UpdateHeader: UpdateHeader{
-					UpdateLookup: UpdateLookup{
-						Period:  7,
-						Version: 1,
-						View:    createRequest.ResourceUpdate.View,
-					},
+		ResourceUpdate: ResourceUpdate{
+			UpdateHeader: UpdateHeader{
+				UpdateLookup: UpdateLookup{
+					Period:  7,
+					Version: 1,
+					View:    createRequest.ResourceUpdate.View,
 				},
-				data: data,
 			},
+			data: data,
 		},
 	}
 

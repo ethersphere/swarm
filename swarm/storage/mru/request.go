@@ -32,11 +32,6 @@ type updateRequestJSON struct {
 	Signature string `json:"signature,omitempty"`
 }
 
-// Request represents an update and/or resource create message
-type Request struct {
-	SignedResourceUpdate
-}
-
 var zeroAddr = common.Address{}
 
 // NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
@@ -68,14 +63,6 @@ func NewCreateRequest(metadata *Resource, userAddr common.Address) (request *Req
 	request.View.Resource = *metadata
 	request.View.User = userAddr
 	return request, nil
-}
-
-// Sign executes the signature to validate the resource and sets the owner address field
-func (r *Request) Sign(signer Signer) error {
-	if err := r.SignedResourceUpdate.Sign(signer); err != nil {
-		return err
-	}
-	return nil
 }
 
 // SetData stores the payload data the resource will be updated with
@@ -113,14 +100,6 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 		copy(r.Signature[:], sigBytes)
 	}
 	return nil
-}
-
-func (r *Request) FromValues(values Values, data []byte, parseView bool) error {
-	return r.SignedResourceUpdate.FromValues(values, data, parseView)
-}
-
-func (r *Request) ToValues(values Values) []byte {
-	return r.SignedResourceUpdate.ToValues(values)
 }
 
 func decodeHexArray(dst []byte, src, name string) error {

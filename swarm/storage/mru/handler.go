@@ -92,7 +92,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// to update
 
 	// First, deserialize the chunk
-	var r SignedResourceUpdate
+	var r Request
 	if err := r.fromChunk(chunkAddr, data); err != nil {
 		log.Debug("Invalid resource chunk", "addr", chunkAddr.Hex(), "err", err.Error())
 		return false
@@ -287,7 +287,7 @@ func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, error) {
 
 	// retrieve metadata from chunk data and check that it matches this mutable resource
-	var r SignedResourceUpdate
+	var r Request
 	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		return nil, err
 	}
@@ -312,12 +312,12 @@ func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, er
 // Note that a Mutable Resource update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature. An error will be returned if the total length of the chunk payload will exceed this limit.
 // Update can only check if the caller is trying to overwrite the very last known version, otherwise it just puts the update
 // on the network.
-func (h *Handler) Update(ctx context.Context, r *SignedResourceUpdate) (storage.Address, error) {
+func (h *Handler) Update(ctx context.Context, r *Request) (storage.Address, error) {
 	return h.update(ctx, r)
 }
 
 // create and commit an update
-func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAddr storage.Address, err error) {
+func (h *Handler) update(ctx context.Context, r *Request) (updateAddr storage.Address, err error) {
 
 	// we can't update anything without a store
 	if h.chunkStore == nil {

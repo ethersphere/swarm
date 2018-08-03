@@ -119,7 +119,7 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[0]], err = rh.Update(ctx, &request.SignedResourceUpdate)
+	resourcekey[updates[0]], err = rh.Update(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +139,7 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[1]], err = rh.Update(ctx, &request.SignedResourceUpdate)
+	resourcekey[updates[1]], err = rh.Update(ctx, request)
 	if err == nil {
 		t.Fatal("Expected update to fail since this version already exists")
 	}
@@ -154,7 +154,7 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[1]], err = rh.Update(ctx, &request.SignedResourceUpdate)
+	resourcekey[updates[1]], err = rh.Update(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -170,7 +170,7 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[2]], err = rh.Update(ctx, &request.SignedResourceUpdate)
+	resourcekey[updates[2]], err = rh.Update(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -190,7 +190,7 @@ func TestResourceHandler(t *testing.T) {
 	if err := request.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	resourcekey[updates[3]], err = rh.Update(ctx, &request.SignedResourceUpdate)
+	resourcekey[updates[3]], err = rh.Update(ctx, request)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -308,7 +308,7 @@ func TestValidator(t *testing.T) {
 		t.Fatalf("sign fail: %v", err)
 	}
 
-	chunk, err := mr.SignedResourceUpdate.toChunk()
+	chunk, err := mr.toChunk()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +383,7 @@ func TestValidatorInStore(t *testing.T) {
 	updateAddr := updateLookup.UpdateAddr()
 	data := []byte("bar")
 
-	r := new(SignedResourceUpdate)
+	r := new(Request)
 	r.updateAddr = updateAddr
 	r.ResourceUpdate.UpdateLookup = updateLookup
 	r.data = data
@@ -466,7 +466,7 @@ func getUpdateDirect(rh *Handler, addr storage.Address) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	var r SignedResourceUpdate
+	var r Request
 	if err := r.fromChunk(addr, chunk.SData); err != nil {
 		return nil, err
 	}

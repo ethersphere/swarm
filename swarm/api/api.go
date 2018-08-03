@@ -970,7 +970,7 @@ func (a *API) ResourceNewRequest(ctx context.Context, view *mru.View) (*mru.Requ
 
 // ResourceUpdate updates a Mutable Resource with arbitrary data.
 // Upon retrieval the update will be retrieved verbatim as bytes.
-func (a *API) ResourceUpdate(ctx context.Context, request *mru.SignedResourceUpdate) (storage.Address, error) {
+func (a *API) ResourceUpdate(ctx context.Context, request *mru.Request) (storage.Address, error) {
 	return a.resource.Update(ctx, request)
 }
 

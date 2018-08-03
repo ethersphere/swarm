@@ -27,21 +27,23 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// SignedResourceUpdate represents a resource update with all the necessary information to prove ownership of the resource
-type SignedResourceUpdate struct {
+//TODO AFTER PR REVIEW: Merge this file with request.go
+
+// Request represents an update and/or resource create message
+type Request struct {
 	ResourceUpdate // actual content that will be put on the chunk, less signature
 	Signature      *Signature
 	updateAddr     storage.Address // resulting chunk address for the update (not serialized, for internal use)
 	binaryData     []byte          // resulting serialized data (not serialized, for efficiency/internal use)
 }
 
-// SignedResourceUpdate layout
+// Request layout
 // resourceUpdate bytes
 // SignatureLength bytes
 const minimumSignedUpdateLength = minimumUpdateDataLength + signatureLength
 
 // Verify checks that signatures are valid and that the signer owns the resource to be updated
-func (r *SignedResourceUpdate) Verify() (err error) {
+func (r *Request) Verify() (err error) {
 	if len(r.data) == 0 {
 		return NewError(ErrInvalidValue, "Update does not contain data")
 	}
@@ -71,7 +73,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 }
 
 // Sign executes the signature to validate the resource
-func (r *SignedResourceUpdate) Sign(signer Signer) error {
+func (r *Request) Sign(signer Signer) error {
 	r.View.User = signer.Address()
 	r.binaryData = nil           //invalidate serialized data
 	digest, err := r.GetDigest() // computes digest and serializes into .binaryData
@@ -101,7 +103,7 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 }
 
 // create an update chunk.
-func (r *SignedResourceUpdate) toChunk() (*storage.Chunk, error) {
+func (r *Request) toChunk() (*storage.Chunk, error) {
 
 	// Check that the update is signed and serialized
 	// For efficiency, data is serialized during signature and cached in
@@ -122,8 +124,8 @@ func (r *SignedResourceUpdate) toChunk() (*storage.Chunk, error) {
 }
 
 // fromChunk populates this structure from chunk data. It does not verify the signature is valid.
-func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata []byte) error {
-	// for update chunk layout see SignedResourceUpdate definition
+func (r *Request) fromChunk(updateAddr storage.Address, chunkdata []byte) error {
+	// for update chunk layout see Request definition
 
 	//deserialize the resource update portion
 	if err := r.ResourceUpdate.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
@@ -149,7 +151,7 @@ func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata [
 
 // GetDigest creates the resource update digest used in signatures
 // the serialized payload is cached in .binaryData
-func (r *SignedResourceUpdate) GetDigest() (result common.Hash, err error) {
+func (r *Request) GetDigest() (result common.Hash, err error) {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
@@ -165,7 +167,7 @@ func (r *SignedResourceUpdate) GetDigest() (result common.Hash, err error) {
 	return common.BytesToHash(hasher.Sum(nil)), nil
 }
 
-func (r *SignedResourceUpdate) FromValues(values Values, data []byte, parseView bool) error {
+func (r *Request) FromValues(values Values, data []byte, parseView bool) error {
 	signatureBytes, err := hexutil.Decode(values.Get("signature"))
 	if err != nil {
 		r.Signature = nil
@@ -184,7 +186,7 @@ func (r *SignedResourceUpdate) FromValues(values Values, data []byte, parseView 
 	return err
 }
 
-func (r *SignedResourceUpdate) ToValues(values Values) []byte {
+func (r *Request) ToValues(values Values) []byte {
 	values.Set("signature", hexutil.Encode(r.Signature[:]))
 	return r.ResourceUpdate.ToValues(values)
 }

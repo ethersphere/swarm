@@ -10,8 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func getTestSignedResourceUpdate() *SignedResourceUpdate {
-	return &SignedResourceUpdate{
+func getTestSignedResourceUpdate() *Request {
+	return &Request{
 		ResourceUpdate: *getTestResourceUpdate(),
 	}
 }
@@ -19,7 +19,7 @@ func getTestSignedResourceUpdate() *SignedResourceUpdate {
 func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 
 	// Test that parseUpdate fails if the chunk is too small
-	var r SignedResourceUpdate
+	var r Request
 	if err := r.fromChunk(storage.ZeroAddr, make([]byte, minimumUpdateDataLength-1)); err == nil {
 		t.Fatalf("Expected parseUpdate to fail when chunkData contains less than %d bytes", minimumUpdateDataLength)
 	}
@@ -48,7 +48,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 
 	compareByteSliceToExpectedHex(t, "chunk", chunk.SData, "0x10dd205b00000000100e000000000000776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c4f000000da070000416c206269656e206861636572206a616dc3a173206c652066616c7461207072656d696f5214c16d60870afb21c679a6020d764c7bb0e7bd8a66cfa7d0aa06e9fbf9c6d0666b013ca47f7a9c44d8d54a14193ba3514a0e1f56234a0618e03f0a836801e100")
 
-	var recovered SignedResourceUpdate
+	var recovered Request
 	l := len(chunk.SData)
 	fmt.Println(l)
 	recovered.fromChunk(chunk.Addr, chunk.SData)
@@ -89,7 +89,7 @@ func TestReverse(t *testing.T) {
 
 	data := []byte("Donde una puerta se cierra, otra se abre")
 
-	update := new(SignedResourceUpdate)
+	update := new(Request)
 	update.View = view
 	update.Period = period
 	update.Version = version
@@ -108,7 +108,7 @@ func TestReverse(t *testing.T) {
 	}
 
 	// check that we can recover the owner account from the update chunk's signature
-	var checkUpdate SignedResourceUpdate
+	var checkUpdate Request
 	if err := checkUpdate.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		t.Fatal(err)
 	}
