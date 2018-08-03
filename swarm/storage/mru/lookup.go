@@ -34,11 +34,15 @@ type LookupParams struct {
 	Limit uint32
 }
 
+// Values interface represents a string key-value store
+// useful for building query strings
 type Values interface {
 	Get(key string) string
 	Set(key, value string)
 }
 
+// FromValues deserializes this instance from a string key-value store
+// useful to parse query strings
 func (lp *LookupParams) FromValues(values Values, parseView bool) error {
 	limit, _ := strconv.ParseUint(values.Get("limit"), 10, 32)
 
@@ -46,6 +50,8 @@ func (lp *LookupParams) FromValues(values Values, parseView bool) error {
 	return lp.UpdateLookup.FromValues(values, parseView)
 }
 
+// ToValues serializes this structure into the provided string key-value store
+// useful to build query strings
 func (lp *LookupParams) ToValues(values url.Values) {
 	if lp.Limit != 0 {
 		values.Set("limit", fmt.Sprintf("%d", lp.Version))
@@ -53,6 +59,10 @@ func (lp *LookupParams) ToValues(values url.Values) {
 	lp.UpdateLookup.ToValues(values)
 }
 
+// NewLookupParams constructs a LookupParams structure with the provided lookup parameters
+// if period = 0 and version = 0, the last resource version will be looked up
+// if period !=0 and version = 0, the last version in that period will be looked up
+// if both period, version !=0, that specific period, version will be looked up
 func NewLookupParams(view *View, period, version uint32, limit uint32) *LookupParams {
 	return &LookupParams{
 		UpdateLookup: UpdateLookup{
@@ -150,6 +160,8 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	return nil
 }
 
+// FromValues deserializes this instance from a string key-value store
+// useful to parse query strings
 func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
 	version, _ := strconv.ParseUint(values.Get("version"), 10, 32)
 	period, _ := strconv.ParseUint(values.Get("period"), 10, 32)
@@ -165,6 +177,8 @@ func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
 	return nil
 }
 
+// ToValues serializes this structure into the provided string key-value store
+// useful to build query strings
 func (u *UpdateLookup) ToValues(values Values) {
 	if u.Period != 0 {
 		values.Set("period", fmt.Sprintf("%d", u.Period))

@@ -15,7 +15,7 @@ start time that indicates when the resource becomes valid, the frequency in seco
 which the resource is expected to be updated.
 
 A Resource View is defined as a specific user's point of view about a particular resource.
-Thus, a View is a Resource + the user's addres (userAddr)
+Thus, a View is a Resource + the user's address (userAddr)
 
 The Resource structure tells the requester from when the mutable resource was
 first added (Unix time in seconds) and in which moments to look for the

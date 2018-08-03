@@ -8,6 +8,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // View represents a particular user's view of a resource
@@ -21,10 +22,11 @@ type View struct {
 // userAddr common.AddressLength bytes
 const viewLength = ResourceLength + common.AddressLength
 
-func NewView(resource *Resource, owner common.Address) *View {
+// NewView build a new resource "point of view" out of the provided resource and user
+func NewView(resource *Resource, user common.Address) *View {
 	return &View{
 		Resource: *resource,
-		User:     owner,
+		User:     user,
 	}
 }
 
@@ -80,12 +82,15 @@ func (u *View) binaryGet(serializedData []byte) error {
 	return nil
 }
 
+// Hex serializes the View to a hex string
 func (u *View) Hex() string {
 	serializedData := make([]byte, viewLength)
 	u.binaryPut(serializedData)
 	return hexutil.Encode(serializedData)
 }
 
+// FromValues deserializes this instance from a string key-value store
+// useful to parse query strings
 func (u *View) FromValues(values Values) error {
 	startTime, err := strconv.ParseUint(values.Get("starttime"), 10, 64)
 	if err != nil {
@@ -95,8 +100,18 @@ func (u *View) FromValues(values Values) error {
 	if err != nil {
 		return err
 	}
-	if err = u.Topic.FromHex(values.Get("topic")); err != nil {
-		return err
+	topic := values.Get("topic")
+	if topic != "" {
+		if err = u.Topic.FromHex(values.Get("topic")); err != nil {
+			return err
+		}
+	} else { // see if the user set name and relatedcontent
+		name := values.Get("name")
+		relatedContent, _ := hexutil.Decode(values.Get("relatedcontent"))
+		if len(relatedContent) > 0 && len(relatedContent) < storage.KeyLength {
+			return NewErrorf(ErrInvalidValue, "relatedcontent field must be a hex-encoded byte array exactly %d bytes long", storage.KeyLength)
+		}
+		u.Topic = NewTopic(name, relatedContent[:storage.KeyLength])
 	}
 	u.User = common.HexToAddress(values.Get("user"))
 	u.Frequency = frequency
@@ -104,6 +119,8 @@ func (u *View) FromValues(values Values) error {
 	return nil
 }
 
+// ToValues serializes this structure into the provided string key-value store
+// useful to build query strings
 func (u *View) ToValues(values Values) {
 	values.Set("starttime", fmt.Sprintf("%d", u.StartTime.Time))
 	values.Set("frequency", fmt.Sprintf("%d", u.Frequency))

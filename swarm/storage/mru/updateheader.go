@@ -54,10 +54,14 @@ func (h *UpdateHeader) binaryGet(serializedData []byte) error {
 	return nil
 }
 
+// FromValues deserializes this instance from a string key-value store
+// useful to parse query strings
 func (h *UpdateHeader) FromValues(values Values, parseView bool) error {
 	return h.UpdateLookup.FromValues(values, parseView)
 }
 
+// ToValues serializes this structure into the provided string key-value store
+// useful to build query strings
 func (h *UpdateHeader) ToValues(values Values) {
 	h.UpdateLookup.ToValues(values)
 }

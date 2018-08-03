@@ -23,6 +23,8 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
+//TODO AFTER PR REVIEW: Merge this file with signedupdate.go
+
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
 	View      *View  `json:"view"`
@@ -71,6 +73,7 @@ func (r *Request) SetData(data []byte) {
 	r.Signature = nil
 }
 
+// IsUpdate returns true if this request models a signed update or otherwise it is a signature request
 func (r *Request) IsUpdate() bool {
 	return r.Signature != nil
 }

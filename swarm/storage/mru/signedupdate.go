@@ -167,6 +167,8 @@ func (r *Request) GetDigest() (result common.Hash, err error) {
 	return common.BytesToHash(hasher.Sum(nil)), nil
 }
 
+// FromValues deserializes this instance from a string key-value store
+// useful to parse query strings
 func (r *Request) FromValues(values Values, data []byte, parseView bool) error {
 	signatureBytes, err := hexutil.Decode(values.Get("signature"))
 	if err != nil {
@@ -186,8 +188,12 @@ func (r *Request) FromValues(values Values, data []byte, parseView bool) error {
 	return err
 }
 
+// ToValues serializes this structure into the provided string key-value store
+// useful to build query strings
 func (r *Request) ToValues(values Values) []byte {
-	values.Set("signature", hexutil.Encode(r.Signature[:]))
+	if r.Signature != nil {
+		values.Set("signature", hexutil.Encode(r.Signature[:]))
+	}
 	return r.ResourceUpdate.ToValues(values)
 }
 

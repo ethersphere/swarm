@@ -28,13 +28,13 @@ type Resource struct {
 }
 
 const frequencyLength = 8 // sizeof(uint64)
-const nameLengthLength = 1
 
 // ResourceID Layout
 // StartTime Timestamp: timestampLength bytes
 // frequency: frequencyLength bytes
 // TopicLength: topicLength bytes
-const ResourceLength = timestampLength + frequencyLength + topicLength
+// ResourceLength returns the byte length of the Resource structure
+const ResourceLength = timestampLength + frequencyLength + TopicLength
 
 // binaryGet populates the resource metadata from a byte array
 func (r *Resource) binaryGet(serializedData []byte) error {
@@ -51,8 +51,8 @@ func (r *Resource) binaryGet(serializedData []byte) error {
 	r.Frequency = binary.LittleEndian.Uint64(serializedData[cursor : cursor+frequencyLength])
 	cursor += frequencyLength
 
-	copy(r.Topic.content[:], serializedData[cursor:cursor+topicLength])
-	cursor += topicLength
+	copy(r.Topic.content[:], serializedData[cursor:cursor+TopicLength])
+	cursor += TopicLength
 	return nil
 }
 
@@ -68,8 +68,8 @@ func (r *Resource) binaryPut(serializedData []byte) error {
 	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+frequencyLength], r.Frequency)
 	cursor += frequencyLength
 
-	copy(serializedData[cursor:cursor+topicLength], r.Topic.content[:topicLength])
-	cursor += topicLength
+	copy(serializedData[cursor:cursor+TopicLength], r.Topic.content[:TopicLength])
+	cursor += TopicLength
 
 	return nil
 }

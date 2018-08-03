@@ -92,11 +92,15 @@ func (r *ResourceUpdate) binaryGet(serializedData []byte) error {
 
 }
 
+// FromValues deserializes this instance from a string key-value store
+// useful to parse query strings
 func (r *ResourceUpdate) FromValues(values Values, data []byte, parseView bool) error {
 	r.data = data
 	return r.UpdateHeader.FromValues(values, parseView)
 }
 
+// ToValues serializes this structure into the provided string key-value store
+// useful to build query strings
 func (r *ResourceUpdate) ToValues(values Values) []byte {
 	r.UpdateHeader.ToValues(values)
 	return r.data

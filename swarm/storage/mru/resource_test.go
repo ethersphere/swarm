@@ -33,9 +33,8 @@ import (
 )
 
 var (
-	loglevel   = flag.Int("loglevel", 3, "loglevel")
-	testHasher = storage.MakeHashFunc(resourceHashAlgorithm)()
-	startTime  = Timestamp{
+	loglevel  = flag.Int("loglevel", 3, "loglevel")
+	startTime = Timestamp{
 		Time: uint64(4200),
 	}
 	resourceFrequency = uint64(42)
