@@ -40,8 +40,10 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -109,6 +111,7 @@ func NewServer(api *api.API, corsString string) *Server {
 }
 
 func (s *Server) ListenAndServe(addr string) error {
+	s.listenAddr = addr
 	return http.ListenAndServe(addr, s)
 }
 
@@ -267,7 +270,8 @@ func (s *Server) WrapHandler(parseBzzUri bool, h func(http.ResponseWriter, *Requ
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 type Server struct {
 	http.Handler
-	api *api.API
+	api        *api.API
+	listenAddr string
 }
 
 // Request wraps http.Request and also includes the parsed bzz URI
@@ -1146,7 +1150,77 @@ func (s *Server) decryptor(r *Request) api.DecryptFunc {
 			m.Access = nil
 			return nil
 		case "act":
+			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
+			if err != nil {
+				return ErrDecrypt
+			}
+			publisher, err := crypto.DecompressPubkey(publisherBytes)
+			if err != nil {
+				return ErrDecrypt
+			}
 
+			sessionKey, err := s.api.NodeSessionKey(publisher, m.Access.Salt)
+			if err != nil {
+				return ErrDecrypt
+			}
+
+			hasher := sha3.NewKeccak256()
+			hasher.Write(append(sessionKey, 0))
+			lookupKey := hasher.Sum(nil)
+
+			hasher.Reset()
+
+			hasher.Write(append(sessionKey, 1))
+			accessKeyEncryptionKey := hasher.Sum(nil)
+			log.Error("got", "accessKeyEncryptionKey", hex.EncodeToString(accessKeyEncryptionKey), "lookupKey", hex.EncodeToString(lookupKey), "sessionKey", hex.EncodeToString(sessionKey))
+
+			lk := hex.EncodeToString(lookupKey)
+			log.Error("lookupKeyFromBzzReq", "lookupKey", lk, "addr", m.Access.Act)
+			c := client.NewClient(fmt.Sprintf("http://%s", s.listenAddr))
+			manifest, _, err := c.DownloadManifest(m.Access.Act)
+			if err != nil {
+				return err
+			}
+
+			found := ""
+			for _, v := range manifest.Entries {
+				if v.Path == lk {
+					found = v.Hash
+				}
+			}
+
+			if found == "" {
+				return errors.New("could not find lookup key in act manifest")
+			}
+
+			v, err := hex.DecodeString(found)
+			log.Error("got the following from the bzz query", "v", manifest, "found", found, "len(v)", len(v))
+			enc := api.NewRefEncryption(len(v) - 8)
+			decodedRef, err := enc.Decrypt(v, accessKeyEncryptionKey)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+
+			ref, err := hex.DecodeString(m.Hash)
+			if err != nil {
+				return err
+			}
+
+			enc = api.NewRefEncryption(len(ref) - 8)
+			decodedMainRef, err := enc.Decrypt(ref, decodedRef)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+
+			log.Error("decoded main ref", "decodedMainRef", hex.EncodeToString(decodedMainRef))
+
+			m.Hash = hex.EncodeToString(decodedMainRef)
+			m.Access = nil
+			return nil
 		}
 		return ErrUnknownAccessType
 	}

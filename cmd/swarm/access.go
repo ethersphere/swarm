@@ -107,6 +107,15 @@ func accessNewACT(ctx *cli.Context) {
 	)
 
 	grantees := []string{}
+	actFilename := ctx.String(SwarmAccessGrantKeysFlag.Name)
+	bytes, err := ioutil.ReadFile(actFilename)
+	if err != nil {
+		utils.Fatalf("had an error reading the grantee public key list")
+	}
+	grantees = strings.Split(string(bytes), "\n")
+	if len(grantees) == 0 {
+		utils.Fatalf("did not get any grantees' public keys")
+	}
 
 	accessKey, ae, err = doACTNew(ctx, salt, grantees)
 	if err != nil {
@@ -126,6 +135,7 @@ func generateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byt
 		utils.Fatalf("Error: %v", err)
 	}
 	// encrypt ref with accessKey
+	log.Error("original ref", "ref", ref)
 	enc := api.NewRefEncryption(len(refBytes))
 	encrypted, err := enc.Encrypt(refBytes, accessKey)
 	if err != nil {
@@ -191,9 +201,9 @@ func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEn
 		return nil, nil, err
 	}
 
-	granteePub, err := crypto.UnmarshalPubkey(b)
+	granteePub, err := crypto.DecompressPubkey(b)
 	if err != nil {
-		log.Error("error unmarshaling grantee public key", "err", err)
+		log.Error("error decompressing grantee public key", "err", err)
 		return nil, nil, err
 	}
 
@@ -236,7 +246,9 @@ func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (acces
 	}
 
 	lookupPathEncryptedAccessKeyMap := make(map[string]string)
+	i := 0
 	for _, v := range granteesPublicKeys {
+		i++
 		if v == "" {
 			return nil, nil, errors.New("need a grantee Public Key")
 		}
@@ -246,9 +258,9 @@ func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (acces
 			return nil, nil, err
 		}
 
-		granteePub, err := crypto.UnmarshalPubkey(b)
+		granteePub, err := crypto.DecompressPubkey(b)
 		if err != nil {
-			log.Error("error unmarshaling grantee public key", "err", err)
+			log.Error("error decompressing grantee public key", "err", err)
 			return nil, nil, err
 		}
 		sessionKey, err := api.NewSessionKeyPK(privateKey, granteePub, salt)
@@ -266,17 +278,20 @@ func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (acces
 		encryptedAccessKey, err := enc.Encrypt(accessKey, accessKeyEncryptionKey)
 
 		lookupPathEncryptedAccessKeyMap[hex.EncodeToString(lookupKey)] = hex.EncodeToString(encryptedAccessKey)
-
+	}
+	if i == 0 {
+		utils.Fatalf("did not do anything with the public keys")
 	}
 	m := api.Manifest{
 		Entries: []api.ManifestEntry{},
 	}
 
 	for k, v := range lookupPathEncryptedAccessKeyMap {
+		log.Error("appending entries to act manifest", "path", k, "hash", v)
 		m.Entries = append(m.Entries, api.ManifestEntry{
 			Path:        k,
 			Hash:        v,
-			ContentType: api.ManifestType,
+			ContentType: "text/plain",
 		})
 	}
 
@@ -301,42 +316,6 @@ func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (acces
 	}
 
 	return accessKey, ae, nil
-
-	//create session keys for each public/private keypair
-	//construct manifest
-	/*
-				create slice of session struct
-				create array of lookup keys by hashing 0 to all of these session keys
-				sha3(session +"0") => lookup key = sha3(append(sessionkey,0)) => check that output is different, maybe create unit test with sanity checks for known hashes
-				access key encryption key = sha3(append(sessionKey,1))
-				create access key = random32Bytes
-				create encrypted accesskeys: encrypt access key using access key encryption keys:
-					enc := api.NewRefEncryption(len(encrypted accesskey))
-					encryptedAccessKey, err := enc.Encrypt(random32Bytes,accesskey encryption key)
-				construct manifest where the path i is the lookup key and the manifest entry
-				sitting at that path contains the
-
-				=========
-		root access manifest with meta
-		see that its act and match on it
-
-		take private key + public key from the metadata (fallback to password when this doesnt work)
-		create shared secret
-		create sessionkey+lookup key by hashing 1+0 with it then concat the act url + lookup key
-		this with bzz/bzz-raw
-		create access key decryption key by hashing 1 to session key
-		decrypt what's in the manifest with this
-		then try to decrypt the reference whicnh was in the original manigfest
-
-	*/
-
-	// ae, err = api.NewAccessEntryACT(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)), salt)
-	// if err != nil {
-	// 	log.Error("error generating access entry", "err", err)
-	// 	return nil, nil, err
-	// }
-
-	// return sessionKey, ae, nil
 }
 
 func doPasswordNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
