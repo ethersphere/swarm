@@ -120,8 +120,8 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	// add the data our multihash aliased manifest will point to
 	databytes := "bar"
-	url := fmt.Sprintf("%s/bzz:/", srv.URL)
-	resp, err := http.Post(url, "text/plain", bytes.NewReader([]byte(databytes)))
+	testBzzUrl := fmt.Sprintf("%s/bzz:/", srv.URL)
+	resp, err := http.Post(testBzzUrl, "text/plain", bytes.NewReader([]byte(databytes)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,14 +154,17 @@ func TestBzzResourceMultihash(t *testing.T) {
 	}
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	body, err := updateRequest.MarshalJSON()
+	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
+	query := testUrl.Query()
+	body := updateRequest.ToValues(query) // this adds all query parameters and returns the data to be posted
+	query.Set("manifest", "1")            // indicate we want a manifest back
+	testUrl.RawQuery = query.Encode()
 
 	// create the multihash update
-	url = fmt.Sprintf("%s/bzz-resource:/", srv.URL)
-	resp, err = http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err = http.Post(testUrl.String(), "application/octect-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,8 +188,8 @@ func TestBzzResourceMultihash(t *testing.T) {
 	}
 
 	// get bzz manifest transparent resource resolve
-	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(url)
+	testBzzUrl = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testBzzUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -211,11 +214,13 @@ func TestBzzResource(t *testing.T) {
 	defer srv.Close()
 
 	// data of update 1
-	databytes := make([]byte, 666)
-	_, err := rand.Read(databytes)
+	update1Data := make([]byte, 666)
+	_, err := rand.Read(update1Data)
 	if err != nil {
 		t.Fatal(err)
 	}
+	//data for update 2
+	update2Data := []byte("foo")
 
 	updateRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
 		Topic:     mru.NewTopic("foo.eth", nil),
@@ -225,20 +230,23 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest.SetData(databytes)
+	updateRequest.SetData(update1Data)
 
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
 
-	body, err := updateRequest.MarshalJSON()
+	// creates resource and sets update 1
+	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
+	query := testUrl.Query()
+	body := updateRequest.ToValues(query) // this adds all query parameters
+	query.Set("manifest", "1")            // indicate we want a manifest back
+	testUrl.RawQuery = query.Encode()
 
-	// creates resource and sets update 1
-	testUrl := fmt.Sprintf("%s/bzz-resource:/", srv.URL)
-	resp, err := http.Post(testUrl, "application/json", bytes.NewReader(body))
+	resp, err := http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,8 +270,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get the manifest
-	testUrl = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(testUrl)
+	testRawUrl := fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testRawUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -289,8 +297,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get bzz manifest transparent resource resolve
-	testUrl = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(testUrl)
+	testBzzUrl := fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testBzzUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -304,8 +312,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get non-existent name, should fail
-	testUrl = fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
-	resp, err = http.Get(testUrl)
+	testBzzResUrl := fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,8 +326,8 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.1) through resource directly
 	log.Info("get update latest = 1.1", "addr", correctManifestAddrHex)
-	testUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(testUrl)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -331,16 +339,16 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(databytes, b) {
-		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	if !bytes.Equal(update1Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
 	}
 
 	// update 2
 	log.Info("update 2")
 
 	// 1.- get metadata about this resource
-	testUrl = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(testUrl + "meta")
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl + "meta")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,17 +364,19 @@ func TestBzzResource(t *testing.T) {
 	if err = updateRequest.UnmarshalJSON(b); err != nil {
 		t.Fatalf("Error decoding resource metadata: %s", err)
 	}
-	data := []byte("foo")
-	updateRequest.SetData(data)
+	updateRequest.SetData(update2Data)
 	if err = updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	body, err = updateRequest.MarshalJSON()
+	testUrl, err = url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
+	query = testUrl.Query()
+	body = updateRequest.ToValues(query) // this adds all query parameters
+	testUrl.RawQuery = query.Encode()
 
-	resp, err = http.Post(testUrl, "application/json", bytes.NewReader(body))
+	resp, err = http.Post(testUrl.String(), "application/octect-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -377,8 +387,8 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.2) through resource directly
 	log.Info("get update 1.2")
-	testUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(testUrl)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,14 +400,14 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(data, b) {
-		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	if !bytes.Equal(update2Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update2Data, b)
 	}
 
 	// get latest update (1.2) with specified period
 	log.Info("get update latest = 1.2")
-	testUrl = fmt.Sprintf("%s/bzz-resource:/%s/?period=1", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(testUrl)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s/?period=1", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -409,14 +419,14 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(data, b) {
-		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	if !bytes.Equal(update2Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update2Data, b)
 	}
 
 	// get first update (1.1) with specified period and version
 	log.Info("get first update 1.1")
-	testUrl = fmt.Sprintf("%s/bzz-resource:/%s?period=1&version=1", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(testUrl)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s?period=1&version=1", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -428,8 +438,8 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(databytes, b) {
-		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	if !bytes.Equal(update1Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
 	}
 
 	// test manifest-less queries
@@ -453,8 +463,8 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(databytes, b) {
-		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	if !bytes.Equal(update1Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
 	}
 
 }

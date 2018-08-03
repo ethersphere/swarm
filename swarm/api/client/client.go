@@ -602,7 +602,7 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 // Returns the resulting Mutable Resource manifest address that you can use to include in an ENS Resolver (setContent)
 // or reference future updates (Client.UpdateResource)
 func (c *Client) CreateResource(request *mru.Request) (string, error) {
-	responseStream, err := c.updateResource(request)
+	responseStream, err := c.updateResource(request, true)
 	if err != nil {
 		return "", err
 	}
@@ -622,17 +622,24 @@ func (c *Client) CreateResource(request *mru.Request) (string, error) {
 
 // UpdateResource allows you to set a new version of your content
 func (c *Client) UpdateResource(request *mru.Request) error {
-	_, err := c.updateResource(request)
+	_, err := c.updateResource(request, false)
 	return err
 }
 
-func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
-	body, err := request.MarshalJSON()
+func (c *Client) updateResource(request *mru.Request, createManifest bool) (io.ReadCloser, error) {
+	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
 	}
+	URL.Path = "/bzz-resource:/"
+	values := URL.Query()
+	body := request.ToValues(values)
+	if createManifest {
+		values.Set("manifest", "1")
+	}
+	URL.RawQuery = values.Encode()
 
-	req, err := http.NewRequest("POST", c.Gateway+"/bzz-resource:/", bytes.NewBuffer(body))
+	req, err := http.NewRequest("POST", URL.String(), bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
@@ -643,14 +650,18 @@ func (c *Client) updateResource(request *mru.Request) (io.ReadCloser, error) {
 	}
 
 	return res.Body, nil
-
 }
 
 // GetResource returns a byte stream with the raw content of the resource
 // manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
 // points to that address
 func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, error) {
-	res, err := http.Get(c.Gateway + "/bzz-resource:/" + manifestAddressOrDomain)
+	URL, err := url.Parse(c.Gateway)
+	if err != nil {
+		return nil, err
+	}
+	URL.Path = "/bzz-resource:/" + manifestAddressOrDomain
+	res, err := http.Get(URL.String())
 	if err != nil {
 		return nil, err
 	}
@@ -658,10 +669,11 @@ func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, err
 }
 
 func (c *Client) QueryResource(lookup *mru.LookupParams) (io.ReadCloser, error) {
-	URL, err := url.Parse(c.Gateway + "/bzz-resource:/")
+	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
 	}
+	URL.Path = "/bzz-resource:/"
 	values := URL.Query()
 	lookup.ToValues(values) //adds query parameters
 	URL.RawQuery = values.Encode()

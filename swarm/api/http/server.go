@@ -496,8 +496,17 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 		RespondError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	view := s.getResourceView(w, r)
+	if view == nil { // couldn't parse query string or retrieve manifest
+		return
+	}
+
 	var updateRequest mru.Request
-	if err := updateRequest.UnmarshalJSON(body); err != nil { // decodes request JSON
+	*updateRequest.View() = *view
+	query := r.URL.Query()
+
+	if err := updateRequest.FromValues(query, body, false); err != nil { // decodes request from query parameters
 		RespondError(w, r, err.Error(), http.StatusBadRequest) //TODO: send different status response depending on error
 		return
 	}
@@ -517,26 +526,64 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// we create a manifest so we can retrieve the resource with bzz:// later
-	// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
-	// metadata chunk (rootAddr)
-	m, err := s.api.NewResourceManifest(r.Context(), updateRequest.View())
-	if err != nil {
-		RespondError(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
-		return
-	}
+	if query.Get("manifest") == "1" {
+		// we create a manifest so we can retrieve the resource with bzz:// later
+		// this manifest has a special "resource type" manifest, and saves the
+		// resource view ID used to retrieve the resource later
+		m, err := s.api.NewResourceManifest(r.Context(), updateRequest.View())
+		if err != nil {
+			RespondError(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
+			return
+		}
+		// the key to the manifest will be passed back to the client
+		// the client can access the view  directly through its resourceView member
+		// the manifest key can be set as content in the resolver of the ENS name
+		outdata, err := json.Marshal(m)
+		if err != nil {
+			RespondError(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
+			return
+		}
+		fmt.Fprint(w, string(outdata))
 
-	// the key to the manifest will be passed back to the client
-	// the client can access the view  directly through its resourceView member
-	// the manifest key can be set as content in the resolver of the ENS name
-	outdata, err := json.Marshal(m)
-	if err != nil {
-		RespondError(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
-		return
+		w.Header().Add("Content-type", "application/json")
 	}
-	fmt.Fprint(w, string(outdata))
+}
 
-	w.Header().Add("Content-type", "application/json")
+func (s *Server) getResourceView(w http.ResponseWriter, r *http.Request) *mru.View {
+	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
+	var view *mru.View
+	var err error
+	if uri.Addr != "" {
+		// resolve the content key.
+		manifestAddr := uri.Address()
+		if manifestAddr == nil {
+			manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr)
+			if err != nil {
+				getFail.Inc(1)
+				RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
+				return nil
+			}
+		}
+
+		// get the resource view from the manifest
+		view, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
+		if err != nil {
+			getFail.Inc(1)
+			RespondError(w, r, fmt.Sprintf("error resolving resource view ID for %s: %s", uri.Addr, err), http.StatusNotFound)
+			return nil
+		}
+		log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "view", view.Hex())
+	} else {
+		var v mru.View
+		if err := v.FromValues(r.URL.Query()); err != nil {
+			getFail.Inc(1)
+			RespondError(w, r, fmt.Sprintf("error parsing view ID parameters: %s", err), http.StatusBadRequest)
+			return nil
+		}
+		view = &v
+	}
+	return view
 }
 
 // Retrieve mutable resource updates:
@@ -552,38 +599,9 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.get.resource", "ruid", ruid)
 	var err error
 
-	var view *mru.View
-
-	if uri.Addr != "" {
-		// resolve the content key.
-		manifestAddr := uri.Address()
-		if manifestAddr == nil {
-			manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr)
-			if err != nil {
-				getFail.Inc(1)
-				RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
-				return
-			}
-		} else {
-			w.Header().Set("Cache-Control", "max-age=2147483648")
-		}
-
-		// get the resource view from the manifest
-		view, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
-		if err != nil {
-			getFail.Inc(1)
-			RespondError(w, r, fmt.Sprintf("error resolving resource view ID for %s: %s", uri.Addr, err), http.StatusNotFound)
-			return
-		}
-		log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "view", view.Hex())
-	} else {
-		var v mru.View
-		if err := v.FromValues(r.URL.Query()); err != nil {
-			getFail.Inc(1)
-			RespondError(w, r, fmt.Sprintf("error parsing view ID parameters: %s", err), http.StatusBadRequest)
-			return
-		}
-		view = &v
+	view := s.getResourceView(w, r)
+	if view == nil { // couldn't parse query string or retrieve manifest
+		return
 	}
 
 	// determine if the query specifies period and version or it is a metadata query

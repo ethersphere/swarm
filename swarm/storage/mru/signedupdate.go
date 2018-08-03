@@ -169,12 +169,19 @@ func (r *SignedResourceUpdate) FromValues(values Values, data []byte, parseView 
 	signatureBytes, err := hexutil.Decode(values.Get("signature"))
 	if err != nil {
 		r.signature = nil
+	} else {
+		if len(signatureBytes) != signatureLength {
+			return NewError(ErrInvalidSignature, "Incorrect signature length")
+		}
+		r.signature = new(Signature)
+		copy(r.signature[:], signatureBytes)
 	}
-	if len(signatureBytes) != signatureLength {
-		return NewError(ErrInvalidSignature, "Incorrect signature length")
+	err = r.resourceUpdate.FromValues(values, data, parseView)
+	if err != nil {
+		return err
 	}
-	copy(r.signature[:], signatureBytes)
-	return r.resourceUpdate.FromValues(values, data, parseView)
+	r.updateAddr = r.UpdateAddr()
+	return err
 }
 
 func (r *SignedResourceUpdate) ToValues(values Values) []byte {
