@@ -29,8 +29,8 @@ import (
 
 // SignedResourceUpdate represents a resource update with all the necessary information to prove ownership of the resource
 type SignedResourceUpdate struct {
-	resourceUpdate // actual content that will be put on the chunk, less signature
-	signature      *Signature
+	ResourceUpdate // actual content that will be put on the chunk, less signature
+	Signature      *Signature
 	updateAddr     storage.Address // resulting chunk address for the update (not serialized, for internal use)
 	binaryData     []byte          // resulting serialized data (not serialized, for efficiency/internal use)
 }
@@ -45,7 +45,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 	if len(r.data) == 0 {
 		return NewError(ErrInvalidValue, "Update does not contain data")
 	}
-	if r.signature == nil {
+	if r.Signature == nil {
 		return NewError(ErrInvalidSignature, "Missing signature field")
 	}
 
@@ -55,7 +55,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 	}
 
 	// get the address of the signer (which also checks that it's a valid signature)
-	r.view.User, err = getUserAddr(digest, *r.signature)
+	r.View.User, err = getUserAddr(digest, *r.Signature)
 	if err != nil {
 		return err
 	}
@@ -72,7 +72,7 @@ func (r *SignedResourceUpdate) Verify() (err error) {
 
 // Sign executes the signature to validate the resource
 func (r *SignedResourceUpdate) Sign(signer Signer) error {
-	r.view.User = signer.Address()
+	r.View.User = signer.Address()
 	r.binaryData = nil           //invalidate serialized data
 	digest, err := r.GetDigest() // computes digest and serializes into .binaryData
 	if err != nil {
@@ -95,7 +95,7 @@ func (r *SignedResourceUpdate) Sign(signer Signer) error {
 		return NewError(ErrInvalidSignature, "Signer address does not match update user address")
 	}
 
-	r.signature = &signature
+	r.Signature = &signature
 	r.updateAddr = r.UpdateAddr()
 	return nil
 }
@@ -106,16 +106,16 @@ func (r *SignedResourceUpdate) toChunk() (*storage.Chunk, error) {
 	// Check that the update is signed and serialized
 	// For efficiency, data is serialized during signature and cached in
 	// the binaryData field when computing the signature digest in .getDigest()
-	if r.signature == nil || r.binaryData == nil {
+	if r.Signature == nil || r.binaryData == nil {
 		return nil, NewError(ErrInvalidSignature, "toChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
 	chunk := storage.NewChunk(r.updateAddr, nil)
-	resourceUpdateLength := r.resourceUpdate.binaryLength()
+	resourceUpdateLength := r.ResourceUpdate.binaryLength()
 	chunk.SData = r.binaryData
 
 	// signature is the last item in the chunk data
-	copy(chunk.SData[resourceUpdateLength:], r.signature[:])
+	copy(chunk.SData[resourceUpdateLength:], r.Signature[:])
 
 	chunk.Size = int64(len(chunk.SData))
 	return chunk, nil
@@ -126,20 +126,20 @@ func (r *SignedResourceUpdate) fromChunk(updateAddr storage.Address, chunkdata [
 	// for update chunk layout see SignedResourceUpdate definition
 
 	//deserialize the resource update portion
-	if err := r.resourceUpdate.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
+	if err := r.ResourceUpdate.binaryGet(chunkdata[:len(chunkdata)-signatureLength]); err != nil {
 		return err
 	}
 
 	// Extract the signature
 	var signature *Signature
-	cursor := r.resourceUpdate.binaryLength()
+	cursor := r.ResourceUpdate.binaryLength()
 	sigdata := chunkdata[cursor : cursor+signatureLength]
 	if len(sigdata) > 0 {
 		signature = &Signature{}
 		copy(signature[:], sigdata)
 	}
 
-	r.signature = signature
+	r.Signature = signature
 	r.updateAddr = updateAddr
 	r.binaryData = chunkdata
 
@@ -153,10 +153,10 @@ func (r *SignedResourceUpdate) GetDigest() (result common.Hash, err error) {
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
-	dataLength := r.resourceUpdate.binaryLength()
+	dataLength := r.ResourceUpdate.binaryLength()
 	if r.binaryData == nil {
 		r.binaryData = make([]byte, dataLength+signatureLength)
-		if err := r.resourceUpdate.binaryPut(r.binaryData[:dataLength]); err != nil {
+		if err := r.ResourceUpdate.binaryPut(r.binaryData[:dataLength]); err != nil {
 			return result, err
 		}
 	}
@@ -168,15 +168,15 @@ func (r *SignedResourceUpdate) GetDigest() (result common.Hash, err error) {
 func (r *SignedResourceUpdate) FromValues(values Values, data []byte, parseView bool) error {
 	signatureBytes, err := hexutil.Decode(values.Get("signature"))
 	if err != nil {
-		r.signature = nil
+		r.Signature = nil
 	} else {
 		if len(signatureBytes) != signatureLength {
 			return NewError(ErrInvalidSignature, "Incorrect signature length")
 		}
-		r.signature = new(Signature)
-		copy(r.signature[:], signatureBytes)
+		r.Signature = new(Signature)
+		copy(r.Signature[:], signatureBytes)
 	}
-	err = r.resourceUpdate.FromValues(values, data, parseView)
+	err = r.ResourceUpdate.FromValues(values, data, parseView)
 	if err != nil {
 		return err
 	}
@@ -185,8 +185,8 @@ func (r *SignedResourceUpdate) FromValues(values Values, data []byte, parseView 
 }
 
 func (r *SignedResourceUpdate) ToValues(values Values) []byte {
-	values.Set("signature", hexutil.Encode(r.signature[:]))
-	return r.resourceUpdate.ToValues(values)
+	values.Set("signature", hexutil.Encode(r.Signature[:]))
+	return r.ResourceUpdate.ToValues(values)
 }
 
 // getUserAddr extracts the address of the resource update signer

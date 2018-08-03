@@ -12,7 +12,7 @@ import (
 
 func getTestSignedResourceUpdate() *SignedResourceUpdate {
 	return &SignedResourceUpdate{
-		resourceUpdate: *getTestResourceUpdate(),
+		ResourceUpdate: *getTestResourceUpdate(),
 	}
 }
 
@@ -90,9 +90,9 @@ func TestReverse(t *testing.T) {
 	data := []byte("Donde una puerta se cierra, otra se abre")
 
 	update := new(SignedResourceUpdate)
-	update.view = view
-	update.period = period
-	update.version = version
+	update.View = view
+	update.Period = period
+	update.Version = version
 	update.data = data
 
 	// generate a hash for t=4200 version 1
@@ -116,7 +116,7 @@ func TestReverse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	recoveredaddress, err := getUserAddr(checkdigest, *checkUpdate.signature)
+	recoveredaddress, err := getUserAddr(checkdigest, *checkUpdate.Signature)
 	if err != nil {
 		t.Fatalf("Retrieve address from signature fail: %v", err)
 	}
@@ -130,11 +130,11 @@ func TestReverse(t *testing.T) {
 	if !bytes.Equal(key[:], chunk.Addr[:]) {
 		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Addr)
 	}
-	if period != checkUpdate.period {
-		t.Fatalf("Expected period '%d', was '%d'", period, checkUpdate.period)
+	if period != checkUpdate.Period {
+		t.Fatalf("Expected period '%d', was '%d'", period, checkUpdate.Period)
 	}
-	if version != checkUpdate.version {
-		t.Fatalf("Expected version '%d', was '%d'", version, checkUpdate.version)
+	if version != checkUpdate.Version {
+		t.Fatalf("Expected version '%d', was '%d'", version, checkUpdate.Version)
 	}
 	if !bytes.Equal(data, checkUpdate.data) {
 		t.Fatalf("Expectedn data '%x', was '%x'", data, checkUpdate.data)

@@ -125,15 +125,15 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update on first period with version = 1 to make it fail since there is already one update with version=1
-	request, err = rh.NewUpdateRequest(ctx, &request.view)
+	request, err = rh.NewUpdateRequest(ctx, &request.View)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.version != 2 || request.period != 1 {
+	if request.Version != 2 || request.Period != 1 {
 		t.Fatal("Suggested period should be 1 and version should be 2")
 	}
 
-	request.version = 1 // force version 1 instead of 2 to make it fail
+	request.Version = 1 // force version 1 instead of 2 to make it fail
 	data = []byte(updates[1])
 	request.SetData(data)
 	if err := request.Sign(signer); err != nil {
@@ -146,7 +146,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// update on second period with version = 1, correct. period=2, version=1
 	fwdClock(int(resourceFrequency/2), timeProvider)
-	request, err = rh.NewUpdateRequest(ctx, &request.view)
+	request, err = rh.NewUpdateRequest(ctx, &request.View)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestResourceHandler(t *testing.T) {
 
 	fwdClock(int(resourceFrequency), timeProvider)
 	// Update on third period, with version = 1
-	request, err = rh.NewUpdateRequest(ctx, &request.view)
+	request, err = rh.NewUpdateRequest(ctx, &request.View)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,11 +177,11 @@ func TestResourceHandler(t *testing.T) {
 
 	// update just after third period
 	fwdClock(1, timeProvider)
-	request, err = rh.NewUpdateRequest(ctx, &request.view)
+	request, err = rh.NewUpdateRequest(ctx, &request.View)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.period != 3 || request.version != 2 {
+	if request.Period != 3 || request.Version != 2 {
 		t.Fatal("Suggested period should be 3 and version should be 2")
 	}
 	data = []byte(updates[3])
@@ -209,7 +209,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsrc2, err := rh2.Lookup(ctx, LookupLatest(&request.view))
+	rsrc2, err := rh2.Lookup(ctx, LookupLatest(&request.View))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -218,16 +218,16 @@ func TestResourceHandler(t *testing.T) {
 	if !bytes.Equal(rsrc2.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("resource data was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
-	if rsrc2.version != 2 {
-		t.Fatalf("resource version was %d, expected 2", rsrc2.version)
+	if rsrc2.Version != 2 {
+		t.Fatalf("resource version was %d, expected 2", rsrc2.Version)
 	}
-	if rsrc2.period != 3 {
-		t.Fatalf("resource period was %d, expected 3", rsrc2.period)
+	if rsrc2.Period != 3 {
+		t.Fatalf("resource period was %d, expected 3", rsrc2.Period)
 	}
-	log.Debug("Latest lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
+	log.Debug("Latest lookup", "period", rsrc2.Period, "version", rsrc2.Version, "data", rsrc2.data)
 
 	// specific period, latest version
-	rsrc, err := rh2.Lookup(ctx, LookupLatestVersionInPeriod(&request.view, 3))
+	rsrc, err := rh2.Lookup(ctx, LookupLatestVersionInPeriod(&request.View, 3))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -235,10 +235,10 @@ func TestResourceHandler(t *testing.T) {
 	if !bytes.Equal(rsrc.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
-	log.Debug("Historical lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
+	log.Debug("Historical lookup", "period", rsrc2.Period, "version", rsrc2.Version, "data", rsrc2.data)
 
 	// specific period, specific version
-	lookupParams := LookupVersion(&request.view, 3, 1)
+	lookupParams := LookupVersion(&request.View, 3, 1)
 	rsrc, err = rh2.Lookup(ctx, lookupParams)
 	if err != nil {
 		t.Fatal(err)
@@ -247,7 +247,7 @@ func TestResourceHandler(t *testing.T) {
 	if !bytes.Equal(rsrc.data, []byte(updates[2])) {
 		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[2])
 	}
-	log.Debug("Specific version lookup", "period", rsrc2.period, "version", rsrc2.version, "data", rsrc2.data)
+	log.Debug("Specific version lookup", "period", rsrc2.Period, "version", rsrc2.Version, "data", rsrc2.data)
 
 	// we are now at third update
 	// check backwards stepping to the first
@@ -265,7 +265,7 @@ func TestResourceHandler(t *testing.T) {
 	// beyond the first should yield an error
 	rsrc, err = rh2.LookupPrevious(ctx, lookupParams)
 	if err == nil {
-		t.Fatalf("expected previous to fail, returned period %d version %d data %v", rsrc.period, rsrc.version, rsrc.data)
+		t.Fatalf("expected previous to fail, returned period %d version %d data %v", rsrc.Period, rsrc.Version, rsrc.data)
 	}
 
 }
@@ -375,9 +375,9 @@ func TestValidatorInStore(t *testing.T) {
 
 	// create a resource update chunk with correct publickey
 	updateLookup := UpdateLookup{
-		period:  42,
-		version: 1,
-		view:    view,
+		Period:  42,
+		Version: 1,
+		View:    view,
 	}
 
 	updateAddr := updateLookup.UpdateAddr()
@@ -385,7 +385,7 @@ func TestValidatorInStore(t *testing.T) {
 
 	r := new(SignedResourceUpdate)
 	r.updateAddr = updateAddr
-	r.resourceUpdate.UpdateLookup = updateLookup
+	r.ResourceUpdate.UpdateLookup = updateLookup
 	r.data = data
 
 	r.Sign(signer)

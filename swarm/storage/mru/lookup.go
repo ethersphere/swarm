@@ -39,11 +39,6 @@ type Values interface {
 	Set(key, value string)
 }
 
-// RootAddr returns the metadata chunk address
-func (lp *LookupParams) View() *View {
-	return &lp.view
-}
-
 func (lp *LookupParams) FromValues(values Values, parseView bool) error {
 	limit, _ := strconv.ParseUint(values.Get("limit"), 10, 32)
 
@@ -53,7 +48,7 @@ func (lp *LookupParams) FromValues(values Values, parseView bool) error {
 
 func (lp *LookupParams) ToValues(values url.Values) {
 	if lp.Limit != 0 {
-		values.Set("limit", fmt.Sprintf("%d", lp.version))
+		values.Set("limit", fmt.Sprintf("%d", lp.Version))
 	}
 	lp.UpdateLookup.ToValues(values)
 }
@@ -61,9 +56,9 @@ func (lp *LookupParams) ToValues(values url.Values) {
 func NewLookupParams(view *View, period, version uint32, limit uint32) *LookupParams {
 	return &LookupParams{
 		UpdateLookup: UpdateLookup{
-			period:  period,
-			version: version,
-			view:    *view,
+			Period:  period,
+			Version: version,
+			View:    *view,
 		},
 		Limit: limit,
 	}
@@ -86,9 +81,9 @@ func LookupVersion(view *View, period, version uint32) *LookupParams {
 
 // UpdateLookup represents the components of a resource update search key
 type UpdateLookup struct {
-	view    View
-	period  uint32
-	version uint32
+	View
+	Period  uint32
+	Version uint32
 }
 
 // UpdateLookup layout:
@@ -115,15 +110,15 @@ func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize UpdateLookup. Expected %d, got %d", updateLookupLength, len(serializedData))
 	}
 	var cursor int
-	if err := u.view.binaryPut(serializedData[cursor : cursor+viewLength]); err != nil {
+	if err := u.View.binaryPut(serializedData[cursor : cursor+viewLength]); err != nil {
 		return err
 	}
 	cursor += viewLength
 
-	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.period)
+	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.Period)
 	cursor += 4
 
-	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.version)
+	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.Version)
 	cursor += 4
 
 	return nil
@@ -141,15 +136,15 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	}
 
 	var cursor int
-	if err := u.view.binaryGet(serializedData[cursor : cursor+viewLength]); err != nil {
+	if err := u.View.binaryGet(serializedData[cursor : cursor+viewLength]); err != nil {
 		return err
 	}
 	cursor += viewLength
 
-	u.period = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
+	u.Period = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
 	cursor += 4
 
-	u.version = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
+	u.Version = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
 	cursor += 4
 
 	return nil
@@ -162,20 +157,20 @@ func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
 	if period == 0 && version != 0 {
 		return NewError(ErrInvalidValue, "cannot have version !=0 if period is 0")
 	}
-	u.version = uint32(version)
-	u.period = uint32(period)
+	u.Version = uint32(version)
+	u.Period = uint32(period)
 	if parseView {
-		return u.view.FromValues(values)
+		return u.View.FromValues(values)
 	}
 	return nil
 }
 
 func (u *UpdateLookup) ToValues(values Values) {
-	if u.period != 0 {
-		values.Set("period", fmt.Sprintf("%d", u.period))
+	if u.Period != 0 {
+		values.Set("period", fmt.Sprintf("%d", u.Period))
 	}
-	if u.version != 0 {
-		values.Set("version", fmt.Sprintf("%d", u.version))
+	if u.Version != 0 {
+		values.Set("version", fmt.Sprintf("%d", u.Version))
 	}
-	u.view.ToValues(values)
+	u.View.ToValues(values)
 }

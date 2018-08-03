@@ -449,7 +449,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	values := urlq.Query()
-	updateRequest.View().ToValues(values) // this adds view query parameters
+	updateRequest.View.ToValues(values) // this adds view query parameters
 	urlq.RawQuery = values.Encode()
 	resp, err = http.Get(urlq.String())
 	if err != nil {

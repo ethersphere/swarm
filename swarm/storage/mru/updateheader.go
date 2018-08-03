@@ -16,9 +16,9 @@
 
 package mru
 
-// updateHeader models the non-payload components of a Resource Update
+// UpdateHeader models the non-payload components of a Resource Update
 // Extensible placeholder. Right now it contains no additional components.
-type updateHeader struct {
+type UpdateHeader struct {
 	UpdateLookup // UpdateLookup contains the information required to locate this resource (components of the search key used to find it)
 }
 
@@ -27,7 +27,7 @@ type updateHeader struct {
 const updateHeaderLength = updateLookupLength
 
 // binaryPut serializes the resource header information into the given slice
-func (h *updateHeader) binaryPut(serializedData []byte) error {
+func (h *UpdateHeader) binaryPut(serializedData []byte) error {
 	if len(serializedData) != updateHeaderLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize updateHeaderLength. Expected %d, got %d", updateHeaderLength, len(serializedData))
 	}
@@ -38,12 +38,12 @@ func (h *updateHeader) binaryPut(serializedData []byte) error {
 }
 
 // binaryLength returns the expected size of this structure when serialized
-func (h *updateHeader) binaryLength() int {
+func (h *UpdateHeader) binaryLength() int {
 	return updateHeaderLength
 }
 
 // binaryGet restores the current updateHeader instance from the information contained in the passed slice
-func (h *updateHeader) binaryGet(serializedData []byte) error {
+func (h *UpdateHeader) binaryGet(serializedData []byte) error {
 	if len(serializedData) != updateHeaderLength {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to read updateHeaderLength. Expected %d, got %d", updateHeaderLength, len(serializedData))
 	}
@@ -54,10 +54,10 @@ func (h *updateHeader) binaryGet(serializedData []byte) error {
 	return nil
 }
 
-func (h *updateHeader) FromValues(values Values, parseView bool) error {
+func (h *UpdateHeader) FromValues(values Values, parseView bool) error {
 	return h.UpdateLookup.FromValues(values, parseView)
 }
 
-func (h *updateHeader) ToValues(values Values) {
+func (h *UpdateHeader) ToValues(values Values) {
 	h.UpdateLookup.ToValues(values)
 }

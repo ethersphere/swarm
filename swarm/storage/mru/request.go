@@ -35,7 +35,6 @@ type updateRequestJSON struct {
 // Request represents an update and/or resource create message
 type Request struct {
 	SignedResourceUpdate
-	isNew bool
 }
 
 var zeroAddr = common.Address{}
@@ -51,8 +50,8 @@ func NewCreateUpdateRequest(metadata *Resource) (*Request, error) {
 	// get the current time
 	now := TimestampProvider.Now().Time
 
-	request.version = 1
-	request.period, err = getNextPeriod(metadata.StartTime.Time, now, metadata.Frequency)
+	request.Version = 1
+	request.Period, err = getNextPeriod(metadata.StartTime.Time, now, metadata.Frequency)
 	if err != nil {
 		return nil, err
 	}
@@ -66,45 +65,9 @@ func NewCreateRequest(metadata *Resource, userAddr common.Address) (request *Req
 	}
 
 	request = new(Request)
-	request.view.Resource = *metadata
-	request.view.User = userAddr
-	request.isNew = true
+	request.View.Resource = *metadata
+	request.View.User = userAddr
 	return request, nil
-}
-
-// Frequency returns the resource's expected update frequency
-func (r *Request) Frequency() uint64 {
-	return r.view.Frequency
-}
-
-// Topic returns the resource's topic
-func (r *Request) Topic() Topic {
-	return r.view.Topic
-}
-
-// Period returns in which period the resource will be published
-func (r *Request) Period() uint32 {
-	return r.period
-}
-
-// Version returns the resource version to publish
-func (r *Request) Version() uint32 {
-	return r.version
-}
-
-// View returns the resource's view ID
-func (r *Request) View() *View {
-	return &r.view
-}
-
-// StartTime returns the time that the resource was/will be created at
-func (r *Request) StartTime() Timestamp {
-	return r.view.StartTime
-}
-
-// Owner returns the resource owner's address
-func (r *Request) Owner() common.Address {
-	return r.view.User
 }
 
 // Sign executes the signature to validate the resource and sets the owner address field
@@ -118,23 +81,19 @@ func (r *Request) Sign(signer Signer) error {
 // SetData stores the payload data the resource will be updated with
 func (r *Request) SetData(data []byte) {
 	r.data = data
-	r.signature = nil
-}
-
-func (r *Request) IsNew() bool {
-	return r.view.Frequency > 0 && (r.period <= 1 || r.version <= 1)
+	r.Signature = nil
 }
 
 func (r *Request) IsUpdate() bool {
-	return r.signature != nil
+	return r.Signature != nil
 }
 
 // fromJSON takes an update request JSON and populates an UpdateRequest
 func (r *Request) fromJSON(j *updateRequestJSON) error {
 
-	r.version = j.Version
-	r.period = j.Period
-	r.view = *j.View
+	r.Version = j.Version
+	r.Period = j.Period
+	r.View = *j.View
 
 	var err error
 	if j.Data != "" {
@@ -149,9 +108,9 @@ func (r *Request) fromJSON(j *updateRequestJSON) error {
 		if err != nil || len(sigBytes) != signatureLength {
 			return NewError(ErrInvalidSignature, "Cannot decode signature")
 		}
-		r.signature = new(Signature)
+		r.Signature = new(Signature)
 		r.updateAddr = r.UpdateAddr()
-		copy(r.signature[:], sigBytes)
+		copy(r.Signature[:], sigBytes)
 	}
 	return nil
 }
@@ -199,17 +158,17 @@ func (r *Request) UnmarshalJSON(rawData []byte) error {
 // Implements json.Marshaler interface
 func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	var signatureString, dataString string
-	if r.signature != nil {
-		signatureString = hexutil.Encode(r.signature[:])
+	if r.Signature != nil {
+		signatureString = hexutil.Encode(r.Signature[:])
 	}
 	if r.data != nil {
 		dataString = hexutil.Encode(r.data)
 	}
 
 	requestJSON := &updateRequestJSON{
-		View:      &r.view,
-		Version:   r.version,
-		Period:    r.period,
+		View:      &r.View,
+		Version:   r.Version,
+		Period:    r.Period,
 		Data:      dataString,
 		Signature: signatureString,
 	}

@@ -125,7 +125,7 @@ func (h *Handler) GetLastPeriod(view *View) (uint32, error) {
 		return 0, NewError(ErrNotFound, " does not exist")
 	}
 
-	return rsrc.period, nil
+	return rsrc.Period, nil
 }
 
 // GetVersion retrieves the period of the last synced update of the Mutable Resource
@@ -134,7 +134,7 @@ func (h *Handler) GetVersion(view *View) (uint32, error) {
 	if rsrc == nil {
 		return 0, NewError(ErrNotFound, " does not exist")
 	}
-	return rsrc.version, nil
+	return rsrc.Version, nil
 }
 
 // NewUpdateRequest prepares an UpdateRequest structure with all the necessary information to
@@ -149,14 +149,14 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 	now := TimestampProvider.Now()
 
 	updateRequest = new(Request)
-	updateRequest.period, err = getNextPeriod(view.StartTime.Time, now.Time, view.Frequency)
+	updateRequest.Period, err = getNextPeriod(view.StartTime.Time, now.Time, view.Frequency)
 	if err != nil {
 		return nil, err
 	}
 
 	// check if there is already an update in this period
 
-	rsrc, err := h.lookup(LookupLatestVersionInPeriod(view, updateRequest.period))
+	rsrc, err := h.lookup(LookupLatestVersionInPeriod(view, updateRequest.Period))
 	if err != nil {
 		if err.(*Error).code != ErrNotFound {
 			return nil, err
@@ -165,13 +165,13 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 		// or that the resource really does not have updates in this period.
 	}
 
-	updateRequest.view = *view
+	updateRequest.View = *view
 
 	// if we already have an update for this period then increment version
 	if rsrc != nil {
-		updateRequest.version = rsrc.version + 1
+		updateRequest.Version = rsrc.Version + 1
 	} else {
-		updateRequest.version = 1
+		updateRequest.Version = 1
 	}
 
 	return updateRequest, nil
@@ -193,21 +193,21 @@ func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*cacheEntry
 // merely replacing content.
 // Requires a cached resource object to determine the current state of the resource.
 func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*cacheEntry, error) {
-	rsrc := h.get(&params.view)
+	rsrc := h.get(&params.View)
 	if rsrc == nil {
 		return nil, NewError(ErrNothingToReturn, "resource not loaded")
 	}
 	var version, period uint32
-	if rsrc.version > 1 {
-		version = rsrc.version - 1
-		period = rsrc.period
-	} else if rsrc.period == 1 {
+	if rsrc.Version > 1 {
+		version = rsrc.Version - 1
+		period = rsrc.Period
+	} else if rsrc.Period == 1 {
 		return nil, NewError(ErrNothingToReturn, "Current update is the oldest")
 	} else {
 		version = 0
-		period = rsrc.period - 1
+		period = rsrc.Period - 1
 	}
-	return h.lookup(NewLookupParams(&params.view, period, version, params.Limit))
+	return h.lookup(NewLookupParams(&params.View, period, version, params.Limit))
 }
 
 // base code for public lookup methods
@@ -220,36 +220,36 @@ func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 	}
 
 	var specificperiod bool
-	if lp.period > 0 {
+	if lp.Period > 0 {
 		specificperiod = true
 	} else {
 		// get the current time and the next period
 		now := TimestampProvider.Now()
 
 		var period uint32
-		period, err := getNextPeriod(params.view.StartTime.Time, now.Time, params.view.Frequency)
+		period, err := getNextPeriod(params.View.StartTime.Time, now.Time, params.View.Frequency)
 		if err != nil {
 			return nil, err
 		}
-		lp.period = period
+		lp.Period = period
 	}
 
 	// start from the last possible period, and iterate previous ones
 	// (unless we want a specific period only) until we find a match.
 	// If we hit startTime we're out of options
 	var specificversion bool
-	if lp.version > 0 {
+	if lp.Version > 0 {
 		specificversion = true
 	} else {
-		lp.version = 1
+		lp.Version = 1
 	}
 
 	var hops uint32
 	if lp.Limit == 0 {
 		lp.Limit = h.queryMaxPeriods
 	}
-	log.Trace("resource lookup", "period", lp.period, "version", lp.version, "limit", lp.Limit)
-	for lp.period > 0 {
+	log.Trace("resource lookup", "period", lp.Period, "version", lp.Version, "limit", lp.Limit)
+	for lp.Period > 0 {
 		if lp.Limit != 0 && hops > lp.Limit {
 			return nil, NewErrorf(ErrPeriodDepth, "Lookup exceeded max period hops (%d)", lp.Limit)
 		}
@@ -257,27 +257,27 @@ func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 		if err == nil {
 			if specificversion {
-				return h.updateCache(&params.view, chunk)
+				return h.updateCache(&params.View, chunk)
 			}
 			// check if we have versions > 1. If a version fails, the previous version is used and returned.
-			log.Trace("rsrc update version 1 found, checking for version updates", "period", lp.period, "updateAddr", updateAddr)
+			log.Trace("rsrc update version 1 found, checking for version updates", "period", lp.Period, "updateAddr", updateAddr)
 			for {
-				newversion := lp.version + 1
+				newversion := lp.Version + 1
 				updateAddr := lp.UpdateAddr()
 				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
 				if err != nil {
-					return h.updateCache(&params.view, chunk)
+					return h.updateCache(&params.View, chunk)
 				}
 				chunk = newchunk
-				lp.version = newversion
-				log.Trace("version update found, checking next", "version", lp.version, "period", lp.period, "updateAddr", updateAddr)
+				lp.Version = newversion
+				log.Trace("version update found, checking next", "version", lp.Version, "period", lp.Period, "updateAddr", updateAddr)
 			}
 		}
 		if specificperiod {
 			break
 		}
-		log.Trace("rsrc update not found, checking previous period", "period", lp.period, "updateAddr", updateAddr)
-		lp.period--
+		log.Trace("rsrc update not found, checking previous period", "period", lp.Period, "updateAddr", updateAddr)
+		lp.Period--
 		hops++
 	}
 	return nil, NewError(ErrNotFound, "no updates found")
@@ -291,7 +291,7 @@ func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, er
 	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		return nil, err
 	}
-	log.Trace("resource cache update", "topic", view.Topic.Hex(), "updatekey", chunk.Addr, "period", r.period, "version", r.version)
+	log.Trace("resource cache update", "topic", view.Topic.Hex(), "updatekey", chunk.Addr, "period", r.Period, "version", r.Version)
 
 	rsrc := h.get(view)
 	if rsrc == nil {
@@ -301,7 +301,7 @@ func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, er
 
 	// update our rsrcs entry map
 	rsrc.lastKey = chunk.Addr
-	rsrc.resourceUpdate = r.resourceUpdate
+	rsrc.ResourceUpdate = r.ResourceUpdate
 	rsrc.Reader = bytes.NewReader(rsrc.data)
 	return rsrc, nil
 }
@@ -324,9 +324,9 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before updating")
 	}
 
-	rsrc := h.get(&r.view)
-	if rsrc != nil && rsrc.period != 0 && rsrc.version != 0 && // This is the only cheap check we can do for sure
-		rsrc.period == r.period && rsrc.version >= r.version {
+	rsrc := h.get(&r.View)
+	if rsrc != nil && rsrc.Period != 0 && rsrc.Version != 0 && // This is the only cheap check we can do for sure
+		rsrc.Period == r.Period && rsrc.Version >= r.Version {
 
 		return nil, NewError(ErrInvalidValue, "A former update in this period is already known to exist")
 	}
@@ -338,12 +338,12 @@ func (h *Handler) update(ctx context.Context, r *SignedResourceUpdate) (updateAd
 
 	// send the chunk
 	h.chunkStore.Put(ctx, chunk)
-	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.period, "version", r.version, "data", chunk.SData)
+	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.Period, "version", r.Version, "data", chunk.SData)
 
 	// update our resources map cache entry if the new update is older than the one we have, if we have it.
-	if rsrc != nil && (r.period > rsrc.period || (rsrc.period == r.period && r.version > rsrc.version)) {
-		rsrc.period = r.period
-		rsrc.version = r.version
+	if rsrc != nil && (r.Period > rsrc.Period || (rsrc.Period == r.Period && r.Version > rsrc.Version)) {
+		rsrc.Period = r.Period
+		rsrc.Version = r.Version
 		rsrc.data = make([]byte, len(r.data))
 		rsrc.lastKey = r.updateAddr
 		copy(rsrc.data, r.data)
@@ -380,5 +380,5 @@ func (h *Handler) set(view *View, rsrc *cacheEntry) {
 // Checks if we already have an update on this resource, according to the value in the current state of the resource cache
 func (h *Handler) hasUpdate(view *View, period uint32) bool {
 	rsrc := h.get(view)
-	return rsrc != nil && rsrc.period == period
+	return rsrc != nil && rsrc.Period == period
 }

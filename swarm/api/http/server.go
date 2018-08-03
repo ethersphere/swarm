@@ -503,7 +503,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var updateRequest mru.Request
-	*updateRequest.View() = *view
+	updateRequest.View = *view
 	query := r.URL.Query()
 
 	if err := updateRequest.FromValues(query, body, false); err != nil { // decodes request from query parameters
@@ -530,7 +530,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 		// we create a manifest so we can retrieve the resource with bzz:// later
 		// this manifest has a special "resource type" manifest, and saves the
 		// resource view ID used to retrieve the resource later
-		m, err := s.api.NewResourceManifest(r.Context(), updateRequest.View())
+		m, err := s.api.NewResourceManifest(r.Context(), &updateRequest.View)
 		if err != nil {
 			RespondError(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
 			return

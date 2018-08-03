@@ -956,7 +956,7 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) ([]b
 		return nil, err
 	}
 	var data []byte
-	_, data, err = a.resource.GetContent(params.View())
+	_, data, err = a.resource.GetContent(&params.View)
 	if err != nil {
 		return nil, err
 	}

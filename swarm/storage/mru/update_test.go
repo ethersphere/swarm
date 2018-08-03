@@ -4,9 +4,9 @@ import (
 	"testing"
 )
 
-func getTestResourceUpdate() *resourceUpdate {
-	return &resourceUpdate{
-		updateHeader: *getTestUpdateHeader(),
+func getTestResourceUpdate() *ResourceUpdate {
+	return &ResourceUpdate{
+		UpdateHeader: *getTestUpdateHeader(),
 		data:         []byte("El que lee mucho y anda mucho, ve mucho y sabe mucho"),
 	}
 }

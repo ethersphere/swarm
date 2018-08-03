@@ -71,12 +71,12 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &Request{
 		SignedResourceUpdate: SignedResourceUpdate{
-			resourceUpdate: resourceUpdate{
-				updateHeader: updateHeader{
+			ResourceUpdate: ResourceUpdate{
+				UpdateHeader: UpdateHeader{
 					UpdateLookup: UpdateLookup{
-						period:  7,
-						version: 1,
-						view:    createRequest.resourceUpdate.view,
+						Period:  7,
+						Version: 1,
+						View:    createRequest.ResourceUpdate.View,
 					},
 				},
 				data: data,
@@ -110,7 +110,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatalf("Error signing request: %s", err)
 	}
 
-	compareByteSliceToExpectedHex(t, "signature", recoveredRequest.signature[:], expectedSignature)
+	compareByteSliceToExpectedHex(t, "signature", recoveredRequest.Signature[:], expectedSignature)
 
 	// mess with the signature and see what happens. To alter the signature, we briefly decode it as JSON
 	// to alter the signature field.
@@ -145,14 +145,14 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
 	// Before checking what happened with Bob's update, let's see what would happen if we mess
 	// with the signature big time to see if Verify catches it
-	savedSignature := *recoveredRequest.signature                               // save the signature for later
-	binary.LittleEndian.PutUint64(recoveredRequest.signature[5:], 556845463424) // write some random data to break the signature
+	savedSignature := *recoveredRequest.Signature                               // save the signature for later
+	binary.LittleEndian.PutUint64(recoveredRequest.Signature[5:], 556845463424) // write some random data to break the signature
 	if err = recoveredRequest.Verify(); err == nil {
 		t.Fatal("Expected Verify to fail on corrupt signature")
 	}
 
 	// restore the Bob's signature from corruption
-	*recoveredRequest.signature = savedSignature
+	*recoveredRequest.Signature = savedSignature
 
 	// Now the signature is not corrupt
 	if err = recoveredRequest.Verify(); err != nil {
@@ -170,7 +170,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	}
 
 	// mess with the lookup key to make sure Verify fails:
-	recoveredRequest.version = 999
+	recoveredRequest.Version = 999
 	if err = recoveredRequest.Verify(); err == nil {
 		t.Fatalf("Expected Verify to fail since the lookup key has been altered")
 	}
