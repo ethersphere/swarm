@@ -83,10 +83,11 @@ const bzzList = `{{ define "content" }}
       <td>DIR</td>
       <td>-</td>
     </tr>
-    {{ end }} {{ range .List.Entries }}
+    {{ end }}
+    {{ range .List.Entries }}
     <tr>
       <td>
-        <a class="normal-link" href="{{ basename .Path }}">{{ basename .Path }}</a>
+        <a class="normal-link" href="/{{ $.URI }}{{ basename .Path }}">{{ basename .Path }}</a>
       </td>
       <td>{{ .ContentType }}</td>
       <td>{{ .Size }}</td>
