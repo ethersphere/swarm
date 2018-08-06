@@ -22,6 +22,7 @@ package http
 import (
 	"bufio"
 	"bytes"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -38,13 +39,21 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 
 	"github.com/rs/cors"
+)
+
+var (
+	ErrDecrypt           = errors.New("cant decrypt - forbidden")
+	ErrUnknownAccessType = errors.New("unknown access type (or not implemented)")
 )
 
 type resourceResponse struct {
@@ -169,6 +178,7 @@ func NewServer(api *api.API, corsString string) *Server {
 }
 
 func (s *Server) ListenAndServe(addr string) error {
+	s.listenAddr = addr
 	return http.ListenAndServe(addr, s)
 }
 
@@ -178,16 +188,23 @@ func (s *Server) ListenAndServe(addr string) error {
 // https://github.com/atom/electron/blob/master/docs/api/protocol.md
 type Server struct {
 	http.Handler
-	api *api.API
+	api        *api.API
+	listenAddr string
 }
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()))
 	if r.Header.Get("Accept") == "application/x-tar" {
 		uri := GetURI(r.Context())
-		reader, err := s.api.GetDirectoryTar(r.Context(), uri)
+		reader, err := s.api.GetDirectoryTar(r.Context(), s.decryptor(r), uri)
 		if err != nil {
+			if isDecryptError(err) {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
+				RespondError(w, r, err.Error(), http.StatusUnauthorized)
+				return
+			}
 			RespondError(w, r, fmt.Sprintf("Had an error building the tarball: %v", err), http.StatusInternalServerError)
+			return
 		}
 		defer reader.Close()
 
@@ -680,6 +697,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 	uri := GetURI(r.Context())
 	log.Debug("handle.get", "ruid", ruid, "uri", uri)
 	getCount.Inc(1)
+	_, _, hasAuth := r.BasicAuth()
 
 	var err error
 	addr := uri.Address()
@@ -698,19 +716,36 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
+
 	if uri.Path != "" {
-		walker, err := s.api.NewManifestWalker(r.Context(), addr, nil)
+		walker, err := s.api.NewManifestWalker(r.Context(), addr, s.decryptor(r), nil)
 		if err != nil {
 			getFail.Inc(1)
+			if isDecryptError(err) {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", addr.String()))
+				RespondError(w, r, err.Error(), http.StatusUnauthorized)
+				return
+			}
+
 			RespondError(w, r, fmt.Sprintf("%s is not a manifest", addr), http.StatusBadRequest)
 			return
 		}
 		var entry *api.ManifestEntry
+		authError := false
 		walker.Walk(func(e *api.ManifestEntry) error {
 			// if the entry matches the path, set entry and stop
 			// the walk
 			if e.Path == uri.Path {
 				entry = e
+				if e.Access != nil {
+					switch e.Access.Type {
+					case api.AccessTypePass:
+						authError = !hasAuth
+					case api.AccessTypePK:
+
+					}
+				}
+
 				// return an error to cancel the walk
 				return errors.New("found")
 			}
@@ -724,6 +759,9 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 			// requested path, recurse into it by returning
 			// nil and continuing the walk
 			if strings.HasPrefix(uri.Path, e.Path) {
+				if e.Access != nil && !hasAuth {
+					authError = true
+				}
 				return nil
 			}
 
@@ -734,6 +772,12 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 			RespondError(w, r, fmt.Sprintf("manifest entry could not be loaded"), http.StatusNotFound)
 			return
 		}
+		if authError {
+			getFail.Inc(1)
+			RespondError(w, r, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+
 		addr = storage.Address(common.Hex2Bytes(entry.Hash))
 	}
 	etag := common.Bytes2Hex(addr)
@@ -796,9 +840,14 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Debug("handle.get.list: resolved", "ruid", ruid, "key", addr)
 
-	list, err := s.api.GetManifestList(r.Context(), addr, uri.Path)
+	list, err := s.api.GetManifestList(r.Context(), s.decryptor(r), addr, uri.Path)
 	if err != nil {
 		getListFail.Inc(1)
+		if isDecryptError(err) {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", addr.String()))
+			RespondError(w, r, err.Error(), http.StatusUnauthorized)
+			return
+		}
 		RespondError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -854,7 +903,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Debug("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr)
-	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), manifestAddr, uri.Path)
+	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), s.decryptor(r), manifestAddr, uri.Path)
 
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
@@ -867,6 +916,12 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		if isDecryptError(err) {
+			w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
+			RespondError(w, r, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
 		switch status {
 		case http.StatusNotFound:
 			getFileNotFound.Inc(1)
@@ -881,9 +936,14 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.api.GetManifestList(r.Context(), manifestAddr, uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), s.decryptor(r), manifestAddr, uri.Path)
 		if err != nil {
 			getFileFail.Inc(1)
+			if isDecryptError(err) {
+				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", manifestAddr))
+				RespondError(w, r, err.Error(), http.StatusUnauthorized)
+				return
+			}
 			RespondError(w, r, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -948,4 +1008,151 @@ func newLoggingResponseWriter(w http.ResponseWriter) *loggingResponseWriter {
 func (lrw *loggingResponseWriter) WriteHeader(code int) {
 	lrw.statusCode = code
 	lrw.ResponseWriter.WriteHeader(code)
+}
+func (s *Server) decryptor(r *http.Request) api.DecryptFunc {
+	return func(m *api.ManifestEntry) error {
+		if m.Access == nil {
+			return nil
+		}
+
+		switch m.Access.Type {
+		case "pass":
+			_, password, ok := r.BasicAuth()
+			if ok {
+				// decrypt
+				key, err := api.NewSessionKeyPassword(password, m.Access)
+				if err != nil {
+					return err
+				}
+
+				ref, err := hex.DecodeString(m.Hash)
+				if err != nil {
+					return err
+				}
+
+				enc := api.NewRefEncryption(len(ref) - 8)
+				decodedRef, err := enc.Decrypt(ref, key)
+				if err != nil {
+					// Return ErrDecrypt to be able to detect
+					// invalid decryption in hinger levels of code.
+					return ErrDecrypt
+				}
+
+				m.Hash = hex.EncodeToString(decodedRef)
+				m.Access = nil
+				return nil
+			} else {
+				return ErrDecrypt
+			}
+		case "pk":
+			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
+			if err != nil {
+				return ErrDecrypt
+			}
+			publisher, err := crypto.DecompressPubkey(publisherBytes)
+			if err != nil {
+				return ErrDecrypt
+			}
+			key, err := s.api.NodeSessionKey(publisher, m.Access.Salt)
+			if err != nil {
+				return ErrDecrypt
+			}
+			ref, err := hex.DecodeString(m.Hash)
+			if err != nil {
+				return err
+			}
+
+			enc := api.NewRefEncryption(len(ref) - 8)
+			decodedRef, err := enc.Decrypt(ref, key)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+
+			m.Hash = hex.EncodeToString(decodedRef)
+			m.Access = nil
+			return nil
+		case "act":
+			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
+			if err != nil {
+				return ErrDecrypt
+			}
+			publisher, err := crypto.DecompressPubkey(publisherBytes)
+			if err != nil {
+				return ErrDecrypt
+			}
+
+			sessionKey, err := s.api.NodeSessionKey(publisher, m.Access.Salt)
+			if err != nil {
+				return ErrDecrypt
+			}
+
+			hasher := sha3.NewKeccak256()
+			hasher.Write(append(sessionKey, 0))
+			lookupKey := hasher.Sum(nil)
+
+			hasher.Reset()
+
+			hasher.Write(append(sessionKey, 1))
+			accessKeyEncryptionKey := hasher.Sum(nil)
+			log.Error("got", "accessKeyEncryptionKey", hex.EncodeToString(accessKeyEncryptionKey), "lookupKey", hex.EncodeToString(lookupKey), "sessionKey", hex.EncodeToString(sessionKey))
+
+			lk := hex.EncodeToString(lookupKey)
+			log.Error("lookupKeyFromBzzReq", "lookupKey", lk, "addr", m.Access.Act)
+			c := client.NewClient(fmt.Sprintf("http://%s", s.listenAddr))
+			manifest, _, err := c.DownloadManifest(m.Access.Act)
+			if err != nil {
+				return err
+			}
+
+			found := ""
+			for _, v := range manifest.Entries {
+				if v.Path == lk {
+					found = v.Hash
+				}
+			}
+
+			if found == "" {
+				return errors.New("could not find lookup key in act manifest")
+			}
+
+			v, err := hex.DecodeString(found)
+			log.Error("got the following from the bzz query", "v", manifest, "found", found, "len(v)", len(v))
+			enc := api.NewRefEncryption(len(v) - 8)
+			decodedRef, err := enc.Decrypt(v, accessKeyEncryptionKey)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+
+			ref, err := hex.DecodeString(m.Hash)
+			if err != nil {
+				return err
+			}
+
+			enc = api.NewRefEncryption(len(ref) - 8)
+			decodedMainRef, err := enc.Decrypt(ref, decodedRef)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+
+			log.Error("decoded main ref", "decodedMainRef", hex.EncodeToString(decodedMainRef))
+
+			m.Hash = hex.EncodeToString(decodedMainRef)
+			m.Access = nil
+			return nil
+		}
+		return ErrUnknownAccessType
+	}
+}
+
+func doDecrypt() {
+}
+
+func isDecryptError(err error) bool {
+	return strings.Contains(err.Error(), ErrDecrypt.Error())
 }
