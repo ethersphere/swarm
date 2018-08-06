@@ -132,7 +132,7 @@ func (c *Config) Init(prvKey *ecdsa.PrivateKey) {
 func (c *Config) ShiftPrivateKey() (privKey *ecdsa.PrivateKey) {
 	if c.privateKey != nil {
 		privKey = c.privateKey
-		c.privateKey = nil
+		//	c.privateKey = nil // TODO: THIS HAS TO BE FIXED!
 	}
 	return privKey
 }

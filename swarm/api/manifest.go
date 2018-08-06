@@ -19,6 +19,8 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,7 +29,11 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/crypto/scrypt"
+
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/ecies"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -46,13 +52,170 @@ type Manifest struct {
 
 // ManifestEntry represents an entry in a swarm manifest
 type ManifestEntry struct {
-	Hash        string    `json:"hash,omitempty"`
-	Path        string    `json:"path,omitempty"`
-	ContentType string    `json:"contentType,omitempty"`
-	Mode        int64     `json:"mode,omitempty"`
-	Size        int64     `json:"size,omitempty"`
-	ModTime     time.Time `json:"mod_time,omitempty"`
-	Status      int       `json:"status,omitempty"`
+	Hash        string       `json:"hash,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	ContentType string       `json:"contentType,omitempty"`
+	Mode        int64        `json:"mode,omitempty"`
+	Size        int64        `json:"size,omitempty"`
+	ModTime     time.Time    `json:"mod_time,omitempty"`
+	Status      int          `json:"status,omitempty"`
+	Access      *AccessEntry `json:"access,omitempty"`
+}
+type AccessEntry struct {
+	Type      AccessType
+	Publisher string
+	Salt      []byte
+	Act       string
+	KdfParams *KdfParams
+}
+
+type DecryptFunc func(*ManifestEntry) error
+
+func (a *AccessEntry) MarshalJSON() (out []byte, err error) {
+
+	return json.Marshal(struct {
+		Type      AccessType `json:"type,omitempty"`
+		Publisher string     `json:"publisher,omitempty"`
+		Salt      string     `json:"salt,omitempty"`
+		Act       string     `json:"act,omitempty"`
+		KdfParams *KdfParams `json:"kdf_params,omitempty"`
+	}{
+		Type:      a.Type,
+		Publisher: a.Publisher,
+		Salt:      hex.EncodeToString(a.Salt),
+		Act:       a.Act,
+		KdfParams: a.KdfParams,
+	})
+
+}
+
+func (a *AccessEntry) UnmarshalJSON(value []byte) error {
+	v := struct {
+		Type      AccessType `json:"type,omitempty"`
+		Publisher string     `json:"publisher,omitempty"`
+		Salt      string     `json:"salt,omitempty"`
+		Act       string     `json:"act,omitempty"`
+		KdfParams *KdfParams `json:"kdf_params,omitempty"`
+	}{}
+
+	err := json.Unmarshal(value, &v)
+	if err != nil {
+		return err
+	}
+	a.Act = v.Act
+	a.KdfParams = v.KdfParams
+	a.Publisher = v.Publisher
+	a.Salt, err = hex.DecodeString(v.Salt)
+	if err != nil {
+		return err
+	}
+	if len(a.Salt) != 32 {
+		return errors.New("salt should be 32 bytes long")
+	}
+	a.Type = v.Type
+	return nil
+}
+
+type KdfParams struct {
+	N int `json:"n"`
+	P int `json:"p"`
+	R int `json:"r"`
+}
+
+type AccessType string
+
+const AccessTypePass = AccessType("pass")
+const AccessTypePK = AccessType("pk")
+const AccessTypeACT = AccessType("act")
+
+func NewAccessEntryPassword(salt []byte, kdfParams *KdfParams) (*AccessEntry, error) {
+	if len(salt) != 32 {
+		return nil, fmt.Errorf("salt should be 32 bytes long")
+	}
+	return &AccessEntry{
+		Type:      AccessTypePass,
+		Salt:      salt,
+		KdfParams: kdfParams,
+	}, nil
+}
+
+func NewAccessEntryPK(publisher string, salt []byte) (*AccessEntry, error) {
+	if len(publisher) != 66 {
+		return nil, fmt.Errorf("publisher should be 66 characters long, got %d", len(publisher))
+	}
+	if len(salt) != 32 {
+		return nil, fmt.Errorf("salt should be 32 bytes long")
+	}
+	return &AccessEntry{
+		Type:      AccessTypePK,
+		Publisher: publisher,
+		Salt:      salt,
+	}, nil
+}
+
+func NewAccessEntryACT(publisher string, salt []byte, act string) (*AccessEntry, error) {
+	if len(salt) != 32 {
+		return nil, fmt.Errorf("salt should be 32 bytes long")
+	}
+	if len(publisher) != 66 {
+		return nil, fmt.Errorf("publisher should be 66 characters long")
+	}
+
+	return &AccessEntry{
+		Type:      AccessTypeACT,
+		Publisher: publisher,
+		Salt:      salt,
+		Act:       act,
+	}, nil
+}
+
+func NOOPDecrypt(*ManifestEntry) error {
+	return nil
+}
+
+var DefaultKdfParams = NewKdfParams(262144, 1, 8)
+
+func NewKdfParams(n, p, r int) *KdfParams {
+
+	return &KdfParams{
+		N: n,
+		P: p,
+		R: r,
+	}
+}
+
+// NewSessionKeyPassword creates a session key based on a shared secret (password) and the given salt
+// and kdf parameters in the access entry
+func NewSessionKeyPassword(password string, accessEntry *AccessEntry) ([]byte, error) {
+	if accessEntry.Type != AccessTypePass {
+		return nil, errors.New("incorrect access entry type")
+	}
+	return scrypt.Key(
+		[]byte(password),
+		accessEntry.Salt,
+		accessEntry.KdfParams.N,
+		accessEntry.KdfParams.R,
+		accessEntry.KdfParams.P,
+		32,
+	)
+}
+
+// NewSessionKeyPK creates a new ACT Session Key using an ECDH shared secret for the given key pair and the given salt value
+func NewSessionKeyPK(private *ecdsa.PrivateKey, public *ecdsa.PublicKey, salt []byte) ([]byte, error) {
+	granteePubEcies := ecies.ImportECDSAPublic(public)
+	privateKey := ecies.ImportECDSA(private)
+
+	bytes, err := privateKey.GenerateShared(granteePubEcies, 16, 16)
+	if err != nil {
+		return nil, err
+	}
+	bytes = append(salt, bytes...)
+	sessionKey := crypto.Keccak256(bytes)
+	return sessionKey, nil
+}
+
+func (a *API) NodeSessionKey(publicKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
+	return NewSessionKeyPK(a.config.privateKey, publicKey, salt)
 }
 
 // ManifestList represents the result of listing files in a manifest
@@ -98,7 +261,7 @@ type ManifestWriter struct {
 }
 
 func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWriter, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, NOOPDecrypt)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -136,8 +299,8 @@ type ManifestWalker struct {
 	quitC chan bool
 }
 
-func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, quitC chan bool) (*ManifestWalker, error) {
-	trie, err := loadManifest(ctx, a.fileStore, addr, quitC)
+func (a *API) NewManifestWalker(ctx context.Context, addr storage.Address, decrypt DecryptFunc, quitC chan bool) (*ManifestWalker, error) {
+	trie, err := loadManifest(ctx, a.fileStore, addr, quitC, decrypt)
 	if err != nil {
 		return nil, fmt.Errorf("error loading manifest %s: %s", addr, err)
 	}
@@ -189,6 +352,7 @@ type manifestTrie struct {
 	entries   [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
 	ref       storage.Address         // if ref != nil, it is stored
 	encrypted bool
+	decrypt   DecryptFunc
 }
 
 func newManifestTrieEntry(entry *ManifestEntry, subtrie *manifestTrie) *manifestTrieEntry {
@@ -204,15 +368,15 @@ type manifestTrieEntry struct {
 	subtrie *manifestTrie
 }
 
-func loadManifest(ctx context.Context, fileStore *storage.FileStore, hash storage.Address, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func loadManifest(ctx context.Context, fileStore *storage.FileStore, hash storage.Address, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 	log.Trace("manifest lookup", "key", hash)
 	// retrieve manifest via FileStore
 	manifestReader, isEncrypted := fileStore.Retrieve(ctx, hash)
 	log.Trace("reader retrieved", "key", hash)
-	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC)
+	return readManifest(manifestReader, hash, fileStore, isEncrypted, quitC, decrypt)
 }
 
-func readManifest(mr storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func readManifest(mr storage.LazySectionReader, hash storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
 	size, err := mr.Size(mr.Context(), quitC)
@@ -253,26 +417,41 @@ func readManifest(mr storage.LazySectionReader, hash storage.Address, fileStore 
 	trie = &manifestTrie{
 		fileStore: fileStore,
 		encrypted: isEncrypted,
+		decrypt:   decrypt,
 	}
 	for _, entry := range man.Entries {
-		trie.addEntry(entry, quitC)
+		err = trie.addEntry(entry, quitC)
+		if err != nil {
+			return
+		}
 	}
 	return
 }
 
-func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
+func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) error {
 	mt.ref = nil // trie modified, hash needs to be re-calculated on demand
+
+	if entry.ManifestEntry.Access != nil {
+		if mt.decrypt == nil {
+			return errors.New("dont have decryptor")
+		}
+
+		err := mt.decrypt(&entry.ManifestEntry)
+		if err != nil {
+			return err
+		}
+	}
 
 	if len(entry.Path) == 0 {
 		mt.entries[256] = entry
-		return
+		return nil
 	}
 
 	b := entry.Path[0]
 	oldentry := mt.entries[b]
 	if (oldentry == nil) || (oldentry.Path == entry.Path && oldentry.ContentType != ManifestType) {
 		mt.entries[b] = entry
-		return
+		return nil
 	}
 
 	cpl := 0
@@ -282,12 +461,12 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 
 	if (oldentry.ContentType == ManifestType) && (cpl == len(oldentry.Path)) {
 		if mt.loadSubTrie(oldentry, quitC) != nil {
-			return
+			return nil
 		}
 		entry.Path = entry.Path[cpl:]
 		oldentry.subtrie.addEntry(entry, quitC)
 		oldentry.Hash = ""
-		return
+		return nil
 	}
 
 	commonPrefix := entry.Path[:cpl]
@@ -305,6 +484,7 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) {
 		Path:        commonPrefix,
 		ContentType: ManifestType,
 	}, subtrie)
+	return nil
 }
 
 func (mt *manifestTrie) getCountLast() (cnt int, entry *manifestTrieEntry) {
@@ -393,9 +573,20 @@ func (mt *manifestTrie) recalcAndStore() error {
 }
 
 func (mt *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (err error) {
+	if entry.ManifestEntry.Access != nil {
+		if mt.decrypt == nil {
+			return errors.New("dont have decryptor")
+		}
+
+		err := mt.decrypt(&entry.ManifestEntry)
+		if err != nil {
+			return err
+		}
+	}
+
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
-		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC)
+		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC, mt.decrypt)
 		entry.Hash = "" // might not match, should be recalculated
 	}
 	return
