@@ -23,11 +23,13 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	gorand "math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -36,7 +38,7 @@ import (
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 )
 
-func TestAccess(t *testing.T) {
+func TestAccessPassword(t *testing.T) {
 	cluster := newTestCluster(t, 1)
 	defer cluster.Shutdown()
 
@@ -258,7 +260,7 @@ func TestAccessPK(t *testing.T) {
 	ref := matches[0]
 
 	pk := cluster.Nodes[0].PrivateKey
-	granteePubKey := crypto.FromECDSAPub(&pk.PublicKey)
+	granteePubKey := crypto.CompressPubkey(&pk.PublicKey)
 
 	publisherDir, err := ioutil.TempDir("", "swarm-account-dir-temp")
 	if err != nil {
@@ -275,7 +277,6 @@ func TestAccessPK(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	_, publisherAccount := getTestAccount(t, publisherDir)
 	up = runSwarm(t,
 		"--bzzaccount",
@@ -360,12 +361,18 @@ func TestAccessPK(t *testing.T) {
 	if string(d) != data {
 		t.Errorf("expected decrypted data %q, got %q", data, string(d))
 	}
-
 }
+
+// TestAccessACT tests the e2e creation, uploading and downloading of an ACT type access control
+// the test fires up a 3 node cluster, then randomly picks 2 nodes which will be acting as grantees to the data
+// set. the third node should fail decoding the reference as it will not be granted access
 func TestAccessACT(t *testing.T) {
 	// Setup Swarm and upload a test file to it
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
+
+	r1 := gorand.New(gorand.NewSource(time.Now().UnixNano()))
+	nodeToSkip := r1.Intn(3) - 1 // a number between 0 and 2 (node indices in `cluster`)
 
 	// create a tmp file
 	tmp, err := ioutil.TempFile("", "swarm-test")
@@ -400,9 +407,12 @@ func TestAccessACT(t *testing.T) {
 	}
 
 	ref := matches[0]
-
+	t.Log("nodetoskip", nodeToSkip)
 	grantees := []string{}
-	for _, v := range cluster.Nodes {
+	for i, v := range cluster.Nodes {
+		if i == nodeToSkip {
+			continue
+		}
 		pk := v.PrivateKey
 		granteePubKey := crypto.CompressPubkey(&pk.PublicKey)
 		grantees = append(grantees, hex.EncodeToString(granteePubKey))
@@ -506,22 +516,38 @@ func TestAccessACT(t *testing.T) {
 
 	httpClient := &http.Client{}
 
-	url := cluster.Nodes[0].URL + "/" + "bzz:/" + hash
-	response, err := httpClient.Get(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if response.StatusCode != http.StatusOK {
-		t.Fatal("should be a 200")
-	}
-	d, err := ioutil.ReadAll(response.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if string(d) != data {
-		t.Errorf("expected decrypted data %q, got %q", data, string(d))
-	}
+	// all nodes except the skipped node should be able to decrypt the content
+	for i, v := range cluster.Nodes {
+		t.Log("trying to fetch from node:", i)
 
+		url := v.URL + "/" + "bzz:/" + hash
+		response, err := httpClient.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Log("response code:", response.StatusCode)
+
+		if i == nodeToSkip {
+			t.Log("reached node to skip, status:", response.StatusCode)
+
+			if response.StatusCode != http.StatusUnauthorized {
+				t.Log("should be a 401")
+			}
+
+			continue
+		}
+
+		if response.StatusCode != http.StatusOK {
+			t.Fatal("should be a 200")
+		}
+		d, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(d) != data {
+			t.Errorf("expected decrypted data %q, got %q", data, string(d))
+		}
+	}
 }
 
 func TestAccessPKUnit(t *testing.T) {

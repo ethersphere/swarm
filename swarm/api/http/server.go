@@ -1096,10 +1096,10 @@ func (s *Server) decryptor(r *http.Request) api.DecryptFunc {
 
 			hasher.Write(append(sessionKey, 1))
 			accessKeyEncryptionKey := hasher.Sum(nil)
-			log.Error("got", "accessKeyEncryptionKey", hex.EncodeToString(accessKeyEncryptionKey), "lookupKey", hex.EncodeToString(lookupKey), "sessionKey", hex.EncodeToString(sessionKey))
+			log.Trace("got", "accessKeyEncryptionKey", hex.EncodeToString(accessKeyEncryptionKey), "lookupKey", hex.EncodeToString(lookupKey), "sessionKey", hex.EncodeToString(sessionKey))
 
 			lk := hex.EncodeToString(lookupKey)
-			log.Error("lookupKeyFromBzzReq", "lookupKey", lk, "addr", m.Access.Act)
+			log.Trace("lookupKeyFromBzzReq", "lookupKey", lk, "addr", m.Access.Act)
 			c := client.NewClient(fmt.Sprintf("http://%s", s.listenAddr))
 			manifest, _, err := c.DownloadManifest(m.Access.Act)
 			if err != nil {
@@ -1114,11 +1114,11 @@ func (s *Server) decryptor(r *http.Request) api.DecryptFunc {
 			}
 
 			if found == "" {
-				return errors.New("could not find lookup key in act manifest")
+				return ErrDecrypt
 			}
 
 			v, err := hex.DecodeString(found)
-			log.Error("got the following from the bzz query", "v", manifest, "found", found, "len(v)", len(v))
+			log.Trace("got the following from the bzz query", "v", manifest, "found", found, "len(v)", len(v))
 			enc := api.NewRefEncryption(len(v) - 8)
 			decodedRef, err := enc.Decrypt(v, accessKeyEncryptionKey)
 			if err != nil {
@@ -1140,7 +1140,7 @@ func (s *Server) decryptor(r *http.Request) api.DecryptFunc {
 				return ErrDecrypt
 			}
 
-			log.Error("decoded main ref", "decodedMainRef", hex.EncodeToString(decodedMainRef))
+			log.Trace("decoded main ref", "decodedMainRef", hex.EncodeToString(decodedMainRef))
 
 			m.Hash = hex.EncodeToString(decodedMainRef)
 			m.Access = nil
