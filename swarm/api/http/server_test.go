@@ -164,7 +164,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 	testUrl.RawQuery = query.Encode()
 
 	// create the multihash update
-	resp, err = http.Post(testUrl.String(), "application/octect-stream", bytes.NewReader(body))
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,7 +376,7 @@ func TestBzzResource(t *testing.T) {
 	body = updateRequest.ToValues(query) // this adds all query parameters
 	testUrl.RawQuery = query.Encode()
 
-	resp, err = http.Post(testUrl.String(), "application/octect-stream", bytes.NewReader(body))
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}

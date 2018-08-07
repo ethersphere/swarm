@@ -44,5 +44,20 @@ resourcedata = View|period|version|data
 
 the full update data that goes in the chunk payload is:
 resourcedata|sign(resourcedata)
+
+Structure Summary:
+
+Request: Resource update with signature
+	ResourceUpdate: headers + data
+		UpdateHeader: (placeholder, to be deleted)
+			UpdateLookup: Information about how to locate a specific update
+				View: Author of the update and what is updating
+					Resource: Item that the updates are about
+
+LookupParams: Represents a specific resource query instance
+	UpdateLookup
+
+
+
 */
 package mru
