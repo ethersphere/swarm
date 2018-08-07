@@ -18,7 +18,6 @@ Swarm is a distributed storage platform and content distribution service, a nati
    *  [Testing](#testing)
    *  [Profiling Swarm](#profiling-swarm)
    *  [Metrics and Instrumentation in Swarm](#metrics-and-instrumentation-in-swarm)
-   *  [Running a local Swarm cluster](#running-a-local-swarm-cluster)
 *  [Public Gateways](#public-gateways)
 *  [Swarm Dapps](#swarm-dapps)
 *  [Contributing](#contributing)
@@ -151,10 +150,51 @@ By clicking full goroutine stack dump (clicking http://localhost:6060/debug/ppro
 
 This section explains how to visualize and use existing Swarm metrics and how to instrument Swarm with a new metric.
 
+Swarm metrics system is based on the `go-metrics` library.
 
-### Running a local Swarm cluster
+The most common types of measurements we use in Swarm are `counters` and `resetting timers`. Consult the `go-metrics` documentation for full reference of available types.
 
-This section explains how to run a local Swarm cluster for development purposes.
+```
+# incrementing a counter
+metrics.GetOrRegisterCounter("network.stream.received_chunks", nil).Inc(1)
+
+# measuring latency with a resetting timer
+start := time.Now()
+t := metrics.GetOrRegisterResettingTimer("http.request.GET.time"), nil)
+...
+t := UpdateSince(start)
+```
+
+#### Visualizing metrics
+
+Swarm supports an InfluxDB exporter. Consult the help section to learn about the command line arguments used to configure it:
+
+```
+swarm --help | grep metrics
+```
+
+We use Grafana and InfluxDB to visualise metrics reported by Swarm. We keep our Grafana dashboards under version control at `./swarm/grafana_dashboards`. You could use them or design your own.
+
+We have built a tool to help with automatic start of Grafana and InfluxDB and provisioning of dashboards at https://github.com/nonsense/stateth , which requires that you have Docker installed.
+
+Once you have `stateth` installed, and you have Docker running locally, you have to:
+
+1. Run `stateth` and keep it running in the background
+```
+stateth --rm --grafana-dashboards-folder $GOPATH/src/github.com/ethereum/go-ethereum/swarm/grafana_dashboards --influxdb-database metrics
+```
+
+2. Run `swarm` with at least the following params:
+```
+--metrics \
+--metrics.influxdb.export \
+--metrics.influxdb.endpoint "http://localhost:8086" \
+--metrics.influxdb.username "admin" \
+--metrics.influxdb.password "admin" \
+--metrics.influxdb.database "metrics"
+```
+
+3. Open Grafana at http://localhost:3000 and view the dashboards to gain insight into Swarm.
 
 
 ## Public Gateways
