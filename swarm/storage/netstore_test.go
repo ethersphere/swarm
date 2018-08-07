@@ -31,12 +31,13 @@ import (
 
 type mockNetFetcher struct {
 	peers           *sync.Map
+	sources         []*discover.NodeID
 	peersPerRequest [][]Address
 	quit            <-chan struct{}
 }
 
 func (m *mockNetFetcher) Offer(ctx context.Context, source *discover.NodeID) {
-
+	m.sources = append(m.sources, source)
 }
 
 func (m *mockNetFetcher) Request(ctx context.Context) {
@@ -52,7 +53,7 @@ type mockNetFetchFuncFactory struct {
 	fetcher *mockNetFetcher
 }
 
-func (m *mockNetFetchFuncFactory) newMockNetFetcherFunc(ctx context.Context, _ Address, peers *sync.Map) NetFetcher {
+func (m *mockNetFetchFuncFactory) newMockNetFetcher(ctx context.Context, _ Address, peers *sync.Map) NetFetcher {
 	m.fetcher.peers = peers
 	m.fetcher.quit = ctx.Done()
 	return m.fetcher
@@ -80,7 +81,7 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 	mockNetFetchFuncFactory := &mockNetFetchFuncFactory{
 		fetcher: fetcher,
 	}
-	netStore, err := NewNetStore(localStore, mockNetFetchFuncFactory.newMockNetFetcherFunc)
+	netStore, err := NewNetStore(localStore, mockNetFetchFuncFactory.newMockNetFetcher)
 	if err != nil {
 		t.Fatal(err)
 	}
