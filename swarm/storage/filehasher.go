@@ -24,40 +24,46 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/ethereum/go-ethereum/swarm/bmt"
 	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
-// SectionHasher is an asynchronous writer interface to a hash
+// SectionWriter is an asynchronous writer interface to a hash
 // it allows for concurrent and out-of-order writes of sections of the hash's input buffer
 // Sum can be called once the final length is known potentially before all sections are complete
+//type SectionWriter interface {
+//	Reset()
+//	WriteSection(idx int64, section []byte) int
+//	Size() int
+//	BlockSize() int
+//	ChunkSize() int
+//	WriteBuffer(count int64, r io.Reader) (int, error)
+//	SetLength(length int64)
+//	Sum(b []byte, length int, meta []byte) []byte
+//}
+
 type SectionHasher interface {
-	Reset()
-	WriteSection(idx int64, section []byte) int
-	Size() int
-	BlockSize() int
-	ChunkSize() int
-	WriteBuffer(count int64, r io.Reader) (int, error)
-	SetLength(length int64)
-	Sum(b []byte, length int, meta []byte) []byte
+	bmt.SectionWriter
+	WriteBuffer(globalCount int64, r io.Reader) (int, error)
 }
 
 // FileHasher is instantiated each time a file is swarm hashed
 // itself implements the ChunkHasher interface
 type FileHasher struct {
-	mtx        sync.Mutex       // RW lock to add/read levels push and unshift batches
-	pool       sync.Pool        // batch resource pool
-	levels     []*level         // levels of the swarm hash tree
-	secsize    int              // section size
-	branches   int              // branching factor
-	hasherFunc func() SwarmHash // SectionHasher // hasher constructor
-	result     chan []byte      // channel to put hash asynchronously
+	mtx        sync.Mutex               // RW lock to add/read levels push and unshift batches
+	pool       sync.Pool                // batch resource pool
+	levels     []*level                 // levels of the swarm hash tree
+	secsize    int                      // section size
+	branches   int                      // branching factor
+	hasherFunc func() bmt.SectionWriter // SectionWriter // hasher constructor
+	result     chan []byte              // channel to put hash asynchronously
 	digestSize int
 	dataLength int64
 	lnBranches float64
 }
 
-//func NewFileHasher(hasherFunc func() SectionHasher, branches int, secSize int) *FileHasher {
-func NewFileHasher(hasherFunc func() SwarmHash, branches int, secSize int) *FileHasher {
+//func NewFileHasher(hasherFunc func() SectionWriter, branches int, secSize int) *FileHasher {
+func NewFileHasher(hasherFunc func() bmt.SectionWriter, branches int, secSize int) *FileHasher {
 	fh := &FileHasher{
 		hasherFunc: hasherFunc,
 		result:     make(chan []byte),
@@ -100,9 +106,9 @@ type batch struct {
 
 // node represent a chunk and embeds an async interface to the chunk hash used
 type node struct {
-	hasher        SwarmHash // SectionHasher // async hasher
-	pos           int       // index of the node chunk within its batch
-	secCnt        int32     // number of sections written
+	hasher        bmt.SectionWriter // async hasher
+	pos           int               // index of the node chunk within its batch
+	secCnt        int32             // number of sections written
 	nodeBuffer    []byte
 	nodeIndex     int
 	writeComplete chan struct{}
@@ -263,12 +269,9 @@ func (n *node) Write(sectionIndex int, section []byte) {
 
 func (n *node) write(sectionIndex int, section []byte) {
 	currentCount := atomic.AddInt32(&n.secCnt, 1)
-	//n.hasher.Write(sectionIndex, section)
-	n.hasher.Reset()
-	n.hasher.Write(section)
-	sum := n.hasher.Sum(nil)
-	log.Debug("writing", "pos", n.pos, "section", sectionIndex, "data", sum, "level", n.levelIndex)
-	copy(n.nodeBuffer[sectionIndex:sectionIndex+n.BlockSize()], sum)
+	n.hasher.Write(sectionIndex, section)
+	log.Debug("writing", "pos", n.pos, "section", sectionIndex, "level", n.levelIndex)
+	copy(n.nodeBuffer[sectionIndex:sectionIndex+n.BlockSize()], section)
 	if currentCount == int32(n.branches) {
 		n.done()
 	}
@@ -282,10 +285,6 @@ func (n *node) done() {
 		parentNode := parentBatch.nodes[parentNodeIndex]
 		serializedLength := make([]byte, 8)
 		binary.LittleEndian.PutUint64(serializedLength, parentNode.span())
-		//n.hasher.ResetWithLength(serializedLength)
-		//n.hasher.Write(n.nodeBuffer)
-		//sum := n.hasher.Sum(nil)
-		//log.Debug("sum", "s", sum, "index", n.index, "nodepos", n.pos, "buf", n.nodeBuffer, "parentNode", parentNode.pos, "levelindex", n.levelIndex)
 		parentNode.write(n.pos*n.BlockSize(), n.nodeBuffer)
 	}()
 
@@ -323,16 +322,16 @@ func (n *node) sum(length int64, nodeSpan int64) {
 	log.Debug("underlen", "l", dataLength)
 	// bmtLength is the actual length of bytes in the chunk
 	// if the node is an intermediate node (level != 0 && len(levels) > 1), bmtLength will be a multiple 32 bytes
-	//var bmtLength uint64
-	//	if n.levelIndex == 0 {
-	//		bmtLength = dataLength
-	//	} else {
-	//		bmtLength = ((dataLength - 1) / uint64((nodeSpan/n.branches+1)*n.hasher.BlockSize()))
-	//	}
+	var bmtLength uint64
+	if n.levelIndex == 0 {
+		bmtLength = dataLength
+	} else {
+		bmtLength = ((dataLength - 1) / uint64((nodeSpan/int64(n.branches)+1)*int64(n.hasher.BlockSize())))
+	}
 
-	n.hasher.ResetWithLength(meta)
-	n.hasher.Write(n.nodeBuffer)
-	hash := n.hasher.Sum(nil) //, int(bmtLength), meta)
+	//n.hasher.ResetWithLength(meta)
+	//n.hasher.Write(n.nodeBuffer)
+	hash := n.hasher.Sum(nil, int(bmtLength), meta)
 
 	// are we on the root level?
 	if parentNode != nil {
@@ -356,10 +355,11 @@ func (fh *FileHasher) Sum(b []byte) []byte {
 
 	// handle edge case where the file is empty
 	if fh.dataLength == 0 {
-		h := fh.hasherFunc()
-		zero := [8]byte{}
-		h.ResetWithLength(zero[:])
-		return h.Sum(b) //fh.hasherFunc().Sum(nil, 0, make([]byte, 8))
+		//		h := fh.hasherFunc()
+		//		zero := [8]byte{}
+		//		h.ResetWithLength(zero[:])
+		//		return h.Sum(b)
+		return fh.hasherFunc().Sum(nil, 0, make([]byte, 8))
 	}
 
 	log.Debug("fh sum", "length", fh.dataLength)

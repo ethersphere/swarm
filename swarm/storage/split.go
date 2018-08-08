@@ -19,8 +19,9 @@ package storage
 import (
 	"context"
 	"encoding/binary"
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"io"
+
+	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
 // SimpleSplitter implements the io.ReaderFrom interface for synchronous read from data
