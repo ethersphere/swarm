@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"os"
 	"strings"
 	"time"
 
@@ -32,8 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	crypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/node"
-	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
@@ -43,13 +40,6 @@ var salt = make([]byte, 32)
 
 // This init function sets defaults so cmd/swarm can run alongside geth.
 func init() {
-	defaultNodeConfig.Name = clientIdentifier
-	defaultNodeConfig.Version = params.VersionWithCommit(gitCommit)
-	defaultNodeConfig.P2P.ListenAddr = ":30399"
-	defaultNodeConfig.IPCPath = "bzzd.ipc"
-	// Set flag defaults for --help display.
-	utils.ListenPortFlag.Value = 30399
-
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		panic("reading from crypto/rand failed: " + err.Error())
 	}
@@ -173,23 +163,8 @@ func generateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byt
 }
 
 func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
-	// booting up the swarm node just as we do in bzzd action
-	bzzconfig, err := buildConfig(ctx)
-	if err != nil {
-		utils.Fatalf("unable to configure swarm: %v", err)
-	}
-	cfg := defaultNodeConfig
-	if _, err := os.Stat(bzzconfig.Path); err == nil {
-		cfg.DataDir = bzzconfig.Path
-	}
-	utils.SetNodeConfig(ctx, &cfg)
-	stack, err := node.New(&cfg)
-	if err != nil {
-		utils.Fatalf("can't create node: %v", err)
-	}
-	initSwarmNode(bzzconfig, stack, ctx)
-	privateKey := getAccount(bzzconfig.BzzAccount, ctx, stack)
-
+	privateKey := getPrivKey(ctx)
+	log.Error(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)))
 	granteePublicKey := ctx.String(SwarmAccessGrantPKFlag.Name)
 
 	if granteePublicKey == "" {
@@ -223,22 +198,7 @@ func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEn
 }
 
 func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (accessKey []byte, ae *api.AccessEntry, err error) {
-	// booting up the swarm node just as we do in bzzd action
-	bzzconfig, err := buildConfig(ctx)
-	if err != nil {
-		utils.Fatalf("unable to configure swarm: %v", err)
-	}
-	cfg := defaultNodeConfig
-	if _, err := os.Stat(bzzconfig.Path); err == nil {
-		cfg.DataDir = bzzconfig.Path
-	}
-	utils.SetNodeConfig(ctx, &cfg)
-	stack, err := node.New(&cfg)
-	if err != nil {
-		utils.Fatalf("can't create node: %v", err)
-	}
-	initSwarmNode(bzzconfig, stack, ctx)
-	privateKey := getAccount(bzzconfig.BzzAccount, ctx, stack)
+	privateKey := getPrivKey(ctx)
 	publisherPub := hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey))
 	granteesPublicKeys = append(granteesPublicKeys, publisherPub)
 
