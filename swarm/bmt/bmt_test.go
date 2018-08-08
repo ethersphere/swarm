@@ -23,13 +23,22 @@ import (
 	"fmt"
 	"io"
 	"math/rand"
+	"os"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/log"
 )
+
+func init() {
+	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
+	hf := log.LvlFilterHandler(4, hs)
+	h := log.CallerFileHandler(hf)
+	log.Root().SetHandler(h)
+}
 
 // the actual data length generated (could be longer than max datalength of the BMT)
 const BufferSize = 4128

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 /*
@@ -404,6 +406,7 @@ func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 		secsize *= 2
 	}
 	write := func(i int, section []byte, final bool) {
+		log.Debug("bmt write sub", "i", i, "final", final, "s", len(section))
 		h.writeSection(i, section, double, final)
 	}
 	return &AsyncHasher{
@@ -462,6 +465,7 @@ func (sw *AsyncHasher) Write(i int, section []byte) {
 	t := sw.getTree()
 	// cursor keeps track of the rightmost section written so far
 	// if index is lower than cursor then just write non-final section as is
+	log.Debug("write bmt", "w", i)
 	if i < t.cursor {
 		// if index is not the rightmost, safe to write section
 		go sw.write(i, section, false)
@@ -567,8 +571,11 @@ func (h *Hasher) writeNode(n *node, bh hash.Hash, isLeft bool, s []byte) {
 	level := 1
 	for {
 		// at the root of the bmt just write the result to the result channel
+		//log.Debug("nodewrite", "s", len(s))
 		if n == nil {
-			h.getTree().result <- s
+			tr := h.getTree()
+			log.Debug("writenode tree", "t", tr)
+			tr.result <- s
 			return
 		}
 		// otherwise assign child hash to left or right segment
@@ -598,10 +605,13 @@ func (h *Hasher) writeNode(n *node, bh hash.Hash, isLeft bool, s []byte) {
 func (h *Hasher) writeFinalNode(level int, n *node, bh hash.Hash, isLeft bool, s []byte) {
 
 	for {
+		log.Debug("writefinalnode", "n", n, "s", len(s))
 		// at the root of the bmt just write the result to the result channel
 		if n == nil {
+			tr := h.getTree()
+			log.Debug("writefinalnode final tree", "t", tr, "s", len(s))
 			if s != nil {
-				h.getTree().result <- s
+				tr.result <- s
 			}
 			return
 		}

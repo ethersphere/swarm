@@ -28,20 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
-// SectionWriter is an asynchronous writer interface to a hash
-// it allows for concurrent and out-of-order writes of sections of the hash's input buffer
-// Sum can be called once the final length is known potentially before all sections are complete
-//type SectionWriter interface {
-//	Reset()
-//	WriteSection(idx int64, section []byte) int
-//	Size() int
-//	BlockSize() int
-//	ChunkSize() int
-//	WriteBuffer(count int64, r io.Reader) (int, error)
-//	SetLength(length int64)
-//	Sum(b []byte, length int, meta []byte) []byte
-//}
-
 type SectionHasher interface {
 	bmt.SectionWriter
 	WriteBuffer(globalCount int64, r io.Reader) (int, error)
@@ -231,6 +217,8 @@ func (fh *FileHasher) WriteBuffer(globalCount int, r io.Reader) (int, error) {
 	} else if c < fh.BlockSize() {
 		return 0, io.ErrUnexpectedEOF
 	}
+	//log.Debug("fh writbuf", "c", globalCount, "s", globalCount/fh.BlockSize())
+	nod.hasher.Write(globalCount/fh.BlockSize(), buf)
 	currentCount := atomic.AddInt32(&nod.secCnt, 1)
 	if currentCount == int32(nod.branches) {
 		nod.done()
@@ -269,8 +257,9 @@ func (n *node) Write(sectionIndex int, section []byte) {
 
 func (n *node) write(sectionIndex int, section []byte) {
 	currentCount := atomic.AddInt32(&n.secCnt, 1)
-	n.hasher.Write(sectionIndex, section)
+
 	log.Debug("writing", "pos", n.pos, "section", sectionIndex, "level", n.levelIndex)
+	n.hasher.Write(sectionIndex/n.BlockSize(), section)
 	copy(n.nodeBuffer[sectionIndex:sectionIndex+n.BlockSize()], section)
 	if currentCount == int32(n.branches) {
 		n.done()
@@ -292,10 +281,6 @@ func (n *node) done() {
 
 // length is global length
 func (n *node) sum(length int64, nodeSpan int64) {
-
-	select {
-	case <-n.writeComplete:
-	}
 
 	log.Debug("node sum", "l", length, "span", nodeSpan)
 	// nodeSpan is the total byte size of a complete tree under the current node
@@ -329,8 +314,7 @@ func (n *node) sum(length int64, nodeSpan int64) {
 		bmtLength = ((dataLength - 1) / uint64((nodeSpan/int64(n.branches)+1)*int64(n.hasher.BlockSize())))
 	}
 
-	//n.hasher.ResetWithLength(meta)
-	//n.hasher.Write(n.nodeBuffer)
+	log.Debug("summing", "l", bmtLength, "dl", dataLength)
 	hash := n.hasher.Sum(nil, int(bmtLength), meta)
 
 	// are we on the root level?
