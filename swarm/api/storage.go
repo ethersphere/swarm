@@ -63,7 +63,7 @@ func (s *Storage) Get(ctx context.Context, bzzpath string) (*Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	addr, err := s.api.Resolve(ctx, uri)
+	addr, err := s.api.Resolve(ctx, uri.Addr, EMPTY_CREDENTIALS)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (s *Storage) Modify(ctx context.Context, rootHash, path, contentHash, conte
 	if err != nil {
 		return "", err
 	}
-	addr, err := s.api.Resolve(ctx, uri)
+	addr, err := s.api.Resolve(ctx, uri.Addr, EMPTY_CREDENTIALS)
 	if err != nil {
 		return "", err
 	}

@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"math/big"
 	"net/http"
 	"path"
@@ -39,20 +40,19 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
-	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
-const (
-	ErrNotFound = errors.New("not found")
-	ErrDecrypt  = errors.New("cant decrypt - forbidden")
+var (
+	ErrNotFound          = errors.New("not found")
+	ErrDecrypt           = errors.New("cant decrypt - forbidden")
+	ErrUnknownAccessType = errors.New("unknown access type (or not implemented)")
 )
+
+const EMPTY_CREDENTIALS = ""
 
 var (
 	apiResolveCount        = metrics.NewRegisteredCounter("api.resolve.count", nil)
@@ -273,16 +273,32 @@ func (a *API) Store(ctx context.Context, data io.Reader, size int64, toEncrypt b
 // ErrResolve is returned when an URI cannot be resolved from ENS.
 type ErrResolve error
 
+// Resolve a name into a content-addressed hash
+// where address could be an ENS name, or a content addressed hash
+func (a *API) Resolve(ctx context.Context, address, credentials string) (storage.Address, error) {
+	// if DNS is not configured, return an error
+	if a.dns == nil {
+		if hashMatcher.MatchString(address) {
+			return common.Hex2Bytes(address), nil
+		}
+		apiResolveFail.Inc(1)
+		return nil, fmt.Errorf("no DNS to resolve name: %q", address)
+	}
+	// try and resolve the address
+	resolved, err := a.dns.Resolve(address)
+	if err != nil {
+		if hashMatcher.MatchString(address) {
+			return common.Hex2Bytes(address), nil
+		}
+		return nil, err
+	}
+	return resolved[:], nil
+}
+
 // Resolve resolves a URI to an Address using the MultiResolver.
-func (a *API) Resolve(ctx context.Context, uri *URI) (storage.Address, error) {
+func (a *API) ResolveURI(ctx context.Context, uri *URI, credentials string) (storage.Address, error) {
 	apiResolveCount.Inc(1)
 	log.Trace("resolving", "uri", uri.Addr)
-
-	var sp opentracing.Span
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"api.resolve")
-	defer sp.Finish()
 
 	// if the URI is immutable, check if the address looks like a hash
 	if uri.Immutable() {
@@ -293,28 +309,51 @@ func (a *API) Resolve(ctx context.Context, uri *URI) (storage.Address, error) {
 		return key, nil
 	}
 
-	// if DNS is not configured, check if the address is a hash
-	if a.dns == nil {
-		key := uri.Address()
-		if key == nil {
-			apiResolveFail.Inc(1)
-			return nil, fmt.Errorf("no DNS to resolve name: %q", uri.Addr)
-		}
-		return key, nil
-	}
-
-	// try and resolve the address
-	resolved, err := a.dns.Resolve(uri.Addr)
-	if err == nil {
-		return resolved[:], nil
-	}
-
-	key := uri.Address()
-	if key == nil {
-		apiResolveFail.Inc(1)
+	addr, err := a.Resolve(ctx, uri.Addr, credentials)
+	if err != nil {
 		return nil, err
 	}
-	return key, nil
+
+	if uri.Path == "" {
+		return addr, nil
+	}
+
+	walker, err := a.NewManifestWalker(ctx, addr, a.Decryptor(ctx, credentials), nil)
+	if err != nil {
+		return nil, err
+	}
+	var entry *ManifestEntry
+
+	walker.Walk(func(e *ManifestEntry) error {
+		// if the entry matches the path, set entry and stop
+		// the walk
+		if e.Path == uri.Path {
+			entry = e
+			// return an error to cancel the walk
+			return errors.New("found")
+		}
+
+		// ignore non-manifest files
+		if e.ContentType != ManifestType {
+			return nil
+		}
+
+		// if the manifest's path is a prefix of the
+		// requested path, recurse into it by returning
+		// nil and continuing the walk
+		if strings.HasPrefix(uri.Path, e.Path) {
+			return nil
+		}
+
+		return ErrSkipManifest
+	})
+
+	if entry == nil {
+		return nil, errors.New("not found")
+	}
+	addr = storage.Address(common.Hex2Bytes(entry.Hash))
+
+	return addr, nil
 }
 
 // Put provides singleton manifest creation on top of FileStore store
@@ -467,20 +506,21 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 	return
 }
 
-func (a *API) GetRaw(ctx context.Context, address *storage.Address, path, passwordCredentials string) error {
+func (a *API) GetRaw(ctx context.Context, address storage.Address, path, passwordCredentials string) (io.Reader, error) {
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
 
 	hasAuth := passwordCredentials != ""
+	var addr storage.Address
 
 	if path != "" {
-		walker, err := a.NewManifestWalker(ctx, address, a.decryptor(passwordCredentials), nil)
+		walker, err := a.NewManifestWalker(ctx, address, a.Decryptor(ctx, passwordCredentials), nil)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		var entry *api.ManifestEntry
+		var entry *ManifestEntry
 		authError := false
-		walker.Walk(func(e *api.ManifestEntry) error {
+		walker.Walk(func(e *ManifestEntry) error {
 			// if the entry matches the path, set entry and stop
 			// the walk
 			if e.Path == path {
@@ -497,7 +537,7 @@ func (a *API) GetRaw(ctx context.Context, address *storage.Address, path, passwo
 			}
 
 			// ignore non-manifest files
-			if e.ContentType != api.ManifestType {
+			if e.ContentType != ManifestType {
 				return nil
 			}
 
@@ -511,34 +551,24 @@ func (a *API) GetRaw(ctx context.Context, address *storage.Address, path, passwo
 				return nil
 			}
 
-			return api.ErrSkipManifest
+			return ErrSkipManifest
 		})
 		if entry == nil {
-			return ErrNotFound
+			return nil, ErrNotFound
 		}
 		if authError {
-			return ErrDecrypt
+			return nil, ErrDecrypt
 		}
 
 		addr = storage.Address(common.Hex2Bytes(entry.Hash))
 	}
-	etag := common.Bytes2Hex(addr)
-	noneMatchEtag := r.Header.Get("If-None-Match")
-	w.Header().Set("ETag", fmt.Sprintf("%q", etag)) // set etag to manifest key or raw entry key.
-	if noneMatchEtag != "" {
-		if bytes.Equal(storage.Address(common.Hex2Bytes(noneMatchEtag)), addr) {
-			w.WriteHeader(http.StatusNotModified)
-			return
-		}
-	}
 
 	// check the root chunk exists by retrieving the file's size
-	reader, isEncrypted := s.api.Retrieve(r.Context(), addr)
-	if _, err := reader.Size(r.Context(), nil); err != nil {
-		getFail.Inc(1)
-		RespondError(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
-		return
+	reader, _ := a.Retrieve(ctx, addr)
+	if _, err := reader.Size(ctx, nil); err != nil {
+		return nil, err
 	}
+	return reader, nil
 
 }
 
@@ -549,7 +579,7 @@ func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Add
 		apiDeleteFail.Inc(1)
 		return nil, err
 	}
-	key, err := a.Resolve(ctx, uri)
+	key, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
 
 	if err != nil {
 		return nil, err
@@ -570,7 +600,7 @@ func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Add
 // it returns an io.Reader and an error. Do not forget to Close() the returned ReadCloser
 func (a *API) GetDirectoryTar(ctx context.Context, decrypt DecryptFunc, uri *URI) (io.ReadCloser, error) {
 	apiGetTarCount.Inc(1)
-	addr, err := a.Resolve(ctx, uri)
+	addr, err := a.Resolve(ctx, uri.Addr, EMPTY_CREDENTIALS)
 	if err != nil {
 		return nil, err
 	}
@@ -757,7 +787,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		apiAddFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := a.Resolve(ctx, uri)
+	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -844,7 +874,7 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 		apiRmFileFail.Inc(1)
 		return "", err
 	}
-	mkey, err := a.Resolve(ctx, uri)
+	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -911,7 +941,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
 	}
-	mkey, err := a.Resolve(ctx, uri)
+	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -965,7 +995,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	if err != nil {
 		return nil, nil, err
 	}
-	addr, err = a.Resolve(ctx, uri)
+	addr, err = a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1042,7 +1072,7 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 	return storage.Address(common.FromHex(entry.Hash)), nil
 }
 
-func (a *API) decryptor(passwordCredentials string) DecryptFunc {
+func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
 	return func(m *ManifestEntry) error {
 		if m.Access == nil {
 			return nil
@@ -1050,9 +1080,9 @@ func (a *API) decryptor(passwordCredentials string) DecryptFunc {
 
 		switch m.Access.Type {
 		case "pass":
-			if passwordCredentials != "" {
+			if credentials != "" {
 				// decrypt
-				key, err := NewSessionKeyPassword(passwordCredentials, m.Access)
+				key, err := NewSessionKeyPassword(credentials, m.Access)
 				if err != nil {
 					return err
 				}
@@ -1085,7 +1115,7 @@ func (a *API) decryptor(passwordCredentials string) DecryptFunc {
 			if err != nil {
 				return ErrDecrypt
 			}
-			key, err := NodeSessionKey(publisher, m.Access.Salt)
+			key, err := a.NodeSessionKey(publisher, m.Access.Salt)
 			if err != nil {
 				return ErrDecrypt
 			}
@@ -1115,7 +1145,7 @@ func (a *API) decryptor(passwordCredentials string) DecryptFunc {
 				return ErrDecrypt
 			}
 
-			sessionKey, err := NodeSessionKey(publisher, m.Access.Salt)
+			sessionKey, err := a.NodeSessionKey(publisher, m.Access.Salt)
 			if err != nil {
 				return ErrDecrypt
 			}
@@ -1130,19 +1160,27 @@ func (a *API) decryptor(passwordCredentials string) DecryptFunc {
 			accessKeyEncryptionKey := hasher.Sum(nil)
 
 			lk := hex.EncodeToString(lookupKey)
-			c := client.NewClient(fmt.Sprintf("http://%s", "s.listenAddr"))
-			manifest, _, err := c.DownloadManifest(m.Access.Act)
+
+			rdr, err := a.GetRaw(ctx, storage.Address(common.Hex2Bytes(m.Access.Act)), lk, "")
 			if err != nil {
 				return err
 			}
 
-			found := ""
-			for _, v := range manifest.Entries {
-				if v.Path == lk {
-					found = v.Hash
-				}
+			buff, err := ioutil.ReadAll(rdr) //TODO - FIGURE OUT A BETTER STRATEGY TO DEALING WITH THIS
+			if err != nil {
+				return err
 			}
 
+			// var manifest *Manifest
+
+			// found := ""
+			// for _, v := range manifest.Entries {
+			// 	if v.Path == lk {
+			// 		found = v.Hash
+			// 	}
+			// }
+
+			found := string(buff)
 			if found == "" {
 				return errors.New("could not find lookup key in act manifest")
 			}

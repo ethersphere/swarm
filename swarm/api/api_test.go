@@ -19,6 +19,7 @@ package api
 import (
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -28,9 +29,15 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
+
+func init() {
+	loglevel := flag.Int("loglevel", 2, "loglevel")
+	flag.Parse()
+	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true)))))
+}
 
 func testAPI(t *testing.T, f func(*API, bool)) {
 	datadir, err := ioutil.TempDir("", "bzz-test")
@@ -229,7 +236,7 @@ func TestAPIResolve(t *testing.T) {
 			if x.immutable {
 				uri.Scheme = "bzz-immutable"
 			}
-			res, err := api.Resolve(context.TODO(), uri)
+			res, err := api.ResolveURI(context.TODO(), uri, "")
 			if err == nil {
 				if x.expectErr != nil {
 					t.Fatalf("expected error %q, got result %q", x.expectErr, res)

@@ -191,7 +191,7 @@ func (fs *FileSystem) Download(bzzpath, localpath string) error {
 	if err != nil {
 		return err
 	}
-	addr, err := fs.api.Resolve(context.TODO(), uri)
+	addr, err := fs.api.Resolve(context.TODO(), uri.Addr, EMPTY_CREDENTIALS)
 	if err != nil {
 		return err
 	}
