@@ -301,7 +301,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != "encrypt" {
-		addr, err = s.api.Resolve(r.Context(), uri)
+		addr, err = s.api.Resolve(r.Context(), uri.Addr, api.EMPTY_CREDENTIALS)
 		if err != nil {
 			postFilesFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusInternalServerError)
@@ -575,7 +575,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	// resolve the content key.
 	manifestAddr := uri.Address()
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.Resolve(r.Context(), uri)
+		manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr, api.EMPTY_CREDENTIALS)
 		if err != nil {
 			getFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
@@ -694,9 +694,9 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 	uri := GetURI(r.Context())
 	log.Debug("handle.get", "ruid", ruid, "uri", uri)
 	getCount.Inc(1)
-	// _, pass, _ := r.BasicAuth()
+	_, pass, _ := r.BasicAuth()
 
-	addr, err := s.api.Resolve(r.Context(), uri)
+	addr, err := s.api.ResolveURI(r.Context(), uri, pass)
 	if err != nil {
 		getFail.Inc(1)
 		RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
@@ -762,7 +762,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr, err := s.api.Resolve(r.Context(), uri)
+	addr, err := s.api.Resolve(r.Context(), uri.Addr, credentials)
 	if err != nil {
 		getListFail.Inc(1)
 		RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
@@ -810,6 +810,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())
+	_, credentials, _ := r.BasicAuth()
 	log.Debug("handle.get.file", "ruid", ruid, "uri", r.RequestURI)
 	getFileCount.Inc(1)
 
@@ -822,7 +823,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	manifestAddr := uri.Address()
 
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.Resolve(r.Context(), uri)
+		manifestAddr, err = s.api.ResolveURI(r.Context(), uri, credentials)
 		if err != nil {
 			getFileFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
@@ -833,9 +834,8 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Debug("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr)
-	_, password, _ := r.BasicAuth()
 
-	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), s.api.Decryptor(r.Context(), password), manifestAddr, uri.Path)
+	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), s.api.Decryptor(r.Context(), credentials), manifestAddr, uri.Path)
 
 	etag := common.Bytes2Hex(contentKey)
 	noneMatchEtag := r.Header.Get("If-None-Match")
@@ -868,7 +868,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.api.GetManifestList(r.Context(), s.api.Decryptor(r.Context(), password), manifestAddr, uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), s.api.Decryptor(r.Context(), credentials), manifestAddr, uri.Path)
 		if err != nil {
 			getFileFail.Inc(1)
 			if isDecryptError(err) {
