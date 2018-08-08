@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -378,5 +379,57 @@ func TestMultiResolver(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDecryptOriginForbidden(t *testing.T) {
+	ctx := context.TODO()
+	ctx = sctx.SetHost(ctx, "swarm-gateways.net")
+
+	me := &ManifestEntry{
+		Access: &AccessEntry{Type: AccessTypePass},
+	}
+
+	api := NewAPI(nil, nil, nil, nil)
+
+	f := api.Decryptor(ctx, "")
+	err := f(me)
+	if err != ErrDecryptDomainForbidden {
+		t.Fatalf("should fail with ErrDecryptDomainForbidden, got %v", err)
+	}
+}
+
+func TestDecryptOrigin(t *testing.T) {
+	for _, v := range []struct {
+		host        string
+		expectError error
+	}{
+		{
+			host:        "localhost",
+			expectError: ErrDecrypt,
+		},
+		{
+			host:        "127.0.0.1",
+			expectError: ErrDecrypt,
+		},
+		{
+			host:        "swarm-gateways.net",
+			expectError: ErrDecryptDomainForbidden,
+		},
+	} {
+		ctx := context.TODO()
+		ctx = sctx.SetHost(ctx, v.host)
+
+		me := &ManifestEntry{
+			Access: &AccessEntry{Type: AccessTypePass},
+		}
+
+		api := NewAPI(nil, nil, nil, nil)
+
+		f := api.Decryptor(ctx, "")
+		err := f(me)
+		if err != v.expectError {
+			t.Fatalf("should fail with %v, got %v", v.expectError, err)
+		}
 	}
 }

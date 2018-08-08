@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
@@ -48,9 +49,14 @@ import (
 )
 
 var (
-	ErrNotFound          = errors.New("not found")
-	ErrDecrypt           = errors.New("cant decrypt - forbidden")
-	ErrUnknownAccessType = errors.New("unknown access type (or not implemented)")
+	ErrNotFound               = errors.New("not found")
+	ErrDecrypt                = errors.New("cant decrypt - forbidden")
+	ErrUnknownAccessType      = errors.New("unknown access type (or not implemented)")
+	ErrDecryptDomainForbidden = errors.New("decryption request domain forbidden - can only decrypt on localhost")
+	AllowedDecryptDomains     = []string{
+		"localhost",
+		"127.0.0.1",
+	}
 )
 
 const EMPTY_CREDENTIALS = ""
@@ -276,7 +282,7 @@ type ErrResolve error
 
 // Resolve a name into a content-addressed hash
 // where address could be an ENS name, or a content addressed hash
-func (a *API) Resolve(ctx context.Context, address, credentials string) (storage.Address, error) {
+func (a *API) Resolve(ctx context.Context, address string) (storage.Address, error) {
 	// if DNS is not configured, return an error
 	if a.dns == nil {
 		if hashMatcher.MatchString(address) {
@@ -316,7 +322,7 @@ func (a *API) ResolveURI(ctx context.Context, uri *URI, credentials string) (sto
 		return key, nil
 	}
 
-	addr, err := a.Resolve(ctx, uri.Addr, credentials)
+	addr, err := a.Resolve(ctx, uri.Addr)
 	if err != nil {
 		return nil, err
 	}
@@ -355,67 +361,6 @@ func (a *API) ResolveURI(ctx context.Context, uri *URI, credentials string) (sto
 	addr = storage.Address(common.Hex2Bytes(entry.Hash))
 	return addr, nil
 }
-
-// Resolve resolves a URI to an Address using the MultiResolver.
-// func (a *API) ResolveURI(ctx context.Context, uri *URI, credentials string) (storage.Address, error) {
-// 	apiResolveCount.Inc(1)
-// 	log.Trace("resolving", "uri", uri.Addr)
-
-// 	// if the URI is immutable, check if the address looks like a hash
-// 	if uri.Immutable() {
-// 		key := uri.Address()
-// 		if key == nil {
-// 			return nil, fmt.Errorf("immutable address not a content hash: %q", uri.Addr)
-// 		}
-// 		return key, nil
-// 	}
-
-// 	addr, err := a.Resolve(ctx, uri.Addr, credentials)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	if uri.Path == "" {
-// 		return addr, nil
-// 	}
-
-// 	walker, err := a.NewManifestWalker(ctx, addr, a.Decryptor(ctx, credentials), nil)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	var entry *ManifestEntry
-
-// 	walker.Walk(func(e *ManifestEntry) error {
-// 		// if the entry matches the path, set entry and stop
-// 		// the walk
-// 		if e.Path == uri.Path {
-// 			entry = e
-// 			// return an error to cancel the walk
-// 			return errors.New("found")
-// 		}
-
-// 		// ignore non-manifest files
-// 		if e.ContentType != ManifestType {
-// 			return nil
-// 		}
-
-// 		// if the manifest's path is a prefix of the
-// 		// requested path, recurse into it by returning
-// 		// nil and continuing the walk
-// 		if strings.HasPrefix(uri.Path, e.Path) {
-// 			return nil
-// 		}
-
-// 		return ErrSkipManifest
-// 	})
-
-// 	if entry == nil {
-// 		return nil, errors.New("not found")
-// 	}
-// 	addr = storage.Address(common.Hex2Bytes(entry.Hash))
-
-// 	return addr, nil
-// }
 
 // Put provides singleton manifest creation on top of FileStore store
 func (a *API) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
@@ -567,72 +512,6 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 	return
 }
 
-func (a *API) GetManifest(ctx context.Context, address storage.Address, path, passwordCredentials string) (io.Reader, error) {
-	// if path is set, interpret <key> as a manifest and return the
-	// raw entry at the given path
-
-	hasAuth := passwordCredentials != ""
-	var addr storage.Address
-
-	if path != "" {
-		walker, err := a.NewManifestWalker(ctx, address, a.Decryptor(ctx, passwordCredentials), nil)
-		if err != nil {
-			return nil, err
-		}
-		var entry *ManifestEntry
-		authError := false
-		walker.Walk(func(e *ManifestEntry) error {
-			// if the entry matches the path, set entry and stop
-			// the walk
-			if e.Path == path {
-				entry = e
-				if e.Access != nil {
-					switch e.Access.Type {
-					case AccessTypePass:
-						authError = !hasAuth
-					}
-				}
-
-				// return an error to cancel the walk
-				return errors.New("found")
-			}
-
-			// ignore non-manifest files
-			if e.ContentType != ManifestType {
-				return nil
-			}
-
-			// if the manifest's path is a prefix of the
-			// requested path, recurse into it by returning
-			// nil and continuing the walk
-			if strings.HasPrefix(path, e.Path) {
-				if e.Access != nil && !hasAuth {
-					authError = true
-				}
-				return nil
-			}
-
-			return ErrSkipManifest
-		})
-		if entry == nil {
-			return nil, ErrNotFound
-		}
-		if authError {
-			return nil, ErrDecrypt
-		}
-
-		addr = storage.Address(common.Hex2Bytes(entry.Hash))
-	}
-
-	// check the root chunk exists by retrieving the file's size
-	reader, _ := a.Retrieve(ctx, addr)
-	if _, err := reader.Size(ctx, nil); err != nil {
-		return nil, err
-	}
-	return reader, nil
-
-}
-
 func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
 	apiDeleteCount.Inc(1)
 	uri, err := Parse("bzz:/" + addr)
@@ -661,7 +540,7 @@ func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Add
 // it returns an io.Reader and an error. Do not forget to Close() the returned ReadCloser
 func (a *API) GetDirectoryTar(ctx context.Context, decrypt DecryptFunc, uri *URI) (io.ReadCloser, error) {
 	apiGetTarCount.Inc(1)
-	addr, err := a.Resolve(ctx, uri.Addr, EMPTY_CREDENTIALS)
+	addr, err := a.Resolve(ctx, uri.Addr)
 	if err != nil {
 		return nil, err
 	}
@@ -1056,7 +935,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 	if err != nil {
 		return nil, nil, err
 	}
-	addr, err = a.Resolve(ctx, uri.Addr, EMPTY_CREDENTIALS)
+	addr, err = a.Resolve(ctx, uri.Addr)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -1137,6 +1016,18 @@ func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
 	return func(m *ManifestEntry) error {
 		if m.Access == nil {
 			return nil
+		}
+
+		allowed := false
+		requestDomain := sctx.GetHost(ctx)
+		for _, v := range AllowedDecryptDomains {
+			if strings.Contains(requestDomain, v) {
+				allowed = true
+			}
+		}
+
+		if !allowed {
+			return ErrDecryptDomainForbidden
 		}
 
 		switch m.Access.Type {

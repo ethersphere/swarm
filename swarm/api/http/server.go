@@ -102,6 +102,7 @@ func NewServer(api *api.API, corsString string) *Server {
 	defaultMiddlewares := []Adapter{
 		RecoverPanic,
 		SetRequestID,
+		SetRequestHost,
 		InitLoggingResponseWriter,
 		ParseURI,
 		InstrumentOpenTracing,
@@ -189,11 +190,11 @@ type Server struct {
 }
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
-	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
+	log.Error("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
 	if r.Header.Get("Accept") == "application/x-tar" {
 		uri := GetURI(r.Context())
-		_, password, _ := r.BasicAuth()
-		reader, err := s.api.GetDirectoryTar(r.Context(), s.api.Decryptor(r.Context(), password), uri)
+		_, credentials, _ := r.BasicAuth()
+		reader, err := s.api.GetDirectoryTar(r.Context(), s.api.Decryptor(r.Context(), credentials), uri)
 		if err != nil {
 			if isDecryptError(err) {
 				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
@@ -301,7 +302,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != "encrypt" {
-		addr, err = s.api.Resolve(r.Context(), uri.Addr, api.EMPTY_CREDENTIALS)
+		addr, err = s.api.Resolve(r.Context(), uri.Addr)
 		if err != nil {
 			postFilesFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusInternalServerError)
@@ -575,7 +576,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	// resolve the content key.
 	manifestAddr := uri.Address()
 	if manifestAddr == nil {
-		manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr, api.EMPTY_CREDENTIALS)
+		manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr)
 		if err != nil {
 			getFail.Inc(1)
 			RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
@@ -762,7 +763,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr, err := s.api.Resolve(r.Context(), uri.Addr, credentials)
+	addr, err := s.api.Resolve(r.Context(), uri.Addr)
 	if err != nil {
 		getListFail.Inc(1)
 		RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
