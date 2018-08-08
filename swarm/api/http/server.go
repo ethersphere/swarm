@@ -189,7 +189,7 @@ type Server struct {
 }
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
-	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()))
+	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
 	if r.Header.Get("Accept") == "application/x-tar" {
 		uri := GetURI(r.Context())
 		_, password, _ := r.BasicAuth()
@@ -752,6 +752,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())
+	_, credentials, _ := r.BasicAuth()
 	log.Debug("handle.get.list", "ruid", ruid, "uri", uri)
 	getListCount.Inc(1)
 
@@ -769,7 +770,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Debug("handle.get.list: resolved", "ruid", ruid, "key", addr)
 
-	list, err := s.api.GetManifestList(r.Context(), s.api.Decryptor(r.Context(), api.EMPTY_CREDENTIALS), addr, uri.Path)
+	list, err := s.api.GetManifestList(r.Context(), s.api.Decryptor(r.Context(), credentials), addr, uri.Path)
 	if err != nil {
 		getListFail.Inc(1)
 		if isDecryptError(err) {
@@ -809,7 +810,7 @@ func (s *Server) HandleGetList(w http.ResponseWriter, r *http.Request) {
 func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	uri := GetURI(r.Context())
-	log.Debug("handle.get.file", "ruid", ruid)
+	log.Debug("handle.get.file", "ruid", ruid, "uri", r.RequestURI)
 	getFileCount.Inc(1)
 
 	// ensure the root path has a trailing slash so that relative URLs work
@@ -867,7 +868,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
-		list, err := s.api.GetManifestList(r.Context(), s.api.Decryptor(r.Context(), api.EMPTY_CREDENTIALS), manifestAddr, uri.Path)
+		list, err := s.api.GetManifestList(r.Context(), s.api.Decryptor(r.Context(), password), manifestAddr, uri.Path)
 		if err != nil {
 			getFileFail.Inc(1)
 			if isDecryptError(err) {

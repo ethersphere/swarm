@@ -91,11 +91,11 @@ func download(ctx *cli.Context) {
 		}
 		return nil
 	}
-
-	err = dl("")
-	if err == swarm.ErrUnauthorized {
-		password := getPassPhrase(fmt.Sprintf("Downloading %s is restricted", uri), 0, makePasswordList(ctx))
+	if passwords := makePasswordList(ctx); passwords != nil {
+		password := getPassPhrase(fmt.Sprintf("Downloading %s is restricted", uri), 0, passwords)
 		err = dl(password)
+	} else {
+		err = dl("")
 	}
 	if err != nil {
 		utils.Fatalf("download: %v", err)

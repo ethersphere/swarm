@@ -1127,9 +1127,8 @@ func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
 				m.Hash = hex.EncodeToString(decodedRef)
 				m.Access = nil
 				return nil
-			} else {
-				return ErrDecrypt
 			}
+			return ErrDecrypt
 		case "pk":
 			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
 			if err != nil {
@@ -1184,9 +1183,7 @@ func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
 			accessKeyEncryptionKey := hasher.Sum(nil)
 
 			lk := hex.EncodeToString(lookupKey)
-			log.Error("wwooooooot")
-			list, err := a.GetManifestList(ctx, NOOPDecrypt, storage.Address(common.Hex2Bytes(m.Access.Act)), hex.EncodeToString(lookupKey))
-			// var manifest *Manifest
+			list, err := a.GetManifestList(ctx, NOOPDecrypt, storage.Address(common.Hex2Bytes(m.Access.Act)), lk)
 
 			found := ""
 			for _, v := range list.Entries {
@@ -1196,10 +1193,13 @@ func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
 			}
 
 			if found == "" {
-				return errors.New("could not find lookup key in act manifest")
+				return ErrDecrypt
 			}
 
 			v, err := hex.DecodeString(found)
+			if err != nil {
+				return err
+			}
 			enc := NewRefEncryption(len(v) - 8)
 			decodedRef, err := enc.Decrypt(v, accessKeyEncryptionKey)
 			if err != nil {
