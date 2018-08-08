@@ -114,7 +114,7 @@ func accessNewACT(ctx *cli.Context) {
 	}
 	grantees = strings.Split(string(bytes), "\n")
 	if len(grantees) == 0 {
-		utils.Fatalf("did not get any grantees' public keys")
+		utils.Fatalf("did not get any grantee public keys")
 	}
 
 	accessKey, ae, err = doACTNew(ctx, salt, grantees)
@@ -239,6 +239,8 @@ func doACTNew(ctx *cli.Context, salt []byte, granteesPublicKeys []string) (acces
 	}
 	initSwarmNode(bzzconfig, stack, ctx)
 	privateKey := getAccount(bzzconfig.BzzAccount, ctx, stack)
+	publisherPub := hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey))
+	granteesPublicKeys = append(granteesPublicKeys, publisherPub)
 
 	accessKey = make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
