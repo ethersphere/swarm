@@ -144,7 +144,7 @@ func generateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byt
 
 	m := api.Manifest{
 		Entries: []api.ManifestEntry{
-			api.ManifestEntry{
+			{
 				Hash:        hex.EncodeToString(encrypted),
 				ContentType: api.ManifestType,
 				ModTime:     time.Now(),
