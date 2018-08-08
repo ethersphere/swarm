@@ -23,7 +23,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"math/big"
 	"net/http"
 	"path"
@@ -506,7 +505,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 	return
 }
 
-func (a *API) GetRaw(ctx context.Context, address storage.Address, path, passwordCredentials string) (io.Reader, error) {
+func (a *API) GetManifest(ctx context.Context, address storage.Address, path, passwordCredentials string) (io.Reader, error) {
 	// if path is set, interpret <key> as a manifest and return the
 	// raw entry at the given path
 
@@ -1161,26 +1160,16 @@ func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
 
 			lk := hex.EncodeToString(lookupKey)
 
-			rdr, err := a.GetRaw(ctx, storage.Address(common.Hex2Bytes(m.Access.Act)), lk, "")
-			if err != nil {
-				return err
-			}
-
-			buff, err := ioutil.ReadAll(rdr) //TODO - FIGURE OUT A BETTER STRATEGY TO DEALING WITH THIS
-			if err != nil {
-				return err
-			}
-
+			list, err := a.GetManifestList(ctx, NOOPDecrypt, storage.Address(common.Hex2Bytes(m.Access.Act)), hex.EncodeToString(lookupKey))
 			// var manifest *Manifest
 
-			// found := ""
-			// for _, v := range manifest.Entries {
-			// 	if v.Path == lk {
-			// 		found = v.Hash
-			// 	}
-			// }
+			found := ""
+			for _, v := range list.Entries {
+				if v.Path == lk {
+					found = v.Hash
+				}
+			}
 
-			found := string(buff)
 			if found == "" {
 				return errors.New("could not find lookup key in act manifest")
 			}
