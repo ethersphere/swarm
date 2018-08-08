@@ -113,12 +113,11 @@ func (fh *fakeHasher) WriteBuffer(offset int64, r io.Reader) (int, error) {
 	return 0, nil
 }
 
-func (fh *fakeHasher) WriteSection(section int64, data []byte) int {
+func (fh *fakeHasher) Write(section int, data []byte) {
 	log.Warn("wrigint to hasher", "src", section, "data", data)
-	pos := section * int64(fh.sectionSize)
+	pos := section * fh.sectionSize
 	copy(fh.output[pos:], data)
 	fh.doneC <- struct{}{}
-	return len(data)
 }
 
 func (fh *fakeHasher) Size() int {
@@ -136,4 +135,8 @@ func (fh *fakeHasher) Sum(hash []byte, length int, meta []byte) []byte {
 		<-fh.doneC
 	}
 	return fh.output
+}
+
+func (fh *fakeHasher) SectionSize() int {
+	return fh.sectionSize
 }

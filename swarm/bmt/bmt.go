@@ -417,6 +417,8 @@ type SectionWriter interface {
 	Write(index int, data []byte)                 // write into section of index
 	Sum(b []byte, length int, span []byte) []byte // returns the hash of the buffer
 	SectionSize() int                             // size of the async section unit to use
+	Size() int
+	BlockSize() int
 }
 
 // AsyncHasher extends BMT Hasher with an asynchronous segment/section writer interface
