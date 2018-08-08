@@ -58,7 +58,7 @@ func init() {
 func accessNewPass(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) != 1 {
-		utils.Fatalf("Expected 1 argument - the ref", "")
+		utils.Fatalf("Expected 1 argument - the ref")
 	}
 
 	var (
@@ -77,7 +77,7 @@ func accessNewPass(ctx *cli.Context) {
 func accessNewPK(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) != 1 {
-		utils.Fatalf("Expected 1 argument - the ref", "")
+		utils.Fatalf("Expected 1 argument - the ref")
 	}
 
 	var (
@@ -96,7 +96,7 @@ func accessNewPK(ctx *cli.Context) {
 func accessNewACT(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) != 1 {
-		utils.Fatalf("Expected 1 argument - the ref", "")
+		utils.Fatalf("Expected 1 argument - the ref")
 	}
 
 	var (
