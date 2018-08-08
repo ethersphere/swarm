@@ -14,10 +14,9 @@ import (
 )
 
 func newAsyncHasher() bmt.SectionWriter {
-	tp := bmt.NewTreePool(sha3.NewKeccak256, 128, 64)
-	return &bmt.AsyncHasher{
-		Hasher: bmt.New(tp),
-	}
+	tp := bmt.NewTreePool(sha3.NewKeccak256, 128*128, 32)
+	h := bmt.New(tp)
+	return h.NewAsyncWriter(false)
 }
 
 func TestLevelFromOffset(t *testing.T) {
@@ -64,7 +63,8 @@ func TestWriteBuffer(t *testing.T) {
 func TestSum(t *testing.T) {
 
 	fh := NewFileHasher(newAsyncHasher, 128, 32)
-	data := make([]byte, 258*fh.ChunkSize())
+	//data := make([]byte, 258*fh.ChunkSize())
+	data := make([]byte, 128*fh.ChunkSize())
 	c, err := crand.Read(data)
 	if err != nil {
 		t.Fatal(err)
@@ -76,7 +76,6 @@ func TestSum(t *testing.T) {
 	for i := 0; i < len(data)/32; i++ {
 		offsets = append(offsets, i*32)
 	}
-
 	r := bytes.NewReader(data)
 	for {
 		if len(offsets) == 0 {
@@ -99,8 +98,8 @@ func TestSum(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-
 	fh.SetLength(int64(len(data)))
 	h := fh.Sum(nil)
 	t.Logf("hash: %x", h)
+
 }
