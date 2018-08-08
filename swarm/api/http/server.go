@@ -22,7 +22,6 @@ package http
 import (
 	"bufio"
 	"bytes"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -39,11 +38,8 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
@@ -196,7 +192,7 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()))
 	if r.Header.Get("Accept") == "application/x-tar" {
 		uri := GetURI(r.Context())
-		reader, err := s.api.GetDirectoryTar(r.Context(), s.decryptor(r), uri)
+		reader, err := s.api.GetDirectoryTar(r.Context(), s.api(r), uri)
 		if err != nil {
 			if isDecryptError(err) {
 				w.Header().Set("WWW-Authenticate", fmt.Sprintf("Basic realm=%q", uri.Address().String()))
@@ -1009,6 +1005,7 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 	lrw.statusCode = code
 	lrw.ResponseWriter.WriteHeader(code)
 }
+<<<<<<< Updated upstream
 func (s *Server) decryptor(r *http.Request) api.DecryptFunc {
 	return func(m *api.ManifestEntry) error {
 		if m.Access == nil {
@@ -1152,6 +1149,8 @@ func (s *Server) decryptor(r *http.Request) api.DecryptFunc {
 
 func doDecrypt() {
 }
+=======
+>>>>>>> Stashed changes
 
 func isDecryptError(err error) bool {
 	return strings.Contains(err.Error(), ErrDecrypt.Error())

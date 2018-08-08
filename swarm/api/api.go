@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -35,13 +36,22 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 	opentracing "github.com/opentracing/opentracing-go"
+)
+
+const (
+	ErrNotFound = errors.New("not found")
+	ErrDecrypt  = errors.New("cant decrypt - forbidden")
 )
 
 var (
@@ -455,6 +465,81 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
 	}
 	return
+}
+
+func (a *API) GetRaw(ctx context.Context, address *storage.Address, path, passwordCredentials string) error {
+	// if path is set, interpret <key> as a manifest and return the
+	// raw entry at the given path
+
+	hasAuth := passwordCredentials != ""
+
+	if path != "" {
+		walker, err := a.NewManifestWalker(ctx, address, a.decryptor(passwordCredentials), nil)
+		if err != nil {
+			return err
+		}
+		var entry *api.ManifestEntry
+		authError := false
+		walker.Walk(func(e *api.ManifestEntry) error {
+			// if the entry matches the path, set entry and stop
+			// the walk
+			if e.Path == path {
+				entry = e
+				if e.Access != nil {
+					switch e.Access.Type {
+					case AccessTypePass:
+						authError = !hasAuth
+					}
+				}
+
+				// return an error to cancel the walk
+				return errors.New("found")
+			}
+
+			// ignore non-manifest files
+			if e.ContentType != api.ManifestType {
+				return nil
+			}
+
+			// if the manifest's path is a prefix of the
+			// requested path, recurse into it by returning
+			// nil and continuing the walk
+			if strings.HasPrefix(path, e.Path) {
+				if e.Access != nil && !hasAuth {
+					authError = true
+				}
+				return nil
+			}
+
+			return api.ErrSkipManifest
+		})
+		if entry == nil {
+			return ErrNotFound
+		}
+		if authError {
+			return ErrDecrypt
+		}
+
+		addr = storage.Address(common.Hex2Bytes(entry.Hash))
+	}
+	etag := common.Bytes2Hex(addr)
+	noneMatchEtag := r.Header.Get("If-None-Match")
+	w.Header().Set("ETag", fmt.Sprintf("%q", etag)) // set etag to manifest key or raw entry key.
+	if noneMatchEtag != "" {
+		if bytes.Equal(storage.Address(common.Hex2Bytes(noneMatchEtag)), addr) {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+
+	// check the root chunk exists by retrieving the file's size
+	reader, isEncrypted := s.api.Retrieve(r.Context(), addr)
+	if _, err := reader.Size(r.Context(), nil); err != nil {
+		getFail.Inc(1)
+		RespondError(w, r, fmt.Sprintf("root chunk not found %s: %s", addr, err), http.StatusNotFound)
+		return
+	}
+
 }
 
 func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
@@ -955,4 +1040,138 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 	}
 
 	return storage.Address(common.FromHex(entry.Hash)), nil
+}
+
+func (a *API) decryptor(passwordCredentials string) DecryptFunc {
+	return func(m *ManifestEntry) error {
+		if m.Access == nil {
+			return nil
+		}
+
+		switch m.Access.Type {
+		case "pass":
+			if passwordCredentials != "" {
+				// decrypt
+				key, err := NewSessionKeyPassword(passwordCredentials, m.Access)
+				if err != nil {
+					return err
+				}
+
+				ref, err := hex.DecodeString(m.Hash)
+				if err != nil {
+					return err
+				}
+
+				enc := NewRefEncryption(len(ref) - 8)
+				decodedRef, err := enc.Decrypt(ref, key)
+				if err != nil {
+					// Return ErrDecrypt to be able to detect
+					// invalid decryption in hinger levels of code.
+					return ErrDecrypt
+				}
+
+				m.Hash = hex.EncodeToString(decodedRef)
+				m.Access = nil
+				return nil
+			} else {
+				return ErrDecrypt
+			}
+		case "pk":
+			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
+			if err != nil {
+				return ErrDecrypt
+			}
+			publisher, err := crypto.DecompressPubkey(publisherBytes)
+			if err != nil {
+				return ErrDecrypt
+			}
+			key, err := NodeSessionKey(publisher, m.Access.Salt)
+			if err != nil {
+				return ErrDecrypt
+			}
+			ref, err := hex.DecodeString(m.Hash)
+			if err != nil {
+				return err
+			}
+
+			enc := NewRefEncryption(len(ref) - 8)
+			decodedRef, err := enc.Decrypt(ref, key)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+
+			m.Hash = hex.EncodeToString(decodedRef)
+			m.Access = nil
+			return nil
+		case "act":
+			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
+			if err != nil {
+				return ErrDecrypt
+			}
+			publisher, err := crypto.DecompressPubkey(publisherBytes)
+			if err != nil {
+				return ErrDecrypt
+			}
+
+			sessionKey, err := NodeSessionKey(publisher, m.Access.Salt)
+			if err != nil {
+				return ErrDecrypt
+			}
+
+			hasher := sha3.NewKeccak256()
+			hasher.Write(append(sessionKey, 0))
+			lookupKey := hasher.Sum(nil)
+
+			hasher.Reset()
+
+			hasher.Write(append(sessionKey, 1))
+			accessKeyEncryptionKey := hasher.Sum(nil)
+
+			lk := hex.EncodeToString(lookupKey)
+			c := client.NewClient(fmt.Sprintf("http://%s", "s.listenAddr"))
+			manifest, _, err := c.DownloadManifest(m.Access.Act)
+			if err != nil {
+				return err
+			}
+
+			found := ""
+			for _, v := range manifest.Entries {
+				if v.Path == lk {
+					found = v.Hash
+				}
+			}
+
+			if found == "" {
+				return errors.New("could not find lookup key in act manifest")
+			}
+
+			v, err := hex.DecodeString(found)
+			enc := NewRefEncryption(len(v) - 8)
+			decodedRef, err := enc.Decrypt(v, accessKeyEncryptionKey)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+
+			ref, err := hex.DecodeString(m.Hash)
+			if err != nil {
+				return err
+			}
+
+			enc = NewRefEncryption(len(ref) - 8)
+			decodedMainRef, err := enc.Decrypt(ref, decodedRef)
+			if err != nil {
+				// Return ErrDecrypt to be able to detect
+				// invalid decryption in hinger levels of code.
+				return ErrDecrypt
+			}
+			m.Hash = hex.EncodeToString(decodedMainRef)
+			m.Access = nil
+			return nil
+		}
+		return ErrUnknownAccessType
+	}
 }
