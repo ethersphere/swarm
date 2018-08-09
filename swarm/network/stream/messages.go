@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -207,17 +208,42 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	defer cancel()
 
 	ctx = context.WithValue(ctx, "source", p.ID().String())
+	ctr := 0
+	errC := make(chan error)
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
 		if wait := c.NeedData(ctx, hash); wait != nil {
 			want.Set(i/HashSize, true)
+
+			// wait asynchronously for chunk to be delivered in order to complain in case we don't get it
+			go func(w func(context.Context) error) {
+				errC <- w(ctx)
+			}(wait)
 		}
 	}
 
-	if err := c.batchDone(p, req, hashes); err != nil {
-		log.Error(err.Error())
-		return err
-	}
+	go func() {
+		defer cancel()
+		for i := 0; i < ctr; i++ {
+			select {
+			case err := <-errC:
+				if err != nil {
+					log.Error("handleOfferedHashesMsg error waiting for chunk", "err", err)
+				}
+			case <-ctx.Done():
+				log.Error("handleOfferedHashesMsg timeout waiting for chunk, dropping", "peer", p.ID().TerminalString(), "err", ctx.Err())
+				p.Drop(ctx.Err())
+				return
+			}
+		}
+		select {
+		case c.next <- c.batchDone(p, req, hashes):
+		case <-c.quit:
+		case <-ctx.Done():
+			log.Error("handleOfferedHashesMsg timeout waiting for batchDone, dropping", "peer", p.ID().TerminalString(), "err", ctx.Err())
+			p.Drop(ctx.Err())
+		}
+	}()
 
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
@@ -237,6 +263,20 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		To:     to,
 	}
 	go func() {
+		select {
+		case <-time.After(10 * time.Second):
+			log.Warn("handleOfferedHashesMsg timeout, so dropping", "peer", p.ID().TerminalString())
+			p.Drop(errors.New("handle offered hashes timeout"))
+			return
+		case err := <-c.next:
+			if err != nil {
+				log.Warn("c.next dropping peer", "peer", p.ID().TerminalString(), "err", err)
+				p.Drop(err)
+				return
+			}
+		case <-c.quit:
+			return
+		}
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(ctx, msg, c.priority)
 		if err != nil {
