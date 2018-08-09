@@ -27,7 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-var searchTimeout = 3000 * time.Millisecond
+var searchTimeout = 1 * time.Second
 
 type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{}, error)
 
