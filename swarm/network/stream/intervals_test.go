@@ -38,13 +38,18 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func TestIntervals(t *testing.T) {
+func XTestIntervals1(t *testing.T) {
 	testIntervals(t, true, nil, false)
-	testIntervals(t, false, NewRange(9, 26), false)
-	testIntervals(t, true, NewRange(9, 26), false)
+}
 
-	testIntervals(t, true, nil, true)
+func XTestIntervals2(t *testing.T) {
+	testIntervals(t, false, NewRange(9, 26), false)
 	testIntervals(t, false, NewRange(9, 26), true)
+}
+
+func XTestIntervals3(t *testing.T) {
+	testIntervals(t, true, nil, true)
+	testIntervals(t, true, NewRange(9, 26), false)
 	testIntervals(t, true, NewRange(9, 26), true)
 }
 
@@ -105,7 +110,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
@@ -260,6 +265,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		if err != nil {
 			return err
 		}
+
 		if err := <-liveErrC; err != nil {
 			return err
 		}

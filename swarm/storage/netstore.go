@@ -68,6 +68,11 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
+	chunk, _ := n.store.Get(ctx, ch.Address())
+	if chunk != nil {
+		return nil
+	}
+
 	// put to the chunk to the store, there should be no error
 	err := n.store.Put(ctx, ch)
 	if err != nil {
@@ -97,7 +102,10 @@ func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 // Has returns nil if the store contains the given address. Otherwise it returns a wait function,
 // which returns after the chunk is available or the context is done
 func (n *NetStore) Has(ctx context.Context, ref Address) func(context.Context) error {
-	_, fetch, _ := n.get(ctx, ref)
+	chunk, fetch, _ := n.get(ctx, ref)
+	if chunk != nil {
+		return nil
+	}
 	return func(ctx context.Context) error {
 		_, err := fetch(ctx)
 		return err
@@ -262,12 +270,6 @@ func (f *fetcher) deliver(ctx context.Context, ch Chunk) {
 	f.chunk = ch
 	// closing the deliveredC channel will terminate ongoing requests
 	close(f.deliveredC)
-	// deliver has to wait until the fetcher is really cancelled, otherwise it can be called again,
-	// and closing deliveredC will panic
-	select {
-	case <-f.cancelledC:
-	case <-ctx.Done():
-	}
 }
 
 // SyncNetStore is a wrapped NetStore with SyncDB functionality
