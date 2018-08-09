@@ -76,8 +76,8 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:        "filesize",
-			Value:       1,
-			Usage:       "file size for generated random file in MB",
+			Value:       1024,
+			Usage:       "file size for generated random file in KB",
 			Destination: &filesize,
 		},
 	}
