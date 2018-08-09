@@ -85,6 +85,27 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		wmsg := i.(WrappedPriorityMsg)
 		p.Send(wmsg.Context, wmsg.Msg)
 	})
+
+	// basic monitoring for pq contention
+	go func(pq *pq.PriorityQueue) {
+		for range time.NewTicker(5 * time.Second).C {
+			var len_maxi int
+			var cap_maxi int
+			for k := range pq.Queues {
+				if len_maxi < len(pq.Queues[k]) {
+					len_maxi = len(pq.Queues[k])
+				}
+
+				if cap_maxi < cap(pq.Queues[k]) {
+					cap_maxi = cap(pq.Queues[k])
+				}
+			}
+
+			metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(len_maxi))
+			metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(cap_maxi))
+		}
+	}(p.pq)
+
 	go func() {
 		<-p.quit
 		cancel()

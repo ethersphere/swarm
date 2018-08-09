@@ -39,7 +39,7 @@ var (
 
 // PriorityQueue is the basic structure
 type PriorityQueue struct {
-	queues []chan interface{}
+	Queues []chan interface{}
 	wakeup chan struct{}
 }
 
@@ -50,18 +50,18 @@ func New(n int, l int) *PriorityQueue {
 		queues[i] = make(chan interface{}, l)
 	}
 	return &PriorityQueue{
-		queues: queues,
+		Queues: queues,
 		wakeup: make(chan struct{}, 1),
 	}
 }
 
 // Run is a forever loop popping items from the queues
 func (pq *PriorityQueue) Run(ctx context.Context, f func(interface{})) {
-	top := len(pq.queues) - 1
+	top := len(pq.Queues) - 1
 	p := top
 READ:
 	for {
-		q := pq.queues[p]
+		q := pq.Queues[p]
 		select {
 		case <-ctx.Done():
 			return
@@ -87,18 +87,18 @@ READ:
 // if context is given it waits until either the item is pushed or the Context aborts
 // otherwise returns errContention if the queue is full
 func (pq *PriorityQueue) Push(ctx context.Context, x interface{}, p int) error {
-	if p < 0 || p >= len(pq.queues) {
+	if p < 0 || p >= len(pq.Queues) {
 		return errBadPriority
 	}
 	if ctx == nil {
 		select {
-		case pq.queues[p] <- x:
+		case pq.Queues[p] <- x:
 		default:
 			return errContention
 		}
 	} else {
 		select {
-		case pq.queues[p] <- x:
+		case pq.Queues[p] <- x:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
