@@ -28,6 +28,8 @@ package priorityqueue
 import (
 	"context"
 	"errors"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -66,11 +68,13 @@ READ:
 		case <-ctx.Done():
 			return
 		case x := <-q:
+			log.Debug("priority.queue f(x)", "p", p, "len(Queues[p])", len(pq.Queues[p]))
 			f(x)
 			p = top
 		default:
 			if p > 0 {
 				p--
+				log.Debug("priority.queue p > 0", "p", p)
 				continue READ
 			}
 			p = top
@@ -78,6 +82,7 @@ READ:
 			case <-ctx.Done():
 				return
 			case <-pq.wakeup:
+				log.Debug("priority.queue wakeup", "p", p)
 			}
 		}
 	}
@@ -90,6 +95,7 @@ func (pq *PriorityQueue) Push(ctx context.Context, x interface{}, p int) error {
 	if p < 0 || p >= len(pq.Queues) {
 		return errBadPriority
 	}
+	log.Debug("priority.queue push", "p", p, "len(Queues[p])", len(pq.Queues[p]))
 	select {
 	case pq.Queues[p] <- x:
 	case <-ctx.Done():
