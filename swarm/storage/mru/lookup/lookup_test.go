@@ -12,21 +12,28 @@ type Data struct {
 	Time    uint64
 }
 
-type Store map[lookup.LookupParameters]*Data
+type Store map[lookup.Epoch]*Data
 
-func write(store Store, lp lookup.LookupParameters, value *Data) {
-	fmt.Printf("Write: %d-%d\n", lp.Epoch, lp.Level)
-	store[lp] = value
+func write(store Store, epoch lookup.Epoch, value *Data) {
+	fmt.Printf("Write: %d-%d\n", epoch.BaseTime, epoch.Level)
+	store[epoch] = value
 }
 
 //var last uint64
 //var lastLevel = lookup.HighestLevel + 1
 
-func update(store Store, last lookup.LookupParameters, now uint64, value *Data) lookup.LookupParameters {
-	lp := lookup.GetNextLookup(last, now)
-	write(store, lp, value)
+func update(store Store, last lookup.Epoch, now uint64, value *Data) lookup.Epoch {
+	var epoch lookup.Epoch
 
-	return lp
+	if last == lookup.NoClue {
+		epoch = lookup.GetFirstEpoch(now)
+	} else {
+		epoch = lookup.GetNextEpoch(last, now)
+	}
+
+	write(store, epoch, value)
+
+	return epoch
 }
 
 const Day = 60 * 60 * 24
@@ -34,10 +41,10 @@ const Year = Day * 365
 const Month = Day * 30
 
 func makeReadFunc(store Store, counter *int) lookup.ReadFunc {
-	return func(level uint8, epoch uint32, now uint64) (interface{}, error) {
-		fmt.Printf("Read: %d-%d\n", epoch, level)
+	return func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+		fmt.Printf("Read: %d-%d\n", epoch.BaseTime, epoch.Level)
 		*counter++
-		data := store[lookup.LookupParameters{Level: level, Epoch: epoch}]
+		data := store[epoch]
 		if data != nil && data.Time <= now {
 			return data, nil
 		}
@@ -54,7 +61,7 @@ func TestLookup(t *testing.T) {
 	// write an update every month for 12 months 3 years ago and then silence for two years
 
 	now := uint64(1533799046)
-	lp := lookup.First
+	epoch := lookup.NoClue
 
 	var lastData *Data
 	for i := uint64(0); i < 12; i++ {
@@ -63,7 +70,7 @@ func TestLookup(t *testing.T) {
 			Payload: t, //our "payload" will be the timestamp itself.
 			Time:    t,
 		}
-		lp = update(store, lp, t, &data)
+		epoch = update(store, epoch, t, &data)
 		lastData = &data
 	}
 
@@ -83,7 +90,7 @@ func TestLookup(t *testing.T) {
 	// reset the read count for the next test
 	readCount = 0
 	// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
-	value, err = lookup.Lookup(now, lp, readFunc)
+	value, err = lookup.Lookup(now, epoch, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +147,7 @@ func TestLookupFail(t *testing.T) {
 
 	// write an update every second for the last 1000 seconds
 
-	lp := lookup.First
+	epoch := lookup.NoClue
 
 	var lastData *Data
 	for i := uint64(0); i <= 1000; i++ {
@@ -149,14 +156,14 @@ func TestLookupFail(t *testing.T) {
 			Payload: t, //our "payload" will be the timestamp itself.
 			Time:    t,
 		}
-		lp = update(store, lp, t, &data)
+		epoch = update(store, epoch, t, &data)
 		lastData = &data
 	}
 
 	// try to get the last value
-	lp.Level = 0
+	epoch.Level = 0
 
-	value, err = lookup.Lookup(lastData.Time, lp, readFunc)
+	value, err = lookup.Lookup(lastData.Time, epoch, readFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,5 +171,4 @@ func TestLookupFail(t *testing.T) {
 	if value != lastData {
 		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
 	}
-
 }
