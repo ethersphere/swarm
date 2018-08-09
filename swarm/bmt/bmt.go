@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+
+	"github.com/grafana/grafana/pkg/log"
 )
 
 /*
@@ -319,6 +321,7 @@ func (h *Hasher) Sum(b []byte) (s []byte) {
 func (h *Hasher) Write(b []byte) (int, error) {
 	l := len(b)
 	if l == 0 || l > 4096 {
+		log.Debug("bmt hasher", "l", l)
 		return 0, nil
 	}
 	t := h.getTree()
