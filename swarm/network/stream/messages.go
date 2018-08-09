@@ -117,7 +117,7 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 
 	go func() {
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
-			log.Warn("SendOfferedHashes dropping peer", "err", err)
+			log.Warn("SendOfferedHashes dropping peer", "peer", p.ID().TerminalString(), "err", err)
 			p.Drop(err)
 		}
 	}()
@@ -135,7 +135,7 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 		}
 		go func() {
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
-				log.Warn("SendOfferedHashes dropping peer", "err", err)
+				log.Warn("SendOfferedHashes dropping peer", "peer", p.ID().TerminalString(), "err", err)
 				p.Drop(err)
 			}
 		}()
