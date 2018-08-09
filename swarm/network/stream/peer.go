@@ -33,7 +33,7 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
-var sendTimeout = 30 * time.Second
+var sendTimeout = 5 * time.Second
 
 type notFoundError struct {
 	t string
