@@ -64,8 +64,8 @@ func ParseURI(h http.Handler) http.Handler {
 func InitLoggingResponseWriter(h http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		writer := newLoggingResponseWriter(w)
-
 		h.ServeHTTP(writer, r)
+		log.Info("request served", "ruid", GetRUID(r.Context()), "code", writer.statusCode)
 	})
 }
 
