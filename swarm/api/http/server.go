@@ -23,7 +23,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -45,11 +44,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
 
 	"github.com/rs/cors"
-)
-
-var (
-	ErrDecrypt           = errors.New("cant decrypt - forbidden")
-	ErrUnknownAccessType = errors.New("unknown access type (or not implemented)")
 )
 
 type resourceResponse struct {
@@ -190,7 +184,7 @@ type Server struct {
 }
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
-	log.Error("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
+	log.Debug("handleBzzGet", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
 	if r.Header.Get("Accept") == "application/x-tar" {
 		uri := GetURI(r.Context())
 		_, credentials, _ := r.BasicAuth()
@@ -944,5 +938,5 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 }
 
 func isDecryptError(err error) bool {
-	return strings.Contains(err.Error(), ErrDecrypt.Error())
+	return strings.Contains(err.Error(), api.ErrDecrypt.Error())
 }

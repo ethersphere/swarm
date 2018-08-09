@@ -214,8 +214,8 @@ func NewSessionKeyPK(private *ecdsa.PrivateKey, public *ecdsa.PublicKey, salt []
 	return sessionKey, nil
 }
 
-func (a *API) NodeSessionKey(publicKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
-	return NewSessionKeyPK(a.config.privateKey, publicKey, salt)
+func (a *API) NodeSessionKey(privateKey *ecdsa.PrivateKey, publicKey *ecdsa.PublicKey, salt []byte) ([]byte, error) {
+	return NewSessionKeyPK(privateKey, publicKey, salt)
 }
 
 // ManifestList represents the result of listing files in a manifest

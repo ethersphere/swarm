@@ -155,8 +155,8 @@ var (
 		Name:  "defaultpath",
 		Usage: "path to file served for empty url path (none)",
 	}
-	SwarmAccessGrantPKFlag = cli.StringFlag{
-		Name:  "grant-pk",
+	SwarmAccessGrantKeyFlag = cli.StringFlag{
+		Name:  "grant-key",
 		Usage: "grants a given public key access to an ACT",
 	}
 	SwarmAccessGrantKeysFlag = cli.StringFlag{
@@ -301,7 +301,7 @@ func init() {
 							Flags: []cli.Flag{
 								utils.PasswordFileFlag,
 								SwarmDryRunFlag,
-								SwarmAccessGrantPKFlag,
+								SwarmAccessGrantKeyFlag,
 							},
 							Name:        "pk",
 							Usage:       "encrypts a reference with the node's private key and a given grantee's public key and embeds it into a root manifest",

@@ -165,7 +165,7 @@ func generateAccessControlManifest(ctx *cli.Context, ref string, accessKey []byt
 func doPKNew(ctx *cli.Context, salt []byte) (sessionKey []byte, ae *api.AccessEntry, err error) {
 	privateKey := getPrivKey(ctx)
 	log.Error(hex.EncodeToString(crypto.CompressPubkey(&privateKey.PublicKey)))
-	granteePublicKey := ctx.String(SwarmAccessGrantPKFlag.Name)
+	granteePublicKey := ctx.String(SwarmAccessGrantKeyFlag.Name)
 
 	if granteePublicKey == "" {
 		return nil, nil, errors.New("need a grantee Public Key")

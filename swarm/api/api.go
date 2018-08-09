@@ -19,6 +19,7 @@ package api
 import (
 	"archive/tar"
 	"context"
+	"crypto/ecdsa"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -245,16 +246,18 @@ type API struct {
 	resource  *mru.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
-	config    *Config
+	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler, config *Config) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, resourceHandler *mru.Handler, pk *ecdsa.PrivateKey) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
 		resource:  resourceHandler,
-		config:    config,
+		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
+			return self.doDecrypt(ctx, credentials, pk)
+		},
 	}
 	return
 }
@@ -1012,7 +1015,7 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 	return storage.Address(common.FromHex(entry.Hash)), nil
 }
 
-func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
+func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.PrivateKey) DecryptFunc {
 	return func(m *ManifestEntry) error {
 		if m.Access == nil {
 			return nil
@@ -1066,7 +1069,7 @@ func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
 			if err != nil {
 				return ErrDecrypt
 			}
-			key, err := a.NodeSessionKey(publisher, m.Access.Salt)
+			key, err := a.NodeSessionKey(pk, publisher, m.Access.Salt)
 			if err != nil {
 				return ErrDecrypt
 			}
@@ -1096,7 +1099,7 @@ func (a *API) Decryptor(ctx context.Context, credentials string) DecryptFunc {
 				return ErrDecrypt
 			}
 
-			sessionKey, err := a.NodeSessionKey(publisher, m.Access.Salt)
+			sessionKey, err := a.NodeSessionKey(pk, publisher, m.Access.Salt)
 			if err != nil {
 				return ErrDecrypt
 			}

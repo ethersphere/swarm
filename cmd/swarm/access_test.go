@@ -291,7 +291,7 @@ func TestAccessPK(t *testing.T) {
 		"new",
 		"pk",
 		"--dry-run",
-		"--grant-pk",
+		"--grant-key",
 		hex.EncodeToString(granteePubKey),
 		ref,
 	)
