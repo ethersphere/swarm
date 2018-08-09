@@ -90,18 +90,10 @@ func (pq *PriorityQueue) Push(ctx context.Context, x interface{}, p int) error {
 	if p < 0 || p >= len(pq.Queues) {
 		return errBadPriority
 	}
-	if ctx == nil {
-		select {
-		case pq.Queues[p] <- x:
-		default:
-			return errContention
-		}
-	} else {
-		select {
-		case pq.Queues[p] <- x:
-		case <-ctx.Done():
-			return ctx.Err()
-		}
+	select {
+	case pq.Queues[p] <- x:
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	select {
 	case pq.wakeup <- wakey:
