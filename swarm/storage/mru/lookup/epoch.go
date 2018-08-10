@@ -10,6 +10,13 @@ type Epoch struct {
 
 const EpochLength = 1 + 8
 
+func NewEpoch(t uint64, level uint8) Epoch {
+	return Epoch{
+		Level:    level,
+		BaseTime: getBaseTime(t, level),
+	}
+}
+
 func (e *Epoch) LaterThan(epoch Epoch) bool {
 	if e.BaseTime == epoch.BaseTime {
 		return e.Level < epoch.Level
@@ -18,5 +25,5 @@ func (e *Epoch) LaterThan(epoch Epoch) bool {
 }
 
 func (e *Epoch) String() string {
-	return fmt.Sprintf("Epoch{BaseTime:%d, Level:%d", e.BaseTime, e.Level)
+	return fmt.Sprintf("Epoch{BaseTime:%d, Level:%d}", e.BaseTime, e.Level)
 }

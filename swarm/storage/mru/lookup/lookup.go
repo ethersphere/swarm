@@ -22,7 +22,7 @@ type ReadFunc func(epoch Epoch, now uint64) (interface{}, error)
 var NoClue = Epoch{}
 
 func getBaseTime(t uint64, level uint8) uint64 {
-	return t & (maxuint64 >> (level + 1) << (level + 1))
+	return t & ((maxuint64 >> level) << level)
 }
 
 func Hint(last uint64) Epoch {
@@ -60,14 +60,14 @@ func GetNextEpoch(last Epoch, now uint64) Epoch {
 	level := getNextLevel(last, now)
 	return Epoch{
 		Level:    level,
-		BaseTime: getBaseTime(now, level-1),
+		BaseTime: getBaseTime(now, level),
 	}
 }
 
 // GetFirstEpoch returns the epoch where the first update should be located
 // based on what time it is now.
 func GetFirstEpoch(now uint64) Epoch {
-	return Epoch{Level: highestLevel, BaseTime: getBaseTime(now, highestLevel)}
+	return Epoch{Level: highestLevel, BaseTime: getBaseTime(now, highestLevel+1)}
 }
 
 // Lookup finds the update with the highest timestamp that is smaller or equal than 'now'
@@ -88,13 +88,13 @@ func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error
 		level = getNextLevel(hint, now)
 	}
 
-	baseTime := getBaseTime(now, level-1)
+	baseTime := getBaseTime(now, level)
 
 	for {
 		if level == highestLevel {
 			baseTimeMin = 0
 		} else {
-			baseTimeMin = getBaseTime(baseTime, level)
+			baseTimeMin = getBaseTime(baseTime, level+1)
 		}
 		// try current level
 		for {
