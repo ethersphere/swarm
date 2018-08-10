@@ -178,6 +178,23 @@ func TestHighFreqUpdates(t *testing.T) {
 		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
 	}
 
+	readCountWithoutHint := readCount
+	// reset the read count for the next test
+	readCount = 0
+	// Provide a hint to get a faster lookup. In particular, we give the exact location of the last update
+	value, err = lookup.Lookup(now, epoch, readFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if value != lastData {
+		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
+	}
+
+	if readCount > readCountWithoutHint {
+		t.Fatalf("Expected lookup to complete with fewer reads than %d since we provided a hint. Did %d reads.", readCountWithoutHint, readCount)
+	}
+
 	for i := uint64(0); i <= 994; i++ {
 		T := uint64(now - 1000 + i) // update every second for the last 1000 seconds
 		value, err := lookup.Lookup(T, lookup.NoClue, readFunc)
