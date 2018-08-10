@@ -487,6 +487,7 @@ func resourcePostMode(path string) (isRaw bool, frequency uint64, err error) {
 // The requests can be to a) create a resource, b) update a resource or c) both a+b: create a resource and set the initial content
 func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
 	log.Debug("handle.post.resource", "ruid", ruid)
 	var err error
 
@@ -497,8 +498,14 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	view := s.getResourceView(w, r)
-	if view == nil { // couldn't parse query string or retrieve manifest
+	view, err := s.api.ResolveResourceView(r.Context(), uri, r.URL.Query())
+	if err != nil { // couldn't parse query string or retrieve manifest
+		getFail.Inc(1)
+		httpStatus := http.StatusBadRequest
+		if err == api.ErrCannotLoadResourceManifest || err == api.ErrCannotResolveResourceURI {
+			httpStatus = http.StatusNotFound
+		}
+		RespondError(w, r, fmt.Sprintf("cannot retrieve resource view: %s", err), httpStatus)
 		return
 	}
 
@@ -549,43 +556,6 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (s *Server) getResourceView(w http.ResponseWriter, r *http.Request) *mru.View {
-	ruid := GetRUID(r.Context())
-	uri := GetURI(r.Context())
-	var view *mru.View
-	var err error
-	if uri.Addr != "" {
-		// resolve the content key.
-		manifestAddr := uri.Address()
-		if manifestAddr == nil {
-			manifestAddr, err = s.api.Resolve(r.Context(), uri.Addr)
-			if err != nil {
-				getFail.Inc(1)
-				RespondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusNotFound)
-				return nil
-			}
-		}
-
-		// get the resource view from the manifest
-		view, err = s.api.ResolveResourceManifest(r.Context(), manifestAddr)
-		if err != nil {
-			getFail.Inc(1)
-			RespondError(w, r, fmt.Sprintf("error resolving resource view ID for %s: %s", uri.Addr, err), http.StatusNotFound)
-			return nil
-		}
-		log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "view", view.Hex())
-	} else {
-		var v mru.View
-		if err := v.FromValues(r.URL.Query()); err != nil {
-			getFail.Inc(1)
-			RespondError(w, r, fmt.Sprintf("error parsing view ID parameters: %s", err), http.StatusBadRequest)
-			return nil
-		}
-		view = &v
-	}
-	return view
-}
-
 // Retrieve mutable resource updates:
 // bzz-resource://<id> - get latest update
 // bzz-resource://<id>/?period=n - get latest update on period n
@@ -599,8 +569,14 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.get.resource", "ruid", ruid)
 	var err error
 
-	view := s.getResourceView(w, r)
-	if view == nil { // couldn't parse query string or retrieve manifest
+	view, err := s.api.ResolveResourceView(r.Context(), uri, r.URL.Query())
+	if err != nil { // couldn't parse query string or retrieve manifest
+		getFail.Inc(1)
+		httpStatus := http.StatusBadRequest
+		if err == api.ErrCannotLoadResourceManifest || err == api.ErrCannotResolveResourceURI {
+			httpStatus = http.StatusNotFound
+		}
+		RespondError(w, r, fmt.Sprintf("cannot retrieve resource view: %s", err), httpStatus)
 		return
 	}
 
