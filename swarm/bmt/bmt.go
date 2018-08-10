@@ -24,7 +24,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/grafana/grafana/pkg/log"
+	"github.com/ethereum/go-ethereum/log"
 )
 
 /*
