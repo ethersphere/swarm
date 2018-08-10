@@ -285,7 +285,7 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priorit
 	}
 	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
-	return peer.SendPriority(context.TODO(), msg, priority)
+	return peer.Send(context.TODO(), msg)
 }
 
 func (r *Registry) Unsubscribe(peerId discover.NodeID, s Stream) error {
@@ -595,7 +595,7 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 		if err != nil {
 			return err
 		}
-		if err := p.SendPriority(context.TODO(), tp, c.priority); err != nil {
+		if err := p.Send(context.TODO(), tp); err != nil {
 			return err
 		}
 		if c.to > 0 && tp.Takeover.End >= c.to {
