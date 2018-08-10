@@ -324,6 +324,8 @@ func (k *Kademlia) On(p OverlayConn) (uint8, bool) {
 // Not receiving from the returned channel will block On function
 // when the neighbourhood depth is changed.
 func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
+	k.lock.Lock()
+	defer k.lock.Unlock()
 	if k.nDepthC == nil {
 		k.nDepthC = make(chan int)
 	}
