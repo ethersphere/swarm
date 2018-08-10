@@ -17,8 +17,6 @@ const filterMask = (maxuint64 >> (64 - numLevels)) << lowestLevel
 // lookup process entirely.
 type ReadFunc func(epoch Epoch, now uint64) (interface{}, error)
 
-var FirstEpoch = Epoch{Level: 255, BaseTime: 0}
-
 // Hint that can be provided when the Lookup caller does not have
 // a clue about where the last update may be
 var NoClue = Epoch{}
@@ -27,12 +25,13 @@ func getBaseTime(t uint64, level uint8) uint64 {
 	return t & (maxuint64 >> (level + 1) << (level + 1))
 }
 
-func Hint(last uint64, now uint64) Epoch {
+func Hint(last uint64) Epoch {
 	lp := Epoch{
 		BaseTime: getBaseTime(last, defaultLevel),
 		Level:    defaultLevel,
 	}
-	return GetNextEpoch(lp, now)
+
+	return lp //GetNextEpoch(lp, now)
 }
 
 func getNextLevel(last Epoch, now uint64) uint8 {
@@ -55,7 +54,7 @@ func getNextLevel(last Epoch, now uint64) uint8 {
 // according to where the previous update was
 // and what time it is now.
 func GetNextEpoch(last Epoch, now uint64) Epoch {
-	if last.Level == 255 {
+	if last == NoClue {
 		return GetFirstEpoch(now)
 	}
 	level := getNextLevel(last, now)
@@ -74,8 +73,8 @@ func GetFirstEpoch(now uint64) Epoch {
 // Lookup finds the update with the highest timestamp that is smaller or equal than 'now'
 // It takes a hint which should be the epoch where the last known update was
 // If you don't know in what epoch the last update happened, simply submit lookup.NoClue
-// read will be called on each lookup attempt
-// Returns an error only if read returns an error
+// read() will be called on each lookup attempt
+// Returns an error only if read() returns an error
 // Returns nil if an update was not found
 func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
 	var lastFound interface{}

@@ -61,7 +61,7 @@ func TestLookup(t *testing.T) {
 	// write an update every month for 12 months 3 years ago and then silence for two years
 
 	now := uint64(1533799046)
-	epoch := lookup.FirstEpoch
+	var epoch lookup.Epoch
 
 	var lastData *Data
 	for i := uint64(0); i < 12; i++ {
@@ -156,10 +156,10 @@ func TestHighFreqUpdates(t *testing.T) {
 
 	// write an update every second for the last 1000 seconds
 
-	epoch := lookup.FirstEpoch
+	var epoch lookup.Epoch
 
 	var lastData *Data
-	for i := uint64(0); i <= 1000; i++ {
+	for i := uint64(0); i <= 994; i++ {
 		T := uint64(now - 1000 + i) // update every second for the last 1000 seconds
 		data := Data{
 			Payload: T, //our "payload" will be the timestamp itself.
@@ -178,7 +178,7 @@ func TestHighFreqUpdates(t *testing.T) {
 		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", lastData, value)
 	}
 
-	for i := uint64(0); i <= 1000; i++ {
+	for i := uint64(0); i <= 994; i++ {
 		T := uint64(now - 1000 + i) // update every second for the last 1000 seconds
 		value, err := lookup.Lookup(T, lookup.NoClue, readFunc)
 		if err != nil {
@@ -203,7 +203,7 @@ func TestSparseUpdates(t *testing.T) {
 	// write an update every 5 years 3 times starting in Jan 1st 1970 and then silence
 
 	now := uint64(1533799046)
-	epoch := lookup.FirstEpoch
+	var epoch lookup.Epoch
 
 	var lastData *Data
 	for i := uint64(0); i < 5; i++ {
