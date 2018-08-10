@@ -23,6 +23,8 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -30,8 +32,8 @@ import (
 // Limit defines whether or not the lookup should be limited
 // If Limit is set to true then Max defines the amount of hops that can be performed
 type LookupParams struct {
-	UpdateLookup
-	Limit uint32
+	UpdateLookup        // last known epoch/level. 0 means no guessing
+	Time         uint64 // Find updates with a timestamp <= Time. 0 means now (find latest)
 }
 
 // Values interface represents a string key-value store
@@ -44,56 +46,36 @@ type Values interface {
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
 func (lp *LookupParams) FromValues(values Values, parseView bool) error {
-	limit, _ := strconv.ParseUint(values.Get("limit"), 10, 32)
-
-	lp.Limit = uint32(limit)
+	lp.Time, _ = strconv.ParseUint(values.Get("time"), 10, 64)
 	return lp.UpdateLookup.FromValues(values, parseView)
 }
 
 // ToValues serializes this structure into the provided string key-value store
 // useful to build query strings
 func (lp *LookupParams) ToValues(values url.Values) {
-	if lp.Limit != 0 {
-		values.Set("limit", fmt.Sprintf("%d", lp.Version))
-	}
+	values.Set("time", fmt.Sprintf("%d", lp.Time))
 	lp.UpdateLookup.ToValues(values)
 }
 
 // NewLookupParams constructs a LookupParams structure with the provided lookup parameters
-// if period = 0 and version = 0, the last resource version will be looked up
-// if period !=0 and version = 0, the last version in that period will be looked up
-// if both period, version !=0, that specific period, version will be looked up
-func NewLookupParams(view *View, period, version uint32, limit uint32) *LookupParams {
+func NewLookupParams(view *View, time uint64) *LookupParams {
 	return &LookupParams{
 		UpdateLookup: UpdateLookup{
-			Period:  period,
-			Version: version,
-			View:    *view,
+			View: *view,
 		},
-		Limit: limit,
+		Time: time,
 	}
 }
 
 // LookupLatest generates lookup parameters that look for the latest version of a resource
 func LookupLatest(view *View) *LookupParams {
-	return NewLookupParams(view, 0, 0, 0)
+	return NewLookupParams(view, 0)
 }
 
-// LookupLatestVersionInPeriod generates lookup parameters that look for the latest version of a resource in a given period
-func LookupLatestVersionInPeriod(view *View, period uint32) *LookupParams {
-	return NewLookupParams(view, period, 0, 0)
-}
-
-// LookupVersion generates lookup parameters that look for a specific version of a resource
-func LookupVersion(view *View, period, version uint32) *LookupParams {
-	return NewLookupParams(view, period, version, 0)
-}
-
-// UpdateLookup represents the components of a resource update search key
+// UpdateLookup represents the components of a resource update search key.Version
 type UpdateLookup struct {
 	View
-	Period  uint32
-	Version uint32
+	lookup.Epoch
 }
 
 // UpdateLookup layout:
@@ -101,7 +83,7 @@ type UpdateLookup struct {
 // userAddr common.AddressLength bytes
 // 4 bytes period
 // 4 bytes version
-const updateLookupLength = viewLength + 4 + 4
+const updateLookupLength = viewLength + lookup.EpochLength
 
 // UpdateAddr calculates the resource update chunk address corresponding to this lookup key
 func (u *UpdateLookup) UpdateAddr() (updateAddr storage.Address) {
@@ -125,11 +107,11 @@ func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 	}
 	cursor += viewLength
 
-	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.Period)
-	cursor += 4
+	serializedData[cursor] = u.Epoch.Level
+	cursor++
 
-	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.Version)
-	cursor += 4
+	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+8], u.Epoch.BaseTime)
+	cursor += 8
 
 	return nil
 }
@@ -151,11 +133,11 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	}
 	cursor += viewLength
 
-	u.Period = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
-	cursor += 4
+	u.Level = serializedData[cursor]
+	cursor++
 
-	u.Version = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
-	cursor += 4
+	u.BaseTime = binary.LittleEndian.Uint64(serializedData[cursor : cursor+8])
+	cursor += 8
 
 	return nil
 }
@@ -163,14 +145,10 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
 func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
-	version, _ := strconv.ParseUint(values.Get("version"), 10, 32)
-	period, _ := strconv.ParseUint(values.Get("period"), 10, 32)
+	level, _ := strconv.ParseUint(values.Get("level"), 10, 32)
+	u.Level = uint8(level)
+	u.BaseTime, _ = strconv.ParseUint(values.Get("basetime"), 10, 64)
 
-	if period == 0 && version != 0 {
-		return NewError(ErrInvalidValue, "cannot have version !=0 if period is 0")
-	}
-	u.Version = uint32(version)
-	u.Period = uint32(period)
 	if parseView {
 		return u.View.FromValues(values)
 	}
@@ -180,11 +158,7 @@ func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
 // ToValues serializes this structure into the provided string key-value store
 // useful to build query strings
 func (u *UpdateLookup) ToValues(values Values) {
-	if u.Period != 0 {
-		values.Set("period", fmt.Sprintf("%d", u.Period))
-	}
-	if u.Version != 0 {
-		values.Set("version", fmt.Sprintf("%d", u.Version))
-	}
+	values.Set("level", fmt.Sprintf("%d", u.Level))
+	values.Set("basetime", fmt.Sprintf("%d", u.Epoch))
 	u.View.ToValues(values)
 }

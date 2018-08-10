@@ -19,6 +19,8 @@ package mru
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -28,8 +30,8 @@ import (
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
 	View      *View  `json:"view"`
-	Version   uint32 `json:"version,omitempty"`
-	Period    uint32 `json:"period,omitempty"`
+	Level     uint8  `json:"level,omitempty"`
+	BaseTime  uint64 `json:"baseTime,omitempty"`
 	Data      string `json:"data,omitempty"`
 	Signature string `json:"signature,omitempty"`
 }
@@ -37,34 +39,16 @@ type updateRequestJSON struct {
 var zeroAddr = common.Address{}
 
 // NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
-func NewCreateUpdateRequest(metadata *Resource) (*Request, error) {
+func NewCreateUpdateRequest(resource *Resource) *Request {
 
-	request, err := NewCreateRequest(metadata, zeroAddr)
-	if err != nil {
-		return nil, err
-	}
+	request := new(Request)
 
 	// get the current time
 	now := TimestampProvider.Now().Time
+	request.Epoch = lookup.GetFirstEpoch(now)
+	request.View.Resource = *resource
 
-	request.Version = 1
-	request.Period, err = getNextPeriod(metadata.StartTime.Time, now, metadata.Frequency)
-	if err != nil {
-		return nil, err
-	}
-	return request, nil
-}
-
-// NewCreateRequest returns a request to create a new resource
-func NewCreateRequest(metadata *Resource, userAddr common.Address) (request *Request, err error) {
-	if metadata.StartTime.Time == 0 { // get the current time
-		metadata.StartTime = TimestampProvider.Now()
-	}
-
-	request = new(Request)
-	request.View.Resource = *metadata
-	request.View.User = userAddr
-	return request, nil
+	return request
 }
 
 // SetData stores the payload data the resource will be updated with
@@ -81,8 +65,8 @@ func (r *Request) IsUpdate() bool {
 // fromJSON takes an update request JSON and populates an UpdateRequest
 func (r *Request) fromJSON(j *updateRequestJSON) error {
 
-	r.Version = j.Version
-	r.Period = j.Period
+	r.BaseTime = j.BaseTime
+	r.Level = j.Level
 	r.View = *j.View
 
 	var err error
@@ -149,8 +133,8 @@ func (r *Request) MarshalJSON() (rawData []byte, err error) {
 
 	requestJSON := &updateRequestJSON{
 		View:      &r.View,
-		Version:   r.Version,
-		Period:    r.Period,
+		Level:     r.Level,
+		BaseTime:  r.BaseTime,
 		Data:      dataString,
 		Signature: signatureString,
 	}

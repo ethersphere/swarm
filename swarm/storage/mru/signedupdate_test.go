@@ -6,6 +6,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -20,7 +22,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 
 	// Test that parseUpdate fails if the chunk is too small
 	var r Request
-	if err := r.fromChunk(storage.ZeroAddr, make([]byte, minimumUpdateDataLength-1)); err == nil {
+	if err := r.fromChunk(storage.ZeroAddr, make([]byte, minimumUpdateDataLength-1+signatureLength)); err == nil {
 		t.Fatalf("Expected parseUpdate to fail when chunkData contains less than %d bytes", minimumUpdateDataLength)
 	}
 
@@ -46,7 +48,7 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 		t.Fatalf("error creating update chunk:%s", err)
 	}
 
-	compareByteSliceToExpectedHex(t, "chunk", chunk.SData, "0x10dd205b00000000100e000000000000776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c4f000000da070000416c206269656e206861636572206a616dc3a173206c652066616c7461207072656d696f5214c16d60870afb21c679a6020d764c7bb0e7bd8a66cfa7d0aa06e9fbf9c6d0666b013ca47f7a9c44d8d54a14193ba3514a0e1f56234a0618e03f0a836801e100")
+	compareByteSliceToExpectedHex(t, "chunk", chunk.SData, "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c190000000000000000416c206269656e206861636572206a616dc3a173206c652066616c7461207072656d696f95cafc0f5f8a587cb8aa96c00ab023dc196b14dc704801b981b9cf38b745ef765a8a02a26fa3a16b72b907a8cc53ad58782de6403552bac069e089b6af260c3801")
 
 	var recovered Request
 	l := len(chunk.SData)
@@ -60,8 +62,10 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 // check that signature address matches update signer address
 func TestReverse(t *testing.T) {
 
-	period := uint32(4)
-	version := uint32(2)
+	epoch := lookup.Epoch{
+		BaseTime: 4,
+		Level:    2,
+	}
 
 	// make fake timeProvider
 	timeProvider := &fakeTimeProvider{
@@ -80,9 +84,7 @@ func TestReverse(t *testing.T) {
 
 	view := View{
 		Resource: Resource{
-			Topic:     NewTopic("Cervantes quotes", nil),
-			StartTime: startTime,
-			Frequency: resourceFrequency,
+			Topic: NewTopic("Cervantes quotes", nil),
 		},
 		User: signer.Address(),
 	}
@@ -91,8 +93,7 @@ func TestReverse(t *testing.T) {
 
 	update := new(Request)
 	update.View = view
-	update.Period = period
-	update.Version = version
+	update.Epoch = epoch
 	update.data = data
 
 	// generate a hash for t=4200 version 1
@@ -130,11 +131,8 @@ func TestReverse(t *testing.T) {
 	if !bytes.Equal(key[:], chunk.Addr[:]) {
 		t.Fatalf("Expected chunk key '%x', was '%x'", key, chunk.Addr)
 	}
-	if period != checkUpdate.Period {
-		t.Fatalf("Expected period '%d', was '%d'", period, checkUpdate.Period)
-	}
-	if version != checkUpdate.Version {
-		t.Fatalf("Expected version '%d', was '%d'", version, checkUpdate.Version)
+	if epoch != checkUpdate.Epoch {
+		t.Fatalf("Expected epoch to be '%s', was '%s'", epoch.String(), checkUpdate.Epoch.String())
 	}
 	if !bytes.Equal(data, checkUpdate.data) {
 		t.Fatalf("Expectedn data '%x', was '%x'", data, checkUpdate.data)

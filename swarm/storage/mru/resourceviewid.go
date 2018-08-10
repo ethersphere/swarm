@@ -1,9 +1,7 @@
 package mru
 
 import (
-	"fmt"
 	"hash"
-	"strconv"
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -92,17 +90,9 @@ func (u *View) Hex() string {
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
 func (u *View) FromValues(values Values) error {
-	startTime, err := strconv.ParseUint(values.Get("starttime"), 10, 64)
-	if err != nil {
-		return err
-	}
-	frequency, err := strconv.ParseUint(values.Get("frequency"), 10, 64)
-	if err != nil {
-		return err
-	}
 	topic := values.Get("topic")
 	if topic != "" {
-		if err = u.Topic.FromHex(values.Get("topic")); err != nil {
+		if err := u.Topic.FromHex(values.Get("topic")); err != nil {
 			return err
 		}
 	} else { // see if the user set name and relatedcontent
@@ -114,16 +104,12 @@ func (u *View) FromValues(values Values) error {
 		u.Topic = NewTopic(name, relatedContent[:storage.KeyLength])
 	}
 	u.User = common.HexToAddress(values.Get("user"))
-	u.Frequency = frequency
-	u.StartTime.Time = startTime
 	return nil
 }
 
 // ToValues serializes this structure into the provided string key-value store
 // useful to build query strings
 func (u *View) ToValues(values Values) {
-	values.Set("starttime", fmt.Sprintf("%d", u.StartTime.Time))
-	values.Set("frequency", fmt.Sprintf("%d", u.Frequency))
 	values.Set("topic", u.Topic.Hex())
 	values.Set("user", u.User.Hex())
 }

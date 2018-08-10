@@ -22,15 +22,11 @@ import (
 func getTestResourceID() *Resource {
 	return &Resource{
 		Topic: NewTopic("world news report, every hour", nil),
-		StartTime: Timestamp{
-			Time: 1528880400,
-		},
-		Frequency: 3600,
 	}
 }
 
 func TestResourceIDSerializerDeserializer(t *testing.T) {
-	testBinarySerializerRecovery(t, getTestResourceID(), "0x10dd205b00000000100e000000000000776f726c64206e657773207265706f72742c20657665727920686f7572000000")
+	testBinarySerializerRecovery(t, getTestResourceID(), "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000")
 }
 
 func TestResourceIDSerializerLengthCheck(t *testing.T) {
