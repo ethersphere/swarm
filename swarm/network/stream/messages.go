@@ -203,6 +203,8 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", len(hashes)/HashSize, err)
 	}
 
+	ctr := 0
+	errC := make(chan error)
 	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
 	defer cancel()
 
@@ -210,15 +212,37 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
 		if wait := c.NeedData(ctx, hash); wait != nil {
+			ctr++
 			want.Set(i/HashSize, true)
+			// create request and wait until the chunk data arrives and is stored
+			go func(w func(context.Context) error) {
+				errC <- w(ctx)
+			}(wait)
 		}
 	}
 
-	if err := c.batchDone(p, req, hashes); err != nil {
-		log.Error(err.Error())
-		return err
-	}
-
+	go func() {
+		defer cancel()
+		for i := 0; i < ctr; i++ {
+			select {
+			case err := <-errC:
+				if err != nil {
+					log.Error("client.handleOfferedHashesMsg() error waiting for chunk", "err", err)
+				}
+			case <-ctx.Done():
+				log.Error("client.handleOfferedHashesMsg() timeout waiting for chunk, dropping peer", "ctx.Err()", ctx.Err())
+				p.Drop(ctx.Err())
+				return
+			}
+		}
+		select {
+		case c.next <- c.batchDone(p, req, hashes):
+		case <-c.quit:
+		case <-ctx.Done():
+			log.Error("client.handleOfferedHashesMsg() timeout waiting for batchDone, dropping peer", "ctx.Err()", ctx.Err())
+			p.Drop(ctx.Err())
+		}
+	}()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
 	if c.stream.Live {
