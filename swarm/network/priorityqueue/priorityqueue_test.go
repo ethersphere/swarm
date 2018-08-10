@@ -74,7 +74,7 @@ Loop:
 		pq := New(3, 2)
 		wg.Add(len(tc.values))
 		for j, value := range tc.values {
-			err := pq.Push(nil, value, tc.priorities[j])
+			err := pq.Push(context.Background(), value, tc.priorities[j])
 			if tc.errors != nil && err != tc.errors[j] {
 				t.Errorf("expected push error %v, got %v", tc.errors[j], err)
 				continue Loop

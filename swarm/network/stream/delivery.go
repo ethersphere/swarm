@@ -192,11 +192,11 @@ type ChunkDeliveryMsg struct {
 }
 
 // TODO: Fix context SNAFU
-func (d *Delivery) handleChunkDeliveryMsg(_ context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
+func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
 	processReceivedChunksCount.Inc(1)
 	go func() {
 		req.peer = sp
-		err := d.chunkStore.Put(context.TODO(), storage.NewChunk(req.Addr, req.SData))
+		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				req.peer.Drop(err)

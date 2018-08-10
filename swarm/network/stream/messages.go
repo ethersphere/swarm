@@ -203,7 +203,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", len(hashes)/HashSize, err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), syncBatchTimeout)
+	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
 	defer cancel()
 
 	ctx = context.WithValue(ctx, "source", p.ID().String())
