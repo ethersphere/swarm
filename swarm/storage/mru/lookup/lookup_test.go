@@ -12,11 +12,11 @@ type Data struct {
 	Time    uint64
 }
 
-type Store map[lookup.Epoch]*Data
+type Store map[lookup.EpochID]*Data
 
 func write(store Store, epoch lookup.Epoch, value *Data) {
-	fmt.Printf("Write: %d-%d, value='%d'\n", epoch.BaseTime, epoch.Level, value.Payload)
-	store[epoch] = value
+	fmt.Printf("Write: %d-%d, value='%d'\n", epoch.Base(), epoch.Level, value.Payload)
+	store[epoch.ID()] = value
 }
 
 //var last uint64
@@ -39,12 +39,12 @@ const Month = Day * 30
 func makeReadFunc(store Store, counter *int) lookup.ReadFunc {
 	return func(epoch lookup.Epoch, now uint64) (interface{}, error) {
 		*counter++
-		data := store[epoch]
+		data := store[epoch.ID()]
 		var valueStr string
 		if data != nil {
 			valueStr = fmt.Sprintf("%d", data.Payload)
 		}
-		fmt.Printf("Read: %d-%d, value='%s'\n", epoch.BaseTime, epoch.Level, valueStr)
+		fmt.Printf("Read: %d-%d, value='%s'\n", epoch.Base(), epoch.Level, valueStr)
 		if data != nil && data.Time <= now {
 			return data, nil
 		}
@@ -260,6 +260,28 @@ func TestSparseUpdates(t *testing.T) {
 
 	if readCount > readCountWithoutHint {
 		t.Fatalf("Expected lookup to complete with fewer reads than %d since we provided a hint. Did %d reads.", readCountWithoutHint, readCount)
+	}
+
+}
+
+func TestMarshallers(t *testing.T) {
+
+	for i := uint64(1); i < lookup.MaxTime; i *= 3 {
+		e := lookup.Epoch{
+			Time:  i,
+			Level: uint8(i % 20),
+		}
+		b, err := e.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var e2 lookup.Epoch
+		if err := e2.UnmarshalBinary(b); err != nil {
+			t.Fatal(err)
+		}
+		if e != e2 {
+			t.Fatal("Expected unmarshalled epoch to be equal to marshalled onet.Fatal(err)")
+		}
 	}
 
 }
