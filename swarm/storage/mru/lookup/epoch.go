@@ -42,9 +42,11 @@ func (e *Epoch) UnmarshalBinary(data []byte) error {
 	if len(data) != EpochLength {
 		return errors.New("Invalid data unmarshalling Epoch")
 	}
-	e.Level = data[7]
-	data[7] = 0
-	e.Time = binary.LittleEndian.Uint64(data)
+	b := make([]byte, 8)
+	copy(b, data)
+	e.Level = b[7]
+	b[7] = 0
+	e.Time = binary.LittleEndian.Uint64(b)
 	return nil
 }
 
@@ -53,6 +55,10 @@ func (e *Epoch) LaterThan(epoch Epoch) bool {
 		return e.Level < epoch.Level
 	}
 	return e.Time >= epoch.Time
+}
+
+func (e *Epoch) Equals(epoch Epoch) bool {
+	return e.Level == epoch.Level && e.Base() == epoch.Base()
 }
 
 func (e *Epoch) String() string {
