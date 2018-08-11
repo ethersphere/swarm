@@ -950,7 +950,7 @@ func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver
 }
 
 // ResourceLookup finds mutable resource updates at specific periods and versions
-func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) ([]byte, error) {
+func (a *API) ResourceLookup(ctx context.Context, params *mru.UpdateLookup) ([]byte, error) {
 	_, err := a.resource.Lookup(ctx, params)
 	if err != nil {
 		return nil, err

@@ -668,7 +668,7 @@ func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, err
 	return res.Body, nil
 }
 
-func (c *Client) QueryResource(lookup *mru.LookupParams) (io.ReadCloser, error) {
+func (c *Client) QueryResource(lookup *mru.UpdateLookup) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err

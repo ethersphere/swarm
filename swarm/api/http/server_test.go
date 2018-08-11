@@ -139,14 +139,10 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	updateRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
-		Topic:     mru.NewTopic("foo.eth", nil),
-		Frequency: 13,
-		StartTime: srv.GetCurrentTime(),
+	updateRequest := mru.NewCreateUpdateRequest(&mru.Resource{
+		Topic: mru.NewTopic("foo.eth", nil),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	updateRequest.SetData(mh)
 
 	if err := updateRequest.Sign(signer); err != nil {
@@ -182,7 +178,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "36651b0613c3fbdba7b83175e282dd2b1b4842c884b794da01ab4b4b14d80179"
+	correctManifestAddrHex := "c2e0d89bf6b0295faf6f1bf0cabadd2851a4596e58605a6b71eac08650c05317"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -215,6 +211,7 @@ func TestBzzResource(t *testing.T) {
 
 	// data of update 1
 	update1Data := make([]byte, 666)
+	update1Timestamp := srv.CurrentTime
 	_, err := rand.Read(update1Data)
 	if err != nil {
 		t.Fatal(err)
@@ -222,10 +219,8 @@ func TestBzzResource(t *testing.T) {
 	//data for update 2
 	update2Data := []byte("foo")
 
-	updateRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
-		Topic:     mru.NewTopic("foo.eth", nil),
-		Frequency: 13,
-		StartTime: srv.GetCurrentTime(),
+	updateRequest := mru.NewCreateUpdateRequest(&mru.Resource{
+		Topic: mru.NewTopic("foo.eth", nil),
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -264,7 +259,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "36651b0613c3fbdba7b83175e282dd2b1b4842c884b794da01ab4b4b14d80179"
+	correctManifestAddrHex := "c2e0d89bf6b0295faf6f1bf0cabadd2851a4596e58605a6b71eac08650c05317"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -291,7 +286,7 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	correctViewHex := "0x2a000000000000000d00000000000000666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
+	correctViewHex := "0x666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
 	if manifest.Entries[0].ResourceView.Hex() != correctViewHex {
 		t.Fatalf("Expected manifest Resource View '%s', got '%s'", correctViewHex, manifest.Entries[0].ResourceView.Hex())
 	}
@@ -344,6 +339,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// update 2
+	// Move the clock ahead 1 second
+	srv.CurrentTime++
 	log.Info("update 2")
 
 	// 1.- get metadata about this resource
@@ -404,52 +401,17 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("Expected body '%x', got '%x'", update2Data, b)
 	}
 
-	// get latest update (1.2) with specified period
-	log.Info("get update latest = 1.2")
-	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s/?period=1", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(testBzzResUrl)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("err %s", resp.Status)
-	}
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(update2Data, b) {
-		t.Fatalf("Expected body '%x', got '%x'", update2Data, b)
-	}
-
-	// get first update (1.1) with specified period and version
-	log.Info("get first update 1.1")
-	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s?period=1&version=1", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(testBzzResUrl)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("err %s", resp.Status)
-	}
-	b, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(update1Data, b) {
-		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
-	}
-
 	// test manifest-less queries
-	log.Info("get first update 1.1 via direct query")
-	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/?period=1&version=1", srv.URL))
+	log.Info("get first update in update1Timestamp via direct query")
+	lp := mru.NewLookupParams(&updateRequest.View, update1Timestamp)
+
+	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	values := urlq.Query()
-	updateRequest.View.ToValues(values) // this adds view query parameters
+	lp.ToValues(values) // this adds view query parameters
 	urlq.RawQuery = values.Encode()
 	resp, err = http.Get(urlq.String())
 	if err != nil {

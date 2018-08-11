@@ -599,7 +599,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	lookupParams := mru.NewLookupParams(view, 0, 0, 0)
+	lookupParams := mru.NewLookupParams(view, 0)
 	if err = lookupParams.FromValues(r.URL.Query(), false); err != nil { // parse period, version
 		RespondError(w, r, fmt.Sprintf("invalid mutable resource request:%s", err), http.StatusBadRequest)
 		return

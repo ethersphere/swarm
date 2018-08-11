@@ -67,10 +67,6 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 		t.Fatal(err)
 	}
 
-	fakeTimeProvider := &fakeTimeProvider{
-		currentTime: 42,
-	}
-	mru.TimestampProvider = fakeTimeProvider
 	rhparams := &mru.HandlerParams{}
 	rh, err := mru.NewTestHandler(resourceDir, rhparams)
 	if err != nil {
@@ -79,34 +75,36 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *Tes
 
 	a := api.NewAPI(fileStore, nil, rh.Handler, nil)
 	srv := httptest.NewServer(serverFunc(a))
-	return &TestSwarmServer{
-		Server:            srv,
-		FileStore:         fileStore,
-		dir:               dir,
-		Hasher:            storage.MakeHashFunc(storage.DefaultHash)(),
-		timestampProvider: fakeTimeProvider,
+	tss := &TestSwarmServer{
+		Server:    srv,
+		FileStore: fileStore,
+		dir:       dir,
+		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
 		cleanup: func() {
 			srv.Close()
 			rh.Close()
 			os.RemoveAll(dir)
 			os.RemoveAll(resourceDir)
 		},
+		CurrentTime: 42,
 	}
+	mru.TimestampProvider = tss
+	return tss
 }
 
 type TestSwarmServer struct {
 	*httptest.Server
-	Hasher            storage.SwarmHash
-	FileStore         *storage.FileStore
-	dir               string
-	cleanup           func()
-	timestampProvider *fakeTimeProvider
+	Hasher      storage.SwarmHash
+	FileStore   *storage.FileStore
+	dir         string
+	cleanup     func()
+	CurrentTime uint64
 }
 
 func (t *TestSwarmServer) Close() {
 	t.cleanup()
 }
 
-func (t *TestSwarmServer) GetCurrentTime() mru.Timestamp {
-	return t.timestampProvider.Now()
+func (t *TestSwarmServer) Now() mru.Timestamp {
+	return mru.Timestamp{t.CurrentTime}
 }
