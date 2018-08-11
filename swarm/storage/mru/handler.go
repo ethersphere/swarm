@@ -132,8 +132,10 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 	now := TimestampProvider.Now().Time
 	updateRequest = new(Request)
 
-	// check if there is already an update
-	lp := NewLookupParams(view, now)
+	lp := &UpdateLookup{
+		Epoch: lookup.NoClue,
+		View:  *view,
+	}
 
 	rsrc, err := h.lookup(lp)
 	if err != nil {
@@ -187,49 +189,51 @@ func (h *Handler) lookup(params *UpdateLookup) (*cacheEntry, error) {
 	if lp.Time == 0 {
 		lp.Time = TimestampProvider.Now().Time
 	}
+	time := lp.Time
 
-	chunkPtr, err := lookup.Lookup(lp.Time, params.Epoch, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+	requestPtr, err := lookup.Lookup(lp.Time, params.Epoch, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
 		lp.Epoch = epoch
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), lp.UpdateAddr(), defaultRetrieveTimeout)
 		if err != nil { // TODO: check for catastrophic errors other than chunk not found
 			return nil, nil
 		}
-		return chunk, nil
 
-		// TODO: Parse chunk and check "now" to see if it is lower than the chunk timestamp
-		// Not having this only affects lookups in the past, not latest update ones.
+		var request Request
+		if err := request.fromChunk(chunk.Addr, chunk.SData); err != nil {
+			return nil, nil
+		}
+		if request.Time <= time {
+			return &request, nil
+		}
+		return nil, nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	chunk, _ := chunkPtr.(*storage.Chunk)
-	if chunk == nil {
+	request, _ := requestPtr.(*Request)
+	if request == nil {
 		return nil, NewError(ErrNotFound, "no updates found")
 	}
-	return h.updateCache(&lp.View, chunk)
+	return h.updateCache(request)
 
 }
 
 // update mutable resource cache map with specified content
-func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, error) {
+func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 
-	// retrieve metadata from chunk data and check that it matches this mutable resource
-	var r Request
-	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
-		return nil, err
-	}
-	log.Trace("resource cache update", "topic", view.Topic.Hex(), "updatekey", chunk.Addr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level)
+	updateAddr := request.UpdateAddr()
+	log.Trace("resource cache update", "topic", request.Topic.Hex(), "updatekey", updateAddr, "epoch time", request.Epoch.Time, "epoch level", request.Epoch.Level)
 
-	rsrc := h.get(view)
+	rsrc := h.get(&request.View)
 	if rsrc == nil {
 		rsrc = &cacheEntry{}
-		h.set(view, rsrc)
+		h.set(&request.View, rsrc)
 	}
 
 	// update our rsrcs entry map
-	rsrc.lastKey = chunk.Addr
-	rsrc.ResourceUpdate = r.ResourceUpdate
+	rsrc.lastKey = updateAddr
+	rsrc.ResourceUpdate = request.ResourceUpdate
 	rsrc.Reader = bytes.NewReader(rsrc.data)
 	return rsrc, nil
 }

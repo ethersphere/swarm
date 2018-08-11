@@ -20,7 +20,7 @@ func TestUpdateLookupUpdateAddr(t *testing.T) {
 }
 
 func TestUpdateLookupSerializer(t *testing.T) {
-	testBinarySerializerRecovery(t, getTestUpdateLookup(), "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c0000000000000019")
+	testBinarySerializerRecovery(t, getTestUpdateLookup(), "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781ce803000000000019")
 }
 
 func TestUpdateLookupLengthCheck(t *testing.T) {
