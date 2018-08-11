@@ -64,7 +64,7 @@ func GetNextEpoch(last Epoch, now uint64) Epoch {
 // GetFirstEpoch returns the epoch where the first update should be located
 // based on what time it is now.
 func GetFirstEpoch(now uint64) Epoch {
-	return Epoch{Level: highestLevel, Time: getBaseTime(now, highestLevel+1)}
+	return Epoch{Level: highestLevel, Time: now}
 }
 
 // Lookup finds the update with the highest timestamp that is smaller or equal than 'now'
