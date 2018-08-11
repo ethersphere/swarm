@@ -126,7 +126,7 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Epoch.BaseTime != 0 || request.Epoch.Level != 24 {
+	if request.Epoch.Base() != 0 || request.Epoch.Level != 24 {
 		t.Fatal("Suggested epoch BaseTime should be 0 and Epoch level should be 24")
 	}
 
@@ -178,8 +178,8 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Epoch.BaseTime != 0 || request.Epoch.Level != 22 {
-		t.Fatalf("Expected epoch base time to be %d, got %d. Expected epoch level to be %d, got %d", 0, request.Epoch.BaseTime, 22, request.Epoch.Level)
+	if request.Epoch.Base() != 0 || request.Epoch.Level != 22 {
+		t.Fatalf("Expected epoch base time to be %d, got %d. Expected epoch level to be %d, got %d", 0, request.Epoch.Base(), 22, request.Epoch.Level)
 	}
 	data = []byte(updates[3])
 	request.SetData(data)
@@ -218,10 +218,10 @@ func TestResourceHandler(t *testing.T) {
 	if rsrc2.Level != 22 {
 		t.Fatalf("resource epoch level was %d, expected 22", rsrc2.Level)
 	}
-	if rsrc2.BaseTime != 0 {
-		t.Fatalf("resource epoch base time was %d, expected 0", rsrc2.BaseTime)
+	if rsrc2.Base() != 0 {
+		t.Fatalf("resource epoch base time was %d, expected 0", rsrc2.Base())
 	}
-	log.Debug("Latest lookup", "epoch base time", rsrc2.BaseTime, "epoch level", rsrc2.Level, "data", rsrc2.data)
+	log.Debug("Latest lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
 	// specific point in time
 	rsrc, err := rh2.Lookup(ctx, NewLookupParams(&request.View, startTime.Time+3*resourceFrequency))
@@ -232,7 +232,7 @@ func TestResourceHandler(t *testing.T) {
 	if !bytes.Equal(rsrc.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
-	log.Debug("Historical lookup", "epoch base time", rsrc2.BaseTime, "epoch level", rsrc2.Level, "data", rsrc2.data)
+	log.Debug("Historical lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 	/*
 		// specific period, specific version
 		lookupParams := LookupVersion(&request.View, 3, 1)
@@ -323,11 +323,9 @@ func TestSparseUpdates(t *testing.T) {
 		lastUpdateTime = T
 	}
 
-	lp := LookupParams{}
-	lp.View = view
-	lp.Time = today
+	lp := NewLookupParams(&view, today)
 
-	_, err = rh.Lookup(ctx, &lp)
+	_, err = rh.Lookup(ctx, lp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -346,7 +344,7 @@ func TestSparseUpdates(t *testing.T) {
 
 	lp.Time = 35*Year + 6*Month
 
-	_, err = rh.Lookup(ctx, &lp)
+	_, err = rh.Lookup(ctx, lp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -459,7 +457,7 @@ func TestValidatorInStore(t *testing.T) {
 
 	// create a resource update chunk with correct publickey
 	updateLookup := UpdateLookup{
-		Epoch: lookup.Epoch{BaseTime: 42,
+		Epoch: lookup.Epoch{Time: 42,
 			Level: 1,
 		},
 		View: view,

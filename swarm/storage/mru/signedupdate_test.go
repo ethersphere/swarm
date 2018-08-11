@@ -2,7 +2,6 @@ package mru
 
 import (
 	"bytes"
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -48,11 +47,9 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 		t.Fatalf("error creating update chunk:%s", err)
 	}
 
-	compareByteSliceToExpectedHex(t, "chunk", chunk.SData, "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c190000000000000000416c206269656e206861636572206a616dc3a173206c652066616c7461207072656d696f95cafc0f5f8a587cb8aa96c00ab023dc196b14dc704801b981b9cf38b745ef765a8a02a26fa3a16b72b907a8cc53ad58782de6403552bac069e089b6af260c3801")
+	compareByteSliceToExpectedHex(t, "chunk", chunk.SData, "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c0000000000000019416c206269656e206861636572206a616dc3a173206c652066616c7461207072656d696f52c3face89e9440d46d914c77c57e2b1f69b46b9319f31977368f4bb1cffb4dc7ed6cf70a765fcfb3ca1925f1749ed626a8b8a50e7d6fb62194310c6c7a45e6400")
 
 	var recovered Request
-	l := len(chunk.SData)
-	fmt.Println(l)
 	recovered.fromChunk(chunk.Addr, chunk.SData)
 	if !reflect.DeepEqual(recovered, r) {
 		t.Fatal("Expected recovered SignedResource update to equal the original one")
@@ -63,8 +60,8 @@ func TestUpdateChunkSerializationErrorChecking(t *testing.T) {
 func TestReverse(t *testing.T) {
 
 	epoch := lookup.Epoch{
-		BaseTime: 4,
-		Level:    2,
+		Time:  7888,
+		Level: 6,
 	}
 
 	// make fake timeProvider

@@ -133,10 +133,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 	updateRequest = new(Request)
 
 	// check if there is already an update
-	lp := new(LookupParams)
-	lp.Epoch = lookup.NoClue
-	lp.Time = now
-	lp.View = *view
+	lp := NewLookupParams(view, now)
 
 	rsrc, err := h.lookup(lp)
 	if err != nil {
@@ -166,12 +163,12 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 // When looking for the latest update, it starts at the next period after the current time.
 // upon failure tries the corresponding keys of each previous period until one is found
 // (or startTime is reached, in which case there are no updates).
-func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*cacheEntry, error) {
+func (h *Handler) Lookup(ctx context.Context, params *UpdateLookup) (*cacheEntry, error) {
 	return h.lookup(params)
 }
 
 // base code for public lookup methods
-func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
+func (h *Handler) lookup(params *UpdateLookup) (*cacheEntry, error) {
 
 	lp := *params
 
@@ -222,7 +219,7 @@ func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, er
 	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
 		return nil, err
 	}
-	log.Trace("resource cache update", "topic", view.Topic.Hex(), "updatekey", chunk.Addr, "epoch base time", r.Epoch.BaseTime, "epoch level", r.Epoch.Level)
+	log.Trace("resource cache update", "topic", view.Topic.Hex(), "updatekey", chunk.Addr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level)
 
 	rsrc := h.get(view)
 	if rsrc == nil {
@@ -256,7 +253,7 @@ func (h *Handler) update(ctx context.Context, r *Request) (updateAddr storage.Ad
 	}
 
 	rsrc := h.get(&r.View)
-	if rsrc != nil && rsrc.Epoch == r.Epoch { // This is the only cheap check we can do for sure
+	if rsrc != nil && rsrc.Epoch.Equals(r.Epoch) { // This is the only cheap check we can do for sure
 		return nil, NewError(ErrInvalidValue, "A former update in this epoch is already known to exist")
 	}
 
@@ -267,7 +264,7 @@ func (h *Handler) update(ctx context.Context, r *Request) (updateAddr storage.Ad
 
 	// send the chunk
 	h.chunkStore.Put(ctx, chunk)
-	log.Trace("resource update", "updateAddr", r.updateAddr, "epoch base time", r.Epoch.BaseTime, "epoch level", r.Epoch.Level, "data", chunk.SData)
+	log.Trace("resource update", "updateAddr", r.updateAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", chunk.SData)
 	// update our resources map cache entry if the new update is older than the one we have, if we have it.
 	if rsrc != nil && r.Epoch.LaterThan(rsrc.Epoch) {
 		rsrc.Epoch = r.Epoch

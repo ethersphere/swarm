@@ -31,7 +31,7 @@ import (
 type updateRequestJSON struct {
 	View      *View  `json:"view"`
 	Level     uint8  `json:"level,omitempty"`
-	BaseTime  uint64 `json:"baseTime,omitempty"`
+	Time      uint64 `json:"time,omitempty"`
 	Data      string `json:"data,omitempty"`
 	Signature string `json:"signature,omitempty"`
 }
@@ -65,7 +65,7 @@ func (r *Request) IsUpdate() bool {
 // fromJSON takes an update request JSON and populates an UpdateRequest
 func (r *Request) fromJSON(j *updateRequestJSON) error {
 
-	r.BaseTime = j.BaseTime
+	r.Time = j.Time
 	r.Level = j.Level
 	r.View = *j.View
 
@@ -134,7 +134,7 @@ func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	requestJSON := &updateRequestJSON{
 		View:      &r.View,
 		Level:     r.Level,
-		BaseTime:  r.BaseTime,
+		Time:      r.Time,
 		Data:      dataString,
 		Signature: signatureString,
 	}

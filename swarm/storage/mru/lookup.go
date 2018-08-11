@@ -17,24 +17,14 @@
 package mru
 
 import (
-	"encoding/binary"
 	"fmt"
 	"hash"
-	"net/url"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
-
-// LookupParams is used to specify constraints when performing an update lookup
-// Limit defines whether or not the lookup should be limited
-// If Limit is set to true then Max defines the amount of hops that can be performed
-type LookupParams struct {
-	UpdateLookup        // last known epoch/level. 0 means no guessing
-	Time         uint64 // Find updates with a timestamp <= Time. 0 means now (find latest)
-}
 
 // Values interface represents a string key-value store
 // useful for building query strings
@@ -43,36 +33,21 @@ type Values interface {
 	Set(key, value string)
 }
 
-// FromValues deserializes this instance from a string key-value store
-// useful to parse query strings
-func (lp *LookupParams) FromValues(values Values, parseView bool) error {
-	lp.Time, _ = strconv.ParseUint(values.Get("time"), 10, 64)
-	return lp.UpdateLookup.FromValues(values, parseView)
-}
-
-// ToValues serializes this structure into the provided string key-value store
-// useful to build query strings
-func (lp *LookupParams) ToValues(values url.Values) {
-	values.Set("time", fmt.Sprintf("%d", lp.Time))
-	lp.UpdateLookup.ToValues(values)
-}
-
 // NewLookupParams constructs a LookupParams structure with the provided lookup parameters
-func NewLookupParams(view *View, time uint64) *LookupParams {
-	return &LookupParams{
-		UpdateLookup: UpdateLookup{
-			View: *view,
-		},
-		Time: time,
+func NewLookupParams(view *View, time uint64) *UpdateLookup {
+	return &UpdateLookup{
+		View:  *view,
+		Epoch: lookup.Hint(time),
 	}
 }
 
 // LookupLatest generates lookup parameters that look for the latest version of a resource
-func LookupLatest(view *View) *LookupParams {
+func LookupLatest(view *View) *UpdateLookup {
 	return NewLookupParams(view, 0)
 }
 
-// UpdateLookup represents the components of a resource update search key.Version
+// UpdateLookup represents the components of a resource update search key.
+// it is also used to specify constraints when performing an update lookup
 type UpdateLookup struct {
 	View
 	lookup.Epoch
@@ -88,7 +63,13 @@ const updateLookupLength = viewLength + lookup.EpochLength
 // UpdateAddr calculates the resource update chunk address corresponding to this lookup key
 func (u *UpdateLookup) UpdateAddr() (updateAddr storage.Address) {
 	serializedData := make([]byte, updateLookupLength)
-	u.binaryPut(serializedData)
+	var cursor int
+	u.View.binaryPut(serializedData[cursor : cursor+viewLength])
+	cursor += viewLength
+
+	eid := u.Epoch.ID()
+	copy(serializedData[cursor:cursor+lookup.EpochLength], eid[:])
+
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
@@ -107,11 +88,12 @@ func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 	}
 	cursor += viewLength
 
-	serializedData[cursor] = u.Epoch.Level
-	cursor++
-
-	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+8], u.Epoch.BaseTime)
-	cursor += 8
+	epochBytes, err := u.Epoch.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	copy(serializedData[cursor:cursor+lookup.EpochLength], epochBytes[:])
+	cursor += lookup.EpochLength
 
 	return nil
 }
@@ -133,11 +115,10 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	}
 	cursor += viewLength
 
-	u.Level = serializedData[cursor]
-	cursor++
-
-	u.BaseTime = binary.LittleEndian.Uint64(serializedData[cursor : cursor+8])
-	cursor += 8
+	if err := u.Epoch.UnmarshalBinary(serializedData[cursor : cursor+lookup.EpochLength]); err != nil {
+		return err
+	}
+	cursor += lookup.EpochLength
 
 	return nil
 }
@@ -146,8 +127,8 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 // useful to parse query strings
 func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
 	level, _ := strconv.ParseUint(values.Get("level"), 10, 32)
-	u.Level = uint8(level)
-	u.BaseTime, _ = strconv.ParseUint(values.Get("basetime"), 10, 64)
+	u.Epoch.Level = uint8(level)
+	u.Epoch.Time, _ = strconv.ParseUint(values.Get("time"), 10, 64)
 
 	if parseView {
 		return u.View.FromValues(values)
@@ -158,7 +139,7 @@ func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
 // ToValues serializes this structure into the provided string key-value store
 // useful to build query strings
 func (u *UpdateLookup) ToValues(values Values) {
-	values.Set("level", fmt.Sprintf("%d", u.Level))
-	values.Set("basetime", fmt.Sprintf("%d", u.Epoch))
+	values.Set("level", fmt.Sprintf("%d", u.Epoch.Level))
+	values.Set("time", fmt.Sprintf("%d", u.Epoch.Time))
 	u.View.ToValues(values)
 }
