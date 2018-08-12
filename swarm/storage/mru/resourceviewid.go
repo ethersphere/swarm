@@ -11,22 +11,14 @@ import (
 
 // View represents a particular user's view of a resource
 type View struct {
-	Resource `json:"resource"`
-	User     common.Address `json:"user"`
+	Topic Topic          `json:"topic"`
+	User  common.Address `json:"user"`
 }
 
 // View layout:
-// ResourceLength bytes
+// TopicLength bytes
 // userAddr common.AddressLength bytes
-const viewLength = ResourceLength + common.AddressLength
-
-// NewView build a new resource "point of view" out of the provided resource and user
-func NewView(resource *Resource, user common.Address) *View {
-	return &View{
-		Resource: *resource,
-		User:     user,
-	}
-}
+const viewLength = TopicLength + common.AddressLength
 
 // mapKey calculates a unique id for this view for the cache map in `Handler`
 func (u *View) mapKey() uint64 {
@@ -46,10 +38,8 @@ func (u *View) binaryPut(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize View. Expected %d, got %d", viewLength, len(serializedData))
 	}
 	var cursor int
-	if err := u.Resource.binaryPut(serializedData[cursor : cursor+ResourceLength]); err != nil {
-		return err
-	}
-	cursor += ResourceLength
+	copy(serializedData[cursor:cursor+TopicLength], u.Topic.content[:TopicLength])
+	cursor += TopicLength
 
 	copy(serializedData[cursor:cursor+common.AddressLength], u.User[:])
 	cursor += common.AddressLength
@@ -69,10 +59,8 @@ func (u *View) binaryGet(serializedData []byte) error {
 	}
 
 	var cursor int
-	if err := u.Resource.binaryGet(serializedData[cursor : cursor+ResourceLength]); err != nil {
-		return err
-	}
-	cursor += ResourceLength
+	copy(u.Topic.content[:], serializedData[cursor:cursor+TopicLength])
+	cursor += TopicLength
 
 	copy(u.User[:], serializedData[cursor:cursor+common.AddressLength])
 	cursor += common.AddressLength

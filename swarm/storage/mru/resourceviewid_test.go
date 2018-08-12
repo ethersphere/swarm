@@ -21,8 +21,8 @@ import (
 
 func getTestResourceView() *View {
 	return &View{
-		Resource: *getTestResourceID(),
-		User:     newCharlieSigner().Address(),
+		Topic: NewTopic("world news report, every hour", nil),
+		User:  newCharlieSigner().Address(),
 	}
 }
 
@@ -31,5 +31,5 @@ func TestViewSerializerDeserializer(t *testing.T) {
 }
 
 func TestMetadataSerializerLengthCheck(t *testing.T) {
-	testBinarySerializerLengthCheck(t, getTestResourceID())
+	testBinarySerializerLengthCheck(t, getTestResourceView())
 }

@@ -39,14 +39,14 @@ type updateRequestJSON struct {
 var zeroAddr = common.Address{}
 
 // NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
-func NewCreateUpdateRequest(resource *Resource) *Request {
+func NewCreateUpdateRequest(topic Topic) *Request {
 
 	request := new(Request)
 
 	// get the current time
 	now := TimestampProvider.Now().Time
 	request.Epoch = lookup.GetFirstEpoch(now)
-	request.View.Resource = *resource
+	request.View.Topic = topic
 
 	return request
 }

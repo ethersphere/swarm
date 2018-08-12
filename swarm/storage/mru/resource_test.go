@@ -87,13 +87,11 @@ func TestResourceHandler(t *testing.T) {
 	defer cancel()
 
 	view := View{
-		Resource: Resource{
-			Topic: NewTopic("Mess with mru code and see what ghost catches you", nil),
-		},
-		User: signer.Address(),
+		Topic: NewTopic("Mess with mru code and see what ghost catches you", nil),
+		User:  signer.Address(),
 	}
 
-	request := NewCreateUpdateRequest(&view.Resource)
+	request := NewCreateUpdateRequest(view.Topic)
 
 	request.Sign(signer)
 	if err != nil {
@@ -297,10 +295,8 @@ func TestSparseUpdates(t *testing.T) {
 	defer cancel()
 
 	view := View{
-		Resource: Resource{
-			Topic: NewTopic("Very slow updates", nil),
-		},
-		User: signer.Address(),
+		Topic: NewTopic("Very slow updates", nil),
+		User:  signer.Address(),
 	}
 
 	// publish one update every 5 years since Unix 0 until today
@@ -308,7 +304,7 @@ func TestSparseUpdates(t *testing.T) {
 	var epoch lookup.Epoch
 	var lastUpdateTime uint64
 	for T := uint64(0); T < today; T += 5 * Year {
-		request := NewCreateUpdateRequest(&view.Resource)
+		request := NewCreateUpdateRequest(view.Topic)
 		request.Epoch = lookup.GetNextEpoch(epoch, T)
 		request.data = generateData(T) // this generates some data that depends on T, so we can check later
 		request.Sign(signer)
@@ -378,12 +374,10 @@ func TestValidator(t *testing.T) {
 
 	// create new resource
 	view := View{
-		Resource: Resource{
-			Topic: NewTopic(resourceName, nil),
-		},
-		User: signer.Address(),
+		Topic: NewTopic(resourceName, nil),
+		User:  signer.Address(),
 	}
-	mr := NewCreateUpdateRequest(&view.Resource)
+	mr := NewCreateUpdateRequest(view.Topic)
 
 	// chunk with address
 	data := []byte("foo")
@@ -449,10 +443,8 @@ func TestValidatorInStore(t *testing.T) {
 	badChunk.SData = goodChunk.SData
 
 	view := View{
-		Resource: Resource{
-			Topic: NewTopic("xyzzy", nil),
-		},
-		User: signer.Address(),
+		Topic: NewTopic("xyzzy", nil),
+		User:  signer.Address(),
 	}
 
 	// create a resource update chunk with correct publickey

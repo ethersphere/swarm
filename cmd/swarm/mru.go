@@ -52,11 +52,9 @@ func resourceCreate(ctx *cli.Context) {
 
 	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
 
-	resource := &mru.Resource{
-		Topic: mru.NewTopic(name, relatedTopicBytes),
-	}
+	topic := mru.NewTopic(name, relatedTopicBytes)
 
-	newResourceRequest := mru.NewCreateUpdateRequest(resource)
+	newResourceRequest := mru.NewCreateUpdateRequest(topic)
 	if initialData != "" {
 		initialDataBytes, err := hexutil.Decode(initialData)
 		if err != nil {

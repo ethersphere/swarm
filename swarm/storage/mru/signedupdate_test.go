@@ -80,10 +80,8 @@ func TestReverse(t *testing.T) {
 	defer teardownTest()
 
 	view := View{
-		Resource: Resource{
-			Topic: NewTopic("Cervantes quotes", nil),
-		},
-		User: signer.Address(),
+		Topic: NewTopic("Cervantes quotes", nil),
+		User:  signer.Address(),
 	}
 
 	data := []byte("Donde una puerta se cierra, otra se abre")

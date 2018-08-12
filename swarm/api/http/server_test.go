@@ -139,9 +139,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	updateRequest := mru.NewCreateUpdateRequest(&mru.Resource{
-		Topic: mru.NewTopic("foo.eth", nil),
-	})
+	updateRequest := mru.NewCreateUpdateRequest(mru.NewTopic("foo.eth", nil))
 
 	updateRequest.SetData(mh)
 
@@ -178,7 +176,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "c2e0d89bf6b0295faf6f1bf0cabadd2851a4596e58605a6b71eac08650c05317"
+	correctManifestAddrHex := "6ef40ba1492cf2a029dc9a8b5896c822cf689d3cd010842f4f1744e6db8824bd"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -219,9 +217,7 @@ func TestBzzResource(t *testing.T) {
 	//data for update 2
 	update2Data := []byte("foo")
 
-	updateRequest := mru.NewCreateUpdateRequest(&mru.Resource{
-		Topic: mru.NewTopic("foo.eth", nil),
-	})
+	updateRequest := mru.NewCreateUpdateRequest(mru.NewTopic("foo.eth", nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -259,7 +255,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "c2e0d89bf6b0295faf6f1bf0cabadd2851a4596e58605a6b71eac08650c05317"
+	correctManifestAddrHex := "6ef40ba1492cf2a029dc9a8b5896c822cf689d3cd010842f4f1744e6db8824bd"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
