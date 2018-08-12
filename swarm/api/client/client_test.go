@@ -394,14 +394,10 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 	// our mutable resource "name"
 	resourceName := "foo.eth"
 
-	createRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
-		Topic:     mru.NewTopic(resourceName, nil),
-		Frequency: 13,
-		StartTime: srv.GetCurrentTime(),
+	createRequest := mru.NewCreateUpdateRequest(&mru.Resource{
+		Topic: mru.NewTopic(resourceName, nil),
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	createRequest.SetData(mh)
 	if err := createRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
@@ -413,7 +409,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 		t.Fatalf("Error creating resource: %s", err)
 	}
 
-	correctManifestAddrHex := "36651b0613c3fbdba7b83175e282dd2b1b4842c884b794da01ab4b4b14d80179"
+	correctManifestAddrHex := "c2e0d89bf6b0295faf6f1bf0cabadd2851a4596e58605a6b71eac08650c05317"
 	if resourceManifestHash != correctManifestAddrHex {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
@@ -448,14 +444,10 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	// our mutable resource name
 	resourceName := "El Quijote"
 	resourceID := &mru.Resource{
-		Topic:     mru.NewTopic(resourceName, nil),
-		Frequency: 13,
-		StartTime: srv.GetCurrentTime(),
+		Topic: mru.NewTopic(resourceName, nil),
 	}
-	createRequest, err := mru.NewCreateUpdateRequest(resourceID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	createRequest := mru.NewCreateUpdateRequest(resourceID)
+
 	createRequest.SetData(databytes)
 	if err := createRequest.Sign(signer); err != nil {
 		t.Fatalf("Error signing update: %s", err)
@@ -463,7 +455,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	resourceManifestHash, err := client.CreateResource(createRequest)
 
-	correctManifestAddrHex := "db81418f37cc98aa4509a4f5556b00d703f81f1d36e038fa4267251635cf9979"
+	correctManifestAddrHex := "01b2be84131b9851974af5c97c0dc69d37433d6938a903088074db06f008647a"
 	if resourceManifestHash != correctManifestAddrHex {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
