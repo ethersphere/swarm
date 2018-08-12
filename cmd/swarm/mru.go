@@ -43,32 +43,15 @@ func resourceCreate(ctx *cli.Context) {
 	var (
 		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		client       = swarm.NewClient(bzzapi)
-		initialData  = ctx.String(SwarmResourceDataOnCreateFlag.Name)
 		name         = ctx.String(SwarmResourceNameFlag.Name)
 		relatedTopic = ctx.String(SwarmResourceTopicFlag.Name)
 	)
 
-	signer := NewGenericSigner(ctx)
-
 	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
-
 	topic := mru.NewTopic(name, relatedTopicBytes)
 
 	newResourceRequest := mru.NewCreateUpdateRequest(topic)
-	if initialData != "" {
-		initialDataBytes, err := hexutil.Decode(initialData)
-		if err != nil {
-			fmt.Printf("Error parsing data: %s\n", err.Error())
-			cli.ShowCommandHelpAndExit(ctx, "create", 1)
-			return
-		}
-		newResourceRequest.SetData(initialDataBytes)
-		if err := newResourceRequest.Sign(signer); err != nil {
-			utils.Fatalf("Error signing resource update: %s", err.Error())
-		}
-	} else {
-		newResourceRequest.View.User = signer.Address()
-	}
+	newResourceRequest.View.User = resourceGetUser(ctx)
 
 	manifestAddress, err := client.CreateResource(newResourceRequest)
 	if err != nil {
@@ -95,6 +78,7 @@ func resourceUpdate(ctx *cli.Context) {
 		cli.ShowCommandHelpAndExit(ctx, "update", 1)
 		return
 	}
+
 	signer := NewGenericSigner(ctx)
 
 	data, err := hexutil.Decode(args[0])
@@ -141,7 +125,6 @@ func resourceInfo(ctx *cli.Context) {
 		name                    = ctx.String(SwarmResourceNameFlag.Name)
 		relatedTopic            = ctx.String(SwarmResourceTopicFlag.Name)
 		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
-		user                    = ctx.String(SwarmResourceUserFlag.Name)
 	)
 
 	var lookup *mru.UpdateLookup
@@ -149,17 +132,7 @@ func resourceInfo(ctx *cli.Context) {
 		relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
 		lookup = new(mru.UpdateLookup)
 		lookup.Topic = mru.NewTopic(name, relatedTopicBytes)
-		if user == "" {
-			bzzconfig, err := buildConfig(ctx)
-			if err != nil {
-				utils.Fatalf("Error reading configuration")
-			}
-			user = bzzconfig.BzzAccount
-			if user == "" {
-				utils.Fatalf("Must specify --user or --bzzaccount")
-			}
-		}
-		lookup.User = common.HexToAddress(user)
+		lookup.User = resourceGetUser(ctx)
 	}
 
 	metadata, err := client.GetResourceMetadata(lookup, manifestAddressOrDomain)
@@ -172,4 +145,19 @@ func resourceInfo(ctx *cli.Context) {
 		utils.Fatalf("Error encoding metadata to JSON for display:%s", err)
 	}
 	fmt.Println(string(encodedMetadata))
+}
+
+func resourceGetUser(ctx *cli.Context) common.Address {
+	var user = ctx.String(SwarmResourceUserFlag.Name)
+	if user == "" {
+		bzzconfig, err := buildConfig(ctx)
+		if err != nil {
+			utils.Fatalf("Error reading configuration")
+		}
+		user = bzzconfig.BzzAccount
+		if user == "" {
+			utils.Fatalf("Must specify --user or --bzzaccount")
+		}
+	}
+	return common.HexToAddress(user)
 }

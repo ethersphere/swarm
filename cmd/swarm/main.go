@@ -204,10 +204,6 @@ var (
 		Name:  "topic",
 		Usage: "User-defined topic this resource is tracking, hex encoded. Limited to 64 hexadecimal characters",
 	}
-	SwarmResourceDataOnCreateFlag = cli.StringFlag{
-		Name:  "data",
-		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
-	}
 	SwarmResourceManifestFlag = cli.StringFlag{
 		Name:  "manifest",
 		Usage: "Refers to the resource through a manifest",
@@ -336,11 +332,13 @@ func init() {
 					CustomHelpTemplate: helpTemplate,
 					Name:               "create",
 					Usage:              "creates and publishes a new Mutable Resource manifest",
-					Description: `creates and publishes a new Mutable Resource manifest about a particular topic.
+					Description: `creates and publishes a new Mutable Resource manifest pointing to a specified user's updates about a particular topic.
 					The topic can be specified directly with the --topic flag as an hex string
 					If no topic is specified, the default topic (zero) will be used
-					The --name flag can be used to specify subtopics with a specific name`,
-					Flags: []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceTopicFlag},
+					The --name flag can be used to specify subtopics with a specific name
+					The --user flag allows to have this manifest refer to a user other than yourself. If not specified,
+					it will then default to your local account (--bzzaccount)`,
+					Flags: []cli.Flag{SwarmResourceNameFlag, SwarmResourceTopicFlag, SwarmResourceUserFlag},
 				},
 				{
 					Action:             resourceUpdate,
@@ -348,7 +346,7 @@ func init() {
 					Name:               "update",
 					Usage:              "updates the content of an existing Mutable Resource",
 					ArgsUsage:          "<0x Hex data>",
-					Description: `updates the content of an existing Mutable Resource
+					Description: `creates a new update on the specified topic
 					The topic can be specified directly with the --topic flag as an hex string
 					If no topic is specified, the default topic (zero) will be used
 					The --name flag can be used to specify subtopics with a specific name.
