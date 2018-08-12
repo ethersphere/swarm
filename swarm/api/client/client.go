@@ -655,27 +655,23 @@ func (c *Client) updateResource(request *mru.Request, createManifest bool) (io.R
 // GetResource returns a byte stream with the raw content of the resource
 // manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResource(manifestAddressOrDomain string) (io.ReadCloser, error) {
+func (c *Client) GetResource(lookup *mru.UpdateLookup, manifestAddressOrDomain string) (io.ReadCloser, error) {
+	return c.getResource(lookup, manifestAddressOrDomain, false)
+}
+
+func (c *Client) getResource(lookup *mru.UpdateLookup, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
 	}
 	URL.Path = "/bzz-resource:/" + manifestAddressOrDomain
-	res, err := http.Get(URL.String())
-	if err != nil {
-		return nil, err
-	}
-	return res.Body, nil
-}
-
-func (c *Client) QueryResource(lookup *mru.UpdateLookup) (io.ReadCloser, error) {
-	URL, err := url.Parse(c.Gateway)
-	if err != nil {
-		return nil, err
-	}
-	URL.Path = "/bzz-resource:/"
 	values := URL.Query()
-	lookup.ToValues(values) //adds query parameters
+	if lookup != nil {
+		lookup.ToValues(values) //adds query parameters
+	}
+	if meta {
+		values.Set("meta", "1")
+	}
 	URL.RawQuery = values.Encode()
 	res, err := http.Get(URL.String())
 	if err != nil {
@@ -687,9 +683,9 @@ func (c *Client) QueryResource(lookup *mru.UpdateLookup) (io.ReadCloser, error) 
 // GetResourceMetadata returns a structure that describes the Mutable Resource
 // manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResourceMetadata(manifestAddressOrDomain string) (*mru.Request, error) {
+func (c *Client) GetResourceMetadata(lookup *mru.UpdateLookup, manifestAddressOrDomain string) (*mru.Request, error) {
 
-	responseStream, err := c.GetResource(manifestAddressOrDomain + "/meta")
+	responseStream, err := c.getResource(lookup, manifestAddressOrDomain, true)
 	if err != nil {
 		return nil, err
 	}

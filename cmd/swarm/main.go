@@ -198,15 +198,23 @@ var (
 	}
 	SwarmResourceNameFlag = cli.StringFlag{
 		Name:  "name",
-		Usage: "User-defined name for the new resource",
+		Usage: "User-defined name for the new resource, limited to 32 characters. If combined with topic, the resource will be a subtopic with this name",
 	}
 	SwarmResourceTopicFlag = cli.StringFlag{
 		Name:  "topic",
-		Usage: "User-defined topic this resource is tracking",
+		Usage: "User-defined topic this resource is tracking, hex encoded. Limited to 64 hexadecimal characters",
 	}
 	SwarmResourceDataOnCreateFlag = cli.StringFlag{
 		Name:  "data",
 		Usage: "Initializes the resource with the given hex-encoded data. Data must be prefixed by 0x",
+	}
+	SwarmResourceManifestFlag = cli.StringFlag{
+		Name:  "manifest",
+		Usage: "Refers to the resource through a manifest",
+	}
+	SwarmResourceUserFlag = cli.StringFlag{
+		Name:  "user",
+		Usage: "Indicates the user who updates the resource",
 	}
 )
 
@@ -327,26 +335,41 @@ func init() {
 					Action:             resourceCreate,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "create",
-					Usage:              "creates a new Mutable Resource",
-					ArgsUsage:          "<frequency>",
-					Description:        "creates a new Mutable Resource",
-					Flags:              []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceTopicFlag},
+					Usage:              "creates and publishes a new Mutable Resource manifest",
+					Description: `creates and publishes a new Mutable Resource manifest about a particular topic.
+					The topic can be specified directly with the --topic flag as an hex string
+					If no topic is specified, the default topic (zero) will be used
+					The --name flag can be used to specify subtopics with a specific name`,
+					Flags: []cli.Flag{SwarmResourceNameFlag, SwarmResourceDataOnCreateFlag, SwarmResourceTopicFlag},
 				},
 				{
 					Action:             resourceUpdate,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "update",
 					Usage:              "updates the content of an existing Mutable Resource",
-					ArgsUsage:          "<Manifest Address or ENS domain> <0x Hex data>",
-					Description:        "updates the content of an existing Mutable Resource",
+					ArgsUsage:          "<0x Hex data>",
+					Description: `updates the content of an existing Mutable Resource
+					The topic can be specified directly with the --topic flag as an hex string
+					If no topic is specified, the default topic (zero) will be used
+					The --name flag can be used to specify subtopics with a specific name.
+					If you have a manifest, you can specify it with --manifest instead of --topic / --name
+					to refer to the resource`,
+					Flags: []cli.Flag{SwarmResourceManifestFlag, SwarmResourceNameFlag, SwarmResourceTopicFlag},
 				},
 				{
 					Action:             resourceInfo,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "info",
 					Usage:              "obtains information about an existing Mutable Resource",
-					ArgsUsage:          "<Manifest Address or ENS domain>",
-					Description:        "obtains information about an existing Mutable Resource",
+					Description: `obtains information about an existing Mutable Resource
+					The topic can be specified directly with the --topic flag as an hex string
+					If no topic is specified, the default topic (zero) will be used
+					The --name flag can be used to specify subtopics with a specific name.
+					The --user flag allows to refer to a user other than yourself. If not specified,
+					it will then default to your local account (--bzzaccount)
+					If you have a manifest, you can specify it with --manifest instead of --topic / --name / ---user
+					to refer to the resource`,
+					Flags: []cli.Flag{SwarmResourceManifestFlag, SwarmResourceNameFlag, SwarmResourceTopicFlag, SwarmResourceUserFlag},
 				},
 			},
 		},

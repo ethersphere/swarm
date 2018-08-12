@@ -581,7 +581,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// determine if the query specifies period and version or it is a metadata query
-	if uri.Path == "meta" {
+	if r.URL.Query().Get("meta") == "1" {
 		unsignedUpdateRequest, err := s.api.ResourceNewRequest(r.Context(), view)
 		if err != nil {
 			getFail.Inc(1)

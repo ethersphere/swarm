@@ -191,7 +191,7 @@ func (h *Handler) lookup(params *UpdateLookup) (*cacheEntry, error) {
 	}
 	time := lp.Time
 
-	requestPtr, err := lookup.Lookup(lp.Time, params.Epoch, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+	requestPtr, err := lookup.Lookup(lp.Time, lp.Epoch, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
 		lp.Epoch = epoch
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), lp.UpdateAddr(), defaultRetrieveTimeout)
 		if err != nil { // TODO: check for catastrophic errors other than chunk not found

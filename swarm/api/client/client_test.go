@@ -414,7 +414,7 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
 
-	reader, err := client.GetResource(correctManifestAddrHex)
+	reader, err := client.GetResource(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)
 	}
@@ -460,7 +460,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
 
-	reader, err := client.GetResource(correctManifestAddrHex)
+	reader, err := client.GetResource(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)
 	}
@@ -476,7 +476,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	// define different data
 	databytes = []byte("... no ha mucho tiempo que vivía un hidalgo de los de lanza en astillero ...")
 
-	updateRequest, err := client.GetResourceMetadata(correctManifestAddrHex)
+	updateRequest, err := client.GetResourceMetadata(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving update request template: %s", err)
 	}
@@ -490,7 +490,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		t.Fatalf("Error updating resource: %s", err)
 	}
 
-	reader, err = client.GetResource(correctManifestAddrHex)
+	reader, err = client.GetResource(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)
 	}
@@ -507,7 +507,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 
 	view := mru.NewView(resourceID, signer.Address())
 	lookupParams := mru.LookupLatest(view)
-	reader, err = client.QueryResource(lookupParams)
+	reader, err = client.GetResource(lookupParams, "")
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)
 	}

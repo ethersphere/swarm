@@ -345,7 +345,7 @@ func TestBzzResource(t *testing.T) {
 
 	// 1.- get metadata about this resource
 	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(testBzzResUrl + "meta")
+	resp, err = http.Get(testBzzResUrl + "?meta=1")
 	if err != nil {
 		t.Fatal(err)
 	}

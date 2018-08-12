@@ -5,7 +5,7 @@ const maxuint64 = ^uint64(0)
 const lowestLevel uint8 = 0 // 0
 const numLevels uint8 = 26  //5
 const highestLevel = lowestLevel + numLevels - 1
-const defaultLevel = uint8((lowestLevel + numLevels) / 2)
+const defaultLevel = highestLevel
 
 const filterMask = (maxuint64 >> (64 - numLevels)) << lowestLevel
 

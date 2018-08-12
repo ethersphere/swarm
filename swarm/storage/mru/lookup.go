@@ -36,8 +36,10 @@ type Values interface {
 // NewLookupParams constructs a LookupParams structure with the provided lookup parameters
 func NewLookupParams(view *View, time uint64) *UpdateLookup {
 	return &UpdateLookup{
-		View:  *view,
-		Epoch: lookup.Hint(time),
+		View: *view,
+		Epoch: lookup.Epoch{
+			Time: time,
+		},
 	}
 }
 

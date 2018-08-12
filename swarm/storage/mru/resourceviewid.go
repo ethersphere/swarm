@@ -98,10 +98,13 @@ func (u *View) FromValues(values Values) error {
 	} else { // see if the user set name and relatedcontent
 		name := values.Get("name")
 		relatedContent, _ := hexutil.Decode(values.Get("relatedcontent"))
-		if len(relatedContent) > 0 && len(relatedContent) < storage.KeyLength {
-			return NewErrorf(ErrInvalidValue, "relatedcontent field must be a hex-encoded byte array exactly %d bytes long", storage.KeyLength)
+		if len(relatedContent) > 0 {
+			if len(relatedContent) < storage.KeyLength {
+				return NewErrorf(ErrInvalidValue, "relatedcontent field must be a hex-encoded byte array exactly %d bytes long", storage.KeyLength)
+			}
+			relatedContent = relatedContent[:storage.KeyLength]
 		}
-		u.Topic = NewTopic(name, relatedContent[:storage.KeyLength])
+		u.Topic = NewTopic(name, relatedContent)
 	}
 	u.User = common.HexToAddress(values.Get("user"))
 	return nil
