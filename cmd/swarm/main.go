@@ -391,23 +391,23 @@ func init() {
 			Description:        "Updates a MANIFEST by adding/removing/updating the hash of a path.\nCOMMAND could be: add, update, remove",
 			Subcommands: []cli.Command{
 				{
-					Action:             add,
+					Action:             manifestAdd,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "add",
 					Usage:              "add a new path to the manifest",
-					ArgsUsage:          "<MANIFEST> <path> <hash> [<content-type>]",
+					ArgsUsage:          "<MANIFEST> <path> <hash>",
 					Description:        "Adds a new path to the manifest",
 				},
 				{
-					Action:             update,
+					Action:             manifestUpdate,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "update",
 					Usage:              "update the hash for an already existing path in the manifest",
-					ArgsUsage:          "<MANIFEST> <path> <newhash> [<newcontent-type>]",
+					ArgsUsage:          "<MANIFEST> <path> <newhash>",
 					Description:        "Update the hash for an already existing path in the manifest",
 				},
 				{
-					Action:             remove,
+					Action:             manifestRemove,
 					CustomHelpTemplate: helpTemplate,
 					Name:               "remove",
 					Usage:              "removes a path from the manifest",
