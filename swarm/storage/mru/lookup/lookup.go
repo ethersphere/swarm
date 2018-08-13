@@ -21,7 +21,7 @@ type ReadFunc func(epoch Epoch, now uint64) (interface{}, error)
 var NoClue = Epoch{}
 
 func getBaseTime(t uint64, level uint8) uint64 {
-	return t & ((maxuint64 >> level) << level)
+	return t & (maxuint64 << level)
 }
 
 func Hint(last uint64) Epoch {
@@ -74,6 +74,58 @@ func GetFirstEpoch(now uint64) Epoch {
 // Returns an error only if read() returns an error
 // Returns nil if an update was not found
 func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
+	var lastFound interface{}
+	var last Epoch
+	var epoch Epoch
+	if hint == NoClue {
+		last = Epoch{Time: 0, Level: highestLevel}
+	} else {
+		last = hint
+	}
+	t := now
+
+	for {
+		epoch = GetNextEpoch(last, t)
+		value, err = read(epoch, now)
+		if err != nil {
+			return nil, err
+		}
+		if value != nil {
+			lastFound = value
+			if epoch.Level == lowestLevel || epoch.Equals(last) {
+				return value, nil
+			}
+			last = epoch
+			continue
+		} else {
+			if epoch.Base() == last.Base() {
+				if lastFound != nil {
+					return lastFound, nil
+				}
+				// we have reached the hint itself
+				// check it out
+				value, err = read(last, now)
+				if err != nil {
+					return nil, err
+				}
+				if value != nil {
+					return value, nil
+				}
+				// bad hint.
+				epoch = last
+				last = Epoch{Time: 0, Level: highestLevel}
+			}
+			base := epoch.Base()
+			if base == 0 {
+				return nil, nil
+			}
+			t = base - 1
+		}
+	}
+}
+
+// Lookup2 is a slower alternative lookup algorithm
+func Lookup2(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
 	var lastFound interface{}
 	var baseTimeMin uint64
 	var baseTimeUp = maxuint64

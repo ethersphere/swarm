@@ -126,6 +126,30 @@ func TestLookup(t *testing.T) {
 
 }
 
+func TestOneUpdateAt0(t *testing.T) {
+
+	store := make(Store)
+	readCount := 0
+
+	readFunc := makeReadFunc(store, &readCount)
+	now := uint64(1533903729)
+
+	var epoch lookup.Epoch
+	data := Data{
+		Payload: 79,
+		Time:    0,
+	}
+	update(store, epoch, 0, &data)
+
+	value, err := lookup.Lookup(now, lookup.NoClue, readFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != &data {
+		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
+	}
+}
+
 func TestLookupFail(t *testing.T) {
 
 	store := make(Store)
