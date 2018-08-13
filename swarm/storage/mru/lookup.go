@@ -33,8 +33,9 @@ type Values interface {
 	Set(key, value string)
 }
 
-// NewLookupParams constructs a LookupParams structure with the provided lookup parameters
-func NewLookupParams(view *View, time uint64) *UpdateLookup {
+// LookupBefore constructs an UpdateLookup structure to find updates on or before `time`
+// if time == 0, the latest update will be looked up
+func LookupBefore(view *View, time uint64) *UpdateLookup {
 	return &UpdateLookup{
 		View: *view,
 		Epoch: lookup.Epoch{
@@ -45,7 +46,7 @@ func NewLookupParams(view *View, time uint64) *UpdateLookup {
 
 // LookupLatest generates lookup parameters that look for the latest version of a resource
 func LookupLatest(view *View) *UpdateLookup {
-	return NewLookupParams(view, 0)
+	return LookupBefore(view, 0)
 }
 
 // UpdateLookup represents the components of a resource update search key.

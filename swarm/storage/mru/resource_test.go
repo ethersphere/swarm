@@ -222,7 +222,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
 	// specific point in time
-	rsrc, err := rh2.Lookup(ctx, NewLookupParams(&request.View, startTime.Time+3*resourceFrequency))
+	rsrc, err := rh2.Lookup(ctx, LookupBefore(&request.View, startTime.Time+3*resourceFrequency))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,38 +231,13 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
 	log.Debug("Historical lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
-	/*
-		// specific period, specific version
-		lookupParams := LookupVersion(&request.View, 3, 1)
-		rsrc, err = rh2.Lookup(ctx, lookupParams)
-		if err != nil {
-			t.Fatal(err)
-		}
-		// check data
-		if !bytes.Equal(rsrc.data, []byte(updates[2])) {
-			t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[2])
-		}
-		log.Debug("Specific version lookup", "period", rsrc2.Period, "version", rsrc2.Version, "data", rsrc2.data)
 
-		// we are now at third update
-		// check backwards stepping to the first
-		for i := 1; i >= 0; i-- {
-			rsrc, err := rh2.LookupPrevious(ctx, lookupParams)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !bytes.Equal(rsrc.data, []byte(updates[i])) {
-				t.Fatalf("resource data (previous) was %v, expected %v", rsrc.data, updates[i])
+	// beyond the first should yield an error
+	rsrc, err = rh2.Lookup(ctx, LookupBefore(&request.View, startTime.Time-1))
+	if err == nil {
+		t.Fatalf("expected previous to fail, returned epoch %s data %v", rsrc.Epoch.String(), rsrc.data)
+	}
 
-			}
-		}
-
-		// beyond the first should yield an error
-		rsrc, err = rh2.LookupPrevious(ctx, lookupParams)
-		if err == nil {
-			t.Fatalf("expected previous to fail, returned period %d version %d data %v", rsrc.Period, rsrc.Version, rsrc.data)
-		}
-	*/
 }
 
 const Day = 60 * 60 * 24
@@ -319,7 +294,7 @@ func TestSparseUpdates(t *testing.T) {
 		lastUpdateTime = T
 	}
 
-	lp := NewLookupParams(&view, today)
+	lp := LookupBefore(&view, today)
 
 	_, err = rh.Lookup(ctx, lp)
 	if err != nil {

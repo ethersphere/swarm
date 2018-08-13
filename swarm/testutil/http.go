@@ -106,5 +106,5 @@ func (t *TestSwarmServer) Close() {
 }
 
 func (t *TestSwarmServer) Now() mru.Timestamp {
-	return mru.Timestamp{t.CurrentTime}
+	return mru.Timestamp{Time: t.CurrentTime}
 }

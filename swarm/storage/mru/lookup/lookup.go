@@ -1,9 +1,28 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
+/*
+Package lookup defines resource lookup algorithms and provides tools to place updates
+so they can be found
+*/
 package lookup
 
 const maxuint64 = ^uint64(0)
-
-const lowestLevel uint8 = 0 // 0
-const numLevels uint8 = 26  //5
+const lowestLevel uint8 = 0
+const numLevels uint8 = 26
 const highestLevel = lowestLevel + numLevels - 1
 const defaultLevel = highestLevel
 
@@ -16,7 +35,7 @@ const filterMask = (maxuint64 >> (64 - numLevels)) << lowestLevel
 // lookup process entirely.
 type ReadFunc func(epoch Epoch, now uint64) (interface{}, error)
 
-// Hint that can be provided when the Lookup caller does not have
+// NoClue is a hint that can be provided when the Lookup caller does not have
 // a clue about where the last update may be
 var NoClue = Epoch{}
 
@@ -24,6 +43,7 @@ func getBaseTime(t uint64, level uint8) uint64 {
 	return t & (maxuint64 << level)
 }
 
+// Hint creates a hint based only on the last known update time
 func Hint(last uint64) Epoch {
 	return Epoch{
 		Time:  last,
@@ -75,36 +95,33 @@ func GetFirstEpoch(now uint64) Epoch {
 // Returns nil if an update was not found
 func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
 	var lastFound interface{}
-	var last Epoch
 	var epoch Epoch
 	if hint == NoClue {
-		last = Epoch{Time: 0, Level: highestLevel}
-	} else {
-		last = hint
+		hint = Epoch{Time: 0, Level: highestLevel}
 	}
+
 	t := now
 
 	for {
-		epoch = GetNextEpoch(last, t)
+		epoch = GetNextEpoch(hint, t)
 		value, err = read(epoch, now)
 		if err != nil {
 			return nil, err
 		}
 		if value != nil {
 			lastFound = value
-			if epoch.Level == lowestLevel || epoch.Equals(last) {
+			if epoch.Level == lowestLevel || epoch.Equals(hint) {
 				return value, nil
 			}
-			last = epoch
-			continue
+			hint = epoch
 		} else {
-			if epoch.Base() == last.Base() {
+			if epoch.Base() == hint.Base() {
 				if lastFound != nil {
 					return lastFound, nil
 				}
 				// we have reached the hint itself
 				// check it out
-				value, err = read(last, now)
+				value, err = read(hint, now)
 				if err != nil {
 					return nil, err
 				}
@@ -112,8 +129,8 @@ func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error
 					return value, nil
 				}
 				// bad hint.
-				epoch = last
-				last = Epoch{Time: 0, Level: highestLevel}
+				epoch = hint
+				hint = Epoch{Time: 0, Level: highestLevel}
 			}
 			base := epoch.Base()
 			if base == 0 {

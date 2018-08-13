@@ -42,7 +42,6 @@ type Handler struct {
 // HandlerParams pass parameters to the Handler constructor NewHandler
 // Signer and TimestampProvider are mandatory parameters
 type HandlerParams struct {
-	QueryMaxPeriods uint32
 }
 
 // hashPool contains a pool of ready hashers
@@ -60,8 +59,7 @@ func init() {
 // NewHandler creates a new Mutable Resource API
 func NewHandler(params *HandlerParams) *Handler {
 	rh := &Handler{
-		resources:       make(map[uint64]*cacheEntry),
-		queryMaxPeriods: params.QueryMaxPeriods,
+		resources: make(map[uint64]*cacheEntry),
 	}
 
 	for i := 0; i < hasherCount; i++ {
@@ -158,10 +156,10 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 	return updateRequest, nil
 }
 
-// Lookup retrieves a specific or latest version of the resource update with metadata chunk at params.Root
-// Lookup works differently depending on the configuration of `LookupParams`
-// See the `LookupParams` documentation and helper functions:
-// `LookupLatest`, `LookupLatestVersionInPeriod` and `LookupVersion`
+// Lookup retrieves a specific or latest version of the resource
+// Lookup works differently depending on the configuration of `UpdateLookup`
+// See the `UpdateLookup` documentation and helper functions:
+// `LookupLatest` and `LookupBefore`
 // When looking for the latest update, it starts at the next period after the current time.
 // upon failure tries the corresponding keys of each previous period until one is found
 // (or startTime is reached, in which case there are no updates).
@@ -191,6 +189,8 @@ func (h *Handler) lookup(params *UpdateLookup) (*cacheEntry, error) {
 	}
 	time := lp.Time
 
+	// Invoke the lookup engine.
+	// The callback will be called every time the lookup algorithm needs to guess
 	requestPtr, err := lookup.Lookup(lp.Time, lp.Epoch, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
 		lp.Epoch = epoch
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), lp.UpdateAddr(), defaultRetrieveTimeout)
