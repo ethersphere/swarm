@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -261,9 +262,24 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	}
 	go func() {
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+		select {
+		case <-time.After(120 * time.Second):
+			log.Warn("handleOfferedHashesMsg timeout, so dropping peer")
+			p.Drop(errors.New("handle offered hashes timeout"))
+			return
+		case err := <-c.next:
+			if err != nil {
+				log.Warn("c.next dropping peer", "err", err)
+				p.Drop(err)
+				return
+			}
+		case <-c.quit:
+			return
+		}
+		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.Send(ctx, msg)
 		if err != nil {
-			log.Warn("SendPriority err, so dropping peer", "peer", p.ID().TerminalString(), "err", err)
+			log.Warn("Send err, so dropping peer", "err", err)
 			p.Drop(err)
 		}
 	}()
