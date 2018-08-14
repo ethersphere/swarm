@@ -21,6 +21,7 @@ import (
 	"hash"
 	"strconv"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -35,27 +36,19 @@ type LookupParams struct {
 	TimeLimit uint64
 }
 
-// Values interface represents a string key-value store
-// useful for building query strings
-type Values interface {
-	Get(key string) string
-	Set(key, value string)
-}
-
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (lp *LookupParams) FromValues(values Values, parseView bool) error {
+func (lp *LookupParams) FromValues(values Values) error {
 	time, _ := strconv.ParseUint(values.Get("time"), 10, 64)
 	lp.TimeLimit = uint64(time)
 
 	level, _ := strconv.ParseUint(values.Get("hint.level"), 10, 32)
 	lp.Hint.Level = uint8(level)
 	lp.Hint.Time, _ = strconv.ParseUint(values.Get("hint.time"), 10, 64)
-	if parseView {
+	if lp.View.User == (common.Address{}) {
 		return lp.View.FromValues(values)
-	} else {
-		return nil
 	}
+	return nil
 }
 
 // ToValues serializes this structure into the provided string key-value store
@@ -64,8 +57,12 @@ func (lp *LookupParams) ToValues(values Values) {
 	if lp.TimeLimit != 0 {
 		values.Set("time", fmt.Sprintf("%d", lp.TimeLimit))
 	}
-	values.Set("hint.level", fmt.Sprintf("%d", lp.Hint.Level))
-	values.Set("hint.time", fmt.Sprintf("%d", lp.Hint.Time))
+	if lp.Hint.Level != 0 {
+		values.Set("hint.level", fmt.Sprintf("%d", lp.Hint.Level))
+	}
+	if lp.Hint.Time != 0 {
+		values.Set("hint.time", fmt.Sprintf("%d", lp.Hint.Time))
+	}
 	lp.View.ToValues(values)
 }
 
@@ -163,12 +160,12 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
+func (u *UpdateLookup) FromValues(values Values) error {
 	level, _ := strconv.ParseUint(values.Get("level"), 10, 32)
 	u.Epoch.Level = uint8(level)
 	u.Epoch.Time, _ = strconv.ParseUint(values.Get("time"), 10, 64)
 
-	if parseView {
+	if u.View.User == (common.Address{}) {
 		return u.View.FromValues(values)
 	}
 	return nil

@@ -26,8 +26,6 @@ const numLevels uint8 = 26
 const highestLevel = lowestLevel + numLevels - 1
 const defaultLevel = highestLevel
 
-const filterMask = (maxuint64 >> (64 - numLevels)) << lowestLevel
-
 // ReadFunc is a handler called by Lookup each time it attempts to find a value
 // It should return <nil> if a value is not found
 // It should return <nil> if a value is found, but its timestamp is higher than "now"

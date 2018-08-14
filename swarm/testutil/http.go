@@ -32,19 +32,6 @@ type TestServer interface {
 	ServeHTTP(http.ResponseWriter, *http.Request)
 }
 
-// simulated timeProvider
-type fakeTimeProvider struct {
-	currentTime uint64
-}
-
-func (f *fakeTimeProvider) Tick() {
-	f.currentTime++
-}
-
-func (f *fakeTimeProvider) Now() mru.Timestamp {
-	return mru.Timestamp{Time: f.currentTime}
-}
-
 func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer) *TestSwarmServer {
 	dir, err := ioutil.TempDir("", "swarm-storage-test")
 	if err != nil {

@@ -24,6 +24,18 @@ type binarySerializer interface {
 	binaryGet(serializedData []byte) error
 }
 
+// Values interface represents a string key-value store
+// useful for building query strings
+type Values interface {
+	Get(key string) string
+	Set(key, value string)
+}
+
+type valueSerializer interface {
+	FromValues(values Values) error
+	ToValues(values Values)
+}
+
 // Hex serializes the structure and converts it to a hex string
 func Hex(bin binarySerializer) string {
 	b := make([]byte, bin.binaryLength())

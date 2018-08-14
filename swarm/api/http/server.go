@@ -513,7 +513,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	updateRequest.View = *view
 	query := r.URL.Query()
 
-	if err := updateRequest.FromValues(query, body, false); err != nil { // decodes request from query parameters
+	if err := updateRequest.FromValues(query, body); err != nil { // decodes request from query parameters
 		RespondError(w, r, err.Error(), http.StatusBadRequest) //TODO: send different status response depending on error
 		return
 	}
@@ -600,7 +600,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	lookupParams := &mru.LookupParams{View: *view}
-	if err = lookupParams.FromValues(r.URL.Query(), false); err != nil { // parse period, version
+	if err = lookupParams.FromValues(r.URL.Query()); err != nil { // parse period, version
 		RespondError(w, r, fmt.Sprintf("invalid mutable resource request:%s", err), http.StatusBadRequest)
 		return
 	}

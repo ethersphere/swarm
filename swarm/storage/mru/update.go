@@ -94,9 +94,9 @@ func (r *ResourceUpdate) binaryGet(serializedData []byte) error {
 
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (r *ResourceUpdate) FromValues(values Values, data []byte, parseView bool) error {
+func (r *ResourceUpdate) FromValues(values Values, data []byte) error {
 	r.data = data
-	return r.UpdateLookup.FromValues(values, parseView)
+	return r.UpdateLookup.FromValues(values)
 }
 
 // ToValues serializes this structure into the provided string key-value store

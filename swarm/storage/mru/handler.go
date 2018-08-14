@@ -21,6 +21,7 @@ package mru
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -171,9 +172,14 @@ func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 
 	lp := *params
 
+	timeLimit := lp.TimeLimit
+	if timeLimit == 0 { // if time limit is set to zero, the user wants to get the latest update
+		timeLimit = TimestampProvider.Now().Time
+	}
+
 	if lp.Hint == lookup.NoClue { // try to use our cache
 		entry := h.get(&lp.View)
-		if entry != nil && entry.Epoch.Time <= lp.TimeLimit {
+		if entry != nil && entry.Epoch.Time <= timeLimit { // avoid bad hints
 			lp.Hint = entry.Epoch
 		}
 	}
@@ -183,19 +189,14 @@ func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
-	var timeLimit uint64
-	if lp.TimeLimit == 0 {
-		timeLimit = TimestampProvider.Now().Time
-	} else {
-		timeLimit = lp.TimeLimit
-	}
-
 	var ul UpdateLookup
 	ul.View = lp.View
+	var readCount int
 
 	// Invoke the lookup engine.
 	// The callback will be called every time the lookup algorithm needs to guess
 	requestPtr, err := lookup.Lookup(timeLimit, lp.Hint, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+		readCount++
 		ul.Epoch = epoch
 		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), ul.UpdateAddr(), defaultRetrieveTimeout)
 		if err != nil { // TODO: check for catastrophic errors other than chunk not found
@@ -214,6 +215,8 @@ func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	log.Info(fmt.Sprintf("Resource lookup finished in %d lookups", readCount))
 
 	request, _ := requestPtr.(*Request)
 	if request == nil {

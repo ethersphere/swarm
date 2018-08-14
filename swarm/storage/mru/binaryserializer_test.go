@@ -17,11 +17,22 @@
 package mru
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
+
+// KV mocks a key value store
+type KV map[string]string
+
+func (kv KV) Get(key string) string {
+	return kv[key]
+}
+func (kv KV) Set(key, value string) {
+	kv[key] = value
+}
 
 func compareByteSliceToExpectedHex(t *testing.T, variableName string, actualValue []byte, expectedHex string) {
 	if hexutil.Encode(actualValue) != expectedHex {
@@ -61,5 +72,27 @@ func testBinarySerializerLengthCheck(t *testing.T, bin binarySerializer) {
 
 	if err := bin.binaryPut(serialized); err == nil {
 		t.Fatalf("Expected %s.binaryPut to fail, since target slice is too small", name)
+	}
+}
+
+func testValueSerializer(t *testing.T, v valueSerializer, expected KV) {
+	name := reflect.TypeOf(v).Elem().Name()
+	kv := make(KV)
+
+	v.ToValues(kv)
+	if !reflect.DeepEqual(expected, kv) {
+		expj, _ := json.Marshal(expected)
+		gotj, _ := json.Marshal(kv)
+		t.Fatalf("Expected %s.ToValues to return %s, got %s", name, string(expj), string(gotj))
+	}
+
+	recovered := reflect.New(reflect.TypeOf(v).Elem()).Interface().(valueSerializer)
+	err := recovered.FromValues(kv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(recovered, v) {
+		t.Fatalf("Expected recovered %s to be the same", name)
 	}
 }
