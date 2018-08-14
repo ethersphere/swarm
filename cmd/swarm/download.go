@@ -79,7 +79,7 @@ func download(ctx *cli.Context) {
 			}
 		} else {
 			// we are downloading a file
-			log.Debug(fmt.Sprintf("downloading file/path from a manifest. hash: %s, path:%s", uri.Addr, uri.Path))
+			log.Debug("downloading file/path from a manifest", uri.Addr, "uri.Path", uri.Path)
 
 			err := client.DownloadFile(uri.Addr, uri.Path, dest, credentials)
 			if err != nil {

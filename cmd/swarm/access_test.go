@@ -39,10 +39,15 @@ import (
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 )
 
-// TestAccessPassword
+// TestAccessPassword tests for the correct creation of an ACT manifest protected by a password.
+// The test creates bogus content, uploads it encrypted, then creates the wrapping manifest with the Access entry
+// The parties participating - node (publisher), uploads to second node then disappears. Content which was uploaded
+// is then fetched through 2nd node. since the tested code is not key-aware - we can just
+// fetch from the 2nd node using HTTP BasicAuth
 func TestAccessPassword(t *testing.T) {
 	cluster := newTestCluster(t, 1)
 	defer cluster.Shutdown()
+	proxyNode := cluster.Nodes[0]
 
 	// create a tmp file
 	tmp, err := ioutil.TempDir("", "swarm-test")
@@ -66,7 +71,7 @@ func TestAccessPassword(t *testing.T) {
 	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
 	up := runSwarm(t,
 		"--bzzapi",
-		cluster.Nodes[0].URL,
+		proxyNode.URL, //it doesn't matter through which node we upload content
 		"up",
 		"--encrypt",
 		dataFilename)
@@ -80,7 +85,6 @@ func TestAccessPassword(t *testing.T) {
 	ref := matches[0]
 
 	password := "smth"
-
 	passwordFilename := filepath.Join(tmp, "password.txt")
 
 	err = ioutil.WriteFile(passwordFilename, []byte(password), 0666)
@@ -89,8 +93,6 @@ func TestAccessPassword(t *testing.T) {
 	}
 
 	up = runSwarm(t,
-		"--bzzapi",
-		cluster.Nodes[0].URL,
 		"access",
 		"new",
 		"pass",
@@ -189,7 +191,7 @@ func TestAccessPassword(t *testing.T) {
 	log.Info("download file with 'swarm down'")
 	up = runSwarm(t,
 		"--bzzapi",
-		cluster.Nodes[0].URL,
+		proxyNode.URL, // proxy node doesn't matter since the password can be provided to any proxy through http basicauth
 		"down",
 		"bzz:/"+hash,
 		tmp,
@@ -205,10 +207,10 @@ func TestAccessPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	log.Info("download file with 'swarm down' with wrong password")
+	log.Debug("download file with 'swarm down' with wrong password")
 	up = runSwarm(t,
 		"--bzzapi",
-		cluster.Nodes[0].URL,
+		proxyNode.URL,
 		"down",
 		"bzz:/"+hash,
 		tmp,
@@ -221,6 +223,12 @@ func TestAccessPassword(t *testing.T) {
 	}
 	up.ExpectExit()
 }
+
+// TestAccessPK tests for the correct creation of an ACT manifest between two parties (publisher and grantee).
+// The test creates bogus content, uploads it encrypted, then creates the wrapping manifest with the Access entry
+// The parties participating - node (publisher), uploads to second node (which is also the grantee) then disappears.
+// Content which was uploaded is then fetched through the grantee's http proxy. Since the tested code is private-key aware,
+// the test will fail if the proxy's given private key is not granted on the ACT.
 
 func TestAccessPK(t *testing.T) {
 	// Setup Swarm and upload a test file to it
@@ -367,7 +375,8 @@ func TestAccessPK(t *testing.T) {
 
 // TestAccessACT tests the e2e creation, uploading and downloading of an ACT type access control
 // the test fires up a 3 node cluster, then randomly picks 2 nodes which will be acting as grantees to the data
-// set. the third node should fail decoding the reference as it will not be granted access
+// set. the third node should fail decoding the reference as it will not be granted access. the publisher uploads through
+// one of the nodes then disappears.
 func TestAccessACT(t *testing.T) {
 	// Setup Swarm and upload a test file to it
 	cluster := newTestCluster(t, 3)
@@ -544,6 +553,8 @@ func TestAccessACT(t *testing.T) {
 	}
 }
 
+// TestKeypairSanity is a sanity test for the crypto scheme for ACT. it asserts the correct shared secret according to
+// the specs at https://github.com/ethersphere/swarm-docs/blob/eb857afda906c6e7bb90d37f3f334ccce5eef230/act.md
 func TestKeypairSanity(t *testing.T) {
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
