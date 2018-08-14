@@ -204,7 +204,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsrc2, err := rh2.Lookup(ctx, LookupLatest(&request.View))
+	rsrc2, err := rh2.Lookup(ctx, LookupLatest(&request.View, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -222,7 +222,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
 	// specific point in time
-	rsrc, err := rh2.Lookup(ctx, LookupBefore(&request.View, startTime.Time+3*resourceFrequency))
+	rsrc, err := rh2.Lookup(ctx, LookupBefore(&request.View, startTime.Time+3*resourceFrequency, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Historical lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
 	// beyond the first should yield an error
-	rsrc, err = rh2.Lookup(ctx, LookupBefore(&request.View, startTime.Time-1))
+	rsrc, err = rh2.Lookup(ctx, LookupBefore(&request.View, startTime.Time-1, lookup.NoClue))
 	if err == nil {
 		t.Fatalf("expected previous to fail, returned epoch %s data %v", rsrc.Epoch.String(), rsrc.data)
 	}
@@ -294,7 +294,7 @@ func TestSparseUpdates(t *testing.T) {
 		lastUpdateTime = T
 	}
 
-	lp := LookupBefore(&view, today)
+	lp := LookupBefore(&view, today, lookup.NoClue)
 
 	_, err = rh.Lookup(ctx, lp)
 	if err != nil {
@@ -313,7 +313,7 @@ func TestSparseUpdates(t *testing.T) {
 	// lookup the closest update to 35*Year + 6* Month (~ June 2005):
 	// it should find the update we put on 35*Year, since we were updating every 5 years.
 
-	lp.Time = 35*Year + 6*Month
+	lp.TimeLimit = 35*Year + 6*Month
 
 	_, err = rh.Lookup(ctx, lp)
 	if err != nil {

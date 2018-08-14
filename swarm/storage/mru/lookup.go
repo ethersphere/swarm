@@ -26,6 +26,15 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
+// LookupParams is used to specify constraints when performing an update lookup
+// Limit defines whether or not the lookup should be limited
+// If Limit is set to true then Max defines the amount of hops that can be performed
+type LookupParams struct {
+	View
+	Hint      lookup.Epoch
+	TimeLimit uint64
+}
+
 // Values interface represents a string key-value store
 // useful for building query strings
 type Values interface {
@@ -33,27 +42,53 @@ type Values interface {
 	Set(key, value string)
 }
 
+// FromValues deserializes this instance from a string key-value store
+// useful to parse query strings
+func (lp *LookupParams) FromValues(values Values, parseView bool) error {
+	time, _ := strconv.ParseUint(values.Get("time"), 10, 64)
+	lp.TimeLimit = uint64(time)
+
+	level, _ := strconv.ParseUint(values.Get("hint.level"), 10, 32)
+	lp.Hint.Level = uint8(level)
+	lp.Hint.Time, _ = strconv.ParseUint(values.Get("hint.time"), 10, 64)
+	if parseView {
+		return lp.View.FromValues(values)
+	} else {
+		return nil
+	}
+}
+
+// ToValues serializes this structure into the provided string key-value store
+// useful to build query strings
+func (lp *LookupParams) ToValues(values Values) {
+	if lp.TimeLimit != 0 {
+		values.Set("time", fmt.Sprintf("%d", lp.TimeLimit))
+	}
+	values.Set("hint.level", fmt.Sprintf("%d", lp.Hint.Level))
+	values.Set("hint.time", fmt.Sprintf("%d", lp.Hint.Time))
+	lp.View.ToValues(values)
+}
+
 // LookupBefore constructs an UpdateLookup structure to find updates on or before `time`
 // if time == 0, the latest update will be looked up
-func LookupBefore(view *View, time uint64) *UpdateLookup {
-	return &UpdateLookup{
-		View: *view,
-		Epoch: lookup.Epoch{
-			Time: time,
-		},
+func LookupBefore(view *View, time uint64, hint lookup.Epoch) *LookupParams {
+	return &LookupParams{
+		TimeLimit: time,
+		View:      *view,
+		Hint:      hint,
 	}
 }
 
 // LookupLatest generates lookup parameters that look for the latest version of a resource
-func LookupLatest(view *View) *UpdateLookup {
-	return LookupBefore(view, 0)
+func LookupLatest(view *View, hint lookup.Epoch) *LookupParams {
+	return LookupBefore(view, 0, hint)
 }
 
 // UpdateLookup represents the components of a resource update search key.
 // it is also used to specify constraints when performing an update lookup
 type UpdateLookup struct {
-	View
-	lookup.Epoch
+	View         `json:"view"`
+	lookup.Epoch `json:"epoch"`
 }
 
 // UpdateLookup layout:

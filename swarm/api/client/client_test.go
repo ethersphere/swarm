@@ -25,6 +25,8 @@ import (
 	"sort"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -506,7 +508,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		User:  signer.Address(),
 	}
 
-	lookupParams := mru.LookupLatest(view)
+	lookupParams := mru.LookupLatest(view, lookup.NoClue)
 	reader, err = client.GetResource(lookupParams, "")
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)

@@ -130,10 +130,9 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 	now := TimestampProvider.Now().Time
 	updateRequest = new(Request)
 
-	lp := &UpdateLookup{
-		Epoch: lookup.NoClue,
-		View:  *view,
-	}
+	lp := new(LookupParams)
+	lp.Hint = lookup.NoClue
+	lp.View = *view
 
 	rsrc, err := h.lookup(lp)
 	if err != nil {
@@ -163,19 +162,19 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 // When looking for the latest update, it starts at the next period after the current time.
 // upon failure tries the corresponding keys of each previous period until one is found
 // (or startTime is reached, in which case there are no updates).
-func (h *Handler) Lookup(ctx context.Context, params *UpdateLookup) (*cacheEntry, error) {
+func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*cacheEntry, error) {
 	return h.lookup(params)
 }
 
 // base code for public lookup methods
-func (h *Handler) lookup(params *UpdateLookup) (*cacheEntry, error) {
+func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 
 	lp := *params
 
-	if lp.Epoch == lookup.NoClue { // try to use our cache
+	if lp.Hint == lookup.NoClue { // try to use our cache
 		entry := h.get(&lp.View)
-		if entry != nil {
-			lp.Epoch = entry.Epoch
+		if entry != nil && entry.Epoch.Time <= lp.TimeLimit {
+			lp.Hint = entry.Epoch
 		}
 	}
 
@@ -184,16 +183,21 @@ func (h *Handler) lookup(params *UpdateLookup) (*cacheEntry, error) {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
-	if lp.Time == 0 {
-		lp.Time = TimestampProvider.Now().Time
+	var timeLimit uint64
+	if lp.TimeLimit == 0 {
+		timeLimit = TimestampProvider.Now().Time
+	} else {
+		timeLimit = lp.TimeLimit
 	}
-	time := lp.Time
+
+	var ul UpdateLookup
+	ul.View = lp.View
 
 	// Invoke the lookup engine.
 	// The callback will be called every time the lookup algorithm needs to guess
-	requestPtr, err := lookup.Lookup(lp.Time, lp.Epoch, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
-		lp.Epoch = epoch
-		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), lp.UpdateAddr(), defaultRetrieveTimeout)
+	requestPtr, err := lookup.Lookup(timeLimit, lp.Hint, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+		ul.Epoch = epoch
+		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), ul.UpdateAddr(), defaultRetrieveTimeout)
 		if err != nil { // TODO: check for catastrophic errors other than chunk not found
 			return nil, nil
 		}
@@ -202,7 +206,7 @@ func (h *Handler) lookup(params *UpdateLookup) (*cacheEntry, error) {
 		if err := request.fromChunk(chunk.Addr, chunk.SData); err != nil {
 			return nil, nil
 		}
-		if request.Time <= time {
+		if request.Time <= timeLimit {
 			return &request, nil
 		}
 		return nil, nil

@@ -88,10 +88,10 @@ func resourceUpdate(ctx *cli.Context) {
 	}
 
 	var updateRequest *mru.Request
-	var lookup *mru.UpdateLookup
+	var lookup *mru.LookupParams
 	if manifestAddressOrDomain == "" {
 		relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
-		lookup = new(mru.UpdateLookup)
+		lookup = new(mru.LookupParams)
 		lookup.User = signer.Address()
 		lookup.Topic = mru.NewTopic(name, relatedTopicBytes)
 	}
@@ -127,10 +127,10 @@ func resourceInfo(ctx *cli.Context) {
 		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
 	)
 
-	var lookup *mru.UpdateLookup
+	var lookup *mru.LookupParams
 	if manifestAddressOrDomain == "" {
 		relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
-		lookup = new(mru.UpdateLookup)
+		lookup = new(mru.LookupParams)
 		lookup.Topic = mru.NewTopic(name, relatedTopicBytes)
 		lookup.User = resourceGetUser(ctx)
 	}

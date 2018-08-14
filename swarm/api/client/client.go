@@ -655,11 +655,11 @@ func (c *Client) updateResource(request *mru.Request, createManifest bool) (io.R
 // GetResource returns a byte stream with the raw content of the resource
 // manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResource(lookup *mru.UpdateLookup, manifestAddressOrDomain string) (io.ReadCloser, error) {
+func (c *Client) GetResource(lookup *mru.LookupParams, manifestAddressOrDomain string) (io.ReadCloser, error) {
 	return c.getResource(lookup, manifestAddressOrDomain, false)
 }
 
-func (c *Client) getResource(lookup *mru.UpdateLookup, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
+func (c *Client) getResource(lookup *mru.LookupParams, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {
 		return nil, err
@@ -683,7 +683,7 @@ func (c *Client) getResource(lookup *mru.UpdateLookup, manifestAddressOrDomain s
 // GetResourceMetadata returns a structure that describes the Mutable Resource
 // manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
 // points to that address
-func (c *Client) GetResourceMetadata(lookup *mru.UpdateLookup, manifestAddressOrDomain string) (*mru.Request, error) {
+func (c *Client) GetResourceMetadata(lookup *mru.LookupParams, manifestAddressOrDomain string) (*mru.Request, error) {
 
 	responseStream, err := c.getResource(lookup, manifestAddressOrDomain, true)
 	if err != nil {

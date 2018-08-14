@@ -29,9 +29,7 @@ import (
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
-	View      *View  `json:"view"`
-	Level     uint8  `json:"level,omitempty"`
-	Time      uint64 `json:"time,omitempty"`
+	UpdateLookup
 	Data      string `json:"data,omitempty"`
 	Signature string `json:"signature,omitempty"`
 }
@@ -65,9 +63,7 @@ func (r *Request) IsUpdate() bool {
 // fromJSON takes an update request JSON and populates an UpdateRequest
 func (r *Request) fromJSON(j *updateRequestJSON) error {
 
-	r.Time = j.Time
-	r.Level = j.Level
-	r.View = *j.View
+	r.UpdateLookup = j.UpdateLookup
 
 	var err error
 	if j.Data != "" {
@@ -132,11 +128,9 @@ func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	}
 
 	requestJSON := &updateRequestJSON{
-		View:      &r.View,
-		Level:     r.Level,
-		Time:      r.Time,
-		Data:      dataString,
-		Signature: signatureString,
+		UpdateLookup: r.UpdateLookup,
+		Data:         dataString,
+		Signature:    signatureString,
 	}
 
 	return json.Marshal(requestJSON)

@@ -60,20 +60,18 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	// proof of ownership
 
 	const expectedSignature = "0x1cbdad7702b7d43ca983dc9f2ed87e73984288cdae6a8844e44688ee22c72080516fcd65a894b894b7b41ac780d5ce5d9fb527dc7126ea876501948d2bb6880d00"
-	const expectedJSON = `{"view":{"topic":"0x6120676f6f64207265736f75726365206e616d65000000000000000000000000","user":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"level":1,"time":1000,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
+	const expectedJSON = `{"view":{"topic":"0x6120676f6f64207265736f75726365206e616d65000000000000000000000000","user":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"epoch":{"level":1,"time":1000},"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
 
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &Request{
 		ResourceUpdate: ResourceUpdate{
-			UpdateHeader: UpdateHeader{
-				UpdateLookup: UpdateLookup{
-					Epoch: lookup.Epoch{
-						Time:  1000,
-						Level: 1,
-					},
-					View: createRequest.ResourceUpdate.View,
+			UpdateLookup: UpdateLookup{
+				Epoch: lookup.Epoch{
+					Time:  1000,
+					Level: 1,
 				},
+				View: createRequest.ResourceUpdate.View,
 			},
 			data: data,
 		},

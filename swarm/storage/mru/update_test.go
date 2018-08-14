@@ -6,7 +6,7 @@ import (
 
 func getTestResourceUpdate() *ResourceUpdate {
 	return &ResourceUpdate{
-		UpdateHeader: *getTestUpdateHeader(),
+		UpdateLookup: *getTestUpdateLookup(),
 		data:         []byte("El que lee mucho y anda mucho, ve mucho y sabe mucho"),
 	}
 }
