@@ -37,12 +37,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/multihash"
-	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
@@ -50,17 +47,8 @@ import (
 )
 
 var (
-	ErrNotFound               = errors.New("not found")
-	ErrDecrypt                = errors.New("cant decrypt - forbidden")
-	ErrUnknownAccessType      = errors.New("unknown access type (or not implemented)")
-	ErrDecryptDomainForbidden = errors.New("decryption request domain forbidden - can only decrypt on localhost")
-	AllowedDecryptDomains     = []string{
-		"localhost",
-		"127.0.0.1",
-	}
+	ErrNotFound = errors.New("not found")
 )
-
-const EMPTY_CREDENTIALS = ""
 
 var (
 	apiResolveCount        = metrics.NewRegisteredCounter("api.resolve.count", nil)
@@ -1037,148 +1025,4 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 	}
 
 	return storage.Address(common.FromHex(entry.Hash)), nil
-}
-
-func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.PrivateKey) DecryptFunc {
-	return func(m *ManifestEntry) error {
-		if m.Access == nil {
-			return nil
-		}
-
-		allowed := false
-		requestDomain := sctx.GetHost(ctx)
-		for _, v := range AllowedDecryptDomains {
-			if strings.Contains(requestDomain, v) {
-				allowed = true
-			}
-		}
-
-		if !allowed {
-			return ErrDecryptDomainForbidden
-		}
-
-		switch m.Access.Type {
-		case "pass":
-			if credentials != "" {
-				// decrypt
-				key, err := NewSessionKeyPassword(credentials, m.Access)
-				if err != nil {
-					return err
-				}
-
-				ref, err := hex.DecodeString(m.Hash)
-				if err != nil {
-					return err
-				}
-
-				enc := NewRefEncryption(len(ref) - 8)
-				decodedRef, err := enc.Decrypt(ref, key)
-				if err != nil {
-					// Return ErrDecrypt to be able to detect
-					// invalid decryption in hinger levels of code.
-					return ErrDecrypt
-				}
-
-				m.Hash = hex.EncodeToString(decodedRef)
-				m.Access = nil
-				return nil
-			}
-			return ErrDecrypt
-		case "pk":
-			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
-			if err != nil {
-				return ErrDecrypt
-			}
-			publisher, err := crypto.DecompressPubkey(publisherBytes)
-			if err != nil {
-				return ErrDecrypt
-			}
-			key, err := a.NodeSessionKey(pk, publisher, m.Access.Salt)
-			if err != nil {
-				return ErrDecrypt
-			}
-			ref, err := hex.DecodeString(m.Hash)
-			if err != nil {
-				return err
-			}
-
-			enc := NewRefEncryption(len(ref) - 8)
-			decodedRef, err := enc.Decrypt(ref, key)
-			if err != nil {
-				// Return ErrDecrypt to be able to detect
-				// invalid decryption in hinger levels of code.
-				return ErrDecrypt
-			}
-
-			m.Hash = hex.EncodeToString(decodedRef)
-			m.Access = nil
-			return nil
-		case "act":
-			publisherBytes, err := hex.DecodeString(m.Access.Publisher)
-			if err != nil {
-				return ErrDecrypt
-			}
-			publisher, err := crypto.DecompressPubkey(publisherBytes)
-			if err != nil {
-				return ErrDecrypt
-			}
-
-			sessionKey, err := a.NodeSessionKey(pk, publisher, m.Access.Salt)
-			if err != nil {
-				return ErrDecrypt
-			}
-
-			hasher := sha3.NewKeccak256()
-			hasher.Write(append(sessionKey, 0))
-			lookupKey := hasher.Sum(nil)
-
-			hasher.Reset()
-
-			hasher.Write(append(sessionKey, 1))
-			accessKeyEncryptionKey := hasher.Sum(nil)
-
-			lk := hex.EncodeToString(lookupKey)
-			list, err := a.GetManifestList(ctx, NOOPDecrypt, storage.Address(common.Hex2Bytes(m.Access.Act)), lk)
-
-			found := ""
-			for _, v := range list.Entries {
-				if v.Path == lk {
-					found = v.Hash
-				}
-			}
-
-			if found == "" {
-				return ErrDecrypt
-			}
-
-			v, err := hex.DecodeString(found)
-			if err != nil {
-				return err
-			}
-			enc := NewRefEncryption(len(v) - 8)
-			decodedRef, err := enc.Decrypt(v, accessKeyEncryptionKey)
-			if err != nil {
-				// Return ErrDecrypt to be able to detect
-				// invalid decryption in hinger levels of code.
-				return ErrDecrypt
-			}
-
-			ref, err := hex.DecodeString(m.Hash)
-			if err != nil {
-				return err
-			}
-
-			enc = NewRefEncryption(len(ref) - 8)
-			decodedMainRef, err := enc.Decrypt(ref, decodedRef)
-			if err != nil {
-				// Return ErrDecrypt to be able to detect
-				// invalid decryption in hinger levels of code.
-				return ErrDecrypt
-			}
-			m.Hash = hex.EncodeToString(decodedMainRef)
-			m.Access = nil
-			return nil
-		}
-		return ErrUnknownAccessType
-	}
 }

@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	gorand "math/rand"
 	"net/http"
 	"os"
@@ -38,6 +39,7 @@ import (
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 )
 
+// TestAccessPassword
 func TestAccessPassword(t *testing.T) {
 	cluster := newTestCluster(t, 1)
 	defer cluster.Shutdown()
@@ -371,8 +373,11 @@ func TestAccessACT(t *testing.T) {
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
 
+	var uploadThroughNode = cluster.Nodes[0]
+	client := swarm.NewClient(uploadThroughNode.URL)
+
 	r1 := gorand.New(gorand.NewSource(time.Now().UnixNano()))
-	nodeToSkip := r1.Intn(3) - 1 // a number between 0 and 2 (node indices in `cluster`)
+	nodeToSkip := int(math.Round(float64(r1.Intn(100) / 50))) // a number between 0 and 2 (node indices in `cluster`)
 
 	// create a tmp file
 	tmp, err := ioutil.TempFile("", "swarm-test")
@@ -407,7 +412,6 @@ func TestAccessACT(t *testing.T) {
 	}
 
 	ref := matches[0]
-	t.Log("nodetoskip", nodeToSkip)
 	grantees := []string{}
 	for i, v := range cluster.Nodes {
 		if i == nodeToSkip {
@@ -460,22 +464,19 @@ func TestAccessACT(t *testing.T) {
 		"access",
 		"new",
 		"act",
-		"--dry-run",
 		"--grant-keys",
 		granteesPubkeyListFile.Name(),
 		ref,
 	)
 
-	_, matches = up.ExpectRegexp(".+")
+	_, matches = up.ExpectRegexp(`[a-f\d]{64}`)
 	up.ExpectExit()
 
 	if len(matches) == 0 {
 		t.Fatalf("stdout not matched")
 	}
-
-	var m api.Manifest
-
-	err = json.Unmarshal([]byte(matches[0]), &m)
+	hash := matches[0]
+	m, _, err := client.DownloadManifest(hash)
 	if err != nil {
 		t.Fatalf("unmarshal manifest: %v", err)
 	}
@@ -507,20 +508,13 @@ func TestAccessACT(t *testing.T) {
 		t.Fatal("manifest access kdf params should be nil")
 	}
 
-	client := swarm.NewClient(cluster.Nodes[0].URL)
-
-	hash, err := client.UploadManifest(&m, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	httpClient := &http.Client{}
 
 	// all nodes except the skipped node should be able to decrypt the content
-	for i, v := range cluster.Nodes {
+	for i, node := range cluster.Nodes {
 		t.Log("trying to fetch from node:", i)
 
-		url := v.URL + "/" + "bzz:/" + hash
+		url := node.URL + "/" + "bzz:/" + hash
 		response, err := httpClient.Get(url)
 		if err != nil {
 			t.Fatal(err)
@@ -531,7 +525,7 @@ func TestAccessACT(t *testing.T) {
 			t.Log("reached node to skip, status:", response.StatusCode)
 
 			if response.StatusCode != http.StatusUnauthorized {
-				t.Log("should be a 401")
+				t.Fatalf("should be a 401")
 			}
 
 			continue
@@ -550,7 +544,7 @@ func TestAccessACT(t *testing.T) {
 	}
 }
 
-func TestAccessPKUnit(t *testing.T) {
+func TestKeypairSanity(t *testing.T) {
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
 		panic("reading from crypto/rand failed: " + err.Error())
