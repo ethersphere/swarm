@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
@@ -103,7 +102,7 @@ func accessNewPK(ctx *cli.Context) {
 		}
 	}
 }
-	
+
 func accessNewACT(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) != 1 {
@@ -154,18 +153,18 @@ func accessNewACT(ctx *cli.Context) {
 }
 
 func printManifests(rootAccessManifest, actManifest *api.Manifest) error {
-	if js, err := json.Marshal(rootAccessManifest); err == nil {
-		fmt.Println(string(js))
-	} else {
+	js, err := json.Marshal(rootAccessManifest)
+	if err != nil {
 		return err
 	}
+	fmt.Println(string(js))
 
 	if actManifest != nil {
-		if js, err := json.Marshal(actManifest); err == nil {
-			fmt.Println(string(js))
-		} else {
+		js, err := json.Marshal(actManifest)
+		if err != nil {
 			return err
 		}
+		fmt.Println(string(js))
 	}
 	return nil
 }
@@ -178,19 +177,13 @@ func uploadManifests(ctx *cli.Context, rootAccessManifest, actManifest *api.Mani
 		key string
 		err error
 	)
-	log.Error("uploading manifests")
 	if actManifest != nil {
-		log.Error("uploading act manifest")
-
 		key, err = client.UploadManifest(actManifest, false)
 		if err != nil {
 			return err
 		}
-		log.Error("uploaded", "key", key)
 
 		rootAccessManifest.Entries[0].Access.Act = key
-		log.Error("uploaded", "rootAccessManifest.Entries[0].Access.Act", rootAccessManifest.Entries[0].Access.Act)
-
 	}
 	key, err = client.UploadManifest(rootAccessManifest, false)
 	if err != nil {

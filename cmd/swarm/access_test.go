@@ -20,10 +20,8 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"io/ioutil"
-	"math"
 	gorand "math/rand"
 	"net/http"
 	"os"
@@ -68,7 +66,6 @@ func TestAccessPassword(t *testing.T) {
 	hashRegexp := `[a-f\d]{128}`
 
 	// upload the file with 'swarm up' and expect a hash
-	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
 	up := runSwarm(t,
 		"--bzzapi",
 		proxyNode.URL, //it doesn't matter through which node we upload content
@@ -188,18 +185,6 @@ func TestAccessPassword(t *testing.T) {
 		t.Errorf("expected decrypted data %q, got %q", data, string(d))
 	}
 
-	log.Info("download file with 'swarm down'")
-	up = runSwarm(t,
-		"--bzzapi",
-		proxyNode.URL, // proxy node doesn't matter since the password can be provided to any proxy through http basicauth
-		"down",
-		"bzz:/"+hash,
-		tmp,
-		"--password",
-		passwordFilename)
-
-	up.ExpectExit()
-
 	wrongPasswordFilename := filepath.Join(tmp, "password-wrong.txt")
 
 	err = ioutil.WriteFile(wrongPasswordFilename, []byte("just wr0ng"), 0666)
@@ -207,7 +192,7 @@ func TestAccessPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	log.Debug("download file with 'swarm down' with wrong password")
+	//download file with 'swarm down' with wrong password
 	up = runSwarm(t,
 		"--bzzapi",
 		proxyNode.URL,
@@ -229,7 +214,6 @@ func TestAccessPassword(t *testing.T) {
 // The parties participating - node (publisher), uploads to second node (which is also the grantee) then disappears.
 // Content which was uploaded is then fetched through the grantee's http proxy. Since the tested code is private-key aware,
 // the test will fail if the proxy's given private key is not granted on the ACT.
-
 func TestAccessPK(t *testing.T) {
 	// Setup Swarm and upload a test file to it
 	cluster := newTestCluster(t, 1)
@@ -253,7 +237,6 @@ func TestAccessPK(t *testing.T) {
 	hashRegexp := `[a-f\d]{128}`
 
 	// upload the file with 'swarm up' and expect a hash
-	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
 	up := runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
@@ -386,8 +369,7 @@ func TestAccessACT(t *testing.T) {
 	client := swarm.NewClient(uploadThroughNode.URL)
 
 	r1 := gorand.New(gorand.NewSource(time.Now().UnixNano()))
-	nodeToSkip := int(math.Round(float64(r1.Intn(100) / 50))) // a number between 0 and 2 (node indices in `cluster`)
-
+	nodeToSkip := r1.Intn(3) // a number between 0 and 2 (node indices in `cluster`)
 	// create a tmp file
 	tmp, err := ioutil.TempFile("", "swarm-test")
 	if err != nil {
@@ -406,7 +388,6 @@ func TestAccessACT(t *testing.T) {
 	hashRegexp := `[a-f\d]{128}`
 
 	// upload the file with 'swarm up' and expect a hash
-	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))
 	up := runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
@@ -521,17 +502,17 @@ func TestAccessACT(t *testing.T) {
 
 	// all nodes except the skipped node should be able to decrypt the content
 	for i, node := range cluster.Nodes {
-		t.Log("trying to fetch from node:", i)
+		log.Debug("trying to fetch from node", "node index", i)
 
 		url := node.URL + "/" + "bzz:/" + hash
 		response, err := httpClient.Get(url)
 		if err != nil {
 			t.Fatal(err)
 		}
-		t.Log("response code:", response.StatusCode)
+		log.Debug("got response from node", "response code", response.StatusCode)
 
 		if i == nodeToSkip {
-			t.Log("reached node to skip, status:", response.StatusCode)
+			log.Debug("reached node to skip", "status code", response.StatusCode)
 
 			if response.StatusCode != http.StatusUnauthorized {
 				t.Fatalf("should be a 401")
@@ -558,7 +539,7 @@ func TestAccessACT(t *testing.T) {
 func TestKeypairSanity(t *testing.T) {
 	salt := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, salt); err != nil {
-		panic("reading from crypto/rand failed: " + err.Error())
+		t.Fatalf("reading from crypto/rand failed: %v", err.Error())
 	}
 	sharedSecret := "a85586744a1ddd56a7ed9f33fa24f40dd745b3a941be296a0d60e329dbdb896d"
 

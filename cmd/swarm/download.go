@@ -79,7 +79,7 @@ func download(ctx *cli.Context) {
 			}
 		} else {
 			// we are downloading a file
-			log.Debug("downloading file/path from a manifest", uri.Addr, "uri.Path", uri.Path)
+			log.Debug("downloading file/path from a manifest", "uri.Addr", uri.Addr, "uri.Path", uri.Path)
 
 			err := client.DownloadFile(uri.Addr, uri.Path, dest, credentials)
 			if err != nil {
@@ -100,5 +100,4 @@ func download(ctx *cli.Context) {
 	if err != nil {
 		utils.Fatalf("download: %v", err)
 	}
-
 }
