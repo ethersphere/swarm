@@ -251,7 +251,7 @@ func TestBMTConcurrentUse(t *testing.T) {
 			bmt := New(pool)
 			data := newData(BufferSize)
 			n := rand.Intn(bmt.Size())
-			errc <- testHasherCorrectness(bmt, hasher, data, n, 128)
+			errc <- testHasherCorrectness(bmt, hasher, data, n, 2048)
 		}()
 	}
 LOOP:
@@ -356,7 +356,7 @@ func testHasherCorrectness(bmt *Hasher, hasher BaseHasherFunc, d []byte, n, coun
 
 //
 func BenchmarkBMT(t *testing.B) {
-	for size := 4096; size >= 128; size /= 2 {
+	for size := 65536; size >= 128; size /= 2 {
 		t.Run(fmt.Sprintf("%v_size_%v", "SHA3", size), func(t *testing.B) {
 			benchmarkSHA3(t, size)
 		})
