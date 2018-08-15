@@ -212,7 +212,6 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 		switch m.Access.Type {
 		case "pass":
 			if credentials != "" {
-				// decrypt
 				key, err := NewSessionKeyPassword(credentials, m.Access)
 				if err != nil {
 					return err
@@ -226,8 +225,6 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 				enc := NewRefEncryption(len(ref) - 8)
 				decodedRef, err := enc.Decrypt(ref, key)
 				if err != nil {
-					// Return ErrDecrypt to be able to detect
-					// invalid decryption in hinger levels of code.
 					return ErrDecrypt
 				}
 
@@ -257,8 +254,6 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 			enc := NewRefEncryption(len(ref) - 8)
 			decodedRef, err := enc.Decrypt(ref, key)
 			if err != nil {
-				// Return ErrDecrypt to be able to detect
-				// invalid decryption in hinger levels of code.
 				return ErrDecrypt
 			}
 
@@ -290,7 +285,6 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 			accessKeyDecryptionKey := hasher.Sum(nil)
 
 			lk := hex.EncodeToString(lookupKey)
-			log.Error("lookup", "lk", lk, "act", m.Access.Act)
 			list, err := a.GetManifestList(ctx, NOOPDecrypt, storage.Address(common.Hex2Bytes(m.Access.Act)), lk)
 
 			found := ""
@@ -311,8 +305,6 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 			enc := NewRefEncryption(len(v) - 8)
 			decodedRef, err := enc.Decrypt(v, accessKeyDecryptionKey)
 			if err != nil {
-				// Return ErrDecrypt to be able to detect
-				// invalid decryption in hinger levels of code.
 				return ErrDecrypt
 			}
 
@@ -324,8 +316,6 @@ func (a *API) doDecrypt(ctx context.Context, credentials string, pk *ecdsa.Priva
 			enc = NewRefEncryption(len(ref) - 8)
 			decodedMainRef, err := enc.Decrypt(ref, decodedRef)
 			if err != nil {
-				// Return ErrDecrypt to be able to detect
-				// invalid decryption in hinger levels of code.
 				return ErrDecrypt
 			}
 			m.Hash = hex.EncodeToString(decodedMainRef)
