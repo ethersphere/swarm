@@ -414,6 +414,12 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, resourceManifestHash)
 	}
 
+	// Check we get a not found error when trying to get the resource with a made-up manifest
+	_, err = client.GetResource(nil, "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb")
+	if err != ErrNoResourceUpdatesFound {
+		t.Fatalf("Expected to receive ErrNoResourceUpdatesFound error. Got: %s", err)
+	}
+
 	reader, err := client.GetResource(nil, correctManifestAddrHex)
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)

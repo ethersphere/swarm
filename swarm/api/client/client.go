@@ -596,6 +596,9 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 	return string(data), nil
 }
 
+// ErrNoResourceUpdatesFound is returned when Swarm cannot find updates of the given resource
+var ErrNoResourceUpdatesFound = errors.New("No updates found for this resource")
+
 // CreateResource creates a Mutable Resource with the given name and frequency, initializing it with the provided
 // data. Data is interpreted as multihash or not depending on the multihash parameter.
 // startTime=0 means "now"
@@ -677,6 +680,21 @@ func (c *Client) getResource(lookup *mru.LookupParams, manifestAddressOrDomain s
 	if err != nil {
 		return nil, err
 	}
+
+	if res.StatusCode != http.StatusOK {
+		if res.StatusCode == http.StatusNotFound {
+			return nil, ErrNoResourceUpdatesFound
+		}
+		errorMessageBytes, err := ioutil.ReadAll(res.Body)
+		var errorMessage string
+		if err != nil {
+			errorMessage = "cannot retrieve error message: " + err.Error()
+		} else {
+			errorMessage = string(errorMessageBytes)
+		}
+		return nil, fmt.Errorf("Error retrieving resource: %s", errorMessage)
+	}
+
 	return res.Body, nil
 }
 
