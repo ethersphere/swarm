@@ -216,7 +216,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if pss.IsActiveHandshake {
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
-
 	self.api = api.NewAPI(self.fileStore, self.dns, resourceHandler)
 	// Manifests for Smart Hosting
 	log.Debug(fmt.Sprintf("-> Web3 virtual server API"))
@@ -373,7 +372,12 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	// start swarm http proxy server
 	if self.config.Port != "" {
 		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
-		server := httpapi.NewServer(self.api, self.config.Cors)
+		serviceGetterMap := map[string]func() interface{}{
+			"dbCapacity":   self.lstore.DbStore.GetCapacity,
+			"dbEntryCount": self.lstore.DbStore.GetEntryCount,
+		}
+
+		server := httpapi.NewServer(self.api, self.config.Cors, serviceGetterMap)
 
 		go server.ListenAndServe(addr)
 	}

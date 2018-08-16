@@ -770,3 +770,11 @@ func databaseExists(path string) bool {
 	defer tdb.Close()
 	return true
 }
+
+func (s *LDBStore) GetEntryCount() interface{} {
+	return s.entryCnt
+}
+
+func (s *LDBStore) GetCapacity() interface{} {
+	return s.capacity
+}
