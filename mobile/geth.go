@@ -22,8 +22,12 @@ package geth
 import (
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"path/filepath"
 
+	"github.com/ethereum/go-ethereum/accounts"
+	"github.com/ethereum/go-ethereum/accounts/keystore"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/eth/downloader"
@@ -35,6 +39,8 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/ethereum/go-ethereum/params"
+	"github.com/ethereum/go-ethereum/swarm"
+	swarmapi "github.com/ethereum/go-ethereum/swarm/api"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 )
 
@@ -76,6 +82,15 @@ type NodeConfig struct {
 
 	// Listening address of pprof server.
 	PprofAddress string
+
+	// SwarmEnabled specifies whether the node should run the Swarm protocol.
+	SwarmEnabled bool
+
+	// SwarmAccount specifies account ID used for starting Swarm node.
+	SwarmAccount string
+
+	// SwarmAccountPassword specifies password for account retrieval from the keystore.
+	SwarmAccountPassword string
 }
 
 // defaultNodeConfig contains the default node configuration values to use if all
@@ -185,6 +200,21 @@ func NewNode(datadir string, config *NodeConfig) (stack *Node, _ error) {
 			return nil, fmt.Errorf("whisper init: %v", err)
 		}
 	}
+
+	// Register the Swarm (BZZ) protocol if requested
+	if config.SwarmEnabled {
+		bzzconfig := swarmapi.NewConfig()
+		key, err := getSwarmKey(rawStack, config.SwarmAccount, config.SwarmAccountPassword)
+		if err == nil {
+			bzzconfig.Init(key.PrivateKey)
+		}
+		if err := rawStack.Register(func(*node.ServiceContext) (node.Service, error) {
+			return swarm.NewSwarm(bzzconfig, nil)
+		}); err != nil {
+			return nil, fmt.Errorf("swarm init: %v", err)
+		}
+	}
+
 	return &Node{rawStack}, nil
 }
 
@@ -216,4 +246,30 @@ func (n *Node) GetNodeInfo() *NodeInfo {
 // GetPeersInfo returns an array of metadata objects describing connected peers.
 func (n *Node) GetPeersInfo() *PeerInfos {
 	return &PeerInfos{n.node.Server().PeersInfo()}
+}
+
+// getSwarmKey is a helper for finding and decrypting given account's private key
+// to be used with Swarm.
+func getSwarmKey(stack *node.Node, account, password string) (*keystore.Key, error) {
+	if account == "" || password == "" {
+		return nil, nil // it's not an error, just skip
+	}
+
+	address := common.HexToAddress(account)
+	acc := accounts.Account{
+		Address: address,
+	}
+
+	am := stack.AccountManager()
+	ks := am.Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
+	a, err := ks.Find(acc)
+	if err != nil {
+		return nil, fmt.Errorf("find account: %v", err)
+	}
+	keyjson, err := ioutil.ReadFile(a.URL.Path)
+	if err != nil {
+		return nil, fmt.Errorf("load key: %v", err)
+	}
+
+	return keystore.DecryptKey(keyjson, password)
 }
