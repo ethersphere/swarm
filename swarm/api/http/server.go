@@ -80,7 +80,7 @@ func (m methodHandler) ServeHTTP(rw http.ResponseWriter, r *http.Request) {
 	rw.WriteHeader(http.StatusMethodNotAllowed)
 }
 
-func NewServer(api *api.API, corsString string, serviceGetterMap map[string]func() interface{}) *Server {
+func NewServer(api *api.API, corsString string) *Server {
 	var allowedOrigins []string
 	for _, domain := range strings.Split(corsString, ",") {
 		allowedOrigins = append(allowedOrigins, strings.TrimSpace(domain))
@@ -163,14 +163,6 @@ func NewServer(api *api.API, corsString string, serviceGetterMap map[string]func
 			InitLoggingResponseWriter,
 		),
 	})
-	mux.Handle("/node", methodHandler{
-		"GET": Adapt(
-			http.HandlerFunc(server.HandleNodeInfo(serviceGetterMap)),
-			SetRequestID,
-			InitLoggingResponseWriter,
-		),
-	})
-
 	server.Handler = c.Handler(mux)
 
 	return server
@@ -221,22 +213,6 @@ func (s *Server) HandleRootPaths(w http.ResponseWriter, r *http.Request) {
 		w.Write(faviconBytes)
 	default:
 		RespondError(w, r, "Not Found", http.StatusNotFound)
-	}
-}
-
-func (s *Server) HandleNodeInfo(getterMap map[string]func() interface{}) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		responseData := map[string]string{}
-		for k, v := range getterMap {
-			switch k {
-			case "dbCapacity":
-				responseData[k] = fmt.Sprintf("%d", v().(uint64))
-			case "dbEntryCount":
-				responseData[k] = fmt.Sprintf("%d", v().(uint64))
-			}
-		}
-
-		RespondMap(w, r, responseData, http.StatusOK)
 	}
 }
 

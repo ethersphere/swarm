@@ -372,12 +372,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	// start swarm http proxy server
 	if self.config.Port != "" {
 		addr := net.JoinHostPort(self.config.ListenAddr, self.config.Port)
-		serviceGetterMap := map[string]func() interface{}{
-			"dbCapacity":   self.lstore.DbStore.GetCapacity,
-			"dbEntryCount": self.lstore.DbStore.GetEntryCount,
-		}
-
-		server := httpapi.NewServer(self.api, self.config.Cors, serviceGetterMap)
+		server := httpapi.NewServer(self.api, self.config.Cors)
 
 		go server.ListenAndServe(addr)
 	}
@@ -464,7 +459,7 @@ func (self *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   &Info{self.config, chequebook.ContractParams},
+			Service:   &Info{self.config, chequebook.ContractParams, NewLocalStoreStats(self.lstore)},
 			Public:    true,
 		},
 		// admin APIs
@@ -530,8 +525,33 @@ func (self *Swarm) SetChequebook(ctx context.Context) error {
 type Info struct {
 	*api.Config
 	*chequebook.Params
+	StoreStats *LocalStoreStats
 }
 
 func (self *Info) Info() *Info {
+	self.StoreStats.Info()
 	return self
+}
+
+type LocalStoreStats struct {
+	getters map[string]func() interface{}
+
+	DbCapacity   uint64
+	DbEntryCount uint64
+}
+
+func NewLocalStoreStats(l *storage.LocalStore) *LocalStoreStats {
+	getters := map[string]func() interface{}{}
+	getters["dbCapacity"] = l.DbStore.GetCapacity
+	getters["dbEntryCount"] = l.DbStore.GetEntryCount
+
+	stats := &LocalStoreStats{
+		getters: getters,
+	}
+	return stats
+}
+
+func (self *LocalStoreStats) Info() {
+	self.DbCapacity = self.getters["dbCapacity"]().(uint64)
+	self.DbEntryCount = self.getters["dbEntryCount"]().(uint64)
 }

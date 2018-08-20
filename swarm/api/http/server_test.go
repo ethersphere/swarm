@@ -93,8 +93,8 @@ func TestResourcePostMode(t *testing.T) {
 	}
 }
 
-func serverFunc(api *api.API, serviceGetters map[string]func() interface{}) testutil.TestServer {
-	return NewServer(api, "", serviceGetters)
+func serverFunc(api *api.API) testutil.TestServer {
+	return NewServer(api, "")
 }
 
 func newTestSigner() (*mru.GenericSigner, error) {
@@ -1010,14 +1010,7 @@ func TestGet(t *testing.T) {
 			headers:            map[string]string{},
 			expectedStatusCode: http.StatusNotFound,
 			verbose:            false,
-		}, {
-			uri:                fmt.Sprintf("%s/node", srv.URL),
-			method:             "GET",
-			headers:            map[string]string{"Accept": "*/*"},
-			expectedStatusCode: http.StatusOK,
-			assertResponseBody: "dbCapacity: 5000000",
-		},
-	} {
+		}} {
 		t.Run("GET "+testCase.uri, func(t *testing.T) {
 			res, body := httpDo(testCase.method, testCase.uri, nil, testCase.headers, testCase.verbose, t)
 			if res.StatusCode != testCase.expectedStatusCode {

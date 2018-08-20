@@ -78,30 +78,6 @@ func RespondTemplate(w http.ResponseWriter, r *http.Request, templateName, msg s
 	})
 }
 
-func RespondMap(w http.ResponseWriter, r *http.Request, m map[string]string, code int) {
-	log.Debug("RespondMap", "ruid", GetRUID(r.Context()))
-
-	w.WriteHeader(code)
-
-	if code >= 400 {
-		w.Header().Del("Cache-Control")
-		w.Header().Del("ETag")
-	}
-
-	acceptHeader := r.Header.Get("Accept")
-	// this cannot be in a switch since an Accept header can have multiple values: "Accept: */*, text/html, application/xhtml+xml, application/xml;q=0.9, */*;q=0.8"
-	if strings.Contains(acceptHeader, "application/json") {
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(m); err != nil {
-			RespondError(w, r, "Internal server error", http.StatusInternalServerError)
-		}
-	} else {
-		for k, v := range m {
-			w.Write([]byte(k + ": " + v + "\n"))
-		}
-	}
-}
-
 func RespondError(w http.ResponseWriter, r *http.Request, msg string, code int) {
 	log.Debug("RespondError", "ruid", GetRUID(r.Context()), "uri", GetURI(r.Context()))
 	RespondTemplate(w, r, "error", msg, code)
