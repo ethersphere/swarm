@@ -93,7 +93,7 @@ func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
 	select {
 	case f.offerC <- source:
 	case <-ctx.Done():
-		log.Error("fetcher.offer", "err", ctx.Err())
+		log.Debug("fetcher.offer", "err", ctx.Err())
 	}
 }
 
@@ -102,7 +102,7 @@ func (f *Fetcher) Request(ctx context.Context) {
 	select {
 	case f.requestC <- struct{}{}:
 	case <-ctx.Done():
-		log.Error("fetcher.request", "err", ctx.Err())
+		log.Debug("fetcher.request", "err", ctx.Err())
 	}
 }
 
