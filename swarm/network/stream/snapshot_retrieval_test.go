@@ -45,7 +45,6 @@ const (
 //Files are uploaded to nodes, other nodes try to retrieve the file
 //Number of nodes can be provided via commandline too.
 func TestFileRetrieval(t *testing.T) {
-	t.Skip("not working")
 	if *nodes != 0 {
 		err := runFileRetrievalTest(*nodes)
 		if err != nil {
@@ -127,10 +126,7 @@ func runFileRetrievalTest(nodeCount int) error {
 				return nil, nil, err
 			}
 			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				store.Close()
-			}
+
 			localStore := store.(*storage.LocalStore)
 			netStore, err := storage.NewSyncNetStore(localStore, nil)
 			if err != nil {
@@ -147,6 +143,12 @@ func runFileRetrievalTest(nodeCount int) error {
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
+
+			cleanup = func() {
+				os.RemoveAll(datadir)
+				netStore.Close()
+				r.Close()
+			}
 
 			return r, cleanup, nil
 
@@ -274,10 +276,7 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 				return nil, nil, err
 			}
 			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				store.Close()
-			}
+
 			localStore := store.(*storage.LocalStore)
 			netStore, err := storage.NewSyncNetStore(localStore, nil)
 			if err != nil {
@@ -295,6 +294,12 @@ func runRetrievalTest(chunkCount int, nodeCount int) error {
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucketKeyFileStore = simulation.BucketKey("filestore")
 			bucket.Store(bucketKeyFileStore, fileStore)
+
+			cleanup = func() {
+				os.RemoveAll(datadir)
+				netStore.Close()
+				r.Close()
+			}
 
 			return r, cleanup, nil
 
