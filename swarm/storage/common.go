@@ -18,6 +18,8 @@ package storage
 import (
 	"context"
 	"time"
+
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 var putTimeout = 30 * time.Second
@@ -38,7 +40,7 @@ func PutChunks(store *LocalStore, chunks ...Chunk) []error {
 
 func put(store *LocalStore, n int, f func(i int64) Chunk) (hs []Address, errs []error) {
 	for i := int64(0); i < int64(n); i++ {
-		chunk := f(DefaultChunkSize)
+		chunk := f(ch.DefaultSize)
 		err := store.Put(context.TODO(), chunk)
 		errs = append(errs, err)
 		hs = append(hs, chunk.Address())

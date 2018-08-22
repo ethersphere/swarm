@@ -198,7 +198,6 @@ func (s *Simulation) Close() {
 
 	s.shutdownWG.Wait()
 	s.Net.Shutdown()
-
 }
 
 // Done returns a channel that is closed when the simulation

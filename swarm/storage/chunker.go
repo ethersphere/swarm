@@ -24,6 +24,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	opentracing "github.com/opentracing/opentracing-go"
@@ -65,10 +66,6 @@ The hashing itself does use extra copies and allocation though, since it does ne
 
 var (
 	errAppendOppNotSuported = errors.New("Append operation not supported")
-)
-
-const (
-	DefaultChunkSize int64 = 4096
 )
 
 type ChunkerParams struct {
@@ -134,7 +131,7 @@ type TreeChunker struct {
 func TreeJoin(ctx context.Context, addr Address, getter Getter, depth int) *LazyChunkReader {
 	jp := &JoinerParams{
 		ChunkerParams: ChunkerParams{
-			chunkSize: DefaultChunkSize,
+			chunkSize: ch.DefaultSize,
 			hashSize:  int64(len(addr)),
 		},
 		addr:   addr,
@@ -154,7 +151,7 @@ func TreeSplit(ctx context.Context, data io.Reader, size int64, putter Putter) (
 	tsp := &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
-				chunkSize: DefaultChunkSize,
+				chunkSize: ch.DefaultSize,
 				hashSize:  putter.RefSize(),
 			},
 			reader: data,

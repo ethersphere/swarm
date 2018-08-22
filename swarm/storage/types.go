@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 const MaxPO = 16
@@ -114,7 +115,9 @@ func MakeHashFunc(hash string) SwarmHasher {
 	case "BMT":
 		return func() SwarmHash {
 			hasher := sha3.NewKeccak256
-			pool := bmt.NewTreePool(hasher, bmt.SegmentCount, bmt.PoolSize)
+			hasherSize := hasher().Size()
+			segmentCount := ch.DefaultSize / hasherSize
+			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 			return bmt.New(pool)
 		}
 	}
@@ -232,11 +235,11 @@ func GenerateRandomChunk(dataSize int64) Chunk {
 }
 
 func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
-	if dataSize > DefaultChunkSize {
-		dataSize = DefaultChunkSize
+	if dataSize > ch.DefaultSize {
+		dataSize = ch.DefaultSize
 	}
 	for i := 0; i < count; i++ {
-		ch := GenerateRandomChunk(DefaultChunkSize)
+		ch := GenerateRandomChunk(ch.DefaultSize)
 		chunks = append(chunks, ch)
 	}
 	return chunks
@@ -347,6 +350,10 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 
 // Validate that the given key is a valid content address for the given data
 func (v *ContentAddressValidator) Validate(addr Address, data []byte) bool {
+	if l := len(data); l < 9 || l > ch.DefaultSize+8 {
+		return false
+	}
+
 	hasher := v.Hasher()
 	hasher.ResetWithLength(data[:8])
 	hasher.Write(data[8:])

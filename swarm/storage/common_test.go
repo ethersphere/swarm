@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -105,7 +106,7 @@ func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Address, err err
 	ctx, cancel := context.WithTimeout(context.Background(), putTimeout)
 	defer cancel()
 	for i := int64(0); i < int64(n); i++ {
-		chunk := f(DefaultChunkSize)
+		chunk := f(ch.DefaultSize)
 		go func() {
 			select {
 			case errc <- store.Put(ctx, chunk):

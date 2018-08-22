@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 
@@ -183,7 +184,7 @@ func testIterator(t *testing.T, mock bool) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 
-	chunks := GenerateRandomChunks(DefaultChunkSize, chunkcount)
+	chunks := GenerateRandomChunks(ch.DefaultSize, chunkcount)
 
 	for i = 0; i < len(chunks); i++ {
 		chunkkeys[i] = chunks[i].Address()
@@ -284,7 +285,7 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	addrs, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
+	addrs, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -317,7 +318,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	addrs, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
+	addrs, err := mputRandomChunks(ldb, n, int64(hunk.DefaultSize))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -354,7 +355,7 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	defer cleanup()
 
 	n := 100
-	chunks, err := mputRandomChunks(ldb, n, int64(DefaultChunkSize))
+	chunks, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
 	if err != nil {
 		t.Fatalf(err.Error())
 	}
@@ -404,32 +405,11 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 	ldb, cleanup := newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
 
-	// n := 7
-	//
-	// err := mputChunks(ldb, chunks...)
-	// if err != nil {
-	// 	t.Fatal(err.Error())
-	// }
-	// delete all chunks
-	// for i := 0; i < n; i++ {
-	// 	key := chunks[i].Address()
-	// 	ikey := getIndexKey(key)
-	//
-	// 	var indx dpaDBIndex
-	// 	ldb.tryAccessIdx(ikey, &indx)
-	//
-	// 	ldb.delete(indx.Idx, ikey, ldb.po(key))
-	// }
-
-	// log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
-	//
-	// cleanup()
-
 	ldb, cleanup = newLDBStore(t)
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	addrs, err := mputRandomChunks(ldb, capacity+surplus, DefaultChunkSize)
+	addrs, err := mputRandomChunks(ldb, capacity+surplus, ch.DefaultSize)
 	if err != nil {
 		t.Fatal(err.Error())
 	}
