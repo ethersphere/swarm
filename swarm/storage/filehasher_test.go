@@ -2,9 +2,11 @@ package storage
 
 import (
 	"bytes"
-	crand "crypto/rand"
+	//crand "crypto/rand"
+	"encoding/binary"
 	"io"
-	"math/rand"
+	//"math/rand"
+	"hash"
 	"testing"
 	"time"
 
@@ -14,7 +16,7 @@ import (
 )
 
 func newAsyncHasher() bmt.SectionWriter {
-	tp := bmt.NewTreePool(sha3.NewKeccak256, 128*128, 32)
+	tp := bmt.NewTreePool(sha3.NewKeccak256, 128, 1)
 	h := bmt.New(tp)
 	return h.NewAsyncWriter(false)
 }
@@ -38,13 +40,11 @@ func TestWriteBuffer(t *testing.T) {
 	offsets := []int{12, 8, 4, 2, 6, 10, 0, 14}
 	r := bytes.NewReader(data)
 	for _, o := range offsets {
-		log.Debug("writing", "o", o)
 		r.Seek(int64(o), io.SeekStart)
 		_, err := fh.WriteBuffer(o, r)
 		if err != nil {
 			t.Fatal(err)
 		}
-		//copy(buf, data[o:o+2])
 	}
 
 	batchone := fh.levels[0].getBatch(0)
@@ -56,50 +56,78 @@ func TestWriteBuffer(t *testing.T) {
 	if !bytes.Equal(batchtwo.batchBuffer, data[8:]) {
 		t.Fatalf("expected batch two data %x, got %x", data[8:], batchtwo.batchBuffer)
 	}
-
-	time.Sleep(time.Second)
 }
 
 func TestSum(t *testing.T) {
 
 	fh := NewFileHasher(newAsyncHasher, 128, 32)
-	//data := make([]byte, 258*fh.ChunkSize())
-	data := make([]byte, 128*fh.ChunkSize())
-	c, err := crand.Read(data)
-	if err != nil {
-		t.Fatal(err)
-	} else if c != len(data) {
-		t.Fatalf("short read %d", c)
+	dataLength := 2 * fh.ChunkSize()
+	data := make([]byte, dataLength)
+	//c, err := crand.Read(data)
+	//	if err != nil {
+	//		t.Fatal(err)
+	//	} else if c != len(data) {
+	//		t.Fatalf("short read %d", c)
+	//	}
+	for i := 0; i < len(data); i++ {
+		data[i] = byte(i % 256)
 	}
-
 	var offsets []int
 	for i := 0; i < len(data)/32; i++ {
 		offsets = append(offsets, i*32)
 	}
 	r := bytes.NewReader(data)
-	for {
-		if len(offsets) == 0 {
-			break
-		}
-		lastIndex := len(offsets) - 1
-		var c int
-		if len(offsets) > 1 {
-			c = rand.Intn(lastIndex)
-		}
-		offset := offsets[c]
-		if c != lastIndex {
-			offsets[c] = offsets[lastIndex]
-		}
-		offsets = offsets[:lastIndex]
-
+	//	for {
+	//		if len(offsets) == 0 {
+	//			break
+	//		}
+	//		lastIndex := len(offsets) - 1
+	//		var c int
+	//		if len(offsets) > 1 {
+	//			c = rand.Intn(lastIndex)
+	//		}
+	//		offset := offsets[c]
+	//		if c != lastIndex {
+	//			offsets[c] = offsets[lastIndex]
+	//		}
+	//		offsets = offsets[:lastIndex]
+	//
+	//		r.Seek(int64(offset), io.SeekStart)
+	//		_, err := fh.WriteBuffer(offset, r)
+	//		if err != nil {
+	//			t.Fatal(err)
+	//		}
+	//	}
+	for i := 0; i < len(offsets); i++ {
+		//offset := offsets[i]
+		offset := i * 32
 		r.Seek(int64(offset), io.SeekStart)
-		_, err := fh.WriteBuffer(offset, r)
+		log.Warn("write", "o", offset)
+		c, err := fh.WriteBuffer(offset, r)
 		if err != nil {
 			t.Fatal(err)
+		} else if c < fh.BlockSize() {
+			t.Fatalf("short read %d", c)
 		}
 	}
-	fh.SetLength(int64(len(data)))
+
+	hasher := func() hash.Hash {
+		return sha3.NewKeccak256()
+	}
+	rb := bmt.NewRefHasher(hasher, dataLength)
+	meta := make([]byte, 8)
+	binary.BigEndian.PutUint64(meta, uint64(dataLength))
+	res := rb.Hash(data)
+	shasher := hasher()
+	shasher.Reset()
+	shasher.Write(meta)
+	shasher.Write(res)
+	x := shasher.Sum(nil)
+
+	time.Sleep(time.Second)
+	t.Logf("hash ref raw: %x", res)
+	t.Logf("hash ref dosum: %x", x)
+	fh.SetLength(int64(dataLength))
 	h := fh.Sum(nil)
 	t.Logf("hash: %x", h)
-
 }

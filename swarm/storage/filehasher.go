@@ -62,7 +62,7 @@ func NewFileHasher(hasherFunc func() bmt.SectionWriter, branches int, secSize in
 			return fh.newBatch()
 		},
 	}
-	fh.digestSize = hasherFunc().Size()
+	fh.digestSize = secSize //hasherFunc().Size()
 
 	fh.levels = append(fh.levels, &level{
 		FileHasher: fh,
@@ -82,23 +82,32 @@ type level struct {
 
 // batch records chunks subsumed under the same parent intermediate chunk
 type batch struct {
-	nodes             []*node // nodes of the batches
-	parent            *node   // pointer to containing
-	nodeCompleteCount int
-	batchBuffer       []byte
-	index             int // offset of the node
-	*level                // pointer to containing level
+	nodes       []*node // nodes of the batches
+	parent      *node   // pointer to containing
+	batchBuffer []byte  // data buffer for batch (divided between nodes)
+	index       int     // offset of the batch
+	*level              // pointer to containing level
 }
 
 // node represent a chunk and embeds an async interface to the chunk hash used
 type node struct {
-	hasher        bmt.SectionWriter // async hasher
-	pos           int               // index of the node chunk within its batch
-	secCnt        int32             // number of sections written
-	nodeBuffer    []byte
-	nodeIndex     int
-	writeComplete chan struct{}
-	*batch        // pointer to containing batch
+	lock       sync.Mutex
+	hasher     bmt.SectionWriter // async hasher
+	pos        int               // index of the node chunk within its batch
+	secCnt     int32             // number of sections written
+	size       int
+	nodeBuffer []byte
+	//writeComplete chan struct{}
+	*batch // pointer to containing batch
+}
+
+// for logging purposes
+func (n *node) getBuffer() []byte {
+	n.lock.Lock()
+	defer n.lock.Unlock()
+	b := make([]byte, len(n.nodeBuffer))
+	copy(b, n.nodeBuffer)
+	return b
 }
 
 // getParentLevel retrieves or creates the next level up from a node/batch/level
@@ -127,6 +136,7 @@ func (lev *level) getBatch(index int) *batch {
 // if it does not currently exist, create it
 func (lev *level) getOrCreateBatch(index int) *batch {
 	pb := lev.getBatch(index)
+	log.Warn("getbatch", "b", fmt.Sprintf("%p", pb))
 	if pb == nil {
 		pb = lev.pool.Get().(*batch)
 		pb.index = index
@@ -167,16 +177,19 @@ func (fh *FileHasher) newBatch() (bt *batch) {
 	bt = &batch{
 		batchBuffer: make([]byte, fh.branches*chunkSize),
 	}
+	log.Debug("newbatch", "bufat", fmt.Sprintf("%p", bt.batchBuffer))
 	for i := range nodes {
 		offset := chunkSize * i
 		nodes[i] = &node{
-			pos:           i,
-			hasher:        fh.hasherFunc(),
-			nodeBuffer:    bt.batchBuffer[offset : offset+chunkSize],
-			batch:         bt,
-			writeComplete: make(chan struct{}),
+			pos:        i,
+			hasher:     fh.hasherFunc(),
+			nodeBuffer: bt.batchBuffer[offset : offset+chunkSize],
+			batch:      bt,
+			//writeComplete: make(chan struct{}),
 		}
 	}
+
+	log.Debug("newbatch node", "bufat", fmt.Sprintf("%p", nodes[0].batchBuffer), "node frst bufat", fmt.Sprintf("%p", nodes[0].nodeBuffer), "node last bufat", fmt.Sprintf("%p", nodes[len(nodes)-1].nodeBuffer))
 	bt.nodes = nodes
 	return bt
 }
@@ -189,7 +202,7 @@ func (fh *FileHasher) OffsetToLevelDepth(c int64) int {
 	return level
 }
 
-// returns data level buffer position for offset globalCount
+// writes data to offset count position
 func (fh *FileHasher) WriteBuffer(globalCount int, r io.Reader) (int, error) {
 
 	// writes are only valid on section thresholds
@@ -202,27 +215,24 @@ func (fh *FileHasher) WriteBuffer(globalCount int, r io.Reader) (int, error) {
 	batchPos := globalCount % (fh.branches * fh.ChunkSize())
 	batchNodeIndex := batchPos / fh.ChunkSize()
 	batchNodePos := batchPos % fh.ChunkSize()
-	//log.Debug("batch", "nodepos", batchNodePos, "node", batchNodeIndex, "global", globalCount, "batchindex", batchIndex, "batchpos", batchPos, "blockSize", fh.BlockSize())
+	log.Debug("batch", "nodepos", batchNodePos, "node", batchNodeIndex, "global", globalCount, "batchindex", batchIndex, "batchpos", batchPos, "blockSize", fh.BlockSize())
 	bt := fh.levels[0].getOrCreateBatch(batchIndex)
 	nod := bt.nodes[batchNodeIndex]
 
-	// Make sure there is a pointer to the data level on the node
-	if nod.level == nil {
-		nod.level = fh.levels[0]
-	}
+	nod.lock.Lock()
 	buf := nod.nodeBuffer[batchNodePos : batchNodePos+fh.BlockSize()]
 	c, err := r.Read(buf)
+	nod.lock.Unlock()
 	if err != nil {
 		return 0, err
 	} else if c < fh.BlockSize() {
 		return 0, io.ErrUnexpectedEOF
 	}
-	//log.Debug("fh writbuf", "c", globalCount, "s", globalCount/fh.BlockSize())
-	nod.hasher.Write(globalCount/fh.BlockSize(), buf)
+	nod.hasher.Write(batchNodePos/fh.BlockSize(), buf)
 	currentCount := atomic.AddInt32(&nod.secCnt, 1)
+	log.Debug("fh writebuf", "c", globalCount, "s", globalCount/fh.BlockSize(), "seccnt", nod.secCnt, "branches", nod.branches, "buflen", len(buf), "buf", buf[:])
 	if currentCount == int32(nod.branches) {
 		nod.done()
-		//nod.writeComplete <- struct{}{}
 	}
 	return fh.BlockSize(), nil
 }
@@ -230,16 +240,7 @@ func (fh *FileHasher) WriteBuffer(globalCount int, r io.Reader) (int, error) {
 // called when the final length of the data is known
 func (fh *FileHasher) SetLength(l int64) {
 	fh.dataLength = l
-
-	// fill out missing levels in the filehasher
-	levelDepth := fh.OffsetToLevelDepth(l)
-	for i := len(fh.levels) - 1; i < levelDepth; i++ {
-		fh.levels = append(fh.levels, &level{
-			levelIndex: i,
-			FileHasher: fh,
-		})
-	}
-	log.Debug("levels", "c", len(fh.levels))
+	return
 }
 
 // dataSpan returns the size of data encoded under the current node
@@ -251,79 +252,103 @@ func (n *node) span() uint64 {
 	return span
 }
 
-func (n *node) Write(sectionIndex int, section []byte) {
-	n.write(sectionIndex, section)
-}
-
 func (n *node) write(sectionIndex int, section []byte) {
 	currentCount := atomic.AddInt32(&n.secCnt, 1)
 
-	log.Debug("writing", "pos", n.pos, "section", sectionIndex, "level", n.levelIndex)
+	log.Debug("writing", "pos", n.pos, "section", sectionIndex, "level", n.levelIndex, "data", section, "buffer", fmt.Sprintf("%p", n.nodeBuffer), "batchbuffer", fmt.Sprintf("%p", n.batchBuffer), "barch", fmt.Sprintf("%p", n.batch), "level", fmt.Sprintf("%p", n.getLevel(n.levelIndex)))
 	n.hasher.Write(sectionIndex/n.BlockSize(), section)
-	copy(n.nodeBuffer[sectionIndex:sectionIndex+n.BlockSize()], section)
+	bytePos := sectionIndex * n.BlockSize()
+	n.lock.Lock()
+	copy(n.nodeBuffer[bytePos:bytePos+n.BlockSize()], section)
+	n.lock.Unlock()
 	if currentCount == int32(n.branches) {
 		n.done()
 	}
 }
 
 func (n *node) done() {
-	go func() {
-		parentBatchIndex := n.index / n.branches
-		parentBatch := n.getLevel(n.levelIndex + 1).getOrCreateBatch(parentBatchIndex)
+	parentBatchIndex := n.index / n.branches
+	parentBatch := n.getLevel(n.levelIndex + 1).getOrCreateBatch(parentBatchIndex)
+	go func(parentBatch *batch) {
 		parentNodeIndex := n.index % n.branches
 		parentNode := parentBatch.nodes[parentNodeIndex]
 		serializedLength := make([]byte, 8)
-		binary.LittleEndian.PutUint64(serializedLength, parentNode.span())
-		parentNode.write(n.pos*n.BlockSize(), n.nodeBuffer)
-	}()
+		binary.BigEndian.PutUint64(serializedLength, parentNode.span())
+		h := n.hasher.Sum(nil, n.ChunkSize(), serializedLength)
+		parentNode.write(n.pos, h)
+	}(parentBatch)
 
 }
 
 // length is global length
 func (n *node) sum(length int64, nodeSpan int64) {
 
-	log.Debug("node sum", "l", length, "span", nodeSpan)
-	// nodeSpan is the total byte size of a complete tree under the current node
-	nodeSpan *= int64(n.branches)
-
-	// if a new batch would be started
-	batchSpan := nodeSpan * int64(n.branches)
-	nodeIndex := length % int64(batchSpan)
-	var parentNode *node
-	if nodeIndex == 0 && len(n.levels) > n.levelIndex+1 {
-		batchIndex := (length-1)/int64(batchSpan) + 1
-		parentNode = n.levels[n.levelIndex+1].getBatch(int(batchIndex)).nodes[nodeIndex]
-		parentNode.sum(length, nodeSpan)
+	if length == 0 {
+		n.result <- n.hasher.Sum(nil, 0, nil)
 		return
+	}
+	log.Warn("node sum 0", "l", length, "span", nodeSpan)
+	// nodeSpan is the total byte size of a complete tree under the current node
+	levelMul := int64(n.levelIndex * n.ChunkSize())
+	if levelMul > 0 {
+		nodeSpan *= levelMul
 	}
 
 	// dataLength is the actual length of data under the current node
-	dataLength := uint64(length % nodeSpan)
+	var dataLength uint64
+	dataLength = uint64(length) % uint64(nodeSpan)
+	if n.levelIndex == 0 && dataLength == 0 {
+		dataLength = uint64(n.ChunkSize())
+	}
 
 	// meta is the length of actual data in the nodespan
 	meta := make([]byte, 8)
 	binary.BigEndian.PutUint64(meta, dataLength)
 
-	log.Debug("underlen", "l", dataLength)
+	log.Debug("underlen", "l", dataLength, "nextlevel", n.levelIndex+1)
+
 	// bmtLength is the actual length of bytes in the chunk
 	// if the node is an intermediate node (level != 0 && len(levels) > 1), bmtLength will be a multiple 32 bytes
 	var bmtLength uint64
 	if n.levelIndex == 0 {
 		bmtLength = dataLength
 	} else {
-		bmtLength = ((dataLength - 1) / uint64((nodeSpan/int64(n.branches)+1)*int64(n.hasher.BlockSize())))
+		bmtLength = (dataLength - 1) / (uint64((nodeSpan/int64(n.branches) + 1) * int64(n.secsize)))
 	}
 
-	log.Debug("summing", "l", bmtLength, "dl", dataLength)
-	hash := n.hasher.Sum(nil, int(bmtLength), meta)
+	// if a new batch would be started
+
+	var parentNode *node
+	if n.levelIndex != len(n.levels)-1 {
+		batchSpan := nodeSpan * int64(n.branches)
+		nodeIndex := ((length % int64(batchSpan)) - 1) / int64(n.ChunkSize())
+		nodeBatchIndex := ((length % int64(n.branches)) - 1) / int64(n.branches*n.ChunkSize())
+		batchIndex := (length - 1) / int64(batchSpan) // + 1
+
+		//parentLevel := n.getLevel(n.levelIndex + 1)
+		parentLevel := n.levels[n.levelIndex+1]
+		parentBatch := parentLevel.getBatch(int(batchIndex))
+		if parentBatch != nil {
+			parentNode = parentBatch.nodes[nodeBatchIndex]
+		}
+
+		log.Warn("node sum 1", "b", n.branches, "lv", len(n.levels), "nln", n.levelIndex, "nidx", nodeIndex, "parentnode", fmt.Sprintf("%p", parentNode), "parentlevel", parentLevel)
+
+		if parentBatch != nil {
+			b := parentBatch.nodes[0].getBuffer()
+			log.Warn("node sum 2", "batchindex", batchIndex, "buf", b)
+		}
+	}
 
 	// are we on the root level?
 	if parentNode != nil {
-		log.Warn("continue")
+		log.Warn("continue", "hasher", fmt.Sprintf("%p", n.hasher), "parent", fmt.Sprintf("%p", parentNode), "this", fmt.Sprintf("%p", n))
 		parentNode.sum(length, nodeSpan)
 		return
 	}
 
+	log.Debug("summing", "l", length, "dl", dataLength, "meta", meta, "bmtlength", bmtLength, "hasher", fmt.Sprintf("%p", n.hasher), "this", fmt.Sprintf("%p", n))
+	hash := n.hasher.Sum(nil, int(dataLength), meta)
 	n.result <- hash
 }
 
@@ -339,10 +364,6 @@ func (fh *FileHasher) Sum(b []byte) []byte {
 
 	// handle edge case where the file is empty
 	if fh.dataLength == 0 {
-		//		h := fh.hasherFunc()
-		//		zero := [8]byte{}
-		//		h.ResetWithLength(zero[:])
-		//		return h.Sum(b)
 		return fh.hasherFunc().Sum(nil, 0, make([]byte, 8))
 	}
 
@@ -359,7 +380,9 @@ func (fh *FileHasher) Sum(b []byte) []byte {
 	log.Debug("lastnode", "batchindex", lastBatchIndexInFile, "nodeindex", nodeIndexInLastBatch)
 
 	// asynchronously call sum on this node and wait for the final result
-	go lastNode.sum(fh.dataLength, int64(fh.ChunkSize()))
+	go func() {
+		lastNode.sum(fh.dataLength, int64(fh.ChunkSize()))
+	}()
 	return <-fh.result
 }
 
