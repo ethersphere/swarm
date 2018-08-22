@@ -93,7 +93,7 @@ func (h *Handler) SetStore(store *storage.SyncNetStore) {
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	dataLength := len(data)
 	if dataLength < minimumChunkLength || dataLength > chunk.DefaultSize+8 {
-		log.Error("invalid chunk size", "addr", chunkAddr.Hex(), "size", dataLength)
+		// log.Error("invalid chunk size", "addr", chunkAddr.Hex(), "size", dataLength)
 		return false
 	}
 
