@@ -216,7 +216,10 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			want.Set(i/HashSize, true)
 			// create request and wait until the chunk data arrives and is stored
 			go func(w func(context.Context) error) {
-				errC <- w(ctx)
+				select {
+				case errC <- w(ctx):
+				case <-c.quit:
+				}
 			}(wait)
 		}
 	}
@@ -229,9 +232,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 				if err != nil {
 					log.Error("client.handleOfferedHashesMsg() error waiting for chunk", "err", err)
 				}
-			case <-ctx.Done():
-				log.Error("client.handleOfferedHashesMsg() timeout waiting for chunk, dropping peer", "ctx.Err()", ctx.Err())
-				p.Drop(ctx.Err())
+			case <-c.quit:
 				return
 			}
 		}

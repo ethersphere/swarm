@@ -19,6 +19,7 @@ package storage
 import (
 	"context"
 	"encoding/hex"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -67,11 +68,6 @@ func NewNetStore(store ChunkStore, nnf NewNetFetcherFunc) (*NetStore, error) {
 func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
-
-	chunk, _ := n.store.Get(ctx, ch.Address())
-	if chunk != nil {
-		return nil
-	}
 
 	// put to the chunk to the store, there should be no error
 	err := n.store.Put(ctx, ch)
@@ -192,14 +188,15 @@ func (n *NetStore) RequestsCacheLen() int {
 // One fetcher object is responsible to fetch one chunk for one address, and keep track of all the
 // peers who have requested it and did not receive it yet.
 type fetcher struct {
-	addr       Address       // address of chunk
-	chunk      Chunk         // fetcher can set the chunk on the fetcher
-	deliveredC chan struct{} // chan signalling chunk delivery to requests
-	cancelledC chan struct{} // chan signalling the fetcher has been cancelled (removed from fetchers in NetStore)
-	netFetcher NetFetcher    // remote fetch function to be called with a request source taken from the context
-	cancel     func()        // cleanup function for the remote fetcher to call when all upstream contexts are called
-	peers      *sync.Map     // the peers which asked for the chunk
-	requestCnt int32         // number of requests on this chunk. If all the requests are done (delivered or context is done) the cancel function is called
+	addr        Address       // address of chunk
+	chunk       Chunk         // fetcher can set the chunk on the fetcher
+	deliveredC  chan struct{} // chan signalling chunk delivery to requests
+	cancelledC  chan struct{} // chan signalling the fetcher has been cancelled (removed from fetchers in NetStore)
+	netFetcher  NetFetcher    // remote fetch function to be called with a request source taken from the context
+	cancel      func()        // cleanup function for the remote fetcher to call when all upstream contexts are called
+	peers       *sync.Map     // the peers which asked for the chunk
+	requestCnt  int32         // number of requests on this chunk. If all the requests are done (delivered or context is done) the cancel function is called
+	deliverOnce *sync.Once    // guarantees that we only close deliveredC once
 }
 
 // newFetcher creates a new fetcher object for the fiven addr. fetch is the function which actually
@@ -212,10 +209,11 @@ func newFetcher(addr Address, nf NetFetcher, cancel func(), peers *sync.Map) *fe
 	cancelOnce := &sync.Once{}        // cancel should only be called once
 	cancelledC := make(chan struct{}) // closed when fetcher is cancelled
 	return &fetcher{
-		addr:       addr,
-		deliveredC: make(chan struct{}),
-		cancelledC: cancelledC,
-		netFetcher: nf,
+		addr:        addr,
+		deliveredC:  make(chan struct{}),
+		deliverOnce: &sync.Once{},
+		cancelledC:  cancelledC,
+		netFetcher:  nf,
 		cancel: func() {
 			cancelOnce.Do(func() {
 				cancel()
@@ -262,14 +260,18 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 		return nil, rctx.Err()
 	case <-f.deliveredC:
 		return f.chunk, nil
+	case <-f.cancelledC:
+		return nil, fmt.Errorf("fetcher cancelled")
 	}
 }
 
 // deliver is called by NetStore.Put to notify all pending requests
 func (f *fetcher) deliver(ctx context.Context, ch Chunk) {
-	f.chunk = ch
-	// closing the deliveredC channel will terminate ongoing requests
-	close(f.deliveredC)
+	f.deliverOnce.Do(func() {
+		f.chunk = ch
+		// closing the deliveredC channel will terminate ongoing requests
+		close(f.deliveredC)
+	})
 }
 
 // SyncNetStore is a wrapped NetStore with SyncDB functionality
