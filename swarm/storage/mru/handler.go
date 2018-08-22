@@ -93,6 +93,7 @@ func (h *Handler) SetStore(store *storage.SyncNetStore) {
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	dataLength := len(data)
 	if dataLength < minimumChunkLength || dataLength > chunk.DefaultSize+8 {
+		log.Error("invalid chunk size", "addr", chunkAddr.Hex(), "size", dataLength)
 		return false
 	}
 
@@ -102,7 +103,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 		rootAddr, _ := metadataHash(data)
 		valid := bytes.Equal(chunkAddr, rootAddr)
 		if !valid {
-			log.Debug("Invalid root metadata chunk with address", "addr", chunkAddr.Hex())
+			log.Error("Invalid root metadata chunk with address", "addr", chunkAddr.Hex())
 		}
 		return valid
 	}
@@ -114,7 +115,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// First, deserialize the chunk
 	var r SignedResourceUpdate
 	if err := r.fromChunk(chunkAddr, data); err != nil {
-		log.Debug("Invalid resource chunk", "addr", chunkAddr.Hex(), "err", err.Error())
+		log.Error("Invalid resource chunk", "addr", chunkAddr.Hex(), "err", err.Error())
 		return false
 	}
 
@@ -122,7 +123,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// that was used to retrieve this chunk
 	// if this validation fails, someone forged a chunk.
 	if !bytes.Equal(chunkAddr, r.updateHeader.UpdateAddr()) {
-		log.Debug("period,version,rootAddr contained in update chunk do not match updateAddr", "addr", chunkAddr.Hex())
+		log.Error("period,version,rootAddr contained in update chunk do not match updateAddr", "addr", chunkAddr.Hex())
 		return false
 	}
 
@@ -130,7 +131,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// If it fails, it means either the signature is not valid, data is corrupted
 	// or someone is trying to update someone else's resource.
 	if err := r.Verify(); err != nil {
-		log.Debug("Invalid signature", "err", err)
+		log.Error("Invalid signature", "err", err)
 		return false
 	}
 
