@@ -83,7 +83,10 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	go p.pq.Run(ctx, func(i interface{}) {
 		wmsg := i.(WrappedPriorityMsg)
-		p.Send(wmsg.Context, wmsg.Msg)
+		err := p.Send(wmsg.Context, wmsg.Msg)
+		if err != nil {
+			log.Error("Message send error", "err", err)
+		}
 	})
 
 	// basic monitoring for pq contention

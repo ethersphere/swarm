@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"time"
 
@@ -118,8 +117,7 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 
 	go func() {
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
-			log.Warn("SendOfferedHashes dropping peer", "peer", p.ID().TerminalString(), "err", err)
-			p.Drop(err)
+			log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
 		}
 	}()
 
@@ -136,8 +134,7 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 		}
 		go func() {
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
-				log.Warn("SendOfferedHashes dropping peer", "peer", p.ID().TerminalString(), "err", err)
-				p.Drop(err)
+				log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
 			}
 		}()
 	}
@@ -230,7 +227,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			select {
 			case err := <-errC:
 				if err != nil {
-					log.Error("client.handleOfferedHashesMsg() error waiting for chunk", "err", err)
+					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk", "err", err)
 				}
 			case <-c.quit:
 				return
@@ -240,8 +237,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		case c.next <- c.batchDone(p, req, hashes):
 		case <-c.quit:
 		case <-ctx.Done():
-			log.Error("client.handleOfferedHashesMsg() timeout waiting for batchDone, dropping peer", "ctx.Err()", ctx.Err())
-			p.Drop(ctx.Err())
+			log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
 		}
 	}()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
@@ -265,13 +261,11 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		select {
 		case <-time.After(120 * time.Second):
-			log.Warn("handleOfferedHashesMsg timeout, so dropping peer")
-			p.Drop(errors.New("handle offered hashes timeout"))
+			log.Warn("handleOfferedHashesMsg timeout")
 			return
 		case err := <-c.next:
 			if err != nil {
-				log.Warn("c.next dropping peer", "err", err)
-				p.Drop(err)
+				log.Warn("c.next error", "err", err)
 				return
 			}
 		case <-c.quit:
@@ -280,8 +274,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(ctx, msg, c.priority)
 		if err != nil {
-			log.Warn("Send err, so dropping peer", "err", err)
-			p.Drop(err)
+			log.Warn("SendPriority error", "err", err)
 		}
 	}()
 	return nil
@@ -315,8 +308,7 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
 		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
-			log.Warn("SendOfferedHashes dropping peer", "err", err)
-			p.Drop(err)
+			log.Warn("SendOfferedHashes error", "err", err)
 		}
 	}()
 	// go p.SendOfferedHashes(s, req.From, req.To)

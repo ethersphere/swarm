@@ -175,7 +175,6 @@ func (d *Delivery) handleRetrieveRequestMsg(_ context.Context, sp *Peer, req *Re
 			err = sp.Deliver(ctx, chunk, s.priority)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
-				sp.Drop(err)
 				return
 			}
 		}
