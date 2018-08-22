@@ -35,7 +35,7 @@ import (
 
 func init() {
 	hs := log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	hf := log.LvlFilterHandler(4, hs)
+	hf := log.LvlFilterHandler(1, hs)
 	h := log.CallerFileHandler(hf)
 	log.Root().SetHandler(h)
 }
