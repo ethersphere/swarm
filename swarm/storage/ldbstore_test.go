@@ -318,7 +318,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	addrs, err := mputRandomChunks(ldb, n, int64(hunk.DefaultSize))
+	addrs, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
