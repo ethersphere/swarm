@@ -238,10 +238,10 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 		}
 	}
 
-	err := sp.Send(ctx, &RetrieveRequestMsg{
+	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
-	})
+	}, Top)
 	if err != nil {
 		return nil, nil, err
 	}

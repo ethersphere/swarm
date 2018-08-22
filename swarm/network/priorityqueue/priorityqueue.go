@@ -98,8 +98,8 @@ func (pq *PriorityQueue) Push(ctx context.Context, x interface{}, p int) error {
 	log.Debug("priority.queue push", "p", p, "len(Queues[p])", len(pq.Queues[p]))
 	select {
 	case pq.Queues[p] <- x:
-	default:
-		return errContention
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 	select {
 	case pq.wakeup <- wakey:

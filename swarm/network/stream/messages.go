@@ -278,7 +278,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			return
 		}
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
-		err := p.Send(ctx, msg)
+		err := p.SendPriority(ctx, msg, c.priority)
 		if err != nil {
 			log.Warn("Send err, so dropping peer", "err", err)
 			p.Drop(err)

@@ -114,7 +114,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, _ uint8) error {
+func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8) error {
 	var sp opentracing.Span
 	ctx, sp = spancontext.StartSpan(
 		ctx,
@@ -125,7 +125,7 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, _ uint8) error 
 		Addr:  chunk.Address(),
 		SData: chunk.Data(),
 	}
-	return p.Send(ctx, msg)
+	return p.SendPriority(ctx, msg, priority)
 }
 
 // SendPriority sends message to the peer using the outgoing priority queue
@@ -171,7 +171,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream:        s.stream,
 	}
 	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
-	return p.Send(ctx, msg)
+	return p.SendPriority(ctx, msg, s.priority)
 }
 
 func (p *Peer) getServer(s Stream) (*server, error) {
