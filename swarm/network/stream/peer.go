@@ -146,7 +146,6 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
-	log.Warn("sendOfferedHashes", "from", f, "to", t, "peer", p.ID(), "addr", p.streamer.addr.ID(), "stream", s.stream)
 	var sp opentracing.Span
 	ctx, sp := spancontext.StartSpan(
 		context.TODO(),
@@ -154,8 +153,6 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	defer sp.Finish()
 
 	hashes, from, to, proof, err := s.SetNextBatch(f, t)
-	sessionAt := s.Server.(*SwarmSyncerServer).sessionAt
-	start := s.Server.(*SwarmSyncerServer).start
 	if err != nil {
 		return err
 	}
@@ -163,7 +160,6 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	if len(hashes) == 0 {
 		return nil
 	}
-	log.Warn("sendOfferedHashes after SetNextBatch", "old_from", f, "old_to", t, "new_from", from, "new_to", to, "peer", p.ID(), "addr", p.streamer.addr.ID(), "stream", s.stream, "sessionAt", sessionAt, "start", start)
 	if proof == nil {
 		proof = &HandoverProof{
 			Handover: &Handover{},
