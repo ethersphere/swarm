@@ -97,14 +97,19 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	var batch []byte
 	i := 0
-	if !s.live && from >= s.sessionAt {
-		return nil, 0, 0, nil, nil
-	}
 	if from == 0 {
 		from = s.start
 	}
 	if to <= from || from >= s.sessionAt {
 		to = math.MaxUint64
+	}
+	if !s.live {
+		if from >= s.sessionAt {
+			return nil, 0, 0, nil, nil
+		}
+		if to >= s.sessionAt {
+			to = s.sessionAt
+		}
 	}
 	var ticker *time.Ticker
 	defer func() {

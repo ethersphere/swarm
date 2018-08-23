@@ -117,6 +117,7 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 	}
 
 	go func() {
+		log.Warn("handleSubscribe first send offer", "from", from, "to", to, "peer", p.ID(), "addr", p.streamer.addr.ID(), "stream", os.stream)
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
 			log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
 		}
@@ -134,6 +135,7 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 			return err
 		}
 		go func() {
+			log.Warn("handleSubscribe second send offer", "from", from, "to", to, "peer", p.ID(), "addr", p.streamer.addr.ID(), "stream", os.stream)
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
 				log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
 			}
