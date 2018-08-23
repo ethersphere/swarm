@@ -158,13 +158,10 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 	}
 	data, _ := s.db.Get(keyEntryCnt)
 	s.entryCnt = BytesToU64(data)
-	s.entryCnt++
 	data, _ = s.db.Get(keyAccessCnt)
 	s.accessCnt = BytesToU64(data)
-	s.accessCnt++
 	data, _ = s.db.Get(keyDataIdx)
 	s.dataIdx = BytesToU64(data)
-	s.dataIdx++
 
 	return s, nil
 }
@@ -263,6 +260,8 @@ func decodeData(addr Address, data []byte) (*chunk, error) {
 // }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
+	log.Trace("collectGarbage", "ratio", ratio)
+
 	metrics.GetOrRegisterCounter("ldbstore.collectgarbage", nil).Inc(1)
 
 	it := s.db.NewIterator()
@@ -532,6 +531,18 @@ func (s *LDBStore) ReIndex() {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
 }
 
+func (s *LDBStore) Delete(addr Address) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	ikey := getIndexKey(addr)
+
+	var indx dpaDBIndex
+	s.tryAccessIdx(ikey, &indx)
+
+	s.delete(indx.Idx, ikey, s.po(addr))
+}
+
 func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
 	metrics.GetOrRegisterCounter("ldbstore.delete", nil).Inc(1)
 
@@ -555,8 +566,8 @@ func (s *LDBStore) BinIndex(po uint8) uint64 {
 }
 
 func (s *LDBStore) Size() uint64 {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	s.lock.RLock()
+	defer s.lock.RUnlock()
 	return s.entryCnt
 }
 
@@ -632,12 +643,12 @@ func (s *LDBStore) writeBatches() {
 	for {
 		select {
 		case <-s.quit:
-			log.Info("DbStore: quit batch write loop")
+			log.Debug("DbStore: quit batch write loop")
 			return
 		case <-s.batchesC:
 			err := s.writeCurrentBatch()
 			if err != nil {
-				log.Info("DbStore: quit batch write loop", "err", err.Error())
+				log.Debug("DbStore: quit batch write loop", "err", err.Error())
 				return
 			}
 		}
@@ -668,12 +679,12 @@ func (s *LDBStore) writeCurrentBatch() error {
 			close(done)
 		}()
 
-		e = s.entryCnt
 		select {
 		case <-s.quit:
 			return errors.New("CollectGarbage terminated due to quit")
 		case <-done:
 		}
+		e = s.entryCnt
 	}
 	return nil
 }
