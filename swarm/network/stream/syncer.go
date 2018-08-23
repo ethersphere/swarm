@@ -46,7 +46,6 @@ type SwarmSyncerServer struct {
 	sessionAt      uint64
 	start          uint64
 	quit           chan struct{}
-	live           bool
 }
 
 // NewSwarmSyncerServer is contructor for SwarmSyncerServer
@@ -62,7 +61,6 @@ func NewSwarmSyncerServer(live bool, po uint8, syncChunkStore storage.SyncChunkS
 		sessionAt:      sessionAt,
 		start:          start,
 		quit:           make(chan struct{}),
-		live:           live,
 	}, nil
 }
 
@@ -97,9 +95,6 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	var batch []byte
 	i := 0
-	if !s.live && from >= s.sessionAt {
-		return nil, 0, 0, nil, nil
-	}
 	if from == 0 {
 		from = s.start
 	}
@@ -141,7 +136,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		wait = true
 	}
 
-	log.Warn("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.syncChunkStore.BinIndex(s.po))
+	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.syncChunkStore.BinIndex(s.po))
 	return batch, from, to, nil, nil
 }
 

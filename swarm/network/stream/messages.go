@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
@@ -209,9 +208,8 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	ctx = context.WithValue(ctx, "source", p.ID().String())
 	for i := 0; i < len(hashes); i += HashSize {
 		hash := hashes[i : i+HashSize]
-		wait := c.NeedData(ctx, hash)
-		log.Warn("hash is offered", "hash", common.Bytes2Hex(hash), "stream", req.Stream, "peer", p.ID(), "addr", p.streamer.addr.ID(), "wait", (wait == nil))
-		if wait != nil {
+
+		if wait := c.NeedData(ctx, hash); wait != nil {
 			ctr++
 			want.Set(i/HashSize, true)
 			// create request and wait until the chunk data arrives and is stored
@@ -251,7 +249,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		c.sessionAt = req.From
 	}
 	from, to := c.nextBatch(req.To + 1)
-	log.Warn("set next batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "addr", p.streamer.addr.ID())
+	log.Trace("set next batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "addr", p.streamer.addr.ID())
 	if from == to {
 		return nil
 	}
