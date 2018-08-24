@@ -19,6 +19,7 @@ package stream
 import (
 	"context"
 	"errors"
+	"time"
 
 	"fmt"
 
@@ -78,25 +79,6 @@ func NewSwarmChunkServer(chunkStore storage.ChunkStore) *SwarmChunkServer {
 	return s
 }
 
-func (s *SwarmChunkServer) context(req *RetrieveRequestMsg) context.Context {
-	var cancel func()
-	ctx := context.Background()
-	// if req.Timeout > 0 {
-	// ctx, cancel = context.WithTimeout(ctx, req.Timeout)
-	// }
-	ctx, cancel = context.WithCancel(ctx)
-
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-s.quit:
-			cancel()
-		}
-	}()
-
-	return ctx
-}
-
 // processDeliveries handles delivered chunk hashes
 func (s *SwarmChunkServer) processDeliveries() {
 	var hashes []byte
@@ -150,15 +132,15 @@ type RetrieveRequestMsg struct {
 }
 
 // TODO: Fix context SNAFU
-func (d *Delivery) handleRetrieveRequestMsg(_ context.Context, sp *Peer, req *RetrieveRequestMsg) error {
+func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
 	log.Trace("received request", "peer", sp.ID(), "hash", req.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
-	//var osp opentracing.Span
-	//ctx, osp = spancontext.StartSpan(
-	//ctx,
-	//"retrieve.request")
-	//defer osp.Finish()
+	var osp opentracing.Span
+	ctx, osp = spancontext.StartSpan(
+		ctx,
+		"retrieve.request")
+	defer osp.Finish()
 
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", false))
 	if err != nil {
@@ -166,11 +148,22 @@ func (d *Delivery) handleRetrieveRequestMsg(_ context.Context, sp *Peer, req *Re
 	}
 	streamer := s.Server.(*SwarmChunkServer)
 
-	ctx := streamer.context(req)
-	ctx = context.WithValue(ctx, "peer", sp.ID().String())
+	var cancel func()
+	// TODO: do something with this hardcoded timeout, maybe use TTL in the future
+	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), 3*time.Second)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-streamer.quit:
+		}
+		cancel()
+	}()
+
 	go func() {
 		chunk, err := d.chunkStore.Get(ctx, req.Addr)
 		if err != nil {
+			log.Warn("ChunkStore.Get can not retrieve chunk", "err", err)
 			return
 		}
 		if req.SkipCheck {
@@ -207,7 +200,9 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
-				// log.Error("invalid chunk delivered", "peer", sp.ID(), "chunk", req.Addr, )
+				// we removed this log because it spams the logs
+				// TODO: Enable this log line
+				// log.Warn("invalid chunk delivered", "peer", sp.ID(), "chunk", req.Addr, )
 			}
 		}
 	}()
