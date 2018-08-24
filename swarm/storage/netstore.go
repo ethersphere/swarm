@@ -24,6 +24,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/swarm/log"
 
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -89,7 +90,7 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 // arrived or context is done
 func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 	chunk, fetch, err := n.get(rctx, ref)
-	if fetch == nil {
+	if chunk != nil || err != nil {
 		return chunk, err
 	}
 	return fetch(rctx)
@@ -111,6 +112,7 @@ func (n *NetStore) Has(ctx context.Context, ref Address) func(context.Context) e
 // Close chunk store
 func (n *NetStore) Close() {
 	n.store.Close()
+	// TODO: loop through fetchers to cancel them
 }
 
 // get attempts at retrieving the chunk from LocalStore
@@ -126,16 +128,17 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 	defer n.mu.Unlock()
 
 	chunk, err := n.store.Get(ctx, ref)
-	if err == nil {
-		// The chunk is available in the LocalStore, so the returned fetch function is not necessary.
-		// However, we still return a fetch function which immediately returns the same chunk again if called.
-		return chunk, func(context.Context) (Chunk, error) { return chunk, nil }, nil
+	if err != nil {
+		// The chunk is not available in the LocalStore, let's get the fetcher for it, or create a new one
+		// if it doesn't exist yet
+		f := n.getOrCreateFetcher(ref)
+		// If the caller needs the chunk, it has to use the returned fetch function to get it
+		return nil, f.Fetch, nil
 	}
-	// The chunk is not available in the LocalStore, let's get the fetcher for it, or create a new one
-	// if it doesn't exist yet
-	f := n.getOrCreateFetcher(ref)
-	// If the caller needs the chunk, it has to use the returned fetch function to get it
-	return nil, f.Fetch, nil
+	if err != ErrChunkNotFound {
+		log.Debug("Received error from LocalStore other than ErrNorFound", "err", err)
+	}
+	return chunk, nil, nil
 }
 
 // getOrCreateFetcher attempts at retrieving an existing fetchers
