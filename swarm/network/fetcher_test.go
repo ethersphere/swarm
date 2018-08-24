@@ -37,12 +37,14 @@ type mockRequester struct {
 	requestC  chan *Request   // when a request is coming it is pushed to requestC
 	waitTimes []time.Duration // with waitTimes[i] you can define how much to wait on the ith request (optional)
 	ctr       int             //counts the number of requests
+	quitC     chan struct{}
 }
 
 func newMockRequester(waitTimes ...time.Duration) *mockRequester {
 	return &mockRequester{
 		requestC:  make(chan *Request),
 		waitTimes: waitTimes,
+		quitC:     make(chan struct{}),
 	}
 }
 
@@ -60,7 +62,7 @@ func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*disco
 	if source == nil {
 		source = &requestedPeerID
 	}
-	return source, make(chan struct{}), nil
+	return source, m.quitC, nil
 }
 
 // TestFetcherSingleRequest creates a Fetcher using mockRequester, and run it with a sample set of peers to skip.
@@ -108,7 +110,7 @@ func TestFetcherSingleRequest(t *testing.T) {
 }
 
 // TestCancelStopsFetcher tests that a cancelled fetcher does not initiate further requests even if its fetch function is called
-func TestCancelStopsFetcher(t *testing.T) {
+func TestFetcherCancelStopsFetcher(t *testing.T) {
 	requester := newMockRequester()
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
@@ -135,7 +137,7 @@ func TestCancelStopsFetcher(t *testing.T) {
 }
 
 // TestFetchCancelStopsRequest tests that calling a Request function with a cancelled context does not initiate a request
-func TestFetchCancelStopsRequest(t *testing.T) {
+func TestFetcherCancelStopsRequest(t *testing.T) {
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
@@ -175,7 +177,7 @@ func TestFetchCancelStopsRequest(t *testing.T) {
 // TestOfferUsesSource tests Fetcher Offer behavior.
 // In this case there should be 1 (and only one) request initiated from the source peer, and the
 // source nodeid should appear in the peersToSkip map.
-func TestOfferUsesSource(t *testing.T) {
+func TestFetcherOfferUsesSource(t *testing.T) {
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
@@ -227,7 +229,7 @@ func TestOfferUsesSource(t *testing.T) {
 	}
 }
 
-func TestOfferAfterRequestUsesSourceFromContext(t *testing.T) {
+func TestFetcherOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 	requester := newMockRequester(100 * time.Millisecond)
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
@@ -284,6 +286,9 @@ func TestFetcherRetryOnTimeout(t *testing.T) {
 	peersToSkip := &sync.Map{}
 
 	// set searchTimeOut to low value so the test is quicker
+	defer func(t time.Duration) {
+		searchTimeout = t
+	}(searchTimeout)
 	searchTimeout = 250 * time.Millisecond
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -345,4 +350,40 @@ func TestFetcherFactory(t *testing.T) {
 		t.Fatalf("fetch timeout")
 	}
 
+}
+
+func TestFetcherRequestQuitRetriesRequest(t *testing.T) {
+	requester := newMockRequester()
+	addr := make([]byte, 32)
+	fetcher := NewFetcher(addr, requester.doRequest, true)
+
+	// make sure searchTimeout is long so it is sure the request is not retried because of timeout
+	defer func(t time.Duration) {
+		searchTimeout = t
+	}(searchTimeout)
+	searchTimeout = 10 * time.Second
+
+	peersToSkip := &sync.Map{}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go fetcher.run(ctx, peersToSkip)
+
+	rctx := context.Background()
+	fetcher.Request(rctx)
+
+	select {
+	case <-requester.requestC:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("request is not initiated")
+	}
+
+	close(requester.quitC)
+
+	select {
+	case <-requester.requestC:
+	case <-time.After(200 * time.Millisecond):
+		t.Fatalf("request is not initiated after failed request")
+	}
 }

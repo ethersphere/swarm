@@ -148,7 +148,10 @@ type SwarmSyncerClient struct {
 	sessionReader storage.LazySectionReader
 	retrieveC     chan *storage.Chunk
 	storeC        chan *storage.Chunk
-	store         storage.ChunkStore
+	store         interface {
+		storage.ChunkStore
+		Has
+	}
 	// chunker               storage.Chunker
 	currentRoot storage.Address
 	requestFunc func(chunk *storage.Chunk)
