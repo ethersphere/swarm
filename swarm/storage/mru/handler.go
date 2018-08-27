@@ -31,7 +31,7 @@ import (
 )
 
 type Handler struct {
-	chunkStore      *storage.SyncNetStore
+	chunkStore      *storage.NetStore
 	HashSize        int
 	resources       map[uint64]*resource
 	resourceLock    sync.RWMutex
@@ -83,7 +83,7 @@ func NewHandler(params *HandlerParams) *Handler {
 }
 
 // SetStore sets the store backend for the Mutable Resource API
-func (h *Handler) SetStore(store *storage.SyncNetStore) {
+func (h *Handler) SetStore(store *storage.NetStore) {
 	h.chunkStore = store
 }
 

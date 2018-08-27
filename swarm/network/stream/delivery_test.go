@@ -327,7 +327,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 				store.Close()
 			}
 			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			netStore, err := storage.NewNetStore(localStore, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -514,7 +514,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 				store.Close()
 			}
 			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			netStore, err := storage.NewNetStore(localStore, nil)
 			if err != nil {
 				return nil, nil, err
 			}

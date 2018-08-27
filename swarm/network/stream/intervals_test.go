@@ -75,7 +75,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 				os.RemoveAll(datadir)
 			}
 			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			netStore, err := storage.NewNetStore(localStore, nil)
 			if err != nil {
 				return nil, nil, err
 			}

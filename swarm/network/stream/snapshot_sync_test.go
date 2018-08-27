@@ -131,7 +131,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 			}
 			bucket.Store(bucketKeyStore, store)
 			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			netStore, err := storage.NewNetStore(localStore, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -295,7 +295,7 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 			}
 			bucket.Store(bucketKeyStore, store)
 			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			netStore, err := storage.NewNetStore(localStore, nil)
 			if err != nil {
 				return nil, nil, err
 			}

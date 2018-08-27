@@ -75,7 +75,7 @@ type Swarm struct {
 	privateKey  *ecdsa.PrivateKey
 	corsString  string
 	swapEnabled bool
-	netStore    *storage.SyncNetStore
+	netStore    *storage.NetStore
 	sfs         *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps          *pss.Pss
 
@@ -169,7 +169,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		return nil, err
 	}
 
-	self.netStore, err = storage.NewSyncNetStore(lstore, nil)
+	self.netStore, err = storage.NewNetStore(lstore, nil)
 	if err != nil {
 		return nil, err
 	}

@@ -102,7 +102,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				}
 			}
 			localStore := store.(*storage.LocalStore)
-			netStore, err := storage.NewSyncNetStore(localStore, nil)
+			netStore, err := storage.NewNetStore(localStore, nil)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -202,7 +202,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			if !ok {
 				return fmt.Errorf("No DB")
 			}
-			netStore := item.(*storage.SyncNetStore)
+			netStore := item.(*storage.NetStore)
 			netStore.Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
 				hashes[i] = append(hashes[i], addr)
 				totalHashes++
@@ -221,7 +221,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 					if !ok {
 						return fmt.Errorf("No DB")
 					}
-					db := item.(*storage.SyncNetStore)
+					db := item.(*storage.NetStore)
 					_, err := db.Get(ctx, key)
 					if err == nil {
 						found++

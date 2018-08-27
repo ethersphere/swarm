@@ -45,14 +45,14 @@ type NetFetcher interface {
 // fetchFuncFactory is a factory object to create a fetch function for a specific chunk address
 type NetStore struct {
 	mu                sync.Mutex
-	store             ChunkStore
+	store             SyncChunkStore
 	fetchers          *lru.Cache
 	NewNetFetcherFunc NewNetFetcherFunc
 }
 
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
 // constructor function that can create a fetch function for a specific chunk address.
-func NewNetStore(store ChunkStore, nnf NewNetFetcherFunc) (*NetStore, error) {
+func NewNetStore(store SyncChunkStore, nnf NewNetFetcherFunc) (*NetStore, error) {
 	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
 	if err != nil {
 		return nil, err
@@ -94,6 +94,14 @@ func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 		return chunk, err
 	}
 	return fetch(rctx)
+}
+
+func (n *NetStore) BinIndex(po uint8) uint64 {
+	return n.store.BinIndex(po)
+}
+
+func (n *NetStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
+	return n.store.Iterator(from, to, po, f)
 }
 
 // FetchFunc returns nil if the store contains the given address. Otherwise it returns a wait function,
@@ -275,33 +283,4 @@ func (f *fetcher) deliver(ctx context.Context, ch Chunk) {
 		// closing the deliveredC channel will terminate ongoing requests
 		close(f.deliveredC)
 	})
-}
-
-// SyncNetStore is a wrapped NetStore with SyncDB functionality
-type SyncNetStore struct {
-	store SyncChunkStore
-	*NetStore
-}
-
-func NewSyncNetStore(store SyncChunkStore, nnf NewNetFetcherFunc) (*SyncNetStore, error) {
-	netStore, err := NewNetStore(store, nnf)
-	if err != nil {
-		return nil, err
-	}
-	return &SyncNetStore{
-		store:    store,
-		NetStore: netStore,
-	}, nil
-}
-
-func (sn *SyncNetStore) BinIndex(po uint8) uint64 {
-	return sn.store.BinIndex(po)
-}
-
-func (sn *SyncNetStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
-	return sn.store.Iterator(from, to, po, f)
-}
-
-func (sn *SyncNetStore) FetchFunc(ctx context.Context, ref Address) func(context.Context) error {
-	return sn.NetStore.FetchFunc(ctx, ref)
 }

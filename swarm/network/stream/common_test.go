@@ -107,7 +107,7 @@ func newStreamerTester(t *testing.T) (*p2ptest.ProtocolTester, *Registry, *stora
 		return nil, nil, nil, removeDataDir, err
 	}
 
-	netStore, err := storage.NewSyncNetStore(localStore, nil)
+	netStore, err := storage.NewNetStore(localStore, nil)
 	if err != nil {
 		return nil, nil, nil, removeDataDir, err
 	}
