@@ -180,7 +180,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	)
 	delivery := stream.NewDelivery(to, db)
 
-	self.swap, err = swap.NewSwap(swap.NewDefaultSwapParams().Params, stateStore)
+	self.swap, err = swap.New(stateStore)
 	if err != nil {
 		return nil, err
 	}
