@@ -105,7 +105,8 @@ func TestNetStoreGetAndPut(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	go func() {
 		err := netStore.Put(ctx, chunk)
@@ -128,7 +129,8 @@ func TestNetStoreGetAfterPut(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
 	err := netStore.Put(ctx, chunk)
 	if err != nil {
@@ -152,7 +154,8 @@ func TestNetStoreGetTimeout(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx, _ := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
 	_, err := netStore.Get(ctx, chunk.Address())
 	if err != context.DeadlineExceeded {
@@ -181,7 +184,8 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
 
 	go func() {
 		// sleep to make sure Put is called after all the Get
@@ -225,7 +229,8 @@ func TestNetStoreHasTimeout(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx, _ := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
 
 	wait := netStore.Has(ctx, chunk.Address())
 	if wait == nil {
@@ -243,7 +248,8 @@ func TestNetStoreHasAfterPut(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx, _ := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
 	err := netStore.Put(ctx, chunk)
 	if err != nil {
@@ -287,7 +293,8 @@ func TestNetStoreGetCallsOffer(t *testing.T) {
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
 	ctx := context.WithValue(context.Background(), "source", sourcePeerID.String())
-	ctx, _ = context.WithTimeout(ctx, 200*time.Millisecond)
+	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
+	defer cancel()
 
 	chunk, err := netStore.Get(ctx, chunk.Address())
 
