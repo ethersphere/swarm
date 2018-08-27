@@ -31,7 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 )
 
-// var sourcePeerID = discover.MustHexID("2dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+var sourcePeerID = discover.MustHexID("2dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
 
 type mockNetFetcher struct {
 	peers           *sync.Map
@@ -276,35 +276,41 @@ func TestNetStoreGetCallsRequest(t *testing.T) {
 	}
 }
 
-// func TestNetStoreGetCallsOffer(t *testing.T) {
-// 	netStore := mustNewNetStore(t)
+func TestNetStoreGetCallsOffer(t *testing.T) {
+	netStore := mustNewNetStore(t)
 
-// 	fetcher := &mockNetFetcher{}
-// 	netStore.NewNetFetcherFunc = (&mockNetFetchFuncFactory{
-// 		fetcher: fetcher,
-// 	}).newMockNetFetcher
+	fetcher := &mockNetFetcher{}
+	netStore.NewNetFetcherFunc = (&mockNetFetchFuncFactory{
+		fetcher: fetcher,
+	}).newMockNetFetcher
 
-// 	chunk := GenerateRandomChunk(ch.DefaultSize)
+	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-// 	source := make([]byte, 64)
-// 	ctx := context.WithValue(context.Background(), "source", source)
-// 	ctx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+	ctx := context.WithValue(context.Background(), "source", sourcePeerID.String())
+	ctx, _ = context.WithTimeout(ctx, 200*time.Millisecond)
 
-// 	go cancel()
+	chunk, err := netStore.Get(ctx, chunk.Address())
 
-// 	_, err := netStore.Get(ctx, chunk.Address())
+	if err != context.DeadlineExceeded {
+		t.Fatalf("Expect error %v got %v", context.DeadlineExceeded, err)
+	}
 
-// 	if err != context.Canceled {
-// 		t.Fatalf("Expected context.Canceled err got %v", err)
-// 	}
+	if !fetcher.offerCalled {
+		t.Fatal("Expected NetFetcher.Request to be called")
+	}
 
-// 	if !fetcher.offerCalled {
-// 		t.Fatal("Expected NetFetcher.Offer to be called")
-// 	}
-// }
+	if len(fetcher.sources) != 1 {
+		t.Fatalf("Expected fetcher sources length 1 got %v", len(fetcher.sources))
+	}
+
+	if fetcher.sources[0].String() != sourcePeerID.String() {
+		t.Fatalf("Expected fetcher source %v got %v", sourcePeerID, fetcher.sources[0])
+	}
+
+}
 
 // TestNetStoreFetcherCountPeers tests multiple NetStore.Get calls with peer in the context.
-// There is no Put call, so the Get calls
+// There is no Put call, so the Get calls timeout
 func TestNetStoreFetcherCountPeers(t *testing.T) {
 	// setup
 	searchTimeout := 500 * time.Millisecond
