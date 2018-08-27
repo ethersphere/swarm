@@ -224,7 +224,7 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 
 }
 
-func TestNetStoreHasTimeout(t *testing.T) {
+func TestNetStoreFetchFuncTimeout(t *testing.T) {
 	netStore := mustNewNetStore(t)
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
@@ -232,7 +232,7 @@ func TestNetStoreHasTimeout(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
 
-	wait := netStore.Has(ctx, chunk.Address())
+	wait := netStore.FetchFunc(ctx, chunk.Address())
 	if wait == nil {
 		t.Fatal("Expected wait function to be not nil")
 	}
@@ -243,7 +243,7 @@ func TestNetStoreHasTimeout(t *testing.T) {
 	}
 }
 
-func TestNetStoreHasAfterPut(t *testing.T) {
+func TestNetStoreFetchFuncAfterPut(t *testing.T) {
 	netStore := mustNewNetStore(t)
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
@@ -256,7 +256,7 @@ func TestNetStoreHasAfterPut(t *testing.T) {
 		t.Fatalf("Expected no err got %v", err)
 	}
 
-	wait := netStore.Has(ctx, chunk.Address())
+	wait := netStore.FetchFunc(ctx, chunk.Address())
 	if wait != nil {
 		t.Fatal("Expected wait to be nil")
 	}

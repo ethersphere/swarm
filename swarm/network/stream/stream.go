@@ -94,10 +94,10 @@ func NewRegistry(addr *network.BzzAddr, delivery *Delivery, syncChunkStore stora
 		return NewSwarmChunkServer(delivery.chunkStore), nil
 	})
 	streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
-		return NewSwarmSyncerClient(p, delivery.chunkStore, NewStream(swarmChunkServerStreamName, t, live))
+		return NewSwarmSyncerClient(p, syncChunkStore, NewStream(swarmChunkServerStreamName, t, live))
 	})
 	RegisterSwarmSyncerServer(streamer, syncChunkStore)
-	RegisterSwarmSyncerClient(streamer, delivery.chunkStore)
+	RegisterSwarmSyncerClient(streamer, syncChunkStore)
 
 	if options.DoSync {
 		// latestIntC function ensures that

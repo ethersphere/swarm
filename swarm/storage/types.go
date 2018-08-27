@@ -374,6 +374,7 @@ type SyncChunkStore interface {
 	ChunkStore
 	BinIndex(po uint8) uint64
 	Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error
+	FetchFunc(ctx context.Context, ref Address) func(context.Context) error
 }
 
 // FakeChunkStore doesn't store anything, just implements the ChunkStore interface

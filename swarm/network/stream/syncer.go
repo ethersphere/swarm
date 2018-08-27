@@ -31,10 +31,6 @@ const (
 	BatchSize = 128
 )
 
-type Has interface {
-	Has(ctx context.Context, ref storage.Address) func(context.Context) error
-}
-
 // SwarmSyncerServer implements an Server for history syncing on bins
 // offered streams:
 // * live request delivery with or without checkback
@@ -101,6 +97,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	if to <= from || from >= s.sessionAt {
 		to = math.MaxUint64
 	}
+
 	var ticker *time.Ticker
 	defer func() {
 		if ticker != nil {
@@ -148,7 +145,7 @@ type SwarmSyncerClient struct {
 	sessionReader storage.LazySectionReader
 	retrieveC     chan *storage.Chunk
 	storeC        chan *storage.Chunk
-	store         storage.ChunkStore
+	store         storage.SyncChunkStore
 	// chunker               storage.Chunker
 	currentRoot storage.Address
 	requestFunc func(chunk *storage.Chunk)
@@ -158,7 +155,7 @@ type SwarmSyncerClient struct {
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, store storage.ChunkStore, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, store storage.SyncChunkStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
 		store:  store,
 		peer:   p,
@@ -204,7 +201,7 @@ func NewSwarmSyncerClient(p *Peer, store storage.ChunkStore, stream Stream) (*Sw
 
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, store storage.ChunkStore) {
+func RegisterSwarmSyncerClient(streamer *Registry, store storage.SyncChunkStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
 		return NewSwarmSyncerClient(p, store, NewStream("SYNC", t, live))
 	})
@@ -212,7 +209,7 @@ func RegisterSwarmSyncerClient(streamer *Registry, store storage.ChunkStore) {
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
-	return s.store.(Has).Has(ctx, key)
+	return s.store.FetchFunc(ctx, key)
 }
 
 // BatchDone

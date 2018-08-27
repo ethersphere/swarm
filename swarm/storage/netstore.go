@@ -96,9 +96,9 @@ func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 	return fetch(rctx)
 }
 
-// Has returns nil if the store contains the given address. Otherwise it returns a wait function,
+// FetchFunc returns nil if the store contains the given address. Otherwise it returns a wait function,
 // which returns after the chunk is available or the context is done
-func (n *NetStore) Has(ctx context.Context, ref Address) func(context.Context) error {
+func (n *NetStore) FetchFunc(ctx context.Context, ref Address) func(context.Context) error {
 	chunk, fetch, _ := n.get(ctx, ref)
 	if chunk != nil {
 		return nil
@@ -300,4 +300,8 @@ func (sn *SyncNetStore) BinIndex(po uint8) uint64 {
 
 func (sn *SyncNetStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
 	return sn.store.Iterator(from, to, po, f)
+}
+
+func (sn *SyncNetStore) FetchFunc(ctx context.Context, ref Address) func(context.Context) error {
+	return sn.NetStore.FetchFunc(ctx, ref)
 }

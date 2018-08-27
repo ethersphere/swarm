@@ -46,12 +46,12 @@ var (
 )
 
 type Delivery struct {
-	chunkStore storage.ChunkStore
+	chunkStore storage.SyncChunkStore
 	overlay    network.Overlay
 	getPeer    func(discover.NodeID) *Peer
 }
 
-func NewDelivery(overlay network.Overlay, chunkStore storage.ChunkStore) *Delivery {
+func NewDelivery(overlay network.Overlay, chunkStore storage.SyncChunkStore) *Delivery {
 	return &Delivery{
 		chunkStore: chunkStore,
 		overlay:    overlay,

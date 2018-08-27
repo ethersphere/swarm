@@ -325,7 +325,7 @@ func newTestExternalClient(store storage.SyncChunkStore) *testExternalClient {
 }
 
 func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
-	wait := c.store.(Has).Has(ctx, storage.Address(hash))
+	wait := c.store.FetchFunc(ctx, storage.Address(hash))
 	if wait == nil {
 		return nil
 	}

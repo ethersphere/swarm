@@ -159,7 +159,7 @@ func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err e
 	return chunk, nil
 }
 
-func (ls *LocalStore) Has(ctx context.Context, addr Address) func(context.Context) error {
+func (ls *LocalStore) FetchFunc(ctx context.Context, addr Address) func(context.Context) error {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
