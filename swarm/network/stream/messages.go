@@ -214,6 +214,9 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			want.Set(i/HashSize, true)
 			// create request and wait until the chunk data arrives and is stored
 			go func(w func(context.Context) error) {
+				ctx, cancel := context.WithCancel(ctx)
+				defer cancel()
+
 				select {
 				case errC <- w(ctx):
 				case <-c.quit:
