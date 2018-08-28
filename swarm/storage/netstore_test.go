@@ -216,7 +216,7 @@ func TestNetStoreGetCancel(t *testing.T) {
 }
 
 func TestNetStoreMultipleGetAndPut(t *testing.T) {
-	netStore := mustNewNetStore(t)
+	netStore, fetcher := mustNewNetStoreWithFetcher(t)
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
@@ -271,7 +271,7 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 }
 
 func TestNetStoreFetchFuncTimeout(t *testing.T) {
-	netStore := mustNewNetStore(t)
+	netStore, fetcher := mustNewNetStoreWithFetcher(t)
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
