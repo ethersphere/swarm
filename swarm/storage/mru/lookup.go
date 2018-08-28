@@ -66,9 +66,9 @@ func (lp *LookupParams) ToValues(values Values) {
 	lp.View.ToValues(values)
 }
 
-// LookupBefore constructs an UpdateLookup structure to find updates on or before `time`
+// NewHistoryLookupParams constructs an UpdateLookup structure to find updates on or before `time`
 // if time == 0, the latest update will be looked up
-func LookupBefore(view *View, time uint64, hint lookup.Epoch) *LookupParams {
+func NewHistoryLookupParams(view *View, time uint64, hint lookup.Epoch) *LookupParams {
 	return &LookupParams{
 		TimeLimit: time,
 		View:      *view,
@@ -76,9 +76,9 @@ func LookupBefore(view *View, time uint64, hint lookup.Epoch) *LookupParams {
 	}
 }
 
-// LookupLatest generates lookup parameters that look for the latest version of a resource
-func LookupLatest(view *View, hint lookup.Epoch) *LookupParams {
-	return LookupBefore(view, 0, hint)
+// NewLatestLookupParams generates lookup parameters that look for the latest version of a resource
+func NewLatestLookupParams(view *View, hint lookup.Epoch) *LookupParams {
+	return NewHistoryLookupParams(view, 0, hint)
 }
 
 // UpdateLookup represents the components of a resource update search key.

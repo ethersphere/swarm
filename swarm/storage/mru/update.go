@@ -22,7 +22,7 @@ import (
 
 // ResourceUpdate encapsulates the information sent as part of a resource update
 type ResourceUpdate struct {
-	UpdateLookup        // metainformationa about this resource update
+	UpdateLookup        // metainformation about this resource update
 	data         []byte // actual data payload
 }
 

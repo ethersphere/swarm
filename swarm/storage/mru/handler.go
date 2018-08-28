@@ -131,11 +131,9 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 	now := TimestampProvider.Now().Time
 	updateRequest = new(Request)
 
-	lp := new(LookupParams)
-	lp.Hint = lookup.NoClue
-	lp.View = *view
+	lp := NewLatestLookupParams(view, lookup.NoClue)
 
-	rsrc, err := h.lookup(lp)
+	rsrc, err := h.Lookup(ctx, lp)
 	if err != nil {
 		if err.(*Error).code != ErrNotFound {
 			return nil, err
@@ -146,7 +144,7 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 
 	updateRequest.View = *view
 
-	// if we already have an update for this period then increment version
+	// if we already have an update, then find next epoch
 	if rsrc != nil {
 		updateRequest.Epoch = lookup.GetNextEpoch(rsrc.Epoch, now)
 	} else {
@@ -164,23 +162,16 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 // upon failure tries the corresponding keys of each previous period until one is found
 // (or startTime is reached, in which case there are no updates).
 func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*cacheEntry, error) {
-	return h.lookup(params)
-}
 
-// base code for public lookup methods
-func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
-
-	lp := *params
-
-	timeLimit := lp.TimeLimit
+	timeLimit := params.TimeLimit
 	if timeLimit == 0 { // if time limit is set to zero, the user wants to get the latest update
 		timeLimit = TimestampProvider.Now().Time
 	}
 
-	if lp.Hint == lookup.NoClue { // try to use our cache
-		entry := h.get(&lp.View)
+	if params.Hint == lookup.NoClue { // try to use our cache
+		entry := h.get(&params.View)
 		if entry != nil && entry.Epoch.Time <= timeLimit { // avoid bad hints
-			lp.Hint = entry.Epoch
+			params.Hint = entry.Epoch
 		}
 	}
 
@@ -190,15 +181,15 @@ func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
 	}
 
 	var ul UpdateLookup
-	ul.View = lp.View
+	ul.View = params.View
 	var readCount int
 
 	// Invoke the lookup engine.
 	// The callback will be called every time the lookup algorithm needs to guess
-	requestPtr, err := lookup.Lookup(timeLimit, lp.Hint, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+	requestPtr, err := lookup.Lookup(timeLimit, params.Hint, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
 		readCount++
 		ul.Epoch = epoch
-		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), ul.UpdateAddr(), defaultRetrieveTimeout)
+		chunk, err := h.chunkStore.GetWithTimeout(ctx, ul.UpdateAddr(), defaultRetrieveTimeout)
 		if err != nil { // TODO: check for catastrophic errors other than chunk not found
 			return nil, nil
 		}

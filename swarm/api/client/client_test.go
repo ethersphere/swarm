@@ -514,7 +514,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 		User:  signer.Address(),
 	}
 
-	lookupParams := mru.LookupLatest(view, lookup.NoClue)
+	lookupParams := mru.NewLatestLookupParams(view, lookup.NoClue)
 	reader, err = client.GetResource(lookupParams, "")
 	if err != nil {
 		t.Fatalf("Error retrieving resource: %s", err)

@@ -401,7 +401,7 @@ func TestBzzResource(t *testing.T) {
 
 	// test manifest-less queries
 	log.Info("get first update in update1Timestamp via direct query")
-	lp := mru.LookupBefore(&updateRequest.View, update1Timestamp, lookup.NoClue)
+	lp := mru.NewHistoryLookupParams(&updateRequest.View, update1Timestamp, lookup.NoClue)
 
 	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {
