@@ -40,6 +40,7 @@ type mockNetFetcher struct {
 	requestCalled   bool
 	offerCalled     bool
 	quit            <-chan struct{}
+	ctx             context.Context
 }
 
 func (m *mockNetFetcher) Offer(ctx context.Context, source *discover.NodeID) {
@@ -64,6 +65,7 @@ type mockNetFetchFuncFactory struct {
 func (m *mockNetFetchFuncFactory) newMockNetFetcher(ctx context.Context, _ Address, peers *sync.Map) NetFetcher {
 	m.fetcher.peers = peers
 	m.fetcher.quit = ctx.Done()
+	m.fetcher.ctx = ctx
 	return m.fetcher
 }
 
@@ -101,7 +103,7 @@ func mustNewNetStoreWithFetcher(t *testing.T) (*NetStore, *mockNetFetcher) {
 
 // TestNetStoreGet tests
 func TestNetStoreGetAndPut(t *testing.T) {
-	netStore := mustNewNetStore(t)
+	netStore, fetcher := mustNewNetStoreWithFetcher(t)
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
@@ -122,6 +124,16 @@ func TestNetStoreGetAndPut(t *testing.T) {
 	if !bytes.Equal(recChunk.Address(), chunk.Address()) || !bytes.Equal(recChunk.Data(), chunk.Data()) {
 		t.Fatalf("Different chunk received than what was put")
 	}
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to remove the fetcher after delivery")
+	}
+
+	select {
+	case <-fetcher.ctx.Done():
+	default:
+		t.Fatal("Expected fetcher context to be cancelled")
+	}
+
 }
 
 func TestNetStoreGetAfterPut(t *testing.T) {
@@ -147,10 +159,14 @@ func TestNetStoreGetAfterPut(t *testing.T) {
 	if fetcher.offerCalled || fetcher.requestCalled {
 		t.Fatal("NetFetcher.offerCalled or requestCalled not expected to be called")
 	}
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to not have fetcher")
+	}
+
 }
 
 func TestNetStoreGetTimeout(t *testing.T) {
-	netStore := mustNewNetStore(t)
+	netStore, fetcher := mustNewNetStoreWithFetcher(t)
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
@@ -161,10 +177,20 @@ func TestNetStoreGetTimeout(t *testing.T) {
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Expected context.DeadLineExceeded err got %v", err)
 	}
+
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to remove the fetcher after timeout")
+	}
+
+	select {
+	case <-fetcher.ctx.Done():
+	default:
+		t.Fatal("Expected fetcher context to be cancelled")
+	}
 }
 
 func TestNetStoreGetCancel(t *testing.T) {
-	netStore := mustNewNetStore(t)
+	netStore, fetcher := mustNewNetStoreWithFetcher(t)
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
@@ -176,6 +202,16 @@ func TestNetStoreGetCancel(t *testing.T) {
 
 	if err != context.Canceled {
 		t.Fatalf("Expected context.Canceled err got %v", err)
+	}
+
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to remove the fetcher after cancel")
+	}
+
+	select {
+	case <-fetcher.ctx.Done():
+	default:
+		t.Fatal("Expected fetcher context to be cancelled")
 	}
 }
 
@@ -200,6 +236,7 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 	for i := 0; i < 4; i++ {
 		getWG.Add(1)
 		go func() {
+			defer getWG.Done()
 			recChunk, err := netStore.Get(ctx, chunk.Address())
 			if err != nil {
 				t.Fatalf("Expected no err got %v", err)
@@ -207,7 +244,6 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 			if !bytes.Equal(recChunk.Address(), chunk.Address()) || !bytes.Equal(recChunk.Data(), chunk.Data()) {
 				t.Fatalf("Different chunk received than what was put")
 			}
-			getWG.Done()
 		}()
 	}
 
@@ -220,6 +256,16 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 	case <-finishedC:
 	case <-time.After(1 * time.Second):
 		t.Fatalf("Timeout waiting for Get calls to return")
+	}
+
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to remove the fetcher after delivery")
+	}
+
+	select {
+	case <-fetcher.ctx.Done():
+	default:
+		t.Fatal("Expected fetcher context to be cancelled")
 	}
 
 }
@@ -237,9 +283,23 @@ func TestNetStoreFetchFuncTimeout(t *testing.T) {
 		t.Fatal("Expected wait function to be not nil")
 	}
 
+	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+		t.Fatalf("Expected netStore to have one fetcher for the requested chunk")
+	}
+
 	err := wait(ctx)
 	if err != context.DeadlineExceeded {
 		t.Fatalf("Expected context.DeadLineExceeded err got %v", err)
+	}
+
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to remove the fetcher after timeout")
+	}
+
+	select {
+	case <-fetcher.ctx.Done():
+	default:
+		t.Fatal("Expected fetcher context to be cancelled")
 	}
 }
 
@@ -259,6 +319,10 @@ func TestNetStoreFetchFuncAfterPut(t *testing.T) {
 	wait := netStore.FetchFunc(ctx, chunk.Address())
 	if wait != nil {
 		t.Fatal("Expected wait to be nil")
+	}
+
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to not have fetcher")
 	}
 }
 
@@ -319,31 +383,8 @@ func TestNetStoreGetCallsOffer(t *testing.T) {
 // TestNetStoreFetcherCountPeers tests multiple NetStore.Get calls with peer in the context.
 // There is no Put call, so the Get calls timeout
 func TestNetStoreFetcherCountPeers(t *testing.T) {
-	// setup
-	searchTimeout := 500 * time.Millisecond
-	naddr := make([]byte, 32)
 
-	// temp datadir
-	datadir, err := ioutil.TempDir("", "netstore")
-	if err != nil {
-		t.Fatal(err)
-	}
-	params := NewDefaultLocalStoreParams()
-	params.Init(datadir)
-	params.BaseKey = naddr
-	localStore, err := NewTestLocalStoreForAddr(params)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fetcher := &mockNetFetcher{}
-	mockNetFetchFuncFactory := &mockNetFetchFuncFactory{
-		fetcher: fetcher,
-	}
-	netStore, err := NewNetStore(localStore, mockNetFetchFuncFactory.newMockNetFetcher)
-	if err != nil {
-		t.Fatal(err)
-	}
+	netStore, fetcher := mustNewNetStoreWithFetcher(t)
 
 	addr := randomAddr()
 	peers := []string{randomAddr().Hex(), randomAddr().Hex(), randomAddr().Hex()}
@@ -356,14 +397,14 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 		peer := peers[i]
 		go func() {
 			ctx = context.WithValue(ctx, "peer", peer)
-			_, err = netStore.Get(ctx, addr)
+			_, err := netStore.Get(ctx, addr)
 			errC <- err
 		}()
 	}
 
 	expectedErr := "context deadline exceeded"
 	for i := 0; i < nrGets; i++ {
-		err = <-errC
+		err := <-errC
 		if err.Error() != expectedErr {
 			t.Fatalf("Expected \"%v\" error got \"%v\"", expectedErr, err)
 		}
@@ -384,7 +425,111 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 			t.Fatalf("Expected at least %v got %v", i+1, len(peers))
 		}
 	}
+}
 
+func TestNetStoreFetcherLifeCycle(t *testing.T) {
+	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+
+	chunk := GenerateRandomChunk(ch.DefaultSize)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	wait := netStore.FetchFunc(ctx, chunk.Address())
+	if wait == nil {
+		t.Fatal("Expected wait function to be not nil")
+	}
+
+	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+		t.Fatalf("Expected netStore to have one fetcher for the requested chunk")
+	}
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			err := wait(ctx)
+			if err != nil {
+				t.Fatalf("Expected no err got %v", err)
+			}
+			wg.Done()
+		}()
+	}
+
+	// sleep a little so the wait functions are called above
+	time.Sleep(100 * time.Millisecond)
+
+	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+		t.Fatal("Expected netStore to have one fetcher for the requested chunk")
+	}
+
+	err := netStore.Put(ctx, chunk)
+	if err != nil {
+		t.Fatalf("Expected no err got %v", err)
+	}
+
+	wg.Wait()
+
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to remove the fetcher after delivery")
+	}
+
+	select {
+	case <-fetcher.ctx.Done():
+	default:
+		t.Fatal("Expected fetcher context to be cancelled")
+	}
+}
+
+func TestNetStoreFetcherLifeCycleWithTimeout(t *testing.T) {
+	netStore, fetcher := mustNewNetStoreWithFetcher(t)
+
+	chunk := GenerateRandomChunk(ch.DefaultSize)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	wait := netStore.FetchFunc(ctx, chunk.Address())
+	if wait == nil {
+		t.Fatal("Expected wait function to be not nil")
+	}
+
+	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+		t.Fatalf("Expected netStore to have one fetcher for the requested chunk")
+	}
+
+	wg := sync.WaitGroup{}
+	for i := 0; i < 3; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			rctx, rcancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer rcancel()
+			err := wait(rctx)
+			if err != context.DeadlineExceeded {
+				t.Fatalf("Expected err %v got %v", context.DeadlineExceeded, err)
+			}
+		}()
+	}
+
+	// sleep a little so the wait functions are called above
+	time.Sleep(100 * time.Millisecond)
+
+	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
+		t.Fatal("Expected netStore to have one fetcher for the requested chunk")
+	}
+
+	wg.Wait()
+
+	if netStore.fetchers.Len() != 0 {
+		t.Fatal("Expected netStore to remove the fetcher after delivery")
+	}
+
+	select {
+	case <-fetcher.ctx.Done():
+	default:
+		t.Fatal("Expected fetcher context to be cancelled")
+	}
 }
 
 func randomAddr() Address {
