@@ -460,8 +460,6 @@ func TestStreamerUpstreamSubscribeLiveAndHistory(t *testing.T) {
 }
 
 func TestStreamerDownstreamOfferedHashesMsgExchange(t *testing.T) {
-	t.Skip("test seems wrong. disable for now.")
-
 	tester, streamer, _, teardown, err := newStreamerTester(t)
 	defer teardown()
 	if err != nil {
