@@ -323,17 +323,6 @@ func (r *Registry) Quit(peerId discover.NodeID, s Stream) error {
 	return peer.Send(context.TODO(), msg)
 }
 
-// func (r *Registry) Retrieve(ctx context.Context, chunk storage.Chunk) (context.Context, error) {
-
-//var sp opentracing.Span
-//ctx, sp = spancontext.StartSpan(
-//ctx,
-//"registry.retrieve")
-//defer sp.Finish()
-
-// 	return r.delivery.RequestFromPeers(ctx, chunk.Address()[:], nil, r.skipCheck, &sync.Map{})
-// }
-
 func (r *Registry) NodeInfo() interface{} {
 	return nil
 }
