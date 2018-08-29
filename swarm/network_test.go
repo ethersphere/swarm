@@ -288,6 +288,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 
 			config.Init(privkey)
 			config.DeliverySkipCheck = o.SkipCheck
+			config.Port = ""
 
 			swarm, err := NewSwarm(config, nil)
 			if err != nil {
