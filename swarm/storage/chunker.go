@@ -416,15 +416,6 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 		if err != nil {
 			return 0, err
 		}
-		// when can this happen? I commenting this out there should be an error upstream
-		// if chunkData == nil {
-		// 	select {
-		// 	case <-ctx.Done():
-		// 		return 0, ctx.Err()
-		// 	default:
-		// 		return 0, fmt.Errorf("root chunk not found for %v", r.key.Hex())
-		// 	}
-		// }
 		r.chunkData = chunkData
 		s := r.chunkData.Size()
 		log.Debug("lazychunkreader.size", "key", r.addr, "size", s)
