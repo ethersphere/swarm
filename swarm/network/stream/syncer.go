@@ -36,12 +36,11 @@ const (
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
-	po             uint8
-	store          storage.ChunkStore
-	syncChunkStore storage.SyncChunkStore
-	sessionAt      uint64
-	start          uint64
-	quit           chan struct{}
+	po        uint8
+	store     storage.SyncChunkStore
+	sessionAt uint64
+	start     uint64
+	quit      chan struct{}
 }
 
 // NewSwarmSyncerServer is contructor for SwarmSyncerServer
@@ -52,11 +51,11 @@ func NewSwarmSyncerServer(live bool, po uint8, syncChunkStore storage.SyncChunkS
 		start = sessionAt
 	}
 	return &SwarmSyncerServer{
-		po:             po,
-		syncChunkStore: syncChunkStore,
-		sessionAt:      sessionAt,
-		start:          start,
-		quit:           make(chan struct{}),
+		po:        po,
+		store:     syncChunkStore,
+		sessionAt: sessionAt,
+		start:     start,
+		quit:      make(chan struct{}),
 	}, nil
 }
 
@@ -80,7 +79,7 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetSection retrieves the actual chunk from localstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.syncChunkStore.Get(ctx, storage.Address(key))
+	chunk, err := s.store.Get(ctx, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
@@ -118,7 +117,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		}
 
 		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
-		err := s.syncChunkStore.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
+		err := s.store.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
 			batch = append(batch, key[:]...)
 			i++
 			to = idx
@@ -133,7 +132,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		wait = true
 	}
 
-	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.syncChunkStore.BinIndex(s.po))
+	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.store.BinIndex(s.po))
 	return batch, from, to, nil, nil
 }
 
