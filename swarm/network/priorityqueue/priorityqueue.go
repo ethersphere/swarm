@@ -68,13 +68,13 @@ READ:
 		case <-ctx.Done():
 			return
 		case x := <-q:
-			log.Debug("priority.queue f(x)", "p", p, "len(Queues[p])", len(pq.Queues[p]))
+			log.Trace("priority.queue f(x)", "p", p, "len(Queues[p])", len(pq.Queues[p]))
 			f(x)
 			p = top
 		default:
 			if p > 0 {
 				p--
-				log.Debug("priority.queue p > 0", "p", p)
+				log.Trace("priority.queue p > 0", "p", p)
 				continue READ
 			}
 			p = top
@@ -82,7 +82,7 @@ READ:
 			case <-ctx.Done():
 				return
 			case <-pq.wakeup:
-				log.Debug("priority.queue wakeup", "p", p)
+				log.Trace("priority.queue wakeup", "p", p)
 			}
 		}
 	}
@@ -95,7 +95,7 @@ func (pq *PriorityQueue) Push(ctx context.Context, x interface{}, p int) error {
 	if p < 0 || p >= len(pq.Queues) {
 		return errBadPriority
 	}
-	log.Debug("priority.queue push", "p", p, "len(Queues[p])", len(pq.Queues[p]))
+	log.Trace("priority.queue push", "p", p, "len(Queues[p])", len(pq.Queues[p]))
 	select {
 	case pq.Queues[p] <- x:
 	case <-ctx.Done():
