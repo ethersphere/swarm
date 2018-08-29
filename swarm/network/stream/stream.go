@@ -285,7 +285,7 @@ func (r *Registry) Subscribe(peerId discover.NodeID, s Stream, h *Range, priorit
 	}
 	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
-	return peer.Send(context.TODO(), msg)
+	return peer.SendPriority(context.TODO(), msg, priority)
 }
 
 func (r *Registry) Unsubscribe(peerId discover.NodeID, s Stream) error {
