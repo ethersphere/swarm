@@ -512,13 +512,6 @@ func TestNetStoreFetcherLifeCycleWithTimeout(t *testing.T) {
 		}()
 	}
 
-	// sleep a little so the wait functions are called above
-	time.Sleep(100 * time.Millisecond)
-
-	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
-		t.Fatal("Expected netStore to have one fetcher for the requested chunk")
-	}
-
 	wg.Wait()
 
 	if netStore.fetchers.Len() != 0 {
