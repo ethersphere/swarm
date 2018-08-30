@@ -89,7 +89,6 @@ READ:
 
 // Push pushes an item to the appropriate queue specified in the priority argument
 // if context is given it waits until either the item is pushed or the Context aborts
-// otherwise returns errContention if the queue is full
 func (pq *PriorityQueue) Push(ctx context.Context, x interface{}, p int) error {
 	if p < 0 || p >= len(pq.Queues) {
 		return errBadPriority
