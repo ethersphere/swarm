@@ -33,7 +33,6 @@ import (
 )
 
 var (
-	errContention  = errors.New("queue contention")
 	errBadPriority = errors.New("bad priority")
 
 	wakey = struct{}{}

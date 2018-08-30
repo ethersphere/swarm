@@ -19,10 +19,11 @@ import (
 	"context"
 	"sync"
 	"testing"
+	"time"
 )
 
 func TestPriorityQueue(t *testing.T) {
-	t.Skip()
+	// t.Skip()
 	var results []string
 	wg := sync.WaitGroup{}
 	pq := New(3, 2)
@@ -67,7 +68,7 @@ Loop:
 		{
 			priorities: []int{0, 0, 0},
 			values:     []string{"0.0", "0.0", "0.1"},
-			errors:     []error{nil, nil, errContention},
+			errors:     []error{nil, nil, context.DeadlineExceeded},
 		},
 	} {
 		var results []string
@@ -75,7 +76,9 @@ Loop:
 		pq := New(3, 2)
 		wg.Add(len(tc.values))
 		for j, value := range tc.values {
-			err := pq.Push(context.Background(), value, tc.priorities[j])
+			ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+			defer cancel()
+			err := pq.Push(ctx, value, tc.priorities[j])
 			if tc.errors != nil && err != tc.errors[j] {
 				t.Errorf("expected push error %v, got %v", tc.errors[j], err)
 				continue Loop
