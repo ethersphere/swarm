@@ -137,15 +137,16 @@ func (n *NetStore) get(ctx context.Context, ref Address) (Chunk, func(context.Co
 
 	chunk, err := n.store.Get(ctx, ref)
 	if err != nil {
+		if err != ErrChunkNotFound {
+			log.Debug("Received error from LocalStore other than ErrNotFound", "err", err)
+		}
 		// The chunk is not available in the LocalStore, let's get the fetcher for it, or create a new one
 		// if it doesn't exist yet
 		f := n.getOrCreateFetcher(ref)
 		// If the caller needs the chunk, it has to use the returned fetch function to get it
 		return nil, f.Fetch, nil
 	}
-	if err != ErrChunkNotFound {
-		log.Debug("Received error from LocalStore other than ErrNorFound", "err", err)
-	}
+
 	return chunk, nil, nil
 }
 
