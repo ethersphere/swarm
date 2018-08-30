@@ -93,7 +93,6 @@ func (h *Handler) SetStore(store *storage.NetStore) {
 func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	dataLength := len(data)
 	if dataLength < minimumChunkLength || dataLength > chunk.DefaultSize+8 {
-		// log.Error("invalid chunk size", "addr", chunkAddr.Hex(), "size", dataLength)
 		return false
 	}
 
@@ -103,7 +102,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 		rootAddr, _ := metadataHash(data)
 		valid := bytes.Equal(chunkAddr, rootAddr)
 		if !valid {
-			log.Error("Invalid root metadata chunk with address", "addr", chunkAddr.Hex())
+			log.Debug("Invalid root metadata chunk with address", "addr", chunkAddr.Hex())
 		}
 		return valid
 	}
@@ -115,7 +114,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// First, deserialize the chunk
 	var r SignedResourceUpdate
 	if err := r.fromChunk(chunkAddr, data); err != nil {
-		log.Error("Invalid resource chunk", "addr", chunkAddr.Hex(), "err", err.Error())
+		log.Debug("Invalid resource chunk", "addr", chunkAddr.Hex(), "err", err.Error())
 		return false
 	}
 
@@ -123,7 +122,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// that was used to retrieve this chunk
 	// if this validation fails, someone forged a chunk.
 	if !bytes.Equal(chunkAddr, r.updateHeader.UpdateAddr()) {
-		log.Error("period,version,rootAddr contained in update chunk do not match updateAddr", "addr", chunkAddr.Hex())
+		log.Debug("period,version,rootAddr contained in update chunk do not match updateAddr", "addr", chunkAddr.Hex())
 		return false
 	}
 
@@ -131,7 +130,7 @@ func (h *Handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	// If it fails, it means either the signature is not valid, data is corrupted
 	// or someone is trying to update someone else's resource.
 	if err := r.Verify(); err != nil {
-		log.Error("Invalid signature", "err", err)
+		log.Debug("Invalid signature", "err", err)
 		return false
 	}
 
@@ -349,9 +348,10 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 			return nil, NewErrorf(ErrPeriodDepth, "Lookup exceeded max period hops (%d)", lp.Limit)
 		}
 		updateAddr := lp.UpdateAddr()
-		//TODO: Maybe add timeout to context, defaultRetrieveTimeout?
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+		ctx, cancel := context.WithTimeout(context.Background(), defaultRetrieveTimeout)
 		defer cancel()
+
 		chunk, err := h.chunkStore.Get(ctx, updateAddr)
 		if err == nil {
 			if specificversion {
@@ -362,9 +362,10 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 			for {
 				newversion := lp.version + 1
 				updateAddr := lp.UpdateAddr()
-				//TODO: Maybe add timeout to context, defaultRetrieveTimeout?
-				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+				ctx, cancel := context.WithTimeout(context.Background(), defaultRetrieveTimeout)
 				defer cancel()
+
 				newchunk, err := h.chunkStore.Get(ctx, updateAddr)
 				if err != nil {
 					return h.updateIndex(rsrc, chunk)
@@ -388,6 +389,8 @@ func (h *Handler) lookup(rsrc *resource, params *LookupParams) (*resource, error
 // Upon retrieval it creates/updates the index entry for it with metadata corresponding to the chunk contents
 func (h *Handler) Load(ctx context.Context, rootAddr storage.Address) (*resource, error) {
 	//TODO: Maybe add timeout to context, defaultRetrieveTimeout?
+	ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
+	defer cancel()
 	chunk, err := h.chunkStore.Get(ctx, rootAddr)
 	if err != nil {
 		return nil, NewError(ErrNotFound, err.Error())

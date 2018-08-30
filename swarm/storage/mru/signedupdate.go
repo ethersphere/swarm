@@ -105,16 +105,6 @@ func (r *SignedResourceUpdate) toChunk() (storage.Chunk, error) {
 		return nil, NewError(ErrInvalidSignature, "newUpdateChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
-	//chunk := storage.NewChunk(r.updateAddr, nil)
-	//resourceUpdateLength := r.resourceUpdate.binaryLength()
-	//chunk.SData = r.binaryData
-
-	//// signature is the last item in the chunk data
-	//copy(chunk.SData[resourceUpdateLength:], r.signature[:])
-
-	//chunk.Size = int64(len(chunk.SData))
-	//return chunk, nil
-
 	resourceUpdateLength := r.resourceUpdate.binaryLength()
 	// signature is the last item in the chunk data
 	copy(r.binaryData[resourceUpdateLength:], r.signature[:])

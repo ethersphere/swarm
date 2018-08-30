@@ -25,9 +25,10 @@ import (
 )
 
 const (
-	defaultStoreTimeout   = 4000 * time.Millisecond
-	hasherCount           = 8
-	resourceHashAlgorithm = storage.SHA3Hash
+	defaultStoreTimeout    = 4000 * time.Millisecond
+	hasherCount            = 8
+	resourceHashAlgorithm  = storage.SHA3Hash
+	defaultRetrieveTimeout = 100 * time.Millisecond
 )
 
 // resource caches resource data and the metadata of its root chunk.
@@ -47,10 +48,6 @@ func (r *resource) Context() context.Context {
 func (r *resource) isSynced() bool {
 	return !r.updated.IsZero()
 }
-
-//func (r *resource) NameHash() common.Hash {
-//return r.nameHash
-//}
 
 // implements storage.LazySectionReader
 func (r *resource) Size(ctx context.Context, _ chan bool) (int64, error) {

@@ -155,7 +155,6 @@ type PyramidChunker struct {
 	quitC       chan bool
 	rootAddress []byte
 	chunkLevel  [][]*TreeEntry
-	ctx         context.Context
 }
 
 func NewPyramidSplitter(params *PyramidSplitterParams) (pc *PyramidChunker) {
@@ -243,7 +242,7 @@ func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(conte
 func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	log.Debug("pyramid.chunker: Append()")
 	// Load the right most unfinished tree chunks in every level
-	pc.loadTree()
+	pc.loadTree(ctx)
 
 	pc.wg.Add(1)
 	pc.prepareChunks(ctx, true)
@@ -306,10 +305,10 @@ func (pc *PyramidChunker) processChunk(ctx context.Context, id int64, job *chunk
 	job.parentWg.Done()
 }
 
-func (pc *PyramidChunker) loadTree() error {
+func (pc *PyramidChunker) loadTree(ctx context.Context) error {
 	log.Debug("pyramid.chunker: loadTree()")
 	// Get the root chunk to get the total size
-	chunkData, err := pc.getter.Get(pc.ctx, Reference(pc.key))
+	chunkData, err := pc.getter.Get(ctx, Reference(pc.key))
 	if err != nil {
 		return errLoadingTreeRootChunk
 	}
@@ -362,7 +361,7 @@ func (pc *PyramidChunker) loadTree() error {
 			branchCount = int64(len(ent.chunk)-8) / pc.hashSize
 			for i := int64(0); i < branchCount; i++ {
 				key := ent.chunk[8+(i*pc.hashSize) : 8+((i+1)*pc.hashSize)]
-				newChunkData, err := pc.getter.Get(pc.ctx, Reference(key))
+				newChunkData, err := pc.getter.Get(ctx, Reference(key))
 				if err != nil {
 					return errLoadingTreeChunk
 				}
@@ -424,7 +423,7 @@ func (pc *PyramidChunker) prepareChunks(ctx context.Context, isAppend bool) {
 			lastAddress := parent.chunk[8+lastBranch*pc.hashSize : 8+(lastBranch+1)*pc.hashSize]
 
 			var err error
-			unfinishedChunkData, err = pc.getter.Get(pc.ctx, lastAddress)
+			unfinishedChunkData, err = pc.getter.Get(ctx, lastAddress)
 			if err != nil {
 				pc.errC <- err
 			}

@@ -176,7 +176,6 @@ type Chunk interface {
 	SpanBytes() []byte
 	Span() int64
 	Data() []byte
-	Chunk() *chunk
 }
 
 type chunk struct {
@@ -189,6 +188,7 @@ func NewChunk(addr Address, data []byte) *chunk {
 	return &chunk{
 		addr:  addr,
 		sdata: data,
+		span:  -1,
 	}
 }
 
@@ -201,9 +201,9 @@ func (c *chunk) SpanBytes() []byte {
 }
 
 func (c *chunk) Span() int64 {
-	// if c.span == 0 {
-	c.span = int64(binary.LittleEndian.Uint64(c.sdata[:8]))
-	// }
+	if c.span == -1 {
+		c.span = int64(binary.LittleEndian.Uint64(c.sdata[:8]))
+	}
 	return c.span
 }
 
@@ -213,10 +213,6 @@ func (c *chunk) Data() []byte {
 
 func (c *chunk) Payload() []byte {
 	return c.sdata[8:]
-}
-
-func (c *chunk) Chunk() *chunk {
-	return c
 }
 
 // String() for pretty printing

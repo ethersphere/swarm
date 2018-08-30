@@ -213,15 +213,6 @@ func getIndexKey(hash Address) []byte {
 	return key
 }
 
-//
-// func getOldDataKey(idx uint64) []byte {
-// 	key := make([]byte, 9)
-// 	key[0] = keyOldData
-// 	binary.BigEndian.PutUint64(key[1:9], idx)
-//
-// 	return key
-// }
-
 func getDataKey(idx uint64, po uint8) []byte {
 	key := make([]byte, 10)
 	key[0] = keyData
@@ -252,12 +243,6 @@ func decodeIndex(data []byte, index *dpaDBIndex) error {
 func decodeData(addr Address, data []byte) (*chunk, error) {
 	return NewChunk(addr, data[32:]), nil
 }
-
-//
-// func decodeOldData(data []byte, chunk *chunk) {
-// 	chunk.sdata = data
-// 	chunk.span = int64(binary.BigEndian.Uint64(data[0:8]))
-// }
 
 func (s *LDBStore) collectGarbage(ratio float32) {
 	log.Trace("collectGarbage", "ratio", ratio)
@@ -371,7 +356,10 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 			if err == io.EOF {
 				break
 			} else if err != nil {
-				errC <- err
+				select {
+				case errC <- err:
+				case <-ctx.Done():
+				}
 			}
 
 			if len(hdr.Name) != 64 {
@@ -387,7 +375,10 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 
 			data, err := ioutil.ReadAll(tr)
 			if err != nil {
-				errC <- err
+				select {
+				case errC <- err:
+				case <-ctx.Done():
+				}
 			}
 			key := Address(keybytes)
 			chunk := NewChunk(key, data[32:])

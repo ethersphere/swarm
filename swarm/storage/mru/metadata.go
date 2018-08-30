@@ -157,10 +157,6 @@ func (metadata *ResourceMetadata) newChunk() (chunk storage.Chunk, metaHash []by
 	}
 
 	// make the chunk and send it to swarm
-	//chunk = storage.NewChunk(rootAddr, nil)
-	//chunk.SData = chunkData
-	//chunk.Size = int64(len(chunkData))
-
 	chunk = storage.NewChunk(rootAddr, chunkData)
 
 	return chunk, metaHash, nil
