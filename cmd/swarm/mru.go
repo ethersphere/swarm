@@ -50,7 +50,7 @@ func resourceCreate(ctx *cli.Context) {
 	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
 	topic := mru.NewTopic(name, relatedTopicBytes)
 
-	newResourceRequest := mru.NewCreateUpdateRequest(topic)
+	newResourceRequest := mru.NewFirstRequest(topic)
 	newResourceRequest.View.User = resourceGetUser(ctx)
 
 	manifestAddress, err := client.CreateResource(newResourceRequest)

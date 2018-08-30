@@ -46,16 +46,3 @@ func (r *cacheEntry) Size(ctx context.Context, _ chan bool) (int64, error) {
 func (r *cacheEntry) Topic() Topic {
 	return r.View.Topic
 }
-
-// Helper function to calculate the next update period number from the current time, start time and frequency
-func getNextPeriod(start uint64, current uint64, frequency uint64) (uint32, error) {
-	if current < start {
-		return 0, NewErrorf(ErrInvalidValue, "given current time value %d < start time %d", current, start)
-	}
-	if frequency == 0 {
-		return 0, NewError(ErrInvalidValue, "frequency is 0")
-	}
-	timeDiff := current - start
-	period := timeDiff / frequency
-	return uint32(period + 1), nil
-}

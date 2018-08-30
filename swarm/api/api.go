@@ -967,7 +967,7 @@ func (a *API) ResourceLookup(ctx context.Context, params *mru.LookupParams) ([]b
 
 // ResourceNewRequest creates a Request object to update a specific mutable resource
 func (a *API) ResourceNewRequest(ctx context.Context, view *mru.View) (*mru.Request, error) {
-	return a.resource.NewUpdateRequest(ctx, view)
+	return a.resource.NewRequest(ctx, view)
 }
 
 // ResourceUpdate updates a Mutable Resource with arbitrary data.

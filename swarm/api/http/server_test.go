@@ -141,7 +141,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	updateRequest := mru.NewCreateUpdateRequest(mru.NewTopic("foo.eth", nil))
+	updateRequest := mru.NewFirstRequest(mru.NewTopic("foo.eth", nil))
 
 	updateRequest.SetData(mh)
 
@@ -219,7 +219,7 @@ func TestBzzResource(t *testing.T) {
 	//data for update 2
 	update2Data := []byte("foo")
 
-	updateRequest := mru.NewCreateUpdateRequest(mru.NewTopic("foo.eth", nil))
+	updateRequest := mru.NewFirstRequest(mru.NewTopic("foo.eth", nil))
 	if err != nil {
 		t.Fatal(err)
 	}

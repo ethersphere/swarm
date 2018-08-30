@@ -119,17 +119,17 @@ func (h *Handler) GetContent(view *View) (storage.Address, []byte, error) {
 	return rsrc.lastKey, rsrc.data, nil
 }
 
-// NewUpdateRequest prepares an UpdateRequest structure with all the necessary information to
+// NewRequest prepares a Request structure with all the necessary information to
 // just add the desired data and sign it.
 // The resulting structure can then be signed and passed to Handler.Update to be verified and sent
-func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateRequest *Request, err error) {
+func (h *Handler) NewRequest(ctx context.Context, view *View) (request *Request, err error) {
 
 	if view == nil {
 		return nil, NewError(ErrInvalidValue, "view cannot be nil")
 	}
 
 	now := TimestampProvider.Now().Time
-	updateRequest = new(Request)
+	request = new(Request)
 
 	lp := NewLatestLookupParams(view, lookup.NoClue)
 
@@ -142,16 +142,16 @@ func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateReque
 		// or that the resource really does not have updates
 	}
 
-	updateRequest.View = *view
+	request.View = *view
 
 	// if we already have an update, then find next epoch
 	if rsrc != nil {
-		updateRequest.Epoch = lookup.GetNextEpoch(rsrc.Epoch, now)
+		request.Epoch = lookup.GetNextEpoch(rsrc.Epoch, now)
 	} else {
-		updateRequest.Epoch = lookup.GetFirstEpoch(now)
+		request.Epoch = lookup.GetFirstEpoch(now)
 	}
 
-	return updateRequest, nil
+	return request, nil
 }
 
 // Lookup retrieves a specific or latest version of the resource
@@ -242,12 +242,7 @@ func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 // Note that a Mutable Resource update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature. An error will be returned if the total length of the chunk payload will exceed this limit.
 // Update can only check if the caller is trying to overwrite the very last known version, otherwise it just puts the update
 // on the network.
-func (h *Handler) Update(ctx context.Context, r *Request) (storage.Address, error) {
-	return h.update(ctx, r)
-}
-
-// create and commit an update
-func (h *Handler) update(ctx context.Context, r *Request) (updateAddr storage.Address, err error) {
+func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Address, err error) {
 
 	// we can't update anything without a store
 	if h.chunkStore == nil {

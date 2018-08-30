@@ -91,7 +91,7 @@ func TestResourceHandler(t *testing.T) {
 		User:  signer.Address(),
 	}
 
-	request := NewCreateUpdateRequest(view.Topic)
+	request := NewFirstRequest(view.Topic)
 
 	request.Sign(signer)
 	if err != nil {
@@ -120,7 +120,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 
 	// update on first period with version = 1 to make it fail since there is already one update with version=1
-	request, err = rh.NewUpdateRequest(ctx, &request.View)
+	request, err = rh.NewRequest(ctx, &request.View)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -141,7 +141,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// update on second period with version = 1, correct. period=2, version=1
 	fwdClock(int(resourceFrequency/2), timeProvider)
-	request, err = rh.NewUpdateRequest(ctx, &request.View)
+	request, err = rh.NewRequest(ctx, &request.View)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -156,7 +156,7 @@ func TestResourceHandler(t *testing.T) {
 
 	fwdClock(int(resourceFrequency), timeProvider)
 	// Update on third period, with version = 1
-	request, err = rh.NewUpdateRequest(ctx, &request.View)
+	request, err = rh.NewRequest(ctx, &request.View)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestResourceHandler(t *testing.T) {
 
 	// update just after third period
 	fwdClock(1, timeProvider)
-	request, err = rh.NewUpdateRequest(ctx, &request.View)
+	request, err = rh.NewRequest(ctx, &request.View)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -279,7 +279,7 @@ func TestSparseUpdates(t *testing.T) {
 	var epoch lookup.Epoch
 	var lastUpdateTime uint64
 	for T := uint64(0); T < today; T += 5 * Year {
-		request := NewCreateUpdateRequest(view.Topic)
+		request := NewFirstRequest(view.Topic)
 		request.Epoch = lookup.GetNextEpoch(epoch, T)
 		request.data = generateData(T) // this generates some data that depends on T, so we can check later
 		request.Sign(signer)
@@ -352,7 +352,7 @@ func TestValidator(t *testing.T) {
 		Topic: NewTopic(resourceName, nil),
 		User:  signer.Address(),
 	}
-	mr := NewCreateUpdateRequest(view.Topic)
+	mr := NewFirstRequest(view.Topic)
 
 	// chunk with address
 	data := []byte("foo")

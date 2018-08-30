@@ -28,8 +28,7 @@ import (
 )
 
 // LookupParams is used to specify constraints when performing an update lookup
-// Limit defines whether or not the lookup should be limited
-// If Limit is set to true then Max defines the amount of hops that can be performed
+// TimeLimit indicates an upper bound for the search. Set to 0 for "now"
 type LookupParams struct {
 	View
 	Hint      lookup.Epoch
@@ -89,10 +88,8 @@ type UpdateLookup struct {
 }
 
 // UpdateLookup layout:
-// ResourceIDLength bytes
-// userAddr common.AddressLength bytes
-// 4 bytes period
-// 4 bytes version
+// View viewLength bytes
+// Epoch EpochLength
 const updateLookupLength = viewLength + lookup.EpochLength
 
 // UpdateAddr calculates the resource update chunk address corresponding to this lookup key
