@@ -51,14 +51,12 @@ type FileStore struct {
 }
 
 type FileStoreParams struct {
-	Hash  string
-	Local bool
+	Hash string
 }
 
 func NewFileStoreParams() *FileStoreParams {
 	return &FileStoreParams{
-		Hash:  DefaultHash,
-		Local: false,
+		Hash: DefaultHash,
 	}
 }
 
