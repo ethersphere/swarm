@@ -292,12 +292,3 @@ func NewRandomChunk(chunkSize uint64) Chunk {
 	hasher.Write(data)
 	return NewChunk(hasher.Sum(nil), data)
 }
-
-type chunkMemStore struct {
-	*MemStore
-}
-
-func (m *chunkMemStore) Put(ctx context.Context, c Chunk) error {
-	m.MemStore.Put(ctx, c)
-	return nil
-}
