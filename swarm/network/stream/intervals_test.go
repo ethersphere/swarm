@@ -38,17 +38,17 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func TestIntervals1(t *testing.T) {
+func TestIntervalsLive(t *testing.T) {
 	testIntervals(t, true, nil, false)
+	testIntervals(t, true, nil, true)
 }
 
-func TestIntervals2(t *testing.T) {
+func TestIntervalsHistory(t *testing.T) {
 	testIntervals(t, false, NewRange(9, 26), false)
 	testIntervals(t, false, NewRange(9, 26), true)
 }
 
-func TestIntervals3(t *testing.T) {
-	testIntervals(t, true, nil, true)
+func TestIntervalsLiveAndHistory(t *testing.T) {
 	testIntervals(t, true, NewRange(9, 26), false)
 	testIntervals(t, true, NewRange(9, 26), true)
 }
