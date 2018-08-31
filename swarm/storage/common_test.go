@@ -84,7 +84,7 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 	return db, cleanup
 }
 
-func mputRandomChunks(store ChunkStore, n int, chunksize int64) ([]Address, error) {
+func mputRandomChunks(store ChunkStore, n int, chunksize int64) ([]Chunk, error) {
 	return mput(store, n, GenerateRandomChunk)
 }
 
@@ -99,7 +99,7 @@ func mputChunks(store ChunkStore, chunks ...Chunk) error {
 	return err
 }
 
-func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Address, err error) {
+func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Chunk, err error) {
 	// put to localstore and wait for stored channel
 	// does not check delivery error state
 	errc := make(chan error)
@@ -113,7 +113,7 @@ func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Address, err err
 			case <-ctx.Done():
 			}
 		}()
-		hs = append(hs, chunk.Address())
+		hs = append(hs, chunk)
 	}
 
 	// wait for all chunks to be stored
@@ -175,18 +175,18 @@ func (r *brokenLimitedReader) Read(buf []byte) (int, error) {
 }
 
 func testStoreRandom(m ChunkStore, n int, chunksize int64, t *testing.T) {
-	hs, err := mputRandomChunks(m, n, chunksize)
+	chunks, err := mputRandomChunks(m, n, chunksize)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	err = mget(m, hs, nil)
+	err = mget(m, chunkAddresses(chunks), nil)
 	if err != nil {
 		t.Fatalf("testStore failed: %v", err)
 	}
 }
 
 func testStoreCorrect(m ChunkStore, n int, chunksize int64, t *testing.T) {
-	hs, err := mputRandomChunks(m, n, chunksize)
+	chunks, err := mputRandomChunks(m, n, chunksize)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
@@ -203,7 +203,7 @@ func testStoreCorrect(m ChunkStore, n int, chunksize int64, t *testing.T) {
 		}
 		return nil
 	}
-	err = mget(m, hs, f)
+	err = mget(m, chunkAddresses(chunks), f)
 	if err != nil {
 		t.Fatalf("testStore failed: %v", err)
 	}
@@ -237,14 +237,15 @@ func benchmarkStorePut(store ChunkStore, n int, chunksize int64, b *testing.B) {
 }
 
 func benchmarkStoreGet(store ChunkStore, n int, chunksize int64, b *testing.B) {
-	hs, err := mputRandomChunks(store, n, chunksize)
+	chunks, err := mputRandomChunks(store, n, chunksize)
 	if err != nil {
 		b.Fatalf("expected no error, got %v", err)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
+	addrs := chunkAddresses(chunks)
 	for i := 0; i < b.N; i++ {
-		err := mget(store, hs, nil)
+		err := mget(store, addrs, nil)
 		if err != nil {
 			b.Fatalf("mget failed: %v", err)
 		}
@@ -281,4 +282,12 @@ func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 }
 
 func (m *MapChunkStore) Close() {
+}
+
+func chunkAddresses(chunks []Chunk) []Address {
+	addrs := make([]Address, len(chunks))
+	for i, ch := range chunks {
+		addrs[i] = ch.Address()
+	}
+	return addrs
 }

@@ -111,19 +111,11 @@ func TestDbStoreCorrect_1(t *testing.T) {
 	testDbStoreCorrect(1, 4096, false, t)
 }
 
-func TestDbStoreRandom_1_5k(t *testing.T) {
+func TestDbStoreRandom_5k(t *testing.T) {
 	testDbStoreRandom(5000, 0, false, t)
 }
 
-func TestDbStoreRandom_8_5k(t *testing.T) {
-	testDbStoreRandom(5000, 0, false, t)
-}
-
-func TestDbStoreCorrect_1_5k(t *testing.T) {
-	testDbStoreCorrect(5000, 4096, false, t)
-}
-
-func TestDbStoreCorrect_8_5k(t *testing.T) {
+func TestDbStoreCorrect_5k(t *testing.T) {
 	testDbStoreCorrect(5000, 4096, false, t)
 }
 
@@ -135,19 +127,11 @@ func TestMockDbStoreCorrect_1(t *testing.T) {
 	testDbStoreCorrect(1, 4096, true, t)
 }
 
-func TestMockDbStoreRandom_1_5k(t *testing.T) {
+func TestMockDbStoreRandom_5k(t *testing.T) {
 	testDbStoreRandom(5000, 0, true, t)
 }
 
-func TestMockDbStoreRandom_8_5k(t *testing.T) {
-	testDbStoreRandom(5000, 0, true, t)
-}
-
-func TestMockDbStoreCorrect_1_5k(t *testing.T) {
-	testDbStoreCorrect(5000, 4096, true, t)
-}
-
-func TestMockDbStoreCorrect_8_5k(t *testing.T) {
+func TestMockDbStoreCorrect_5k(t *testing.T) {
 	testDbStoreCorrect(5000, 4096, true, t)
 }
 
@@ -285,17 +269,21 @@ func TestLDBStoreWithoutCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	addrs, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
+	chunks, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
-	for _, a := range addrs {
-		_, err := ldb.Get(context.TODO(), a)
+	for _, ch := range chunks {
+		ret, err := ldb.Get(context.TODO(), ch.Address())
 		if err != nil {
 			t.Fatal(err)
+		}
+
+		if !bytes.Equal(ret.Data(), ch.Data()) {
+			t.Fatal("expected to get the same data back, but got smth else")
 		}
 	}
 
@@ -318,7 +306,7 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 
-	addrs, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
+	chunks, err := mputRandomChunks(ldb, n, int64(ch.DefaultSize))
 	if err != nil {
 		t.Fatal(err.Error())
 	}
@@ -328,14 +316,18 @@ func TestLDBStoreCollectGarbage(t *testing.T) {
 	time.Sleep(1 * time.Second)
 
 	var missing int
-	for _, a := range addrs {
-		ret, err := ldb.Get(nil, a)
+	for _, ch := range chunks {
+		ret, err := ldb.Get(context.Background(), ch.Address())
 		if err == ErrChunkNotFound || err == ldberrors.ErrNotFound {
 			missing++
 			continue
 		}
 		if err != nil {
 			t.Fatal(err)
+		}
+
+		if !bytes.Equal(ret.Data(), ch.Data()) {
+			t.Fatal("expected to get the same data back, but got smth else")
 		}
 
 		log.Trace("got back chunk", "chunk", ret)
@@ -363,14 +355,14 @@ func TestLDBStoreAddRemove(t *testing.T) {
 	for i := 0; i < n; i++ {
 		// delete all even index chunks
 		if i%2 == 0 {
-			ldb.Delete(chunks[i])
+			ldb.Delete(chunks[i].Address())
 		}
 	}
 
 	log.Info("ldbstore", "entrycnt", ldb.entryCnt, "accesscnt", ldb.accessCnt)
 
 	for i := 0; i < n; i++ {
-		_, err := ldb.Get(nil, chunks[i])
+		ret, err := ldb.Get(nil, chunks[i].Address())
 
 		if i%2 == 0 {
 			// expect even chunks to be missing
@@ -384,9 +376,9 @@ func TestLDBStoreAddRemove(t *testing.T) {
 				t.Fatalf("expected no error, but got %s", err)
 			}
 
-			// if !bytes.Equal(ret.Data(), chunks[i].Data()) {
-			// 	t.Fatal("expected to get the same data back, but got smth else")
-			// }
+			if !bytes.Equal(ret.Data(), chunks[i].Data()) {
+				t.Fatal("expected to get the same data back, but got smth else")
+			}
 		}
 	}
 }
@@ -455,9 +447,12 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	// expect last chunks to be present, as they have the largest access value
 	for i := surplus; i < surplus+capacity; i++ {
-		_, err := ldb.Get(context.TODO(), chunks[i].Address())
+		ret, err := ldb.Get(context.TODO(), chunks[i].Address())
 		if err != nil {
 			t.Fatalf("chunk %v: expected no error, but got %s", i, err)
+		}
+		if !bytes.Equal(ret.Data(), chunks[i].Data()) {
+			t.Fatal("expected to get the same data back, but got smth else")
 		}
 	}
 }
