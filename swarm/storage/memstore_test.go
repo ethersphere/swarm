@@ -111,8 +111,8 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 	memStore := NewMemStore(NewStoreParams(4000, 200, nil, nil), nil)
 
 	tests := []struct {
-		n         int    // number of chunks to push to memStore
-		chunkSize uint64 // size of chunk (by default in Swarm - 4096)
+		n         int   // number of chunks to push to memStore
+		chunkSize int64 // size of chunk (by default in Swarm - 4096)
 	}{
 		{
 			n:         1,
@@ -141,7 +141,7 @@ func TestMemStoreAndLDBStore(t *testing.T) {
 		var chunks []Chunk
 
 		for i := 0; i < tt.n; i++ {
-			c := NewRandomChunk(tt.chunkSize)
+			c := GenerateRandomChunk(tt.chunkSize)
 			chunks = append(chunks, c)
 		}
 

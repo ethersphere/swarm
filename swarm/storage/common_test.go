@@ -282,13 +282,3 @@ func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 
 func (m *MapChunkStore) Close() {
 }
-
-func NewRandomChunk(chunkSize uint64) Chunk {
-	data := make([]byte, chunkSize+8) // SData should be chunkSize + 8 bytes reserved for length
-
-	rand.Read(data)
-
-	hasher := MakeHashFunc(SHA3Hash)()
-	hasher.Write(data)
-	return NewChunk(hasher.Sum(nil), data)
-}
