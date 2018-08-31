@@ -103,7 +103,7 @@ func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Chunk, err error
 	// put to localstore and wait for stored channel
 	// does not check delivery error state
 	errc := make(chan error)
-	ctx, cancel := context.WithTimeout(context.Background(), putTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	for i := int64(0); i < int64(n); i++ {
 		chunk := f(ch.DefaultSize)

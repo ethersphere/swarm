@@ -48,20 +48,12 @@ func TestMemStoreCorrect_1(t *testing.T) {
 	testMemStoreCorrect(1, 4104, t)
 }
 
-func TestMemStoreRandom_1_1k(t *testing.T) {
+func TestMemStoreRandom_1k(t *testing.T) {
 	testMemStoreRandom(1000, 0, t)
 }
 
-func TestMemStoreCorrect_1_1k(t *testing.T) {
+func TestMemStoreCorrect_1k(t *testing.T) {
 	testMemStoreCorrect(100, 4096, t)
-}
-
-func TestMemStoreRandom_8_1k(t *testing.T) {
-	testMemStoreRandom(1000, 0, t)
-}
-
-func TestMemStoreCorrect_8_1k(t *testing.T) {
-	testMemStoreCorrect(1000, 4096, t)
 }
 
 func TestMemStoreNotFound(t *testing.T) {

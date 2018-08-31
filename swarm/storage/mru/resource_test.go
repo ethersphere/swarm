@@ -783,9 +783,6 @@ func TestValidatorInStore(t *testing.T) {
 	// create content addressed chunks, one good, one faulty
 	chunks := storage.GenerateRandomChunks(chunk.DefaultSize, 2)
 	goodChunk := chunks[0]
-	//badChunk := chunks[1]
-	//badChunk.SData = goodChunk.Data()
-
 	badChunk := storage.NewChunk(chunks[1].Address(), goodChunk.Data())
 
 	metadata := &ResourceMetadata{
@@ -828,19 +825,18 @@ func TestValidatorInStore(t *testing.T) {
 	}
 
 	// put the chunks in the store and check their error status
-	// TODO: Fix tests with PutChunks - collecting errors in a slice like PutChunks doesn't make sense.
-	storage.PutChunks(store, goodChunk)
-	//if goodChunk.GetErrored() == nil {
-	//t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
-	//}
-	storage.PutChunks(store, badChunk)
-	//if badChunk.GetErrored() == nil {
-	//t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
-	//}
-	storage.PutChunks(store, uglyChunk)
-	//if err := uglyChunk.GetErrored(); err != nil {
-	//t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
-	//}
+	err = store.Put(context.Background(), goodChunk)
+	if err == nil {
+		t.Fatal("expected error on good content address chunk with resource validator only, but got nil")
+	}
+	err = store.Put(context.Background(), badChunk)
+	if err == nil {
+		t.Fatal("expected error on bad content address chunk with resource validator only, but got nil")
+	}
+	err = store.Put(context.Background(), uglyChunk)
+	if err != nil {
+		t.Fatalf("expected no error on resource update chunk with resource validator only, but got: %s", err)
+	}
 }
 
 // fast-forward clock

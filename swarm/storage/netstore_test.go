@@ -110,13 +110,17 @@ func TestNetStoreGetAndPut(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
+	c := make(chan struct{})
 	go func() {
+		<-c
+		time.Sleep(200 * time.Millisecond)
 		err := netStore.Put(ctx, chunk)
 		if err != nil {
 			t.Fatalf("Expected no err got %v", err)
 		}
 	}()
 
+	close(c)
 	recChunk, err := netStore.Get(ctx, chunk.Address())
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)

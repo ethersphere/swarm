@@ -17,6 +17,7 @@
 package storage
 
 import (
+	"context"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -52,7 +53,7 @@ func TestValidator(t *testing.T) {
 	badChunk := chunks[1]
 	copy(badChunk.Data(), goodChunk.Data())
 
-	errs := PutChunks(store, goodChunk, badChunk)
+	errs := putChunks(store, goodChunk, badChunk)
 	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk in spite of no validation, but got: %s", err)
 	}
@@ -68,7 +69,7 @@ func TestValidator(t *testing.T) {
 	badChunk = chunks[1]
 	copy(badChunk.Data(), goodChunk.Data())
 
-	errs = PutChunks(store, goodChunk, badChunk)
+	errs = putChunks(store, goodChunk, badChunk)
 	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
@@ -86,7 +87,7 @@ func TestValidator(t *testing.T) {
 	badChunk = chunks[1]
 	copy(badChunk.Data(), goodChunk.Data())
 
-	errs = PutChunks(store, goodChunk, badChunk)
+	errs = putChunks(store, goodChunk, badChunk)
 	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
@@ -104,7 +105,7 @@ func TestValidator(t *testing.T) {
 	badChunk = chunks[1]
 	copy(badChunk.Data(), goodChunk.Data())
 
-	errs = PutChunks(store, goodChunk, badChunk)
+	errs = putChunks(store, goodChunk, badChunk)
 	if errs[0] != nil {
 		t.Fatalf("expected no error on good content address chunk with content address validator only, but got: %s", err)
 	}
@@ -118,4 +119,28 @@ type boolTestValidator bool
 
 func (self boolTestValidator) Validate(addr Address, data []byte) bool {
 	return bool(self)
+}
+
+// putChunks adds chunks  to localstore
+// It waits for receive on the stored channel
+// It logs but does not fail on delivery error
+func putChunks(store *LocalStore, chunks ...Chunk) []error {
+	i := 0
+	f := func(n int64) Chunk {
+		chunk := chunks[i]
+		i++
+		return chunk
+	}
+	_, errs := put(store, len(chunks), f)
+	return errs
+}
+
+func put(store *LocalStore, n int, f func(i int64) Chunk) (hs []Address, errs []error) {
+	for i := int64(0); i < int64(n); i++ {
+		chunk := f(ch.DefaultSize)
+		err := store.Put(context.TODO(), chunk)
+		errs = append(errs, err)
+		hs = append(hs, chunk.Address())
+	}
+	return hs, errs
 }
