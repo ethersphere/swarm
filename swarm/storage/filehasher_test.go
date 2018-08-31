@@ -2,11 +2,11 @@ package storage
 
 import (
 	"bytes"
-	//crand "crypto/rand"
-	"encoding/binary"
+	crand "crypto/rand"
+	//"encoding/binary"
 	"io"
 	//"math/rand"
-	"hash"
+	"fmt"
 	"testing"
 	"time"
 
@@ -58,25 +58,40 @@ func TestWriteBuffer(t *testing.T) {
 	}
 }
 
+func newSerialData(l int) ([]byte, error) {
+	data := make([]byte, l)
+	for i := 0; i < len(data); i++ {
+		data[i] = byte(i % 255)
+	}
+	return data, nil
+}
+
+func newRandomData(l int) ([]byte, error) {
+	data := make([]byte, l)
+	c, err := crand.Read(data)
+	if err != nil {
+		return nil, err
+	} else if c != len(data) {
+		return nil, fmt.Errorf("short read (%d)", c)
+	}
+	return data, nil
+}
+
 func TestSum(t *testing.T) {
 
+	dataFunc := newSerialData
 	fh := NewFileHasher(newAsyncHasher, 128, 32)
-	dataLength := 2 * fh.ChunkSize()
-	data := make([]byte, dataLength)
-	//c, err := crand.Read(data)
-	//	if err != nil {
-	//		t.Fatal(err)
-	//	} else if c != len(data) {
-	//		t.Fatalf("short read %d", c)
-	//	}
-	for i := 0; i < len(data); i++ {
-		data[i] = byte(i % 256)
+	dataLength := fh.ChunkSize() * 127
+	data, err := dataFunc(dataLength)
+	if err != nil {
+		t.Fatal(err)
 	}
+	r := bytes.NewReader(data)
 	var offsets []int
 	for i := 0; i < len(data)/32; i++ {
 		offsets = append(offsets, i*32)
 	}
-	r := bytes.NewReader(data)
+
 	//	for {
 	//		if len(offsets) == 0 {
 	//			break
@@ -111,22 +126,21 @@ func TestSum(t *testing.T) {
 		}
 	}
 
-	hasher := func() hash.Hash {
-		return sha3.NewKeccak256()
-	}
-	rb := bmt.NewRefHasher(hasher, dataLength)
-	meta := make([]byte, 8)
-	binary.BigEndian.PutUint64(meta, uint64(dataLength))
-	res := rb.Hash(data)
-	shasher := hasher()
-	shasher.Reset()
-	shasher.Write(meta)
-	shasher.Write(res)
-	x := shasher.Sum(nil)
+	//	rb := bmt.NewRefHasher(sha3.NewKeccak256, 128)
+	//	meta := make([]byte, 8)
+	//	binary.BigEndian.PutUint64(meta, uint64(dataLength))
+	//	res := make([]byte, 64)
+	//	copy(res, rb.Hash(data[:fh.ChunkSize()]))
+	//	copy(res[32:], rb.Hash(data[fh.ChunkSize():]))
+	//	t.Logf("data length %d chunksize %d res %x", dataLength, fh.ChunkSize(), res)
+	//	root := rb.Hash(res)
+	//	shasher := sha3.NewKeccak256()
+	//	shasher.Write(meta)
+	//	shasher.Write(root)
+	//	x := shasher.Sum(nil)
 
-	time.Sleep(time.Second)
-	t.Logf("hash ref raw: %x", res)
-	t.Logf("hash ref dosum: %x", x)
+	time.Sleep(time.Second * 1)
+	//t.Logf("hash ref dosum: %x", x)
 	fh.SetLength(int64(dataLength))
 	h := fh.Sum(nil)
 	t.Logf("hash: %x", h)

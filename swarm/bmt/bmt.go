@@ -23,8 +23,6 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 /*
@@ -77,9 +75,8 @@ type BaseHasherFunc func() hash.Hash
 //   the tree and itself in a state reusable for hashing a new chunk
 // - generates and verifies segment inclusion proofs (TODO:)
 type Hasher struct {
-	pool *TreePool  // BMT resource pool
-	bmt  *tree      // prebuilt BMT resource for flowcontrol and proofs
-	lock sync.Mutex // concurrent access to bmt member
+	pool *TreePool // BMT resource pool
+	bmt  *tree     // prebuilt BMT resource for flowcontrol and proofs
 }
 
 // New creates a reusable BMT Hasher that
@@ -174,7 +171,7 @@ func (p *TreePool) release(t *tree) {
 type tree struct {
 	leaves  []*node     // leaf nodes of the tree, other nodes accessible via parent links
 	cursor  int         // index of rightmost currently open segment
-	offset  int         // byte offset (cursor position) within currently open segment
+	offset  int         // offset (cursor position) within currently open segment
 	section []byte      // the rightmost open section (double segment)
 	result  chan []byte // result channel
 	span    []byte      // The span of the data subsumed under the chunk
@@ -379,11 +376,11 @@ func (h *Hasher) ResetWithLength(span []byte) {
 // releaseTree gives back the Tree to the pool whereby it unlocks
 // it resets tree, segment and index
 func (h *Hasher) releaseTree() {
-	t := h.GetBmt()
+	t := h.bmt
 	if t == nil {
 		return
 	}
-	h.SetBmt(nil)
+	h.bmt = nil
 	go func() {
 		t.cursor = 0
 		t.offset = 0
@@ -397,18 +394,6 @@ func (h *Hasher) releaseTree() {
 	}()
 }
 
-func (h *Hasher) GetBmt() *tree {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-	return h.bmt
-}
-
-func (h *Hasher) SetBmt(t *tree) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-	h.bmt = t
-}
-
 // NewAsyncWriter extends Hasher with an interface for concurrent segment/section writes
 func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 	secsize := h.pool.SegmentSize
@@ -416,7 +401,6 @@ func (h *Hasher) NewAsyncWriter(double bool) *AsyncHasher {
 		secsize *= 2
 	}
 	write := func(i int, section []byte, final bool) {
-		//log.Debug("bmt write sub", "i", i, "final", final, "s", len(section))
 		h.writeSection(i, section, double, final)
 	}
 	return &AsyncHasher{
@@ -433,8 +417,6 @@ type SectionWriter interface {
 	Write(index int, data []byte)                 // write into section of index
 	Sum(b []byte, length int, span []byte) []byte // returns the hash of the buffer
 	SectionSize() int                             // size of the async section unit to use
-	Size() int
-	BlockSize() int
 }
 
 // AsyncHasher extends BMT Hasher with an asynchronous segment/section writer interface
@@ -475,36 +457,28 @@ func (sw *AsyncHasher) Write(i int, section []byte) {
 	t := sw.getTree()
 	// cursor keeps track of the rightmost section written so far
 	// if index is lower than cursor then just write non-final section as is
-
-	log.Debug("writenote", "offset", t.offset, "i", i, "sectionlen", len(section), "cur", t.cursor, "data", section)
 	if i < t.cursor {
 		// if index is not the rightmost, safe to write section
 		go sw.write(i, section, false)
 		return
 	}
-
 	// if there is a previous rightmost section safe to write section
 	if t.offset > 0 {
 		if i == t.cursor {
-
 			// i==cursor implies cursor was set by Hash call so we can write section as final one
 			// since it can be shorter, first we copy it to the padded buffer
 			t.section = make([]byte, sw.secsize)
 			copy(t.section, section)
 			go sw.write(i, t.section, true)
 			return
-
 		}
-
 		// the rightmost section just changed, so we write the previous one as non-final
 		go sw.write(t.cursor, t.section, false)
 	}
 	// set i as the index of the righmost section written so far
 	// set t.offset to cursor*secsize+1
-
 	t.cursor = i
-	//t.offset = i*sw.secsize + 1
-	t.offset = (i + 1) * sw.secsize
+	t.offset = i*sw.secsize + 1
 	t.section = make([]byte, sw.secsize)
 	copy(t.section, section)
 }
@@ -519,7 +493,6 @@ func (sw *AsyncHasher) Write(i int, section []byte) {
 // meta: metadata to hash together with BMT root for the final digest
 //   e.g., span for protection against existential forgery
 func (sw *AsyncHasher) Sum(b []byte, length int, meta []byte) (s []byte) {
-	//log.Warn("bmt sum", "l", length)
 	sw.mtx.Lock()
 	t := sw.getTree()
 	if length == 0 {
@@ -529,8 +502,6 @@ func (sw *AsyncHasher) Sum(b []byte, length int, meta []byte) (s []byte) {
 		// for non-zero input the rightmost section is written to the tree asynchronously
 		// if the actual last section has been written (t.cursor == length/t.secsize)
 		maxsec := (length - 1) / sw.secsize
-
-		//log.Debug("sum->write", "c", t.cursor, "offset", t.offset, "meta", meta, "maxsec", maxsec)
 		if t.offset > 0 {
 			go sw.write(t.cursor, t.section, maxsec == t.cursor)
 		}
@@ -549,7 +520,6 @@ func (sw *AsyncHasher) Sum(b []byte, length int, meta []byte) (s []byte) {
 		return append(b, s...)
 	}
 	// hash together meta and BMT root hash using the pools
-	//log.Debug("dosum", "s", s, "b", b, "m", meta)
 	return doSum(sw.pool.hasher(), b, meta, s)
 }
 
@@ -574,7 +544,6 @@ func (h *Hasher) writeSection(i int, section []byte, double bool, final bool) {
 		hasher = n.hasher
 		isLeft = i%2 == 0
 	}
-
 	// write hash into parent node
 	if final {
 		// for the last segment use writeFinalNode
@@ -594,9 +563,7 @@ func (h *Hasher) writeNode(n *node, bh hash.Hash, isLeft bool, s []byte) {
 	for {
 		// at the root of the bmt just write the result to the result channel
 		if n == nil {
-			tr := h.getTree()
-			//log.Debug("writenode tree", "t", tr)
-			tr.result <- s
+			h.getTree().result <- s
 			return
 		}
 		// otherwise assign child hash to left or right segment
@@ -626,13 +593,10 @@ func (h *Hasher) writeNode(n *node, bh hash.Hash, isLeft bool, s []byte) {
 func (h *Hasher) writeFinalNode(level int, n *node, bh hash.Hash, isLeft bool, s []byte) {
 
 	for {
-		//log.Debug("writefinalnode", "s", len(s))
 		// at the root of the bmt just write the result to the result channel
 		if n == nil {
-			tr := h.getTree()
-			//log.Debug("writefinalnode final tree", "t", tr, "s", len(s))
 			if s != nil {
-				tr.result <- s
+				h.getTree().result <- s
 			}
 			return
 		}
@@ -683,12 +647,11 @@ func (h *Hasher) writeFinalNode(level int, n *node, bh hash.Hash, isLeft bool, s
 
 // getTree obtains a BMT resource by reserving one from the pool and assigns it to the bmt field
 func (h *Hasher) getTree() *tree {
-	b := h.GetBmt()
-	if b != nil {
-		return b
+	if h.bmt != nil {
+		return h.bmt
 	}
 	t := h.pool.reserve()
-	h.SetBmt(t)
+	h.bmt = t
 	return t
 }
 
