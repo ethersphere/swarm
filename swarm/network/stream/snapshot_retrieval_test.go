@@ -91,9 +91,7 @@ func TestRetrieval(t *testing.T) {
 		} else {
 			//default test
 			nodeCnt = []int{16}
-			chnkCnt = []int{1}
-			// nodeCnt = []int{16}
-			// chnkCnt = []int{32}
+			chnkCnt = []int{32}
 		}
 		for _, n := range nodeCnt {
 			for _, c := range chnkCnt {

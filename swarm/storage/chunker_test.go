@@ -94,6 +94,9 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 	} else {
 		addr, wait, err = TreeSplit(ctx, data, int64(n), putGetter)
 	}
+	if err != nil {
+		tester.t.Fatalf(err.Error())
+	}
 	tester.t.Logf(" Address = %v\n", addr)
 	err = wait(ctx)
 	if err != nil {
@@ -291,8 +294,7 @@ func benchmarkSplitTreeSHA3(n int, t *testing.B) {
 		data := testDataReader(n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, SHA3Hash)
 
-		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-		defer cancel()
+		ctx := context.Background()
 		_, wait, err := TreeSplit(ctx, data, int64(n), putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -311,8 +313,7 @@ func benchmarkSplitTreeBMT(n int, t *testing.B) {
 		data := testDataReader(n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
 
-		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-		defer cancel()
+		ctx := context.Background()
 		_, wait, err := TreeSplit(ctx, data, int64(n), putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -330,8 +331,7 @@ func benchmarkSplitPyramidBMT(n int, t *testing.B) {
 		data := testDataReader(n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
 
-		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-		defer cancel()
+		ctx := context.Background()
 		_, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -349,8 +349,7 @@ func benchmarkSplitPyramidSHA3(n int, t *testing.B) {
 		data := testDataReader(n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, SHA3Hash)
 
-		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-		defer cancel()
+		ctx := context.Background()
 		_, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -371,8 +370,7 @@ func benchmarkSplitAppendPyramid(n, m int, t *testing.B) {
 		store := NewMapChunkStore()
 		putGetter := newTestHasherStore(store, SHA3Hash)
 
-		ctx, cancel := context.WithTimeout(context.Background(), splitTimeout)
-		defer cancel()
+		ctx := context.Background()
 		key, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
@@ -383,8 +381,6 @@ func benchmarkSplitAppendPyramid(n, m int, t *testing.B) {
 		}
 
 		putGetter = newTestHasherStore(store, SHA3Hash)
-		ctx, cancel = context.WithTimeout(context.Background(), splitTimeout)
-		defer cancel()
 		_, wait, err = PyramidAppend(ctx, key, data1, putGetter, putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
