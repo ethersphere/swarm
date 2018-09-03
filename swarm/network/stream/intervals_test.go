@@ -38,13 +38,18 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-func TestIntervals(t *testing.T) {
+func TestIntervalsLive(t *testing.T) {
 	testIntervals(t, true, nil, false)
-	testIntervals(t, false, NewRange(9, 26), false)
-	testIntervals(t, true, NewRange(9, 26), false)
-
 	testIntervals(t, true, nil, true)
+}
+
+func TestIntervalsHistory(t *testing.T) {
+	testIntervals(t, false, NewRange(9, 26), false)
 	testIntervals(t, false, NewRange(9, 26), true)
+}
+
+func TestIntervalsLiveAndHistory(t *testing.T) {
+	testIntervals(t, true, NewRange(9, 26), false)
 	testIntervals(t, true, NewRange(9, 26), true)
 }
 
@@ -70,17 +75,21 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 				os.RemoveAll(datadir)
 			}
 			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
+			netStore, err := storage.NewNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck: skipCheck,
 			})
 			bucket.Store(bucketKeyRegistry, r)
 
 			r.RegisterClientFunc(externalStreamName, func(p *Peer, t string, live bool) (Client, error) {
-				return newTestExternalClient(db), nil
+				return newTestExternalClient(netStore), nil
 			})
 			r.RegisterServerFunc(externalStreamName, func(p *Peer, t string, live bool) (Server, error) {
 				return newTestExternalServer(t, externalStreamSessionAt, externalStreamMaxKeys, nil), nil
@@ -101,7 +110,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		t.Fatal(err)
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
@@ -256,6 +265,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		if err != nil {
 			return err
 		}
+
 		if err := <-liveErrC; err != nil {
 			return err
 		}
@@ -302,21 +312,21 @@ func enableNotifications(r *Registry, peerID discover.NodeID, s Stream) error {
 
 type testExternalClient struct {
 	hashes               chan []byte
-	db                   *storage.DBAPI
+	store                storage.SyncChunkStore
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(db *storage.DBAPI) *testExternalClient {
+func newTestExternalClient(store storage.SyncChunkStore) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
-		db:                   db,
+		store:                store,
 		enableNotificationsC: make(chan struct{}),
 	}
 }
 
-func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func() {
-	chunk, _ := c.db.GetOrCreateRequest(ctx, hash)
-	if chunk.ReqC == nil {
+func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
+	wait := c.store.FetchFunc(ctx, storage.Address(hash))
+	if wait == nil {
 		return nil
 	}
 	c.hashes <- hash
@@ -329,7 +339,7 @@ func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func() {
 			return chunk.WaitToStore()
 		}
 	*/
-	return nil
+	return wait
 }
 
 func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {

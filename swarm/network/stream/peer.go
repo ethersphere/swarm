@@ -33,7 +33,7 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
-var sendTimeout = 30 * time.Second
+var sendTimeout = 5 * time.Second
 
 type notFoundError struct {
 	t string
@@ -83,8 +83,32 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	go p.pq.Run(ctx, func(i interface{}) {
 		wmsg := i.(WrappedPriorityMsg)
-		p.Send(wmsg.Context, wmsg.Msg)
+		err := p.Send(wmsg.Context, wmsg.Msg)
+		if err != nil {
+			log.Error("Message send error", "err", err)
+		}
 	})
+
+	// basic monitoring for pq contention
+	go func(pq *pq.PriorityQueue) {
+		for range time.NewTicker(5 * time.Second).C {
+			var len_maxi int
+			var cap_maxi int
+			for k := range pq.Queues {
+				if len_maxi < len(pq.Queues[k]) {
+					len_maxi = len(pq.Queues[k])
+				}
+
+				if cap_maxi < cap(pq.Queues[k]) {
+					cap_maxi = cap(pq.Queues[k])
+				}
+			}
+
+			metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(len_maxi))
+			metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(cap_maxi))
+		}
+	}(p.pq)
+
 	go func() {
 		<-p.quit
 		cancel()
@@ -93,7 +117,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer
-func (p *Peer) Deliver(ctx context.Context, chunk *storage.Chunk, priority uint8) error {
+func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8) error {
 	var sp opentracing.Span
 	ctx, sp = spancontext.StartSpan(
 		ctx,
@@ -101,8 +125,8 @@ func (p *Peer) Deliver(ctx context.Context, chunk *storage.Chunk, priority uint8
 	defer sp.Finish()
 
 	msg := &ChunkDeliveryMsg{
-		Addr:  chunk.Addr,
-		SData: chunk.SData,
+		Addr:  chunk.Address(),
+		SData: chunk.Data(),
 	}
 	return p.SendPriority(ctx, msg, priority)
 }
@@ -345,6 +369,22 @@ func (p *Peer) removeClientParams(s Stream) error {
 	}
 	delete(p.clientParams, s)
 	return nil
+}
+
+func (p *Peer) context() context.Context {
+	var cancel func()
+	ctx := context.Background()
+	ctx, cancel = context.WithCancel(ctx)
+
+	go func() {
+		select {
+		case <-ctx.Done():
+		case <-p.quit:
+			cancel()
+		}
+	}()
+
+	return ctx
 }
 
 func (p *Peer) close() {

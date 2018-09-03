@@ -130,20 +130,26 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 				return nil, nil, err
 			}
 			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				store.Close()
-			}
 			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
+			netStore, err := storage.NewNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), &RegistryOptions{
+			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				DoSync:          true,
 				SyncUpdateDelay: 3 * time.Second,
 			})
 			bucket.Store(bucketKeyRegistry, r)
+
+			cleanup = func() {
+				os.RemoveAll(datadir)
+				netStore.Close()
+				r.Close()
+			}
 
 			return r, cleanup, nil
 
@@ -168,6 +174,10 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 
 	ctx, cancelSimRun := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancelSimRun()
+
+	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
@@ -196,10 +206,6 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 		}
 		conf.hashes = append(conf.hashes, hashes...)
 		mapKeysToNodes(conf)
-
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-			return err
-		}
 
 		// File retrieval check is repeated until all uploaded files are retrieved from all nodes
 		// or until the timeout is reached.
@@ -288,20 +294,26 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 				return nil, nil, err
 			}
 			bucket.Store(bucketKeyStore, store)
-			cleanup = func() {
-				os.RemoveAll(datadir)
-				store.Close()
-			}
 			localStore := store.(*storage.LocalStore)
-			db := storage.NewDBAPI(localStore)
+			netStore, err := storage.NewNetStore(localStore, nil)
+			if err != nil {
+				return nil, nil, err
+			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			delivery := NewDelivery(kad, db)
+			delivery := NewDelivery(kad, netStore)
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
 
-			r := NewRegistry(addr, delivery, db, state.NewInmemoryStore(), nil)
+			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), nil)
 			bucket.Store(bucketKeyRegistry, r)
 
-			fileStore := storage.NewFileStore(storage.NewNetStore(localStore, nil), storage.NewFileStoreParams())
+			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
 			bucket.Store(bucketKeyFileStore, fileStore)
+
+			cleanup = func() {
+				os.RemoveAll(datadir)
+				netStore.Close()
+				r.Close()
+			}
 
 			return r, cleanup, nil
 
@@ -322,6 +334,10 @@ func testSyncingViaDirectSubscribe(chunkCount int, nodeCount int) error {
 
 	err := sim.UploadSnapshot(fmt.Sprintf("testing/snapshot_%d.json", nodeCount))
 	if err != nil {
+		return err
+	}
+
+	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
 		return err
 	}
 

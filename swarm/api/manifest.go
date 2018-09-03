@@ -70,7 +70,10 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 		return nil, err
 	}
 	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
-	wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
 	return key, err
 }
 
@@ -87,7 +90,11 @@ func (a *API) NewResourceManifest(ctx context.Context, resourceAddr string) (sto
 	if err != nil {
 		return nil, err
 	}
-	key, _, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
+	key, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
+	if err != nil {
+		return nil, err
+	}
+	err = wait(ctx)
 	return key, err
 }
 
@@ -110,7 +117,12 @@ func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC
 func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (key storage.Address, err error) {
 	entry := newManifestTrieEntry(e, nil)
 	if data != nil {
-		key, _, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+		var wait func(context.Context) error
+		key, wait, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+		if err != nil {
+			return nil, err
+		}
+		err = wait(ctx)
 		if err != nil {
 			return nil, err
 		}
