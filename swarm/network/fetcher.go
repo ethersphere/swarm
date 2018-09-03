@@ -89,20 +89,29 @@ func NewFetcher(addr storage.Address, rf RequestFunc, skipCheck bool) *Fetcher {
 }
 
 func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
-	// put source
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
 	select {
 	case f.offerC <- source:
 	case <-ctx.Done():
-		log.Debug("fetcher.offer", "err", ctx.Err())
 	}
 }
 
 // fetch is called by NetStore evey time there is a request or offer for a chunk
 func (f *Fetcher) Request(ctx context.Context) {
 	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
+
+	select {
 	case f.requestC <- struct{}{}:
 	case <-ctx.Done():
-		log.Debug("fetcher.request", "err", ctx.Err())
 	}
 }
 

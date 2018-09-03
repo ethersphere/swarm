@@ -153,12 +153,6 @@ func TestFetcherCancelStopsRequest(t *testing.T) {
 	rctx, rcancel := context.WithCancel(context.Background())
 	rcancel()
 
-	select {
-	case <-rctx.Done(): // make sure that request context is done
-	case <-time.After(time.Second):
-		t.Fatal("request context is not canceled")
-	}
-
 	// we call Request with a cancelled context
 	fetcher.Request(rctx)
 
