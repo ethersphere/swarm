@@ -481,7 +481,7 @@ func TestNetStoreFetcherCountPeers(t *testing.T) {
 	for i := 0; i < nrGets; i++ {
 		peer := peers[i]
 		go func() {
-			ctx = context.WithValue(ctx, "peer", peer)
+			ctx := context.WithValue(ctx, "peer", peer)
 			_, err := netStore.Get(ctx, addr)
 			errC <- err
 		}()
