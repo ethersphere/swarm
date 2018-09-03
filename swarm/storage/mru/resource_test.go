@@ -269,8 +269,7 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	addr := storage.Address(request.rootAddr)
-	chunk, err := rh.chunkStore.Get(ctx, addr)
+	chunk, err := rh.chunkStore.Get(ctx, storage.Address(request.rootAddr))
 	if err != nil {
 		t.Fatal(err)
 	} else if len(chunk.Data()) < 16 {
