@@ -586,7 +586,7 @@ func TestNetStoreFetcherLifeCycleWithTimeout(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	// FetchFunc should return a non-nil wait function, because the chunk is not available
@@ -613,14 +613,6 @@ func TestNetStoreFetcherLifeCycleWithTimeout(t *testing.T) {
 				t.Fatalf("Expected err %v got %v", context.DeadlineExceeded, err)
 			}
 		}()
-	}
-
-	// sleep a little so the wait functions are called above
-	time.Sleep(100 * time.Millisecond)
-
-	// there should be still only one fetcher, because all wait calls are for the same chunk
-	if netStore.fetchers.Len() != 1 || netStore.getFetcher(chunk.Address()) == nil {
-		t.Fatal("Expected netStore to have one fetcher for the requested chunk")
 	}
 
 	// wait until all wait calls timeout
