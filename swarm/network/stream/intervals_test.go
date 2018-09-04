@@ -156,6 +156,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			simulation.NewPeerEventsFilter().Type(p2p.PeerEventTypeDrop),
 		)
 
+		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
+		if err != nil {
+			return err
+		}
+
 		go func() {
 			for d := range disconnections {
 				if d.Error != nil {
@@ -260,11 +265,6 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 				}
 			}
 		}()
-
-		err = registry.Subscribe(storer, NewStream(externalStreamName, "", live), history, Top)
-		if err != nil {
-			return err
-		}
 
 		if err := <-liveErrC; err != nil {
 			return err
