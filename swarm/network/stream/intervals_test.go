@@ -113,6 +113,10 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 
+	if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
+		t.Fatal(err)
+	}
+
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 		storer := nodeIDs[0]
@@ -145,11 +149,6 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		liveErrC := make(chan error)
 		historyErrC := make(chan error)
 
-		if _, err := sim.WaitTillHealthy(ctx, 2); err != nil {
-			log.Error("WaitKademlia error: %v", "err", err)
-			return err
-		}
-
 		log.Debug("Watching for disconnections")
 		disconnections := sim.PeerEvents(
 			context.Background(),
@@ -181,7 +180,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			var liveHashesChan chan []byte
 			liveHashesChan, err = getHashes(ctx, registry, storer, NewStream(externalStreamName, "", true))
 			if err != nil {
-				log.Error("Subscription error: %v", "err", err)
+				log.Error("get hashes", "err", err)
 				return
 			}
 			i := externalStreamSessionAt
@@ -225,6 +224,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 			var historyHashesChan chan []byte
 			historyHashesChan, err = getHashes(ctx, registry, storer, NewStream(externalStreamName, "", false))
 			if err != nil {
+				log.Error("get hashes", "err", err)
 				return
 			}
 
@@ -329,16 +329,14 @@ func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(con
 	if wait == nil {
 		return nil
 	}
-	c.hashes <- hash
-	//NOTE: This was failing on go1.9.x with a deadlock.
-	//Sometimes this function would just block
-	//It is commented now, but it may be well worth after the chunk refactor
-	//to re-enable this and see if the problem has been addressed
-	/*
-		return func() {
-			return chunk.WaitToStore()
+	select {
+	case c.hashes <- hash:
+	case <-ctx.Done():
+		log.Warn("testExternalClient NeedData context", "err", ctx.Err())
+		return func(_ context.Context) error {
+			return ctx.Err()
 		}
-	*/
+	}
 	return wait
 }
 
