@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"reflect"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 )
 
 func areEqualJSON(s1, s2 string) (bool, error) {
@@ -33,15 +35,8 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	bob := newBobSigner()         //Bob
 
 	// Create a resource to our good guy Charlie's name
-	createRequest, err := NewCreateRequest(&Resource{
-		Topic:     NewTopic("a good resource name", nil),
-		Frequency: 300,
-		StartTime: Timestamp{Time: 1528900000},
-	}, charlie.Address())
-
-	if err != nil {
-		t.Fatalf("Error creating resource name: %s", err)
-	}
+	createRequest := NewCreateUpdateRequest(NewTopic("a good resource name", nil))
+	createRequest.User = charlie.Address()
 
 	// We now encode the create message to simulate we send it over the wire
 	messageRawData, err := createRequest.MarshalJSON()
@@ -64,19 +59,19 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	// and recover the information above. To sign an update, we need the rootAddr and the metaHash to construct
 	// proof of ownership
 
-	const expectedSignature = "0x4d1a7790f06379a3f9ccc1c3952017ebb9aba1aee4b4b767806598663d9472c743f97dc1eaa4aab4ed5db8784346ff681e379160175aebdbc4812167f93a8ec600"
-	const expectedJSON = `{"view":{"resource":{"startTime":1528900000,"frequency":300,"topic":"0x6120676f6f64207265736f75726365206e616d65000000000000000000000000"},"user":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
+	const expectedSignature = "0x1cbdad7702b7d43ca983dc9f2ed87e73984288cdae6a8844e44688ee22c72080516fcd65a894b894b7b41ac780d5ce5d9fb527dc7126ea876501948d2bb6880d00"
+	const expectedJSON = `{"view":{"topic":"0x6120676f6f64207265736f75726365206e616d65000000000000000000000000","user":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"epoch":{"level":1,"time":1000},"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
 
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &Request{
 		ResourceUpdate: ResourceUpdate{
-			UpdateHeader: UpdateHeader{
-				UpdateLookup: UpdateLookup{
-					Period:  7,
-					Version: 1,
-					View:    createRequest.ResourceUpdate.View,
+			UpdateLookup: UpdateLookup{
+				Epoch: lookup.Epoch{
+					Time:  1000,
+					Level: 1,
 				},
+				View: createRequest.ResourceUpdate.View,
 			},
 			data: data,
 		},
@@ -168,7 +163,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	}
 
 	// mess with the lookup key to make sure Verify fails:
-	recoveredRequest.Version = 999
+	recoveredRequest.Time = 77999
 	if err = recoveredRequest.Verify(); err == nil {
 		t.Fatalf("Expected Verify to fail since the lookup key has been altered")
 	}

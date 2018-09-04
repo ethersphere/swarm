@@ -29,6 +29,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+
 	"bytes"
 	"mime"
 	"path/filepath"
@@ -411,7 +413,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 			if entry.ResourceView == nil {
 				return reader, mimeType, status, nil, fmt.Errorf("Cannot decode ResourceView in manifest")
 			}
-			_, err := a.resource.Lookup(ctx, mru.LookupLatest(entry.ResourceView))
+			_, err := a.resource.Lookup(ctx, mru.NewLatestLookupParams(entry.ResourceView, lookup.NoClue))
 			if err != nil {
 				apiGetNotFound.Inc(1)
 				status = http.StatusNotFound

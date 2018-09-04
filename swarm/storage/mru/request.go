@@ -19,6 +19,8 @@ package mru
 import (
 	"encoding/json"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
@@ -27,9 +29,7 @@ import (
 
 // updateRequestJSON represents a JSON-serialized UpdateRequest
 type updateRequestJSON struct {
-	View      *View  `json:"view"`
-	Version   uint32 `json:"version,omitempty"`
-	Period    uint32 `json:"period,omitempty"`
+	UpdateLookup
 	Data      string `json:"data,omitempty"`
 	Signature string `json:"signature,omitempty"`
 }
@@ -37,34 +37,16 @@ type updateRequestJSON struct {
 var zeroAddr = common.Address{}
 
 // NewCreateUpdateRequest returns a ready to sign request to create and initialize a resource with data
-func NewCreateUpdateRequest(metadata *Resource) (*Request, error) {
+func NewCreateUpdateRequest(topic Topic) *Request {
 
-	request, err := NewCreateRequest(metadata, zeroAddr)
-	if err != nil {
-		return nil, err
-	}
+	request := new(Request)
 
 	// get the current time
 	now := TimestampProvider.Now().Time
+	request.Epoch = lookup.GetFirstEpoch(now)
+	request.View.Topic = topic
 
-	request.Version = 1
-	request.Period, err = getNextPeriod(metadata.StartTime.Time, now, metadata.Frequency)
-	if err != nil {
-		return nil, err
-	}
-	return request, nil
-}
-
-// NewCreateRequest returns a request to create a new resource
-func NewCreateRequest(metadata *Resource, userAddr common.Address) (request *Request, err error) {
-	if metadata.StartTime.Time == 0 { // get the current time
-		metadata.StartTime = TimestampProvider.Now()
-	}
-
-	request = new(Request)
-	request.View.Resource = *metadata
-	request.View.User = userAddr
-	return request, nil
+	return request
 }
 
 // SetData stores the payload data the resource will be updated with
@@ -81,9 +63,7 @@ func (r *Request) IsUpdate() bool {
 // fromJSON takes an update request JSON and populates an UpdateRequest
 func (r *Request) fromJSON(j *updateRequestJSON) error {
 
-	r.Version = j.Version
-	r.Period = j.Period
-	r.View = *j.View
+	r.UpdateLookup = j.UpdateLookup
 
 	var err error
 	if j.Data != "" {
@@ -148,11 +128,9 @@ func (r *Request) MarshalJSON() (rawData []byte, err error) {
 	}
 
 	requestJSON := &updateRequestJSON{
-		View:      &r.View,
-		Version:   r.Version,
-		Period:    r.Period,
-		Data:      dataString,
-		Signature: signatureString,
+		UpdateLookup: r.UpdateLookup,
+		Data:         dataString,
+		Signature:    signatureString,
 	}
 
 	return json.Marshal(requestJSON)

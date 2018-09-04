@@ -1,9 +1,7 @@
 package mru
 
 import (
-	"fmt"
 	"hash"
-	"strconv"
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -13,22 +11,14 @@ import (
 
 // View represents a particular user's view of a resource
 type View struct {
-	Resource `json:"resource"`
-	User     common.Address `json:"user"`
+	Topic Topic          `json:"topic"`
+	User  common.Address `json:"user"`
 }
 
 // View layout:
-// ResourceLength bytes
+// TopicLength bytes
 // userAddr common.AddressLength bytes
-const viewLength = ResourceLength + common.AddressLength
-
-// NewView build a new resource "point of view" out of the provided resource and user
-func NewView(resource *Resource, user common.Address) *View {
-	return &View{
-		Resource: *resource,
-		User:     user,
-	}
-}
+const viewLength = TopicLength + common.AddressLength
 
 // mapKey calculates a unique id for this view for the cache map in `Handler`
 func (u *View) mapKey() uint64 {
@@ -48,10 +38,8 @@ func (u *View) binaryPut(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize View. Expected %d, got %d", viewLength, len(serializedData))
 	}
 	var cursor int
-	if err := u.Resource.binaryPut(serializedData[cursor : cursor+ResourceLength]); err != nil {
-		return err
-	}
-	cursor += ResourceLength
+	copy(serializedData[cursor:cursor+TopicLength], u.Topic.content[:TopicLength])
+	cursor += TopicLength
 
 	copy(serializedData[cursor:cursor+common.AddressLength], u.User[:])
 	cursor += common.AddressLength
@@ -71,10 +59,8 @@ func (u *View) binaryGet(serializedData []byte) error {
 	}
 
 	var cursor int
-	if err := u.Resource.binaryGet(serializedData[cursor : cursor+ResourceLength]); err != nil {
-		return err
-	}
-	cursor += ResourceLength
+	copy(u.Topic.content[:], serializedData[cursor:cursor+TopicLength])
+	cursor += TopicLength
 
 	copy(u.User[:], serializedData[cursor:cursor+common.AddressLength])
 	cursor += common.AddressLength
@@ -92,38 +78,29 @@ func (u *View) Hex() string {
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
 func (u *View) FromValues(values Values) error {
-	startTime, err := strconv.ParseUint(values.Get("starttime"), 10, 64)
-	if err != nil {
-		return err
-	}
-	frequency, err := strconv.ParseUint(values.Get("frequency"), 10, 64)
-	if err != nil {
-		return err
-	}
 	topic := values.Get("topic")
 	if topic != "" {
-		if err = u.Topic.FromHex(values.Get("topic")); err != nil {
+		if err := u.Topic.FromHex(values.Get("topic")); err != nil {
 			return err
 		}
 	} else { // see if the user set name and relatedcontent
 		name := values.Get("name")
 		relatedContent, _ := hexutil.Decode(values.Get("relatedcontent"))
-		if len(relatedContent) > 0 && len(relatedContent) < storage.KeyLength {
-			return NewErrorf(ErrInvalidValue, "relatedcontent field must be a hex-encoded byte array exactly %d bytes long", storage.KeyLength)
+		if len(relatedContent) > 0 {
+			if len(relatedContent) < storage.KeyLength {
+				return NewErrorf(ErrInvalidValue, "relatedcontent field must be a hex-encoded byte array exactly %d bytes long", storage.KeyLength)
+			}
+			relatedContent = relatedContent[:storage.KeyLength]
 		}
-		u.Topic = NewTopic(name, relatedContent[:storage.KeyLength])
+		u.Topic = NewTopic(name, relatedContent)
 	}
 	u.User = common.HexToAddress(values.Get("user"))
-	u.Frequency = frequency
-	u.StartTime.Time = startTime
 	return nil
 }
 
 // ToValues serializes this structure into the provided string key-value store
 // useful to build query strings
 func (u *View) ToValues(values Values) {
-	values.Set("starttime", fmt.Sprintf("%d", u.StartTime.Time))
-	values.Set("frequency", fmt.Sprintf("%d", u.Frequency))
 	values.Set("topic", u.Topic.Hex())
 	values.Set("user", u.User.Hex())
 }

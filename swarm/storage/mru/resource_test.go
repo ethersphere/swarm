@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"testing"
@@ -30,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 )
 
 var (
@@ -85,18 +87,12 @@ func TestResourceHandler(t *testing.T) {
 	defer cancel()
 
 	view := View{
-		Resource: Resource{
-			Topic:     NewTopic("Mess with mru code and see what ghost catches you", nil),
-			StartTime: startTime,
-			Frequency: resourceFrequency,
-		},
-		User: signer.Address(),
+		Topic: NewTopic("Mess with mru code and see what ghost catches you", nil),
+		User:  signer.Address(),
 	}
 
-	request, err := NewCreateUpdateRequest(&view.Resource)
-	if err != nil {
-		t.Fatal(err)
-	}
+	request := NewCreateUpdateRequest(view.Topic)
+
 	request.Sign(signer)
 	if err != nil {
 		t.Fatal(err)
@@ -128,11 +124,11 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Version != 2 || request.Period != 1 {
-		t.Fatal("Suggested period should be 1 and version should be 2")
+	if request.Epoch.Base() != 0 || request.Epoch.Level != 24 {
+		t.Fatal("Suggested epoch BaseTime should be 0 and Epoch level should be 24")
 	}
 
-	request.Version = 1 // force version 1 instead of 2 to make it fail
+	request.Epoch.Level = 25 // force level 25 instead of 24 to make it fail
 	data = []byte(updates[1])
 	request.SetData(data)
 	if err := request.Sign(signer); err != nil {
@@ -140,7 +136,7 @@ func TestResourceHandler(t *testing.T) {
 	}
 	resourcekey[updates[1]], err = rh.Update(ctx, request)
 	if err == nil {
-		t.Fatal("Expected update to fail since this version already exists")
+		t.Fatal("Expected update to fail since an update in this epoch already exists")
 	}
 
 	// update on second period with version = 1, correct. period=2, version=1
@@ -180,8 +176,8 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Period != 3 || request.Version != 2 {
-		t.Fatal("Suggested period should be 3 and version should be 2")
+	if request.Epoch.Base() != 0 || request.Epoch.Level != 22 {
+		t.Fatalf("Expected epoch base time to be %d, got %d. Expected epoch level to be %d, got %d", 0, request.Epoch.Base(), 22, request.Epoch.Level)
 	}
 	data = []byte(updates[3])
 	request.SetData(data)
@@ -208,25 +204,25 @@ func TestResourceHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rsrc2, err := rh2.Lookup(ctx, LookupLatest(&request.View))
+	rsrc2, err := rh2.Lookup(ctx, NewLatestLookupParams(&request.View, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// last update should be "clyde", version two, time= startTime + (resourcefrequency * 3)
+	// last update should be "clyde", time= startTime + (resourcefrequency * 3)
 	if !bytes.Equal(rsrc2.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("resource data was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
-	if rsrc2.Version != 2 {
-		t.Fatalf("resource version was %d, expected 2", rsrc2.Version)
+	if rsrc2.Level != 22 {
+		t.Fatalf("resource epoch level was %d, expected 22", rsrc2.Level)
 	}
-	if rsrc2.Period != 3 {
-		t.Fatalf("resource period was %d, expected 3", rsrc2.Period)
+	if rsrc2.Base() != 0 {
+		t.Fatalf("resource epoch base time was %d, expected 0", rsrc2.Base())
 	}
-	log.Debug("Latest lookup", "period", rsrc2.Period, "version", rsrc2.Version, "data", rsrc2.data)
+	log.Debug("Latest lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
-	// specific period, latest version
-	rsrc, err := rh2.Lookup(ctx, LookupLatestVersionInPeriod(&request.View, 3))
+	// specific point in time
+	rsrc, err := rh2.Lookup(ctx, NewHistoryLookupParams(&request.View, startTime.Time+3*resourceFrequency, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,39 +230,104 @@ func TestResourceHandler(t *testing.T) {
 	if !bytes.Equal(rsrc.data, []byte(updates[len(updates)-1])) {
 		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
 	}
-	log.Debug("Historical lookup", "period", rsrc2.Period, "version", rsrc2.Version, "data", rsrc2.data)
+	log.Debug("Historical lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
-	// specific period, specific version
-	lookupParams := LookupVersion(&request.View, 3, 1)
-	rsrc, err = rh2.Lookup(ctx, lookupParams)
+	// beyond the first should yield an error
+	rsrc, err = rh2.Lookup(ctx, NewHistoryLookupParams(&request.View, startTime.Time-1, lookup.NoClue))
+	if err == nil {
+		t.Fatalf("expected previous to fail, returned epoch %s data %v", rsrc.Epoch.String(), rsrc.data)
+	}
+
+}
+
+const Day = 60 * 60 * 24
+const Year = Day * 365
+const Month = Day * 30
+
+func generateData(x uint64) []byte {
+	return []byte(fmt.Sprintf("%d", x))
+}
+
+func TestSparseUpdates(t *testing.T) {
+
+	// make fake timeProvider
+	timeProvider := &fakeTimeProvider{
+		currentTime: startTime.Time,
+	}
+
+	// signer containing private key
+	signer := newAliceSigner()
+
+	rh, datadir, teardownTest, err := setupTest(timeProvider, signer)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// check data
-	if !bytes.Equal(rsrc.data, []byte(updates[2])) {
-		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[2])
-	}
-	log.Debug("Specific version lookup", "period", rsrc2.Period, "version", rsrc2.Version, "data", rsrc2.data)
+	defer teardownTest()
+	defer os.RemoveAll(datadir)
 
-	// we are now at third update
-	// check backwards stepping to the first
-	for i := 1; i >= 0; i-- {
-		rsrc, err := rh2.LookupPrevious(ctx, lookupParams)
+	// create a new resource
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	view := View{
+		Topic: NewTopic("Very slow updates", nil),
+		User:  signer.Address(),
+	}
+
+	// publish one update every 5 years since Unix 0 until today
+	today := uint64(1533799046)
+	var epoch lookup.Epoch
+	var lastUpdateTime uint64
+	for T := uint64(0); T < today; T += 5 * Year {
+		request := NewCreateUpdateRequest(view.Topic)
+		request.Epoch = lookup.GetNextEpoch(epoch, T)
+		request.data = generateData(T) // this generates some data that depends on T, so we can check later
+		request.Sign(signer)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(rsrc.data, []byte(updates[i])) {
-			t.Fatalf("resource data (previous) was %v, expected %v", rsrc.data, updates[i])
 
+		if _, err := rh.Update(ctx, request); err != nil {
+			t.Fatal(err)
 		}
+		epoch = request.Epoch
+		lastUpdateTime = T
 	}
 
-	// beyond the first should yield an error
-	rsrc, err = rh2.LookupPrevious(ctx, lookupParams)
-	if err == nil {
-		t.Fatalf("expected previous to fail, returned period %d version %d data %v", rsrc.Period, rsrc.Version, rsrc.data)
+	lp := NewHistoryLookupParams(&view, today, lookup.NoClue)
+
+	_, err = rh.Lookup(ctx, lp)
+	if err != nil {
+		t.Fatal(err)
 	}
 
+	_, content, err := rh.GetContent(&view)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(generateData(lastUpdateTime), content) {
+		t.Fatalf("Expected to recover last written value %d, got %s", lastUpdateTime, string(content))
+	}
+
+	// lookup the closest update to 35*Year + 6* Month (~ June 2005):
+	// it should find the update we put on 35*Year, since we were updating every 5 years.
+
+	lp.TimeLimit = 35*Year + 6*Month
+
+	_, err = rh.Lookup(ctx, lp)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, content, err = rh.GetContent(&view)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(generateData(35*Year), content) {
+		t.Fatalf("Expected to recover %d, got %s", 35*Year, string(content))
+	}
 }
 
 func TestValidator(t *testing.T) {
@@ -288,17 +349,10 @@ func TestValidator(t *testing.T) {
 
 	// create new resource
 	view := View{
-		Resource: Resource{
-			Topic:     NewTopic(resourceName, nil),
-			StartTime: timeProvider.Now(),
-			Frequency: resourceFrequency,
-		},
-		User: signer.Address(),
+		Topic: NewTopic(resourceName, nil),
+		User:  signer.Address(),
 	}
-	mr, err := NewCreateUpdateRequest(&view.Resource)
-	if err != nil {
-		t.Fatal(err)
-	}
+	mr := NewCreateUpdateRequest(view.Topic)
 
 	// chunk with address
 	data := []byte("foo")
@@ -364,19 +418,16 @@ func TestValidatorInStore(t *testing.T) {
 	badChunk.SData = goodChunk.SData
 
 	view := View{
-		Resource: Resource{
-			Topic:     NewTopic("xyzzy", nil),
-			StartTime: startTime,
-			Frequency: resourceFrequency,
-		},
-		User: signer.Address(),
+		Topic: NewTopic("xyzzy", nil),
+		User:  signer.Address(),
 	}
 
 	// create a resource update chunk with correct publickey
 	updateLookup := UpdateLookup{
-		Period:  42,
-		Version: 1,
-		View:    view,
+		Epoch: lookup.Epoch{Time: 42,
+			Level: 1,
+		},
+		View: view,
 	}
 
 	updateAddr := updateLookup.UpdateAddr()

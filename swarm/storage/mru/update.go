@@ -22,7 +22,7 @@ import (
 
 // ResourceUpdate encapsulates the information sent as part of a resource update
 type ResourceUpdate struct {
-	UpdateHeader        // metainformationa about this resource update
+	UpdateLookup        // metainformation about this resource update
 	data         []byte // actual data payload
 }
 
@@ -31,8 +31,8 @@ type ResourceUpdate struct {
 // data (datalength bytes)
 //
 // Minimum size is Header + 1 (minimum data length, enforced)
-const minimumUpdateDataLength = updateHeaderLength + 1
-const maxUpdateDataLength = chunk.DefaultSize - signatureLength - updateHeaderLength
+const minimumUpdateDataLength = updateLookupLength + 1
+const maxUpdateDataLength = chunk.DefaultSize - signatureLength - updateLookupLength
 
 // binaryPut serializes the resource update information into the given slice
 func (r *ResourceUpdate) binaryPut(serializedData []byte) error {
@@ -51,10 +51,10 @@ func (r *ResourceUpdate) binaryPut(serializedData []byte) error {
 
 	var cursor int
 	// serialize header (see updateHeader)
-	if err := r.UpdateHeader.binaryPut(serializedData[cursor : cursor+updateHeaderLength]); err != nil {
+	if err := r.UpdateLookup.binaryPut(serializedData[cursor : cursor+updateLookupLength]); err != nil {
 		return err
 	}
-	cursor += updateHeaderLength
+	cursor += updateLookupLength
 
 	// add the data
 	copy(serializedData[cursor:], r.data)
@@ -65,7 +65,7 @@ func (r *ResourceUpdate) binaryPut(serializedData []byte) error {
 
 // binaryLength returns the expected number of bytes this structure will take to encode
 func (r *ResourceUpdate) binaryLength() int {
-	return updateHeaderLength + len(r.data)
+	return updateLookupLength + len(r.data)
 }
 
 // binaryGet populates this instance from the information contained in the passed byte slice
@@ -73,13 +73,13 @@ func (r *ResourceUpdate) binaryGet(serializedData []byte) error {
 	if len(serializedData) < minimumUpdateDataLength {
 		return NewErrorf(ErrNothingToReturn, "chunk less than %d bytes cannot be a resource update chunk", minimumUpdateDataLength)
 	}
-	dataLength := len(serializedData) - updateHeaderLength
+	dataLength := len(serializedData) - updateLookupLength
 	var cursor int
 	// at this point we can be satisfied that we have the correct data length to read
-	if err := r.UpdateHeader.binaryGet(serializedData[cursor : cursor+updateHeaderLength]); err != nil {
+	if err := r.UpdateLookup.binaryGet(serializedData[cursor : cursor+updateLookupLength]); err != nil {
 		return err
 	}
-	cursor += updateHeaderLength
+	cursor += updateLookupLength
 
 	data := serializedData[cursor : cursor+dataLength]
 	cursor += dataLength
@@ -94,14 +94,14 @@ func (r *ResourceUpdate) binaryGet(serializedData []byte) error {
 
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (r *ResourceUpdate) FromValues(values Values, data []byte, parseView bool) error {
+func (r *ResourceUpdate) FromValues(values Values, data []byte) error {
 	r.data = data
-	return r.UpdateHeader.FromValues(values, parseView)
+	return r.UpdateLookup.FromValues(values)
 }
 
 // ToValues serializes this structure into the provided string key-value store
 // useful to build query strings
 func (r *ResourceUpdate) ToValues(values Values) []byte {
-	r.UpdateHeader.ToValues(values)
+	r.UpdateLookup.ToValues(values)
 	return r.data
 }
