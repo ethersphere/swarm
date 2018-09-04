@@ -187,9 +187,13 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 			wait = time.NewTimer(searchTimeout)
 			defer wait.Stop()
 			waitC = wait.C
+		} else {
+			// reset the timer to go off after searchTimeout
+			if !wait.Stop() {
+				<-wait.C
+			}
+			wait.Reset(searchTimeout)
 		}
-		// reset the timer to go off after searchTimeout
-		wait.Reset(searchTimeout)
 		doRequest = false
 	}
 }
