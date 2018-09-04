@@ -175,8 +175,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		}
 		select {
 		case streamer.deliveryC <- chunk.Address()[:]:
-		case <-ctx.Done():
-			log.Warn("streamer.deliveryC is contented", "err", ctx.Err())
+		case <-streamer.quit:
 		}
 
 	}()
@@ -208,6 +207,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 				// we removed this log because it spams the logs
 				// TODO: Enable this log line
 				// log.Warn("invalid chunk delivered", "peer", sp.ID(), "chunk", req.Addr, )
+				req.peer.Drop(err)
 			}
 		}
 	}()
