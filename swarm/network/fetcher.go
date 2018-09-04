@@ -188,10 +188,14 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 			defer wait.Stop()
 			waitC = wait.C
 		} else {
-			// reset the timer to go off after searchTimeout
+			// stop the timer and drain the channel if it was not drained earlier
 			if !wait.Stop() {
-				<-wait.C
+				select {
+				case <-wait.C:
+				default:
+				}
 			}
+			// reset the timer to go off after searchTimeout
 			wait.Reset(searchTimeout)
 		}
 		doRequest = false
