@@ -170,10 +170,15 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			err = sp.Deliver(ctx, chunk, s.priority)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
-				return
 			}
+			return
 		}
-		streamer.deliveryC <- chunk.Address()[:]
+		select {
+		case streamer.deliveryC <- chunk.Address()[:]:
+		case <-ctx.Done():
+			log.Warn("streamer.deliveryC is contented", "err", ctx.Err())
+		}
+
 	}()
 
 	return nil
