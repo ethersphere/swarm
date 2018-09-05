@@ -131,7 +131,6 @@ type RetrieveRequestMsg struct {
 	SkipCheck bool
 }
 
-// TODO: Fix context SNAFU
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
 	log.Trace("received request", "peer", sp.ID(), "hash", req.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
