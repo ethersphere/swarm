@@ -270,7 +270,8 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		select {
 		case err := <-c.next:
 			if err != nil {
-				log.Warn("c.next error", "err", err)
+				log.Warn("c.next error dropping peer", "err", err)
+				p.Drop(err)
 				return
 			}
 		case <-c.quit:
