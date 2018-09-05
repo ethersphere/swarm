@@ -279,6 +279,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			return
 		case <-ctx.Done():
 			log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
+			return
 		}
 		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(ctx, msg, c.priority)
