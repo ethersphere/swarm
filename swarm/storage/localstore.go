@@ -112,7 +112,7 @@ func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
-	_, err := ls.memStore.Get(context.TODO(), chunk.Address())
+	_, err := ls.memStore.Get(ctx, chunk.Address())
 	if err == nil {
 		return nil
 	}
