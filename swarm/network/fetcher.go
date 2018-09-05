@@ -89,12 +89,15 @@ func NewFetcher(addr storage.Address, rf RequestFunc, skipCheck bool) *Fetcher {
 }
 
 func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
+	// First we need to have this select to make sure that we return if context is done
 	select {
 	case <-ctx.Done():
 		return
 	default:
 	}
 
+	// This select alone would not guarantee that we return of context is done, it could potentially
+	// push to offerC instead if offerC is available (see number 2 in https://golang.org/ref/spec#Select_statements)
 	select {
 	case f.offerC <- source:
 	case <-ctx.Done():
@@ -103,12 +106,15 @@ func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
 
 // fetch is called by NetStore evey time there is a request or offer for a chunk
 func (f *Fetcher) Request(ctx context.Context) {
+	// First we need to have this select to make sure that we return if context is done
 	select {
 	case <-ctx.Done():
 		return
 	default:
 	}
 
+	// This select alone would not guarantee that we return of context is done, it could potentially
+	// push to offerC instead if offerC is available (see number 2 in https://golang.org/ref/spec#Select_statements)
 	select {
 	case f.requestC <- struct{}{}:
 	case <-ctx.Done():
