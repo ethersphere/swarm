@@ -232,6 +232,9 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 					p.Drop(err)
 					return
 				}
+			case <-ctx.Done():
+				log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
+				return
 			case <-c.quit:
 				log.Debug("client.handleOfferedHashesMsg() quit")
 				return
