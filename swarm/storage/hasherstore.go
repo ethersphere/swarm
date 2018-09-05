@@ -51,7 +51,7 @@ func newChunkEncryption(chunkSize, refSize int64) *chunkEncryption {
 }
 
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
-// With the HasherStore you can put and get chunk data (which is just []byte) into a DPA
+// With the HasherStore you can put and get chunk data (which is just []byte) into a ChunkStore
 // and the hasherStore will take core of encryption/decryption of data if necessary
 func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
 	var chunkEncryption *chunkEncryption
