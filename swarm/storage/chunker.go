@@ -351,8 +351,6 @@ func (tc *TreeChunker) runWorker(ctx context.Context) {
 				}
 
 				h, err := tc.putter.Put(ctx, job.chunk)
-				//>>>>>>> master
-				//h, err := tc.putter.Put(tc.ctx, job.chunk)
 				if err != nil {
 					tc.errC <- err
 					return
@@ -372,7 +370,7 @@ func (tc *TreeChunker) Append() (Address, func(), error) {
 
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
-	Ctx       context.Context
+	ctx       context.Context
 	addr      Address // root address
 	chunkData ChunkData
 	off       int64 // offset
@@ -391,12 +389,12 @@ func (tc *TreeChunker) Join(ctx context.Context) *LazyChunkReader {
 		hashSize:  tc.hashSize,
 		depth:     tc.depth,
 		getter:    tc.getter,
-		Ctx:       tc.ctx,
+		ctx:       tc.ctx,
 	}
 }
 
 func (r *LazyChunkReader) Context() context.Context {
-	return r.Ctx
+	return r.ctx
 }
 
 // Size is meant to be called on the LazySectionReader
@@ -439,7 +437,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	var sp opentracing.Span
 	var cctx context.Context
 	cctx, sp = spancontext.StartSpan(
-		r.Ctx,
+		r.ctx,
 		"lcr.read")
 	defer sp.Finish()
 
@@ -544,7 +542,7 @@ func (r *LazyChunkReader) join(b []byte, off int64, eoff int64, depth int, treeS
 		wg.Add(1)
 		go func(j int64) {
 			childAddress := chunkData[8+j*r.hashSize : 8+(j+1)*r.hashSize]
-			chunkData, err := r.getter.Get(r.Ctx, Reference(childAddress))
+			chunkData, err := r.getter.Get(r.ctx, Reference(childAddress))
 			if err != nil {
 				log.Debug("lazychunkreader.join", "key", fmt.Sprintf("%x", childAddress), "err", err)
 				select {
