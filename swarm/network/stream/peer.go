@@ -33,8 +33,6 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
-var sendTimeout = 5 * time.Second
-
 type notFoundError struct {
 	t string
 	s Stream
@@ -135,13 +133,16 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8)
 func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8) error {
 	defer metrics.GetOrRegisterResettingTimer(fmt.Sprintf("peer.sendpriority_t.%d", priority), nil).UpdateSince(time.Now())
 	metrics.GetOrRegisterCounter(fmt.Sprintf("peer.sendpriority.%d", priority), nil).Inc(1)
-	cctx, cancel := context.WithTimeout(context.Background(), sendTimeout)
-	defer cancel()
 	wmsg := WrappedPriorityMsg{
 		Context: ctx,
 		Msg:     msg,
 	}
-	return p.pq.Push(cctx, wmsg, int(priority))
+	err := p.pq.Push(wmsg, int(priority))
+	if err == pq.ErrContention {
+		log.Warn("dropping peer on priority queue contention", "peer", p.ID())
+		p.Drop(err)
+	}
+	return err
 }
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg

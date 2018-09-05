@@ -68,7 +68,7 @@ Loop:
 		{
 			priorities: []int{0, 0, 0},
 			values:     []string{"0.0", "0.0", "0.1"},
-			errors:     []error{nil, nil, context.DeadlineExceeded},
+			errors:     []error{nil, nil, ErrContention},
 		},
 	} {
 		var results []string

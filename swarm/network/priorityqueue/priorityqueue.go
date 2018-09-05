@@ -33,6 +33,8 @@ import (
 )
 
 var (
+	ErrContention = errors.New("contention")
+
 	errBadPriority = errors.New("bad priority")
 
 	wakey = struct{}{}
@@ -89,15 +91,15 @@ READ:
 
 // Push pushes an item to the appropriate queue specified in the priority argument
 // if context is given it waits until either the item is pushed or the Context aborts
-func (pq *PriorityQueue) Push(ctx context.Context, x interface{}, p int) error {
+func (pq *PriorityQueue) Push(x interface{}, p int) error {
 	if p < 0 || p >= len(pq.Queues) {
 		return errBadPriority
 	}
 	log.Trace("priority.queue push", "p", p, "len(Queues[p])", len(pq.Queues[p]))
 	select {
 	case pq.Queues[p] <- x:
-	case <-ctx.Done():
-		return ctx.Err()
+	default:
+		return ErrContention
 	}
 	select {
 	case pq.wakeup <- wakey:
