@@ -88,6 +88,7 @@ func NewFetcher(addr storage.Address, rf RequestFunc, skipCheck bool) *Fetcher {
 	}
 }
 
+// Offer is called when an upstream peer offers the chunk via syncing as part of `OfferedHashesMsg` and the node does not have the chunk locally.
 func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
 	// First we need to have this select to make sure that we return if context is done
 	select {
@@ -104,7 +105,7 @@ func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
 	}
 }
 
-// fetch is called by NetStore evey time there is a request or offer for a chunk
+// Request is called when an upstream peer request the chunk as part of `WantedHashesMsg` and the node does not have the chunk locally.
 func (f *Fetcher) Request(ctx context.Context) {
 	// First we need to have this select to make sure that we return if context is done
 	select {
