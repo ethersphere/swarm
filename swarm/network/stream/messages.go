@@ -225,7 +225,9 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			select {
 			case err := <-errC:
 				if err != nil {
-					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk", "err", err)
+					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk, dropping peer", "peer", p.ID(), "err", err)
+					p.Drop(err)
+					return
 				}
 			case <-c.quit:
 				log.Debug("client.handleOfferedHashesMsg() quit")
