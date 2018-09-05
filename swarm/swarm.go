@@ -51,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
+	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
 
@@ -78,6 +79,7 @@ type Swarm struct {
 	lstore      *storage.LocalStore // local store, needs to store for releasing resources after node stopped
 	sfs         *fuse.SwarmFS       // need this to cleanup all the active mounts on node exit
 	ps          *pss.Pss
+	swap        *swap.Swap
 
 	tracerClose io.Closer
 }
@@ -176,7 +178,14 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	)
 	delivery := stream.NewDelivery(to, db)
 
-	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, &stream.RegistryOptions{
+	if config.SwapEnabled {
+		self.swap, err = swap.New(stateStore)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	self.streamer = stream.NewRegistry(addr, delivery, db, stateStore, self.swap, &stream.RegistryOptions{
 		SkipCheck:       config.DeliverySkipCheck,
 		DoSync:          config.SyncEnabled,
 		DoRetrieve:      true,
@@ -338,7 +347,7 @@ func (self *Swarm) Start(srv *p2p.Server) error {
 	newaddr := self.bzz.UpdateLocalAddr([]byte(srv.Self().String()))
 	log.Info("Updated bzz local addr", "oaddr", fmt.Sprintf("%x", newaddr.OAddr), "uaddr", fmt.Sprintf("%s", newaddr.UAddr))
 	// set chequebook
-	if self.config.SwapEnabled {
+	if self.config.SwapEnabled && self.config.SwapAPI != "" {
 		ctx := context.Background() // The initial setup has no deadline.
 		err := self.SetChequebook(ctx)
 		if err != nil {
