@@ -609,7 +609,6 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	case <-batch.c:
 		return batch.err
 	case <-ctx.Done():
-		// log.Error("context done", "err", ctx.Err())
 		return ctx.Err()
 	}
 }
