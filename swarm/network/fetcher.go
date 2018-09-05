@@ -66,11 +66,10 @@ func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 	}
 }
 
-// New contructs a new Fetcher, for the given source. All peers in peersToSkip are not requested to
+// New contructs a new Fetcher, for the given chunk. All peers in peersToSkip are not requested to
 // deliver the given chunk. peersToSkip should always contain the peers which are actively requesting
 // this chunk, to make sure we don't request back the chunks from them.
-// The created Fetcher is started the returned function is its fetch function. This function is used by
-// NetStore to fetch a chunk which is not available locally.
+// The created Fetcher is started and returned.
 func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peersToSkip *sync.Map) storage.NetFetcher {
 	fetcher := NewFetcher(source, f.request, f.skipCheck)
 	go fetcher.run(ctx, peersToSkip)
