@@ -104,7 +104,7 @@ func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
 	}
 }
 
-// Request is called when an upstream peer request the chunk as part of `WantedHashesMsg` and the node does not have the chunk locally.
+// Request is called when an upstream peer request the chunk as part of `RetrieveRequestMsg`, or from a local request through FileStore, and the node does not have the chunk locally.
 func (f *Fetcher) Request(ctx context.Context) {
 	// First we need to have this select to make sure that we return if context is done
 	select {
