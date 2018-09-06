@@ -30,9 +30,7 @@ import (
 const TopicLength = storage.KeyLength
 
 // Topic represents what a resource talks about
-type Topic struct {
-	content [TopicLength]byte
-}
+type Topic [TopicLength]byte
 
 // ErrTopicTooLong is returned when creating a topic with a name/related content too long
 var ErrTopicTooLong = fmt.Errorf("Topic is too long. Max length is %d", TopicLength)
@@ -49,7 +47,7 @@ func NewTopic(name string, relatedContent []byte) (topic Topic, err error) {
 			contentLength = TopicLength
 			err = ErrTopicTooLong
 		}
-		copy(topic.content[:], relatedContent[:contentLength])
+		copy(topic[:], relatedContent[:contentLength])
 	}
 	nameBytes := []byte(name)
 	nameLength := len(nameBytes)
@@ -57,22 +55,22 @@ func NewTopic(name string, relatedContent []byte) (topic Topic, err error) {
 		nameLength = TopicLength
 		err = ErrTopicTooLong
 	}
-	bitutil.XORBytes(topic.content[:], topic.content[:], nameBytes[:nameLength])
+	bitutil.XORBytes(topic[:], topic[:], nameBytes[:nameLength])
 	return topic, err
 }
 
 // Hex will return the topic encoded as an hex string
 func (t *Topic) Hex() string {
-	return hexutil.Encode(t.content[:])
+	return hexutil.Encode(t[:])
 }
 
 // FromHex will parse a hex string into this Topic instance
 func (t *Topic) FromHex(hex string) error {
 	bytes, err := hexutil.Decode(hex)
-	if err != nil || len(bytes) != len(t.content) {
+	if err != nil || len(bytes) != len(t) {
 		return NewErrorf(ErrInvalidValue, "Cannot decode topic")
 	}
-	copy(t.content[:], bytes)
+	copy(t[:], bytes)
 	return nil
 }
 
@@ -84,13 +82,13 @@ func (t *Topic) Name(relatedContent []byte) string {
 		if contentLength > TopicLength {
 			contentLength = TopicLength
 		}
-		bitutil.XORBytes(nameBytes.content[:], t.content[:], relatedContent[:contentLength])
+		bitutil.XORBytes(nameBytes[:], t[:], relatedContent[:contentLength])
 	}
-	z := bytes.IndexByte(nameBytes.content[:], 0)
+	z := bytes.IndexByte(nameBytes[:], 0)
 	if z < 0 {
 		z = TopicLength
 	}
-	return string(nameBytes.content[:z])
+	return string(nameBytes[:z])
 
 }
 

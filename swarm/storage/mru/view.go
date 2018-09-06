@@ -54,7 +54,7 @@ func (u *View) binaryPut(serializedData []byte) error {
 		return NewErrorf(ErrInvalidValue, "Incorrect slice size to serialize View. Expected %d, got %d", viewLength, len(serializedData))
 	}
 	var cursor int
-	copy(serializedData[cursor:cursor+TopicLength], u.Topic.content[:TopicLength])
+	copy(serializedData[cursor:cursor+TopicLength], u.Topic[:TopicLength])
 	cursor += TopicLength
 
 	copy(serializedData[cursor:cursor+common.AddressLength], u.User[:])
@@ -75,7 +75,7 @@ func (u *View) binaryGet(serializedData []byte) error {
 	}
 
 	var cursor int
-	copy(u.Topic.content[:], serializedData[cursor:cursor+TopicLength])
+	copy(u.Topic[:], serializedData[cursor:cursor+TopicLength])
 	cursor += TopicLength
 
 	copy(u.User[:], serializedData[cursor:cursor+common.AddressLength])
