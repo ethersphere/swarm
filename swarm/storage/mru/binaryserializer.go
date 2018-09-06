@@ -33,7 +33,7 @@ type Values interface {
 
 type valueSerializer interface {
 	FromValues(values Values) error
-	ToValues(values Values)
+	AppendValues(values Values)
 }
 
 // Hex serializes the structure and converts it to a hex string

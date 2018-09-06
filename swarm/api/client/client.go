@@ -636,7 +636,7 @@ func (c *Client) updateResource(request *mru.Request, createManifest bool) (io.R
 	}
 	URL.Path = "/bzz-resource:/"
 	values := URL.Query()
-	body := request.ToValues(values)
+	body := request.AppendValues(values)
 	if createManifest {
 		values.Set("manifest", "1")
 	}
@@ -674,7 +674,7 @@ func (c *Client) getResource(lookup *mru.LookupParams, manifestAddressOrDomain s
 	URL.Path = "/bzz-resource:/" + manifestAddressOrDomain
 	values := URL.Query()
 	if lookup != nil {
-		lookup.ToValues(values) //adds query parameters
+		lookup.AppendValues(values) //adds query parameters
 	}
 	if meta {
 		values.Set("meta", "1")

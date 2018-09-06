@@ -79,11 +79,11 @@ func testValueSerializer(t *testing.T, v valueSerializer, expected KV) {
 	name := reflect.TypeOf(v).Elem().Name()
 	kv := make(KV)
 
-	v.ToValues(kv)
+	v.AppendValues(kv)
 	if !reflect.DeepEqual(expected, kv) {
 		expj, _ := json.Marshal(expected)
 		gotj, _ := json.Marshal(kv)
-		t.Fatalf("Expected %s.ToValues to return %s, got %s", name, string(expj), string(gotj))
+		t.Fatalf("Expected %s.AppendValues to return %s, got %s", name, string(expj), string(gotj))
 	}
 
 	recovered := reflect.New(reflect.TypeOf(v).Elem()).Interface().(valueSerializer)

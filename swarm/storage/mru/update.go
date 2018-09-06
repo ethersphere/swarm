@@ -99,9 +99,9 @@ func (r *ResourceUpdate) FromValues(values Values, data []byte) error {
 	return r.UpdateLookup.FromValues(values)
 }
 
-// ToValues serializes this structure into the provided string key-value store
+// AppendValues serializes this structure into the provided string key-value store
 // useful to build query strings
-func (r *ResourceUpdate) ToValues(values Values) []byte {
-	r.UpdateLookup.ToValues(values)
+func (r *ResourceUpdate) AppendValues(values Values) []byte {
+	r.UpdateLookup.AppendValues(values)
 	return r.data
 }

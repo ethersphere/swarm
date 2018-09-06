@@ -156,8 +156,8 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := testUrl.Query()
-	body := updateRequest.ToValues(query) // this adds all query parameters and returns the data to be posted
-	query.Set("manifest", "1")            // indicate we want a manifest back
+	body := updateRequest.AppendValues(query) // this adds all query parameters and returns the data to be posted
+	query.Set("manifest", "1")                // indicate we want a manifest back
 	testUrl.RawQuery = query.Encode()
 
 	// create the multihash update
@@ -237,8 +237,8 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := testUrl.Query()
-	body := updateRequest.ToValues(query) // this adds all query parameters
-	query.Set("manifest", "1")            // indicate we want a manifest back
+	body := updateRequest.AppendValues(query) // this adds all query parameters
+	query.Set("manifest", "1")                // indicate we want a manifest back
 	testUrl.RawQuery = query.Encode()
 
 	resp, err := http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
@@ -370,7 +370,7 @@ func TestBzzResource(t *testing.T) {
 		t.Fatal(err)
 	}
 	query = testUrl.Query()
-	body = updateRequest.ToValues(query) // this adds all query parameters
+	body = updateRequest.AppendValues(query) // this adds all query parameters
 	testUrl.RawQuery = query.Encode()
 
 	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
@@ -411,7 +411,7 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	values := urlq.Query()
-	lp.ToValues(values) // this adds view query parameters
+	lp.AppendValues(values) // this adds view query parameters
 	urlq.RawQuery = values.Encode()
 	resp, err = http.Get(urlq.String())
 	if err != nil {

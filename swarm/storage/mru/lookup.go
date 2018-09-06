@@ -50,9 +50,9 @@ func (lp *LookupParams) FromValues(values Values) error {
 	return nil
 }
 
-// ToValues serializes this structure into the provided string key-value store
+// AppendValues serializes this structure into the provided string key-value store
 // useful to build query strings
-func (lp *LookupParams) ToValues(values Values) {
+func (lp *LookupParams) AppendValues(values Values) {
 	if lp.TimeLimit != 0 {
 		values.Set("time", fmt.Sprintf("%d", lp.TimeLimit))
 	}
@@ -62,7 +62,7 @@ func (lp *LookupParams) ToValues(values Values) {
 	if lp.Hint.Time != 0 {
 		values.Set("hint.time", fmt.Sprintf("%d", lp.Hint.Time))
 	}
-	lp.View.ToValues(values)
+	lp.View.AppendValues(values)
 }
 
 // NewHistoryLookupParams constructs an UpdateLookup structure to find updates on or before `time`
@@ -168,10 +168,10 @@ func (u *UpdateLookup) FromValues(values Values) error {
 	return nil
 }
 
-// ToValues serializes this structure into the provided string key-value store
+// AppendValues serializes this structure into the provided string key-value store
 // useful to build query strings
-func (u *UpdateLookup) ToValues(values Values) {
+func (u *UpdateLookup) AppendValues(values Values) {
 	values.Set("level", fmt.Sprintf("%d", u.Epoch.Level))
 	values.Set("time", fmt.Sprintf("%d", u.Epoch.Time))
-	u.View.ToValues(values)
+	u.View.AppendValues(values)
 }

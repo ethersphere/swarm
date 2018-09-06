@@ -117,9 +117,9 @@ func (u *View) FromValues(values Values) (err error) {
 	return nil
 }
 
-// ToValues serializes this structure into the provided string key-value store
+// AppendValues serializes this structure into the provided string key-value store
 // useful to build query strings
-func (u *View) ToValues(values Values) {
+func (u *View) AppendValues(values Values) {
 	values.Set("topic", u.Topic.Hex())
 	values.Set("user", u.User.Hex())
 }
