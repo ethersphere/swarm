@@ -510,18 +510,6 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 			RespondError(w, r, err.Error(), http.StatusForbidden)
 			return
 		}
-	}
-
-	if updateRequest.IsNew() {
-		err = s.api.ResourceCreate(r.Context(), &updateRequest)
-		if err != nil {
-			code, err2 := s.translateResourceError(w, r, "resource creation fail", err)
-			RespondError(w, r, err2.Error(), code)
-			return
-		}
-	}
-
-	if updateRequest.IsUpdate() {
 		_, err = s.api.ResourceUpdate(r.Context(), &updateRequest.SignedResourceUpdate)
 		if err != nil {
 			RespondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -529,30 +517,25 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// at this point both possible operations (create, update or both) were successful
-	// so in case it was a new resource, then create a manifest and send it over.
-
-	if updateRequest.IsNew() {
-		// we create a manifest so we can retrieve the resource with bzz:// later
-		// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
-		// metadata chunk (rootAddr)
-		m, err := s.api.NewResourceManifest(r.Context(), updateRequest.RootAddr().Hex())
-		if err != nil {
-			RespondError(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
-			return
-		}
-
-		// the key to the manifest will be passed back to the client
-		// the client can access the root chunk key directly through its Hash member
-		// the manifest key should be set as content in the resolver of the ENS name
-		// \TODO update manifest key automatically in ENS
-		outdata, err := json.Marshal(m)
-		if err != nil {
-			RespondError(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
-			return
-		}
-		fmt.Fprint(w, string(outdata))
+	// we create a manifest so we can retrieve the resource with bzz:// later
+	// this manifest has a special "resource type" manifest, and its hash is the key of the mutable resource
+	// metadata chunk (rootAddr)
+	m, err := s.api.NewResourceManifest(r.Context(), updateRequest.ViewID())
+	if err != nil {
+		RespondError(w, r, fmt.Sprintf("failed to create resource manifest: %v", err), http.StatusInternalServerError)
+		return
 	}
+
+	// the key to the manifest will be passed back to the client
+	// the client can access the view ID directly through its viewID member
+	// the manifest key can be set as content in the resolver of the ENS name
+	outdata, err := json.Marshal(m)
+	if err != nil {
+		RespondError(w, r, fmt.Sprintf("failed to create json response: %s", err), http.StatusInternalServerError)
+		return
+	}
+	fmt.Fprint(w, string(outdata))
+
 	w.Header().Add("Content-type", "application/json")
 }
 
@@ -582,24 +565,24 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "max-age=2147483648")
 	}
 
-	// get the root chunk rootAddr from the manifest
-	rootAddr, err := s.api.ResolveResourceManifest(r.Context(), manifestAddr)
+	// get the resource ViewID from the manifest
+	viewID, err := s.api.ResolveResourceManifest(r.Context(), manifestAddr)
 	if err != nil {
 		getFail.Inc(1)
-		RespondError(w, r, fmt.Sprintf("error resolving resource root chunk for %s: %s", uri.Addr, err), http.StatusNotFound)
+		RespondError(w, r, fmt.Sprintf("error resolving resource view ID for %s: %s", uri.Addr, err), http.StatusNotFound)
 		return
 	}
 
-	log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "rootchunk addr", rootAddr)
+	log.Debug("handle.get.resource: resolved", "ruid", ruid, "manifestkey", manifestAddr, "viewID", viewID.Hex())
 
 	// determine if the query specifies period and version or it is a metadata query
 	var params []string
 	if len(uri.Path) > 0 {
 		if uri.Path == "meta" {
-			unsignedUpdateRequest, err := s.api.ResourceNewRequest(r.Context(), rootAddr)
+			unsignedUpdateRequest, err := s.api.ResourceNewRequest(r.Context(), viewID)
 			if err != nil {
 				getFail.Inc(1)
-				RespondError(w, r, fmt.Sprintf("cannot retrieve resource metadata for rootAddr=%s: %s", rootAddr.Hex(), err), http.StatusNotFound)
+				RespondError(w, r, fmt.Sprintf("cannot retrieve resource metadata for viewID=%s: %s", viewID.Hex(), err), http.StatusNotFound)
 				return
 			}
 			rawResponse, err := unsignedUpdateRequest.MarshalJSON()
@@ -617,13 +600,12 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 		params = strings.Split(uri.Path, "/")
 
 	}
-	var name string
 	var data []byte
 	now := time.Now()
 
 	switch len(params) {
 	case 0: // latest only
-		name, data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatest(rootAddr))
+		data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatest(viewID))
 	case 2: // specific period and version
 		var version uint64
 		var period uint64
@@ -635,14 +617,14 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			break
 		}
-		name, data, err = s.api.ResourceLookup(r.Context(), mru.LookupVersion(rootAddr, uint32(period), uint32(version)))
+		data, err = s.api.ResourceLookup(r.Context(), mru.LookupVersion(viewID, uint32(period), uint32(version)))
 	case 1: // last version of specific period
 		var period uint64
 		period, err = strconv.ParseUint(params[0], 10, 32)
 		if err != nil {
 			break
 		}
-		name, data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatestVersionInPeriod(rootAddr, uint32(period)))
+		data, err = s.api.ResourceLookup(r.Context(), mru.LookupLatestVersionInPeriod(viewID, uint32(period)))
 	default: // bogus
 		err = mru.NewError(storage.ErrInvalidValue, "invalid mutable resource request")
 	}
@@ -655,7 +637,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// All ok, serve the retrieved update
-	log.Debug("Found update", "name", name, "ruid", ruid)
+	log.Debug("Found update", "viewID", viewID.Hex(), "ruid", ruid)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeContent(w, r, "", now, bytes.NewReader(data))
 }

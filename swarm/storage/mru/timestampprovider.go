@@ -26,7 +26,7 @@ var TimestampProvider timestampProvider = NewDefaultTimestampProvider()
 
 // Encodes a point in time as a Unix epoch
 type Timestamp struct {
-	Time uint64 // Unix epoch timestamp, in seconds
+	Time uint64 `json:"time"` // Unix epoch timestamp, in seconds
 }
 
 // 8 bytes uint64 Time
