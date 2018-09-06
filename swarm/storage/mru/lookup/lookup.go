@@ -21,10 +21,27 @@ so they can be found
 package lookup
 
 const maxuint64 = ^uint64(0)
-const lowestLevel uint8 = 0
-const numLevels uint8 = 26
-const highestLevel = lowestLevel + numLevels - 1
-const defaultLevel = highestLevel
+
+// LowestLevel establishes the frequency resolution of the lookup algorithm as a power of 2.
+const LowestLevel uint8 = 0
+
+// HighestLevel sets the lowest frequency the algorithm will operate at, as a power of 2.
+// 25 -> 2^25 equals to roughly one year.
+const HighestLevel = 25
+
+// DefaultLevel sets what level will be chosen to search when there is no hint
+const DefaultLevel = HighestLevel
+
+//Algorithm is the function signature of a lookup algorithm
+type Algorithm func(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error)
+
+// Lookup finds the update with the highest timestamp that is smaller or equal than 'now'
+// It takes a hint which should be the epoch where the last known update was
+// If you don't know in what epoch the last update happened, simply submit lookup.NoClue
+// read() will be called on each lookup attempt
+// Returns an error only if read() returns an error
+// Returns nil if an update was not found
+var Lookup Algorithm = FluzCapacitorAlgorithm
 
 // ReadFunc is a handler called by Lookup each time it attempts to find a value
 // It should return <nil> if a value is not found
@@ -37,6 +54,8 @@ type ReadFunc func(epoch Epoch, now uint64) (interface{}, error)
 // a clue about where the last update may be
 var NoClue = Epoch{}
 
+// getBaseTime returns the epoch base time of the given
+// time and level
 func getBaseTime(t uint64, level uint8) uint64 {
 	return t & (maxuint64 << level)
 }
@@ -45,19 +64,23 @@ func getBaseTime(t uint64, level uint8) uint64 {
 func Hint(last uint64) Epoch {
 	return Epoch{
 		Time:  last,
-		Level: defaultLevel,
+		Level: DefaultLevel,
 	}
 }
 
+// getNextLevel returns the frequency level a next update should be placed at, provided where
+// the last update was and what time it is now.
+// To calculate it, it finds the first nonzero bit counting from the highest significant bit
+// but won't return a level that is smaller than the last-1
 func getNextLevel(last Epoch, now uint64) uint8 {
-	mix := (last.Base() ^ now) | (1 << (last.Level - 1))
-	if mix > (maxuint64 >> (64 - highestLevel - 1)) {
-		return highestLevel
+	mix := (last.Base() ^ now) | (1 << (last.Level - 1)) // make sure we stop the below loop at one level below the current.
+	if mix > (maxuint64 >> (64 - HighestLevel - 1)) {    // if the last update was more than 2^highestLevel seconds ago, choose the highestLevel
+		return HighestLevel
 	}
-	mask := uint64(1 << (highestLevel))
+	mask := uint64(1 << (HighestLevel)) // set up a mask to scan for nonzero bits
 
-	for i := uint8(highestLevel); i > lowestLevel; i-- {
-		if mix&mask != 0 {
+	for i := uint8(HighestLevel); i > LowestLevel; i-- {
+		if mix&mask != 0 { // if we find a nonzero bit, this is the level the next update should be at.
 			return i
 		}
 		mask = mask >> 1
@@ -82,20 +105,23 @@ func GetNextEpoch(last Epoch, now uint64) Epoch {
 // GetFirstEpoch returns the epoch where the first update should be located
 // based on what time it is now.
 func GetFirstEpoch(now uint64) Epoch {
-	return Epoch{Level: highestLevel, Time: now}
+	return Epoch{Level: HighestLevel, Time: now}
 }
 
-// Lookup finds the update with the highest timestamp that is smaller or equal than 'now'
-// It takes a hint which should be the epoch where the last known update was
-// If you don't know in what epoch the last update happened, simply submit lookup.NoClue
-// read() will be called on each lookup attempt
-// Returns an error only if read() returns an error
-// Returns nil if an update was not found
-func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
+var worstHint = Epoch{Time: 0, Level: 63}
+
+// FluzCapacitorAlgorithm works by narrowing the epoch search area if an update is found
+// going back and forth in time
+// First, it will attempt to find an update where it should be now if the hint was
+// really the last update. If that lookup fails, then the last update must be either the hint itself
+// or the epochs right below. If however, that lookup succeeds, then the update must be
+// that one or within the epochs right below.
+// see the guide for a more graphical representation
+func FluzCapacitorAlgorithm(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
 	var lastFound interface{}
 	var epoch Epoch
 	if hint == NoClue {
-		hint = Epoch{Time: 0, Level: highestLevel}
+		hint = worstHint
 	}
 
 	t := now
@@ -108,7 +134,7 @@ func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error
 		}
 		if value != nil {
 			lastFound = value
-			if epoch.Level == lowestLevel || epoch.Equals(hint) {
+			if epoch.Level == LowestLevel || epoch.Equals(hint) {
 				return value, nil
 			}
 			hint = epoch
@@ -118,6 +144,9 @@ func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error
 					return lastFound, nil
 				}
 				// we have reached the hint itself
+				if hint == worstHint {
+					return nil, nil
+				}
 				// check it out
 				value, err = read(hint, now)
 				if err != nil {
@@ -128,72 +157,13 @@ func Lookup(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error
 				}
 				// bad hint.
 				epoch = hint
-				hint = Epoch{Time: 0, Level: highestLevel}
+				hint = worstHint
 			}
 			base := epoch.Base()
 			if base == 0 {
 				return nil, nil
 			}
 			t = base - 1
-		}
-	}
-}
-
-// Lookup2 is a slower alternative lookup algorithm
-func Lookup2(now uint64, hint Epoch, read ReadFunc) (value interface{}, err error) {
-	var lastFound interface{}
-	var baseTimeMin uint64
-	var baseTimeUp = maxuint64
-	var level uint8
-
-	if hint == NoClue {
-		level = defaultLevel
-	} else {
-		level = getNextLevel(hint, now)
-	}
-
-	baseTime := getBaseTime(now, level)
-
-	for {
-		if level == highestLevel {
-			baseTimeMin = 0
-		} else {
-			baseTimeMin = getBaseTime(baseTime, level+1)
-		}
-		// try current level
-		for {
-			value, err = read(Epoch{Level: level, Time: baseTime}, now)
-			if err != nil {
-				return nil, err
-			}
-			if value != nil {
-				lastFound = value
-				if level == lowestLevel {
-					return value, nil
-				}
-				break
-			}
-			if baseTime == baseTimeMin {
-				break
-			}
-			baseTime -= (1 << level)
-		}
-
-		if value == nil {
-			if level == highestLevel {
-				return nil, nil
-			}
-			if lastFound != nil {
-				return lastFound, nil
-			}
-			level++
-			baseTimeUp = baseTime
-		} else {
-			if baseTimeUp == baseTime {
-				return value, nil
-			}
-			level--
-			baseTime += (1 << level)
 		}
 	}
 }

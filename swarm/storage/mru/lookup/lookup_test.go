@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 )
 
@@ -31,7 +32,7 @@ type Data struct {
 type Store map[lookup.EpochID]*Data
 
 func write(store Store, epoch lookup.Epoch, value *Data) {
-	fmt.Printf("Write: %d-%d, value='%d'\n", epoch.Base(), epoch.Level, value.Payload)
+	log.Debug("Write: %d-%d, value='%d'\n", epoch.Base(), epoch.Level, value.Payload)
 	store[epoch.ID()] = value
 }
 
@@ -57,7 +58,7 @@ func makeReadFunc(store Store, counter *int) lookup.ReadFunc {
 		if data != nil {
 			valueStr = fmt.Sprintf("%d", data.Payload)
 		}
-		fmt.Printf("Read: %d-%d, value='%s'\n", epoch.Base(), epoch.Level, valueStr)
+		log.Debug("Read: %d-%d, value='%s'\n", epoch.Base(), epoch.Level, valueStr)
 		if data != nil && data.Time <= now {
 			return data, nil
 		}
@@ -72,13 +73,12 @@ func TestLookup(t *testing.T) {
 	readFunc := makeReadFunc(store, &readCount)
 
 	// write an update every month for 12 months 3 years ago and then silence for two years
-
 	now := uint64(1533799046)
 	var epoch lookup.Epoch
 
 	var lastData *Data
 	for i := uint64(0); i < 12; i++ {
-		t := uint64(now - Year*3 + i*Month) // update every month for 12 months 3 years ago and then silence for two years
+		t := uint64(now - Year*3 + i*Month)
 		data := Data{
 			Payload: t, //our "payload" will be the timestamp itself.
 			Time:    t,
@@ -113,7 +113,7 @@ func TestLookup(t *testing.T) {
 	}
 
 	if readCount > readCountWithoutHint {
-		t.Fatalf("Expected lookup to complete with fewer reads than %d since we provided a hint. Did %d reads.", readCountWithoutHint, readCount)
+		t.Fatalf("Expected lookup to complete with fewer or same reads than %d since we provided a hint. Did %d reads.", readCountWithoutHint, readCount)
 	}
 
 	// try to get an intermediate value
@@ -163,6 +163,39 @@ func TestOneUpdateAt0(t *testing.T) {
 	}
 }
 
+// Tests the update is found even when a bad hint is given
+func TestBadHint(t *testing.T) {
+
+	store := make(Store)
+	readCount := 0
+
+	readFunc := makeReadFunc(store, &readCount)
+	now := uint64(1533903729)
+
+	var epoch lookup.Epoch
+	data := Data{
+		Payload: 79,
+		Time:    0,
+	}
+
+	// place an update for t=1200
+	update(store, epoch, 1200, &data)
+
+	// come up with some evil hint
+	badHint := lookup.Epoch{
+		Level: 18,
+		Time:  1200000000,
+	}
+
+	value, err := lookup.Lookup(now, badHint, readFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if value != &data {
+		t.Fatalf("Expected lookup to return the last written value: %v. Got %v", data, value)
+	}
+}
+
 func TestLookupFail(t *testing.T) {
 
 	store := make(Store)
@@ -181,6 +214,11 @@ func TestLookupFail(t *testing.T) {
 	if value != nil {
 		t.Fatal("Expected value to be nil, since the update should've failed")
 	}
+
+	expectedReads := now/(1<<lookup.HighestLevel) + 1
+	if uint64(readCount) != expectedReads {
+		t.Fatalf("Expected lookup to fail after %d reads. Did %d reads.", expectedReads, readCount)
+	}
 }
 
 func TestHighFreqUpdates(t *testing.T) {
@@ -192,12 +230,11 @@ func TestHighFreqUpdates(t *testing.T) {
 	now := uint64(1533903729)
 
 	// write an update every second for the last 1000 seconds
-
 	var epoch lookup.Epoch
 
 	var lastData *Data
 	for i := uint64(0); i <= 994; i++ {
-		T := uint64(now - 1000 + i) // update every second for the last 1000 seconds
+		T := uint64(now - 1000 + i)
 		data := Data{
 			Payload: T, //our "payload" will be the timestamp itself.
 			Time:    T,
@@ -297,28 +334,6 @@ func TestSparseUpdates(t *testing.T) {
 
 	if readCount > readCountWithoutHint {
 		t.Fatalf("Expected lookup to complete with fewer reads than %d since we provided a hint. Did %d reads.", readCountWithoutHint, readCount)
-	}
-
-}
-
-func TestMarshallers(t *testing.T) {
-
-	for i := uint64(1); i < lookup.MaxTime; i *= 3 {
-		e := lookup.Epoch{
-			Time:  i,
-			Level: uint8(i % 20),
-		}
-		b, err := e.MarshalBinary()
-		if err != nil {
-			t.Fatal(err)
-		}
-		var e2 lookup.Epoch
-		if err := e2.UnmarshalBinary(b); err != nil {
-			t.Fatal(err)
-		}
-		if e != e2 {
-			t.Fatal("Expected unmarshalled epoch to be equal to marshalled onet.Fatal(err)")
-		}
 	}
 
 }
