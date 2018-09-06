@@ -72,8 +72,8 @@ func (e *Epoch) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// LaterThan returns true if this epoch occurs later or exactly at the other epoch.
-func (e *Epoch) LaterThan(epoch Epoch) bool {
+// After returns true if this epoch occurs later or exactly at the other epoch.
+func (e *Epoch) After(epoch Epoch) bool {
 	if e.Time == epoch.Time {
 		return e.Level < epoch.Level
 	}

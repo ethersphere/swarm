@@ -263,7 +263,7 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 	h.chunkStore.Put(ctx, chunk)
 	log.Trace("resource update", "updateAddr", r.updateAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", chunk.SData)
 	// update our resources map cache entry if the new update is older than the one we have, if we have it.
-	if rsrc != nil && r.Epoch.LaterThan(rsrc.Epoch) {
+	if rsrc != nil && r.Epoch.After(rsrc.Epoch) {
 		rsrc.Epoch = r.Epoch
 		rsrc.data = make([]byte, len(r.data))
 		rsrc.lastKey = r.updateAddr
