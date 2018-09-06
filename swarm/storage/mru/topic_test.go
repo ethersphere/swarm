@@ -9,7 +9,7 @@ import (
 func TestTopic(t *testing.T) {
 	related, _ := hexutil.Decode("0xabcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789")
 	topicName := "test-topic"
-	topic := NewTopic(topicName, related)
+	topic, _ := NewTopic(topicName, related)
 	hex := topic.Hex()
 	expectedHex := "0xdfa89c750e3108f9c2aeef0123456789abcdef0123456789abcdef0123456789"
 	if hex != expectedHex {

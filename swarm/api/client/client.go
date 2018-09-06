@@ -662,6 +662,10 @@ func (c *Client) GetResource(lookup *mru.LookupParams, manifestAddressOrDomain s
 	return c.getResource(lookup, manifestAddressOrDomain, false)
 }
 
+// getResource returns a byte stream with the raw content of the resource
+// manifestAddressOrDomain is the address you obtained in CreateResource or an ENS domain whose Resolver
+// points to that address
+// meta set to true will instruct the node return resource metainformation instead
 func (c *Client) getResource(lookup *mru.LookupParams, manifestAddressOrDomain string, meta bool) (io.ReadCloser, error) {
 	URL, err := url.Parse(c.Gateway)
 	if err != nil {

@@ -20,8 +20,9 @@ import (
 )
 
 func getTestResourceView() *View {
+	topic, _ := NewTopic("world news report, every hour", nil)
 	return &View{
-		Topic: NewTopic("world news report, every hour", nil),
+		Topic: topic,
 		User:  newCharlieSigner().Address(),
 	}
 }

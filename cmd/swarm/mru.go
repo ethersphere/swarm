@@ -35,22 +35,29 @@ func NewGenericSigner(ctx *cli.Context) mru.Signer {
 	return mru.NewGenericSigner(getPrivKey(ctx))
 }
 
+func getTopic(ctx *cli.Context) mru.Topic {
+	var name = ctx.String(SwarmResourceNameFlag.Name)
+	var relatedTopic = ctx.String(SwarmResourceTopicFlag.Name)
+
+	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
+	topic, err := mru.NewTopic(name, relatedTopicBytes)
+	if err != nil {
+		utils.Fatalf("Error parsing topic: %s", err)
+	}
+	return topic
+}
+
 // swarm resource create <frequency> [--name <name>] [--data <0x Hexdata> [--multihash=false]]
 // swarm resource update <Manifest Address or ENS domain> <0x Hexdata> [--multihash=false]
 // swarm resource info <Manifest Address or ENS domain>
 
 func resourceCreate(ctx *cli.Context) {
 	var (
-		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client       = swarm.NewClient(bzzapi)
-		name         = ctx.String(SwarmResourceNameFlag.Name)
-		relatedTopic = ctx.String(SwarmResourceTopicFlag.Name)
+		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client = swarm.NewClient(bzzapi)
 	)
 
-	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
-	topic := mru.NewTopic(name, relatedTopicBytes)
-
-	newResourceRequest := mru.NewFirstRequest(topic)
+	newResourceRequest := mru.NewFirstRequest(getTopic(ctx))
 	newResourceRequest.View.User = resourceGetUser(ctx)
 
 	manifestAddress, err := client.CreateResource(newResourceRequest)
@@ -68,8 +75,6 @@ func resourceUpdate(ctx *cli.Context) {
 	var (
 		bzzapi                  = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		client                  = swarm.NewClient(bzzapi)
-		name                    = ctx.String(SwarmResourceNameFlag.Name)
-		relatedTopic            = ctx.String(SwarmResourceTopicFlag.Name)
 		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
 	)
 
@@ -89,11 +94,12 @@ func resourceUpdate(ctx *cli.Context) {
 
 	var updateRequest *mru.Request
 	var lookup *mru.LookupParams
+
 	if manifestAddressOrDomain == "" {
-		relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
 		lookup = new(mru.LookupParams)
 		lookup.User = signer.Address()
-		lookup.Topic = mru.NewTopic(name, relatedTopicBytes)
+		lookup.Topic = getTopic(ctx)
+
 	}
 
 	// Retrieve resource status and metadata out of the manifest
@@ -122,16 +128,13 @@ func resourceInfo(ctx *cli.Context) {
 	var (
 		bzzapi                  = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 		client                  = swarm.NewClient(bzzapi)
-		name                    = ctx.String(SwarmResourceNameFlag.Name)
-		relatedTopic            = ctx.String(SwarmResourceTopicFlag.Name)
 		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
 	)
 
 	var lookup *mru.LookupParams
 	if manifestAddressOrDomain == "" {
-		relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
 		lookup = new(mru.LookupParams)
-		lookup.Topic = mru.NewTopic(name, relatedTopicBytes)
+		lookup.Topic = getTopic(ctx)
 		lookup.User = resourceGetUser(ctx)
 	}
 

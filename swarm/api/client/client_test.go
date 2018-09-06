@@ -393,10 +393,10 @@ func TestClientCreateResourceMultihash(t *testing.T) {
 	s := common.FromHex(swarmHash)
 	mh := multihash.ToMultihash(s)
 
-	// our mutable resource "name"
-	resourceName := "foo.eth"
+	// our mutable resource topic
+	topic, _ := mru.NewTopic("foo.eth", nil)
 
-	createRequest := mru.NewFirstRequest(mru.NewTopic(resourceName, nil))
+	createRequest := mru.NewFirstRequest(topic)
 
 	createRequest.SetData(mh)
 	if err := createRequest.Sign(signer); err != nil {
@@ -448,8 +448,7 @@ func TestClientCreateUpdateResource(t *testing.T) {
 	databytes := []byte("En un lugar de La Mancha, de cuyo nombre no quiero acordarme...")
 
 	// our mutable resource name
-	resourceName := "El Quijote"
-	topic := mru.NewTopic(resourceName, nil)
+	topic, _ := mru.NewTopic("El Quijote", nil)
 	createRequest := mru.NewFirstRequest(topic)
 
 	createRequest.SetData(databytes)

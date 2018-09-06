@@ -86,8 +86,9 @@ func TestResourceHandler(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
+	topic, _ := NewTopic("Mess with mru code and see what ghost catches you", nil)
 	view := View{
-		Topic: NewTopic("Mess with mru code and see what ghost catches you", nil),
+		Topic: topic,
 		User:  signer.Address(),
 	}
 
@@ -268,9 +269,9 @@ func TestSparseUpdates(t *testing.T) {
 	// create a new resource
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-
+	topic, _ := NewTopic("Very slow updates", nil)
 	view := View{
-		Topic: NewTopic("Very slow updates", nil),
+		Topic: topic,
 		User:  signer.Address(),
 	}
 
@@ -348,8 +349,9 @@ func TestValidator(t *testing.T) {
 	defer teardownTest()
 
 	// create new resource
+	topic, _ := NewTopic(resourceName, nil)
 	view := View{
-		Topic: NewTopic(resourceName, nil),
+		Topic: topic,
 		User:  signer.Address(),
 	}
 	mr := NewFirstRequest(view.Topic)
@@ -417,8 +419,9 @@ func TestValidatorInStore(t *testing.T) {
 	badChunk := chunks[1]
 	badChunk.SData = goodChunk.SData
 
+	topic, _ := NewTopic("xyzzy", nil)
 	view := View{
-		Topic: NewTopic("xyzzy", nil),
+		Topic: topic,
 		User:  signer.Address(),
 	}
 

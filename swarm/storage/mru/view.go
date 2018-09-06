@@ -93,7 +93,7 @@ func (u *View) Hex() string {
 
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (u *View) FromValues(values Values) error {
+func (u *View) FromValues(values Values) (err error) {
 	topic := values.Get("topic")
 	if topic != "" {
 		if err := u.Topic.FromHex(values.Get("topic")); err != nil {
@@ -108,7 +108,10 @@ func (u *View) FromValues(values Values) error {
 			}
 			relatedContent = relatedContent[:storage.KeyLength]
 		}
-		u.Topic = NewTopic(name, relatedContent)
+		u.Topic, err = NewTopic(name, relatedContent)
+		if err != nil {
+			return err
+		}
 	}
 	u.User = common.HexToAddress(values.Get("user"))
 	return nil

@@ -19,6 +19,7 @@ package mru
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
@@ -33,17 +34,20 @@ type Topic struct {
 	content [TopicLength]byte
 }
 
+// ErrTopicTooLong is returned when creating a topic with a name/related content too long
+var ErrTopicTooLong = fmt.Errorf("Topic is too long. Max length is %d", TopicLength)
+
 // NewTopic creates a new topic from a provided name and "related content" byte array,
 // merging the two together.
-// If relatedContent or name are longer than TopicLength, they will be truncated.
+// If relatedContent or name are longer than TopicLength, they will be truncated and an error returned
 // name can be an empty string
 // relatedContent can be nil
-func NewTopic(name string, relatedContent []byte) Topic {
-	var topic Topic
+func NewTopic(name string, relatedContent []byte) (topic Topic, err error) {
 	if relatedContent != nil {
 		contentLength := len(relatedContent)
 		if contentLength > TopicLength {
 			contentLength = TopicLength
+			err = ErrTopicTooLong
 		}
 		copy(topic.content[:], relatedContent[:contentLength])
 	}
@@ -51,9 +55,10 @@ func NewTopic(name string, relatedContent []byte) Topic {
 	nameLength := len(nameBytes)
 	if nameLength > TopicLength {
 		nameLength = TopicLength
+		err = ErrTopicTooLong
 	}
 	bitutil.XORBytes(topic.content[:], topic.content[:], nameBytes[:nameLength])
-	return topic
+	return topic, err
 }
 
 // Hex will return the topic encoded as an hex string

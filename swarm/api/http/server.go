@@ -514,7 +514,7 @@ func (s *Server) HandlePostResource(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 
 	if err := updateRequest.FromValues(query, body); err != nil { // decodes request from query parameters
-		RespondError(w, r, err.Error(), http.StatusBadRequest) //TODO: send different status response depending on error
+		RespondError(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 

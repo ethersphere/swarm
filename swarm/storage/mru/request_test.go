@@ -54,7 +54,8 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	bob := newBobSigner()         //Bob
 
 	// Create a resource to our good guy Charlie's name
-	createRequest := NewFirstRequest(NewTopic("a good resource name", nil))
+	topic, _ := NewTopic("a good resource name", nil)
+	createRequest := NewFirstRequest(topic)
 	createRequest.User = charlie.Address()
 
 	// We now encode the create message to simulate we send it over the wire
@@ -256,8 +257,9 @@ func TestReverse(t *testing.T) {
 	}
 	defer teardownTest()
 
+	topic, _ := NewTopic("Cervantes quotes", nil)
 	view := View{
-		Topic: NewTopic("Cervantes quotes", nil),
+		Topic: topic,
 		User:  signer.Address(),
 	}
 
