@@ -2,12 +2,10 @@ package storage
 
 import (
 	"bytes"
-	crand "crypto/rand"
-	//"encoding/binary"
-	"io"
-	//"math/rand"
 	"context"
+	crand "crypto/rand"
 	"fmt"
+	"io"
 	"testing"
 	"time"
 
@@ -26,44 +24,6 @@ func newAsyncHasher() bmt.SectionWriter {
 	h := bmt.New(pool)
 	return h.NewAsyncWriter(false)
 }
-
-func TestLevelFromOffset(t *testing.T) {
-	fh := NewFileHasher(newAsyncHasher, 128, 32)
-	sizes := []int{64, 127, 128, 129, 128*128 - 1, 128 * 128, 128 * 128 * 128 * 20}
-	expects := []int{0, 0, 1, 1, 1, 2, 3}
-	for i, sz := range sizes {
-		offset := fh.ChunkSize() * sz
-		lvl := fh.OffsetToLevelDepth(int64(offset))
-		if lvl != expects[i] {
-			t.Fatalf("offset %d (chunkcount %d), expected level %d, got %d", offset, sz, expects[i], lvl)
-		}
-	}
-}
-
-//
-//func TestWriteBuffer(t *testing.T) {
-//	data := []byte("0123456789abcdef")
-//	fh := NewFileHasher(newAsyncHasher, 2, 2)
-//	offsets := []int{12, 8, 4, 2, 6, 10, 0, 14}
-//	r := bytes.NewReader(data)
-//	for _, o := range offsets {
-//		r.Seek(int64(o), io.SeekStart)
-//		_, err := fh.WriteBuffer(o, r)
-//		if err != nil {
-//			t.Fatal(err)
-//		}
-//	}
-//
-//	batchone := fh.levels[0].getBatch(0)
-//	if !bytes.Equal(batchone.batchBuffer, data[:8]) {
-//		t.Fatalf("expected batch one data %x, got %x", data[:8], batchone.batchBuffer)
-//	}
-//
-//	batchtwo := fh.levels[0].getBatch(1)
-//	if !bytes.Equal(batchtwo.batchBuffer, data[8:]) {
-//		t.Fatalf("expected batch two data %x, got %x", data[8:], batchtwo.batchBuffer)
-//	}
-//}
 
 func newSerialData(l int) ([]byte, error) {
 	data := make([]byte, l)
@@ -90,7 +50,6 @@ func TestSum(t *testing.T) {
 	dataFunc := newSerialData
 	chunkSize := 128 * 32
 	dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize * 129, chunkSize * 130}
-	//dataLengths := []int{chunkSize * 2} //, chunkSize*128 + 32}
 
 	for _, dl := range dataLengths {
 		chunks := dl / chunkSize
