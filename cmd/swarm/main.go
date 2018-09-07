@@ -333,9 +333,13 @@ func init() {
 					Name:               "create",
 					Usage:              "creates and publishes a new Mutable Resource manifest",
 					Description: `creates and publishes a new Mutable Resource manifest pointing to a specified user's updates about a particular topic.
-					The topic can be specified directly with the --topic flag as an hex string
-					If no topic is specified, the default topic (zero) will be used
-					The --name flag can be used to specify subtopics with a specific name
+					The resource topic can be built in the following ways:
+					* use --topic to set the topic to an arbitrary binary hex string.
+					* use --name to set the topic to a human-readable name.
+					    For example --name could be set to "profile-picture", meaning this Mutable Resource allows to get this user's current profile picture.
+					* use both --topic and --name to create named subtopics. 
+						For example, --topic could be set to an Ethereum contract address and --name could be set to "comments", meaning
+						the Mutable Resource tracks a discussion about that contract.
 					The --user flag allows to have this manifest refer to a user other than yourself. If not specified,
 					it will then default to your local account (--bzzaccount)`,
 					Flags: []cli.Flag{SwarmResourceNameFlag, SwarmResourceTopicFlag, SwarmResourceUserFlag},
@@ -346,12 +350,18 @@ func init() {
 					Name:               "update",
 					Usage:              "updates the content of an existing Mutable Resource",
 					ArgsUsage:          "<0x Hex data>",
-					Description: `creates a new update on the specified topic
-					The topic can be specified directly with the --topic flag as an hex string
-					If no topic is specified, the default topic (zero) will be used
-					The --name flag can be used to specify subtopics with a specific name.
-					If you have a manifest, you can specify it with --manifest instead of --topic / --name
-					to refer to the resource`,
+					Description: `publishes a new update on the specified topic
+					The resource topic can be built in the following ways:
+					* use --topic to set the topic to an arbitrary binary hex string.
+					* use --name to set the topic to a human-readable name.
+					    For example --name could be set to "profile-picture", meaning this Mutable Resource allows to get this user's current profile picture.
+					* use both --topic and --name to create named subtopics. 
+						For example, --topic could be set to an Ethereum contract address and --name could be set to "comments", meaning
+						the Mutable Resource tracks a discussion about that contract.
+					
+					If you have a manifest, you can specify it with --manifest to refer to the resource,
+					instead of using --topic / --name
+					`,
 					Flags: []cli.Flag{SwarmResourceManifestFlag, SwarmResourceNameFlag, SwarmResourceTopicFlag},
 				},
 				{
