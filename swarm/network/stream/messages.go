@@ -29,7 +29,7 @@ import (
 	opentracing "github.com/opentracing/opentracing-go"
 )
 
-var syncBatchTimeout = 3000 * time.Millisecond
+var syncBatchTimeout = 30 * time.Second
 
 // Stream defines a unique stream identifier.
 type Stream struct {

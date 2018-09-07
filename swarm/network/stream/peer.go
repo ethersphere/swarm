@@ -83,7 +83,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		wmsg := i.(WrappedPriorityMsg)
 		err := p.Send(wmsg.Context, wmsg.Msg)
 		if err != nil {
-			log.Error("Message send error, dropping peer", "err", err)
+			log.Error("Message send error, dropping peer", "peer", p.ID(), "err", err)
 			p.Drop(err)
 		}
 	})
