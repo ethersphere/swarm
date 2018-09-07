@@ -164,13 +164,13 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 		case id := <-gone:
 			log.Debug("peer gone", "peer id", id.String(), "request addr", f.addr)
 			peers.Delete(id.String())
-			doRequest = true
+			doRequest = requested
 
 		// search timeout: too much time passed since the last request,
 		// extend the search to a new peer if we can find one
 		case <-waitC:
 			log.Debug("search timed out: rerequesting", "request addr", f.addr)
-			doRequest = true
+			doRequest = requested
 
 			// all Fetcher context closed, can quit
 		case <-ctx.Done():

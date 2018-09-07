@@ -149,7 +149,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	var cancel func()
 	// TODO: do something with this hardcoded timeout, maybe use TTL in the future
-	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), 3*time.Second)
+	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), 10*time.Second)
 
 	go func() {
 		select {
@@ -168,7 +168,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		if req.SkipCheck {
 			err = sp.Deliver(ctx, chunk, s.priority)
 			if err != nil {
-				log.Warn("ERROR in handleRetrieveRequestMsg, DROPPING peer!", "err", err)
+				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
 			return
 		}

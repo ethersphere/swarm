@@ -40,6 +40,7 @@ type SwarmSyncerServer struct {
 	store     storage.SyncChunkStore
 	sessionAt uint64
 	start     uint64
+	live      bool
 	quit      chan struct{}
 }
 
@@ -55,6 +56,7 @@ func NewSwarmSyncerServer(live bool, po uint8, syncChunkStore storage.SyncChunkS
 		store:     syncChunkStore,
 		sessionAt: sessionAt,
 		start:     start,
+		live:      live,
 		quit:      make(chan struct{}),
 	}, nil
 }
@@ -77,7 +79,7 @@ func (s *SwarmSyncerServer) Close() {
 	close(s.quit)
 }
 
-// GetSection retrieves the actual chunk from localstore
+// GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
 	chunk, err := s.store.Get(ctx, storage.Address(key))
 	if err != nil {
@@ -90,11 +92,20 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	var batch []byte
 	i := 0
-	if from == 0 {
-		from = s.start
-	}
-	if to <= from || from >= s.sessionAt {
-		to = math.MaxUint64
+	if s.live {
+		if from == 0 {
+			from = s.start
+		}
+		if to <= from || from >= s.sessionAt {
+			to = math.MaxUint64
+		}
+	} else {
+		if (to < from && to != 0) || from > s.sessionAt {
+			return nil, 0, 0, nil, nil
+		}
+		if to > s.sessionAt {
+			to = s.sessionAt
+		}
 	}
 
 	var ticker *time.Ticker

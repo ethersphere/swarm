@@ -48,6 +48,7 @@ type NetStore struct {
 	store             SyncChunkStore
 	fetchers          *lru.Cache
 	NewNetFetcherFunc NewNetFetcherFunc
+	closeC            chan struct{}
 }
 
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
@@ -61,6 +62,7 @@ func NewNetStore(store SyncChunkStore, nnf NewNetFetcherFunc) (*NetStore, error)
 		store:             store,
 		fetchers:          fetchers,
 		NewNetFetcherFunc: nnf,
+		closeC:            make(chan struct{}),
 	}, nil
 }
 
@@ -119,6 +121,7 @@ func (n *NetStore) FetchFunc(ctx context.Context, ref Address) func(context.Cont
 
 // Close chunk store
 func (n *NetStore) Close() {
+	close(n.closeC)
 	n.store.Close()
 	// TODO: loop through fetchers to cancel them
 }
@@ -175,7 +178,7 @@ func (n *NetStore) getOrCreateFetcher(ref Address) *fetcher {
 	// the peers which requested the chunk should not be requested to deliver it.
 	peers := &sync.Map{}
 
-	fetcher := newFetcher(ref, n.NewNetFetcherFunc(ctx, ref, peers), destroy, peers)
+	fetcher := newFetcher(ref, n.NewNetFetcherFunc(ctx, ref, peers), destroy, peers, n.closeC)
 	n.fetchers.Add(key, fetcher)
 
 	return fetcher
@@ -217,19 +220,17 @@ type fetcher struct {
 //     1. when the chunk has been fetched all peers have been either notified or their context has been done
 //     2. the chunk has not been fetched but all context from all the requests has been done
 // The peers map stores all the peers which have requested chunk.
-func newFetcher(addr Address, nf NetFetcher, cancel func(), peers *sync.Map) *fetcher {
-	cancelOnce := &sync.Once{}        // cancel should only be called once
-	cancelledC := make(chan struct{}) // closed when fetcher is cancelled
+func newFetcher(addr Address, nf NetFetcher, cancel func(), peers *sync.Map, closeC chan struct{}) *fetcher {
+	cancelOnce := &sync.Once{} // cancel should only be called once
 	return &fetcher{
 		addr:        addr,
 		deliveredC:  make(chan struct{}),
 		deliverOnce: &sync.Once{},
-		cancelledC:  cancelledC,
+		cancelledC:  closeC,
 		netFetcher:  nf,
 		cancel: func() {
 			cancelOnce.Do(func() {
 				cancel()
-				close(cancelledC)
 			})
 		},
 		peers: peers,
