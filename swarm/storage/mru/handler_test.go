@@ -125,11 +125,11 @@ func TestResourceHandler(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if request.Epoch.Base() != 0 || request.Epoch.Level != 24 {
-		t.Fatal("Suggested epoch BaseTime should be 0 and Epoch level should be 24")
+	if request.Epoch.Base() != 0 || request.Epoch.Level != lookup.HighestLevel-1 {
+		t.Fatalf("Suggested epoch BaseTime should be 0 and Epoch level should be %d", lookup.HighestLevel-1)
 	}
 
-	request.Epoch.Level = 25 // force level 25 instead of 24 to make it fail
+	request.Epoch.Level = lookup.HighestLevel // force level 25 instead of 24 to make it fail
 	data = []byte(updates[1])
 	request.SetData(data)
 	if err := request.Sign(signer); err != nil {
@@ -223,13 +223,13 @@ func TestResourceHandler(t *testing.T) {
 	log.Debug("Latest lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
 	// specific point in time
-	rsrc, err := rh2.Lookup(ctx, NewHistoryLookupParams(&request.View, startTime.Time+3*resourceFrequency, lookup.NoClue))
+	rsrc, err := rh2.Lookup(ctx, NewHistoryLookupParams(&request.View, startTime.Time+2*resourceFrequency, lookup.NoClue))
 	if err != nil {
 		t.Fatal(err)
 	}
 	// check data
-	if !bytes.Equal(rsrc.data, []byte(updates[len(updates)-1])) {
-		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[len(updates)-1])
+	if !bytes.Equal(rsrc.data, []byte(updates[2])) {
+		t.Fatalf("resource data (historical) was %v, expected %v", string(rsrc2.data), updates[2])
 	}
 	log.Debug("Historical lookup", "epoch base time", rsrc2.Base(), "epoch level", rsrc2.Level, "data", rsrc2.data)
 
