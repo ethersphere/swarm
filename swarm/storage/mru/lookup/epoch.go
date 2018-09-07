@@ -24,8 +24,8 @@ import (
 
 // Epoch represents a time slot at a particular frequency level
 type Epoch struct {
-	Level uint8  `json:"level"` // Level indicates the frequency level as the exponent of a power of 2
 	Time  uint64 `json:"time"`  // Time stores the time at which the update or lookup takes place
+	Level uint8  `json:"level"` // Level indicates the frequency level as the exponent of a power of 2
 }
 
 // EpochID is a unique identifier for an Epoch, based on its level and base time.

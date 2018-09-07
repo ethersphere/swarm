@@ -23,11 +23,11 @@ package lookup
 const maxuint64 = ^uint64(0)
 
 // LowestLevel establishes the frequency resolution of the lookup algorithm as a power of 2.
-const LowestLevel uint8 = 0
+const LowestLevel uint8 = 0 // default is 0 (1 second)
 
 // HighestLevel sets the lowest frequency the algorithm will operate at, as a power of 2.
 // 25 -> 2^25 equals to roughly one year.
-const HighestLevel = 25
+const HighestLevel = 25 // default is 25 (~1 year)
 
 // DefaultLevel sets what level will be chosen to search when there is no hint
 const DefaultLevel = HighestLevel
@@ -68,22 +68,33 @@ func Hint(last uint64) Epoch {
 	}
 }
 
-// getNextLevel returns the frequency level a next update should be placed at, provided where
+// GetNextLevel returns the frequency level a next update should be placed at, provided where
 // the last update was and what time it is now.
-// To calculate it, it finds the first nonzero bit counting from the highest significant bit
-// but won't return a level that is smaller than the last-1
-func getNextLevel(last Epoch, now uint64) uint8 {
-	mix := (last.Base() ^ now) | (1 << (last.Level - 1)) // make sure we stop the below loop at one level below the current.
-	if mix > (maxuint64 >> (64 - HighestLevel - 1)) {    // if the last update was more than 2^highestLevel seconds ago, choose the highestLevel
+// This is the first nonzero bit of the XOR of 'last' and 'now', counting from the highest significant bit
+// but limited to not return a level that is smaller than the last-1
+func GetNextLevel(last Epoch, now uint64) uint8 {
+	// First XOR the last epoch base time with the current clock.
+	// This will set all the common most significant bits will to zero.
+	mix := (last.Base() ^ now)
+
+	// Then, make sure we stop the below loop before one level below the current, by setting
+	// that level's bit to 1.
+	// If the next level is lower than the current one, it must be exactly level-1 and not lower.
+	mix |= (1 << (last.Level - 1))
+
+	// if the last update was more than 2^highestLevel seconds ago, choose the highest level
+	if mix > (maxuint64 >> (64 - HighestLevel - 1)) {
 		return HighestLevel
 	}
-	mask := uint64(1 << (HighestLevel)) // set up a mask to scan for nonzero bits
+
+	// set up a mask to scan for nonzero bits, starting at the highest level
+	mask := uint64(1 << (HighestLevel))
 
 	for i := uint8(HighestLevel); i > LowestLevel; i-- {
 		if mix&mask != 0 { // if we find a nonzero bit, this is the level the next update should be at.
 			return i
 		}
-		mask = mask >> 1
+		mask = mask >> 1 // move our bit one position to the right
 	}
 	return 0
 }
@@ -95,7 +106,7 @@ func GetNextEpoch(last Epoch, now uint64) Epoch {
 	if last == NoClue {
 		return GetFirstEpoch(now)
 	}
-	level := getNextLevel(last, now)
+	level := GetNextLevel(last, now)
 	return Epoch{
 		Level: level,
 		Time:  now,
