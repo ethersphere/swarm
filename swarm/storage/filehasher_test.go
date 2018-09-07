@@ -6,6 +6,7 @@ import (
 	//"encoding/binary"
 	"io"
 	//"math/rand"
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -15,9 +16,14 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 )
 
+var pool *bmt.TreePool
+
+func init() {
+	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize*32)
+}
+
 func newAsyncHasher() bmt.SectionWriter {
-	tp := bmt.NewTreePool(sha3.NewKeccak256, 128, 1)
-	h := bmt.New(tp)
+	h := bmt.New(pool)
 	return h.NewAsyncWriter(false)
 }
 
@@ -34,29 +40,30 @@ func TestLevelFromOffset(t *testing.T) {
 	}
 }
 
-func TestWriteBuffer(t *testing.T) {
-	data := []byte("0123456789abcdef")
-	fh := NewFileHasher(newAsyncHasher, 2, 2)
-	offsets := []int{12, 8, 4, 2, 6, 10, 0, 14}
-	r := bytes.NewReader(data)
-	for _, o := range offsets {
-		r.Seek(int64(o), io.SeekStart)
-		_, err := fh.WriteBuffer(o, r)
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	batchone := fh.levels[0].getBatch(0)
-	if !bytes.Equal(batchone.batchBuffer, data[:8]) {
-		t.Fatalf("expected batch one data %x, got %x", data[:8], batchone.batchBuffer)
-	}
-
-	batchtwo := fh.levels[0].getBatch(1)
-	if !bytes.Equal(batchtwo.batchBuffer, data[8:]) {
-		t.Fatalf("expected batch two data %x, got %x", data[8:], batchtwo.batchBuffer)
-	}
-}
+//
+//func TestWriteBuffer(t *testing.T) {
+//	data := []byte("0123456789abcdef")
+//	fh := NewFileHasher(newAsyncHasher, 2, 2)
+//	offsets := []int{12, 8, 4, 2, 6, 10, 0, 14}
+//	r := bytes.NewReader(data)
+//	for _, o := range offsets {
+//		r.Seek(int64(o), io.SeekStart)
+//		_, err := fh.WriteBuffer(o, r)
+//		if err != nil {
+//			t.Fatal(err)
+//		}
+//	}
+//
+//	batchone := fh.levels[0].getBatch(0)
+//	if !bytes.Equal(batchone.batchBuffer, data[:8]) {
+//		t.Fatalf("expected batch one data %x, got %x", data[:8], batchone.batchBuffer)
+//	}
+//
+//	batchtwo := fh.levels[0].getBatch(1)
+//	if !bytes.Equal(batchtwo.batchBuffer, data[8:]) {
+//		t.Fatalf("expected batch two data %x, got %x", data[8:], batchtwo.batchBuffer)
+//	}
+//}
 
 func newSerialData(l int) ([]byte, error) {
 	data := make([]byte, l)
@@ -79,69 +86,49 @@ func newRandomData(l int) ([]byte, error) {
 
 func TestSum(t *testing.T) {
 
+	var mismatch int
 	dataFunc := newSerialData
-	fh := NewFileHasher(newAsyncHasher, 128, 32)
-	dataLength := fh.ChunkSize() * 127
-	data, err := dataFunc(dataLength)
-	if err != nil {
-		t.Fatal(err)
-	}
-	r := bytes.NewReader(data)
-	var offsets []int
-	for i := 0; i < len(data)/32; i++ {
-		offsets = append(offsets, i*32)
-	}
+	chunkSize := 128 * 32
+	dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize * 129, chunkSize * 130}
+	//dataLengths := []int{chunkSize * 2} //, chunkSize*128 + 32}
 
-	//	for {
-	//		if len(offsets) == 0 {
-	//			break
-	//		}
-	//		lastIndex := len(offsets) - 1
-	//		var c int
-	//		if len(offsets) > 1 {
-	//			c = rand.Intn(lastIndex)
-	//		}
-	//		offset := offsets[c]
-	//		if c != lastIndex {
-	//			offsets[c] = offsets[lastIndex]
-	//		}
-	//		offsets = offsets[:lastIndex]
-	//
-	//		r.Seek(int64(offset), io.SeekStart)
-	//		_, err := fh.WriteBuffer(offset, r)
-	//		if err != nil {
-	//			t.Fatal(err)
-	//		}
-	//	}
-	for i := 0; i < len(offsets); i++ {
-		//offset := offsets[i]
-		offset := i * 32
-		r.Seek(int64(offset), io.SeekStart)
-		log.Warn("write", "o", offset)
-		c, err := fh.WriteBuffer(offset, r)
+	for _, dl := range dataLengths {
+		chunks := dl / chunkSize
+		log.Debug("testing", "c", chunks, "s", dl%chunkSize)
+		fh := NewFileHasher(newAsyncHasher, 128, 32)
+		data, err := dataFunc(dl)
 		if err != nil {
 			t.Fatal(err)
-		} else if c < fh.BlockSize() {
-			t.Fatalf("short read %d", c)
 		}
+		for i := 0; i < len(data); i += 32 {
+			max := i + 32
+			if len(data) < max {
+				max = len(data)
+			}
+			_, err := fh.WriteBuffer(i, data[i:max])
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		time.Sleep(time.Second * 1)
+		fh.SetLength(int64(dl))
+		h := fh.Sum(nil)
+
+		putGetter := newTestHasherStore(&fakeChunkStore{}, BMTHash)
+
+		p, _, err := PyramidSplit(context.TODO(), io.LimitReader(bytes.NewReader(data), int64(len(data))), putGetter, putGetter)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+
+		eq := bytes.Equal(p, h)
+		if !eq {
+			mismatch++
+		}
+		t.Logf("[%3d + %2d]\t%v\t%v\t%x", chunks, dl%chunkSize, eq, p, h)
 	}
-
-	//	rb := bmt.NewRefHasher(sha3.NewKeccak256, 128)
-	//	meta := make([]byte, 8)
-	//	binary.BigEndian.PutUint64(meta, uint64(dataLength))
-	//	res := make([]byte, 64)
-	//	copy(res, rb.Hash(data[:fh.ChunkSize()]))
-	//	copy(res[32:], rb.Hash(data[fh.ChunkSize():]))
-	//	t.Logf("data length %d chunksize %d res %x", dataLength, fh.ChunkSize(), res)
-	//	root := rb.Hash(res)
-	//	shasher := sha3.NewKeccak256()
-	//	shasher.Write(meta)
-	//	shasher.Write(root)
-	//	x := shasher.Sum(nil)
-
-	time.Sleep(time.Second * 1)
-	//t.Logf("hash ref dosum: %x", x)
-	fh.SetLength(int64(dataLength))
-	h := fh.Sum(nil)
-	t.Logf("hash: %x", h)
+	if mismatch > 0 {
+		t.Fatalf("%d/%d mismatches", mismatch, len(dataLengths))
+	}
 }
