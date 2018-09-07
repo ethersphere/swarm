@@ -1,11 +1,38 @@
+// Copyright 2018 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package mru
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 )
+
+// KV mocks a key value store
+type KV map[string]string
+
+func (kv KV) Get(key string) string {
+	return kv[key]
+}
+func (kv KV) Set(key, value string) {
+	kv[key] = value
+}
 
 func compareByteSliceToExpectedHex(t *testing.T, variableName string, actualValue []byte, expectedHex string) {
 	if hexutil.Encode(actualValue) != expectedHex {
@@ -45,5 +72,27 @@ func testBinarySerializerLengthCheck(t *testing.T, bin binarySerializer) {
 
 	if err := bin.binaryPut(serialized); err == nil {
 		t.Fatalf("Expected %s.binaryPut to fail, since target slice is too small", name)
+	}
+}
+
+func testValueSerializer(t *testing.T, v valueSerializer, expected KV) {
+	name := reflect.TypeOf(v).Elem().Name()
+	kv := make(KV)
+
+	v.AppendValues(kv)
+	if !reflect.DeepEqual(expected, kv) {
+		expj, _ := json.Marshal(expected)
+		gotj, _ := json.Marshal(kv)
+		t.Fatalf("Expected %s.AppendValues to return %s, got %s", name, string(expj), string(gotj))
+	}
+
+	recovered := reflect.New(reflect.TypeOf(v).Elem()).Interface().(valueSerializer)
+	err := recovered.FromValues(kv)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !reflect.DeepEqual(recovered, v) {
+		t.Fatalf("Expected recovered %s to be the same", name)
 	}
 }

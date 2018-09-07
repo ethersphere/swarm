@@ -6,41 +6,25 @@ without resorting to ENS on each update.
 The update scheme is built on swarm chunks with chunk keys following
 a predictable, versionable pattern.
 
-Updates are defined to be periodic in nature, where the update frequency
-is expressed in seconds.
-
 A Resource is tied to a unique identifier that is deterministically generated out of
-the metadata content that describes it. This metadata includes a user-defined topic, a resource
-start time that indicates when the resource becomes valid, the frequency in seconds with
-which the resource is expected to be updated.
+the chosen topic.
 
 A Resource View is defined as a specific user's point of view about a particular resource.
-Thus, a View is a Resource + the user's address (userAddr)
-
-The Resource structure tells the requester from when the mutable resource was
-first added (Unix time in seconds) and in which moments to look for the
-actual updates. Thus, a Resource with Topic "føø.bar"
-starting at unix time 1528800000 with frequency 300 (every 5 mins) will have updates on 1528800300,
-1528800600, 1528800900 and so on.
+Thus, a View is a Topic + the user's address (userAddr)
 
 Actual data updates are also made in the form of swarm chunks. The keys
 of the updates are the hash of a concatenation of properties as follows:
 
-updateAddr = H(View, period, version)
+updateAddr = H(View, Epoch ID)
 where H is the SHA3 hash function
-The period is (currentTime - startTime) / frequency
-
-Using our previous example, this means that a period 3 will happen when the
-clock hits 1528800900
-
-If more than one update is made in the same period, incremental
-version numbers are used successively.
+View is the combination of Topic and the user address
+Epoch ID is a time slot. See the lookup package for more information.
 
 A user looking up a resource would only need to know the View in order to
 another user's updates
 
-the resource update data is:
-resourcedata = View|period|version|data
+The resource update data is:
+resourcedata = View|Epoch|data
 
 the full update data that goes in the chunk payload is:
 resourcedata|sign(resourcedata)
@@ -52,12 +36,9 @@ Request: Resource update with signature
 		UpdateHeader: (placeholder, to be deleted)
 			UpdateLookup: Information about how to locate a specific update
 				View: Author of the update and what is updating
-					Resource: Item that the updates are about
-
-LookupParams: Represents a specific resource query instance
-	UpdateLookup
-
-
+					Topic: Item that the updates are about
+					User: User who updates the resource
+				Epoch: time slot where the update is stored
 
 */
 package mru

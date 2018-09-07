@@ -21,8 +21,11 @@ package mru
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -40,7 +43,6 @@ type Handler struct {
 // HandlerParams pass parameters to the Handler constructor NewHandler
 // Signer and TimestampProvider are mandatory parameters
 type HandlerParams struct {
-	QueryMaxPeriods uint32
 }
 
 // hashPool contains a pool of ready hashers
@@ -58,8 +60,7 @@ func init() {
 // NewHandler creates a new Mutable Resource API
 func NewHandler(params *HandlerParams) *Handler {
 	rh := &Handler{
-		resources:       make(map[uint64]*cacheEntry),
-		queryMaxPeriods: params.QueryMaxPeriods,
+		resources: make(map[uint64]*cacheEntry),
 	}
 
 	for i := 0; i < hasherCount; i++ {
@@ -118,190 +119,119 @@ func (h *Handler) GetContent(view *View) (storage.Address, []byte, error) {
 	return rsrc.lastKey, rsrc.data, nil
 }
 
-// GetLastPeriod retrieves the period of the last synced update of the Mutable Resource
-func (h *Handler) GetLastPeriod(view *View) (uint32, error) {
-	rsrc := h.get(view)
-	if rsrc == nil {
-		return 0, NewError(ErrNotFound, " does not exist")
-	}
-
-	return rsrc.Period, nil
-}
-
-// GetVersion retrieves the period of the last synced update of the Mutable Resource
-func (h *Handler) GetVersion(view *View) (uint32, error) {
-	rsrc := h.get(view)
-	if rsrc == nil {
-		return 0, NewError(ErrNotFound, " does not exist")
-	}
-	return rsrc.Version, nil
-}
-
-// NewUpdateRequest prepares an UpdateRequest structure with all the necessary information to
+// NewRequest prepares a Request structure with all the necessary information to
 // just add the desired data and sign it.
 // The resulting structure can then be signed and passed to Handler.Update to be verified and sent
-func (h *Handler) NewUpdateRequest(ctx context.Context, view *View) (updateRequest *Request, err error) {
+func (h *Handler) NewRequest(ctx context.Context, view *View) (request *Request, err error) {
 
 	if view == nil {
 		return nil, NewError(ErrInvalidValue, "view cannot be nil")
 	}
 
-	now := TimestampProvider.Now()
+	now := TimestampProvider.Now().Time
+	request = new(Request)
 
-	updateRequest = new(Request)
-	updateRequest.Period, err = getNextPeriod(view.StartTime.Time, now.Time, view.Frequency)
-	if err != nil {
-		return nil, err
-	}
+	lp := NewLatestLookupParams(view, lookup.NoClue)
 
-	// check if there is already an update in this period
-
-	rsrc, err := h.lookup(LookupLatestVersionInPeriod(view, updateRequest.Period))
+	rsrc, err := h.Lookup(ctx, lp)
 	if err != nil {
 		if err.(*Error).code != ErrNotFound {
 			return nil, err
 		}
 		// not finding updates means that there is a network error
-		// or that the resource really does not have updates in this period.
+		// or that the resource really does not have updates
 	}
 
-	updateRequest.View = *view
+	request.View = *view
 
-	// if we already have an update for this period then increment version
+	// if we already have an update, then find next epoch
 	if rsrc != nil {
-		updateRequest.Version = rsrc.Version + 1
+		request.Epoch = lookup.GetNextEpoch(rsrc.Epoch, now)
 	} else {
-		updateRequest.Version = 1
+		request.Epoch = lookup.GetFirstEpoch(now)
 	}
 
-	return updateRequest, nil
+	return request, nil
 }
 
-// Lookup retrieves a specific or latest version of the resource update with metadata chunk at params.Root
-// Lookup works differently depending on the configuration of `LookupParams`
-// See the `LookupParams` documentation and helper functions:
-// `LookupLatest`, `LookupLatestVersionInPeriod` and `LookupVersion`
+// Lookup retrieves a specific or latest version of the resource
+// Lookup works differently depending on the configuration of `UpdateLookup`
+// See the `UpdateLookup` documentation and helper functions:
+// `LookupLatest` and `LookupBefore`
 // When looking for the latest update, it starts at the next period after the current time.
 // upon failure tries the corresponding keys of each previous period until one is found
 // (or startTime is reached, in which case there are no updates).
 func (h *Handler) Lookup(ctx context.Context, params *LookupParams) (*cacheEntry, error) {
-	return h.lookup(params)
-}
 
-// LookupPrevious returns the resource before the one currently loaded in the resource cache
-// This is useful where resource updates are used incrementally in contrast to
-// merely replacing content.
-// Requires a cached resource object to determine the current state of the resource.
-func (h *Handler) LookupPrevious(ctx context.Context, params *LookupParams) (*cacheEntry, error) {
-	rsrc := h.get(&params.View)
-	if rsrc == nil {
-		return nil, NewError(ErrNothingToReturn, "resource not loaded")
+	timeLimit := params.TimeLimit
+	if timeLimit == 0 { // if time limit is set to zero, the user wants to get the latest update
+		timeLimit = TimestampProvider.Now().Time
 	}
-	var version, period uint32
-	if rsrc.Version > 1 {
-		version = rsrc.Version - 1
-		period = rsrc.Period
-	} else if rsrc.Period == 1 {
-		return nil, NewError(ErrNothingToReturn, "Current update is the oldest")
-	} else {
-		version = 0
-		period = rsrc.Period - 1
+
+	if params.Hint == lookup.NoClue { // try to use our cache
+		entry := h.get(&params.View)
+		if entry != nil && entry.Epoch.Time <= timeLimit { // avoid bad hints
+			params.Hint = entry.Epoch
+		}
 	}
-	return h.lookup(NewLookupParams(&params.View, period, version, params.Limit))
-}
 
-// base code for public lookup methods
-func (h *Handler) lookup(params *LookupParams) (*cacheEntry, error) {
-
-	lp := *params
 	// we can't look for anything without a store
 	if h.chunkStore == nil {
 		return nil, NewError(ErrInit, "Call Handler.SetStore() before performing lookups")
 	}
 
-	var specificperiod bool
-	if lp.Period > 0 {
-		specificperiod = true
-	} else {
-		// get the current time and the next period
-		now := TimestampProvider.Now()
+	var ul UpdateLookup
+	ul.View = params.View
+	var readCount int
 
-		var period uint32
-		period, err := getNextPeriod(params.View.StartTime.Time, now.Time, params.View.Frequency)
-		if err != nil {
-			return nil, err
+	// Invoke the lookup engine.
+	// The callback will be called every time the lookup algorithm needs to guess
+	requestPtr, err := lookup.Lookup(timeLimit, params.Hint, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
+		readCount++
+		ul.Epoch = epoch
+		chunk, err := h.chunkStore.GetWithTimeout(ctx, ul.UpdateAddr(), defaultRetrieveTimeout)
+		if err != nil { // TODO: check for catastrophic errors other than chunk not found
+			return nil, nil
 		}
-		lp.Period = period
+
+		var request Request
+		if err := request.fromChunk(chunk.Addr, chunk.SData); err != nil {
+			return nil, nil
+		}
+		if request.Time <= timeLimit {
+			return &request, nil
+		}
+		return nil, nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
-	// start from the last possible period, and iterate previous ones
-	// (unless we want a specific period only) until we find a match.
-	// If we hit startTime we're out of options
-	var specificversion bool
-	if lp.Version > 0 {
-		specificversion = true
-	} else {
-		lp.Version = 1
-	}
+	log.Info(fmt.Sprintf("Resource lookup finished in %d lookups", readCount))
 
-	var hops uint32
-	if lp.Limit == 0 {
-		lp.Limit = h.queryMaxPeriods
+	request, _ := requestPtr.(*Request)
+	if request == nil {
+		return nil, NewError(ErrNotFound, "no updates found")
 	}
-	log.Trace("resource lookup", "period", lp.Period, "version", lp.Version, "limit", lp.Limit)
-	for lp.Period > 0 {
-		if lp.Limit != 0 && hops > lp.Limit {
-			return nil, NewErrorf(ErrPeriodDepth, "Lookup exceeded max period hops (%d)", lp.Limit)
-		}
-		updateAddr := lp.UpdateAddr()
-		chunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
-		if err == nil {
-			if specificversion {
-				return h.updateCache(&params.View, chunk)
-			}
-			// check if we have versions > 1. If a version fails, the previous version is used and returned.
-			log.Trace("rsrc update version 1 found, checking for version updates", "period", lp.Period, "updateAddr", updateAddr)
-			for {
-				newversion := lp.Version + 1
-				updateAddr := lp.UpdateAddr()
-				newchunk, err := h.chunkStore.GetWithTimeout(context.TODO(), updateAddr, defaultRetrieveTimeout)
-				if err != nil {
-					return h.updateCache(&params.View, chunk)
-				}
-				chunk = newchunk
-				lp.Version = newversion
-				log.Trace("version update found, checking next", "version", lp.Version, "period", lp.Period, "updateAddr", updateAddr)
-			}
-		}
-		if specificperiod {
-			break
-		}
-		log.Trace("rsrc update not found, checking previous period", "period", lp.Period, "updateAddr", updateAddr)
-		lp.Period--
-		hops++
-	}
-	return nil, NewError(ErrNotFound, "no updates found")
+	return h.updateCache(request)
+
 }
 
 // update mutable resource cache map with specified content
-func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, error) {
+func (h *Handler) updateCache(request *Request) (*cacheEntry, error) {
 
-	// retrieve metadata from chunk data and check that it matches this mutable resource
-	var r Request
-	if err := r.fromChunk(chunk.Addr, chunk.SData); err != nil {
-		return nil, err
-	}
-	log.Trace("resource cache update", "topic", view.Topic.Hex(), "updatekey", chunk.Addr, "period", r.Period, "version", r.Version)
+	updateAddr := request.UpdateAddr()
+	log.Trace("resource cache update", "topic", request.Topic.Hex(), "updatekey", updateAddr, "epoch time", request.Epoch.Time, "epoch level", request.Epoch.Level)
 
-	rsrc := h.get(view)
+	rsrc := h.get(&request.View)
 	if rsrc == nil {
 		rsrc = &cacheEntry{}
-		h.set(view, rsrc)
+		h.set(&request.View, rsrc)
 	}
 
 	// update our rsrcs entry map
-	rsrc.lastKey = chunk.Addr
-	rsrc.ResourceUpdate = r.ResourceUpdate
+	rsrc.lastKey = updateAddr
+	rsrc.ResourceUpdate = request.ResourceUpdate
 	rsrc.Reader = bytes.NewReader(rsrc.data)
 	return rsrc, nil
 }
@@ -312,12 +242,7 @@ func (h *Handler) updateCache(view *View, chunk *storage.Chunk) (*cacheEntry, er
 // Note that a Mutable Resource update cannot span chunks, and thus has a MAX NET LENGTH 4096, INCLUDING update header data and signature. An error will be returned if the total length of the chunk payload will exceed this limit.
 // Update can only check if the caller is trying to overwrite the very last known version, otherwise it just puts the update
 // on the network.
-func (h *Handler) Update(ctx context.Context, r *Request) (storage.Address, error) {
-	return h.update(ctx, r)
-}
-
-// create and commit an update
-func (h *Handler) update(ctx context.Context, r *Request) (updateAddr storage.Address, err error) {
+func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Address, err error) {
 
 	// we can't update anything without a store
 	if h.chunkStore == nil {
@@ -325,10 +250,8 @@ func (h *Handler) update(ctx context.Context, r *Request) (updateAddr storage.Ad
 	}
 
 	rsrc := h.get(&r.View)
-	if rsrc != nil && rsrc.Period != 0 && rsrc.Version != 0 && // This is the only cheap check we can do for sure
-		rsrc.Period == r.Period && rsrc.Version >= r.Version {
-
-		return nil, NewError(ErrInvalidValue, "A former update in this period is already known to exist")
+	if rsrc != nil && rsrc.Epoch.Equals(r.Epoch) { // This is the only cheap check we can do for sure
+		return nil, NewError(ErrInvalidValue, "A former update in this epoch is already known to exist")
 	}
 
 	chunk, err := r.toChunk() // Serialize the update into a chunk. Fails if data is too big
@@ -338,17 +261,16 @@ func (h *Handler) update(ctx context.Context, r *Request) (updateAddr storage.Ad
 
 	// send the chunk
 	h.chunkStore.Put(ctx, chunk)
-	log.Trace("resource update", "updateAddr", r.updateAddr, "lastperiod", r.Period, "version", r.Version, "data", chunk.SData)
-
+	log.Trace("resource update", "updateAddr", r.updateAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", chunk.SData)
 	// update our resources map cache entry if the new update is older than the one we have, if we have it.
-	if rsrc != nil && (r.Period > rsrc.Period || (rsrc.Period == r.Period && r.Version > rsrc.Version)) {
-		rsrc.Period = r.Period
-		rsrc.Version = r.Version
+	if rsrc != nil && r.Epoch.After(rsrc.Epoch) {
+		rsrc.Epoch = r.Epoch
 		rsrc.data = make([]byte, len(r.data))
 		rsrc.lastKey = r.updateAddr
 		copy(rsrc.data, r.data)
 		rsrc.Reader = bytes.NewReader(rsrc.data)
 	}
+
 	return r.updateAddr, nil
 }
 
@@ -375,10 +297,4 @@ func (h *Handler) set(view *View, rsrc *cacheEntry) {
 	h.resourceLock.Lock()
 	defer h.resourceLock.Unlock()
 	h.resources[mapKey] = rsrc
-}
-
-// Checks if we already have an update on this resource, according to the value in the current state of the resource cache
-func (h *Handler) hasUpdate(view *View, period uint32) bool {
-	rsrc := h.get(view)
-	return rsrc != nil && rsrc.Period == period
 }

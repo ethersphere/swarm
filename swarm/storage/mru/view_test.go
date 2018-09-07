@@ -19,20 +19,18 @@ import (
 	"testing"
 )
 
-func getTestResourceID() *Resource {
-	return &Resource{
-		Topic: NewTopic("world news report, every hour", nil),
-		StartTime: Timestamp{
-			Time: 1528880400,
-		},
-		Frequency: 3600,
+func getTestResourceView() *View {
+	topic, _ := NewTopic("world news report, every hour", nil)
+	return &View{
+		Topic: topic,
+		User:  newCharlieSigner().Address(),
 	}
 }
 
-func TestResourceIDSerializerDeserializer(t *testing.T) {
-	testBinarySerializerRecovery(t, getTestResourceID(), "0x10dd205b00000000100e000000000000776f726c64206e657773207265706f72742c20657665727920686f7572000000")
+func TestViewSerializerDeserializer(t *testing.T) {
+	testBinarySerializerRecovery(t, getTestResourceView(), "0x776f726c64206e657773207265706f72742c20657665727920686f7572000000876a8936a7cd0b79ef0735ad0896c1afe278781c")
 }
 
-func TestResourceIDSerializerLengthCheck(t *testing.T) {
-	testBinarySerializerLengthCheck(t, getTestResourceID())
+func TestMetadataSerializerLengthCheck(t *testing.T) {
+	testBinarySerializerLengthCheck(t, getTestResourceView())
 }

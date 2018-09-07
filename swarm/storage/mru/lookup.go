@@ -17,96 +17,91 @@
 package mru
 
 import (
-	"encoding/binary"
 	"fmt"
 	"hash"
-	"net/url"
 	"strconv"
+
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/storage/mru/lookup"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // LookupParams is used to specify constraints when performing an update lookup
-// Limit defines whether or not the lookup should be limited
-// If Limit is set to true then Max defines the amount of hops that can be performed
+// TimeLimit indicates an upper bound for the search. Set to 0 for "now"
 type LookupParams struct {
-	UpdateLookup
-	Limit uint32
-}
-
-// Values interface represents a string key-value store
-// useful for building query strings
-type Values interface {
-	Get(key string) string
-	Set(key, value string)
+	View
+	Hint      lookup.Epoch
+	TimeLimit uint64
 }
 
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (lp *LookupParams) FromValues(values Values, parseView bool) error {
-	limit, _ := strconv.ParseUint(values.Get("limit"), 10, 32)
+func (lp *LookupParams) FromValues(values Values) error {
+	time, _ := strconv.ParseUint(values.Get("time"), 10, 64)
+	lp.TimeLimit = uint64(time)
 
-	lp.Limit = uint32(limit)
-	return lp.UpdateLookup.FromValues(values, parseView)
+	level, _ := strconv.ParseUint(values.Get("hint.level"), 10, 32)
+	lp.Hint.Level = uint8(level)
+	lp.Hint.Time, _ = strconv.ParseUint(values.Get("hint.time"), 10, 64)
+	if lp.View.User == (common.Address{}) {
+		return lp.View.FromValues(values)
+	}
+	return nil
 }
 
-// ToValues serializes this structure into the provided string key-value store
+// AppendValues serializes this structure into the provided string key-value store
 // useful to build query strings
-func (lp *LookupParams) ToValues(values url.Values) {
-	if lp.Limit != 0 {
-		values.Set("limit", fmt.Sprintf("%d", lp.Version))
+func (lp *LookupParams) AppendValues(values Values) {
+	if lp.TimeLimit != 0 {
+		values.Set("time", fmt.Sprintf("%d", lp.TimeLimit))
 	}
-	lp.UpdateLookup.ToValues(values)
+	if lp.Hint.Level != 0 {
+		values.Set("hint.level", fmt.Sprintf("%d", lp.Hint.Level))
+	}
+	if lp.Hint.Time != 0 {
+		values.Set("hint.time", fmt.Sprintf("%d", lp.Hint.Time))
+	}
+	lp.View.AppendValues(values)
 }
 
-// NewLookupParams constructs a LookupParams structure with the provided lookup parameters
-// if period = 0 and version = 0, the last resource version will be looked up
-// if period !=0 and version = 0, the last version in that period will be looked up
-// if both period, version !=0, that specific period, version will be looked up
-func NewLookupParams(view *View, period, version uint32, limit uint32) *LookupParams {
+// NewHistoryLookupParams constructs an UpdateLookup structure to find updates on or before `time`
+// if time == 0, the latest update will be looked up
+func NewHistoryLookupParams(view *View, time uint64, hint lookup.Epoch) *LookupParams {
 	return &LookupParams{
-		UpdateLookup: UpdateLookup{
-			Period:  period,
-			Version: version,
-			View:    *view,
-		},
-		Limit: limit,
+		TimeLimit: time,
+		View:      *view,
+		Hint:      hint,
 	}
 }
 
-// LookupLatest generates lookup parameters that look for the latest version of a resource
-func LookupLatest(view *View) *LookupParams {
-	return NewLookupParams(view, 0, 0, 0)
+// NewLatestLookupParams generates lookup parameters that look for the latest version of a resource
+func NewLatestLookupParams(view *View, hint lookup.Epoch) *LookupParams {
+	return NewHistoryLookupParams(view, 0, hint)
 }
 
-// LookupLatestVersionInPeriod generates lookup parameters that look for the latest version of a resource in a given period
-func LookupLatestVersionInPeriod(view *View, period uint32) *LookupParams {
-	return NewLookupParams(view, period, 0, 0)
-}
-
-// LookupVersion generates lookup parameters that look for a specific version of a resource
-func LookupVersion(view *View, period, version uint32) *LookupParams {
-	return NewLookupParams(view, period, version, 0)
-}
-
-// UpdateLookup represents the components of a resource update search key
+// UpdateLookup represents the components of a resource update search key.
+// it is also used to specify constraints when performing an update lookup
 type UpdateLookup struct {
-	View
-	Period  uint32
-	Version uint32
+	View         `json:"view"`
+	lookup.Epoch `json:"epoch"`
 }
 
 // UpdateLookup layout:
-// ResourceIDLength bytes
-// userAddr common.AddressLength bytes
-// 4 bytes period
-// 4 bytes version
-const updateLookupLength = viewLength + 4 + 4
+// View viewLength bytes
+// Epoch EpochLength
+const updateLookupLength = viewLength + lookup.EpochLength
 
 // UpdateAddr calculates the resource update chunk address corresponding to this lookup key
 func (u *UpdateLookup) UpdateAddr() (updateAddr storage.Address) {
 	serializedData := make([]byte, updateLookupLength)
-	u.binaryPut(serializedData)
+	var cursor int
+	u.View.binaryPut(serializedData[cursor : cursor+viewLength])
+	cursor += viewLength
+
+	eid := u.Epoch.ID()
+	copy(serializedData[cursor:cursor+lookup.EpochLength], eid[:])
+
 	hasher := hashPool.Get().(hash.Hash)
 	defer hashPool.Put(hasher)
 	hasher.Reset()
@@ -125,11 +120,12 @@ func (u *UpdateLookup) binaryPut(serializedData []byte) error {
 	}
 	cursor += viewLength
 
-	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.Period)
-	cursor += 4
-
-	binary.LittleEndian.PutUint32(serializedData[cursor:cursor+4], u.Version)
-	cursor += 4
+	epochBytes, err := u.Epoch.MarshalBinary()
+	if err != nil {
+		return err
+	}
+	copy(serializedData[cursor:cursor+lookup.EpochLength], epochBytes[:])
+	cursor += lookup.EpochLength
 
 	return nil
 }
@@ -151,40 +147,31 @@ func (u *UpdateLookup) binaryGet(serializedData []byte) error {
 	}
 	cursor += viewLength
 
-	u.Period = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
-	cursor += 4
-
-	u.Version = binary.LittleEndian.Uint32(serializedData[cursor : cursor+4])
-	cursor += 4
+	if err := u.Epoch.UnmarshalBinary(serializedData[cursor : cursor+lookup.EpochLength]); err != nil {
+		return err
+	}
+	cursor += lookup.EpochLength
 
 	return nil
 }
 
 // FromValues deserializes this instance from a string key-value store
 // useful to parse query strings
-func (u *UpdateLookup) FromValues(values Values, parseView bool) error {
-	version, _ := strconv.ParseUint(values.Get("version"), 10, 32)
-	period, _ := strconv.ParseUint(values.Get("period"), 10, 32)
+func (u *UpdateLookup) FromValues(values Values) error {
+	level, _ := strconv.ParseUint(values.Get("level"), 10, 32)
+	u.Epoch.Level = uint8(level)
+	u.Epoch.Time, _ = strconv.ParseUint(values.Get("time"), 10, 64)
 
-	if period == 0 && version != 0 {
-		return NewError(ErrInvalidValue, "cannot have version !=0 if period is 0")
-	}
-	u.Version = uint32(version)
-	u.Period = uint32(period)
-	if parseView {
+	if u.View.User == (common.Address{}) {
 		return u.View.FromValues(values)
 	}
 	return nil
 }
 
-// ToValues serializes this structure into the provided string key-value store
+// AppendValues serializes this structure into the provided string key-value store
 // useful to build query strings
-func (u *UpdateLookup) ToValues(values Values) {
-	if u.Period != 0 {
-		values.Set("period", fmt.Sprintf("%d", u.Period))
-	}
-	if u.Version != 0 {
-		values.Set("version", fmt.Sprintf("%d", u.Version))
-	}
-	u.View.ToValues(values)
+func (u *UpdateLookup) AppendValues(values Values) {
+	values.Set("level", fmt.Sprintf("%d", u.Epoch.Level))
+	values.Set("time", fmt.Sprintf("%d", u.Epoch.Time))
+	u.View.AppendValues(values)
 }

@@ -19,8 +19,9 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
+
+	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
 
@@ -34,63 +35,30 @@ func NewGenericSigner(ctx *cli.Context) mru.Signer {
 	return mru.NewGenericSigner(getPrivKey(ctx))
 }
 
+func getTopic(ctx *cli.Context) mru.Topic {
+	var name = ctx.String(SwarmResourceNameFlag.Name)
+	var relatedTopic = ctx.String(SwarmResourceTopicFlag.Name)
+
+	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
+	topic, err := mru.NewTopic(name, relatedTopicBytes)
+	if err != nil {
+		utils.Fatalf("Error parsing topic: %s", err)
+	}
+	return topic
+}
+
 // swarm resource create <frequency> [--name <name>] [--data <0x Hexdata> [--multihash=false]]
 // swarm resource update <Manifest Address or ENS domain> <0x Hexdata> [--multihash=false]
 // swarm resource info <Manifest Address or ENS domain>
 
 func resourceCreate(ctx *cli.Context) {
-	args := ctx.Args()
-
 	var (
-		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client       = swarm.NewClient(bzzapi)
-		initialData  = ctx.String(SwarmResourceDataOnCreateFlag.Name)
-		name         = ctx.String(SwarmResourceNameFlag.Name)
-		relatedTopic = ctx.String(SwarmResourceTopicFlag.Name)
+		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client = swarm.NewClient(bzzapi)
 	)
 
-	if len(args) < 1 {
-		fmt.Println("Incorrect number of arguments")
-		cli.ShowCommandHelpAndExit(ctx, "create", 1)
-		return
-	}
-	signer := NewGenericSigner(ctx)
-	frequency, err := strconv.ParseUint(args[0], 10, 64)
-	if err != nil {
-		fmt.Printf("Frequency formatting error: %s\n", err.Error())
-		cli.ShowCommandHelpAndExit(ctx, "create", 1)
-		return
-	}
-
-	relatedTopicBytes, _ := hexutil.Decode(relatedTopic)
-
-	resource := &mru.Resource{
-		Topic:     mru.NewTopic(name, relatedTopicBytes),
-		Frequency: frequency,
-	}
-
-	var newResourceRequest *mru.Request
-	if initialData != "" {
-		initialDataBytes, err := hexutil.Decode(initialData)
-		if err != nil {
-			fmt.Printf("Error parsing data: %s\n", err.Error())
-			cli.ShowCommandHelpAndExit(ctx, "create", 1)
-			return
-		}
-		newResourceRequest, err = mru.NewCreateUpdateRequest(resource)
-		if err != nil {
-			utils.Fatalf("Error creating new resource request: %s", err)
-		}
-		newResourceRequest.SetData(initialDataBytes)
-		if err = newResourceRequest.Sign(signer); err != nil {
-			utils.Fatalf("Error signing resource update: %s", err.Error())
-		}
-	} else {
-		newResourceRequest, err = mru.NewCreateRequest(resource, signer.Address())
-		if err != nil {
-			utils.Fatalf("Error creating new resource request: %s", err)
-		}
-	}
+	newResourceRequest := mru.NewFirstRequest(getTopic(ctx))
+	newResourceRequest.View.User = resourceGetUser(ctx)
 
 	manifestAddress, err := client.CreateResource(newResourceRequest)
 	if err != nil {
@@ -105,25 +73,37 @@ func resourceUpdate(ctx *cli.Context) {
 	args := ctx.Args()
 
 	var (
-		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client = swarm.NewClient(bzzapi)
+		bzzapi                  = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client                  = swarm.NewClient(bzzapi)
+		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
 	)
 
-	if len(args) < 2 {
+	if len(args) < 1 {
 		fmt.Println("Incorrect number of arguments")
 		cli.ShowCommandHelpAndExit(ctx, "update", 1)
 		return
 	}
+
 	signer := NewGenericSigner(ctx)
-	manifestAddressOrDomain := args[0]
-	data, err := hexutil.Decode(args[1])
+
+	data, err := hexutil.Decode(args[0])
 	if err != nil {
 		utils.Fatalf("Error parsing data: %s", err.Error())
 		return
 	}
 
+	var updateRequest *mru.Request
+	var lookup *mru.LookupParams
+
+	if manifestAddressOrDomain == "" {
+		lookup = new(mru.LookupParams)
+		lookup.User = signer.Address()
+		lookup.Topic = getTopic(ctx)
+
+	}
+
 	// Retrieve resource status and metadata out of the manifest
-	updateRequest, err := client.GetResourceMetadata(manifestAddressOrDomain)
+	updateRequest, err = client.GetResourceMetadata(lookup, manifestAddressOrDomain)
 	if err != nil {
 		utils.Fatalf("Error retrieving resource status: %s", err.Error())
 	}
@@ -146,17 +126,19 @@ func resourceUpdate(ctx *cli.Context) {
 
 func resourceInfo(ctx *cli.Context) {
 	var (
-		bzzapi = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		client = swarm.NewClient(bzzapi)
+		bzzapi                  = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		client                  = swarm.NewClient(bzzapi)
+		manifestAddressOrDomain = ctx.String(SwarmResourceManifestFlag.Name)
 	)
-	args := ctx.Args()
-	if len(args) < 1 {
-		fmt.Println("Incorrect number of arguments.")
-		cli.ShowCommandHelpAndExit(ctx, "info", 1)
-		return
+
+	var lookup *mru.LookupParams
+	if manifestAddressOrDomain == "" {
+		lookup = new(mru.LookupParams)
+		lookup.Topic = getTopic(ctx)
+		lookup.User = resourceGetUser(ctx)
 	}
-	manifestAddressOrDomain := args[0]
-	metadata, err := client.GetResourceMetadata(manifestAddressOrDomain)
+
+	metadata, err := client.GetResourceMetadata(lookup, manifestAddressOrDomain)
 	if err != nil {
 		utils.Fatalf("Error retrieving resource metadata: %s", err.Error())
 		return
@@ -166,4 +148,19 @@ func resourceInfo(ctx *cli.Context) {
 		utils.Fatalf("Error encoding metadata to JSON for display:%s", err)
 	}
 	fmt.Println(string(encodedMetadata))
+}
+
+func resourceGetUser(ctx *cli.Context) common.Address {
+	var user = ctx.String(SwarmResourceUserFlag.Name)
+	if user == "" {
+		bzzconfig, err := buildConfig(ctx)
+		if err != nil {
+			utils.Fatalf("Error reading configuration")
+		}
+		user = bzzconfig.BzzAccount
+		if user == "" {
+			utils.Fatalf("Must specify --user or --bzzaccount")
+		}
+	}
+	return common.HexToAddress(user)
 }
