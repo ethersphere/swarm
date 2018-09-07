@@ -246,7 +246,11 @@ func (n *node) write(sectionIndex int, section []byte) {
 		if n.levelIndex == 0 {
 			go n.done(n.ChunkSize(), n.ChunkSize())
 		} else {
-			go n.done(n.ChunkSize(), n.ChunkSize()*(n.branches*n.levelIndex))
+			span := n.ChunkSize()
+			for i := 0; i < n.levelIndex; i++ {
+				span *= n.branches
+			}
+			go n.done(n.ChunkSize(), span)
 		}
 	}
 }
@@ -362,11 +366,11 @@ func (n *node) getParent(length int64) *node {
 		for i := 0; i < nextLevel; i++ {
 			levelBytePos /= int64(n.branches)
 		}
-		parentBatchIndex := levelBytePos / int64(n.branches*n.ChunkSize())
+		parentBatchIndex := (levelBytePos - 1) / int64(n.branches*n.ChunkSize())
 		parentNodeIndex := (levelBytePos % int64(n.branches*n.ChunkSize()) / int64(n.ChunkSize()))
 		parentLevel := n.levels[nextLevel]
 		parentBatch := parentLevel.getBatch(int(parentBatchIndex))
-		log.Debug("parentbatch", "b", fmt.Sprintf("%p", parentBatch), "level", nextLevel)
+		log.Debug("parentbatch", "b", fmt.Sprintf("%p", parentBatch), "level", nextLevel, "nodeindex", parentNodeIndex)
 		if parentBatch != nil {
 			return parentBatch.nodes[parentNodeIndex]
 		}
