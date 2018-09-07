@@ -49,7 +49,7 @@ func TestSum(t *testing.T) {
 	var mismatch int
 	dataFunc := newSerialData
 	chunkSize := 128 * 32
-	dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize * 129, chunkSize * 130}
+	dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize * 129, chunkSize * 130, chunkSize * 128 * 128}
 
 	for _, dl := range dataLengths {
 		chunks := dl / chunkSize
@@ -74,20 +74,26 @@ func TestSum(t *testing.T) {
 		fh.SetLength(int64(dl))
 		h := fh.Sum(nil)
 
-		putGetter := newTestHasherStore(&fakeChunkStore{}, BMTHash)
+		p, err := referenceHash(data)
 
-		p, _, err := PyramidSplit(context.TODO(), io.LimitReader(bytes.NewReader(data), int64(len(data))), putGetter, putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())
 		}
-
 		eq := bytes.Equal(p, h)
 		if !eq {
 			mismatch++
 		}
-		t.Logf("[%3d + %2d]\t%v\t%v\t%x", chunks, dl%chunkSize, eq, p, h)
+		t.Logf("[%3d + %2d]\t%v\t%x\t%x", chunks, dl%chunkSize, eq, p, h)
+		t.Logf("[%3d + %2d]\t%x", chunks, dl%chunkSize, h)
 	}
 	if mismatch > 0 {
 		t.Fatalf("%d/%d mismatches", mismatch, len(dataLengths))
 	}
+}
+
+func referenceHash(data []byte) ([]byte, error) {
+	//return []byte{}, nil
+	putGetter := newTestHasherStore(&fakeChunkStore{}, BMTHash)
+	p, _, err := PyramidSplit(context.TODO(), io.LimitReader(bytes.NewReader(data), int64(len(data))), putGetter, putGetter)
+	return p, err
 }
