@@ -50,6 +50,12 @@ type synctestConfig struct {
 	addrToIDMap map[string]discover.NodeID
 }
 
+// Tests in this file should not request chunks from peers.
+// This function will panic indicating that there is a problem if request has been made.
+func dummyRequestFromPeers(_ context.Context, req *network.Request) (*discover.NodeID, chan struct{}, error) {
+	panic(fmt.Sprintf("unexpected request: address %s, source %s", req.Addr.String(), req.Source.String()))
+}
+
 //This test is a syncing test for nodes.
 //One node is randomly selected to be the pivot node.
 //A configurable number of chunks and nodes can be
@@ -137,7 +143,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 
 			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				DoSync:          true,
@@ -187,10 +193,9 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 
 	go func() {
 		for d := range disconnections {
-			if d.Error != nil {
-				log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
-				t.Fatal(d.Error)
-			}
+			log.Error("peer drop", "node", d.NodeID, "peer", d.Event.Peer)
+			t.Fatal("unexpected disconnect")
+			cancelSimRun()
 		}
 	}()
 
@@ -317,7 +322,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			}
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 			delivery := NewDelivery(kad, netStore)
-			netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 
 			r := NewRegistry(addr, delivery, netStore, state.NewInmemoryStore(), nil)
 			bucket.Store(bucketKeyRegistry, r)

@@ -19,7 +19,6 @@ package stream
 import (
 	"context"
 	"errors"
-	"time"
 
 	"fmt"
 
@@ -149,7 +148,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	var cancel func()
 	// TODO: do something with this hardcoded timeout, maybe use TTL in the future
-	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), 10*time.Second)
+	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), network.RequestTimeout)
 
 	go func() {
 		select {

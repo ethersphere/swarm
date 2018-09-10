@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -252,7 +253,7 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 	// has been delivered
 	peer := rctx.Value("peer")
 	if peer != nil {
-		f.peers.Store(peer, true)
+		f.peers.Store(peer, time.Now())
 		defer f.peers.Delete(peer)
 	}
 

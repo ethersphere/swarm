@@ -51,6 +51,7 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	req := network.NewRequest(
 		storage.Address(hash0[:]),
 		true,
+		&sync.Map{},
 	)
 	streamer.delivery.RequestFromPeers(ctx, req)
 

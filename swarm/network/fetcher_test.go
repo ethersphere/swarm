@@ -77,7 +77,7 @@ func TestFetcherSingleRequest(t *testing.T) {
 	peers := []string{"a", "b", "c", "d"}
 	peersToSkip := &sync.Map{}
 	for _, p := range peers {
-		peersToSkip.Store(p, true)
+		peersToSkip.Store(p, time.Now())
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

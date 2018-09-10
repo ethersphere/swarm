@@ -21,14 +21,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
-
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 var searchTimeout = 1 * time.Second
-var peerToSkipTTL = 10 * time.Second // time to consider peer to be skipped
+
+// Time to consider peer to be skipped.
+// Also used in stream delivery.
+var RequestTimeout = 10 * time.Second
 
 type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{}, error)
 
@@ -53,11 +55,11 @@ type Request struct {
 	peersToSkip *sync.Map        // peers not to request chunk from (only makes sense if source is nil)
 }
 
-func NewRequest(addr storage.Address, skipCheck bool) *Request {
+func NewRequest(addr storage.Address, skipCheck bool, peersToSkip *sync.Map) *Request {
 	return &Request{
 		Addr:        addr,
 		SkipCheck:   skipCheck,
-		peersToSkip: &sync.Map{},
+		peersToSkip: peersToSkip,
 	}
 }
 
@@ -66,8 +68,8 @@ func (r *Request) SkipPeer(nodeID string) bool {
 	if !ok {
 		return false
 	}
-	deadline, ok := val.(time.Time)
-	if ok && time.Now().After(deadline) {
+	t, ok := val.(time.Time)
+	if ok && time.Now().After(t.Add(RequestTimeout)) {
 		// deadine expired
 		r.peersToSkip.Delete(nodeID)
 		return false
@@ -207,7 +209,7 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 			var err error
 			sources, err = f.doRequest(ctx, gone, peers, sources)
 			if err != nil {
-				log.Debug("unable to request", "request addr", f.addr, "err", err)
+				log.Warn("unable to request", "request addr", f.addr, "err", err)
 			}
 		}
 
@@ -280,7 +282,7 @@ func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, pee
 		}
 	}
 	// add peer to the set of peers to skip from now
-	peersToSkip.Store(sourceID.String(), time.Now().Add(peerToSkipTTL))
+	peersToSkip.Store(sourceID.String(), time.Now())
 
 	// if the quit channel is closed, it indicates that the source peer we requested from
 	// disconnected or terminated its streamer
