@@ -228,7 +228,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 		d.overlay.EachConn(req.Addr[:], 255, func(p network.OverlayConn, po int, nn bool) bool {
 			id := p.(network.Peer).ID()
 			// TODO: skip light nodes that do not accept retrieve requests
-			if _, ok := req.PeersToSkip.Load(id.String()); ok {
+			if req.SkipPeer(id.String()) {
 				log.Trace("Delivery.RequestFromPeers: skip peer", "peer id", id)
 				return true
 			}

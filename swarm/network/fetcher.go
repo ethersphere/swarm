@@ -28,6 +28,7 @@ import (
 )
 
 var searchTimeout = 1 * time.Second
+var peerToSkipTTL = 10 * time.Second // time to consider peer to be skipped
 
 type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{}, error)
 
@@ -49,7 +50,29 @@ type Request struct {
 	Addr        storage.Address  // chunk address
 	Source      *discover.NodeID // nodeID of peer to request from (can be nil)
 	SkipCheck   bool             // whether to offer the chunk first or deliver directly
-	PeersToSkip *sync.Map        // peers not to request chunk from (only makes sense if source is nil)
+	peersToSkip *sync.Map        // peers not to request chunk from (only makes sense if source is nil)
+}
+
+func NewRequest(addr storage.Address, skipCheck bool) *Request {
+	return &Request{
+		Addr:        addr,
+		SkipCheck:   skipCheck,
+		peersToSkip: &sync.Map{},
+	}
+}
+
+func (r *Request) SkipPeer(nodeID string) bool {
+	val, ok := r.peersToSkip.Load(nodeID)
+	if !ok {
+		return false
+	}
+	deadline, ok := val.(time.Time)
+	if ok && time.Now().After(deadline) {
+		// deadine expired
+		r.peersToSkip.Delete(nodeID)
+		return false
+	}
+	return true
 }
 
 // FetcherFactory is initialised with a request function and can create fetchers
@@ -228,7 +251,7 @@ func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, pee
 	req := &Request{
 		Addr:        f.addr,
 		SkipCheck:   f.skipCheck,
-		PeersToSkip: peersToSkip,
+		peersToSkip: peersToSkip,
 	}
 
 	foundSource := false
@@ -257,7 +280,7 @@ func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, pee
 		}
 	}
 	// add peer to the set of peers to skip from now
-	peersToSkip.Store(sourceID.String(), true)
+	peersToSkip.Store(sourceID.String(), time.Now().Add(peerToSkipTTL))
 
 	// if the quit channel is closed, it indicates that the source peer we requested from
 	// disconnected or terminated its streamer

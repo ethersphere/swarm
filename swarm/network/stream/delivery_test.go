@@ -48,11 +48,10 @@ func TestStreamerRetrieveRequest(t *testing.T) {
 	peerID := tester.IDs[0]
 
 	ctx := context.Background()
-	req := &network.Request{
-		Addr:        storage.Address(hash0[:]),
-		SkipCheck:   true,
-		PeersToSkip: &sync.Map{},
-	}
+	req := network.NewRequest(
+		storage.Address(hash0[:]),
+		true,
+	)
 	streamer.delivery.RequestFromPeers(ctx, req)
 
 	err = tester.TestExchanges(p2ptest.Exchange{

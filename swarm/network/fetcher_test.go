@@ -92,14 +92,14 @@ func TestFetcherSingleRequest(t *testing.T) {
 	case request := <-requester.requestC:
 		// request should contain all peers from peersToSkip provided to the fetcher
 		for _, p := range peers {
-			if _, ok := request.PeersToSkip.Load(p); !ok {
+			if _, ok := request.peersToSkip.Load(p); !ok {
 				t.Fatalf("request.peersToSkip misses peer")
 			}
 		}
 
 		// source peer should be also added to peersToSkip eventually
 		time.Sleep(100 * time.Millisecond)
-		if _, ok := request.PeersToSkip.Load(requestedPeerID.String()); !ok {
+		if _, ok := request.peersToSkip.Load(requestedPeerID.String()); !ok {
 			t.Fatalf("request.peersToSkip does not contain peer returned by the request function")
 		}
 
@@ -224,7 +224,7 @@ func TestFetcherOfferUsesSource(t *testing.T) {
 
 	// source peer should be added to peersToSkip eventually
 	time.Sleep(100 * time.Millisecond)
-	if _, ok := request.PeersToSkip.Load(sourcePeerID.String()); !ok {
+	if _, ok := request.peersToSkip.Load(sourcePeerID.String()); !ok {
 		t.Fatalf("SourcePeerId not added to peersToSkip")
 	}
 }
@@ -272,7 +272,7 @@ func TestFetcherOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 
 	// source peer should be added to peersToSkip eventually
 	time.Sleep(100 * time.Millisecond)
-	if _, ok := request.PeersToSkip.Load(sourcePeerID.String()); !ok {
+	if _, ok := request.peersToSkip.Load(sourcePeerID.String()); !ok {
 		t.Fatalf("SourcePeerId not added to peersToSkip")
 	}
 }
