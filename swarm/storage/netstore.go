@@ -92,8 +92,11 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 // arrived or context is done
 func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
 	chunk, fetch, err := n.get(rctx, ref)
-	if chunk != nil || err != nil {
-		return chunk, err
+	if err != nil {
+		return nil, err
+	}
+	if chunk != nil {
+		return chunk, nil
 	}
 	return fetch(rctx)
 }
