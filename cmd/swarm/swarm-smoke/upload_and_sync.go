@@ -43,6 +43,7 @@ func generateEndpoints(scheme string, cluster string, from int, to int) {
 		for port := from; port <= to; port++ {
 			endpoints = append(endpoints, fmt.Sprintf("%s://localhost:%v", scheme, port))
 		}
+		return
 	} else {
 		cluster = cluster + "."
 	}
