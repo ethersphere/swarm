@@ -69,7 +69,7 @@ func (r *Request) SkipPeer(nodeID string) bool {
 		return false
 	}
 	t, ok := val.(time.Time)
-	if ok && time.Now().After(t.Add(RequestTimeout)) {
+	if ok && t.Add(RequestTimeout).After(time.Now()) {
 		// deadine expired
 		r.peersToSkip.Delete(nodeID)
 		return false
