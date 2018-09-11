@@ -246,6 +246,7 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 			}()
 		}
 		for !allSuccess {
+			allSuccess = true
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
 				localChunks := conf.idToChunksMap[id]
@@ -278,7 +279,10 @@ func testSyncingViaGlobalSync(t *testing.T, chunkCount int, nodeCount int) {
 						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}
 				}
-				allSuccess = localSuccess
+				if !localSuccess {
+					allSuccess = false
+					break
+				}
 			}
 		}
 		if !allSuccess {
@@ -453,6 +457,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 		// or until the timeout is reached.
 		allSuccess := false
 		for !allSuccess {
+			allSuccess = true
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
 				localChunks := conf.idToChunksMap[id]
@@ -485,7 +490,10 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 						log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", chunk, id))
 					}
 				}
-				allSuccess = localSuccess
+				if !localSuccess {
+					allSuccess = false
+					break
+				}
 			}
 		}
 		if !allSuccess {
