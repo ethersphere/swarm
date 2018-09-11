@@ -25,15 +25,16 @@ func newAsyncHasher() bmt.SectionWriter {
 	return h.NewAsyncWriter(false)
 }
 
-func newSerialData(l int) ([]byte, error) {
+func newSerialData(l int, offset int) ([]byte, error) {
 	data := make([]byte, l)
 	for i := 0; i < len(data); i++ {
-		data[i] = byte(i % 255)
+		data[i] = byte((i + offset) % 255)
 	}
 	return data, nil
 }
 
-func newRandomData(l int) ([]byte, error) {
+// offset doesn't matter here
+func newRandomData(l int, offset int) ([]byte, error) {
 	data := make([]byte, l)
 	c, err := crand.Read(data)
 	if err != nil {
@@ -47,15 +48,17 @@ func newRandomData(l int) ([]byte, error) {
 func TestSum(t *testing.T) {
 
 	var mismatch int
-	dataFunc := newSerialData
 	chunkSize := 128 * 32
-	dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize * 129, chunkSize * 130, chunkSize * 128 * 128}
+	serialOffset := 0
+	//dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize*128 + 64, chunkSize * 129, chunkSize * 130, chunkSize * 128 * 128}
+	dataLengths := []int{chunkSize * 129}
+	//dataLengths := []int{chunkSize}
 
 	for _, dl := range dataLengths {
 		chunks := dl / chunkSize
 		log.Debug("testing", "c", chunks, "s", dl%chunkSize)
 		fh := NewFileHasher(newAsyncHasher, 128, 32)
-		data, err := dataFunc(dl)
+		data, err := newSerialData(dl, serialOffset)
 		if err != nil {
 			t.Fatal(err)
 		}
