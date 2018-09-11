@@ -20,26 +20,26 @@ import (
 	"encoding/binary"
 )
 
-// ResourceID encapsulates the immutable information about a mutable resource :)
-type ResourceID struct {
+// Resource encapsulates the immutable information about a mutable resource :)
+type Resource struct {
 	StartTime Timestamp `json:"startTime"` // time at which the resource starts to be valid
 	Frequency uint64    `json:"frequency"` // expected update frequency for the resource
 	Topic     Topic     `json:"topic"`     // resource topic, for the reference of the user, to disambiguate resources with same starttime, frequency or to reference another hash
 }
 
 const frequencyLength = 8 // sizeof(uint64)
-const nameLengthLength = 1
 
 // ResourceID Layout
 // StartTime Timestamp: timestampLength bytes
 // frequency: frequencyLength bytes
 // TopicLength: topicLength bytes
-const ResourceIDLength = timestampLength + frequencyLength + topicLength
+// ResourceLength returns the byte length of the Resource structure
+const ResourceLength = timestampLength + frequencyLength + TopicLength
 
 // binaryGet populates the resource metadata from a byte array
-func (r *ResourceID) binaryGet(serializedData []byte) error {
-	if len(serializedData) != ResourceIDLength {
-		return NewErrorf(ErrInvalidValue, "ResourceID to deserialize has an invalid length. Expected it to be exactly %d. Got %d.", ResourceIDLength, len(serializedData))
+func (r *Resource) binaryGet(serializedData []byte) error {
+	if len(serializedData) != ResourceLength {
+		return NewErrorf(ErrInvalidValue, "Resource to deserialize has an invalid length. Expected it to be exactly %d. Got %d.", ResourceLength, len(serializedData))
 	}
 
 	var cursor int
@@ -51,15 +51,15 @@ func (r *ResourceID) binaryGet(serializedData []byte) error {
 	r.Frequency = binary.LittleEndian.Uint64(serializedData[cursor : cursor+frequencyLength])
 	cursor += frequencyLength
 
-	copy(r.Topic.content[:], serializedData[cursor:cursor+topicLength])
-	cursor += topicLength
+	copy(r.Topic.content[:], serializedData[cursor:cursor+TopicLength])
+	cursor += TopicLength
 	return nil
 }
 
 // binaryPut encodes the metadata into a byte array
-func (r *ResourceID) binaryPut(serializedData []byte) error {
-	if len(serializedData) != ResourceIDLength {
-		return NewErrorf(ErrInvalidValue, "ResourceID to serialize has an invalid length. Expected it to be exactly %d. Got %d.", ResourceIDLength, len(serializedData))
+func (r *Resource) binaryPut(serializedData []byte) error {
+	if len(serializedData) != ResourceLength {
+		return NewErrorf(ErrInvalidValue, "Resource to serialize has an invalid length. Expected it to be exactly %d. Got %d.", ResourceLength, len(serializedData))
 	}
 	var cursor int
 	r.StartTime.binaryPut(serializedData[cursor : cursor+timestampLength])
@@ -68,12 +68,12 @@ func (r *ResourceID) binaryPut(serializedData []byte) error {
 	binary.LittleEndian.PutUint64(serializedData[cursor:cursor+frequencyLength], r.Frequency)
 	cursor += frequencyLength
 
-	copy(serializedData[cursor:cursor+topicLength], r.Topic.content[:topicLength])
-	cursor += topicLength
+	copy(serializedData[cursor:cursor+TopicLength], r.Topic.content[:TopicLength])
+	cursor += TopicLength
 
 	return nil
 }
 
-func (r *ResourceID) binaryLength() int {
-	return ResourceIDLength
+func (r *Resource) binaryLength() int {
+	return ResourceLength
 }

@@ -29,6 +29,7 @@ import (
 	"io/ioutil"
 	"mime/multipart"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -119,8 +120,8 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	// add the data our multihash aliased manifest will point to
 	databytes := "bar"
-	url := fmt.Sprintf("%s/bzz:/", srv.URL)
-	resp, err := http.Post(url, "text/plain", bytes.NewReader([]byte(databytes)))
+	testBzzUrl := fmt.Sprintf("%s/bzz:/", srv.URL)
+	resp, err := http.Post(testBzzUrl, "text/plain", bytes.NewReader([]byte(databytes)))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +139,7 @@ func TestBzzResourceMultihash(t *testing.T) {
 
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
+	updateRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
 		Topic:     mru.NewTopic("foo.eth", nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
@@ -153,14 +154,17 @@ func TestBzzResourceMultihash(t *testing.T) {
 	}
 	log.Info("added data", "manifest", string(b), "data", common.ToHex(mh))
 
-	body, err := updateRequest.MarshalJSON()
+	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
+	query := testUrl.Query()
+	body := updateRequest.ToValues(query) // this adds all query parameters and returns the data to be posted
+	query.Set("manifest", "1")            // indicate we want a manifest back
+	testUrl.RawQuery = query.Encode()
 
 	// create the multihash update
-	url = fmt.Sprintf("%s/bzz-resource:/", srv.URL)
-	resp, err = http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,14 +182,14 @@ func TestBzzResourceMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "c29a2902d0ae16a015e220a376001c1f36c426e6419bd3b1aabdcffe6f3cdf06"
+	correctManifestAddrHex := "36651b0613c3fbdba7b83175e282dd2b1b4842c884b794da01ab4b4b14d80179"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource key mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
 
 	// get bzz manifest transparent resource resolve
-	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(url)
+	testBzzUrl = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testBzzUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -210,13 +214,15 @@ func TestBzzResource(t *testing.T) {
 	defer srv.Close()
 
 	// data of update 1
-	databytes := make([]byte, 666)
-	_, err := rand.Read(databytes)
+	update1Data := make([]byte, 666)
+	_, err := rand.Read(update1Data)
 	if err != nil {
 		t.Fatal(err)
 	}
+	//data for update 2
+	update2Data := []byte("foo")
 
-	updateRequest, err := mru.NewCreateUpdateRequest(&mru.ResourceID{
+	updateRequest, err := mru.NewCreateUpdateRequest(&mru.Resource{
 		Topic:     mru.NewTopic("foo.eth", nil),
 		Frequency: 13,
 		StartTime: srv.GetCurrentTime(),
@@ -224,20 +230,23 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	updateRequest.SetData(databytes)
+	updateRequest.SetData(update1Data)
 
 	if err := updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
 
-	body, err := updateRequest.MarshalJSON()
+	// creates resource and sets update 1
+	testUrl, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
+	query := testUrl.Query()
+	body := updateRequest.ToValues(query) // this adds all query parameters
+	query.Set("manifest", "1")            // indicate we want a manifest back
+	testUrl.RawQuery = query.Encode()
 
-	// creates resource and sets update 1
-	url := fmt.Sprintf("%s/bzz-resource:/", srv.URL)
-	resp, err := http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err := http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -255,14 +264,14 @@ func TestBzzResource(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "c29a2902d0ae16a015e220a376001c1f36c426e6419bd3b1aabdcffe6f3cdf06"
+	correctManifestAddrHex := "36651b0613c3fbdba7b83175e282dd2b1b4842c884b794da01ab4b4b14d80179"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response resource manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
 
 	// get the manifest
-	url = fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(url)
+	testRawUrl := fmt.Sprintf("%s/bzz-raw:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testRawUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -282,14 +291,14 @@ func TestBzzResource(t *testing.T) {
 	if len(manifest.Entries) != 1 {
 		t.Fatalf("Manifest has %d entries", len(manifest.Entries))
 	}
-	correctViewIDHex := "0x2a000000000000000d00000000000000666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
-	if manifest.Entries[0].ResourceViewID.Hex() != correctViewIDHex {
-		t.Fatalf("Expected manifest ResourceViewID '%s', got '%s'", correctViewIDHex, manifest.Entries[0].ResourceViewID.Hex())
+	correctViewHex := "0x2a000000000000000d00000000000000666f6f2e65746800000000000000000000000000000000000000000000000000c96aaa54e2d44c299564da76e1cd3184a2386b8d"
+	if manifest.Entries[0].ResourceView.Hex() != correctViewHex {
+		t.Fatalf("Expected manifest Resource View '%s', got '%s'", correctViewHex, manifest.Entries[0].ResourceView.Hex())
 	}
 
 	// get bzz manifest transparent resource resolve
-	url = fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
-	resp, err = http.Get(url)
+	testBzzUrl := fmt.Sprintf("%s/bzz:/%s", srv.URL, rsrcResp)
+	resp, err = http.Get(testBzzUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -303,8 +312,8 @@ func TestBzzResource(t *testing.T) {
 	}
 
 	// get non-existent name, should fail
-	url = fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
-	resp, err = http.Get(url)
+	testBzzResUrl := fmt.Sprintf("%s/bzz-resource:/bar", srv.URL)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -317,8 +326,8 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.1) through resource directly
 	log.Info("get update latest = 1.1", "addr", correctManifestAddrHex)
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,16 +339,16 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(databytes, b) {
-		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	if !bytes.Equal(update1Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
 	}
 
 	// update 2
 	log.Info("update 2")
 
 	// 1.- get metadata about this resource
-	url = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url + "meta")
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s/", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl + "meta")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -355,17 +364,19 @@ func TestBzzResource(t *testing.T) {
 	if err = updateRequest.UnmarshalJSON(b); err != nil {
 		t.Fatalf("Error decoding resource metadata: %s", err)
 	}
-	data := []byte("foo")
-	updateRequest.SetData(data)
+	updateRequest.SetData(update2Data)
 	if err = updateRequest.Sign(signer); err != nil {
 		t.Fatal(err)
 	}
-	body, err = updateRequest.MarshalJSON()
+	testUrl, err = url.Parse(fmt.Sprintf("%s/bzz-resource:/", srv.URL))
 	if err != nil {
 		t.Fatal(err)
 	}
+	query = testUrl.Query()
+	body = updateRequest.ToValues(query) // this adds all query parameters
+	testUrl.RawQuery = query.Encode()
 
-	resp, err = http.Post(url, "application/json", bytes.NewReader(body))
+	resp, err = http.Post(testUrl.String(), "application/octet-stream", bytes.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -376,8 +387,8 @@ func TestBzzResource(t *testing.T) {
 
 	// get latest update (1.2) through resource directly
 	log.Info("get update 1.2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,14 +400,14 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(data, b) {
-		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	if !bytes.Equal(update2Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update2Data, b)
 	}
 
 	// get latest update (1.2) with specified period
 	log.Info("get update latest = 1.2")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s/?period=1", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -408,14 +419,14 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(data, b) {
-		t.Fatalf("Expected body '%x', got '%x'", data, b)
+	if !bytes.Equal(update2Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update2Data, b)
 	}
 
 	// get first update (1.1) with specified period and version
 	log.Info("get first update 1.1")
-	url = fmt.Sprintf("%s/bzz-resource:/%s/1/1", srv.URL, correctManifestAddrHex)
-	resp, err = http.Get(url)
+	testBzzResUrl = fmt.Sprintf("%s/bzz-resource:/%s?period=1&version=1", srv.URL, correctManifestAddrHex)
+	resp, err = http.Get(testBzzResUrl)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -427,9 +438,35 @@ func TestBzzResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(databytes, b) {
-		t.Fatalf("Expected body '%x', got '%x'", databytes, b)
+	if !bytes.Equal(update1Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
 	}
+
+	// test manifest-less queries
+	log.Info("get first update 1.1 via direct query")
+	urlq, err := url.Parse(fmt.Sprintf("%s/bzz-resource:/?period=1&version=1", srv.URL))
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := urlq.Query()
+	updateRequest.View.ToValues(values) // this adds view query parameters
+	urlq.RawQuery = values.Encode()
+	resp, err = http.Get(urlq.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("err %s", resp.Status)
+	}
+	b, err = ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(update1Data, b) {
+		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
+	}
+
 }
 
 func TestBzzGetPath(t *testing.T) {

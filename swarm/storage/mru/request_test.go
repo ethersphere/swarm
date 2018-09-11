@@ -33,7 +33,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	bob := newBobSigner()         //Bob
 
 	// Create a resource to our good guy Charlie's name
-	createRequest, err := NewCreateRequest(&ResourceID{
+	createRequest, err := NewCreateRequest(&Resource{
 		Topic:     NewTopic("a good resource name", nil),
 		Frequency: 300,
 		StartTime: Timestamp{Time: 1528900000},
@@ -65,22 +65,20 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	// proof of ownership
 
 	const expectedSignature = "0x4d1a7790f06379a3f9ccc1c3952017ebb9aba1aee4b4b767806598663d9472c743f97dc1eaa4aab4ed5db8784346ff681e379160175aebdbc4812167f93a8ec600"
-	const expectedJSON = `{"viewId":{"resourceId":{"startTime":{"time":1528900000},"frequency":300,"topic":"0x6120676f6f64207265736f75726365206e616d65000000000000000000000000"},"ownerAddr":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
+	const expectedJSON = `{"view":{"resource":{"startTime":1528900000,"frequency":300,"topic":"0x6120676f6f64207265736f75726365206e616d65000000000000000000000000"},"user":"0x876a8936a7cd0b79ef0735ad0896c1afe278781c"},"version":1,"period":7,"data":"0x5468697320686f75722773207570646174653a20537761726d2039392e3020686173206265656e2072656c656173656421"}`
 
 	//Put together an unsigned update request that we will serialize to send it to the signer.
 	data := []byte("This hour's update: Swarm 99.0 has been released!")
 	request := &Request{
-		SignedResourceUpdate: SignedResourceUpdate{
-			resourceUpdate: resourceUpdate{
-				updateHeader: updateHeader{
-					UpdateLookup: UpdateLookup{
-						period:  7,
-						version: 1,
-						viewID:  createRequest.resourceUpdate.viewID,
-					},
+		ResourceUpdate: ResourceUpdate{
+			UpdateHeader: UpdateHeader{
+				UpdateLookup: UpdateLookup{
+					Period:  7,
+					Version: 1,
+					View:    createRequest.ResourceUpdate.View,
 				},
-				data: data,
 			},
+			data: data,
 		},
 	}
 
@@ -110,7 +108,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 		t.Fatalf("Error signing request: %s", err)
 	}
 
-	compareByteSliceToExpectedHex(t, "signature", recoveredRequest.signature[:], expectedSignature)
+	compareByteSliceToExpectedHex(t, "signature", recoveredRequest.Signature[:], expectedSignature)
 
 	// mess with the signature and see what happens. To alter the signature, we briefly decode it as JSON
 	// to alter the signature field.
@@ -145,14 +143,14 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 
 	// Before checking what happened with Bob's update, let's see what would happen if we mess
 	// with the signature big time to see if Verify catches it
-	savedSignature := *recoveredRequest.signature                               // save the signature for later
-	binary.LittleEndian.PutUint64(recoveredRequest.signature[5:], 556845463424) // write some random data to break the signature
+	savedSignature := *recoveredRequest.Signature                               // save the signature for later
+	binary.LittleEndian.PutUint64(recoveredRequest.Signature[5:], 556845463424) // write some random data to break the signature
 	if err = recoveredRequest.Verify(); err == nil {
 		t.Fatal("Expected Verify to fail on corrupt signature")
 	}
 
 	// restore the Bob's signature from corruption
-	*recoveredRequest.signature = savedSignature
+	*recoveredRequest.Signature = savedSignature
 
 	// Now the signature is not corrupt
 	if err = recoveredRequest.Verify(); err != nil {
@@ -170,7 +168,7 @@ func TestEncodingDecodingUpdateRequests(t *testing.T) {
 	}
 
 	// mess with the lookup key to make sure Verify fails:
-	recoveredRequest.version = 999
+	recoveredRequest.Version = 999
 	if err = recoveredRequest.Verify(); err == nil {
 		t.Fatalf("Expected Verify to fail since the lookup key has been altered")
 	}

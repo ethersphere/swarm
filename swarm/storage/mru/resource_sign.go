@@ -60,7 +60,7 @@ func (s *GenericSigner) Sign(data common.Hash) (signature Signature, err error) 
 	return
 }
 
-// PublicKey returns the public key of the signer's private key
+// Address returns the public key of the signer's private key
 func (s *GenericSigner) Address() common.Address {
 	return s.address
 }

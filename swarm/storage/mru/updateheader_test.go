@@ -4,8 +4,8 @@ import (
 	"testing"
 )
 
-func getTestUpdateHeader() *updateHeader {
-	return &updateHeader{
+func getTestUpdateHeader() *UpdateHeader {
+	return &UpdateHeader{
 		UpdateLookup: *getTestUpdateLookup(),
 	}
 }

@@ -19,8 +19,8 @@ import (
 	"testing"
 )
 
-func getTestResourceID() *ResourceID {
-	return &ResourceID{
+func getTestResourceID() *Resource {
+	return &Resource{
 		Topic: NewTopic("world news report, every hour", nil),
 		StartTime: Timestamp{
 			Time: 1528880400,

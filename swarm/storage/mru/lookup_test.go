@@ -6,9 +6,9 @@ import (
 
 func getTestUpdateLookup() *UpdateLookup {
 	return &UpdateLookup{
-		viewID:  *getTestResourceViewID(),
-		period:  79,
-		version: 2010,
+		View:    *getTestResourceView(),
+		Period:  79,
+		Version: 2010,
 	}
 }
 
