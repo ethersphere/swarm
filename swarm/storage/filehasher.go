@@ -153,6 +153,12 @@ func (b *batch) delink() {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	b.batches.Delete(b.index)
+	for _, n := range b.nodes {
+		n.hasher.Reset()
+	}
+	for i, _ := range b.batchBuffer {
+		b.batchBuffer[i] = byte(0x0)
+	}
 	b.pool.Put(b)
 }
 
@@ -183,7 +189,6 @@ func (fh *FileHasher) newBatch() (bt *batch) {
 			hasher:     fh.hasherFunc(),
 			nodeBuffer: bt.batchBuffer[offset : offset+chunkSize],
 			batch:      bt,
-			//writeComplete: make(chan struct{}),
 		}
 	}
 
@@ -209,7 +214,7 @@ func (fh *FileHasher) WriteBuffer(globalCount int, buf []byte) (int, error) {
 
 	nod.hasher.Write(batchNodePos/fh.BlockSize(), buf)
 	currentCount := atomic.AddInt32(&nod.secCnt, 1)
-	log.Trace("fh writebuf", "c", globalCount, "s", globalCount/fh.BlockSize(), "seccnt", nod.secCnt, "branches", nod.branches, "buflen", len(buf), "node", fmt.Sprintf("%p", nod), "buf", buf[:])
+	log.Trace("fh writebuf", "c", globalCount, "s", globalCount/fh.BlockSize(), "seccnt", nod.secCnt, "branches", nod.branches, "buflen", len(buf), "node", fmt.Sprintf("%p", nod), "batch", fmt.Sprintf("%p", nod.batch), "buf", buf[:])
 	if currentCount == int32(nod.branches) {
 		go nod.done(nod.ChunkSize(), nod.ChunkSize())
 	}
@@ -238,7 +243,7 @@ func (n *node) span(l uint64) uint64 {
 func (n *node) write(sectionIndex int, section []byte) {
 	currentCount := atomic.AddInt32(&n.secCnt, 1)
 
-	log.Debug("write intermediate", "pos", n.pos, "section", sectionIndex, "level", n.levelIndex, "data", section, "buffer", fmt.Sprintf("%p", n.nodeBuffer), "batchbuffer", fmt.Sprintf("%p", n.batchBuffer), "barch", fmt.Sprintf("%p", n.batch), "level", fmt.Sprintf("%p", n.getLevel(n.levelIndex)), "node", fmt.Sprintf("%p", n))
+	log.Debug("write intermediate", "pos", n.pos, "section", sectionIndex, "level", n.levelIndex, "data", section, "buffer", fmt.Sprintf("%p", n.nodeBuffer), "batchbuffer", fmt.Sprintf("%p", n.batchBuffer), "batch", fmt.Sprintf("%p", n.batch), "node", fmt.Sprintf("%p", n))
 	n.hasher.Write(sectionIndex, section)
 	bytePos := sectionIndex * n.BlockSize()
 	copy(n.nodeBuffer[bytePos:bytePos+n.BlockSize()], section)
@@ -262,9 +267,13 @@ func (n *node) done(nodeLength int, spanLength int) {
 	parentNode := parentBatch.nodes[parentNodeIndex]
 	serializedLength := make([]byte, 8)
 	binary.LittleEndian.PutUint64(serializedLength, uint64(spanLength))
-	log.Debug("node done", "n", fmt.Sprintf("%p", n), "serl", serializedLength, "parent", fmt.Sprintf("%p", parentNode), "l", nodeLength)
+	log.Debug("node done", "n", fmt.Sprintf("%p", n), "serl", serializedLength, "parent", fmt.Sprintf("%p", parentNode), "l", nodeLength, "pos", n.pos)
 	h := n.hasher.Sum(nil, nodeLength, serializedLength)
 	parentNode.write(n.pos, h)
+	if n.pos == n.branches-1 {
+		log.Debug("delink", "n", fmt.Sprintf("%p", n), "b", fmt.Sprintf("%p", n.batch))
+		//n.batch.delink()
+	}
 }
 
 // length is global length
@@ -309,22 +318,35 @@ func (n *node) sum(length int64, potentialSpan int64) {
 	}
 
 	log.Debug("bmtl", "l", bmtLength, "dl", dataLength, "n", fmt.Sprintf("%p", n), "pos", n.pos, "seccnt", n.secCnt)
+
 	if n.secCnt > 1 {
+		log.Debug("seccnt > 1", "nbuf", n.nodeBuffer)
 		n.done(int(bmtLength), int(dataLength))
 		parentNode := n.getParent(length)
 		parentNode.sum(length, potentialSpan)
 		return
 	}
 
-	if n.index == 0 && n.pos == 0 {
-		// if it's on data level, we have to make the hash
-		// otherwise it's already hashed
-		if n.levelIndex == 0 {
-			n.result <- n.hasher.Sum(nil, bmtLength, meta)
-		} else {
-			n.result <- n.nodeBuffer[:n.BlockSize()]
+	if n.index == 0 {
+		if n.pos == 0 {
+			// if it's on data level, we have to make the hash
+			// otherwise it's already hashed
+			if n.levelIndex == 0 {
+				n.result <- n.hasher.Sum(nil, bmtLength, meta)
+				return
+			} else {
+				log.Debug("result direct no hash", "n", fmt.Sprintf("%p", n))
+				n.result <- n.nodeBuffer[:n.BlockSize()]
+				return
+			}
+			// TODO: instead of this situation we should find the correct parent directly and write the hash to it
+		} else if n.levelIndex > 0 {
+			parentNode := n.getParent(length)
+			parentNode.write(n.pos, n.nodeBuffer)
+			parentNode.sum(length, potentialSpan)
+			return
 		}
-		return
+
 	}
 
 	var levelCount int
@@ -337,7 +359,7 @@ func (n *node) sum(length int64, potentialSpan int64) {
 	// get the top node. This will always have free capacity
 	topRoot := n.levels[len(n.levels)-1].getBatch(0).nodes[0]
 	danglingTop := n.levelIndex + levelCount
-	log.Debug("levelcount", "l", levelCount, "previdx", prevIdx)
+	log.Debug("levelcount", "l", levelCount, "previdx", prevIdx, "n", fmt.Sprintf("%p", n), "nindex", n.index)
 	var nodeToWrite *node
 	// if there is a tree unconnected to the root, append to this and write result to root
 	if danglingTop == len(n.levels) {
@@ -349,6 +371,7 @@ func (n *node) sum(length int64, potentialSpan int64) {
 		nodeToWrite = n
 	}
 
+	log.Debug("nodetowrite", "n", fmt.Sprintf("%p", nodeToWrite), "sec", nodeToWrite.secCnt)
 	topRoot.write(int(topRoot.secCnt), nodeToWrite.hasher.Sum(nil, int(nodeToWrite.secCnt)*n.BlockSize(), meta))
 	binary.LittleEndian.PutUint64(meta, uint64(length))
 	log.Debug("top", "n", topRoot.nodeBuffer)
