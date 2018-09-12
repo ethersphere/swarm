@@ -39,7 +39,6 @@ import (
 	mockdb "github.com/ethereum/go-ethereum/swarm/storage/mock/db"
 )
 
-const testMinProxBinSize = 2
 const MaxTimeout = 600
 
 type synctestConfig struct {
