@@ -319,8 +319,8 @@ func TestFetcherRetryOnTimeout(t *testing.T) {
 	default:
 	}
 
-	// after another 200ms search timeout is over, there should be a new request
-	time.Sleep(200 * time.Millisecond)
+	// after another 300ms search timeout is over, there should be a new request
+	time.Sleep(300 * time.Millisecond)
 
 	select {
 	case <-requester.requestC:
