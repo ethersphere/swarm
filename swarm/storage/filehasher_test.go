@@ -51,10 +51,8 @@ func TestSum(t *testing.T) {
 	var mismatch int
 	chunkSize := 128 * 32
 	serialOffset := 0
-	dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize*128 + 64, chunkSize * 129, chunkSize * 130, chunkSize * 128 * 128}
-	//dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32}
-	//dataLengths := []int{chunkSize * 129}
-	//dataLengths := []int{chunkSize*128*128 + (128 * chunkSize)}
+	//dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize*128 + 64, chunkSize * 129, chunkSize * 130, chunkSize * 128 * 128}
+	dataLengths := []int{chunkSize * 2}
 
 	for _, dl := range dataLengths {
 		chunks := dl / chunkSize
@@ -143,4 +141,31 @@ func TestAnomaly(t *testing.T) {
 	h.Write(rightChunkHash)
 	resultHex := fmt.Sprintf("%x", h.Sum(nil))
 	t.Logf("%v %v %v", resultHex, resultHex == correctHex, meta)
+}
+
+func TestReferenceFileHasher(t *testing.T) {
+	h := bmt.New(pool)
+	var mismatch int
+	chunkSize := 128 * 32
+	dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize*128 + 64, chunkSize * 129} //, chunkSize * 130, chunkSize * 128 * 128}
+	//dataLengths := []int{31}
+	for _, dataLength := range dataLengths {
+		fh := NewReferenceFileHasher(h, 128)
+		data, _ := newSerialData(dataLength, 0)
+		refHash := fh.Hash(bytes.NewReader(data), len(data)).Bytes()
+
+		pyramidHash, err := referenceHash(data)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+
+		eq := bytes.Equal(pyramidHash, refHash)
+		if !eq {
+			mismatch++
+		}
+		t.Logf("[%7d+%4d]\tref: %x\tpyr: %x", dataLength/chunkSize, dataLength%chunkSize, refHash, pyramidHash)
+	}
+	if mismatch > 0 {
+		t.Fatalf("failed have %d mismatch", mismatch)
+	}
 }
