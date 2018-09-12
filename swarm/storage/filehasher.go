@@ -163,6 +163,7 @@ func (b *batch) delink() {
 	b.pool.Put(b)
 }
 
+// TODO: rename as blocksize in bmt is hardcoded 2*segmentsize (is that correct?) to avoid ambiguity
 func (fh *FileHasher) BlockSize() int {
 	return fh.secsize
 }
@@ -374,7 +375,7 @@ func (n *node) sum(length int64, potentialSpan int64) {
 		nodeToWrite = n
 	}
 
-	log.Debug("nodetowrite", "n", fmt.Sprintf("%p", nodeToWrite), "sec", nodeToWrite.secCnt)
+	log.Debug("nodetowrite", "n", fmt.Sprintf("%p", nodeToWrite), "sec", nodeToWrite.secCnt, "meta", meta)
 	topRoot.write(int(topRoot.secCnt), nodeToWrite.hasher.Sum(nil, int(nodeToWrite.secCnt)*n.BlockSize(), meta))
 	binary.LittleEndian.PutUint64(meta, uint64(length))
 	log.Debug("top", "n", topRoot.nodeBuffer)
