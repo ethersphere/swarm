@@ -387,3 +387,76 @@ func TestFetcherRequestQuitRetriesRequest(t *testing.T) {
 		t.Fatalf("request is not initiated after failed request")
 	}
 }
+
+// TestRequestSkipPeer checks if PeerSkip function will skip provided peer
+// and not skip unknown one.
+func TestRequestSkipPeer(t *testing.T) {
+	addr := make([]byte, 32)
+	peers := []discover.NodeID{
+		discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+		discover.MustHexID("2dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439"),
+	}
+
+	peersToSkip := new(sync.Map)
+	peersToSkip.Store(peers[0].String(), time.Now())
+	r := NewRequest(addr, false, peersToSkip)
+
+	if !r.SkipPeer(peers[0].String()) {
+		t.Errorf("peer not skipped")
+	}
+
+	if r.SkipPeer(peers[1].String()) {
+		t.Errorf("peer skipped")
+	}
+}
+
+// TestRequestSkipPeerExpired checks if a peer to skip is not skipped
+// after RequestTimeout has passed.
+func TestRequestSkipPeerExpired(t *testing.T) {
+	addr := make([]byte, 32)
+	peer := discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+
+	// set RequestTimeout to a low value and reset it after the test
+	defer func(t time.Duration) { RequestTimeout = t }(RequestTimeout)
+	RequestTimeout = 250 * time.Millisecond
+
+	peersToSkip := new(sync.Map)
+	peersToSkip.Store(peer.String(), time.Now())
+	r := NewRequest(addr, false, peersToSkip)
+
+	if !r.SkipPeer(peer.String()) {
+		t.Errorf("peer not skipped")
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	if r.SkipPeer(peer.String()) {
+		t.Errorf("peer skipped")
+	}
+}
+
+// TestRequestSkipPeerPermanent checks if a peer to skip is not skipped
+// after RequestTimeout is not skipped if it is set for a permanent skipping
+// by value to peersToSkip map is not time.Duration.
+func TestRequestSkipPeerPermanent(t *testing.T) {
+	addr := make([]byte, 32)
+	peer := discover.MustHexID("1dd9d65c4552b5eb43d5ad55a2ee3f56c6cbc1c64a5c8d659f51fcd51bace24351232b8d7821617d2b29b54b81cdefb9b3e9c37d7fd5f63270bcc9e1a6f6a439")
+
+	// set RequestTimeout to a low value and reset it after the test
+	defer func(t time.Duration) { RequestTimeout = t }(RequestTimeout)
+	RequestTimeout = 250 * time.Millisecond
+
+	peersToSkip := new(sync.Map)
+	peersToSkip.Store(peer.String(), true)
+	r := NewRequest(addr, false, peersToSkip)
+
+	if !r.SkipPeer(peer.String()) {
+		t.Errorf("peer not skipped")
+	}
+
+	time.Sleep(500 * time.Millisecond)
+
+	if !r.SkipPeer(peer.String()) {
+		t.Errorf("peer not skipped")
+	}
+}
