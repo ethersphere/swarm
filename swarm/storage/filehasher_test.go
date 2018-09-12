@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	crand "crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"io"
 	"testing"
@@ -50,9 +51,10 @@ func TestSum(t *testing.T) {
 	var mismatch int
 	chunkSize := 128 * 32
 	serialOffset := 0
-	//dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize*128 + 64, chunkSize * 129, chunkSize * 130, chunkSize * 128 * 128}
-	dataLengths := []int{chunkSize * 129}
-	//dataLengths := []int{chunkSize}
+	dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize*128 + 64, chunkSize * 129, chunkSize * 130, chunkSize * 128 * 128}
+	//dataLengths := []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32}
+	//dataLengths := []int{chunkSize * 129}
+	//dataLengths := []int{chunkSize*128*128 + (128 * chunkSize)}
 
 	for _, dl := range dataLengths {
 		chunks := dl / chunkSize
@@ -92,6 +94,7 @@ func TestSum(t *testing.T) {
 	if mismatch > 0 {
 		t.Fatalf("%d/%d mismatches", mismatch, len(dataLengths))
 	}
+
 }
 
 func referenceHash(data []byte) ([]byte, error) {
@@ -99,4 +102,45 @@ func referenceHash(data []byte) ([]byte, error) {
 	putGetter := newTestHasherStore(&fakeChunkStore{}, BMTHash)
 	p, _, err := PyramidSplit(context.TODO(), io.LimitReader(bytes.NewReader(data), int64(len(data))), putGetter, putGetter)
 	return p, err
+}
+
+func TestAnomaly(t *testing.T) {
+
+	correctData := []byte{48, 71, 216, 65, 7, 120, 152, 194, 107, 190, 107, 230, 82, 162, 236, 89, 10, 93, 155, 215, 205, 69, 210, 144, 234, 66, 81, 27, 72, 117, 60, 9, 129, 179, 29, 154, 127, 108, 55, 117, 35, 232, 118, 157, 176, 33, 9, 29, 242, 62, 221, 159, 215, 189, 107, 205, 241, 26, 34, 245, 24, 219, 96, 6}
+	correctHex := "b8e1804e37a064d28d161ab5f256cc482b1423d5cd0a6b30fde7b0f51ece9199"
+	var dataLength uint64 = 4096*128 + 4096
+
+	data := make([]byte, dataLength)
+	for i := uint64(0); i < dataLength; i++ {
+		data[i] = byte(i % 255)
+	}
+
+	leftChunk := make([]byte, 4096)
+
+	h := bmt.New(pool)
+	meta := make([]byte, 8)
+	binary.LittleEndian.PutUint64(meta, 4096)
+	for i := 0; i < 128; i++ {
+		h.ResetWithLength(meta)
+		h.Write(data[i*4096 : i*4096+4096])
+		copy(leftChunk[i*32:], h.Sum(nil))
+	}
+	binary.LittleEndian.PutUint64(meta, 4096*128)
+	h.ResetWithLength(meta)
+	h.Write(leftChunk)
+	leftChunkHash := h.Sum(nil)
+	t.Logf("%x %v %v", leftChunkHash, bytes.Equal(correctData[:32], leftChunkHash), meta)
+
+	binary.LittleEndian.PutUint64(meta, 4096)
+	h.ResetWithLength(meta)
+	h.Write(data[4096*128:])
+	rightChunkHash := h.Sum(nil)
+	t.Logf("%x %v %v", rightChunkHash, bytes.Equal(correctData[32:], rightChunkHash), meta)
+
+	binary.LittleEndian.PutUint64(meta, dataLength)
+	h.ResetWithLength(meta)
+	h.Write(leftChunkHash)
+	h.Write(rightChunkHash)
+	resultHex := fmt.Sprintf("%x", h.Sum(nil))
+	t.Logf("%v %v %v", resultHex, resultHex == correctHex, meta)
 }
