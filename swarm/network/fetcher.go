@@ -55,6 +55,8 @@ type Request struct {
 	peersToSkip *sync.Map        // peers not to request chunk from (only makes sense if source is nil)
 }
 
+// NewRequest returns a new instance of Request based on chunk address skip check and
+// a map of peers to skip.
 func NewRequest(addr storage.Address, skipCheck bool, peersToSkip *sync.Map) *Request {
 	return &Request{
 		Addr:        addr,
@@ -63,6 +65,10 @@ func NewRequest(addr storage.Address, skipCheck bool, peersToSkip *sync.Map) *Re
 	}
 }
 
+// SkipPeer returns if the peer with nodeID should not be requested to deliver a chunk.
+// Peers to skip are kept per Request and for a time period of RequestTimeout.
+// This function is used in stream package in Delivery.RequestFromPeers to optimize
+// requests for chunks.
 func (r *Request) SkipPeer(nodeID string) bool {
 	val, ok := r.peersToSkip.Load(nodeID)
 	if !ok {
