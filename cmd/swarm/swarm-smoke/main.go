@@ -48,7 +48,7 @@ func main() {
 		cli.StringFlag{
 			Name:        "cluster-endpoint",
 			Value:       "testing",
-			Usage:       "cluster to point to (open, or testing)",
+			Usage:       "cluster to point to (local, open or testing)",
 			Destination: &cluster,
 		},
 		cli.IntFlag{

@@ -21,13 +21,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
-
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 var searchTimeout = 1 * time.Second
+
+// Time to consider peer to be skipped.
+// Also used in stream delivery.
+var RequestTimeout = 10 * time.Second
 
 type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{}, error)
 
@@ -49,7 +52,35 @@ type Request struct {
 	Addr        storage.Address  // chunk address
 	Source      *discover.NodeID // nodeID of peer to request from (can be nil)
 	SkipCheck   bool             // whether to offer the chunk first or deliver directly
-	PeersToSkip *sync.Map        // peers not to request chunk from (only makes sense if source is nil)
+	peersToSkip *sync.Map        // peers not to request chunk from (only makes sense if source is nil)
+}
+
+// NewRequest returns a new instance of Request based on chunk address skip check and
+// a map of peers to skip.
+func NewRequest(addr storage.Address, skipCheck bool, peersToSkip *sync.Map) *Request {
+	return &Request{
+		Addr:        addr,
+		SkipCheck:   skipCheck,
+		peersToSkip: peersToSkip,
+	}
+}
+
+// SkipPeer returns if the peer with nodeID should not be requested to deliver a chunk.
+// Peers to skip are kept per Request and for a time period of RequestTimeout.
+// This function is used in stream package in Delivery.RequestFromPeers to optimize
+// requests for chunks.
+func (r *Request) SkipPeer(nodeID string) bool {
+	val, ok := r.peersToSkip.Load(nodeID)
+	if !ok {
+		return false
+	}
+	t, ok := val.(time.Time)
+	if ok && time.Now().After(t.Add(RequestTimeout)) {
+		// deadine expired
+		r.peersToSkip.Delete(nodeID)
+		return false
+	}
+	return true
 }
 
 // FetcherFactory is initialised with a request function and can create fetchers
@@ -184,7 +215,7 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 			var err error
 			sources, err = f.doRequest(ctx, gone, peers, sources)
 			if err != nil {
-				log.Debug("unable to request", "request addr", f.addr, "err", err)
+				log.Warn("unable to request", "request addr", f.addr, "err", err)
 			}
 		}
 
@@ -228,7 +259,7 @@ func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, pee
 	req := &Request{
 		Addr:        f.addr,
 		SkipCheck:   f.skipCheck,
-		PeersToSkip: peersToSkip,
+		peersToSkip: peersToSkip,
 	}
 
 	foundSource := false
@@ -257,7 +288,7 @@ func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, pee
 		}
 	}
 	// add peer to the set of peers to skip from now
-	peersToSkip.Store(sourceID.String(), true)
+	peersToSkip.Store(sourceID.String(), time.Now())
 
 	// if the quit channel is closed, it indicates that the source peer we requested from
 	// disconnected or terminated its streamer

@@ -154,7 +154,6 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 		k[1] = uint8(i)
 		cnt, _ := s.db.Get(k)
 		s.bucketCnt[i] = BytesToU64(cnt)
-		s.bucketCnt[i]++
 	}
 	data, _ := s.db.Get(keyEntryCnt)
 	s.entryCnt = BytesToU64(data)
@@ -541,7 +540,6 @@ func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx, po))
 	s.entryCnt--
-	s.bucketCnt[po]--
 	cntKey := make([]byte, 2)
 	cntKey[0] = keyDistanceCnt
 	cntKey[1] = po
@@ -661,11 +659,13 @@ func (s *LDBStore) writeCurrentBatch() error {
 	b.err = s.writeBatch(b, e, d, a)
 	close(b.c)
 	for e > s.capacity {
+		log.Trace("for >", "e", e, "s.capacity", s.capacity)
 		// Collect garbage in a separate goroutine
 		// to be able to interrupt this loop by s.quit.
 		done := make(chan struct{})
 		go func() {
 			s.collectGarbage(gcArrayFreeRatio)
+			log.Trace("collectGarbage closing done")
 			close(done)
 		}()
 

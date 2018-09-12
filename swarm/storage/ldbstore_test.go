@@ -424,7 +424,6 @@ func TestLDBStoreRemoveThenCollectGarbage(t *testing.T) {
 
 	ldb, cleanup = newLDBStore(t)
 	capacity = 10
-
 	ldb.setCapacity(uint64(capacity))
 	defer cleanup()
 

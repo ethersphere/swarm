@@ -103,7 +103,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		if (to < from && to != 0) || from > s.sessionAt {
 			return nil, 0, 0, nil, nil
 		}
-		if to > s.sessionAt {
+		if to == 0 || to > s.sessionAt {
 			to = s.sessionAt
 		}
 	}

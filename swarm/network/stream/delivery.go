@@ -19,7 +19,6 @@ package stream
 import (
 	"context"
 	"errors"
-	"time"
 
 	"fmt"
 
@@ -149,7 +148,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	var cancel func()
 	// TODO: do something with this hardcoded timeout, maybe use TTL in the future
-	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), 10*time.Second)
+	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), network.RequestTimeout)
 
 	go func() {
 		select {
@@ -228,7 +227,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 		d.overlay.EachConn(req.Addr[:], 255, func(p network.OverlayConn, po int, nn bool) bool {
 			id := p.(network.Peer).ID()
 			// TODO: skip light nodes that do not accept retrieve requests
-			if _, ok := req.PeersToSkip.Load(id.String()); ok {
+			if req.SkipPeer(id.String()) {
 				log.Trace("Delivery.RequestFromPeers: skip peer", "peer id", id)
 				return true
 			}
