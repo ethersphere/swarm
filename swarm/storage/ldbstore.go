@@ -50,6 +50,10 @@ const (
 )
 
 var (
+	dbEntryCount = metrics.NewRegisteredCounter("ldbstore.entryCnt", nil)
+)
+
+var (
 	keyIndex       = byte(0)
 	keyOldData     = byte(1)
 	keyAccessCnt   = []byte{2}
@@ -540,6 +544,7 @@ func (s *LDBStore) delete(idx uint64, idxKey []byte, po uint8) {
 	batch.Delete(idxKey)
 	batch.Delete(getDataKey(idx, po))
 	s.entryCnt--
+	dbEntryCount.Dec(1)
 	cntKey := make([]byte, 2)
 	cntKey[0] = keyDistanceCnt
 	cntKey[1] = po
@@ -619,6 +624,7 @@ func (s *LDBStore) doPut(chunk Chunk, index *dpaDBIndex, po uint8) {
 	index.Idx = s.dataIdx
 	s.bucketCnt[po] = s.dataIdx
 	s.entryCnt++
+	dbEntryCount.Inc(1)
 	s.dataIdx++
 
 	cntKey := make([]byte, 2)

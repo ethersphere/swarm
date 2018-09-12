@@ -1,4 +1,4 @@
-// Copyright 2016 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,44 +14,31 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package network
+package testutil
 
 import (
+	"io"
+	"io/ioutil"
+	"os"
+	"strings"
 	"testing"
-
-	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 )
 
-/***
- *
- * - after connect, that outgoing subpeersmsg is sent
- *
- */
-func TestDiscovery(t *testing.T) {
-	params := NewHiveParams()
-	s, pp := newHiveTester(t, params, 1, nil)
-
-	id := s.IDs[0]
-	raddr := NewAddrFromNodeID(id)
-	pp.Register(raddr)
-
-	// start the hive and wait for the connection
-	pp.Start(s.Server)
-	defer pp.Stop()
-
-	// send subPeersMsg to the peer
-	err := s.TestExchanges(p2ptest.Exchange{
-		Label: "outgoing subPeersMsg",
-		Expects: []p2ptest.Expect{
-			{
-				Code: 1,
-				Msg:  &subPeersMsg{Depth: 0},
-				Peer: id,
-			},
-		},
-	})
-
+// TempFileWithContent is a helper function that creates a temp file that contains the following string content then closes the file handle
+// it returns the complete file path
+func TempFileWithContent(t *testing.T, content string) string {
+	tempFile, err := ioutil.TempFile("", "swarm-temp-file")
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	_, err = io.Copy(tempFile, strings.NewReader(content))
+	if err != nil {
+		os.RemoveAll(tempFile.Name())
+		t.Fatal(err)
+	}
+	if err = tempFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return tempFile.Name()
 }
