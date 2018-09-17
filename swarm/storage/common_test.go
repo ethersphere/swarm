@@ -152,6 +152,15 @@ func generateRandomData(l int) (r io.Reader, slice []byte) {
 	return
 }
 
+func generateSerialData(l int, mod int, offset int) (r io.Reader, slice []byte) {
+	slice = make([]byte, l)
+	for i := 0; i < len(slice); i++ {
+		slice[i] = byte((i + offset) % mod)
+	}
+	r = io.LimitReader(bytes.NewReader(slice), int64(l))
+	return
+}
+
 func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
 	hs := mputRandomChunks(m, processors, n, chunksize)
 	err := mget(m, hs, nil)
