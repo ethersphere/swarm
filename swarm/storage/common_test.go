@@ -174,12 +174,21 @@ func (r *brokenLimitedReader) Read(buf []byte) (int, error) {
 	return r.lr.Read(buf)
 }
 
-func testStoreRandom(m ChunkStore, n int, chunksize int64, t *testing.T) {
-	chunks, err := mputRandomChunks(m, n, chunksize)
+func generateSerialData(l int, mod int, offset int) (r io.Reader, slice []byte) {
+	slice = make([]byte, l)
+	for i := 0; i < len(slice); i++ {
+		slice[i] = byte((i + offset) % mod)
+	}
+	r = io.LimitReader(bytes.NewReader(slice), int64(l))
+	return
+}
+
+func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
+	hs, err := mputRandomChunks(m, processors, n, chunksize)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	err = mget(m, chunkAddresses(chunks), nil)
+	err := mget(m, hs, nil)
 	if err != nil {
 		t.Fatalf("testStore failed: %v", err)
 	}

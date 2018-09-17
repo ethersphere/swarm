@@ -70,6 +70,41 @@ func testRandomBrokenData(n int, tester *chunkerTester) {
 	tester.t.Logf(" Address = %v\n", key)
 }
 
+func testSerialData(usePyramid bool, hash string, n int, tester *chunkerTester) Address {
+	if tester.inputs == nil {
+		tester.inputs = make(map[uint64][]byte)
+	}
+	input, found := tester.inputs[uint64(n)]
+	var data io.Reader
+	if !found {
+		data, input = generateSerialData(n, 255, 0)
+		tester.inputs[uint64(n)] = input
+	} else {
+		data = io.LimitReader(bytes.NewReader(input), int64(n))
+	}
+
+	putGetter := newTestHasherStore(NewMapChunkStore(), hash)
+
+	var addr Address
+	var wait func(context.Context) error
+	var err error
+	ctx := context.TODO()
+	if usePyramid {
+		addr, wait, err = PyramidSplit(ctx, data, putGetter, putGetter)
+	} else {
+		addr, wait, err = TreeSplit(ctx, data, int64(n), putGetter)
+	}
+	if err != nil {
+		tester.t.Fatalf(err.Error())
+	}
+	tester.t.Logf(" Key = %v\n", addr)
+	err = wait(ctx)
+	if err != nil {
+		tester.t.Fatalf(err.Error())
+	}
+	return addr
+}
+
 func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) Address {
 	if tester.inputs == nil {
 		tester.inputs = make(map[uint64][]byte)
@@ -227,6 +262,21 @@ func TestDataAppend(t *testing.T) {
 			tester.t.Fatalf("input and output mismatch\n IN: %v\nOUT: %v\n", newInput, newOutput)
 		}
 	}
+}
+
+func TestSerialData(t *testing.T) {
+	sizes := []int{4096 * 129}
+	tester := &chunkerTester{t: t}
+
+	for _, s := range sizes {
+		treeChunkerKey := testSerialData(false, BMTHash, s, tester)
+		//		pyramidChunkerKey := testRandomData(true, SHA3Hash, s, tester)
+		//		if treeChunkerKey.String() != pyramidChunkerKey.String() {
+		//			tester.t.Fatalf("tree chunker and pyramid chunker key mismatch for size %v\n TC: %v\n PC: %v\n", s, treeChunkerKey.String(), pyramidChunkerKey.String())
+		//		}
+		t.Logf("chunker result: %s", treeChunkerKey)
+	}
+
 }
 
 func TestRandomData(t *testing.T) {

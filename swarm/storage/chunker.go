@@ -298,7 +298,6 @@ func (tc *TreeChunker) split(ctx context.Context, depth int, treeSize int64, add
 	// dept > 0
 	// intermediate chunk containing child nodes hashes
 	branchCnt := (size + treeSize - 1) / treeSize
-
 	var chunk = make([]byte, branchCnt*tc.hashSize+8)
 	var pos, i int64
 
@@ -336,6 +335,8 @@ func (tc *TreeChunker) split(ctx context.Context, depth int, treeSize int64, add
 	case tc.jobC <- &hashJob{addr, chunk, size, parentWg}:
 	case <-tc.quitC:
 	}
+
+	log.Trace("chunkdata", "d", chunk)
 }
 
 func (tc *TreeChunker) runWorker(ctx context.Context) {
