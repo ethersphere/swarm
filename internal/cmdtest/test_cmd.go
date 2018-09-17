@@ -181,8 +181,8 @@ func (tt *TestCmd) ExpectExit() {
 	}
 }
 
-func (tt *TestCmd) WaitExit() {
-	tt.cmd.Wait()
+func (tt *TestCmd) WaitExit() error {
+	return tt.cmd.Wait()
 }
 
 func (tt *TestCmd) Interrupt() {

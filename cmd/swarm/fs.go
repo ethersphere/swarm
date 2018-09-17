@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"gopkg.in/urfave/cli.v1"
@@ -108,20 +107,27 @@ func listMounts(cliContext *cli.Context) {
 }
 
 func dialRPC(ctx *cli.Context) (*rpc.Client, error) {
-	var endpoint string
+	endpoint := getIPCEndpoint(ctx)
+	return rpc.Dial(endpoint)
+}
 
-	if ctx.IsSet(utils.IPCPathFlag.Name) {
-		endpoint = ctx.String(utils.IPCPathFlag.Name)
-	} else {
-		utils.Fatalf("swarm ipc endpoint not specified")
+func getIPCEndpoint(ctx *cli.Context) string {
+	cfg := defaultNodeConfig
+
+	if ctx.GlobalIsSet(utils.DataDirFlag.Name) {
+		cfg.DataDir = ctx.GlobalString(utils.DataDirFlag.Name)
 	}
 
-	if endpoint == "" {
-		endpoint = node.DefaultIPCEndpoint(clientIdentifier)
-	} else if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
+	if ctx.IsSet(utils.IPCPathFlag.Name) {
+		cfg.IPCPath = ctx.String(utils.IPCPathFlag.Name)
+	}
+
+	endpoint := cfg.IPCEndpoint()
+
+	if strings.HasPrefix(endpoint, "rpc:") || strings.HasPrefix(endpoint, "ipc:") {
 		// Backwards compatibility with geth < 1.5 which required
 		// these prefixes.
 		endpoint = endpoint[4:]
 	}
-	return rpc.Dial(endpoint)
+	return endpoint
 }

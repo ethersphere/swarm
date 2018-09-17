@@ -42,6 +42,22 @@ type testFile struct {
 	content  string
 }
 
+func TestCLISwarmFsDefaultIPCPath(t *testing.T) {
+	cluster := newTestCluster(t, 1)
+	defer cluster.Shutdown()
+
+	handlingNode := cluster.Nodes[0]
+	list := runSwarm(t, []string{
+		"--datadir", handlingNode.Dir,
+		"fs",
+		"list",
+	}...)
+
+	if err := list.WaitExit(); err != nil {
+		t.Error(err)
+	}
+}
+
 // TestCLISwarmFs is a high-level test of swarmfs
 //
 // This test fails on travis for macOS as this executable exits with code 1
