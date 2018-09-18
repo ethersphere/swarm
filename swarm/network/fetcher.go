@@ -32,6 +32,8 @@ var searchTimeout = 1 * time.Second
 // Also used in stream delivery.
 var RequestTimeout = 10 * time.Second
 
+var MaxHopCtr = 20 // maximum number of forwarded requests (hops), to make sure requests are not forwarded forever in peer loops
+
 type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{}, error)
 
 // Fetcher is created when a chunk is not found locally. It starts a request handler loop once and
@@ -44,7 +46,7 @@ type Fetcher struct {
 	protoRequestFunc RequestFunc           // request function fetcher calls to issue retrieve request for a chunk
 	addr             storage.Address       // the address of the chunk to be fetched
 	offerC           chan *discover.NodeID // channel of sources (peer node id strings)
-	requestC         chan struct{}
+	requestC         chan int              // channel for incoming requests (with the hopCtr value in it)
 	skipCheck        bool
 }
 
@@ -53,6 +55,7 @@ type Request struct {
 	Source      *discover.NodeID // nodeID of peer to request from (can be nil)
 	SkipCheck   bool             // whether to offer the chunk first or deliver directly
 	peersToSkip *sync.Map        // peers not to request chunk from (only makes sense if source is nil)
+	HopCtr      int              // number of forwarded requests (hops)
 }
 
 // NewRequest returns a new instance of Request based on chunk address skip check and
@@ -113,7 +116,7 @@ func NewFetcher(addr storage.Address, rf RequestFunc, skipCheck bool) *Fetcher {
 		addr:             addr,
 		protoRequestFunc: rf,
 		offerC:           make(chan *discover.NodeID),
-		requestC:         make(chan struct{}),
+		requestC:         make(chan int),
 		skipCheck:        skipCheck,
 	}
 }
@@ -136,7 +139,7 @@ func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
 }
 
 // Request is called when an upstream peer request the chunk as part of `RetrieveRequestMsg`, or from a local request through FileStore, and the node does not have the chunk locally.
-func (f *Fetcher) Request(ctx context.Context) {
+func (f *Fetcher) Request(ctx context.Context, hopCtr int) {
 	// First we need to have this select to make sure that we return if context is done
 	select {
 	case <-ctx.Done():
@@ -144,10 +147,14 @@ func (f *Fetcher) Request(ctx context.Context) {
 	default:
 	}
 
+	if hopCtr >= MaxHopCtr {
+		return
+	}
+
 	// This select alone would not guarantee that we return of context is done, it could potentially
 	// push to offerC instead if offerC is available (see number 2 in https://golang.org/ref/spec#Select_statements)
 	select {
-	case f.requestC <- struct{}{}:
+	case f.requestC <- hopCtr + 1:
 	case <-ctx.Done():
 	}
 }
@@ -161,6 +168,7 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 		waitC     <-chan time.Time   // timer channel
 		sources   []*discover.NodeID // known sources, ie. peers that offered the chunk
 		requested bool               // true if the chunk was actually requested
+		hopCtr    int
 	)
 	gone := make(chan *discover.NodeID) // channel to signal that a peer we requested from disconnected
 
@@ -183,7 +191,7 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 			doRequest = requested
 
 		// incoming request
-		case <-f.requestC:
+		case hopCtr = <-f.requestC:
 			log.Trace("new request", "request addr", f.addr)
 			// 2) chunk is requested, set requested flag
 			// launch a request iff none been launched yet
@@ -213,7 +221,7 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 		// need to issue a new request
 		if doRequest {
 			var err error
-			sources, err = f.doRequest(ctx, gone, peers, sources)
+			sources, err = f.doRequest(ctx, gone, peers, sources, hopCtr)
 			if err != nil {
 				log.Info("unable to request", "request addr", f.addr, "err", err)
 			}
@@ -251,7 +259,7 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 // * the peer's address is added to the set of peers to skip
 // * the peer's address is removed from prospective sources, and
 // * a go routine is started that reports on the gone channel if the peer is disconnected (or terminated their streamer)
-func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, peersToSkip *sync.Map, sources []*discover.NodeID) ([]*discover.NodeID, error) {
+func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, peersToSkip *sync.Map, sources []*discover.NodeID, hopCtr int) ([]*discover.NodeID, error) {
 	var i int
 	var sourceID *discover.NodeID
 	var quit chan struct{}
@@ -260,6 +268,7 @@ func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, pee
 		Addr:        f.addr,
 		SkipCheck:   f.skipCheck,
 		peersToSkip: peersToSkip,
+		HopCtr:      hopCtr,
 	}
 
 	foundSource := false

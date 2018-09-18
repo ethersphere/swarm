@@ -128,6 +128,7 @@ func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, err
 type RetrieveRequestMsg struct {
 	Addr      storage.Address
 	SkipCheck bool
+	HopCtr    int
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
@@ -148,7 +149,9 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	var cancel func()
 	// TODO: do something with this hardcoded timeout, maybe use TTL in the future
-	ctx, cancel = context.WithTimeout(context.WithValue(ctx, "peer", sp.ID().String()), network.RequestTimeout)
+	ctx = context.WithValue(ctx, "peer", sp.ID().String())
+	ctx = context.WithValue(ctx, "hopctr", req.HopCtr)
+	ctx, cancel = context.WithTimeout(ctx, network.RequestTimeout)
 
 	go func() {
 		select {
@@ -247,6 +250,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
+		HopCtr:    req.HopCtr,
 	}, Top)
 	if err != nil {
 		return nil, nil, err

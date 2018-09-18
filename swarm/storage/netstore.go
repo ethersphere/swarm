@@ -35,7 +35,7 @@ type (
 )
 
 type NetFetcher interface {
-	Request(ctx context.Context)
+	Request(ctx context.Context, hopCtr int)
 	Offer(ctx context.Context, source *discover.NodeID)
 }
 
@@ -262,13 +262,16 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 
 	// If there is a source in the context then it is an offer, otherwise a request
 	sourceIF := rctx.Value("source")
+
+	hopCtr, _ := rctx.Value("hopctr").(int)
+
 	if sourceIF != nil {
 		var source *discover.NodeID
 		id := discover.MustHexID(sourceIF.(string))
 		source = &id
 		f.netFetcher.Offer(rctx, source)
 	} else {
-		f.netFetcher.Request(rctx)
+		f.netFetcher.Request(rctx, hopCtr)
 	}
 
 	// wait until either the chunk is delivered or the context is done
