@@ -432,7 +432,7 @@ func TestNetStoreGetCallsRequest(t *testing.T) {
 	}
 
 	if fetcher.hopCtrs[0] != 5 {
-		t.Fatal("Expected NetFetcher.Request be called with hopCtr 5, got %v", fetcher.hopCtrs[0])
+		t.Fatalf("Expected NetFetcher.Request be called with hopCtr 5, got %v", fetcher.hopCtrs[0])
 	}
 }
 
