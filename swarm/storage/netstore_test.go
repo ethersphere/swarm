@@ -41,7 +41,7 @@ type mockNetFetcher struct {
 	offerCalled     bool
 	quit            <-chan struct{}
 	ctx             context.Context
-	hopCtrs         []int
+	hopCtrs         []uint64
 }
 
 func (m *mockNetFetcher) Offer(ctx context.Context, source *discover.NodeID) {
@@ -49,7 +49,7 @@ func (m *mockNetFetcher) Offer(ctx context.Context, source *discover.NodeID) {
 	m.sources = append(m.sources, source)
 }
 
-func (m *mockNetFetcher) Request(ctx context.Context, hopCtr int) {
+func (m *mockNetFetcher) Request(ctx context.Context, hopCtr uint64) {
 	m.requestCalled = true
 	var peers []Address
 	m.peers.Range(func(key interface{}, _ interface{}) bool {

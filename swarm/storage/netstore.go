@@ -35,7 +35,7 @@ type (
 )
 
 type NetFetcher interface {
-	Request(ctx context.Context, hopCtr int)
+	Request(ctx context.Context, hopCtr uint64)
 	Offer(ctx context.Context, source *discover.NodeID)
 }
 
@@ -263,7 +263,7 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 	// If there is a source in the context then it is an offer, otherwise a request
 	sourceIF := rctx.Value("source")
 
-	hopCtr, _ := rctx.Value("hopctr").(int)
+	hopCtr, _ := rctx.Value("hopctr").(uint64)
 
 	if sourceIF != nil {
 		var source *discover.NodeID
