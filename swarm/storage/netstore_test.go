@@ -415,7 +415,7 @@ func TestNetStoreGetCallsRequest(t *testing.T) {
 
 	chunk := GenerateRandomChunk(ch.DefaultSize)
 
-	ctx := context.WithValue(context.Background(), "hopctr", 5)
+	ctx := context.WithValue(context.Background(), "hopctr", uint64(5))
 	ctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 
