@@ -23,6 +23,7 @@ import (
 	"math"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/bmt"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -49,7 +50,6 @@ type FileHasher struct {
 	lnBranches float64
 }
 
-//func NewFileHasher(hasherFunc func() SectionWriter, branches int, secSize int) *FileHasher {
 func NewFileHasher(hasherFunc func() bmt.SectionWriter, branches int, secSize int) *FileHasher {
 	fh := &FileHasher{
 		hasherFunc: hasherFunc,
@@ -116,7 +116,7 @@ func (lev *level) getLevel(pl int) (par *level) {
 	if pl < len(lev.levels) {
 		return lev.levels[pl]
 	}
-	log.Warn("creating level", "l", pl)
+	log.Trace("creating level", "l", pl)
 	par = &level{
 		levelIndex: pl,
 		FileHasher: lev.FileHasher,
@@ -309,10 +309,15 @@ func (n *node) sum(length int64, potentialSpan int64) {
 	// we already checked on top if length is 0. If it is 0 here, it's on span threshold and a full chunk write
 	// otherwise we do not have a full chunk write, and need to make the underlying hash sum
 	if dataLength == 0 {
-		// get the parent node if it exists
-		parentNode := n.getParent(length)
-		parentNode.sum(length, potentialSpan)
-		return
+		// replace this with a channel somewhere
+		for {
+			parentNode := n.getParent(length)
+			if parentNode != nil {
+				parentNode.sum(length, potentialSpan)
+				return
+			}
+			time.Sleep(time.Microsecond)
+		}
 	}
 
 	var bmtLength int
