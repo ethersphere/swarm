@@ -284,6 +284,7 @@ func (n *node) done(nodeLength int, spanLength int, parentNode *node) {
 // length is global length
 func (n *node) sum(length int64, potentialSpan int64) {
 
+	log.Debug("sum", "n", fmt.Sprintf("%p", n))
 	if length == 0 {
 		n.result <- n.hasher.Sum(nil, 0, nil)
 		return
