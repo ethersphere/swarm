@@ -354,3 +354,18 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 		t.Errorf("manifest contains %v entries, expected %v", entriesCount, 3)
 	}
 }
+
+func TestDetectMimeTypeRequireFallbackToOctetStream(t *testing.T) {
+	for pathToFile, expect := range map[string]string{
+		"./path/to/file.pdf":    "application/pdf",
+		"./path/to/file.md":     "application/octet-stream",
+		"":                      "application/octet-stream",
+		"noextension":           "application/octet-stream",
+		"./path/to/noextension": "application/octet-stream",
+	} {
+		detected := detectMimeType(pathToFile)
+		if detected != expect {
+			t.Fatalf("Expected mime type %s, got %s", expect, detected)
+		}
+	}
+}

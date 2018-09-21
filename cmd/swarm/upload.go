@@ -31,6 +31,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
+	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -156,18 +157,26 @@ func homeDir() string {
 	return ""
 }
 
+// try detect by extension as it's cheaper
+// otherwise detect by file content
+// if it cannot determine a more specific one, it
+// returns "application/octet-stream".
 func detectMimeType(file string) string {
 	if ext := filepath.Ext(file); ext != "" {
-		return mime.TypeByExtension(ext)
+		if mimeType := mime.TypeByExtension(ext); mimeType != "" {
+			return mimeType
+		}
 	}
+
 	f, err := os.Open(file)
 	if err != nil {
-		return ""
+		log.Warn("detectMimeType: can't open file", "file", file, "err", err)
+		return "application/octet-stream"
 	}
 	defer f.Close()
 	buf := make([]byte, 512)
 	if n, _ := f.Read(buf); n > 0 {
 		return http.DetectContentType(buf)
 	}
-	return ""
+	return "application/octet-stream"
 }

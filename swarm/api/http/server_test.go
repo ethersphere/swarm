@@ -31,6 +31,7 @@ import (
 	"mime/multipart"
 	"net/http"
 	"os"
+	"path"
 	"strconv"
 	"strings"
 	"testing"
@@ -773,6 +774,17 @@ func testBzzTar(encrypted bool, t *testing.T) {
 	}
 	defer resp2.Body.Close()
 
+	if h := resp2.Header.Get("Content-Type"); h != "application/x-tar" {
+		t.Fatalf("Content-Type header expected: application/x-tar, got: %s", h)
+	}
+
+	// See header to suggest file name for Browsers
+	expectedFileName := string(swarmHash) + ".tar"
+	expectedContentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", expectedFileName)
+	if h := resp2.Header.Get("Content-Disposition"); h != expectedContentDisposition {
+		t.Fatalf("Content-Disposition header expected: %s, got: %s", expectedContentDisposition, h)
+	}
+
 	file, err := ioutil.TempFile("", "swarm-downloaded-tarball")
 	if err != nil {
 		t.Fatal(err)
@@ -1219,19 +1231,25 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 	hash := common.HexToHash(string(swarmHash))
 	resolver.hash = &hash
 	for _, v := range []struct {
-		addr               string
-		path               string
-		expectedStatusCode int
+		addr                string
+		path                string
+		expectedStatusCode  int
+		expectedContentType string
+		expectedFileName    string
 	}{
 		{
-			addr:               string(swarmHash),
-			path:               fileNames[0],
-			expectedStatusCode: http.StatusOK,
+			addr:                string(swarmHash),
+			path:                fileNames[0],
+			expectedStatusCode:  http.StatusOK,
+			expectedContentType: "text/plain",
+			expectedFileName:    path.Base(fileNames[0]),
 		},
 		{
-			addr:               "somebogusensname",
-			path:               fileNames[0],
-			expectedStatusCode: http.StatusOK,
+			addr:                "somebogusensname",
+			path:                fileNames[0],
+			expectedStatusCode:  http.StatusOK,
+			expectedContentType: "text/plain",
+			expectedFileName:    path.Base(fileNames[0]),
 		},
 	} {
 		req, err := http.NewRequest("GET", fmt.Sprintf(srv.URL+"/bzz:/%s/%s", v.addr, v.path), nil)
@@ -1246,6 +1264,17 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 		if serverResponse.StatusCode != v.expectedStatusCode {
 			t.Fatalf("expected %d, got %d", v.expectedStatusCode, serverResponse.StatusCode)
 		}
+
+		if h := serverResponse.Header.Get("Content-Type"); h != v.expectedContentType {
+			t.Fatalf("Content-Type header expected: %s, got %s", v.expectedContentType, h)
+		}
+
+		// See header to suggest file name for Browsers
+		expectedContentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", v.expectedFileName)
+		if h := serverResponse.Header.Get("Content-Disposition"); h != expectedContentDisposition {
+			t.Fatalf("Content-Disposition header expected: %s, got: %s", expectedContentDisposition, h)
+		}
+
 	}
 }
 

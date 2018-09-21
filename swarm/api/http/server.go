@@ -201,6 +201,7 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 		defer reader.Close()
 
 		w.Header().Set("Content-Type", "application/x-tar")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar\"", path.Base(r.URL.Path)))
 		w.WriteHeader(http.StatusOK)
 		io.Copy(w, reader)
 		return
@@ -862,6 +863,10 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
@@ -891,6 +896,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(r.URL.Path)))
 	http.ServeContent(w, r, "", time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
 }
 
