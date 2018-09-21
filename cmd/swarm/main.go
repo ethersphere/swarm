@@ -282,6 +282,18 @@ func init() {
 			Description:        "encrypts a reference and embeds it into a root manifest",
 			Subcommands: []cli.Command{
 				{
+					Action:             accessRemove,
+					CustomHelpTemplate: helpTemplate,
+					Name:               "remove",
+					Usage:              "TODO",
+					ArgsUsage:          "<ref>",
+					Description:        "TODO",
+					Flags: []cli.Flag{
+						SwarmAccessGrantKeysFlag,
+						utils.PasswordFileFlag,
+					},
+				},
+				{
 					CustomHelpTemplate: helpTemplate,
 					Name:               "new",
 					Usage:              "encrypts a reference and embeds it into a root manifest",

@@ -373,7 +373,7 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 	dataFilename := testutil.TempFileWithContent(t, data)
 	defer os.RemoveAll(dataFilename)
 
-	// upload the file with 'swarm up' and expect a hash
+	// upload the file with 'swarm up' and expect a rootAccessManifestHash
 	up := runSwarm(t,
 		"--bzzapi",
 		cluster.Nodes[0].URL,
@@ -470,8 +470,8 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 	publicKeyFromDataDir.ExpectExit()
 	pkComp := strings.Split(publicKeyString[0], "=")[1]
 
-	hash := matches[0]
-	m, _, err := client.DownloadManifest(hash)
+	rootAccessManifestHash := matches[0]
+	m, _, err := client.DownloadManifest(rootAccessManifestHash)
 	if err != nil {
 		t.Fatalf("unmarshal manifest: %v", err)
 	}
@@ -509,7 +509,7 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 	for i, node := range cluster.Nodes {
 		log.Debug("trying to fetch from node", "node index", i)
 
-		url := node.URL + "/" + "bzz:/" + hash
+		url := node.URL + "/" + "bzz:/" + rootAccessManifestHash
 		response, err := httpClient.Get(url)
 		if err != nil {
 			t.Fatal(err)
@@ -555,7 +555,82 @@ func testAccessACT(t *testing.T, bogusEntries int) {
 		if string(d) != data {
 			t.Errorf("expected decrypted data %q, got %q", data, string(d))
 		}
+
 	}
+
+	nodeToRevokeAccessFrom := (nodeToSkip + 1) % clusterSize
+	revokedNodePrivateKey := cluster.Nodes[nodeToRevokeAccessFrom].PrivateKey
+	revokedNodePublicKey := crypto.CompressPubkey(&revokedNodePrivateKey.PublicKey)
+	revokedPubkeyListFile := testutil.TempFileWithContent(t, hex.EncodeToString(revokedNodePublicKey))
+	defer os.RemoveAll(revokedPubkeyListFile)
+
+	remove := runSwarm(t,
+		"--bzzaccount",
+		publisherAccount.Address.String(),
+		"--password",
+		passwordFilename,
+		"--datadir",
+		publisherDir,
+		"--bzzapi",
+		cluster.Nodes[0].URL,
+		"access",
+		"remove",
+		"--grant-keys",
+		revokedPubkeyListFile,
+		"--password",
+		actPasswordFilename,
+		rootAccessManifestHash,
+	)
+
+	_, matches = remove.ExpectRegexp(`[a-f\d]{64}`)
+	remove.ExpectExit()
+
+	if len(matches) == 0 {
+		t.Fatalf("stdout not matched")
+	}
+
+	for i, node := range cluster.Nodes {
+		log.Debug("trying to fetch from node", "node index", i)
+
+		url := node.URL + "/" + "bzz:/" + rootAccessManifestHash
+		// try downloading using a password instead, using the unauthorized node
+		passwordUrl := strings.Replace(url, "http://", "http://:smth@", -1)
+		response, err := httpClient.Get(passwordUrl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if response.StatusCode != http.StatusUnauthorized {
+			t.Fatal("should be a 401")
+		}
+
+		response, err = httpClient.Get(url)
+		if err != nil {
+			t.Fatal(err)
+		}
+		log.Debug("got response from node", "response code", response.StatusCode)
+
+		if i == nodeToSkip || i == nodeToRevokeAccessFrom {
+			log.Debug("reached node to skip", "status code", response.StatusCode)
+
+			if response.StatusCode != http.StatusUnauthorized {
+				t.Fatalf("should be a 401")
+			}
+
+			continue
+		}
+
+		if response.StatusCode != http.StatusOK {
+			t.Fatal("should be a 200")
+		}
+		d, err := ioutil.ReadAll(response.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(d) != data {
+			t.Errorf("expected decrypted data %q, got %q", data, string(d))
+		}
+	}
+
 }
 
 // TestKeypairSanity is a sanity test for the crypto scheme for ACT. it asserts the correct shared secret according to

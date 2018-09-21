@@ -102,6 +102,10 @@ func accessNewPK(ctx *cli.Context) {
 	}
 }
 
+func accessRemove(ctx *cli.Context) {
+	fmt.Println(strings.Repeat("2", 64))
+}
+
 func accessNewACT(ctx *cli.Context) {
 	args := ctx.Args()
 	if len(args) != 1 {
