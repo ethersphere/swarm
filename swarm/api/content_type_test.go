@@ -1,40 +1,43 @@
 package api
 
-import "testing"
+import (
+	"os"
+	"testing"
+)
 
-func TestDetectContentType(t *testing.T) {
-	for _, v := range []struct {
-		path                string
-		expectedContentType string
-	}{
-		{
-			path:                "./path/to/file.pdf",
-			expectedContentType: "application/pdf",
-		},
-		{
-			path:                "./path/to/file.md",
-			expectedContentType: "application/octet-stream",
-		},
-		{
-			path:                "",
-			expectedContentType: "application/octet-stream",
-		},
-		{
-			path:                "noextension",
-			expectedContentType: "application/octet-stream",
-		},
-		{
-			path:                "./path/to/noextension",
-			expectedContentType: "application/octet-stream",
-		},
-		{
-			path:                "./1.css",
-			expectedContentType: "text/css; charset=utf-8",
-		},
-	} {
-		detected := DetectContentType(v.path)
-		if detected != v.expectedContentType {
-			t.Fatalf("Expected mime type %s, got %s", v.expectedContentType, detected)
-		}
+func TestDetectContentTypeOfNotExistFile(t *testing.T) {
+	// internally use http.DetectContentType, so here are test cases only about fallback to file extension check
+	testDetectCTNotExistFile(t, "./path/to/not/exist/file.pdf", "application/pdf")
+	testDetectCTNotExistFile(t, "./path/to/not/exist/file.css", "text/css; charset=utf-8")
+	testDetectCTNotExistFile(t, "./path/to/not/exist/.css", "text/css; charset=utf-8")
+	testDetectCTNotExistFile(t, "./path/to/not/exist/file.md", "application/octet-stream")
+	testDetectCTNotExistFile(t, "./path/to/not/exist/file.strangeext", "application/octet-stream")
+	testDetectCTNotExistFile(t, "./path/to/not/exist/.gitignore", "application/octet-stream")
+	testDetectCTNotExistFile(t, "./path/to/not/exist/file-no-extension", "application/octet-stream")
+}
+
+func testDetectCTNotExistFile(t *testing.T, path, expectedContentType string) {
+	detected := DetectContentType(path)
+	if detected != expectedContentType {
+		t.Fatalf("Expected mime type %s, got %s", expectedContentType, detected)
+	}
+}
+
+func TestDetectContentTypeOfExistFile(t *testing.T) {
+	// internally use http.DetectContentType, so here are test cases only about fallback to file extension check
+	testDetectCTCreateFile(t, "file.css", "Lorem Ipsum", "text/css; charset=utf-8")
+}
+
+func testDetectCTCreateFile(t *testing.T, fileName, content, expectedContentType string) {
+	path := os.TempDir() + fileName
+	_, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(path)
+
+	detected := DetectContentType(path)
+	if detected != expectedContentType {
+		t.Fatalf("Expected mime type %s, got %s", expectedContentType, detected)
 	}
 }

@@ -1,34 +1,41 @@
 package api
 
 import (
+	"github.com/ethereum/go-ethereum/log"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
-// detect first by file extension
-// otherwise detect by file content
-// if it cannot determine a more specific one, it
-// returns "application/octet-stream".
+// detect content type by file content
+// otherwise by file extension
+// returns "application/octet-stream" in worst case
 func DetectContentType(file string) string {
-	if ext := filepath.Ext(file); ext != "" {
-		if mimeType := mime.TypeByExtension(ext); mimeType != "" {
-			return mimeType
-		}
-	}
+	var contentType = "application/octet-stream" // default value
 
 	f, err := os.Open(file)
 	if err != nil {
 		log.Warn("detectMimeType: can't open file", "file", file, "err", err)
-		return "application/octet-stream"
 	}
 	defer f.Close()
 	buf := make([]byte, 512)
 	if n, _ := f.Read(buf); n > 0 {
-		return http.DetectContentType(buf)
+		contentType = http.DetectContentType(buf)
 	}
-	return "application/octet-stream"
+
+	// if found specific contentType - return it, else check file extension
+	if contentType != "" && contentType != "application/octet-stream" {
+		return contentType
+	}
+
+	if ext := filepath.Ext(file); ext != "" {
+		contentType = mime.TypeByExtension(ext)
+	}
+
+	if contentType == "" {
+		return "application/octet-stream"
+	}
+
+	return contentType
 }
