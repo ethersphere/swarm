@@ -21,7 +21,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"path"
 	"path/filepath"
@@ -99,50 +98,45 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 
 	cnt := len(list)
 	errors := make([]error, cnt)
-	done := make(chan bool, maxParallelFiles)
-	dcnt := 0
 	awg := &sync.WaitGroup{}
 
 	for i, entry := range list {
-		if i >= dcnt+maxParallelFiles {
-			<-done
-			dcnt++
-		}
 		awg.Add(1)
-		go func(i int, entry *manifestTrieEntry, done chan bool) {
+		go func(i int, entry *manifestTrieEntry) {
+			defer awg.Done()
+
 			f, err := os.Open(entry.Path)
-			if err == nil {
-				stat, _ := f.Stat()
-				var hash storage.Address
-				var wait func(context.Context) error
-				ctx := context.TODO()
-				hash, wait, err = fs.api.fileStore.Store(ctx, f, stat.Size(), toEncrypt)
-				if hash != nil {
-					list[i].Hash = hash.Hex()
-				}
-				err = wait(ctx)
-				awg.Done()
-				if err == nil {
-					first512 := make([]byte, 512)
-					fread, _ := f.ReadAt(first512, 0)
-					if fread > 0 {
-						mimeType := http.DetectContentType(first512[:fread])
-						if filepath.Ext(entry.Path) == ".css" {
-							mimeType = "text/css"
-						}
-						list[i].ContentType = mimeType
-					}
-				}
-				f.Close()
+			if err != nil {
+				errors[i] = err
+				return
 			}
-			errors[i] = err
-			done <- true
-		}(i, entry, done)
+			defer f.Close()
+
+			stat, err := f.Stat()
+			if err != nil {
+				errors[i] = err
+				return
+			}
+
+			var hash storage.Address
+			var wait func(context.Context) error
+			ctx := context.TODO()
+			hash, wait, err = fs.api.fileStore.Store(ctx, f, stat.Size(), toEncrypt)
+			if hash != nil {
+				list[i].Hash = hash.Hex()
+			}
+
+			list[i].ContentType = DetectContentType(entry.Path)
+
+			if err := wait(ctx); err != nil {
+				errors[i] = err
+				return
+			}
+
+		}(i, entry)
 	}
-	for dcnt < cnt {
-		<-done
-		dcnt++
-	}
+
+	awg.Wait()
 
 	trie := &manifestTrie{
 		fileStore: fs.api.fileStore,
@@ -168,7 +162,6 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 	if err2 == nil {
 		hs = trie.ref.Hex()
 	}
-	awg.Wait()
 	return hs, err2
 }
 

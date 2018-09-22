@@ -32,7 +32,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
-	colorable "github.com/mattn/go-colorable"
+	"github.com/mattn/go-colorable"
 )
 
 var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
@@ -352,20 +352,5 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 
 	if entriesCount != 3 {
 		t.Errorf("manifest contains %v entries, expected %v", entriesCount, 3)
-	}
-}
-
-func TestDetectMimeTypeRequireFallbackToOctetStream(t *testing.T) {
-	for pathToFile, expect := range map[string]string{
-		"./path/to/file.pdf":    "application/pdf",
-		"./path/to/file.md":     "application/octet-stream",
-		"":                      "application/octet-stream",
-		"noextension":           "application/octet-stream",
-		"./path/to/noextension": "application/octet-stream",
-	} {
-		detected := detectMimeType(pathToFile)
-		if detected != expect {
-			t.Fatalf("Expected mime type %s, got %s", expect, detected)
-		}
 	}
 }

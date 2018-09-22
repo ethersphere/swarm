@@ -22,8 +22,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"mime"
-	"net/http"
 	"os"
 	"os/user"
 	"path"
@@ -31,7 +29,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -120,7 +118,7 @@ func upload(ctx *cli.Context) {
 			}
 			defer f.Close()
 			if mimeType == "" {
-				mimeType = detectMimeType(file)
+				mimeType = api.DetectContentType(file)
 			}
 			f.ContentType = mimeType
 			return client.Upload(f, "", toEncrypt)
@@ -155,28 +153,4 @@ func homeDir() string {
 		return usr.HomeDir
 	}
 	return ""
-}
-
-// try detect by extension as it's cheaper
-// otherwise detect by file content
-// if it cannot determine a more specific one, it
-// returns "application/octet-stream".
-func detectMimeType(file string) string {
-	if ext := filepath.Ext(file); ext != "" {
-		if mimeType := mime.TypeByExtension(ext); mimeType != "" {
-			return mimeType
-		}
-	}
-
-	f, err := os.Open(file)
-	if err != nil {
-		log.Warn("detectMimeType: can't open file", "file", file, "err", err)
-		return "application/octet-stream"
-	}
-	defer f.Close()
-	buf := make([]byte, 512)
-	if n, _ := f.Read(buf); n > 0 {
-		return http.DetectContentType(buf)
-	}
-	return "application/octet-stream"
 }
