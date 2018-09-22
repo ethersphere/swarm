@@ -252,9 +252,9 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if _, err := api.ValidateContentTypeHeader(r); err != nil {
+	if r.Header.Get("Content-Length") == "" {
 		postRawFail.Inc(1)
-		RespondError(w, r, err.Error(), http.StatusBadRequest)
+		RespondError(w, r, "missing Content-Length header in request", http.StatusBadRequest)
 		return
 	}
 
@@ -282,7 +282,14 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
 
-	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	contentType, err := api.ValidateContentTypeHeader(r)
+	if err != nil {
+		postFilesFail.Inc(1)
+		RespondError(w, r, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	contentType, params, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		postFilesFail.Inc(1)
 		RespondError(w, r, err.Error(), http.StatusBadRequest)

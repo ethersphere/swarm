@@ -1120,7 +1120,7 @@ func TestModify(t *testing.T) {
 			res, body := httpDo(testCase.method, testCase.uri, reqBody, testCase.headers, testCase.verbose, t)
 
 			if res.StatusCode != testCase.expectedStatusCode {
-				t.Fatalf("expected status code %d but got %d", testCase.expectedStatusCode, res.StatusCode)
+				t.Fatalf("expected status code %d but got %d, %s", testCase.expectedStatusCode, res.StatusCode, body)
 			}
 			if testCase.assertResponseBody != "" && !strings.Contains(body, testCase.assertResponseBody) {
 				t.Log(body)
