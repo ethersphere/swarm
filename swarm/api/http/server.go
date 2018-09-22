@@ -252,9 +252,9 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if r.Header.Get("Content-Length") == "" {
+	if _, err := api.ValidateContentTypeHeader(r); err != nil {
 		postRawFail.Inc(1)
-		RespondError(w, r, "missing Content-Length header in request", http.StatusBadRequest)
+		RespondError(w, r, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -399,10 +399,15 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 			name = part.FormName()
 		}
 		uri := GetURI(r.Context())
-		path := path.Join(uri.Path, name)
+
+		contentType, err := api.ValidateContentTypeHeader(r)
+		if err != nil {
+			return err
+		}
+
 		entry := &api.ManifestEntry{
-			Path:        path,
-			ContentType: part.Header.Get("Content-Type"),
+			Path:        path.Join(uri.Path, name),
+			ContentType: contentType,
 			Size:        size,
 			ModTime:     time.Now(),
 		}
@@ -418,9 +423,15 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 func (s *Server) handleDirectUpload(r *http.Request, mw *api.ManifestWriter) error {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.direct.upload", "ruid", ruid)
+
+	contentType, err := api.ValidateContentTypeHeader(r)
+	if err != nil {
+		return err
+	}
+
 	key, err := mw.AddEntry(r.Context(), r.Body, &api.ManifestEntry{
 		Path:        GetURI(r.Context()).Path,
-		ContentType: r.Header.Get("Content-Type"),
+		ContentType: contentType,
 		Mode:        0644,
 		Size:        r.ContentLength,
 		ModTime:     time.Now(),

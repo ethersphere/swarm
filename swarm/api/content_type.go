@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/log"
 	"mime"
 	"net/http"
@@ -38,4 +39,17 @@ func DetectContentType(file string) string {
 	}
 
 	return contentType
+}
+
+func ValidateContentTypeHeader(r *http.Request) (string, error) {
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "" {
+		return "", fmt.Errorf("Content-Type header is required, but was not sent or empty")
+	}
+
+	if _, _, err := mime.ParseMediaType(contentType); err != nil {
+		return "", fmt.Errorf("Content-Type header is invalid: %s", err)
+	}
+
+	return contentType, nil
 }
