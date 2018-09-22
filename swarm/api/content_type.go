@@ -2,11 +2,12 @@ package api
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/log"
 	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
+
+	"github.com/ethereum/go-ethereum/log"
 )
 
 // detect content type by file content
@@ -20,6 +21,7 @@ func DetectContentType(file string) string {
 		log.Warn("detectMimeType: can't open file", "file", file, "err", err)
 	}
 	defer f.Close()
+
 	buf := make([]byte, 512)
 	if n, _ := f.Read(buf); n > 0 {
 		contentType = http.DetectContentType(buf)
