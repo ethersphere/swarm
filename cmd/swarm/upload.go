@@ -28,9 +28,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/ethereum/go-ethereum/cmd/utils"
-	"github.com/ethereum/go-ethereum/swarm/api"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+
+	"github.com/ethereum/go-ethereum/cmd/utils"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -117,10 +117,9 @@ func upload(ctx *cli.Context) {
 				return "", fmt.Errorf("error opening file: %s", err)
 			}
 			defer f.Close()
-			if mimeType == "" {
-				mimeType = api.DetectContentType(file)
+			if mimeType != "" {
+				f.ContentType = mimeType
 			}
-			f.ContentType = mimeType
 			return client.Upload(f, "", toEncrypt)
 		}
 	}

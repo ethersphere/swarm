@@ -433,3 +433,51 @@ func TestDecryptOrigin(t *testing.T) {
 		}
 	}
 }
+
+func TestDetectContentType(t *testing.T) {
+	// internally use http.DetectContentType, so here are test cases only about fallback to file extension check
+	testDetectContentType(t, "file.css", "", "text/css; charset=utf-8")
+	testDetectContentType(t, "css_with_html_inside.css", "<!doctype html><html><head></head><body></body></html>", "text/html; charset=utf-8")
+	testDetectContentType(t, "file.pdf", "", "application/pdf")
+	testDetectContentType(t, "file.md", "", MimeOctetStream)
+	testDetectContentType(t, "file-with-unknown-content.strangeext", "", MimeOctetStream)
+	testDetectContentType(t, "file-with-text.strangeext", "Lorem Ipsum", "text/plain; charset=utf-8")
+	testDetectContentType(t, "file-no-extension", "Lorem Ipsum", "text/plain; charset=utf-8")
+	testDetectContentType(t, "file-no-extension-no-content", "", MimeOctetStream)
+}
+
+func testDetectContentType(t *testing.T, fileName, content, expectedContentType string) {
+	f, err := tempFileWithContent(fileName, content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(f.Name())
+
+	detected, err := DetectContentType(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if detected != expectedContentType {
+		t.Fatalf("File: %s, Expected mime type %s, got %s", fileName, expectedContentType, detected)
+	}
+}
+
+func tempFileWithContent(fileName string, content string) (*os.File, error) {
+	f, err := ioutil.TempFile("", "*"+fileName)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := f.Write([]byte(content)); err != nil {
+		os.Remove(f.Name())
+		return nil, err
+	}
+
+	if err := f.Sync(); err != nil {
+		os.Remove(f.Name())
+		return nil, err
+	}
+
+	return f, nil
+}

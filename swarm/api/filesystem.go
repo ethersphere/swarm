@@ -98,12 +98,21 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 
 	cnt := len(list)
 	errors := make([]error, cnt)
+	done := make(chan bool, maxParallelFiles)
+	dcnt := 0
 	awg := &sync.WaitGroup{}
 
 	for i, entry := range list {
+		if i >= dcnt+maxParallelFiles {
+			<-done
+			dcnt++
+		}
 		awg.Add(1)
-		go func(i int, entry *manifestTrieEntry) {
-			defer awg.Done()
+		go func(i int, entry *manifestTrieEntry, done chan bool) {
+			defer func() {
+				awg.Done()
+				done <- true
+			}()
 
 			f, err := os.Open(entry.Path)
 			if err != nil {
@@ -126,14 +135,22 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 				list[i].Hash = hash.Hex()
 			}
 
-			list[i].ContentType = DetectContentType(entry.Path)
+			list[i].ContentType, err = DetectContentType(f)
+			if err != nil {
+				errors[i] = err
+				return
+			}
 
 			if err := wait(ctx); err != nil {
 				errors[i] = err
 				return
 			}
 
-		}(i, entry)
+		}(i, entry, done)
+	}
+	for dcnt < cnt {
+		<-done
+		dcnt++
 	}
 
 	awg.Wait()

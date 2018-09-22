@@ -201,7 +201,13 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 		defer reader.Close()
 
 		w.Header().Set("Content-Type", "application/x-tar")
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar\"", path.Base(r.URL.Path)))
+
+		fileName := uri.Addr
+		if uri.Path != "" {
+			path.Base(uri.Path)
+		}
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar\"", fileName))
+
 		w.WriteHeader(http.StatusOK)
 		io.Copy(w, reader)
 		return
@@ -282,7 +288,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
 
-	contentType, err := api.ValidateContentTypeHeader(r)
+	contentType, err := ValidateContentTypeHeader(r)
 	if err != nil {
 		postFilesFail.Inc(1)
 		RespondError(w, r, err.Error(), http.StatusBadRequest)
@@ -407,7 +413,7 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 		}
 		uri := GetURI(r.Context())
 
-		contentType, err := api.ValidateContentTypeHeader(r)
+		contentType, err := ValidateContentTypeHeader(r)
 		if err != nil {
 			return err
 		}
@@ -431,7 +437,7 @@ func (s *Server) handleDirectUpload(r *http.Request, mw *api.ManifestWriter) err
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.direct.upload", "ruid", ruid)
 
-	contentType, err := api.ValidateContentTypeHeader(r)
+	contentType, err := ValidateContentTypeHeader(r)
 	if err != nil {
 		return err
 	}
@@ -675,7 +681,7 @@ func (s *Server) HandleGetResource(w http.ResponseWriter, r *http.Request) {
 
 	// All ok, serve the retrieved update
 	log.Debug("Found update", "name", name, "ruid", ruid)
-	w.Header().Set("Content-Type", "application/octet-stream")
+	w.Header().Set("Content-Type", api.MimeOctetStream)
 	http.ServeContent(w, r, "", now, bytes.NewReader(data))
 }
 
@@ -749,7 +755,7 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 	case uri.Raw():
 		// allow the request to overwrite the content type using a query
 		// parameter
-		contentType := "application/octet-stream"
+		contentType := api.MimeOctetStream
 		if typ := r.URL.Query().Get("content_type"); typ != "" {
 			contentType = typ
 		}
@@ -882,7 +888,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if contentType == "" {
-		contentType = "application/octet-stream"
+		contentType = api.MimeOctetStream
 	}
 
 	//the request results in ambiguous files
@@ -965,4 +971,17 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 func isDecryptError(err error) bool {
 	return strings.Contains(err.Error(), api.ErrDecrypt.Error())
+}
+
+func ValidateContentTypeHeader(r *http.Request) (string, error) {
+	contentType := r.Header.Get("Content-Type")
+	if contentType == "" {
+		return "", fmt.Errorf("Content-Type header is required, but was not sent or empty")
+	}
+
+	if _, _, err := mime.ParseMediaType(contentType); err != nil {
+		return "", fmt.Errorf("Content-Type header is invalid: %s", err)
+	}
+
+	return contentType, nil
 }

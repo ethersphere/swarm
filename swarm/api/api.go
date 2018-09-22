@@ -26,6 +26,7 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"os"
 	"path"
 	"strings"
 
@@ -43,7 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -471,7 +472,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 
 			} else {
 				// data is returned verbatim since it's not a multihash
-				return rsrc, "application/octet-stream", http.StatusOK, nil, nil
+				return rsrc, "", http.StatusOK, nil, nil
 			}
 		}
 
@@ -1018,4 +1019,41 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 	}
 
 	return storage.Address(common.FromHex(entry.Hash)), nil
+}
+
+// MimeOctetStream default value of http Content-Type header
+const MimeOctetStream = "application/octet-stream"
+
+// DetectContentType by file content, or fallback to file extension
+func DetectContentType(f *os.File) (string, error) {
+	var contentType = MimeOctetStream
+
+	// save/rollback to get content probe from begin of file
+	currentPosition, err := f.Seek(0, 1)
+	if err != nil {
+		return MimeOctetStream, err
+	}
+	defer f.Seek(currentPosition, 0)
+
+	if _, err := f.Seek(0, 0); err != nil {
+		return MimeOctetStream, err
+	}
+
+	buf := make([]byte, 512)
+	if n, _ := f.Read(buf); n > 0 {
+		contentType = http.DetectContentType(buf[:n])
+	}
+	if contentType != "" && contentType != MimeOctetStream {
+		return contentType, nil
+	}
+
+	if ext := filepath.Ext(f.Name()); ext != "" {
+		contentType = mime.TypeByExtension(ext)
+	}
+
+	if contentType == "" {
+		return MimeOctetStream, nil
+	}
+
+	return contentType, nil
 }
