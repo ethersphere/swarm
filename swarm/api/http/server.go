@@ -203,8 +203,8 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/x-tar")
 
 		fileName := uri.Addr
-		if uri.Path != "" {
-			path.Base(uri.Path)
+		if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
+			fileName = found
 		}
 		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar\"", fileName))
 
@@ -887,10 +887,6 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if contentType == "" {
-		contentType = api.MimeOctetStream
-	}
-
 	//the request results in ambiguous files
 	//e.g. /read with readme.md and readinglist.txt available in manifest
 	if status == http.StatusMultipleChoices {
@@ -919,9 +915,17 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Type", contentType)
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", path.Base(r.URL.Path)))
-	http.ServeContent(w, r, "", time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+	if contentType != "" {
+		w.Header().Set("Content-Type", contentType)
+	}
+
+	fileName := uri.Addr
+	if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
+		fileName = found
+	}
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
+
+	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
 }
 
 // The size of buffer used for bufio.Reader on LazyChunkReader passed to

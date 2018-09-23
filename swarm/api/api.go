@@ -29,7 +29,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"sync"
 
 	"bytes"
 	"mime"
@@ -1025,8 +1024,6 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 // MimeOctetStream default value of http Content-Type header
 const MimeOctetStream = "application/octet-stream"
 
-var once sync.Once // guards initMime
-
 // builtinTypesLower stores copy of https://github.com/nginx/nginx/blob/master/conf/mime.types
 // not include mime.builtinTypesLower
 var builtinTypesLower = map[string]string{
@@ -1137,7 +1134,7 @@ var builtinTypesLower = map[string]string{
 	".avi":  "video/x-msvideo",
 }
 
-func initMime() {
+func init() {
 	for ext, t := range builtinTypesLower {
 		mime.AddExtensionType(ext, t)
 	}
@@ -1145,8 +1142,6 @@ func initMime() {
 
 // DetectContentType by file content, or fallback to file extension
 func DetectContentType(f *os.File) (string, error) {
-	once.Do(initMime)
-
 	ctype := mime.TypeByExtension(filepath.Ext(f.Name()))
 	if ctype != "" {
 		return ctype, nil

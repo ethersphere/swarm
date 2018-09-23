@@ -96,23 +96,14 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 		list = append(list, entry)
 	}
 
-	cnt := len(list)
-	errors := make([]error, cnt)
-	done := make(chan bool, maxParallelFiles)
-	dcnt := 0
-	awg := &sync.WaitGroup{}
+	errors := make([]error, len(list))
+	sem := make(chan bool, maxParallelFiles)
+	defer close(sem)
 
 	for i, entry := range list {
-		if i >= dcnt+maxParallelFiles {
-			<-done
-			dcnt++
-		}
-		awg.Add(1)
-		go func(i int, entry *manifestTrieEntry, done chan bool) {
-			defer func() {
-				awg.Done()
-				done <- true
-			}()
+		sem <- true
+		go func(i int, entry *manifestTrieEntry) {
+			defer func() { <-sem }()
 
 			f, err := os.Open(entry.Path)
 			if err != nil {
@@ -134,6 +125,10 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 			if hash != nil {
 				list[i].Hash = hash.Hex()
 			}
+			if err := wait(ctx); err != nil {
+				errors[i] = err
+				return
+			}
 
 			list[i].ContentType, err = DetectContentType(f)
 			if err != nil {
@@ -141,19 +136,11 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 				return
 			}
 
-			if err := wait(ctx); err != nil {
-				errors[i] = err
-				return
-			}
-
-		}(i, entry, done)
+		}(i, entry)
 	}
-	for dcnt < cnt {
-		<-done
-		dcnt++
+	for i := 0; i < cap(sem); i++ {
+		sem <- true
 	}
-
-	awg.Wait()
 
 	trie := &manifestTrie{
 		fileStore: fs.api.fileStore,

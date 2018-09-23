@@ -444,8 +444,6 @@ func TestDetectContentType(t *testing.T) {
 	testDetectContentType(t, "file-with-text.strangeext", "Lorem Ipsum", "text/plain; charset=utf-8")
 	testDetectContentType(t, "file-no-extension", "Lorem Ipsum", "text/plain; charset=utf-8")
 	testDetectContentType(t, "file-no-extension-no-content", "", "text/plain; charset=utf-8")
-
-	// TODO: research, define behavior when content doesn't mach file extension. Now just rely on extension.
 	testDetectContentType(t, "css_with_html_inside.css", "<!doctype html><html><head></head><body></body></html>", "text/css; charset=utf-8")
 }
 
