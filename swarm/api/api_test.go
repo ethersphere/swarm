@@ -436,14 +436,17 @@ func TestDecryptOrigin(t *testing.T) {
 
 func TestDetectContentType(t *testing.T) {
 	// internally use http.DetectContentType, so here are test cases only about fallback to file extension check
-	testDetectContentType(t, "file.css", "", "text/css; charset=utf-8")
-	testDetectContentType(t, "css_with_html_inside.css", "<!doctype html><html><head></head><body></body></html>", "text/html; charset=utf-8")
+	testDetectContentType(t, "file.css", "body {background-color: orange}", "text/css; charset=utf-8")
+	testDetectContentType(t, "file-empty.css", "", "text/css; charset=utf-8")
 	testDetectContentType(t, "file.pdf", "", "application/pdf")
-	testDetectContentType(t, "file.md", "", MimeOctetStream)
-	testDetectContentType(t, "file-with-unknown-content.strangeext", "", MimeOctetStream)
+	testDetectContentType(t, "file.md", "", "text/plain; charset=utf-8")
+	testDetectContentType(t, "file-with-unknown-content.strangeext", "", "text/plain; charset=utf-8")
 	testDetectContentType(t, "file-with-text.strangeext", "Lorem Ipsum", "text/plain; charset=utf-8")
 	testDetectContentType(t, "file-no-extension", "Lorem Ipsum", "text/plain; charset=utf-8")
-	testDetectContentType(t, "file-no-extension-no-content", "", MimeOctetStream)
+	testDetectContentType(t, "file-no-extension-no-content", "", "text/plain; charset=utf-8")
+
+	// TODO: research, define behavior when content doesn't mach file extension. Now just rely on extension.
+	testDetectContentType(t, "css_with_html_inside.css", "<!doctype html><html><head></head><body></body></html>", "text/css; charset=utf-8")
 }
 
 func testDetectContentType(t *testing.T, fileName, content, expectedContentType string) {

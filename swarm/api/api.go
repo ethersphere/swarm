@@ -29,6 +29,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"sync"
 
 	"bytes"
 	"mime"
@@ -1024,36 +1025,148 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 // MimeOctetStream default value of http Content-Type header
 const MimeOctetStream = "application/octet-stream"
 
+var once sync.Once // guards initMime
+
+// builtinTypesLower stores copy of https://github.com/nginx/nginx/blob/master/conf/mime.types
+// not include mime.builtinTypesLower
+var builtinTypesLower = map[string]string{
+	".shtml": "text/html; charset=utf-8",
+	".jpeg":  "image/jpeg",
+	".atom":  "application/atom+xml",
+	".rss":   "application/rss+xml",
+	".mml":   "text/mathml; charset=utf-8",
+	".txt":   "text/plain; charset=utf-8",
+	".jad":   "text/vnd.sun.j2me.app-descriptor; charset=utf-8",
+	".wml":   "text/vnd.wap.wml; charset=utf-8",
+	".htc":   "text/x-component; charset=utf-8",
+
+	".svgz": "image/svg+xml",
+	".tif":  "image/tiff",
+	".tiff": "image/tiff",
+	".wbmp": "image/vnd.wap.wbmp",
+	".webp": "image/webp",
+	".ico":  "image/x-icon",
+	".jng":  "image/x-jng",
+	".bmp":  "image/x-ms-bmp",
+
+	".woff":  "font/woff",
+	".woff2": "font/woff2",
+
+	".jar":  "application/java-archive",
+	".war":  "application/java-archive",
+	".ear":  "application/java-archive",
+	".json": "application/json",
+	".hqx":  "application/mac-binhex40",
+	".doc":  "application/msword",
+	".ps":   "application/postscript",
+	".eps":  "application/postscript",
+	".ai":   "application/postscript",
+	".rtf":  "application/rtf",
+	".m3u8": "application/vnd.apple.mpegurl",
+	".kml":  "application/vnd.google-earth.kml+xml",
+	".kmz":  "application/vnd.google-earth.kmz",
+	".xls":  "application/vnd.ms-excel",
+	".eot":  "application/vnd.ms-fontobject",
+	".ppt":  "application/vnd.ms-powerpoint",
+	".odg":  "application/vnd.oasis.opendocument.graphics",
+	".odp":  "application/vnd.oasis.opendocument.presentation",
+	".ods":  "application/vnd.oasis.opendocument.spreadsheet",
+	".odt":  "application/vnd.oasis.opendocument.text",
+	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+
+	".wmlc":    "application/vnd.wap.wmlc",
+	".7z":      "application/x-7z-compressed",
+	".jardiff": "application/x-java-archive-diff",
+	".jnlp":    "application/x-java-jnlp-file",
+	".run":     "application/x-makeself",
+	".pl":      "application/x-perl",
+	".pm":      "application/x-perl",
+	".prc":     "application/x-pilot",
+	".pdb":     "application/x-pilot",
+	".rar":     "application/x-rar-compressed",
+	".rpm":     "application/x-redhat-package-manager",
+	".sea":     "application/x-sea",
+	".swf":     "application/x-shockwave-flash",
+	".sit":     "application/x-stuffit",
+	".tcl":     "application/x-tcl",
+	".tk":      "application/x-tcl",
+	".der":     "application/x-x509-ca-cert",
+	".pem":     "application/x-x509-ca-cert",
+	".crt":     "application/x-x509-ca-cert",
+	".xpi":     "application/x-xpinstall",
+	".xhtml":   "application/xhtml+xml",
+	".xspf":    "application/xspf+xml",
+	".zip":     "application/zip",
+
+	".bin": "application/octet-stream",
+	".exe": "application/octet-stream",
+	".dll": "application/octet-stream",
+	".deb": "application/octet-stream",
+	".dmg": "application/octet-stream",
+	".iso": "application/octet-stream",
+	".img": "application/octet-stream",
+	".msi": "application/octet-stream",
+	".msp": "application/octet-stream",
+	".msm": "application/octet-stream",
+
+	".mid":  "audio/midi",
+	".midi": "audio/midi",
+	".kar":  "audio/midi",
+	".mp3":  "audio/mpeg",
+	".ogg":  "audio/ogg",
+	".m4a":  "audio/x-m4a",
+	".ra":   "audio/x-realaudio",
+
+	".3gpp": "video/3gpp",
+	".3gp":  "video/3gpp",
+
+	".ts":   "video/mp2t",
+	".mp4":  "video/mp4",
+	".mpeg": "video/mpeg",
+	".mpg":  "video/mpeg",
+	".mov":  "video/quicktime",
+	".webm": "video/webm",
+	".flv":  "video/x-flv",
+	".m4v":  "video/x-m4v",
+	".mng":  "video/x-mng",
+	".asx":  "video/x-ms-asf",
+	".asf":  "video/x-ms-asf",
+	".wmv":  "video/x-ms-wmv",
+	".avi":  "video/x-msvideo",
+}
+
+func initMime() {
+	for ext, t := range builtinTypesLower {
+		mime.AddExtensionType(ext, t)
+	}
+}
+
 // DetectContentType by file content, or fallback to file extension
 func DetectContentType(f *os.File) (string, error) {
-	var contentType = MimeOctetStream
+	once.Do(initMime)
+
+	ctype := mime.TypeByExtension(filepath.Ext(f.Name()))
+	if ctype != "" {
+		return ctype, nil
+	}
 
 	// save/rollback to get content probe from begin of file
-	currentPosition, err := f.Seek(0, 1)
+	currentPosition, err := f.Seek(0, io.SeekCurrent)
 	if err != nil {
-		return MimeOctetStream, err
-	}
-	defer f.Seek(currentPosition, 0)
-
-	if _, err := f.Seek(0, 0); err != nil {
-		return MimeOctetStream, err
+		return MimeOctetStream, fmt.Errorf("seeker can't seek, %s", err)
 	}
 
-	buf := make([]byte, 512)
-	if n, _ := f.Read(buf); n > 0 {
-		contentType = http.DetectContentType(buf[:n])
-	}
-	if contentType != "" && contentType != MimeOctetStream {
-		return contentType, nil
+	// read a chunk to decide between utf-8 text and binary
+	var buf [512]byte
+	n, _ := f.Read(buf[:])
+	ctype = http.DetectContentType(buf[:n])
+
+	_, err = f.Seek(currentPosition, io.SeekStart) // rewind to output whole file
+	if err != nil {
+		return MimeOctetStream, fmt.Errorf("seeker can't seek, %s", err)
 	}
 
-	if ext := filepath.Ext(f.Name()); ext != "" {
-		contentType = mime.TypeByExtension(ext)
-	}
-
-	if contentType == "" {
-		return MimeOctetStream, nil
-	}
-
-	return contentType, nil
+	return ctype, nil
 }
