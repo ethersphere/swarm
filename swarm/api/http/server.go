@@ -755,11 +755,9 @@ func (s *Server) HandleGet(w http.ResponseWriter, r *http.Request) {
 	case uri.Raw():
 		// allow the request to overwrite the content type using a query
 		// parameter
-		contentType := api.MimeOctetStream
 		if typ := r.URL.Query().Get("content_type"); typ != "" {
-			contentType = typ
+			w.Header().Set("Content-Type", typ)
 		}
-		w.Header().Set("Content-Type", contentType)
 		http.ServeContent(w, r, "", time.Now(), reader)
 	case uri.Hash():
 		w.Header().Set("Content-Type", "text/plain")
