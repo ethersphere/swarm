@@ -175,7 +175,8 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			return
 		}
 		if req.SkipCheck {
-			err = sp.Deliver(ctx, chunk, s.priority)
+			syncing := false
+			err = sp.Deliver(ctx, chunk, s.priority, syncing)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
@@ -192,9 +193,10 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 }
 
 type ChunkDeliveryMsg struct {
-	Addr  storage.Address
-	SData []byte // the stored chunk Data (incl size)
-	peer  *Peer  // set in handleChunkDeliveryMsg
+	Addr    storage.Address
+	SData   []byte // the stored chunk Data (incl size)
+	peer    *Peer  // set in handleChunkDeliveryMsg
+	Syncing bool   // if true, this is a delivery for syncing (no SWAP accounting needed)
 }
 
 // TODO: Fix context SNAFU
