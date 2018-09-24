@@ -1132,6 +1132,8 @@ var builtinTypesLower = map[string]string{
 	".asf":  "video/x-ms-asf",
 	".wmv":  "video/x-ms-wmv",
 	".avi":  "video/x-msvideo",
+
+	".md": "text/markdown; charset=utf-8",
 }
 
 func init() {

@@ -441,7 +441,7 @@ func TestDetectContentType(t *testing.T) {
 	testDetectContentType(t, "file.css", "body {background-color: orange}", "text/css; charset=utf-8")
 	testDetectContentType(t, "file-empty.css", "", "text/css; charset=utf-8")
 	testDetectContentType(t, "file.pdf", "", "application/pdf")
-	testDetectContentType(t, "file.md", "", "text/plain; charset=utf-8")
+	testDetectContentType(t, "file.md", "", "text/markdown; charset=utf-8")
 	testDetectContentType(t, "file-with-unknown-content.strangeext", "", "text/plain; charset=utf-8")
 	testDetectContentType(t, "file-with-text.strangeext", "Lorem Ipsum", "text/plain; charset=utf-8")
 	testDetectContentType(t, "file-no-extension", "Lorem Ipsum", "text/plain; charset=utf-8")
@@ -466,7 +466,7 @@ func testDetectContentType(t *testing.T, fileName, content, expectedContentType 
 	}
 }
 
-// tempFile copy of ioutil.TempFile - because before go1.11 it adding random suffix
+// tempFile copy of ioutil.TempFile - because before go1.11 it changes file extension
 func tempFile(fileName string) (f *os.File, err error) {
 	nconflict := 0
 	for i := 0; i < 10000; i++ {
