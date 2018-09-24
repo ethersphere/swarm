@@ -17,6 +17,7 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -25,8 +26,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
-	"path/filepath"
-	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -437,65 +436,67 @@ func TestDecryptOrigin(t *testing.T) {
 }
 
 func TestDetectContentType(t *testing.T) {
-	// internally use http.DetectContentType, so here are test cases only about fallback to file extension check
-	testDetectContentType(t, "file.css", "body {background-color: orange}", "text/css; charset=utf-8")
-	testDetectContentType(t, "file-empty.css", "", "text/css; charset=utf-8")
-	testDetectContentType(t, "file.pdf", "", "application/pdf")
-	testDetectContentType(t, "file.md", "", "text/markdown; charset=utf-8")
-	testDetectContentType(t, "file-with-unknown-content.strangeext", "", "text/plain; charset=utf-8")
-	testDetectContentType(t, "file-with-text.strangeext", "Lorem Ipsum", "text/plain; charset=utf-8")
-	testDetectContentType(t, "file-no-extension", "Lorem Ipsum", "text/plain; charset=utf-8")
-	testDetectContentType(t, "file-no-extension-no-content", "", "text/plain; charset=utf-8")
-	testDetectContentType(t, "css_with_html_inside.css", "<!doctype html><html><head></head><body></body></html>", "text/css; charset=utf-8")
-}
+	for _, tc := range []struct {
+		file                string
+		content             string
+		expectedContentType string
+	}{
+		{
+			file:                "file-with-correct-css.css",
+			content:             "body {background-color: orange}",
+			expectedContentType: "text/css; charset=utf-8",
+		},
+		{
+			file:                "empty-file.css",
+			content:             "",
+			expectedContentType: "text/css; charset=utf-8",
+		},
+		{
+			file:                "empty-file.pdf",
+			content:             "",
+			expectedContentType: "application/pdf",
+		},
+		{
+			file:                "empty-file.md",
+			content:             "",
+			expectedContentType: "text/markdown; charset=utf-8",
+		},
+		{
+			file:                "empty-file-with-unknown-content.strangeext",
+			content:             "",
+			expectedContentType: "text/plain; charset=utf-8",
+		},
+		{
+			file:                "file-with-unknown-extension-and-content.strangeext",
+			content:             "Lorem Ipsum",
+			expectedContentType: "text/plain; charset=utf-8",
+		},
+		{
+			file:                "file-no-extension",
+			content:             "Lorem Ipsum",
+			expectedContentType: "text/plain; charset=utf-8",
+		},
+		{
+			file:                "file-no-extension-no-content",
+			content:             "",
+			expectedContentType: "text/plain; charset=utf-8",
+		},
+		{
+			file:                "css-file-with-html-inside.css",
+			content:             "<!doctype html><html><head></head><body></body></html>",
+			expectedContentType: "text/css; charset=utf-8",
+		},
+	} {
+		t.Run(tc.file, func(t *testing.T) {
+			detected, err := DetectContentType(tc.file, bytes.NewReader([]byte(tc.content)))
+			if err != nil {
+				t.Fatal(err)
+			}
 
-func testDetectContentType(t *testing.T, fileName, content, expectedContentType string) {
-	f, err := tempFileWithContent(fileName, content)
-	if err != nil {
-		t.Fatal(err)
+			if detected != tc.expectedContentType {
+				t.Fatalf("File: %s, Expected mime type %s, got %s", tc.file, tc.expectedContentType, detected)
+			}
+
+		})
 	}
-	defer os.Remove(f.Name())
-
-	detected, err := DetectContentType(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if detected != expectedContentType {
-		t.Fatalf("File: %s, Expected mime type %s, got %s", fileName, expectedContentType, detected)
-	}
-}
-
-// tempFile copy of ioutil.TempFile - because before go1.11 it changes file extension
-func tempFile(fileName string) (f *os.File, err error) {
-	nconflict := 0
-	for i := 0; i < 10000; i++ {
-		name := filepath.Join(os.TempDir(), strconv.Itoa(nconflict)+fileName)
-		f, err = os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
-		if os.IsExist(err) {
-			nconflict++
-			continue
-		}
-		break
-	}
-	return
-}
-
-func tempFileWithContent(fileName string, content string) (*os.File, error) {
-	f, err := tempFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-
-	if _, err := f.Write([]byte(content)); err != nil {
-		os.Remove(f.Name())
-		return nil, err
-	}
-
-	if err := f.Sync(); err != nil {
-		os.Remove(f.Name())
-		return nil, err
-	}
-
-	return f, nil
 }

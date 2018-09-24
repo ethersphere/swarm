@@ -130,7 +130,7 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 				return
 			}
 
-			list[i].ContentType, err = DetectContentType(f)
+			list[i].ContentType, err = DetectContentType(f.Name(), f)
 			if err != nil {
 				errors[i] = err
 				return

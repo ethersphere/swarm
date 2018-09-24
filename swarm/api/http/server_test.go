@@ -780,7 +780,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 
 	// See header to suggest file name for Browsers
 	expectedFileName := string(swarmHash) + ".tar"
-	expectedContentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", expectedFileName)
+	expectedContentDisposition := fmt.Sprintf("inline; filename=\"%s\"", expectedFileName)
 	if h := resp2.Header.Get("Content-Disposition"); h != expectedContentDisposition {
 		t.Fatalf("Content-Disposition header expected: %s, got: %s", expectedContentDisposition, h)
 	}
@@ -1270,7 +1270,7 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 		}
 
 		// See header to suggest file name for Browsers
-		expectedContentDisposition := fmt.Sprintf("attachment; filename=\"%s\"", v.expectedFileName)
+		expectedContentDisposition := fmt.Sprintf("inline; filename=\"%s\"", v.expectedFileName)
 		if h := serverResponse.Header.Get("Content-Disposition"); h != expectedContentDisposition {
 			t.Fatalf("Content-Disposition header expected: %s, got: %s", expectedContentDisposition, h)
 		}

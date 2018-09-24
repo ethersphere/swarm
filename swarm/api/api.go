@@ -26,7 +26,6 @@ import (
 	"io"
 	"math/big"
 	"net/http"
-	"os"
 	"path"
 	"strings"
 
@@ -1138,13 +1137,15 @@ var builtinTypesLower = map[string]string{
 
 func init() {
 	for ext, t := range builtinTypesLower {
-		mime.AddExtensionType(ext, t)
+		if err := mime.AddExtensionType(ext, t); err != nil {
+			panic(err)
+		}
 	}
 }
 
-// DetectContentType by file content, or fallback to file extension
-func DetectContentType(f *os.File) (string, error) {
-	ctype := mime.TypeByExtension(filepath.Ext(f.Name()))
+// DetectContentType by file file extension, or fallback to content sniff
+func DetectContentType(fileName string, f io.ReadSeeker) (string, error) {
+	ctype := mime.TypeByExtension(filepath.Ext(fileName))
 	if ctype != "" {
 		return ctype, nil
 	}

@@ -206,7 +206,7 @@ func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
 		if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
 			fileName = found
 		}
-		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.tar\"", fileName))
+		w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s.tar\"", fileName))
 
 		w.WriteHeader(http.StatusOK)
 		io.Copy(w, reader)
@@ -921,7 +921,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	if found := path.Base(uri.Path); found != "" && found != "." && found != "/" {
 		fileName = found
 	}
-	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fileName))
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 
 	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
 }

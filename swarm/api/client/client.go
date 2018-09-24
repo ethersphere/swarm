@@ -123,7 +123,7 @@ func Open(path string) (*File, error) {
 		return nil, err
 	}
 
-	contentType, err := api.DetectContentType(f)
+	contentType, err := api.DetectContentType(f.Name(), f)
 	if err != nil {
 		return nil, err
 	}
