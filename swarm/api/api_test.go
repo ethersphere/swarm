@@ -25,6 +25,8 @@ import (
 	"io/ioutil"
 	"math/big"
 	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -464,8 +466,23 @@ func testDetectContentType(t *testing.T, fileName, content, expectedContentType 
 	}
 }
 
+// tempFile copy of ioutil.TempFile - because before go1.11 it adding random suffix
+func tempFile(fileName string) (f *os.File, err error) {
+	nconflict := 0
+	for i := 0; i < 10000; i++ {
+		name := filepath.Join(os.TempDir(), strconv.Itoa(nconflict)+fileName)
+		f, err = os.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+		if os.IsExist(err) {
+			nconflict++
+			continue
+		}
+		break
+	}
+	return
+}
+
 func tempFileWithContent(fileName string, content string) (*os.File, error) {
-	f, err := ioutil.TempFile("", "*"+fileName)
+	f, err := tempFile(fileName)
 	if err != nil {
 		return nil, err
 	}
