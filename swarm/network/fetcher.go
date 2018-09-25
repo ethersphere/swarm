@@ -22,7 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -34,7 +34,7 @@ var RequestTimeout = 10 * time.Second
 
 var maxHopCount uint64 = 20 // maximum number of forwarded requests (hops), to make sure requests are not forwarded forever in peer loops
 
-type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{}, error)
+type RequestFunc func(context.Context, *Request) (*enode.ID, chan struct{}, error)
 
 // Fetcher is created when a chunk is not found locally. It starts a request handler loop once and
 // keeps it alive until all active requests are completed. This can happen:
@@ -43,19 +43,19 @@ type RequestFunc func(context.Context, *Request) (*discover.NodeID, chan struct{
 // Fetcher self destroys itself after it is completed.
 // TODO: cancel all forward requests after termination
 type Fetcher struct {
-	protoRequestFunc RequestFunc           // request function fetcher calls to issue retrieve request for a chunk
-	addr             storage.Address       // the address of the chunk to be fetched
-	offerC           chan *discover.NodeID // channel of sources (peer node id strings)
-	requestC         chan uint64           // channel for incoming requests (with the hopCount value in it)
+	protoRequestFunc RequestFunc     // request function fetcher calls to issue retrieve request for a chunk
+	addr             storage.Address // the address of the chunk to be fetched
+	offerC           chan *enode.ID  // channel of sources (peer node id strings)
+	requestC         chan uint64     // channel for incoming requests (with the hopCount value in it)
 	skipCheck        bool
 }
 
 type Request struct {
-	Addr        storage.Address  // chunk address
-	Source      *discover.NodeID // nodeID of peer to request from (can be nil)
-	SkipCheck   bool             // whether to offer the chunk first or deliver directly
-	peersToSkip *sync.Map        // peers not to request chunk from (only makes sense if source is nil)
-	HopCount    uint64           // number of forwarded requests (hops)
+	Addr        storage.Address // chunk address
+	Source      *enode.ID       // nodeID of peer to request from (can be nil)
+	SkipCheck   bool            // whether to offer the chunk first or deliver directly
+	peersToSkip *sync.Map       // peers not to request chunk from (only makes sense if source is nil)
+	HopCount    uint64          // number of forwarded requests (hops)
 }
 
 // NewRequest returns a new instance of Request based on chunk address skip check and
@@ -115,14 +115,14 @@ func NewFetcher(addr storage.Address, rf RequestFunc, skipCheck bool) *Fetcher {
 	return &Fetcher{
 		addr:             addr,
 		protoRequestFunc: rf,
-		offerC:           make(chan *discover.NodeID),
+		offerC:           make(chan *enode.ID),
 		requestC:         make(chan uint64),
 		skipCheck:        skipCheck,
 	}
 }
 
 // Offer is called when an upstream peer offers the chunk via syncing as part of `OfferedHashesMsg` and the node does not have the chunk locally.
-func (f *Fetcher) Offer(ctx context.Context, source *discover.NodeID) {
+func (f *Fetcher) Offer(ctx context.Context, source *enode.ID) {
 	// First we need to have this select to make sure that we return if context is done
 	select {
 	case <-ctx.Done():
@@ -164,14 +164,14 @@ func (f *Fetcher) Request(ctx context.Context, hopCount uint64) {
 // it keeps the Fetcher alive within the lifecycle of the passed context
 func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 	var (
-		doRequest bool               // determines if retrieval is initiated in the current iteration
-		wait      *time.Timer        // timer for search timeout
-		waitC     <-chan time.Time   // timer channel
-		sources   []*discover.NodeID // known sources, ie. peers that offered the chunk
-		requested bool               // true if the chunk was actually requested
+		doRequest bool             // determines if retrieval is initiated in the current iteration
+		wait      *time.Timer      // timer for search timeout
+		waitC     <-chan time.Time // timer channel
+		sources   []*enode.ID      // known sources, ie. peers that offered the chunk
+		requested bool             // true if the chunk was actually requested
 		hopCount  uint64
 	)
-	gone := make(chan *discover.NodeID) // channel to signal that a peer we requested from disconnected
+	gone := make(chan *enode.ID) // channel to signal that a peer we requested from disconnected
 
 	// loop that keeps the fetching process alive
 	// after every request a timer is set. If this goes off we request again from another peer
@@ -260,9 +260,9 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 // * the peer's address is added to the set of peers to skip
 // * the peer's address is removed from prospective sources, and
 // * a go routine is started that reports on the gone channel if the peer is disconnected (or terminated their streamer)
-func (f *Fetcher) doRequest(ctx context.Context, gone chan *discover.NodeID, peersToSkip *sync.Map, sources []*discover.NodeID, hopCount uint64) ([]*discover.NodeID, error) {
+func (f *Fetcher) doRequest(ctx context.Context, gone chan *enode.ID, peersToSkip *sync.Map, sources []*enode.ID, hopCount uint64) ([]*enode.ID, error) {
 	var i int
-	var sourceID *discover.NodeID
+	var sourceID *enode.ID
 	var quit chan struct{}
 
 	req := &Request{

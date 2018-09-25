@@ -24,9 +24,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
-
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -36,7 +35,7 @@ type (
 
 type NetFetcher interface {
 	Request(ctx context.Context, hopCtr uint64)
-	Offer(ctx context.Context, source *discover.NodeID)
+	Offer(ctx context.Context, source *enode.ID)
 }
 
 // NetStore is an extension of local storage
@@ -268,10 +267,11 @@ func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
 	hopCtr, _ := rctx.Value("hopctr").(uint64)
 
 	if sourceIF != nil {
-		var source *discover.NodeID
-		id := discover.MustHexID(sourceIF.(string))
-		source = &id
-		f.netFetcher.Offer(rctx, source)
+		var source enode.ID
+		if err := source.UnmarshalText([]byte(sourceIF.(string))); err != nil {
+			return nil, err
+		}
+		f.netFetcher.Offer(rctx, &source)
 	} else {
 		f.netFetcher.Request(rctx, hopCtr)
 	}
