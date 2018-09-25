@@ -148,6 +148,7 @@ func (f *Fetcher) Request(ctx context.Context, hopCount uint64) {
 	}
 
 	if hopCount >= maxHopCount {
+		log.Debug("fetcher request hop count limit reached", "hops", hopCount)
 		return
 	}
 
