@@ -288,14 +288,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
 
-	contentType, err := ValidateContentTypeHeader(r)
-	if err != nil {
-		postFilesFail.Inc(1)
-		RespondError(w, r, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	contentType, params, err := mime.ParseMediaType(contentType)
+	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
 		postFilesFail.Inc(1)
 		RespondError(w, r, err.Error(), http.StatusBadRequest)
@@ -412,15 +405,10 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 			name = part.FormName()
 		}
 		uri := GetURI(r.Context())
-
-		contentType, err := ValidateContentTypeHeader(r)
-		if err != nil {
-			return err
-		}
-
+		path := path.Join(uri.Path, name)
 		entry := &api.ManifestEntry{
-			Path:        path.Join(uri.Path, name),
-			ContentType: contentType,
+			Path:        path,
+			ContentType: part.Header.Get("Content-Type"),
 			Size:        size,
 			ModTime:     time.Now(),
 		}
@@ -436,15 +424,9 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 func (s *Server) handleDirectUpload(r *http.Request, mw *api.ManifestWriter) error {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.direct.upload", "ruid", ruid)
-
-	contentType, err := ValidateContentTypeHeader(r)
-	if err != nil {
-		return err
-	}
-
 	key, err := mw.AddEntry(r.Context(), r.Body, &api.ManifestEntry{
 		Path:        GetURI(r.Context()).Path,
-		ContentType: contentType,
+		ContentType: r.Header.Get("Content-Type"),
 		Mode:        0644,
 		Size:        r.ContentLength,
 		ModTime:     time.Now(),
@@ -973,17 +955,4 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 func isDecryptError(err error) bool {
 	return strings.Contains(err.Error(), api.ErrDecrypt.Error())
-}
-
-func ValidateContentTypeHeader(r *http.Request) (string, error) {
-	contentType := r.Header.Get("Content-Type")
-	if contentType == "" {
-		return "", fmt.Errorf("Content-Type header is required, but was not sent or empty")
-	}
-
-	if _, _, err := mime.ParseMediaType(contentType); err != nil {
-		return "", fmt.Errorf("Content-Type header is invalid: %s", err)
-	}
-
-	return contentType, nil
 }

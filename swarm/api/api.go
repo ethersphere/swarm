@@ -16,6 +16,9 @@
 
 package api
 
+//go:generate mimegen --types ./../../cmd/swarm/mimegen/mime.types --package=api --out gen_mime.go
+//go:generate gofmt -s -w gen_mime.go
+
 import (
 	"archive/tar"
 	"context"
@@ -778,9 +781,14 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 
 		// add the entry under the path from the request
 		manifestPath := path.Join(manifestPath, hdr.Name)
+		contentType := hdr.Xattrs["user.swarm.content-type"]
+		if contentType == "" {
+			contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
+		}
+		//DetectContentType("")
 		entry := &ManifestEntry{
 			Path:        manifestPath,
-			ContentType: hdr.Xattrs["user.swarm.content-type"],
+			ContentType: contentType,
 			Mode:        hdr.Mode,
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
@@ -791,10 +799,15 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
 		if hdr.Name == defaultPath {
+			contentType := hdr.Xattrs["user.swarm.content-type"]
+			if contentType == "" {
+				contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
+			}
+
 			entry := &ManifestEntry{
 				Hash:        contentKey.Hex(),
 				Path:        "", // default entry
-				ContentType: hdr.Xattrs["user.swarm.content-type"],
+				ContentType: contentType,
 				Mode:        hdr.Mode,
 				Size:        hdr.Size,
 				ModTime:     hdr.ModTime,
@@ -1022,126 +1035,6 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 
 // MimeOctetStream default value of http Content-Type header
 const MimeOctetStream = "application/octet-stream"
-
-// builtinTypesLower stores copy of https://github.com/nginx/nginx/blob/master/conf/mime.types
-// not include mime.builtinTypesLower
-var builtinTypesLower = map[string]string{
-	".shtml": "text/html; charset=utf-8",
-	".jpeg":  "image/jpeg",
-	".atom":  "application/atom+xml",
-	".rss":   "application/rss+xml",
-	".mml":   "text/mathml; charset=utf-8",
-	".txt":   "text/plain; charset=utf-8",
-	".jad":   "text/vnd.sun.j2me.app-descriptor; charset=utf-8",
-	".wml":   "text/vnd.wap.wml; charset=utf-8",
-	".htc":   "text/x-component; charset=utf-8",
-
-	".svgz": "image/svg+xml",
-	".tif":  "image/tiff",
-	".tiff": "image/tiff",
-	".wbmp": "image/vnd.wap.wbmp",
-	".webp": "image/webp",
-	".ico":  "image/x-icon",
-	".jng":  "image/x-jng",
-	".bmp":  "image/x-ms-bmp",
-
-	".woff":  "font/woff",
-	".woff2": "font/woff2",
-
-	".jar":  "application/java-archive",
-	".war":  "application/java-archive",
-	".ear":  "application/java-archive",
-	".json": "application/json",
-	".hqx":  "application/mac-binhex40",
-	".doc":  "application/msword",
-	".ps":   "application/postscript",
-	".eps":  "application/postscript",
-	".ai":   "application/postscript",
-	".rtf":  "application/rtf",
-	".m3u8": "application/vnd.apple.mpegurl",
-	".kml":  "application/vnd.google-earth.kml+xml",
-	".kmz":  "application/vnd.google-earth.kmz",
-	".xls":  "application/vnd.ms-excel",
-	".eot":  "application/vnd.ms-fontobject",
-	".ppt":  "application/vnd.ms-powerpoint",
-	".odg":  "application/vnd.oasis.opendocument.graphics",
-	".odp":  "application/vnd.oasis.opendocument.presentation",
-	".ods":  "application/vnd.oasis.opendocument.spreadsheet",
-	".odt":  "application/vnd.oasis.opendocument.text",
-	".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-	".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-	".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-
-	".wmlc":    "application/vnd.wap.wmlc",
-	".7z":      "application/x-7z-compressed",
-	".jardiff": "application/x-java-archive-diff",
-	".jnlp":    "application/x-java-jnlp-file",
-	".run":     "application/x-makeself",
-	".pl":      "application/x-perl",
-	".pm":      "application/x-perl",
-	".prc":     "application/x-pilot",
-	".pdb":     "application/x-pilot",
-	".rar":     "application/x-rar-compressed",
-	".rpm":     "application/x-redhat-package-manager",
-	".sea":     "application/x-sea",
-	".swf":     "application/x-shockwave-flash",
-	".sit":     "application/x-stuffit",
-	".tcl":     "application/x-tcl",
-	".tk":      "application/x-tcl",
-	".der":     "application/x-x509-ca-cert",
-	".pem":     "application/x-x509-ca-cert",
-	".crt":     "application/x-x509-ca-cert",
-	".xpi":     "application/x-xpinstall",
-	".xhtml":   "application/xhtml+xml",
-	".xspf":    "application/xspf+xml",
-	".zip":     "application/zip",
-
-	".bin": "application/octet-stream",
-	".exe": "application/octet-stream",
-	".dll": "application/octet-stream",
-	".deb": "application/octet-stream",
-	".dmg": "application/octet-stream",
-	".iso": "application/octet-stream",
-	".img": "application/octet-stream",
-	".msi": "application/octet-stream",
-	".msp": "application/octet-stream",
-	".msm": "application/octet-stream",
-
-	".mid":  "audio/midi",
-	".midi": "audio/midi",
-	".kar":  "audio/midi",
-	".mp3":  "audio/mpeg",
-	".ogg":  "audio/ogg",
-	".m4a":  "audio/x-m4a",
-	".ra":   "audio/x-realaudio",
-
-	".3gpp": "video/3gpp",
-	".3gp":  "video/3gpp",
-
-	".ts":   "video/mp2t",
-	".mp4":  "video/mp4",
-	".mpeg": "video/mpeg",
-	".mpg":  "video/mpeg",
-	".mov":  "video/quicktime",
-	".webm": "video/webm",
-	".flv":  "video/x-flv",
-	".m4v":  "video/x-m4v",
-	".mng":  "video/x-mng",
-	".asx":  "video/x-ms-asf",
-	".asf":  "video/x-ms-asf",
-	".wmv":  "video/x-ms-wmv",
-	".avi":  "video/x-msvideo",
-
-	".md": "text/markdown; charset=utf-8",
-}
-
-func init() {
-	for ext, t := range builtinTypesLower {
-		if err := mime.AddExtensionType(ext, t); err != nil {
-			panic(err)
-		}
-	}
-}
 
 // DetectContentType by file file extension, or fallback to content sniff
 func DetectContentType(fileName string, f io.ReadSeeker) (string, error) {
