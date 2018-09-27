@@ -16,6 +16,9 @@
 
 package api
 
+//go:generate mimegen --types ./../../cmd/swarm/mimegen/mime.types --package=api --out gen_mime.go
+//go:generate gofmt -s -w gen_mime.go
+
 import (
 	"archive/tar"
 	"context"
@@ -43,7 +46,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mru"
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -471,7 +474,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 
 			} else {
 				// data is returned verbatim since it's not a multihash
-				return rsrc, "application/octet-stream", http.StatusOK, nil, nil
+				return rsrc, "", http.StatusOK, nil, nil
 			}
 		}
 
@@ -778,9 +781,14 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 
 		// add the entry under the path from the request
 		manifestPath := path.Join(manifestPath, hdr.Name)
+		contentType := hdr.Xattrs["user.swarm.content-type"]
+		if contentType == "" {
+			contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
+		}
+		//DetectContentType("")
 		entry := &ManifestEntry{
 			Path:        manifestPath,
-			ContentType: hdr.Xattrs["user.swarm.content-type"],
+			ContentType: contentType,
 			Mode:        hdr.Mode,
 			Size:        hdr.Size,
 			ModTime:     hdr.ModTime,
@@ -791,10 +799,15 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
 		if hdr.Name == defaultPath {
+			contentType := hdr.Xattrs["user.swarm.content-type"]
+			if contentType == "" {
+				contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
+			}
+
 			entry := &ManifestEntry{
 				Hash:        contentKey.Hex(),
 				Path:        "", // default entry
-				ContentType: hdr.Xattrs["user.swarm.content-type"],
+				ContentType: contentType,
 				Mode:        hdr.Mode,
 				Size:        hdr.Size,
 				ModTime:     hdr.ModTime,
@@ -1018,4 +1031,33 @@ func (a *API) ResolveResourceManifest(ctx context.Context, addr storage.Address)
 	}
 
 	return storage.Address(common.FromHex(entry.Hash)), nil
+}
+
+// MimeOctetStream default value of http Content-Type header
+const MimeOctetStream = "application/octet-stream"
+
+// DetectContentType by file file extension, or fallback to content sniff
+func DetectContentType(fileName string, f io.ReadSeeker) (string, error) {
+	ctype := mime.TypeByExtension(filepath.Ext(fileName))
+	if ctype != "" {
+		return ctype, nil
+	}
+
+	// save/rollback to get content probe from begin of file
+	currentPosition, err := f.Seek(0, io.SeekCurrent)
+	if err != nil {
+		return MimeOctetStream, fmt.Errorf("seeker can't seek, %s", err)
+	}
+
+	// read a chunk to decide between utf-8 text and binary
+	var buf [512]byte
+	n, _ := f.Read(buf[:])
+	ctype = http.DetectContentType(buf[:n])
+
+	_, err = f.Seek(currentPosition, io.SeekStart) // rewind to output whole file
+	if err != nil {
+		return MimeOctetStream, fmt.Errorf("seeker can't seek, %s", err)
+	}
+
+	return ctype, nil
 }
