@@ -106,8 +106,7 @@ func (f *AltFileHasher) getPotentialSpan(level int) int {
 	return span
 }
 
-// TODO: check if length 0
-// TODO: log error if not end and len(b) < segmentsize
+// TODO: ensure local copies of all thread unsafe vars
 // performs recursive hashing on complete batches or data end
 func (f *AltFileHasher) write(b []byte, offset int, level int) {
 
@@ -172,6 +171,23 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 
 	if executeHasher {
 
+		// check for the dangling chunk
+		if level > 0 && f.finished {
+			f.lock.Lock()
+			cwc := f.writeCount[level-1]
+			f.lock.Unlock()
+			if offset%f.branches == 0 && cwc%(f.branches*f.branches) < f.branches {
+				log.Debug("dangle", "level", level)
+				parentOffset := (wc - 1) / f.branches
+				f.write(b, parentOffset, level+1)
+				f.lock.Lock()
+				f.wg.Done()
+				f.lock.Unlock()
+				f.doneC[level] <- struct{}{}
+				return
+			}
+		}
+
 		f.lock.Lock()
 		f.lwg[level].Add(1)
 		f.lock.Unlock()
@@ -205,8 +221,7 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 		go func(level int, wc int, finished bool) {
 			// if the hasher on the level about is still working, wait for it
 			f.lwg[level+1].Wait()
-			//chunkWriteCount := wc % f.branches
-			//parentOffset := (chunkWriteCount - 1) / f.branches
+
 			parentOffset := (wc - 1) / f.branches
 			if (level == 0 && finished) || f.targetCount[level] == wc {
 				log.Debug("done", "level", level)
