@@ -20,10 +20,30 @@ const (
 var pool *bmt.TreePool
 
 var (
-	start       = 0
-	end         = 14
-	dataLengths = []int{31, 32, 33, 63, 64, 65, chunkSize, chunkSize + 31, chunkSize + 32, chunkSize + 63, chunkSize + 64, chunkSize * 2, chunkSize*2 + 32, chunkSize * 128, chunkSize*128 + 31, chunkSize*128 + 32, chunkSize*128 + 64, chunkSize * 129, chunkSize * 130, chunkSize * 128 * 128}
-	expected    = []string{
+	start       = 14
+	end         = 15
+	dataLengths = []int{31, // 0
+		32,                    // 1
+		33,                    // 2
+		63,                    // 3
+		64,                    // 4
+		65,                    // 5
+		chunkSize,             // 6
+		chunkSize + 31,        // 7
+		chunkSize + 32,        // 8
+		chunkSize + 63,        // 9
+		chunkSize + 64,        // 10
+		chunkSize * 2,         // 11
+		chunkSize*2 + 32,      // 12
+		chunkSize * 128,       // 13
+		chunkSize*128 + 31,    // 14
+		chunkSize*128 + 32,    // 15
+		chunkSize*128 + 64,    // 16
+		chunkSize * 129,       // 17
+		chunkSize * 130,       // 18
+		chunkSize * 128 * 128, // 19
+	}
+	expected = []string{
 		"ece86edb20669cc60d142789d464d57bdf5e33cb789d443f608cbd81cfa5697d",
 		"0be77f0bb7abc9cd0abed640ee29849a3072ccfd1020019fe03658c38f087e02",
 		"3463b46d4f9d5bfcbf9a23224d635e51896c1daef7d225b86679db17c5fd868e",

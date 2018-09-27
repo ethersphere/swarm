@@ -88,14 +88,14 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 	}
 
 	// write and return result when we get it back
-	f.write(b, f.writeCount[0], 0)
+	f.write(b, f.writeCount[0], 0, f.totalBytes)
 	f.wg.Wait()
 	return f.buffers[f.levelCount-1][:f.segmentSize]
 }
 
 func (f *AltFileHasher) Write(b []byte) {
 	f.totalBytes += len(b)
-	f.write(b, f.writeCount[0], 0)
+	f.write(b, f.writeCount[0], 0, f.totalBytes)
 }
 
 func (f *AltFileHasher) getPotentialSpan(level int) int {
@@ -108,16 +108,16 @@ func (f *AltFileHasher) getPotentialSpan(level int) int {
 
 // TODO: ensure local copies of all thread unsafe vars
 // performs recursive hashing on complete batches or data end
-func (f *AltFileHasher) write(b []byte, offset int, level int) {
+func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 
 	if b == nil {
-		log.Debug("write", "level", level, "offset", offset, "length", "nil")
+		log.Debug("write", "level", level, "offset", offset, "length", "nil", "wc", f.writeCount[level])
 	} else {
 		l := 32
 		if len(b) < l {
 			l = len(b)
 		}
-		log.Debug("write", "level", level, "offset", offset, "length", len(b), "data", b[:l])
+		log.Debug("write", "level", level, "offset", offset, "length", len(b), "wc", f.writeCount[level], "data", b[:l])
 	}
 
 	// top level then return
@@ -177,13 +177,13 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 			cwc := f.writeCount[level-1]
 			f.lock.Unlock()
 			if offset%f.branches == 0 && cwc%(f.branches*f.branches) < f.branches {
-				log.Debug("dangle", "level", level)
+				log.Debug("dangle done", "level", level)
 				parentOffset := (wc - 1) / f.branches
-				f.write(b, parentOffset, level+1)
 				f.lock.Lock()
 				f.wg.Done()
 				f.lock.Unlock()
 				f.doneC[level] <- struct{}{}
+				f.write(b, parentOffset, level+1, total)
 				return
 			}
 		}
@@ -199,7 +199,8 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 		// if data is fully written, the current chunk may be shorter than the span
 		var dataUnderSpan int
 		if f.isWriteFinished() {
-			dataUnderSpan = (f.totalBytes-1)%span + 1
+			//dataUnderSpan = (f.totalBytes-1)%span + 1
+			dataUnderSpan = (total-1)%span + 1
 		} else {
 			dataUnderSpan = span
 		}
@@ -218,7 +219,7 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 		log.Debug("hash", "level", level, "size", hashDataSize, "meta", meta, "wc", wc)
 		hashResult := f.hashers[level].Sum(nil, hashDataSize, meta)
 		f.hashers[level].Reset()
-		go func(level int, wc int, finished bool) {
+		go func(level int, wc int, finished bool, total int) {
 			// if the hasher on the level about is still working, wait for it
 			f.lwg[level+1].Wait()
 
@@ -230,11 +231,11 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 				f.lock.Unlock()
 				f.doneC[level] <- struct{}{}
 			}
-			f.write(hashResult, parentOffset, level+1)
+			f.write(hashResult, parentOffset, level+1, total)
 			f.lock.Lock()
 			f.lwg[level].Done()
 			f.lock.Unlock()
-		}(level, wc, f.finished)
+		}(level, wc, f.finished, f.totalBytes)
 	}
 }
 
