@@ -203,9 +203,11 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 		hashResult := f.hashers[level].Sum(nil, hashDataSize, meta)
 		f.hashers[level].Reset()
 		go func(level int, wc int, finished bool) {
+			// if the hasher on the level about is still working, wait for it
 			f.lwg[level+1].Wait()
-			chunkWriteCount := wc % f.branches
-			parentOffset := (chunkWriteCount - 1) / f.branches
+			//chunkWriteCount := wc % f.branches
+			//parentOffset := (chunkWriteCount - 1) / f.branches
+			parentOffset := (wc - 1) / f.branches
 			if (level == 0 && finished) || f.targetCount[level] == wc {
 				log.Debug("done", "level", level)
 				f.lock.Lock()
