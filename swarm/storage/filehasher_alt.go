@@ -15,18 +15,18 @@ const (
 type AltFileHasher struct {
 	branches    int
 	segmentSize int
-	hashers     [altFileHasherMaxLevels]bmt.SectionWriter
-	buffers     [altFileHasherMaxLevels - 1][]byte
-	levelCount  int
 	chunkSize   int
-	finished    bool
-	totalBytes  int
-	targetCount [altFileHasherMaxLevels - 1]int
-	writeCount  [altFileHasherMaxLevels]int
-	doneC       [altFileHasherMaxLevels]chan struct{}
-	wg          sync.WaitGroup                         // used when level done
+	hashers     [altFileHasherMaxLevels]bmt.SectionWriter
+	buffers     [altFileHasherMaxLevels][]byte         // holds chunk data on each level (todo; push data to channel on complete)
+	levelCount  int                                    // number of levels in this job (only determined when Finish() is called
+	finished    bool                                   // finished writing data
+	totalBytes  int                                    // total data bytes written
+	targetCount [altFileHasherMaxLevels - 1]int        // expected section writes per level
+	writeCount  [altFileHasherMaxLevels]int            // number of section writes per level
+	doneC       [altFileHasherMaxLevels]chan struct{}  // used to tell parent that child is done writing on right edge
+	wg          sync.WaitGroup                         // used to tell caller hashing is done (maybe be replced by channel, and doneC only internally)
 	lwg         [altFileHasherMaxLevels]sync.WaitGroup // used when busy hashing
-	lock        sync.Mutex
+	lock        sync.Mutex                             // protect filehasher state vars
 }
 
 func NewAltFileHasher(hasherFunc func() bmt.SectionWriter, segmentSize int, branches int) *AltFileHasher {
@@ -139,7 +139,9 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 	// only write if we have data
 	// data might be nil when upon write finish
 	if b != nil {
-		f.hashers[level].Write(offset%f.branches, b)
+		netOffset := (offset % f.branches)
+		f.hashers[level].Write(netOffset, b)
+		copy(f.buffers[level][netOffset*f.segmentSize:], b)
 		f.lock.Lock()
 		f.writeCount[level]++
 		wc = f.writeCount[level]

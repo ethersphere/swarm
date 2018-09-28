@@ -20,8 +20,6 @@ const (
 var pool *bmt.TreePool
 
 var (
-	start       = 14
-	end         = 15
 	dataLengths = []int{31, // 0
 		32,                    // 1
 		33,                    // 2
@@ -65,6 +63,9 @@ var (
 		"59de730bf6c67a941f3b2ffa2f920acfaa1713695ad5deea12b4a121e5f23fa1",
 		"522194562123473dcfd7a457b18ee7dee8b7db70ed3cfa2b73f348a992fdfd3b",
 	}
+
+	start = 19
+	end   = 20
 )
 
 func init() {
