@@ -17,14 +17,19 @@
 package http
 
 import (
+	"bytes"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
 	"testing"
 
 	"golang.org/x/net/html"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -163,7 +168,47 @@ func TestJsonResponse(t *testing.T) {
 	if !isJSON(string(respbody)) {
 		t.Fatalf("Expected response to be JSON, received invalid JSON: %s", string(respbody))
 	}
+}
 
+func TestGetFallbackToList(t *testing.T) {
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+	data := "arbitraryString"
+	url := fmt.Sprintf("%s/bzz:/", srv.URL)
+
+	buf := new(bytes.Buffer)
+	form := multipart.NewWriter(buf)
+	form.WriteField("name", "John Doe")
+	file1, _ := form.CreateFormFile("cv", "cv.txt")
+	file1.Write([]byte(data))
+	file2, _ := form.CreateFormFile("profile_picture", "profile.jpg")
+	file2.Write([]byte(data))
+	form.Close()
+
+	headers := map[string]string{
+		"Content-Type":   form.FormDataContentType(),
+		"Content-Length": strconv.Itoa(buf.Len()),
+	}
+	res, body := httpDo("POST", url, buf, headers, false, t)
+
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("expected POST multipart/form-data to return 200, but it returned %d", res.StatusCode)
+	}
+	if len(body) != 64 {
+		t.Fatalf("expected POST multipart/form-data to return a 64 char manifest but the answer was %d chars long", len(body))
+	}
+	log.Info(fmt.Sprintf("uploading directory with 'swarm up'"))
+	hash := body
+	log.Info("dir uploaded", "hash", hash)
+	headers = map[string]string{"Accept": "*/*"}
+	res, body = httpDo("GET", srv.URL+"/bzz:/"+hash, nil, headers, false, t)
+	if res.StatusCode != 301 {
+		//		t.Fatalf("expected HTTP status 301, got %s", res.Status)
+	}
+	//todo: check the location header
+	if body != data {
+		t.Fatalf("expected HTTP body %q, got %q", data, body)
+	}
 }
 
 func isJSON(s string) bool {

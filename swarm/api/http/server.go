@@ -771,7 +771,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "max-age=2147483648, immutable") // url was of type bzz://<hex key>/path, so we are sure it is immutable.
 	}
 
-	log.Debug("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr)
+	log.Trace("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr)
 
 	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), s.api.Decryptor(r.Context(), credentials), manifestAddr, uri.Path)
 
@@ -795,6 +795,23 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		switch status {
 		case http.StatusNotFound:
 			getFileNotFound.Inc(1)
+			// second is that the manifest doesnt specify a default entry and there's a slash in the end of the path
+			if uri.Path == "" {
+				reader, _ := s.api.Retrieve(r.Context(), manifestAddr)
+				if _, err := reader.Size(r.Context(), nil); err != nil {
+					RespondError(w, r, err.Error(), http.StatusNotFound)
+					return
+				}
+				var manifest api.Manifest
+				if err := json.NewDecoder(reader).Decode(&manifest); err != nil {
+					RespondError(w, r, err.Error(), http.StatusNotFound)
+					return
+				}
+				if manifest.DefaultEntry == "" {
+					http.Redirect(w, r, strings.Replace(r.URL.Path, "bzz", "bzz-list", -1)+"/", http.StatusMovedPermanently)
+					return
+				}
+			}
 			RespondError(w, r, err.Error(), http.StatusNotFound)
 		default:
 			getFileFail.Inc(1)

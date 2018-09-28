@@ -31,9 +31,11 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/api/client"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
-	"github.com/mattn/go-colorable"
+	colorable "github.com/mattn/go-colorable"
 )
 
 func init() {
@@ -265,7 +267,7 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 
 			switch mode := fi.Mode(); {
 			case mode.IsRegular():
-				if file, err := swarm.Open(path.Join(tmpDownload, v.Name())); err != nil {
+				if file, err := client.Open(path.Join(tmpDownload, v.Name())); err != nil {
 					t.Fatalf("encountered an error opening the file returned from the CLI: %v", err)
 				} else {
 					ff := make([]byte, len(data))
@@ -283,6 +285,73 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 		if err != nil {
 			t.Fatalf("could not list files at: %v", files)
 		}
+	}
+}
+
+func serverFunc(api *api.API) testutil.TestServer {
+	return swarmhttp.NewServer(api, "")
+}
+
+func TestCLISwarmUpDefaultEntry(t *testing.T) {
+	toEncrypt := false
+	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	tmp, err := ioutil.TempDir("", "swarm-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.Remove(tmp)
+
+	data := []byte("notsorandomdata")
+	for _, v := range []string{"index.html", "otherfile.html"} {
+		ioutil.WriteFile(path.Join(tmp, v), append([]byte(v), data...), 0644)
+	}
+	hashRegexp := `[a-f\d]{64}`
+	flags := []string{
+		"--bzzapi", srv.URL,
+		"--defaultpath", path.Join(tmp, "index.html"),
+		"--recursive",
+		"up",
+		tmp,
+	}
+	if toEncrypt {
+		hashRegexp = `[a-f\d]{128}`
+		flags = []string{
+			"--bzzapi", srv.URL,
+			"up",
+			"--encrypt",
+			tmp}
+	}
+	// upload the file with 'swarm up' and expect a hash
+	log.Info(fmt.Sprintf("uploading directory with 'swarm up'"))
+	up := runSwarm(t, flags...)
+	_, matches := up.ExpectRegexp(hashRegexp)
+	up.ExpectExit()
+	hash := matches[0]
+	log.Info("dir uploaded", "hash", hash)
+
+	client := client.NewClient(srv.URL)
+	m, _, err := client.DownloadManifest(hash)
+	if len(m.Entries) != 2 {
+		t.Fatalf("expected 2 entries, got %d. entries are %v", len(m.Entries), m.Entries)
+	}
+	if m.DefaultEntry != "index.html" {
+		t.Fatalf("index.html should be default manifest entry, got %v", m.DefaultEntry)
+	}
+
+	uri := srv.URL + "/bzz:/" + hash
+	resp, err := http.Get(uri)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bytes, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(bytes) != "index.html"+string(data) {
+		t.Fatalf("expected data to be index.html, got %v", string(bytes))
 	}
 }
 
@@ -342,7 +411,6 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 	hash := matches[0]
 
 	client := swarm.NewClient(srv.URL)
-
 	m, isEncrypted, err := client.DownloadManifest(hash)
 	if err != nil {
 		t.Fatal(err)
@@ -356,7 +424,7 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 	var entriesCount int
 	for _, e := range m.Entries {
 		entriesCount++
-		if e.Path == "" {
+		if e.Path == m.DefaultEntry {
 			found = true
 		}
 	}
@@ -365,7 +433,7 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 		t.Error("manifest default entry was not found")
 	}
 
-	if entriesCount != 3 {
-		t.Errorf("manifest contains %v entries, expected %v", entriesCount, 3)
+	if entriesCount != 2 {
+		t.Errorf("manifest contains %v entries, expected %v", len(m.Entries), 2)
 	}
 }

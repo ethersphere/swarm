@@ -376,6 +376,21 @@ func (a *API) Put(ctx context.Context, content string, contentType string, toEnc
 	}, nil
 }
 
+/*func (a *API) GetManifest(ctx context.Context, decrypt DecryptFunc, manifestAddr storage.Address, path string) (*Manifest, error) {
+	log.Debug("api.get.manifest", "key", manifestAddr, "path", path)
+	apiGetCount.Inc(1)
+	var manifest Manifest
+	reader, contentType, status, contentKey, err := s.api.Get(ctx, a.Decryptor(ctx, credentials), manifestAddr, path)
+
+	if err := json.NewDecoder(res).Decode(&manifest); err != nil {
+		return nil, isEncrypted, err
+	}
+	trie, err := loadManifest(ctx, a.fileStore, manifestAddr, nil, decrypt)
+	if err != nil {
+		return nil, err
+	}
+}*/
+
 // Get uses iterative manifest retrieval and prefix matching
 // to resolve basePath to content using FileStore retrieve
 // it returns a section reader, mimeType, status, the key of the actual content and an error
@@ -388,12 +403,14 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		status = http.StatusNotFound
 		return nil, "", http.StatusNotFound, nil, err
 	}
-
 	log.Debug("trie getting entry", "key", manifestAddr, "path", path)
+	if path == "" {
+		path = trie.defaultEntry
+	}
 	entry, _ := trie.getEntry(path)
-
+	log.Error("sf", "sf", entry, "trie", trie)
 	if entry != nil {
-		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Hash", entry.Hash)
+		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Path", entry.Path, "entry.contentType", entry.ContentType, "entry.Hash", entry.Hash)
 
 		if entry.ContentType == ManifestType {
 			log.Debug("entry is manifest", "key", manifestAddr, "new key", entry.Hash)
@@ -778,23 +795,11 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
 		}
 		if hdr.Name == defaultPath {
-			contentType := hdr.Xattrs["user.swarm.content-type"]
-			if contentType == "" {
-				contentType = mime.TypeByExtension(filepath.Ext(hdr.Name))
-			}
-
-			entry := &ManifestEntry{
-				Hash:        contentKey.Hex(),
-				Path:        "", // default entry
-				ContentType: contentType,
-				Mode:        hdr.Mode,
-				Size:        hdr.Size,
-				ModTime:     hdr.ModTime,
-			}
-			contentKey, err = mw.AddEntry(ctx, nil, entry)
+			log.Info("writing defualt entry")
+			err := mw.SetDefaultEntry(defaultPath)
 			if err != nil {
 				apiUploadTarFail.Inc(1)
-				return nil, fmt.Errorf("error adding default manifest entry from tar stream: %s", err)
+				return nil, fmt.Errorf("error setting default manifest entry from tar stream: %s", err)
 			}
 			defaultPathFound = true
 		}

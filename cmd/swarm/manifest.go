@@ -259,6 +259,8 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 			newMRoot.Entries = append(newMRoot.Entries, e)
 
 		}
+		newMRoot.DefaultEntry = mroot.DefaultEntry
+		newMRoot.IsDirectory = mroot.IsDirectory
 		mroot = newMRoot
 	}
 
@@ -271,14 +273,12 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 			if newEntry.Path == e.Path {
 				entry.Path = e.Path
 				newMRoot.Entries = append(newMRoot.Entries, entry)
-			} else if isRoot && e.Path == "" && e.Hash == oldHash {
-				entry.Path = e.Path
-				newMRoot.Entries = append(newMRoot.Entries, entry)
-				defaultEntryUpdated = true
 			} else {
 				newMRoot.Entries = append(newMRoot.Entries, e)
 			}
 		}
+		newMRoot.DefaultEntry = mroot.DefaultEntry
+		newMRoot.IsDirectory = mroot.IsDirectory
 		mroot = newMRoot
 	}
 
@@ -331,6 +331,8 @@ func removeEntryFromManifest(client *swarm.Client, mhash, path string) string {
 			}
 			newMRoot.Entries = append(newMRoot.Entries, entry)
 		}
+		newMRoot.DefaultEntry = mroot.DefaultEntry
+		newMRoot.IsDirectory = mroot.IsDirectory
 		mroot = newMRoot
 	}
 
@@ -342,6 +344,8 @@ func removeEntryFromManifest(client *swarm.Client, mhash, path string) string {
 				newMRoot.Entries = append(newMRoot.Entries, entry)
 			}
 		}
+		newMRoot.DefaultEntry = mroot.DefaultEntry
+		newMRoot.IsDirectory = mroot.IsDirectory
 		mroot = newMRoot
 	}
 

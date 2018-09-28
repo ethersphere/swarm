@@ -43,7 +43,9 @@ const (
 
 // Manifest represents a swarm manifest
 type Manifest struct {
-	Entries []ManifestEntry `json:"entries,omitempty"`
+	Entries      []ManifestEntry `json:"entries,omitempty"`
+	IsDirectory  bool            `json:"isDirectory,omitempty"`
+	DefaultEntry string          `json:"defaultEntry,omitempty"`
 }
 
 // ManifestEntry represents an entry in a swarm manifest
@@ -138,6 +140,12 @@ func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *Manife
 	return addr, nil
 }
 
+// SetDefaultEntry sets a string as the current trie's default entry path.
+func (m *ManifestWriter) SetDefaultEntry(path string) error {
+	m.trie.defaultEntry = path
+	return nil
+}
+
 // RemoveEntry removes the given path from the manifest
 func (m *ManifestWriter) RemoveEntry(path string) error {
 	m.trie.deleteEntry(path, m.quitC)
@@ -206,11 +214,12 @@ func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) 
 }
 
 type manifestTrie struct {
-	fileStore *storage.FileStore
-	entries   [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
-	ref       storage.Address         // if ref != nil, it is stored
-	encrypted bool
-	decrypt   DecryptFunc
+	fileStore    *storage.FileStore
+	entries      [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
+	ref          storage.Address         // if ref != nil, it is stored
+	encrypted    bool
+	defaultEntry string
+	decrypt      DecryptFunc
 }
 
 func newManifestTrieEntry(entry *ManifestEntry, subtrie *manifestTrie) *manifestTrieEntry {
@@ -260,25 +269,44 @@ func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore 
 	}
 
 	log.Debug("manifest retrieved", "addr", addr)
-	var man struct {
-		Entries []*manifestTrieEntry `json:"entries"`
-	}
-	err = json.Unmarshal(manifestData, &man)
+	/*	var man struct {
+		Entries      []*manifestTrieEntry `json:"entries"`
+		IsDirectory  bool                 `json:"isDirectory,omitempty"`
+		DefaultEntry string               `json:"defaultEntry,omitempty"`
+	}*/
+	mm := &Manifest{}
+	err = json.Unmarshal(manifestData, mm)
 	if err != nil {
 		err = fmt.Errorf("Manifest %v is malformed: %v", addr.Log(), err)
 		log.Trace("malformed manifest", "addr", addr)
 		return
 	}
 
-	log.Trace("manifest entries", "addr", addr, "len", len(man.Entries))
+	log.Trace("manifest entries", "addr", addr, "len", len(mm.Entries))
 
 	trie = &manifestTrie{
-		fileStore: fileStore,
-		encrypted: isEncrypted,
-		decrypt:   decrypt,
+		fileStore:    fileStore,
+		encrypted:    isEncrypted,
+		decrypt:      decrypt,
+		defaultEntry: mm.DefaultEntry,
+		//		isDirectory:  mm.IsDirectory,
 	}
-	for _, entry := range man.Entries {
-		err = trie.addEntry(entry, quitC)
+	for _, entry := range mm.Entries {
+		log.Error("msg", "entry", entry, "entry.hash", entry.Hash)
+		me := ManifestEntry{
+			Hash:        entry.Hash,
+			Path:        entry.Path,
+			ContentType: entry.ContentType,
+			Mode:        entry.Mode,
+			Size:        entry.Size,
+			ModTime:     entry.ModTime,
+			Status:      entry.Status,
+			Access:      entry.Access,
+		}
+		mte := &manifestTrieEntry{ManifestEntry: me}
+		log.Error("msg", "entry", mte)
+
+		err = trie.addEntry(mte, quitC)
 		if err != nil {
 			return
 		}
@@ -301,6 +329,7 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) erro
 	}
 
 	if len(entry.Path) == 0 {
+		log.Trace("setting mt.entries[256=entry]")
 		mt.entries[256] = entry
 		return nil
 	}
@@ -313,7 +342,9 @@ func (mt *manifestTrie) addEntry(entry *manifestTrieEntry, quitC chan bool) erro
 	}
 
 	cpl := 0
-	for (len(entry.Path) > cpl) && (len(oldentry.Path) > cpl) && (entry.Path[cpl] == oldentry.Path[cpl]) {
+	for (len(entry.Path) > cpl) &&
+		(len(oldentry.Path) > cpl) &&
+		(entry.Path[cpl] == oldentry.Path[cpl]) {
 		cpl++
 	}
 
@@ -396,10 +427,8 @@ func (mt *manifestTrie) recalcAndStore() error {
 		return nil
 	}
 
-	var buffer bytes.Buffer
-	buffer.WriteString(`{"entries":[`)
-
 	list := &Manifest{}
+	list.DefaultEntry = mt.defaultEntry
 	for _, entry := range &mt.entries {
 		if entry != nil {
 			if entry.Hash == "" { // TODO: paralellize
@@ -411,7 +440,6 @@ func (mt *manifestTrie) recalcAndStore() error {
 			}
 			list.Entries = append(list.Entries, entry.ManifestEntry)
 		}
-
 	}
 
 	manifest, err := json.Marshal(list)
@@ -444,8 +472,10 @@ func (mt *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (
 
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
+		log.Trace("loading subtrie", "hash", entry.Hash)
 		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC, mt.decrypt)
-		entry.Hash = "" // might not match, should be recalculated
+		log.Error("loaded subrtie", "trie", entry.subtrie)
+		//entry.Hash = "" // might not match, should be recalculated
 	}
 	return
 }
@@ -502,16 +532,19 @@ func (mt *manifestTrie) listWithPrefix(prefix string, quitC chan bool, cb func(e
 func (mt *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manifestTrieEntry, pos int) {
 	log.Trace(fmt.Sprintf("findPrefixOf(%s)", path))
 
-	if len(path) == 0 {
-		return mt.entries[256], 0
-	}
-
+	/*	if len(path) == 0 {
+			log.Trace("returning entry 256")
+			return mt.entries[256], 0
+		}
+	*/
 	//see if first char is in manifest entries
 	b := path[0]
 	entry = mt.entries[b]
-	if entry == nil {
+	log.Error("listing trie", "trie", mt.entries)
+	/*	if entry == nil {
+		log.Trace("entry nil, returning entry 256")
 		return mt.entries[256], 0
-	}
+	}*/
 
 	epl := len(entry.Path)
 	log.Trace(fmt.Sprintf("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl))
@@ -578,6 +611,7 @@ func RegularSlashes(path string) (res string) {
 }
 
 func (mt *manifestTrie) getEntry(spath string) (entry *manifestTrieEntry, fullpath string) {
+	log.Debug("api.manifest.getEntry", "spath", spath)
 	path := RegularSlashes(spath)
 	var pos int
 	quitC := make(chan bool)

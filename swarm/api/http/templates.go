@@ -149,12 +149,11 @@ function goToPage() {
 
 <div class="searchbar">
   <form class="separate-block" action="javascript:goToPage();">
-    <input type="text" id="page" autofocus name="search" placeholder="Please enter an ENS name or swarm hash to retrieve ..">
+    <input type="text" id="page" autofocus name="search" placeholder="Please enter an ENS name or swarm hash to retrieve">
     <button class="button" type="submit" value="submit" onclick="goToPage();">Go!</button>
   </form>
 </div>
 <div class="footer">
-<p>{{.Timestamp}}</p>
 <p>Swarm: Serverless Hosting Incentivised Peer-To-Peer Storage And Content Distribution</p>
 </div>
 </div>
