@@ -130,7 +130,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 		size := chunkCount * chunkSize
 
-		_, wait, err := fileStore.Store(ctx, pseudoRandReader(size), int64(size), false)
+		_, wait, err := fileStore.Store(ctx, randomReader(1, size), int64(size), false)
 		if err != nil {
 			log.Error("Store error: %v", "err", err)
 			t.Fatal(err)

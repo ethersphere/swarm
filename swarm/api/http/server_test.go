@@ -172,7 +172,7 @@ func TestBzzFeed(t *testing.T) {
 	defer srv.Close()
 
 	// data of update 1
-	update1Data := testutil.PseudoRandBytes(666)
+	update1Data := testutil.RandomBytes(1, 666)
 	update1Timestamp := srv.CurrentTime
 	//data for update 2
 	update2Data := []byte("foo")

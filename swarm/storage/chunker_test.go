@@ -46,7 +46,7 @@ func newTestHasherStore(store ChunkStore, hash string) *hasherStore {
 }
 
 func testRandomBrokenData(n int, tester *chunkerTester) {
-	data := pseudoRandReader(n)
+	data := randomReader(1, n)
 	brokendata := brokenLimitReader(data, n, n/2)
 
 	buf := make([]byte, n)
@@ -55,7 +55,7 @@ func testRandomBrokenData(n int, tester *chunkerTester) {
 		tester.t.Fatalf("Broken reader is not broken, hence broken. Returns: %v", err)
 	}
 
-	data = pseudoRandReader(n)
+	data = randomReader(2, n)
 	brokendata = brokenLimitReader(data, n, n/2)
 
 	putGetter := newTestHasherStore(NewMapChunkStore(), SHA3Hash)
@@ -76,7 +76,7 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 	input, found := tester.inputs[uint64(n)]
 	var data io.Reader
 	if !found {
-		input = pseudoRandBytes(n)
+		input = randomBytes(1, n)
 		data = bytes.NewReader(input)
 		tester.inputs[uint64(n)] = input
 	} else {
@@ -176,7 +176,7 @@ func TestDataAppend(t *testing.T) {
 		input, found := tester.inputs[uint64(n)]
 		var data io.Reader
 		if !found {
-			input = pseudoRandBytes(n)
+			input = randomBytes(i, n)
 			data = bytes.NewReader(input)
 			tester.inputs[uint64(n)] = input
 		} else {
@@ -199,7 +199,7 @@ func TestDataAppend(t *testing.T) {
 		appendInput, found := tester.inputs[uint64(m)]
 		var appendData io.Reader
 		if !found {
-			appendInput = pseudoRandBytes(m)
+			appendInput = randomBytes(i, m)
 			appendData = bytes.NewReader(appendInput)
 			tester.inputs[uint64(m)] = appendInput
 		} else {
@@ -273,7 +273,7 @@ func benchReadAll(reader LazySectionReader) {
 func benchmarkSplitJoin(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		data := pseudoRandReader(n)
+		data := randomReader(i, n)
 
 		putGetter := newTestHasherStore(NewMapChunkStore(), SHA3Hash)
 		ctx := context.TODO()
@@ -293,7 +293,7 @@ func benchmarkSplitJoin(n int, t *testing.B) {
 func benchmarkSplitTreeSHA3(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		data := pseudoRandReader(n)
+		data := randomReader(i, n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, SHA3Hash)
 
 		ctx := context.Background()
@@ -312,7 +312,7 @@ func benchmarkSplitTreeSHA3(n int, t *testing.B) {
 func benchmarkSplitTreeBMT(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		data := pseudoRandReader(n)
+		data := randomReader(i, n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
 
 		ctx := context.Background()
@@ -330,7 +330,7 @@ func benchmarkSplitTreeBMT(n int, t *testing.B) {
 func benchmarkSplitPyramidBMT(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		data := pseudoRandReader(n)
+		data := randomReader(i, n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
 
 		ctx := context.Background()
@@ -348,7 +348,7 @@ func benchmarkSplitPyramidBMT(n int, t *testing.B) {
 func benchmarkSplitPyramidSHA3(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		data := pseudoRandReader(n)
+		data := randomReader(i, n)
 		putGetter := newTestHasherStore(&FakeChunkStore{}, SHA3Hash)
 
 		ctx := context.Background()
@@ -366,8 +366,8 @@ func benchmarkSplitPyramidSHA3(n int, t *testing.B) {
 func benchmarkSplitAppendPyramid(n, m int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
-		data := pseudoRandReader(n)
-		data1 := pseudoRandReader(m)
+		data := randomReader(i, n)
+		data1 := randomReader(t.N+i, m)
 
 		store := NewMapChunkStore()
 		putGetter := newTestHasherStore(store, SHA3Hash)

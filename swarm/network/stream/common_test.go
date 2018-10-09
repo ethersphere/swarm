@@ -226,16 +226,17 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 	return rootAddrs, rfiles, nil
 }
 
-func pseudoRandReader(size int) *bytes.Reader {
-	return bytes.NewReader(pseudoRandBytes(size))
+func randomReader(seed, length int) *bytes.Reader {
+	return bytes.NewReader(randomBytes(seed, length))
 }
 
-func pseudoRandBytes(size int) []byte {
-	data := make([]byte, size)
-	if _, err := mrand.Read(data); err != nil {
+func randomBytes(seed, length int) []byte {
+	source := mrand.NewSource(int64(seed))
+	b := make([]byte, length)
+	if _, err := mrand.New(source).Read(b); err != nil {
 		panic(err)
 	}
-	return data
+	return b
 }
 
 //generate a random file (string)

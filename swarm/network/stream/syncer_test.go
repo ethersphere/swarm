@@ -181,7 +181,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				}
 				fileStore := item.(*storage.FileStore)
 				size := chunkCount * chunkSize
-				_, wait, err := fileStore.Store(ctx, pseudoRandReader(size), int64(size), false)
+				_, wait, err := fileStore.Store(ctx, randomReader(j, size), int64(size), false)
 				if err != nil {
 					t.Fatal(err.Error())
 				}

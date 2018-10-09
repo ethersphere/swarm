@@ -45,7 +45,7 @@ func TestCLISwarmExportImport(t *testing.T) {
 	cluster := newTestCluster(t, 1)
 
 	// generate random 10mb file
-	content := testutil.PseudoRandBytes(10000000)
+	content := testutil.RandomBytes(1, 10000000)
 	fileName := testutil.TempFileWithContent(t, string(content))
 	defer os.Remove(fileName)
 

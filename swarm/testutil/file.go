@@ -45,14 +45,17 @@ func TempFileWithContent(t *testing.T, content string) string {
 	return tempFile.Name()
 }
 
-func PseudoRandBytes(size int) []byte {
-	data := make([]byte, size)
-	if _, err := mrand.Read(data); err != nil {
+// RandomBytes returns pseudo-random deterministic result
+// because test fails must be reproducible
+func RandomBytes(seed, length int) []byte {
+	source := mrand.NewSource(int64(seed))
+	b := make([]byte, length)
+	if _, err := mrand.New(source).Read(b); err != nil {
 		panic(err)
 	}
-	return data
+	return b
 }
 
-func PseudoRandReader(size int) *bytes.Reader {
-	return bytes.NewReader(PseudoRandBytes(size))
+func RandomReader(seed, length int) *bytes.Reader {
+	return bytes.NewReader(RandomBytes(seed, length))
 }
