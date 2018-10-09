@@ -18,7 +18,7 @@ package encryption
 
 import (
 	"bytes"
-	"crypto/rand"
+	mrand "math/rand"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -126,7 +126,7 @@ func testEncryptDecryptIsIdentity(t *testing.T, padding int, initCtr uint32, dat
 	enc := New(key, padding, initCtr, hashFunc)
 
 	data := make([]byte, dataLength)
-	rand.Read(data)
+	mrand.Read(data)
 
 	encrypted, err := enc.Encrypt(data)
 	if err != nil {

@@ -19,9 +19,8 @@ package stream
 import (
 	"bytes"
 	"context"
-	crand "crypto/rand"
 	"fmt"
-	"io"
+	mrand "math/rand"
 	"os"
 	"sync"
 	"testing"
@@ -530,7 +529,9 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		//now we can actually upload a (random) file to the round-robin store
 		size := chunkCount * chunkSize
 		log.Debug("Storing data to file store")
-		fileHash, wait, err := roundRobinFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		b := make([]byte, size)
+		mrand.Read(b)
+		fileHash, wait, err := roundRobinFileStore.Store(ctx, bytes.NewReader(b), int64(size), false)
 		// wait until all chunks stored
 		if err != nil {
 			return err
@@ -719,7 +720,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 			for i := 0; i < chunkCount; i++ {
 				// create actual size real chunks
 				ctx := context.TODO()
-				hash, wait, err := remoteFileStore.Store(ctx, io.LimitReader(crand.Reader, int64(chunkSize)), int64(chunkSize), false)
+				hash, wait, err := remoteFileStore.Store(ctx, pseudoRandReader(chunkSize), int64(chunkSize), false)
 				if err != nil {
 					b.Fatalf("expected no error. got %v", err)
 				}

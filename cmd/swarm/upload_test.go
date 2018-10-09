@@ -30,6 +30,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+
 	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
@@ -77,33 +79,22 @@ func testCLISwarmUp(toEncrypt bool, t *testing.T) {
 	cluster := newTestCluster(t, 3)
 	defer cluster.Shutdown()
 
-	// create a tmp file
-	tmp, err := ioutil.TempFile("", "swarm-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer tmp.Close()
-	defer os.Remove(tmp.Name())
+	tmpFileName := testutil.TempFileWithContent(t, data)
+	defer os.Remove(tmpFileName)
 
 	// write data to file
-	data := "notsorandomdata"
-	_, err = io.WriteString(tmp, data)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	hashRegexp := `[a-f\d]{64}`
 	flags := []string{
 		"--bzzapi", cluster.Nodes[0].URL,
 		"up",
-		tmp.Name()}
+		tmpFileName}
 	if toEncrypt {
 		hashRegexp = `[a-f\d]{128}`
 		flags = []string{
 			"--bzzapi", cluster.Nodes[0].URL,
 			"up",
 			"--encrypt",
-			tmp.Name()}
+			tmpFileName}
 	}
 	// upload the file with 'swarm up' and expect a hash
 	log.Info(fmt.Sprintf("uploading file with 'swarm up'"))

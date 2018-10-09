@@ -17,14 +17,15 @@
 package stream
 
 import (
+	"bytes"
 	"context"
-	crand "crypto/rand"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
+	mrand "math/rand"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -225,13 +226,25 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 	return rootAddrs, rfiles, nil
 }
 
+func pseudoRandReader(size int) *bytes.Reader {
+	return bytes.NewReader(pseudoRandBytes(size))
+}
+
+func pseudoRandBytes(size int) []byte {
+	data := make([]byte, size)
+	if _, err := mrand.Read(data); err != nil {
+		panic(err)
+	}
+	return data
+}
+
 //generate a random file (string)
 func generateRandomFile() (string, error) {
 	//generate a random file size between minFileSize and maxFileSize
 	fileSize := rand.Intn(maxFileSize-minFileSize) + minFileSize
 	log.Debug(fmt.Sprintf("Generated file with filesize %d kB", fileSize))
 	b := make([]byte, fileSize*1024)
-	_, err := crand.Read(b)
+	_, err := mrand.Read(b)
 	if err != nil {
 		log.Error("Error generating random file.", "err", err)
 		return "", err

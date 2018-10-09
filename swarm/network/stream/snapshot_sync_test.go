@@ -17,9 +17,7 @@ package stream
 
 import (
 	"context"
-	crand "crypto/rand"
 	"fmt"
-	"io"
 	"os"
 	"runtime"
 	"sync"
@@ -603,7 +601,7 @@ func uploadFileToSingleNodeStore(id enode.ID, chunkCount int, lstore *storage.Lo
 	size := chunkSize
 	var rootAddrs []storage.Address
 	for i := 0; i < chunkCount; i++ {
-		rk, wait, err := fileStore.Store(context.TODO(), io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+		rk, wait, err := fileStore.Store(context.TODO(), pseudoRandReader(size), int64(size), false)
 		if err != nil {
 			return nil, err
 		}

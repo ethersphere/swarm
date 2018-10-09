@@ -17,8 +17,10 @@
 package testutil
 
 import (
+	"bytes"
 	"io"
 	"io/ioutil"
+	mrand "math/rand"
 	"os"
 	"strings"
 	"testing"
@@ -41,4 +43,16 @@ func TempFileWithContent(t *testing.T, content string) string {
 		t.Fatal(err)
 	}
 	return tempFile.Name()
+}
+
+func PseudoRandBytes(size int) []byte {
+	data := make([]byte, size)
+	if _, err := mrand.Read(data); err != nil {
+		panic(err)
+	}
+	return data
+}
+
+func PseudoRandReader(size int) *bytes.Reader {
+	return bytes.NewReader(PseudoRandBytes(size))
 }

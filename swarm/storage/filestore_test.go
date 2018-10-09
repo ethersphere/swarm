@@ -21,11 +21,24 @@ import (
 	"context"
 	"io"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"testing"
 )
 
 const testDataSize = 0x0001000
+
+func pseudoRandReader(size int) *bytes.Reader {
+	return bytes.NewReader(pseudoRandBytes(size))
+}
+
+func pseudoRandBytes(size int) []byte {
+	b := make([]byte, size)
+	if _, err := rand.Read(b); err != nil {
+		panic(err)
+	}
+	return b
+}
 
 func TestFileStorerandom(t *testing.T) {
 	testFileStoreRandom(false, t)
@@ -49,9 +62,9 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 	defer os.RemoveAll("/tmp/bzz")
 
-	reader, slice := GenerateRandomData(testDataSize)
+	slice := pseudoRandBytes(testDataSize)
 	ctx := context.TODO()
-	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
@@ -114,9 +127,9 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		DbStore:  db,
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
-	reader, slice := GenerateRandomData(testDataSize)
+	slice := pseudoRandBytes(testDataSize)
 	ctx := context.TODO()
-	key, wait, err := fileStore.Store(ctx, reader, testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}

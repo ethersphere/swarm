@@ -18,9 +18,7 @@ package stream
 
 import (
 	"context"
-	crand "crypto/rand"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"math"
 	"os"
@@ -183,7 +181,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 				}
 				fileStore := item.(*storage.FileStore)
 				size := chunkCount * chunkSize
-				_, wait, err := fileStore.Store(ctx, io.LimitReader(crand.Reader, int64(size)), int64(size), false)
+				_, wait, err := fileStore.Store(ctx, pseudoRandReader(size), int64(size), false)
 				if err != nil {
 					t.Fatal(err.Error())
 				}

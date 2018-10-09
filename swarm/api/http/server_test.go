@@ -20,7 +20,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -173,20 +172,13 @@ func TestBzzFeed(t *testing.T) {
 	defer srv.Close()
 
 	// data of update 1
-	update1Data := make([]byte, 666)
+	update1Data := testutil.PseudoRandBytes(666)
 	update1Timestamp := srv.CurrentTime
-	_, err := rand.Read(update1Data)
-	if err != nil {
-		t.Fatal(err)
-	}
 	//data for update 2
 	update2Data := []byte("foo")
 
 	topic, _ := feed.NewTopic("foo.eth", nil)
 	updateRequest := feed.NewFirstRequest(topic)
-	if err != nil {
-		t.Fatal(err)
-	}
 	updateRequest.SetData(update1Data)
 
 	if err := updateRequest.Sign(signer); err != nil {
