@@ -35,6 +35,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 func TestIntervalsLive(t *testing.T) {
@@ -130,7 +131,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
 		size := chunkCount * chunkSize
 
-		_, wait, err := fileStore.Store(ctx, randomReader(1, size), int64(size), false)
+		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(1, size), int64(size), false)
 		if err != nil {
 			log.Error("Store error: %v", "err", err)
 			t.Fatal(err)

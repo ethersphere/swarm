@@ -21,25 +21,13 @@ import (
 	"context"
 	"io"
 	"io/ioutil"
-	mrand "math/rand"
 	"os"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 const testDataSize = 0x0001000
-
-func randomReader(seed, size int) *bytes.Reader {
-	return bytes.NewReader(randomBytes(seed, size))
-}
-
-func randomBytes(seed, length int) []byte {
-	source := mrand.NewSource(int64(seed))
-	b := make([]byte, length)
-	if _, err := mrand.New(source).Read(b); err != nil {
-		panic(err)
-	}
-	return b
-}
 
 func TestFileStorerandom(t *testing.T) {
 	testFileStoreRandom(false, t)
@@ -63,7 +51,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 	defer os.RemoveAll("/tmp/bzz")
 
-	slice := randomBytes(1, testDataSize)
+	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
 	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
 	if err != nil {
@@ -128,7 +116,7 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		DbStore:  db,
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
-	slice := randomBytes(1, testDataSize)
+	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
 	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
 	if err != nil {

@@ -17,7 +17,6 @@
 package stream
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"flag"
@@ -224,19 +223,6 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 		rootAddrs[i] = rk
 	}
 	return rootAddrs, rfiles, nil
-}
-
-func randomReader(seed, length int) *bytes.Reader {
-	return bytes.NewReader(randomBytes(seed, length))
-}
-
-func randomBytes(seed, length int) []byte {
-	source := mrand.NewSource(int64(seed))
-	b := make([]byte, length)
-	if _, err := mrand.New(source).Read(b); err != nil {
-		panic(err)
-	}
-	return b
 }
 
 //generate a random file (string)

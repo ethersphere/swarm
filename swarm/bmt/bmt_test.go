@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/testutil"
+
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
@@ -119,7 +121,7 @@ func TestRefHasher(t *testing.T) {
 		for segmentCount := x.from; segmentCount <= x.to; segmentCount++ {
 			for length := 1; length <= segmentCount*32; length++ {
 				t.Run(fmt.Sprintf("%d_segments_%d_bytes", segmentCount, length), func(t *testing.T) {
-					data := randomBytes(i, length)
+					data := testutil.RandomBytes(i, length)
 					expected := x.expected(data)
 					actual := NewRefHasher(sha3.NewKeccak256, segmentCount).Hash(data)
 					if !bytes.Equal(actual, expected) {
@@ -152,7 +154,7 @@ func TestHasherEmptyData(t *testing.T) {
 
 // tests sequential write with entire max size written in one go
 func TestSyncHasherCorrectness(t *testing.T) {
-	data := randomBytes(1, BufferSize)
+	data := testutil.RandomBytes(1, BufferSize)
 	hasher := sha3.NewKeccak256
 	size := hasher().Size()
 
@@ -178,7 +180,7 @@ func TestSyncHasherCorrectness(t *testing.T) {
 
 // tests order-neutral concurrent writes with entire max size written in one go
 func TestAsyncCorrectness(t *testing.T) {
-	data := randomBytes(1, BufferSize)
+	data := testutil.RandomBytes(1, BufferSize)
 	hasher := sha3.NewKeccak256
 	size := hasher().Size()
 	whs := []whenHash{first, last, random}
@@ -232,7 +234,7 @@ func testHasherReuse(poolsize int, t *testing.T) {
 	bmt := New(pool)
 
 	for i := 0; i < 100; i++ {
-		data := randomBytes(1, BufferSize)
+		data := testutil.RandomBytes(1, BufferSize)
 		n := rand.Intn(bmt.Size())
 		err := testHasherCorrectness(bmt, hasher, data, n, segmentCount)
 		if err != nil {
@@ -252,7 +254,7 @@ func TestBMTConcurrentUse(t *testing.T) {
 	for i := 0; i < cycles; i++ {
 		go func() {
 			bmt := New(pool)
-			data := randomBytes(1, BufferSize)
+			data := testutil.RandomBytes(1, BufferSize)
 			n := rand.Intn(bmt.Size())
 			errc <- testHasherCorrectness(bmt, hasher, data, n, 128)
 		}()
@@ -286,7 +288,7 @@ func TestBMTWriterBuffers(t *testing.T) {
 			defer pool.Drain(0)
 			n := count * 32
 			bmt := New(pool)
-			data := randomBytes(1, n)
+			data := testutil.RandomBytes(1, n)
 			rbmt := NewRefHasher(hasher, count)
 			refHash := rbmt.Hash(data)
 			expHash := syncHash(bmt, nil, data)
@@ -409,7 +411,7 @@ func BenchmarkPool(t *testing.B) {
 
 // benchmarks simple sha3 hash on chunks
 func benchmarkSHA3(t *testing.B, n int) {
-	data := randomBytes(1, n)
+	data := testutil.RandomBytes(1, n)
 	hasher := sha3.NewKeccak256
 	h := hasher()
 
@@ -428,7 +430,7 @@ func benchmarkSHA3(t *testing.B, n int) {
 func benchmarkBMTBaseline(t *testing.B, n int) {
 	hasher := sha3.NewKeccak256
 	hashSize := hasher().Size()
-	data := randomBytes(1, hashSize)
+	data := testutil.RandomBytes(1, hashSize)
 
 	t.ReportAllocs()
 	t.ResetTimer()
@@ -452,7 +454,7 @@ func benchmarkBMTBaseline(t *testing.B, n int) {
 
 // benchmarks BMT Hasher
 func benchmarkBMT(t *testing.B, n int) {
-	data := randomBytes(1, n)
+	data := testutil.RandomBytes(1, n)
 	hasher := sha3.NewKeccak256
 	pool := NewTreePool(hasher, segmentCount, PoolSize)
 	bmt := New(pool)
@@ -466,7 +468,7 @@ func benchmarkBMT(t *testing.B, n int) {
 
 // benchmarks BMT hasher with asynchronous concurrent segment/section writes
 func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
-	data := randomBytes(1, n)
+	data := testutil.RandomBytes(1, n)
 	hasher := sha3.NewKeccak256
 	pool := NewTreePool(hasher, segmentCount, PoolSize)
 	bmt := New(pool).NewAsyncWriter(double)
@@ -484,7 +486,7 @@ func benchmarkBMTAsync(t *testing.B, n int, wh whenHash, double bool) {
 
 // benchmarks 100 concurrent bmt hashes with pool capacity
 func benchmarkPool(t *testing.B, poolsize, n int) {
-	data := randomBytes(1, n)
+	data := testutil.RandomBytes(1, n)
 	hasher := sha3.NewKeccak256
 	pool := NewTreePool(hasher, segmentCount, poolsize)
 	cycles := 100
@@ -507,7 +509,7 @@ func benchmarkPool(t *testing.B, poolsize, n int) {
 
 // benchmarks the reference hasher
 func benchmarkRefHasher(t *testing.B, n int) {
-	data := randomBytes(1, n)
+	data := testutil.RandomBytes(1, n)
 	hasher := sha3.NewKeccak256
 	rbmt := NewRefHasher(hasher, 128)
 
@@ -516,15 +518,6 @@ func benchmarkRefHasher(t *testing.B, n int) {
 	for i := 0; i < t.N; i++ {
 		rbmt.Hash(data)
 	}
-}
-
-func randomBytes(seed, length int) []byte {
-	source := mrand.NewSource(int64(seed))
-	b := make([]byte, length)
-	if _, err := mrand.New(source).Read(b); err != nil {
-		panic(err)
-	}
-	return b
 }
 
 // Hash hashes the data and the span using the bmt hasher

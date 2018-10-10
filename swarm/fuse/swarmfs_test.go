@@ -31,6 +31,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/log"
 
@@ -229,15 +230,6 @@ func checkFile(t *testing.T, testMountDir, fname string, contents []byte) {
 	}
 }
 
-func randomBytes(seed, length int) []byte {
-	source := mrand.NewSource(int64(seed))
-	b := make([]byte, length)
-	if _, err := mrand.New(source).Read(b); err != nil {
-		panic(err)
-	}
-	return b
-}
-
 func isDirEmpty(name string) bool {
 	f, err := os.Open(name)
 	if err != nil {
@@ -331,22 +323,22 @@ func (ta *testAPI) mountListAndUnmount(t *testing.T, toEncrypt bool) {
 	dat.testMountDir = filepath.Join(dat.testDir, "testMountDir")
 	dat.files = make(map[string]fileInfo)
 
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["2.txt"] = fileInfo{0711, 333, 444, randomBytes(2, 10)}
-	dat.files["3.txt"] = fileInfo{0622, 333, 444, randomBytes(3, 100)}
-	dat.files["4.txt"] = fileInfo{0533, 333, 444, randomBytes(4, 1024)}
-	dat.files["5.txt"] = fileInfo{0544, 333, 444, randomBytes(5, 10)}
-	dat.files["6.txt"] = fileInfo{0555, 333, 444, randomBytes(6, 10)}
-	dat.files["7.txt"] = fileInfo{0666, 333, 444, randomBytes(7, 10)}
-	dat.files["8.txt"] = fileInfo{0777, 333, 333, randomBytes(8, 10)}
-	dat.files["11.txt"] = fileInfo{0777, 333, 444, randomBytes(9, 10)}
-	dat.files["111.txt"] = fileInfo{0777, 333, 444, randomBytes(10, 10)}
-	dat.files["two/2.txt"] = fileInfo{0777, 333, 444, randomBytes(11, 10)}
-	dat.files["two/2/2.txt"] = fileInfo{0777, 333, 444, randomBytes(12, 10)}
-	dat.files["two/2./2.txt"] = fileInfo{0777, 444, 444, randomBytes(13, 10)}
-	dat.files["twice/2.txt"] = fileInfo{0777, 444, 333, randomBytes(14, 200)}
-	dat.files["one/two/three/four/five/six/seven/eight/nine/10.txt"] = fileInfo{0777, 333, 444, randomBytes(15, 10240)}
-	dat.files["one/two/three/four/five/six/six"] = fileInfo{0777, 333, 444, randomBytes(16, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["2.txt"] = fileInfo{0711, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["3.txt"] = fileInfo{0622, 333, 444, testutil.RandomBytes(3, 100)}
+	dat.files["4.txt"] = fileInfo{0533, 333, 444, testutil.RandomBytes(4, 1024)}
+	dat.files["5.txt"] = fileInfo{0544, 333, 444, testutil.RandomBytes(5, 10)}
+	dat.files["6.txt"] = fileInfo{0555, 333, 444, testutil.RandomBytes(6, 10)}
+	dat.files["7.txt"] = fileInfo{0666, 333, 444, testutil.RandomBytes(7, 10)}
+	dat.files["8.txt"] = fileInfo{0777, 333, 333, testutil.RandomBytes(8, 10)}
+	dat.files["11.txt"] = fileInfo{0777, 333, 444, testutil.RandomBytes(9, 10)}
+	dat.files["111.txt"] = fileInfo{0777, 333, 444, testutil.RandomBytes(10, 10)}
+	dat.files["two/2.txt"] = fileInfo{0777, 333, 444, testutil.RandomBytes(11, 10)}
+	dat.files["two/2/2.txt"] = fileInfo{0777, 333, 444, testutil.RandomBytes(12, 10)}
+	dat.files["two/2./2.txt"] = fileInfo{0777, 444, 444, testutil.RandomBytes(13, 10)}
+	dat.files["twice/2.txt"] = fileInfo{0777, 444, 333, testutil.RandomBytes(14, 200)}
+	dat.files["one/two/three/four/five/six/seven/eight/nine/10.txt"] = fileInfo{0777, 333, 444, testutil.RandomBytes(15, 10240)}
+	dat.files["one/two/three/four/five/six/six"] = fileInfo{0777, 333, 444, testutil.RandomBytes(16, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -389,7 +381,7 @@ func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "max-upload1")
 	dat.testMountDir = filepath.Join(dat.testDir, "max-mount1")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -399,7 +391,7 @@ func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 
 	dat.testUploadDir = filepath.Join(dat.testDir, "max-upload2")
 	dat.testMountDir = filepath.Join(dat.testDir, "max-mount2")
-	dat.files["2.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["2.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -408,7 +400,7 @@ func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 
 	dat.testUploadDir = filepath.Join(dat.testDir, "max-upload3")
 	dat.testMountDir = filepath.Join(dat.testDir, "max-mount3")
-	dat.files["3.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["3.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -417,7 +409,7 @@ func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 
 	dat.testUploadDir = filepath.Join(dat.testDir, "max-upload4")
 	dat.testMountDir = filepath.Join(dat.testDir, "max-mount4")
-	dat.files["4.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["4.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -426,7 +418,7 @@ func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 
 	dat.testUploadDir = filepath.Join(dat.testDir, "max-upload5")
 	dat.testMountDir = filepath.Join(dat.testDir, "max-mount5")
-	dat.files["5.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["5.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -439,7 +431,7 @@ func (ta *testAPI) runMaxMounts(t *testing.T, toEncrypt bool) {
 	if err != nil {
 		t.Fatalf("Couldn't create upload dir 6: %v", err)
 	}
-	dat.files["6.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["6.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 	testMountDir6 := filepath.Join(dat.testDir, "max-mount6")
 	err = os.MkdirAll(testMountDir6, 0777)
 	if err != nil {
@@ -478,7 +470,7 @@ func (ta *testAPI) remount(t *testing.T, toEncrypt bool) {
 	dat.testMountDir = filepath.Join(dat.testDir, "remount-mount1")
 	dat.files = make(map[string]fileInfo)
 
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -497,7 +489,7 @@ func (ta *testAPI) remount(t *testing.T, toEncrypt bool) {
 	}
 
 	// mount a different hash in already mounted point
-	dat.files["2.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["2.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 	testUploadDir2, err3 := addDir(dat.testDir, "remount-upload2")
 	if err3 != nil {
 		t.Fatalf("Error creating second upload dir: %v", err3)
@@ -546,7 +538,7 @@ func (ta *testAPI) unmount(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "ex-upload1")
 	dat.testMountDir = filepath.Join(dat.testDir, "ex-mount1")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -594,7 +586,7 @@ func (ta *testAPI) unmountWhenResourceBusy(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "ex-upload1")
 	dat.testMountDir = filepath.Join(dat.testDir, "ex-mount1")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -612,7 +604,7 @@ func (ta *testAPI) unmountWhenResourceBusy(t *testing.T, toEncrypt bool) {
 	//we need to manually close the file before mount for this test
 	//but let's defer too in case of errors
 	defer d.Close()
-	_, err = d.Write(randomBytes(1, 10))
+	_, err = d.Write(testutil.RandomBytes(1, 10))
 	if err != nil {
 		t.Fatalf("Couldn't write to file: %v", err)
 	}
@@ -670,7 +662,7 @@ func (ta *testAPI) seekInMultiChunkFile(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "seek-upload1")
 	dat.testMountDir = filepath.Join(dat.testDir, "seek-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10240)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10240)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -736,9 +728,9 @@ func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "create-upload1")
 	dat.testMountDir = filepath.Join(dat.testDir, "create-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["five.txt"] = fileInfo{0700, 333, 444, randomBytes(2, 10)}
-	dat.files["six.txt"] = fileInfo{0700, 333, 444, randomBytes(3, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["five.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["six.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(3, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -754,7 +746,7 @@ func (ta *testAPI) createNewFile(t *testing.T, toEncrypt bool) {
 	}
 	defer d.Close()
 	log.Debug("Opened file")
-	contents := randomBytes(1, 11)
+	contents := testutil.RandomBytes(1, 11)
 	log.Debug("content read")
 	_, err = d.Write(contents)
 	if err != nil {
@@ -814,7 +806,7 @@ func (ta *testAPI) createNewFileInsideDirectory(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "createinsidedir-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "createinsidedir-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["one/1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["one/1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -831,7 +823,7 @@ func (ta *testAPI) createNewFileInsideDirectory(t *testing.T, toEncrypt bool) {
 	}
 	defer d.Close()
 	log.Debug("File opened")
-	contents := randomBytes(1, 11)
+	contents := testutil.RandomBytes(1, 11)
 	log.Debug("Content read")
 	_, err = d.Write(contents)
 	if err != nil {
@@ -891,7 +883,7 @@ func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T, toEncrypt bool)
 	dat.testUploadDir = filepath.Join(dat.testDir, "createinsidenewdir-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "createinsidenewdir-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -911,7 +903,7 @@ func (ta *testAPI) createNewFileInsideNewDirectory(t *testing.T, toEncrypt bool)
 	}
 	defer d.Close()
 	log.Debug("File opened")
-	contents := randomBytes(1, 11)
+	contents := testutil.RandomBytes(1, 11)
 	log.Debug("content read")
 	_, err = d.Write(contents)
 	if err != nil {
@@ -967,9 +959,9 @@ func (ta *testAPI) removeExistingFile(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "remove-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "remove-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["five.txt"] = fileInfo{0700, 333, 444, randomBytes(2, 10)}
-	dat.files["six.txt"] = fileInfo{0700, 333, 444, randomBytes(3, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["five.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["six.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(3, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -1027,9 +1019,9 @@ func (ta *testAPI) removeExistingFileInsideDir(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "remove-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "remove-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["one/five.txt"] = fileInfo{0700, 333, 444, randomBytes(2, 10)}
-	dat.files["one/six.txt"] = fileInfo{0700, 333, 444, randomBytes(3, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["one/five.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["one/six.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(3, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -1095,9 +1087,9 @@ func (ta *testAPI) removeNewlyAddedFile(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "removenew-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "removenew-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["five.txt"] = fileInfo{0700, 333, 444, randomBytes(2, 10)}
-	dat.files["six.txt"] = fileInfo{0700, 333, 444, randomBytes(3, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["five.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["six.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(3, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -1118,7 +1110,7 @@ func (ta *testAPI) removeNewlyAddedFile(t *testing.T, toEncrypt bool) {
 	}
 	defer d.Close()
 	log.Debug("file opened")
-	contents := randomBytes(1, 11)
+	contents := testutil.RandomBytes(1, 11)
 	log.Debug("content read")
 	_, err = d.Write(contents)
 	if err != nil {
@@ -1188,9 +1180,9 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "modifyfile-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "modifyfile-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["five.txt"] = fileInfo{0700, 333, 444, randomBytes(2, 10)}
-	dat.files["six.txt"] = fileInfo{0700, 333, 444, randomBytes(3, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["five.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["six.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(3, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -1344,9 +1336,9 @@ func (ta *testAPI) removeEmptyDir(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "rmdir-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "rmdir-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["five.txt"] = fileInfo{0700, 333, 444, randomBytes(2, 10)}
-	dat.files["six.txt"] = fileInfo{0700, 333, 444, randomBytes(3, 10)}
+	dat.files["1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["five.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["six.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(3, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -1393,9 +1385,9 @@ func (ta *testAPI) removeDirWhichHasFiles(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "rmdir-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "rmdir-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["one/1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["two/five.txt"] = fileInfo{0700, 333, 444, randomBytes(2, 10)}
-	dat.files["two/six.txt"] = fileInfo{0700, 333, 444, randomBytes(3, 10)}
+	dat.files["one/1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["two/five.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["two/six.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(3, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -1467,12 +1459,12 @@ func (ta *testAPI) removeDirWhichHasSubDirs(t *testing.T, toEncrypt bool) {
 	dat.testUploadDir = filepath.Join(dat.testDir, "rmsubdir-upload")
 	dat.testMountDir = filepath.Join(dat.testDir, "rmsubdir-mount")
 	dat.files = make(map[string]fileInfo)
-	dat.files["one/1.txt"] = fileInfo{0700, 333, 444, randomBytes(1, 10)}
-	dat.files["two/three/2.txt"] = fileInfo{0700, 333, 444, randomBytes(2, 10)}
-	dat.files["two/three/3.txt"] = fileInfo{0700, 333, 444, randomBytes(3, 10)}
-	dat.files["two/four/5.txt"] = fileInfo{0700, 333, 444, randomBytes(4, 10)}
-	dat.files["two/four/6.txt"] = fileInfo{0700, 333, 444, randomBytes(5, 10)}
-	dat.files["two/four/six/7.txt"] = fileInfo{0700, 333, 444, randomBytes(6, 10)}
+	dat.files["one/1.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(1, 10)}
+	dat.files["two/three/2.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(2, 10)}
+	dat.files["two/three/3.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(3, 10)}
+	dat.files["two/four/5.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(4, 10)}
+	dat.files["two/four/6.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(5, 10)}
+	dat.files["two/four/six/7.txt"] = fileInfo{0700, 333, 444, testutil.RandomBytes(6, 10)}
 
 	dat, err = ta.uploadAndMount(dat, t)
 	if err != nil {
@@ -1554,7 +1546,7 @@ func (ta *testAPI) appendFileContentsToEnd(t *testing.T, toEncrypt bool) {
 	dat.testMountDir = filepath.Join(dat.testDir, "appendlargefile-mount")
 	dat.files = make(map[string]fileInfo)
 
-	line1 := randomBytes(1, 10)
+	line1 := testutil.RandomBytes(1, 10)
 
 	dat.files["1.txt"] = fileInfo{0700, 333, 444, line1}
 
@@ -1571,7 +1563,7 @@ func (ta *testAPI) appendFileContentsToEnd(t *testing.T, toEncrypt bool) {
 	}
 	defer fd.Close()
 	log.Debug("file opened")
-	line2 := randomBytes(1, 5)
+	line2 := testutil.RandomBytes(1, 5)
 	log.Debug("line read")
 	_, err = fd.Seek(int64(len(line1)), 0)
 	if err != nil {
