@@ -38,7 +38,7 @@ func TestLigthnodeRetrieveRequestWithRetrieve(t *testing.T) {
 
 	err = tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID()})
 	if err == nil || err.Error() != "timed out waiting for peers to disconnect" {
-		t.Fatalf("Expected no disconnnect, got %v", err)
+		t.Fatalf("Expected no disconnect, got %v", err)
 	}
 }
 
