@@ -136,6 +136,8 @@ func runFileRetrievalTest(nodeCount int) error {
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				DoSync:          true,
 				SyncUpdateDelay: 3 * time.Second,
+				DoRetrieve:      true,
+				DoServeRetrieve: true,
 			})
 
 			fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
