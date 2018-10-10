@@ -94,7 +94,7 @@ func TestSyncingViaGlobalSync(t *testing.T) {
 	}
 }
 
-func XTestSyncingViaDirectSubscribe(t *testing.T) {
+func TestSyncingViaDirectSubscribe(t *testing.T) {
 	if runtime.GOOS == "darwin" && os.Getenv("TRAVIS") == "true" {
 		t.Skip("Flaky on mac on travis")
 	}
