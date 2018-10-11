@@ -430,7 +430,9 @@ func (p *Pss) process(pssmsg *PssMsg) error {
 
 func (p *Pss) executeHandlers(topic Topic, payload []byte, from *PssAddress, asymmetric bool, keyid string) {
 	handlers := p.getHandlers(topic)
-	peer := p2p.NewPeer(enode.ID{}, fmt.Sprintf("%x", from), []p2p.Cap{})
+	// nid := enode.HexID("0x00") // this hack is needed to satisfy the p2p method
+	nid := enode.ID{}
+	peer := p2p.NewPeer(nid, fmt.Sprintf("%x", from), []p2p.Cap{})
 	for f := range handlers {
 		err := (*f)(payload, peer, asymmetric, keyid)
 		if err != nil {
@@ -446,8 +448,25 @@ func (p *Pss) isSelfRecipient(msg *PssMsg) bool {
 
 // test match of leftmost bytes in given message to node's Kademlia address
 func (p *Pss) isSelfPossibleRecipient(msg *PssMsg) bool {
+	// in partial addressing mode self is possible recipient if To address is a prefix
+	// of the local kademlia base address
+	params := newMsgParamsFromBytes(msg.Control)
 	local := p.Kademlia.BaseAddr()
-	return bytes.Equal(msg.To, local[:len(msg.To)])
+	if params.nhr == 0 && params.nhs == 0 {
+		return bytes.Equal(msg.To, local[:len(msg.To)])
+	}
+	minProx := 255
+	if params.nhr > 0 {
+		minProx = params.nhr
+	}
+	if params.nhs > 0 {
+		depth := p.Kademlia.NeighbourhoodDepth(params.nhr)
+		if depth < minProx {
+			minProx = depth
+		}
+	}
+	po, _ := p.Kademlia.POF(local, msg.To, 256)
+	return po > minProx
 }
 
 /////////////////////////////////////////////////////////////////////

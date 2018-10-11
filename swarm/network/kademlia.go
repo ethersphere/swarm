@@ -63,6 +63,7 @@ type KadParams struct {
 	MaxRetries     int   // maximum number of redial attempts
 	// function to sanction or prevent suggesting a peer
 	Reachable func(*BzzAddr) bool
+	POF       pot.Pof
 }
 
 // NewKadParams returns a params struct with default values
@@ -75,6 +76,7 @@ func NewKadParams() *KadParams {
 		RetryInterval:  4200000000, // 4.2 sec
 		MaxRetries:     42,
 		RetryExponent:  2,
+		POF:            pof,
 	}
 }
 
@@ -175,7 +177,7 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	minsize := k.MinBinSize
-	depth := k.neighbourhoodDepth()
+	depth := k.neighbourhoodDepth(k.MinProxBinSize)
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
 	var ppo int
@@ -305,7 +307,7 @@ func (k *Kademlia) sendNeighbourhoodDepthChange() {
 	// It provides signaling of neighbourhood depth change.
 	// This part of the code is sending new neighbourhood depth to nDepthC if that condition is met.
 	if k.nDepthC != nil {
-		nDepth := k.neighbourhoodDepth()
+		nDepth := k.neighbourhoodDepth(k.MinProxBinSize)
 		if nDepth != k.nDepth {
 			k.nDepth = nDepth
 			k.nDepthC <- nDepth
@@ -357,7 +359,7 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 
 	var startPo int
 	var endPo int
-	kadDepth := k.neighbourhoodDepth()
+	kadDepth := k.neighbourhoodDepth(k.MinProxBinSize)
 
 	k.conns.EachBin(base, pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		if startPo > 0 && endPo != k.MaxProxDisplay {
@@ -391,7 +393,7 @@ func (k *Kademlia) eachConn(base []byte, o int, f func(*Peer, int, bool) bool) {
 	if len(base) == 0 {
 		base = k.base
 	}
-	depth := k.neighbourhoodDepth()
+	depth := k.neighbourhoodDepth(k.MinProxBinSize)
 	k.conns.EachNeighbour(base, pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
@@ -413,7 +415,7 @@ func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool
 	if len(base) == 0 {
 		base = k.base
 	}
-	depth := k.neighbourhoodDepth()
+	depth := k.neighbourhoodDepth(k.MinProxBinSize)
 	k.addrs.EachNeighbour(base, pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
@@ -423,18 +425,22 @@ func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool
 }
 
 // neighbourhoodDepth returns the proximity order that defines the distance of
-// the nearest neighbour set with cardinality >= MinProxBinSize
-// if there is altogether less than MinProxBinSize peers it returns 0
+// the nearest neighbour set with cardinality >= targetSize
+// if there is altogether less than targetSize peers it returns 0
+func (k *Kademlia) NeighbourhoodDepth(targetSize int) (depth int) {
+	return k.neighbourhoodDepth(targetSize)
+}
+
 // caller must hold the lock
-func (k *Kademlia) neighbourhoodDepth() (depth int) {
-	if k.conns.Size() < k.MinProxBinSize {
+func (k *Kademlia) neighbourhoodDepth(targetSize int) (depth int) {
+	if k.conns.Size() < targetSize {
 		return 0
 	}
 	var size int
 	f := func(v pot.Val, i int) bool {
 		size++
 		depth = i
-		return size < k.MinProxBinSize
+		return size < targetSize
 	}
 	k.conns.EachNeighbour(k.base, pof, f)
 	return depth
@@ -496,7 +502,7 @@ func (k *Kademlia) string() string {
 	liverows := make([]string, k.MaxProxDisplay)
 	peersrows := make([]string, k.MaxProxDisplay)
 
-	depth := k.neighbourhoodDepth()
+	depth := k.neighbourhoodDepth(k.MinProxBinSize)
 	rest := k.conns.Size()
 	k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		var rowlen int
@@ -616,7 +622,7 @@ func (k *Kademlia) saturation(n int) int {
 		prev++
 		return prev == po && size >= n
 	})
-	depth := k.neighbourhoodDepth()
+	depth := k.neighbourhoodDepth(k.MinProxBinSize)
 	if depth < prev {
 		return depth
 	}
@@ -629,7 +635,7 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 	prev := 0
 	e := len(emptyBins)
 	ok := true
-	depth := k.neighbourhoodDepth()
+	depth := k.neighbourhoodDepth(k.MinProxBinSize)
 	k.conns.EachBin(k.base, pof, 0, func(po, _ int, _ func(func(val pot.Val, i int) bool) bool) bool {
 		if prev == depth+1 {
 			return true

@@ -34,8 +34,10 @@ const (
 )
 
 const (
-	pssControlSym = 1
-	pssControlRaw = 1 << 1
+	pssControlSym                 = 1
+	pssControlRaw                 = 1 << 1
+	pssControlNeighbourhoodRadius = 1 << 2
+	pssControlNeighbourhoodSize   = 1 << 3
 )
 
 var (
@@ -91,29 +93,65 @@ type pssDigest [digestLength]byte
 
 // conceals bitwise operations on the control flags byte
 type msgParams struct {
-	raw bool
-	sym bool
+	raw bool // unenctypted mode
+	sym bool // symmetric encryption
+	nhr int  // neighbourhood addressing mode based on minumim proximity order
+	nhs int  // neighbourhood addressing mode based on minumim neighbourhood size
 }
 
 func newMsgParamsFromBytes(paramBytes []byte) *msgParams {
-	if len(paramBytes) != 1 {
+	if len(paramBytes) == 0 {
 		return nil
 	}
+	var nhs, nhr int
+	if paramBytes[0]&pssControlNeighbourhoodRadius > 0 {
+		if len(paramBytes) > 1 {
+			nhr = int(uint8(paramBytes[1]))
+		} else {
+			return nil
+		}
+		if paramBytes[0]&pssControlNeighbourhoodSize > 0 {
+			if len(paramBytes) > 2 {
+				nhs = int(uint8(paramBytes[2]))
+			} else {
+				return nil
+			}
+		}
+	} else if paramBytes[0]&pssControlNeighbourhoodSize > 0 {
+		if len(paramBytes) > 1 {
+			nhs = int(uint8(paramBytes[1]))
+		} else {
+			return nil
+		}
+	}
+
 	return &msgParams{
 		raw: paramBytes[0]&pssControlRaw > 0,
 		sym: paramBytes[0]&pssControlSym > 0,
+		nhs: nhs,
+		nhr: nhr,
 	}
 }
 
 func (m *msgParams) Bytes() (paramBytes []byte) {
 	var b byte
+	var nh []byte
 	if m.raw {
 		b |= pssControlRaw
 	}
 	if m.sym {
 		b |= pssControlSym
 	}
+	if m.nhr > 0 {
+		b |= pssControlNeighbourhoodRadius
+		nh = append(nh, byte(m.nhr))
+	}
+	if m.nhs > 0 {
+		b |= pssControlNeighbourhoodSize
+		nh = append(nh, byte(m.nhs))
+	}
 	paramBytes = append(paramBytes, b)
+	paramBytes = append(paramBytes, nh...)
 	return paramBytes
 }
 
