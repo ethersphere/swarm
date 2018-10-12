@@ -70,6 +70,7 @@ type Config struct {
 	SwapAPI              string
 	Cors                 string
 	BzzAccount           string
+	AutoDefaultPath      bool
 	privateKey           *ecdsa.PrivateKey
 }
 

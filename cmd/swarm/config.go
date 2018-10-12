@@ -80,6 +80,7 @@ const (
 	SWARM_ENV_STORE_CAPACITY          = "SWARM_STORE_CAPACITY"
 	SWARM_ENV_STORE_CACHE_CAPACITY    = "SWARM_STORE_CACHE_CAPACITY"
 	SWARM_ACCESS_PASSWORD             = "SWARM_ACCESS_PASSWORD"
+	SWARM_AUTO_DEFAULTPATH            = "SWARM_AUTO_DEFAULTPATH"
 	GETH_ENV_DATADIR                  = "GETH_DATADIR"
 )
 
@@ -361,6 +362,14 @@ func envVarsOverride(currentConfig *bzzapi.Config) (config *bzzapi.Config) {
 
 	if cors := os.Getenv(SWARM_ENV_CORS); cors != "" {
 		currentConfig.Cors = cors
+	}
+
+	if autoDefaultPath := os.Getenv(SWARM_AUTO_DEFAULTPATH); autoDefaultPath != "" {
+		b, err := strconv.ParseBool(autoDefaultPath)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_AUTO_DEFAULTPATH, err)
+		}
+		currentConfig.AutoDefaultPath = b
 	}
 
 	return currentConfig

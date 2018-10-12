@@ -26,6 +26,7 @@ import (
 	"os/user"
 	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
@@ -47,16 +48,24 @@ var upCommand = cli.Command{
 func upload(ctx *cli.Context) {
 	args := ctx.Args()
 	var (
-		bzzapi       = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
-		recursive    = ctx.GlobalBool(SwarmRecursiveFlag.Name)
-		wantManifest = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
-		defaultPath  = ctx.GlobalString(SwarmUploadDefaultPath.Name)
-		fromStdin    = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
-		mimeType     = ctx.GlobalString(SwarmUploadMimeType.Name)
-		client       = swarm.NewClient(bzzapi)
-		toEncrypt    = ctx.Bool(SwarmEncryptedFlag.Name)
-		file         string
+		bzzapi          = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
+		recursive       = ctx.GlobalBool(SwarmRecursiveFlag.Name)
+		wantManifest    = ctx.GlobalBoolT(SwarmWantManifestFlag.Name)
+		defaultPath     = ctx.GlobalString(SwarmUploadDefaultPath.Name)
+		fromStdin       = ctx.GlobalBool(SwarmUpFromStdinFlag.Name)
+		mimeType        = ctx.GlobalString(SwarmUploadMimeType.Name)
+		client          = swarm.NewClient(bzzapi)
+		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
+		autoDefaultPath = false
+		file            string
 	)
+	if autoDefaultPathString := os.Getenv(SWARM_AUTO_DEFAULTPATH); autoDefaultPathString != "" {
+		b, err := strconv.ParseBool(autoDefaultPathString)
+		if err != nil {
+			utils.Fatalf("invalid environment variable %s: %v", SWARM_AUTO_DEFAULTPATH, err)
+		}
+		autoDefaultPath = b
+	}
 
 	if len(args) != 1 {
 		if fromStdin {
@@ -106,6 +115,14 @@ func upload(ctx *cli.Context) {
 			if !recursive {
 				return "", errors.New("Argument is a directory and recursive upload is disabled")
 			}
+			if autoDefaultPath {
+				defaultEntryCandidate := path.Join(file, "index.html")
+				defaultEntryStat, err := os.Stat(defaultEntryCandidate)
+				if err == nil && !defaultEntryStat.IsDir() {
+					defaultPath = defaultEntryCandidate
+				}
+			}
+
 			if defaultPath != "" {
 				// construct absolute default path
 				absDefaultPath, _ := filepath.Abs(defaultPath)
