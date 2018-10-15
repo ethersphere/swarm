@@ -468,8 +468,8 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 			if entry == nil {
 				status = http.StatusNotFound
 				apiGetNotFound.Inc(1)
-				err = fmt.Errorf("manifest (feed update multihash) entry for '%s' not found", path)
-				log.Trace("manifest (feed update multihash) entry not found", "key", manifestAddr, "path", path)
+				err = fmt.Errorf("Feed update multihash: could not find resource '%s'", path)
+				log.Trace("Feed update multihash: could not find resource", "key", manifestAddr, "path", path)
 				return reader, mimeType, status, nil, err
 			}
 		}
@@ -489,7 +489,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		// no entry found
 		status = http.StatusNotFound
 		apiGetNotFound.Inc(1)
-		err = fmt.Errorf("manifest entry for '%s' not found", path)
+		err = fmt.Errorf("Not found: could not find resource '%s'", path)
 		log.Trace("manifest entry not found", "key", contentAddr, "path", path)
 	}
 	return
@@ -792,14 +792,14 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 		contentKey, err = mw.AddEntry(ctx, tr, entry)
 		if err != nil {
 			apiUploadTarFail.Inc(1)
-			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)
+			return nil, fmt.Errorf("Error adding manifest entry from tar stream: %s", err)
 		}
 		if hdr.Name == defaultPath {
 			log.Info("writing defualt entry")
 			err := mw.SetDefaultEntry(defaultPath)
 			if err != nil {
 				apiUploadTarFail.Inc(1)
-				return nil, fmt.Errorf("error setting default manifest entry from tar stream: %s", err)
+				return nil, fmt.Errorf("Error setting default manifest entry from tar stream: %s", err)
 			}
 			defaultPathFound = true
 		}

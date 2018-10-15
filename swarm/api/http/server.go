@@ -414,7 +414,7 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 		log.Debug("adding path to new manifest", "ruid", ruid, "bytes", entry.Size, "path", entry.Path)
 		contentKey, err := mw.AddEntry(r.Context(), reader, entry)
 		if err != nil {
-			return fmt.Errorf("error adding manifest entry from multipart form: %s", err)
+			return fmt.Errorf("Error adding manifest entry from multipart form: %s", err)
 		}
 		log.Debug("stored content", "ruid", ruid, "key", contentKey)
 	}
