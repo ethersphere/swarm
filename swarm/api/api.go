@@ -408,7 +408,6 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		path = trie.defaultEntry
 	}
 	entry, _ := trie.getEntry(path)
-	log.Error("sf", "sf", entry, "trie", trie)
 	if entry != nil {
 		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Path", entry.Path, "entry.contentType", entry.ContentType, "entry.Hash", entry.Hash)
 

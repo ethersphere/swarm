@@ -292,7 +292,6 @@ func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore 
 		//		isDirectory:  mm.IsDirectory,
 	}
 	for _, entry := range mm.Entries {
-		log.Error("msg", "entry", entry, "entry.hash", entry.Hash)
 		me := ManifestEntry{
 			Hash:        entry.Hash,
 			Path:        entry.Path,
@@ -304,7 +303,6 @@ func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore 
 			Access:      entry.Access,
 		}
 		mte := &manifestTrieEntry{ManifestEntry: me}
-		log.Error("msg", "entry", mte)
 
 		err = trie.addEntry(mte, quitC)
 		if err != nil {
@@ -472,9 +470,7 @@ func (mt *manifestTrie) loadSubTrie(entry *manifestTrieEntry, quitC chan bool) (
 
 	if entry.subtrie == nil {
 		hash := common.Hex2Bytes(entry.Hash)
-		log.Trace("loading subtrie", "hash", entry.Hash)
 		entry.subtrie, err = loadManifest(context.TODO(), mt.fileStore, hash, quitC, mt.decrypt)
-		log.Error("loaded subrtie", "trie", entry.subtrie)
 		//entry.Hash = "" // might not match, should be recalculated
 	}
 	return
@@ -540,12 +536,6 @@ func (mt *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manif
 	//see if first char is in manifest entries
 	b := path[0]
 	entry = mt.entries[b]
-	log.Error("listing trie", "trie", mt.entries)
-	/*	if entry == nil {
-		log.Trace("entry nil, returning entry 256")
-		return mt.entries[256], 0
-	}*/
-
 	epl := len(entry.Path)
 	log.Trace(fmt.Sprintf("path = %v  entry.Path = %v  epl = %v", path, entry.Path, epl))
 	if len(path) <= epl {

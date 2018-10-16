@@ -409,7 +409,6 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 			Path:        path,
 			ContentType: part.Header.Get("Content-Type"),
 			Size:        size,
-			ModTime:     time.Now(),
 		}
 		log.Debug("adding path to new manifest", "ruid", ruid, "bytes", entry.Size, "path", entry.Path)
 		contentKey, err := mw.AddEntry(r.Context(), reader, entry)
@@ -423,13 +422,15 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 func (s *Server) handleDirectUpload(r *http.Request, mw *api.ManifestWriter) error {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.direct.upload", "ruid", ruid)
-	key, err := mw.AddEntry(r.Context(), r.Body, &api.ManifestEntry{
+	me := &api.ManifestEntry{
 		Path:        GetURI(r.Context()).Path,
 		ContentType: r.Header.Get("Content-Type"),
 		Mode:        0644,
 		Size:        r.ContentLength,
-		ModTime:     time.Now(),
-	})
+	}
+	mw.SetDefaultEntry(me.Path)
+	key, err := mw.AddEntry(r.Context(), r.Body, me)
+
 	if err != nil {
 		return err
 	}

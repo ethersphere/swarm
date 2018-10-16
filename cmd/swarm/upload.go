@@ -29,6 +29,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -46,6 +47,7 @@ var upCommand = cli.Command{
 }
 
 func upload(ctx *cli.Context) {
+	log.Debug("cmd.swarm.upload")
 	args := ctx.Args()
 	var (
 		bzzapi          = strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
@@ -110,15 +112,18 @@ func upload(ctx *cli.Context) {
 	// define a function which either uploads a directory or single file
 	// based on the type of the file being uploaded
 	var doUpload func() (hash string, err error)
+	log.Debug("doUploadDirectory")
 	if stat.IsDir() {
 		doUpload = func() (string, error) {
 			if !recursive {
 				return "", errors.New("Argument is a directory and recursive upload is disabled")
 			}
-			if autoDefaultPath {
+			if autoDefaultPath && defaultPath == "" {
 				defaultEntryCandidate := path.Join(file, "index.html")
+				log.Debug("trying to find default path", "path", defaultEntryCandidate)
 				defaultEntryStat, err := os.Stat(defaultEntryCandidate)
 				if err == nil && !defaultEntryStat.IsDir() {
+					log.Debug("setting auto detected default path", "path", defaultEntryCandidate)
 					defaultPath = defaultEntryCandidate
 				}
 			}
