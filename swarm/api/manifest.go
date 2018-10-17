@@ -647,12 +647,7 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []byte, nameresolver bool) (storage.Address, string, error) {
 	apiAddFileCount.Inc(1)
 
-	uri, err := Parse("bzz:/" + mhash)
-	if err != nil {
-		apiAddFileFail.Inc(1)
-		return nil, "", err
-	}
-	mkey, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
+	mkey, err := a.Resolve(ctx, mhash)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
