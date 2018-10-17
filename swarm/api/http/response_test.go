@@ -202,9 +202,7 @@ func TestGetFallbackToList(t *testing.T) {
 	log.Info("dir uploaded", "hash", hash)
 	headers = map[string]string{"Accept": "*/*"}
 	res, body = httpDo("GET", srv.URL+"/bzz:/"+hash, nil, headers, false, t)
-	if res.StatusCode != 301 {
-		//		t.Fatalf("expected HTTP status 301, got %s", res.Status)
-	}
+
 	//todo: check the location header
 	if body != data {
 		t.Fatalf("expected HTTP body %q, got %q", data, body)
