@@ -164,7 +164,6 @@ func addEntryToManifest(client *swarm.Client, mhash, path string, entry api.Mani
 	if err != nil {
 		utils.Fatalf("Manifest download failed: %v", err)
 	}
-
 	// See if we path is in this Manifest or do we have to dig deeper
 	for _, e := range mroot.Entries {
 		if path == e.Path {

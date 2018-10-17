@@ -31,9 +31,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/api/client"
-	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -288,10 +286,6 @@ func testCLISwarmUpRecursive(toEncrypt bool, t *testing.T) {
 	}
 }
 
-func serverFunc(api *api.API) testutil.TestServer {
-	return swarmhttp.NewServer(api, "")
-}
-
 func TestCLISwarmUpDefaultEntry(t *testing.T) {
 	toEncrypt := false
 	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
@@ -410,8 +404,8 @@ func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T
 	up.ExpectExit()
 	hash := matches[0]
 
-	client := swarm.NewClient(srv.URL)
-	m, isEncrypted, err := client.DownloadManifest(hash)
+	c := client.NewClient(srv.URL)
+	m, isEncrypted, err := c.DownloadManifest(hash)
 	if err != nil {
 		t.Fatal(err)
 	}

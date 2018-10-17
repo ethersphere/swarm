@@ -403,7 +403,6 @@ func (pc *PyramidChunker) prepareChunks(ctx context.Context, isAppend bool) {
 	parent := NewTreeEntry(pc)
 	var unfinishedChunkData ChunkData
 	var unfinishedChunkSize uint64
-
 	if isAppend && len(pc.chunkLevel[0]) != 0 {
 		lastIndex := len(pc.chunkLevel[0]) - 1
 		ent := pc.chunkLevel[0][lastIndex]

@@ -663,7 +663,6 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 		ContentType: mime.TypeByExtension(filepath.Ext(fname)),
 		Mode:        0700,
 		Size:        int64(len(content)),
-		ModTime:     time.Now(),
 	}
 
 	mw, err := a.NewManifestWriter(ctx, mkey, nil)
