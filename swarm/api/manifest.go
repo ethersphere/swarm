@@ -91,10 +91,12 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 func (a *API) NewFeedManifest(ctx context.Context, feed *feed.Feed) (storage.Address, error) {
 	var manifest Manifest
 	entry := ManifestEntry{
+		Path:        "feed",
 		Feed:        feed,
 		ContentType: FeedContentType,
 	}
 	manifest.Entries = append(manifest.Entries, entry)
+	manifest.DefaultEntry = "feed"
 	data, err := json.Marshal(&manifest)
 	if err != nil {
 		return nil, err
@@ -283,7 +285,7 @@ func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore 
 		return
 	}
 
-	log.Trace("manifest entries", "addr", addr, "len", len(mm.Entries))
+	log.Trace("manifest entries", "addr", addr, "len", len(mm.Entries), "entries", mm.Entries)
 
 	trie = &manifestTrie{
 		fileStore:    fileStore,

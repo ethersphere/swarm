@@ -480,18 +480,12 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 
 func (a *API) Delete(ctx context.Context, addr string, path string) (storage.Address, error) {
 	apiDeleteCount.Inc(1)
-	uri, err := Parse("bzz:/" + addr)
-	if err != nil {
-		apiDeleteFail.Inc(1)
-		return nil, err
-	}
-	key, err := a.ResolveURI(ctx, uri, EMPTY_CREDENTIALS)
-
+	key, err := a.Resolve(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
 	newKey, err := a.UpdateManifest(ctx, key, func(mw *ManifestWriter) error {
-		log.Debug(fmt.Sprintf("removing %s from manifest %s", path, key.Log()))
+		log.Debug("removing entry from manifest", "path", path, "key.Log()", key.Log())
 		return mw.RemoveEntry(path)
 	})
 	if err != nil {

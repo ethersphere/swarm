@@ -799,12 +799,12 @@ func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 	file := &swarm.File{
 		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
 		ManifestEntry: api.ManifestEntry{
-			Path:        "",
+			Path:        "datafile",
 			ContentType: "text/plain",
 			Size:        int64(len(data)),
 		},
 	}
-	hash, err := client.Upload(file, "", toEncrypt)
+	hash, err := client.TarUpload("", &swarm.FileUploader{file}, "datafile", toEncrypt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -995,13 +995,13 @@ func TestModify(t *testing.T) {
 	file := &swarm.File{
 		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
 		ManifestEntry: api.ManifestEntry{
-			Path:        "",
+			Path:        "datafile",
 			ContentType: "text/plain",
 			Size:        int64(len(data)),
 		},
 	}
 
-	hash, err := swarmClient.Upload(file, "", false)
+	hash, err := swarmClient.TarUpload("", &swarm.FileUploader{file}, "datafile", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1017,11 +1017,11 @@ func TestModify(t *testing.T) {
 		verbose               bool
 	}{
 		{
-			uri:                fmt.Sprintf("%s/bzz:/%s", srv.URL, hash),
+			uri:                fmt.Sprintf("%s/bzz:/%s/datafile", srv.URL, hash),
 			method:             "DELETE",
 			headers:            map[string]string{},
 			expectedStatusCode: http.StatusOK,
-			assertResponseBody: "8b634aea26eec353ac0ecbec20c94f44d6f8d11f38d4578a4c207a84c74ef731",
+			assertResponseBody: "ec47c72420434b7744076840bdfa573bd34e4dfbed3cbc902b41a7def2508ad5",
 			verbose:            false,
 		},
 		{
