@@ -128,7 +128,6 @@ func Open(path string) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return &File{
 		ReadCloser: f,
 		ManifestEntry: api.ManifestEntry{

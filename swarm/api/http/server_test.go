@@ -141,7 +141,7 @@ func TestBzzFeedMultihash(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
+	correctManifestAddrHex := "b989ff8dfe4ea0b45ccf3156bab4e86e9b1f72a0637009ed4c06923703d2b37f"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response feed manifest address mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}
@@ -221,7 +221,7 @@ func TestBzzFeed(t *testing.T) {
 		t.Fatalf("data %s could not be unmarshaled: %v", b, err)
 	}
 
-	correctManifestAddrHex := "bb056a5264c295c2b0f613c8409b9c87ce9d71576ace02458160df4cc894210b"
+	correctManifestAddrHex := "b989ff8dfe4ea0b45ccf3156bab4e86e9b1f72a0637009ed4c06923703d2b37f"
 	if rsrcResp.Hex() != correctManifestAddrHex {
 		t.Fatalf("Response feed manifest mismatch, expected '%s', got '%s'", correctManifestAddrHex, rsrcResp.Hex())
 	}

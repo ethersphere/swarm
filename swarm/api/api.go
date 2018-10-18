@@ -447,7 +447,7 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 
 			// finally, get the manifest entry
 			// it will always be the entry on path ""
-			entry, _ = trie.getEntry(path)
+			entry, _ = trie.getEntry("feed")
 			if entry == nil {
 				status = http.StatusNotFound
 				apiGetNotFound.Inc(1)
@@ -704,7 +704,8 @@ func (a *API) ResolveFeedManifest(ctx context.Context, addr storage.Address) (*f
 		return nil, ErrCannotLoadFeedManifest
 	}
 
-	entry, _ := trie.getEntry("")
+	entry, _ := trie.getEntry("feed")
+	log.Error("entry", "entry", entry)
 	if entry.ContentType != FeedContentType {
 		return nil, ErrNotAFeedManifest
 	}
