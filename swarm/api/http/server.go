@@ -772,7 +772,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "max-age=2147483648, immutable") // url was of type bzz://<hex key>/path, so we are sure it is immutable.
 	}
 
-	log.Trace("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr)
+	log.Trace("handle.get.file: resolved", "ruid", ruid, "key", manifestAddr, "uri.Path", uri.Path)
 
 	reader, contentType, status, contentKey, err := s.api.Get(r.Context(), s.api.Decryptor(r.Context(), credentials), manifestAddr, uri.Path)
 

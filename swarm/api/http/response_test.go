@@ -30,6 +30,7 @@ import (
 	"golang.org/x/net/html"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -178,7 +179,6 @@ func TestGetFallbackToList(t *testing.T) {
 
 	buf := new(bytes.Buffer)
 	form := multipart.NewWriter(buf)
-	form.WriteField("name", "John Doe")
 	file1, _ := form.CreateFormFile("cv", "cv.txt")
 	file1.Write([]byte(data))
 	file2, _ := form.CreateFormFile("profile_picture", "profile.jpg")
@@ -201,11 +201,17 @@ func TestGetFallbackToList(t *testing.T) {
 	hash := body
 	log.Info("dir uploaded", "hash", hash)
 	headers = map[string]string{"Accept": "*/*"}
-	res, body = httpDo("GET", srv.URL+"/bzz:/"+hash, nil, headers, false, t)
-
-	//todo: check the location header
-	if body != data {
-		t.Fatalf("expected HTTP body %q, got %q", data, body)
+	res, body = httpDo("GET", srv.URL+"/bzz:/"+hash+"/", nil, headers, false, t)
+	manifest := &api.Manifest{}
+	err := json.Unmarshal([]byte(body), manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(manifest.Entries) != 2 {
+		t.Fatalf("Manifest has %d entries, expected 2", len(manifest.Entries))
+	}
+	if manifest.DefaultEntry != "" {
+		t.Fatalf("expected empty default entry, got %s", manifest.DefaultEntry)
 	}
 }
 

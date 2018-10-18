@@ -517,7 +517,9 @@ func (mt *manifestTrie) listWithPrefix(prefix string, quitC chan bool, cb func(e
 
 func (mt *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manifestTrieEntry, pos int) {
 	log.Trace(fmt.Sprintf("findPrefixOf(%s)", path))
-
+	if path == "" {
+		return nil, 0
+	}
 	//see if first char is in manifest entries
 	b := path[0]
 	entry = mt.entries[b]

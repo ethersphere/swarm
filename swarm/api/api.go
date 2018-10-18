@@ -386,10 +386,11 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 		status = http.StatusNotFound
 		return nil, "", http.StatusNotFound, nil, err
 	}
-	log.Debug("trie getting entry", "key", manifestAddr, "path", path)
-	if path == "" {
+	if path == "" && trie.defaultEntry != "" {
+		log.Trace("api.get: setting path to default entry", "trie.defaultEntry", trie.defaultEntry)
 		path = trie.defaultEntry
 	}
+	log.Debug("trie getting entry", "key", manifestAddr, "path", path)
 	entry, _ := trie.getEntry(path)
 	if entry != nil {
 		log.Debug("trie got entry", "key", manifestAddr, "path", path, "entry.Path", entry.Path, "entry.contentType", entry.ContentType, "entry.Hash", entry.Hash)
