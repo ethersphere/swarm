@@ -112,6 +112,7 @@ func (f *AltFileHasher) getPotentialSpan(level int) int {
 // performs recursive hashing on complete batches or data end
 func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 
+	// only for log, delete on prod
 	if b == nil {
 		log.Debug("write", "level", level, "offset", offset, "length", "nil", "wc", f.writeCount[level])
 	} else {
@@ -122,7 +123,7 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 		log.Debug("write", "level", level, "offset", offset, "length", len(b), "wc", f.writeCount[level], "data", b[:l])
 	}
 
-	// top level then return
+	// if top level then return
 	if level == f.levelCount-1 {
 		copy(f.buffers[level], b)
 		f.lock.Lock()
@@ -133,13 +134,12 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 	}
 
 	// thread safe writecount
-	// b will never be nil except bottom level, which will have already been hashed if on chunk boundary
 	f.lock.Lock()
 	wc := f.writeCount[level]
 	f.lock.Unlock()
 
 	// only write if we have data
-	// data might be nil when upon write finish
+	// b will never be nil except bottom level where it can be nil upon finish (which will have already been hashed if on chunk boundary)
 	if b != nil {
 		//netOffset := (offset % f.branches)
 		netOffset := (offset % f.batchSegments)
@@ -163,7 +163,6 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 	// - we are above data level, writes are finished, and expected level write count is reached
 	executeHasher := false
 	if wc%f.branches == 0 {
-		//if wc%f.batchSegments == 0 {
 		log.Debug("executehasher", "reason", "edge", "level", level, "offset", offset)
 		executeHasher = true
 	} else if f.finished && level == 0 {
@@ -227,10 +226,10 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 		hashResult := f.hashers[level].Sum(nil, hashDataSize, meta)
 		f.hashers[level].Reset()
 		go func(level int, wc int, finished bool, total int) {
-			// if the hasher on the level about is still working, wait for it
+			// if the hasher on the level above is still working, wait for it
 			f.lwg[level+1].Wait()
-
-			parentOffset := (wc - 1) / f.batchSegments //f.branches
+			parentOffset := (wc - 1) / f.branches
+			log.Debug(">>>> wc", "wc", wc, "l", level, "f.BatchSegments", f.batchSegments, "parentffset", parentOffset)
 			if (level == 0 && finished) || f.targetCount[level] == wc {
 				log.Debug("done", "level", level)
 				f.lock.Lock()
