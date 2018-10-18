@@ -25,17 +25,19 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 )
 
 const (
-	defaultWhisperTTL = 6000
+	defaultWhisperTTL      = 6000
+	symKeyEntryBaseMemSize = 32 // memory used for each symkey map entry
+	pubKeyEntryBaseMemSize = 24 // memory used for each pubkey map entry
 )
 
 const (
-	pssControlSym = 1
-	pssControlRaw = 1 << 1
+	pssControlRaw = 1
 )
 
 var (
@@ -92,7 +94,6 @@ type pssDigest [digestLength]byte
 // conceals bitwise operations on the control flags byte
 type msgParams struct {
 	raw bool
-	sym bool
 }
 
 func newMsgParamsFromBytes(paramBytes []byte) *msgParams {
@@ -101,7 +102,6 @@ func newMsgParamsFromBytes(paramBytes []byte) *msgParams {
 	}
 	return &msgParams{
 		raw: paramBytes[0]&pssControlRaw > 0,
-		sym: paramBytes[0]&pssControlSym > 0,
 	}
 }
 
@@ -110,9 +110,6 @@ func (m *msgParams) Bytes() (paramBytes []byte) {
 	if m.raw {
 		b |= pssControlRaw
 	}
-	if m.sym {
-		b |= pssControlSym
-	}
 	paramBytes = append(paramBytes, b)
 	return paramBytes
 }
@@ -120,8 +117,9 @@ func (m *msgParams) Bytes() (paramBytes []byte) {
 // PssMsg encapsulates messages transported over pss.
 type PssMsg struct {
 	To      []byte
-	Control []byte
+	Control byte
 	Expire  uint32
+	Filter  []byte
 	Payload *whisper.Envelope
 }
 
@@ -138,7 +136,7 @@ func (msg *PssMsg) isRaw() bool {
 
 // message is flagged as symmetrically encrypted
 func (msg *PssMsg) isSym() bool {
-	return msg.Control[0]&pssControlSym > 0
+	return len(msg.Filter) > 0
 }
 
 // serializes the message for use in cache
@@ -155,13 +153,38 @@ func (msg *PssMsg) serialize() []byte {
 
 // String representation of PssMsg
 func (msg *PssMsg) String() string {
-	return fmt.Sprintf("PssMsg: Recipient: %x", common.ToHex(msg.To))
+	return fmt.Sprintf("PssMsg: [sym: %v] Recipient: %x", len(msg.Filter) > 0, common.ToHex(msg.To))
 }
 
 // Signature for a message handler function for a PssMsg
-//
 // Implementations of this type are passed to Pss.Register together with a topic,
-type Handler func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
+type HandlerFunc func(msg []byte, p *p2p.Peer, asymmetric bool, keyid string) error
+
+// Handler defines code to be executed upon reception of content.
+type handler struct {
+	f    HandlerFunc
+	raw  bool // if true, will allow raw messages to be handled
+	prox bool // if true, explicit recipient address will be truncated to minproxsize depth
+}
+
+// NewHandler returns a new message handler
+func NewHandler(f HandlerFunc) {
+	return &Handler{
+		f: f,
+	}
+}
+
+// WithRaw is a chainable method that allows raw messages to be handled.
+func (h *Handler) WithRaw() *Handler {
+	h.raw = true
+	return h
+}
+
+// WithProxBin is a chainable method that allows sending messages with full addresses to neighbourhoods using the kademlia depth as reference
+func (h *Handler) WithProxBin() *Handler {
+	h.prox = true
+	return h
+}
 
 // the stateStore handles saving and loading PSS peers and their corresponding keys
 // it is currently unimplemented

@@ -41,19 +41,21 @@ import (
 )
 
 const (
-	defaultPaddingByteSize     = 16
-	DefaultMsgTTL              = time.Second * 120
-	defaultDigestCacheTTL      = time.Second * 10
-	defaultSymKeyCacheCapacity = 512
-	digestLength               = 32 // byte length of digest used for pss cache (currently same as swarm chunk hash)
-	defaultWhisperWorkTime     = 3
-	defaultWhisperPoW          = 0.0000000001
-	defaultMaxMsgSize          = 1024 * 1024
-	defaultCleanInterval       = time.Second * 60 * 10
-	defaultOutboxCapacity      = 100000
-	pssProtocolName            = "pss"
-	pssVersion                 = 2
-	hasherCount                = 8
+	defaultPaddingByteSize          = 16
+	DefaultMsgTTL                   = time.Second * 120
+	defaultDigestCacheTTL           = time.Second * 10
+	defaultKeyMemCapacity           = (1 << 24) - 1 // temporary value, means 512M if full
+	defaultTopicSymKeyCacheCapacity = (1 << 24) - 1 // pointers at 8 bytes a pop = 140M full
+	defaultSymKeyCacheCapacity      = 512           // temporary value, number of decryption keys stored under a single topic, evenly distributed among topics supports defaultTopicSymKeyCacheCapacity / defaultSymKeyCacheCapacity topics
+	digestLength                    = 32            // byte length of digest used for pss cache
+	defaultWhisperWorkTime          = 3
+	defaultWhisperPoW               = 0.0000000001
+	defaultMaxMsgSize               = 1024 * 1024
+	defaultCleanInterval            = time.Second * 60 * 10
+	defaultOutboxCapacity           = 100000
+	pssProtocolName                 = "pss"
+	pssVersion                      = 2
+	hasherCount                     = 8
 )
 
 var (
@@ -89,7 +91,6 @@ type PssParams struct {
 	CacheTTL            time.Duration
 	privateKey          *ecdsa.PrivateKey
 	SymKeyCacheCapacity int
-	AllowRaw            bool // If true, enables sending and receiving messages without builtin pss encryption
 }
 
 // Sane defaults for Pss
@@ -97,6 +98,7 @@ func NewPssParams() *PssParams {
 	return &PssParams{
 		MsgTTL:              DefaultMsgTTL,
 		CacheTTL:            defaultDigestCacheTTL,
+		KeyMemCapacity:      defaultKeyMemCapacity,
 		SymKeyCacheCapacity: defaultSymKeyCacheCapacity,
 	}
 }
@@ -127,18 +129,22 @@ type Pss struct {
 	outbox          chan *PssMsg
 
 	// keys and peers
-	pubKeyPool                 map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
-	pubKeyPoolMu               sync.RWMutex
-	symKeyPool                 map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
-	symKeyPoolMu               sync.RWMutex
-	symKeyDecryptCache         []*string // fast lookup of symkeys recently used for decryption; last used is on top of stack
-	symKeyDecryptCacheCursor   int       // modular cursor pointing to last used, wraps on symKeyDecryptCache array
-	symKeyDecryptCacheCapacity int       // max amount of symkeys to keep.
+	pubKeyPool               map[string]map[Topic]*pssPeer // mapping of hex public keys to peer address by topic.
+	pubKeyPoolMu             sync.RWMutex
+	symKeyPool               map[string]map[Topic]*pssPeer // mapping of symkeyids to peer address by topic.
+	symKeyPoolMu             sync.RWMutex
+	symKeyDecryptCache       map[Topic][]*string // fast lookup of symkeys recently used for decryption; last used is on top of stack
+	symKeyDecryptCacheCursor map[Topic]int       // modular cursor pointing to last used, wraps on symKeyDecryptCache array
+
+	// resource control
+	keyMemCapacity                 int // total keys in memory
+	symKeyTopicSymKeyCacheCapacity int // max number of cached decrypt keys
+	symKeyDecryptCacheCapacity     int // max number of decrypt keys under one topic
+	keyMemUse                      uint64
 
 	// message handling
 	handlers   map[Topic]map[*Handler]bool // topic and version based pss payload handlers. See pss.Handle()
 	handlersMu sync.RWMutex
-	allowRaw   bool
 	hashPool   sync.Pool
 
 	// process
@@ -175,13 +181,14 @@ func NewPss(k *network.Kademlia, params *PssParams) (*Pss, error) {
 		capstring:       cap.String(),
 		outbox:          make(chan *PssMsg, defaultOutboxCapacity),
 
-		pubKeyPool:                 make(map[string]map[Topic]*pssPeer),
-		symKeyPool:                 make(map[string]map[Topic]*pssPeer),
-		symKeyDecryptCache:         make([]*string, params.SymKeyCacheCapacity),
-		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity,
+		pubKeyPool: make(map[string]map[Topic]*pssPeer),
+		symKeyPool: make(map[string]map[Topic]*pssPeer),
+
+		keyMemCapacity:             params.keyMemCapacity, // per instance
+		symKeyDecryptCache:         make(map[topic][]*string),
+		symKeyDecryptCacheCapacity: params.SymKeyCacheCapacity, // per topic
 
 		handlers: make(map[Topic]map[*Handler]bool),
-		allowRaw: params.AllowRaw,
 		hashPool: sync.Pool{
 			New: func() interface{} {
 				return storage.MakeHashFunc(storage.DefaultHash)()
@@ -316,14 +323,15 @@ func (p *Pss) PublicKey() *ecdsa.PublicKey {
 func (p *Pss) Register(topic *Topic, handler Handler) func() {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
-	handlers := p.handlers[*topic]
+	handlers := p.handlers[topic]
 	if handlers == nil {
 		handlers = make(map[*Handler]bool)
-		p.handlers[*topic] = handlers
+		p.handlers[topic] = handlers
 	}
 	handlers[&handler] = true
 	return func() { p.deregister(topic, &handler) }
 }
+
 func (p *Pss) deregister(topic *Topic, h *Handler) {
 	p.handlersMu.Lock()
 	defer p.handlersMu.Unlock()
