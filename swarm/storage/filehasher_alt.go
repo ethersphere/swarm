@@ -67,6 +67,7 @@ func (f *AltFileHasher) isWriteFinished() bool {
 }
 
 func (f *AltFileHasher) Finish(b []byte) []byte {
+	f.lock.Lock()
 	if b != nil {
 		f.totalBytes += len(b)
 	}
@@ -88,16 +89,17 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 		f.targetCount[i] = target
 		log.Debug("setting targetcount", "l", i, "t", target)
 	}
+	f.lock.Unlock()
 
 	// write and return result when we get it back
-	f.write(b, f.writeCount[0], 0, f.totalBytes)
+	f.write(b, f.writeCount[0], 0)
 	f.wg.Wait()
 	return f.buffers[f.levelCount-1][:f.segmentSize]
 }
 
 func (f *AltFileHasher) Write(b []byte) {
 	f.totalBytes += len(b)
-	f.write(b, f.writeCount[0], 0, f.totalBytes)
+	f.write(b, f.writeCount[0], 0)
 }
 
 func (f *AltFileHasher) getPotentialSpan(level int) int {
@@ -110,38 +112,40 @@ func (f *AltFileHasher) getPotentialSpan(level int) int {
 
 // TODO: ensure local copies of all thread unsafe vars
 // performs recursive hashing on complete batches or data end
-func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
+func (f *AltFileHasher) write(b []byte, offset int, level int) {
+
+	// thread safe state vars
+	f.lock.Lock()
+	wc := f.writeCount[level]
+	currentTotal := f.totalBytes
+	targetCount := f.targetCount[level]
+	f.lock.Unlock()
 
 	// only for log, delete on prod
 	if b == nil {
-		log.Debug("write", "level", level, "offset", offset, "length", "nil", "wc", f.writeCount[level])
+		log.Debug("write", "level", level, "offset", offset, "length", "nil", "wc", f.writeCount[level], "total", currentTotal)
 	} else {
 		l := 32
 		if len(b) < l {
 			l = len(b)
 		}
-		log.Debug("write", "level", level, "offset", offset, "length", len(b), "wc", f.writeCount[level], "data", b[:l])
+		log.Debug("write", "level", level, "offset", offset, "length", len(b), "wc", f.writeCount[level], "data", b[:l], "total", currentTotal)
 	}
 
+	f.lock.Lock()
 	// if top level then return
 	if level == f.levelCount-1 {
 		copy(f.buffers[level], b)
-		f.lock.Lock()
 		f.wg.Done()
 		f.lock.Unlock()
 		log.Debug("top done", "level", level)
 		return
 	}
-
-	// thread safe writecount
-	f.lock.Lock()
-	wc := f.writeCount[level]
 	f.lock.Unlock()
 
 	// only write if we have data
 	// b will never be nil except bottom level where it can be nil upon finish (which will have already been hashed if on chunk boundary)
 	if b != nil {
-		//netOffset := (offset % f.branches)
 		netOffset := (offset % f.batchSegments)
 		f.hashers[level].Write(netOffset%f.branches, b)
 		copy(f.buffers[level][netOffset*f.segmentSize:], b)
@@ -168,9 +172,9 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 	} else if f.finished && level == 0 {
 		log.Debug("executehasher", "reason", "data done", "level", level, "offset", offset)
 		executeHasher = true
-	} else if f.finished && f.targetCount[level] > 0 && f.targetCount[level] == wc {
+	} else if f.finished && targetCount > 0 && targetCount == wc {
 		<-f.doneC[level-1]
-		log.Debug("executehasher", "reason", "target done", "level", level, "offset", offset)
+		log.Debug("executehasher", "reason", "target done", "level", level, "offset", offset, "wc", wc)
 		executeHasher = true
 	}
 
@@ -181,15 +185,15 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 			f.lock.Lock()
 			cwc := f.writeCount[level-1]
 			f.lock.Unlock()
-			//if offset%f.branches == 0 && cwc%(f.branches*f.branches) < f.branches {
-			if offset%f.batchSegments == 0 && cwc%f.batchSegments < f.branches { // verify why do we need the latter part?
+			// TODO: verify why do we need the latter part again?
+			if offset%f.batchSegments == 0 && cwc%f.batchSegments < f.branches {
 				log.Debug("dangle done", "level", level)
 				parentOffset := (wc - 1) / f.branches
 				f.lock.Lock()
 				f.wg.Done()
 				f.lock.Unlock()
 				f.doneC[level] <- struct{}{}
-				f.write(b, parentOffset, level+1, total)
+				f.write(b, parentOffset, level+1)
 				return
 			}
 		}
@@ -205,8 +209,7 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 		// if data is fully written, the current chunk may be shorter than the span
 		var dataUnderSpan int
 		if f.isWriteFinished() {
-			//dataUnderSpan = (f.totalBytes-1)%span + 1
-			dataUnderSpan = (total-1)%span + 1
+			dataUnderSpan = (currentTotal-1)%span + 1
 		} else {
 			dataUnderSpan = span
 		}
@@ -225,23 +228,22 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, total int) {
 		log.Debug("hash", "level", level, "size", hashDataSize, "meta", meta, "wc", wc)
 		hashResult := f.hashers[level].Sum(nil, hashDataSize, meta)
 		f.hashers[level].Reset()
-		go func(level int, wc int, finished bool, total int) {
+		go func(level int, wc int, finished bool, total int, targetCount int) {
 			// if the hasher on the level above is still working, wait for it
 			f.lwg[level+1].Wait()
 			parentOffset := (wc - 1) / f.branches
-			log.Debug(">>>> wc", "wc", wc, "l", level, "f.BatchSegments", f.batchSegments, "parentffset", parentOffset)
-			if (level == 0 && finished) || f.targetCount[level] == wc {
+			if (level == 0 && finished) || targetCount == wc {
 				log.Debug("done", "level", level)
 				f.lock.Lock()
 				f.wg.Done()
 				f.lock.Unlock()
 				f.doneC[level] <- struct{}{}
 			}
-			f.write(hashResult, parentOffset, level+1, total)
+			f.write(hashResult, parentOffset, level+1) //, total)
 			f.lock.Lock()
 			f.lwg[level].Done()
 			f.lock.Unlock()
-		}(level, wc, f.finished, f.totalBytes)
+		}(level, wc, f.finished, currentTotal, targetCount) //f.totalBytes)
 	}
 }
 
