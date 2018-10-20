@@ -162,6 +162,24 @@ func mget(store ChunkStore, hs []Address, f func(h Address, chunk Chunk) error) 
 	return err
 }
 
+func generateRandomData(l int) (r io.Reader, slice []byte) {
+	slice = make([]byte, l)
+	if _, err := rand.Read(slice); err != nil {
+		panic("rand error")
+	}
+	r = io.LimitReader(bytes.NewReader(slice), int64(l))
+	return
+}
+
+func generateSerialData(l int, mod int, offset int) (r io.Reader, slice []byte) {
+	slice = make([]byte, l)
+	for i := 0; i < len(slice); i++ {
+		slice[i] = byte((i + offset) % mod)
+	}
+	r = io.LimitReader(bytes.NewReader(slice), int64(l))
+	return
+}
+
 func testDataReader(l int) (r io.Reader) {
 	return io.LimitReader(rand.Reader, int64(l))
 }
@@ -174,21 +192,12 @@ func (r *brokenLimitedReader) Read(buf []byte) (int, error) {
 	return r.lr.Read(buf)
 }
 
-func generateSerialData(l int, mod int, offset int) (r io.Reader, slice []byte) {
-	slice = make([]byte, l)
-	for i := 0; i < len(slice); i++ {
-		slice[i] = byte((i + offset) % mod)
-	}
-	r = io.LimitReader(bytes.NewReader(slice), int64(l))
-	return
-}
-
-func testStoreRandom(m ChunkStore, processors int, n int, chunksize int64, t *testing.T) {
-	hs, err := mputRandomChunks(m, processors, n, chunksize)
+func testStoreRandom(m ChunkStore, n int, chunksize int64, t *testing.T) {
+	chunks, err := mputRandomChunks(m, n, chunksize)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	err := mget(m, hs, nil)
+	err = mget(m, chunkAddresses(chunks), nil)
 	if err != nil {
 		t.Fatalf("testStore failed: %v", err)
 	}
