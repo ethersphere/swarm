@@ -79,7 +79,10 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 	log.Debug("finish set", "levelcount", f.levelCount)
 	for i := altFileHasherMaxLevels; i > f.levelCount; i-- {
 		log.Debug("purging unused level wg", "l", i)
+		f.lock.Lock()
 		f.wg.Done()
+		log.Debug("lock flush level", "level", i)
+		f.lock.Unlock()
 	}
 
 	// calculate the amount of writes expected on each level
@@ -137,8 +140,8 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 	if level == f.levelCount-1 {
 		copy(f.buffers[level], b)
 		f.wg.Done()
-		f.lock.Unlock()
 		log.Debug("top done", "level", level)
+		f.lock.Unlock()
 		return
 	}
 	f.lock.Unlock()
@@ -236,6 +239,7 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 				log.Debug("done", "level", level)
 				f.lock.Lock()
 				f.wg.Done()
+				log.Debug("done", "level", level)
 				f.lock.Unlock()
 				f.doneC[level] <- struct{}{}
 			}
@@ -247,11 +251,13 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 	}
 }
 
-func (f *AltFileHasher) wgDoneFunc(level int, prune bool) func() {
-	log.Warn("done", "level", level, "prune", prune)
-	return func() {
-		f.lock.Lock()
-		f.wg.Done()
-		f.lock.Unlock()
-	}
-}
+//
+//func (f *AltFileHasher) wgDoneFunc(level int, prune bool) func() {
+//	log.Warn("done", "level", level, "prune", prune)
+//	return func() {
+//		f.lock.Lock()
+//		f.wg.Done()
+//		log.Debug("done", "level", level)
+//		f.lock.Unlock()
+//	}
+//}

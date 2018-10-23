@@ -2,7 +2,11 @@ package storage
 
 import (
 	"bytes"
+	"context"
 	"fmt"
+	"io"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,8 +68,8 @@ var (
 		"522194562123473dcfd7a457b18ee7dee8b7db70ed3cfa2b73f348a992fdfd3b",
 	}
 
-	start = 1
-	end   = 14
+	start = 7
+	end   = 8
 )
 
 func init() {
@@ -168,5 +172,103 @@ func TestSum(t *testing.T) {
 	}
 	if mismatch > 0 {
 		t.Fatalf("%d/%d mismatches", mismatch, len(dataLengths))
+	}
+}
+
+func BenchmarkAltFileHasher(b *testing.B) {
+	for i := 0; i < len(dataLengths)-1; i++ {
+		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkAltFileHasher)
+	}
+}
+
+func benchmarkAltFileHasher(b *testing.B) {
+	params := strings.Split(b.Name(), "/")
+	dataLength, err := strconv.ParseInt(params[1], 10, 64)
+	if err != nil {
+		b.Fatal(err)
+	}
+	_, data := generateSerialData(int(dataLength), 255, 0)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		fh := NewAltFileHasher(newAsyncHasher, 32, 128)
+		l := int64(32)
+		offset := int64(0)
+		for j := int64(0); j < dataLength; j += 32 {
+			remain := dataLength - offset
+			if remain < l {
+				l = remain
+			}
+			fh.Write(data[offset : offset+l])
+			offset += 32
+		}
+		fh.Finish(nil)
+	}
+}
+
+func BenchmarkPyramidHasherCompareAltFileHasher(b *testing.B) {
+
+	for i := 0; i < len(dataLengths)-1; i++ {
+		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkPyramidHasherCompareAltFileHasher)
+	}
+}
+
+func benchmarkPyramidHasherCompareAltFileHasher(b *testing.B) {
+	//t.ReportAllocs()
+	params := strings.Split(b.Name(), "/")
+	dataLength, err := strconv.ParseInt(params[1], 10, 64)
+	if err != nil {
+		b.Fatal(err)
+	}
+	_, data := generateSerialData(int(dataLength), 255, 0)
+	buf := bytes.NewReader(data)
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		buf.Seek(0, io.SeekStart)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
+
+		ctx := context.Background()
+		_, wait, err := PyramidSplit(ctx, buf, putGetter, putGetter)
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+		err = wait(ctx)
+		if err != nil {
+			b.Fatalf(err.Error())
+		}
+	}
+}
+
+func BenchmarkFileHasher(b *testing.B) {
+	for i := 0; i < len(dataLengths)-1; i++ {
+		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkFileHasher)
+	}
+}
+
+func benchmarkFileHasher(b *testing.B) {
+	params := strings.Split(b.Name(), "/")
+	dataLength, err := strconv.ParseInt(params[1], 10, 64)
+	if err != nil {
+		b.Fatal(err)
+	}
+	_, data := generateSerialData(int(dataLength), 255, 0)
+
+	for i := 0; i < b.N; i++ {
+		for i := start; i < end; i++ {
+			fh := NewFileHasher(newAsyncHasher, 128, 32)
+			for i := 0; i < len(data); i += 32 {
+				max := i + 32
+				if len(data) < max {
+					max = len(data)
+				}
+				_, err := fh.WriteBuffer(i, data[i:max])
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+
+			fh.SetLength(int64(dataLength))
+			fh.Sum(nil)
+		}
 	}
 }
