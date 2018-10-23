@@ -68,8 +68,8 @@ var (
 		"522194562123473dcfd7a457b18ee7dee8b7db70ed3cfa2b73f348a992fdfd3b",
 	}
 
-	start = 7
-	end   = 8
+	start = 19
+	end   = 20
 )
 
 func init() {
@@ -176,7 +176,7 @@ func TestSum(t *testing.T) {
 }
 
 func BenchmarkAltFileHasher(b *testing.B) {
-	for i := 0; i < len(dataLengths)-1; i++ {
+	for i := start; i < end; i++ {
 		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkAltFileHasher)
 	}
 }
@@ -207,7 +207,7 @@ func benchmarkAltFileHasher(b *testing.B) {
 
 func BenchmarkPyramidHasherCompareAltFileHasher(b *testing.B) {
 
-	for i := 0; i < len(dataLengths)-1; i++ {
+	for i := start; i < end; i++ {
 		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkPyramidHasherCompareAltFileHasher)
 	}
 }
@@ -240,7 +240,7 @@ func benchmarkPyramidHasherCompareAltFileHasher(b *testing.B) {
 }
 
 func BenchmarkFileHasher(b *testing.B) {
-	for i := 0; i < len(dataLengths)-1; i++ {
+	for i := start; i < end; i++ {
 		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkFileHasher)
 	}
 }

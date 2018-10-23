@@ -76,33 +76,39 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 	// find our level height and release the unused levels
 	f.levelCount = getLevelsFromLength(f.totalBytes, f.segmentSize, f.branches)
 
-	log.Debug("finish set", "levelcount", f.levelCount)
+	log.Debug("finish set", "levelcount", f.levelCount, "b", len(b))
 	for i := altFileHasherMaxLevels; i > f.levelCount; i-- {
 		log.Debug("purging unused level wg", "l", i)
-		f.lock.Lock()
 		f.wg.Done()
-		log.Debug("lock flush level", "level", i)
-		f.lock.Unlock()
 	}
 
 	// calculate the amount of writes expected on each level
-	target := (f.totalBytes-1)/f.segmentSize + 1
+	target := f.writeCount[0]
+	if b != nil {
+		target++
+	}
+	log.Debug("setting targetcount", "l", 0, "t", target)
+	target = (f.totalBytes-1)/f.segmentSize + 1
 	for i := 1; i < f.levelCount; i++ {
 		target = (target-1)/f.branches + 1
 		f.targetCount[i] = target
 		log.Debug("setting targetcount", "l", i, "t", target)
 	}
+
 	f.lock.Unlock()
 
 	// write and return result when we get it back
-	f.write(b, f.writeCount[0], 0)
+	f.lwg[0].Wait()
+	//f.write(b, f.writeCount[0], 0)
+	f.write(b, f.writeCount[0], 0, f.totalBytes)
 	f.wg.Wait()
 	return f.buffers[f.levelCount-1][:f.segmentSize]
 }
 
 func (f *AltFileHasher) Write(b []byte) {
 	f.totalBytes += len(b)
-	f.write(b, f.writeCount[0], 0)
+	//f.write(b, f.writeCount[0], 0)
+	f.write(b, f.writeCount[0], 0, f.totalBytes)
 }
 
 func (f *AltFileHasher) getPotentialSpan(level int) int {
@@ -115,12 +121,13 @@ func (f *AltFileHasher) getPotentialSpan(level int) int {
 
 // TODO: ensure local copies of all thread unsafe vars
 // performs recursive hashing on complete batches or data end
-func (f *AltFileHasher) write(b []byte, offset int, level int) {
+//func (f *AltFileHasher) write(b []byte, offset int, level int) {
+func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int) {
 
 	// thread safe state vars
 	f.lock.Lock()
 	wc := f.writeCount[level]
-	currentTotal := f.totalBytes
+	//currentTotal := f.totalBytes
 	targetCount := f.targetCount[level]
 	f.lock.Unlock()
 
@@ -140,8 +147,8 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 	if level == f.levelCount-1 {
 		copy(f.buffers[level], b)
 		f.wg.Done()
-		log.Debug("top done", "level", level)
 		f.lock.Unlock()
+		log.Debug("top done", "level", level)
 		return
 	}
 	f.lock.Unlock()
@@ -187,18 +194,24 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 		if level > 0 && f.finished {
 			f.lock.Lock()
 			cwc := f.writeCount[level-1]
-			f.lock.Unlock()
+
+			log.Debug("danglecheck", "offset", offset, "f.batchSegments", f.batchSegments, "cwc", cwc)
 			// TODO: verify why do we need the latter part again?
-			if offset%f.batchSegments == 0 && cwc%f.batchSegments < f.branches {
-				log.Debug("dangle done", "level", level)
+			childWrites := cwc % f.batchSegments
+			//if offset%f.batchSegments == 0 && childWrites < f.branches {
+			//if offset%f.branches == 0 && childWrites < f.branches && childWrites > 0 {
+			if offset%f.branches == 0 && childWrites < f.branches {
+				f.lwg[level+1].Wait()
+				log.Debug("dangle done", "level", level, "wc", wc)
 				parentOffset := (wc - 1) / f.branches
-				f.lock.Lock()
 				f.wg.Done()
 				f.lock.Unlock()
 				f.doneC[level] <- struct{}{}
-				f.write(b, parentOffset, level+1)
+				//f.write(b, parentOffset, level+1)
+				f.write(b, parentOffset, level+1, currentTotal)
 				return
 			}
+			f.lock.Unlock()
 		}
 
 		f.lock.Lock()
@@ -234,30 +247,21 @@ func (f *AltFileHasher) write(b []byte, offset int, level int) {
 		go func(level int, wc int, finished bool, total int, targetCount int) {
 			// if the hasher on the level above is still working, wait for it
 			f.lwg[level+1].Wait()
+			log.Debug("gofunc hash up", "level", level, "wc", wc)
 			parentOffset := (wc - 1) / f.branches
 			if (level == 0 && finished) || targetCount == wc {
 				log.Debug("done", "level", level)
 				f.lock.Lock()
 				f.wg.Done()
-				log.Debug("done", "level", level)
 				f.lock.Unlock()
 				f.doneC[level] <- struct{}{}
 			}
-			f.write(hashResult, parentOffset, level+1) //, total)
+			//f.write(hashResult, parentOffset, level+1)
+			f.write(hashResult, parentOffset, level+1, total)
 			f.lock.Lock()
 			f.lwg[level].Done()
 			f.lock.Unlock()
-		}(level, wc, f.finished, currentTotal, targetCount) //f.totalBytes)
+		}(level, wc, f.finished, currentTotal, targetCount)
+
 	}
 }
-
-//
-//func (f *AltFileHasher) wgDoneFunc(level int, prune bool) func() {
-//	log.Warn("done", "level", level, "prune", prune)
-//	return func() {
-//		f.lock.Lock()
-//		f.wg.Done()
-//		log.Debug("done", "level", level)
-//		f.lock.Unlock()
-//	}
-//}
