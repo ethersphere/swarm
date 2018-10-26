@@ -254,21 +254,40 @@ func benchmarkFileHasher(b *testing.B) {
 	_, data := generateSerialData(int(dataLength), 255, 0)
 
 	for i := 0; i < b.N; i++ {
-		for i := start; i < end; i++ {
-			fh := NewFileHasher(newAsyncHasher, 128, 32)
-			for i := 0; i < len(data); i += 32 {
-				max := i + 32
-				if len(data) < max {
-					max = len(data)
-				}
-				_, err := fh.WriteBuffer(i, data[i:max])
-				if err != nil {
-					b.Fatal(err)
-				}
+		fh := NewFileHasher(newAsyncHasher, 128, 32)
+		for i := 0; i < len(data); i += 32 {
+			max := i + 32
+			if len(data) < max {
+				max = len(data)
 			}
-
-			fh.SetLength(int64(dataLength))
-			fh.Sum(nil)
+			_, err := fh.WriteBuffer(i, data[i:max])
+			if err != nil {
+				b.Fatal(err)
+			}
 		}
+
+		fh.SetLength(int64(dataLength))
+		fh.Sum(nil)
+	}
+}
+
+func BenchmarkReferenceHasher(b *testing.B) {
+	for i := start; i < end; i++ {
+		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkReferenceFileHasher)
+	}
+}
+
+func benchmarkReferenceFileHasher(b *testing.B) {
+	params := strings.Split(b.Name(), "/")
+	dataLength, err := strconv.ParseInt(params[1], 10, 64)
+	if err != nil {
+		b.Fatal(err)
+	}
+	_, data := generateSerialData(int(dataLength), 255, 0)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		h := bmt.New(pool)
+		fh := NewReferenceFileHasher(h, 128)
+		fh.Hash(bytes.NewReader(data), len(data)).Bytes()
 	}
 }
