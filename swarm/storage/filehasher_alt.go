@@ -98,7 +98,6 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 	f.lock.Unlock()
 
 	// write and return result when we get it back
-	f.lwg[0].Wait()
 	//f.write(b, f.writeCount[0], 0)
 	f.write(b, f.writeCount[0], 0, f.totalBytes)
 	f.wg.Wait()
@@ -188,6 +187,15 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 		executeHasher = true
 	}
 
+	// if this was a nil data finish instruction and we are on boundary, we've already hashed what we need to hash
+	if f.finished && len(b) == 0 && level == 0 {
+		f.lwg[0].Wait()
+		log.Debug("finished and 0", "wc", wc)
+		if wc%f.branches == 0 {
+			executeHasher = false
+		}
+	}
+
 	if executeHasher {
 
 		// check for the dangling chunk
@@ -200,8 +208,8 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 			childWrites := cwc % f.batchSegments
 			//if offset%f.batchSegments == 0 && childWrites < f.branches {
 			//if offset%f.branches == 0 && childWrites < f.branches && childWrites > 0 {
-			if offset%f.branches == 0 && childWrites < f.branches {
-				f.lwg[level+1].Wait()
+			if offset%f.branches == 0 && childWrites <= f.branches {
+				//		f.lwg[level+1].Wait()
 				log.Debug("dangle done", "level", level, "wc", wc)
 				parentOffset := (wc - 1) / f.branches
 				f.wg.Done()
