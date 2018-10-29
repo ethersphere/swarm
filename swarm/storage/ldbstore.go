@@ -275,6 +275,10 @@ func getGCIdxValue(index *dpaDBIndex, po uint8, addr Address) []byte {
 	return val
 }
 
+func parseGCIdxKey(key []byte) (byte, []byte) {
+	return key[0], key[1:]
+}
+
 func parseGCIdxEntry(accessCnt []byte, val []byte) (index *dpaDBIndex, po uint8, addr Address) {
 	index = &dpaDBIndex{
 		Idx:    binary.BigEndian.Uint64(val[1:]),
@@ -562,13 +566,28 @@ func (s *LDBStore) CleanIndex() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	it := s.db.NewIterator()
-	it.Seek([]byte{keyIndex})
-
 	batch := leveldb.Batch{}
 
 	okEntryCount := 0
 	totalEntryCount := 0
+
+	// throw out all gc indices, we will rebuild from cleaned index
+	it := s.db.NewIterator()
+	it.Seek([]byte{keyGCIdx})
+	var gcDeletes int
+	for it.Valid() {
+		rowType, _ := parseGCIdxKey(it.Key())
+		if rowType != keyGCIdx {
+			break
+		}
+		batch.Delete(it.Key())
+		gcDeletes++
+		it.Next()
+	}
+	log.Debug("gc", "deletes", gcDeletes)
+	s.db.Write(&batch)
+
+	it.Seek([]byte{keyIndex})
 	var idx dpaDBIndex
 	for it.Valid() {
 		rowType, chunkHash := parseIndexKey(it.Key())
@@ -577,23 +596,31 @@ func (s *LDBStore) CleanIndex() error {
 		}
 		err := decodeIndex(it.Value(), &idx)
 		if err != nil {
-			// TODO: should delete?
 			return fmt.Errorf("corrupt index: %v", err)
 		}
 		po := s.po(chunkHash)
+
+		// if we don't find the data key, remove the entry
 		dataKey := getDataKey(idx.Idx, po)
 		_, err = s.db.Get(dataKey)
 		if err != nil {
-			log.Warn("clean delete", "key", chunkHash)
-			s.batch.Delete(it.Key())
+			log.Trace("clean delete", "key", chunkHash)
+			batch.Delete(it.Key())
 		} else {
-			log.Trace("clean ok", "key", chunkHash)
+			gcIdxKey := getGCIdxKey(&idx)
+			gcIdxData := getGCIdxValue(&idx, po, chunkHash)
+			batch.Put(gcIdxKey, gcIdxData)
+			log.Trace("clean ok", "key", chunkHash, "gcKey", gcIdxKey, "gcData", gcIdxData)
 			okEntryCount++
 		}
 		totalEntryCount++
 		it.Next()
 	}
+
+	it.Release()
 	log.Debug("entries", "ok", okEntryCount, "total", totalEntryCount, "batchlen", batch.Len())
+	s.db.Write(&batch)
+
 	return nil
 }
 
