@@ -568,8 +568,8 @@ func (s *LDBStore) CleanIndex() error {
 
 	batch := leveldb.Batch{}
 
-	okEntryCount := 0
-	totalEntryCount := 0
+	var okEntryCount uint64
+	var totalEntryCount uint64
 
 	// throw out all gc indices, we will rebuild from cleaned index
 	it := s.db.NewIterator()
@@ -589,6 +589,7 @@ func (s *LDBStore) CleanIndex() error {
 
 	it.Seek([]byte{keyIndex})
 	var idx dpaDBIndex
+	var poPtrs [256]uint64
 	for it.Valid() {
 		rowType, chunkHash := parseIndexKey(it.Key())
 		if rowType != keyIndex {
@@ -612,6 +613,9 @@ func (s *LDBStore) CleanIndex() error {
 			batch.Put(gcIdxKey, gcIdxData)
 			log.Trace("clean ok", "key", chunkHash, "gcKey", gcIdxKey, "gcData", gcIdxData)
 			okEntryCount++
+			if idx.Idx > poPtrs[uint8(po)] {
+				poPtrs[uint8(po)] = idx.Idx
+			}
 		}
 		totalEntryCount++
 		it.Next()
@@ -619,6 +623,23 @@ func (s *LDBStore) CleanIndex() error {
 
 	it.Release()
 	log.Debug("entries", "ok", okEntryCount, "total", totalEntryCount, "batchlen", batch.Len())
+
+	var entryCount [8]byte
+	binary.BigEndian.PutUint64(entryCount[:], okEntryCount)
+	batch.Put(keyEntryCnt, entryCount[:])
+	var poKey [2]byte
+	poKey[0] = keyDistanceCnt
+	for i, poPtr := range poPtrs {
+		poKey[1] = uint8(i)
+		if poPtr == 0 {
+			batch.Delete(poKey[:])
+		} else {
+			var idxCount [8]byte
+			binary.BigEndian.PutUint64(idxCount[:], poPtr)
+			batch.Put(poKey[:], idxCount[:])
+		}
+	}
+
 	s.db.Write(&batch)
 
 	return nil
