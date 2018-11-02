@@ -205,8 +205,12 @@ func (ls *LocalStore) Migrate() error {
 	if schema != CurrentDbSchema {
 		// run migrations
 
-		if schema == "" {
+		if schema != DbSchemaHalloween {
 			log.Debug("running migrations for", "schema", schema, "runtime-schema", CurrentDbSchema)
+			if schema == DbSchemaPurity {
+				// fix garbage screwed garbage collection and indices
+				ls.DbStore.CleanIndex()
+			}
 
 			// delete chunks that are not valid, i.e. chunks that do not pass any of the ls.Validators
 			ls.DbStore.Cleanup(func(c *chunk) bool {
