@@ -657,7 +657,7 @@ func TestCleanIndex(t *testing.T) {
 		t.Fatalf("expected gc 0 idx to be pruned: %v", idxKey)
 	}
 
-	// second gc index should still be fixde
+	// second gc index should still be fixed
 	_, err = ldb.db.Get(gcSecondCorrectKey)
 	if err != nil {
 		t.Fatalf("expected gc 1 idx to be present: %v", idxKey)
@@ -668,6 +668,54 @@ func TestCleanIndex(t *testing.T) {
 	_, err = ldb.db.Get(gcSecondCorrectKey)
 	if err != nil {
 		t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+	}
+
+	c, err := ldb.db.Get(keyEntryCnt)
+	if err != nil {
+		t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+	}
+
+	// entrycount should now be one less
+	entryCount := binary.BigEndian.Uint64(c)
+	if entryCount != 2 {
+		t.Fatalf("expected entrycnt to be 2, was %d", c)
+	}
+
+	// the chunks might accidentally be in the same bin
+	// if so that bin counter will now be 2 - the highest added index.
+	// if not, the total of them will be 3
+	poBins := []uint8{ldb.po(chunks[1].Address()), ldb.po(chunks[2].Address())}
+	if poBins[0] == poBins[1] {
+		poBins = poBins[:1]
+	}
+
+	var binTotal uint64
+	var currentBin [2]byte
+	currentBin[0] = keyDistanceCnt
+	if len(poBins) == 1 {
+		currentBin[1] = poBins[0]
+		c, err := ldb.db.Get(currentBin[:])
+		if err != nil {
+			t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+		}
+		binCount := binary.BigEndian.Uint64(c)
+		if binCount != 2 {
+			t.Fatalf("expected entrycnt to be 2, was %d", binCount)
+		}
+	} else {
+		for _, bin := range poBins {
+			currentBin[1] = bin
+			c, err := ldb.db.Get(currentBin[:])
+			if err != nil {
+				t.Fatalf("expected gc 2 idx to be present: %v", idxKey)
+			}
+			binCount := binary.BigEndian.Uint64(c)
+			binTotal += binCount
+
+		}
+		if binTotal != 3 {
+			t.Fatalf("expected sum of bin indices to be 3, was %d", binTotal)
+		}
 	}
 }
 
