@@ -30,11 +30,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/testutil"
-
 	"github.com/ethereum/go-ethereum/log"
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
+
 	"github.com/mattn/go-colorable"
 )
 
@@ -289,7 +289,7 @@ func TestCLISwarmUpDefaultPath(t *testing.T) {
 }
 
 func testCLISwarmUpDefaultPath(toEncrypt bool, absDefaultPath bool, t *testing.T) {
-	srv := testutil.NewTestSwarmServer(t, serverFunc, nil)
+	srv := swarmhttp.NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
 
 	tmp, err := ioutil.TempDir("", "swarm-defaultpath-test")
