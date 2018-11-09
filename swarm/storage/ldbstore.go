@@ -247,10 +247,6 @@ func getIndexKey(hash Address) []byte {
 	return key
 }
 
-func parseIndexKey(key []byte) (byte, []byte) {
-	return key[0], key[1:]
-}
-
 func getDataKey(idx uint64, po uint8) []byte {
 	key := make([]byte, 10)
 	key[0] = keyData
@@ -591,7 +587,7 @@ func (s *LDBStore) CleanIndex() error {
 	var idx dpaDBIndex
 	var poPtrs [256]uint64
 	for it.Valid() {
-		rowType, chunkHash := parseIndexKey(it.Key())
+		rowType, chunkHash := parseGCIdxKey(it.Key())
 		if rowType != keyIndex {
 			break
 		}
@@ -644,50 +640,6 @@ func (s *LDBStore) CleanIndex() error {
 
 	return nil
 }
-
-// this seems to be unused
-//func (s *LDBStore) ReIndex() {
-//	//Iterates over the database and checks that there are no faulty chunks
-//	it := s.db.NewIterator()
-//	startPosition := []byte{keyOldData}
-//	it.Seek(startPosition)
-//	var key []byte
-//	var errorsFound, total int
-//	for it.Valid() {
-//		key = it.Key()
-//		if (key == nil) || (key[0] != keyOldData) {
-//			break
-//		}
-//		data := it.Value()
-//		hasher := s.hashfunc()
-//		hasher.Write(data)
-//		hash := hasher.Sum(nil)
-//
-//		newKey := make([]byte, 10)
-//		oldCntKey := make([]byte, 2)
-//		newCntKey := make([]byte, 2)
-//		oldCntKey[0] = keyDistanceCnt
-//		newCntKey[0] = keyDistanceCnt
-//		key[0] = keyData
-//		key[1] = s.po(Address(key[1:]))
-//		oldCntKey[1] = key[1]
-//		newCntKey[1] = s.po(Address(newKey[1:]))
-//		copy(newKey[2:], key[1:])
-//		newValue := append(hash, data...)
-//
-//		batch := new(leveldb.Batch)
-//		batch.Delete(key)
-//		s.bucketCnt[oldCntKey[1]]--
-//		batch.Put(oldCntKey, U64ToBytes(s.bucketCnt[oldCntKey[1]]))
-//		batch.Put(newKey, newValue)
-//		s.bucketCnt[newCntKey[1]]++
-//		batch.Put(newCntKey, U64ToBytes(s.bucketCnt[newCntKey[1]]))
-//		s.db.Write(batch)
-//		it.Next()
-//	}
-//	it.Release()
-//	log.Warn(fmt.Sprintf("Found %v errors out of %v entries", errorsFound, total))
-//}
 
 // Delete is removes a chunk and updates indices.
 // Is thread safe
@@ -813,7 +765,6 @@ func (s *LDBStore) doPut(chunk Chunk, index *dpaDBIndex, po uint8) {
 	dkey := getDataKey(s.dataIdx, po)
 	s.batch.Put(dkey, data)
 	index.Idx = s.dataIdx
-	// TODO: why is this indexcount and not the count of items in po
 	s.bucketCnt[po] = s.dataIdx
 	s.entryCnt++
 	dbEntryCount.Inc(1)
