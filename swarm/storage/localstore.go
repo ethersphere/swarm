@@ -195,35 +195,42 @@ func (ls *LocalStore) Close() {
 
 // Migrate checks the datastore schema vs the runtime schema, and runs migrations if they don't match
 func (ls *LocalStore) Migrate() error {
-	schema, err := ls.DbStore.GetSchema()
+	actualDbSchema, err := ls.DbStore.GetSchema()
 	if err != nil {
 		log.Error(err.Error())
 		return err
 	}
 
-	log.Debug("found schema", "schema", schema, "runtime-schema", CurrentDbSchema)
-	if schema != CurrentDbSchema {
-		// run migrations
-
-		if schema != DbSchemaHalloween {
-			log.Debug("running migrations for", "schema", schema, "runtime-schema", CurrentDbSchema)
-			if schema == DbSchemaPurity {
-				// fix garbage screwed garbage collection and indices
-				ls.DbStore.CleanIndex()
-			}
-
-			// delete chunks that are not valid, i.e. chunks that do not pass any of the ls.Validators
-			ls.DbStore.Cleanup(func(c *chunk) bool {
-				return !ls.isValid(c)
-			})
-
-			err := ls.DbStore.PutSchema(DbSchemaPurity)
-			if err != nil {
-				log.Error(err.Error())
-				return err
-			}
-		}
+	log.Debug("DB schema", "current", actualDbSchema, "desired", DesiredDbSchema)
+	if actualDbSchema == DesiredDbSchema {
+		return nil
 	}
 
+	if actualDbSchema == DbSchemaNone {
+		ls.migrateFromNoneToPurity()
+		actualDbSchema = DbSchemaPurity
+	}
+
+	if actualDbSchema == DbSchemaPurity {
+		ls.DbStore.CleanGCIndex()
+		actualDbSchema = DbSchemaHalloween
+	}
+
+	if err := ls.DbStore.PutSchema(actualDbSchema); err != nil {
+		log.Error(err.Error())
+		return err
+	}
 	return nil
+}
+
+func (ls *LocalStore) migrateFromNoneToPurity() {
+	// delete chunks that are not valid, i.e. chunks that do not pass
+	// any of the ls.Validators
+	ls.DbStore.Cleanup(func(c *chunk) bool {
+		return !ls.isValid(c)
+	})
+}
+
+func (ls *LocalStore) migrateFromPurityToHalloween() {
+	ls.DbStore.CleanGCIndex()
 }

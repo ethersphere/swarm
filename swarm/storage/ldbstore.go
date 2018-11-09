@@ -493,7 +493,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 	}
 }
 
-//Cleanup iterates over the database and deletes chunks if they pass the `f` condition
+// Cleanup iterates over the database and deletes chunks if they pass the `f` condition
 func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 	var errorsFound, removed, total int
 
@@ -558,7 +558,10 @@ func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 	log.Warn(fmt.Sprintf("Found %v errors out of %v entries. Removed %v chunks.", errorsFound, total, removed))
 }
 
-func (s *LDBStore) CleanIndex() error {
+// CleanGCIndex rebuilds the garbage collector index from scratch, while
+// removing inconsistent elements, e.g., indices with missing data chunks.
+// WARN: it's a pretty heavy, long running function.
+func (s *LDBStore) CleanGCIndex() error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -708,7 +711,6 @@ func (s *LDBStore) CurrentStorageIndex() uint64 {
 // Put adds a chunk to the database, adding indices and incrementing global counters.
 // If it already exists, it merely increments the access count of the existing entry.
 // Is thread safe
-
 func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	metrics.GetOrRegisterCounter("ldbstore.put", nil).Inc(1)
 	log.Trace("ldbstore.put", "key", chunk.Address())
@@ -737,7 +739,6 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 	index.Access = s.accessCnt
 	s.accessCnt++
 	idata = encodeIndex(&index)
-	log.Warn("inserting index value", "v", idata, "index", index)
 	s.batch.Put(ikey, idata)
 
 	// add the access-chunkindex index for garbage collection
@@ -874,7 +875,7 @@ func (s *LDBStore) GetSchema() (string, error) {
 	data, err := s.db.Get(keySchema)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return "", nil
+			return DbSchemaNone, nil
 		}
 		return "", err
 	}

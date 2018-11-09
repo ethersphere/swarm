@@ -32,7 +32,6 @@ import (
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
-
 	ldberrors "github.com/syndtr/goleveldb/leveldb/errors"
 )
 
@@ -603,6 +602,7 @@ func TestCleanIndex(t *testing.T) {
 	dataKey := make([]byte, 10)
 	dataKey[0] = keyData
 	dataKey[1] = byte(po)
+	// dataKey[2:10] = first chunk has storageIdx 0 on [2:10]
 	_, err = ldb.db.Get(dataKey)
 	if err != nil {
 		t.Fatal(err)
@@ -628,7 +628,7 @@ func TestCleanIndex(t *testing.T) {
 	ldb.db.Delete(gcSecondCorrectKey)
 	ldb.db.Put(gcSecondCorrectKey, warpedGCVal)
 
-	ldb.CleanIndex()
+	ldb.CleanGCIndex()
 
 	// the index without corresponding data should have been deleted
 	idxKey := make([]byte, 33)
