@@ -601,7 +601,7 @@ func (s *LDBStore) CleanIndex() error {
 		dataKey := getDataKey(idx.Idx, po)
 		_, err = s.db.Get(dataKey)
 		if err != nil {
-			log.Trace("clean delete", "key", chunkHash)
+			log.Warn("deleting inconsistent index (missing data)", "key", chunkHash)
 			batch.Delete(it.Key())
 		} else {
 			gcIdxKey := getGCIdxKey(&idx)
