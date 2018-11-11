@@ -24,17 +24,15 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	mrand "math/rand"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
-
-	"github.com/ethereum/go-ethereum/log"
-
 	colorable "github.com/mattn/go-colorable"
 )
 
@@ -1200,7 +1198,7 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	//write some random data into the file
 	log.Debug("file opened")
 	line1 := []byte("Line 1")
-	_, err = mrand.Read(line1)
+	_, err = rand.Read(line1)
 	if err != nil {
 		t.Fatalf("Error writing random bytes to byte array: %v", err)
 	}
@@ -1266,7 +1264,7 @@ func (ta *testAPI) addNewFileAndModifyContents(t *testing.T, toEncrypt bool) {
 	log.Debug("file opened")
 	//...and modify something
 	line2 := []byte("Line 2")
-	_, err = mrand.Read(line2)
+	_, err = rand.Read(line2)
 	if err != nil {
 		t.Fatalf("Error modifying random bytes to byte array: %v", err)
 	}

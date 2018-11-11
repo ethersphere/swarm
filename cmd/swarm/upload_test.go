@@ -34,7 +34,6 @@ import (
 	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
-
 	"github.com/mattn/go-colorable"
 )
 

@@ -20,13 +20,10 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	mrand "math/rand"
 	"os"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/swarm/testutil"
 
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -40,6 +37,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 //Tests initializing a retrieve request
@@ -531,8 +529,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 		//now we can actually upload a (random) file to the round-robin store
 		size := chunkCount * chunkSize
 		log.Debug("Storing data to file store")
-		b := make([]byte, size)
-		mrand.Read(b)
+		b := testutil.RandomBytes(1, size)
 		fileHash, wait, err := roundRobinFileStore.Store(ctx, bytes.NewReader(b), int64(size), false)
 		// wait until all chunks stored
 		if err != nil {

@@ -21,15 +21,13 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand"
-	mrand "math/rand"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/testutil"
-
 	"github.com/ethereum/go-ethereum/crypto/sha3"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
 // the actual data length generated (could be longer than max datalength of the BMT)
@@ -570,7 +568,7 @@ func asyncHash(bmt SectionWriter, span []byte, l int, wh whenHash, idxs []int, s
 	maxsize := len(idxs)
 	var r int
 	if wh == random {
-		r = mrand.Intn(maxsize)
+		r = rand.Intn(maxsize)
 	}
 	for i, idx := range idxs {
 		bmt.Write(idx, segments[idx])
