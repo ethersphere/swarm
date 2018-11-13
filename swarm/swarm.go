@@ -175,13 +175,25 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if err := nodeID.UnmarshalText([]byte(config.NodeID)); err != nil {
 		return nil, err
 	}
-	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, stateStore, &stream.RegistryOptions{
+
+	syncing := stream.SyncingAutoSubscribe
+	if !config.SyncEnabled || config.LightNodeEnabled {
+		syncing = stream.SyncingDisabled
+	}
+
+	retrieval := stream.RetrievalEnabled
+	if config.LightNodeEnabled {
+		retrieval = stream.RetrievalClientOnly
+	}
+
+	registryOptions := &stream.RegistryOptions{
 		SkipCheck:       config.DeliverySkipCheck,
-		DoSync:          config.SyncEnabled,
-		DoRetrieve:      true,
+		Syncing:         syncing,
+		Retrieval:       retrieval,
 		SyncUpdateDelay: config.SyncUpdateDelay,
 		MaxPeerServers:  config.MaxStreamPeerServers,
-	})
+	}
+	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, stateStore, registryOptions)
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)

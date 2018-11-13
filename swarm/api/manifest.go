@@ -569,7 +569,6 @@ func (mt *manifestTrie) findPrefixOf(path string, quitC chan bool) (entry *manif
 			if path != entry.Path {
 				return nil, 0
 			}
-			pos = epl
 		}
 	}
 	return nil, 0

@@ -62,6 +62,9 @@ func createMockStore(globalStore *mockdb.GlobalStore, id enode.ID, addr *network
 	params.Init(datadir)
 	params.BaseKey = addr.Over()
 	lstore, err = storage.NewLocalStore(params, mockStore)
+	if err != nil {
+		return nil, "", err
+	}
 	return lstore, datadir, nil
 }
 
@@ -114,6 +117,8 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 			bucket.Store(bucketKeyDelivery, delivery)
 
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				Retrieval: RetrievalDisabled,
+				Syncing:   SyncingAutoSubscribe,
 				SkipCheck: skipCheck,
 			})
 
