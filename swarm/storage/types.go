@@ -24,6 +24,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
@@ -321,4 +322,36 @@ func (f *FakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 
 // Close doesn't store anything it is just here to implement ChunkStore
 func (f *FakeChunkStore) Close() {
+}
+
+// MapChunkStore is a very simple ChunkStore implementation to store chunks in a map in memory.
+type MapChunkStore struct {
+	chunks map[string]Chunk
+	mu     sync.RWMutex
+}
+
+func NewMapChunkStore() *MapChunkStore {
+	return &MapChunkStore{
+		chunks: make(map[string]Chunk),
+	}
+}
+
+func (m *MapChunkStore) Put(_ context.Context, ch Chunk) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.chunks[ch.Address().Hex()] = ch
+	return nil
+}
+
+func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	chunk := m.chunks[ref.Hex()]
+	if chunk == nil {
+		return nil, ErrChunkNotFound
+	}
+	return chunk, nil
+}
+
+func (m *MapChunkStore) Close() {
 }
