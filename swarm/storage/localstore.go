@@ -28,8 +28,9 @@ import (
 
 type LocalStoreParams struct {
 	*StoreParams
-	ChunkDbPath string
-	Validators  []ChunkValidator `toml:"-"`
+	ChunkDbPath    string
+	Validators     []ChunkValidator `toml:"-"`
+	SkipValidation bool
 }
 
 func NewDefaultLocalStoreParams() *LocalStoreParams {
@@ -49,10 +50,11 @@ func (p *LocalStoreParams) Init(path string) {
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
-	Validators []ChunkValidator
-	memStore   *MemStore
-	DbStore    *LDBStore
-	mu         sync.Mutex
+	Validators     []ChunkValidator
+	memStore       *MemStore
+	DbStore        *LDBStore
+	mu             sync.Mutex
+	skipValidation bool
 }
 
 // This constructor uses MemStore and DbStore as components
@@ -63,9 +65,10 @@ func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalS
 		return nil, err
 	}
 	return &LocalStore{
-		memStore:   NewMemStore(params.StoreParams, dbStore),
-		DbStore:    dbStore,
-		Validators: params.Validators,
+		memStore:       NewMemStore(params.StoreParams, dbStore),
+		DbStore:        dbStore,
+		Validators:     params.Validators,
+		skipValidation: params.SkipValidation,
 	}, nil
 }
 
@@ -88,6 +91,10 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 func (ls *LocalStore) isValid(chunk Chunk) bool {
 	// by default chunks are valid. if we have 0 validators, then all chunks are valid.
 	valid := true
+	if ls.skipValidation {
+		log.Warn("LocalStore: Skipping chunk validation")
+		return valid
+	}
 
 	// ls.Validators contains a list of one validator per chunk type.
 	// if one validator succeeds, then the chunk is valid

@@ -30,6 +30,29 @@ var (
 	hashfunc = MakeHashFunc(DefaultHash)
 )
 
+func TestSkipValidation(t *testing.T) {
+	// set up localstore
+	datadir, err := ioutil.TempDir("", "storage-testvalidator")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(datadir)
+
+	params := NewDefaultLocalStoreParams()
+	params.SkipValidation = true
+	params.Init(datadir)
+	store, err := NewLocalStore(params, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	chunks := GenerateRandomChunks(0, 1)
+	err = store.Put(context.TODO(), chunks[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 // tests that the content address validator correctly checks the data
 // tests that feed update chunks are passed through content address validator
 // the test checking the resouce update validator internal correctness is found in storage/feeds/handler_test.go
