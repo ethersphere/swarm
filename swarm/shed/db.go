@@ -40,12 +40,19 @@ type DB struct {
 	ldb *leveldb.DB
 }
 
+var leveldbOptions = &opt.Options{
+	Compression: opt.NoCompression,
+	BlockSize:   1 << 16,
+	// Default max open file descriptors (ulimit -n) is 256 on OS
+	// X, and >=1024 on (most?) Linux machines. So set to a low
+	// number since we have multiple leveldb instances.
+	OpenFilesCacheCapacity: 10,
+}
+
 // NewDB constructs a new DB and validates the schema
 // if it exists in database on the given path.
 func NewDB(path string) (db *DB, err error) {
-	ldb, err := leveldb.OpenFile(path, &opt.Options{
-		OpenFilesCacheCapacity: openFileLimit,
-	})
+	ldb, err := leveldb.OpenFile(path, leveldbOptions)
 	if err != nil {
 		return nil, err
 	}

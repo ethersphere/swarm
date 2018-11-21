@@ -1,11 +1,17 @@
 package rushed
 
 import (
+	"errors"
+
 	"github.com/ethereum/go-ethereum/swarm/shed"
 )
 
 const (
 	iterBatchSize = 128
+)
+
+var (
+	errCancelled = errors.New("cancelled")
 )
 
 type Subscription struct {

@@ -123,47 +123,57 @@ func (t *tester) Put(_ context.Context, ch storage.Chunk) error {
 	return t.index.Put(*(newItemFromChunk(ch)))
 }
 func BenchmarkPut(b *testing.B) {
-	n := 128	
-	for j := 0; j < 5; j++ {
+	n := 128
+	for j := 0; j < 2; j++ {
 		n *= 2
-		in := time.Nanosecond
-		for i := 0; i < 3; i++ {
+		chunks := make([]storage.Chunk, n)
+		for k := 0; k < n; k++ {
+			chunks[k] = storage.GenerateRandomChunk(chunk.DefaultSize)
+		}
+		in := 1 * time.Nanosecond
+		for i := 0; i < 4; i++ {
 			for _, name := range []string{"shed", "rushed"} {
-				path, err := ioutil.TempDir("", "rushed-test")
-				if err != nil {
-					b.Fatal(err)
-				}
-				defer os.RemoveAll(path)
-				tester, err := newTester(path)
-				if err != nil {
-					b.Fatal(err)
-				}
-				defer tester.db.Close()
-				var db putter
-				if name == "shed" {
-					db = tester
-				} else {
-					db = tester.db.Mode(0)
-				}
 				b.Run(fmt.Sprintf("N=%v Interval=%v, DB=%v", n, in, name), func(t *testing.B) {
-					benchmarkPut(t, n, in, db)
+					benchmarkPut(t, chunks, in, name)
 				})
 			}
-			in *= time.Duration(10)
+			in *= time.Duration(100)
 		}
 	}
 }
 
-func benchmarkPut(b *testing.B, n int, in time.Duration, db putter) {
+func benchmarkPut(b *testing.B, chunks []storage.Chunk, in time.Duration, name string) {
 	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		path, err := ioutil.TempDir("", "rushed-test")
+		if err != nil {
+			b.Fatal(err)
+		}
+		tester, err := newTester(path)
+		if err != nil {
+			os.RemoveAll(path)
+			b.Fatal(err)
+		}
+		var db putter
+		if name == "shed" {
+			db = tester
+		} else {
+			db = tester.db.Mode(0)
+		}
 		var wg sync.WaitGroup
-		wg.Add(n)
-		for j := 0; j < n; j++ {
-			go func() {
+		wg.Add(len(chunks))
+		ctx := context.Background()
+		b.StartTimer()
+		for _, ch := range chunks {
+			time.Sleep(in)
+			go func(chu storage.Chunk) {
 				defer wg.Done()
-				db.Put(context.Background(), storage.GenerateRandomChunk(chunk.DefaultSize))
-			}()
+				db.Put(ctx, chu)
+			}(ch)
 		}
 		wg.Wait()
+		b.StopTimer()
+		tester.db.Close()
+		os.RemoveAll(path)
 	}
 }
