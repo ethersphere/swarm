@@ -18,36 +18,63 @@ package shed
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Index functions for the index that is used in tests in this file.
-var retrievalIndexFuncs = IndexFuncs{
-	EncodeKey: func(fields IndexItem) (key []byte, err error) {
-		return fields.Address, nil
-	},
-	DecodeKey: func(key []byte) (e IndexItem, err error) {
-		e.Address = key
-		return e, nil
-	},
-	EncodeValue: func(fields IndexItem) (value []byte, err error) {
-		b := make([]byte, 8)
-		binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
-		value = append(b, fields.Data...)
-		return value, nil
-	},
-	DecodeValue: func(value []byte) (e IndexItem, err error) {
-		e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-		e.Data = value[8:]
-		return e, nil
-	},
-}
+var (
+	// Address->StoreTimestamp|Data
+	retrievalIndexFuncs = IndexFuncs{
+		EncodeKey: func(fields IndexItem) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e IndexItem, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: func(fields IndexItem) (value []byte, err error) {
+			b := make([]byte, 8)
+			binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
+			value = append(b, fields.Data...)
+			return value, nil
+		},
+		DecodeValue: func(value []byte) (e IndexItem, err error) {
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
+			e.Data = value[8:]
+			return e, nil
+		},
+	}
+	// StoredTimestamp|Address->Data
+	storedIndexFuncs = IndexFuncs{
+		EncodeKey: func(fields IndexItem) (key []byte, err error) {
+			b := make([]byte, 8, 8+len(fields.Address))
+			binary.BigEndian.PutUint64(b[:8], uint64(fields.StoreTimestamp))
+			key = append(b, fields.Address...)
+			return key, nil
+		},
+		DecodeKey: func(key []byte) (e IndexItem, err error) {
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(key[:8]))
+			e.Address = key[8:]
+			return e, nil
+		},
+		EncodeValue: func(fields IndexItem) (value []byte, err error) {
+			return fields.Data, nil
+		},
+		DecodeValue: func(value []byte) (e IndexItem, err error) {
+			e.Data = value
+			return e, nil
+		},
+	}
+)
 
 // TestIndex validates put, get and delete functions of the Index implementation.
 func TestIndex(t *testing.T) {
@@ -371,6 +398,153 @@ func TestIndex_iterate(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
+}
+
+// TestIndex_NewSubscription tests one index subscription for iterations
+// over existing keys and a newly saved.
+func TestIndex_NewSubscription(t *testing.T) {
+	db, cleanupFunc := newTestDB(t)
+	defer cleanupFunc()
+
+	index, err := db.NewIndex("stored", storedIndexFuncs)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// put some items before the subscription is created and provide them for validation
+	items := putItems(t, index, 10)
+
+	// cursor counts the number of received items
+	var cursor int
+	// mu protects the cursor and wantItemsCount
+	var mu sync.Mutex
+	// wait signals that it is safe to check if
+	// all items are iterated on.
+	wait := make(chan struct{})
+
+	// wantItemsCount is the expected number of items from subscription
+	wantItemsCount := len(items)
+
+	s, err := index.NewSubscription(context.Background(), func(item IndexItem) (stop bool, err error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		// validate that the item is the one that is expected by ordering
+		if !bytes.Equal(items[cursor].Address, item.Address) {
+			return false, fmt.Errorf("got %v address %x, want %x", cursor, items[cursor].Address, item.Address)
+		}
+
+		// move the cursor (increase the count of received items)
+		cursor++
+
+		// if all expected items are received, signal for a check
+		if cursor == wantItemsCount {
+			wait <- struct{}{}
+		}
+		return
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s == nil {
+		t.Fatal("subscription is nil")
+	}
+	defer s.Stop()
+
+	t.Run("initial items", func(t *testing.T) {
+		// wait until it is safe to check for the number of received items
+		select {
+		case <-s.Done():
+			t.Fatalf("sunscription should not be done: %s", s.Err())
+		case <-time.After(30 * time.Second):
+			t.Fatalf("index subscription items not received")
+		case <-wait:
+		}
+
+		mu.Lock()
+		// get the current received items count
+		gotItemsCount := cursor
+		mu.Unlock()
+
+		if gotItemsCount != wantItemsCount {
+			t.Fatalf("got items %v, want %v", gotItemsCount, wantItemsCount)
+		}
+	})
+
+	t.Run("put more items", func(t *testing.T) {
+		// add more items after the subscription started
+		items = append(items, putItems(t, index, 12)...)
+
+		mu.Lock()
+		// increment expected total number of items
+		wantItemsCount = len(items)
+		mu.Unlock()
+
+		// wait for a second as no items should be received until
+		// TriggerSubscriptions is called.
+		select {
+		case <-s.Done():
+			t.Fatalf("sunscription should not be done: %s", s.Err())
+		case <-time.After(time.Second):
+		case <-wait:
+			t.Fatalf("unexpected index subscriptions received")
+		}
+
+		mu.Lock()
+		// get the current cursor
+		gotItemsCount := cursor
+		mu.Unlock()
+
+		if gotItemsCount == wantItemsCount {
+			t.Fatalf("got items %v, before triggering subscriptions", gotItemsCount)
+		}
+	})
+
+	t.Run("trigger", func(t *testing.T) {
+		index.TriggerSubscriptions()
+
+		// wait until it is safe to check for the number of received items
+		select {
+		case <-s.Done():
+			t.Fatalf("sunscription should not be done: %s", s.Err())
+		case <-time.After(30 * time.Second):
+			t.Fatalf("index subscription items not received")
+		case <-wait:
+		}
+
+		mu.Lock()
+		// get the current cursor
+		gotItemsCount := cursor
+		// increment expected total number of items
+		wantItemsCount = len(items)
+		mu.Unlock()
+
+		if gotItemsCount != wantItemsCount {
+			t.Fatalf("got items %v, want %v", gotItemsCount, wantItemsCount)
+		}
+	})
+}
+
+func putItems(t *testing.T, index Index, n int) []IndexItem {
+	t.Helper()
+
+	items := make([]IndexItem, 0)
+	for i := 0; i < n; i++ {
+		c := storage.GenerateRandomChunk(24)
+		items = append(items, IndexItem{
+			Address:        c.Address(),
+			Data:           c.Data(),
+			StoreTimestamp: time.Now().UTC().UnixNano(),
+		})
+	}
+
+	for _, item := range items {
+		err := index.Put(item)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	return items
 }
 
 // checkIndexItem is a test helper function that compares if two Index items are the same.
