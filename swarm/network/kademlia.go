@@ -451,7 +451,8 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 	var lastPo int
 
 	f := func(v pot.Val, i int) bool {
-		if bytes.Equal(pot.ToBytes(v), pivotAddr) {
+		// po == 256 means that addr is the pivot address(self)
+		if po == 256 {
 			return true
 		}
 		size++
@@ -646,7 +647,8 @@ func NewPeerPotMap(kadMinProxSize int, addrs [][]byte) map[string]*PeerPot {
 
 		np.EachNeighbour(a, pof, func(val pot.Val, po int) bool {
 			addr := val.([]byte)
-			if bytes.Equal(pot.ToBytes(val), a) {
+			// po == 256 means that addr is the pivot address(self)
+			if po == 256 {
 				return true
 			}
 
