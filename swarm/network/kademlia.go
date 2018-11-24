@@ -175,7 +175,7 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	minsize := k.MinBinSize
-	depth := k.NeighbourhoodDepth()
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	// if there is a callable neighbour within the current proxBin, connect
 	// this makes sure nearest neighbour set is fully connected
 	var ppo int
@@ -305,7 +305,7 @@ func (k *Kademlia) sendNeighbourhoodDepthChange() {
 	// It provides signaling of neighbourhood depth change.
 	// This part of the code is sending new neighbourhood depth to nDepthC if that condition is met.
 	if k.nDepthC != nil {
-		nDepth := k.NeighbourhoodDepth()
+		nDepth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 		if nDepth != k.nDepth {
 			k.nDepth = nDepth
 			k.nDepthC <- nDepth
@@ -361,7 +361,7 @@ func (k *Kademlia) EachBin(base []byte, pof pot.Pof, o int, eachBinFunc func(con
 
 	var startPo int
 	var endPo int
-	kadDepth := k.NeighbourhoodDepth()
+	kadDepth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 
 	k.conns.EachBin(base, pof, o, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		if startPo > 0 && endPo != k.MaxProxDisplay {
@@ -395,7 +395,7 @@ func (k *Kademlia) eachConn(base []byte, o int, f func(*Peer, int, bool) bool) {
 	if len(base) == 0 {
 		base = k.base
 	}
-	depth := k.NeighbourhoodDepth()
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	k.conns.EachNeighbour(base, pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
@@ -550,7 +550,7 @@ func (k *Kademlia) string() string {
 	liverows := make([]string, k.MaxProxDisplay)
 	peersrows := make([]string, k.MaxProxDisplay)
 
-	depth := k.NeighbourhoodDepth()
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	rest := k.conns.Size()
 	k.conns.EachBin(k.base, pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		var rowlen int
@@ -683,7 +683,7 @@ func (k *Kademlia) saturation(n int) int {
 		prev++
 		return prev == po && size >= n
 	})
-	depth := k.NeighbourhoodDepth()
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	if depth < prev {
 		return depth
 	}
@@ -696,7 +696,7 @@ func (k *Kademlia) full(emptyBins []int) (full bool) {
 	prev := 0
 	e := len(emptyBins)
 	ok := true
-	depth := k.NeighbourhoodDepth()
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	k.conns.EachBin(k.base, pof, 0, func(po, _ int, _ func(func(val pot.Val, i int) bool) bool) bool {
 		if po >= depth {
 			return false
@@ -800,7 +800,6 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	gotnn, countnn, culpritsnn := k.gotNearestNeighbours(pp.NNSet)
 	knownn := k.knowNearestNeighbours(pp.NNSet)
 	full := k.full(pp.EmptyBins)
-
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, full: %v\n", k.BaseAddr()[:4], knownn, gotnn, full))
 	return &Health{knownn, gotnn, countnn, culpritsnn, full, k.string()}
 }
