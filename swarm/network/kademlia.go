@@ -452,7 +452,7 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 
 	f := func(v pot.Val, i int) bool {
 		// po == 256 means that addr is the pivot address(self)
-		if po == 256 {
+		if i == 256 {
 			return true
 		}
 		size++
