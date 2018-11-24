@@ -417,7 +417,7 @@ func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool
 	if len(base) == 0 {
 		base = k.base
 	}
-	depth := k.NeighbourhoodDepth()
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	k.addrs.EachNeighbour(base, pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
@@ -426,16 +426,16 @@ func (k *Kademlia) eachAddr(base []byte, o int, f func(*BzzAddr, int, bool) bool
 	})
 }
 
-// depthForPot returns the proximity order that defines the distance of
-// the nearest neighbour set with cardinality >= MinProxBinSize
-// if there is altogether less than MinProxBinSize peers it returns 0
-// caller must hold the lock
 func (k *Kademlia) NeighbourhoodDepth() (depth int) {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	return depthForPot(k.conns, k.MinProxBinSize, k.base)
 }
 
+// depthForPot returns the proximity order that defines the distance of
+// the nearest neighbour set with cardinality >= MinProxBinSize
+// if there is altogether less than MinProxBinSize peers it returns 0
+// caller must hold the lock
 func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 	if p.Size() <= minProxBinSize {
 		return 0
