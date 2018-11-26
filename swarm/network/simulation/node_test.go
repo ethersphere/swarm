@@ -287,7 +287,7 @@ func TestUploadSnapshot(t *testing.T) {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			kad := network.NewKademlia(addr.Over(), NewTestKadParams(ctx))
 			return network.NewBzz(config, kad, nil, nil, nil), nil, nil
 		},
 	})

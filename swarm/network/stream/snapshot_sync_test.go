@@ -347,7 +347,7 @@ func testSyncingViaDirectSubscribe(t *testing.T, chunkCount int, nodeCount int) 
 			if err != nil {
 				return nil, nil, err
 			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			kad := network.NewKademlia(addr.Over(), simulation.NewTestKadParams(ctx))
 			delivery := NewDelivery(kad, netStore)
 			netStore.NewNetFetcherFunc = network.NewFetcherFactory(dummyRequestFromPeers, true).New
 

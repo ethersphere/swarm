@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
@@ -62,7 +63,7 @@ type KadParams struct {
 	RetryExponent  int   // exponent to multiply retry intervals with
 	MaxRetries     int   // maximum number of redial attempts
 	// function to sanction or prevent suggesting a peer
-	Reachable func(*BzzAddr) bool
+	Reachable func(id enode.ID) bool
 }
 
 // NewKadParams returns a params struct with default values
@@ -519,9 +520,13 @@ func (k *Kademlia) callable(e *entry) bool {
 		return false
 	}
 	// function to sanction or prevent suggesting a peer
-	if k.Reachable != nil && !k.Reachable(e.BzzAddr) {
-		log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
-		return false
+	if k.Reachable != nil {
+		enode := enode.ID{}
+		copy(enode[:], e.BzzAddr.Over())
+		if !k.Reachable(enode) {
+			log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
+			return false
+		}
 	}
 	e.retries++
 	log.Trace(fmt.Sprintf("%08x: peer %v is callable", k.BaseAddr()[:4], e))
@@ -698,6 +703,8 @@ func (k *Kademlia) saturation(n int) int {
 // full returns true if all required bins have connected peers.
 // It is used in Healthy function for testing only
 func (k *Kademlia) full(emptyBins []int) (full bool) {
+	log.Debug("kademlia.full", "node", fmt.Sprintf("%08x", k.BaseAddr()[:4]), "emptyBins", emptyBins)
+
 	prev := 0
 	e := len(emptyBins)
 	ok := true

@@ -48,6 +48,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
@@ -1932,11 +1933,11 @@ func setupNetwork(numnodes int, allowRaw bool) (clients []*rpc.Client, err error
 func newServices(allowRaw bool) adapters.Services {
 	stateStore := state.NewInmemoryStore()
 	kademlias := make(map[enode.ID]*network.Kademlia)
-	kademlia := func(id enode.ID) *network.Kademlia {
+	kademlia := func(id enode.ID, ctx *adapters.ServiceContext) *network.Kademlia {
 		if k, ok := kademlias[id]; ok {
 			return k
 		}
-		params := network.NewKadParams()
+		params := simulation.NewTestKadParams(ctx)
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
 		params.MinBinSize = 1
@@ -1957,7 +1958,7 @@ func newServices(allowRaw bool) adapters.Services {
 			privkey, err := w.GetPrivateKey(keys)
 			pssp := NewPssParams().WithPrivateKey(privkey)
 			pssp.AllowRaw = allowRaw
-			pskad := kademlia(ctx.Config.ID)
+			pskad := kademlia(ctx.Config.ID, ctx)
 			ps, err := NewPss(pskad, pssp)
 			if err != nil {
 				return nil, err
@@ -2007,7 +2008,7 @@ func newServices(allowRaw bool) adapters.Services {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			return network.NewBzz(config, kademlia(ctx.Config.ID), stateStore, nil, nil), nil
+			return network.NewBzz(config, kademlia(ctx.Config.ID, ctx), stateStore, nil, nil), nil
 		},
 	}
 }

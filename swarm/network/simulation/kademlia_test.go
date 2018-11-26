@@ -39,7 +39,7 @@ func TestWaitTillHealthy(t *testing.T) {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			kad := network.NewKademlia(addr.Over(), NewTestKadParams(ctx))
 			// store kademlia in node's bucket under BucketKeyKademlia
 			// so that it can be found by WaitTillHealthy method.
 			b.Store(BucketKeyKademlia, kad)
@@ -48,7 +48,7 @@ func TestWaitTillHealthy(t *testing.T) {
 	})
 	defer sim.Close()
 
-	_, err := sim.AddNodesAndConnectRing(10)
+	_, err := sim.AddNodesAndConnectRing(30)
 	if err != nil {
 		t.Fatal(err)
 	}

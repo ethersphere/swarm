@@ -83,11 +83,12 @@ func (net *Network) Events() *event.Feed {
 func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) {
 	net.lock.Lock()
 	defer net.lock.Unlock()
-
 	if conf.Reachable == nil {
 		conf.Reachable = func(otherID enode.ID) bool {
+			log.Trace("kademlia.Reachable", "thisNode", conf.ID.TerminalString(), "thatNode", otherID.TerminalString())
 			_, err := net.InitConn(conf.ID, otherID)
-			if err != nil && bytes.Compare(conf.ID.Bytes(), otherID.Bytes()) < 0 {
+			if err != nil {
+				log.Trace("net.InitConn returned an error", "err", err)
 				return false
 			}
 			return true
@@ -331,11 +332,8 @@ func (net *Network) DidDisconnect(one, other enode.ID) error {
 	if conn == nil {
 		return fmt.Errorf("connection between %v and %v does not exist", one, other)
 	}
-	if !conn.Up {
-		return fmt.Errorf("%v and %v already disconnected", one, other)
-	}
 	conn.Up = false
-	conn.initiated = time.Now().Add(-DialBanTimeout)
+	conn.wasInitiated = false
 	net.events.Send(NewEvent(conn))
 	return nil
 }
@@ -472,15 +470,13 @@ func (net *Network) InitConn(oneID, otherID enode.ID) (*Conn, error) {
 	if oneID == otherID {
 		return nil, fmt.Errorf("refusing to connect to self %v", oneID)
 	}
+
 	conn, err := net.getOrCreateConn(oneID, otherID)
 	if err != nil {
 		return nil, err
 	}
-	if conn.Up {
-		return nil, fmt.Errorf("%v and %v already connected", oneID, otherID)
-	}
-	if time.Since(conn.initiated) < DialBanTimeout {
-		return nil, fmt.Errorf("connection between %v and %v recently attempted", oneID, otherID)
+	if conn.wasInitiated {
+		return nil, fmt.Errorf("connection between %v and %v was already initiated", oneID, otherID)
 	}
 
 	err = conn.nodesUp()
@@ -489,7 +485,7 @@ func (net *Network) InitConn(oneID, otherID enode.ID) (*Conn, error) {
 		return nil, fmt.Errorf("nodes not up: %v", err)
 	}
 	log.Debug("Connection initiated", "id", oneID, "other", otherID)
-	conn.initiated = time.Now()
+	conn.wasInitiated = true
 	return conn, nil
 }
 
@@ -575,11 +571,11 @@ type Conn struct {
 
 	// Up tracks whether or not the connection is active
 	Up bool `json:"up"`
-	// Registers when the connection was grabbed to dial
-	initiated time.Time
 
-	one   *Node
-	other *Node
+	// Toggled when the connection was grabbed to dial or DidDisconnect was fired
+	wasInitiated bool
+	one          *Node
+	other        *Node
 }
 
 // nodesUp returns whether both nodes are currently up

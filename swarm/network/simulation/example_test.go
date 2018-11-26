@@ -47,7 +47,8 @@ func ExampleSimulation_WaitTillHealthy() {
 				UnderlayAddr: addr.Under(),
 				HiveParams:   hp,
 			}
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			kad := network.NewKademlia(addr.Over(), simulation.NewTestKadParams(ctx))
+
 			// store kademlia in node's bucket under BucketKeyKademlia
 			// so that it can be found by WaitTillHealthy method.
 			b.Store(simulation.BucketKeyKademlia, kad)

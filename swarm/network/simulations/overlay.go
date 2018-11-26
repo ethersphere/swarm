@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	colorable "github.com/mattn/go-colorable"
 )
@@ -84,8 +85,7 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	s.mtx.Unlock()
 
 	addr := network.NewAddr(node)
-
-	kp := network.NewKadParams()
+	kp := simulation.NewTestKadParams(ctx)
 	kp.MinProxBinSize = 2
 	kp.MaxBinSize = 4
 	kp.MinBinSize = 1

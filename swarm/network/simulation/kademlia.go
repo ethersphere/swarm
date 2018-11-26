@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
@@ -93,4 +94,12 @@ func (s *Simulation) kademlias() (ks map[enode.ID]*network.Kademlia) {
 		ks[id] = k
 	}
 	return ks
+}
+
+func NewTestKadParams(ctx *adapters.ServiceContext) *network.KadParams {
+	kadParams := network.NewKadParams()
+	if ctx.Config.Reachable != nil {
+		kadParams.Reachable = ctx.Config.Reachable
+	}
+	return kadParams
 }
