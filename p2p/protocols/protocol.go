@@ -208,6 +208,8 @@ type Peer struct {
 	*p2p.Peer                   // the p2p.Peer object representing the remote
 	rw        p2p.MsgReadWriter // p2p.MsgReadWriter to send messages to and read messages from
 	spec      *Spec
+	hsOk      bool
+	hsC       chan struct{}
 }
 
 // NewPeer constructs a new peer
@@ -244,6 +246,10 @@ func (p *Peer) Run(handler func(ctx context.Context, msg interface{}) error) err
 // TODO: may need to implement protocol drop only? don't want to kick off the peer
 // if they are useful for other protocols
 func (p *Peer) Drop(err error) {
+	if p.hsOk {
+		<-p.hsC
+		p.hsOk = false
+	}
 	p.Disconnect(p2p.DiscSubprotocolError)
 }
 
@@ -405,9 +411,15 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 		if p.Inbound() {
 			receive()
 			send()
+			log.Warn("inbound handshake ok")
+			p.hsOk = true
+			p.hsC <- struct{}{}
 		} else {
 			send()
 			receive()
+			log.Warn("outbound handshake ok")
+			p.hsOk = true
+			p.hsC <- struct{}{}
 		}
 	}()
 
@@ -422,4 +434,14 @@ func (p *Peer) Handshake(ctx context.Context, hs interface{}, verify func(interf
 		}
 	}
 	return rhs, nil
+}
+
+func (p *Peer) WaitForHandshake(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-p.hsC:
+		p.hsC <- struct{}{}
+	}
+	return nil
 }
