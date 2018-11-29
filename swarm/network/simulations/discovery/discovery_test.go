@@ -554,9 +554,10 @@ func newService(ctx *adapters.ServiceContext) (node.Service, error) {
 	kp.MinProxBinSize = testMinProxBinSize
 
 	if ctx.Config.Reachable != nil {
-		kp.Reachable = func(id enode.ID) bool {
-			return ctx.Config.Reachable(id)
-		}
+		log.Error("ctx.config.reachable not null")
+		/*		kp.Reachable = func(id enode.ID) bool {
+				return ctx.Config.Reachable(id)
+			}*/
 	}
 	kad := network.NewKademlia(addr.Over(), kp)
 	hp := network.NewHiveParams()
