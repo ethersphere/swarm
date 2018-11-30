@@ -84,8 +84,6 @@ func watchSim(sim *simulation.Simulation) (context.Context, context.CancelFunc) 
 
 //This test requests bogus hashes into the network
 func TestNonExistingHashesWithServer(t *testing.T) {
-
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	nodeCount, _, sim := setupSim(retrievalSimServiceMap)
 	defer sim.Close()
 
@@ -144,8 +142,6 @@ func sendSimTerminatedEvent(sim *simulation.Simulation) {
 //It also sends some custom events so that the frontend
 //can visualize messages like SendOfferedMsg, WantedHashesMsg, DeliveryMsg
 func TestSnapshotSyncWithServer(t *testing.T) {
-
-	t.Skip("temporarily disabled as simulations.WaitTillHealthy cannot be trusted")
 	nodeCount, chunkCount, sim := setupSim(simServiceMap)
 	defer sim.Close()
 
