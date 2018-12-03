@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -89,6 +90,9 @@ func (net *Network) NewNodeWithConfig(conf *adapters.NodeConfig) (*Node, error) 
 			_, err := net.InitConn(conf.ID, otherID)
 			if err != nil {
 				log.Trace("net.InitConn returned an error", "err", err)
+				r := rand.New(rand.NewSource(time.Now().UnixNano()))
+				t := time.Duration(time.Duration(r.Intn(200)) * time.Millisecond)
+				time.Sleep(t)
 				return false
 			}
 			return true

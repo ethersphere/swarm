@@ -524,6 +524,9 @@ func (k *Kademlia) callable(e *entry) bool {
 		enode := enode.ID{}
 		copy(enode[:], e.BzzAddr.Over())
 		if !k.Reachable(enode) {
+			r := rand.New(rand.NewSource(time.Now().UnixNano()))
+			t := time.Duration(time.Duration(r.Intn(400)) * time.Millisecond)
+			time.Sleep(t)
 			log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
 			return false
 		}
