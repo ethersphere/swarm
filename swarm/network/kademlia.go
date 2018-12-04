@@ -398,7 +398,7 @@ func (k *Kademlia) eachConn(base []byte, o int, f func(*Peer, int, bool) bool) {
 	if len(base) == 0 {
 		base = k.base
 	}
-	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+	depth := depthForPot(k.conns, k.MinProxBinSize, base)
 	k.conns.EachNeighbour(base, pof, func(val pot.Val, po int) bool {
 		if po > o {
 			return true
