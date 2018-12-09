@@ -5,7 +5,6 @@
 package txscript
 
 import (
-	"bytes"
 	"testing"
 )
 
@@ -206,22 +205,6 @@ var scriptClassTests = []struct {
 	},
 }
 
-// TestScriptClass ensures all the scripts in scriptClassTests have the expected
-// class.
-func TestScriptClass(t *testing.T) {
-	t.Parallel()
-
-	for _, test := range scriptClassTests {
-		script := mustParseShortForm(test.script)
-		class := GetScriptClass(script)
-		if class != test.class {
-			t.Errorf("%s: expected %s got %s (script %x)", test.name,
-				test.class, class, script)
-			continue
-		}
-	}
-}
-
 // TestStringifyClass ensures the script class string returns the expected
 // string for each script class.
 func TestStringifyClass(t *testing.T) {
@@ -284,92 +267,6 @@ func TestStringifyClass(t *testing.T) {
 		if typeString != test.stringed {
 			t.Errorf("%s: got %#q, want %#q", test.name,
 				typeString, test.stringed)
-		}
-	}
-}
-
-// TestNullDataScript tests whether NullDataScript returns a valid script.
-func TestNullDataScript(t *testing.T) {
-	tests := []struct {
-		name     string
-		data     []byte
-		expected []byte
-		err      error
-		class    ScriptClass
-	}{
-		{
-			name:     "small int",
-			data:     hexToBytes("01"),
-			expected: mustParseShortForm("RETURN 1"),
-			err:      nil,
-			class:    NullDataTy,
-		},
-		{
-			name:     "max small int",
-			data:     hexToBytes("10"),
-			expected: mustParseShortForm("RETURN 16"),
-			err:      nil,
-			class:    NullDataTy,
-		},
-		{
-			name: "data of size before OP_PUSHDATA1 is needed",
-			data: hexToBytes("0102030405060708090a0b0c0d0e0f10111" +
-				"2131415161718"),
-			expected: mustParseShortForm("RETURN 0x18 0x01020304" +
-				"05060708090a0b0c0d0e0f101112131415161718"),
-			err:   nil,
-			class: NullDataTy,
-		},
-		{
-			name: "just right",
-			data: hexToBytes("000102030405060708090a0b0c0d0e0f101" +
-				"112131415161718191a1b1c1d1e1f202122232425262" +
-				"728292a2b2c2d2e2f303132333435363738393a3b3c3" +
-				"d3e3f404142434445464748494a4b4c4d4e4f"),
-			expected: mustParseShortForm("RETURN PUSHDATA1 0x50 " +
-				"0x000102030405060708090a0b0c0d0e0f101112131" +
-				"415161718191a1b1c1d1e1f20212223242526272829" +
-				"2a2b2c2d2e2f303132333435363738393a3b3c3d3e3" +
-				"f404142434445464748494a4b4c4d4e4f"),
-			err:   nil,
-			class: NullDataTy,
-		},
-		{
-			name: "too big",
-			data: hexToBytes("000102030405060708090a0b0c0d0e0f101" +
-				"112131415161718191a1b1c1d1e1f202122232425262" +
-				"728292a2b2c2d2e2f303132333435363738393a3b3c3" +
-				"d3e3f404142434445464748494a4b4c4d4e4f50"),
-			expected: nil,
-			err:      scriptError(ErrTooMuchNullData, ""),
-			class:    NonStandardTy,
-		},
-	}
-
-	for i, test := range tests {
-		script, err := NullDataScript(test.data)
-		if e := tstCheckScriptError(err, test.err); e != nil {
-			t.Errorf("NullDataScript: #%d (%s): %v", i, test.name,
-				e)
-			continue
-
-		}
-
-		// Check that the expected result was returned.
-		if !bytes.Equal(script, test.expected) {
-			t.Errorf("NullDataScript: #%d (%s) wrong result\n"+
-				"got: %x\nwant: %x", i, test.name, script,
-				test.expected)
-			continue
-		}
-
-		// Check that the script has the correct type.
-		scriptType := GetScriptClass(script)
-		if scriptType != test.class {
-			t.Errorf("GetScriptClass: #%d (%s) wrong result -- "+
-				"got: %v, want: %v", i, test.name, scriptType,
-				test.class)
-			continue
 		}
 	}
 }

@@ -8,7 +8,7 @@ import (
 
 func TestEngine(t *testing.T) {
 
-	spk := []byte{txscript.OP_2, txscript.OP_3, txscript.OP_EQUAL}
+	spk := []byte{txscript.OP_2, txscript.OP_2, txscript.OP_EQUAL}
 	ssig := []byte{}
 
 	e, err := txscript.NewEngine(spk, ssig, txscript.ScriptFlags(0))
