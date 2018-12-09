@@ -253,7 +253,8 @@ func testScripts(t *testing.T, tests [][]interface{}) {
 			continue
 		}
 
-		vm, err := NewEngine(scriptPubKey, scriptSig, flags)
+		testPayload := []byte("PAYLOAD")
+		vm, err := NewEngine(scriptPubKey, scriptSig, testPayload, flags)
 		if err == nil {
 			err = vm.Execute()
 		}

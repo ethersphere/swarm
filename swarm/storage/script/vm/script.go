@@ -7,6 +7,8 @@ package txscript
 import (
 	"bytes"
 	"fmt"
+
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
 
 const MaxPubKeysPerMultiSig = 20 // Multisig can't have more sigs than this.
@@ -226,6 +228,22 @@ func removeOpcodeByData(pkscript []parsedOpcode, data []byte) []parsedOpcode {
 	}
 	return retScript
 
+}
+
+// calcSignatureHash will, given a script and hash type for the current script
+// engine instance, calculate the signature hash to be used for signing and
+// verification.
+func calcSignatureHash(script []parsedOpcode, payload []byte) []byte {
+	// Remove all instances of OP_CODESEPARATOR from the script.
+	script = removeOpcode(script, OP_CODESEPARATOR)
+	// UnparseScript cannot fail here because removeOpcode
+	// above only returns a valid script.
+	sigScript, _ := unparseScript(script)
+	hasher := sha3.NewKeccak256()
+	hasher.Write(sigScript)
+	hasher.Write(payload)
+	hash := hasher.Sum(nil)
+	return hash[:]
 }
 
 // asSmallInt returns the passed opcode, which must be true according to

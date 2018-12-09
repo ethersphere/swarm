@@ -121,7 +121,7 @@ type Engine struct {
 	numOps          int
 	flags           ScriptFlags
 	savedFirstStack [][]byte // stack from first script for bip16 scripts
-	inputAmount     int64
+	payload         []byte
 }
 
 // hasFlag returns whether the script engine instance has the passed flag set.
@@ -446,7 +446,7 @@ func (vm *Engine) SetAltStack(data [][]byte) {
 // NewEngine returns a new script engine for the provided public key script,
 // transaction, and input index.  The flags modify the behavior of the script
 // engine according to the description provided by each flag.
-func NewEngine(scriptPubKey []byte, scriptSig []byte, flags ScriptFlags) (*Engine, error) {
+func NewEngine(scriptPubKey []byte, scriptSig []byte, payload []byte, flags ScriptFlags) (*Engine, error) {
 
 	// When both the signature script and public key script are empty the
 	// result is necessarily an error since the stack would end up being
@@ -467,7 +467,7 @@ func NewEngine(scriptPubKey []byte, scriptSig []byte, flags ScriptFlags) (*Engin
 	// it possible to have a situation where P2SH would not be a soft fork
 	// when it should be. The same goes for segwit which will pull in
 	// additional scripts for execution from the witness stack.
-	vm := Engine{flags: flags}
+	vm := Engine{flags: flags, payload: payload}
 	if vm.hasFlag(ScriptVerifyCleanStack) && (!vm.hasFlag(ScriptBip16) &&
 		!vm.hasFlag(ScriptVerifyWitness)) {
 		return nil, scriptError(ErrInvalidFlags,

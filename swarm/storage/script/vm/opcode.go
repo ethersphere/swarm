@@ -13,6 +13,8 @@ import (
 	"fmt"
 	"hash"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/ripemd160"
 )
 
@@ -1887,22 +1889,55 @@ func opcodeCodeSeparator(op *parsedOpcode, vm *Engine) error {
 	return nil
 }
 
-// opcodeCheckSig treats the top 2 items on the stack as a public key and a
-// signature and replaces them with a bool which indicates if the signature was
+const signatureLength = 65
+
+// opcodeCheckSig treats the top 2 items on the stack as a 20-byte Ethereum Address and a
+// 65-byte signature and replaces them with a bool which indicates if the signature was
 // successfully verified.
 //
 // The process of verifying a signature requires calculating a signature hash in
-// the same way the transaction signer did.  It involves hashing portions of the
-// transaction based on the hash type byte (which is the final byte of the
-// signature) and the portion of the script starting from the most recent
+// the same way the transaction signer did:
+// Concatenate the bytecode of the portion of the script starting from the most recent
 // OP_CODESEPARATOR (or the beginning of the script if there are none) to the
-// end of the script (with any other OP_CODESEPARATORs removed).  Once this
-// "script hash" is calculated, the signature is checked using standard
-// cryptographic methods against the provided public key.
+// end of the script (with any other OP_CODESEPARATORs removed) the chunk payload
+// Then, calc the Keccack256 hash of the resulting byte array.
+// Once this "script hash" is calculated, the signature is checked using standard
+// cryptographic methods against the provided Ethereum Address.
 //
-// Stack transformation: [... signature pubkey] -> [... bool]
+// Stack transformation: [... signature ethereum_address] -> [... bool]
 func opcodeCheckSig(op *parsedOpcode, vm *Engine) error {
-	return errors.New("unimplemented")
+	addressBytes, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(addressBytes) != common.AddressLength {
+		vm.dstack.PushBool(false)
+		return nil
+	}
+
+	sigBytes, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(sigBytes) != signatureLength {
+		vm.dstack.PushBool(false)
+		return nil
+	}
+
+	// Get script starting from the most recent OP_CODESEPARATOR.
+	subScript := vm.subScript()
+
+	digest := calcSignatureHash(subScript, vm.payload)
+
+	pub, err := crypto.SigToPub(digest, sigBytes)
+	if err != nil {
+		return err
+	}
+	signer := crypto.PubkeyToAddress(*pub)
+	valid := bytes.Equal(signer[:], addressBytes)
+	vm.dstack.PushBool(valid)
+	return nil
+
 }
 
 // opcodeCheckSigVerify is a combination of opcodeCheckSig and opcodeVerify.
