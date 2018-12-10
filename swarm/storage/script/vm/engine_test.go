@@ -18,8 +18,8 @@ func TestEngine(t *testing.T) {
 	sb := txscript.NewScriptBuilder()
 	sb.AddData(address[:])
 	sb.AddOp(txscript.OP_CHECKSIG)
-	sb.AddData([]byte("some stuff"))
-	sb.AddData([]byte("and more"))
+	sb.EmbedData([]byte("some embedded data"))
+
 	spk, err := sb.Script()
 	if err != nil {
 		t.Fatal(err)

@@ -83,7 +83,7 @@ func parseScriptTemplate(script []byte, opcodes *[256]opcode) ([]parsedOpcode, e
 			pop.data = script[i+1 : i+op.length]
 			i += op.length
 
-		// Data pushes with parsed lengths -- OP_PUSHDATAP{1,2,4}.
+		// Data pushes with parsed lengths -- OP_PUSHDATAP{1,2,4} and OP_EMBED
 		case op.length < 0:
 			var l uint
 			off := i + 1

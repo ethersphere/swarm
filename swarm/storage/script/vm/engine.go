@@ -16,6 +16,8 @@ type ScriptFlags uint32
 const (
 	MaxOpsPerScript      = 201 // Max number of non-push operations.
 	MaxScriptElementSize = 520 // Max bytes pushable to the stack.
+	MaxEmbedSize         = 255 // Max data that can be embedded with OP_EMBED
+
 	// ScriptBip16 defines whether the bip16 threshold has passed and thus
 	// pay-to-script hash transactions will be fully validated.
 	ScriptBip16 ScriptFlags = 1 << iota

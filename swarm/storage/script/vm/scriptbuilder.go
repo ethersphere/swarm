@@ -219,6 +219,32 @@ func (b *ScriptBuilder) AddData(data []byte) *ScriptBuilder {
 
 	return b.addData(data)
 }
+func (b *ScriptBuilder) EmbedData(data []byte) *ScriptBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	// Embedding data that would cause the script to exceed the largest allowed
+	// script size would result in a non-canonical script.
+	dataSize := len(data) + 1
+	if len(b.script)+dataSize > MaxScriptSize {
+		str := fmt.Sprintf("adding %d bytes of data would exceed the "+
+			"maximum allowed canonical script length of %d",
+			dataSize, MaxScriptSize)
+		b.err = ErrScriptNotCanonical(str)
+		return b
+	}
+
+	// Embeds max length is 255
+	dataLen := len(data)
+	if dataLen > MaxEmbedSize {
+		b.err = fmt.Errorf("max embed size is %d. Got %d bytes", MaxEmbedSize, dataLen)
+		return b
+	}
+	b.script = append(b.script, OP_EMBED, byte(dataLen))
+	b.script = append(b.script, data...)
+	return b
+}
 
 // AddInt64 pushes the passed integer to the end of the script.  The script will
 // not be modified if pushing the data would cause the script to exceed the
