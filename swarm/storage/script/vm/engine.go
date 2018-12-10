@@ -448,13 +448,13 @@ func (vm *Engine) SetAltStack(data [][]byte) {
 // NewEngine returns a new script engine for the provided public key script,
 // transaction, and input index.  The flags modify the behavior of the script
 // engine according to the description provided by each flag.
-func NewEngine(scriptPubKey []byte, scriptSig []byte, payload []byte, flags ScriptFlags) (*Engine, error) {
+func NewEngine(scriptKey Script, scriptSig Script, payload []byte, flags ScriptFlags) (*Engine, error) {
 
 	// When both the signature script and public key script are empty the
 	// result is necessarily an error since the stack would end up being
 	// empty which is equivalent to a false top element.  Thus, just return
 	// the relevant error now as an optimization.
-	if len(scriptSig) == 0 && len(scriptPubKey) == 0 {
+	if len(scriptSig) == 0 && len(scriptKey) == 0 {
 		return nil, scriptError(ErrEvalFalse,
 			"false stack entry at end of script execution")
 	}
@@ -480,7 +480,7 @@ func NewEngine(scriptPubKey []byte, scriptSig []byte, payload []byte, flags Scri
 	// allows multiple scripts to be executed in sequence.  For example,
 	// with a pay-to-script-hash transaction, there will be ultimately be
 	// a third script to execute.
-	scripts := [][]byte{scriptSig, scriptPubKey}
+	scripts := [][]byte{scriptSig, scriptKey}
 	vm.scripts = make([][]parsedOpcode, len(scripts))
 	for i, scr := range scripts {
 		if len(scr) > MaxScriptSize {

@@ -1,6 +1,7 @@
 package vm_test
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -51,6 +52,13 @@ func TestEngine(t *testing.T) {
 	fmt.Println(dis)
 	dis, _ = e.DisasmScript(0)
 	fmt.Println(dis)
+
+	s := vm.Script(spk)
+	b, err := json.MarshalIndent(s, "", "\t")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(string(b))
 
 	err = e.Execute()
 	if err != nil {

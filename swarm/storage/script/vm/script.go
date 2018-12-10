@@ -6,10 +6,40 @@ package vm
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"strings"
+
+	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 )
+
+type Script []byte
+
+type scriptJSON struct {
+	Binary string `json:"binary"`
+	Script string `json:"script"`
+}
+
+func (s Script) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&scriptJSON{
+		Binary: hexutil.Encode(s),
+		Script: s.String(),
+	})
+}
+
+func (s Script) String() string {
+	parsed, err := parseScript(s)
+	if err != nil {
+		return ""
+	}
+	var sb strings.Builder
+	for _, opcode := range parsed {
+		sb.WriteString(opcode.print(false) + " ")
+	}
+	return strings.Trim(sb.String(), " ")
+}
 
 const MaxPubKeysPerMultiSig = 20 // Multisig can't have more sigs than this.
 
