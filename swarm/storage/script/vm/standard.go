@@ -1,4 +1,4 @@
-package txscript
+package vm
 
 import "fmt"
 

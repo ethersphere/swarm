@@ -1,4 +1,4 @@
-package txscript_test
+package vm_test
 
 import (
 	"fmt"
@@ -15,9 +15,9 @@ func TestEngine(t *testing.T) {
 
 	address := crypto.PubkeyToAddress(privKey.PublicKey)
 
-	sb := txscript.NewScriptBuilder()
+	sb := vm.NewScriptBuilder()
 	sb.AddData(address[:])
-	sb.AddOp(txscript.OP_CHECKSIG)
+	sb.AddOp(vm.OP_CHECKSIG)
 	sb.EmbedData([]byte("some embedded data"))
 
 	spk, err := sb.Script()
@@ -35,14 +35,14 @@ func TestEngine(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	sb = txscript.NewScriptBuilder()
+	sb = vm.NewScriptBuilder()
 	sb.AddData(sigBytes)
 	ssig, err := sb.Script()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	e, err := txscript.NewEngine(spk, ssig, payload, txscript.ScriptFlags(0))
+	e, err := vm.NewEngine(spk, ssig, payload, vm.ScriptFlags(0))
 	if err != nil {
 		t.Fatal(err)
 	}
