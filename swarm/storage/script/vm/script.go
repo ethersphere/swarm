@@ -7,6 +7,7 @@ package vm
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -260,20 +261,50 @@ func removeOpcodeByData(pkscript []parsedOpcode, data []byte) []parsedOpcode {
 
 }
 
-// calcSignatureHash will, given a script and hash type for the current script
-// engine instance, calculate the signature hash to be used for signing and
-// verification.
-func calcSignatureHash(script []parsedOpcode, payload []byte) []byte {
+func PrepareScriptForSig(script []byte) ([]byte, error) {
+	parsed, err := parseScript(script)
+	if err != nil {
+		return nil, err
+	}
+	return prepareScriptForSig(parsed), nil
+}
+func prepareScriptForSig(parsed []parsedOpcode) []byte {
+
 	// Remove all instances of OP_CODESEPARATOR from the script.
-	script = removeOpcode(script, OP_CODESEPARATOR)
+	parsed = removeOpcode(parsed, OP_CODESEPARATOR)
 	// UnparseScript cannot fail here because removeOpcode
 	// above only returns a valid script.
-	sigScript, _ := unparseScript(script)
+	sigScript, _ := unparseScript(parsed)
+	return sigScript
+
+}
+
+// CalcSignatureHash will, given a script and hash type for the current script
+// engine instance, calculate the signature hash to be used for signing and
+// verification.
+// script must be filtered/prepared first using PrepareScriptForSig
+
+func CalcSignatureHash(nonce []byte, script []byte, payload []byte) []byte {
 	hasher := sha3.NewKeccak256()
-	hasher.Write(sigScript)
+	hasher.Write(nonce)
+	hasher.Write(script)
 	hasher.Write(payload)
 	hash := hasher.Sum(nil)
 	return hash[:]
+}
+
+func Compact2Target(compact []byte) (target []byte, err error) {
+	if len(compact) != 4 || compact[0] < 3 {
+		return nil, errors.New("Incorrect compact target format")
+	}
+	target = make([]byte, 32)
+	exponent := compact[0]
+	copy(target[32-exponent:], compact[1:])
+	return target, nil
+}
+
+func VerifyTarget(target, hash []byte) bool {
+	return bytes.Compare(hash, target) == -1
 }
 
 // asSmallInt returns the passed opcode, which must be true according to

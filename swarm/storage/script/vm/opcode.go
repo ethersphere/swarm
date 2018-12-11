@@ -285,7 +285,7 @@ const (
 	OP_UNKNOWN245          = 0xf5 // 245
 	OP_UNKNOWN246          = 0xf6 // 246
 	OP_UNKNOWN247          = 0xf7 // 247
-	OP_UNKNOWN248          = 0xf8 // 248
+	OP_CHECKPOW            = 0xf8 // 248
 	OP_EMBED               = 0xf9 // 249
 	OP_SMALLINTEGER        = 0xfa // 250 - bitcoin core internal
 	OP_PUBKEYS             = 0xfb // 251 - bitcoin core internal
@@ -571,7 +571,7 @@ var opcodeArray = [256]opcode{
 	OP_UNKNOWN245: {OP_UNKNOWN245, "OP_UNKNOWN245", 1, opcodeInvalid},
 	OP_UNKNOWN246: {OP_UNKNOWN246, "OP_UNKNOWN246", 1, opcodeInvalid},
 	OP_UNKNOWN247: {OP_UNKNOWN247, "OP_UNKNOWN247", 1, opcodeInvalid},
-	OP_UNKNOWN248: {OP_UNKNOWN248, "OP_UNKNOWN248", 1, opcodeInvalid},
+	OP_CHECKPOW:   {OP_CHECKPOW, "OP_CHECKPOW", 1, opcodeCheckPow},
 	OP_EMBED:      {OP_EMBED, "OP_EMBED", -1, opcodeEmbed},
 
 	// Bitcoin Core internal use opcode.  Defined here for completeness.
@@ -1910,16 +1910,12 @@ func opcodeCheckSig(op *parsedOpcode, vm *Engine) error {
 	if err != nil {
 		return err
 	}
-	if len(addressBytes) != common.AddressLength {
-		vm.dstack.PushBool(false)
-		return nil
-	}
-
 	sigBytes, err := vm.dstack.PopByteArray()
 	if err != nil {
 		return err
 	}
-	if len(sigBytes) != signatureLength {
+
+	if len(addressBytes) != common.AddressLength || len(sigBytes) != signatureLength {
 		vm.dstack.PushBool(false)
 		return nil
 	}
@@ -1927,7 +1923,7 @@ func opcodeCheckSig(op *parsedOpcode, vm *Engine) error {
 	// Get script starting from the most recent OP_CODESEPARATOR.
 	subScript := vm.subScript()
 
-	digest := calcSignatureHash(subScript, vm.payload)
+	digest := CalcSignatureHash(nil, prepareScriptForSig(subScript), vm.payload)
 
 	pub, err := crypto.SigToPub(digest, sigBytes)
 	if err != nil {
@@ -1997,6 +1993,31 @@ func opcodeCheckMultiSigVerify(op *parsedOpcode, vm *Engine) error {
 		err = abstractVerify(op, vm, ErrCheckMultiSigVerify)
 	}
 	return err
+}
+
+// opcodeCheckPow verifies a nonce has been found to meet a certain
+// hashing target
+// Stack transformation:
+// nonce target -> bool
+func opcodeCheckPow(op *parsedOpcode, vm *Engine) error {
+	targetBytes, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	nonce, err := vm.dstack.PopByteArray()
+	if err != nil {
+		return err
+	}
+	if len(targetBytes) != 4 || targetBytes[0] < 3 {
+		vm.dstack.PushBool(false)
+		return nil
+	}
+
+	// Get script starting from the most recent OP_CODESEPARATOR.
+	subScript := vm.subScript()
+	hash := CalcSignatureHash(nonce, prepareScriptForSig(subScript), vm.payload)
+	vm.dstack.PushBool(VerifyTarget(targetBytes, hash))
+	return nil
 }
 
 // opcodeEmbed does nothing. It is just useful to embed arbitrary data that will
