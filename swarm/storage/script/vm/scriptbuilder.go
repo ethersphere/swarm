@@ -52,31 +52,10 @@ type ScriptBuilder struct {
 	err    error
 }
 
-// AddOp pushes the passed opcode to the end of the script.  The script will not
-// be modified if pushing the opcode would cause the script to exceed the
-// maximum allowed script engine size.
-func (b *ScriptBuilder) AddOp(opcode byte) *ScriptBuilder {
-	if b.err != nil {
-		return b
-	}
-
-	// Pushes that would cause the script to exceed the largest allowed
-	// script size would result in a non-canonical script.
-	if len(b.script)+1 > MaxScriptSize {
-		str := fmt.Sprintf("adding an opcode would exceed the maximum "+
-			"allowed canonical script length of %d", MaxScriptSize)
-		b.err = ErrScriptNotCanonical(str)
-		return b
-	}
-
-	b.script = append(b.script, opcode)
-	return b
-}
-
-// AddOps pushes the passed opcodes to the end of the script.  The script will
+// AddOp pushes the passed opcodes to the end of the script.  The script will
 // not be modified if pushing the opcodes would cause the script to exceed the
 // maximum allowed script engine size.
-func (b *ScriptBuilder) AddOps(opcodes []byte) *ScriptBuilder {
+func (b *ScriptBuilder) AddOp(opcodes ...byte) *ScriptBuilder {
 	if b.err != nil {
 		return b
 	}

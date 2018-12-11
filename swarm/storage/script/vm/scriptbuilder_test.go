@@ -58,11 +58,11 @@ func TestScriptBuilderAddOp(t *testing.T) {
 		}
 	}
 
-	// Run tests and bulk add ops via AddOps.
+	// Run tests and bulk add ops via AddOp.
 	t.Logf("Running %d tests", len(tests))
 	for i, test := range tests {
 		builder.Reset()
-		result, err := builder.AddOps(test.opcodes).Script()
+		result, err := builder.AddOp(test.opcodes...).Script()
 		if err != nil {
 			t.Errorf("ScriptBuilder.AddOps #%d (%s) unexpected "+
 				"error: %v", i, test.name, err)
