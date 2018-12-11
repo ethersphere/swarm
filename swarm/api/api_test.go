@@ -51,7 +51,7 @@ func testAPI(t *testing.T, f func(*API, bool)) {
 	if err != nil {
 		return
 	}
-	api := NewAPI(fileStore, nil, nil, nil)
+	api := NewAPI(fileStore, nil, nil, nil, nil)
 	f(api, false)
 	f(api, true)
 }
@@ -391,7 +391,7 @@ func TestDecryptOriginForbidden(t *testing.T) {
 		Access: &AccessEntry{Type: AccessTypePass},
 	}
 
-	api := NewAPI(nil, nil, nil, nil)
+	api := NewAPI(nil, nil, nil, nil, nil)
 
 	f := api.Decryptor(ctx, "")
 	err := f(me)
@@ -425,7 +425,7 @@ func TestDecryptOrigin(t *testing.T) {
 			Access: &AccessEntry{Type: AccessTypePass},
 		}
 
-		api := NewAPI(nil, nil, nil, nil)
+		api := NewAPI(nil, nil, nil, nil, nil)
 
 		f := api.Decryptor(ctx, "")
 		err := f(me)

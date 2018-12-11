@@ -32,6 +32,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/script"
+
 	"bytes"
 	"mime"
 	"path/filepath"
@@ -236,17 +238,19 @@ it is the public interface of the FileStore which is included in the ethereum st
 */
 type API struct {
 	feed      *feed.Handler
+	script    script.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, scriptHandler script.Handler, pk *ecdsa.PrivateKey) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
 		feed:      feedHandler,
+		script:    scriptHandler,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},

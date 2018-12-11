@@ -29,6 +29,8 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/script"
+
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
@@ -217,9 +219,14 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	feedsHandler = feed.NewHandler(fhParams)
 	feedsHandler.SetStore(self.netStore)
 
+	scriptHandler := script.NewHandler(&script.HandlerParams{
+		ChunkStore: self.netStore,
+	})
+
 	lstore.Validators = []storage.ChunkValidator{
 		storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)),
 		feedsHandler,
+		scriptHandler,
 	}
 
 	err = lstore.Migrate()
@@ -240,7 +247,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
 
-	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey)
+	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, scriptHandler, self.privateKey)
 
 	self.sfs = fuse.NewSwarmFS(self.api)
 	log.Debug("Initialized FUSE filesystem")

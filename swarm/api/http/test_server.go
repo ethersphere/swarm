@@ -23,6 +23,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/script"
+
 	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
@@ -60,7 +62,9 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 		t.Fatal(err)
 	}
 
-	a := api.NewAPI(fileStore, resolver, rh.Handler, nil)
+	scriptHandler, _ := script.NewTestHandler(t)
+
+	a := api.NewAPI(fileStore, resolver, rh.Handler, scriptHandler, nil)
 	srv := httptest.NewServer(serverFunc(a))
 	tss := &TestSwarmServer{
 		Server:    srv,

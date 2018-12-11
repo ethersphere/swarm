@@ -14,7 +14,7 @@ import (
 
 func TestHandler(t *testing.T) {
 
-	handler, cleanup := NewTestHandler(t)
+	handler, cleanup := script.NewTestHandler(t)
 	defer cleanup()
 
 	sb := vm.NewScriptBuilder()
