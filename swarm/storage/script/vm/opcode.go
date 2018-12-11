@@ -750,7 +750,7 @@ func (pop *parsedOpcode) print(oneline bool) string {
 	// we prefer to show the actual opcode names.  Thus, only replace the
 	// opcodes in question when the oneline flag is set.
 	opcodeName := pop.opcode.name
-	if oneline {
+	if oneline && pop.opcode.value != OP_EMBED {
 		if replName, ok := opcodeOnelineRepls[opcodeName]; ok {
 			opcodeName = replName
 		}

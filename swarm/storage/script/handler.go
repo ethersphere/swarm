@@ -50,7 +50,7 @@ func (h *handler) Validate(chunkAddr storage.Address, data []byte) bool {
 }
 
 func (h *handler) Put(ctx context.Context, chunk *Chunk) error {
-	return h.ChunkStore.Put(ctx, chunk)
+	return h.ChunkStore.Put(ctx, storage.NewChunk(chunk.Address(), chunk.Data()))
 }
 
 func (h *handler) Get(ctx context.Context, addr storage.Address) (*Chunk, error) {

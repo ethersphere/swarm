@@ -3,18 +3,20 @@ package script
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/script/hexbytes"
 	"github.com/ethereum/go-ethereum/swarm/storage/script/vm"
 )
 
 type Chunk struct {
-	sdata     []byte
 	addr      storage.Address
+	sdata     []byte
 	scriptKey []byte
 	scriptSig []byte
 	payload   []byte
@@ -28,25 +30,25 @@ func NewChunk(ScriptKey, ScriptSig vm.Script, Payload []byte) (*Chunk, error) {
 		return nil, ErrChunkTooBig
 	}
 	chunk := new(Chunk)
-	chunk.sdata = make([]byte, binaryLength)
-	buf := bytes.NewBuffer(chunk.sdata)
-	buf.Reset()
+	sdata := make([]byte, binaryLength)
+	chunk.sdata = sdata
+	offset := 0
+
 	s := []*[]byte{&chunk.scriptKey, &chunk.scriptSig, &chunk.payload}
-	for i, arr := range [][]byte{ScriptKey, ScriptSig, Payload} {
-		if err := binary.Write(buf, binary.LittleEndian, uint16(len(arr))); err != nil {
-			return nil, err
-		}
-		fmt.Println(buf.Len(), buf.Len()+len(arr))
-		*s[i] = chunk.sdata[buf.Len() : buf.Len()+len(arr)]
-		if _, err := buf.Write(arr); err != nil {
-			return nil, err
-		}
+	for i, src := range [][]byte{ScriptKey, ScriptSig, Payload} {
+		length := len(src)
+		binary.LittleEndian.PutUint16(sdata[offset:offset+2], uint16(length))
+		offset += 2
+		dst := sdata[offset : offset+length]
+		offset += length
+		copy(dst, src)
+		*s[i] = dst
 	}
 	chunk.calcAddress()
 	return chunk, nil
 }
 
-// calcAddress calculates the chunk address corresponding to this request
+// calcAddress calculates the chunk address according to the scriptKey.
 func (c *Chunk) calcAddress() {
 	hasher := sha3.NewKeccak256()
 	hasher.Write(c.scriptKey)
@@ -70,11 +72,11 @@ func (c *Chunk) Verify(addr storage.Address) error {
 
 func (c *Chunk) UnmarshalBinary(data []byte) error {
 	s := []*[]byte{&c.scriptKey, &c.scriptSig, &c.payload}
-	var offset int
-	for i := 0; offset < len(data) && i < len(s); i++ {
+	dataLength := len(data)
+	for i, offset := 0, 0; offset < dataLength && i < 3; i++ {
 		length := int(binary.LittleEndian.Uint16(data[offset : offset+2]))
 		offset += 2
-		if length > len(data) {
+		if length > dataLength-offset {
 			return errors.New("Incorrect data length")
 		}
 		*s[i] = data[offset : offset+length]
@@ -82,6 +84,38 @@ func (c *Chunk) UnmarshalBinary(data []byte) error {
 	}
 	c.sdata = data
 	c.calcAddress()
+	return nil
+}
+
+type chunkJSON struct {
+	Address   hexbytes.HexBytes `json:"address,omitempty"`
+	ScriptKey vm.Script         `json:"scriptKey"`
+	ScriptSig vm.Script         `json:"scriptSig"`
+	Data      hexbytes.HexBytes `json:"data"`
+}
+
+func (c *Chunk) MarshalJSON() ([]byte, error) {
+	return json.Marshal(&chunkJSON{
+		ScriptKey: c.scriptKey,
+		ScriptSig: c.scriptSig,
+		Data:      c.payload,
+		Address:   hexbytes.HexBytes(c.addr),
+	})
+}
+
+func (c *Chunk) UnmarshalJSON(data []byte) error {
+	var cj chunkJSON
+	if err := json.Unmarshal(data, &cj); err != nil {
+		return err
+	}
+	chunk, err := NewChunk(cj.ScriptKey, cj.ScriptSig, cj.Data)
+	if err != nil {
+		return err
+	}
+	if len(cj.Address) != 0 && !bytes.Equal(chunk.addr, cj.Address) {
+		return errors.New("Chunk address mismatch")
+	}
+	*c = *chunk
 	return nil
 }
 

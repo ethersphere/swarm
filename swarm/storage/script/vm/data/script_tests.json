@@ -1629,18 +1629,6 @@
 	],
 	[
 		"0",
-		"IF 0xf8 ELSE 1 ENDIF",
-		"P2SH,STRICTENC",
-		"OK"
-	],
-	[
-		"0",
-		"IF 0xf9 ELSE 1 ENDIF",
-		"P2SH,STRICTENC",
-		"OK"
-	],
-	[
-		"0",
 		"IF 0xfa ELSE 1 ENDIF",
 		"P2SH,STRICTENC",
 		"OK"
@@ -4362,18 +4350,6 @@
 	[
 		"1",
 		"IF 0xf7 ELSE 1 ENDIF",
-		"P2SH,STRICTENC",
-		"BAD_OPCODE"
-	],
-	[
-		"1",
-		"IF 0xf8 ELSE 1 ENDIF",
-		"P2SH,STRICTENC",
-		"BAD_OPCODE"
-	],
-	[
-		"1",
-		"IF 0xf9 ELSE 1 ENDIF",
 		"P2SH,STRICTENC",
 		"BAD_OPCODE"
 	],

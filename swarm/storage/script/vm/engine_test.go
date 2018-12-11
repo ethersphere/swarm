@@ -137,3 +137,31 @@ func TestEnginePow(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestScriptMarshallingUnmarshalling(t *testing.T) {
+	st := `{
+		"script": "OP_DATA_4 0x1effffff OP_CHECKPOW OP_EMBED 0x12 0x736f6d6520656d6265646465642064617461"
+	}`
+
+	var script vm.Script
+	err := json.Unmarshal([]byte(st), &script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedString := `OP_DATA_4 0x1effffff OP_CHECKPOW OP_EMBED 0x12 0x736f6d6520656d6265646465642064617461`
+	if script.String() != expectedString {
+		t.Fatalf("Expected %s, got %s", expectedString, script.String())
+	}
+
+	st = `{
+		"binary": "0x041efffffff8f912736f6d6520656d6265646465642064617461"
+	}`
+
+	err = json.Unmarshal([]byte(st), &script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if script.String() != expectedString {
+		t.Fatalf("Expected %s, got %s", expectedString, script.String())
+	}
+}
