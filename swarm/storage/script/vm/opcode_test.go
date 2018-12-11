@@ -129,7 +129,7 @@ func TestOpcodeDisasm(t *testing.T) {
 		}
 
 		pop := parsedOpcode{opcode: &opcodeArray[opcodeVal], data: data}
-		gotStr := pop.print(true)
+		gotStr := pop.print(true, false)
 		if gotStr != expectedStr {
 			t.Errorf("pop.print (opcode %x): Unexpected disasm "+
 				"string - got %v, want %v", opcodeVal, gotStr,
@@ -195,7 +195,7 @@ func TestOpcodeDisasm(t *testing.T) {
 		}
 
 		pop := parsedOpcode{opcode: &opcodeArray[opcodeVal], data: data}
-		gotStr := pop.print(false)
+		gotStr := pop.print(false, false)
 		if gotStr != expectedStr {
 			t.Errorf("pop.print (opcode %x): Unexpected disasm "+
 				"string - got %v, want %v", opcodeVal, gotStr,

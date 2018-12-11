@@ -7,10 +7,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/script/hexbytes"
 	"github.com/ethereum/go-ethereum/swarm/storage/script/vm"
 )
 
@@ -88,10 +89,10 @@ func (c *Chunk) UnmarshalBinary(data []byte) error {
 }
 
 type chunkJSON struct {
-	Address   hexbytes.HexBytes `json:"address,omitempty"`
-	ScriptKey vm.Script         `json:"scriptKey"`
-	ScriptSig vm.Script         `json:"scriptSig"`
-	Data      hexbytes.HexBytes `json:"data"`
+	Address   hexutil.Bytes `json:"address,omitempty"`
+	ScriptKey vm.Script     `json:"scriptKey"`
+	ScriptSig vm.Script     `json:"scriptSig"`
+	Data      hexutil.Bytes `json:"data"`
 }
 
 func (c *Chunk) MarshalJSON() ([]byte, error) {
@@ -99,7 +100,7 @@ func (c *Chunk) MarshalJSON() ([]byte, error) {
 		ScriptKey: c.scriptKey,
 		ScriptSig: c.scriptSig,
 		Data:      c.payload,
-		Address:   hexbytes.HexBytes(c.addr),
+		Address:   hexutil.Bytes(c.addr),
 	})
 }
 

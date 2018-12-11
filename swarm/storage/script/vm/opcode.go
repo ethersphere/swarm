@@ -12,6 +12,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -743,21 +744,27 @@ func (pop *parsedOpcode) checkMinimalDataPush() error {
 
 // print returns a human-readable string representation of the opcode for use
 // in script disassembly.
-func (pop *parsedOpcode) print(oneline bool) string {
+func (pop *parsedOpcode) print(oneline, shortName bool) string {
 	// The reference implementation one-line disassembly replaces opcodes
 	// which represent values (e.g. OP_0 through OP_16 and OP_1NEGATE)
 	// with the raw value.  However, when not doing a one-line dissassembly,
 	// we prefer to show the actual opcode names.  Thus, only replace the
 	// opcodes in question when the oneline flag is set.
 	opcodeName := pop.opcode.name
+	var name string
+	if shortName {
+		name = strings.TrimPrefix(opcodeName, "OP_")
+	} else {
+		name = opcodeName
+	}
 	if oneline && pop.opcode.value != OP_EMBED {
 		if replName, ok := opcodeOnelineRepls[opcodeName]; ok {
-			opcodeName = replName
+			name = replName
 		}
 
 		// Nothing more to do for non-data push opcodes.
 		if pop.opcode.length == 1 {
-			return opcodeName
+			return name
 		}
 
 		return fmt.Sprintf("%x", pop.data)
@@ -765,11 +772,11 @@ func (pop *parsedOpcode) print(oneline bool) string {
 
 	// Nothing more to do for non-data push opcodes.
 	if pop.opcode.length == 1 {
-		return opcodeName
+		return name
 	}
 
 	// Add length for the OP_PUSHDATA# opcodes.
-	retString := opcodeName
+	retString := name
 	switch pop.opcode.length {
 	case -1:
 		retString += fmt.Sprintf(" 0x%02x", len(pop.data))

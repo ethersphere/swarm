@@ -13,20 +13,21 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
+
 	"github.com/ethereum/go-ethereum/crypto/sha3"
-	"github.com/ethereum/go-ethereum/swarm/storage/script/hexbytes"
 )
 
 type Script []byte
 
 type scriptJSON struct {
-	Binary hexbytes.HexBytes `json:"binary,omitempty"`
-	Script string            `json:"script,omitempty"`
+	Binary hexutil.Bytes `json:"binary,omitempty"`
+	Script string        `json:"script,omitempty"`
 }
 
 func (s Script) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&scriptJSON{
-		Binary: hexbytes.HexBytes(s),
+		Binary: hexutil.Bytes(s),
 		Script: s.String(),
 	})
 }
@@ -59,7 +60,7 @@ func (s Script) String() string {
 	}
 	var sb strings.Builder
 	for _, opcode := range parsed {
-		sb.WriteString(opcode.print(false) + " ")
+		sb.WriteString(opcode.print(false, true) + " ")
 	}
 	return strings.Trim(sb.String(), " ")
 }
@@ -220,7 +221,7 @@ func DisasmString(buf []byte) (string, error) {
 	var disbuf bytes.Buffer
 	opcodes, err := parseScript(buf)
 	for _, pop := range opcodes {
-		disbuf.WriteString(pop.print(true))
+		disbuf.WriteString(pop.print(true, false))
 		disbuf.WriteByte(' ')
 	}
 	if disbuf.Len() > 0 {

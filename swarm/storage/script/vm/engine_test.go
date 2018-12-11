@@ -148,7 +148,7 @@ func TestScriptMarshallingUnmarshalling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expectedString := `OP_DATA_4 0x1effffff OP_CHECKPOW OP_EMBED 0x12 0x736f6d6520656d6265646465642064617461`
+	expectedString := `DATA_4 0x1effffff CHECKPOW EMBED 0x12 0x736f6d6520656d6265646465642064617461`
 	if script.String() != expectedString {
 		t.Fatalf("Expected %s, got %s", expectedString, script.String())
 	}

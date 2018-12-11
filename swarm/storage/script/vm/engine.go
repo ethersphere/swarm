@@ -200,7 +200,7 @@ func (vm *Engine) executeOpcode(pop *parsedOpcode) error {
 // to the caller to provide a valid offset.
 func (vm *Engine) disasm(scriptIdx int, scriptOff int) string {
 	return fmt.Sprintf("%02x:%04x: %s", scriptIdx, scriptOff,
-		vm.scripts[scriptIdx][scriptOff].print(false))
+		vm.scripts[scriptIdx][scriptOff].print(false, false))
 }
 
 // validPC returns an error if the current script position is valid for
