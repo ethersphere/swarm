@@ -1966,15 +1966,9 @@ type parsedSigInfo struct {
 }
 
 // opcodeCheckMultiSig treats the top item on the stack as an integer number of
-// public keys, followed by that many entries as raw data representing the public
-// keys, followed by the integer number of signatures, followed by that many
-// entries as raw data representing the signatures.
-//
-// Due to a bug in the original Satoshi client implementation, an additional
-// dummy argument is also required by the consensus rules, although it is not
-// used.  The dummy value SHOULD be an OP_0, although that is not required by
-// the consensus rules.  When the ScriptStrictMultiSig flag is set, it must be
-// OP_0.
+// Ethereum Addresses, followed by that many 20-byte entries representing the signer's
+// addresses, followed by the integer number of signatures, followed by that many
+// 65-byte entries as raw data representing the signatures.
 //
 // All of the aforementioned stack items are replaced with a bool which
 // indicates if the requisite number of signatures were successfully verified.
@@ -1983,9 +1977,132 @@ type parsedSigInfo struct {
 // for verifying each signature.
 //
 // Stack transformation:
-// [... dummy [sig ...] numsigs [pubkey ...] numpubkeys] -> [... bool]
+// [... [sig ...] numsigs [address ...] numaddresses] -> [... bool]
 func opcodeCheckMultiSig(op *parsedOpcode, vm *Engine) error {
-	return errors.New("unimplemented")
+	numKeys, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+
+	numPubKeys := int(numKeys.Int32())
+	if numPubKeys < 0 {
+		str := fmt.Sprintf("number of pubkeys %d is negative",
+			numPubKeys)
+		return scriptError(ErrInvalidPubKeyCount, str)
+	}
+	if numPubKeys > MaxPubKeysPerMultiSig {
+		str := fmt.Sprintf("too many pubkeys: %d > %d",
+			numPubKeys, MaxPubKeysPerMultiSig)
+		return scriptError(ErrInvalidPubKeyCount, str)
+	}
+	vm.numOps += numPubKeys
+	if vm.numOps > MaxOpsPerScript {
+		str := fmt.Sprintf("exceeded max operation limit of %d",
+			MaxOpsPerScript)
+		return scriptError(ErrTooManyOperations, str)
+	}
+
+	pubKeys := make([][]byte, 0, numPubKeys)
+	for i := 0; i < numPubKeys; i++ {
+		pubKey, err := vm.dstack.PopByteArray()
+		if err != nil {
+			return err
+		}
+		pubKeys = append(pubKeys, pubKey)
+	}
+
+	numSigs, err := vm.dstack.PopInt()
+	if err != nil {
+		return err
+	}
+	numSignatures := int(numSigs.Int32())
+	if numSignatures < 0 {
+		str := fmt.Sprintf("number of signatures %d is negative",
+			numSignatures)
+		return scriptError(ErrInvalidSignatureCount, str)
+
+	}
+	if numSignatures > numPubKeys {
+		str := fmt.Sprintf("more signatures than pubkeys: %d > %d",
+			numSignatures, numPubKeys)
+		return scriptError(ErrInvalidSignatureCount, str)
+	}
+
+	signatures := make([]*parsedSigInfo, 0, numSignatures)
+	for i := 0; i < numSignatures; i++ {
+		signature, err := vm.dstack.PopByteArray()
+		if err != nil {
+			return err
+		}
+		sigInfo := &parsedSigInfo{signature: signature}
+		signatures = append(signatures, sigInfo)
+	}
+
+	// Get script starting from the most recent OP_CODESEPARATOR.
+	subScript := vm.subScript()
+
+	// Generate the signature hash based on the signature hash type.
+	digest := CalcSignatureHash(nil, prepareScriptForSig(subScript), vm.payload)
+
+	// Remove the signature since there is
+	// no way for a signature to sign itself.
+	for _, sigInfo := range signatures {
+		subScript = removeOpcodeByData(subScript, sigInfo.signature)
+	}
+
+	success := true
+	numPubKeys++
+	pubKeyIdx := -1
+	signatureIdx := 0
+	for numSignatures > 0 {
+		// When there are more signatures than public keys remaining,
+		// there is no way to succeed since too many signatures are
+		// invalid, so exit early.
+		pubKeyIdx++
+		numPubKeys--
+		if numSignatures > numPubKeys {
+			success = false
+			break
+		}
+
+		sigInfo := signatures[signatureIdx]
+		pubKey := pubKeys[pubKeyIdx]
+
+		// The order of the signature and public key evaluation is
+		// important here since it can be distinguished by an
+		// OP_CHECKMULTISIG NOT when the strict encoding flag is set.
+
+		signature := sigInfo.signature
+		if len(signature) == 0 {
+			// Skip to the next pubkey if signature is empty.
+			continue
+		}
+
+		pub, err := crypto.SigToPub(digest, signature)
+		if err != nil {
+			return err
+		}
+		signer := crypto.PubkeyToAddress(*pub)
+		valid := bytes.Equal(signer[:], pubKey)
+
+		if valid {
+			// PubKey verified, move on to the next signature.
+			signatureIdx++
+			numSignatures--
+		}
+	}
+
+	if !success && vm.hasFlag(ScriptVerifyNullFail) {
+		for _, sig := range signatures {
+			if len(sig.signature) > 0 {
+				str := "not all signatures empty on failed checkmultisig"
+				return scriptError(ErrNullFail, str)
+			}
+		}
+	}
+
+	vm.dstack.PushBool(success)
+	return nil
 }
 
 // opcodeCheckMultiSigVerify is a combination of opcodeCheckMultiSig and

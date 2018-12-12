@@ -36,16 +36,16 @@ func NewHandler(params *HandlerParams) Handler {
 }
 
 // Validate implements the storage.ChunkValidator interface
-func (h *handler) Validate(chunkAddr storage.Address, data []byte) bool {
+func (h *handler) Validate(chunk storage.Chunk) bool {
 
 	var r Chunk
-	err := r.UnmarshalBinary(data)
+	err := r.UnmarshalBinary(chunk.Data())
 	if err != nil {
 		return false
 	}
 
-	if err := r.Verify(chunkAddr); err != nil {
-		log.Debug("Invalid script update chunk", "addr", chunkAddr.Hex(), "err", err.Error())
+	if err := r.Verify(chunk.Address()); err != nil {
+		log.Debug("Invalid script update chunk", "addr", chunk.Address(), "err", err)
 		return false
 	}
 	return true
