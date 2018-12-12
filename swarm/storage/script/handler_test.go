@@ -7,8 +7,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/script"
-
 	"github.com/ethereum/go-ethereum/swarm/storage/script/vm"
 )
 
@@ -17,6 +17,7 @@ func TestHandler(t *testing.T) {
 	handler, cleanup := script.NewTestHandler(t)
 	defer cleanup()
 
+	// build a simple script. The key expects a number in the signature that added to 3 equals 5.
 	sb := vm.NewScriptBuilder()
 	sb.AddOp(vm.OP_3, vm.OP_ADD, vm.OP_5, vm.OP_EQUAL)
 	scriptKey, err := sb.Script()
@@ -24,6 +25,7 @@ func TestHandler(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Build a sig script that provides the right answer
 	sb = vm.NewScriptBuilder()
 	sb.AddOp(vm.OP_2)
 	scriptSig, err := sb.Script()
@@ -81,4 +83,14 @@ func TestHandler(t *testing.T) {
 		t.Fatal("Expected address to match")
 	}
 
+}
+func TestChunkSizeCheck(t *testing.T) {
+	_, err := script.NewChunk(make([]byte, 2000), make([]byte, 2000), make([]byte, 2000))
+	if err != script.ErrChunkTooBig {
+		t.Fatalf("Expected NewChunk to fail with ErrChunkTooBig, got %s", err)
+	}
+	c := new(script.Chunk)
+	if err = c.UnmarshalBinary(make([]byte, chunk.DefaultSize+100)); err != script.ErrChunkTooBig {
+		t.Fatalf("Expected UnmarshalBinary to fail with ErrChunkTooBig, got %s", err)
+	}
 }

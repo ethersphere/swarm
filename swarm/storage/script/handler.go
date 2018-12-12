@@ -10,10 +10,13 @@ import (
 
 const defaultRetrieveTimeout = 100 * time.Millisecond
 
+//HandlerParams contains the Handler's initialization parameters
 type HandlerParams struct {
 	ChunkStore storage.ChunkStore
 }
 
+// Handler defines a common interface for the script Handler
+// It behaves as a chunk store for self-validating chunks
 type Handler interface {
 	storage.ChunkValidator
 	Put(ctx context.Context, chunk *Chunk) error
@@ -24,6 +27,7 @@ type handler struct {
 	HandlerParams
 }
 
+// NewHandler builds a new Handler
 func NewHandler(params *HandlerParams) Handler {
 	return &handler{
 		HandlerParams: *params,
@@ -31,12 +35,12 @@ func NewHandler(params *HandlerParams) Handler {
 
 }
 
+// Validate implements the storage.ChunkValidator interface
 func (h *handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	var r Chunk
 	err := r.UnmarshalBinary(data)
 	if err != nil {
-		// warn
 		return false
 	}
 
@@ -47,10 +51,13 @@ func (h *handler) Validate(chunkAddr storage.Address, data []byte) bool {
 	return true
 }
 
+// Put writes a self-validating chunk to the underlying chunkstore. Internally, the
+// underlying chunkstore will call Validate() which will verify the chunk is valid.
 func (h *handler) Put(ctx context.Context, chunk *Chunk) error {
 	return h.ChunkStore.Put(ctx, storage.NewChunk(chunk.Address(), chunk.Data()))
 }
 
+// Get will retrieve a chunk by address.
 func (h *handler) Get(ctx context.Context, addr storage.Address) (*Chunk, error) {
 	ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
 	defer cancel()

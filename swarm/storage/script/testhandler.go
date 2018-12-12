@@ -8,7 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-// NewTestHandler creates Handler object to be used for testing purposes.
+// NewTestHandler creates a mock Handler object to be used for testing purposes.
 func NewTestHandler(t *testing.T) (handler Handler, cleanup func()) {
 	path, err := ioutil.TempDir("", "bzzscript-test")
 	if err != nil {
