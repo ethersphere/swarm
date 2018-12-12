@@ -35,6 +35,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/script"
+
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
@@ -147,7 +149,16 @@ func NewServer(api *api.API, corsString string) *Server {
 			defaultMiddlewares...,
 		),
 	})
-
+	mux.Handle("/bzz-script:/", methodHandler{
+		"GET": Adapt(
+			http.HandlerFunc(server.HandleGetScript),
+			defaultMiddlewares...,
+		),
+		"PUT": Adapt(
+			http.HandlerFunc(server.HandlePutScript),
+			defaultMiddlewares...,
+		),
+	})
 	mux.Handle("/", methodHandler{
 		"GET": Adapt(
 			http.HandlerFunc(server.HandleRootPaths),
@@ -594,6 +605,75 @@ func (s *Server) HandleGetFeed(w http.ResponseWriter, r *http.Request) {
 	log.Debug("Found update", "feed", fd.Hex(), "ruid", ruid)
 	w.Header().Set("Content-Type", api.MimeOctetStream)
 	http.ServeContent(w, r, "", time.Now(), bytes.NewReader(data))
+}
+
+func (s *Server) HandleGetScript(w http.ResponseWriter, r *http.Request) {
+	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
+	log.Debug("handle.get.script", "ruid", ruid)
+	var err error
+
+	addr := uri.Address()
+	if addr == nil {
+		respondError(w, r, "Missing or invalid address", http.StatusBadRequest)
+		return
+	}
+	chunk, err := s.api.ScriptGet(r.Context(), addr)
+	if err != nil {
+		var code int
+		if err == storage.ErrChunkNotFound {
+			code = http.StatusNotFound
+		} else {
+			code = http.StatusInternalServerError
+		}
+		respondError(w, r, fmt.Sprintf("Error retrieving script chunk: %s", err), code)
+		return
+	}
+
+	w.Header().Add("Content-type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(chunk); err != nil {
+		respondError(w, r, fmt.Sprintf("Error formatting response: %s", err), http.StatusInternalServerError)
+	}
+}
+
+func (s *Server) HandlePutScript(w http.ResponseWriter, r *http.Request) {
+	ruid := GetRUID(r.Context())
+	uri := GetURI(r.Context())
+	log.Debug("handle.get.script", "ruid", ruid)
+	var err error
+
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		respondError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	chunk := new(script.Chunk)
+	if err := json.Unmarshal(body, chunk); err != nil {
+		respondError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if uri.Address() != nil {
+		if !bytes.Equal(uri.Address(), chunk.Address()) {
+			respondError(w, r, "Address mismatch", http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := s.api.ScriptPut(r.Context(), chunk); err != nil {
+		var code int
+		if err == storage.ErrChunkInvalid {
+			code = http.StatusUnauthorized
+		} else {
+			code = http.StatusInternalServerError
+		}
+		respondError(w, r, fmt.Sprintf("Error storing script chunk: %s", err), code)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }
 
 func (s *Server) translateFeedError(w http.ResponseWriter, r *http.Request, supErr string, err error) (int, error) {

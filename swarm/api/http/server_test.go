@@ -32,12 +32,15 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/script"
+	"github.com/ethereum/go-ethereum/swarm/storage/script/vm"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -443,6 +446,149 @@ func TestBzzFeed(t *testing.T) {
 	}
 	if !bytes.Equal(update1Data, b) {
 		t.Fatalf("Expected body '%x', got '%x'", update1Data, b)
+	}
+
+}
+
+func TestBzzScript(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	// Helper func to generate /bzz-script:/ URLs.
+	URL := func(address storage.Address) string {
+		var strAddr string
+		if address != nil {
+			strAddr = address.Hex()
+		}
+		return fmt.Sprintf("%s/bzz-script:/%s", srv.URL, strAddr)
+	}
+
+	BODY := func(res *http.Response) []byte {
+		body, err := ioutil.ReadAll(res.Body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return body
+	}
+
+	// Helper func to upload a chunk to /bzz-script:/
+	PUT := func(address storage.Address, chunk *script.Chunk) *http.Response {
+		// Serialize the chunk as JSON to be able to PUT it.
+		chunkJSON, err := json.Marshal(chunk)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		// build a PUT request to /bzz-script:/
+		req, err := http.NewRequest("PUT", URL(address), bytes.NewReader(chunkJSON))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return res
+	}
+
+	// Helper func to retrieve a chunk from /bzz-script:/
+	GET := func(address storage.Address) (chunk *script.Chunk, status int) {
+		// Test we can retrieve the chunk we just published:
+		res, err := http.Get(URL(address))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if res.StatusCode == http.StatusOK {
+			chunk = new(script.Chunk)
+			if err := json.Unmarshal(BODY(res), chunk); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return chunk, res.StatusCode
+	}
+
+	// build a simple script. The key expects a number in the signature that added to 3 equals 5.
+	sb := vm.NewScriptBuilder()
+	sb.AddOp(vm.OP_3, vm.OP_ADD, vm.OP_5, vm.OP_EQUAL)
+	scriptKey, err := sb.Script()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Build a sig script that provides the right answer
+	sb = vm.NewScriptBuilder()
+	sb.AddOp(vm.OP_2)
+	scriptSig, err := sb.Script()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	payload := []byte("Dad crédito a las obras y no a las palabras")
+
+	// Create a Script Chunk with key, sig and payload
+	chunk, err := script.NewChunk(scriptKey, scriptSig, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res := PUT(nil, chunk)
+
+	// Since the scriptSig is valid, expect success.
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("Expected Status to be 200 OK, got %d. Response:\n %s", res.StatusCode, string(BODY(res)))
+	}
+
+	// Test we can retrieve the chunk we just published:
+	retrievedChunk, _ := GET(chunk.Address())
+
+	if !reflect.DeepEqual(chunk, retrievedChunk) {
+		t.Fatalf("Expected retrieved chunk to be equal to original.")
+	}
+
+	// now test for error conditions
+	// Since ZeroAddr != chunk.Address(), expect a 400 Bad Request
+
+	// 1.- try to retrieve a non-existing chunk and expect a 404 not found
+	_, code := GET(storage.ZeroAddr)
+	if code != http.StatusNotFound {
+		t.Fatalf("Expected a 404 Not Found status. Got %d", res.StatusCode)
+	}
+
+	// 2.- Put with an address mismatch between the chunk actual content and the URL address:
+
+	res = PUT(storage.ZeroAddr, chunk)
+	// Since ZeroAddr != chunk.Address(), expect a 400 Bad Request
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("Expected Status to be 400 Bad Request, got %d. Response:\n %s", res.StatusCode, string(BODY(res)))
+	}
+
+	// 3.- Expect a bad request error when using GET without an address:
+
+	_, code = GET(nil)
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("Expected Status to be 400 Bad Request, got %d. Response:\n %s", res.StatusCode, string(BODY(res)))
+	}
+
+	// 4.- Build an incorrect sig script and expect it to be rejected
+
+	sb = vm.NewScriptBuilder()
+	sb.AddOp(vm.OP_7) // wrong sig, should have been 2.
+	badScriptSig, err := sb.Script()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	badChunk, err := script.NewChunk(scriptKey, badScriptSig, payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	res = PUT(nil, badChunk)
+
+	// Since the scriptSig is not valid, expect a 401 Not Authorized error.
+	if res.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("Expected Status to be 401 Not Authorized, got %d. Response:\n %s", res.StatusCode, string(BODY(res)))
 	}
 
 }

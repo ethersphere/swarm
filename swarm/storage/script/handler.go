@@ -2,7 +2,6 @@ package script
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -12,7 +11,7 @@ import (
 const defaultRetrieveTimeout = 100 * time.Millisecond
 
 type HandlerParams struct {
-	ChunkStore *storage.NetStore
+	ChunkStore storage.ChunkStore
 }
 
 type Handler interface {
@@ -43,7 +42,6 @@ func (h *handler) Validate(chunkAddr storage.Address, data []byte) bool {
 
 	if err := r.Verify(chunkAddr); err != nil {
 		log.Debug("Invalid script update chunk", "addr", chunkAddr.Hex(), "err", err.Error())
-		fmt.Println(err)
 		return false
 	}
 	return true

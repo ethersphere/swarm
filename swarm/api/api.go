@@ -1049,6 +1049,16 @@ func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feed.Values) (*f
 	return fd, nil
 }
 
+// ScriptGet retrieves a bzz-script chunk by address
+func (a *API) ScriptGet(ctx context.Context, addr storage.Address) (*script.Chunk, error) {
+	return a.script.Get(ctx, addr)
+}
+
+// ScriptPut publishes a bzz-script chunk
+func (a *API) ScriptPut(ctx context.Context, chunk *script.Chunk) error {
+	return a.script.Put(ctx, chunk)
+}
+
 // MimeOctetStream default value of http Content-Type header
 const MimeOctetStream = "application/octet-stream"
 
