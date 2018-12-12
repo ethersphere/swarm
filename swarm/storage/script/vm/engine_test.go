@@ -42,41 +42,87 @@ func TestEngineSig(t *testing.T) {
 	// get a test signer:
 	alice := Signer(1)
 
-	sb := vm.NewScriptBuilder()
-	sb.AddData(alice.Address().Bytes())
-	sb.AddOp(vm.OP_CHECKSIG)
-	sb.EmbedData([]byte("some embedded data in the key"))
+	// build a simple signing script. It will look like this:
+	// DATA_20 <alice's address) CHECKSIG
 
+	sb := vm.NewScriptBuilder()
+	sb.AddData(alice.Address().Bytes())                   // add Alice's Ethereum address
+	sb.AddOp(vm.OP_CHECKSIG)                              // CHECKSIG opcode
+	sb.EmbedData([]byte("some embedded data in the key")) // this is some optional key metadata
+
+	// retrieve the script out of the builder as a byte array
 	spk, err := sb.Script()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	payload := []byte("PAYLOAD")
+	payload := []byte("PAYLOAD") // some payload for our message/chunk
+
+	// prepare script for signature. This removes certain opcodes
 	preparedScript, err := vm.PrepareScriptForSig(spk)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	// calculate digest to sign:
 	digest := common.BytesToHash(vm.CalcSignatureHash(nil, preparedScript, payload))
 
-	signature, err := alice.Sign(digest)
+	// actually sign it and obtain a signature
+	aliceSignature, err := alice.Sign(digest)
 
-	sb = vm.NewScriptBuilder()
-	sb.AddData(signature[:])
-	ssig, err := sb.Script()
+	// also generate a signature for the same content by an unauthorized user:
+	rogueSignature, err := Signer(666).Sign(digest)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	e, err := vm.NewEngine(spk, ssig, payload, vm.ScriptFlags(0))
-	if err != nil {
-		t.Fatal(err)
+	signTest := func(expectedErrorCode vm.ErrorCode, signature feed.Signature) {
+
+		// build the signature script. It will simply contain the 65-byte signature.
+		sb := vm.NewScriptBuilder()
+
+		sb.AddData(signature[:]) // add the signature
+
+		ssig, err := sb.Script()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		e, err := vm.NewEngine(spk, ssig, payload, vm.ScriptFlags(0))
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		err = e.Execute()
+		if err != nil {
+			if scriptError, ok := err.(vm.Error); ok {
+				if scriptError.ErrorCode == expectedErrorCode {
+					// this was expected, so no error.
+					return
+				} else {
+					t.Fatalf("Script error %d: %s ", scriptError.ErrorCode, scriptError.Error())
+				}
+			} else {
+				if expectedErrorCode == -1 {
+					// expected error of other type, so ok.
+					return
+				}
+			}
+			t.Fatal(err)
+		}
+		if expectedErrorCode != 0 {
+			t.Fatalf("Expected failure with error code %d, got nil error", expectedErrorCode)
+		}
 	}
 
-	err = e.Execute()
-	if err != nil {
-		t.Fatal(err)
-	}
+	// should work with Alice's signature
+	signTest(0, aliceSignature)
+
+	// should fail with rogue signature
+	signTest(vm.ErrEvalFalse, rogueSignature)
+
+	// should fail with an invalid signature
+	signTest(-1, feed.Signature{})
 
 }
 
@@ -84,6 +130,9 @@ func TestEngineMultiSig(t *testing.T) {
 	// test m of n multisig
 	const numSignatures = 3 // signatures required
 	const numSigners = 5    // how many people can sign
+
+	// Build a 3 of 5 multisig script. It will look like this:
+	// 3 DATA_20 <addr0> DATA_20 <addr1> DATA_20 <addr2> DATA_20 <addr3> DATA_20 <addr4> 5 CHECKMULTISIG
 
 	sb := vm.NewScriptBuilder()
 
