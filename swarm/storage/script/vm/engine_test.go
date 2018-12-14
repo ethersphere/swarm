@@ -23,6 +23,7 @@ import (
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
@@ -87,6 +88,8 @@ func TestEngineSig(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+
+		fmt.Println(hexutil.Encode(spk), hexutil.Encode(ssig))
 
 		e, err := vm.NewEngine(spk, ssig, payload, vm.ScriptFlags(0))
 		if err != nil {

@@ -533,10 +533,15 @@ func TestBzzScript(t *testing.T) {
 	}
 
 	res := PUT(nil, chunk)
+	body := string(BODY(res))
 
 	// Since the scriptSig is valid, expect success.
 	if res.StatusCode != http.StatusOK {
-		t.Fatalf("Expected Status to be 200 OK, got %d. Response:\n %s", res.StatusCode, string(BODY(res)))
+		t.Fatalf("Expected Status to be 200 OK, got %d. Response:\n %s", res.StatusCode, body)
+	}
+	expected := fmt.Sprintf("%q\n", chunk.Address())
+	if body != expected {
+		t.Fatalf("Expected PUT to return the chunk address as a quoted JSON string: %q, got %s", chunk.Address(), body)
 	}
 
 	// Test we can retrieve the chunk we just published:

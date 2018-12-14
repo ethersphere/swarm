@@ -674,6 +674,10 @@ func (s *Server) HandlePutScript(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+	w.Header().Add("Content-type", "application/json")
+	if err := json.NewEncoder(w).Encode(chunk.Address()); err != nil {
+		respondError(w, r, fmt.Sprintf("Error formatting response: %s", err), http.StatusInternalServerError)
+	}
 }
 
 func (s *Server) translateFeedError(w http.ResponseWriter, r *http.Request, supErr string, err error) (int, error) {
