@@ -1943,7 +1943,8 @@ func opcodeCheckSig(op *parsedOpcode, vm *Engine) error {
 
 	pub, err := crypto.SigToPub(digest, sigBytes)
 	if err != nil {
-		return err
+		vm.dstack.PushBool(false)
+		return nil
 	}
 	signer := crypto.PubkeyToAddress(*pub)
 	valid := bytes.Equal(signer[:], addressBytes)
@@ -1956,7 +1957,7 @@ func opcodeCheckSig(op *parsedOpcode, vm *Engine) error {
 // The opcodeCheckSig function is invoked followed by opcodeVerify.  See the
 // documentation for each of those opcodes for more details.
 //
-// Stack transformation: signature pubkey] -> [... bool] -> [...]
+// Stack transformation: signature address] -> [... bool] -> [...]
 func opcodeCheckSigVerify(op *parsedOpcode, vm *Engine) error {
 	err := opcodeCheckSig(op, vm)
 	if err == nil {
@@ -1988,36 +1989,36 @@ type parsedSigInfo struct {
 // Stack transformation:
 // [... [sig ...] numsigs [address ...] numaddresses] -> [... bool]
 func opcodeCheckMultiSig(op *parsedOpcode, vm *Engine) error {
-	numKeys, err := vm.dstack.PopInt()
+	numAddr, err := vm.dstack.PopInt()
 	if err != nil {
 		return err
 	}
 
-	numPubKeys := int(numKeys.Int32())
-	if numPubKeys < 0 {
-		str := fmt.Sprintf("number of pubkeys %d is negative",
-			numPubKeys)
+	numAddresses := int(numAddr.Int32())
+	if numAddresses < 0 {
+		str := fmt.Sprintf("number of addresses %d is negative",
+			numAddresses)
 		return scriptError(ErrInvalidPubKeyCount, str)
 	}
-	if numPubKeys > MaxPubKeysPerMultiSig {
-		str := fmt.Sprintf("too many pubkeys: %d > %d",
-			numPubKeys, MaxPubKeysPerMultiSig)
+	if numAddresses > MaxAddressesPerMultiSig {
+		str := fmt.Sprintf("too many addresses: %d > %d",
+			numAddresses, MaxAddressesPerMultiSig)
 		return scriptError(ErrInvalidPubKeyCount, str)
 	}
-	vm.numOps += numPubKeys
+	vm.numOps += numAddresses
 	if vm.numOps > MaxOpsPerScript {
 		str := fmt.Sprintf("exceeded max operation limit of %d",
 			MaxOpsPerScript)
 		return scriptError(ErrTooManyOperations, str)
 	}
 
-	pubKeys := make([][]byte, 0, numPubKeys)
-	for i := 0; i < numPubKeys; i++ {
-		pubKey, err := vm.dstack.PopByteArray()
+	addresses := make([][]byte, 0, numAddresses)
+	for i := 0; i < numAddresses; i++ {
+		addr, err := vm.dstack.PopByteArray()
 		if err != nil {
 			return err
 		}
-		pubKeys = append(pubKeys, pubKey)
+		addresses = append(addresses, addr)
 	}
 
 	numSigs, err := vm.dstack.PopInt()
@@ -2031,9 +2032,9 @@ func opcodeCheckMultiSig(op *parsedOpcode, vm *Engine) error {
 		return scriptError(ErrInvalidSignatureCount, str)
 
 	}
-	if numSignatures > numPubKeys {
-		str := fmt.Sprintf("more signatures than pubkeys: %d > %d",
-			numSignatures, numPubKeys)
+	if numSignatures > numAddresses {
+		str := fmt.Sprintf("more signatures than addresses: %d > %d",
+			numSignatures, numAddresses)
 		return scriptError(ErrInvalidSignatureCount, str)
 	}
 
@@ -2060,42 +2061,43 @@ func opcodeCheckMultiSig(op *parsedOpcode, vm *Engine) error {
 	}
 
 	success := true
-	numPubKeys++
+	numAddresses++
 	pubKeyIdx := -1
 	signatureIdx := 0
 	for numSignatures > 0 {
-		// When there are more signatures than public keys remaining,
+		// When there are more signatures than addresses remaining,
 		// there is no way to succeed since too many signatures are
 		// invalid, so exit early.
 		pubKeyIdx++
-		numPubKeys--
-		if numSignatures > numPubKeys {
+		numAddresses--
+		if numSignatures > numAddresses {
 			success = false
 			break
 		}
 
 		sigInfo := signatures[signatureIdx]
-		pubKey := pubKeys[pubKeyIdx]
+		pubKey := addresses[pubKeyIdx]
 
-		// The order of the signature and public key evaluation is
+		// The order of the signature and address evaluation is
 		// important here since it can be distinguished by an
 		// OP_CHECKMULTISIG NOT when the strict encoding flag is set.
 
 		signature := sigInfo.signature
 		if len(signature) == 0 {
-			// Skip to the next pubkey if signature is empty.
+			// Skip to the next address if signature is empty.
 			continue
 		}
 
 		pub, err := crypto.SigToPub(digest, signature)
 		if err != nil {
-			return err
+			vm.dstack.PushBool(false)
+			return nil
 		}
 		signer := crypto.PubkeyToAddress(*pub)
 		valid := bytes.Equal(signer[:], pubKey)
 
 		if valid {
-			// PubKey verified, move on to the next signature.
+			// address verified, move on to the next signature.
 			signatureIdx++
 			numSignatures--
 		}
@@ -2119,7 +2121,7 @@ func opcodeCheckMultiSig(op *parsedOpcode, vm *Engine) error {
 // See the documentation for each of those opcodes for more details.
 //
 // Stack transformation:
-// [... dummy [sig ...] numsigs [pubkey ...] numpubkeys] -> [... bool] -> [...]
+// [... dummy [sig ...] numsigs [address ...] numaddresses] -> [... bool] -> [...]
 func opcodeCheckMultiSigVerify(op *parsedOpcode, vm *Engine) error {
 	err := opcodeCheckMultiSig(op, vm)
 	if err == nil {

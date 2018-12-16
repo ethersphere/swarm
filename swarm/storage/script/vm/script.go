@@ -74,7 +74,7 @@ func (s Script) String() string {
 	return strings.Trim(sb.String(), " ")
 }
 
-const MaxPubKeysPerMultiSig = 20 // Multisig can't have more sigs than this.
+const MaxAddressesPerMultiSig = 20 // Multisig can't have more sigs than this.
 
 // isSmallInt returns whether or not the opcode is considered a small integer,
 // which is an OP_0, or OP_1 through OP_16.
@@ -373,7 +373,7 @@ func getSigOpCount(pops []parsedOpcode, precise bool) int {
 				pops[i-1].opcode.value <= OP_16 {
 				nSigs += asSmallInt(pops[i-1].opcode)
 			} else {
-				nSigs += MaxPubKeysPerMultiSig
+				nSigs += MaxAddressesPerMultiSig
 			}
 		default:
 			// Not a sigop.

@@ -18,12 +18,10 @@ package vm_test
 import (
 	"encoding/binary"
 	"encoding/json"
-	"fmt"
 	"testing"
 	"unsafe"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
@@ -57,7 +55,7 @@ func TestEngineSig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	payload := []byte("PAYLOAD") // some payload for our message/chunk
+	payload := []byte("hello world!") // some payload for our message/chunk
 
 	// prepare script for signature. This removes certain opcodes
 	preparedScript, err := vm.PrepareScriptForSig(spk)
@@ -88,8 +86,6 @@ func TestEngineSig(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-
-		fmt.Println(hexutil.Encode(spk), hexutil.Encode(ssig))
 
 		e, err := vm.NewEngine(spk, ssig, payload, vm.ScriptFlags(0))
 		if err != nil {
@@ -125,7 +121,7 @@ func TestEngineSig(t *testing.T) {
 	signTest(vm.ErrEvalFalse, rogueSignature)
 
 	// should fail with an invalid signature
-	signTest(-1, feed.Signature{})
+	signTest(vm.ErrEvalFalse, feed.Signature{})
 
 }
 
@@ -158,7 +154,7 @@ func TestEngineMultiSig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	payload := []byte("PAYLOAD")
+	payload := []byte("hello world!")
 	preparedScript, err := vm.PrepareScriptForSig(spk)
 	if err != nil {
 		t.Fatal(err)
@@ -232,7 +228,7 @@ func TestEngineMultiSig(t *testing.T) {
 	signTest(vm.ErrEvalFalse, sigs[4], sigs[4], sigs[4])
 
 	// Two are good, one is not even a signature
-	signTest(-1, sigs[1], sigs[2], make([]byte, 65)) // expect a signature recovery error
+	signTest(vm.ErrEvalFalse, sigs[1], sigs[2], make([]byte, 65)) // expect a signature recovery error
 
 	// Two are good, one is a valid signature of someone not authorized in the key
 	signTest(vm.ErrEvalFalse, sigs[1], sigs[2], rogueSignature[:])
@@ -261,7 +257,7 @@ func TestEnginePow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload := []byte("PAYLOAD")
+	payload := []byte("hello world!")
 
 	nonce := make([]byte, 8)
 	n := (*uint64)(unsafe.Pointer(&nonce[0]))
@@ -272,7 +268,6 @@ func TestEnginePow(t *testing.T) {
 	}
 
 	target, err := vm.Compact2Target(targetCompact)
-	fmt.Println("target", target)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -280,7 +275,6 @@ func TestEnginePow(t *testing.T) {
 	for {
 		hash := vm.CalcSignatureHash(nonce, prepared, payload)
 		if vm.VerifyTarget(target, hash) {
-			fmt.Println(hash)
 			break
 		}
 		*n++
