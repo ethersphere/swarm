@@ -1,12 +1,17 @@
 package lookup_test
 
 import (
+	"fmt"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func TestMarshallers(t *testing.T) {
+func TestMarshallers(tx *testing.T) {
+	t := testutil.BeginTest(tx, false)
+	defer t.FinishTest()
 
 	for i := uint64(1); i < lookup.MaxTime; i *= 3 {
 		e := lookup.Epoch{
@@ -14,21 +19,22 @@ func TestMarshallers(t *testing.T) {
 			Level: uint8(i % 20),
 		}
 		b, err := e.MarshalBinary()
-		if err != nil {
-			t.Fatal(err)
-		}
+		t.Ok(err)
+		t.EqualsKey(fmt.Sprintf("epoch%018d", i), hexutil.Bytes(b))
+
 		var e2 lookup.Epoch
-		if err := e2.UnmarshalBinary(b); err != nil {
-			t.Fatal(err)
-		}
-		if e != e2 {
-			t.Fatal("Expected unmarshalled epoch to be equal to marshalled onet.Fatal(err)")
-		}
+		err = e2.UnmarshalBinary(b)
+		t.Ok(err)
+
+		t.Assert(e == e2, "Expected unmarshalled epoch to be equal to marshalled one.")
 	}
 
 }
 
-func TestAfter(t *testing.T) {
+func TestAfter(tx *testing.T) {
+	t := testutil.BeginTest(tx, false)
+	defer t.FinishTest()
+
 	a := lookup.Epoch{
 		Time:  5,
 		Level: 3,
@@ -42,16 +48,7 @@ func TestAfter(t *testing.T) {
 		Level: 4,
 	}
 
-	if !b.After(a) {
-		t.Fatal("Expected 'after' to be true, got false")
-	}
-
-	if b.After(b) {
-		t.Fatal("Expected 'after' to be false when both epochs are identical, got true")
-	}
-
-	if !b.After(c) {
-		t.Fatal("Expected 'after' to be true when both epochs have the same time but the level is lower in the first one, but got false")
-	}
-
+	t.Assert(b.After(a), "Expected 'after' to be true, got false")
+	t.Assert(!b.After(b), "Expected 'after' to be false when both epochs are identical, got true")
+	t.Assert(b.After(c), "Expected 'after' to be true when both epochs have the same time but the level is lower in the first one, but got false")
 }
