@@ -795,6 +795,33 @@ func (k *Kademlia) connectedPotential() []int {
 	return culprits
 }
 
+func (k *Kademlia) connectedPotential() []uint8 {
+	pk := make(map[uint8]int)
+	pc := make(map[uint8]int)
+
+	// create a map with all bins that have known peers
+	// in order deepest to shallowest compared to the kademlia base address
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+	k.eachAddr(nil, depth, func(_ *BzzAddr, po int, _ bool) bool {
+		pk[uint8(po)]++
+		return true
+	})
+	k.eachConn(nil, depth, func(_ *Peer, po int, _ bool) bool {
+		pc[uint8(po)]++
+		return true
+	})
+
+	var culprits []uint8
+	for po, v := range pk {
+		if pc[po] == v {
+			continue
+		} else if pc[po] < k.HealthBinSize {
+			culprits = append(culprits, po)
+		}
+	}
+	return culprits
+}
+
 // Health state of the Kademlia
 // used for testing only
 type Health struct {
