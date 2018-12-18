@@ -745,18 +745,18 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 	// iterate through nearest neighbors in the peerpot map
 	// if we can't find the neighbor in the map we created above
 	// then we don't know all our neighbors
-	var gots int
+	var connects int
 	var culprits [][]byte
 	for _, p := range peers {
 		pk := common.Bytes2Hex(p)
 		if pm[pk] {
-			gots++
+			connects++
 		} else {
 			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", k.base, pk))
 			culprits = append(culprits, p)
 		}
 	}
-	return gots == len(peers), gots, culprits
+	return connects == len(peers), connects, culprits
 }
 
 // connectedPotential checks whether the peer is connected to a health minimum of peers it knows about in bins that are shallower than depth
@@ -813,12 +813,12 @@ type Health struct {
 func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
-	gotnn, countgotnn, culpritsgotnn := k.connectedNeighbours(pp.NNSet)
+	connectnn, countconnectnn, culpritsconnectnn := k.connectedNeighbours(pp.NNSet)
 	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
 	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	impotentBins := k.connectedPotential()
 	saturated := k.saturation() < depth
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, connectNNs: %v, saturated: %v\n", k.base, knownn, connectnn, saturated))
 	return &Health{
 		KnowNN:           knownn,
 		CountKnowNN:      countknownn,

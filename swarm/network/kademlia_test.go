@@ -270,7 +270,7 @@ func assertHealthSimple(t *testing.T, k *Kademlia, expectHealthy bool) error {
 // - IF we know of peers in bins shallower than depth, connected to at least HealthBinSize of them
 func assertHealthPotential(t *testing.T, k *Kademlia, expectHealthyAndPotent bool) error {
 	healthParams := getHealth(k)
-	health := healthParams.KnowNN && healthParams.GotNN && healthParams.CountKnowNN > 0 && healthParams.Potent
+	health := healthParams.KnowNN && healthParams.ConnectNN && healthParams.CountKnowNN > 0 && healthParams.Potent
 	if expectHealthyAndPotent != health {
 		return fmt.Errorf("expected kademlia health %v, is %v\n%v", expectHealthyAndPotent, health, k.String())
 	}
