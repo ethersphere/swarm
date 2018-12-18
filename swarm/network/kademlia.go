@@ -725,6 +725,7 @@ func (k *Kademlia) knowNeighbours(addrs [][]byte) (got bool, n int, missing [][]
 // connectedNeighbours tests if all neighbours in the peerpot
 // are currently connected in the kademlia
 // It is used in Healthy function for testing only
+// TODO move to separate testing tools file
 func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing [][]byte) {
 	pm := make(map[string]bool)
 
@@ -758,6 +759,9 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 	return gots == len(peers), gots, culprits
 }
 
+// connectedPotential checks whether the peer is connected to a health minimum of peers it knows about in bins that are shallower than depth
+// it returns an array of bin proximity orders for which this is not the case
+// TODO move to separate testing tools file
 func (k *Kademlia) connectedPotential() []uint8 {
 	pk := make(map[uint8]int)
 	pc := make(map[uint8]int)
