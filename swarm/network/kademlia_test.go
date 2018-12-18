@@ -162,10 +162,7 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	testNum++
 }
 
-// TestHealthStrict tests the simplest definition of health
-// Which means whether we are connected to all neighbors we know of
-func TestHealthStrict(t *testing.T) {
-
+func TestHealthSimple(t *testing.T) {
 	// base address is all zeros
 	// no peers
 	// unhealthy (and lonely)
@@ -230,24 +227,54 @@ func TestHealthStrict(t *testing.T) {
 
 func assertHealth(t *testing.T, k *Kademlia, expectHealthy bool, expectSaturation bool) {
 	t.Helper()
+	if err := assertHealthSimple(t, k, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHealthPotential(t *testing.T) {
+	k := newTestKademlia("11111111")
+	if err := assertHealthPotential(t, k, false); err != nil {
+		t.Fatal(err)
+	}
+
+}
+
+// retrieves the health object based on the current connectivity of the given kademlia
+func getHealth(k *Kademlia) *Health {
 	kid := common.Bytes2Hex(k.BaseAddr())
 	addrs := [][]byte{k.BaseAddr()}
 	k.EachAddr(nil, 255, func(addr *BzzAddr, po int, _ bool) bool {
 		addrs = append(addrs, addr.Address())
 		return true
 	})
-
 	pp := NewPeerPotMap(k.MinProxBinSize, addrs)
-	healthParams := k.Healthy(pp[kid])
+	return k.Healthy(pp[kid])
+}
 
-	// definition of health, all conditions but be true:
-	// - we at least know one peer
-	// - we know all neighbors
-	// - we are connected to all known neighbors
+// evaluates the simplest definition of health:
+// all conditions must be true:
+// - we at least know one peer
+// - we know all neighbors
+// - we are connected to all known neighbors
+func assertHealthSimple(t *testing.T, k *Kademlia, expectHealthy bool) error {
+	healthParams := getHealth(k)
 	health := healthParams.KnowNN && healthParams.ConnectNN && healthParams.CountKnowNN > 0
 	if expectHealthy != health {
 		t.Fatalf("expected kademlia health %v, is %v\n%v", expectHealthy, health, k.String())
 	}
+}
+
+// evaluates healthiness by taking into account potential connections
+// additional conditions for healthiness
+// - IF we know of peers in bins shallower than depth, connected to at least HealthBinSize of them
+func assertHealthPotential(t *testing.T, k *Kademlia, expectHealthyAndPotent bool) error {
+	healthParams := getHealth(k)
+	health := healthParams.KnowNN && healthParams.GotNN && healthParams.CountKnowNN > 0 && healthParams.Potent
+	if expectHealthyAndPotent != health {
+		return fmt.Errorf("expected kademlia health %v, is %v\n%v", expectHealthyAndPotent, health, k.String())
+	}
+	return nil
 }
 
 func testSuggestPeer(k *Kademlia, expAddr string, expPo int, expWant bool) error {

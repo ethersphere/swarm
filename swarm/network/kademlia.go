@@ -52,10 +52,12 @@ node from the other.
 var Pof = pot.DefaultPof(256)
 
 // KadParams holds the config params for Kademlia
+// TODO rename parameters to reduce ambiguity and conform to updated terminology
 type KadParams struct {
 	// adjustable parameters
 	MaxProxDisplay int   // number of rows the table shows
 	MinProxBinSize int   // nearest neighbour core minimum cardinality
+	HealthBinSize  int   // number of connections out of known peers in a bin to be considered healthy
 	MinBinSize     int   // minimum number of peers in a row
 	MaxBinSize     int   // maximum number of peers in a row before pruning
 	RetryInterval  int64 // initial interval before a peer is first redialed
@@ -70,6 +72,7 @@ func NewKadParams() *KadParams {
 	return &KadParams{
 		MaxProxDisplay: 16,
 		MinProxBinSize: 2,
+		HealthBinSize:  1,
 		MinBinSize:     2,
 		MaxBinSize:     4,
 		RetryInterval:  4200000000, // 4.2 sec
@@ -755,6 +758,33 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 	return gots == len(peers), gots, culprits
 }
 
+func (k *Kademlia) connectedPotential() []uint8 {
+	pk := make(map[uint8]int)
+	pc := make(map[uint8]int)
+
+	// create a map with all bins that have known peers
+	// in order deepest to shallowest compared to the kademlia base address
+	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+	k.eachAddr(nil, depth, func(_ *BzzAddr, po int, _ bool) bool {
+		pk[uint8(po)]++
+		return true
+	})
+	k.eachConn(nil, depth, func(_ *Peer, po int, _ bool) bool {
+		pc[uint8(po)]++
+		return true
+	})
+
+	var culprits []uint8
+	for po, v := range pk {
+		if pc[po] == v {
+			continue
+		} else if pc[po] < k.HealthBinSize {
+			culprits = append(culprits, po)
+		}
+	}
+	return culprits
+}
+
 // Health state of the Kademlia
 // used for testing only
 type Health struct {
@@ -782,6 +812,7 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	gotnn, countgotnn, culpritsgotnn := k.connectedNeighbours(pp.NNSet)
 	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
 	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+	impotentBins := k.connectedPotential()
 	saturated := k.saturation() < depth
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
 	return &Health{
