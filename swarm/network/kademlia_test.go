@@ -238,6 +238,83 @@ func TestHealthPotential(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// know one peer but not connected
+	// not potent and not healthy
+	Register(k, "11100000")
+	log.Trace(k.String())
+	if err := assertHealthPotential(t, k, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// know one peer and connected
+	// healthy and potent
+	On(k, "11100000")
+	if err := assertHealthPotential(t, k, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// know two peers, only one connected
+	// not healthy, not potent
+	Register(k, "11111100")
+	log.Trace(k.String())
+	if err := assertHealthPotential(t, k, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// know two peers and connected to both
+	// healthy and potent
+	On(k, "11111100")
+	if err := assertHealthPotential(t, k, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// know three peers, connected to the two deepest
+	// healthy but not potent
+	Register(k, "00000000")
+	log.Trace(k.String())
+	if err := assertHealthPotential(t, k, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// know three peers, connected to all three
+	// healthy and potent
+	On(k, "00000000")
+	if err := assertHealthPotential(t, k, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// add another peer in the zero-bin
+	// still healthy and potent
+	Register(k, "00000000")
+	log.Trace(k.String())
+	if err := assertHealthPotential(t, k, true); err != nil {
+		t.Fatal(err)
+	}
+
+	// add peers until depth
+	// healthy but not potent
+	Register(k, "10000000")
+	Register(k, "11000000")
+	log.Trace(k.String())
+	if err := assertHealthPotential(t, k, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// add fourth peer deeper than current depth
+	// still healthy, still not potent
+	On(k, "10000000")
+	log.Trace(k.String())
+	if err := assertHealthPotential(t, k, false); err != nil {
+		t.Fatal(err)
+	}
+
+	// add fourth peer deeper than current depth
+	// healthy and potent
+	On(k, "11000000")
+	log.Trace(k.String())
+	if err := assertHealthPotential(t, k, true); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // retrieves the health object based on the current connectivity of the given kademlia
