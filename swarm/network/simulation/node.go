@@ -117,23 +117,6 @@ func (s *Simulation) AddNodes(count int) (ids []enode.ID, err error) {
 	return ids, nil
 }
 
-// AddNodesAndConnectFull is a helpper method that combines
-// AddNodes and ConnectNodesFull. Only new nodes will be connected.
-func (s *Simulation) AddNodesAndConnectFull(count int) (ids []enode.ID, err error) {
-	if count < 2 {
-		return nil, errors.New("count of nodes must be at least 2")
-	}
-	ids, err = s.AddNodes(count)
-	if err != nil {
-		return nil, err
-	}
-	err = s.Net.ConnectNodesFull(ids)
-	if err != nil {
-		return nil, err
-	}
-	return ids, nil
-}
-
 // AddNodesAndConnectChain is a helpper method that combines
 // AddNodes and ConnectNodesChain. The chain will be continued from the last
 // added node, if there is one in simulation using ConnectToLastNode method.

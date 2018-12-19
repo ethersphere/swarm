@@ -96,24 +96,6 @@ func VerifyChain(t *testing.T, net *Network, ids []enode.ID) {
 	}
 }
 
-func VerifyFull(t *testing.T, net *Network, ids []enode.ID) {
-	t.Helper()
-	n := len(ids)
-	var connections int
-	for i, lid := range ids {
-		for _, rid := range ids[i+1:] {
-			if net.GetConn(lid, rid) != nil {
-				connections++
-			}
-		}
-	}
-
-	want := n * (n - 1) / 2
-	if connections != want {
-		t.Errorf("wrong number of connections, got: %v, want: %v", connections, want)
-	}
-}
-
 func VerifyStar(t *testing.T, net *Network, ids []enode.ID, centerIndex int) {
 	t.Helper()
 	n := len(ids)
@@ -130,5 +112,23 @@ func VerifyStar(t *testing.T, net *Network, ids []enode.ID, centerIndex int) {
 				}
 			}
 		}
+	}
+}
+
+func verifyFull(t *testing.T, net *Network, ids []enode.ID) {
+	t.Helper()
+	n := len(ids)
+	var connections int
+	for i, lid := range ids {
+		for _, rid := range ids[i+1:] {
+			if net.GetConn(lid, rid) != nil {
+				connections++
+			}
+		}
+	}
+
+	want := n * (n - 1) / 2
+	if connections != want {
+		t.Errorf("wrong number of connections, got: %v, want: %v", connections, want)
 	}
 }

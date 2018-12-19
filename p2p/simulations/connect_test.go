@@ -145,7 +145,7 @@ func TestConnectNodesFull(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			VerifyFull(t, net, ids)
+			verifyFull(t, net, ids)
 		})
 	}
 }

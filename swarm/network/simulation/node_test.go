@@ -218,20 +218,6 @@ func TestAddNodes(t *testing.T) {
 	}
 }
 
-func TestAddNodesAndConnectFull(t *testing.T) {
-	sim := New(noopServiceFuncMap)
-	defer sim.Close()
-
-	n := 12
-
-	ids, err := sim.AddNodesAndConnectFull(n)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	simulations.VerifyFull(t, sim.Net, ids)
-}
-
 func TestAddNodesAndConnectChain(t *testing.T) {
 	sim := New(noopServiceFuncMap)
 	defer sim.Close()
