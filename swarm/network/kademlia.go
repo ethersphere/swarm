@@ -669,17 +669,20 @@ func NewPeerPotMap(minProxBinSize int, addrs [][]byte) map[string]*PeerPot {
 // returns the smallest po value in which the node has less than n peers
 // if the iterator reaches depth, then value for depth is returned
 // TODO move to separate testing tools file
-// TODO this function will stop at the first bin with less than MinBinSize peers, even if there are empty bins between that bin and the depth. This may not be correct behavior
 func (k *Kademlia) saturation() int {
 	prev := -1
-	k.addrs.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
 		prev++
 		return prev == po && size >= k.MinBinSize
 	})
+
 	// TODO evaluate whether this check cannot just as well be done within the eachbin
 	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	if depth < prev {
 		return depth
+	}
+	if prev == -1 {
+		prev = 0
 	}
 	return prev
 }
@@ -762,29 +765,32 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 // connectedPotential checks whether the peer is connected to a health minimum of peers it knows about in bins that are shallower than depth
 // it returns an array of bin proximity orders for which this is not the case
 // TODO move to separate testing tools file
-func (k *Kademlia) connectedPotential() []uint8 {
-	pk := make(map[uint8]int)
-	pc := make(map[uint8]int)
+func (k *Kademlia) connectedPotential() []int {
+	pk := make(map[int]int)
+	pc := make(map[int]int)
 
 	// create a map with all bins that have known peers
 	// in order deepest to shallowest compared to the kademlia base address
 	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
-	k.eachAddr(nil, depth, func(_ *BzzAddr, po int, _ bool) bool {
-		pk[uint8(po)]++
+	k.eachAddr(nil, 255, func(_ *BzzAddr, po int, _ bool) bool {
+		pk[po]++
 		return true
 	})
-	k.eachConn(nil, depth, func(_ *Peer, po int, _ bool) bool {
-		pc[uint8(po)]++
+	k.eachConn(nil, 255, func(_ *Peer, po int, _ bool) bool {
+		pc[po]++
 		return true
 	})
 
-	var culprits []uint8
+	var culprits []int
 	for po, v := range pk {
 		if pc[po] == v {
 			continue
+		} else if po >= depth && pc[po] != pk[po] {
+			culprits = append(culprits, po)
 		} else if pc[po] < k.HealthBinSize {
 			culprits = append(culprits, po)
 		}
+
 	}
 	return culprits
 }
@@ -815,10 +821,10 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	defer k.lock.RUnlock()
 	connectnn, countconnectnn, culpritsconnectnn := k.connectedNeighbours(pp.NNSet)
 	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
-	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	impotentBins := k.connectedPotential()
-	saturated := k.saturation() < depth
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, connectNNs: %v, saturated: %v\n", k.base, knownn, connectnn, saturated))
+	saturation := k.saturation()
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, connectNNs: %v, saturated: %v\n", k.base, knownn, connectnn, saturation))
+	potent := countknownn == 0 || len(impotentBins) == 0
 	return &Health{
 		KnowNN:           knownn,
 		CountKnowNN:      countknownn,

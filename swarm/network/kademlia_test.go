@@ -31,6 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
+var (
+	minBinSize     = 2
+	minProxBinSize = 2
+)
+
 func init() {
 	h := log.LvlFilterHandler(log.LvlWarn, log.StreamHandler(os.Stderr, log.TerminalFormat(true)))
 	log.Root().SetHandler(h)
@@ -44,8 +49,8 @@ func testKadPeerAddr(s string) *BzzAddr {
 func newTestKademliaParams() *KadParams {
 	params := NewKadParams()
 	// TODO why is this 1?
-	params.MinBinSize = 1
-	params.MinProxBinSize = 2
+	params.MinBinSize = minBinSize
+	params.MinProxBinSize = minProxBinSize
 	return params
 }
 
@@ -227,14 +232,14 @@ func TestHealthSimple(t *testing.T) {
 
 func assertHealth(t *testing.T, k *Kademlia, expectHealthy bool, expectSaturation bool) {
 	t.Helper()
-	if err := assertHealthSimple(t, k, true); err != nil {
+	if err := assertHealthSimple(k, true); err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestHealthPotential(t *testing.T) {
 	k := newTestKademlia("11111111")
-	if err := assertHealthPotential(t, k, false); err != nil {
+	if err := assertHealthPotential(k, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -242,14 +247,14 @@ func TestHealthPotential(t *testing.T) {
 	// not potent and not healthy
 	Register(k, "11100000")
 	log.Trace(k.String())
-	if err := assertHealthPotential(t, k, false); err != nil {
+	if err := assertHealthPotential(k, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// know one peer and connected
 	// healthy and potent
 	On(k, "11100000")
-	if err := assertHealthPotential(t, k, true); err != nil {
+	if err := assertHealthPotential(k, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -257,14 +262,14 @@ func TestHealthPotential(t *testing.T) {
 	// not healthy, not potent
 	Register(k, "11111100")
 	log.Trace(k.String())
-	if err := assertHealthPotential(t, k, false); err != nil {
+	if err := assertHealthPotential(k, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// know two peers and connected to both
 	// healthy and potent
 	On(k, "11111100")
-	if err := assertHealthPotential(t, k, true); err != nil {
+	if err := assertHealthPotential(k, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -272,14 +277,14 @@ func TestHealthPotential(t *testing.T) {
 	// healthy but not potent
 	Register(k, "00000000")
 	log.Trace(k.String())
-	if err := assertHealthPotential(t, k, false); err != nil {
+	if err := assertHealthPotential(k, false); err != nil {
 		t.Fatal(err)
 	}
 
 	// know three peers, connected to all three
 	// healthy and potent
 	On(k, "00000000")
-	if err := assertHealthPotential(t, k, true); err != nil {
+	if err := assertHealthPotential(k, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -287,7 +292,7 @@ func TestHealthPotential(t *testing.T) {
 	// still healthy and potent
 	Register(k, "00000000")
 	log.Trace(k.String())
-	if err := assertHealthPotential(t, k, true); err != nil {
+	if err := assertHealthPotential(k, true); err != nil {
 		t.Fatal(err)
 	}
 
@@ -296,7 +301,7 @@ func TestHealthPotential(t *testing.T) {
 	Register(k, "10000000")
 	Register(k, "11000000")
 	log.Trace(k.String())
-	if err := assertHealthPotential(t, k, false); err != nil {
+	if err := assertHealthPotential(k, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -304,7 +309,7 @@ func TestHealthPotential(t *testing.T) {
 	// still healthy, still not potent
 	On(k, "10000000")
 	log.Trace(k.String())
-	if err := assertHealthPotential(t, k, false); err != nil {
+	if err := assertHealthPotential(k, false); err != nil {
 		t.Fatal(err)
 	}
 
@@ -312,7 +317,71 @@ func TestHealthPotential(t *testing.T) {
 	// healthy and potent
 	On(k, "11000000")
 	log.Trace(k.String())
-	if err := assertHealthPotential(t, k, true); err != nil {
+	if err := assertHealthPotential(k, true); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestHealthSaturation(t *testing.T) {
+	baseAddressBytes := RandomAddr().OAddr
+	k := NewKademlia(baseAddressBytes, NewKadParams())
+
+	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
+
+	// add first connected neighbor
+	// saturation 0
+	addr := pot.RandomAddressAt(baseAddress, 3)
+	peer := newTestDiscoveryPeer(addr, k)
+	k.On(peer)
+	if err := assertHealthSaturation(k, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// add second connected neighbor
+	// saturation 0
+	addr = pot.RandomAddressAt(baseAddress, 4)
+	peer = newTestDiscoveryPeer(addr, k)
+	k.On(peer)
+	if err := assertHealthSaturation(k, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// connect peer in zero-bin
+	// saturation 0
+	addr = pot.RandomAddressAt(baseAddress, 0)
+	peer = newTestDiscoveryPeer(addr, k)
+	k.On(peer)
+	if err := assertHealthSaturation(k, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	// connect another peer in zero-bin
+	// saturation 1
+	addr = pot.RandomAddressAt(baseAddress, 0)
+	peer = newTestDiscoveryPeer(addr, k)
+	k.On(peer)
+	if err := assertHealthSaturation(k, 1); err != nil {
+		t.Fatal(err)
+	}
+
+	// one connection in zero-bin, two in one-bin
+	// saturation 0
+	k.Off(peer)
+	addr = pot.RandomAddressAt(baseAddress, 1)
+	peer = newTestDiscoveryPeer(addr, k)
+	k.On(peer)
+	addr = pot.RandomAddressAt(baseAddress, 1)
+	peer = newTestDiscoveryPeer(addr, k)
+	k.On(peer)
+	if err := assertHealthSaturation(k, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	k.Off(peer)
+	addr = pot.RandomAddressAt(baseAddress, 1)
+	peer = newTestDiscoveryPeer(addr, k)
+	k.On(peer)
+	if err := assertHealthSaturation(k, 0); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -334,7 +403,7 @@ func getHealth(k *Kademlia) *Health {
 // - we at least know one peer
 // - we know all neighbors
 // - we are connected to all known neighbors
-func assertHealthSimple(t *testing.T, k *Kademlia, expectHealthy bool) error {
+func assertHealthSimple(k *Kademlia, expectHealthy bool) error {
 	healthParams := getHealth(k)
 	health := healthParams.KnowNN && healthParams.ConnectNN && healthParams.CountKnowNN > 0
 	if expectHealthy != health {
@@ -345,11 +414,18 @@ func assertHealthSimple(t *testing.T, k *Kademlia, expectHealthy bool) error {
 // evaluates healthiness by taking into account potential connections
 // additional conditions for healthiness
 // - IF we know of peers in bins shallower than depth, connected to at least HealthBinSize of them
-func assertHealthPotential(t *testing.T, k *Kademlia, expectHealthyAndPotent bool) error {
+func assertHealthPotential(k *Kademlia, expectPotent bool) error {
 	healthParams := getHealth(k)
-	health := healthParams.KnowNN && healthParams.ConnectNN && healthParams.CountKnowNN > 0 && healthParams.Potent
-	if expectHealthyAndPotent != health {
-		return fmt.Errorf("expected kademlia health %v, is %v\n%v", expectHealthyAndPotent, health, k.String())
+	if expectPotent != healthParams.Potent {
+		return fmt.Errorf("expected kademlia potency %v, is %v\n%v", expectPotent, healthParams.Potent, k.String())
+	}
+	return nil
+}
+
+func assertHealthSaturation(k *Kademlia, expectSaturation int) error {
+	healthParams := getHealth(k)
+	if expectSaturation != healthParams.Saturation {
+		return fmt.Errorf("expected kademlia saturation %v, is %v\n%v", expectSaturation, healthParams.Saturation, k.String())
 	}
 	return nil
 }
