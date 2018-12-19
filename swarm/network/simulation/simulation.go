@@ -38,7 +38,7 @@ var (
 // Simulation provides methods on network, nodes and services
 // to manage them.
 type Simulation struct {
-	// Net is exposed as a way to access lower level functionalities
+	// Net is exposed as a way to access lower level functionality
 	// of p2p/simulations.Network.
 	Net *simulations.Network
 

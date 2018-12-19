@@ -105,10 +105,10 @@ func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 
 // AddNodes creates new nodes with random configurations,
 // applies provided options to the config and adds nodes to network.
-func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
+func (s *Simulation) AddNodes(count int) (ids []enode.ID, err error) {
 	ids = make([]enode.ID, 0, count)
 	for i := 0; i < count; i++ {
-		id, err := s.AddNode(opts...)
+		id, err := s.AddNode()
 		if err != nil {
 			return nil, err
 		}
@@ -119,11 +119,11 @@ func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []enode.ID,
 
 // AddNodesAndConnectFull is a helpper method that combines
 // AddNodes and ConnectNodesFull. Only new nodes will be connected.
-func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
+func (s *Simulation) AddNodesAndConnectFull(count int) (ids []enode.ID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
-	ids, err = s.AddNodes(count, opts...)
+	ids, err = s.AddNodes(count)
 	if err != nil {
 		return nil, err
 	}
@@ -137,11 +137,11 @@ func (s *Simulation) AddNodesAndConnectFull(count int, opts ...AddNodeOption) (i
 // AddNodesAndConnectChain is a helpper method that combines
 // AddNodes and ConnectNodesChain. The chain will be continued from the last
 // added node, if there is one in simulation using ConnectToLastNode method.
-func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
+func (s *Simulation) AddNodesAndConnectChain(count int) (ids []enode.ID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
-	id, err := s.AddNode(opts...)
+	id, err := s.AddNode()
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 	if err != nil {
 		return nil, err
 	}
-	ids, err = s.AddNodes(count-1, opts...)
+	ids, err = s.AddNodes(count - 1)
 	if err != nil {
 		return nil, err
 	}
@@ -163,11 +163,11 @@ func (s *Simulation) AddNodesAndConnectChain(count int, opts ...AddNodeOption) (
 
 // AddNodesAndConnectRing is a helpper method that combines
 // AddNodes and ConnectNodesRing.
-func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
+func (s *Simulation) AddNodesAndConnectRing(count int) (ids []enode.ID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
-	ids, err = s.AddNodes(count, opts...)
+	ids, err = s.AddNodes(count)
 	if err != nil {
 		return nil, err
 	}
@@ -180,11 +180,11 @@ func (s *Simulation) AddNodesAndConnectRing(count int, opts ...AddNodeOption) (i
 
 // AddNodesAndConnectStar is a helpper method that combines
 // AddNodes and ConnectNodesStar.
-func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
+func (s *Simulation) AddNodesAndConnectStar(count int) (ids []enode.ID, err error) {
 	if count < 2 {
 		return nil, errors.New("count of nodes must be at least 2")
 	}
-	ids, err = s.AddNodes(count, opts...)
+	ids, err = s.AddNodes(count)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +198,7 @@ func (s *Simulation) AddNodesAndConnectStar(count int, opts ...AddNodeOption) (i
 //UploadSnapshot uploads a snapshot to the simulation
 //This method tries to open the json file provided, applies the config to all nodes
 //and then loads the snapshot into the Simulation network
-func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
+func (s *Simulation) UploadSnapshot(snapshotFile string) error {
 	f, err := os.Open(snapshotFile)
 	if err != nil {
 		return err
@@ -225,9 +225,6 @@ func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) 
 	for _, n := range snap.Nodes {
 		n.Node.Config.EnableMsgEvents = true
 		n.Node.Config.Services = s.serviceNames
-		for _, o := range opts {
-			o(n.Node.Config)
-		}
 	}
 
 	log.Info("Waiting for p2p connections to be established...")
