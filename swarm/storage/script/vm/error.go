@@ -346,10 +346,6 @@ const (
 	// the public key used in either a check-sig or check-multi-sig isn't
 	// serialized in a compressed format.
 	ErrWitnessPubKeyType
-
-	// numErrorCodes is the maximum error code number used in tests.  This
-	// entry MUST be the last entry in the enum.
-	numErrorCodes
 )
 
 // Map of ErrorCode values back to their constant names for pretty printing.

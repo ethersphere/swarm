@@ -109,14 +109,6 @@ const (
 
 	// MaxScriptSize is the maximum allowed length of a raw script.
 	MaxScriptSize = 10000
-
-	// payToWitnessPubKeyHashDataSize is the size of the witness program's
-	// data push for a pay-to-witness-pub-key-hash output.
-	payToWitnessPubKeyHashDataSize = 20
-
-	// payToWitnessScriptHashDataSize is the size of the witness program's
-	// data push for a pay-to-witness-script-hash output.
-	payToWitnessScriptHashDataSize = 32
 )
 
 // Engine is the virtual machine that executes scripts.
