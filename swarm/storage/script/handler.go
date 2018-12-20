@@ -70,7 +70,7 @@ func (h *handler) Validate(chunk storage.Chunk) bool {
 // Put writes a self-validating chunk to the underlying chunkstore. Internally, the
 // underlying chunkstore will call Validate() which will verify the chunk is valid.
 func (h *handler) Put(ctx context.Context, chunk *Chunk) error {
-	return h.ChunkStore.Put(ctx, storage.NewChunk(chunk.Address(), chunk.Data()))
+	return h.ChunkStore.Put(ctx, chunk)
 }
 
 // Get will retrieve a chunk by address.

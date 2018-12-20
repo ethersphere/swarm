@@ -161,15 +161,3 @@ func (c *Chunk) UnmarshalJSON(data []byte) error {
 	*c = *chunk
 	return nil
 }
-
-func (c *Chunk) SpanBytes() []byte {
-	panic("unused")
-}
-
-func (c *Chunk) Span() int64 {
-	panic("unused")
-}
-
-func (c *Chunk) Payload() []byte {
-	panic("unused")
-}
