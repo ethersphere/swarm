@@ -804,7 +804,8 @@ type Health struct {
 	ConnectNN        bool     // whether node is connected to all its neighbours
 	CountConnectNN   int      // amount of neighbours connected to
 	MissingConnectNN [][]byte // which neighbours we should have been connected to but we're not
-	Saturated        bool     // whether we are connected to all the peers we would have liked to
+	Potent           bool     // whether we are connected a mininum of peers for bins we know of peers
+	Saturation       int      // whether we are connected to all the peers we would have liked to
 	Hive             string
 }
 
@@ -819,8 +820,8 @@ type Health struct {
 func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
-	connectnn, countconnectnn, culpritsconnectnn := k.connectedNeighbours(pp.NNSet)
-	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
+	connectnn, countconnectnn, missingconnectnn := k.connectedNeighbours(pp.NNSet)
+	knownn, countknownn, missingknownn := k.knowNeighbours(pp.NNSet)
 	impotentBins := k.connectedPotential()
 	saturation := k.saturation()
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, connectNNs: %v, saturated: %v\n", k.base, knownn, connectnn, saturation))
@@ -828,11 +829,12 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	return &Health{
 		KnowNN:           knownn,
 		CountKnowNN:      countknownn,
-		MissingKnowNN:    culpritsknownn,
-		ConnectNN:        gotnn,
-		CountConnectNN:   countgotnn,
-		MissingConnectNN: culpritsgotnn,
-		Saturated:        saturated,
+		MissingKnowNN:    missingknownn,
+		ConnectNN:        connectnn,
+		CountConnectNN:   countconnectnn,
+		MissingConnectNN: missingconnectnn,
+		Potent:           potent,
+		Saturation:       saturation,
 		Hive:             k.string(),
 	}
 }
