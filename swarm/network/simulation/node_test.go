@@ -117,29 +117,6 @@ func TestAddNode(t *testing.T) {
 	}
 }
 
-func TestAddNodeWithMsgEvents(t *testing.T) {
-	sim := New(noopServiceFuncMap)
-	defer sim.Close()
-
-	id, err := sim.AddNode(AddNodeWithMsgEvents(true))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !sim.Net.GetNode(id).Config.EnableMsgEvents {
-		t.Error("EnableMsgEvents is false")
-	}
-
-	id, err = sim.AddNode(AddNodeWithMsgEvents(false))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if sim.Net.GetNode(id).Config.EnableMsgEvents {
-		t.Error("EnableMsgEvents is true")
-	}
-}
-
 func TestAddNodeWithService(t *testing.T) {
 	sim := New(map[string]ServiceFunc{
 		"noop1": noopServiceFunc,

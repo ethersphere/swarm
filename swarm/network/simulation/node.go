@@ -66,14 +66,6 @@ func (s *Simulation) DownNodeIDs() (ids []enode.ID) {
 // to Simulation.AddNode method.
 type AddNodeOption func(*adapters.NodeConfig)
 
-// AddNodeWithMsgEvents sets the EnableMsgEvents option
-// to NodeConfig.
-func AddNodeWithMsgEvents(enable bool) AddNodeOption {
-	return func(o *adapters.NodeConfig) {
-		o.EnableMsgEvents = enable
-	}
-}
-
 // AddNodeWithService specifies a service that should be
 // started on a node. This option can be repeated as variadic
 // argument toe AddNode and other add node related methods.
