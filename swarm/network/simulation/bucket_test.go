@@ -100,7 +100,7 @@ func TestServiceBucket(t *testing.T) {
 		}
 	})
 
-	if err := sim.StopNode(id2); err != nil {
+	if err := sim.Net.Stop(id2); err != nil {
 		t.Fatal(err)
 	}
 

@@ -177,11 +177,6 @@ func (s *Simulation) UploadSnapshot(snapshotFile string) error {
 	return nil
 }
 
-// StartNode starts a node by NodeID.
-func (s *Simulation) StartNode(id enode.ID) (err error) {
-	return s.Net.Start(id)
-}
-
 // StartRandomNodes starts random nodes.
 func (s *Simulation) StartRandomNodes(count int) (ids []enode.ID, err error) {
 	ids = make([]enode.ID, 0, count)
@@ -197,11 +192,6 @@ func (s *Simulation) StartRandomNodes(count int) (ids []enode.ID, err error) {
 		ids = append(ids, n.ID())
 	}
 	return ids, nil
-}
-
-// StopNode stops a node by NodeID.
-func (s *Simulation) StopNode(id enode.ID) (err error) {
-	return s.Net.Stop(id)
 }
 
 // StopRandomNodes stops random nodes.
