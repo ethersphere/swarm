@@ -151,36 +151,21 @@ func (h *Hive) connect() {
 
 // Run protocol run function
 func (h *Hive) Run(p *BzzPeer) error {
-	h.trackPeer(p)
-	defer h.untrackPeer(p)
-
 	dp := NewPeer(p, h.Kademlia)
 	depth, changed := h.On(dp)
 	// if we want discovery, advertise change of depth
 	if h.Discovery {
 		if changed {
 			// if depth changed, send to all peers
-			NotifyDepth(depth, h.Kademlia)
+			NotifyDepth(uint8(depth), h.Kademlia)
 		} else {
 			// otherwise just send depth to new peer
-			dp.NotifyDepth(depth)
+			dp.NotifyDepth(uint8(depth))
 		}
 		NotifyPeer(p.BzzAddr, h.Kademlia)
 	}
 	defer h.Off(dp)
 	return dp.Run(dp.HandleMsg)
-}
-
-func (h *Hive) trackPeer(p *BzzPeer) {
-	h.lock.Lock()
-	h.peers[p.ID()] = p
-	h.lock.Unlock()
-}
-
-func (h *Hive) untrackPeer(p *BzzPeer) {
-	h.lock.Lock()
-	delete(h.peers, p.ID())
-	h.lock.Unlock()
 }
 
 // NodeInfo function is used by the p2p.server RPC interface to display

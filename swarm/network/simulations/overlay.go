@@ -89,7 +89,6 @@ func (s *Simulation) NewService(ctx *adapters.ServiceContext) (node.Service, err
 	kp.MinProxBinSize = 2
 	kp.MaxBinSize = 4
 	kp.MinBinSize = 1
-	kp.MaxRetries = 1000
 	kp.RetryExponent = 2
 	kp.RetryInterval = 1000000
 	kad := network.NewKademlia(addr.Over(), kp)

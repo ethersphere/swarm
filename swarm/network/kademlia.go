@@ -62,9 +62,8 @@ type KadParams struct {
 	MaxBinSize     int   // maximum number of peers in a row before pruning
 	RetryInterval  int64 // initial interval before a peer is first redialed
 	RetryExponent  int   // exponent to multiply retry intervals with
-	MaxRetries     int   // maximum number of redial attempts
 	// function to sanction or prevent suggesting a peer
-	Reachable func(*BzzAddr) bool `json:"-"`
+	// Reachable func(*BzzAddr) bool `json:"-"`
 }
 
 // NewKadParams returns a params struct with default values
@@ -76,7 +75,6 @@ func NewKadParams() *KadParams {
 		MinBinSize:     2,
 		MaxBinSize:     4,
 		RetryInterval:  4200000000, // 4.2 sec
-		MaxRetries:     42,
 		RetryExponent:  2,
 	}
 }
@@ -88,7 +86,7 @@ type Kademlia struct {
 	base       []byte   // immutable baseaddress of the table
 	addrs      *pot.Pot // pots container for known peer addresses
 	conns      *pot.Pot // pots container for live peer connections
-	depth      uint8    // stores the last current depth of saturation
+	depth      int      // stores the last current depth of saturation
 	nDepth     int      // stores the last neighbourhood depth
 	nDepthC    chan int // returned by DepthC function to signal neighbourhood depth change
 	addrCountC chan int // returned by AddrCountC function to signal peer count change
@@ -126,11 +124,13 @@ func newEntry(p *BzzAddr) *entry {
 }
 
 // Label is a short tag for the entry for debug
+// TODO: move this to common utility function
 func Label(e *entry) string {
 	return fmt.Sprintf("%s (%d)", e.Hex()[:4], e.retries)
 }
 
 // Hex is the hexadecimal serialisation of the entry address
+// TODO: move this to common utility function
 func (e *entry) Hex() string {
 	return fmt.Sprintf("%x", e.Address())
 }
@@ -242,15 +242,15 @@ func (k *Kademlia) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	}
 	// no candidate peer found, request for the short bin
 	var changed bool
-	if uint8(nxt) < k.depth {
-		k.depth = uint8(nxt)
+	if nxt < k.depth {
+		k.depth = nxt
 		changed = true
 	}
 	return a, nxt, changed
 }
 
 // On inserts the peer as a kademlia peer into the live peers
-func (k *Kademlia) On(p *Peer) (uint8, bool) {
+func (k *Kademlia) On(p *Peer) (int, bool) {
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	var ins bool
@@ -278,7 +278,7 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	}
 	log.Trace(k.string())
 	// calculate if depth of saturation changed
-	depth := uint8(k.saturation())
+	depth := k.saturation()
 	var changed bool
 	if depth != k.depth {
 		changed = true
@@ -497,7 +497,7 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 // callable decides if an address entry represents a callable peer
 func (k *Kademlia) callable(e *entry) bool {
 	// not callable if peer is live or exceeded maxRetries
-	if e.conn != nil || e.retries > k.MaxRetries {
+	if e.conn != nil {
 		return false
 	}
 	// calculate the allowed number of retries based on time lapsed since last seen
@@ -515,14 +515,34 @@ func (k *Kademlia) callable(e *entry) bool {
 		return false
 	}
 	// function to sanction or prevent suggesting a peer
-	if k.Reachable != nil && !k.Reachable(e.BzzAddr) {
-		log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
-		return false
-	}
+	//	if k.Reachable != nil && !k.Reachable(e.BzzAddr) {
+	//		log.Trace(fmt.Sprintf("%08x: peer %v is temporarily not callable", k.BaseAddr()[:4], e))
+	//		return false
+	//	}
 	e.retries++
 	log.Trace(fmt.Sprintf("%08x: peer %v is callable", k.BaseAddr()[:4], e))
 
 	return true
+}
+
+// note for the following two functions
+// pot swap does not alter the underlying pot if return value of passed function is equal to argument
+// TODO add a "Have" method to pot
+
+// Check if given address is connected to kademlia
+func (k *Kademlia) Connected(addr *BzzAddr) bool {
+	_, _, found, _ := pot.Swap(k.conns, addr, Pof, func(v pot.Val) pot.Val {
+		return v
+	})
+	return found
+}
+
+// Check if given address is known to kademlia
+func (k *Kademlia) Known(addr *BzzAddr) bool {
+	_, _, found, _ := pot.Swap(k.addrs, addr, Pof, func(v pot.Val) pot.Val {
+		return v
+	})
+	return found
 }
 
 // BaseAddr return the kademlia base address

@@ -64,6 +64,7 @@ func (d *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 }
 
 // NotifyDepth sends a message to all connections if depth of saturation is changed
+// TODO rename depth to unambiguous term and make sure cast properly from source throughout (ideally not cast)
 func NotifyDepth(depth uint8, kad *Kademlia) {
 	f := func(val *Peer, po int, _ bool) bool {
 		val.NotifyDepth(depth)

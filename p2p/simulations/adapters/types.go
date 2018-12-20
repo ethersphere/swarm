@@ -97,7 +97,7 @@ type NodeConfig struct {
 	Services []string
 
 	// function to sanction or prevent suggesting a peer
-	Reachable func(id enode.ID) bool
+	// Reachable func(id enode.ID) bool
 
 	Port uint16
 }

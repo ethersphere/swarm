@@ -191,7 +191,6 @@ func newServices() adapters.Services {
 		params.MinProxBinSize = 2
 		params.MaxBinSize = 3
 		params.MinBinSize = 1
-		params.MaxRetries = 1000
 		params.RetryExponent = 2
 		params.RetryInterval = 1000000
 		kademlias[id] = NewKademlia(id[:], params)
