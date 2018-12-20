@@ -96,25 +96,6 @@ func VerifyChain(t *testing.T, net *Network, ids []enode.ID) {
 	}
 }
 
-func VerifyStar(t *testing.T, net *Network, ids []enode.ID, centerIndex int) {
-	t.Helper()
-	n := len(ids)
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			c := net.GetConn(ids[i], ids[j])
-			if i == centerIndex || j == centerIndex {
-				if c == nil {
-					t.Errorf("nodes %v and %v are not connected, but they should be", i, j)
-				}
-			} else {
-				if c != nil {
-					t.Errorf("nodes %v and %v are connected, but they should not be", i, j)
-				}
-			}
-		}
-	}
-}
-
 func verifyFull(t *testing.T, net *Network, ids []enode.ID) {
 	t.Helper()
 	n := len(ids)
@@ -130,5 +111,24 @@ func verifyFull(t *testing.T, net *Network, ids []enode.ID) {
 	want := n * (n - 1) / 2
 	if connections != want {
 		t.Errorf("wrong number of connections, got: %v, want: %v", connections, want)
+	}
+}
+
+func verifyStar(t *testing.T, net *Network, ids []enode.ID, centerIndex int) {
+	t.Helper()
+	n := len(ids)
+	for i := 0; i < n; i++ {
+		for j := i + 1; j < n; j++ {
+			c := net.GetConn(ids[i], ids[j])
+			if i == centerIndex || j == centerIndex {
+				if c == nil {
+					t.Errorf("nodes %v and %v are not connected, but they should be", i, j)
+				}
+			} else {
+				if c != nil {
+					t.Errorf("nodes %v and %v are connected, but they should not be", i, j)
+				}
+			}
+		}
 	}
 }

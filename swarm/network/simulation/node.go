@@ -161,23 +161,6 @@ func (s *Simulation) AddNodesAndConnectRing(count int) (ids []enode.ID, err erro
 	return ids, nil
 }
 
-// AddNodesAndConnectStar is a helpper method that combines
-// AddNodes and ConnectNodesStar.
-func (s *Simulation) AddNodesAndConnectStar(count int) (ids []enode.ID, err error) {
-	if count < 2 {
-		return nil, errors.New("count of nodes must be at least 2")
-	}
-	ids, err = s.AddNodes(count)
-	if err != nil {
-		return nil, err
-	}
-	err = s.Net.ConnectNodesStar(ids[0], ids[1:])
-	if err != nil {
-		return nil, err
-	}
-	return ids, nil
-}
-
 //UploadSnapshot uploads a snapshot to the simulation
 //This method tries to open the json file provided, applies the config to all nodes
 //and then loads the snapshot into the Simulation network

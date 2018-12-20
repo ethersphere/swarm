@@ -185,7 +185,7 @@ func TestConnectNodesStar(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	VerifyStar(t, net, ids, pivotIndex)
+	verifyStar(t, net, ids, pivotIndex)
 }
 
 func TestConnectNodesStarPivot(t *testing.T) {
@@ -201,5 +201,5 @@ func TestConnectNodesStarPivot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	VerifyStar(t, net, ids, pivotIndex)
+	verifyStar(t, net, ids, pivotIndex)
 }

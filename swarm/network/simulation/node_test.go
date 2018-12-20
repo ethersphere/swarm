@@ -249,18 +249,6 @@ func TestAddNodesAndConnectRing(t *testing.T) {
 	simulations.VerifyRing(t, sim.Net, ids)
 }
 
-func TestAddNodesAndConnectStar(t *testing.T) {
-	sim := New(noopServiceFuncMap)
-	defer sim.Close()
-
-	ids, err := sim.AddNodesAndConnectStar(12)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	simulations.VerifyStar(t, sim.Net, ids, 0)
-}
-
 //To test that uploading a snapshot works
 func TestUploadSnapshot(t *testing.T) {
 	log.Debug("Creating simulation")
