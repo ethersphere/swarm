@@ -25,7 +25,6 @@ import (
 
 var (
 	ErrNodeNotFound = errors.New("node not found")
-	ErrNoPivotNode  = errors.New("no pivot node set")
 )
 
 // ConnectToLastNode connects the node with provided NodeID
