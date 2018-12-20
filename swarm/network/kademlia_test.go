@@ -86,6 +86,35 @@ func Register(k *Kademlia, regs ...string) {
 	}
 }
 
+func TestKademliaConnectedKnown(t *testing.T) {
+	baseAddressBytes := RandomAddr().OAddr
+	k := NewKademlia(baseAddressBytes, NewKadParams())
+
+	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
+
+	peerAddr := pot.RandomAddressAt(baseAddress, 42)
+	peerBzzAddr := &BzzAddr{
+		OAddr: peerAddr.Bytes(),
+	}
+	peer := newTestDiscoveryPeer(peerAddr, k)
+
+	k.On(peer)
+	if !k.Connected(peerBzzAddr) {
+		t.Fatal("expected connected known when connected")
+	}
+	if !k.Known(peerBzzAddr) {
+		t.Fatal("expected known when connected")
+	}
+
+	k.Off(peer)
+	if k.Connected(peerBzzAddr) {
+		t.Fatal("expected not connected known when not connected")
+	}
+	if !k.Known(peerBzzAddr) {
+		t.Fatal("expected known when not connected")
+	}
+}
+
 // tests the validity of neighborhood depth calculations
 //
 // in particular, it tests that if there are one or more consecutive
