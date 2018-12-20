@@ -676,7 +676,6 @@ func TestOffEffectingAddressBookLightNode(t *testing.T) {
 func TestSuggestPeerRetries(t *testing.T) {
 	k := newTestKademlia("00000000")
 	k.RetryInterval = int64(300 * time.Millisecond) // cycle
-	k.MaxRetries = 50
 	k.RetryExponent = 2
 	sleep := func(n int) {
 		ts := k.RetryInterval
