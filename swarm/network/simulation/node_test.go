@@ -117,27 +117,6 @@ func TestAddNode(t *testing.T) {
 	}
 }
 
-func TestAddNodeWithService(t *testing.T) {
-	sim := New(map[string]ServiceFunc{
-		"noop1": noopServiceFunc,
-		"noop2": noopServiceFunc,
-	})
-	defer sim.Close()
-
-	id, err := sim.AddNode(AddNodeWithService("noop1"))
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	n := sim.Net.GetNode(id).Node.(*adapters.SimNode)
-	if n.Service("noop1") == nil {
-		t.Error("service noop1 not found on node")
-	}
-	if n.Service("noop2") != nil {
-		t.Error("service noop2 should not be found on node")
-	}
-}
-
 func TestAddNodeMultipleServices(t *testing.T) {
 	sim := New(map[string]ServiceFunc{
 		"noop1": noopServiceFunc,

@@ -62,29 +62,10 @@ func (s *Simulation) DownNodeIDs() (ids []enode.ID) {
 	return ids
 }
 
-// AddNodeOption defines the option that can be passed
-// to Simulation.AddNode method.
-type AddNodeOption func(*adapters.NodeConfig)
-
-// AddNodeWithService specifies a service that should be
-// started on a node. This option can be repeated as variadic
-// argument toe AddNode and other add node related methods.
-// If AddNodeWithService is not specified, all services will be started.
-func AddNodeWithService(serviceName string) AddNodeOption {
-	return func(o *adapters.NodeConfig) {
-		o.Services = append(o.Services, serviceName)
-	}
-}
-
-// AddNode creates a new node with random configuration,
-// applies provided options to the config and adds the node to network.
-// By default all services will be started on a node. If one or more
-// AddNodeWithService option are provided, only specified services will be started.
-func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
+// AddNode creates a new node with random configuration and adds that to
+// the network. All services will be started on the node.
+func (s *Simulation) AddNode() (id enode.ID, err error) {
 	conf := adapters.RandomNodeConfig()
-	for _, o := range opts {
-		o(conf)
-	}
 	if len(conf.Services) == 0 {
 		conf.Services = s.serviceNames
 	}
