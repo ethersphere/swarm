@@ -86,36 +86,6 @@ func Register(k *Kademlia, regs ...string) {
 	}
 }
 
-// TestConnected tests the simple peer bool check functions in kademlia
-func TestExistence(t *testing.T) {
-	baseAddressBytes := RandomAddr().OAddr
-	k := NewKademlia(baseAddressBytes, NewKadParams())
-
-	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
-
-	addr := pot.RandomAddressAt(baseAddress, 42)
-	bzzAddr := &BzzAddr{
-		OAddr: addr.Bytes(),
-	}
-	peer := newTestDiscoveryPeer(addr, k)
-
-	k.On(peer)
-	if !k.Connected(bzzAddr) {
-		t.Fatal("expected connected when connected")
-	}
-	if !k.Known(bzzAddr) {
-		t.Fatal("expected known when connected")
-	}
-
-	k.Off(peer)
-	if k.Connected(bzzAddr) {
-		t.Fatal("expected NOT connected when disconnected")
-	}
-	if !k.Known(bzzAddr) {
-		t.Fatal("expected known when disconnected")
-	}
-}
-
 // tests the validity of neighborhood depth calculations
 //
 // in particular, it tests that if there are one or more consecutive
@@ -706,6 +676,7 @@ func TestOffEffectingAddressBookLightNode(t *testing.T) {
 func TestSuggestPeerRetries(t *testing.T) {
 	k := newTestKademlia("00000000")
 	k.RetryInterval = int64(300 * time.Millisecond) // cycle
+	k.MaxRetries = 50
 	k.RetryExponent = 2
 	sleep := func(n int) {
 		ts := k.RetryInterval
