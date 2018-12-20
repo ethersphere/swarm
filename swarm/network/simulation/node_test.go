@@ -333,54 +333,6 @@ func TestStartStopNode(t *testing.T) {
 	}
 }
 
-func TestStartStopRandomNode(t *testing.T) {
-	sim := New(noopServiceFuncMap)
-	defer sim.Close()
-
-	_, err := sim.AddNodes(3)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	id, err := sim.StopRandomNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	n := sim.Net.GetNode(id)
-	if n == nil {
-		t.Fatal("node not found")
-	}
-	if n.Up {
-		t.Error("node not stopped")
-	}
-
-	id2, err := sim.StopRandomNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// Sleep here to ensure that Network.watchPeerEvents defer function
-	// has set the `node.Up = false` before we start the node again.
-	// p2p/simulations/network.go:215
-	//
-	// The same node is stopped and started again, and upon start
-	// watchPeerEvents is started in a goroutine. If the node is stopped
-	// and then very quickly started, that goroutine may be scheduled later
-	// then start and force `node.Up = false` in its defer function.
-	// This will make this test unreliable.
-	time.Sleep(time.Second)
-
-	idStarted, err := sim.StartRandomNode()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if idStarted != id && idStarted != id2 {
-		t.Error("unexpected started node ID")
-	}
-}
-
 func TestStartStopRandomNodes(t *testing.T) {
 	sim := New(noopServiceFuncMap)
 	defer sim.Close()

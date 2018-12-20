@@ -209,15 +209,6 @@ func (s *Simulation) StartNode(id enode.ID) (err error) {
 	return s.Net.Start(id)
 }
 
-// StartRandomNode starts a random node.
-func (s *Simulation) StartRandomNode() (id enode.ID, err error) {
-	n := s.Net.GetRandomDownNode()
-	if n == nil {
-		return id, ErrNodeNotFound
-	}
-	return n.ID(), s.Net.Start(n.ID())
-}
-
 // StartRandomNodes starts random nodes.
 func (s *Simulation) StartRandomNodes(count int) (ids []enode.ID, err error) {
 	ids = make([]enode.ID, 0, count)
@@ -238,15 +229,6 @@ func (s *Simulation) StartRandomNodes(count int) (ids []enode.ID, err error) {
 // StopNode stops a node by NodeID.
 func (s *Simulation) StopNode(id enode.ID) (err error) {
 	return s.Net.Stop(id)
-}
-
-// StopRandomNode stops a random node.
-func (s *Simulation) StopRandomNode() (id enode.ID, err error) {
-	n := s.Net.GetRandomUpNode()
-	if n == nil {
-		return id, ErrNodeNotFound
-	}
-	return n.ID(), s.Net.Stop(n.ID())
 }
 
 // StopRandomNodes stops random nodes.
