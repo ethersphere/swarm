@@ -239,6 +239,19 @@ func (h *Hive) savePeers() error {
 	return nil
 }
 
+//
+// NOTE BELOW HERE IS THE CONSTRUCTION SITE FOR KADEMLIA HIVE REFACTOR
+//
+
+func (h *Hive) suggestPeers() []*Peer {
+	var suggestion []*Peer
+	for _, peer := range h.getPotentialPeers() {
+		suggestion = append(suggestion, peer)
+		// CALL THE PEERS
+	}
+	return suggestion
+}
+
 // returns peers to attempt connections to
 //
 // the method first checks known neighbors, and if any unconnected neighbors are found
@@ -246,7 +259,7 @@ func (h *Hive) savePeers() error {
 //
 // if no neighbours are found, peers from the shallowest bin that has unconnected pers
 // (who also have exceeded time delay) are returned
-func (h *Hive) getPotentialPeers(offset int) []*Peer {
+func (h *Hive) getPotentialPeers() []*Peer {
 
 	// record the peers to report back as callable
 	var callablePeers []*Peer
@@ -256,6 +269,14 @@ func (h *Hive) getPotentialPeers(offset int) []*Peer {
 
 	// first check the neighbours
 	potentialPeers := h.getPotentialNeighbours(depth)
+	for _, peer := range potentialPeers {
+		if h.isTimeForRetry(peer) {
+			callablePeers = append(callablePeers, peer)
+		}
+	}
+	if len(callablePeers) > 0 {
+		return callablePeers
+	}
 
 	// lastPotentialBin keeps track of the last bin we got peers from
 	// initially setting it to -1 means it will always be run once
@@ -278,6 +299,9 @@ func (h *Hive) getPotentialPeers(offset int) []*Peer {
 			break
 		}
 
+		//
+		lastPotentialBin++
+
 		// otherwise, revert to bins shallower than depth
 		for len(potentialPeers) == 0 && lastPotentialBin < depth {
 			potentialPeers, lastPotentialBin = h.getPotentialBinPeers(lastPotentialBin, depth)
@@ -287,8 +311,6 @@ func (h *Hive) getPotentialPeers(offset int) []*Peer {
 	// return the catch of the day ... ehm ... tick
 	return callablePeers
 }
-
-// NOTE BELOW HERE IS THE CONSTRUCTION SITE FOR KADEMLIA HIVE REFACTOR
 
 // returns all neighbors not connected to that should be
 func (h *Hive) getPotentialNeighbours(depth int) []*Peer {
@@ -331,12 +353,13 @@ func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
 
 		// stop if we reach depth, because peers from that point and deeper will be treated differently
 		if depth >= po {
+			//TODO how to handle simbin -1 here
 			return true
 		}
 
 		// if we detect an empty bin we can short circuit and return those results immetdiately
 		if seqPo != po {
-			slimBin = seqPo
+			slimBin = po
 			slimBinSize = 0
 			return false
 		}
