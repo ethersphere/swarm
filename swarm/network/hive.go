@@ -18,6 +18,7 @@ package network
 
 import (
 	"fmt"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -42,6 +43,8 @@ type HiveParams struct {
 	PeersBroadcastSetSize uint8 // how many peers to use when relaying
 	MaxPeersPerRequest    uint8 // max size for peer address batches
 	KeepAliveInterval     time.Duration
+	RetryInterval         int64 // initial interval before a peer is first redialed
+	RetryExponent         int   // exponent to multiply retry intervals with
 }
 
 // NewHiveParams returns hive config with only the
@@ -51,6 +54,9 @@ func NewHiveParams() *HiveParams {
 		PeersBroadcastSetSize: 3,
 		MaxPeersPerRequest:    5,
 		KeepAliveInterval:     500 * time.Millisecond,
+		RetryInterval:         4200000000, // 4.2 sec
+		//RetryExponent:         2,
+		RetryExponent: 3,
 	}
 }
 
@@ -226,4 +232,120 @@ func (h *Hive) savePeers() error {
 		return fmt.Errorf("could not save peers: %v", err)
 	}
 	return nil
+}
+
+// SuggestPeer returns a known peer for the lowest proximity bin for the
+// lowest bincount below depth
+// naturally if there is an empty row it returns a peer for that
+func (h *Hive) SuggestPeer() (a *BzzAddr, o int, want bool) {
+	return &BzzAddr{}, 0, false
+	//	k.lock.Lock()
+	//	defer k.lock.Unlock()
+	//	minsize := k.MinBinSize
+	//	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+	//	// if there is a callable neighbour within the current proxBin, connect
+	//	// this makes sure nearest neighbour set is fully connected
+	//	var ppo int
+	//	k.addrs.EachNeighbour(k.base, Pof, func(val pot.Val, po int) bool {
+	//		if po < depth {
+	//			return false
+	//		}
+	//		e := val.(*entry)
+	//		c := k.callable(e)
+	//		if c {
+	//			a = e.BzzAddr
+	//		}
+	//		ppo = po
+	//		return !c
+	//	})
+	//	if a != nil {
+	//		log.Trace(fmt.Sprintf("%08x candidate nearest neighbour found: %v (%v)", k.BaseAddr()[:4], a, ppo))
+	//		return a, 0, false
+	//	}
+	//
+	//	var bpo []int
+	//	prev := -1
+	//	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+	//		prev++
+	//		for ; prev < po; prev++ {
+	//			bpo = append(bpo, prev)
+	//			minsize = 0
+	//		}
+	//		if size < minsize {
+	//			bpo = append(bpo, po)
+	//			minsize = size
+	//		}
+	//		return size > 0 && po < depth
+	//	})
+	//	// all buckets are full, ie., minsize == k.MinBinSize
+	//	if len(bpo) == 0 {
+	//		return nil, 0, false
+	//	}
+	//	// as long as we got candidate peers to connect to
+	//	// dont ask for new peers (want = false)
+	//	// try to select a candidate peer
+	//	// find the first callable peer
+	//	nxt := bpo[0]
+	//	k.addrs.EachBin(k.base, Pof, nxt, func(po, _ int, f func(func(pot.Val, int) bool) bool) bool {
+	//		// for each bin (up until depth) we find callable candidate peers
+	//		if po >= depth {
+	//			return false
+	//		}
+	//		return f(func(val pot.Val, _ int) bool {
+	//			e := val.(*entry)
+	//			c := k.callable(e)
+	//			if c {
+	//				a = e.BzzAddr
+	//			}
+	//			return !c
+	//		})
+	//	})
+	//	// found a candidate
+	//	if a != nil {
+	//		return a, 0, false
+	//	}
+	//	// no candidate peer found, request for the short bin
+	//	var changed bool
+	//	if nxt < k.depth {
+	//		k.depth = nxt
+	//		changed = true
+	//	}
+	//	return a, nxt, changed
+}
+
+// calculate the allowed number of retries based on time lapsed since last seen
+// NOTE this method has been moved from kademlia.go connect method. The function now spread over two functions
+// TODO simplify
+func (h *Hive) getRetriesFromDuration(timeAgo time.Duration) int {
+	div := int64(h.RetryExponent)
+	div += (150000 - rand.Int63n(300000)) * div / 1000000
+	var retries int
+	for delta := int64(timeAgo); delta > h.RetryInterval; delta /= div {
+		retries++
+	}
+	return retries
+}
+
+func (h *Hive) isTimeForRetry(d *Peer) bool {
+	timeAgo := time.Since(d.seenAt)
+	allowedRetryCountNow := h.getRetriesFromDuration(timeAgo)
+	isTime := d.retries < allowedRetryCountNow
+	if isTime {
+		log.Trace(fmt.Sprintf("%08x: peer %v is callable", Label(d)[:4], d))
+	} else {
+		log.Trace(fmt.Sprintf("%08x: %v long time since last try (at %v) needed before retry %v, wait only warrants %v", h.BaseAddr()[:4], d, timeAgo, d.retries, allowedRetryCountNow))
+	}
+	return isTime
+}
+
+// callable decides if an address entry represents a callable peer
+// this is never called concurrently, so safe to increment
+func (h *Hive) callable(d *Peer) bool {
+	if d.up || !h.isTimeForRetry(d) {
+		return false
+	}
+	// TODO move to the actual retry call
+	d.retries++
+
+	return true
 }

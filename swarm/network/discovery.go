@@ -20,32 +20,56 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 )
 
 // discovery bzz extension for requesting and relaying node address records
 
+// encapsulates connectivity information related to discovery mechanics
+type connectivity struct {
+	seenAt  time.Time
+	retries int
+	depth   uint8
+}
+
+// encapsulates peer information exchange related to discovery mechanics
+type exchange struct {
+	sentPeers bool            // whether we already sent peer closer to this address
+	peers     map[string]bool // tracks node records sent to the peer
+}
+
 // Peer wraps BzzPeer and embeds Kademlia overlay connectivity driver
 type Peer struct {
 	*BzzPeer
-	kad       *Kademlia
-	sentPeers bool            // whether we already sent peer closer to this address
-	mtx       sync.RWMutex    //
-	peers     map[string]bool // tracks node records sent to the peer
-	depth     uint8           // the proximity order advertised by remote as depth of saturation
+	*connectivity
+	*exchange
+	kad *Kademlia
+	mtx sync.RWMutex
+	up  bool
 }
 
 // NewPeer constructs a discovery peer
 func NewPeer(p *BzzPeer, kad *Kademlia) *Peer {
 	d := &Peer{
+		exchange: &exchange{
+			peers: make(map[string]bool),
+		},
 		kad:     kad,
 		BzzPeer: p,
-		peers:   make(map[string]bool),
 	}
 	// record remote as seen so we never send a peer its own record
 	d.seen(p.BzzAddr)
 	return d
+}
+
+// Label is a short tag for the entry for debug
+// TODO: move this to common utility function
+func Label(d pot.BytesAddress) string {
+	//return fmt.Sprintf("%s (%d)", common.Bytes2Hex(d.Address())[:4]) //, d.retries)
+	return fmt.Sprintf("%s", common.Bytes2Hex(d.Address())[:4])
 }
 
 // HandleMsg is the message handler that delegates incoming messages
