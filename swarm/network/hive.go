@@ -239,28 +239,52 @@ func (h *Hive) savePeers() error {
 	return nil
 }
 
-// abstracts the potential peer retrieval
+// returns peers to attempt connections to
+//
+// the method first checks known neighbors, and if any unconnected neighbors are found
+// that have exceeded the time delay for reconnection attempt then those are returned.
+//
+// if no neighbours are found, peers from the shallowest bin that has unconnected pers
+// (who also have exceeded time delay) are returned
 func (h *Hive) getPotentialPeers(offset int) []*Peer {
 
-	//
+	// record the peers to report back as callable
 	var callablePeers []*Peer
 
 	// our kademlia depth right now
 	depth := h.Kademlia.NeighbourhoodDepth()
 
+	// first check the neighbours
 	potentialPeers := h.getPotentialNeighbours(depth)
-	if len(potentialPeers) == 0 {
-		var lastPotentialBin int
+
+	// lastPotentialBin keeps track of the last bin we got peers from
+	// initially setting it to -1 means it will always be run once
+	// and thus still process the neighbours if we have any.
+	// if the depth is 0 then only neighbours are relevant
+	// if we hit depth then we break out of the loop (with no peers)
+	for lastPotentialBin := -1; lastPotentialBin < depth; {
+
+		// among the latest retrieved potential peers
+		// add any that have exceeded time delay for reconnect
+		for _, peer := range potentialPeers {
+			if h.isTimeForRetry(peer) {
+				callablePeers = append(callablePeers, peer)
+			}
+		}
+
+		// if we now actally have peers that can be called
+		// then break out and return them
+		if len(callablePeers) > 0 {
+			break
+		}
+
+		// otherwise, revert to bins shallower than depth
 		for len(potentialPeers) == 0 && lastPotentialBin < depth {
 			potentialPeers, lastPotentialBin = h.getPotentialBinPeers(lastPotentialBin, depth)
 		}
 	}
 
-	for _, peer := range potentialPeers {
-		if h.isTimeForRetry(peer) {
-			callablePeers = append(callablePeers, peer)
-		}
-	}
+	// return the catch of the day ... ehm ... tick
 	return callablePeers
 }
 
