@@ -153,7 +153,7 @@ func TestConnectNodesRing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	VerifyRing(t, net, ids)
+	verifyRing(t, net, ids)
 }
 
 func TestConnectNodesStar(t *testing.T) {
