@@ -22,10 +22,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
@@ -67,8 +67,9 @@ type Hive struct {
 	Store       state.Store       // storage interface to save peers across sessions
 	addPeer     func(*enode.Node) // server callback to connect to a peer
 	// bookkeeping
-	lock   sync.Mutex
-	peers  map[enode.ID]*BzzPeer
+	lock sync.Mutex
+	//peers  map[enode.ID]*BzzPeer
+	peers  map[string]*Peer // resolved addrs (record keeping in kademlia) to peer object maps
 	ticker *time.Ticker
 }
 
@@ -81,7 +82,9 @@ func NewHive(params *HiveParams, kad *Kademlia, store state.Store) *Hive {
 		HiveParams: params,
 		Kademlia:   kad,
 		Store:      store,
-		peers:      make(map[enode.ID]*BzzPeer),
+		//peers:      make(map[enode.ID]*BzzPeer),
+		// TODO bzzpeer addr should be fixed length so we can use it in indices without casting/formatting to string
+		peers: make(map[string]*Peer),
 	}
 }
 
@@ -182,22 +185,24 @@ func (h *Hive) NodeInfo() interface{} {
 
 // PeerInfo function is used by the p2p.server RPC interface to display
 // protocol specific information any connected peer referred to by their NodeID
+// TODO temporarily bypassed until hive and kademlia reorganization is stabilized (output functions should not dictate the structure of our objects and the peers array in Hive was made just to satisfy this)
 func (h *Hive) PeerInfo(id enode.ID) interface{} {
-	h.lock.Lock()
-	p := h.peers[id]
-	h.lock.Unlock()
-
-	if p == nil {
-		return nil
-	}
-	addr := NewAddr(p.Node())
-	return struct {
-		OAddr hexutil.Bytes
-		UAddr hexutil.Bytes
-	}{
-		OAddr: addr.OAddr,
-		UAddr: addr.UAddr,
-	}
+	return struct{}{}
+	//	h.lock.Lock()
+	//	p := h.peers[id]
+	//	h.lock.Unlock()
+	//
+	//	if p == nil {
+	//		return nil
+	//	}
+	//	addr := NewAddr(p.Node())
+	//	return struct {
+	//		OAddr hexutil.Bytes
+	//		UAddr hexutil.Bytes
+	//	}{
+	//		OAddr: addr.OAddr,
+	//		UAddr: addr.UAddr,
+	//	}
 }
 
 // loadPeers, savePeer implement persistence callback/
@@ -234,13 +239,121 @@ func (h *Hive) savePeers() error {
 	return nil
 }
 
+// abstracts the potential peer retrieval
+func (h *Hive) getPotentialPeers(offset int) []*Peer {
+
+	//
+	var callablePeers []*Peer
+
+	// our kademlia depth right now
+	depth := h.Kademlia.NeighbourhoodDepth()
+
+	potentialPeers := h.getPotentialNeighbours(depth)
+	if len(potentialPeers) == 0 {
+		var lastPotentialBin int
+		for len(potentialPeers) == 0 && lastPotentialBin < depth {
+			potentialPeers, lastPotentialBin = h.getPotentialBinPeers(lastPotentialBin, depth)
+		}
+	}
+
+	for _, peer := range potentialPeers {
+		if h.isTimeForRetry(peer) {
+			callablePeers = append(callablePeers, peer)
+		}
+	}
+	return callablePeers
+}
+
+// NOTE BELOW HERE IS THE CONSTRUCTION SITE FOR KADEMLIA HIVE REFACTOR
+
+// returns all neighbors not connected to that should be
+func (h *Hive) getPotentialNeighbours(depth int) []*Peer {
+	var neighbours []*Peer
+
+	h.Kademlia.EachAddr(nil, 255, func(addr *BzzAddr, po int, _ bool) bool {
+		if !h.Kademlia.Connected(addr) {
+			p := h.peers[string(addr.Address())]
+			neighbours = append(neighbours, p)
+		}
+		return true
+	})
+
+	return neighbours
+}
+
+// gets unconnected peers from the SHALLOWEST bin depth with the FEWEST connected peers
+// neighbours are not considered
+// returns the peers returned and which po they are returned from
+// if the returned array is nil, we reached depth without finding any
+// TODO consider a separate pot where retrycount is part of the sorted value
+func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
+
+	// record all peers that can and should be connected to
+	var peers []*Peer
+
+	// keeps track of which po the last iteration matched
+	seqPo := -1
+
+	// records the bin with the fewest peers
+	slimBin := -1
+
+	// records the size of the slimBin
+	slimBinSize := h.Kademlia.MinBinSize
+
+	// find the bin shallower than depth that has the LEAST peers
+	// TODO refactor in order to avoid accessing hidden member of kademlia
+	h.Kademlia.conns.EachBin(nil, Pof, offset, func(po int, size int, f func(func(pot.Val, int) bool) bool) bool {
+		seqPo++
+
+		// stop if we reach depth, because peers from that point and deeper will be treated differently
+		if depth >= po {
+			return true
+		}
+
+		// if we detect an empty bin we can short circuit and return those results immetdiately
+		if seqPo != po {
+			slimBin = seqPo
+			slimBinSize = 0
+			return false
+		}
+
+		// if size is less than optimal and smallest size we've seen so far
+		// record this bin and its size
+		if size < h.Kademlia.MinBinSize && size < slimBinSize {
+			slimBin = po
+			slimBinSize = size
+		}
+		return true
+	})
+
+	// if no bins have peers to match
+	if slimBin == -1 {
+		return nil, 0
+	}
+
+	// if we found a bin to process, fill up with all unconnected peers in that bin
+	h.Kademlia.EachAddr(nil, slimBin, func(addr *BzzAddr, po int, _ bool) bool {
+		if po != slimBin {
+			return false
+		}
+		if !h.Kademlia.Connected(addr) {
+			bzzAddrPeerIdx := string(addr.Address())
+			peers = append(peers, h.peers[bzzAddrPeerIdx])
+		}
+		return true
+	})
+
+	return peers, slimBin
+}
+
 // SuggestPeer returns a known peer for the lowest proximity bin for the
 // lowest bincount below depth
 // naturally if there is an empty row it returns a peer for that
 func (h *Hive) SuggestPeer() (a *BzzAddr, o int, want bool) {
-	return &BzzAddr{}, 0, false
-	//	k.lock.Lock()
-	//	defer k.lock.Unlock()
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	return nil, 0, false
 	//	minsize := k.MinBinSize
 	//	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
 	//	// if there is a callable neighbour within the current proxBin, connect
@@ -336,16 +449,4 @@ func (h *Hive) isTimeForRetry(d *Peer) bool {
 		log.Trace(fmt.Sprintf("%08x: %v long time since last try (at %v) needed before retry %v, wait only warrants %v", h.BaseAddr()[:4], d, timeAgo, d.retries, allowedRetryCountNow))
 	}
 	return isTime
-}
-
-// callable decides if an address entry represents a callable peer
-// this is never called concurrently, so safe to increment
-func (h *Hive) callable(d *Peer) bool {
-	if d.up || !h.isTimeForRetry(d) {
-		return false
-	}
-	// TODO move to the actual retry call
-	d.retries++
-
-	return true
 }

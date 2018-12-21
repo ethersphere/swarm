@@ -102,12 +102,13 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 
 // entry represents a Kademlia table entry (an extension of BzzAddr)
 // to save space we record a pointer to bzzaddr instead of the addr itself
+// TODO evaluate if the underlying pot by itself hides this behind a pointer. In this case we don't need this extra wrapper
 type entry struct {
 	*BzzAddr
 }
 
 func (e *entry) Address() []byte {
-	return e.Address()
+	return e.BzzAddr.Address()
 }
 
 // newEntry creates a kademlia peer from a *Peer
