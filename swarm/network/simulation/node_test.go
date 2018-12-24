@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethereum/go-ethereum/swarm/network"
 )
@@ -172,25 +171,6 @@ func TestAddNodes(t *testing.T) {
 	if count != nodesCount {
 		t.Errorf("expected %v nodes, got %v", nodesCount, count)
 	}
-}
-
-func TestAddNodesAndConnectChain(t *testing.T) {
-	sim := New(noopServiceFuncMap)
-	defer sim.Close()
-
-	_, err := sim.AddNodesAndConnectChain(12)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// add another set of nodes to test
-	// if two chains are connected
-	_, err = sim.AddNodesAndConnectChain(7)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	simulations.VerifyChain(t, sim.Net, sim.UpNodeIDs())
 }
 
 //To test that uploading a snapshot works

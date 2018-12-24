@@ -53,7 +53,6 @@ func TestIntervalsLiveAndHistory(t *testing.T) {
 
 func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 
-	nodes := 2
 	chunkCount := dataChunkCount
 	externalStreamName := "externalStream"
 	externalStreamSessionAt := uint64(50)
@@ -105,8 +104,11 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 	defer sim.Close()
 
 	log.Info("Adding nodes to simulation")
-	_, err := sim.AddNodesAndConnectChain(nodes)
+	ids, err := sim.AddNodes(2)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sim.Net.ConnectNodesChain(ids); err != nil {
 		t.Fatal(err)
 	}
 

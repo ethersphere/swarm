@@ -18,7 +18,6 @@ package simulation
 
 import (
 	"encoding/json"
-	"errors"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -86,33 +85,6 @@ func (s *Simulation) AddNodes(count int) (ids []enode.ID, err error) {
 			return nil, err
 		}
 		ids = append(ids, id)
-	}
-	return ids, nil
-}
-
-// AddNodesAndConnectChain is a helpper method that combines
-// AddNodes and ConnectNodesChain. The chain will be continued from the last
-// added node, if there is one in simulation using ConnectToLastNode method.
-func (s *Simulation) AddNodesAndConnectChain(count int) (ids []enode.ID, err error) {
-	if count < 2 {
-		return nil, errors.New("count of nodes must be at least 2")
-	}
-	id, err := s.AddNode()
-	if err != nil {
-		return nil, err
-	}
-	err = s.Net.ConnectToLastNode(id)
-	if err != nil {
-		return nil, err
-	}
-	ids, err = s.AddNodes(count - 1)
-	if err != nil {
-		return nil, err
-	}
-	ids = append([]enode.ID{id}, ids...)
-	err = s.Net.ConnectNodesChain(ids)
-	if err != nil {
-		return nil, err
 	}
 	return ids, nil
 }

@@ -120,15 +120,18 @@ func testSyncBetweenNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck 
 	defer sim.Close()
 
 	// create context for simulation run
-	timeout := 30 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	// defer cancel should come before defer simulation teardown
 	defer cancel()
 
-	_, err := sim.AddNodesAndConnectChain(nodes)
+	ids, err := sim.AddNodes(nodes)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err := sim.Net.ConnectNodesChain(ids); err != nil {
+		t.Fatal(err)
+	}
+
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 
@@ -285,8 +288,11 @@ func TestSameVersionID(t *testing.T) {
 
 	//connect just two nodes
 	log.Info("Adding nodes to simulation")
-	_, err := sim.AddNodesAndConnectChain(2)
+	ids, err := sim.AddNodes(2)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sim.Net.ConnectNodesChain(ids); err != nil {
 		t.Fatal(err)
 	}
 
@@ -369,8 +375,11 @@ func TestDifferentVersionID(t *testing.T) {
 
 	//connect the nodes
 	log.Info("Adding nodes to simulation")
-	_, err := sim.AddNodesAndConnectChain(2)
+	ids, err := sim.AddNodes(2)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sim.Net.ConnectNodesChain(ids); err != nil {
 		t.Fatal(err)
 	}
 

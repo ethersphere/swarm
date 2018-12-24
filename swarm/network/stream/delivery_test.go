@@ -442,17 +442,17 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 }
 
 func TestDeliveryFromNodes(t *testing.T) {
-	testDeliveryFromNodes(t, 2, 1, dataChunkCount, true)
-	testDeliveryFromNodes(t, 2, 1, dataChunkCount, false)
-	testDeliveryFromNodes(t, 4, 1, dataChunkCount, true)
-	testDeliveryFromNodes(t, 4, 1, dataChunkCount, false)
-	testDeliveryFromNodes(t, 8, 1, dataChunkCount, true)
-	testDeliveryFromNodes(t, 8, 1, dataChunkCount, false)
-	testDeliveryFromNodes(t, 16, 1, dataChunkCount, true)
-	testDeliveryFromNodes(t, 16, 1, dataChunkCount, false)
+	testDeliveryFromNodes(t, 2, dataChunkCount, true)
+	testDeliveryFromNodes(t, 2, dataChunkCount, false)
+	testDeliveryFromNodes(t, 4, dataChunkCount, true)
+	testDeliveryFromNodes(t, 4, dataChunkCount, false)
+	testDeliveryFromNodes(t, 8, dataChunkCount, true)
+	testDeliveryFromNodes(t, 8, dataChunkCount, false)
+	testDeliveryFromNodes(t, 16, dataChunkCount, true)
+	testDeliveryFromNodes(t, 16, dataChunkCount, false)
 }
 
-func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck bool) {
+func testDeliveryFromNodes(t *testing.T, numberOfNodes, chunkCount int, skipCheck bool) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			node := ctx.Config.Node()
@@ -493,8 +493,11 @@ func testDeliveryFromNodes(t *testing.T, nodes, conns, chunkCount int, skipCheck
 	defer sim.Close()
 
 	log.Info("Adding nodes to simulation")
-	_, err := sim.AddNodesAndConnectChain(nodes)
+	ids, err := sim.AddNodes(numberOfNodes)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sim.Net.ConnectNodesChain(ids); err != nil {
 		t.Fatal(err)
 	}
 
@@ -629,7 +632,7 @@ func BenchmarkDeliveryFromNodesWithCheck(b *testing.B) {
 	}
 }
 
-func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skipCheck bool) {
+func benchmarkDeliveryFromNodes(b *testing.B, numberOfNodes, conns, chunkCount int, skipCheck bool) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			node := ctx.Config.Node()
@@ -669,8 +672,11 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, conns, chunkCount int, skip
 	defer sim.Close()
 
 	log.Info("Initializing test config")
-	_, err := sim.AddNodesAndConnectChain(nodes)
+	ids, err := sim.AddNodes(numberOfNodes)
 	if err != nil {
+		b.Fatal(err)
+	}
+	if err := sim.Net.ConnectNodesChain(ids); err != nil {
 		b.Fatal(err)
 	}
 

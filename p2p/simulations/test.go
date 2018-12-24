@@ -1,8 +1,6 @@
 package simulations
 
 import (
-	"testing"
-
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/enr"
@@ -56,79 +54,4 @@ func (t *NoopService) Start(server *p2p.Server) error {
 
 func (t *NoopService) Stop() error {
 	return nil
-}
-
-func VerifyChain(t *testing.T, net *Network, ids []enode.ID) {
-	t.Helper()
-	n := len(ids)
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			c := net.GetConn(ids[i], ids[j])
-			if i == j-1 {
-				if c == nil {
-					t.Errorf("nodes %v and %v are not connected, but they should be", i, j)
-				}
-			} else {
-				if c != nil {
-					t.Errorf("nodes %v and %v are connected, but they should not be", i, j)
-				}
-			}
-		}
-	}
-}
-
-func verifyFull(t *testing.T, net *Network, ids []enode.ID) {
-	t.Helper()
-	n := len(ids)
-	var connections int
-	for i, lid := range ids {
-		for _, rid := range ids[i+1:] {
-			if net.GetConn(lid, rid) != nil {
-				connections++
-			}
-		}
-	}
-
-	want := n * (n - 1) / 2
-	if connections != want {
-		t.Errorf("wrong number of connections, got: %v, want: %v", connections, want)
-	}
-}
-
-func verifyRing(t *testing.T, net *Network, ids []enode.ID) {
-	t.Helper()
-	n := len(ids)
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			c := net.GetConn(ids[i], ids[j])
-			if i == j-1 || (i == 0 && j == n-1) {
-				if c == nil {
-					t.Errorf("nodes %v and %v are not connected, but they should be", i, j)
-				}
-			} else {
-				if c != nil {
-					t.Errorf("nodes %v and %v are connected, but they should not be", i, j)
-				}
-			}
-		}
-	}
-}
-
-func verifyStar(t *testing.T, net *Network, ids []enode.ID, centerIndex int) {
-	t.Helper()
-	n := len(ids)
-	for i := 0; i < n; i++ {
-		for j := i + 1; j < n; j++ {
-			c := net.GetConn(ids[i], ids[j])
-			if i == centerIndex || j == centerIndex {
-				if c == nil {
-					t.Errorf("nodes %v and %v are not connected, but they should be", i, j)
-				}
-			} else {
-				if c != nil {
-					t.Errorf("nodes %v and %v are connected, but they should not be", i, j)
-				}
-			}
-		}
-	}
 }

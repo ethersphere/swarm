@@ -316,10 +316,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		change := step.nodeCount - len(sim.UpNodeIDs())
 
 		if change > 0 {
-			_, err := sim.AddNodesAndConnectChain(change)
-			if err != nil {
-				t.Fatal(err)
-			}
+			addNodesAndPreserveChainTopology(t, sim, change)
 		} else if change < 0 {
 			_, err := sim.StopRandomNodes(-change)
 			if err != nil {
@@ -371,6 +368,34 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 			t.Fatal(result.Error)
 		}
 		log.Debug("done: test sync step", "n", i+1, "nodes", step.nodeCount)
+	}
+}
+
+func addNodesAndPreserveChainTopology(t *testing.T, s *simulation.Simulation, increment int) {
+	t.Helper()
+
+	if increment < 1 {
+		t.Fatalf("change must be positive (increment: %v)", increment)
+	}
+
+	oldNodeIDs := s.UpNodeIDs()
+
+	newNodeIDs, err := s.AddNodes(increment)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Net.ConnectNodesChain(newNodeIDs); err != nil {
+		t.Fatal(err)
+	}
+
+	// If we had old nodes, then our cluster is split into two now.
+	// Let's connect the two components and preserve chain topology.
+	if len(oldNodeIDs) > 0 {
+		lastOld := oldNodeIDs[len(oldNodeIDs)-1]
+		if err := s.Net.Connect(lastOld, newNodeIDs[0]); err != nil {
+			t.Fatal(err)
+		}
 	}
 }
 
