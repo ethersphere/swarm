@@ -316,7 +316,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 		change := step.nodeCount - len(sim.UpNodeIDs())
 
 		if change > 0 {
-			addNodesAndPreserveChainTopology(t, sim, change)
+			addNodesChain(t, sim, change)
 		} else if change < 0 {
 			_, err := sim.StopRandomNodes(-change)
 			if err != nil {
@@ -371,7 +371,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 	}
 }
 
-func addNodesAndPreserveChainTopology(t *testing.T, s *simulation.Simulation, increment int) {
+func addNodesChain(t *testing.T, s *simulation.Simulation, increment int) {
 	t.Helper()
 
 	if increment < 1 {
