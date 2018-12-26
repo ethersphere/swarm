@@ -17,14 +17,9 @@
 package simulations
 
 import (
-	"errors"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
-)
-
-var (
-	ErrNodeNotFound = errors.New("node not found")
 )
 
 // ConnectNodesChain connects all nodes in a chain topology.
