@@ -17,6 +17,7 @@
 package network
 
 import (
+	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
@@ -114,4 +115,55 @@ func TestHiveStatePersistance(t *testing.T) {
 	if len(peers) != 0 {
 		t.Fatalf("%d peers left over: %v", len(peers), peers)
 	}
+}
+
+// TestSuggestPeer tests for the different moving parts of the kademlia SuggestPeer method
+// We have to take several things in accoutn when testing this functionality:
+//	1. Proximity order of the peers (duh)
+//	2. Callability of peers (i.e. we tried to connect to a peer recently but couldn't so we have to make sure
+//		 the exponential backoff kicks in (we won't test for its correctness here though)
+//	3.
+func TestSuggestPeerWTF(t *testing.T) {
+	base := "00000000"
+
+	for _, v := range []struct {
+		name    string
+		ons     []string
+		offs    []string
+		expAddr []string
+	}{
+		{
+			name:    "example test",
+			ons:     []string{"00100000", "00110000"},
+			offs:    []string{"00110000"},
+			expAddr: []string{},
+		},
+	} {
+		t.Run(v.name, func(t *testing.T) {
+			params := NewHiveParams()
+			k := newTestKademlia(base)
+			h := NewHive(params, k, nil) // hive
+
+			for _, on := range v.ons {
+				On(k, on)
+			}
+			for _, off := range v.offs {
+				Off(k, off)
+			}
+
+			err := testSuggestPeerWTF(h, v.expAddr)
+			if err != nil {
+				t.Fatalf("%v", err.Error())
+			}
+		})
+	}
+}
+func testSuggestPeerWTF(h *Hive, expAddr []string) error {
+	peers := h.suggestPeers()
+	for i, v := range peers {
+		if expAddr[i] != binStr(v.BzzAddr) {
+			return fmt.Errorf("incorrect peer address suggested. expected %v, got %v", expAddr[i], binStr(v.BzzAddr))
+		}
+	}
+	return nil
 }

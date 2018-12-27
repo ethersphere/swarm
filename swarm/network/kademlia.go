@@ -610,6 +610,7 @@ func (k *Kademlia) connectedPotential() []int {
 	return culprits
 }
 
+/*
 func (k *Kademlia) connectedPotential() []uint8 {
 	pk := make(map[uint8]int)
 	pc := make(map[uint8]int)
@@ -636,7 +637,7 @@ func (k *Kademlia) connectedPotential() []uint8 {
 	}
 	return culprits
 }
-
+*/
 // Health state of the Kademlia
 // used for testing only
 type Health struct {
