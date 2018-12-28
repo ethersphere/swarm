@@ -663,7 +663,7 @@ func NewPeerPotMap(minProxBinSize int, addrs [][]byte) map[string]*PeerPot {
 }
 
 // saturation iterates through all peers and
-// returns the smallest po value in which the node has less than n peers
+// returns the smallest po value in which the node has less than Kademlia.MinProxBinSize peers
 // if the iterator reaches depth, then value for depth is returned
 // TODO move to separate testing tools file
 // TODO this function will stop at the first bin with less than MinBinSize peers, even if there are empty bins between that bin and the depth. This may not be correct behavior
