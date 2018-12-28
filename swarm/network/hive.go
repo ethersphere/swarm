@@ -17,6 +17,7 @@
 package network
 
 import (
+	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"sync"
@@ -82,7 +83,6 @@ func NewHive(params *HiveParams, kad *Kademlia, store state.Store) *Hive {
 		HiveParams: params,
 		Kademlia:   kad,
 		Store:      store,
-		//peers:      make(map[enode.ID]*BzzPeer),
 		// TODO bzzpeer addr should be fixed length so we can use it in indices without casting/formatting to string
 		peers: make(map[string]*Peer),
 	}
@@ -138,7 +138,6 @@ func (h *Hive) Stop() error {
 // as well as advertises saturation depth if needed
 func (h *Hive) connect() {
 	for range h.ticker.C {
-
 		addr, depth, changed := h.SuggestPeer()
 		if h.Discovery && changed {
 			NotifyDepth(uint8(depth), h.Kademlia)
@@ -158,10 +157,28 @@ func (h *Hive) connect() {
 	}
 }
 
+func (h *Hive) registerPeer(p *Peer) (int, bool) {
+	addr := hex.EncodeToString(p.BzzPeer.OAddr)
+	log.Trace("hive.registerPeer", "addr", addr)
+	h.peers[addr] = p
+	return h.On(p)
+}
+
+func (h *Hive) getPeer(bzzPeer *BzzPeer) *Peer {
+	addr := hex.EncodeToString(bzzPeer.OAddr)
+	log.Trace("hive.getPeer", "addr", addr)
+	p, ok := h.peers[addr]
+	if !ok {
+		panic("requested peer cannot be found in the known peer map")
+	}
+
+	return p
+}
+
 // Run protocol run function
 func (h *Hive) Run(p *BzzPeer) error {
 	dp := NewPeer(p, h.Kademlia)
-	depth, changed := h.On(dp)
+	depth, changed := h.registerPeer(dp)
 	// if we want discovery, advertise change of depth
 	if h.Discovery {
 		if changed {
@@ -318,7 +335,11 @@ func (h *Hive) getPotentialNeighbours(depth int) []*Peer {
 
 	h.Kademlia.EachAddr(nil, 255, func(addr *BzzAddr, po int, _ bool) bool {
 		if !h.Kademlia.Connected(addr) {
-			p := h.peers[string(addr.Address())]
+			addr := hex.EncodeToString(addr.OAddr)
+			p, ok := h.peers[addr]
+			if !ok {
+				panic("not ok bro")
+			}
 			neighbours = append(neighbours, p)
 		}
 		return true

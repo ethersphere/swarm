@@ -57,8 +57,9 @@ func NewPeer(p *BzzPeer, kad *Kademlia) *Peer {
 		exchange: &exchange{
 			peers: make(map[string]bool),
 		},
-		kad:     kad,
-		BzzPeer: p,
+		kad:          kad,
+		BzzPeer:      p,
+		connectivity: &connectivity{seenAt: time.Now()},
 	}
 	// record remote as seen so we never send a peer its own record
 	d.seen(p.BzzAddr)

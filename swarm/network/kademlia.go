@@ -250,7 +250,6 @@ func (k *Kademlia) Off(p *Peer) {
 	} else {
 		del = true
 	}
-
 	if del {
 		k.conns, _, _, _ = pot.Swap(k.conns, p, Pof, func(_ pot.Val) pot.Val {
 			// v cannot be nil, but no need to check

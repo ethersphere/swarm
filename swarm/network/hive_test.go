@@ -19,7 +19,7 @@ package network
 import (
 	"fmt"
 	"io/ioutil"
-	"log"
+	golog "log"
 	"os"
 	"testing"
 
@@ -62,7 +62,7 @@ func TestRegisterAndConnect(t *testing.T) {
 }
 
 func TestHiveStatePersistance(t *testing.T) {
-	log.SetOutput(os.Stdout)
+	golog.SetOutput(os.Stdout)
 
 	dir, err := ioutil.TempDir("", "hive_test_store")
 	if err != nil {
@@ -145,7 +145,8 @@ func TestSuggestPeerWTF(t *testing.T) {
 			h := NewHive(params, k, nil) // hive
 
 			for _, on := range v.ons {
-				On(k, on)
+				piu := newTestKadPeer(k, on, false)
+				h.registerPeer(piu)
 			}
 			for _, off := range v.offs {
 				Off(k, off)

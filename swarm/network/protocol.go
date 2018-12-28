@@ -357,6 +357,7 @@ func (a *BzzAddr) Under() []byte {
 func (a *BzzAddr) ID() enode.ID {
 	n, err := enode.ParseV4(string(a.UAddr))
 	if err != nil {
+		panic("wtf")
 		return enode.ID{}
 	}
 	return n.ID()
