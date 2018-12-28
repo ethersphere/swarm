@@ -61,10 +61,26 @@ func (s *Simulation) DownNodeIDs() (ids []enode.ID) {
 	return ids
 }
 
+// AddNodeOption defines the option that can be passed
+// to Simulation.AddNode method.
+type AddNodeOption func(*adapters.NodeConfig)
+
+// AddNodeWithMsgEvents sets the EnableMsgEvents option
+// to NodeConfig.
+func AddNodeWithMsgEvents(enable bool) AddNodeOption {
+	return func(o *adapters.NodeConfig) {
+		o.EnableMsgEvents = enable
+	}
+}
+
 // AddNode creates a new node with random configuration and adds that to
-// the network. All services will be started on the node.
-func (s *Simulation) AddNode() (id enode.ID, err error) {
+// the network. All services will be started on the node. Tweaking the node's
+// configuration is possible through the opts parameter.
+func (s *Simulation) AddNode(opts ...AddNodeOption) (id enode.ID, err error) {
 	conf := adapters.RandomNodeConfig()
+	for _, o := range opts {
+		o(conf)
+	}
 	if len(conf.Services) == 0 {
 		conf.Services = s.serviceNames
 	}
@@ -77,10 +93,10 @@ func (s *Simulation) AddNode() (id enode.ID, err error) {
 
 // AddNodes creates new nodes with random configurations,
 // applies provided options to the config and adds nodes to network.
-func (s *Simulation) AddNodes(count int) (ids []enode.ID, err error) {
+func (s *Simulation) AddNodes(count int, opts ...AddNodeOption) (ids []enode.ID, err error) {
 	ids = make([]enode.ID, 0, count)
 	for i := 0; i < count; i++ {
-		id, err := s.AddNode()
+		id, err := s.AddNode(opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -92,7 +108,7 @@ func (s *Simulation) AddNodes(count int) (ids []enode.ID, err error) {
 // UploadSnapshot uploads a snapshot to the simulation
 // This method tries to open the json file provided, applies the config to
 // all nodes and then loads the snapshot into the Simulation network
-func (s *Simulation) UploadSnapshot(snapshotFile string) error {
+func (s *Simulation) UploadSnapshot(snapshotFile string, opts ...AddNodeOption) error {
 	f, err := os.Open(snapshotFile)
 	if err != nil {
 		return err
@@ -119,6 +135,9 @@ func (s *Simulation) UploadSnapshot(snapshotFile string) error {
 	for _, n := range snap.Nodes {
 		n.Node.Config.EnableMsgEvents = true
 		n.Node.Config.Services = s.serviceNames
+		for _, o := range opts {
+			o(n.Node.Config)
+		}
 	}
 
 	log.Info("Waiting for p2p connections to be established...")
