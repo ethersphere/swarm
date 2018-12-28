@@ -17,13 +17,10 @@
 package network
 
 import (
-	"flag"
 	"fmt"
-	"os"
 	"sync"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
@@ -34,15 +31,6 @@ const (
 	TestProtocolVersion   = 8
 	TestProtocolNetworkID = 3
 )
-
-var (
-	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
-)
-
-func init() {
-	flag.Parse()
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(true))))
-}
 
 type testStore struct {
 	sync.Mutex

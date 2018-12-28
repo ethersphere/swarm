@@ -23,6 +23,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/log"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
@@ -146,6 +147,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 
 			for _, on := range v.ons {
 				piu := newTestKadPeer(k, on, false)
+				log.Error(fmt.Sprintf("%v", piu.OAddr))
 				h.registerPeer(piu)
 			}
 			for _, off := range v.offs {
