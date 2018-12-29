@@ -23,7 +23,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/log"
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/state"
 )
@@ -136,20 +135,18 @@ func TestSuggestPeerWTF(t *testing.T) {
 		skip     bool
 	}{
 		{
-			name: "example test",
-			ons:  []string{"00000010", "00010000", "00000011", "00000111"},
-
-			offs:     []string{}, //{"00110000"},
+			name:     "no peers to suggest (all ON)",
+			ons:      []string{"00000010", "00010000", "00000011", "00000111"},
+			offs:     []string{},
 			expAddr:  []string{},
-			expDepth: 2,
+			expDepth: 0,
 		},
 		{
-			name:     "example test",
-			skip:     true,
+			name:     "suggest deeper then shallower",
 			ons:      []string{"00100000", "00110000", "00111000", "00011011", "00010101"},
-			offs:     []string{}, //{"00110000"},
-			expAddr:  []string{},
-			expDepth: 2,
+			offs:     []string{"00110000", "00111000"},
+			expAddr:  []string{"00111000", "00110000"},
+			expDepth: 0,
 		},
 	} {
 		if v.skip {
@@ -162,13 +159,11 @@ func TestSuggestPeerWTF(t *testing.T) {
 
 			for _, on := range v.ons {
 				piu := newTestKadPeer(k, on, false)
-				log.Error(fmt.Sprintf("%v", piu.OAddr))
 				h.registerPeer(piu)
 			}
 			for _, off := range v.offs {
 				Off(k, off)
 			}
-			log.Error("woot is", "depth", h.NeighbourhoodDepth())
 			if h.Kademlia.NeighbourhoodDepth() != v.expDepth {
 				t.Fatalf("wrong neighbourhood depth. got: %d, want: %d", k.NeighbourhoodDepth(), v.expDepth)
 			}
