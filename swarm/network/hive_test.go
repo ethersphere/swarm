@@ -133,15 +133,28 @@ func TestSuggestPeerWTF(t *testing.T) {
 		offs     []string
 		expAddr  []string
 		expDepth int
+		skip     bool
 	}{
 		{
+			name: "example test",
+			ons:  []string{"00000010", "00010000", "00000011", "00000111"},
+
+			offs:     []string{}, //{"00110000"},
+			expAddr:  []string{},
+			expDepth: 2,
+		},
+		{
 			name:     "example test",
+			skip:     true,
 			ons:      []string{"00100000", "00110000", "00111000", "00011011", "00010101"},
 			offs:     []string{}, //{"00110000"},
 			expAddr:  []string{},
 			expDepth: 2,
 		},
 	} {
+		if v.skip {
+			continue
+		}
 		t.Run(v.name, func(t *testing.T) {
 			params := NewHiveParams()
 			k := newTestKademlia(base)

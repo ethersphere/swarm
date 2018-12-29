@@ -163,7 +163,6 @@ func TestNeighbourhoodDepth(t *testing.T) {
 		t.Fatalf("%d expected depth 0, was %d", testNum, depth)
 	}
 	testNum++
-
 	// add from 0 to 6
 	for i, p := range peers {
 		kad.On(p)
@@ -173,8 +172,10 @@ func TestNeighbourhoodDepth(t *testing.T) {
 		}
 	}
 	testNum++
+	kad.Off(sevenPeers[0])
 
 	kad.Off(sevenPeers[1])
+	log.Trace(kad.String())
 	depth = kad.NeighbourhoodDepth()
 	if depth != 6 {
 		t.Fatalf("%d expected depth 6, was %d", testNum, depth)
@@ -182,6 +183,7 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	testNum++
 
 	kad.Off(peers[4])
+	log.Trace(kad.String())
 	depth = kad.NeighbourhoodDepth()
 	if depth != 4 {
 		t.Fatalf("%d expected depth 4, was %d", testNum, depth)
@@ -189,6 +191,7 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	testNum++
 
 	kad.Off(peers[3])
+	log.Trace(kad.String())
 	depth = kad.NeighbourhoodDepth()
 	if depth != 3 {
 		t.Fatalf("%d expected depth 3, was %d", testNum, depth)

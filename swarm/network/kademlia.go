@@ -261,6 +261,9 @@ func (k *Kademlia) Off(p *Peer) {
 		}
 		k.sendNeighbourhoodDepthChange()
 	}
+	log.Trace("OFF")
+	log.Trace(k.string())
+
 }
 
 // EachBin is a two level nested iterator
