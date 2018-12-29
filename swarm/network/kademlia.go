@@ -352,6 +352,7 @@ func (k *Kademlia) NeighbourhoodDepth() (depth int) {
 // caller must hold the lock
 func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 	if p.Size() <= minProxBinSize {
+		log.Error("1")
 		return 0
 	}
 
@@ -379,13 +380,18 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 
 		return true
 	}
+
 	p.EachNeighbour(pivotAddr, Pof, f)
+	log.Error("maxdepth", "d", maxDepth)
 
 	// the second step is to test for empty bins in order from shallowest to deepest
 	// if an empty bin is found, this will be the actual depth
 	// we stop iterating if we hit the maxDepth determined in the first step
 	p.EachBin(pivotAddr, Pof, 0, func(po int, _ int, f func(func(pot.Val, int) bool) bool) bool {
+		log.Error("0.0", "po", po)
+
 		if po == depth {
+			log.Error("0.1")
 			if maxDepth == depth {
 				return false
 			}
@@ -394,7 +400,7 @@ func depthForPot(p *pot.Pot, minProxBinSize int, pivotAddr []byte) (depth int) {
 		}
 		return false
 	})
-
+	log.Error("d", "d", depth)
 	return depth
 }
 

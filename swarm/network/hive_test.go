@@ -125,19 +125,21 @@ func TestHiveStatePersistance(t *testing.T) {
 //		 the exponential backoff kicks in (we won't test for its correctness here though)
 //	3.
 func TestSuggestPeerWTF(t *testing.T) {
-	base := "00000000"
+	base := "00000001"
 
 	for _, v := range []struct {
-		name    string
-		ons     []string
-		offs    []string
-		expAddr []string
+		name     string
+		ons      []string
+		offs     []string
+		expAddr  []string
+		expDepth int
 	}{
 		{
-			name:    "example test",
-			ons:     []string{"00100000", "00110000"},
-			offs:    []string{"00110000"},
-			expAddr: []string{},
+			name:     "example test",
+			ons:      []string{"00100000", "00110000", "00111000", "00011011", "00010101"},
+			offs:     []string{}, //{"00110000"},
+			expAddr:  []string{},
+			expDepth: 2,
 		},
 	} {
 		t.Run(v.name, func(t *testing.T) {
@@ -153,7 +155,10 @@ func TestSuggestPeerWTF(t *testing.T) {
 			for _, off := range v.offs {
 				Off(k, off)
 			}
-
+			log.Error("woot is", "depth", h.NeighbourhoodDepth())
+			if h.Kademlia.NeighbourhoodDepth() != v.expDepth {
+				t.Fatalf("wrong neighbourhood depth. got: %d, want: %d", k.NeighbourhoodDepth(), v.expDepth)
+			}
 			err := testSuggestPeerWTF(h, v.expAddr)
 			if err != nil {
 				t.Fatalf("%v", err.Error())
