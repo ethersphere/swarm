@@ -20,7 +20,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/rand"
-	"runtime/debug"
 	"sync"
 	"time"
 
@@ -510,7 +509,7 @@ func (h *Hive) getRetriesFromDuration(timeAgo time.Duration) int {
 }
 
 func (h *Hive) isTimeForRetry(d *Peer) bool {
-	debug.PrintStack()
+	//	debug.PrintStack()
 	timeAgo := time.Since(d.seenAt)
 	allowedRetryCountNow := h.getRetriesFromDuration(timeAgo)
 	isTime := d.retries < allowedRetryCountNow
