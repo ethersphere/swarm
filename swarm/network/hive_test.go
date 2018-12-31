@@ -140,6 +140,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 			offs:     []string{},
 			expAddr:  []string{},
 			expDepth: 0,
+			skip:     true,
 		},
 		{
 			name:     "suggest deeper then shallower",
@@ -167,15 +168,18 @@ func TestSuggestPeerWTF(t *testing.T) {
 			if h.Kademlia.NeighbourhoodDepth() != v.expDepth {
 				t.Fatalf("wrong neighbourhood depth. got: %d, want: %d", k.NeighbourhoodDepth(), v.expDepth)
 			}
-			err := testSuggestPeerWTF(h, v.expAddr)
+			err := testSuggestPeerWTF(t, h, v.expAddr)
 			if err != nil {
 				t.Fatalf("%v", err.Error())
 			}
 		})
 	}
 }
-func testSuggestPeerWTF(h *Hive, expAddr []string) error {
+func testSuggestPeerWTF(t *testing.T, h *Hive, expAddr []string) error {
 	peers := h.suggestPeers()
+	if len(peers) != len(expAddr) {
+		t.Fatalf("expected %d suggested peers but got %d instead", len(expAddr), len(peers))
+	}
 	for i, v := range peers {
 		if expAddr[i] != binStr(v.BzzAddr) {
 			return fmt.Errorf("incorrect peer address suggested. expected %v, got %v", expAddr[i], binStr(v.BzzAddr))
