@@ -163,8 +163,8 @@ func (h *Hive) registerPeer(p *Peer) (int, bool) {
 	return h.On(p)
 }
 
-func (h *Hive) getPeer(bzzPeer *BzzPeer) *Peer {
-	addr := hex.EncodeToString(bzzPeer.OAddr)
+func (h *Hive) getPeer(bzzAddr *BzzAddr) *Peer {
+	addr := hex.EncodeToString(bzzAddr.OAddr)
 	log.Trace("hive.getPeer", "addr", addr)
 	p, ok := h.peers[addr]
 	if !ok {
@@ -275,6 +275,17 @@ func (h *Hive) suggestPeers() []*Peer {
 //
 // if no neighbours are found, peers from the shallowest bin that has unconnected pers
 // (who also have exceeded time delay) are returned
+// peers are added in the following manner
+//                      DEPTH
+//                        +
+//                        |       ADDED FIRST
+//                        |  <------------------+
+//                        |
+//SHALLOW  +-------------------------------------+  D E E P
+//  (0)                   |                          (256)
+//          +---------->  +
+//           ADDED LATER
+
 func (h *Hive) getPotentialPeers() []*Peer {
 
 	// record the peers to report back as callable
@@ -282,7 +293,7 @@ func (h *Hive) getPotentialPeers() []*Peer {
 
 	// our kademlia depth right now
 	depth := h.Kademlia.NeighbourhoodDepth()
-
+	log.Trace("getting potential peers", "depth", depth)
 	// first check the neighbours
 	potentialPeers := h.getPotentialNeighbours(depth)
 
@@ -292,36 +303,26 @@ func (h *Hive) getPotentialPeers() []*Peer {
 		}
 	}
 	if len(callablePeers) > 0 {
+		log.Trace("got callable neighbours returning", "depth", depth)
+
 		return callablePeers
 	}
 
 	// lastPotentialBin keeps track of the last bin we got peers from
-	// initially setting it to -1 means it will always be run once
-	// and thus still process the neighbours if we have any.
 	// if the depth is 0 then only neighbours are relevant
 	// if we hit depth then we break out of the loop (with no peers)
-	for lastPotentialBin := -1; lastPotentialBin < depth; {
+	for lastPotentialBin := 0; lastPotentialBin < depth; lastPotentialBin++ {
+		log.Trace("loop", "lastPotentialBin", lastPotentialBin, "depth", depth, "len(potentialPeers)", len(potentialPeers))
+
+		potentialPeers, _ = h.getPotentialBinPeers(lastPotentialBin, depth)
 
 		// among the latest retrieved potential peers
 		// add any that have exceeded time delay for reconnect
 		for _, peer := range potentialPeers {
 			if h.isTimeForRetry(peer) {
+				log.Trace("append the stuff")
 				callablePeers = append(callablePeers, peer)
 			}
-		}
-
-		// if we now actally have peers that can be called
-		// then break out and return them
-		if len(callablePeers) > 0 {
-			break
-		}
-
-		//
-		lastPotentialBin++
-
-		// otherwise, revert to bins shallower than depth
-		for len(potentialPeers) == 0 && lastPotentialBin < depth {
-			potentialPeers, lastPotentialBin = h.getPotentialBinPeers(lastPotentialBin, depth)
 		}
 	}
 
@@ -334,6 +335,10 @@ func (h *Hive) getPotentialNeighbours(depth int) []*Peer {
 	var neighbours []*Peer
 
 	h.Kademlia.EachAddr(nil, 255, func(addr *BzzAddr, po int, _ bool) bool {
+		if po < depth {
+			return false
+		}
+
 		if !h.Kademlia.Connected(addr) {
 			addr := hex.EncodeToString(addr.OAddr)
 			p, ok := h.peers[addr]
@@ -354,11 +359,12 @@ func (h *Hive) getPotentialNeighbours(depth int) []*Peer {
 // if the returned array is nil, we reached depth without finding any
 // TODO consider a separate pot where retrycount is part of the sorted value
 func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
+	log.Debug("hive.getPotentialBinPeers", "base", fmt.Sprintf("%08x", h.BaseAddr()[:4]), "offset", offset, "depth", depth)
 
 	// record all peers that can and should be connected to
 	var peers []*Peer
 
-	// keeps track of which po the last iteration matched
+	// keeps track of which po the last iteration matched in order to detect an empty bin
 	seqPo := -1
 
 	// records the bin with the fewest peers
@@ -366,21 +372,21 @@ func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
 
 	// records the size of the slimBin
 	slimBinSize := h.Kademlia.MinBinSize
+	//TODO seqPo and empty bin? isn't this just depth? why do we need this?
 
 	// find the bin shallower than depth that has the LEAST peers
 	// TODO refactor in order to avoid accessing hidden member of kademlia
-	h.Kademlia.conns.EachBin(nil, Pof, offset, func(po int, size int, f func(func(pot.Val, int) bool) bool) bool {
+	h.Kademlia.conns.EachBin(h.Kademlia.base, Pof, offset, func(po int, size int, f func(func(pot.Val, int) bool) bool) bool {
 		seqPo++
-
 		// stop if we reach depth, because peers from that point and deeper will be treated differently
-		if depth >= po {
-			//TODO how to handle simbin -1 here
+		if po <= depth {
 			return true
 		}
 
 		// if we detect an empty bin we can short circuit and return those results immetdiately
 		if seqPo != po {
-			slimBin = po
+			log.Trace("detected empty bin", "seqPo", seqPo, "po", po)
+			slimBin = seqPo
 			slimBinSize = 0
 			return false
 		}
@@ -388,11 +394,13 @@ func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
 		// if size is less than optimal and smallest size we've seen so far
 		// record this bin and its size
 		if size < h.Kademlia.MinBinSize && size < slimBinSize {
-			slimBin = po
+			slimBin = seqPo
 			slimBinSize = size
 		}
 		return true
 	})
+
+	log.Trace("processed conns", "slim bin", slimBin, "slimBinSize", slimBinSize, "seqPo", seqPo)
 
 	// if no bins have peers to match
 	if slimBin == -1 {
@@ -400,14 +408,14 @@ func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
 	}
 
 	// if we found a bin to process, fill up with all unconnected peers in that bin
-	h.Kademlia.EachAddr(nil, slimBin, func(addr *BzzAddr, po int, _ bool) bool {
+	h.Kademlia.EachAddr(h.Kademlia.base, slimBin, func(addr *BzzAddr, po int, _ bool) bool {
 		if po != slimBin {
 			return false
 		}
 		if !h.Kademlia.Connected(addr) {
-			bzzAddrPeerIdx := string(addr.Address())
-			if h.isTimeForRetry(h.peers[bzzAddrPeerIdx]) {
-				peers = append(peers, h.peers[bzzAddrPeerIdx])
+			p := h.getPeer(addr)
+			if h.isTimeForRetry(p) {
+				peers = append(peers, p)
 			}
 		}
 		return true

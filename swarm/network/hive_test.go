@@ -143,6 +143,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 			offs:     []string{},
 			expAddr:  []string{},
 			expDepth: 0,
+			skip:     true,
 		},
 		{
 			name:     "no peers (too early to try)",
@@ -151,6 +152,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 			expAddr:  []string{},
 			expDepth: 0,
 			wait:     2 * time.Millisecond, //retry interval is set to 10ms, let's try before
+			skip:     true,
 		},
 		{
 			name:     "suggest deeper then shallower",
@@ -158,7 +160,25 @@ func TestSuggestPeerWTF(t *testing.T) {
 			offs:     []string{"00110000", "00111000"},
 			expAddr:  []string{"00111000", "00110000"},
 			expDepth: 0,
-			wait:     70 * time.Millisecond,
+			wait:     20 * time.Millisecond,
+			skip:     true,
+		},
+		{
+			name:     "shallow bin ON (depth=1, bin 1 empty), suggest a peer with po > depth",
+			ons:      []string{"10000000", "00100000", "00100001", "00100011"},
+			offs:     []string{"00100011"},
+			expAddr:  []string{"00100011"},
+			expDepth: 1,
+			wait:     20 * time.Millisecond,
+			skip:     true,
+		},
+		{
+			name:     "shallow bin ON (depth=3, bin 2 peer known but not connected), suggest a peer with po < depth",
+			ons:      []string{"10000000", "01000000", "00100000", "00100001", "00001111", "00001011"},
+			offs:     []string{"00100001"},
+			expAddr:  []string{"00100001"},
+			expDepth: 3,
+			wait:     20 * time.Millisecond,
 		},
 	} {
 		if v.skip {
@@ -177,6 +197,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 			for _, off := range v.offs {
 				Off(k, off)
 			}
+
 			if h.Kademlia.NeighbourhoodDepth() != v.expDepth {
 				t.Fatalf("wrong neighbourhood depth. got: %d, want: %d", k.NeighbourhoodDepth(), v.expDepth)
 			}
@@ -184,6 +205,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 			if v.wait > 0 {
 				time.Sleep(v.wait)
 			}
+
 			err := testSuggestPeerWTF(t, h, v.expAddr)
 			if err != nil {
 				t.Fatalf("%v", err.Error())
