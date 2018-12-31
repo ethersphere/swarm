@@ -57,8 +57,7 @@ func NewHiveParams() *HiveParams {
 		MaxPeersPerRequest:    5,
 		KeepAliveInterval:     500 * time.Millisecond,
 		RetryInterval:         4200000000, // 4.2 sec
-		//RetryExponent:         2,
-		RetryExponent: 3,
+		RetryExponent:         3,
 	}
 }
 
@@ -287,6 +286,7 @@ func (h *Hive) getPotentialPeers() []*Peer {
 
 	// first check the neighbours
 	potentialPeers := h.getPotentialNeighbours(depth)
+
 	for _, peer := range potentialPeers {
 		if h.isTimeForRetry(peer) {
 			callablePeers = append(callablePeers, peer)
@@ -407,11 +407,12 @@ func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
 		}
 		if !h.Kademlia.Connected(addr) {
 			bzzAddrPeerIdx := string(addr.Address())
-			peers = append(peers, h.peers[bzzAddrPeerIdx])
+			if h.isTimeForRetry(h.peers[bzzAddrPeerIdx]) {
+				peers = append(peers, h.peers[bzzAddrPeerIdx])
+			}
 		}
 		return true
 	})
-
 	return peers, slimBin
 }
 
@@ -516,7 +517,7 @@ func (h *Hive) isTimeForRetry(d *Peer) bool {
 	if isTime {
 		log.Trace(fmt.Sprintf("%08x: peer %v is callable", Label(d)[:4], d))
 	} else {
-		log.Trace(fmt.Sprintf("%08x: %v long time since last try (at %v) needed before retry %v, wait only warrants %v", h.BaseAddr()[:4], d, timeAgo, d.retries, allowedRetryCountNow))
+		log.Trace(fmt.Sprintf("%08x: %v long time since last try (at %v) needed before retry %v, wait only warrants %v, callable result: %t", h.BaseAddr()[:4], d, timeAgo, d.retries, allowedRetryCountNow, isTime))
 	}
 	return isTime
 }

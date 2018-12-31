@@ -22,6 +22,7 @@ import (
 	golog "log"
 	"os"
 	"testing"
+	"time"
 
 	p2ptest "github.com/ethereum/go-ethereum/p2p/testing"
 	"github.com/ethereum/go-ethereum/swarm/state"
@@ -125,6 +126,7 @@ func TestHiveStatePersistance(t *testing.T) {
 //	3.
 func TestSuggestPeerWTF(t *testing.T) {
 	base := "00000001"
+	hiveRetryInterval := int64(10 * time.Millisecond)
 
 	for _, v := range []struct {
 		name     string
@@ -133,6 +135,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 		expAddr  []string
 		expDepth int
 		skip     bool
+		wait     time.Duration
 	}{
 		{
 			name:     "no peers to suggest (all ON)",
@@ -140,7 +143,14 @@ func TestSuggestPeerWTF(t *testing.T) {
 			offs:     []string{},
 			expAddr:  []string{},
 			expDepth: 0,
-			skip:     true,
+		},
+		{
+			name:     "no peers (too early to try)",
+			ons:      []string{"00100000", "00110000", "00111000", "00011011", "00010101"},
+			offs:     []string{"00110000", "00111000"},
+			expAddr:  []string{},
+			expDepth: 0,
+			wait:     2 * time.Millisecond, //retry interval is set to 10ms, let's try before
 		},
 		{
 			name:     "suggest deeper then shallower",
@@ -148,6 +158,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 			offs:     []string{"00110000", "00111000"},
 			expAddr:  []string{"00111000", "00110000"},
 			expDepth: 0,
+			wait:     70 * time.Millisecond,
 		},
 	} {
 		if v.skip {
@@ -155,6 +166,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 		}
 		t.Run(v.name, func(t *testing.T) {
 			params := NewHiveParams()
+			params.RetryInterval = hiveRetryInterval
 			k := newTestKademlia(base)
 			h := NewHive(params, k, nil) // hive
 
@@ -167,6 +179,10 @@ func TestSuggestPeerWTF(t *testing.T) {
 			}
 			if h.Kademlia.NeighbourhoodDepth() != v.expDepth {
 				t.Fatalf("wrong neighbourhood depth. got: %d, want: %d", k.NeighbourhoodDepth(), v.expDepth)
+			}
+
+			if v.wait > 0 {
+				time.Sleep(v.wait)
 			}
 			err := testSuggestPeerWTF(t, h, v.expAddr)
 			if err != nil {
