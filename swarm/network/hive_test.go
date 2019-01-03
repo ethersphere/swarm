@@ -151,7 +151,7 @@ func TestSuggestPeerWTF(t *testing.T) {
 			offs:     []string{"00110000", "00111000"},
 			expAddr:  []string{},
 			expDepth: 0,
-			wait:     2 * time.Millisecond, //retry interval is set to 10ms, let's try before
+			wait:     2 * time.Millisecond, //retry interval is set to 10ms, try before
 			skip:     true,
 		},
 		{

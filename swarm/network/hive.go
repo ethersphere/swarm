@@ -330,6 +330,18 @@ func (h *Hive) getPotentialPeers() []*Peer {
 	return callablePeers
 }
 
+func insertSort(arr []int, comp func(int, int) bool) {
+	size := len(arr)
+	var temp, i, j int
+	for i = 1; i < size; i++ {
+		temp = arr[i]
+		for j = i; j > 0 && comp(arr[j-1], temp); j-- {
+			arr[j] = arr[j-1]
+		}
+		arr[j] = temp
+	}
+}
+
 // returns all neighbors not connected to that should be
 func (h *Hive) getPotentialNeighbours(depth int) []*Peer {
 	var neighbours []*Peer
@@ -379,7 +391,7 @@ func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
 	h.Kademlia.conns.EachBin(h.Kademlia.base, Pof, offset, func(po int, size int, f func(func(pot.Val, int) bool) bool) bool {
 		seqPo++
 		// stop if we reach depth, because peers from that point and deeper will be treated differently
-		if po <= depth {
+		if depth >= po {
 			return true
 		}
 
@@ -517,7 +529,6 @@ func (h *Hive) getRetriesFromDuration(timeAgo time.Duration) int {
 }
 
 func (h *Hive) isTimeForRetry(d *Peer) bool {
-	//	debug.PrintStack()
 	timeAgo := time.Since(d.seenAt)
 	allowedRetryCountNow := h.getRetriesFromDuration(timeAgo)
 	isTime := d.retries < allowedRetryCountNow
