@@ -436,6 +436,9 @@ func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
 // lowest bincount below depth
 // naturally if there is an empty row it returns a peer for that
 func (h *Hive) SuggestPeer() (a *BzzAddr, o int, want bool) {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
 	return nil, 0, false
 	/*	minsize := k.MinBinSize
 		 lastbin = -1
