@@ -362,7 +362,6 @@ func (h *Hive) getPotentialNeighbours(depth int) []*Peer {
 	return neighbours
 }
 
-
 // gets unconnected peers from the SHALLOWEST bin depth with the FEWEST connected peers
 // neighbours are not considered
 // returns the peers returned and which po they are returned from
@@ -438,76 +437,76 @@ func (h *Hive) getPotentialBinPeers(offset int, depth int) ([]*Peer, int) {
 // naturally if there is an empty row it returns a peer for that
 func (h *Hive) SuggestPeer() (a *BzzAddr, o int, want bool) {
 	return nil, 0, false
-	minsize := k.MinBinSize
- lastbin = -1
-	depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
- if there is a callable neighbour within the current proxBin, connect
- this makes sure nearest neighbour set is fully connected
-	var ppo int
-	k.addrs.EachNeighbour(k.base, Pof, func(val pot.Val, po int) bool {
-		if lastbin > 0 && po != lastbin { return false}
-		e := val.(*entry)
-		if its connected => counter++, if == minProxBinSize, set the lastbin to po
-		c := k.callable(e)
-		if c {
-			a = e.BzzAddr
-		}
-		ppo = po
-		return !c
-	})
-	if a != nil {
-		log.Trace(fmt.Sprintf("%08x candidate nearest neighbour found: %v (%v)", k.BaseAddr()[:4], a, ppo))
-		return a, 0, false
-	}
-
-	var bpo []int
-	prev := -1
-	k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
-		prev++
-		for ; prev < po; prev++ {
-			bpo = append(bpo, prev)
-			minsize = 0
-		}
-		if size < minsize {
-			bpo = append(bpo, po)
-			minsize = size
-		}
-		return size > 0 && po < depth
-	})
-	// all buckets are full, ie., minsize == k.MinBinSize
-		if len(bpo) == 0 {
-		return nil, 0, false
-	}
-	// as long as we got candidate peers to connect to
-	//	// dont ask for new peers (want = false)
-	//	// try to select a candidate peer
-	//	// find the first callable peer
-	//	nxt := bpo[0]
-	k.addrs.EachBin(k.base, Pof, nxt, func(po, _ int, f func(func(pot.Val, int) bool) bool) bool {
-	//		// for each bin (up until depth) we find callable candidate peers
-		if po >= depth {
-			return false
-		}
-		return f(func(val pot.Val, _ int) bool {
-			e := val.(*entry)
-			c := k.callable(e)
-			if c {
-				a = e.BzzAddr
+	/*	minsize := k.MinBinSize
+		 lastbin = -1
+			depth := depthForPot(k.conns, k.MinProxBinSize, k.base)
+		 if there is a callable neighbour within the current proxBin, connect
+		 this makes sure nearest neighbour set is fully connected
+			var ppo int
+			k.addrs.EachNeighbour(k.base, Pof, func(val pot.Val, po int) bool {
+				if lastbin > 0 && po != lastbin { return false}
+				e := val.(*entry)
+				if its connected => counter++, if == minProxBinSize, set the lastbin to po
+				c := k.callable(e)
+				if c {
+					a = e.BzzAddr
+				}
+				ppo = po
+				return !c
+			})
+			if a != nil {
+				log.Trace(fmt.Sprintf("%08x candidate nearest neighbour found: %v (%v)", k.BaseAddr()[:4], a, ppo))
+				return a, 0, false
 			}
-			return !c
-		})
-	})
- found a candidate
-	if a != nil {
-			return a, 0, false
-	}
-	// no candidate peer found, request for the short bin
-	var changed bool
-	if nxt < k.depth {
-		k.depth = nxt
-		changed = true
-	}
-	return a, nxt, changed
+
+			var bpo []int
+			prev := -1
+			k.conns.EachBin(k.base, Pof, 0, func(po, size int, f func(func(val pot.Val, i int) bool) bool) bool {
+				prev++
+				for ; prev < po; prev++ {
+					bpo = append(bpo, prev)
+					minsize = 0
+				}
+				if size < minsize {
+					bpo = append(bpo, po)
+					minsize = size
+				}
+				return size > 0 && po < depth
+			})
+			// all buckets are full, ie., minsize == k.MinBinSize
+				if len(bpo) == 0 {
+				return nil, 0, false
+			}
+			// as long as we got candidate peers to connect to
+			//	// dont ask for new peers (want = false)
+			//	// try to select a candidate peer
+			//	// find the first callable peer
+			//	nxt := bpo[0]
+			k.addrs.EachBin(k.base, Pof, nxt, func(po, _ int, f func(func(pot.Val, int) bool) bool) bool {
+			//		// for each bin (up until depth) we find callable candidate peers
+				if po >= depth {
+					return false
+				}
+				return f(func(val pot.Val, _ int) bool {
+					e := val.(*entry)
+					c := k.callable(e)
+					if c {
+						a = e.BzzAddr
+					}
+					return !c
+				})
+			})
+		 found a candidate
+			if a != nil {
+					return a, 0, false
+			}
+			// no candidate peer found, request for the short bin
+			var changed bool
+			if nxt < k.depth {
+				k.depth = nxt
+				changed = true
+			}
+			return a, nxt, changed*/
 }
 
 // calculate the allowed number of retries based on time lapsed since last seen
