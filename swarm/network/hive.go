@@ -312,15 +312,12 @@ func (h *Hive) getPotentialPeers() []*Peer {
 	// if the depth is 0 then only neighbours are relevant
 	// if we hit depth then we break out of the loop (with no peers)
 	for lastPotentialBin := 0; lastPotentialBin < depth; lastPotentialBin++ {
-		log.Trace("loop", "lastPotentialBin", lastPotentialBin, "depth", depth, "len(potentialPeers)", len(potentialPeers))
-
 		potentialPeers, _ = h.getPotentialBinPeers(lastPotentialBin, depth)
 
 		// among the latest retrieved potential peers
 		// add any that have exceeded time delay for reconnect
 		for _, peer := range potentialPeers {
 			if h.isTimeForRetry(peer) {
-				log.Trace("append the stuff")
 				callablePeers = append(callablePeers, peer)
 			}
 		}
