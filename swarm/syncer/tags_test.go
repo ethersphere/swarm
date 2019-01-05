@@ -141,7 +141,7 @@ func TestDBWithTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dbpath)
-	db, err := NewDB(dbpath, nil, sync, receiptsC)
+	db, err := NewDB(dbpath, nil, sync, receiptsC, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

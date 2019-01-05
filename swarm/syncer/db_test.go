@@ -123,7 +123,7 @@ func TestDBIteration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dbpath)
-	db, err := NewDB(dbpath, nil, syncf, receiptsC)
+	db, err := NewDB(dbpath, nil, syncf, receiptsC, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -193,7 +193,7 @@ func TestDBCompleteMultipleSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dbpath)
-	db, err := NewDB(dbpath, nil, sync, receiptsC)
+	db, err := NewDB(dbpath, nil, sync, receiptsC, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -216,7 +216,7 @@ func TestDBCompleteMultipleSessions(t *testing.T) {
 			round++
 			log.Warn("session ends", "round", round, "chunks", i, "unsynced", db.Size())
 			db.Close()
-			db, err = NewDB(dbpath, nil, sync, receiptsC)
+			db, err = NewDB(dbpath, nil, sync, receiptsC, nil)
 			if err != nil {
 				t.Fatal(err)
 			}

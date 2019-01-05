@@ -969,6 +969,7 @@ func (p *Pss) forward(msg *PssMsg) error {
 			return false // stop iterating
 		}
 		if sendFunc(p, sp, msg) {
+			log.Trace("forwarding", "self", label(p.BaseAddr()), "to", label(sp.Address()), "msg", msg.Payload.Hash().Hex()[:4])
 			sent++
 			if onlySendOnce {
 				return false

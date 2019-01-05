@@ -12,14 +12,15 @@ import (
 // - protocol (dispatcher)
 // - pubsub transport layer
 type Syncer struct {
-	db *DB // sync db
+	db   *DB    // sync db
+	addr []byte //
 }
 
 // New constructs a Syncer
-func New(dbpath string, baseAddr storage.Address, store storage.ChunkStore, ps PubSub) (*Syncer, error) {
+func New(dbpath string, baseAddr storage.Address, store storage.ChunkStore, ps PubSub, depthFunc func() uint) (*Syncer, error) {
 	d := newDispatcher(baseAddr).withPubSub(ps)
 	receiptsC := make(chan storage.Address)
-	db, err := NewDB(dbpath, store, d.sendChunk, receiptsC)
+	db, err := NewDB(dbpath, store, d.sendChunk, receiptsC, depthFunc)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +28,7 @@ func New(dbpath string, baseAddr storage.Address, store storage.ChunkStore, ps P
 		receiptsC <- addr
 		return nil
 	}
-	return &Syncer{db: db}, nil
+	return &Syncer{db: db, addr: baseAddr[:]}, nil
 }
 
 // Close closes the syncer
@@ -41,6 +42,7 @@ func (s *Syncer) Close() {
 func (s *Syncer) Put(tagname string, chunk storage.Chunk) {
 	it := &item{
 		Addr:  chunk.Address(),
+		PO:    uint(storage.Proximity(chunk.Address(), s.addr)),
 		Tag:   tagname,
 		chunk: chunk,
 		state: SPLIT, // can be left explicit

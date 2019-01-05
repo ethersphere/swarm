@@ -44,7 +44,7 @@ func TestSyncerWithLoopbackPubSub(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dbpath)
-	s, err := New(dbpath, baseAddr, chunkStore, lb)
+	s, err := New(dbpath, baseAddr, chunkStore, lb, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,9 @@ func upload(ctx context.Context, s *Syncer, tagname string, n int) (addrs []stor
 		addrs = append(addrs, ch.Address())
 		s.Put(tagname, ch)
 	}
-	err = tg.WaitTill(ctx, SYNCED)
+	_ = tg
+	// err = tg.WaitTill(ctx, SYNCED)
+	time.Sleep(1 * time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +200,7 @@ func download(ctx context.Context, s *Syncer, addrs []storage.Address) error {
 //   there is no retries, if any of the downloads times out or the
 func TestSyncerWithPubSubOracle(t *testing.T) {
 	nodeCnt := 128
-	chunkCnt := 100
+	chunkCnt := 10
 	trials := 100
 
 	// offband syncing to nearest neighbourhood
@@ -214,9 +216,9 @@ func TestSyncerWithPubSubOracle(t *testing.T) {
 
 // test syncer using pss
 func TestSyncerWithPss(t *testing.T) {
-	nodeCnt := 32
-	chunkCnt := 1
-	trials := 1
+	nodeCnt := 128
+	chunkCnt := 10
+	trials := 10
 	psSyncerF := func(_ []byte, p *pss.Pss) PubSub {
 		return NewPss(p, false)
 	}
@@ -254,29 +256,33 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, trials int, sf simulation.ServiceFu
 	errc := make(chan error)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		for i := 0; i < trials; i++ {
-			if i%10 == 0 && i > 0 {
-				time.Sleep(1000 * time.Millisecond)
-			}
+			// if i%10 == 0 && i > 0 {
+			// 	time.Sleep(1000 * time.Millisecond)
+			// }
 			go func(i int) {
 				u, d := choose2(nodeCnt)
 				uid := sim.UpNodeIDs()[u]
-				syncer, _ := sim.NodeItem(uid, bucketKeySyncer)
+				val, _ := sim.NodeItem(uid, bucketKeySyncer)
+				syncer := val.(*Syncer)
+				syncer.db.depthC <- syncer.db.depthFunc()
 				did := sim.UpNodeIDs()[d]
 				tagname := fmt.Sprintf("tag-%v-%v-%d", label(uid[:]), label(did[:]), i)
 				log.Error("uploading", "peer", uid, "chunks", chunkCnt, "tagname", tagname)
-				what, err := upload(ctx, syncer.(*Syncer), tagname, chunkCnt)
+				what, err := upload(ctx, syncer, tagname, chunkCnt)
 				if err != nil {
 					select {
 					case errc <- err:
 					case <-ctx.Done():
+						return
 					}
 					return
 				}
-				log.Error("synced", "peer", did, "chunks", chunkCnt, "tagname", tagname)
+				log.Error("synced", "peer", uid, "chunks", chunkCnt, "tagname", tagname)
 				log.Error("downloading", "peer", did, "chunks", chunkCnt, "tagname", tagname)
 
-				syncer, _ = sim.NodeItem(did, bucketKeySyncer)
-				err = download(ctx, syncer.(*Syncer), what)
+				val, _ = sim.NodeItem(did, bucketKeySyncer)
+				syncer = val.(*Syncer)
+				err = download(ctx, syncer, what)
 				select {
 				case errc <- err:
 				case <-ctx.Done():
@@ -291,7 +297,7 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, trials int, sf simulation.ServiceFu
 				return err
 			}
 			i++
-			if i == trials {
+			if i >= trials {
 				break
 			}
 		}
@@ -354,7 +360,10 @@ func newServiceFunc(psSyncer, psStorer func([]byte, *pss.Pss) PubSub) func(ctx *
 		}
 		defer os.RemoveAll(dbpath)
 		p := psSyncer(addr.OAddr, ps)
-		syn, err := New(dbpath, addr.OAddr, netStore, p)
+		depthFunc := func() uint {
+			return uint(kad.NeighbourhoodDepth())
+		}
+		syn, err := New(dbpath, addr.OAddr, netStore, p, depthFunc)
 		if err != nil {
 			os.RemoveAll(datadir)
 			os.RemoveAll(dbpath)

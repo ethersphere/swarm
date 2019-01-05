@@ -45,6 +45,7 @@ var (
 type item struct {
 	Addr   storage.Address // chunk address
 	Tag    string          // tag to track batches of chunks (allows for sync ETA)
+	PO     uint            // distance
 	key    []byte          // key to look up the item in the DB
 	chunk  storage.Chunk   // chunk is retrieved when item is popped from batch and pushed to buffer
 	sentAt time.Time       // time chunk is sent to a peer for syncing
@@ -93,6 +94,8 @@ type DB struct {
 	dbquit     chan struct{}        // channel to signal batch was written and db can be closed
 	index      int64                // ever incrementing storage index
 	size       int64                // number of items
+	depthFunc  func() uint          // call to changed depth
+	depthC     chan uint            // kademlia neighbourhood depth
 }
 
 type storeBatch struct {
@@ -102,7 +105,7 @@ type storeBatch struct {
 }
 
 // NewDB constructs a DB
-func NewDB(dbpath string, store storage.ChunkStore, f func(storage.Chunk) error, receiptsC chan storage.Address) (*DB, error) {
+func NewDB(dbpath string, store storage.ChunkStore, f func(storage.Chunk) error, receiptsC chan storage.Address, depthFunc func() uint) (*DB, error) {
 
 	ldb, err := storage.NewLDBDatabase(dbpath)
 	if err != nil {
@@ -116,6 +119,8 @@ func NewDB(dbpath string, store storage.ChunkStore, f func(storage.Chunk) error,
 		requestC:   make(chan struct{}, 1),
 		itemsC:     make(chan []*item),
 		putC:       make(chan *item),
+		depthC:     make(chan uint),
+		depthFunc:  depthFunc,
 		receiptsC:  receiptsC,
 		chunkC:     make(chan *item, bufferSize),
 		quit:       make(chan struct{}),
@@ -150,6 +155,7 @@ func (db *DB) Size() int64 {
 
 // listen listens until quit to put and delete events and writes them in a batch
 func (db *DB) listen() {
+	var depth uint = 256
 	batch := &storeBatch{Batch: new(leveldb.Batch)}
 	for {
 		select {
@@ -159,14 +165,24 @@ func (db *DB) listen() {
 			close(db.batchC)
 			return
 
+		case depth = <-db.depthC:
+
 		case item := <-db.putC:
 			// consume putC for insertion
 			// we can assume no duplicates are sent
+
 			key := db.newKey()
 			batch.Put(key, item.bytes())
 			batch.Put(indexKey, key[1:])
 			db.size++
 			batch.new++
+			if item.PO >= depth {
+				go func() {
+					db.waiting.Store(item.Addr.Hex(), item)
+					db.receiptsC <- item.Addr
+				}()
+				// continue
+			}
 
 		case addr := <-db.receiptsC:
 			log.Warn("received receipt", "addr", label(addr[:]))
