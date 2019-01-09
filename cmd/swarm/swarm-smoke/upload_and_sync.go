@@ -113,6 +113,10 @@ func uploadAndSync(c *cli.Context) error {
 
 	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
 
+	if onlyUpload {
+		return nil
+	}
+
 	time.Sleep(time.Duration(syncDelay) * time.Second)
 
 	wg := sync.WaitGroup{}

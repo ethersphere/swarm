@@ -49,6 +49,7 @@ var (
 	verbosity        int
 	timeout          int
 	single           bool
+	onlyUpload       bool
 )
 
 func main() {
@@ -121,6 +122,11 @@ func main() {
 			Name:        "single",
 			Usage:       "whether to fetch content from a single node or from all nodes",
 			Destination: &single,
+		},
+		cli.BoolFlag{
+			Name:        "only-upload",
+			Usage:       "only upload, without trying to retrieve",
+			Destination: &onlyUpload,
 		},
 	}
 
