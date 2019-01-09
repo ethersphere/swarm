@@ -337,12 +337,6 @@ func TestHealthSaturation(t *testing.T) {
 	peer = newTestDiscoveryPeer(addr, k)
 	k.On(peer)
 	assertHealthSaturation(t, k, 0)
-
-	k.Off(peer)
-	addr = pot.RandomAddressAt(baseAddress, 1)
-	peer = newTestDiscoveryPeer(addr, k)
-	k.On(peer)
-	assertHealthSaturation(t, k, 0)
 }
 
 // retrieves the health object based on the current connectivity of the given kademlia

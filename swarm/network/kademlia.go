@@ -762,7 +762,7 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 	return connects == len(peers), connects, culprits
 }
 
-// connectedPotential checks whether the peer is connected to a health minimum of peers it knows about in bins that are shallower than depth
+// connectedPotential checks whether the node is connected to a health minimum of peers it knows about in bins that are shallower than depth
 // it returns an array of bin proximity orders for which this is not the case
 // TODO move to separate testing tools file
 func (k *Kademlia) connectedPotential() []int {
@@ -804,7 +804,7 @@ type Health struct {
 	ConnectNN        bool     // whether node is connected to all its neighbours
 	CountConnectNN   int      // amount of neighbours connected to
 	MissingConnectNN [][]byte // which neighbours we should have been connected to but we're not
-	Potent           bool     // whether we are connected a mininum of peers for bins we know of peers
+	Potent           bool     // whether we are connected a mininum of peers in all the bins we have known peers in
 	Saturation       int      // whether we are connected to all the peers we would have liked to
 	Hive             string
 }
@@ -820,12 +820,15 @@ type Health struct {
 func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
+
 	connectnn, countconnectnn, missingconnectnn := k.connectedNeighbours(pp.NNSet)
 	knownn, countknownn, missingknownn := k.knowNeighbours(pp.NNSet)
-	impotentBins := k.connectedPotential()
 	saturation := k.saturation()
+	impotentBins := k.connectedPotential()
+	potent := len(impotentBins) == 0
+
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, connectNNs: %v, saturated: %v\n", k.base, knownn, connectnn, saturation))
-	potent := countknownn == 0 || len(impotentBins) == 0
+
 	return &Health{
 		KnowNN:           knownn,
 		CountKnowNN:      countknownn,
