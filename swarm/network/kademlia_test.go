@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2017 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -28,6 +28,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/pot"
+)
+
+var (
+	minBinSize     = 2
+	minProxBinSize = 2
 )
 
 func init() {
@@ -168,10 +173,7 @@ func TestNeighbourhoodDepth(t *testing.T) {
 	testNum++
 }
 
-// TestHealthStrict tests the simplest definition of health
-// Which means whether we are connected to all neighbors we know of
-func TestHealthStrict(t *testing.T) {
-
+func TestHealthSimple(t *testing.T) {
 	// base address is all zeros
 	// no peers
 	// unhealthy (and lonely)
@@ -241,10 +243,198 @@ func (tk *testKademlia) checkHealth(expectHealthy bool, expectSaturation bool) {
 	pp := NewPeerPotMap(tk.NeighbourhoodSize, addrs)
 	healthParams := tk.Healthy(pp[kid])
 
-	// definition of health, all conditions but be true:
-	// - we at least know one peer
-	// - we know all neighbors
-	// - we are connected to all known neighbors
+	/*
+	   =======
+	   	k := newTestKademlia("11111111")
+	   	assertHealthSimple(t, k, false)
+
+	   	// know one peer but not connected
+	   	// unhealthy
+	   	Register(k, "11100000")
+	   	log.Trace(k.String())
+	   	assertHealthSimple(t, k, false)
+
+	   	// know one peer and connected
+	   	// healthy
+	   	On(k, "11100000")
+	   	assertHealthSimple(t, k, true)
+
+	   	// know two peers, only one connected
+	   	// unhealthy
+	   	Register(k, "11111100")
+	   	log.Trace(k.String())
+	   	assertHealthSimple(t, k, false)
+
+	   	// know two peers and connected to both
+	   	// healthy
+	   	On(k, "11111100")
+	   	assertHealthSimple(t, k, true)
+
+	   	// know three peers, connected to the two deepest
+	   	// healthy
+	   	Register(k, "00000000")
+	   	log.Trace(k.String())
+	   	assertHealthSimple(t, k, true)
+
+	   	// know three peers, connected to all three
+	   	// healthy
+	   	On(k, "00000000")
+	   	assertHealthSimple(t, k, true)
+
+	   	// add fourth peer deeper than current depth
+	   	// unhealthy
+	   	Register(k, "11110000")
+	   	log.Trace(k.String())
+	   	assertHealthSimple(t, k, false)
+
+	   	// connected to three deepest peers
+	   	// healthy
+	   	On(k, "11110000")
+	   	assertHealthSimple(t, k, true)
+
+	   	// add additional peer in same bin as deepest peer
+	   	// unhealthy
+	   	Register(k, "11111101")
+	   	log.Trace(k.String())
+	   	assertHealthSimple(t, k, false)
+
+	   	// four deepest of five peers connected
+	   	// healthy
+	   	On(k, "11111101")
+	   	assertHealthSimple(t, k, true)
+	   }
+
+	   func TestHealthPotential(t *testing.T) {
+	   	k := newTestKademlia("11111111")
+	   	assertHealthPotential(t, k, true)
+
+	   	// know one peer but not connected
+	   	// not potent and not healthy
+	   	Register(k, "11100000")
+	   	log.Trace(k.String())
+	   	assertHealthPotential(t, k, false)
+
+	   	// know one peer and connected
+	   	// healthy and potent
+	   	On(k, "11100000")
+	   	assertHealthPotential(t, k, true)
+
+	   	// know two peers, only one connected
+	   	// not healthy, not potent
+	   	Register(k, "11111100")
+	   	log.Trace(k.String())
+	   	assertHealthPotential(t, k, false)
+
+	   	// know two peers and connected to both
+	   	// healthy and potent
+	   	On(k, "11111100")
+	   	assertHealthPotential(t, k, true)
+
+	   	// know three peers, connected to the two deepest
+	   	// healthy but not potent
+	   	Register(k, "00000000")
+	   	log.Trace(k.String())
+	   	assertHealthPotential(t, k, false)
+
+	   	// know three peers, connected to all three
+	   	// healthy and potent
+	   	On(k, "00000000")
+	   	assertHealthPotential(t, k, true)
+
+	   	// add another peer in the zero-bin
+	   	// still healthy and potent
+	   	Register(k, "00000000")
+	   	log.Trace(k.String())
+	   	assertHealthPotential(t, k, true)
+
+	   	// add peers until depth
+	   	// healthy but not potent
+	   	Register(k, "10000000")
+	   	Register(k, "11000000")
+	   	log.Trace(k.String())
+	   	assertHealthPotential(t, k, false)
+
+	   	// add fourth peer deeper than current depth
+	   	// still healthy, still not potent
+	   	On(k, "10000000")
+	   	log.Trace(k.String())
+	   	assertHealthPotential(t, k, false)
+
+	   	// add fourth peer deeper than current depth
+	   	// healthy and potent
+	   	On(k, "11000000")
+	   	log.Trace(k.String())
+	   	assertHealthPotential(t, k, true)
+	   }
+
+	   func TestHealthSaturation(t *testing.T) {
+	   	baseAddressBytes := RandomAddr().OAddr
+	   	k := NewKademlia(baseAddressBytes, NewKadParams())
+
+	   	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
+
+	   	// add first connected neighbor
+	   	// saturation 0
+	   	addr := pot.RandomAddressAt(baseAddress, 3)
+	   	peer := newTestDiscoveryPeer(addr, k)
+	   	k.On(peer)
+	   	assertHealthSaturation(t, k, 0)
+
+	   	// add second connected neighbor
+	   	// saturation 0
+	   	addr = pot.RandomAddressAt(baseAddress, 4)
+	   	peer = newTestDiscoveryPeer(addr, k)
+	   	k.On(peer)
+	   	assertHealthSaturation(t, k, 0)
+
+	   	// connect peer in zero-bin
+	   	// saturation 0
+	   	addr = pot.RandomAddressAt(baseAddress, 0)
+	   	peer = newTestDiscoveryPeer(addr, k)
+	   	k.On(peer)
+	   	assertHealthSaturation(t, k, 0)
+
+	   	// connect another peer in zero-bin
+	   	// saturation 1
+	   	addr = pot.RandomAddressAt(baseAddress, 0)
+	   	peer = newTestDiscoveryPeer(addr, k)
+	   	k.On(peer)
+	   	assertHealthSaturation(t, k, 1)
+
+	   	// one connection in zero-bin, two in one-bin
+	   	// saturation 0
+	   	k.Off(peer)
+	   	addr = pot.RandomAddressAt(baseAddress, 1)
+	   	peer = newTestDiscoveryPeer(addr, k)
+	   	k.On(peer)
+	   	addr = pot.RandomAddressAt(baseAddress, 1)
+	   	peer = newTestDiscoveryPeer(addr, k)
+	   	k.On(peer)
+	   	assertHealthSaturation(t, k, 0)
+	   }
+
+	   // retrieves the health object based on the current connectivity of the given kademlia
+	   func getHealth(k *Kademlia) *Health {
+	   	kid := common.Bytes2Hex(k.BaseAddr())
+	   	addrs := [][]byte{k.BaseAddr()}
+	   	k.EachAddr(nil, 255, func(addr *BzzAddr, po int) bool {
+	   		addrs = append(addrs, addr.Address())
+	   		return true
+	   	})
+	   	pp := NewPeerPotMap(k.NeighbourhoodSize, addrs)
+	   	return k.Healthy(pp[kid])
+	   }
+	   >>>>>>> swarm/network: Add potent method for healthy, fix saturation
+
+	   // evaluates the simplest definition of health:
+	   // all conditions must be true:
+	   // - we at least know one peer
+	   // - we know all neighbors
+	   // - we are connected to all known neighbors
+	   func assertHealthSimple(t *testing.T, k *Kademlia, expectHealthy bool) {
+	   	t.Helper()
+	   	healthParams := getHealth(k)
+	*/
 	health := healthParams.KnowNN && healthParams.ConnectNN && healthParams.CountKnowNN > 0
 	if expectHealthy != health {
 		tk.t.Fatalf("expected kademlia health %v, is %v\n%v", expectHealthy, health, tk.String())
@@ -255,6 +445,32 @@ func (tk *testKademlia) checkSuggestPeer(expAddr string, expDepth int, expChange
 	tk.t.Helper()
 	addr, depth, changed := tk.SuggestPeer()
 	log.Trace("suggestPeer return", "addr", addr, "depth", depth, "changed", changed)
+	/*
+		=======
+		// evaluates healthiness by taking into account potential connections
+		// additional conditions for healthiness
+		// - IF we know of peers in bins shallower than depth, connected to at least HealthBinSize of them
+		func assertHealthPotential(t *testing.T, k *Kademlia, expectPotent bool) {
+			t.Helper()
+			healthParams := getHealth(k)
+			if expectPotent != healthParams.Potent {
+				t.Fatalf("expected kademlia potency %v, is %v\n%v", expectPotent, healthParams.Potent, k.String())
+			}
+		}
+
+		func assertHealthSaturation(t *testing.T, k *Kademlia, expectSaturation int) {
+			t.Helper()
+			healthParams := getHealth(k)
+			if expectSaturation != healthParams.Saturation {
+				t.Fatalf("expected kademlia saturation %v, is %v\n%v", expectSaturation, healthParams.Saturation, k.String())
+			}
+		}
+
+		func testSuggestPeer(k *Kademlia, expAddr string, expPo int, expWant bool) error {
+			addr, o, want := k.SuggestPeer()
+			log.Trace("suggestpeer return", "a", addr, "o", o, "want", want)
+		>>>>>>> swarm/network: Add potent method for healthy, fix saturation
+	*/
 	if binStr(addr) != expAddr {
 		tk.t.Fatalf("incorrect peer address suggested. expected %v, got %v", expAddr, binStr(addr))
 	}
@@ -445,6 +661,15 @@ func TestKademliaHiveString(t *testing.T) {
 	tk.Register("10000000", "10000001")
 	tk.MaxProxDisplay = 8
 	h := tk.String()
+	/*
+		=======
+			k := newTestKademlia("00000000")
+			On(k, "01000000", "00100000")
+			Register(k, "10000000", "10000001")
+			k.MaxProxDisplay = 8
+			h := k.String()
+		>>>>>>> swarm/network: Add potent method for healthy, fix saturation
+	*/
 	expH := "\n=========================================================================\nMon Feb 27 12:10:28 UTC 2017 KΛÐΞMLIΛ hive: queen's address: 000000\npopulation: 2 (4), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 4\n============ DEPTH: 0 ==========================================\n000  0                              |  2 8100 (0) 8000 (0)\n001  1 4000                         |  1 4000 (0)\n002  1 2000                         |  1 2000 (0)\n003  0                              |  0\n004  0                              |  0\n005  0                              |  0\n006  0                              |  0\n007  0                              |  0\n========================================================================="
 	if expH[104:] != h[104:] {
 		t.Fatalf("incorrect hive output. expected %v, got %v", expH, h)

@@ -57,6 +57,7 @@ type KadParams struct {
 	MaxProxDisplay    int   // number of rows the table shows
 	NeighbourhoodSize int   // nearest neighbour core minimum cardinality
 	MinBinSize        int   // minimum number of peers in a row
+	HealthBinSize     int   // minimum number of peers per bin
 	MaxBinSize        int   // maximum number of peers in a row before pruning
 	RetryInterval     int64 // initial interval before a peer is first redialed
 	RetryExponent     int   // exponent to multiply retry intervals with
@@ -71,6 +72,7 @@ func NewKadParams() *KadParams {
 		MaxProxDisplay:    16,
 		NeighbourhoodSize: 2,
 		MinBinSize:        2,
+		HealthBinSize:     1,
 		MaxBinSize:        4,
 		RetryInterval:     4200000000, // 4.2 sec
 		MaxRetries:        42,
@@ -688,6 +690,9 @@ func (k *Kademlia) saturation() int {
 	if prev < 0 {
 		return 0
 	}
+	if prev < 0 {
+		prev = 0
+	}
 	return prev
 }
 
@@ -715,17 +720,16 @@ func (k *Kademlia) knowNeighbours(addrs [][]byte) (got bool, n int, missing [][]
 	// then we don't know all our neighbors
 	// (which sadly is all too common in modern society)
 	var gots int
-	var culprits [][]byte
 	for _, p := range addrs {
 		pk := common.Bytes2Hex(p)
 		if pm[pk] {
 			gots++
 		} else {
 			log.Trace(fmt.Sprintf("%08x: known nearest neighbour %s not found", k.base, pk))
-			culprits = append(culprits, p)
+			missing = append(missing, p)
 		}
 	}
-	return gots == len(addrs), gots, culprits
+	return gots == len(addrs), gots, missing
 }
 
 // connectedNeighbours tests if all neighbours in the peerpot
@@ -750,18 +754,49 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 	// iterate through nearest neighbors in the peerpot map
 	// if we can't find the neighbor in the map we created above
 	// then we don't know all our neighbors
-	var gots int
-	var culprits [][]byte
+	var connects int
 	for _, p := range peers {
 		pk := common.Bytes2Hex(p)
 		if pm[pk] {
-			gots++
+			connects++
 		} else {
 			log.Trace(fmt.Sprintf("%08x: ExpNN: %s not found", k.base, pk))
-			culprits = append(culprits, p)
+			missing = append(missing, p)
 		}
 	}
-	return gots == len(peers), gots, culprits
+	return connects == len(peers), connects, missing
+}
+
+// connectedPotential checks whether the node is connected to a health minimum of peers it knows about in bins that are shallower than depth
+// it returns an array of bin proximity orders for which this is not the case
+// TODO move to separate testing tools file
+func (k *Kademlia) connectedPotential() (missing []int) {
+	pk := make(map[int]int)
+	pc := make(map[int]int)
+
+	// create a map with all bins that have known peers
+	// in order deepest to shallowest compared to the kademlia base address
+	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
+	k.eachAddr(nil, 255, func(_ *BzzAddr, po int) bool {
+		pk[po]++
+		return true
+	})
+	k.eachConn(nil, 255, func(_ *Peer, po int) bool {
+		pc[po]++
+		return true
+	})
+
+	for po, v := range pk {
+		if pc[po] == v {
+			continue
+		} else if po >= depth && pc[po] != pk[po] {
+			missing = append(missing, po)
+		} else if pc[po] < k.HealthBinSize {
+			missing = append(missing, po)
+		}
+
+	}
+	return missing
 }
 
 // Health state of the Kademlia
@@ -773,7 +808,8 @@ type Health struct {
 	ConnectNN        bool     // whether node is connected to all its neighbours
 	CountConnectNN   int      // amount of neighbours connected to
 	MissingConnectNN [][]byte // which neighbours we should have been connected to but we're not
-	Saturated        bool     // whether we are connected to all the peers we would have liked to
+	Saturation       int      // whether we are connected to all the peers we would have liked to
+	Potent           bool     // whether we are connected to a minimum of peers in all the bins we have known peers in
 	Hive             string
 }
 
@@ -796,14 +832,28 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 	saturated := k.saturation() < depth
 	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
+	/*
+	=======
+
+		connectnn, countconnectnn, missingconnectnn := k.connectedNeighbours(pp.NNSet)
+		knownn, countknownn, missingknownn := k.knowNeighbours(pp.NNSet)
+		saturation := k.saturation()
+		impotentBins := k.connectedPotential()
+		potent := len(impotentBins) == 0
+
+		log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, connectNNs: %v, saturation: %v\n", k.base, knownn, connectnn, saturation))
+
+	>>>>>>> swarm/network: Add potent method for healthy, fix saturation
+	*/
 	return &Health{
 		KnowNN:           knownn,
 		CountKnowNN:      countknownn,
-		MissingKnowNN:    culpritsknownn,
-		ConnectNN:        gotnn,
-		CountConnectNN:   countgotnn,
-		MissingConnectNN: culpritsgotnn,
-		Saturated:        saturated,
+		MissingKnowNN:    missingknownn,
+		ConnectNN:        connectnn,
+		CountConnectNN:   countconnectnn,
+		MissingConnectNN: missingconnectnn,
+		Saturation:       saturation,
+		Potent:           potent,
 		Hive:             k.string(),
 	}
 }
