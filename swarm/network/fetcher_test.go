@@ -80,7 +80,7 @@ func TestFetcherSingleRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, nil)
 
 	rctx := context.Background()
 	fetcher.Request(rctx, 0)
@@ -122,7 +122,7 @@ func TestFetcherCancelStopsFetcher(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// we start the fetcher, and then we immediately cancel the context
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, nil)
 	cancel()
 
 	rctx, rcancel := context.WithTimeout(ctx, 100*time.Millisecond)
@@ -150,7 +150,7 @@ func TestFetcherCancelStopsRequest(t *testing.T) {
 	defer cancel()
 
 	// we start the fetcher with an active context
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, nil)
 
 	rctx, rcancel := context.WithCancel(context.Background())
 	rcancel()
@@ -190,7 +190,7 @@ func TestFetcherOfferUsesSource(t *testing.T) {
 	defer cancel()
 
 	// start the fetcher
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, nil)
 
 	rctx := context.Background()
 	// call the Offer function with the source peer
@@ -242,7 +242,7 @@ func TestFetcherOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 	defer cancel()
 
 	// start the fetcher
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, nil)
 
 	// call Request first
 	rctx := context.Background()
@@ -293,11 +293,24 @@ func TestFetcherRetryOnTimeout(t *testing.T) {
 	}(searchTimeout)
 	searchTimeout = 250 * time.Millisecond
 
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Context cancel defer will close the context and deferred function
+	// that waits for fetcherDoneC will prevent searchTimeout defer function
+	// to change searchTimeout before fetcher run returns.
+	fetcherDoneC := make(chan struct{})
+	defer func() {
+		select {
+		case <-fetcherDoneC:
+		case <-time.After(10 * time.Second):
+			t.Error("fetcher run function did not finish")
+		}
+	}()
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// start the fetcher
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, fetcherDoneC)
 
 	// call the fetch function with an active context
 	rctx := context.Background()
@@ -370,7 +383,7 @@ func TestFetcherRequestQuitRetriesRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, nil)
 
 	rctx := context.Background()
 	fetcher.Request(rctx, 0)
@@ -473,7 +486,7 @@ func TestFetcherMaxHopCount(t *testing.T) {
 
 	peersToSkip := &sync.Map{}
 
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, nil)
 
 	rctx := context.Background()
 	fetcher.Request(rctx, maxHopCount)

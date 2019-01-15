@@ -106,7 +106,7 @@ func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 // The created Fetcher is started and returned.
 func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peersToSkip *sync.Map) storage.NetFetcher {
 	fetcher := NewFetcher(source, f.request, f.skipCheck)
-	go fetcher.run(ctx, peersToSkip)
+	go fetcher.run(ctx, peersToSkip, nil)
 	return fetcher
 }
 
@@ -162,7 +162,12 @@ func (f *Fetcher) Request(ctx context.Context, hopCount uint8) {
 
 // start prepares the Fetcher
 // it keeps the Fetcher alive within the lifecycle of the passed context
-func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
+// If doneC is not nil it will be closed to signal that the run function has returned.
+// Not nil doneC is used in tests to synchronize cleanup operations when the test is done.
+func (f *Fetcher) run(ctx context.Context, peers *sync.Map, doneC chan struct{}) {
+	if doneC != nil {
+		defer close(doneC)
+	}
 	var (
 		doRequest bool             // determines if retrieval is initiated in the current iteration
 		wait      *time.Timer      // timer for search timeout
