@@ -52,7 +52,11 @@ func (m *mockRequester) doRequest(ctx context.Context, request *Request) (*enode
 		m.count++
 	}
 	time.Sleep(waitTime)
-	m.requestC <- request
+	select {
+	case m.requestC <- request:
+	case <-ctx.Done():
+		return nil, nil, ctx.Err()
+	}
 
 	// if there is a Source in the request use that, if not use the global requestedPeerId
 	source := request.Source
