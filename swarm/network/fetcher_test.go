@@ -77,10 +77,19 @@ func TestFetcherSingleRequest(t *testing.T) {
 		peersToSkip.Store(p, time.Now())
 	}
 
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Waiting for fetcher run function goroutine to terminate
+	// prevents the race condition on searchTimeout value change by other
+	// tests. The fetcherDoneC defer function will wait for a proper
+	// goroutine cleanup.
+	fetcherDoneC := make(chan struct{})
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go fetcher.run(ctx, peersToSkip, nil)
+	go fetcher.run(ctx, peersToSkip)
 
 	rctx := context.Background()
 	fetcher.Request(rctx, 0)
@@ -119,10 +128,19 @@ func TestFetcherCancelStopsFetcher(t *testing.T) {
 
 	peersToSkip := &sync.Map{}
 
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Waiting for fetcher run function goroutine to terminate
+	// prevents the race condition on searchTimeout value change by other
+	// tests. The fetcherDoneC defer function will wait for a proper
+	// goroutine cleanup.
+	fetcherDoneC := make(chan struct{})
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
+
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// we start the fetcher, and then we immediately cancel the context
-	go fetcher.run(ctx, peersToSkip, nil)
+	go fetcher.run(ctx, peersToSkip)
 	cancel()
 
 	rctx, rcancel := context.WithTimeout(ctx, 100*time.Millisecond)
@@ -146,11 +164,20 @@ func TestFetcherCancelStopsRequest(t *testing.T) {
 
 	peersToSkip := &sync.Map{}
 
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Waiting for fetcher run function goroutine to terminate
+	// prevents the race condition on searchTimeout value change by other
+	// tests. The fetcherDoneC defer function will wait for a proper
+	// goroutine cleanup.
+	fetcherDoneC := make(chan struct{})
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// we start the fetcher with an active context
-	go fetcher.run(ctx, peersToSkip, nil)
+	go fetcher.run(ctx, peersToSkip)
 
 	rctx, rcancel := context.WithCancel(context.Background())
 	rcancel()
@@ -186,11 +213,20 @@ func TestFetcherOfferUsesSource(t *testing.T) {
 
 	peersToSkip := &sync.Map{}
 
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Waiting for fetcher run function goroutine to terminate
+	// prevents the race condition on searchTimeout value change by other
+	// tests. The fetcherDoneC defer function will wait for a proper
+	// goroutine cleanup.
+	fetcherDoneC := make(chan struct{})
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// start the fetcher
-	go fetcher.run(ctx, peersToSkip, nil)
+	go fetcher.run(ctx, peersToSkip)
 
 	rctx := context.Background()
 	// call the Offer function with the source peer
@@ -238,11 +274,20 @@ func TestFetcherOfferAfterRequestUsesSourceFromContext(t *testing.T) {
 
 	peersToSkip := &sync.Map{}
 
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Waiting for fetcher run function goroutine to terminate
+	// prevents the race condition on searchTimeout value change by other
+	// tests. The fetcherDoneC defer function will wait for a proper
+	// goroutine cleanup.
+	fetcherDoneC := make(chan struct{})
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// start the fetcher
-	go fetcher.run(ctx, peersToSkip, nil)
+	go fetcher.run(ctx, peersToSkip)
 
 	// call Request first
 	rctx := context.Background()
@@ -298,19 +343,14 @@ func TestFetcherRetryOnTimeout(t *testing.T) {
 	// that waits for fetcherDoneC will prevent searchTimeout defer function
 	// to change searchTimeout before fetcher run returns.
 	fetcherDoneC := make(chan struct{})
-	defer func() {
-		select {
-		case <-fetcherDoneC:
-		case <-time.After(10 * time.Second):
-			t.Error("fetcher run function did not finish")
-		}
-	}()
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// start the fetcher
-	go fetcher.run(ctx, peersToSkip, fetcherDoneC)
+	go fetcher.run(ctx, peersToSkip)
 
 	// call the fetch function with an active context
 	rctx := context.Background()
@@ -354,9 +394,21 @@ func TestFetcherFactory(t *testing.T) {
 
 	peersToSkip := &sync.Map{}
 
-	fetcher := fetcherFactory.New(context.Background(), addr, peersToSkip)
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Waiting for fetcher run function goroutine to terminate
+	// prevents the race condition on searchTimeout value change by other
+	// tests. The fetcherDoneC defer function will wait for a proper
+	// goroutine cleanup.
+	fetcherDoneC := make(chan struct{})
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
 
-	fetcher.Request(context.Background(), 0)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	fetcher := fetcherFactory.New(ctx, addr, peersToSkip)
+
+	fetcher.Request(ctx, 0)
 
 	// check if the created fetchFunction really starts a fetcher and initiates a request
 	select {
@@ -380,10 +432,19 @@ func TestFetcherRequestQuitRetriesRequest(t *testing.T) {
 
 	peersToSkip := &sync.Map{}
 
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Waiting for fetcher run function goroutine to terminate
+	// prevents the race condition on searchTimeout value change by other
+	// tests. The fetcherDoneC defer function will wait for a proper
+	// goroutine cleanup.
+	fetcherDoneC := make(chan struct{})
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	go fetcher.run(ctx, peersToSkip, nil)
+	go fetcher.run(ctx, peersToSkip)
 
 	rctx := context.Background()
 	fetcher.Request(rctx, 0)
@@ -481,12 +542,21 @@ func TestFetcherMaxHopCount(t *testing.T) {
 	addr := make([]byte, 32)
 	fetcher := NewFetcher(addr, requester.doRequest, true)
 
+	// fetcherDoneC will be closed when fetcher run function returns.
+	// Waiting for fetcher run function goroutine to terminate
+	// prevents the race condition on searchTimeout value change by other
+	// tests. The fetcherDoneC defer function will wait for a proper
+	// goroutine cleanup.
+	fetcherDoneC := make(chan struct{})
+	defer setTestHookFetcherRun(func() { close(fetcherDoneC) })()
+	defer waitFetcherDone(t, fetcherDoneC)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	peersToSkip := &sync.Map{}
 
-	go fetcher.run(ctx, peersToSkip, nil)
+	go fetcher.run(ctx, peersToSkip)
 
 	rctx := context.Background()
 	fetcher.Request(rctx, maxHopCount)
@@ -496,5 +566,82 @@ func TestFetcherMaxHopCount(t *testing.T) {
 	case <-requester.requestC:
 		t.Fatalf("cancelled fetcher initiated request")
 	case <-time.After(200 * time.Millisecond):
+	}
+}
+
+// waitFetcherDone is a helper function that waits for
+// a channel to be closed.
+func waitFetcherDone(t *testing.T, doneC <-chan struct{}) {
+	t.Helper()
+	select {
+	case _, ok := <-doneC:
+		if ok {
+			t.Error("channel struct{} received, but channel not closed")
+		}
+	case <-time.After(10 * time.Second):
+		t.Error("fetcher run function did not finish")
+	}
+}
+
+// setTestHookFetcherRun sets testHookFetcherRun and
+// returns a function that will reset it to the
+// value before the change.
+func setTestHookFetcherRun(h func()) (reset func()) {
+	current := testHookFetcherRun
+	reset = func() { testHookFetcherRun = current }
+	testHookFetcherRun = h
+	return reset
+}
+
+// TestSetTestHookFetcherRun tests if setTestHookFetcherRun changes
+// testHookFetcherRun function correctly and if its reset function
+// resets the original function.
+func TestSetTestHookFetcherRun(t *testing.T) {
+	// Set the current function after the test finishes.
+	defer func(h func()) { testHookFetcherRun = h }(testHookFetcherRun)
+
+	// expected value for the unchanged function
+	original := 1
+	// expected value for the changed function
+	changed := 2
+
+	// this variable will be set with two different functions
+	var got int
+
+	// define the original (unchanged) functions
+	testHookFetcherRun = func() {
+		got = original
+	}
+
+	// set got variable
+	testHookFetcherRun()
+
+	// test if got variable is set correctly
+	if got != original {
+		t.Errorf("got hook value %v, want %v", got, original)
+	}
+
+	// set the new function
+	reset := setTestHookFetcherRun(func() {
+		got = changed
+	})
+
+	// set got variable
+	testHookFetcherRun()
+
+	// test if got variable is set correctly to changed value
+	if got != changed {
+		t.Errorf("got hook value %v, want %v", got, changed)
+	}
+
+	// set the function to the original one
+	reset()
+
+	// set got variable
+	testHookFetcherRun()
+
+	// test if got variable is set correctly to original value
+	if got != original {
+		t.Errorf("got hook value %v, want %v", got, original)
 	}
 }
