@@ -307,7 +307,10 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 			k.addrCountC <- k.addrs.Size()
 		}
 	}
-	log.Trace(k.string())
+
+	//remove spammy multi-line log
+	//log.Trace(k.string())
+
 	// calculate if depth of saturation changed
 	depth := uint8(k.saturation())
 	var changed bool

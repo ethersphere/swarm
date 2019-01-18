@@ -23,7 +23,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 const (
@@ -146,6 +148,12 @@ func (f *Fetcher) Offer(ctx context.Context, source *enode.ID) {
 
 // Request is called when an upstream peer request the chunk as part of `RetrieveRequestMsg`, or from a local request through FileStore, and the node does not have the chunk locally.
 func (f *Fetcher) Request(ctx context.Context, hopCount uint8) {
+	var osp opentracing.Span
+	ctx, osp = spancontext.StartSpan(
+		ctx,
+		"fetcher.request")
+	defer osp.Finish()
+
 	// First we need to have this select to make sure that we return if context is done
 	select {
 	case <-ctx.Done():
@@ -227,11 +235,17 @@ func (f *Fetcher) run(ctx context.Context, peers *sync.Map) {
 
 		// need to issue a new request
 		if doRequest {
+			ctxx, osp := spancontext.StartSpan(
+				ctx,
+				"fetcher.run.doRequest")
+
 			var err error
-			sources, err = f.doRequest(ctx, gone, peers, sources, hopCount)
+			sources, err = f.doRequest(ctxx, gone, peers, sources, hopCount)
 			if err != nil {
 				log.Info("unable to request", "request addr", f.addr, "err", err)
 			}
+
+			osp.Finish()
 		}
 
 		// if wait channel is not set, set it to a timer

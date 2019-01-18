@@ -26,7 +26,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	lru "github.com/hashicorp/golang-lru"
+	opentracing "github.com/opentracing/opentracing-go"
 )
 
 type (
@@ -93,14 +95,25 @@ func (n *NetStore) Put(ctx context.Context, ch Chunk) error {
 // it calls fetch with the request, which blocks until the chunk
 // arrived or context is done
 func (n *NetStore) Get(rctx context.Context, ref Address) (Chunk, error) {
-	chunk, fetch, err := n.get(rctx, ref)
+	lctx, osp := spancontext.StartSpan(
+		rctx,
+		"netstore.get")
+
+	chunk, fetch, err := n.get(lctx, ref)
 	if err != nil {
+		osp.Finish()
 		return nil, err
 	}
 	if chunk != nil {
+		osp.Finish()
 		return chunk, nil
 	}
-	return fetch(rctx)
+
+	rectx, osp := spancontext.StartSpan(
+		rctx,
+		"netstore.remoteget")
+	defer osp.Finish()
+	return fetch(rectx)
 }
 
 func (n *NetStore) BinIndex(po uint8) uint64 {
@@ -245,6 +258,12 @@ func newFetcher(addr Address, nf NetFetcher, cancel func(), peers *sync.Map, clo
 // Fetch fetches the chunk synchronously, it is called by NetStore.Get is the chunk is not available
 // locally.
 func (f *fetcher) Fetch(rctx context.Context) (Chunk, error) {
+	var osp opentracing.Span
+	rctx, osp = spancontext.StartSpan(
+		rctx,
+		"fetcher.fetch")
+	defer osp.Finish()
+
 	atomic.AddInt32(&f.requestCnt, 1)
 	defer func() {
 		// if all the requests are done the fetcher can be cancelled

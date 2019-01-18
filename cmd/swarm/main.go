@@ -45,7 +45,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 	sv "github.com/ethereum/go-ethereum/swarm/version"
 
-	"gopkg.in/urfave/cli.v1"
+	cli "gopkg.in/urfave/cli.v1"
 )
 
 const clientIdentifier = "swarm"
@@ -240,7 +240,6 @@ func keys(ctx *cli.Context) error {
 		fmt.Println(fmt.Sprintf("publicKey=%s", pubkeyhex))
 	}
 	fmt.Println(fmt.Sprintf("publicKeyCompressed=%s", pubCompressed))
-
 	return nil
 }
 

@@ -251,7 +251,8 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 				return true
 			}
 			if req.SkipPeer(id.String()) {
-				log.Trace("Delivery.RequestFromPeers: skip peer", "peer id", id)
+				// disable trace log: it is too spamy (1/3 of all logs)
+				//log.Trace("Delivery.RequestFromPeers: skip peer", "peer id", id)
 				return true
 			}
 			sp = d.getPeer(id)
