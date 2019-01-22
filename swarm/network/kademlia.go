@@ -767,10 +767,10 @@ func (k *Kademlia) connectedNeighbours(peers [][]byte) (got bool, n int, missing
 	return connects == len(peers), connects, missing
 }
 
-// connectedPotential checks whether the node is connected to a health minimum of peers it knows about in bins that are shallower than depth
+// getWeakBins checks whether the node is connected to a health minimum of peers it knows about in bins that are shallower than depth
 // it returns an array of bin proximity orders for which this is not the case
 // TODO move to separate testing tools file
-func (k *Kademlia) connectedPotential() (missing []int) {
+func (k *Kademlia) getWeakBins() (missing []int) {
 	pk := make(map[int]int)
 	pc := make(map[int]int)
 
@@ -808,8 +808,8 @@ type Health struct {
 	ConnectNN        bool     // whether node is connected to all its neighbours
 	CountConnectNN   int      // amount of neighbours connected to
 	MissingConnectNN [][]byte // which neighbours we should have been connected to but we're not
-	Saturation       int      // whether we are connected to all the peers we would have liked to
-	Potent           bool     // whether we are connected to a minimum of peers in all the bins we have known peers in
+	Saturated        bool     // whether we are connected to all the peers we would have liked to
+	Robust           bool     // whether we are connected to a minimum of peers in all the bins we have known peers in
 	Hive             string
 }
 
@@ -827,33 +827,25 @@ func (k *Kademlia) Healthy(pp *PeerPot) *Health {
 	if len(pp.NNSet) < k.NeighbourhoodSize {
 		log.Warn("peerpot NNSet < NeighbourhoodSize")
 	}
-	gotnn, countgotnn, culpritsgotnn := k.connectedNeighbours(pp.NNSet)
-	knownn, countknownn, culpritsknownn := k.knowNeighbours(pp.NNSet)
+	connectNN, countConnectNN, missingConnectNN := k.connectedNeighbours(pp.NNSet)
+	knownNN, countKnownNN, missingKnownNN := k.knowNeighbours(pp.NNSet)
 	depth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
-	saturated := k.saturation() < depth
-	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, saturated: %v\n", k.base, knownn, gotnn, saturated))
-	/*
-	=======
+	isSaturated := k.saturation() < depth
 
-		connectnn, countconnectnn, missingconnectnn := k.connectedNeighbours(pp.NNSet)
-		knownn, countknownn, missingknownn := k.knowNeighbours(pp.NNSet)
-		saturation := k.saturation()
-		impotentBins := k.connectedPotential()
-		potent := len(impotentBins) == 0
+	weakBins := k.getWeakBins()
+	isRobust := len(weakBins) == 0
 
-		log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, connectNNs: %v, saturation: %v\n", k.base, knownn, connectnn, saturation))
+	log.Trace(fmt.Sprintf("%08x: healthy: knowNNs: %v, gotNNs: %v, isSaturated: %v, isRobust:%v\n", k.base, knownNN, connectNN, isSaturated, isRobust))
 
-	>>>>>>> swarm/network: Add potent method for healthy, fix saturation
-	*/
 	return &Health{
-		KnowNN:           knownn,
-		CountKnowNN:      countknownn,
-		MissingKnowNN:    missingknownn,
-		ConnectNN:        connectnn,
-		CountConnectNN:   countconnectnn,
-		MissingConnectNN: missingconnectnn,
-		Saturation:       saturation,
-		Potent:           potent,
+		KnowNN:           knownNN,
+		CountKnowNN:      countKnownNN,
+		MissingKnowNN:    missingKnownNN,
+		ConnectNN:        connectNN,
+		CountConnectNN:   countConnectNN,
+		MissingConnectNN: missingConnectNN,
+		Saturated:        isSaturated,
+		Robust:           isRobust,
 		Hive:             k.string(),
 	}
 }
