@@ -90,9 +90,11 @@ func uploadAndSync(c *cli.Context) error {
 		metrics.GetOrRegisterResettingTimer("upload-and-sync.total-time", nil).Update(totalTime)
 	}(time.Now())
 
+	tuid := uuid.New()[:8]
+
 	generateEndpoints(scheme, cluster, appName, from, to)
 	seed := int(time.Now().UnixNano() / 1e6)
-	log.Info("uploading to "+endpoints[0]+" and syncing", "seed", seed)
+	log.Info("uploading to "+endpoints[0]+" and syncing", "tuid", tuid, "seed", seed)
 
 	randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
@@ -102,7 +104,8 @@ func uploadAndSync(c *cli.Context) error {
 		log.Error(err.Error())
 		return err
 	}
-	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).UpdateSince(t1)
+	t2 := time.Since(t1)
+	metrics.GetOrRegisterResettingTimer("upload-and-sync.upload-time", nil).Update(t2)
 
 	fhash, err := digest(bytes.NewReader(randomBytes))
 	if err != nil {
@@ -110,7 +113,7 @@ func uploadAndSync(c *cli.Context) error {
 		return err
 	}
 
-	log.Info("uploaded successfully", "hash", hash, "digest", fmt.Sprintf("%x", fhash))
+	log.Info("uploaded successfully", "tuid", tuid, "hash", hash, "digest", fmt.Sprintf("%x", fhash), "took", t2)
 
 	time.Sleep(time.Duration(syncDelay) * time.Second)
 
@@ -123,12 +126,14 @@ func uploadAndSync(c *cli.Context) error {
 		go func(endpoint string, ruid string) {
 			for {
 				start := time.Now()
-				err := fetch(hash, endpoint, fhash, ruid)
+				err := fetch(hash, endpoint, fhash, ruid, tuid)
 				if err != nil {
 					continue
 				}
+				ended := time.Since(start)
 
-				metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).UpdateSince(start)
+				metrics.GetOrRegisterResettingTimer("upload-and-sync.single.fetch-time", nil).Update(ended)
+				log.Debug("fetch successful", "tuid", tuid, "ruid", ruid, "took", ended)
 				wg.Done()
 				return
 			}
@@ -140,12 +145,14 @@ func uploadAndSync(c *cli.Context) error {
 			go func(endpoint string, ruid string) {
 				for {
 					start := time.Now()
-					err := fetch(hash, endpoint, fhash, ruid)
+					err := fetch(hash, endpoint, fhash, ruid, tuid)
 					if err != nil {
 						continue
 					}
+					ended := time.Since(start)
 
-					metrics.GetOrRegisterResettingTimer("upload-and-sync.each.fetch-time", nil).UpdateSince(start)
+					metrics.GetOrRegisterResettingTimer("upload-and-sync.each.fetch-time", nil).Update(ended)
+					log.Debug("fetch successful", "tuid", tuid, "ruid", ruid, "took", ended)
 					wg.Done()
 					return
 				}
@@ -153,17 +160,17 @@ func uploadAndSync(c *cli.Context) error {
 		}
 	}
 	wg.Wait()
-	log.Info("all endpoints synced random file successfully")
+	log.Info("all endpoints synced random file successfully", "tuid", tuid)
 
 	return nil
 }
 
 // fetch is getting the requested `hash` from the `endpoint` and compares it with the `original` file
-func fetch(hash string, endpoint string, original []byte, ruid string) error {
+func fetch(hash string, endpoint string, original []byte, ruid string, tuid string) error {
 	ctx, sp := spancontext.StartSpan(context.Background(), "upload-and-sync.fetch")
 	defer sp.Finish()
 
-	log.Trace("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
+	log.Trace("http get request", "tuid", tuid, "ruid", ruid, "api", endpoint, "hash", hash)
 
 	var tn time.Time
 	reqUri := endpoint + "/bzz:/" + hash + "/"
@@ -187,11 +194,11 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 		log.Error(err.Error(), "ruid", ruid)
 		return err
 	}
-	log.Trace("http get response", "ruid", ruid, "api", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
+	log.Trace("http get response", "tuid", tuid, "ruid", ruid, "api", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
 
 	if res.StatusCode != 200 {
 		err := fmt.Errorf("expected status code %d, got %v", 200, res.StatusCode)
-		log.Warn(err.Error(), "ruid", ruid)
+		log.Warn(err.Error(), "tuid", tuid, "ruid", ruid)
 		return err
 	}
 
@@ -199,17 +206,17 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 
 	rdigest, err := digest(res.Body)
 	if err != nil {
-		log.Warn(err.Error(), "ruid", ruid)
+		log.Warn(err.Error(), "tuid", tuid, "ruid", ruid)
 		return err
 	}
 
 	if !bytes.Equal(rdigest, original) {
 		err := fmt.Errorf("downloaded imported file md5=%x is not the same as the generated one=%x", rdigest, original)
-		log.Warn(err.Error(), "ruid", ruid)
+		log.Warn(err.Error(), "tuid", tuid, "ruid", ruid)
 		return err
 	}
 
-	log.Trace("downloaded file matches random file", "ruid", ruid, "len", res.ContentLength)
+	log.Trace("downloaded file matches random file", "tuid", tuid, "ruid", ruid, "len", res.ContentLength)
 
 	return nil
 }

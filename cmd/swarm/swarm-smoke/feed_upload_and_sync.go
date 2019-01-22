@@ -23,7 +23,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
-	colorable "github.com/mattn/go-colorable"
 	opentracing "github.com/opentracing/opentracing-go"
 	"github.com/pborman/uuid"
 	cli "gopkg.in/urfave/cli.v1"
@@ -35,7 +34,6 @@ const (
 
 func cliFeedUploadAndSync(c *cli.Context) error {
 	metrics.GetOrRegisterCounter("feed-and-sync", nil).Inc(1)
-	log.Root().SetHandler(log.CallerFileHandler(log.LvlFilterHandler(log.Lvl(verbosity), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true)))))
 
 	errc := make(chan error)
 	go func() {
@@ -290,7 +288,7 @@ func feedUploadAndSync(c *cli.Context) error {
 			ruid := uuid.New()[:8]
 			go func(url string, endpoint string, ruid string) {
 				for {
-					err := fetch(url, endpoint, fileHash, ruid)
+					err := fetch(url, endpoint, fileHash, ruid, "")
 					if err != nil {
 						continue
 					}
