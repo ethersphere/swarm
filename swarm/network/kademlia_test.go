@@ -196,9 +196,9 @@ func TestHealthStrict(t *testing.T) {
 	tk.checkHealth(true, false)
 
 	// know three peers, connected to the two deepest
-	// healthy
+	// unhealthy (not robust)
 	tk.Register("00000000")
-	tk.checkHealth(true, false)
+	tk.checkHealth(false, false)
 
 	// know three peers, connected to all three
 	// healthy
@@ -236,9 +236,9 @@ func (tk *testKademlia) checkHealth(expectHealthy bool, expectSaturated bool) {
 	})
 
 	pp := NewPeerPotMap(tk.NeighbourhoodSize, addrs)
-	healthParams := tk.Healthy(pp[kid])
+	healthParams := tk.GetHealthInfo(pp[kid])
 
-	health := healthParams.KnowNN && healthParams.ConnectNN && healthParams.CountKnowNN > 0
+	health := healthParams.IsHealthyStrict()
 	if expectHealthy != health {
 		tk.t.Fatalf("expected kademlia health %v, is %v\n%v", expectHealthy, health, tk.String())
 	}
@@ -307,52 +307,6 @@ func TestIsRobust(t *testing.T) {
 	isRobust(t, tk, true)
 }
 
-func TestIsSaturated(t *testing.T) {
-	baseAddressBytes := RandomAddr().OAddr
-	k := NewKademlia(baseAddressBytes, NewKadParams())
-
-	baseAddress := pot.NewAddressFromBytes(baseAddressBytes)
-
-	// add first connected neighbor
-	// saturated false
-	addr := pot.RandomAddressAt(baseAddress, 3)
-	peer := newTestDiscoveryPeer(addr, k)
-	k.On(peer)
-	isSaturated(t, k, false)
-
-	// add second connected neighbor
-	// saturated false
-	addr = pot.RandomAddressAt(baseAddress, 4)
-	peer = newTestDiscoveryPeer(addr, k)
-	k.On(peer)
-	isSaturated(t, k, false)
-
-	// connect peer in zero-bin
-	// saturated true
-	addr = pot.RandomAddressAt(baseAddress, 0)
-	peer = newTestDiscoveryPeer(addr, k)
-	k.On(peer)
-	isSaturated(t, k, true)
-
-	// connect another peer in zero-bin
-	// saturated false
-	addr = pot.RandomAddressAt(baseAddress, 0)
-	peer = newTestDiscoveryPeer(addr, k)
-	k.On(peer)
-	isSaturated(t, k, false)
-
-	// one connection in zero-bin, two in one-bin
-	// saturated true
-	k.Off(peer)
-	addr = pot.RandomAddressAt(baseAddress, 1)
-	peer = newTestDiscoveryPeer(addr, k)
-	k.On(peer)
-	addr = pot.RandomAddressAt(baseAddress, 1)
-	peer = newTestDiscoveryPeer(addr, k)
-	k.On(peer)
-	isSaturated(t, k, true)
-}
-
 // retrieves the health object based on the current connectivity of the given kademlia
 func getHealth(k *Kademlia) *Health {
 	kid := common.Bytes2Hex(k.BaseAddr())
@@ -362,7 +316,7 @@ func getHealth(k *Kademlia) *Health {
 		return true
 	})
 	pp := NewPeerPotMap(k.NeighbourhoodSize, addrs)
-	return k.Healthy(pp[kid])
+	return k.GetHealthInfo(pp[kid])
 }
 
 // evaluates healthiness by taking into account robustial connections
@@ -373,14 +327,6 @@ func isRobust(t *testing.T, k *testKademlia, expectIsRobust bool) {
 	healthParams := getHealth(k.Kademlia)
 	if expectIsRobust != healthParams.Robust {
 		t.Fatalf("expected kademlia potency %v, is %v\n%v", expectIsRobust, healthParams.Robust, k.String())
-	}
-}
-
-func isSaturated(t *testing.T, k *Kademlia, expectSaturated bool) {
-	t.Helper()
-	healthParams := getHealth(k)
-	if expectSaturated != healthParams.Saturated {
-		t.Fatalf("expected kademlia saturation %v, is %v\n%v", expectSaturated, healthParams.Saturated, k.String())
 	}
 }
 

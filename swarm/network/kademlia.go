@@ -690,9 +690,6 @@ func (k *Kademlia) saturation() int {
 	if prev < 0 {
 		return 0
 	}
-	if prev < 0 {
-		prev = 0
-	}
 	return prev
 }
 
@@ -813,7 +810,12 @@ type Health struct {
 	Hive             string
 }
 
-// Healthy reports the health state of the kademlia connectivity
+// IsHealthyStrict return the strict interpretation of `Healthy` given a `Health` struct
+func (h *Health) IsHealthyStrict() bool {
+	return h.KnowNN && h.ConnectNN && h.CountKnowNN > 0 && h.Robust
+}
+
+// GetHealthInfo reports the health state of the kademlia connectivity
 //
 // The PeerPot argument provides an all-knowing view of the network
 // The resulting Health object is a result of comparisons between
@@ -821,7 +823,7 @@ type Health struct {
 // what SHOULD it have been when we take all we know about the network into consideration.
 //
 // used for testing only
-func (k *Kademlia) Healthy(pp *PeerPot) *Health {
+func (k *Kademlia) GetHealthInfo(pp *PeerPot) *Health {
 	k.lock.RLock()
 	defer k.lock.RUnlock()
 	if len(pp.NNSet) < k.NeighbourhoodSize {
