@@ -811,6 +811,11 @@ type Health struct {
 }
 
 // IsHealthyStrict return the strict interpretation of `Healthy` given a `Health` struct
+// definition of strict health: all conditions must be true:
+// - we at least know one peer
+// - we know all neighbors
+// - we are connected to all known neighbors
+// - it is robust (we are connected to a minimum of peers in all the bins we have known peers in)
 func (h *Health) IsHealthyStrict() bool {
 	return h.KnowNN && h.ConnectNN && h.CountKnowNN > 0 && h.Robust
 }
