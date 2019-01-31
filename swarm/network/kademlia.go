@@ -786,7 +786,7 @@ func (k *Kademlia) getWeakBins() (missing []int) {
 	for po, v := range pk {
 		if pc[po] == v {
 			continue
-		} else if po >= depth && pc[po] != pk[po] {
+		} else if po >= depth {
 			missing = append(missing, po)
 		} else if pc[po] < k.HealthBinSize {
 			missing = append(missing, po)
