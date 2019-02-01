@@ -1,5 +1,5 @@
 package chunk
 
 const (
-	DefaultSize = 4096
+	DefaultSize = 32768
 )
