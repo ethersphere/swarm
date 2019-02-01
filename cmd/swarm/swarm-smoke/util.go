@@ -174,11 +174,11 @@ func fetchFeed(topic string, user string, endpoint string, original []byte, ruid
 }
 
 // fetch is getting the requested `hash` from the `endpoint` and compares it with the `original` file
-func fetch(hash string, endpoint string, original []byte, ruid string) error {
+func fetch(hash string, endpoint string, original []byte, ruid string, tuid string) error {
 	ctx, sp := spancontext.StartSpan(context.Background(), "upload-and-sync.fetch")
 	defer sp.Finish()
 
-	log.Info("http get request", "ruid", ruid, "api", endpoint, "hash", hash)
+	log.Info("http get request", "tuid", tuid, "ruid", ruid, "endpoint", endpoint, "hash", hash)
 
 	var tn time.Time
 	reqUri := endpoint + "/bzz:/" + hash + "/"
@@ -202,7 +202,7 @@ func fetch(hash string, endpoint string, original []byte, ruid string) error {
 		log.Error(err.Error(), "ruid", ruid)
 		return err
 	}
-	log.Info("http get response", "ruid", ruid, "api", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
+	log.Info("http get response", "tuid", tuid, "ruid", ruid, "endpoint", endpoint, "hash", hash, "code", res.StatusCode, "len", res.ContentLength)
 
 	if res.StatusCode != 200 {
 		err := fmt.Errorf("expected status code %d, got %v", 200, res.StatusCode)

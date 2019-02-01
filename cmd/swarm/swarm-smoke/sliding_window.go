@@ -91,7 +91,7 @@ outer:
 					randIndex := 1 + rand.Intn(len(endpoints)-1)
 					ruid := uuid.New()[:8]
 					start := time.Now()
-					err := fetch(v.hash, endpoints[randIndex], v.digest, ruid)
+					err := fetch(v.hash, endpoints[randIndex], v.digest, ruid, "")
 					if err != nil {
 						continue inner
 					}
