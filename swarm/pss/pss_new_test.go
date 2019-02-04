@@ -434,6 +434,7 @@ func nodeIDToAddr(id enode.ID) []byte {
 // temporary function for polling a "stable" network
 // stability here means no conns or drops in network within a "serenity" duration
 // timeout is max time to wait for a "stable" network
+// TODO: remove when replaced with snapshot
 func serenityNowPlease(sim *simulation.Simulation, serenity time.Duration, timeout time.Duration) bool {
 	ctx, cancel := context.WithTimeout(context.TODO(), timeout)
 	defer cancel()
