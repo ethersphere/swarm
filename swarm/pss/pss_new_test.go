@@ -129,6 +129,7 @@ func testProxNetwork(t *testing.T) {
 	defer sim.Close()
 
 	// start network
+	// TODO: use snapshot and skip until SKIP
 	_, err = sim.AddNodesAndConnectRing(int(nodeCount))
 	if err != nil {
 		t.Fatal(err)
@@ -168,6 +169,7 @@ func testProxNetwork(t *testing.T) {
 		t.Fatalf("network not stable after %ds", timeoutMultiplier)
 	}
 	log.Debug("network stable", "threshold", pulse)
+	// SKIP <- skip till here
 
 	// generate messages and index them
 	pof := pot.DefaultPof(256)
@@ -256,7 +258,7 @@ func testProxNetwork(t *testing.T) {
 				// incoming message from pss message handler
 				case handlerNotification := <-handlerC:
 
-					// for brevity below
+					// for syntax brevity below
 					xMsgs := expectedMsgs[handlerNotification.id]
 
 					// check if recipient has already received all its messages
