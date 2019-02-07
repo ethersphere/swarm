@@ -294,6 +294,7 @@ func bzzd(ctx *cli.Context) error {
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
 	}
+	defer stack.Close()
 
 	//a few steps need to be done after the config phase is completed,
 	//due to overriding behavior
@@ -381,6 +382,8 @@ func getPrivKey(ctx *cli.Context) *ecdsa.PrivateKey {
 	if err != nil {
 		utils.Fatalf("can't create node: %v", err)
 	}
+	defer stack.Close()
+
 	return getAccount(bzzconfig.BzzAccount, ctx, stack)
 }
 
