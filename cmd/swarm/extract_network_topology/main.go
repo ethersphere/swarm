@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os/exec"
 
@@ -19,11 +20,20 @@ import (
 // echo '{"jsonrpc":"2.0","method":"admin_peers","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/<<namespace>>/pods/http:<<deploymentName>>-<<index>>:8546/proxy/ --origin localhost
 // echo '{"jsonrpc":"2.0","method":"admin_peers","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/gluk256/pods/http:swarm-3:8546/proxy/ --origin localhost | jq ".[]" | tail -n+3 | jq ".[] | .id"
 
+var (
+	nodes          int
+	namespace      string
+	deploymentName string
+)
+
+func init() {
+	flag.IntVar(&nodes, "nodes", 3, "number of nodes in the deployment")
+	flag.StringVar(&namespace, "namespace", "staging", "kubernetes namespace of the deployment")
+	flag.StringVar(&deploymentName, "deploymentName", "swarm-private", "deployment name")
+}
+
 func main() {
-	// TODO: get from command-line arguments / golang flags
-	namespace := "staging"
-	nodes := 3
-	deploymentName := "swarm-private"
+	flag.Parse()
 
 	privateKeys := []string{}
 	names := []string{}
