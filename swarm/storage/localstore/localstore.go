@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -17,415 +17,235 @@
 package localstore
 
 import (
-	"encoding/binary"
-	"encoding/hex"
-	"errors"
+	"context"
+	"path/filepath"
 	"sync"
-	"time"
 
-	"github.com/ethereum/go-ethereum/log"
-	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
-var (
-	// ErrInvalidMode is retuned when an unknown Mode
-	// is provided to the function.
-	ErrInvalidMode = errors.New("invalid mode")
-	// ErrAddressLockTimeout is returned when the same chunk
-	// is updated in parallel and one of the updates
-	// takes longer then the configured timeout duration.
-	ErrAddressLockTimeout = errors.New("address lock timeout")
-)
-
-var (
-	// Default value for Capacity DB option.
-	defaultCapacity int64 = 5000000
-	// Limit the number of goroutines created by Getters
-	// that call updateGC function. Value 0 sets no limit.
-	maxParallelUpdateGC = 1000
-)
-
-// DB is the local store implementation and holds
-// database related objects.
-type DB struct {
-	shed *shed.DB
-
-	// schema name of loaded data
-	schemaName shed.StringField
-	// field that stores number of intems in gc index
-	storedGCSize shed.Uint64Field
-
-	// retrieval indexes
-	retrievalDataIndex   shed.Index
-	retrievalAccessIndex shed.Index
-	// push syncing index
-	pushIndex shed.Index
-	// push syncing subscriptions triggers
-	pushTriggers   []chan struct{}
-	pushTriggersMu sync.RWMutex
-
-	// pull syncing index
-	pullIndex shed.Index
-	// pull syncing subscriptions triggers per bin
-	pullTriggers   map[uint8][]chan struct{}
-	pullTriggersMu sync.RWMutex
-
-	// garbage collection index
-	gcIndex shed.Index
-	// index that stores hashes that are not
-	// counted in and saved to storedGCSize
-	gcUncountedHashesIndex shed.Index
-
-	// number of elements in garbage collection index
-	// it must be always read by getGCSize and
-	// set with incGCSize which are locking gcSizeMu
-	gcSize   int64
-	gcSizeMu sync.RWMutex
-	// garbage collection is triggered when gcSize exceeds
-	// the capacity value
-	capacity int64
-
-	// triggers garbage collection event loop
-	collectGarbageTrigger chan struct{}
-	// triggers write gc size event loop
-	writeGCSizeTrigger chan struct{}
-
-	// a buffered channel acting as a semaphore
-	// to limit the maximal number of goroutines
-	// created by Getters to call updateGC function
-	updateGCSem chan struct{}
-	// a wait group to ensure all updateGC goroutines
-	// are done before closing the database
-	updateGCWG sync.WaitGroup
-
-	baseKey []byte
-
-	addressLocks sync.Map
-
-	// this channel is closed when close function is called
-	// to terminate other goroutines
-	close chan struct{}
+type LocalStoreParams struct {
+	*StoreParams
+	ChunkDbPath string
+	Validators  []ChunkValidator `toml:"-"`
 }
 
-// Options struct holds optional parameters for configuring DB.
-type Options struct {
-	// MockStore is a mock node store that is used to store
-	// chunk data in a central store. It can be used to reduce
-	// total storage space requirements in testing large number
-	// of swarm nodes with chunk data deduplication provided by
-	// the mock global store.
-	MockStore *mock.NodeStore
-	// Capacity is a limit that triggers garbage collection when
-	// number of items in gcIndex equals or exceeds it.
-	Capacity int64
-	// MetricsPrefix defines a prefix for metrics names.
-	MetricsPrefix string
+func NewDefaultLocalStoreParams() *LocalStoreParams {
+	return &LocalStoreParams{
+		StoreParams: NewDefaultStoreParams(),
+	}
 }
 
-// New returns a new DB.  All fields and indexes are initialized
-// and possible conflicts with schema from existing database is checked.
-// One goroutine for writing batches is created.
-func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
-	if o == nil {
-		o = new(Options)
+//this can only finally be set after all config options (file, cmd line, env vars)
+//have been evaluated
+func (p *LocalStoreParams) Init(path string) {
+	if p.ChunkDbPath == "" {
+		p.ChunkDbPath = filepath.Join(path, "chunks")
 	}
-	db = &DB{
-		capacity: o.Capacity,
-		baseKey:  baseKey,
-		// channels collectGarbageTrigger and writeGCSizeTrigger
-		// need to be buffered with the size of 1
-		// to signal another event if it
-		// is triggered during already running function
-		collectGarbageTrigger: make(chan struct{}, 1),
-		writeGCSizeTrigger:    make(chan struct{}, 1),
-		close:                 make(chan struct{}),
-	}
-	if db.capacity <= 0 {
-		db.capacity = defaultCapacity
-	}
-	if maxParallelUpdateGC > 0 {
-		db.updateGCSem = make(chan struct{}, maxParallelUpdateGC)
-	}
-
-	db.shed, err = shed.NewDB(path, o.MetricsPrefix)
-	if err != nil {
-		return nil, err
-	}
-	// Identify current storage schema by arbitrary name.
-	db.schemaName, err = db.shed.NewStringField("schema-name")
-	if err != nil {
-		return nil, err
-	}
-	// Persist gc size.
-	db.storedGCSize, err = db.shed.NewUint64Field("gc-size")
-	if err != nil {
-		return nil, err
-	}
-	// Functions for retrieval data index.
-	var (
-		encodeValueFunc func(fields shed.Item) (value []byte, err error)
-		decodeValueFunc func(keyItem shed.Item, value []byte) (e shed.Item, err error)
-	)
-	if o.MockStore != nil {
-		encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, 8)
-			binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
-			err = o.MockStore.Put(fields.Address, fields.Data)
-			if err != nil {
-				return nil, err
-			}
-			return b, nil
-		}
-		decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-			e.Data, err = o.MockStore.Get(keyItem.Address)
-			return e, err
-		}
-	} else {
-		encodeValueFunc = func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, 8)
-			binary.BigEndian.PutUint64(b, uint64(fields.StoreTimestamp))
-			value = append(b, fields.Data...)
-			return value, nil
-		}
-		decodeValueFunc = func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[:8]))
-			e.Data = value[8:]
-			return e, nil
-		}
-	}
-	// Index storing actual chunk address, data and store timestamp.
-	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|Data", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
-			return e, nil
-		},
-		EncodeValue: encodeValueFunc,
-		DecodeValue: decodeValueFunc,
-	})
-	if err != nil {
-		return nil, err
-	}
-	// Index storing access timestamp for a particular address.
-	// It is needed in order to update gc index keys for iteration order.
-	db.retrievalAccessIndex, err = db.shed.NewIndex("Address->AccessTimestamp", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			b := make([]byte, 8)
-			binary.BigEndian.PutUint64(b, uint64(fields.AccessTimestamp))
-			return b, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			e.AccessTimestamp = int64(binary.BigEndian.Uint64(value))
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	// pull index allows history and live syncing per po bin
-	db.pullIndex, err = db.shed.NewIndex("PO|StoredTimestamp|Hash->nil", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 41)
-			key[0] = db.po(fields.Address)
-			binary.BigEndian.PutUint64(key[1:9], uint64(fields.StoreTimestamp))
-			copy(key[9:], fields.Address[:])
-			return key, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key[9:]
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(key[1:9]))
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return nil, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	// create a pull syncing triggers used by SubscribePull function
-	db.pullTriggers = make(map[uint8][]chan struct{})
-	// push index contains as yet unsynced chunks
-	db.pushIndex, err = db.shed.NewIndex("StoredTimestamp|Hash->nil", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 40)
-			binary.BigEndian.PutUint64(key[:8], uint64(fields.StoreTimestamp))
-			copy(key[8:], fields.Address[:])
-			return key, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key[8:]
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(key[:8]))
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return nil, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	// create a push syncing triggers used by SubscribePush function
-	db.pushTriggers = make([]chan struct{}, 0)
-	// gc index for removable chunk ordered by ascending last access time
-	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|StoredTimestamp|Hash->nil", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			b := make([]byte, 16, 16+len(fields.Address))
-			binary.BigEndian.PutUint64(b[:8], uint64(fields.AccessTimestamp))
-			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
-			key = append(b, fields.Address...)
-			return key, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.AccessTimestamp = int64(binary.BigEndian.Uint64(key[:8]))
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(key[8:16]))
-			e.Address = key[16:]
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return nil, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-	// gc uncounted hashes index keeps hashes that are in gc index
-	// but not counted in and saved to storedGCSize
-	db.gcUncountedHashesIndex, err = db.shed.NewIndex("Hash->nil", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return nil, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// count number of elements in garbage collection index
-	gcSize, err := db.storedGCSize.Get()
-	if err != nil {
-		return nil, err
-	}
-	// get number of uncounted hashes
-	gcUncountedSize, err := db.gcUncountedHashesIndex.Count()
-	if err != nil {
-		return nil, err
-	}
-	gcSize += uint64(gcUncountedSize)
-	// remove uncounted hashes from the index and
-	// save the total gcSize after uncounted hashes are removed
-	err = db.writeGCSize(int64(gcSize))
-	if err != nil {
-		return nil, err
-	}
-	db.incGCSize(int64(gcSize))
-
-	// start worker to write gc size
-	go db.writeGCSizeWorker()
-	// start garbage collection worker
-	go db.collectGarbageWorker()
-	return db, nil
 }
 
-// Close closes the underlying database.
-func (db *DB) Close() (err error) {
-	close(db.close)
-	db.updateGCWG.Wait()
-	if err := db.writeGCSize(db.getGCSize()); err != nil {
-		log.Error("localstore: write gc size", "err", err)
+// LocalStore is a combination of inmemory db over a disk persisted db
+// implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
+type LocalStore struct {
+	Validators []ChunkValidator
+	memStore   *MemStore
+	DbStore    *LDBStore
+	mu         sync.Mutex
+}
+
+// This constructor uses MemStore and DbStore as components
+func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
+	ldbparams := NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
+	dbStore, err := NewMockDbStore(ldbparams, mockStore)
+	if err != nil {
+		return nil, err
 	}
-	return db.shed.Close()
+	return &LocalStore{
+		memStore:   NewMemStore(params.StoreParams, dbStore),
+		DbStore:    dbStore,
+		Validators: params.Validators,
+	}, nil
 }
 
-// po computes the proximity order between the address
-// and database base key.
-func (db *DB) po(addr storage.Address) (bin uint8) {
-	return uint8(storage.Proximity(db.baseKey, addr))
+func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
+	ldbparams := NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
+	dbStore, err := NewLDBStore(ldbparams)
+	if err != nil {
+		return nil, err
+	}
+	localStore := &LocalStore{
+		memStore:   NewMemStore(params.StoreParams, dbStore),
+		DbStore:    dbStore,
+		Validators: params.Validators,
+	}
+	return localStore, nil
 }
 
-var (
-	// Maximal time for lockAddr to wait until it
-	// returns error.
-	addressLockTimeout = 3 * time.Second
-	// duration between two lock checks in lockAddr.
-	addressLockCheckDelay = 30 * time.Microsecond
-)
+// isValid returns true if chunk passes any of the LocalStore Validators.
+// isValid also returns true if LocalStore has no Validators.
+func (ls *LocalStore) isValid(chunk Chunk) bool {
+	// by default chunks are valid. if we have 0 validators, then all chunks are valid.
+	valid := true
 
-// lockAddr sets the lock on a particular address
-// using addressLocks sync.Map and returns unlock function.
-// If the address is locked this function will check it
-// in a for loop for addressLockTimeout time, after which
-// it will return ErrAddressLockTimeout error.
-func (db *DB) lockAddr(addr storage.Address) (unlock func(), err error) {
-	start := time.Now()
-	lockKey := hex.EncodeToString(addr)
-	for {
-		_, loaded := db.addressLocks.LoadOrStore(lockKey, struct{}{})
-		if !loaded {
+	// ls.Validators contains a list of one validator per chunk type.
+	// if one validator succeeds, then the chunk is valid
+	for _, v := range ls.Validators {
+		if valid = v.Validate(chunk); valid {
 			break
 		}
-		time.Sleep(addressLockCheckDelay)
-		if time.Since(start) > addressLockTimeout {
-			return nil, ErrAddressLockTimeout
+	}
+	return valid
+}
+
+// Put is responsible for doing validation and storage of the chunk
+// by using configured ChunkValidators, MemStore and LDBStore.
+// If the chunk is not valid, its GetErrored function will
+// return ErrChunkInvalid.
+// This method will check if the chunk is already in the MemStore
+// and it will return it if it is. If there is an error from
+// the MemStore.Get, it will be returned by calling GetErrored
+// on the chunk.
+// This method is responsible for closing Chunk.ReqC channel
+// when the chunk is stored in memstore.
+// After the LDBStore.Put, it is ensured that the MemStore
+// contains the chunk with the same data, but nil ReqC channel.
+func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
+	if !ls.isValid(chunk) {
+		return ErrChunkInvalid
+	}
+
+	log.Trace("localstore.put", "key", chunk.Address())
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	_, err := ls.memStore.Get(ctx, chunk.Address())
+	if err == nil {
+		return nil
+	}
+	if err != nil && err != ErrChunkNotFound {
+		return err
+	}
+	ls.memStore.Put(ctx, chunk)
+	err = ls.DbStore.Put(ctx, chunk)
+	return err
+}
+
+// Has queries the underlying DbStore if a chunk with the given address
+// is being stored there.
+// Returns true if it is stored, false if not
+func (ls *LocalStore) Has(ctx context.Context, addr Address) bool {
+	return ls.DbStore.Has(ctx, addr)
+}
+
+// Get(chunk *Chunk) looks up a chunk in the local stores
+// This method is blocking until the chunk is retrieved
+// so additional timeout may be needed to wrap this call if
+// ChunkStores are remote and can have long latency
+func (ls *LocalStore) Get(ctx context.Context, addr Address) (chunk Chunk, err error) {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	return ls.get(ctx, addr)
+}
+
+func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err error) {
+	chunk, err = ls.memStore.Get(ctx, addr)
+
+	if err != nil && err != ErrChunkNotFound {
+		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
+		return nil, err
+	}
+
+	if err == nil {
+		metrics.GetOrRegisterCounter("localstore.get.cachehit", nil).Inc(1)
+		go ls.DbStore.MarkAccessed(addr)
+		return chunk, nil
+	}
+
+	metrics.GetOrRegisterCounter("localstore.get.cachemiss", nil).Inc(1)
+	chunk, err = ls.DbStore.Get(ctx, addr)
+	if err != nil {
+		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
+		return nil, err
+	}
+
+	ls.memStore.Put(ctx, chunk)
+	return chunk, nil
+}
+
+func (ls *LocalStore) FetchFunc(ctx context.Context, addr Address) func(context.Context) error {
+	ls.mu.Lock()
+	defer ls.mu.Unlock()
+
+	_, err := ls.get(ctx, addr)
+	if err == nil {
+		return nil
+	}
+	return func(context.Context) error {
+		return err
+	}
+}
+
+func (ls *LocalStore) BinIndex(po uint8) uint64 {
+	return ls.DbStore.BinIndex(po)
+}
+
+func (ls *LocalStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
+	return ls.DbStore.SyncIterator(from, to, po, f)
+}
+
+// Close the local store
+func (ls *LocalStore) Close() {
+	ls.DbStore.Close()
+}
+
+// Migrate checks the datastore schema vs the runtime schema and runs
+// migrations if they don't match
+func (ls *LocalStore) Migrate() error {
+	actualDbSchema, err := ls.DbStore.GetSchema()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+
+	if actualDbSchema == CurrentDbSchema {
+		return nil
+	}
+
+	log.Debug("running migrations for", "schema", actualDbSchema, "runtime-schema", CurrentDbSchema)
+
+	if actualDbSchema == DbSchemaNone {
+		ls.migrateFromNoneToPurity()
+		actualDbSchema = DbSchemaPurity
+	}
+
+	if err := ls.DbStore.PutSchema(actualDbSchema); err != nil {
+		return err
+	}
+
+	if actualDbSchema == DbSchemaPurity {
+		if err := ls.migrateFromPurityToHalloween(); err != nil {
+			return err
 		}
+		actualDbSchema = DbSchemaHalloween
 	}
-	return func() { db.addressLocks.Delete(lockKey) }, nil
+
+	if err := ls.DbStore.PutSchema(actualDbSchema); err != nil {
+		return err
+	}
+	return nil
 }
 
-// chunkToItem creates new Item with data provided by the Chunk.
-func chunkToItem(ch storage.Chunk) shed.Item {
-	return shed.Item{
-		Address: ch.Address(),
-		Data:    ch.Data(),
-	}
+func (ls *LocalStore) migrateFromNoneToPurity() {
+	// delete chunks that are not valid, i.e. chunks that do not pass
+	// any of the ls.Validators
+	ls.DbStore.Cleanup(func(c *chunk) bool {
+		return !ls.isValid(c)
+	})
 }
 
-// addressToItem creates new Item with a provided address.
-func addressToItem(addr storage.Address) shed.Item {
-	return shed.Item{
-		Address: addr,
-	}
-}
-
-// now is a helper function that returns a current unix timestamp
-// in UTC timezone.
-// It is set in the init function for usage in production, and
-// optionally overridden in tests for data validation.
-var now func() int64
-
-func init() {
-	// set the now function
-	now = func() (t int64) {
-		return time.Now().UTC().UnixNano()
-	}
+func (ls *LocalStore) migrateFromPurityToHalloween() error {
+	return ls.DbStore.CleanGCIndex()
 }

@@ -16,7 +16,7 @@
 
 // memory storage layer for the package blockhash
 
-package storage
+package memstore
 
 import (
 	"context"
