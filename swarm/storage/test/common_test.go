@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package storage
+package test
 
 import (
 	"bytes"
@@ -29,7 +29,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/constants"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/ldbstore"
 	"github.com/mattn/go-colorable"
 )
 
@@ -44,22 +46,30 @@ func init() {
 	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
 }
 
-type brokenLimitedReader struct {
+type BrokenLimitedReader struct {
 	lr    io.Reader
 	errAt int
 	off   int
 	size  int
 }
 
-func brokenLimitReader(data io.Reader, size int, errAt int) *brokenLimitedReader {
-	return &brokenLimitedReader{
+func BrokenLimitReader(data io.Reader, size int, errAt int) *BrokenLimitedReader {
+	return &BrokenLimitedReader{
 		lr:    data,
 		errAt: errAt,
 		size:  size,
 	}
 }
 
-func newLDBStore(t *testing.T) (*LDBStore, func()) {
+func (r *BrokenLimitedReader) Read(buf []byte) (int, error) {
+	if r.off+len(buf) > r.errAt {
+		return 0, fmt.Errorf("Broken reader")
+	}
+	r.off += len(buf)
+	return r.lr.Read(buf)
+}
+
+func NewLDBStore(t *testing.T) (*ldbstore.LDBStore, func()) {
 	dir, err := ioutil.TempDir("", "bzz-storage-test")
 	if err != nil {
 		t.Fatal(err)
@@ -83,11 +93,11 @@ func newLDBStore(t *testing.T) (*LDBStore, func()) {
 	return db, cleanup
 }
 
-func mputRandomChunks(store ChunkStore, n int) ([]Chunk, error) {
-	return mput(store, n, GenerateRandomChunk)
+func MputRandomChunks(store storage.ChunkStore, n int) ([]storage.Chunk, error) {
+	return Mput(store, n, GenerateRandomChunk)
 }
 
-func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Chunk, err error) {
+func Mput(store storage.ChunkStore, n int, f func(i int64) storage.Chunk) (hs []storage.Chunk, err error) {
 	// put to localstore and wait for stored channel
 	// does not check delivery error state
 	errc := make(chan error)
@@ -114,13 +124,13 @@ func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Chunk, err error
 	return hs, nil
 }
 
-func mget(store ChunkStore, hs []Address, f func(h Address, chunk Chunk) error) error {
+func Mget(store storage.ChunkStore, hs []storage.Address, f func(h storage.Address, chunk storage.Chunk) error) error {
 	wg := sync.WaitGroup{}
 	wg.Add(len(hs))
 	errc := make(chan error)
 
 	for _, k := range hs {
-		go func(h Address) {
+		go func(h storage.Address) {
 			defer wg.Done()
 			// TODO: write timeout with context
 			chunk, err := store.Get(context.TODO(), h)
@@ -151,15 +161,7 @@ func mget(store ChunkStore, hs []Address, f func(h Address, chunk Chunk) error) 
 	return err
 }
 
-func (r *brokenLimitedReader) Read(buf []byte) (int, error) {
-	if r.off+len(buf) > r.errAt {
-		return 0, fmt.Errorf("Broken reader")
-	}
-	r.off += len(buf)
-	return r.lr.Read(buf)
-}
-
-func testStoreRandom(m ChunkStore, n int, t *testing.T) {
+func testStoreRandom(m storage.ChunkStore, n int, t *testing.T) {
 	chunks, err := mputRandomChunks(m, n)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
@@ -170,12 +172,12 @@ func testStoreRandom(m ChunkStore, n int, t *testing.T) {
 	}
 }
 
-func testStoreCorrect(m ChunkStore, n int, t *testing.T) {
+func TestStoreCorrect(m storage.ChunkStore, n int, t *testing.T) {
 	chunks, err := mputRandomChunks(m, n)
 	if err != nil {
 		t.Fatalf("expected no error, got %v", err)
 	}
-	f := func(h Address, chunk Chunk) error {
+	f := func(h storage.Address, chunk storage.Chunk) error {
 		if !bytes.Equal(h, chunk.Address()) {
 			return fmt.Errorf("key does not match retrieved chunk Address")
 		}
@@ -195,10 +197,10 @@ func testStoreCorrect(m ChunkStore, n int, t *testing.T) {
 	}
 }
 
-func benchmarkStorePut(store ChunkStore, n int, b *testing.B) {
+func BenchmarkStorePut(store storage.ChunkStore, n int, b *testing.B) {
 	chunks := make([]Chunk, n)
 	i := 0
-	f := func(dataSize int64) Chunk {
+	f := func(dataSize int64) storage.Chunk {
 		chunk := GenerateRandomChunk(dataSize)
 		chunks[i] = chunk
 		i++
@@ -207,7 +209,7 @@ func benchmarkStorePut(store ChunkStore, n int, b *testing.B) {
 
 	mput(store, n, f)
 
-	f = func(dataSize int64) Chunk {
+	f = func(dataSize int64) storage.Chunk {
 		chunk := chunks[i]
 		i++
 		return chunk
@@ -222,7 +224,7 @@ func benchmarkStorePut(store ChunkStore, n int, b *testing.B) {
 	}
 }
 
-func benchmarkStoreGet(store ChunkStore, n int, b *testing.B) {
+func BenchmarkStoreGet(store storage.ChunkStore, n int, b *testing.B) {
 	chunks, err := mputRandomChunks(store, n)
 	if err != nil {
 		b.Fatalf("expected no error, got %v", err)
@@ -240,24 +242,24 @@ func benchmarkStoreGet(store ChunkStore, n int, b *testing.B) {
 
 // MapChunkStore is a very simple ChunkStore implementation to store chunks in a map in memory.
 type MapChunkStore struct {
-	chunks map[string]Chunk
+	chunks map[string]storage.Chunk
 	mu     sync.RWMutex
 }
 
 func NewMapChunkStore() *MapChunkStore {
 	return &MapChunkStore{
-		chunks: make(map[string]Chunk),
+		chunks: make(map[string]storage.Chunk),
 	}
 }
 
-func (m *MapChunkStore) Put(_ context.Context, ch Chunk) error {
+func (m *MapChunkStore) Put(_ context.Context, ch storage.Chunk) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.chunks[ch.Address().Hex()] = ch
 	return nil
 }
 
-func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
+func (m *MapChunkStore) Get(_ context.Context, ref storage.Address) (storage.Chunk, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	chunk := m.chunks[ref.Hex()]
@@ -268,7 +270,7 @@ func (m *MapChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 }
 
 // Need to implement Has from SyncChunkStore
-func (m *MapChunkStore) Has(ctx context.Context, ref Address) bool {
+func (m *MapChunkStore) Has(ctx context.Context, ref storage.Address) bool {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -279,8 +281,8 @@ func (m *MapChunkStore) Has(ctx context.Context, ref Address) bool {
 func (m *MapChunkStore) Close() {
 }
 
-func chunkAddresses(chunks []Chunk) []Address {
-	addrs := make([]Address, len(chunks))
+func ChunkAddresses(chunks []storage.Chunk) []storage.Address {
+	addrs := make([]storage.Address, len(chunks))
 	for i, ch := range chunks {
 		addrs[i] = ch.Address()
 	}
