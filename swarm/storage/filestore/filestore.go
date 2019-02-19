@@ -14,13 +14,15 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package storage
+package filestore
 
 import (
 	"context"
 	"io"
 	"sort"
 	"sync"
+
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 /*
@@ -35,15 +37,9 @@ As the chunker produces chunks, FileStore dispatches them to its own chunk store
 implementation for storage or retrieval.
 */
 
-const (
-	defaultLDBCapacity                = 5000000 // capacity for LevelDB, by default 5*10^6*4096 bytes == 20GB
-	defaultCacheCapacity              = 10000   // capacity for in-memory chunks' cache
-	defaultChunkRequestsCacheCapacity = 5000000 // capacity for container holding outgoing requests for chunks. should be set to LevelDB capacity
-)
-
 type FileStore struct {
-	ChunkStore
-	hashFunc SwarmHasher
+	storage.ChunkStore
+	hashFunc storage.SwarmHasher
 }
 
 type FileStoreParams struct {
@@ -58,18 +54,18 @@ func NewFileStoreParams() *FileStoreParams {
 
 // for testing locally
 func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
-	params := NewDefaultLocalStoreParams()
+	params := storage.NewDefaultLocalStoreParams()
 	params.Init(datadir)
-	localStore, err := NewLocalStore(params, nil)
+	localStore, err := storage.NewLocalStore(params, nil)
 	if err != nil {
 		return nil, err
 	}
-	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(MakeHashFunc(DefaultHash)))
+	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(storage.MakeHashFunc(DefaultHash)))
 	return NewFileStore(localStore, NewFileStoreParams()), nil
 }
 
-func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
-	hashFunc := MakeHashFunc(params.Hash)
+func NewFileStore(store storage.ChunkStore, params *FileStoreParams) *FileStore {
+	hashFunc := storage.MakeHashFunc(params.Hash)
 	return &FileStore{
 		ChunkStore: store,
 		hashFunc:   hashFunc,
@@ -81,7 +77,7 @@ func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
-func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
+func (f *FileStore) Retrieve(ctx context.Context, addr storage.Address) (reader *storage.LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > f.hashFunc().Size()
 	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted)
 	reader = TreeJoin(ctx, addr, getter, 0)
@@ -90,7 +86,7 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 
 // Store is a public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
-func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
+func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr storage.Address, wait func(context.Context) error, err error) {
 	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt)
 	return PyramidSplit(ctx, data, putter, putter)
 }
@@ -100,7 +96,7 @@ func (f *FileStore) HashSize() int {
 }
 
 // GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
-func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
+func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs storage.AddressCollection, err error) {
 	// create a special kind of putter, which only will store the references
 	putter := &hashExplorer{
 		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
@@ -126,13 +122,13 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 
 // hashExplorer is a special kind of putter which will only store chunk references
 type hashExplorer struct {
-	*hasherStore
-	references []Reference
+	*storage.hasherStore
+	references []storage.Reference
 	lock       sync.Mutex
 }
 
 // HashExplorer's Put will add just the chunk hashes to its `References`
-func (he *hashExplorer) Put(ctx context.Context, chunkData ChunkData) (Reference, error) {
+func (he *hashExplorer) Put(ctx context.Context, chunkData storage.ChunkData) (storage.Reference, error) {
 	// Need to do the actual Put, which returns the references
 	ref, err := he.hasherStore.Put(ctx, chunkData)
 	if err != nil {

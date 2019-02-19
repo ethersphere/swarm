@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/filestore"
 )
 
 const (
@@ -44,7 +45,7 @@ const (
 // allow several bzz nodes running in parallel
 type Config struct {
 	// serialised/persisted fields
-	*storage.FileStoreParams
+	*filestore.FileStoreParams
 	*storage.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.LocalProfile

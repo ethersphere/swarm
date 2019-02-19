@@ -27,12 +27,9 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 	"golang.org/x/crypto/sha3"
 )
-
-const MaxPO = 16
-const AddressLength = 32
 
 type SwarmHasher func() SwarmHash
 
@@ -52,7 +49,7 @@ type Address []byte
 //
 // (0 farthest, 255 closest, 256 self)
 func Proximity(one, other []byte) (ret int) {
-	b := (MaxPO-1)/8 + 1
+	b := (constants.MaxPO-1)/8 + 1
 	if b > len(one) {
 		b = len(one)
 	}
@@ -65,7 +62,7 @@ func Proximity(one, other []byte) (ret int) {
 			}
 		}
 	}
-	return MaxPO
+	return constants.MaxPO
 }
 
 var ZeroAddr = Address(common.Hash{}.Bytes())
@@ -80,7 +77,7 @@ func MakeHashFunc(hash string) SwarmHasher {
 		return func() SwarmHash {
 			hasher := sha3.NewLegacyKeccak256
 			hasherSize := hasher().Size()
-			segmentCount := ch.DefaultSize / hasherSize
+			segmentCount := constants.DefaultChunkSize / hasherSize
 			pool := bmt.NewTreePool(hasher, segmentCount, bmt.PoolSize)
 			return bmt.New(pool)
 		}
@@ -213,7 +210,7 @@ type StoreParams struct {
 }
 
 func NewDefaultStoreParams() *StoreParams {
-	return NewStoreParams(defaultLDBCapacity, defaultCacheCapacity, nil, nil)
+	return NewStoreParams(constants.DefaultLDBCapacity, constants.DefaultCacheCapacity, nil, nil)
 }
 
 func NewStoreParams(ldbCap uint64, cacheCap uint, hash SwarmHasher, basekey []byte) *StoreParams {
@@ -276,7 +273,7 @@ func NewContentAddressValidator(hasher SwarmHasher) *ContentAddressValidator {
 // Validate that the given key is a valid content address for the given data
 func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
 	data := chunk.Data()
-	if l := len(data); l < 9 || l > ch.DefaultSize+8 {
+	if l := len(data); l < 9 || l > constants.DefaultChunkSize+8 {
 		// log.Error("invalid chunk size", "chunk", addr.Hex(), "size", l)
 		return false
 	}

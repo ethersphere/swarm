@@ -21,12 +21,11 @@ package storage
 
 import (
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
 )
-
-const openFileLimit = 128
 
 type LDBDatabase struct {
 	db *leveldb.DB
@@ -34,7 +33,7 @@ type LDBDatabase struct {
 
 func NewLDBDatabase(file string) (*LDBDatabase, error) {
 	// Open the db
-	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: openFileLimit})
+	db, err := leveldb.OpenFile(file, &opt.Options{OpenFilesCacheCapacity: constants.OpenFileLimit})
 	if err != nil {
 		return nil, err
 	}

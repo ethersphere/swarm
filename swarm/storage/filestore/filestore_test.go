@@ -14,16 +14,20 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package storage
+package filestore
 
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -42,7 +46,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	}
 	db := tdb.LDBStore
 	db.setCapacity(50000)
-	memStore := NewMemStore(NewDefaultStoreParams(), db)
+	memStore := storage.NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{
 		memStore: memStore,
 		DbStore:  db,
@@ -204,4 +208,43 @@ func TestGetAllReferences(t *testing.T) {
 			t.Fatalf("Expected reference array length to be %d, but is %d", expectedLens[i], len(addrs))
 		}
 	}
+}
+
+type testDbStore struct {
+	*LDBStore
+	dir string
+}
+
+func newTestDbStore(mock bool, trusted bool) (*testDbStore, func(), error) {
+	dir, err := ioutil.TempDir("", "bzz-storage-test")
+	if err != nil {
+		return nil, func() {}, err
+	}
+
+	var db *LDBStore
+	storeparams := storage.NewDefaultStoreParams()
+	params := storage.NewLDBStoreParams(storeparams, dir)
+	params.Po = testPoFunc
+
+	if mock {
+		globalStore := mem.NewGlobalStore()
+		addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
+		mockStore := globalStore.NewNodeStore(addr)
+
+		db, err = NewMockDbStore(params, mockStore)
+	} else {
+		db, err = NewLDBStore(params)
+	}
+
+	cleanup := func() {
+		if db != nil {
+			db.Close()
+		}
+		err = os.RemoveAll(dir)
+		if err != nil {
+			panic(fmt.Sprintf("db cleanup failed: %v", err))
+		}
+	}
+
+	return &testDbStore{db, dir}, cleanup, err
 }

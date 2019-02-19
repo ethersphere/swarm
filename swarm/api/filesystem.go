@@ -271,7 +271,7 @@ func (fs *FileSystem) Download(bzzpath, localpath string) error {
 	}
 }
 
-func retrieveToFile(quitC chan bool, fileStore *storage.FileStore, addr storage.Address, path string) error {
+func retrieveToFile(quitC chan bool, fileStore *filestore.FileStore, addr storage.Address, path string) error {
 	f, err := os.Create(path) // TODO: basePath separators
 	if err != nil {
 		return err

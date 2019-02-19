@@ -413,7 +413,7 @@ func TestValidatorInStore(t *testing.T) {
 	store.Validators = append(store.Validators, fh)
 
 	// create content addressed chunks, one good, one faulty
-	chunks := storage.GenerateRandomChunks(chunk.DefaultSize, 2)
+	chunks := storage.GenerateRandomChunks(constants.DefaultChunkSize, 2)
 	goodChunk := chunks[0]
 	badChunk := storage.NewChunk(chunks[1].Address(), goodChunk.Data())
 

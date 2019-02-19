@@ -193,7 +193,7 @@ func runFileRetrievalTest(nodeCount int) error {
 				if !ok {
 					return fmt.Errorf("No filestore")
 				}
-				fileStore := item.(*storage.FileStore)
+				fileStore := item.(*filestore.FileStore)
 				//check all chunks
 				for i, hash := range conf.hashes {
 					reader, _ := fileStore.Retrieve(context.TODO(), hash)
@@ -285,7 +285,7 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) error {
 				if !ok {
 					return fmt.Errorf("No filestore")
 				}
-				fileStore := item.(*storage.FileStore)
+				fileStore := item.(*filestore.FileStore)
 				//check all chunks
 				for _, hash := range conf.hashes {
 					reader, _ := fileStore.Retrieve(context.TODO(), hash)

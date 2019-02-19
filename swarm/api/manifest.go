@@ -206,7 +206,7 @@ func (m *ManifestWalker) walk(trie *manifestTrie, prefix string, walkFn WalkFn) 
 }
 
 type manifestTrie struct {
-	fileStore *storage.FileStore
+	fileStore *filestore.FileStore
 	entries   [257]*manifestTrieEntry // indexed by first character of basePath, entries[256] is the empty basePath entry
 	ref       storage.Address         // if ref != nil, it is stored
 	encrypted bool
@@ -226,7 +226,7 @@ type manifestTrieEntry struct {
 	subtrie *manifestTrie
 }
 
-func loadManifest(ctx context.Context, fileStore *storage.FileStore, addr storage.Address, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func loadManifest(ctx context.Context, fileStore *filestore.FileStore, addr storage.Address, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 	log.Trace("manifest lookup", "addr", addr)
 	// retrieve manifest via FileStore
 	manifestReader, isEncrypted := fileStore.Retrieve(ctx, addr)
@@ -234,7 +234,7 @@ func loadManifest(ctx context.Context, fileStore *storage.FileStore, addr storag
 	return readManifest(manifestReader, addr, fileStore, isEncrypted, quitC, decrypt)
 }
 
-func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
+func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore *filestore.FileStore, isEncrypted bool, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
 
 	// TODO check size for oversized manifests
 	size, err := mr.Size(mr.Context(), quitC)

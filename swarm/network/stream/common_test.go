@@ -238,7 +238,7 @@ func (rrs *roundRobinStore) Close() {
 	}
 }
 
-func readAll(fileStore *storage.FileStore, hash []byte) (int64, error) {
+func readAll(fileStore *filestore.FileStore, hash []byte) (int64, error) {
 	r, _ := fileStore.Retrieve(context.TODO(), hash)
 	buf := make([]byte, 1024)
 	var n int
@@ -270,7 +270,7 @@ func uploadFilesToNodes(sim *simulation.Simulation) ([]storage.Address, []string
 		if !ok {
 			return nil, nil, fmt.Errorf("Error accessing localstore")
 		}
-		fileStore := item.(*storage.FileStore)
+		fileStore := item.(*filestore.FileStore)
 		//generate a file
 		rfiles[i], err = generateRandomFile()
 		if err != nil {

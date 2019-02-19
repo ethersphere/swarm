@@ -28,7 +28,7 @@ import (
 	"testing"
 	"time"
 
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -232,7 +232,7 @@ func newTestDB(t testing.TB, o *Options) (db *DB, cleanupFunc func()) {
 // generateRandomChunk generates a valid Chunk with
 // data size of default chunk size.
 func generateRandomChunk() storage.Chunk {
-	return storage.GenerateRandomChunk(ch.DefaultSize)
+	return storage.GenerateRandomChunk(constants.DefaultChunkSize)
 }
 
 func init() {
@@ -248,7 +248,7 @@ func init() {
 // random data, and their execution time can be decreased
 // using this function.
 func generateFakeRandomChunk() storage.Chunk {
-	data := make([]byte, ch.DefaultSize)
+	data := make([]byte, constants.DefaultChunkSize)
 	rand.Read(data)
 	key := make([]byte, 32)
 	rand.Read(key)
@@ -266,16 +266,16 @@ func TestGenerateFakeRandomChunk(t *testing.T) {
 		t.Errorf("first chunk address length %v, want %v", addrLen, 32)
 	}
 	dataLen := len(c1.Data())
-	if dataLen != ch.DefaultSize {
-		t.Errorf("first chunk data length %v, want %v", dataLen, ch.DefaultSize)
+	if dataLen != constants.DefaultChunkSize {
+		t.Errorf("first chunk data length %v, want %v", dataLen, constants.DefaultChunkSize)
 	}
 	addrLen = len(c2.Address())
 	if addrLen != 32 {
 		t.Errorf("second chunk address length %v, want %v", addrLen, 32)
 	}
 	dataLen = len(c2.Data())
-	if dataLen != ch.DefaultSize {
-		t.Errorf("second chunk data length %v, want %v", dataLen, ch.DefaultSize)
+	if dataLen != constants.DefaultChunkSize {
+		t.Errorf("second chunk data length %v, want %v", dataLen, constants.DefaultChunkSize)
 	}
 	if bytes.Equal(c1.Address(), c2.Address()) {
 		t.Error("fake chunks addresses do not differ")

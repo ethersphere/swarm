@@ -82,7 +82,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 type TestSwarmServer struct {
 	*httptest.Server
 	Hasher      storage.SwarmHash
-	FileStore   *storage.FileStore
+	FileStore   *filestore.FileStore
 	dir         string
 	cleanup     func()
 	CurrentTime uint64

@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -56,7 +57,7 @@ var fetcherTimeout = 2 * time.Minute // timeout to cancel the fetcher even if re
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
 // constructor function that can create a fetch function for a specific chunk address.
 func NewNetStore(store SyncChunkStore, nnf NewNetFetcherFunc) (*NetStore, error) {
-	fetchers, err := lru.New(defaultChunkRequestsCacheCapacity)
+	fetchers, err := lru.New(constants.DefaultChunkRequestsCacheCapacity)
 	if err != nil {
 		return nil, err
 	}

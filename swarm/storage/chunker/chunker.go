@@ -13,7 +13,7 @@
 //
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
-package storage
+package chunker
 
 import (
 	"context"
@@ -127,7 +127,7 @@ type TreeChunker struct {
 func TreeJoin(ctx context.Context, addr Address, getter Getter, depth int) *LazyChunkReader {
 	jp := &JoinerParams{
 		ChunkerParams: ChunkerParams{
-			chunkSize: ch.DefaultSize,
+			chunkSize: constants.DefaultChunkSize,
 			hashSize:  int64(len(addr)),
 		},
 		addr:   addr,
@@ -147,7 +147,7 @@ func TreeSplit(ctx context.Context, data io.Reader, size int64, putter Putter) (
 	tsp := &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
-				chunkSize: ch.DefaultSize,
+				chunkSize: constants.DefaultChunkSize,
 				hashSize:  putter.RefSize(),
 			},
 			reader: data,

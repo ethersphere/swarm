@@ -22,7 +22,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 )
 
 // Feed represents a particular user's stream of updates on a topic
@@ -103,10 +103,10 @@ func (f *Feed) FromValues(values Values) (err error) {
 		name := values.Get("name")
 		relatedContent, _ := hexutil.Decode(values.Get("relatedcontent"))
 		if len(relatedContent) > 0 {
-			if len(relatedContent) < storage.AddressLength {
-				return NewErrorf(ErrInvalidValue, "relatedcontent field must be a hex-encoded byte array exactly %d bytes long", storage.AddressLength)
+			if len(relatedContent) < constants.AddressLength {
+				return NewErrorf(ErrInvalidValue, "relatedcontent field must be a hex-encoded byte array exactly %d bytes long", constants.AddressLength)
 			}
-			relatedContent = relatedContent[:storage.AddressLength]
+			relatedContent = relatedContent[:constants.AddressLength]
 		}
 		f.Topic, err = NewTopic(name, relatedContent)
 		if err != nil {

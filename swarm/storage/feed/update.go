@@ -44,7 +44,7 @@ type Update struct {
 const minimumUpdateDataLength = idLength + headerLength + 1
 
 //MaxUpdateDataLength indicates the maximum payload size for a feed update
-const MaxUpdateDataLength = chunk.DefaultSize - signatureLength - idLength - headerLength
+const MaxUpdateDataLength = constants.DefaultChunkSize - signatureLength - idLength - headerLength
 
 // binaryPut serializes the feed update information into the given slice
 func (r *Update) binaryPut(serializedData []byte) error {

@@ -23,11 +23,11 @@ import (
 
 	"github.com/ethereum/go-ethereum/common/bitutil"
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 )
 
 // TopicLength establishes the max length of a topic string
-const TopicLength = storage.AddressLength
+const TopicLength = constants.AddressLength
 
 // Topic represents what a feed is about
 type Topic [TopicLength]byte

@@ -539,7 +539,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 			if !ok {
 				return fmt.Errorf("No filestore")
 			}
-			pivotFileStore := item.(*storage.FileStore)
+			pivotFileStore := item.(*filestore.FileStore)
 			log.Debug("Starting retrieval routine")
 			retErrC := make(chan error)
 			go func() {
@@ -653,7 +653,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 		if !ok {
 			return errors.New("No filestore")
 		}
-		remoteFileStore := item.(*storage.FileStore)
+		remoteFileStore := item.(*filestore.FileStore)
 
 		pivotNode := nodeIDs[0]
 		item, ok = sim.NodeItem(pivotNode, bucketKeyNetStore)

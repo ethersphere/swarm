@@ -111,7 +111,7 @@ func testIntervals(t *testing.T, live bool, history *Range, skipCheck bool) {
 		if !ok {
 			return fmt.Errorf("No filestore")
 		}
-		fileStore := item.(*storage.FileStore)
+		fileStore := item.(*filestore.FileStore)
 
 		size := chunkCount * chunkSize
 

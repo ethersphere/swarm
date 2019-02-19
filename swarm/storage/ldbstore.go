@@ -36,20 +36,13 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-const (
-	defaultGCRatio    = 10
-	defaultMaxGCRound = 10000
-	defaultMaxGCBatch = 5000
-
-	wEntryCnt  = 1 << 0
-	wIndexCnt  = 1 << 1
-	wAccessCnt = 1 << 2
-)
+const ()
 
 var (
 	dbEntryCount = metrics.NewRegisteredCounter("ldbstore.entryCnt", nil)
@@ -174,9 +167,9 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 
 	// set up garbage collection
 	s.gc = &garbage{
-		maxBatch: defaultMaxGCBatch,
-		maxRound: defaultMaxGCRound,
-		ratio:    defaultGCRatio,
+		maxBatch: constants.DefaultMaxGCBatch,
+		maxRound: constants.DefaultMaxGCRound,
+		ratio:    constants.DefaultGCRatio,
 	}
 
 	s.gc.runC = make(chan struct{}, 1)
@@ -368,7 +361,7 @@ func (s *LDBStore) collectGarbage() error {
 			}
 		}
 
-		s.writeBatch(s.gc.batch, wEntryCnt)
+		s.writeBatch(s.gc.batch, constants.WwEntryCnt)
 		log.Trace("garbage collect batch done", "batch", singleIterationCount, "total", s.gc.count)
 		s.lock.Unlock()
 		it.Release()
@@ -862,7 +855,7 @@ func (s *LDBStore) writeCurrentBatch() error {
 		return nil
 	}
 	s.batch = newBatch()
-	b.err = s.writeBatch(b, wEntryCnt|wAccessCnt|wIndexCnt)
+	b.err = s.writeBatch(b, constants.WwEntryCnt|constants.WwAccessCnt|constants.WwIndexCnt)
 	close(b.c)
 	if s.entryCnt >= s.capacity {
 		go s.collectGarbage()
@@ -872,13 +865,13 @@ func (s *LDBStore) writeCurrentBatch() error {
 
 // must be called non concurrently
 func (s *LDBStore) writeBatch(b *dbBatch, wFlag uint8) error {
-	if wFlag&wEntryCnt > 0 {
+	if wFlag&constants.WwEntryCnt > 0 {
 		b.Put(keyEntryCnt, U64ToBytes(s.entryCnt))
 	}
-	if wFlag&wIndexCnt > 0 {
+	if wFlag&constants.WwIndexCnt > 0 {
 		b.Put(keyDataIdx, U64ToBytes(s.dataIdx))
 	}
-	if wFlag&wAccessCnt > 0 {
+	if wFlag&constants.WwAccessCnt > 0 {
 		b.Put(keyAccessCnt, U64ToBytes(s.accessCnt))
 	}
 	l := b.Len()

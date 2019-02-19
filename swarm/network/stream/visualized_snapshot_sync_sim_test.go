@@ -97,7 +97,7 @@ func TestNonExistingHashesWithServer(t *testing.T) {
 		if !ok {
 			return errors.New("No filestore")
 		}
-		fileStore := item.(*storage.FileStore)
+		fileStore := item.(*filestore.FileStore)
 		//create a bogus hash
 		fakeHash := storage.GenerateRandomChunk(1000).Address()
 		//try to retrieve it - will propagate RetrieveRequestMsg into the network

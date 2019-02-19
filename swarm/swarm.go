@@ -68,7 +68,7 @@ type Swarm struct {
 	config            *api.Config        // swarm configuration
 	api               *api.API           // high level api layer (fs/manifest)
 	dns               api.Resolver       // DNS registrar
-	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
+	fileStore         *filestore.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
 	bzz               *network.Bzz       // the logistic manager
 	backend           chequebook.Backend // simple blockchain Backend

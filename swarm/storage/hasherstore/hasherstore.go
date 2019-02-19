@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	ch "github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
 )
@@ -189,9 +189,9 @@ func (h *hasherStore) decryptChunkData(chunkData ChunkData, encryptionKey encryp
 
 	// removing extra bytes which were just added for padding
 	length := ChunkData(decryptedSpan).Size()
-	for length > ch.DefaultSize {
-		length = length + (ch.DefaultSize - 1)
-		length = length / ch.DefaultSize
+	for length > constants.DefaultChunkSize {
+		length = length + (constants.DefaultChunkSize - 1)
+		length = length / constants.DefaultChunkSize
 		length *= uint64(h.refSize)
 	}
 
@@ -232,11 +232,11 @@ func (h *hasherStore) decrypt(chunkData ChunkData, key encryption.Key) ([]byte, 
 }
 
 func (h *hasherStore) newSpanEncryption(key encryption.Key) encryption.Encryption {
-	return encryption.New(key, 0, uint32(ch.DefaultSize/h.refSize), sha3.NewLegacyKeccak256)
+	return encryption.New(key, 0, uint32(constants.DefaultChunkSize/h.refSize), sha3.NewLegacyKeccak256)
 }
 
 func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryption {
-	return encryption.New(key, int(ch.DefaultSize), 0, sha3.NewLegacyKeccak256)
+	return encryption.New(key, int(constants.DefaultChunkSize), 0, sha3.NewLegacyKeccak256)
 }
 
 func (h *hasherStore) storeChunk(ctx context.Context, chunk *chunk) {
@@ -252,7 +252,7 @@ func (h *hasherStore) storeChunk(ctx context.Context, chunk *chunk) {
 func parseReference(ref Reference, hashSize int) (Address, encryption.Key, error) {
 	encryptedRefLength := hashSize + encryption.KeyLength
 	switch len(ref) {
-	case AddressLength:
+	case constants.AddressLength:
 		return Address(ref), nil, nil
 	case encryptedRefLength:
 		encKeyIdx := len(ref) - encryption.KeyLength
