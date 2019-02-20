@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/netstore"
 )
 
 const (
@@ -110,7 +111,7 @@ func NewFetcherFactory(request RequestFunc, skipCheck bool) *FetcherFactory {
 // contain the peers which are actively requesting this chunk, to make sure we
 // don't request back the chunks from them.
 // The created Fetcher is started and returned.
-func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peers *sync.Map) storage.NetFetcher {
+func (f *FetcherFactory) New(ctx context.Context, source storage.Address, peers *sync.Map) netstore.NetFetcher {
 	fetcher := NewFetcher(ctx, source, f.request, f.skipCheck)
 	go fetcher.run(peers)
 	return fetcher

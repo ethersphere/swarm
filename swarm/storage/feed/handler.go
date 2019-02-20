@@ -25,13 +25,14 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
+	"github.com/ethereum/go-ethereum/swarm/storage/netstore"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 type Handler struct {
-	chunkStore *storage.NetStore
+	chunkStore *netstore.NetStore
 	HashSize   int
 	cache      map[uint64]*cacheEntry
 	cacheLock  sync.RWMutex
@@ -72,7 +73,7 @@ func NewHandler(params *HandlerParams) *Handler {
 }
 
 // SetStore sets the store backend for the Swarm feeds API
-func (h *Handler) SetStore(store *storage.NetStore) {
+func (h *Handler) SetStore(store *netstore.NetStore) {
 	h.chunkStore = store
 }
 

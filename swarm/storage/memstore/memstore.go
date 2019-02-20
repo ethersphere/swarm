@@ -21,6 +21,8 @@ package memstore
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/ldbstore"
 	lru "github.com/hashicorp/golang-lru"
 )
 
@@ -31,7 +33,7 @@ type MemStore struct {
 
 //NewMemStore is instantiating a MemStore cache keeping all frequently requested
 //chunks in the `cache` LRU cache.
-func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
+func NewMemStore(params *storage.StoreParams, _ *ldbstore.LDBStore) (m *MemStore) {
 	if params.CacheCapacity == 0 {
 		return &MemStore{
 			disabled: true,
@@ -49,23 +51,23 @@ func NewMemStore(params *StoreParams, _ *LDBStore) (m *MemStore) {
 }
 
 // Has needed to implement SyncChunkStore
-func (m *MemStore) Has(_ context.Context, addr Address) bool {
+func (m *MemStore) Has(_ context.Context, addr storage.Address) bool {
 	return m.cache.Contains(addr)
 }
 
-func (m *MemStore) Get(_ context.Context, addr Address) (Chunk, error) {
+func (m *MemStore) Get(_ context.Context, addr storage.Address) (storage.Chunk, error) {
 	if m.disabled {
-		return nil, ErrChunkNotFound
+		return nil, storage.ErrChunkNotFound
 	}
 
 	c, ok := m.cache.Get(string(addr))
 	if !ok {
-		return nil, ErrChunkNotFound
+		return nil, storage.ErrChunkNotFound
 	}
-	return c.(Chunk), nil
+	return c.(storage.Chunk), nil
 }
 
-func (m *MemStore) Put(_ context.Context, c Chunk) error {
+func (m *MemStore) Put(_ context.Context, c storage.Chunk) error {
 	if m.disabled {
 		return nil
 	}

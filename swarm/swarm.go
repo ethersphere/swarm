@@ -50,7 +50,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/storage/filestore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/storage/netstore"
 	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
@@ -65,15 +67,15 @@ var (
 
 // the swarm stack
 type Swarm struct {
-	config            *api.Config        // swarm configuration
-	api               *api.API           // high level api layer (fs/manifest)
-	dns               api.Resolver       // DNS registrar
+	config            *api.Config          // swarm configuration
+	api               *api.API             // high level api layer (fs/manifest)
+	dns               api.Resolver         // DNS registrar
 	fileStore         *filestore.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
 	bzz               *network.Bzz       // the logistic manager
 	backend           chequebook.Backend // simple blockchain Backend
 	privateKey        *ecdsa.PrivateKey
-	netStore          *storage.NetStore
+	netStore          *netstore.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
 	swap              *swap.Swap

@@ -23,13 +23,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/ldbstore"
+	"github.com/ethereum/go-ethereum/swarm/storage/memstore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
 type LocalStoreParams struct {
-	*StoreParams
+	*storage.StoreParams
 	ChunkDbPath string
-	Validators  []ChunkValidator `toml:"-"`
+	Validators  []storage.ChunkValidator `toml:"-"`
 }
 
 func NewDefaultLocalStoreParams() *LocalStoreParams {
@@ -49,9 +52,9 @@ func (p *LocalStoreParams) Init(path string) {
 // LocalStore is a combination of inmemory db over a disk persisted db
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
-	Validators []ChunkValidator
-	memStore   *MemStore
-	DbStore    *LDBStore
+	Validators []storage.ChunkValidator
+	memStore   *memstore.MemStore
+	DbStore    *ldbstore.LDBStore
 	mu         sync.Mutex
 }
 
@@ -85,7 +88,7 @@ func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
 
 // isValid returns true if chunk passes any of the LocalStore Validators.
 // isValid also returns true if LocalStore has no Validators.
-func (ls *LocalStore) isValid(chunk Chunk) bool {
+func (ls *LocalStore) isValid(chunk storage.Chunk) bool {
 	// by default chunks are valid. if we have 0 validators, then all chunks are valid.
 	valid := true
 
@@ -100,7 +103,7 @@ func (ls *LocalStore) isValid(chunk Chunk) bool {
 }
 
 // Put is responsible for doing validation and storage of the chunk
-// by using configured ChunkValidators, MemStore and LDBStore.
+// by using configuredstorage.Validators, MemStore and LDBStore.
 // If the chunk is not valid, its GetErrored function will
 // return ErrChunkInvalid.
 // This method will check if the chunk is already in the MemStore
@@ -111,7 +114,7 @@ func (ls *LocalStore) isValid(chunk Chunk) bool {
 // when the chunk is stored in memstore.
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
-func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
+func (ls *LocalStore) Put(ctx context.Context, chunk storage.Chunk) error {
 	if !ls.isValid(chunk) {
 		return ErrChunkInvalid
 	}
@@ -143,14 +146,14 @@ func (ls *LocalStore) Has(ctx context.Context, addr Address) bool {
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (ls *LocalStore) Get(ctx context.Context, addr Address) (chunk Chunk, err error) {
+func (ls *LocalStore) Get(ctx context.Context, addr Address) (chunk storage.Chunk, err error) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
 	return ls.get(ctx, addr)
 }
 
-func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err error) {
+func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk storage.Chunk, err error) {
 	chunk, err = ls.memStore.Get(ctx, addr)
 
 	if err != nil && err != ErrChunkNotFound {

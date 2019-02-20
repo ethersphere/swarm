@@ -38,6 +38,7 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -64,17 +65,17 @@ var (
 )
 
 type LDBStoreParams struct {
-	*StoreParams
+	*storage.StoreParams
 	Path string
-	Po   func(Address) uint8
+	Po   func(storage.Address) uint8
 }
 
 // NewLDBStoreParams constructs LDBStoreParams with the specified values.
-func NewLDBStoreParams(storeparams *StoreParams, path string) *LDBStoreParams {
+func NewLDBStoreParams(storeparams *storage.StoreParams, path string) *LDBStoreParams {
 	return &LDBStoreParams{
 		StoreParams: storeparams,
 		Path:        path,
-		Po:          func(k Address) (ret uint8) { return uint8(Proximity(storeparams.BaseKey, k[:])) },
+		Po:          func(k storage.Address) (ret uint8) { return uint8(storage.Proximity(storeparams.BaseKey, k[:])) },
 	}
 }
 
@@ -98,8 +99,8 @@ type LDBStore struct {
 	capacity  uint64
 	bucketCnt []uint64
 
-	hashfunc SwarmHasher
-	po       func(Address) uint8
+	hashfunc storage.SwarmHasher
+	po       func(storage.Address) uint8
 
 	batchesC chan struct{}
 	closed   bool
@@ -111,11 +112,11 @@ type LDBStore struct {
 	// Functions encodeDataFunc is used to bypass
 	// the default functionality of DbStore with
 	// mock.NodeStore for testing purposes.
-	encodeDataFunc func(chunk Chunk) []byte
+	encodeDataFunc func(chunk storage.Chunk) []byte
 	// If getDataFunc is defined, it will be used for
 	// retrieving the chunk data instead from the local
 	// LevelDB database.
-	getDataFunc func(key Address) (data []byte, err error)
+	getDataFunc func(key storage.Address) (data []byte, err error)
 }
 
 type dbBatch struct {
@@ -180,7 +181,7 @@ func NewLDBStore(params *LDBStoreParams) (s *LDBStore, err error) {
 
 // MarkAccessed increments the access counter as a best effort for a chunk, so
 // the chunk won't get garbage collected.
-func (s *LDBStore) MarkAccessed(addr Address) {
+func (s *LDBStore) MarkAccessed(addr storage.Address) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -241,7 +242,7 @@ func U64ToBytes(val uint64) []byte {
 	return data
 }
 
-func getIndexKey(hash Address) []byte {
+func getIndexKey(hash storage.Address) []byte {
 	hashSize := len(hash)
 	key := make([]byte, hashSize+1)
 	key[0] = keyIndex
@@ -265,7 +266,7 @@ func getGCIdxKey(index *dpaDBIndex) []byte {
 	return key
 }
 
-func getGCIdxValue(index *dpaDBIndex, po uint8, addr Address) []byte {
+func getGCIdxValue(index *dpaDBIndex, po uint8, addr storage.Address) []byte {
 	val := make([]byte, 41) // po = 1, index.Index = 8, Address = 32
 	val[0] = po
 	binary.BigEndian.PutUint64(val[1:], index.Idx)
@@ -277,7 +278,7 @@ func parseIdxKey(key []byte) (byte, []byte) {
 	return key[0], key[1:]
 }
 
-func parseGCIdxEntry(accessCnt []byte, val []byte) (index *dpaDBIndex, po uint8, addr Address) {
+func parseGCIdxEntry(accessCnt []byte, val []byte) (index *dpaDBIndex, po uint8, addr storage.Address) {
 	index = &dpaDBIndex{
 		Idx:    binary.BigEndian.Uint64(val[1:]),
 		Access: binary.BigEndian.Uint64(accessCnt),
@@ -292,7 +293,7 @@ func encodeIndex(index *dpaDBIndex) []byte {
 	return data
 }
 
-func encodeData(chunk Chunk) []byte {
+func encodeData(chunk storage.Chunk) []byte {
 	// Always create a new underlying array for the returned byte slice.
 	// The chunk.Address array may be used in the returned slice which
 	// may be changed later in the code or by the LevelDB, resulting
@@ -305,8 +306,8 @@ func decodeIndex(data []byte, index *dpaDBIndex) error {
 	return dec.Decode(index)
 }
 
-func decodeData(addr Address, data []byte) (*chunk, error) {
-	return NewChunk(addr, data[32:]), nil
+func decodeData(addr storage.Address, data []byte) (*storage.chunk, error) {
+	return storage.NewChunk(addr, data[32:]), nil
 }
 
 func (s *LDBStore) collectGarbage() error {
@@ -459,8 +460,8 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 				case <-ctx.Done():
 				}
 			}
-			key := Address(keybytes)
-			chunk := NewChunk(key, data[32:])
+			key := storage.Address(keybytes)
+			chunk := storage.NewChunk(key, data[32:])
 
 			go func() {
 				select {
@@ -714,7 +715,7 @@ func (s *LDBStore) CleanGCIndex() error {
 
 // Delete is removes a chunk and updates indices.
 // Is thread safe
-func (s *LDBStore) Delete(addr Address) error {
+func (s *LDBStore) Delete(addr storage.Address) error {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
@@ -767,7 +768,7 @@ func (s *LDBStore) BinIndex(po uint8) uint64 {
 // Put adds a chunk to the database, adding indices and incrementing global counters.
 // If it already exists, it merely increments the access count of the existing entry.
 // Is thread safe
-func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
+func (s *LDBStore) Put(ctx context.Context, chunk storage.Chunk) error {
 	metrics.GetOrRegisterCounter("ldbstore.put", nil).Inc(1)
 	log.Trace("ldbstore.put", "key", chunk.Address())
 
@@ -812,7 +813,7 @@ func (s *LDBStore) Put(ctx context.Context, chunk Chunk) error {
 }
 
 // force putting into db, does not check or update necessary indices
-func (s *LDBStore) doPut(chunk Chunk, index *dpaDBIndex, po uint8) {
+func (s *LDBStore) doPut(chunk storage.Chunk, index *dpaDBIndex, po uint8) {
 	data := s.encodeDataFunc(chunk)
 	dkey := getDataKey(s.dataIdx, po)
 	s.batch.Put(dkey, data)
@@ -886,8 +887,8 @@ func (s *LDBStore) writeBatch(b *dbBatch, wFlag uint8) error {
 // to a mock store to bypass the default functionality encodeData.
 // The constructed function always returns the nil data, as DbStore does
 // not need to store the data, but still need to create the index.
-func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk Chunk) []byte {
-	return func(chunk Chunk) []byte {
+func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk storage.Chunk) []byte {
+	return func(chunk storage.Chunk) []byte {
 		if err := mockStore.Put(chunk.Address(), encodeData(chunk)); err != nil {
 			log.Error(fmt.Sprintf("%T: Chunk %v put: %v", mockStore, chunk.Address().Log(), err))
 		}
@@ -898,7 +899,7 @@ func newMockEncodeDataFunc(mockStore *mock.NodeStore) func(chunk Chunk) []byte {
 // tryAccessIdx tries to find index entry. If found then increments the access
 // count for garbage collection and returns the index entry and true for found,
 // otherwise returns nil and false.
-func (s *LDBStore) tryAccessIdx(addr Address, po uint8) (*dpaDBIndex, bool) {
+func (s *LDBStore) tryAccessIdx(addr storage.Address, po uint8) (*dpaDBIndex, bool) {
 	ikey := getIndexKey(addr)
 	idata, err := s.db.Get(ikey)
 	if err != nil {
@@ -932,7 +933,7 @@ func (s *LDBStore) GetSchema() (string, error) {
 	data, err := s.db.Get(keySchema)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return DbSchemaNone, nil
+			return storage.DbSchemaNone, nil
 		}
 		return "", err
 	}
@@ -951,7 +952,7 @@ func (s *LDBStore) PutSchema(schema string) error {
 // Get retrieves the chunk matching the provided key from the database.
 // If the chunk entry does not exist, it returns an error
 // Updates access count and is thread safe
-func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error) {
+func (s *LDBStore) Get(_ context.Context, addr storage.Address) (chunk storage.Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
 	log.Trace("ldbstore.get", "key", addr)
 
@@ -962,7 +963,7 @@ func (s *LDBStore) Get(_ context.Context, addr Address) (chunk Chunk, err error)
 
 // Has queries the underlying DB if a chunk with the given address is stored
 // Returns true if the chunk is found, false if not
-func (s *LDBStore) Has(_ context.Context, addr Address) bool {
+func (s *LDBStore) Has(_ context.Context, addr storage.Address) bool {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 
@@ -973,7 +974,7 @@ func (s *LDBStore) Has(_ context.Context, addr Address) bool {
 }
 
 // TODO: To conform with other private methods of this object indices should not be updated
-func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
+func (s *LDBStore) get(addr storage.Address) (chunk *chunk, err error) {
 	if s.closed {
 		return nil, ErrDBClosed
 	}
@@ -1002,7 +1003,7 @@ func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 
 		return decodeData(addr, data)
 	} else {
-		err = ErrChunkNotFound
+		err = storage.ErrChunkNotFound
 	}
 
 	return
@@ -1011,12 +1012,12 @@ func (s *LDBStore) get(addr Address) (chunk *chunk, err error) {
 // newMockGetFunc returns a function that reads chunk data from
 // the mock database, which is used as the value for DbStore.getFunc
 // to bypass the default functionality of DbStore with a mock store.
-func newMockGetDataFunc(mockStore *mock.NodeStore) func(addr Address) (data []byte, err error) {
-	return func(addr Address) (data []byte, err error) {
+func newMockGetDataFunc(mockStore *mock.NodeStore) func(addr storage.Address) (data []byte, err error) {
+	return func(addr storage.Address) (data []byte, err error) {
 		data, err = mockStore.Get(addr)
 		if err == mock.ErrNotFound {
 			// preserve ErrChunkNotFound error
-			err = ErrChunkNotFound
+			err = storage.ErrChunkNotFound
 		}
 		return data, err
 	}
@@ -1044,7 +1045,7 @@ func (s *LDBStore) Close() {
 }
 
 // SyncIterator(start, stop, po, f) calls f on each hash of a bin po from start to stop
-func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(Address, uint64) bool) error {
+func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(storage.Address, uint64) bool) error {
 	metrics.GetOrRegisterCounter("ldbstore.synciterator", nil).Inc(1)
 
 	sincekey := getDataKey(since, po)
@@ -1062,7 +1063,7 @@ func (s *LDBStore) SyncIterator(since uint64, until uint64, po uint8, f func(Add
 		key := make([]byte, 32)
 		val := it.Value()
 		copy(key, val[:32])
-		if !f(Address(key), binary.BigEndian.Uint64(dbkey[2:])) {
+		if !f(storage.Address(key), binary.BigEndian.Uint64(dbkey[2:])) {
 			break
 		}
 	}

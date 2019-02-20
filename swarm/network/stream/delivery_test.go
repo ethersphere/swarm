@@ -37,6 +37,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/filestore"
+	"github.com/ethereum/go-ethereum/swarm/storage/netstore"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -660,7 +662,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 		if !ok {
 			return errors.New("No filestore")
 		}
-		netStore := item.(*storage.NetStore)
+		netStore := item.(*netstore.NetStore)
 
 		if _, err := sim.WaitTillHealthy(ctx); err != nil {
 			return err

@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/chunker"
 )
 
 /*
@@ -77,7 +78,7 @@ func NewFileStore(store storage.ChunkStore, params *FileStoreParams) *FileStore 
 // Chunk retrieval blocks on netStore requests with a timeout so reader will
 // report error if retrieval of chunks within requested range time out.
 // It returns a reader with the chunk data and whether the content was encrypted
-func (f *FileStore) Retrieve(ctx context.Context, addr storage.Address) (reader *storage.LazyChunkReader, isEncrypted bool) {
+func (f *FileStore) Retrieve(ctx context.Context, addr storage.Address) (reader *chunker.LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > f.hashFunc().Size()
 	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted)
 	reader = TreeJoin(ctx, addr, getter, 0)

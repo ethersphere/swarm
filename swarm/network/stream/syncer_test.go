@@ -36,7 +36,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/filestore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/storage/netstore"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -189,7 +191,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			if !ok {
 				return fmt.Errorf("No DB")
 			}
-			netStore := item.(*storage.NetStore)
+			netStore := item.(*netstore.NetStore)
 			netStore.Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
 				hashes[i] = append(hashes[i], addr)
 				totalHashes++
@@ -208,7 +210,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 					if !ok {
 						return fmt.Errorf("No DB")
 					}
-					db := item.(*storage.NetStore)
+					db := item.(*netstore.NetStore)
 					_, err := db.Get(ctx, key)
 					if err == nil {
 						found++

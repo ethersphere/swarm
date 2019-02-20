@@ -21,15 +21,16 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/netstore"
 )
 
 type Inspector struct {
 	api      *API
 	hive     *network.Hive
-	netStore *storage.NetStore
+	netStore *netstore.NetStore
 }
 
-func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore) *Inspector {
+func NewInspector(api *API, hive *network.Hive, netStore *netstore.NetStore) *Inspector {
 	return &Inspector{api, hive, netStore}
 }
 
