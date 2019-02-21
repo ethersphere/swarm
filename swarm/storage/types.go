@@ -132,35 +132,31 @@ func (c AddressCollection) Swap(i, j int) {
 }
 
 // Chunk interface implemented by context.Contexts and data chunks
-type Chunk interface {
-	Address() Address
-	Data() []byte
-}
 
-type chunk struct {
+type Chunk struct {
 	addr  Address
 	sdata []byte
 	span  int64
 }
 
-func NewChunk(addr Address, data []byte) *chunk {
-	return &chunk{
-		addr:  addr,
-		sdata: data,
-		span:  -1,
+func NewChunk(addr Address, data []byte) Chunk {
+	return Chunk{
+		Addr:  addr,
+		Sdata: data,
+		Span:  -1,
 	}
 }
 
-func (c *chunk) Address() Address {
+func (c *Chunk) Address() Address {
 	return c.addr
 }
 
-func (c *chunk) Data() []byte {
+func (c *Chunk) Data() []byte {
 	return c.sdata
 }
 
 // String() for pretty printing
-func (self *chunk) String() string {
+func (self *Chunk) String() string {
 	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
 }
 

@@ -306,8 +306,9 @@ func decodeIndex(data []byte, index *dpaDBIndex) error {
 	return dec.Decode(index)
 }
 
-func decodeData(addr storage.Address, data []byte) (*storage.chunk, error) {
-	return storage.NewChunk(addr, data[32:]), nil
+func decodeData(addr storage.Address, data []byte) *storage.Chunk {
+	v := storage.NewChunk(addr, data[32:])
+	return &v
 }
 
 func (s *LDBStore) collectGarbage() error {
@@ -539,18 +540,14 @@ func (s *LDBStore) Cleanup(f func(*chunk) bool) {
 		}
 
 		ck := data[:32]
-		c, err := decodeData(ck, data)
-		if err != nil {
-			log.Error("decodeData error", "err", err)
-			continue
-		}
+		c := decodeData(ck, data)
 
-		cs := int64(binary.LittleEndian.Uint64(c.sdata[:8]))
-		log.Trace("chunk", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
+		cs := int64(binary.LittleEndian.Uint64(c.Sdata[:8]))
+		log.Trace("chunk", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.Sdata), "size", cs)
 
 		// if chunk is to be removed
 		if f(c) {
-			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.sdata), "size", cs)
+			log.Warn("chunk for cleanup", "key", fmt.Sprintf("%x", key), "ck", fmt.Sprintf("%x", ck), "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po, "len data", len(data), "len sdata", len(c.Sdata), "size", cs)
 			s.deleteNow(&index, getIndexKey(key[1:]), po)
 			removed++
 			errorsFound++
@@ -952,7 +949,7 @@ func (s *LDBStore) PutSchema(schema string) error {
 // Get retrieves the chunk matching the provided key from the database.
 // If the chunk entry does not exist, it returns an error
 // Updates access count and is thread safe
-func (s *LDBStore) Get(_ context.Context, addr storage.Address) (chunk storage.Chunk, err error) {
+func (s *LDBStore) Get(_ context.Context, addr storage.Address) (chunk *storage.Chunk, err error) {
 	metrics.GetOrRegisterCounter("ldbstore.get", nil).Inc(1)
 	log.Trace("ldbstore.get", "key", addr)
 
@@ -974,7 +971,7 @@ func (s *LDBStore) Has(_ context.Context, addr storage.Address) bool {
 }
 
 // TODO: To conform with other private methods of this object indices should not be updated
-func (s *LDBStore) get(addr storage.Address) (chunk *chunk, err error) {
+func (s *LDBStore) get(addr storage.Address) (chunk *storage.Chunk, err error) {
 	if s.closed {
 		return nil, ErrDBClosed
 	}
@@ -1000,8 +997,8 @@ func (s *LDBStore) get(addr storage.Address) (chunk *chunk, err error) {
 				return
 			}
 		}
-
-		return decodeData(addr, data)
+		chunk = decodeData(addr, data)
+		return nil, nil
 	} else {
 		err = storage.ErrChunkNotFound
 	}

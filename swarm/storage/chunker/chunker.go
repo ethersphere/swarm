@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	opentracing "github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -73,8 +74,8 @@ type ChunkerParams struct {
 type SplitterParams struct {
 	ChunkerParams
 	reader io.Reader
-	putter Putter
-	addr   Address
+	putter storage.Putter
+	addr   storage.Address
 }
 
 type TreeSplitterParams struct {
@@ -84,8 +85,8 @@ type TreeSplitterParams struct {
 
 type JoinerParams struct {
 	ChunkerParams
-	addr   Address
-	getter Getter
+	addr   storage.Address
+	getter storage.Getter
 	// TODO: there is a bug, so depth can only be 0 today, see: https://github.com/ethersphere/go-ethereum/issues/344
 	depth int
 	ctx   context.Context
@@ -98,7 +99,7 @@ type TreeChunker struct {
 	dataSize int64
 	data     io.Reader
 	// calculated
-	addr        Address
+	addr        storage.Address
 	depth       int
 	hashSize    int64        // self.hashFunc.New().Size()
 	chunkSize   int64        // hashSize* branches
@@ -106,8 +107,8 @@ type TreeChunker struct {
 	workerLock  sync.RWMutex // lock for the worker count
 	jobC        chan *hashJob
 	wg          *sync.WaitGroup
-	putter      Putter
-	getter      Getter
+	putter      storage.Putter
+	getter      storage.Getter
 	errC        chan error
 	quitC       chan bool
 }
@@ -124,7 +125,7 @@ type TreeChunker struct {
 	The chunks are not meant to be validated by the chunker when joining. This
 	is because it is left to the DPA to decide which sources are trusted.
 */
-func TreeJoin(ctx context.Context, addr Address, getter Getter, depth int) *LazyChunkReader {
+func TreeJoin(ctx context.Context, addr storage.Address, getter storage.Getter, depth int) *LazyChunkReader {
 	jp := &JoinerParams{
 		ChunkerParams: ChunkerParams{
 			chunkSize: constants.DefaultChunkSize,
@@ -143,7 +144,7 @@ func TreeJoin(ctx context.Context, addr Address, getter Getter, depth int) *Lazy
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Key), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func TreeSplit(ctx context.Context, data io.Reader, size int64, putter Putter) (k Address, wait func(context.Context) error, err error) {
+func TreeSplit(ctx context.Context, data io.Reader, size int64, putter storage.Putter) (k storage.Address, wait func(context.Context) error, err error) {
 	tsp := &TreeSplitterParams{
 		SplitterParams: SplitterParams{
 			ChunkerParams: ChunkerParams{
@@ -196,7 +197,7 @@ func NewTreeSplitter(params *TreeSplitterParams) *TreeChunker {
 }
 
 type hashJob struct {
-	key      Address
+	key      storage.Address
 	chunk    []byte
 	size     int64
 	parentWg *sync.WaitGroup
@@ -220,7 +221,7 @@ func (tc *TreeChunker) decrementWorkerCount() {
 	tc.workerCount -= 1
 }
 
-func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
+func (tc *TreeChunker) Split(ctx context.Context) (k storage.Address, wait func(context.Context) error, err error) {
 	if tc.chunkSize <= 0 {
 		panic("chunker must be initialised")
 	}
@@ -263,7 +264,7 @@ func (tc *TreeChunker) Split(ctx context.Context) (k Address, wait func(context.
 	return key, tc.putter.Wait, nil
 }
 
-func (tc *TreeChunker) split(ctx context.Context, depth int, treeSize int64, addr Address, size int64, parentWg *sync.WaitGroup) {
+func (tc *TreeChunker) split(ctx context.Context, depth int, treeSize int64, addr storage.Address, size int64, parentWg *sync.WaitGroup) {
 
 	//
 
@@ -363,14 +364,14 @@ func (tc *TreeChunker) runWorker(ctx context.Context) {
 // LazyChunkReader implements LazySectionReader
 type LazyChunkReader struct {
 	ctx       context.Context
-	addr      Address // root address
-	chunkData ChunkData
+	addr      storage.Address // root address
+	chunkData storage.ChunkData
 	off       int64 // offset
 	chunkSize int64 // inherit from chunker
 	branches  int64 // inherit from chunker
 	hashSize  int64 // inherit from chunker
 	depth     int
-	getter    Getter
+	getter    storage.Getter
 }
 
 func (tc *TreeChunker) Join(ctx context.Context) *LazyChunkReader {
@@ -485,7 +486,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 	return len(b), nil
 }
 
-func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff int64, depth int, treeSize int64, chunkData ChunkData, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
+func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff int64, depth int, treeSize int64, chunkData storage.ChunkData, parentWg *sync.WaitGroup, errC chan error, quitC chan bool) {
 	defer parentWg.Done()
 	// find appropriate block level
 	for chunkData.Size() < uint64(treeSize) && depth > r.depth {

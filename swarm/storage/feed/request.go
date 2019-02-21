@@ -171,7 +171,7 @@ func (r *Request) toChunk() (storage.Chunk, error) {
 }
 
 // fromChunk populates this structure from chunk data. It does not verify the signature is valid.
-func (r *Request) fromChunk(chunk storage.Chunk) error {
+func (r *Request) fromChunk(chunk *storage.Chunk) error {
 	// for update chunk layout see Request definition
 
 	chunkdata := chunk.Data()

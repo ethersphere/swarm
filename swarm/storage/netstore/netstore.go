@@ -94,13 +94,14 @@ func (n *NetStore) Put(ctx context.Context, ch storage.Chunk) error {
 // It calls NetStore.get, and if the chunk is not in local Storage
 // it calls fetch with the request, which blocks until the chunk
 // arrived or context is done
-func (n *NetStore) Get(rctx context.Context, ref storage.Address) (storage.Chunk, error) {
+func (n *NetStore) Get(rctx context.Context, ref storage.Address) (*storage.Chunk, error) {
 	chunk, fetch, err := n.get(rctx, ref)
 	if err != nil {
 		return nil, err
 	}
 	if chunk != nil {
 		return chunk, nil
+
 	}
 	return fetch(rctx)
 }
@@ -159,7 +160,7 @@ func (n *NetStore) Close() {
 // or all fetcher contexts are done.
 // It returns a chunk, a fetcher function and an error
 // If chunk is nil, the returned fetch function needs to be called with a context to return the chunk.
-func (n *NetStore) get(ctx context.Context, ref storage.Address) (storage.Chunk, func(context.Context) (storage.Chunk, error), error) {
+func (n *NetStore) get(ctx context.Context, ref storage.Address) (*storage.Chunk, func(context.Context) (*storage.Chunk, error), error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -175,7 +176,7 @@ func (n *NetStore) get(ctx context.Context, ref storage.Address) (storage.Chunk,
 		return nil, f.Fetch, nil
 	}
 
-	return chunk, nil, nil
+	return &chunk, nil, nil
 }
 
 // Has is the storage layer entry point to query the underlying
@@ -271,7 +272,7 @@ func newFetcher(addr storage.Address, nf NetFetcher, cancel func(), peers *sync.
 
 // Fetch fetches the chunk synchronously, it is called by NetStore.Get is the chunk is not available
 // locally.
-func (f *fetcher) Fetch(rctx context.Context) (storage.Chunk, error) {
+func (f *fetcher) Fetch(rctx context.Context) (*storage.Chunk, error) {
 	atomic.AddInt32(&f.requestCnt, 1)
 	defer func() {
 		// if all the requests are done the fetcher can be cancelled
@@ -308,7 +309,7 @@ func (f *fetcher) Fetch(rctx context.Context) (storage.Chunk, error) {
 	case <-rctx.Done():
 		return nil, rctx.Err()
 	case <-f.deliveredC:
-		return f.chunk, nil
+		return &f.chunk, nil
 	case <-f.cancelledC:
 		return nil, fmt.Errorf("fetcher cancelled")
 	}
