@@ -175,7 +175,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		}
 		if req.SkipCheck {
 			syncing := false
-			err = sp.Deliver(ctx, *chunk, s.priority, syncing)
+			err = sp.Deliver(ctx, chunk, s.priority, syncing)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
@@ -221,7 +221,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 
 		req.peer = sp
 		c := storage.NewChunk(req.Addr, req.SData)
-		err := d.chunkStore.Put(ctx, &c)
+		err := d.chunkStore.Put(ctx, c)
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				// we removed this log because it spams the logs

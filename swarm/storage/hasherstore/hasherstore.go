@@ -98,9 +98,7 @@ func (h *HasherStore) Get(ctx context.Context, ref storage.Reference) (storage.C
 	if err != nil {
 		return nil, err
 	}
-	if chunk == nil {
-		panic("wtf2")
-	}
+
 	v := chunk.Data()
 	if v == nil {
 		panic("wtf")
@@ -163,10 +161,10 @@ func (h *HasherStore) createHash(chunkData storage.ChunkData) storage.Address {
 	return hasher.Sum(nil)
 }
 
-func (h *HasherStore) createChunk(chunkData storage.ChunkData) *storage.Chunk {
+func (h *HasherStore) createChunk(chunkData storage.ChunkData) storage.Chunk {
 	hash := h.createHash(chunkData)
 	chunk := storage.NewChunk(hash, chunkData)
-	return &chunk
+	return chunk
 }
 
 func (h *HasherStore) encryptChunkData(chunkData storage.ChunkData) (storage.ChunkData, encryption.Key, error) {
@@ -246,7 +244,7 @@ func (h *HasherStore) newDataEncryption(key encryption.Key) encryption.Encryptio
 	return encryption.New(key, int(constants.DefaultChunkSize), 0, sha3.NewLegacyKeccak256)
 }
 
-func (h *HasherStore) storeChunk(ctx context.Context, chunk *storage.Chunk) {
+func (h *HasherStore) storeChunk(ctx context.Context, chunk storage.Chunk) {
 	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
 		select {

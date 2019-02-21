@@ -91,7 +91,7 @@ func (h *Handler) Validate(chunk storage.Chunk) bool {
 
 	// First, deserialize the chunk
 	var r Request
-	if err := r.fromChunk(&chunk); err != nil {
+	if err := r.fromChunk(chunk); err != nil {
 		log.Debug("Invalid feed update chunk", "addr", chunk.Address(), "err", err)
 		return false
 	}
@@ -260,7 +260,7 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 	}
 
 	// send the chunk
-	h.chunkStore.Put(ctx, &chunk)
+	h.chunkStore.Put(ctx, chunk)
 	log.Trace("feed update", "updateAddr", r.idAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", chunk.Data())
 	// update our feed updates map cache entry if the new update is older than the one we have, if we have it.
 	if feedUpdate != nil && r.Epoch.After(feedUpdate.Epoch) {

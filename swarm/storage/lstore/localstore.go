@@ -113,8 +113,8 @@ func (ls *LocalStore) isValid(chunk storage.Chunk) bool {
 // when the chunk is stored in memstore.
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
-func (ls *LocalStore) Put(ctx context.Context, chunk *storage.Chunk) error {
-	if !ls.isValid(*chunk) {
+func (ls *LocalStore) Put(ctx context.Context, chunk storage.Chunk) error {
+	if !ls.isValid(chunk) {
 		return storage.ErrChunkInvalid
 	}
 
@@ -130,7 +130,7 @@ func (ls *LocalStore) Put(ctx context.Context, chunk *storage.Chunk) error {
 		return err
 	}
 	ls.memStore.Put(ctx, chunk)*/
-	return ls.DbStore.Put(ctx, *chunk)
+	return ls.DbStore.Put(ctx, chunk)
 }
 
 // Has queries the underlying DbStore if a chunk with the given address
@@ -144,14 +144,14 @@ func (ls *LocalStore) Has(ctx context.Context, addr storage.Address) bool {
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (ls *LocalStore) Get(ctx context.Context, addr storage.Address) (chunk *storage.Chunk, err error) {
+func (ls *LocalStore) Get(ctx context.Context, addr storage.Address) (chunk storage.Chunk, err error) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
 	return ls.get(ctx, addr)
 }
 
-func (ls *LocalStore) get(ctx context.Context, addr storage.Address) (chunk *storage.Chunk, err error) {
+func (ls *LocalStore) get(ctx context.Context, addr storage.Address) (chunk storage.Chunk, err error) {
 	/*chunk, err = ls.memStore.Get(ctx, addr)
 
 	if err != nil && err != ErrChunkNotFound {
@@ -169,7 +169,7 @@ func (ls *LocalStore) get(ctx context.Context, addr storage.Address) (chunk *sto
 	chunk, err = ls.DbStore.Get(ctx, addr)
 	if err != nil {
 		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
-		return nil, err
+		return storage.Chunk{}, err
 	}
 
 	//	ls.memStore.Put(ctx, chunk)
@@ -242,8 +242,8 @@ func (ls *LocalStore) Migrate() error {
 func (ls *LocalStore) migrateFromNoneToPurity() {
 	// delete chunks that are not valid, i.e. chunks that do not pass
 	// any of the ls.Validators
-	ls.DbStore.Cleanup(func(c *storage.Chunk) bool {
-		return !ls.isValid(*c)
+	ls.DbStore.Cleanup(func(c storage.Chunk) bool {
+		return !ls.isValid(c)
 	})
 }
 

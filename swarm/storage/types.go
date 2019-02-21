@@ -284,8 +284,8 @@ func (v *ContentAddressValidator) Validate(chunk Chunk) bool {
 }
 
 type ChunkStore interface {
-	Put(ctx context.Context, ch *Chunk) (err error)
-	Get(rctx context.Context, ref Address) (ch *Chunk, err error)
+	Put(ctx context.Context, ch Chunk) (err error)
+	Get(rctx context.Context, ref Address) (ch Chunk, err error)
 	Has(rctx context.Context, ref Address) bool
 	Close()
 }
@@ -305,7 +305,7 @@ type FakeChunkStore struct {
 }
 
 // Put doesn't store anything it is just here to implement ChunkStore
-func (f FakeChunkStore) Put(_ context.Context, ch *Chunk) error {
+func (f FakeChunkStore) Put(_ context.Context, ch Chunk) error {
 	return nil
 }
 
@@ -315,7 +315,7 @@ func (f FakeChunkStore) Has(_ context.Context, ref Address) bool {
 }
 
 // Get doesn't store anything it is just here to implement ChunkStore
-func (f FakeChunkStore) Get(_ context.Context, ref Address) (*Chunk, error) {
+func (f FakeChunkStore) Get(_ context.Context, ref Address) (Chunk, error) {
 	panic("FakeChunkStore doesn't support Get")
 }
 

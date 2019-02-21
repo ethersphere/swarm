@@ -72,7 +72,7 @@ func NewNetStore(store storage.SyncChunkStore, nnf NewNetFetcherFunc) (*NetStore
 
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
 // the fetchers cache
-func (n *NetStore) Put(ctx context.Context, ch *storage.Chunk) error {
+func (n *NetStore) Put(ctx context.Context, ch storage.Chunk) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -85,7 +85,7 @@ func (n *NetStore) Put(ctx context.Context, ch *storage.Chunk) error {
 	// if chunk is now put in the store, check if there was an active fetcher and call deliver on it
 	// (this delivers the chunk to requestors via the fetcher)
 	if f := n.getFetcher(ch.Address()); f != nil {
-		f.deliver(ctx, *ch)
+		f.deliver(ctx, ch)
 	}
 	return nil
 }
@@ -94,12 +94,12 @@ func (n *NetStore) Put(ctx context.Context, ch *storage.Chunk) error {
 // It calls NetStore.get, and if the chunk is not in local Storage
 // it calls fetch with the request, which blocks until the chunk
 // arrived or context is done
-func (n *NetStore) Get(rctx context.Context, ref storage.Address) (*storage.Chunk, error) {
+func (n *NetStore) Get(rctx context.Context, ref storage.Address) (storage.Chunk, error) {
 	chunk, fetch, err := n.get(rctx, ref)
 	if err != nil {
-		return nil, err
+		return storage.Chunk{}, err
 	}
-	if chunk != nil {
+	if fetch == nil {
 		return chunk, nil
 
 	}
@@ -117,8 +117,8 @@ func (n *NetStore) Iterator(from uint64, to uint64, po uint8, f func(storage.Add
 // FetchFunc returns nil if the store contains the given address. Otherwise it returns a wait function,
 // which returns after the chunk is available or the context is done
 func (n *NetStore) FetchFunc(ctx context.Context, ref storage.Address) func(context.Context) error {
-	chunk, fetch, _ := n.get(ctx, ref)
-	if chunk != nil {
+	_, fetch, err := n.get(ctx, ref)
+	if fetch == nil && err == nil {
 		return nil
 	}
 	return func(ctx context.Context) error {
@@ -160,7 +160,7 @@ func (n *NetStore) Close() {
 // or all fetcher contexts are done.
 // It returns a chunk, a fetcher function and an error
 // If chunk is nil, the returned fetch function needs to be called with a context to return the chunk.
-func (n *NetStore) get(ctx context.Context, ref storage.Address) (*storage.Chunk, func(context.Context) (*storage.Chunk, error), error) {
+func (n *NetStore) get(ctx context.Context, ref storage.Address) (storage.Chunk, func(context.Context) (storage.Chunk, error), error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -173,7 +173,7 @@ func (n *NetStore) get(ctx context.Context, ref storage.Address) (*storage.Chunk
 		// if it doesn't exist yet
 		f := n.getOrCreateFetcher(ctx, ref)
 		// If the caller needs the chunk, it has to use the returned fetch function to get it
-		return nil, f.Fetch, nil
+		return storage.Chunk{}, f.Fetch, nil
 	}
 
 	return chunk, nil, nil
@@ -272,7 +272,7 @@ func newFetcher(addr storage.Address, nf NetFetcher, cancel func(), peers *sync.
 
 // Fetch fetches the chunk synchronously, it is called by NetStore.Get is the chunk is not available
 // locally.
-func (f *fetcher) Fetch(rctx context.Context) (*storage.Chunk, error) {
+func (f *fetcher) Fetch(rctx context.Context) (storage.Chunk, error) {
 	atomic.AddInt32(&f.requestCnt, 1)
 	defer func() {
 		// if all the requests are done the fetcher can be cancelled
@@ -297,7 +297,7 @@ func (f *fetcher) Fetch(rctx context.Context) (*storage.Chunk, error) {
 	if sourceIF != nil {
 		var source enode.ID
 		if err := source.UnmarshalText([]byte(sourceIF.(string))); err != nil {
-			return nil, err
+			return storage.Chunk{}, err
 		}
 		f.netFetcher.Offer(&source)
 	} else {
@@ -307,11 +307,11 @@ func (f *fetcher) Fetch(rctx context.Context) (*storage.Chunk, error) {
 	// wait until either the chunk is delivered or the context is done
 	select {
 	case <-rctx.Done():
-		return nil, rctx.Err()
+		return storage.Chunk{}, rctx.Err()
 	case <-f.deliveredC:
-		return &f.chunk, nil
+		return f.chunk, nil
 	case <-f.cancelledC:
-		return nil, fmt.Errorf("fetcher cancelled")
+		return storage.Chunk{}, fmt.Errorf("fetcher cancelled")
 	}
 }
 
