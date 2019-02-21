@@ -412,7 +412,10 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 		metrics.GetOrRegisterResettingTimer("lcr.getter.get", nil).UpdateSince(startTime)
 		r.chunkData = chunkData
 	}
-
+	log.Debug("lazychunkreader.chunkdataLength", "len", len(r.chunkData))
+	if len(r.chunkData) == 0 {
+		return 0, nil
+	}
 	s := r.chunkData.Size()
 	log.Debug("lazychunkreader.size", "key", r.addr, "size", s)
 

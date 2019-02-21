@@ -107,7 +107,7 @@ func Mput(store storage.ChunkStore, n int, f func(i int64) storage.Chunk) (hs []
 		chunk := f(constants.DefaultChunkSize)
 		go func() {
 			select {
-			case errc <- store.Put(ctx, &chunk):
+			case errc <- store.Put(ctx, chunk):
 			case <-ctx.Done():
 			}
 		}()
@@ -139,7 +139,7 @@ func Mget(store storage.ChunkStore, hs []storage.Address, f func(h storage.Addre
 				return
 			}
 			if f != nil {
-				err = f(h, *chunk)
+				err = f(h, chunk)
 				if err != nil {
 					errc <- err
 					return
