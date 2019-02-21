@@ -25,7 +25,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/ldbstore"
-	"github.com/ethereum/go-ethereum/swarm/storage/memstore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
@@ -37,7 +36,7 @@ type LocalStoreParams struct {
 
 func NewDefaultLocalStoreParams() *LocalStoreParams {
 	return &LocalStoreParams{
-		StoreParams: NewDefaultStoreParams(),
+		StoreParams: storage.NewDefaultStoreParams(),
 	}
 }
 
@@ -53,33 +52,33 @@ func (p *LocalStoreParams) Init(path string) {
 // implements a Get/Put with fallback (caching) logic using any 2 ChunkStores
 type LocalStore struct {
 	Validators []storage.ChunkValidator
-	memStore   *memstore.MemStore
-	DbStore    *ldbstore.LDBStore
-	mu         sync.Mutex
+	//memStore   *memstore.MemStore
+	DbStore *ldbstore.LDBStore
+	mu      sync.Mutex
 }
 
 // This constructor uses MemStore and DbStore as components
 func NewLocalStore(params *LocalStoreParams, mockStore *mock.NodeStore) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
-	dbStore, err := NewMockDbStore(ldbparams, mockStore)
+	ldbparams := ldbstore.NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
+	dbStore, err := ldbstore.NewMockDbStore(ldbparams, mockStore)
 	if err != nil {
 		return nil, err
 	}
 	return &LocalStore{
-		memStore:   NewMemStore(params.StoreParams, dbStore),
+		//	memStore:   NewMemStore(params.StoreParams, dbStore),
 		DbStore:    dbStore,
 		Validators: params.Validators,
 	}, nil
 }
 
 func NewTestLocalStoreForAddr(params *LocalStoreParams) (*LocalStore, error) {
-	ldbparams := NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
-	dbStore, err := NewLDBStore(ldbparams)
+	ldbparams := ldbstore.NewLDBStoreParams(params.StoreParams, params.ChunkDbPath)
+	dbStore, err := ldbstore.NewLDBStore(ldbparams)
 	if err != nil {
 		return nil, err
 	}
 	localStore := &LocalStore{
-		memStore:   NewMemStore(params.StoreParams, dbStore),
+		//	memStore:   NewMemStore(params.StoreParams, dbStore),
 		DbStore:    dbStore,
 		Validators: params.Validators,
 	}
@@ -116,29 +115,28 @@ func (ls *LocalStore) isValid(chunk storage.Chunk) bool {
 // contains the chunk with the same data, but nil ReqC channel.
 func (ls *LocalStore) Put(ctx context.Context, chunk storage.Chunk) error {
 	if !ls.isValid(chunk) {
-		return ErrChunkInvalid
+		return storage.ErrChunkInvalid
 	}
 
 	log.Trace("localstore.put", "key", chunk.Address())
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
-	_, err := ls.memStore.Get(ctx, chunk.Address())
+	/*_, err := ls.memStore.Get(ctx, chunk.Address())
 	if err == nil {
 		return nil
 	}
 	if err != nil && err != ErrChunkNotFound {
 		return err
 	}
-	ls.memStore.Put(ctx, chunk)
-	err = ls.DbStore.Put(ctx, chunk)
-	return err
+	ls.memStore.Put(ctx, chunk)*/
+	return ls.DbStore.Put(ctx, chunk)
 }
 
 // Has queries the underlying DbStore if a chunk with the given address
 // is being stored there.
 // Returns true if it is stored, false if not
-func (ls *LocalStore) Has(ctx context.Context, addr Address) bool {
+func (ls *LocalStore) Has(ctx context.Context, addr storage.Address) bool {
 	return ls.DbStore.Has(ctx, addr)
 }
 
@@ -146,15 +144,15 @@ func (ls *LocalStore) Has(ctx context.Context, addr Address) bool {
 // This method is blocking until the chunk is retrieved
 // so additional timeout may be needed to wrap this call if
 // ChunkStores are remote and can have long latency
-func (ls *LocalStore) Get(ctx context.Context, addr Address) (chunk storage.Chunk, err error) {
+func (ls *LocalStore) Get(ctx context.Context, addr storage.Address) (chunk *storage.Chunk, err error) {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
 	return ls.get(ctx, addr)
 }
 
-func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk storage.Chunk, err error) {
-	chunk, err = ls.memStore.Get(ctx, addr)
+func (ls *LocalStore) get(ctx context.Context, addr storage.Address) (chunk *storage.Chunk, err error) {
+	/*chunk, err = ls.memStore.Get(ctx, addr)
 
 	if err != nil && err != ErrChunkNotFound {
 		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
@@ -167,18 +165,18 @@ func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk storage.Chun
 		return chunk, nil
 	}
 
-	metrics.GetOrRegisterCounter("localstore.get.cachemiss", nil).Inc(1)
+	metrics.GetOrRegisterCounter("localstore.get.cachemiss", nil).Inc(1)*/
 	chunk, err = ls.DbStore.Get(ctx, addr)
 	if err != nil {
 		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
 		return nil, err
 	}
 
-	ls.memStore.Put(ctx, chunk)
+	//	ls.memStore.Put(ctx, chunk)
 	return chunk, nil
 }
 
-func (ls *LocalStore) FetchFunc(ctx context.Context, addr Address) func(context.Context) error {
+func (ls *LocalStore) FetchFunc(ctx context.Context, addr storage.Address) func(context.Context) error {
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
 
@@ -195,7 +193,7 @@ func (ls *LocalStore) BinIndex(po uint8) uint64 {
 	return ls.DbStore.BinIndex(po)
 }
 
-func (ls *LocalStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
+func (ls *LocalStore) Iterator(from uint64, to uint64, po uint8, f func(storage.Address, uint64) bool) error {
 	return ls.DbStore.SyncIterator(from, to, po, f)
 }
 
@@ -213,26 +211,26 @@ func (ls *LocalStore) Migrate() error {
 		return err
 	}
 
-	if actualDbSchema == CurrentDbSchema {
+	if actualDbSchema == storage.CurrentDbSchema {
 		return nil
 	}
 
-	log.Debug("running migrations for", "schema", actualDbSchema, "runtime-schema", CurrentDbSchema)
+	log.Debug("running migrations for", "schema", actualDbSchema, "runtime-schema", storage.CurrentDbSchema)
 
-	if actualDbSchema == DbSchemaNone {
+	if actualDbSchema == storage.DbSchemaNone {
 		ls.migrateFromNoneToPurity()
-		actualDbSchema = DbSchemaPurity
+		actualDbSchema = storage.DbSchemaPurity
 	}
 
 	if err := ls.DbStore.PutSchema(actualDbSchema); err != nil {
 		return err
 	}
 
-	if actualDbSchema == DbSchemaPurity {
+	if actualDbSchema == storage.DbSchemaPurity {
 		if err := ls.migrateFromPurityToHalloween(); err != nil {
 			return err
 		}
-		actualDbSchema = DbSchemaHalloween
+		actualDbSchema = storage.DbSchemaHalloween
 	}
 
 	if err := ls.DbStore.PutSchema(actualDbSchema); err != nil {
@@ -244,8 +242,8 @@ func (ls *LocalStore) Migrate() error {
 func (ls *LocalStore) migrateFromNoneToPurity() {
 	// delete chunks that are not valid, i.e. chunks that do not pass
 	// any of the ls.Validators
-	ls.DbStore.Cleanup(func(c *chunk) bool {
-		return !ls.isValid(c)
+	ls.DbStore.Cleanup(func(c *storage.Chunk) bool {
+		return !ls.isValid(*c)
 	})
 }
 

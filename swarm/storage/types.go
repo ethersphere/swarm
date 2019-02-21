@@ -134,9 +134,9 @@ func (c AddressCollection) Swap(i, j int) {
 // Chunk interface implemented by context.Contexts and data chunks
 
 type Chunk struct {
-	addr  Address
-	sdata []byte
-	span  int64
+	Addr  Address
+	Sdata []byte
+	Span  int64
 }
 
 func NewChunk(addr Address, data []byte) Chunk {
@@ -148,16 +148,16 @@ func NewChunk(addr Address, data []byte) Chunk {
 }
 
 func (c *Chunk) Address() Address {
-	return c.addr
+	return c.Addr
 }
 
 func (c *Chunk) Data() []byte {
-	return c.sdata
+	return c.Sdata
 }
 
 // String() for pretty printing
 func (self *Chunk) String() string {
-	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.addr.Log(), self.span, len(self.sdata))
+	return fmt.Sprintf("Address: %v TreeSize: %v Chunksize: %v", self.Addr.Log(), self.Span, len(self.Sdata))
 }
 
 func GenerateRandomChunk(dataSize int64) Chunk {

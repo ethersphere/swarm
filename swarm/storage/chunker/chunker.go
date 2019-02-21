@@ -404,7 +404,7 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 	log.Debug("lazychunkreader.size", "addr", r.addr)
 	if r.chunkData == nil {
 		startTime := time.Now()
-		chunkData, err := r.getter.Get(cctx, Reference(r.addr))
+		chunkData, err := r.getter.Get(cctx, storage.Reference(r.addr))
 		if err != nil {
 			metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 			return 0, err
@@ -534,7 +534,7 @@ func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff in
 		go func(j int64) {
 			childAddress := chunkData[8+j*r.hashSize : 8+(j+1)*r.hashSize]
 			startTime := time.Now()
-			chunkData, err := r.getter.Get(ctx, Reference(childAddress))
+			chunkData, err := r.getter.Get(ctx, storage.Reference(childAddress))
 			if err != nil {
 				metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 				log.Debug("lazychunkreader.join", "key", fmt.Sprintf("%x", childAddress), "err", err)

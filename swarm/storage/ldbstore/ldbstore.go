@@ -497,7 +497,7 @@ func (s *LDBStore) Import(in io.Reader) (int64, error) {
 }
 
 // Cleanup iterates over the database and deletes chunks if they pass the `f` condition
-func (s *LDBStore) Cleanup(f func(*chunk) bool) {
+func (s *LDBStore) Cleanup(f func(*storage.Chunk) bool) {
 	var errorsFound, removed, total int
 
 	it := s.db.NewIterator()

@@ -24,6 +24,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/chunker"
+	"github.com/ethereum/go-ethereum/swarm/storage/hasherstore"
+	"github.com/ethereum/go-ethereum/swarm/storage/lstore"
 )
 
 /*
@@ -49,19 +51,19 @@ type FileStoreParams struct {
 
 func NewFileStoreParams() *FileStoreParams {
 	return &FileStoreParams{
-		Hash: DefaultHash,
+		Hash: storage.DefaultHash,
 	}
 }
 
 // for testing locally
 func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
-	params := storage.NewDefaultLocalStoreParams()
+	params := lstore.NewDefaultLocalStoreParams()
 	params.Init(datadir)
-	localStore, err := storage.NewLocalStore(params, nil)
+	localStore, err := lstore.NewLocalStore(params, nil)
 	if err != nil {
 		return nil, err
 	}
-	localStore.Validators = append(localStore.Validators, NewContentAddressValidator(storage.MakeHashFunc(DefaultHash)))
+	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(storage.DefaultHash)))
 	return NewFileStore(localStore, NewFileStoreParams()), nil
 }
 
@@ -100,7 +102,7 @@ func (f *FileStore) HashSize() int {
 func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs storage.AddressCollection, err error) {
 	// create a special kind of putter, which only will store the references
 	putter := &hashExplorer{
-		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
+		hasherStore: hasherstore.NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
 	}
 	// do the actual splitting anyway, no way around it
 	_, wait, err := PyramidSplit(ctx, data, putter, putter)
@@ -123,7 +125,7 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 
 // hashExplorer is a special kind of putter which will only store chunk references
 type hashExplorer struct {
-	*storage.hasherStore
+	*hasherstore.HasherStore
 	references []storage.Reference
 	lock       sync.Mutex
 }

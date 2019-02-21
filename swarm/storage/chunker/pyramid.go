@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 /*
@@ -73,10 +74,10 @@ const (
 
 type PyramidSplitterParams struct {
 	SplitterParams
-	getter Getter
+	getter storage.Getter
 }
 
-func NewPyramidSplitterParams(addr Address, reader io.Reader, putter Putter, getter Getter, chunkSize int64) *PyramidSplitterParams {
+func NewPyramidSplitterParams(addr storage.Address, reader io.Reader, putter storage.Putter, getter storage.Getter, chunkSize int64) *PyramidSplitterParams {
 	hashSize := putter.RefSize()
 	return &PyramidSplitterParams{
 		SplitterParams: SplitterParams{
@@ -96,11 +97,11 @@ func NewPyramidSplitterParams(addr Address, reader io.Reader, putter Putter, get
 	When splitting, data is given as a SectionReader, and the key is a hashSize long byte slice (Address), the root hash of the entire content will fill this once processing finishes.
 	New chunks to store are store using the putter which the caller provides.
 */
-func PyramidSplit(ctx context.Context, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
+func PyramidSplit(ctx context.Context, reader io.Reader, putter storage.Putter, getter storage.Getter) (storage.Address, func(context.Context) error, error) {
 	return NewPyramidSplitter(NewPyramidSplitterParams(nil, reader, putter, getter, constants.DefaultChunkSize)).Split(ctx)
 }
 
-func PyramidAppend(ctx context.Context, addr Address, reader io.Reader, putter Putter, getter Getter) (Address, func(context.Context) error, error) {
+func PyramidAppend(ctx context.Context, addr storage.Address, reader io.Reader, putter storage.Putter, getter storage.Getter) (storage.Address, func(context.Context) error, error) {
 	return NewPyramidSplitter(NewPyramidSplitterParams(addr, reader, putter, getter, constants.DefaultChunkSize)).Append(ctx)
 }
 
@@ -129,7 +130,7 @@ func NewTreeEntry(pyramid *PyramidChunker) *TreeEntry {
 
 // Used by the hash processor to create a data/tree chunk and send to storage
 type chunkJob struct {
-	key      Address
+	key      storage.Address
 	chunk    []byte
 	parentWg *sync.WaitGroup
 }
@@ -139,9 +140,9 @@ type PyramidChunker struct {
 	hashSize    int64
 	branches    int64
 	reader      io.Reader
-	putter      Putter
-	getter      Getter
-	key         Address
+	putter      storage.Putter
+	getter      storage.Getter
+	key         storage.Address
 	workerCount int64
 	workerLock  sync.RWMutex
 	jobC        chan *chunkJob
@@ -171,7 +172,7 @@ func NewPyramidSplitter(params *PyramidSplitterParams) (pc *PyramidChunker) {
 	return
 }
 
-func (pc *PyramidChunker) Join(addr Address, getter Getter, depth int) LazySectionReader {
+func (pc *PyramidChunker) Join(addr storage.Address, getter storage.Getter, depth int) storage.LazySectionReader {
 	return &LazyChunkReader{
 		addr:      addr,
 		depth:     depth,
@@ -200,7 +201,7 @@ func (pc *PyramidChunker) decrementWorkerCount() {
 	pc.workerCount -= 1
 }
 
-func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
+func (pc *PyramidChunker) Split(ctx context.Context) (k storage.Address, wait func(context.Context) error, err error) {
 	pc.wg.Add(1)
 	pc.prepareChunks(ctx, false)
 
@@ -232,7 +233,7 @@ func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(conte
 
 }
 
-func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
+func (pc *PyramidChunker) Append(ctx context.Context) (k storage.Address, wait func(context.Context) error, err error) {
 	// Load the right most unfinished tree chunks in every level
 	pc.loadTree(ctx)
 
@@ -297,7 +298,7 @@ func (pc *PyramidChunker) processChunk(ctx context.Context, id int64, job *chunk
 
 func (pc *PyramidChunker) loadTree(ctx context.Context) error {
 	// Get the root chunk to get the total size
-	chunkData, err := pc.getter.Get(ctx, Reference(pc.key))
+	chunkData, err := pc.getter.Get(ctx, storage.Reference(pc.key))
 	if err != nil {
 		return errLoadingTreeRootChunk
 	}
@@ -350,7 +351,7 @@ func (pc *PyramidChunker) loadTree(ctx context.Context) error {
 			branchCount = int64(len(ent.chunk)-8) / pc.hashSize
 			for i := int64(0); i < branchCount; i++ {
 				key := ent.chunk[8+(i*pc.hashSize) : 8+((i+1)*pc.hashSize)]
-				newChunkData, err := pc.getter.Get(ctx, Reference(key))
+				newChunkData, err := pc.getter.Get(ctx, storage.Reference(key))
 				if err != nil {
 					return errLoadingTreeChunk
 				}
@@ -389,7 +390,7 @@ func (pc *PyramidChunker) prepareChunks(ctx context.Context, isAppend bool) {
 	go pc.processor(ctx, pc.workerCount)
 
 	parent := NewTreeEntry(pc)
-	var unfinishedChunkData ChunkData
+	var unfinishedChunkData storage.ChunkData
 	var unfinishedChunkSize uint64
 
 	if isAppend && len(pc.chunkLevel[0]) != 0 {
@@ -656,7 +657,7 @@ func (pc *PyramidChunker) enqueueTreeChunk(ent *TreeEntry, chunkWG *sync.WaitGro
 	}
 }
 
-func (pc *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, parent *TreeEntry, chunkWG *sync.WaitGroup) Address {
+func (pc *PyramidChunker) enqueueDataChunk(chunkData []byte, size uint64, parent *TreeEntry, chunkWG *sync.WaitGroup) storage.Address {
 	binary.LittleEndian.PutUint64(chunkData[:8], size)
 	pkey := parent.chunk[8+parent.branchCount*pc.hashSize : 8+(parent.branchCount+1)*pc.hashSize]
 

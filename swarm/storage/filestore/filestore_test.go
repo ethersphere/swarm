@@ -46,10 +46,10 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	}
 	db := tdb.LDBStore
 	db.setCapacity(50000)
-	memStore := storage.NewMemStore(NewDefaultStoreParams(), db)
+	//memStore := storage.NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{
-		memStore: memStore,
-		DbStore:  db,
+		//memStore: memStore,
+		DbStore: db,
 	}
 
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
@@ -82,7 +82,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	}
 	ioutil.WriteFile("/tmp/slice.bzz.16M", slice, 0666)
 	ioutil.WriteFile("/tmp/result.bzz.16M", resultSlice, 0666)
-	localStore.memStore = NewMemStore(NewDefaultStoreParams(), db)
+	//	localStore.memStore = NewMemStore(NewDefaultStoreParams(), db)
 	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -114,10 +114,10 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	db := tdb.LDBStore
-	memStore := NewMemStore(NewDefaultStoreParams(), db)
+	//memStore := NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{
-		memStore: memStore,
-		DbStore:  db,
+		//	memStore: memStore,
+		DbStore: db,
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 	slice := testutil.RandomBytes(1, testDataSize)
@@ -146,16 +146,16 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		t.Fatalf("Comparison error.")
 	}
 	// Clear memStore
-	memStore.setCapacity(0)
+//	memStore.setCapacity(0)
 	// check whether it is, indeed, empty
-	fileStore.ChunkStore = memStore
-	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
-	if isEncrypted != toEncrypt {
-		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
-	}
-	if _, err = resultReader.ReadAt(resultSlice, 0); err == nil {
-		t.Fatalf("Was able to read %d bytes from an empty memStore.", len(slice))
-	}
+//	fileStore.ChunkStore = memStore
+//	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
+//	if isEncrypted != toEncrypt {
+//		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
+//	}
+//	if _, err = resultReader.ReadAt(resultSlice, 0); err == nil {
+//		t.Fatalf("Was able to read %d bytes from an empty memStore.", len(slice))
+//	}
 	// check how it works with localStore
 	fileStore.ChunkStore = localStore
 	//	localStore.dbStore.setCapacity(0)
@@ -187,10 +187,10 @@ func TestGetAllReferences(t *testing.T) {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	db := tdb.LDBStore
-	memStore := NewMemStore(NewDefaultStoreParams(), db)
+	//	memStore := NewMemStore(NewDefaultStoreParams(), db)
 	localStore := &LocalStore{
-		memStore: memStore,
-		DbStore:  db,
+		//	memStore: memStore,
+		DbStore: db,
 	}
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
 
