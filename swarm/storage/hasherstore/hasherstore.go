@@ -98,8 +98,14 @@ func (h *HasherStore) Get(ctx context.Context, ref storage.Reference) (storage.C
 	if err != nil {
 		return nil, err
 	}
-
-	chunkData := storage.ChunkData(chunk.Data())
+	if chunk == nil {
+		panic("wtf2")
+	}
+	v := chunk.Data()
+	if v == nil {
+		panic("wtf")
+	}
+	chunkData := storage.ChunkData([]byte{})
 	toDecrypt := (encryptionKey != nil)
 	if toDecrypt {
 		var err error

@@ -73,10 +73,6 @@ func newTestDbStore(mock bool, trusted bool) (*testDbStore, func(), error) {
 	return &testDbStore{db, dir}, cleanup, err
 }
 
-func testPoFunc(k Address) (ret uint8) {
-	basekey := make([]byte, 32)
-	return uint8(Proximity(basekey, k[:]))
-}
 
 func testDbStoreRandom(n int, mock bool, t *testing.T) {
 	db, cleanup, err := newTestDbStore(mock, true)

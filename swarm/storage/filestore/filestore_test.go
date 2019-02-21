@@ -26,8 +26,12 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/ldbstore"
+	"github.com/ethereum/go-ethereum/swarm/storage/lstore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
+	testi "github.com/ethereum/go-ethereum/swarm/storage/test"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -39,20 +43,21 @@ func TestFileStorerandom(t *testing.T) {
 }
 
 func testFileStoreRandom(toEncrypt bool, t *testing.T) {
-	tdb, cleanup, err := newTestDbStore(false, false)
+	tdb, cleanup, err := newTestDbStore(false, false, 50000)
 	defer cleanup()
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	db := tdb.LDBStore
-	db.setCapacity(50000)
 	//memStore := storage.NewMemStore(NewDefaultStoreParams(), db)
-	localStore := &LocalStore{
+	localStore := &lstore.LocalStore{
 		//memStore: memStore,
 		DbStore: db,
 	}
 
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
+
+	// todo: wtf is this?
 	defer os.RemoveAll("/tmp/bzz")
 
 	slice := testutil.RandomBytes(1, testDataSize)
@@ -65,6 +70,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	if err != nil {
 		t.Fatalf("Store waitt error: %v", err.Error())
 	}
+	t.Logf("getting the key now %v", key)
 	resultReader, isEncrypted := fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
@@ -108,14 +114,15 @@ func TestFileStoreCapacity(t *testing.T) {
 }
 
 func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
-	tdb, cleanup, err := newTestDbStore(false, false)
+	tdb, cleanup, err := newTestDbStore(false, false, constants.DefaultLDBCapacity)
+
 	defer cleanup()
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	db := tdb.LDBStore
 	//memStore := NewMemStore(NewDefaultStoreParams(), db)
-	localStore := &LocalStore{
+	localStore := &lstore.LocalStore{
 		//	memStore: memStore,
 		DbStore: db,
 	}
@@ -146,16 +153,16 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		t.Fatalf("Comparison error.")
 	}
 	// Clear memStore
-//	memStore.setCapacity(0)
+	//	memStore.setCapacity(0)
 	// check whether it is, indeed, empty
-//	fileStore.ChunkStore = memStore
-//	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
-//	if isEncrypted != toEncrypt {
-//		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
-//	}
-//	if _, err = resultReader.ReadAt(resultSlice, 0); err == nil {
-//		t.Fatalf("Was able to read %d bytes from an empty memStore.", len(slice))
-//	}
+	//	fileStore.ChunkStore = memStore
+	//	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
+	//	if isEncrypted != toEncrypt {
+	//		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)
+	//	}
+	//	if _, err = resultReader.ReadAt(resultSlice, 0); err == nil {
+	//		t.Fatalf("Was able to read %d bytes from an empty memStore.", len(slice))
+	//	}
 	// check how it works with localStore
 	fileStore.ChunkStore = localStore
 	//	localStore.dbStore.setCapacity(0)
@@ -181,14 +188,14 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 // TestGetAllReferences only tests that GetAllReferences returns an expected
 // number of references for a given file
 func TestGetAllReferences(t *testing.T) {
-	tdb, cleanup, err := newTestDbStore(false, false)
+	tdb, cleanup, err := newTestDbStore(false, false, constants.DefaultLDBCapacity)
 	defer cleanup()
 	if err != nil {
 		t.Fatalf("init dbStore failed: %v", err)
 	}
 	db := tdb.LDBStore
 	//	memStore := NewMemStore(NewDefaultStoreParams(), db)
-	localStore := &LocalStore{
+	localStore := &lstore.LocalStore{
 		//	memStore: memStore,
 		DbStore: db,
 	}
@@ -211,29 +218,32 @@ func TestGetAllReferences(t *testing.T) {
 }
 
 type testDbStore struct {
-	*LDBStore
+	*ldbstore.LDBStore
 	dir string
 }
 
-func newTestDbStore(mock bool, trusted bool) (*testDbStore, func(), error) {
+func newTestDbStore(mock bool, trusted bool, capacity uint64) (*testDbStore, func(), error) {
 	dir, err := ioutil.TempDir("", "bzz-storage-test")
 	if err != nil {
 		return nil, func() {}, err
 	}
 
-	var db *LDBStore
+	var db *ldbstore.LDBStore
 	storeparams := storage.NewDefaultStoreParams()
-	params := storage.NewLDBStoreParams(storeparams, dir)
-	params.Po = testPoFunc
+	if capacity != storeparams.DbCapacity {
+		storeparams.DbCapacity = capacity
+	}
+	params := ldbstore.NewLDBStoreParams(storeparams, dir)
+	params.Po = testi.TestPoFunc
 
 	if mock {
 		globalStore := mem.NewGlobalStore()
 		addr := common.HexToAddress("0x5aaeb6053f3e94c9b9a09f33669435e7ef1beaed")
 		mockStore := globalStore.NewNodeStore(addr)
 
-		db, err = NewMockDbStore(params, mockStore)
+		db, err = ldbstore.NewMockDbStore(params, mockStore)
 	} else {
-		db, err = NewLDBStore(params)
+		db, err = ldbstore.NewLDBStore(params)
 	}
 
 	cleanup := func() {

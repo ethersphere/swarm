@@ -288,3 +288,8 @@ func ChunkAddresses(chunks []storage.Chunk) []storage.Address {
 	}
 	return addrs
 }
+
+func TestPoFunc(k storage.Address) (ret uint8) {
+	basekey := make([]byte, 32)
+	return uint8(storage.Proximity(basekey, k[:]))
+}
