@@ -244,7 +244,7 @@ func (h *HasherStore) storeChunk(ctx context.Context, chunk *storage.Chunk) {
 	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
 		select {
-		case h.errC <- h.store.Put(ctx, *chunk):
+		case h.errC <- h.store.Put(ctx, chunk):
 		case <-h.quitC:
 		}
 	}()

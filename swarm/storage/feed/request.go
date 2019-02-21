@@ -158,7 +158,7 @@ func (r *Request) toChunk() (storage.Chunk, error) {
 	// For efficiency, data is serialized during signature and cached in
 	// the binaryData field when computing the signature digest in .getDigest()
 	if r.Signature == nil || r.binaryData == nil {
-		return nil, NewError(ErrInvalidSignature, "toChunk called without a valid signature or payload data. Call .Sign() first.")
+		return storage.Chunk{}, NewError(ErrInvalidSignature, "toChunk called without a valid signature or payload data. Call .Sign() first.")
 	}
 
 	updateLength := r.Update.binaryLength()

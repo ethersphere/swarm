@@ -51,6 +51,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/filestore"
+	"github.com/ethereum/go-ethereum/swarm/storage/lstore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/storage/netstore"
 	"github.com/ethereum/go-ethereum/swarm/swap"
@@ -147,12 +148,12 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.dns = resolver
 	}
 
-	lstore, err := storage.NewLocalStore(config.LocalStoreParams, mockStore)
+	lstore, err := lstore.NewLocalStore(config.LocalStoreParams, mockStore)
 	if err != nil {
 		return nil, err
 	}
 
-	self.netStore, err = storage.NewNetStore(lstore, nil)
+	self.netStore, err = netstore.NewNetStore(lstore, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -198,7 +199,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
+	self.fileStore = filestore.NewFileStore(self.netStore, self.config.FileStoreParams)
 
 	var feedsHandler *feed.Handler
 	fhParams := &feed.HandlerParams{}

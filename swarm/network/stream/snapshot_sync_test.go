@@ -325,7 +325,7 @@ func mapKeysToNodes(conf *synctestConfig) {
 //upload a file(chunks) to a single local node store
 func uploadFileToSingleNodeStore(id enode.ID, chunkCount int, lstore *storage.LocalStore) ([]storage.Address, error) {
 	log.Debug(fmt.Sprintf("Uploading to node id: %s", id))
-	fileStore := storage.NewFileStore(lstore, storage.NewFileStoreParams())
+	fileStore := filestore.NewFileStore(lstore, filestore.NewFileStoreParams())
 	size := chunkSize
 	var rootAddrs []storage.Address
 	for i := 0; i < chunkCount; i++ {

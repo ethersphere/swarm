@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/constants"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -373,10 +374,10 @@ func (a *API) Get(ctx context.Context, decrypt DecryptFunc, manifestAddr storage
 			}
 
 			// extract content hash
-			if len(contentAddr) != storage.AddressLength {
+			if len(contentAddr) != constants.AddressLength {
 				apiGetInvalid.Inc(1)
 				status = http.StatusUnprocessableEntity
-				errorMessage := fmt.Sprintf("invalid swarm hash in feed update. Expected %d bytes. Got %d", storage.AddressLength, len(contentAddr))
+				errorMessage := fmt.Sprintf("invalid swarm hash in feed update. Expected %d bytes. Got %d", constants.AddressLength, len(contentAddr))
 				log.Warn(errorMessage)
 				return reader, mimeType, status, nil, errors.New(errorMessage)
 			}

@@ -516,7 +516,7 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 				i++
 			}
 			//...which then gets passed to the round-robin file store
-			roundRobinFileStore := storage.NewFileStore(newRoundRobinStore(stores...), storage.NewFileStoreParams())
+			roundRobinFileStore := filestore.NewFileStore(newRoundRobinStore(stores...), filestore.NewFileStoreParams())
 			//now we can actually upload a (random) file to the round-robin store
 			size := chunkCount * chunkSize
 			log.Debug("Storing data to file store")

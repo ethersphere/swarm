@@ -72,7 +72,7 @@ func NewNetStore(store storage.SyncChunkStore, nnf NewNetFetcherFunc) (*NetStore
 
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
 // the fetchers cache
-func (n *NetStore) Put(ctx context.Context, ch storage.Chunk) error {
+func (n *NetStore) Put(ctx context.Context, ch *storage.Chunk) error {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
@@ -85,7 +85,7 @@ func (n *NetStore) Put(ctx context.Context, ch storage.Chunk) error {
 	// if chunk is now put in the store, check if there was an active fetcher and call deliver on it
 	// (this delivers the chunk to requestors via the fetcher)
 	if f := n.getFetcher(ch.Address()); f != nil {
-		f.deliver(ctx, ch)
+		f.deliver(ctx, *ch)
 	}
 	return nil
 }
@@ -176,7 +176,7 @@ func (n *NetStore) get(ctx context.Context, ref storage.Address) (*storage.Chunk
 		return nil, f.Fetch, nil
 	}
 
-	return &chunk, nil, nil
+	return chunk, nil, nil
 }
 
 // Has is the storage layer entry point to query the underlying

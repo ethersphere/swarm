@@ -113,8 +113,8 @@ func (ls *LocalStore) isValid(chunk storage.Chunk) bool {
 // when the chunk is stored in memstore.
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
-func (ls *LocalStore) Put(ctx context.Context, chunk storage.Chunk) error {
-	if !ls.isValid(chunk) {
+func (ls *LocalStore) Put(ctx context.Context, chunk *storage.Chunk) error {
+	if !ls.isValid(*chunk) {
 		return storage.ErrChunkInvalid
 	}
 
@@ -130,7 +130,7 @@ func (ls *LocalStore) Put(ctx context.Context, chunk storage.Chunk) error {
 		return err
 	}
 	ls.memStore.Put(ctx, chunk)*/
-	return ls.DbStore.Put(ctx, chunk)
+	return ls.DbStore.Put(ctx, *chunk)
 }
 
 // Has queries the underlying DbStore if a chunk with the given address

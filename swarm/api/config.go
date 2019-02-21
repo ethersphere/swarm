@@ -32,8 +32,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/services/swap"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/filestore"
+	"github.com/ethereum/go-ethereum/swarm/storage/lstore"
 )
 
 const (
@@ -46,7 +46,7 @@ const (
 type Config struct {
 	// serialised/persisted fields
 	*filestore.FileStoreParams
-	*storage.LocalStoreParams
+	*lstore.LocalStoreParams
 	*network.HiveParams
 	Swap *swap.LocalProfile
 	Pss  *pss.PssParams
@@ -80,8 +80,8 @@ type Config struct {
 func NewConfig() (c *Config) {
 
 	c = &Config{
-		LocalStoreParams: storage.NewDefaultLocalStoreParams(),
-		FileStoreParams:  storage.NewFileStoreParams(),
+		LocalStoreParams: lstore.NewDefaultLocalStoreParams(),
+		FileStoreParams:  filestore.NewFileStoreParams(),
 		HiveParams:       network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
 		Swap:                 swap.NewDefaultSwapParams(),
