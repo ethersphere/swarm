@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"bytes"
@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // SubscribePull returns a channel that provides chunk addresses and stored times from pull syncing index.
@@ -161,7 +160,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *ChunkD
 // ChunkDescriptor holds information required for Pull syncing. This struct
 // is provided by subscribing to pull index.
 type ChunkDescriptor struct {
-	Address        storage.Address
+	Address        Address
 	StoreTimestamp int64
 }
 

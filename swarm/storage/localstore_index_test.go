@@ -14,14 +14,12 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"bytes"
 	"math/rand"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // TestDB_pullIndex validates the ordering of keys in pull index.
@@ -62,8 +60,8 @@ func TestDB_pullIndex(t *testing.T) {
 	}
 
 	testItemsOrder(t, db.pullIndex, chunks, func(i, j int) (less bool) {
-		poi := storage.Proximity(db.baseKey, chunks[i].Address())
-		poj := storage.Proximity(db.baseKey, chunks[j].Address())
+		poi := Proximity(db.baseKey, chunks[i].Address())
+		poj := Proximity(db.baseKey, chunks[j].Address())
 		if poi < poj {
 			return true
 		}

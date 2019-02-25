@@ -53,4 +53,4 @@ Internally, DB stores Chunk data and any required information, such as
 store and access timestamps in different shed indexes that can be
 iterated on by garbage collector or subscriptions.
 */
-package localstore
+package storage

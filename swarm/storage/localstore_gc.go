@@ -87,7 +87,7 @@ gcUncountedHashesIndex is empty, which is the usual case, New function will take
 the minimal time to return.
 */
 
-package localstore
+package storage
 
 import (
 	"time"

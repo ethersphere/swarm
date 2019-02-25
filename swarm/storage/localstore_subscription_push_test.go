@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"bytes"
@@ -23,8 +23,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // TestDB_SubscribePush uploads some chunks before and after
@@ -36,7 +34,7 @@ func TestDB_SubscribePush(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	chunks := make([]storage.Chunk, 0)
+	chunks := make([]Chunk, 0)
 	var chunksMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {
@@ -124,7 +122,7 @@ func TestDB_SubscribePush_multiple(t *testing.T) {
 
 	uploader := db.NewPutter(ModePutUpload)
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]Address, 0)
 	var addrsMu sync.Mutex
 
 	uploadRandomChunks := func(count int) {

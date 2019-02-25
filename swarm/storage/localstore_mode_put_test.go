@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"bytes"
@@ -22,8 +22,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // TestModePutRequest validates ModePutRequest index values on the provided DB.
@@ -132,7 +130,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 	chunkCount := 1000
 	workerCount := 100
 
-	chunkChan := make(chan storage.Chunk)
+	chunkChan := make(chan Chunk)
 	errChan := make(chan error)
 	doneChan := make(chan struct{})
 	defer close(doneChan)
@@ -159,7 +157,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 		}(i)
 	}
 
-	chunks := make([]storage.Chunk, 0)
+	chunks := make([]Chunk, 0)
 	var chunksMu sync.Mutex
 
 	// send chunks to workers
@@ -271,7 +269,7 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 	defer cleanupFunc()
 
 	uploader := db.NewPutter(ModePutUpload)
-	chunks := make([]storage.Chunk, count)
+	chunks := make([]Chunk, count)
 	for i := 0; i < count; i++ {
 		chunks[i] = generateFakeRandomChunk()
 	}

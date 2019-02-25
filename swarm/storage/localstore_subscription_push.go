@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"context"
@@ -22,15 +22,14 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // SubscribePush returns a channel that provides storage chunks with ordering from push syncing index.
 // Returned stop function will terminate current and further iterations, and also it will close
 // the returned channel without any errors. Make sure that you check the second returned parameter
 // from the channel to stop iteration when its value is false.
-func (db *DB) SubscribePush(ctx context.Context) (c <-chan storage.Chunk, stop func()) {
-	chunks := make(chan storage.Chunk)
+func (db *DB) SubscribePush(ctx context.Context) (c <-chan Chunk, stop func()) {
+	chunks := make(chan Chunk)
 	trigger := make(chan struct{}, 1)
 
 	db.pushTriggersMu.Lock()
@@ -65,7 +64,7 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan storage.Chunk, stop f
 					}
 
 					select {
-					case chunks <- storage.NewChunk(dataItem.Address, dataItem.Data):
+					case chunks <- NewChunk(dataItem.Address, dataItem.Data):
 						// set next iteration start item
 						// when its chunk is successfully sent to channel
 						sinceItem = &item

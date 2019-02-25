@@ -14,12 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -51,23 +50,23 @@ func (db *DB) NewGetter(mode ModeGet) *Getter {
 }
 
 // Get returns a chunk from the database. If the chunk is
-// not found storage.ErrChunkNotFound will be returned.
+// not found ErrChunkNotFound will be returned.
 // All required indexes will be updated required by the
 // Getter Mode.
-func (g *Getter) Get(addr storage.Address) (chunk storage.Chunk, err error) {
+func (g *Getter) Get(addr Address) (chunk Chunk, err error) {
 	out, err := g.db.get(g.mode, addr)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return nil, storage.ErrChunkNotFound
+			return nil, ErrChunkNotFound
 		}
 		return nil, err
 	}
-	return storage.NewChunk(out.Address, out.Data), nil
+	return NewChunk(out.Address, out.Data), nil
 }
 
 // get returns Item from the retrieval index
 // and updates other indexes.
-func (db *DB) get(mode ModeGet, addr storage.Address) (out shed.Item, err error) {
+func (db *DB) get(mode ModeGet, addr Address) (out shed.Item, err error) {
 	item := addressToItem(addr)
 
 	out, err = db.retrievalDataIndex.Get(item)

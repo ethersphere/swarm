@@ -14,13 +14,11 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"strconv"
 	"testing"
-
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // BenchmarkRetrievalIndexes uploads a number of chunks in order to measure
@@ -64,7 +62,7 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 	requester := db.NewGetter(ModeGetRequest)
-	addrs := make([]storage.Address, count)
+	addrs := make([]Address, count)
 	for i := 0; i < count; i++ {
 		chunk := generateFakeRandomChunk()
 		err := uploader.Put(chunk)
@@ -134,7 +132,7 @@ func benchmarkUpload(b *testing.B, o *Options, count int) {
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
 	uploader := db.NewPutter(ModePutUpload)
-	chunks := make([]storage.Chunk, count)
+	chunks := make([]Chunk, count)
 	for i := 0; i < count; i++ {
 		chunk := generateFakeRandomChunk()
 		chunks[i] = chunk

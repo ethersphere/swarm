@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"encoding/binary"
@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 )
 
@@ -144,9 +143,9 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		// need to be buffered with the size of 1
 		// to signal another event if it
 		// is triggered during already running function
-		collectGarbageTrigger:    make(chan struct{}, 1),
-		writeGCSizeTrigger:       make(chan struct{}, 1),
-		close:                    make(chan struct{}),
+		collectGarbageTrigger: make(chan struct{}, 1),
+		writeGCSizeTrigger:    make(chan struct{}, 1),
+		close:                 make(chan struct{}),
 		collectGarbageWorkerDone: make(chan struct{}),
 		writeGCSizeWorkerDone:    make(chan struct{}),
 	}
@@ -392,8 +391,8 @@ func (db *DB) Close() (err error) {
 
 // po computes the proximity order between the address
 // and database base key.
-func (db *DB) po(addr storage.Address) (bin uint8) {
-	return uint8(storage.Proximity(db.baseKey, addr))
+func (db *DB) po(addr Address) (bin uint8) {
+	return uint8(Proximity(db.baseKey, addr))
 }
 
 var (
@@ -409,7 +408,7 @@ var (
 // If the address is locked this function will check it
 // in a for loop for addressLockTimeout time, after which
 // it will return ErrAddressLockTimeout error.
-func (db *DB) lockAddr(addr storage.Address) (unlock func(), err error) {
+func (db *DB) lockAddr(addr Address) (unlock func(), err error) {
 	start := time.Now()
 	lockKey := hex.EncodeToString(addr)
 	for {
@@ -426,7 +425,7 @@ func (db *DB) lockAddr(addr storage.Address) (unlock func(), err error) {
 }
 
 // chunkToItem creates new Item with data provided by the Chunk.
-func chunkToItem(ch storage.Chunk) shed.Item {
+func chunkToItem(ch Chunk) shed.Item {
 	return shed.Item{
 		Address: ch.Address(),
 		Data:    ch.Data(),
@@ -434,7 +433,7 @@ func chunkToItem(ch storage.Chunk) shed.Item {
 }
 
 // addressToItem creates new Item with a provided address.
-func addressToItem(addr storage.Address) shed.Item {
+func addressToItem(addr Address) shed.Item {
 	return shed.Item{
 		Address: addr,
 	}

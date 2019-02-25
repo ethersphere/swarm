@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"bytes"
@@ -30,7 +30,6 @@ import (
 
 	ch "github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -232,8 +231,8 @@ func newTestDB(t testing.TB, o *Options) (db *DB, cleanupFunc func()) {
 
 // generateRandomChunk generates a valid Chunk with
 // data size of default chunk size.
-func generateRandomChunk() storage.Chunk {
-	return storage.GenerateRandomChunk(ch.DefaultSize)
+func generateRandomChunk() Chunk {
+	return GenerateRandomChunk(ch.DefaultSize)
 }
 
 func init() {
@@ -243,17 +242,17 @@ func init() {
 
 // generateFakeRandomChunk generates a Chunk that is not
 // valid, but it contains a random key and a random value.
-// This function is faster then storage.GenerateRandomChunk
+// This function is faster then GenerateRandomChunk
 // which generates a valid chunk.
 // Some tests in this package do not need valid chunks, just
 // random data, and their execution time can be decreased
 // using this function.
-func generateFakeRandomChunk() storage.Chunk {
+func generateFakeRandomChunk() Chunk {
 	data := make([]byte, ch.DefaultSize)
 	rand.Read(data)
 	key := make([]byte, 32)
 	rand.Read(key)
-	return storage.NewChunk(key, data)
+	return NewChunk(key, data)
 }
 
 // TestGenerateFakeRandomChunk validates that
@@ -288,7 +287,7 @@ func TestGenerateFakeRandomChunk(t *testing.T) {
 
 // newRetrieveIndexesTest returns a test function that validates if the right
 // chunk values are in the retrieval indexes.
-func newRetrieveIndexesTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newRetrieveIndexesTest(db *DB, chunk Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
 		if err != nil {
@@ -307,7 +306,7 @@ func newRetrieveIndexesTest(db *DB, chunk storage.Chunk, storeTimestamp, accessT
 
 // newRetrieveIndexesTestWithAccess returns a test function that validates if the right
 // chunk values are in the retrieval indexes when access time must be stored.
-func newRetrieveIndexesTestWithAccess(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newRetrieveIndexesTestWithAccess(db *DB, chunk Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.retrievalDataIndex.Get(addressToItem(chunk.Address()))
 		if err != nil {
@@ -327,7 +326,7 @@ func newRetrieveIndexesTestWithAccess(db *DB, chunk storage.Chunk, storeTimestam
 
 // newPullIndexTest returns a test function that validates if the right
 // chunk values are in the pull index.
-func newPullIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+func newPullIndexTest(db *DB, chunk Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pullIndex.Get(shed.Item{
 			Address:        chunk.Address(),
@@ -344,7 +343,7 @@ func newPullIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantErr
 
 // newPushIndexTest returns a test function that validates if the right
 // chunk values are in the push index.
-func newPushIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
+func newPushIndexTest(db *DB, chunk Chunk, storeTimestamp int64, wantError error) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.pushIndex.Get(shed.Item{
 			Address:        chunk.Address(),
@@ -361,7 +360,7 @@ func newPushIndexTest(db *DB, chunk storage.Chunk, storeTimestamp int64, wantErr
 
 // newGCIndexTest returns a test function that validates if the right
 // chunk values are in the push index.
-func newGCIndexTest(db *DB, chunk storage.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
+func newGCIndexTest(db *DB, chunk Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
 	return func(t *testing.T) {
 		item, err := db.gcIndex.Get(shed.Item{
 			Address:         chunk.Address(),
@@ -415,7 +414,7 @@ func newIndexGCSizeTest(db *DB) func(t *testing.T) {
 // testIndexChunk embeds storageChunk with additional data that is stored
 // in database. It is used for index values validations.
 type testIndexChunk struct {
-	storage.Chunk
+	Chunk
 	storeTimestamp int64
 }
 

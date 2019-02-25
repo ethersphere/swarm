@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"io/ioutil"
@@ -22,8 +22,6 @@ import (
 	"os"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // TestDB_collectGarbageWorker tests garbage collection runs
@@ -64,7 +62,7 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	uploader := db.NewPutter(ModePutUpload)
 	syncer := db.NewSetter(ModeSetSync)
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]Address, 0)
 
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
@@ -106,8 +104,8 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	// the first synced chunk should be removed
 	t.Run("get the first synced chunk", func(t *testing.T) {
 		_, err := db.NewGetter(ModeGetRequest).Get(addrs[0])
-		if err != storage.ErrChunkNotFound {
-			t.Errorf("got error %v, want %v", err, storage.ErrChunkNotFound)
+		if err != ErrChunkNotFound {
+			t.Errorf("got error %v, want %v", err, ErrChunkNotFound)
 		}
 	})
 
@@ -137,7 +135,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 		testHookCollectGarbageChan <- collectedCount
 	})()
 
-	addrs := make([]storage.Address, 0)
+	addrs := make([]Address, 0)
 
 	// upload random chunks just up to the capacity
 	for i := 0; i < int(db.capacity)-1; i++ {
@@ -217,8 +215,8 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	// the second synced chunk should be removed
 	t.Run("get gc-ed chunk", func(t *testing.T) {
 		_, err := db.NewGetter(ModeGetRequest).Get(addrs[1])
-		if err != storage.ErrChunkNotFound {
-			t.Errorf("got error %v, want %v", err, storage.ErrChunkNotFound)
+		if err != ErrChunkNotFound {
+			t.Errorf("got error %v, want %v", err, ErrChunkNotFound)
 		}
 	})
 

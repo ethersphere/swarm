@@ -14,11 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package storage
 
 import (
 	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -53,7 +52,7 @@ func (db *DB) NewPutter(mode ModePut) *Putter {
 
 // Put stores the Chunk to database and depending
 // on the Putter mode, it updates required indexes.
-func (p *Putter) Put(ch storage.Chunk) (err error) {
+func (p *Putter) Put(ch Chunk) (err error) {
 	return p.db.put(p.mode, chunkToItem(ch))
 }
 
