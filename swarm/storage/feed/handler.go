@@ -190,7 +190,7 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
 		defer cancel()
 
-		ch, err := h.chunkStore.Get(ctx, chunk.ModeGetFeedLookup, id.Addr())
+		ch, err := h.chunkStore.Get(ctx, chunk.ModeGetLookup, id.Addr())
 		if err != nil { // TODO: check for catastrophic errors other than chunk not found
 			return nil, nil
 		}

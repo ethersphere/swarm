@@ -104,7 +104,7 @@ func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err er
 
 	// no updates to indexes
 	case chunk.ModeGetSync:
-	case chunk.ModeGetFeedLookup:
+	case chunk.ModeGetLookup:
 	default:
 		return out, ErrInvalidMode
 	}

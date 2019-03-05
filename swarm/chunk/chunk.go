@@ -118,8 +118,8 @@ const (
 	ModeGetRequest ModeGet = iota
 	// ModeGetSync: when accessed for syncing or proof of custody request
 	ModeGetSync
-	// ModeGetFeedLookup: when accessed to lookup a feed
-	ModeGetFeedLookup
+	// ModeGetLookup: when accessed to lookup a a chunk in feeds or other places
+	ModeGetLookup
 )
 
 // ModePut enumerates different Putter modes.
