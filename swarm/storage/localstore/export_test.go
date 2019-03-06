@@ -23,6 +23,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
+// TestExportImport constructs two databases, one to put and export
+// chunks and another one to import and validate that all chunks are
+// imported.
 func TestExportImport(t *testing.T) {
 	db1, cleanup1 := newTestDB(t, nil)
 	defer cleanup1()

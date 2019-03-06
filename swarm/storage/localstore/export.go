@@ -28,6 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/shed"
 )
 
+// Export writes a tar structured data to the writer of
+// all chunks in the retrieval data index. It returns the
+// number of chunks exported.
 func (db *DB) Export(w io.Writer) (count int64, err error) {
 	tw := tar.NewWriter(w)
 	defer tw.Close()
@@ -51,6 +54,9 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 	return count, err
 }
 
+// Import reads a tar structured data from the reader and
+// stores chunks in the database. It returns the number of
+// chunks imported.
 func (db *DB) Import(r io.Reader) (count int64, err error) {
 	tr := tar.NewReader(r)
 
@@ -62,16 +68,17 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 	go func() {
 		for {
 			hdr, err := tr.Next()
-			if err == io.EOF {
-				break
-			} else if err != nil {
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
 				select {
 				case errC <- err:
 				case <-ctx.Done():
 				}
 			}
 
-			if len(hdr.Name) != 64 && len(hdr.Name) != 128 {
+			if len(hdr.Name) != 64 {
 				log.Warn("ignoring non-chunk file", "name", hdr.Name)
 				continue
 			}
@@ -101,11 +108,14 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 
 			count++
 		}
-		countC <- count
+		select {
+		case countC <- count:
+		case <-ctx.Done():
+		}
 	}()
 
 	// wait for all chunks to be stored
-	i := int64(0)
+	var i int64
 	var total int64
 	for {
 		select {

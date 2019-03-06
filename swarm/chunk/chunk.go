@@ -29,7 +29,7 @@ type chunk struct {
 	sdata []byte
 }
 
-func NewChunk(addr Address, data []byte) *chunk {
+func NewChunk(addr Address, data []byte) Chunk {
 	return &chunk{
 		addr:  addr,
 		sdata: data,

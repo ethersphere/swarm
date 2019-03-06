@@ -233,15 +233,15 @@ func (f *FakeChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (C
 }
 
 func (f *FakeChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
-	return nil
+	panic("FakeChunkStore doesn't support Set")
 }
 
 func (f *FakeChunkStore) LastPullSubscriptionChunk(bin uint8) (c *chunk.Descriptor, err error) {
-	return nil, nil
+	panic("FakeChunkStore doesn't support LastPullSubscriptionChunk")
 }
 
 func (f *FakeChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.Descriptor) (c <-chan chunk.Descriptor, stop func()) {
-	return nil, nil
+	panic("FakeChunkStore doesn't support SubscribePull")
 }
 
 // Close doesn't store anything it is just here to implement ChunkStore
