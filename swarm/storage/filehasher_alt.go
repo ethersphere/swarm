@@ -230,8 +230,8 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 				//		f.lwg[level+1].Wait()
 				log.Debug("dangle done", "level", level, "wc", wc)
 				parentOffset := (wc - 1) / f.branches
-				f.wg.Done()
 				f.lock.Unlock()
+				f.wg.Done()
 				f.doneC[level] <- struct{}{}
 				//f.write(b, parentOffset, level+1)
 				f.write(b, parentOffset, level+1, currentTotal)
@@ -240,9 +240,7 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 			f.lock.Unlock()
 		}
 
-		f.lock.Lock()
 		f.lwg[level].Add(1)
-		f.lock.Unlock()
 
 		// calculate what the potential span under this chunk will be
 		span := f.getPotentialSpan(level)
@@ -277,17 +275,12 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 			parentOffset := (wc - 1) / f.branches
 			if (level == 0 && finished) || targetCount == wc {
 				log.Debug("done", "level", level)
-				f.lock.Lock()
 				f.wg.Done()
-				f.lock.Unlock()
 				f.doneC[level] <- struct{}{}
 			}
 			//f.write(hashResult, parentOffset, level+1)
 			f.write(hashResult, parentOffset, level+1, total)
-			f.lock.Lock()
 			f.lwg[level].Done()
-			f.lock.Unlock()
 		}(level, wc, f.finished, currentTotal, targetCount)
-
 	}
 }
