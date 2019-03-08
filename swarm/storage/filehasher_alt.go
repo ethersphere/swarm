@@ -26,7 +26,7 @@ type AltFileHasher struct {
 	writeCount    [altFileHasherMaxLevels]int            // number of segment writes per level
 	doneC         [altFileHasherMaxLevels]chan struct{}  // used to tell parent that child is done writing on right edge
 	wg            sync.WaitGroup                         // used to tell caller hashing is done (maybe be replced by channel, and doneC only internally)
-	lwg           [altFileHasherMaxLevels]sync.WaitGroup // used when busy hashing
+	lwg           [altFileHasherMaxLevels]sync.WaitGroup // used to block while the level's hasher is busy
 	lock          sync.Mutex                             // protect filehasher state vars
 }
 
@@ -44,6 +44,10 @@ func NewAltFileHasher(hasherFunc func() bmt.SectionWriter, segmentSize int, bran
 	}
 	f.Reset()
 	return f
+}
+
+func (f *AltFileHasher) incWriteCount(c int, level int) {
+
 }
 
 func (f *AltFileHasher) Reset() {
@@ -136,7 +140,6 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 	// copy state vars so we don't have to keep lock across the call
 	f.lock.Lock()
 	wc := f.writeCount[level]
-	//currentTotal := f.totalBytes
 	targetCount := f.targetCount[level]
 	f.lock.Unlock()
 
@@ -153,15 +156,12 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 
 	// if top level then b is the root hash which means we are finished
 	// write it to the topmost buffer and release the waitgroup blocking  and then return
-	f.lock.Lock()
 	if level == f.levelCount-1 {
 		copy(f.buffers[level], b)
-		f.lock.Unlock()
 		f.wg.Done()
 		log.Debug("top done", "level", level)
 		return
 	}
-	f.lock.Unlock()
 
 	// only write if we have data
 	// b will never be nil except data level where it can be nil if no additional data is written upon the call to Finish()
@@ -215,25 +215,23 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 	}
 
 	if executeHasher {
+
+		// if we are still hashing the data for this level, wait until we are done
 		f.lwg[level].Wait()
+
 		// check for the dangling chunk
 		if level > 0 && f.finished {
 			f.lock.Lock()
 			cwc := f.writeCount[level-1]
 
 			log.Debug("danglecheck", "offset", offset, "f.batchSegments", f.batchSegments, "cwc", cwc)
-			// TODO: verify why do we need the latter part again?
 			childWrites := cwc % f.batchSegments
-			//if offset%f.batchSegments == 0 && childWrites < f.branches {
-			//if offset%f.branches == 0 && childWrites < f.branches && childWrites > 0 {
 			if offset%f.branches == 0 && childWrites <= f.branches {
-				//		f.lwg[level+1].Wait()
 				log.Debug("dangle done", "level", level, "wc", wc)
 				parentOffset := (wc - 1) / f.branches
 				f.lock.Unlock()
 				f.wg.Done()
 				f.doneC[level] <- struct{}{}
-				//f.write(b, parentOffset, level+1)
 				f.write(b, parentOffset, level+1, currentTotal)
 				return
 			}
@@ -262,12 +260,13 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 			hashDataSize = ((dataUnderSpan-1)/(span/f.branches) + 1) * f.segmentSize
 		}
 
-		// hash the chunk and write it to the current cursor position on the next level
 		meta := make([]byte, 8)
 		binary.LittleEndian.PutUint64(meta, uint64(dataUnderSpan))
 		log.Debug("hash", "level", level, "size", hashDataSize, "meta", meta, "wc", wc)
 		hashResult := f.hashers[level].Sum(nil, hashDataSize, meta)
 		f.hashers[level].Reset()
+
+		// hash the chunk and write it to the current cursor position on the next level
 		go func(level int, wc int, finished bool, total int, targetCount int) {
 			// if the hasher on the level above is still working, wait for it
 			f.lwg[level+1].Wait()
@@ -278,7 +277,6 @@ func (f *AltFileHasher) write(b []byte, offset int, level int, currentTotal int)
 				f.wg.Done()
 				f.doneC[level] <- struct{}{}
 			}
-			//f.write(hashResult, parentOffset, level+1)
 			f.write(hashResult, parentOffset, level+1, total)
 			f.lwg[level].Done()
 		}(level, wc, f.finished, currentTotal, targetCount)
