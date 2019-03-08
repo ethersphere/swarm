@@ -350,13 +350,13 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 	gcSize += uint64(gcUncountedSize)
+	db.incGCSize(int64(gcSize))
 	// remove uncounted hashes from the index and
 	// save the total gcSize after uncounted hashes are removed
-	err = db.writeGCSize(int64(gcSize))
+	err = db.writeGCSize()
 	if err != nil {
 		return nil, err
 	}
-	db.incGCSize(int64(gcSize))
 
 	// start worker to write gc size
 	go db.writeGCSizeWorker()
@@ -391,7 +391,7 @@ func (db *DB) closeWithOptions(writeGCSize bool) (err error) {
 	}
 
 	if writeGCSize {
-		if err := db.writeGCSize(db.getGCSize()); err != nil {
+		if err := db.writeGCSize(); err != nil {
 			log.Error("localstore: write gc size", "err", err)
 		}
 	}

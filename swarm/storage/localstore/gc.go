@@ -250,7 +250,7 @@ func (db *DB) writeGCSizeWorker() {
 	for {
 		select {
 		case <-db.writeGCSizeTrigger:
-			err := db.writeGCSize(db.getGCSize())
+			err := db.writeGCSize()
 			if err != nil {
 				log.Error("localstore write gc size", "err", err)
 			}
@@ -271,33 +271,44 @@ func (db *DB) writeGCSizeWorker() {
 // It removes all hashes from gcUncountedHashesIndex
 // not to include them on the next DB initialization
 // (New function) when gcSize is counted.
-func (db *DB) writeGCSize(gcSize int64) (err error) {
+func (db *DB) writeGCSize() (err error) {
 	const maxBatchSize = 1000
 
-	batch := new(leveldb.Batch)
-	db.storedGCSize.PutInBatch(batch, uint64(gcSize))
-	batchSize := 1
+	for {
+		gcSize := db.getGCSize()
 
-	// use only one iterator as it acquires its snapshot
-	// not to remove hashes from index that are added
-	// after stored gc size is written
-	err = db.gcUncountedHashesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-		db.gcUncountedHashesIndex.DeleteInBatch(batch, item)
-		batchSize++
-		if batchSize >= maxBatchSize {
-			err = db.shed.WriteBatch(batch)
-			if err != nil {
-				return false, err
+		batch := new(leveldb.Batch)
+		db.storedGCSize.PutInBatch(batch, uint64(gcSize))
+		batchSize := 1
+
+		// use only one iterator as it acquires its snapshot
+		// not to remove hashes from index that are added
+		// after stored gc size is written
+		err = db.gcUncountedHashesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+			db.gcUncountedHashesIndex.DeleteInBatch(batch, item)
+			batchSize++
+			if batchSize >= maxBatchSize {
+				err = db.shed.WriteBatch(batch)
+				if err != nil {
+					return false, err
+				}
+				batch.Reset()
+				batchSize = 0
 			}
-			batch.Reset()
-			batchSize = 0
+			return false, nil
+		}, nil)
+		if err != nil {
+			return err
 		}
-		return false, nil
-	}, nil)
-	if err != nil {
-		return err
+		err = db.shed.WriteBatch(batch)
+		if err != nil {
+			return err
+		}
+		if gcSize == db.getGCSize() {
+			break
+		}
 	}
-	return db.shed.WriteBatch(batch)
+	return nil
 }
 
 // testHookCollectGarbage is a hook that can provide
