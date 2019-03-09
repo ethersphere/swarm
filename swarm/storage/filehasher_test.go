@@ -69,14 +69,16 @@ var (
 	}
 
 	start = 0
-	end   = 20
+	end   = 7
 )
 
-func init() {
-	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize*32)
-}
+//
+//func init() {
+//	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize*32)
+//}
 
 func newAsyncHasher() bmt.SectionWriter {
+	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize*32)
 	h := bmt.New(pool)
 	return h.NewAsyncWriter(false)
 }
@@ -86,7 +88,7 @@ func TestAltFileHasher(t *testing.T) {
 
 	for i := start; i < end; i++ {
 		dataLength := dataLengths[i]
-		log.Info("start", "len", dataLength)
+		log.Info("start", "i", i, "len", dataLength)
 		fh := NewAltFileHasher(newAsyncHasher, 32, 128)
 		_, data := generateSerialData(dataLength, 255, 0)
 		l := 32
@@ -108,7 +110,7 @@ func TestAltFileHasher(t *testing.T) {
 		t.Logf("[%7d+%4d]\t%v\tref: %x\texpect: %s", dataLength/chunkSize, dataLength%chunkSize, eq, refHash, expected[i])
 	}
 	if mismatch > 0 {
-		t.Fatalf("mismatches: %d/%d", mismatch, len(dataLengths))
+		t.Fatalf("mismatches: %d/%d", mismatch, end-start)
 	}
 }
 
@@ -117,7 +119,7 @@ func TestReferenceFileHasher(t *testing.T) {
 	var mismatch int
 	for i := start; i < end; i++ {
 		dataLength := dataLengths[i]
-		log.Info("start", "len", dataLength)
+		log.Info("start", "i", i, "len", dataLength)
 		fh := NewReferenceFileHasher(h, 128)
 		_, data := generateSerialData(dataLength, 255, 0)
 		refHash := fh.Hash(bytes.NewReader(data), len(data)).Bytes()
@@ -129,7 +131,7 @@ func TestReferenceFileHasher(t *testing.T) {
 		t.Logf("[%7d+%4d]\t%v\tref: %x\texpect: %s", dataLength/chunkSize, dataLength%chunkSize, eq, refHash, expected[i])
 	}
 	if mismatch > 0 {
-		t.Fatalf("mismatches: %d/%d", mismatch, len(dataLengths))
+		t.Fatalf("mismatches: %d/%d", mismatch, end-start)
 	}
 }
 
