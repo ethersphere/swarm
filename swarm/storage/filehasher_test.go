@@ -68,17 +68,16 @@ var (
 		"522194562123473dcfd7a457b18ee7dee8b7db70ed3cfa2b73f348a992fdfd3b",
 	}
 
-	start = 0
+	start = 5
 	end   = 10
 )
 
-//
 //func init() {
-//	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize*32)
+//	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize)
 //}
 
 func newAsyncHasher() bmt.SectionWriter {
-	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize*32)
+	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize)
 	h := bmt.New(pool)
 	return h.NewAsyncWriter(false)
 }
