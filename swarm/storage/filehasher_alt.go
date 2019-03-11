@@ -90,8 +90,20 @@ func (f *AltFileHasher) addJob(level int, data []byte, last bool) {
 
 // cancel the file hashing operation
 func (f *AltFileHasher) cancel(e error) {
+	f.lock.Lock()
+	defer f.lock.Unlock()
 	f.cancelFunc()
-	f.Reset()
+	for i := 0; i < altFileHasherMaxLevels; i++ {
+		select {
+		case _, ok := <-f.levelJobs[i]:
+			if ok {
+				close(f.levelJobs[i])
+			}
+		case <-f.ctx.Done():
+			close(f.levelJobs[i])
+		}
+	}
+	f.levelCount = 0
 }
 
 // makes sure the hasher is clean before it's returned to the pool
@@ -169,7 +181,7 @@ func (f *AltFileHasher) Reset() {
 		if i > 0 {
 			f.targetCount[i-1] = 0
 		}
-		f.levelJobs[i] = make(chan fileHashJob, branches-1)
+		f.levelJobs[i] = make(chan fileHashJob, branches)
 		f.writeCount[i] = 0
 		f.writeSyncCount = 0
 	}
@@ -222,7 +234,6 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 
 	f.lock.Unlock()
 
-	log.Warn("foo", "tgt", f.targetCount[f.levelCount-2], "lvl", f.levelCount-2, "br", f.branches)
 	// if the last intermediate level ends on a chunk boundary, we already have our result
 	// and no further action is needed
 	if f.targetCount[f.levelCount-2]%f.branches > 0 {
