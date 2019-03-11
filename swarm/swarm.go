@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -56,6 +57,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
+	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 var (
@@ -147,6 +150,13 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		resolver = api.NewMultiResolver(opts...)
 		self.dns = resolver
 	}
+	// check that we are not in the old database schema
+	// if so - fail and exit
+	isLegacy := isLegacyDatabase(config.LocalStoreParams.ChunkDbPath)
+
+	if isLegacy {
+		return nil, errors.New("Legacy database format detected!")
+	}
 
 	var feedsHandler *feed.Handler
 	fhParams := &feed.HandlerParams{}
@@ -232,6 +242,40 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	log.Debug("Initialized FUSE filesystem")
 
 	return self, nil
+}
+
+// returns true if legacy database is in the datadir
+func isLegacyDatabase(datadir string) bool {
+
+	var (
+		legacyDbSchemaKey = []byte{8}
+		dbSchemaKey       = []byte{0}
+	)
+
+	db, err := leveldb.OpenFile(datadir, &opt.Options{OpenFilesCacheCapacity: 128})
+	if err != nil {
+		log.Error("error found", "err", err)
+		return false
+	}
+	defer db.Close()
+
+	data, err := db.Get(legacyDbSchemaKey, nil)
+	if err != nil {
+		if err == leveldb.ErrNotFound {
+
+			data, err := db.Get(dbSchemaKey, nil)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Println("getting some wtf")
+			fmt.Println(string(data))
+
+			return false
+		}
+	}
+
+	fmt.Println(string(data))
+	return string(data) == "halloween"
 }
 
 // parseEnsAPIAddress parses string according to format

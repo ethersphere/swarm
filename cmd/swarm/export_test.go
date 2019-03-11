@@ -17,17 +17,33 @@
 package main
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
 	"crypto/md5"
+	"encoding/base64"
+	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
+	"path"
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/cmd/swarm/testdata"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
+)
+
+const (
+	DATABASE_FIXTURE_BZZ_ACCOUNT = "0aa159029fa13ffa8fa1c6fff6ebceface99d6a4"
+	DATABASE_FIXTURE_PASSWORD    = "pass"
+	FIXTURE_DATADIR_PREFIX       = "swarm/bzz-0aa159029fa13ffa8fa1c6fff6ebceface99d6a4"
+	FixtureBaseKey               = "a9f22b3d77b4bdf5f3eefce995d6c8e7cecf2636f20956f08a0d1ed95adb52ad"
 )
 
 // TestCLISwarmExportImport perform the following test:
@@ -99,6 +115,105 @@ func TestCLISwarmExportImport(t *testing.T) {
 	mustEqualFiles(t, bytes.NewReader(content), res.Body)
 }
 
+func TestExportLegacyToNew(t *testing.T) {
+	// changes to the swarm code:
+	/*
+		bzz account 0aa159029fa13ffa8fa1c6fff6ebceface99d6a4
+		password qwerty
+		uploaded file hash http://localhost:8500/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/
+
+		open LDB on startup, try to get old DB schema key from the db.
+			if its valid - ask for migration.
+			if not - check new db schema key validity.
+			migration should be also correct with last shcema name that requires the export+import migration
+			and check that it was done successfully
+			user should delete the folder after export so that the new db gets created
+		v0. create old database tarball as a fixture, push to codebase
+		v1. unpack fixture to tmp dir
+		v2. try to open new swarm that should complain about schema changes but with same datadir
+		v3. catch the complaint
+		v4. do the export
+		v5. remove the folder
+			6. try to reopen with new swarm - file should not be retrievable
+			7. close
+			8. try to import the dump
+			9. file should be accessible
+	*/
+	tmpdir, err := ioutil.TempDir("", "swarm-test")
+	fmt.Println(tmpdir)
+	//	defer os.RemoveAll(tmpdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	deflateBase64Gzip(t, testdata.DATADIR_MIGRATION_FIXTURE, tmpdir)
+
+	tmpPassword := testutil.TempFileWithContent(t, DATABASE_FIXTURE_PASSWORD)
+	defer os.Remove(tmpPassword)
+
+	flags := []string{
+		"--datadir", tmpdir,
+		"--bzzaccount", DATABASE_FIXTURE_BZZ_ACCOUNT,
+		"--password", tmpPassword,
+	}
+
+	newSwarmOldDb := runSwarm(t, flags...)
+	_, matches := newSwarmOldDb.ExpectRegexp(".+")
+	newSwarmOldDb.ExpectExit()
+
+	if len(matches) == 0 {
+		t.Fatalf("stdout not matched")
+	}
+
+	if newSwarmOldDb.ExitStatus() == 0 {
+		t.Fatal("should error")
+	}
+
+	actualDataDir := path.Join(tmpdir, FIXTURE_DATADIR_PREFIX)
+	exportCmd := runSwarm(t, "--verbosity", "5", "db", "export", actualDataDir+"/chunks", tmpdir+"/export.tar", FixtureBaseKey)
+	exportCmd.ExpectExit()
+
+	stat, err := os.Stat(tmpdir + "/export.tar")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// make some silly size assumption
+	if stat.Size() < 90000 {
+		t.Fatal("export size too small")
+	}
+
+	err = os.RemoveAll(path.Join(actualDataDir, "chunks"))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	newSwarmNoDb := runSwarm(t, append(flags, "--verbosity", "6")...)
+	time.Sleep(3 * time.Second)
+	res, err := http.Get("http://localhost:8500/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.StatusCode != 404 {
+		t.Fatal("should not be found!")
+	}
+	_, _ = newSwarmOldDb.ExpectRegexp(".+")
+	newSwarmNoDb.ExpectExit()
+
+	/*		if len(matches) == 0 {
+					t.Fatalf("stdout not matched")
+				}/
+
+			if newSwarmOldDb.ExitStatus() == 0 {
+				t.Fatal("should error")
+			}*/
+	/*	robots, err := ioutil.ReadAll(res.Body)
+		res.Body.Close()
+		if err != nil {
+			t.Fatal(err)
+		}*/
+
+}
+
 func mustEqualFiles(t *testing.T, up io.Reader, down io.Reader) {
 	h := md5.New()
 	upLen, err := io.Copy(h, up)
@@ -116,4 +231,55 @@ func mustEqualFiles(t *testing.T, up io.Reader, down io.Reader) {
 	if !bytes.Equal(upHash, downHash) || upLen != downLen {
 		t.Fatalf("downloaded imported file md5=%x (length %v) is not the same as the generated one mp5=%x (length %v)", downHash, downLen, upHash, upLen)
 	}
+}
+
+func deflateBase64Gzip(t *testing.T, base64File, directory string) {
+	t.Helper()
+
+	f := base64.NewDecoder(base64.StdEncoding, strings.NewReader(base64File))
+
+	gzf, err := gzip.NewReader(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tarReader := tar.NewReader(gzf)
+
+	i := 0
+	for {
+		header, err := tarReader.Next()
+
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		name := header.Name
+
+		switch header.Typeflag {
+		case tar.TypeDir:
+			log.Debug("deflating tgz", "creating directory", path.Join(directory, name))
+			err := os.Mkdir(path.Join(directory, name), os.ModePerm)
+			if err != nil {
+				t.Fatal(err)
+			}
+		case tar.TypeReg:
+			log.Debug("deflating tgz", "creating file", path.Join(directory, name))
+			file, err := os.Create(path.Join(directory, name))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := io.Copy(file, tarReader); err != nil {
+				t.Fatal(err)
+			}
+		default:
+			t.Fatal("shouldn't happen")
+		}
+
+		i++
+	}
+
 }

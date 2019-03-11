@@ -36,17 +36,22 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/ethereum/go-ethereum/internal/cmdtest"
+	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/mattn/go-colorable"
 )
 
-var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
+var loglevel = flag.Int("loglevel", 5, "verbosity of logs")
 
 func init() {
+	log.PrintOrigins(true)
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+
 	// Run the app if we've been exec'd as "swarm-test" in runSwarm.
 	reexec.Register("swarm-test", func() {
 		if err := app.Run(os.Args); err != nil {
