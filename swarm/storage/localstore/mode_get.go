@@ -116,11 +116,8 @@ func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err er
 // only Address and Data fields with non zero values,
 // which is ensured by the get function.
 func (db *DB) updateGC(item shed.Item) (err error) {
-	unlock, err := db.lockAddr(item.Address)
-	if err != nil {
-		return err
-	}
-	defer unlock()
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
 
 	batch := new(leveldb.Batch)
 

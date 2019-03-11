@@ -22,7 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
-// Hasser provides Get method to retrieve Chunks
+// Hasser provides Has method to retrieve Chunks
 // from database.
 type Hasser struct {
 	db *DB
@@ -36,10 +36,11 @@ func (db *DB) NewHasser() *Hasser {
 }
 
 // Has returns true if the chunk is stored in database.
-func (h *Hasser) Has(addr chunk.Address) (yes bool, err error) {
+func (h *Hasser) Has(addr chunk.Address) (bool, error) {
 	return h.db.retrievalDataIndex.Has(addressToItem(addr))
 }
 
-func (db *DB) Has(_ context.Context, addr chunk.Address) (yes bool, err error) {
+// Has returns true if the chunk is stored in database.
+func (db *DB) Has(_ context.Context, addr chunk.Address) (bool, error) {
 	return db.retrievalDataIndex.Has(addressToItem(addr))
 }

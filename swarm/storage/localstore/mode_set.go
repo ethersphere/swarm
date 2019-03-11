@@ -55,11 +55,8 @@ func (db *DB) Set(_ context.Context, mode chunk.ModeSet, addr chunk.Address) (er
 // of this function for the same address in parallel.
 func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 	// protect parallel updates
-	unlock, err := db.lockAddr(addr)
-	if err != nil {
-		return err
-	}
-	defer unlock()
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
 
 	batch := new(leveldb.Batch)
 
@@ -105,7 +102,6 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		db.pullIndex.PutInBatch(batch, item)
 		triggerPullFeed = true
 		db.gcIndex.PutInBatch(batch, item)
-		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		gcSizeChange++
 
 	case chunk.ModeSetSync:
@@ -143,7 +139,6 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		db.retrievalAccessIndex.PutInBatch(batch, item)
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
-		db.gcUncountedHashesIndex.PutInBatch(batch, item)
 		gcSizeChange++
 
 	case chunk.ModeSetRemove:
@@ -171,7 +166,6 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		db.retrievalAccessIndex.DeleteInBatch(batch, item)
 		db.pullIndex.DeleteInBatch(batch, item)
 		db.gcIndex.DeleteInBatch(batch, item)
-		db.gcUncountedHashesIndex.DeleteInBatch(batch, item)
 		// a check is needed for decrementing gcSize
 		// as delete is not reporting if the key/value pair
 		// is deleted or not
@@ -183,12 +177,14 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		return ErrInvalidMode
 	}
 
-	err = db.shed.WriteBatch(batch)
+	err = db.incGCSizeInBatch(batch, gcSizeChange)
 	if err != nil {
 		return err
 	}
-	if gcSizeChange != 0 {
-		db.incGCSize(gcSizeChange)
+
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		return err
 	}
 	if triggerPullFeed {
 		db.triggerPullSubscriptions(db.po(item.Address))
