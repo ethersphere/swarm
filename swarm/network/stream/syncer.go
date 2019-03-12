@@ -19,11 +19,8 @@ package stream
 import (
 	"context"
 	"strconv"
-	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
-
-	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -79,57 +76,47 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 
 // SessionIndex returns current storage bin (po) index.
 func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
-	return 0, nil
-	//return s.store.BinIndex(s.po), nil
+	return s.store.LastPullSubscriptionBinID(s.po)
 }
 
 // GetBatch retrieves the next batch of hashes from the dbstore
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	var batch []byte
-	//i := 0
-
-	var ticker *time.Ticker
-	defer func() {
-		if ticker != nil {
-			ticker.Stop()
-		}
-	}()
-	var wait bool
-	for {
-		if wait {
-			if ticker == nil {
-				ticker = time.NewTicker(1000 * time.Millisecond)
-			}
-			select {
-			case <-ticker.C:
-			case <-s.quit:
-				return nil, 0, 0, nil, nil
-			}
-		}
-
-		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
-		// err := s.store.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
-		// 	select {
-		// 	case <-s.quit:
-		// 		return false
-		// 	default:
-		// 	}
-		// 	batch = append(batch, key[:]...)
-		// 	i++
-		// 	to = idx
-		// 	return i < BatchSize
-		// })
-		// if err != nil {
-		// 	return nil, 0, 0, nil, err
-		// }
-		if len(batch) > 0 {
-			break
-		}
-		wait = true
+	if to == 0 {
+		return nil, 0, 0, nil, nil
 	}
+	var start *uint64
+	end := to
+	descriptors, stop := s.store.SubscribePull(context.Background(), s.po, &from, &to)
+	defer stop()
 
-	//log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.store.BinIndex(s.po))
-	return batch, from, to, nil, nil
+	var batch []byte
+	i := 0
+
+	for iterate := true; iterate; {
+		select {
+		case d, ok := <-descriptors:
+			if !ok {
+				iterate = false
+				break
+			}
+			batch = append(batch, d.Address[:]...)
+			i++
+			if start == nil {
+				start = &d.BinID
+			}
+			end = d.BinID
+			if i >= BatchSize {
+				iterate = false
+			}
+		case <-s.quit:
+			iterate = false
+		}
+	}
+	if start == nil {
+		s := uint64(0)
+		start = &s
+	}
+	return batch, *start, end, nil, nil
 }
 
 // SwarmSyncerClient

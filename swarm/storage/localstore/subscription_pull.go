@@ -19,6 +19,7 @@ package localstore
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -29,8 +30,8 @@ import (
 
 // SubscribePull returns a channel that provides chunk addresses and stored times from pull syncing index.
 // Pull syncing index can be only subscribed to a particular proximity order bin. If since
-// is not nil, the iteration will start from the first item stored after that timestamp. If until is not nil,
-// only chunks stored up to this timestamp will be send to the channel, and the returned channel will be
+// is not nil, the iteration will start from the first item stored after that id. If until is not nil,
+// only chunks stored up to this id will be send to the channel, and the returned channel will be
 // closed. The since-until interval is open on the left and closed on the right (since,until]. Returned stop
 // function will terminate current and further iterations without errors, and also close the returned channel.
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
@@ -115,7 +116,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64
 						// if until is reached
 						return
 					}
-					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
+					log.Error("localstore pull subscription iteration", "bin", bin, "since", fmtUint64Ptr(since), "until", fmtUint64Ptr(until), "err", err)
 					return
 				}
 			case <-stopChan:
@@ -129,7 +130,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64
 			case <-ctx.Done():
 				err := ctx.Err()
 				if err != nil {
-					log.Error("localstore pull subscription", "bin", bin, "since", since, "until", until, "err", err)
+					log.Error("localstore pull subscription", "bin", bin, "since", fmtUint64Ptr(since), "until", fmtUint64Ptr(until), "err", err)
 				}
 				return
 			}
@@ -155,14 +156,14 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64
 	return chunkDescriptors, stop
 }
 
-// LastPullSubscriptionBinID returns chunk.Descriptor of the latest Chunk
+// LastPullSubscriptionBinID returns chunk bin id of the latest Chunk
 // in pull syncing index for a provided bin. If there are no chunks in
-// that bin, chunk.ErrChunkNotFound is returned.
+// that bin, 0 value is returned.
 func (db *DB) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
 	item, err := db.pullIndex.Last([]byte{bin})
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return 0, chunk.ErrChunkNotFound
+			return 0, nil
 		}
 		return 0, err
 	}
@@ -196,4 +197,12 @@ func (db *DB) addressInBin(bin uint8) (addr chunk.Address) {
 	b := bin / 8
 	addr[b] = addr[b] ^ (1 << (7 - bin%8))
 	return addr
+}
+
+// fmtUint64Ptr formats uint64 pointer to string.
+func fmtUint64Ptr(i *uint64) string {
+	if i == nil {
+		return "<nil>"
+	}
+	return fmt.Sprint(*i)
 }

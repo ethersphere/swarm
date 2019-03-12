@@ -172,18 +172,20 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			if err != nil {
 				return err
 			}
-			c, _ := localStore.SubscribePull(ctx, po, nil, &until)
-			for iterate := true; iterate; {
-				select {
-				case cd, ok := <-c:
-					if !ok {
-						iterate = false
+			if until > 0 {
+				c, _ := localStore.SubscribePull(ctx, po, nil, &until)
+				for iterate := true; iterate; {
+					select {
+					case cd, ok := <-c:
+						if !ok {
+							iterate = false
+						}
+						hashes[i] = append(hashes[i], cd.Address)
+						totalHashes++
+						hashCounts[i]++
+					case <-ctx.Done():
+						return ctx.Err()
 					}
-					hashes[i] = append(hashes[i], cd.Address)
-					totalHashes++
-					hashCounts[i]++
-				case <-ctx.Done():
-					return ctx.Err()
 				}
 			}
 		}
@@ -198,7 +200,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 					if !ok {
 						return fmt.Errorf("No DB")
 					}
-					db := item.(*storage.NetStore)
+					db := item.(chunk.Store)
 					_, err := db.Get(ctx, chunk.ModeGetRequest, key)
 					if err == nil {
 						found++
@@ -210,7 +212,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 		if total == found && total > 0 {
 			return nil
 		}
-		return fmt.Errorf("Total not equallying found: total is %d", total)
+		return fmt.Errorf("Total not equallying found %v: total is %d", found, total)
 	})
 
 	if result.Error != nil {
