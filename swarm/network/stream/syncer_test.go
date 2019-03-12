@@ -168,11 +168,11 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 				return fmt.Errorf("No DB")
 			}
 			localStore := item.(*localstore.DB)
-			until, err := localStore.LastPullSubscriptionChunk(po)
+			until, err := localStore.LastPullSubscriptionBinID(po)
 			if err != nil {
 				return err
 			}
-			c, _ := localStore.SubscribePull(ctx, po, nil, until)
+			c, _ := localStore.SubscribePull(ctx, po, nil, &until)
 			for iterate := true; iterate; {
 				select {
 				case cd, ok := <-c:

@@ -17,7 +17,6 @@
 package localstore
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"sync"
@@ -36,7 +35,7 @@ import (
 // function will terminate current and further iterations without errors, and also close the returned channel.
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
-func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.Descriptor) (c <-chan chunk.Descriptor, stop func()) {
+func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64) (c <-chan chunk.Descriptor, stop func()) {
 	chunkDescriptors := make(chan chunk.Descriptor)
 	trigger := make(chan struct{}, 1)
 
@@ -66,8 +65,8 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.
 		var sinceItem *shed.Item
 		if since != nil {
 			sinceItem = &shed.Item{
-				Address:        since.Address,
-				StoreTimestamp: since.StoreTimestamp,
+				Address: db.addressInBin(bin),
+				BinID:   *since,
 			}
 		}
 		for {
@@ -80,14 +79,12 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 					select {
 					case chunkDescriptors <- chunk.Descriptor{
-						Address:        item.Address,
-						StoreTimestamp: item.StoreTimestamp,
+						Address: item.Address,
+						BinID:   item.BinID,
 					}:
 						// until chunk descriptor is sent
 						// break the iteration
-						if until != nil &&
-							(item.StoreTimestamp >= until.StoreTimestamp ||
-								bytes.Equal(item.Address, until.Address)) {
+						if until != nil && item.BinID >= *until {
 							return true, errStopSubscription
 						}
 						// set next iteration start item
@@ -158,21 +155,18 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.
 	return chunkDescriptors, stop
 }
 
-// LastPullSubscriptionChunk returns chunk.Descriptor of the latest Chunk
+// LastPullSubscriptionBinID returns chunk.Descriptor of the latest Chunk
 // in pull syncing index for a provided bin. If there are no chunks in
 // that bin, chunk.ErrChunkNotFound is returned.
-func (db *DB) LastPullSubscriptionChunk(bin uint8) (c *chunk.Descriptor, err error) {
+func (db *DB) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
 	item, err := db.pullIndex.Last([]byte{bin})
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return nil, chunk.ErrChunkNotFound
+			return 0, chunk.ErrChunkNotFound
 		}
-		return nil, err
+		return 0, err
 	}
-	return &chunk.Descriptor{
-		Address:        item.Address,
-		StoreTimestamp: item.StoreTimestamp,
-	}, nil
+	return item.BinID, nil
 }
 
 // triggerPullSubscriptions is used internally for starting iterations
@@ -193,4 +187,13 @@ func (db *DB) triggerPullSubscriptions(bin uint8) {
 		default:
 		}
 	}
+}
+
+// addressInBin returns an address that is in a specific
+// proximity order bin from database base key.
+func (db *DB) addressInBin(bin uint8) (addr chunk.Address) {
+	addr = append([]byte(nil), db.baseKey...)
+	b := bin / 8
+	addr[b] = addr[b] ^ (1 << (7 - bin%8))
+	return addr
 }

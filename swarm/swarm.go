@@ -156,7 +156,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	localStore, err := localstore.New(config.ChunkDbPath, config.BaseKey, &localstore.Options{
 		MockStore: mockStore,
-		Capacity:  int64(config.DbCapacity),
+		Capacity:  config.DbCapacity,
 	})
 	if err != nil {
 		return nil, err

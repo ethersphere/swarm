@@ -235,11 +235,11 @@ func (rrs *roundRobinStore) Set(ctx context.Context, mode chunk.ModeSet, addr ch
 	return nil
 }
 
-func (rrs *roundRobinStore) LastPullSubscriptionChunk(bin uint8) (c *chunk.Descriptor, err error) {
-	return nil, nil
+func (rrs *roundRobinStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
+	return 0, nil
 }
 
-func (rrs *roundRobinStore) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.Descriptor) (c <-chan chunk.Descriptor, stop func()) {
+func (rrs *roundRobinStore) SubscribePull(ctx context.Context, bin uint8, since, until *uint64) (c <-chan chunk.Descriptor, stop func()) {
 	return nil, nil
 }
 

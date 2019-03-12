@@ -96,7 +96,7 @@ func TestModePutSync(t *testing.T) {
 
 	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
 
-	t.Run("pull index", newPullIndexTest(db, ch, wantTimestamp, nil))
+	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
 }
 
 // TestModePutUpload validates ModePutUpload index values on the provided DB.
@@ -118,7 +118,7 @@ func TestModePutUpload(t *testing.T) {
 
 	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
 
-	t.Run("pull index", newPullIndexTest(db, ch, wantTimestamp, nil))
+	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
 
 	t.Run("push index", newPushIndexTest(db, ch, wantTimestamp, nil))
 }

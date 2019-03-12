@@ -88,6 +88,10 @@ func newTestNetStore(t *testing.T) (netStore *NetStore, fetcher *mockNetFetcher,
 	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
 		Capacity: 50000,
 	})
+	if err != nil {
+		os.RemoveAll(dir)
+		t.Fatal(err)
+	}
 	cleanup = func() {
 		localStore.Close()
 		os.RemoveAll(dir)

@@ -45,6 +45,9 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
 		Capacity: 50000,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer localStore.Close()
 
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
@@ -109,6 +112,9 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
 		Capacity: 50000,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer localStore.Close()
 
 	fileStore := NewFileStore(localStore, NewFileStoreParams())
@@ -181,6 +187,9 @@ func TestGetAllReferences(t *testing.T) {
 	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
 		Capacity: 50000,
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer localStore.Close()
 
 	fileStore := NewFileStore(localStore, NewFileStoreParams())

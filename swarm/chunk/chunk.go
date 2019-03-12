@@ -151,15 +151,15 @@ const (
 // Descriptor holds information required for Pull syncing. This struct
 // is provided by subscribing to pull index.
 type Descriptor struct {
-	Address        Address
-	StoreTimestamp int64
+	Address Address
+	BinID   uint64
 }
 
-func (c *Descriptor) String() string {
-	if c == nil {
+func (d *Descriptor) String() string {
+	if d == nil {
 		return "none"
 	}
-	return fmt.Sprintf("%s stored at %v", c.Address.Hex(), c.StoreTimestamp)
+	return fmt.Sprintf("%s bin id %v", d.Address.Hex(), d.BinID)
 }
 
 type Store interface {
@@ -167,8 +167,8 @@ type Store interface {
 	Put(ctx context.Context, mode ModePut, ch Chunk) (err error)
 	Has(ctx context.Context, addr Address) (yes bool, err error)
 	Set(ctx context.Context, mode ModeSet, addr Address) (err error)
-	LastPullSubscriptionChunk(bin uint8) (c *Descriptor, err error)
-	SubscribePull(ctx context.Context, bin uint8, since, until *Descriptor) (c <-chan Descriptor, stop func())
+	LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
+	SubscribePull(ctx context.Context, bin uint8, since, until *uint64) (c <-chan Descriptor, stop func())
 	Close() (err error)
 }
 

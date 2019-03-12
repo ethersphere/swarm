@@ -79,9 +79,14 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		switch err {
 		case nil:
 			item.StoreTimestamp = i.StoreTimestamp
+			item.BinID = i.BinID
 		case leveldb.ErrNotFound:
 			db.pushIndex.DeleteInBatch(batch, item)
 			item.StoreTimestamp = now()
+			item.BinID, err = db.binIDs.Inc(uint64(db.po(item.Address)))
+			if err != nil {
+				return err
+			}
 		default:
 			return err
 		}
@@ -123,6 +128,7 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 			return err
 		}
 		item.StoreTimestamp = i.StoreTimestamp
+		item.BinID = i.BinID
 
 		i, err = db.retrievalAccessIndex.Get(item)
 		switch err {
@@ -161,6 +167,7 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 			return err
 		}
 		item.StoreTimestamp = i.StoreTimestamp
+		item.BinID = i.BinID
 
 		db.retrievalDataIndex.DeleteInBatch(batch, item)
 		db.retrievalAccessIndex.DeleteInBatch(batch, item)

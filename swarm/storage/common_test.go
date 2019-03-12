@@ -254,11 +254,11 @@ func (m *MapChunkStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.
 	return nil
 }
 
-func (m *MapChunkStore) LastPullSubscriptionChunk(bin uint8) (c *chunk.Descriptor, err error) {
-	return nil, nil
+func (m *MapChunkStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
+	return 0, nil
 }
 
-func (m *MapChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until *chunk.Descriptor) (c <-chan chunk.Descriptor, stop func()) {
+func (m *MapChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until *uint64) (c <-chan chunk.Descriptor, stop func()) {
 	return nil, nil
 }
 

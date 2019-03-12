@@ -87,6 +87,7 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 		switch err {
 		case nil:
 			item.StoreTimestamp = i.StoreTimestamp
+			item.BinID = i.BinID
 		case leveldb.ErrNotFound:
 			// no chunk accesses
 		default:
@@ -99,6 +100,12 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 		}
 		if item.StoreTimestamp == 0 {
 			item.StoreTimestamp = now()
+		}
+		if item.BinID == 0 {
+			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
+			if err != nil {
+				return err
+			}
 		}
 		// update access timestamp
 		item.AccessTimestamp = now()
@@ -114,6 +121,10 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 		// put to indexes: retrieve, push, pull
 
 		item.StoreTimestamp = now()
+		item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
+		if err != nil {
+			return err
+		}
 		db.retrievalDataIndex.PutInBatch(batch, item)
 		db.pullIndex.PutInBatch(batch, item)
 		triggerPullFeed = true
@@ -124,6 +135,10 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 		// put to indexes: retrieve, pull
 
 		item.StoreTimestamp = now()
+		item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
+		if err != nil {
+			return err
+		}
 		db.retrievalDataIndex.PutInBatch(batch, item)
 		db.pullIndex.PutInBatch(batch, item)
 		triggerPullFeed = true

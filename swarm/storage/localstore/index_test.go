@@ -57,7 +57,7 @@ func TestDB_pullIndex(t *testing.T) {
 			// are sequential and that only ordering
 			// of events matter, this information is
 			// sufficient
-			storeTimestamp: now(),
+			binID: uint64(now()),
 		}
 	}
 
@@ -70,10 +70,10 @@ func TestDB_pullIndex(t *testing.T) {
 		if poi > poj {
 			return false
 		}
-		if chunks[i].storeTimestamp < chunks[j].storeTimestamp {
+		if chunks[i].binID < chunks[j].binID {
 			return true
 		}
-		if chunks[i].storeTimestamp > chunks[j].storeTimestamp {
+		if chunks[i].binID > chunks[j].binID {
 			return false
 		}
 		return bytes.Compare(chunks[i].Address(), chunks[j].Address()) == -1

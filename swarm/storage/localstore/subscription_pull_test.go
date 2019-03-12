@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/shed"
 )
 
 // TestDB_SubscribePull uploads some chunks before and after
@@ -58,7 +59,7 @@ func TestDB_SubscribePull(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
+		go readPullSubscriptionBin(ctx, db, bin, ch, addrs, &addrsMu, errChan)
 	}
 
 	// upload some chunks just after subscribe
@@ -110,7 +111,7 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 			defer stop()
 
 			// receive and validate addresses from the subscription
-			go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
+			go readPullSubscriptionBin(ctx, db, bin, ch, addrs, &addrsMu, errChan)
 		}
 	}
 
@@ -141,20 +142,14 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
-	lastTimestamp := time.Now().UTC().UnixNano()
-	var lastTimestampMu sync.RWMutex
-	defer setNow(func() (t int64) {
-		lastTimestampMu.Lock()
-		defer lastTimestampMu.Unlock()
-		lastTimestamp++
-		return lastTimestamp
-	})()
+	binIDCounter := make(map[uint8]uint64)
+	var binIDCounterMu sync.RWMutex
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]chunk.Descriptor) {
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]uint64) {
 		addrsMu.Lock()
 		defer addrsMu.Unlock()
 
-		last = make(map[uint8]chunk.Descriptor)
+		last = make(map[uint8]uint64)
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
@@ -173,14 +168,11 @@ func TestDB_SubscribePull_since(t *testing.T) {
 				wantedChunksCount++
 			}
 
-			lastTimestampMu.RLock()
-			storeTimestamp := lastTimestamp
-			lastTimestampMu.RUnlock()
+			binIDCounterMu.RLock()
+			binIDCounter[bin]++
+			binIDCounterMu.RUnlock()
 
-			last[bin] = chunk.Descriptor{
-				Address:        ch.Address(),
-				StoreTimestamp: storeTimestamp,
-			}
+			last[bin] = binIDCounter[bin]
 		}
 		return last
 	}
@@ -200,7 +192,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		var since *chunk.Descriptor
+		var since *uint64
 		if c, ok := last[bin]; ok {
 			since = &c
 		}
@@ -208,7 +200,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
+		go readPullSubscriptionBin(ctx, db, bin, ch, addrs, &addrsMu, errChan)
 
 	}
 
@@ -232,20 +224,14 @@ func TestDB_SubscribePull_until(t *testing.T) {
 	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
-	lastTimestamp := time.Now().UTC().UnixNano()
-	var lastTimestampMu sync.RWMutex
-	defer setNow(func() (t int64) {
-		lastTimestampMu.Lock()
-		defer lastTimestampMu.Unlock()
-		lastTimestamp++
-		return lastTimestamp
-	})()
+	binIDCounter := make(map[uint8]uint64)
+	var binIDCounterMu sync.RWMutex
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]chunk.Descriptor) {
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]uint64) {
 		addrsMu.Lock()
 		defer addrsMu.Unlock()
 
-		last = make(map[uint8]chunk.Descriptor)
+		last = make(map[uint8]uint64)
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
@@ -264,14 +250,11 @@ func TestDB_SubscribePull_until(t *testing.T) {
 				wantedChunksCount++
 			}
 
-			lastTimestampMu.RLock()
-			storeTimestamp := lastTimestamp
-			lastTimestampMu.RUnlock()
+			binIDCounterMu.RLock()
+			binIDCounter[bin]++
+			binIDCounterMu.RUnlock()
 
-			last[bin] = chunk.Descriptor{
-				Address:        ch.Address(),
-				StoreTimestamp: storeTimestamp,
-			}
+			last[bin] = binIDCounter[bin]
 		}
 		return last
 	}
@@ -299,7 +282,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
+		go readPullSubscriptionBin(ctx, db, bin, ch, addrs, &addrsMu, errChan)
 	}
 
 	// upload some chunks just after subscribe
@@ -322,20 +305,14 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
-	lastTimestamp := time.Now().UTC().UnixNano()
-	var lastTimestampMu sync.RWMutex
-	defer setNow(func() (t int64) {
-		lastTimestampMu.Lock()
-		defer lastTimestampMu.Unlock()
-		lastTimestamp++
-		return lastTimestamp
-	})()
+	binIDCounter := make(map[uint8]uint64)
+	var binIDCounterMu sync.RWMutex
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]chunk.Descriptor) {
+	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]uint64) {
 		addrsMu.Lock()
 		defer addrsMu.Unlock()
 
-		last = make(map[uint8]chunk.Descriptor)
+		last = make(map[uint8]uint64)
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
@@ -354,14 +331,11 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 				wantedChunksCount++
 			}
 
-			lastTimestampMu.RLock()
-			storeTimestamp := lastTimestamp
-			lastTimestampMu.RUnlock()
+			binIDCounterMu.RLock()
+			binIDCounter[bin]++
+			binIDCounterMu.RUnlock()
 
-			last[bin] = chunk.Descriptor{
-				Address:        ch.Address(),
-				StoreTimestamp: storeTimestamp,
-			}
+			last[bin] = binIDCounter[bin]
 		}
 		return last
 	}
@@ -387,7 +361,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		var since *chunk.Descriptor
+		var since *uint64
 		if c, ok := upload1[bin]; ok {
 			since = &c
 		}
@@ -401,7 +375,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 		defer stop()
 
 		// receive and validate addresses from the subscription
-		go readPullSubscriptionBin(ctx, bin, ch, addrs, &addrsMu, errChan)
+		go readPullSubscriptionBin(ctx, db, bin, ch, addrs, &addrsMu, errChan)
 	}
 
 	// upload some chunks just after subscribe
@@ -437,7 +411,7 @@ func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uin
 // readPullSubscriptionBin is a helper function that reads all chunk.Descriptors from a channel and
 // sends error to errChan, even if it is nil, to count the number of chunk.Descriptors
 // returned by the channel.
-func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan chunk.Descriptor, addrs map[uint8][]chunk.Address, addrsMu *sync.Mutex, errChan chan error) {
+func readPullSubscriptionBin(ctx context.Context, db *DB, bin uint8, ch <-chan chunk.Descriptor, addrs map[uint8][]chunk.Address, addrsMu *sync.Mutex, errChan chan error) {
 	var i int // address index
 	for {
 		select {
@@ -450,9 +424,20 @@ func readPullSubscriptionBin(ctx context.Context, bin uint8, ch <-chan chunk.Des
 			if i+1 > len(addrs[bin]) {
 				err = fmt.Errorf("got more chunk addresses %v, then expected %v, for bin %v", i+1, len(addrs[bin]), bin)
 			} else {
-				want := addrs[bin][i]
-				if !bytes.Equal(got.Address, want) {
-					err = fmt.Errorf("got chunk address %v in bin %v %s, want %s", i, bin, got.Address.Hex(), want)
+				addr := addrs[bin][i]
+				if !bytes.Equal(got.Address, addr) {
+					err = fmt.Errorf("got chunk bin id %v in bin %v %v, want %v", i, bin, got.Address.Hex(), addr.Hex())
+				} else {
+					want, err := db.retrievalDataIndex.Get(shed.Item{
+						Address: addr,
+					})
+					if err != nil {
+						err = fmt.Errorf("got chunk (bin id %v in bin %v) from retrieval index %s: %v", i, bin, addrs[bin][i].Hex(), err)
+					} else {
+						if got.BinID != want.BinID {
+							err = fmt.Errorf("got chunk bin id %v in bin %v %v, want %v", i, bin, got, want)
+						}
+					}
 				}
 			}
 			addrsMu.Unlock()
@@ -486,10 +471,10 @@ func checkErrChan(ctx context.Context, t *testing.T, errChan chan error, wantedC
 	}
 }
 
-// TestDB_LastPullSubscriptionChunk validates that LastPullSubscriptionChunk
+// TestDB_LastPullSubscriptionBinID validates that LastPullSubscriptionBinID
 // is returning the last chunk descriptor for proximity order bins by
 // doing a few rounds of chunk uploads.
-func TestDB_LastPullSubscriptionChunk(t *testing.T) {
+func TestDB_LastPullSubscriptionBinID(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
@@ -497,16 +482,10 @@ func TestDB_LastPullSubscriptionChunk(t *testing.T) {
 
 	addrs := make(map[uint8][]chunk.Address)
 
-	lastTimestamp := time.Now().UTC().UnixNano()
-	var lastTimestampMu sync.RWMutex
-	defer setNow(func() (t int64) {
-		lastTimestampMu.Lock()
-		defer lastTimestampMu.Unlock()
-		lastTimestamp++
-		return lastTimestamp
-	})()
+	binIDCounter := make(map[uint8]uint64)
+	var binIDCounterMu sync.RWMutex
 
-	last := make(map[uint8]chunk.Descriptor)
+	last := make(map[uint8]uint64)
 
 	// do a few rounds of uploads and check if
 	// last pull subscription chunk is correct
@@ -528,32 +507,46 @@ func TestDB_LastPullSubscriptionChunk(t *testing.T) {
 			}
 			addrs[bin] = append(addrs[bin], ch.Address())
 
-			lastTimestampMu.RLock()
-			storeTimestamp := lastTimestamp
-			lastTimestampMu.RUnlock()
+			binIDCounterMu.RLock()
+			binIDCounter[bin]++
+			binIDCounterMu.RUnlock()
 
-			last[bin] = chunk.Descriptor{
-				Address:        ch.Address(),
-				StoreTimestamp: storeTimestamp,
-			}
+			last[bin] = binIDCounter[bin]
 		}
 
 		// check
 		for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
 			want, ok := last[bin]
-			got, err := db.LastPullSubscriptionChunk(bin)
+			got, err := db.LastPullSubscriptionBinID(bin)
 			if ok {
 				if err != nil {
 					t.Errorf("got unexpected error value %v", err)
 				}
-				if !bytes.Equal(got.Address, want.Address) {
-					t.Errorf("got last address %s, want %s", got.Address.Hex(), want.Address.Hex())
+				if got != want {
+					t.Errorf("got last bin id %v, want %v", got, want)
 				}
 			} else {
 				if err != chunk.ErrChunkNotFound {
 					t.Errorf("got unexpected error value %v, want %v", err, chunk.ErrChunkNotFound)
 				}
 			}
+		}
+	}
+}
+
+// TestAddressInBin validates that function addressInBin
+// returns a valid address for every proximity order bin.
+func TestAddressInBin(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	for po := uint8(0); po < chunk.MaxPO; po++ {
+		addr := db.addressInBin(po)
+
+		got := db.po(addr)
+
+		if got != uint8(po) {
+			t.Errorf("got po %v, want %v", got, po)
 		}
 	}
 }

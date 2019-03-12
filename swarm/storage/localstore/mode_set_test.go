@@ -41,11 +41,11 @@ func TestModeSetAccess(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Run("pull index", newPullIndexTest(db, ch, wantTimestamp, nil))
+	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
 
 	t.Run("pull index count", newItemsCountTest(db.pullIndex, 1))
 
-	t.Run("gc index", newGCIndexTest(db, ch, wantTimestamp, wantTimestamp))
+	t.Run("gc index", newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, 1))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -78,7 +78,7 @@ func TestModeSetSync(t *testing.T) {
 
 	t.Run("push index", newPushIndexTest(db, ch, wantTimestamp, leveldb.ErrNotFound))
 
-	t.Run("gc index", newGCIndexTest(db, ch, wantTimestamp, wantTimestamp))
+	t.Run("gc index", newGCIndexTest(db, ch, wantTimestamp, wantTimestamp, 1))
 
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
