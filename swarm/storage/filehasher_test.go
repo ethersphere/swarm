@@ -69,7 +69,7 @@ var (
 	}
 
 	start = 0
-	end   = 19
+	end   = 20
 )
 
 //func init() {
@@ -131,6 +131,36 @@ func TestReferenceFileHasher(t *testing.T) {
 	}
 	if mismatch > 0 {
 		t.Fatalf("mismatches: %d/%d", mismatch, end-start)
+	}
+}
+
+func TestPyramidHasherCompare(t *testing.T) {
+
+	var mismatch int
+	for i := start; i < end; i++ {
+		dataLength := dataLengths[i]
+		log.Info("start", "i", i, "len", dataLength)
+		_, data := generateSerialData(int(dataLength), 255, 0)
+		buf := bytes.NewReader(data)
+		buf.Seek(0, io.SeekStart)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
+
+		ctx := context.Background()
+		refHash, wait, err := PyramidSplit(ctx, buf, putGetter, putGetter)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		err = wait(ctx)
+		if err != nil {
+			t.Fatalf(err.Error())
+		}
+		eq := true
+		if expected[i] != refHash.String() {
+			mismatch++
+			eq = false
+		}
+		t.Logf("[%7d+%4d]\t%v\tref: %s\texpect: %s", dataLength/chunkSize, dataLength%chunkSize, eq, refHash, expected[i])
+
 	}
 }
 

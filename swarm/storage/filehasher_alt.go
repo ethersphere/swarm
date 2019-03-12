@@ -3,11 +3,11 @@ package storage
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
+	//	"fmt"
 	"sync"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/ethereum/go-ethereum/log"
+	//	"github.com/ethereum/go-ethereum/common/hexutil"
+	//	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/bmt"
 )
 
@@ -78,13 +78,13 @@ func (f *AltFileHasher) addJob(level int, data []byte, last bool) {
 	// asynchronously retrieve the hashers
 	// this allows write jobs to be set up even if all hashers are busy
 	go func(hasher chan<- bmt.SectionWriter) {
-		log.Debug("getting hasher", "level", level)
+		//log.Debug("getting hasher", "level", level)
 		j.hasher <- f.hasherPool.Get().(*bmt.AsyncHasher)
-		log.Debug("got hasher", "level", level)
+		//log.Debug("got hasher", "level", level)
 	}(j.hasher)
 
 	// add the job to the appropriate level queue
-	log.Debug("add job", "level", level, "job", fmt.Sprintf("%p", &j))
+	//log.Debug("add job", "level", level, "job", fmt.Sprintf("%p", &j))
 	f.levelJobs[level] <- j
 }
 
@@ -115,7 +115,7 @@ func (f *AltFileHasher) putHasher(h bmt.SectionWriter) {
 // returns true if current write offset of level is on hashing boundary
 func (f *AltFileHasher) isChunkBoundary(level int, wc int) bool {
 	isboundary := wc%f.branches == 0
-	log.Debug("check chunk boundary", "level", level, "wc", wc, "is", isboundary)
+	//log.Debug("check chunk boundary", "level", level, "wc", wc, "is", isboundary)
 	return isboundary
 }
 
@@ -204,9 +204,9 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 
 	// find our level height and decrease the waitgroup count to used levels only
 	f.levelCount = getLevelsFromLength(f.totalBytes, f.segmentSize, f.branches)
-	log.Debug("finish set", "levelcount", f.levelCount, "b", len(b))
+	//log.Debug("finish set", "levelcount", f.levelCount, "b", len(b))
 	for i := altFileHasherMaxLevels; i > f.levelCount; i-- {
-		log.Debug("purging unused level chans", "l", i)
+		//log.Debug("purging unused level chans", "l", i)
 		close(f.levelJobs[i-1])
 	}
 
@@ -224,12 +224,12 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 	// add number of writes divided by 128 for every additional level
 	// we don't use targetCount for level 0, since f.finished annotates that it is reached
 	target := (f.totalBytes-1)/f.segmentSize + 1
-	log.Debug("setting targetcount", "l", 0, "t", target)
+	//log.Debug("setting targetcount", "l", 0, "t", target)
 	f.targetCount[0] = target
 	for i := 1; i < f.levelCount; i++ {
 		target = (target-1)/f.branches + 1
 		f.targetCount[i] = target
-		log.Debug("setting targetcount", "l", i, "t", target)
+		//log.Debug("setting targetcount", "l", i, "t", target)
 	}
 
 	f.lock.Unlock()
@@ -241,7 +241,7 @@ func (f *AltFileHasher) Finish(b []byte) []byte {
 		// (it will not hash as long as the job write count is 0
 		// if not, we need to trigger hashing on the incomplete chunk write
 		if f.writeSyncCount%f.branches == 0 {
-			log.Debug("write end chunk boundary align", "segmentwrites", f.writeSyncCount)
+			//log.Debug("write end chunk boundary align", "segmentwrites", f.writeSyncCount)
 			f.addJob(0, nil, true)
 
 		}
@@ -274,11 +274,11 @@ func (f *AltFileHasher) Write(b []byte) {
 // it creates a new write job when write count hits chunk boundaries
 // TODO pass writecount offset through function to avoid segmentwrite calculation
 func (f *AltFileHasher) write(level int, offset int, b []byte, last bool) {
-	log.Trace("write chunk boundary align", "offset", offset, "total", f.getTotalBytesSafe(), "level", level, "last", last, "datalength", len(b))
+	//log.Trace("write chunk boundary align", "offset", offset, "total", f.getTotalBytesSafe(), "level", level, "last", last, "datalength", len(b))
 	if f.isChunkBoundary(level, offset) {
 		f.addJob(level, b, last)
 	}
-	log.Debug("write levelwritec", "level", level, "last", last, "wc", offset)
+	//log.Debug("write levelwritec", "level", level, "last", last, "wc", offset)
 	if len(b) > 0 {
 		f.levelWriteC[level] <- b
 	}
@@ -296,17 +296,17 @@ func (f *AltFileHasher) processJobs() {
 				select {
 				case j, ok := <-f.levelJobs[i]:
 					if !ok {
-						log.Trace("job channel closed", "i", i)
+						//log.Trace("job channel closed", "i", i)
 						return
 					}
 					if f.isTopLevelSafe(i) {
 						dataPtr := <-f.levelWriteC[i]
-						log.Debug("this is top level so all done", "i", i, "root", hexutil.Encode(dataPtr))
+						//log.Debug("this is top level so all done", "i", i, "root", hexutil.Encode(dataPtr))
 						close(f.levelJobs[i])
 						f.resC <- dataPtr
 						return
 					}
-					log.Debug("have job write", "level", i, "j", j)
+					//log.Debug("have job write", "level", i, "j", j)
 					h := <-j.hasher
 					var finished bool
 					for !finished {
@@ -318,9 +318,9 @@ func (f *AltFileHasher) processJobs() {
 							if len(dataPtr) == 0 {
 								j.last = true
 							} else {
-								log.Trace("job write chan", "level", i, "data", dataPtr, "wc", writeCount, "last", j.last)
+								//log.Trace("job write chan", "level", i, "data", dataPtr, "wc", writeCount, "last", j.last)
 								if !(j.last && i == 0) {
-									log.Debug("WRITE TO HASHER", "level", i, "wc", writeCount, "data", dataPtr)
+									//log.Debug("WRITE TO HASHER", "level", i, "wc", writeCount, "data", dataPtr)
 									netOffset := (writeCount % f.batchSegments)
 									h.Write(netOffset%f.branches, dataPtr)
 								}
@@ -335,7 +335,7 @@ func (f *AltFileHasher) processJobs() {
 						// if we're in the explicitly last write
 						// the latter can be a write without data, which will be the trigger from Finish()
 						if (f.isChunkBoundary(i, writeCount)) || j.last {
-							log.Debug("chunk boundary|last", "last", j.last, "wc", writeCount, "level", i)
+							//log.Debug("chunk boundary|last", "last", j.last, "wc", writeCount, "level", i)
 							f.doHash(h, i, &j)
 							finished = true
 						}
@@ -343,7 +343,7 @@ func (f *AltFileHasher) processJobs() {
 					}
 					f.putHasher(h)
 				case <-f.ctx.Done():
-					log.Debug("job exiting", "level", i, "err", f.ctx.Err())
+					//log.Debug("job exiting", "level", i, "err", f.ctx.Err())
 					return
 				}
 			}
@@ -365,10 +365,10 @@ func (f *AltFileHasher) doHash(h bmt.SectionWriter, level int, j *fileHashJob) {
 	if level > 0 && j.last {
 		writeCountBelow := f.getWriteCountSafe(level - 1)
 		f.lock.Lock()
-		log.Debug("danglecheck", "offset", offset, "f.batchSegments", f.batchSegments, "wcbelow", writeCountBelow)
+		//log.Debug("danglecheck", "offset", offset, "f.batchSegments", f.batchSegments, "wcbelow", writeCountBelow)
 		childWrites := writeCountBelow % f.batchSegments
 		if offset%f.branches == 0 && childWrites <= f.branches {
-			log.Debug("dangle done", "level", level, "writeCount", offset)
+			//log.Debug("dangle done", "level", level, "writeCount", offset)
 			f.lock.Unlock()
 			f.write(level+1, offset, j.data, true)
 			close(f.levelJobs[level])
@@ -403,20 +403,20 @@ func (f *AltFileHasher) doHash(h bmt.SectionWriter, level int, j *fileHashJob) {
 
 		meta := make([]byte, 8)
 		binary.LittleEndian.PutUint64(meta, uint64(dataUnderSpan))
-		log.Debug("hash", "level", level, "size", hashDataSize, "job", fmt.Sprintf("%p", j), "meta", meta, "wc", offset, "hasher", h, "gettotalbytes", f.getTotalBytesSafe(), "last", j.last, "span", span, "data", j.data)
+		//log.Debug("hash", "level", level, "size", hashDataSize, "job", fmt.Sprintf("%p", j), "meta", meta, "wc", offset, "hasher", h, "gettotalbytes", f.getTotalBytesSafe(), "last", j.last, "span", span, "data", j.data)
 
 		j.sum = h.Sum(nil, hashDataSize, meta)
-		log.Debug("hash done", "level", level, "job", fmt.Sprintf("%p", j), "wc", offset)
+		//log.Debug("hash done", "level", level, "job", fmt.Sprintf("%p", j), "wc", offset)
 
 		// also write to output
 		go func() {
-			log.Trace("TODO write out to chunk", "sum", hexutil.Encode(j.sum), "data", hexutil.Encode(j.data))
+			//log.Trace("TODO write out to chunk", "sum", hexutil.Encode(j.sum), "data", hexutil.Encode(j.data))
 		}()
 	}
 
 	// write to next level hasher
 	// TODO here we are copying data bytes, can we get away with referencing underlying buffer?
-	log.Trace("next level write", "level", level+1, "digest", hexutil.Encode(j.sum))
+	//log.Trace("next level write", "level", level+1, "digest", hexutil.Encode(j.sum))
 
 	parentOffset := (offset - 1) / f.branches
 	f.write(level+1, parentOffset, j.sum, j.last)
