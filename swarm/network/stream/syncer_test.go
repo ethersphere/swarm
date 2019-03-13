@@ -173,7 +173,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 				return err
 			}
 			if until > 0 {
-				c, _ := localStore.SubscribePull(ctx, po, nil, &until)
+				c, _ := localStore.SubscribePull(ctx, po, 0, until)
 				for iterate := true; iterate; {
 					select {
 					case cd, ok := <-c:

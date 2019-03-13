@@ -19,7 +19,6 @@ package localstore
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -30,13 +29,13 @@ import (
 
 // SubscribePull returns a channel that provides chunk addresses and stored times from pull syncing index.
 // Pull syncing index can be only subscribed to a particular proximity order bin. If since
-// is not nil, the iteration will start from the first item stored after that id. If until is not nil,
+// is not 0, the iteration will start from the first item stored after that id. If until is not 0,
 // only chunks stored up to this id will be send to the channel, and the returned channel will be
 // closed. The since-until interval is open on the left and closed on the right (since,until]. Returned stop
 // function will terminate current and further iterations without errors, and also close the returned channel.
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
-func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64) (c <-chan chunk.Descriptor, stop func()) {
+func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
 	chunkDescriptors := make(chan chunk.Descriptor)
 	trigger := make(chan struct{}, 1)
 
@@ -64,10 +63,10 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64
 		// sinceItem is the Item from which the next iteration
 		// should start. The first iteration starts from the first Item.
 		var sinceItem *shed.Item
-		if since != nil {
+		if since > 0 {
 			sinceItem = &shed.Item{
 				Address: db.addressInBin(bin),
-				BinID:   *since,
+				BinID:   since,
 			}
 		}
 		for {
@@ -85,7 +84,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64
 					}:
 						// until chunk descriptor is sent
 						// break the iteration
-						if until != nil && item.BinID >= *until {
+						if until > 0 && item.BinID >= until {
 							return true, errStopSubscription
 						}
 						// set next iteration start item
@@ -116,7 +115,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64
 						// if until is reached
 						return
 					}
-					log.Error("localstore pull subscription iteration", "bin", bin, "since", fmtUint64Ptr(since), "until", fmtUint64Ptr(until), "err", err)
+					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
 			case <-stopChan:
@@ -130,7 +129,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until *uint64
 			case <-ctx.Done():
 				err := ctx.Err()
 				if err != nil {
-					log.Error("localstore pull subscription", "bin", bin, "since", fmtUint64Ptr(since), "until", fmtUint64Ptr(until), "err", err)
+					log.Error("localstore pull subscription", "bin", bin, "since", since, "until", until, "err", err)
 				}
 				return
 			}
@@ -197,12 +196,4 @@ func (db *DB) addressInBin(bin uint8) (addr chunk.Address) {
 	b := bin / 8
 	addr[b] = addr[b] ^ (1 << (7 - bin%8))
 	return addr
-}
-
-// fmtUint64Ptr formats uint64 pointer to string.
-func fmtUint64Ptr(i *uint64) string {
-	if i == nil {
-		return "<nil>"
-	}
-	return fmt.Sprint(*i)
 }

@@ -55,7 +55,7 @@ func TestDB_SubscribePull(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		ch, stop := db.SubscribePull(ctx, bin, nil, nil)
+		ch, stop := db.SubscribePull(ctx, bin, 0, 0)
 		defer stop()
 
 		// receive and validate addresses from the subscription
@@ -107,7 +107,7 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 	// that all of them will write every address error to errChan
 	for j := 0; j < subsCount; j++ {
 		for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-			ch, stop := db.SubscribePull(ctx, bin, nil, nil)
+			ch, stop := db.SubscribePull(ctx, bin, 0, 0)
 			defer stop()
 
 			// receive and validate addresses from the subscription
@@ -192,11 +192,8 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		var since *uint64
-		if c, ok := last[bin]; ok {
-			since = &c
-		}
-		ch, stop := db.SubscribePull(ctx, bin, since, nil)
+		since := last[bin]
+		ch, stop := db.SubscribePull(ctx, bin, since, 0)
 		defer stop()
 
 		// receive and validate addresses from the subscription
@@ -278,7 +275,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 		if !ok {
 			continue
 		}
-		ch, stop := db.SubscribePull(ctx, bin, nil, &until)
+		ch, stop := db.SubscribePull(ctx, bin, 0, until)
 		defer stop()
 
 		// receive and validate addresses from the subscription
@@ -361,17 +358,14 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		var since *uint64
-		if c, ok := upload1[bin]; ok {
-			since = &c
-		}
+		since := upload1[bin]
 		until, ok := upload2[bin]
 		if !ok {
 			// no chunks un this bin uploaded in the upload2
 			// skip this bin from testing
 			continue
 		}
-		ch, stop := db.SubscribePull(ctx, bin, since, &until)
+		ch, stop := db.SubscribePull(ctx, bin, since, until)
 		defer stop()
 
 		// receive and validate addresses from the subscription
@@ -522,13 +516,9 @@ func TestDB_LastPullSubscriptionBinID(t *testing.T) {
 				if err != nil {
 					t.Errorf("got unexpected error value %v", err)
 				}
-				if got != want {
-					t.Errorf("got last bin id %v, want %v", got, want)
-				}
-			} else {
-				if err != chunk.ErrChunkNotFound {
-					t.Errorf("got unexpected error value %v, want %v", err, chunk.ErrChunkNotFound)
-				}
+			}
+			if got != want {
+				t.Errorf("got last bin id %v, want %v", got, want)
 			}
 		}
 	}

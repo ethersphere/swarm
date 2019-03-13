@@ -239,7 +239,7 @@ func (rrs *roundRobinStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err
 	return 0, nil
 }
 
-func (rrs *roundRobinStore) SubscribePull(ctx context.Context, bin uint8, since, until *uint64) (c <-chan chunk.Descriptor, stop func()) {
+func (rrs *roundRobinStore) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
 	return nil, nil
 }
 

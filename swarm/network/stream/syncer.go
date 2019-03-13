@@ -86,7 +86,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	}
 	var start *uint64
 	end := to
-	descriptors, stop := s.store.SubscribePull(context.Background(), s.po, &from, &to)
+	descriptors, stop := s.store.SubscribePull(context.Background(), s.po, from, to)
 	defer stop()
 
 	var batch []byte

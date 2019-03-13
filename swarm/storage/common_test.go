@@ -258,7 +258,7 @@ func (m *MapChunkStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err err
 	return 0, nil
 }
 
-func (m *MapChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until *uint64) (c <-chan chunk.Descriptor, stop func()) {
+func (m *MapChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
 	return nil, nil
 }
 

@@ -240,7 +240,7 @@ func (f *FakeChunkStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err er
 	panic("FakeChunkStore doesn't support LastPullSubscriptionBinID")
 }
 
-func (f *FakeChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until *uint64) (c <-chan chunk.Descriptor, stop func()) {
+func (f *FakeChunkStore) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
 	panic("FakeChunkStore doesn't support SubscribePull")
 }
 
