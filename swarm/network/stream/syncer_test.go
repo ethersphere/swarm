@@ -179,6 +179,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 					case cd, ok := <-c:
 						if !ok {
 							iterate = false
+							break
 						}
 						hashes[i] = append(hashes[i], cd.Address)
 						totalHashes++
