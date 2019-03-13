@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"gopkg.in/urfave/cli.v1"
 )
@@ -77,6 +78,11 @@ func dbExport(ctx *cli.Context) {
 		utils.Fatalf("invalid arguments, please specify both <chunkdb> (path to a local chunk database), <file> (path to write the tar archive to, - for stdout) and the base key")
 	}
 
+	isLegacy := storage.IsLegacyDatabase(config.ChunkDbPath)
+	if isLegacy {
+		//handle this in a different way
+
+	}
 	store, err := openLDBStore(args[0], common.Hex2Bytes(args[2]))
 	if err != nil {
 		utils.Fatalf("error opening local chunk database: %s", err)
