@@ -152,7 +152,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	}
 	// check that we are not in the old database schema
 	// if so - fail and exit
-	isLegacy := isLegacyDatabase(config.LocalStoreParams.ChunkDbPath)
+	isLegacy := isLegacyDatabase(config.ChunkDbPath)
 
 	if isLegacy {
 		return nil, errors.New("Legacy database format detected!")
