@@ -31,7 +31,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/ethereum/go-ethereum/cmd/swarm/testdata"
 	"github.com/ethereum/go-ethereum/log"
@@ -74,7 +73,6 @@ func TestCLISwarmExportImport(t *testing.T) {
 	if err := cluster.Nodes[0].Client.Call(&info, "bzz_info"); err != nil {
 		t.Fatal(err)
 	}
-
 	cluster.Stop()
 	defer cluster.Cleanup()
 
@@ -85,6 +83,7 @@ func TestCLISwarmExportImport(t *testing.T) {
 	// start second cluster
 	cluster2 := newTestCluster(t, 1)
 
+	t.Fatal("stop")
 	var info2 swarm.Info
 	if err := cluster2.Nodes[0].Client.Call(&info2, "bzz_info"); err != nil {
 		t.Fatal(err)
@@ -134,11 +133,13 @@ func TestExportLegacyToNew(t *testing.T) {
 		v3. catch the complaint
 		v4. do the export
 		v5. remove the folder
-			6. try to reopen with new swarm - file should not be retrievable
-			7. close
+		vx6. try to reopen with new swarm - file should not be retrievable
+		-7. close
 			8. try to import the dump
 			9. file should be accessible
 	*/
+
+	const UPLOADED_HASH = "67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a"
 	tmpdir, err := ioutil.TempDir("", "swarm-test")
 	fmt.Println(tmpdir)
 	//	defer os.RemoveAll(tmpdir)
@@ -186,19 +187,77 @@ func TestExportLegacyToNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	newSwarmNoDb := runSwarm(t, append(flags, "--verbosity", "6")...)
-	time.Sleep(3 * time.Second)
-	res, err := http.Get("http://localhost:8500/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/")
+	port, err := assignTCPPort()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.StatusCode != 404 {
-		t.Fatal("should not be found!")
-	}
-	_, _ = newSwarmOldDb.ExpectRegexp(".+")
-	newSwarmNoDb.ExpectExit()
+	flags = append(flags, "--verbosity", "6", "--bzzport", port)
+	//	newSwarmNoDb := runSwarm(t, flags...)
+	//consider hacking this just to verify
+	/*	time.Sleep(1 * time.Second)
+		res, err := http.Get("http://localhost:" + port + "/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != 404 {
+			t.Fatal("should not be found!")
+		}
+		_, _ = newSwarmNoDb.ExpectRegexp(".+")
+		newSwarmNoDb.ExpectExit()
+	*/
 
+	// start second cluster
+	cluster2 := newTestCluster(t, 1)
+	log.Error("1")
+	var info2 swarm.Info
+	if err := cluster2.Nodes[0].Client.Call(&info2, "bzz_info"); err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("2")
+
+	// stop second cluster, so that we close LevelDB
+	cluster2.Stop()
+	defer cluster2.Cleanup()
+	fmt.Println("3")
+
+	// import the export.tar
+	importCmd := runSwarm(t, "db", "import", info2.Path+"/chunks", tmpdir+"/export.tar", strings.TrimPrefix(info2.BzzKey, "0x"))
+	importCmd.ExpectExit()
+	fmt.Println("4")
+
+	// spin second cluster back up
+	cluster2.StartExistingNodes(t, 1, strings.TrimPrefix(info2.BzzAccount, "0x"))
+	fmt.Println("5")
+
+	// try to fetch imported file
+	res, err := http.Get(cluster2.Nodes[0].URL + "/bzz:/" + UPLOADED_HASH)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println("6")
+
+	if res.StatusCode != 200 {
+		t.Fatalf("expected HTTP status %d, got %s", 200, res.Status)
+	}
+
+	// compare downloaded file with the generated random file
+	//mustEqualFiles(t, bytes.NewReader(content), res.Body)
+	/*
+		importCmd := runSwarm(t, "--verbosity", "5", "db", "import", actualDataDir+"/chunks", tmpdir+"/export.tar", FixtureBaseKey)
+		importCmd.ExpectExit()
+		newSwarmDb := runSwarm(t, flags...)
+		//consider hacking this just to verify
+		time.Sleep(2 * time.Second)
+		res, err := http.Get("http://localhost:" + port + "/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.StatusCode != 404 {
+			t.Fatal("should not be found!")
+		}
+		_, _ = newSwarmDb.ExpectRegexp(".+")
+		newSwarmDb.ExpectExit()
+	*/
 	/*		if len(matches) == 0 {
 					t.Fatalf("stdout not matched")
 				}/

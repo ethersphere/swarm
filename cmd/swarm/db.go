@@ -108,8 +108,13 @@ func dbExport(ctx *cli.Context) {
 
 	isLegacy := storage.IsLegacyDatabase(args[0])
 	if isLegacy {
-		//handle this in a different way
-		exportLegacy(args[0], common.Hex2Bytes(args[2]), out)
+		count, err := exportLegacy(args[0], common.Hex2Bytes(args[2]), out)
+		if err != nil {
+			utils.Fatalf("error exporting legacy local chunk database: %s", err)
+		}
+
+		log.Info(fmt.Sprintf("successfully exported %d chunks from legacy db", count))
+		return
 	}
 
 	store, err := openLDBStore(args[0], common.Hex2Bytes(args[2]))
