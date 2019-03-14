@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -85,8 +86,9 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	countC := make(chan int64)
 	errC := make(chan error)
+	doneC := make(chan struct{})
+	var wg sync.WaitGroup
 	go func() {
 		var (
 			firstFile = true
@@ -156,37 +158,37 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 				}
 			}
 
+			wg.Add(1)
 			go func() {
 				select {
-				case errC <- db.Put(ctx, chunk.ModePutUpload, ch):
 				case <-ctx.Done():
+				default:
+					err := db.Put(ctx, chunk.ModePutUpload, ch)
+					if err != nil {
+						errC <- err
+					}
+					wg.Done()
 				}
 			}()
 
 			count++
 		}
-		select {
-		case countC <- count:
-		case <-ctx.Done():
-		}
+		wg.Wait()
+		close(doneC)
 	}()
 
 	// wait for all chunks to be stored
-	var i int64
-	var total int64
 	for {
 		select {
 		case err := <-errC:
 			if err != nil {
 				return count, err
 			}
-			i++
-		case total = <-countC:
 		case <-ctx.Done():
-			return i, ctx.Err()
+			return count, ctx.Err()
+		case <-doneC:
+			return count, nil
 		}
-		if total > 0 && i == total {
-			return total, nil
-		}
+
 	}
 }
