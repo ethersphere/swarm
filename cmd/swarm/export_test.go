@@ -167,7 +167,7 @@ func TestExportLegacyToNew(t *testing.T) {
 	if newSwarmOldDb.ExitStatus() == 0 {
 		t.Fatal("should error")
 	}
-
+	t.Log("exporting legacy database")
 	actualDataDir := path.Join(tmpdir, FIXTURE_DATADIR_PREFIX)
 	exportCmd := runSwarm(t, "--verbosity", "5", "db", "export", actualDataDir+"/chunks", tmpdir+"/export.tar", FixtureBaseKey)
 	exportCmd.ExpectExit()
@@ -181,29 +181,11 @@ func TestExportLegacyToNew(t *testing.T) {
 	if stat.Size() < 90000 {
 		t.Fatal("export size too small")
 	}
-
+	t.Log("removing chunk datadir")
 	err = os.RemoveAll(path.Join(actualDataDir, "chunks"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	port, err := assignTCPPort()
-	if err != nil {
-		t.Fatal(err)
-	}
-	flags = append(flags, "--verbosity", "6", "--bzzport", port)
-	//	newSwarmNoDb := runSwarm(t, flags...)
-	//consider hacking this just to verify
-	/*	time.Sleep(1 * time.Second)
-		res, err := http.Get("http://localhost:" + port + "/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if res.StatusCode != 404 {
-			t.Fatal("should not be found!")
-		}
-		_, _ = newSwarmNoDb.ExpectRegexp(".+")
-		newSwarmNoDb.ExpectExit()
-	*/
 
 	// start second cluster
 	cluster2 := newTestCluster(t, 1)
@@ -216,13 +198,14 @@ func TestExportLegacyToNew(t *testing.T) {
 	cluster2.Stop()
 	defer cluster2.Cleanup()
 
+	t.Log("importing from legacy db")
 	// import the export.tar
 	importCmd := runSwarm(t, "db", "import", info2.Path+"/chunks", tmpdir+"/export.tar", strings.TrimPrefix(info2.BzzKey, "0x"))
 	importCmd.ExpectExit()
 
 	// spin second cluster back up
 	cluster2.StartExistingNodes(t, 1, strings.TrimPrefix(info2.BzzAccount, "0x"))
-
+	t.Log("trying to http get the file")
 	// try to fetch imported file
 	res, err := http.Get(cluster2.Nodes[0].URL + "/bzz:/" + UPLOADED_HASH)
 	if err != nil {
@@ -235,34 +218,6 @@ func TestExportLegacyToNew(t *testing.T) {
 
 	// compare downloaded file with the generated random file
 	//mustEqualFiles(t, bytes.NewReader(content), res.Body)
-	/*
-		importCmd := runSwarm(t, "--verbosity", "5", "db", "import", actualDataDir+"/chunks", tmpdir+"/export.tar", FixtureBaseKey)
-		importCmd.ExpectExit()
-		newSwarmDb := runSwarm(t, flags...)
-		//consider hacking this just to verify
-		time.Sleep(2 * time.Second)
-		res, err := http.Get("http://localhost:" + port + "/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if res.StatusCode != 404 {
-			t.Fatal("should not be found!")
-		}
-		_, _ = newSwarmDb.ExpectRegexp(".+")
-		newSwarmDb.ExpectExit()
-	*/
-	/*		if len(matches) == 0 {
-					t.Fatalf("stdout not matched")
-				}/
-
-			if newSwarmOldDb.ExitStatus() == 0 {
-				t.Fatal("should error")
-			}*/
-	/*	robots, err := ioutil.ReadAll(res.Body)
-		res.Body.Close()
-		if err != nil {
-			t.Fatal(err)
-		}*/
 
 }
 
