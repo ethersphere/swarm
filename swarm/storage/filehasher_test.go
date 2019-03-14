@@ -68,8 +68,8 @@ var (
 		"522194562123473dcfd7a457b18ee7dee8b7db70ed3cfa2b73f348a992fdfd3b",
 	}
 
-	start = 0
-	end   = 20
+	start = 6
+	end   = 7
 )
 
 func newAsyncHasher() bmt.SectionWriter {
@@ -83,11 +83,28 @@ func TestNewFileHasher(t *testing.T) {
 	hashFunc := func() SectionHasherTwo {
 		return SectionHasherTwo(NewFilePadder(chunker))
 	}
-	fm, err := NewFileMuxer(hashFunc)
+	fh, err := NewFileMuxer(hashFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println(fm)
+	log.Info("filehasher set up", "batchsize", fh.BatchSize(), "padsize", fh.PadSize())
+
+	for i := start; i < end; i++ {
+		dataLength := dataLengths[i]
+		_, data := generateSerialData(dataLength, 255, 0)
+		log.Info(">>>>>>>>> NewFileHasher start", "i", i, "len", dataLength)
+		offset := 0
+		l := fh.SectionSize()
+		for i := 0; i < dataLength; i += 32 {
+			remain := dataLength - offset
+			if remain < l {
+				l = remain
+			}
+			fh.Write(i, data[offset:offset+l])
+			offset += 32
+		}
+		time.Sleep(time.Second)
+	}
 }
 
 func TestAltFileHasher(t *testing.T) {
