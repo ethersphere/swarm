@@ -72,14 +72,22 @@ var (
 	end   = 20
 )
 
-//func init() {
-//	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize)
-//}
-
 func newAsyncHasher() bmt.SectionWriter {
 	pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize)
 	h := bmt.New(pool)
 	return h.NewAsyncWriter(false)
+}
+
+func TestNewFileHasher(t *testing.T) {
+	chunker := &FileChunker{}
+	hashFunc := func() SectionHasherTwo {
+		return SectionHasherTwo(NewFilePadder(chunker))
+	}
+	fm, err := NewFileMuxer(hashFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Println(fm)
 }
 
 func TestAltFileHasher(t *testing.T) {
