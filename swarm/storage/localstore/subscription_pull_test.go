@@ -193,6 +193,10 @@ func TestDB_SubscribePull_since(t *testing.T) {
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
 		since := last[bin]
+		if since > 0 {
+			// start from the next uploaded chunk
+			since++
+		}
 		ch, stop := db.SubscribePull(ctx, bin, since, 0)
 		defer stop()
 
@@ -359,6 +363,10 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
 		since := upload1[bin]
+		if since > 0 {
+			// start from the next uploaded chunk
+			since++
+		}
 		until, ok := upload2[bin]
 		if !ok {
 			// no chunks un this bin uploaded in the upload2
