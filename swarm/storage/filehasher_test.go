@@ -122,6 +122,7 @@ func TestNewFileHasher(t *testing.T) {
 		}
 		time.Sleep(time.Second * 2)
 		t.Logf("debug parent: %d - change %d", fh.debugJobParent, fh.debugJobChange)
+		t.Logf("debug bytes top: %x", fh.topJob.debugHash)
 	}
 }
 
