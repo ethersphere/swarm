@@ -207,33 +207,27 @@ func TestExportLegacyToNew(t *testing.T) {
 
 	// start second cluster
 	cluster2 := newTestCluster(t, 1)
-	log.Error("1")
 	var info2 swarm.Info
 	if err := cluster2.Nodes[0].Client.Call(&info2, "bzz_info"); err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("2")
 
 	// stop second cluster, so that we close LevelDB
 	cluster2.Stop()
 	defer cluster2.Cleanup()
-	fmt.Println("3")
 
 	// import the export.tar
 	importCmd := runSwarm(t, "db", "import", info2.Path+"/chunks", tmpdir+"/export.tar", strings.TrimPrefix(info2.BzzKey, "0x"))
 	importCmd.ExpectExit()
-	fmt.Println("4")
 
 	// spin second cluster back up
 	cluster2.StartExistingNodes(t, 1, strings.TrimPrefix(info2.BzzAccount, "0x"))
-	fmt.Println("5")
 
 	// try to fetch imported file
 	res, err := http.Get(cluster2.Nodes[0].URL + "/bzz:/" + UPLOADED_HASH)
 	if err != nil {
 		t.Fatal(err)
 	}
-	fmt.Println("6")
 
 	if res.StatusCode != 200 {
 		t.Fatalf("expected HTTP status %d, got %s", 200, res.Status)
