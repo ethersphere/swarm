@@ -83,7 +83,6 @@ func TestCLISwarmExportImport(t *testing.T) {
 	// start second cluster
 	cluster2 := newTestCluster(t, 1)
 
-	t.Fatal("stop")
 	var info2 swarm.Info
 	if err := cluster2.Nodes[0].Client.Call(&info2, "bzz_info"); err != nil {
 		t.Fatal(err)

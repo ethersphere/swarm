@@ -1,8 +1,6 @@
 package storage
 
 import (
-	"fmt"
-
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -43,17 +41,17 @@ func IsLegacyDatabase(datadir string) bool {
 	if err != nil {
 		if err == leveldb.ErrNotFound {
 
-			data, err := db.Get(dbSchemaKey, nil)
+			data, err = db.Get(dbSchemaKey, nil)
 			if err != nil {
-				fmt.Println(err)
+				log.Error("got an error fetching schema name from the database", "err", err)
 			}
-			fmt.Println("getting some wtf")
-			fmt.Println(string(data))
 
+			// todo add check for current localstore schema name
 			return false
 		}
+
+		log.Error("got an unexpected error fetching legacy name from the database", "err", err)
 	}
 
-	fmt.Println(string(data))
-	return string(data) == DbSchemaHalloween
+	return string(data) == DbSchemaHalloween || string(data) == DbSchemaPurity
 }
