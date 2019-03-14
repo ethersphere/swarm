@@ -218,11 +218,11 @@ func newRoundRobinStore(stores ...storage.ChunkStore) *roundRobinStore {
 
 // not used in this context, only to fulfill ChunkStore interface
 func (rrs *roundRobinStore) Has(_ context.Context, _ storage.Address) (bool, error) {
-	return false, errors.New("RoundRobinStore doesn't support HasChunk")
+	return false, errors.New("roundRobinStore doesn't support Has")
 }
 
 func (rrs *roundRobinStore) Get(_ context.Context, _ chunk.ModeGet, _ storage.Address) (storage.Chunk, error) {
-	return nil, errors.New("get not well defined on round robin store")
+	return nil, errors.New("roundRobinStore doesn't support Get")
 }
 
 func (rrs *roundRobinStore) Put(ctx context.Context, mode chunk.ModePut, ch storage.Chunk) error {
@@ -232,11 +232,11 @@ func (rrs *roundRobinStore) Put(ctx context.Context, mode chunk.ModePut, ch stor
 }
 
 func (rrs *roundRobinStore) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
-	return nil
+	return errors.New("roundRobinStore doesn't support Set")
 }
 
 func (rrs *roundRobinStore) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
-	return 0, nil
+	return 0, errors.New("roundRobinStore doesn't support LastPullSubscriptionBinID")
 }
 
 func (rrs *roundRobinStore) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
