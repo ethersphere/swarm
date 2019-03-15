@@ -121,8 +121,8 @@ func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map,
 
 	netStore, err := storage.NewNetStore(localStore, nil)
 	if err != nil {
-		localStoreCleanup()
 		localStore.Close()
+		localStoreCleanup()
 		return nil, nil, nil, err
 	}
 
@@ -168,15 +168,19 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 
 	netStore, err := storage.NewNetStore(localStore, nil)
 	if err != nil {
+		localStore.Close()
 		removeDataDir()
 		return nil, nil, nil, nil, err
 	}
 
 	delivery := NewDelivery(to, netStore)
 	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
-	streamer := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), registryOptions, nil)
+	intervalsStore := state.NewInmemoryStore()
+	streamer := NewRegistry(addr.ID(), delivery, netStore, intervalsStore, registryOptions, nil)
 	teardown := func() {
 		streamer.Close()
+		intervalsStore.Close()
+		netStore.Close()
 		removeDataDir()
 	}
 	protocolTester := p2ptest.NewProtocolTester(addr.ID(), 1, streamer.runProtocol)
