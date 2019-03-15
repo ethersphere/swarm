@@ -90,7 +90,7 @@ func newAsyncHasher() bmt.SectionWriter {
 	return h.NewAsyncWriter(false)
 }
 
-func TestNewFileHasher(t *testing.T) {
+func TestChainedFileHasher(t *testing.T) {
 	chunker := &FileChunker{}
 	hashFunc := func() SectionHasherTwo {
 		return SectionHasherTwo(NewFilePadder(chunker))
@@ -100,7 +100,11 @@ func TestNewFileHasher(t *testing.T) {
 			SectionWriter: newAsyncHasher(),
 		}
 	}
-	fh, err := NewFileMuxer(hashFunc, writerModeGC)
+	//	hashFunc = func() SectionHasherTwo {
+	//		return newTreeHasherWrapper()
+	//	}
+
+	fh, err := NewFileSplitter(hashFunc, writerModeGC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,18 +125,23 @@ func TestNewFileHasher(t *testing.T) {
 			offset += 32
 		}
 		time.Sleep(time.Second * 2)
+		refHash := fh.Sum(nil, 0, nil)
+		_ = refHash // nothing yet
 		t.Logf("debug create: %d - change %d", fh.debugJobCreate, fh.debugJobChange)
 		t.Logf("debug bytes top: %x", fh.topJob.debugHash)
+		for j, w := range fh.debugWrites {
+			t.Logf("%s: %v", j, w)
+		}
 	}
 }
 
-func BenchmarkNewFileHasher(b *testing.B) {
+func BenchmarkChainedFileHasher(b *testing.B) {
 	for i := start; i < end; i++ {
-		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkNewFileHasher)
+		b.Run(fmt.Sprintf("%d", dataLengths[i]), benchmarkChainedFileHasher)
 	}
 }
 
-func benchmarkNewFileHasher(b *testing.B) {
+func benchmarkChainedFileHasher(b *testing.B) {
 	params := strings.Split(b.Name(), "/")
 	dataLength, err := strconv.ParseInt(params[1], 10, 64)
 	if err != nil {
@@ -142,12 +151,12 @@ func benchmarkNewFileHasher(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		hashFunc := func() SectionHasherTwo {
-			return &wrappedHasher{
-				//SectionWriter: newAsyncHasher(),
-				SectionWriter: newTreeHasherWrapper(),
-			}
+			return newTreeHasherWrapper()
+			// return &wrappedHasher{
+			// 	SectionWriter: newAsyncHasher(),
+			// }
 		}
-		fh, err := NewFileMuxer(hashFunc, writerModePool)
+		fh, err := NewFileSplitter(hashFunc, writerModePool)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -162,7 +171,7 @@ func benchmarkNewFileHasher(b *testing.B) {
 			fh.Write(int(offset/32), data[offset:offset+l])
 			offset += 32
 		}
-		//fh.Finish(nil)
+		//refHash := fh.Sum(nil, 0, nil)
 	}
 }
 
