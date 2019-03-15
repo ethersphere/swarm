@@ -145,11 +145,11 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	binIDCounter := make(map[uint8]uint64)
 	var binIDCounterMu sync.RWMutex
 
-	uploadRandomChunks := func(count int, wanted bool) (last map[uint8]uint64) {
+	uploadRandomChunks := func(count int, wanted bool) (first map[uint8]uint64) {
 		addrsMu.Lock()
 		defer addrsMu.Unlock()
 
-		last = make(map[uint8]uint64)
+		first = make(map[uint8]uint64)
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
@@ -160,28 +160,30 @@ func TestDB_SubscribePull_since(t *testing.T) {
 
 			bin := db.po(ch.Address())
 
-			if _, ok := addrs[bin]; !ok {
-				addrs[bin] = make([]chunk.Address, 0)
-			}
-			if wanted {
-				addrs[bin] = append(addrs[bin], ch.Address())
-				wantedChunksCount++
-			}
-
 			binIDCounterMu.RLock()
 			binIDCounter[bin]++
 			binIDCounterMu.RUnlock()
 
-			last[bin] = binIDCounter[bin]
+			if wanted {
+				if _, ok := addrs[bin]; !ok {
+					addrs[bin] = make([]chunk.Address, 0)
+				}
+				addrs[bin] = append(addrs[bin], ch.Address())
+				wantedChunksCount++
+
+				if _, ok := first[bin]; !ok {
+					first[bin] = binIDCounter[bin]
+				}
+			}
 		}
-		return last
+		return first
 	}
 
 	// prepopulate database with some chunks
 	// before the subscription
-	last := uploadRandomChunks(30, false)
+	uploadRandomChunks(30, false)
 
-	uploadRandomChunks(25, true)
+	first := uploadRandomChunks(25, true)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -192,10 +194,9 @@ func TestDB_SubscribePull_since(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		since := last[bin]
-		if since > 0 {
-			// start from the next uploaded chunk
-			since++
+		since, ok := first[bin]
+		if !ok {
+			continue
 		}
 		ch, stop := db.SubscribePull(ctx, bin, since, 0)
 		defer stop()
@@ -204,9 +205,6 @@ func TestDB_SubscribePull_since(t *testing.T) {
 		go readPullSubscriptionBin(ctx, db, bin, ch, addrs, &addrsMu, errChan)
 
 	}
-
-	// upload some chunks just after subscribe
-	uploadRandomChunks(15, true)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
@@ -362,8 +360,8 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	errChan := make(chan error)
 
 	for bin := uint8(0); bin <= uint8(chunk.MaxPO); bin++ {
-		since := upload1[bin]
-		if since > 0 {
+		since, ok := upload1[bin]
+		if ok {
 			// start from the next uploaded chunk
 			since++
 		}
