@@ -18,6 +18,12 @@ const (
 	defaultSegmentSize = 32
 )
 
+const (
+	writerModePool   = iota // use sync.Pool for managing hasher allocation
+	writerModeGC            // only allocate new hashers, rely on GC to reap them
+	writerModeManual        // handle a pre-allocated hasher pool with buffered channels
+)
+
 var (
 	hashPool            sync.Pool
 	mockPadding         = [defaultPadSize * defaultSegmentSize]byte{}
@@ -30,7 +36,7 @@ func init() {
 	}
 	hashPool.New = func() interface{} {
 
-		pool = bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize)
+		pool := bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize)
 		h := bmt.New(pool)
 		return h.NewAsyncWriter(false)
 	}
@@ -45,18 +51,53 @@ func putHasher(h bmt.SectionWriter) {
 	hashPool.Put(h)
 }
 
+// defines the chained writer interface
 type SectionHasherTwo interface {
 	bmt.SectionWriter
-	// Provides:
-	//	Reset()                                       // standard init to be called before reuse
-	//	Write(index int, data []byte)                 // write into section of index
-	//	Sum(b []byte, length int, span []byte) []byte // returns the hash of the buffer
-	//	SectionSize() int                             // size of the async section unit to use
-
 	BatchSize() uint64 // sections to write before sum should be called
 	PadSize() uint64   // additional sections that will be written on sum
 }
 
+// used for benchmarks against pyramid hasher which uses sync hasher
+type treeHasherWrapper struct {
+	*bmt.Hasher
+}
+
+func newTreeHasherWrapper() *treeHasherWrapper {
+	pool := bmt.NewTreePool(sha3.NewKeccak256, 128, bmt.PoolSize)
+	h := bmt.New(pool)
+	return &treeHasherWrapper{
+		Hasher: h,
+	}
+}
+
+// implements SectionHasherTwo
+func (h *treeHasherWrapper) Write(index int, b []byte) {
+	h.Hasher.Write(b)
+}
+
+// implements SectionHasherTwo
+func (h *treeHasherWrapper) Sum(b []byte, length int, span []byte) []byte {
+	return h.Hasher.Sum(b)
+}
+
+// implements SectionHasherTwo
+func (h *treeHasherWrapper) BatchSize() uint64 {
+	return 128
+}
+
+// implements SectionHasherTwo
+func (h *treeHasherWrapper) PadSize() uint64 {
+	return 0
+}
+
+// implements SectionHasherTwo
+func (h *treeHasherWrapper) SectionSize() int {
+	return 32
+}
+
+// FileChunker is a chainable FileHasher writer that creates chunks on write and sum
+// TODO not implemented
 type FileChunker struct {
 	branches uint64
 }
@@ -68,33 +109,39 @@ func NewFileChunker() *FileChunker {
 
 }
 
+// implements SectionHasherTwo
 func (f *FileChunker) Write(index int, b []byte) {
 	log.Trace("got write", "b", len(b))
 }
 
+// implements SectionHasherTwo
 func (f *FileChunker) Sum(b []byte, length int, span []byte) []byte {
 	log.Warn("got sum", "b", hexutil.Encode(b), "span", span)
 	return b[:f.SectionSize()]
 }
 
+// implements SectionHasherTwo
 func (f *FileChunker) BatchSize() uint64 {
 	return branches
 }
 
+// implements SectionHasherTwo
 func (f *FileChunker) PadSize() uint64 {
 	return 0
 }
 
+// implements SectionHasherTwo
 func (f *FileChunker) SectionSize() int {
 	return 32
 }
 
+// implements SectionHasherTwo
 func (f *FileChunker) Reset() {
 	return
 }
 
-// Pads data on hashing
-// will be erasure coding behavior
+// FilePadder is a chainable FileHasher writer that pads the data written to it on sum
+// illustrates possible erasure coding interface
 type FilePadder struct {
 	hasher bmt.SectionWriter
 	writer SectionHasherTwo
@@ -117,20 +164,24 @@ func NewFilePadder(writer SectionHasherTwo) *FilePadder {
 	return p
 }
 
+// implements SectionHasherTwo
 func (p *FilePadder) BatchSize() uint64 {
 	return p.writer.BatchSize() - p.PadSize()
 }
 
+// implements SectionHasherTwo
 func (p *FilePadder) PadSize() uint64 {
 	return 18
 }
 
+// implements SectionHasherTwo
 func (p *FilePadder) Size() int {
 	return p.hasher.SectionSize()
 }
 
+// implements SectionHasherTwo
 // ignores index
-// TODO Write should return write count
+// TODO bmt.SectionWriter.Write interface should return write count
 func (p *FilePadder) Write(index int, b []byte) {
 	//log.Debug("padder write", "index", index, "l", len(b), "c", atomic.AddUint64(&p.debugSize, uint64(len(b))))
 	log.Debug("padder write", "index", index, "l", len(b))
@@ -147,12 +198,7 @@ func (p *FilePadder) writeBuffer(index int, b []byte) {
 	copy(p.buffer[bytesIndex:], b[:p.SectionSize()])
 }
 
-// performs data padding on the supplied data
-// returns padding
-func (p *FilePadder) pad(b []byte) []byte {
-	return mockPadding[:]
-}
-
+// implements SectionHasherTwo
 // ignores span
 func (p *FilePadder) Sum(b []byte, length int, span []byte) []byte {
 	var writeCount int
@@ -184,16 +230,25 @@ func (p *FilePadder) Sum(b []byte, length int, span []byte) []byte {
 	return s
 }
 
+// implements SectionHasherTwo
 func (p *FilePadder) Reset() {
 	p.hasher = getHasher()
 	p.buffer = make([]byte, (p.PadSize()+p.BatchSize())*uint64(p.SectionSize()))
 }
 
+// implements SectionHasherTwo
 // panics if called after sum and before reset
 func (p *FilePadder) SectionSize() int {
 	return p.hasher.SectionSize()
 }
 
+// performs data padding on the supplied data
+// returns padding
+func (p *FilePadder) pad(b []byte) []byte {
+	return mockPadding[:]
+}
+
+// utility structure for controlling asynchronous tree hashing of the file
 type hasherJob struct {
 	parent        *hasherJob
 	dataOffset    uint64 // global write count this job represents
@@ -205,6 +260,8 @@ type hasherJob struct {
 	writer        SectionHasherTwo
 }
 
+// reuse hasherjob with new offsets
+// not thread-safe
 func (h *hasherJob) reset(w SectionHasherTwo, dataOffset uint64, levelOffset uint64, edge int) {
 	h.debugLifetime++
 	h.count = 0
@@ -230,36 +287,62 @@ type FileMuxer struct {
 	targetCount     uint64            // set when sum is called, is total length of data
 	targetLevel     int               // set when sum is called, is tree level of root chunk
 	balancedTable   map[uint64]uint64 // maps write counts to bytecounts for
-	debugJobChange  uint32
-	debugJobParent  uint32
+	debugJobChange  uint32            // debug counter for job reset calls
+	debugJobCreate  uint32            // debug counter for new job allocations
 
-	writerQueue chan struct{}
-	writerPool  sync.Pool // chained writers providing hashing
-	jobMu       sync.Mutex
+	getWriter  func() SectionHasherTwo // mode-dependent function to assign hasher
+	putWriter  func(SectionHasherTwo)  // mode-dependent function to release hasher
+	writerFunc func() SectionHasherTwo // hasher function used by manual and GC modes
+
+	writerQueue       chan struct{}         // throttles allocation of hashers
+	writerPool        sync.Pool             // chained writers providing hashing in Pool mode
+	writerManualQueue chan SectionHasherTwo // chained writers providing hashing in Manual mode
 }
 
-func NewFileMuxer(writerFunc func() SectionHasherTwo) (*FileMuxer, error) {
+func NewFileMuxer(writerFunc func() SectionHasherTwo, mode int) (*FileMuxer, error) {
+
 	if writerFunc == nil {
 		return nil, errors.New("writer cannot be nil")
 	}
-	writer := writerFunc()
+
+	// create new instance and cache frequenctly used values
 	branches := writer.BatchSize() + writer.PadSize()
+	writer := writerFunc()
 	f := &FileMuxer{
 		branches:        int(branches),
 		sectionSize:     writer.SectionSize(),
 		writerBatchSize: writer.BatchSize(),
 		parentBatchSize: writer.BatchSize() * branches,
 		writerPadSize:   writer.PadSize(),
-		writerQueue:     make(chan struct{}, 1024),
-		balancedTable:   make(map[uint64]uint64),
-	}
-	f.writerPool.New = func() interface{} {
-		return writerFunc()
-	}
-	for i := 0; i < 1000; i++ {
-		f.writerPool.Put(f.writerPool.Get())
+		//writerQueue:     make(chan struct{}, 1000),
+		balancedTable: make(map[uint64]uint64),
+		writerFunc:    writerFunc,
 	}
 
+	// see writerMode*
+	switch mode {
+	case writerModeManual:
+		f.writerManualQueue = make(chan SectionHasherTwo, 1000)
+
+		for i := 0; i < 1000; i++ {
+			f.writerManualQueue <- writerFunc()
+		}
+		f.getWriter = f.getWriterManual
+		f.putWriter = f.putWriterManual
+	case writerModeGC:
+
+		f.getWriter = f.getWriterGC
+		f.putWriter = f.putWriterGC
+
+	case writerModePool:
+		f.writerPool.New = func() interface{} {
+			return writerFunc()
+		}
+		f.getWriter = f.getWriterPool
+		f.putWriter = f.putWriterPool
+	}
+
+	// create lookup table for data write counts that result in balanced trees
 	lastBoundary := uint64(1)
 	f.balancedTable[lastBoundary] = uint64(f.sectionSize)
 	for i := 1; i < 9; i++ {
@@ -267,38 +350,31 @@ func NewFileMuxer(writerFunc func() SectionHasherTwo) (*FileMuxer, error) {
 		f.balancedTable[lastBoundary] = lastBoundary * uint64(f.sectionSize)
 	}
 
+	// create the hasherJob object for the data level.
 	f.lastJob = &hasherJob{
 		writer: f.getWriter(),
 	}
 	f.topJob = f.lastJob
 
-	//log.Info("init", "fh", f, "table", f.balancedTable, "writer", writer.BatchSize())
 	return f, nil
 }
 
-func (m *FileMuxer) getWriter() SectionHasherTwo {
-	//m.writerQueue <- struct{}{}
-	return m.writerPool.Get().(SectionHasherTwo)
-}
-
-func (m *FileMuxer) putWriter(writer SectionHasherTwo) {
-	writer.Reset()
-	m.writerPool.Put(writer)
-	//<-m.writerQueue
-}
-
+// implements SectionHasherTwo
 func (m *FileMuxer) BatchSize() uint64 {
 	return m.writerBatchSize + m.writerPadSize
 }
 
+// implements SectionHasherTwo
 func (m *FileMuxer) PadSize() uint64 {
 	return 0
 }
 
+// implements SectionHasherTwo
 func (m *FileMuxer) SectionSize() int {
 	return m.sectionSize
 }
 
+// implements SectionHasherTwo
 func (m *FileMuxer) Write(index int, b []byte) {
 	//log.Trace("data write", "offset", index, "jobcount", m.lastJob.count, "batchsize", m.writerBatchSize)
 
@@ -306,6 +382,20 @@ func (m *FileMuxer) Write(index int, b []byte) {
 	m.lastWrite++
 }
 
+// implements SectionHasherTwo
+// TODO is noop
+func (m *FileMuxer) Sum(b []byte, length int, span []byte) []byte {
+	log.Warn("filemux sum called, not implemented", "b", b, "l", length, "span", span)
+	return nil
+}
+
+// implements SectionHasherTwo
+// TODO is noop
+func (m *FileMuxer) Reset() {
+	log.Warn("filemux reset called, not implemented")
+}
+
+// handles recursive writing across tree levels
 // b byte is not thread safe
 // index is internal within a job (batchsize / sectionsize)
 func (m *FileMuxer) write(h *hasherJob, index int, b []byte, groundlevel bool) {
@@ -328,56 +418,15 @@ func (m *FileMuxer) write(h *hasherJob, index int, b []byte, groundlevel bool) {
 	// check threshold or done
 	if newcount == m.writerBatchSize || h.edge > 0 {
 
-		// copy the vars at the time of call
-		dataOffset := h.dataOffset
-
 		//go func(index int, w SectionHasherTwo, p *hasherJob) {
-		go func(dataOffset uint64, levelOffset uint64, w SectionHasherTwo, p *hasherJob) {
-			thisJobLength := (newcount * uint64(m.sectionSize)) + uint64(len(b)%m.sectionSize)
+		go m.sum(b, index, newcount, h.dataOffset, h.levelOffset, h, h.writer, h.parent)
 
-			// span is the total size under the chunk
-			// BUG dataoffset needs modulo levelindex
-			spanBytes := make([]byte, 8)
-
-			binary.LittleEndian.PutUint64(spanBytes, uint64(dataOffset+thisJobLength))
-
-			log.Debug("jobwrite sum", "w", fmt.Sprintf("%p", w), "l", thisJobLength, "span", spanBytes)
-			// sum the data using the chained writer
-
-			s := w.Sum(
-				nil,
-				int(thisJobLength),
-				spanBytes,
-			)
-
-			// reset the chained writer
-			m.putWriter(w)
-
-			// we only create a parent object on a job on the first write
-			// this way, if it is nil and we are working the right edge, we know when to skip
-			if p == nil {
-				h.parent = &hasherJob{
-					dataOffset:  dataOffset,
-					levelOffset: (levelOffset-1)/uint64(m.branches) + 1,
-					writer:      m.getWriter(),
-				}
-
-				atomic.AddUint32(&m.debugJobParent, 1)
-				log.Debug("set parent", "child", fmt.Sprintf("%p", h), "parent", fmt.Sprintf("%p", h.parent))
-			}
-			// write to the parent job
-			// the section index to write to is divided by the branches
-			m.write(h.parent, (index-1)/m.branches, s, false)
-
-			log.Debug("hash result", "s", hexutil.Encode(s), "length", thisJobLength)
-		}(h.dataOffset, h.levelOffset, h.writer, h.parent)
-
-		newLevelOffset := dataOffset + newcount - 1
+		newLevelOffset := h.dataOffset + newcount - 1
 		var sameParent bool
 		if newLevelOffset%m.parentBatchSize > 0 {
 			sameParent = true
 		}
-		newDataOffset := dataOffset
+		newDataOffset := h.dataOffset
 		if groundlevel {
 			newDataOffset += newcount - 1
 		}
@@ -392,6 +441,92 @@ func (m *FileMuxer) write(h *hasherJob, index int, b []byte, groundlevel bool) {
 	}
 }
 
+// handles recursive feedback writes of chained sum call
+// as the hasherJob from the context calling this is asynchronously reset
+// the relevant values to use for calculation must be copied
+// if parent doesn't exist (new level) a new one is created
+// releases the hasher used by the hasherJob at time of calling this method
+func (m *FileMuxer) sum(b []byte, index int, count uint64, dataOffset uint64, levelOffset uint64, job *hasherJob, w SectionHasherTwo, p *hasherJob) {
+
+	thisJobLength := (count * uint64(m.sectionSize)) + uint64(len(b)%m.sectionSize)
+
+	// span is the total size under the chunk
+	// BUG dataoffset needs modulo levelindex
+	spanBytes := make([]byte, 8)
+
+	binary.LittleEndian.PutUint64(spanBytes, uint64(dataOffset+thisJobLength))
+
+	log.Debug("jobwrite sum", "w", fmt.Sprintf("%p", w), "l", thisJobLength, "span", spanBytes)
+	// sum the data using the chained writer
+
+	s := w.Sum(
+		nil,
+		int(thisJobLength),
+		spanBytes,
+	)
+
+	// reset the chained writer
+	m.putWriter(w)
+
+	// we only create a parent object on a job on the first write
+	// this way, if it is nil and we are working the right edge, we know when to skip
+	if p == nil {
+		job.parent = m.newJob(dataOffset, levelOffset)
+		atomic.AddUint32(&m.debugJobCreate, 1)
+		log.Debug("set parent", "child", fmt.Sprintf("%p", job), "parent", fmt.Sprintf("%p", job.parent))
+	}
+	// write to the parent job
+	// the section index to write to is divided by the branches
+	m.write(job.parent, (index-1)/m.branches, s, false)
+
+	log.Debug("hash result", "s", hexutil.Encode(s), "length", thisJobLength)
+
+}
+
+// creates a new hasherJob
+func (m *FileMuxer) newJob(dataOffset uint64, levelOffset uint64) *hasherJob {
+	return &hasherJob{
+		dataOffset:  dataOffset,
+		levelOffset: (levelOffset-1)/uint64(m.branches) + 1,
+		writer:      m.getWriter(),
+	}
+}
+
+// see writerMode consts
+func (m *FileMuxer) getWriterGC() SectionHasherTwo {
+	return m.writerFunc()
+}
+
+// see writerMode consts
+func (m *FileMuxer) putWriterGC(w SectionHasherTwo) {
+	// noop
+}
+
+// see writerMode consts
+func (m *FileMuxer) getWriterPool() SectionHasherTwo {
+	//m.writerQueue <- struct{}{}
+	return m.writerPool.Get().(SectionHasherTwo)
+}
+
+// see writerMode consts
+func (m *FileMuxer) putWriterPool(writer SectionHasherTwo) {
+	writer.Reset()
+	m.writerPool.Put(writer)
+	//<-m.writerQueue
+}
+
+// see writerMode consts
+func (m *FileMuxer) getWriterManual() SectionHasherTwo {
+	return <-m.writerManualQueue
+}
+
+// see writerMode consts
+func (m *FileMuxer) putWriterManual(writer SectionHasherTwo) {
+	writer.Reset()
+	m.writerManualQueue <- writer
+}
+
+// calculates if the given data write length results in a balanced tree
 func (m *FileMuxer) isBalancedBoundary(count uint64) bool {
 	_, ok := m.balancedTable[count]
 	return ok

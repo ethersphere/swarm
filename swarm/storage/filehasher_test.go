@@ -100,7 +100,7 @@ func TestNewFileHasher(t *testing.T) {
 			SectionWriter: newAsyncHasher(),
 		}
 	}
-	fh, err := NewFileMuxer(hashFunc)
+	fh, err := NewFileMuxer(hashFunc, writerModeGC)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestNewFileHasher(t *testing.T) {
 			offset += 32
 		}
 		time.Sleep(time.Second * 2)
-		t.Logf("debug parent: %d - change %d", fh.debugJobParent, fh.debugJobChange)
+		t.Logf("debug create: %d - change %d", fh.debugJobCreate, fh.debugJobChange)
 		t.Logf("debug bytes top: %x", fh.topJob.debugHash)
 	}
 }
@@ -143,13 +143,15 @@ func benchmarkNewFileHasher(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		hashFunc := func() SectionHasherTwo {
 			return &wrappedHasher{
-				SectionWriter: newAsyncHasher(),
+				//SectionWriter: newAsyncHasher(),
+				SectionWriter: newTreeHasherWrapper(),
 			}
 		}
-		fh, err := NewFileMuxer(hashFunc)
+		fh, err := NewFileMuxer(hashFunc, writerModePool)
 		if err != nil {
 			b.Fatal(err)
 		}
+		_ = SectionHasherTwo(fh)
 		l := int64(32)
 		offset := int64(0)
 		for j := int64(0); j < dataLength; j += 32 {
