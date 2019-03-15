@@ -31,6 +31,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 const (
@@ -148,6 +149,8 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		ctx,
 		"stream.handle.retrieve")
 
+	osp.LogFields(olog.String("ref", req.Addr.String()))
+
 	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", true))
 	if err != nil {
 		return err
@@ -178,12 +181,15 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		}
 		if req.SkipCheck {
 			syncing := false
+			osp.LogFields(olog.Bool("skipCheck", true))
+
 			err = sp.Deliver(ctx, ch, s.priority, syncing)
 			if err != nil {
 				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 			}
 			return
 		}
+		osp.LogFields(olog.Bool("skipCheck", false))
 		select {
 		case streamer.deliveryC <- ch.Address()[:]:
 		case <-streamer.quit:
@@ -239,7 +245,8 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 
 	go func() {
 		if span != nil {
-			defer span.(opentracing.Span).Finish()
+			span.LogFields(olog.String("finish", "from handleChunkDeliveryMsg"))
+			defer span.Finish()
 		}
 
 		msg.peer = sp
