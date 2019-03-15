@@ -19,6 +19,7 @@ package stream
 import (
 	"context"
 	"strconv"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -79,18 +80,32 @@ func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
 	return s.store.LastPullSubscriptionBinID(s.po)
 }
 
-// GetBatch retrieves the next batch of hashes from the dbstore
+// SetNextBatch retrieves the next batch of hashes from the localstore.
+// It expects a range if bin IDs, both ends inclusive in syncing, and returns
+// concatenated byte slice of chunk addresses and bin IDs of the first and
+// the last one in that slice. The batch may have up to BatchSize number of
+// chunk addresses. If at least one chunk is added to the batch and no new chunks
+// are added in batchTimeout period, the batch will be returned. This function
+// will block until new chunks are received from localstore pull subscription.
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	if to == 0 {
-		return nil, 0, 0, nil, nil
-	}
-	var start *uint64
-	end := to
 	descriptors, stop := s.store.SubscribePull(context.Background(), s.po, from, to)
 	defer stop()
 
-	var batch []byte
-	i := 0
+	const batchTimeout = 2 * time.Second
+
+	var (
+		batch        []byte
+		batchSize    int
+		batchStartID *uint64
+		batchEndID   uint64
+		timer        *time.Timer
+		timerC       <-chan time.Time
+	)
+	defer func() {
+		if timer != nil {
+			timer.Stop()
+		}
+	}()
 
 	for iterate := true; iterate; {
 		select {
@@ -100,23 +115,45 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 				break
 			}
 			batch = append(batch, d.Address[:]...)
-			i++
-			if start == nil {
-				start = &d.BinID
+			// This is the most naive approach to label the chunk as synced
+			// allowing it to be garbage collected. A proper way requires
+			// validating that the chunk is successfully stored by the peer.
+			err := s.store.Set(context.Background(), chunk.ModeSetSync, d.Address)
+			if err != nil {
+				return nil, 0, 0, nil, err
 			}
-			end = d.BinID
-			if i >= BatchSize {
+			batchSize++
+			if batchStartID == nil {
+				// set batch start id only if
+				// this is the first iteration
+				batchStartID = &d.BinID
+			}
+			batchEndID = d.BinID
+			if batchSize >= BatchSize {
 				iterate = false
 			}
+			if timer == nil {
+				timer = time.NewTimer(batchTimeout)
+			} else {
+				if !timer.Stop() {
+					<-timer.C
+				}
+				timer.Reset(batchTimeout)
+			}
+			timerC = timer.C
+		case <-timerC:
+			// return batch if new chunks are not
+			// received after some time
+			iterate = false
 		case <-s.quit:
 			iterate = false
 		}
 	}
-	if start == nil {
-		s := uint64(0)
-		start = &s
+	if batchStartID == nil {
+		// if batch start id is not set, return 0
+		batchStartID = new(uint64)
 	}
-	return batch, *start, end, nil, nil
+	return batch, *batchStartID, batchEndID, nil, nil
 }
 
 // SwarmSyncerClient

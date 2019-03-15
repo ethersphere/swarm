@@ -242,7 +242,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 							return fmt.Errorf("Error accessing localstore")
 						}
 						lstore := item.(*localstore.DB)
-						_, err = lstore.Get(ctx, chunk.ModeGetRequest, ch)
+						_, err = lstore.Get(ctx, chunk.ModeGetLookup, ch)
 					}
 					if err != nil {
 						log.Debug(fmt.Sprintf("Chunk %s NOT found for id %s", ch, id))
