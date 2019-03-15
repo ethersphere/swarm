@@ -211,27 +211,45 @@ type ChunkDeliveryMsgRetrieval ChunkDeliveryMsg
 type ChunkDeliveryMsgSyncing ChunkDeliveryMsg
 
 // chunk delivery msg is response to retrieverequest msg
-func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
+func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req interface{}) error {
 
 	processReceivedChunksCount.Inc(1)
 
+	var msg *ChunkDeliveryMsg
+	var mode chunk.ModePut
+	switch r := req.(type) {
+	case *ChunkDeliveryMsgRetrieval:
+		msg = (*ChunkDeliveryMsg)(r)
+		// do not sync if peer that is sending us a chunk is closer to the chunk then we are
+		peerPO := chunk.Proximity(sp.ID().Bytes(), msg.Addr)
+		po := chunk.Proximity(d.kad.BaseAddr(), msg.Addr)
+		if peerPO > po {
+			mode = chunk.ModePutRequest
+		} else {
+			mode = chunk.ModePutSync
+		}
+	case *ChunkDeliveryMsgSyncing:
+		msg = (*ChunkDeliveryMsg)(r)
+		mode = chunk.ModePutSync
+	}
+
 	// retrieve the span for the originating retrieverequest
-	spanId := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), req.Addr)
-	span := tracing.ShiftSpanByKey(spanId)
+	spanID := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), msg.Addr)
+	span := tracing.ShiftSpanByKey(spanID)
 
 	go func() {
 		if span != nil {
 			defer span.(opentracing.Span).Finish()
 		}
 
-		req.peer = sp
-		err := d.chunkStore.Put(ctx, chunk.ModePutRequest, storage.NewChunk(req.Addr, req.SData))
+		msg.peer = sp
+		err := d.chunkStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				// we removed this log because it spams the logs
 				// TODO: Enable this log line
-				// log.Warn("invalid chunk delivered", "peer", sp.ID(), "chunk", req.Addr, )
-				req.peer.Drop(err)
+				// log.Warn("invalid chunk delivered", "peer", sp.ID(), "chunk", msg.Addr, )
+				msg.peer.Drop(err)
 			}
 		}
 	}()

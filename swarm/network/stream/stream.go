@@ -627,13 +627,8 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	case *WantedHashesMsg:
 		return p.handleWantedHashesMsg(ctx, msg)
 
-	case *ChunkDeliveryMsgRetrieval:
-		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
-		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
-
-	case *ChunkDeliveryMsgSyncing:
-		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
-		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+	case *ChunkDeliveryMsgRetrieval, *ChunkDeliveryMsgSyncing:
+		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, msg)
 
 	case *RetrieveRequestMsg:
 		return p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)
