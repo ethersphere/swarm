@@ -37,7 +37,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	mockmem "github.com/ethereum/go-ethereum/swarm/storage/mock/mem"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
@@ -196,10 +195,10 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 		node := sim.Net.GetRandomUpNode()
 		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
 		if !ok {
-			return fmt.Errorf("No localstore")
+			return errors.New("no store in simulation bucket")
 		}
-		lstore := item.(*localstore.DB)
-		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
+		store := item.(chunk.Store)
+		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, store)
 		if err != nil {
 			return err
 		}
@@ -228,7 +227,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 				for _, ch := range localChunks {
 					//get the real chunk by the index in the index array
 					ch := conf.hashes[ch]
-					log.Trace(fmt.Sprintf("node has chunk: %s:", ch))
+					log.Trace("node has chunk", "address", ch)
 					//check if the expected chunk is indeed in the localstore
 					var err error
 					if *useMockStore {
@@ -239,13 +238,13 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 						//use the actual localstore
 						item, ok := sim.NodeItem(id, bucketKeyStore)
 						if !ok {
-							return fmt.Errorf("Error accessing localstore")
+							return errors.New("no store in simulation bucket")
 						}
-						lstore := item.(*localstore.DB)
-						_, err = lstore.Get(ctx, chunk.ModeGetLookup, ch)
+						store := item.(chunk.Store)
+						_, err = store.Get(ctx, chunk.ModeGetLookup, ch)
 					}
 					if err != nil {
-						log.Debug(fmt.Sprintf("Chunk %s NOT found for id %s", ch, id))
+						log.Debug("chunk not found", "address", ch.Hex(), "node", id)
 						// Do not get crazy with logging the warn message
 						time.Sleep(500 * time.Millisecond)
 						continue REPEAT
@@ -256,7 +255,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 						Data: ch.String(),
 					}
 					sim.Net.Events().Send(evt)
-					log.Debug(fmt.Sprintf("Chunk %s IS FOUND for id %s", ch, id))
+					log.Debug("chunk found", "address", ch.Hex(), "node", id)
 				}
 			}
 			return nil
@@ -302,9 +301,9 @@ func mapKeysToNodes(conf *synctestConfig) {
 }
 
 //upload a file(chunks) to a single local node store
-func uploadFileToSingleNodeStore(id enode.ID, chunkCount int, lstore *localstore.DB) ([]storage.Address, error) {
+func uploadFileToSingleNodeStore(id enode.ID, chunkCount int, store chunk.Store) ([]storage.Address, error) {
 	log.Debug(fmt.Sprintf("Uploading to node id: %s", id))
-	fileStore := storage.NewFileStore(lstore, storage.NewFileStoreParams())
+	fileStore := storage.NewFileStore(store, storage.NewFileStoreParams())
 	size := chunkSize
 	var rootAddrs []storage.Address
 	for i := 0; i < chunkCount; i++ {

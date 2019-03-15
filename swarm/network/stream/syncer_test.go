@@ -26,17 +26,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/chunk"
-
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
@@ -167,13 +165,13 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			if !ok {
 				return fmt.Errorf("No DB")
 			}
-			localStore := item.(*localstore.DB)
-			until, err := localStore.LastPullSubscriptionBinID(po)
+			store := item.(chunk.Store)
+			until, err := store.LastPullSubscriptionBinID(po)
 			if err != nil {
 				return err
 			}
 			if until > 0 {
-				c, _ := localStore.SubscribePull(ctx, po, 0, until)
+				c, _ := store.SubscribePull(ctx, po, 0, until)
 				for iterate := true; iterate; {
 					select {
 					case cd, ok := <-c:

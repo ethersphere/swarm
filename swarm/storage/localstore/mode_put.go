@@ -46,6 +46,10 @@ func (p *Putter) Put(ch chunk.Chunk) (err error) {
 	return p.db.put(p.mode, chunkToItem(ch))
 }
 
+// Put stores the Chunk to database and depending
+// on the Putter mode, it updates required indexes.
+// Put is required to implement chunk.Store
+// interface.
 func (db *DB) Put(_ context.Context, mode chunk.ModePut, ch chunk.Chunk) (err error) {
 	return db.put(mode, chunkToItem(ch))
 }

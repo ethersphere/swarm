@@ -52,12 +52,7 @@ func TestDB_pullIndex(t *testing.T) {
 
 		chunks[i] = testIndexChunk{
 			Chunk: chunk,
-			// this timestamp is not the same as in
-			// the index, but given that uploads
-			// are sequential and that only ordering
-			// of events matter, this information is
-			// sufficient
-			binID: uint64(now()),
+			binID: uint64(i),
 		}
 	}
 

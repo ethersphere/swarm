@@ -143,10 +143,6 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	if !bytes.Equal(slice, resultSlice) {
 		t.Fatalf("Comparison error.")
 	}
-	// Clear memStore
-	//memStore.setCapacity(0)
-	// check whether it is, indeed, empty
-	//fileStore.ChunkStore = memStore
 	resultReader, isEncrypted = fileStore.Retrieve(context.TODO(), key)
 	if isEncrypted != toEncrypt {
 		t.Fatalf("isEncrypted expected %v got %v", toEncrypt, isEncrypted)

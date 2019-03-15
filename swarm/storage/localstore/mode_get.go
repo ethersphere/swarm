@@ -56,6 +56,11 @@ func (g *Getter) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
 	return chunk.NewChunk(out.Address, out.Data), nil
 }
 
+// Get returns a chunk from the database. If the chunk is
+// not found chunk.ErrChunkNotFound will be returned.
+// All required indexes will be updated required by the
+// Getter Mode. Get is required to implement chunk.Store
+// interface.
 func (db *DB) Get(_ context.Context, mode chunk.ModeGet, addr chunk.Address) (ch chunk.Chunk, err error) {
 	out, err := db.get(mode, addr)
 	if err != nil {

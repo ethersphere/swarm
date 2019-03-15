@@ -45,6 +45,10 @@ func (s *Setter) Set(addr chunk.Address) (err error) {
 	return s.db.set(s.mode, addr)
 }
 
+// Set updates database indexes for a specific
+// chunk represented by the address.
+// Set is required to implement chunk.Store
+// interface.
 func (db *DB) Set(_ context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
 	return db.set(mode, addr)
 }

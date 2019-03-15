@@ -178,15 +178,20 @@ type FetchStore interface {
 	FetchFunc(ctx context.Context, addr Address) func(context.Context) error
 }
 
+// Validator validates a chunk.
 type Validator interface {
 	Validate(ch Chunk) bool
 }
 
+// ValidatorStore encapsulates Store by decorting the Put method
+// with validators check.
 type ValidatorStore struct {
 	Store
 	validators []Validator
 }
 
+// NewValidatorStore returns a new ValidatorStore which uses
+// provided validators to validate chunks on Put.
 func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore) {
 	return &ValidatorStore{
 		Store:      store,
@@ -194,6 +199,9 @@ func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore)
 	}
 }
 
+// Put overrides Store put method with validators check. If one of the validators
+// return true, the chunk is considered valid and Store Put method is called.
+// If all validators return false, ErrChunkInvalid is returned.
 func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, ch Chunk) (err error) {
 	for _, v := range s.validators {
 		if v.Validate(ch) {

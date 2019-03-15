@@ -72,6 +72,8 @@ type DB struct {
 	pullTriggers   map[uint8][]chan struct{}
 	pullTriggersMu sync.RWMutex
 
+	// binIDs stores the latest chunk serial ID for very
+	// proximity order bin
 	binIDs shed.Uint64Vector
 
 	// garbage collection index
@@ -261,6 +263,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+	// create a vector for bin IDs
 	db.binIDs, err = db.shed.NewUint64Vector("bin-ids")
 	if err != nil {
 		return nil, err

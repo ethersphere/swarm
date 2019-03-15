@@ -85,7 +85,6 @@ type Config struct {
 func NewConfig() (c *Config) {
 
 	c = &Config{
-		//LocalStoreParams: storage.NewDefaultLocalStoreParams(),
 		FileStoreParams: storage.NewFileStoreParams(),
 		HiveParams:      network.NewHiveParams(),
 		//SyncParams:    network.NewDefaultSyncParams(),
