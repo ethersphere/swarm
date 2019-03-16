@@ -140,8 +140,8 @@ func TestExportLegacyToNew(t *testing.T) {
 
 	const UPLOADED_HASH = "67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a"
 	tmpdir, err := ioutil.TempDir("", "swarm-test")
-	fmt.Println(tmpdir)
-	//	defer os.RemoveAll(tmpdir)
+	log.Trace("running legacy datastore migration test", "temp dir", tmpdir)
+	defer os.RemoveAll(tmpdir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -198,7 +198,8 @@ func TestExportLegacyToNew(t *testing.T) {
 	cluster2.Stop()
 	defer cluster2.Cleanup()
 
-	t.Log("importing from legacy db")
+	log.Error(fmt.Sprintf("%v", info2.Path))
+	//log.Error(info2)
 	// import the export.tar
 	importCmd := runSwarm(t, "db", "import", info2.Path+"/chunks", tmpdir+"/export.tar", strings.TrimPrefix(info2.BzzKey, "0x"))
 	importCmd.ExpectExit()

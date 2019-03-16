@@ -235,7 +235,7 @@ func loadManifest(ctx context.Context, fileStore *storage.FileStore, addr storag
 }
 
 func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore *storage.FileStore, isEncrypted bool, quitC chan bool, decrypt DecryptFunc) (trie *manifestTrie, err error) { // non-recursive, subtrees are downloaded on-demand
-
+	log.Trace("checking LazySectionReader size")
 	// TODO check size for oversized manifests
 	size, err := mr.Size(mr.Context(), quitC)
 	if err != nil { // size == 0
@@ -244,11 +244,16 @@ func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore 
 		err = fmt.Errorf("Manifest not Found")
 		return
 	}
+	log.Trace("checking LazySectionReader size valid")
+	log.Warn("manifest exceeds size limit", "addr", addr, "size", size, "limit", manifestSizeLimit)
+
 	if size > manifestSizeLimit {
 		log.Warn("manifest exceeds size limit", "addr", addr, "size", size, "limit", manifestSizeLimit)
 		err = fmt.Errorf("Manifest size of %v bytes exceeds the %v byte limit", size, manifestSizeLimit)
 		return
 	}
+	log.Trace("reading from LazySectionReader")
+
 	manifestData := make([]byte, size)
 	read, err := mr.Read(manifestData)
 	if int64(read) < size {

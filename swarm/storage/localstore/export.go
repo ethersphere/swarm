@@ -126,6 +126,7 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 				log.Warn("ignoring non-chunk file", "name", hdr.Name)
 				continue
 			}
+			log.Trace("processing chunk for import", "key", hdr.Name)
 
 			keybytes, err := hex.DecodeString(hdr.Name)
 			if err != nil {

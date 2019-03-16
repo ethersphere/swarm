@@ -215,7 +215,7 @@ func exportLegacy(path string, basekey []byte, out io.Writer) (int64, error) {
 		data, err := db.Get(datakey, nil)
 		if err != nil {
 			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v, %x", key, err, datakey))
-			continue
+			panic("fix") //continue
 		}
 
 		hdr := &tar.Header{
@@ -223,6 +223,7 @@ func exportLegacy(path string, basekey []byte, out io.Writer) (int64, error) {
 			Mode: 0644,
 			Size: int64(len(data)),
 		}
+		log.Info("exported chunk", "name", hdr.Name, "size", hdr.Size)
 		if err := tw.WriteHeader(hdr); err != nil {
 			return count, err
 		}
