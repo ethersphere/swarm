@@ -403,11 +403,11 @@ func (p *Pss) handlePssMsg(ctx context.Context, msg interface{}) error {
 	}
 	isRecipient := p.isSelfPossibleRecipient(pssmsg, isProx)
 	if !isRecipient {
-		log.Trace("pss was for someone else :'( ... forwarding", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
+		log.Trace("pss msg forwarding ===>", "pss", common.ToHex(p.BaseAddr()), "prox", isProx)
 		return p.enqueue(pssmsg)
 	}
 
-	log.Trace("pss for us, yay! ... let's process!", "pss", common.ToHex(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Payload.Topic[:]))
+	log.Trace("pss msg processing <===", "pss", common.ToHex(p.BaseAddr()), "prox", isProx, "raw", isRaw, "topic", label(pssmsg.Payload.Topic[:]))
 	if err := p.process(pssmsg, isRaw, isProx); err != nil {
 		qerr := p.enqueue(pssmsg)
 		if qerr != nil {
@@ -452,15 +452,11 @@ func (p *Pss) process(pssmsg *PssMsg, raw bool, prox bool) error {
 		payload = recvmsg.Payload
 	}
 
-	if len(pssmsg.To) < addressLength {
-		if err := p.enqueue(pssmsg); err != nil {
-			return err
-		}
+	if len(pssmsg.To) < addressLength || prox {
+		err = p.enqueue(pssmsg)
 	}
 	p.executeHandlers(psstopic, payload, from, raw, prox, asymmetric, keyid)
-
-	return nil
-
+	return err
 }
 
 func (p *Pss) executeHandlers(topic Topic, payload []byte, from PssAddress, raw bool, prox bool, asymmetric bool, keyid string) {
