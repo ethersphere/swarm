@@ -22,6 +22,7 @@ import (
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -123,11 +124,9 @@ func TestCLISwarmExportImport(t *testing.T) {
 // 6. file should be accessible
 func TestExportLegacyToNew(t *testing.T) {
 	/*
-		bzz account 0aa159029fa13ffa8fa1c6fff6ebceface99d6a4
-		password qwerty
-		uploaded file hash http://localhost:8500/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/
+		fixture	bzz account 0aa159029fa13ffa8fa1c6fff6ebceface99d6a4
 	*/
-
+	const UPLOADED_FILE_MD5_HASH = "a001fdae53ba50cae584b8b02b06f821"
 	const UPLOADED_HASH = "67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a"
 	tmpdir, err := ioutil.TempDir("", "swarm-test")
 	log.Trace("running legacy datastore migration test", "temp dir", tmpdir)
@@ -204,10 +203,21 @@ func TestExportLegacyToNew(t *testing.T) {
 	if res.StatusCode != 200 {
 		t.Fatalf("expected HTTP status %d, got %s", 200, res.Status)
 	}
+	h := md5.New()
+	if _, err := io.Copy(h, res.Body); err != nil {
+		t.Fatal(err)
+	}
 
-	// compare downloaded file with the generated random file
-	// todo get the content from janos
+	sum := h.Sum(nil)
 
+	b, err := hex.DecodeString(UPLOADED_FILE_MD5_HASH)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if !bytes.Equal(sum, b) {
+		t.Fatal("should be equal")
+	}
 }
 
 func mustEqualFiles(t *testing.T, up io.Reader, down io.Reader) {

@@ -243,13 +243,11 @@ func readManifest(mr storage.LazySectionReader, addr storage.Address, fileStore 
 		err = fmt.Errorf("Manifest not Found")
 		return
 	}
-
 	if size > manifestSizeLimit {
 		log.Warn("manifest exceeds size limit", "addr", addr, "size", size, "limit", manifestSizeLimit)
 		err = fmt.Errorf("Manifest size of %v bytes exceeds the %v byte limit", size, manifestSizeLimit)
 		return
 	}
-
 	manifestData := make([]byte, size)
 	read, err := mr.Read(manifestData)
 	if int64(read) < size {
