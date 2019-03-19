@@ -84,6 +84,9 @@ The import may be quite large, consider piping the input through the Unix
 pv(1) tool to get a progress bar:
 
     pv chunks.tar | swarm db import ~/.ethereum/swarm/bzz-KEY/chunks -`,
+			Flags: []cli.Flag{
+				SwarmLegacyFlag,
+			},
 		},
 	},
 }
@@ -137,6 +140,8 @@ func dbImport(ctx *cli.Context) {
 		utils.Fatalf("invalid arguments, please specify both <chunkdb> (path to a local chunk database), <file> (path to read the tar archive from, - for stdin) and the base key")
 	}
 
+	legacy := ctx.IsSet(SwarmLegacyFlag.Name)
+
 	store, err := openLDBStore(args[0], common.Hex2Bytes(args[2]))
 	if err != nil {
 		utils.Fatalf("error opening local chunk database: %s", err)
@@ -154,8 +159,8 @@ func dbImport(ctx *cli.Context) {
 		defer f.Close()
 		in = f
 	}
-
-	count, err := store.Import(in)
+	log.Error("islegacy", "is", legacy)
+	count, err := store.Import(in, legacy)
 	if err != nil {
 		utils.Fatalf("error importing local chunk database: %s", err)
 	}

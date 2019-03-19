@@ -182,4 +182,8 @@ var (
 		Usage:  "URL of the Global Store API provider (only for testing)",
 		EnvVar: SwarmGlobalstoreAPI,
 	}
+	SwarmLegacyFlag = cli.BoolFlag{
+		Name:  "legacy",
+		Usage: "Import data from a legacy database dump",
+	}
 )

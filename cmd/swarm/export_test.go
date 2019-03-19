@@ -22,7 +22,6 @@ import (
 	"compress/gzip"
 	"crypto/md5"
 	"encoding/base64"
-	"fmt"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -198,10 +197,8 @@ func TestExportLegacyToNew(t *testing.T) {
 	cluster2.Stop()
 	defer cluster2.Cleanup()
 
-	log.Error(fmt.Sprintf("%v", info2.Path))
-	//log.Error(info2)
 	// import the export.tar
-	importCmd := runSwarm(t, "db", "import", info2.Path+"/chunks", tmpdir+"/export.tar", strings.TrimPrefix(info2.BzzKey, "0x"))
+	importCmd := runSwarm(t, "db", "import", "--legacy", info2.Path+"/chunks", tmpdir+"/export.tar", strings.TrimPrefix(info2.BzzKey, "0x"))
 	importCmd.ExpectExit()
 
 	// spin second cluster back up
@@ -218,7 +215,7 @@ func TestExportLegacyToNew(t *testing.T) {
 	}
 
 	// compare downloaded file with the generated random file
-	//mustEqualFiles(t, bytes.NewReader(content), res.Body)
+	// todo get the content from janos
 
 }
 

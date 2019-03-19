@@ -80,7 +80,7 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 // Import reads a tar structured data from the reader and
 // stores chunks in the database. It returns the number of
 // chunks imported.
-func (db *DB) Import(r io.Reader) (count int64, err error) {
+func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 	tr := tar.NewReader(r)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -160,6 +160,7 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 			}
 
 			wg.Add(1)
+
 			go func() {
 				select {
 				case <-ctx.Done():
