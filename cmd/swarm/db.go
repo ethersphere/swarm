@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/opt"
@@ -109,7 +108,7 @@ func dbExport(ctx *cli.Context) {
 		out = f
 	}
 
-	isLegacy := storage.IsLegacyDatabase(args[0])
+	isLegacy := localstore.IsLegacyDatabase(args[0])
 	if isLegacy {
 		count, err := exportLegacy(args[0], common.Hex2Bytes(args[2]), out)
 		if err != nil {
@@ -159,7 +158,7 @@ func dbImport(ctx *cli.Context) {
 		defer f.Close()
 		in = f
 	}
-	log.Error("islegacy", "is", legacy)
+
 	count, err := store.Import(in, legacy)
 	if err != nil {
 		utils.Fatalf("error importing local chunk database: %s", err)
@@ -216,11 +215,10 @@ func exportLegacy(path string, basekey []byte, out io.Writer) (int64, error) {
 		po := uint8(chunk.Proximity(basekey, hash))
 
 		datakey := getDataKey(index.Idx, po)
-		log.Trace("store.export", "dkey", fmt.Sprintf("%x", datakey), "dataidx", index.Idx, "po", po)
 		data, err := db.Get(datakey, nil)
 		if err != nil {
-			log.Warn(fmt.Sprintf("Chunk %x found but could not be accessed: %v, %x", key, err, datakey))
-			panic("fix") //continue
+			log.Crit(fmt.Sprintf("Chunk %x found but could not be accessed: %v, %x", key, err, datakey))
+			continue
 		}
 
 		hdr := &tar.Header{
@@ -228,7 +226,6 @@ func exportLegacy(path string, basekey []byte, out io.Writer) (int64, error) {
 			Mode: 0644,
 			Size: int64(len(data)),
 		}
-		log.Info("exported chunk", "name", hdr.Name, "size", hdr.Size)
 		if err := tw.WriteHeader(hdr); err != nil {
 			return count, err
 		}

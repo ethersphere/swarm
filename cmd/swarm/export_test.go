@@ -72,6 +72,7 @@ func TestCLISwarmExportImport(t *testing.T) {
 	if err := cluster.Nodes[0].Client.Call(&info, "bzz_info"); err != nil {
 		t.Fatal(err)
 	}
+
 	cluster.Stop()
 	defer cluster.Cleanup()
 
@@ -112,29 +113,19 @@ func TestCLISwarmExportImport(t *testing.T) {
 	mustEqualFiles(t, bytes.NewReader(content), res.Body)
 }
 
+// TestExportLegacyToNew checks that an old database gets imported correctly into the new localstore structure
+// The test sequence is as follows:
+// 1. unpack database fixture to tmp dir
+// 2. try to open with new swarm binary that should complain about old database
+// 3. export from old database
+// 4. remove the chunks folder
+// 5. import the dump
+// 6. file should be accessible
 func TestExportLegacyToNew(t *testing.T) {
-	// changes to the swarm code:
 	/*
 		bzz account 0aa159029fa13ffa8fa1c6fff6ebceface99d6a4
 		password qwerty
 		uploaded file hash http://localhost:8500/bzz:/67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a/
-
-		open LDB on startup, try to get old DB schema key from the db.
-			if its valid - ask for migration.
-			if not - check new db schema key validity.
-			migration should be also correct with last shcema name that requires the export+import migration
-			and check that it was done successfully
-			user should delete the folder after export so that the new db gets created
-		v0. create old database tarball as a fixture, push to codebase
-		v1. unpack fixture to tmp dir
-		v2. try to open new swarm that should complain about schema changes but with same datadir
-		v3. catch the complaint
-		v4. do the export
-		v5. remove the folder
-		vx6. try to reopen with new swarm - file should not be retrievable
-		-7. close
-			8. try to import the dump
-			9. file should be accessible
 	*/
 
 	const UPLOADED_HASH = "67a86082ee0ea1bc7dd8d955bb1e14d04f61d55ae6a4b37b3d0296a3a95e454a"
@@ -144,7 +135,7 @@ func TestExportLegacyToNew(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	deflateBase64Gzip(t, testdata.DATADIR_MIGRATION_FIXTURE, tmpdir)
+	inflateBase64Gzip(t, testdata.DATADIR_MIGRATION_FIXTURE, tmpdir)
 
 	tmpPassword := testutil.TempFileWithContent(t, DATABASE_FIXTURE_PASSWORD)
 	defer os.Remove(tmpPassword)
@@ -238,11 +229,10 @@ func mustEqualFiles(t *testing.T, up io.Reader, down io.Reader) {
 	}
 }
 
-func deflateBase64Gzip(t *testing.T, base64File, directory string) {
+func inflateBase64Gzip(t *testing.T, base64File, directory string) {
 	t.Helper()
 
 	f := base64.NewDecoder(base64.StdEncoding, strings.NewReader(base64File))
-
 	gzf, err := gzip.NewReader(f)
 	if err != nil {
 		t.Fatal(err)
@@ -250,10 +240,8 @@ func deflateBase64Gzip(t *testing.T, base64File, directory string) {
 
 	tarReader := tar.NewReader(gzf)
 
-	i := 0
 	for {
 		header, err := tarReader.Next()
-
 		if err == io.EOF {
 			break
 		}
@@ -266,13 +254,11 @@ func deflateBase64Gzip(t *testing.T, base64File, directory string) {
 
 		switch header.Typeflag {
 		case tar.TypeDir:
-			log.Debug("deflating tgz", "creating directory", path.Join(directory, name))
 			err := os.Mkdir(path.Join(directory, name), os.ModePerm)
 			if err != nil {
 				t.Fatal(err)
 			}
 		case tar.TypeReg:
-			log.Debug("deflating tgz", "creating file", path.Join(directory, name))
 			file, err := os.Create(path.Join(directory, name))
 			if err != nil {
 				t.Fatal(err)
@@ -283,8 +269,5 @@ func deflateBase64Gzip(t *testing.T, base64File, directory string) {
 		default:
 			t.Fatal("shouldn't happen")
 		}
-
-		i++
 	}
-
 }

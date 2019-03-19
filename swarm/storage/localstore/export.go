@@ -126,7 +126,6 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 				log.Warn("ignoring non-chunk file", "name", hdr.Name)
 				continue
 			}
-			log.Trace("processing chunk for import", "key", hdr.Name)
 
 			keybytes, err := hex.DecodeString(hdr.Name)
 			if err != nil {
@@ -164,6 +163,7 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			go func() {
 				select {
 				case <-ctx.Done():
+					wg.Done()
 				default:
 					err := db.Put(ctx, chunk.ModePutUpload, ch)
 					if err != nil {
@@ -188,9 +188,13 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			}
 		case <-ctx.Done():
 			return count, ctx.Err()
-		case <-doneC:
-			return count, nil
+		default:
+			// this select is to give priority to ctx.Done() and <-errC
+			select {
+			case <-doneC:
+				return count, nil
+			default:
+			}
 		}
-
 	}
 }

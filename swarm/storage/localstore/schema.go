@@ -1,4 +1,4 @@
-package storage
+package localstore
 
 import (
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -22,6 +22,8 @@ const DbSchemaPurity = "purity"
 // so rebuild index will run just once.
 const DbSchemaHalloween = "halloween"
 
+const DbSchemaSanctuary = "sanctuary"
+
 // returns true if legacy database is in the datadir
 func IsLegacyDatabase(datadir string) bool {
 
@@ -32,7 +34,7 @@ func IsLegacyDatabase(datadir string) bool {
 
 	db, err := leveldb.OpenFile(datadir, &opt.Options{OpenFilesCacheCapacity: 128})
 	if err != nil {
-		log.Error("error found", "err", err)
+		log.Error("got an error while trying to open leveldb path", "path", datadir, "err", err)
 		return false
 	}
 	defer db.Close()
@@ -46,12 +48,13 @@ func IsLegacyDatabase(datadir string) bool {
 				log.Error("got an error fetching schema name from the database", "err", err)
 			}
 
-			// todo add check for current localstore schema name
+			// todo add check for current localstore schema name - the values are encoded differently so we'd have
+			// to initialize localstore object here
 			return false
 		}
 
 		log.Error("got an unexpected error fetching legacy name from the database", "err", err)
 	}
-
+	log.Trace("checking if database scheme is legacy", "schema name", string(data))
 	return string(data) == DbSchemaHalloween || string(data) == DbSchemaPurity
 }

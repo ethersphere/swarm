@@ -158,10 +158,22 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// Identify current storage schema by arbitrary name.
 	db.schemaName, err = db.shed.NewStringField("schema-name")
 	if err != nil {
 		return nil, err
+	}
+	schemaName, err := db.schemaName.Get()
+	if err != nil {
+		return nil, err
+	}
+	if schemaName == "" {
+		// initial new localstore run
+		err := db.schemaName.Put(DbSchemaSanctuary)
+		if err != nil {
+			return nil, err
+		}
 	}
 	// Persist gc size.
 	db.gcSize, err = db.shed.NewUint64Field("gc-size")
