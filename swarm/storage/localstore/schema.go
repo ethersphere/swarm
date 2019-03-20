@@ -8,7 +8,7 @@ import (
 
 // The DB schema we want to use. The actual/current DB schema might differ
 // until migrations are run.
-const CurrentDbSchema = DbSchemaHalloween
+const CurrentDbSchema = DbSchemaSanctuary
 
 // There was a time when we had no schema at all.
 const DbSchemaNone = ""
