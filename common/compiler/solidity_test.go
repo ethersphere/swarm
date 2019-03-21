@@ -1,4 +1,4 @@
-// Copyright 2015 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -39,7 +39,7 @@ func skipWithoutSolc(t *testing.T) {
 	}
 }
 
-func TestCompiler(t *testing.T) {
+func TestSolidityCompiler(t *testing.T) {
 	skipWithoutSolc(t)
 
 	contracts, err := CompileSolidityString("", testSource)
@@ -67,7 +67,7 @@ func TestCompiler(t *testing.T) {
 	}
 }
 
-func TestCompileError(t *testing.T) {
+func TestSolidityCompileError(t *testing.T) {
 	skipWithoutSolc(t)
 
 	contracts, err := CompileSolidityString("", testSource[4:])
