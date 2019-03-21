@@ -184,6 +184,6 @@ var (
 	}
 	SwarmLegacyFlag = cli.BoolFlag{
 		Name:  "legacy",
-		Usage: "Import data from a legacy database dump",
+		Usage: "Use this flag when importing a db export from a legacy local store database dump (for schemas older than 'sanctuary')",
 	}
 )

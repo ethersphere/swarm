@@ -153,7 +153,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	isLegacy := localstore.IsLegacyDatabase(config.ChunkDbPath)
 
 	if isLegacy {
-		return nil, errors.New("Legacy database format detected!")
+		return nil, errors.New("Legacy database format detected! Please follow the instructions at https://hackmd.io/s/ryXRQJbO4 to migrate your old local store!")
 	}
 
 	var feedsHandler *feed.Handler
