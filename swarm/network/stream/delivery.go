@@ -170,7 +170,6 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	}()
 
 	go func() {
-		defer osp.Finish()
 		chunk, err := d.chunkStore.Get(ctx, req.Addr)
 		if err != nil {
 			retrieveChunkFail.Inc(1)

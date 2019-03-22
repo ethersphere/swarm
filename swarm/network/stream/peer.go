@@ -132,6 +132,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 // Deliver sends a storeRequestMsg protocol message to the peer
 // Depending on the `syncing` parameter we send different message types
 func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8, syncing bool) error {
+	var sp opentracing.Span
 	var msg interface{}
 
 	spanName := "send.chunk.delivery"
@@ -152,6 +153,10 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 		}
 		spanName += ".retrieval"
 	}
+	ctx, sp = spancontext.StartSpan(
+		ctx,
+		spanName)
+	defer sp.Finish()
 
 	ctx = context.WithValue(ctx, "stream_send_tag", nil)
 	return p.SendPriority(ctx, msg, priority)

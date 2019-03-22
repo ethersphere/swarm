@@ -766,7 +766,6 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 		if err != nil {
 			return err
 		}
-
 		if err := p.SendPriority(context.TODO(), tp, c.priority); err != nil {
 			return err
 		}
