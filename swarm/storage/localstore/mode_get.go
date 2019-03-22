@@ -38,7 +38,7 @@ func (db *DB) Get(_ context.Context, mode chunk.ModeGet, addr chunk.Address) (ch
 		}
 		return nil, err
 	}
-	return chunk.NewChunk(out.Address, out.Data), nil
+	return chunk.NewChunk(out.Address, out.Data, nil), nil
 }
 
 // get returns Item from the retrieval index

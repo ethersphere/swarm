@@ -22,17 +22,20 @@ var (
 type Chunk interface {
 	Address() Address
 	Data() []byte
+	Tags() []uint64
 }
 
 type chunk struct {
 	addr  Address
 	sdata []byte
+	tags  []uint64
 }
 
-func NewChunk(addr Address, data []byte) Chunk {
+func NewChunk(addr Address, data []byte, tags []uint64) Chunk {
 	return &chunk{
 		addr:  addr,
 		sdata: data,
+		tags:  tags,
 	}
 }
 
@@ -42,6 +45,10 @@ func (c *chunk) Address() Address {
 
 func (c *chunk) Data() []byte {
 	return c.sdata
+}
+
+func (c *chunk) Tags() []uint64 {
+	return c.tags
 }
 
 func (self *chunk) String() string {

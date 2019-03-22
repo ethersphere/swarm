@@ -65,7 +65,7 @@ func (db *DB) SubscribePush(ctx context.Context) (c <-chan chunk.Chunk, stop fun
 					}
 
 					select {
-					case chunks <- chunk.NewChunk(dataItem.Address, dataItem.Data):
+					case chunks <- chunk.NewChunk(dataItem.Address, dataItem.Data, nil):
 						// set next iteration start item
 						// when its chunk is successfully sent to channel
 						sinceItem = &item

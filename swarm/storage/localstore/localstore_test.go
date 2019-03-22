@@ -182,7 +182,13 @@ func generateTestRandomChunk() chunk.Chunk {
 	rand.Read(data)
 	key := make([]byte, 32)
 	rand.Read(key)
-	return chunk.NewChunk(key, data)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	n := r.Intn(10)
+	tags := []uint64{}
+	for i := 0; i < n; i++ {
+		tags = append(tags, r.Uint64())
+	}
+	return chunk.NewChunk(key, data, tags)
 }
 
 // TestGenerateTestRandomChunk validates that
@@ -212,6 +218,14 @@ func TestGenerateTestRandomChunk(t *testing.T) {
 	}
 	if bytes.Equal(c1.Data(), c2.Data()) {
 		t.Error("fake chunks data bytes do not differ")
+	}
+	for i, _ := range c1.Tags() {
+		if i > len(c2.Tags())-1 {
+			break
+		}
+		if c1.Tags()[i] == c2.Tags()[i] {
+			t.Fatal("tags should be different")
+		}
 	}
 }
 
