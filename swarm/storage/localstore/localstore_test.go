@@ -223,7 +223,7 @@ func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTim
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0)
+		validateItem(t, item, chunk.Address(), chunk.Data(), storeTimestamp, 0, []uint64{})
 
 		// access index should not be set
 		wantErr := leveldb.ErrNotFound
@@ -242,14 +242,14 @@ func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, ac
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, ch.Address(), ch.Data(), storeTimestamp, 0)
+		validateItem(t, item, ch.Address(), ch.Data(), storeTimestamp, []uint64)
 
 		if accessTimestamp > 0 {
 			item, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
 			if err != nil {
 				t.Fatal(err)
 			}
-			validateItem(t, item, ch.Address(), nil, 0, accessTimestamp)
+			validateItem(t, item, ch.Address(), nil, 0, accessTimestamp, []uint64{})
 		}
 	}
 }
@@ -266,7 +266,7 @@ func newPullIndexTest(db *DB, ch chunk.Chunk, binID uint64, wantError error) fun
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, ch.Address(), nil, 0, 0)
+			validateItem(t, item, ch.Address(), nil, 0, []uint64{})
 		}
 	}
 }
@@ -283,7 +283,7 @@ func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError er
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, ch.Address(), nil, storeTimestamp, 0)
+			validateItem(t, item, ch.Address(), nil, storeTimestamp, []uint64{})
 		}
 	}
 }
@@ -300,7 +300,7 @@ func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp i
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp)
+		validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp, []uint64{})
 	}
 }
 
@@ -376,7 +376,7 @@ func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFun
 }
 
 // validateItem is a helper function that checks Item values.
-func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimestamp, accessTimestamp int64) {
+func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimestamp, accessTimestamp int64, tags []uint64) {
 	t.Helper()
 
 	if !bytes.Equal(item.Address, address) {
