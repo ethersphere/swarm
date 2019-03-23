@@ -195,6 +195,8 @@ func (m OfferedHashesMsg) String() string {
 // handleOfferedHashesMsg protocol msg handler calls the incoming streamer interface
 // Filter method
 func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg) error {
+	rid := getGID()
+
 	metrics.GetOrRegisterCounter("peer.handleofferedhashes", nil).Inc(1)
 
 	var sp opentracing.Span
@@ -223,18 +225,21 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	errC := make(chan error)
 	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
 
-	ctx = context.WithValue(ctx, "source", p.ID().String())
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
 
 		if wait := c.NeedData(ctx, hash); wait != nil {
+			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid)
 			ctr++
 			want.Set(i/HashSize, true)
 			// create request and wait until the chunk data arrives and is stored
 			go func(w func(context.Context) error) {
+				log.Trace("waiting for", "ref", fmt.Sprintf("%x", hash), "rid", rid)
 				select {
 				case errC <- w(ctx):
+					log.Trace("done waiting for, w(ctx) returned", "ref", fmt.Sprintf("%x", hash), "rid", rid)
 				case <-ctx.Done():
+					log.Trace("done waiting for, context done", "ref", fmt.Sprintf("%x", hash), "rid", rid)
 				}
 			}(wait)
 		}
@@ -246,15 +251,15 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			select {
 			case err := <-errC:
 				if err != nil {
-					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk, dropping peer", "peer", p.ID(), "err", err)
-					p.Drop(err)
+					log.Error("handleOfferedHashesMsg() error waiting for chunk", "peer", p.ID(), "err", err, "rid", rid)
+					//p.Drop(err)
 					return
 				}
 			case <-ctx.Done():
-				log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
+				log.Debug("handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err(), "rid", rid)
 				return
 			case <-c.quit:
-				log.Debug("client.handleOfferedHashesMsg() quit")
+				log.Debug("client.handleOfferedHashesMsg() quit", "rid", rid)
 				return
 			}
 		}
@@ -289,7 +294,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		case err := <-c.next:
 			if err != nil {
 				log.Warn("c.next error dropping peer", "err", err)
-				p.Drop(err)
+				//p.Drop(err)
 				return
 			}
 		case <-c.quit:
@@ -358,6 +363,7 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 			}
 			chunk := storage.NewChunk(hash, data)
 			syncing := true
+			log.Trace("wanted hashes, deliver", "ref", chunk.Address().String(), "peer", p.ID())
 			if err := p.Deliver(ctx, chunk, s.priority, syncing); err != nil {
 				return err
 			}

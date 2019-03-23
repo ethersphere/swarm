@@ -90,7 +90,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		err := p.Send(wmsg.Context, wmsg.Msg)
 		if err != nil {
 			log.Error("Message send error, dropping peer", "peer", p.ID(), "err", err)
-			p.Drop(err)
+			//p.Drop(err)
 		}
 	})
 
@@ -154,7 +154,7 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 	}
 
 	ctx = context.WithValue(ctx, "stream_send_tag", nil)
-	return p.SendPriority(ctx, msg, priority)
+	return p.Send(ctx, msg)
 }
 
 // SendPriority sends message to the peer using the outgoing priority queue
