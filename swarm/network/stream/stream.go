@@ -108,7 +108,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.SyncChunkStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
+func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -152,14 +152,14 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore storage.Sy
 	// if retrieval is not disabled, register the client func (both light nodes and normal nodes can issue retrieve requests)
 	if options.Retrieval != RetrievalDisabled {
 		streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
-			return NewSwarmSyncerClient(p, syncChunkStore, NewStream(swarmChunkServerStreamName, t, live))
+			return NewSwarmSyncerClient(p, netStore, NewStream(swarmChunkServerStreamName, t, live))
 		})
 	}
 
 	// If syncing is not disabled, the syncing functions are registered (both client and server)
 	if options.Syncing != SyncingDisabled {
-		RegisterSwarmSyncerServer(streamer, syncChunkStore)
-		RegisterSwarmSyncerClient(streamer, syncChunkStore)
+		RegisterSwarmSyncerServer(streamer, netStore)
+		RegisterSwarmSyncerClient(streamer, netStore)
 	}
 
 	// if syncing is set to automatically subscribe to the syncing stream, start the subscription process

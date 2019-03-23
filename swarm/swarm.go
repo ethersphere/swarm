@@ -149,17 +149,15 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		return nil, err
 	}
 
-	self.netStore, err = storage.NewNetStore(lstore, nil)
-	if err != nil {
-		return nil, err
-	}
+	self.netStore = storage.NewNetStore(lstore)
 
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
 	delivery := stream.NewDelivery(to, self.netStore)
-	self.netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, config.DeliverySkipCheck).New
+	network.RemoteGet = delivery.RequestFromPeers
+	storage.RemoteFetch = network.RemoteFetch
 
 	if config.SwapEnabled {
 		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
@@ -405,7 +403,6 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 			select {
 			case <-time.After(updateGaugesPeriod):
 				uptimeGauge.Update(time.Since(startTime).Nanoseconds())
-				requestsCacheGauge.Update(int64(s.netStore.RequestsCacheLen()))
 			case <-doneC:
 				return
 			}

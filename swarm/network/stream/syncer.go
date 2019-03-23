@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -36,26 +37,26 @@ const (
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
 	po    uint8
-	store storage.SyncChunkStore
+	store *storage.NetStore
 	quit  chan struct{}
 }
 
 // NewSwarmSyncerServer is constructor for SwarmSyncerServer
-func NewSwarmSyncerServer(po uint8, syncChunkStore storage.SyncChunkStore) (*SwarmSyncerServer, error) {
+func NewSwarmSyncerServer(po uint8, netStore *storage.NetStore) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
 		po:    po,
-		store: syncChunkStore,
+		store: netStore,
 		quit:  make(chan struct{}),
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, syncChunkStore storage.SyncChunkStore) {
+func RegisterSwarmSyncerServer(streamer *Registry, netStore *storage.NetStore) {
 	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
 			return nil, err
 		}
-		return NewSwarmSyncerServer(po, syncChunkStore)
+		return NewSwarmSyncerServer(po, netStore)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -132,15 +133,15 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	store  storage.SyncChunkStore
+	store  *storage.NetStore
 	peer   *Peer
 	stream Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, store storage.SyncChunkStore, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, netStore *storage.NetStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		store:  store,
+		store:  netStore,
 		peer:   p,
 		stream: stream,
 	}, nil
@@ -184,15 +185,27 @@ func NewSwarmSyncerClient(p *Peer, store storage.SyncChunkStore, stream Stream) 
 
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, store storage.SyncChunkStore) {
+func RegisterSwarmSyncerClient(streamer *Registry, netStore *storage.NetStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
-		return NewSwarmSyncerClient(p, store, NewStream("SYNC", t, live))
+		return NewSwarmSyncerClient(p, netStore, NewStream("SYNC", t, live))
 	})
 }
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
-	return s.store.FetchFunc(ctx, key)
+	has, fi := s.store.HasWithCallback(ctx, key)
+	if has {
+		return nil
+	}
+
+	return func(ctx context.Context) error {
+		select {
+		case <-fi.Delivered:
+		case <-time.After(20 * time.Second):
+			return fmt.Errorf("chunk not delivered through syncing after 20sec. ref=%s", fmt.Sprintf("%x", key))
+		}
+		return nil
+	}
 }
 
 // BatchDone

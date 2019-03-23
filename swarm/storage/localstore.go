@@ -24,6 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type LocalStoreParams struct {
@@ -112,13 +113,17 @@ func (ls *LocalStore) isValid(chunk Chunk) bool {
 // After the LDBStore.Put, it is ensured that the MemStore
 // contains the chunk with the same data, but nil ReqC channel.
 func (ls *LocalStore) Put(ctx context.Context, chunk Chunk) error {
+	log.Trace("localstore.put", "ref", chunk.Address().String())
+
 	if !ls.isValid(chunk) {
+		log.Error("localstore.invalid chunk", "ref", chunk.Address().String())
 		return ErrChunkInvalid
 	}
 
-	log.Trace("localstore.put", "key", chunk.Address())
 	ls.mu.Lock()
 	defer ls.mu.Unlock()
+
+	log.Trace("localstore.put after lock", "ref", chunk.Address().String())
 
 	_, err := ls.memStore.Get(ctx, chunk.Address())
 	if err == nil {
@@ -153,8 +158,9 @@ func (ls *LocalStore) Get(ctx context.Context, addr Address) (chunk Chunk, err e
 func (ls *LocalStore) get(ctx context.Context, addr Address) (chunk Chunk, err error) {
 	chunk, err = ls.memStore.Get(ctx, addr)
 
-	if err != nil && err != ErrChunkNotFound {
+	if err != nil && err != ErrChunkNotFound && err != leveldb.ErrNotFound {
 		metrics.GetOrRegisterCounter("localstore.get.error", nil).Inc(1)
+		log.Error(err.Error(), "ref", addr.String())
 		return nil, err
 	}
 

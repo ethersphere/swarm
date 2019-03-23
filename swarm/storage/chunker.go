@@ -473,7 +473,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 
 	err = <-errC
 	if err != nil {
-		log.Debug("lazychunkreader.readat.errc", "err", err)
+		log.Error("lazychunkreader.readat.errc", "err", err)
 		close(quitC)
 		return 0, err
 	}
@@ -537,7 +537,7 @@ func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff in
 			if err != nil {
 				metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 				select {
-				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childAddress)):
+				case errC <- fmt.Errorf("lcr.join chunk not found ref=%s", fmt.Sprintf("%x", childAddress)):
 				case <-quitC:
 				}
 				return
