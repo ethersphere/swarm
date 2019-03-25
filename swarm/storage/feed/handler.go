@@ -24,6 +24,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -31,7 +33,7 @@ import (
 )
 
 type Handler struct {
-	chunkStore *storage.NetStore
+	chunkStore *network.NetStore
 	HashSize   int
 	cache      map[uint64]*cacheEntry
 	cacheLock  sync.RWMutex
@@ -72,7 +74,7 @@ func NewHandler(params *HandlerParams) *Handler {
 }
 
 // SetStore sets the store backend for the Swarm feeds API
-func (h *Handler) SetStore(store *storage.NetStore) {
+func (h *Handler) SetStore(store *network.NetStore) {
 	h.chunkStore = store
 }
 
@@ -188,7 +190,12 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 		ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
 		defer cancel()
 
-		chunk, err := h.chunkStore.Get(ctx, id.Addr())
+		r := &network.Request{
+			Addr:     id.Addr(),
+			Origin:   enode.ID{},
+			HopCount: 0,
+		}
+		chunk, err := h.chunkStore.Get(ctx, r)
 		if err != nil { // TODO: check for catastrophic errors other than chunk not found
 			return nil, nil
 		}

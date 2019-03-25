@@ -27,10 +27,10 @@ import (
 type Inspector struct {
 	api      *API
 	hive     *network.Hive
-	netStore *storage.NetStore
+	netStore *network.NetStore
 }
 
-func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore) *Inspector {
+func NewInspector(api *API, hive *network.Hive, netStore *network.NetStore) *Inspector {
 	return &Inspector{api, hive, netStore}
 }
 

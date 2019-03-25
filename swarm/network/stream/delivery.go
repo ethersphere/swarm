@@ -20,11 +20,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"strconv"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
@@ -44,15 +46,15 @@ var (
 )
 
 type Delivery struct {
-	chunkStore storage.ChunkStore
-	kad        *network.Kademlia
-	getPeer    func(enode.ID) *Peer
+	netStore *network.NetStore
+	kad      *network.Kademlia
+	getPeer  func(enode.ID) *Peer
 }
 
-func NewDelivery(kad *network.Kademlia, chunkStore storage.ChunkStore) *Delivery {
+func NewDelivery(kad *network.Kademlia, netStore *network.NetStore) *Delivery {
 	return &Delivery{
-		chunkStore: chunkStore,
-		kad:        kad,
+		netStore: netStore,
+		kad:      kad,
 	}
 }
 
@@ -60,13 +62,13 @@ func NewDelivery(kad *network.Kademlia, chunkStore storage.ChunkStore) *Delivery
 type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
-	chunkStore storage.ChunkStore
+	chunkStore *network.NetStore
 	currentLen uint64
 	quit       chan struct{}
 }
 
 // NewSwarmChunkServer is SwarmChunkServer constructor
-func NewSwarmChunkServer(chunkStore storage.ChunkStore) *SwarmChunkServer {
+func NewSwarmChunkServer(chunkStore *network.NetStore) *SwarmChunkServer {
 	s := &SwarmChunkServer{
 		deliveryC:  make(chan []byte, deliveryCap),
 		batchC:     make(chan []byte),
@@ -121,7 +123,13 @@ func (s *SwarmChunkServer) Close() {
 
 // GetData retrives chunk data from db store
 func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.chunkStore.Get(ctx, storage.Address(key))
+	//TODO: this should be localstore, not netstore?
+	r := &network.Request{
+		Addr:     storage.Address(key),
+		Origin:   enode.ID{},
+		HopCount: 0,
+	}
+	chunk, err := s.chunkStore.Get(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +141,7 @@ type RetrieveRequestMsg struct {
 	Addr      storage.Address
 	SkipCheck bool
 	HopCount  uint8
+	Origin    enode.ID
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
@@ -151,7 +160,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	}
 	streamer := s.Server.(*SwarmChunkServer)
 
-	ctx, cancel := context.WithTimeout(context.WithValue(ctx, "hopCount", req.HopCount+1), network.RequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, network.RequestTimeout)
 
 	go func() {
 		select {
@@ -163,7 +172,13 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	go func() {
 		defer osp.Finish()
-		chunk, err := d.chunkStore.Get(ctx, req.Addr)
+
+		r := &network.Request{
+			Addr:     req.Addr,
+			Origin:   sp.ID(),
+			HopCount: req.HopCount,
+		}
+		chunk, err := d.netStore.Get(ctx, r)
 		if err != nil {
 			retrieveChunkFail.Inc(1)
 			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
@@ -220,7 +235,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *Ch
 	go func() {
 		log.Trace("handle.chunk.delivery", "ref", req.Addr, "peer", sp.ID(), "rid", rid)
 
-		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
+		err := d.netStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				log.Error("invalid chunk delivered", "peer", sp.ID(), "chunk", req.Addr)
@@ -246,10 +261,16 @@ func getGID() uint64 {
 
 // RequestFromPeers sends a chunk retrieve request to a peer
 // The closest peer that hasn't already been sent to is chosen
-func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (*enode.ID, error) {
+func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request, localID enode.ID) (*enode.ID, error) {
 	metrics.GetOrRegisterCounter("delivery.requestfrompeers", nil).Inc(1)
 
+	rid := getGID()
+
 	var sp *Peer
+
+	var err error
+
+	depth := d.kad.NeighbourhoodDepth()
 
 	d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
@@ -259,11 +280,26 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 			return true
 		}
 
+		// do not send request back to peer who asked us. maybe merge with SkipPeer at some point
+		if req.Origin.String() == id.String() {
+			return true
+		}
+
 		// skip peers that we have already tried
 		if req.SkipPeer(id.String()) {
 			rid := getGID()
 			log.Trace("Delivery.RequestFromPeers: skip peer", "peer", id, "ref", req.Addr.String(), "rid", rid)
 			return true
+		}
+
+		// if origin is farther away from req.Addr and origin is not in our depth
+		prox := chunk.Proximity(req.Addr, d.kad.BaseAddr())
+		// proximity between the req.Addr and our base addr
+		if po < depth && prox >= depth {
+			log.Trace("Delivery.RequestFromPeers: skip peer because depth", "po", po, "depth", depth, "peer", id, "ref", req.Addr.String(), "rid", rid)
+
+			err = fmt.Errorf("not going outside of depth; ref=%s po=%v depth=%v prox=%v", req.Addr.String(), po, depth, prox)
+			return false
 		}
 
 		sp = d.getPeer(id)
@@ -276,19 +312,27 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 		return false
 	})
 
+	if err != nil {
+		log.Error(err.Error())
+		return nil, err
+	}
+
 	if sp == nil {
 		return nil, errors.New("no peer found") // TODO: maybe clear the peers to skip and try again, or return a failure?
 	}
 
 	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
 	// this span will finish only when delivery is handled (or times out)
-	log.Trace("sending retrieve request", "ref", req.Addr, "peer", sp.ID().String())
-	err := sp.Send(ctx, &RetrieveRequestMsg{
+	r := &RetrieveRequestMsg{
+		Origin:    localID, // this is redundant, we should be able to extract it from the p2p sub system
 		Addr:      req.Addr,
-		HopCount:  req.HopCount,
+		HopCount:  req.HopCount + 1,
 		SkipCheck: true, // this has something to do with old syncing
-	})
+	}
+	log.Trace("sending retrieve request", "ref", r.Addr, "peer", sp.ID().String(), "origin", r.Origin)
+	err = sp.Send(ctx, r)
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
 

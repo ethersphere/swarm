@@ -23,7 +23,9 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -37,12 +39,12 @@ const (
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
 	po    uint8
-	store *storage.NetStore
+	store *network.NetStore
 	quit  chan struct{}
 }
 
 // NewSwarmSyncerServer is constructor for SwarmSyncerServer
-func NewSwarmSyncerServer(po uint8, netStore *storage.NetStore) (*SwarmSyncerServer, error) {
+func NewSwarmSyncerServer(po uint8, netStore *network.NetStore) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
 		po:    po,
 		store: netStore,
@@ -50,7 +52,7 @@ func NewSwarmSyncerServer(po uint8, netStore *storage.NetStore) (*SwarmSyncerSer
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, netStore *storage.NetStore) {
+func RegisterSwarmSyncerServer(streamer *Registry, netStore *network.NetStore) {
 	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
@@ -70,7 +72,13 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	chunk, err := s.store.Get(ctx, storage.Address(key))
+	//TODO: this should be localstore, not netstore?
+	r := &network.Request{
+		Addr:     storage.Address(key),
+		Origin:   enode.ID{},
+		HopCount: 0,
+	}
+	chunk, err := s.store.Get(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -133,13 +141,13 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	store  *storage.NetStore
+	store  *network.NetStore
 	peer   *Peer
 	stream Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, netStore *storage.NetStore, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, netStore *network.NetStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
 		store:  netStore,
 		peer:   p,
@@ -147,51 +155,14 @@ func NewSwarmSyncerClient(p *Peer, netStore *storage.NetStore, stream Stream) (*
 	}, nil
 }
 
-// // NewIncomingProvableSwarmSyncer is a contructor for provable data exchange syncer
-// func NewIncomingProvableSwarmSyncer(po int, priority int, index uint64, sessionAt uint64, intervals []uint64, sessionRoot storage.Address, chunker *storage.PyramidChunker, store storage.ChunkStore, p Peer) *SwarmSyncerClient {
-// 	retrieveC := make(storage.Chunk, chunksCap)
-// 	RunChunkRequestor(p, retrieveC)
-// 	storeC := make(storage.Chunk, chunksCap)
-// 	RunChunkStorer(store, storeC)
-// 	s := &SwarmSyncerClient{
-// 		po:            po,
-// 		priority:      priority,
-// 		sessionAt:     sessionAt,
-// 		start:         index,
-// 		end:           index,
-// 		nextC:         make(chan struct{}, 1),
-// 		intervals:     intervals,
-// 		sessionRoot:   sessionRoot,
-// 		sessionReader: chunker.Join(sessionRoot, retrieveC),
-// 		retrieveC:     retrieveC,
-// 		storeC:        storeC,
-// 	}
-// 	return s
-// }
-
-// // StartSyncing is called on the Peer to start the syncing process
-// // the idea is that it is called only after kademlia is close to healthy
-// func StartSyncing(s *Streamer, peerId enode.ID, po uint8, nn bool) {
-// 	lastPO := po
-// 	if nn {
-// 		lastPO = maxPO
-// 	}
-//
-// 	for i := po; i <= lastPO; i++ {
-// 		s.Subscribe(peerId, "SYNC", newSyncLabel("LIVE", po), 0, 0, High, true)
-// 		s.Subscribe(peerId, "SYNC", newSyncLabel("HISTORY", po), 0, 0, Mid, false)
-// 	}
-// }
-
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, netStore *storage.NetStore) {
+func RegisterSwarmSyncerClient(streamer *Registry, netStore *network.NetStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
 		return NewSwarmSyncerClient(p, netStore, NewStream("SYNC", t, live))
 	})
 }
 
-// NeedData
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
 	has, fi := s.store.HasWithCallback(ctx, key)
 	if has {
@@ -208,7 +179,6 @@ func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func
 	}
 }
 
-// BatchDone
 func (s *SwarmSyncerClient) BatchDone(stream Stream, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
 	// TODO: reenable this with putter/getter refactored code
 	// if s.chunker != nil {

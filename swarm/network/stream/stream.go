@@ -34,7 +34,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/state"
-	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
@@ -108,7 +107,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
+func NewRegistry(localID enode.ID, delivery *Delivery, netStore *network.NetStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -145,7 +144,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStor
 			if !live {
 				return nil, errors.New("only live retrieval requests supported")
 			}
-			return NewSwarmChunkServer(delivery.chunkStore), nil
+			return NewSwarmChunkServer(delivery.netStore), nil
 		})
 	}
 
