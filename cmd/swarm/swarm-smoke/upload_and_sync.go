@@ -101,21 +101,22 @@ func trackChunks(testData []byte) error {
 			continue
 		}
 
-		count := 0
+		yes, no := 0, 0
 		for _, info := range hasInfo {
 			if info.Has {
 				hostChunks = append(hostChunks, "1")
+				yes++
 			} else {
 				hostChunks = append(hostChunks, "0")
-				count++
+				no++
 			}
 		}
 
-		if count == 0 {
+		if no == 0 {
 			log.Info("host reported to have all chunks", "host", host)
 		}
 
-		log.Debug("chunks", "chunks", strings.Join(hostChunks, ""), "host", host)
+		log.Debug("chunks", "chunks", strings.Join(hostChunks, ""), "yes", yes, "no", no, "host", host)
 	}
 	return nil
 }

@@ -44,9 +44,6 @@ var (
 	processReceivedChunksCount    = metrics.NewRegisteredCounter("network.stream.received_chunks.count", nil)
 	handleRetrieveRequestMsgCount = metrics.NewRegisteredCounter("network.stream.handle_retrieve_request_msg.count", nil)
 	retrieveChunkFail             = metrics.NewRegisteredCounter("network.stream.retrieve_chunks_fail.count", nil)
-
-	requestFromPeersCount     = metrics.NewRegisteredCounter("network.stream.request_from_peers.count", nil)
-	requestFromPeersEachCount = metrics.NewRegisteredCounter("network.stream.request_from_peers_each.count", nil)
 )
 
 type Delivery struct {
@@ -268,14 +265,7 @@ func getGID() uint64 {
 // RequestFromPeers sends a chunk retrieve request to a peer
 // The closest peer that hasn't already been sent to is chosen
 func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (*enode.ID, error) {
-	ctx, osp := spancontext.StartSpan(
-		ctx,
-		"request.from.peers")
-	defer osp.Finish()
-
-	osp.LogFields(olog.String("ref", req.Addr.String()))
-
-	requestFromPeersCount.Inc(1)
+	metrics.GetOrRegisterCounter("delivery.requestfrompeers", nil).Inc(1)
 
 	var sp *Peer
 
@@ -319,7 +309,6 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 	if err != nil {
 		return nil, err
 	}
-	requestFromPeersEachCount.Inc(1)
 
 	spID := sp.ID()
 	return &spID, nil

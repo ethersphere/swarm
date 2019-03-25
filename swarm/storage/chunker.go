@@ -569,6 +569,7 @@ func (r *LazyChunkReader) Read(b []byte) (read int, err error) {
 		metrics.GetOrRegisterCounter("lazychunkreader.read.err", nil).Inc(1)
 	}
 
+	log.Trace("lazychunkreader.read.bytes", "key", r.addr, "bytes", read)
 	metrics.GetOrRegisterCounter("lazychunkreader.read.bytes", nil).Inc(int64(read))
 
 	r.off += int64(read)

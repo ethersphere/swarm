@@ -150,10 +150,8 @@ func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, error) {
 			log.Error("got error from LocalStore other than leveldb.ErrNotFound or ErrChunkNotFound", "err", err)
 		}
 
-		hopCount, ok := ctx.Value("hopCount").(uint8)
-		if !ok {
-			hopCount = 0
-		}
+		var hopCount uint8
+		hopCount, _ = ctx.Value("hopCount").(uint8)
 
 		if hopCount >= maxHopCount {
 			return nil, fmt.Errorf("reach %v hop counts for ref=%s", maxHopCount, fmt.Sprintf("%x", hopCount))
@@ -178,7 +176,7 @@ func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, error) {
 			return chunk, nil
 		})
 
-		res, ok := v.(Chunk)
+		res, _ := v.(Chunk)
 
 		log.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err, "rid", rid)
 
