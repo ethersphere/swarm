@@ -28,7 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 // FailedPeerSkipDelay is the time we consider a peer to be skipped for a particular request/chunk,
@@ -63,45 +65,53 @@ func getGID() uint64 {
 }
 
 func RemoteFetch(ctx context.Context, ref storage.Address, fi *storage.FetcherItem) error {
+	// while we haven't timed-out, and while we don't have a chunk,
+	// iterate over peers and try to find a chunk
 	metrics.GetOrRegisterCounter("remote.fetch", nil).Inc(1)
+	gt := time.After(FetcherTimeout)
 
-	hopCount, ok := ctx.Value("hopCount").(uint8)
-	if !ok {
-		hopCount = 0
-	}
+	var hopCount uint8
+	hopCount, _ = ctx.Value("hopCount").(uint8)
 
 	req := NewRequest(ref, hopCount)
 	rid := getGID()
 
-	// initial call to search for chunk
-	log.Trace("remote.fetch, initial remote get", "ref", ref, "rid", rid)
-	currentPeer, err := RemoteGet(ctx, req)
-	if err != nil {
-		return err
-	}
-
-	// add peer to the set of peers to skip from now
-	req.PeersToSkip.Store(currentPeer.String(), time.Now())
-
-	// while we haven't timed-out, and while we don't have a chunk,
-	// iterate over peers and try to find a chunk
-	gt := time.After(FetcherTimeout)
 	for {
+		metrics.GetOrRegisterCounter("remote.fetch.inner", nil).Inc(1)
+
+		innerCtx, osp := spancontext.StartSpan(
+			ctx,
+			"remote.fetch")
+		osp.LogFields(olog.String("ref", ref.String()))
+
+		log.Trace("remote.fetch", "ref", ref, "rid", rid)
+		currentPeer, err := RemoteGet(innerCtx, req)
+		if err != nil {
+			log.Error(err.Error(), "ref", ref, "rid", rid)
+			osp.Finish()
+			return err
+		}
+
+		// add peer to the set of peers to skip from now
+		log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String(), "rid", rid)
+		req.PeersToSkip.Store(currentPeer.String(), time.Now())
+
 		select {
 		case <-fi.Delivered:
 			log.Trace("remote.fetch, chunk delivered", "ref", ref, "rid", rid)
+
+			osp.LogFields(olog.Bool("delivered", true))
+			osp.Finish()
 			return nil
 		case <-time.After(SearchTimeout):
-			log.Trace("remote.fetch, next remote get", "ref", ref, "rid", rid)
-			currentPeer, err := RemoteGet(context.TODO(), req)
-			if err != nil {
-				log.Error(err.Error(), "ref", ref, "rid", rid)
-				return err
-			}
-			// add peer to the set of peers to skip from now
-			log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String(), "rid", rid)
-			req.PeersToSkip.Store(currentPeer.String(), time.Now())
+			osp.LogFields(olog.Bool("timeout", true))
+			osp.Finish()
+			break
 		case <-gt:
+			log.Trace("remote.fetch, fail", "ref", ref, "rid", rid)
+
+			osp.LogFields(olog.Bool("fail", true))
+			osp.Finish()
 			return errors.New("chunk couldnt be retrieved from remote nodes")
 		}
 	}
