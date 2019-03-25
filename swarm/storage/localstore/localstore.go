@@ -271,7 +271,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	// create a pull syncing triggers used by SubscribePull function
 	db.pullTriggers = make(map[uint8][]chan struct{})
 	// push index contains as yet unsynced chunks
-	db.pushIndex, err = db.shed.NewIndex("StoreTimestamp|Hash->nil", shed.IndexFuncs{
+	db.pushIndex, err = db.shed.NewIndex("StoreTimestamp|Hash->Tags", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
 			key = make([]byte, 40)
 			binary.BigEndian.PutUint64(key[:8], uint64(fields.StoreTimestamp))
