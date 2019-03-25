@@ -297,7 +297,7 @@ func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError er
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, ch.Address(), nil, storeTimestamp, []uint64{})
+			validateItem(t, item, ch.Address(), nil, storeTimestamp, ch.Tags())
 		}
 	}
 }
@@ -392,7 +392,6 @@ func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFun
 // validateItem is a helper function that checks Item values.
 func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimestamp, accessTimestamp int64, tags []uint64) {
 	t.Helper()
-
 	if !bytes.Equal(item.Address, address) {
 		t.Errorf("got item address %x, want %x", item.Address, address)
 	}
@@ -404,6 +403,16 @@ func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimes
 	}
 	if item.AccessTimestamp != accessTimestamp {
 		t.Errorf("got item access timestamp %v, want %v", item.AccessTimestamp, accessTimestamp)
+	}
+	count := 0
+	for i, v := range tags {
+		if item.Tags[i] != v {
+			t.Errorf("expected item %d to equal %d but got %d", i, v, tags[i])
+		}
+		count++
+	}
+	if count != len(tags) {
+		t.Errorf("did not process enough tags, want %d got %d", len(item.Tags), count)
 	}
 }
 
