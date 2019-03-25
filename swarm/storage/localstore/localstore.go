@@ -374,6 +374,7 @@ func chunkToItem(ch chunk.Chunk) shed.Item {
 	return shed.Item{
 		Address: ch.Address(),
 		Data:    ch.Data(),
+		Tags:    ch.Tags(),
 	}
 }
 
