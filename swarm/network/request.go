@@ -17,11 +17,8 @@
 package network
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	"runtime"
-	"strconv"
 	"sync"
 	"time"
 
@@ -47,33 +44,23 @@ var FetcherTimeout = 10 * time.Second
 // SearchTimeout is the max time we wait for a peer to deliver a chunk we requests, after which we try another peer
 var SearchTimeout = 1 * time.Second
 
-var RemoteGet func(ctx context.Context, req *Request) (*enode.ID, error)
+var RemoteGet func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, error)
 
 type Request struct {
 	Addr        storage.Address // chunk address
+	Origin      enode.ID        // who is sending us that request?
 	PeersToSkip sync.Map        // peers not to request chunk from (only makes sense if source is nil)
 	HopCount    uint8           // number of forwarded requests (hops)
 }
 
-func getGID() uint64 {
-	b := make([]byte, 64)
-	b = b[:runtime.Stack(b, false)]
-	b = bytes.TrimPrefix(b, []byte("goroutine "))
-	b = b[:bytes.IndexByte(b, ' ')]
-	n, _ := strconv.ParseUint(string(b), 10, 64)
-	return n
-}
-
-func RemoteFetch(ctx context.Context, ref storage.Address, fi *storage.FetcherItem) error {
+func RemoteFetch(ctx context.Context, req *Request, fi *FetcherItem, localID enode.ID) error {
 	// while we haven't timed-out, and while we don't have a chunk,
 	// iterate over peers and try to find a chunk
 	metrics.GetOrRegisterCounter("remote.fetch", nil).Inc(1)
 	gt := time.After(FetcherTimeout)
 
-	var hopCount uint8
-	hopCount, _ = ctx.Value("hopCount").(uint8)
+	ref := req.Addr
 
-	req := NewRequest(ref, hopCount)
 	rid := getGID()
 
 	for {
@@ -85,12 +72,14 @@ func RemoteFetch(ctx context.Context, ref storage.Address, fi *storage.FetcherIt
 		osp.LogFields(olog.String("ref", ref.String()))
 
 		log.Trace("remote.fetch", "ref", ref, "rid", rid)
-		currentPeer, err := RemoteGet(innerCtx, req)
+		currentPeer, err := RemoteGet(innerCtx, req, localID)
 		if err != nil {
 			log.Error(err.Error(), "ref", ref, "rid", rid)
+			osp.LogFields(olog.String("err", err.Error()))
 			osp.Finish()
 			return err
 		}
+		osp.LogFields(olog.String("peer", currentPeer.String()))
 
 		// add peer to the set of peers to skip from now
 		log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String(), "rid", rid)

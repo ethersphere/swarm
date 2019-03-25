@@ -160,6 +160,13 @@ func uploadAndSync(c *cli.Context, randomBytes []byte, tuid string) error {
 
 	time.Sleep(time.Duration(syncDelay) * time.Second)
 
+	log.Debug("chunks before fetch attempt", "tuid", tuid, "hash", hash)
+
+	err = trackChunks(randomBytes)
+	if err != nil {
+		log.Error(err.Error())
+	}
+
 	wg := sync.WaitGroup{}
 	if single {
 		randIndex := 1 + rand.Intn(len(hosts)-1)

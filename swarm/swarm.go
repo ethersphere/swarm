@@ -72,7 +72,7 @@ type Swarm struct {
 	bzz               *network.Bzz       // the logistic manager
 	backend           chequebook.Backend // simple blockchain Backend
 	privateKey        *ecdsa.PrivateKey
-	netStore          *storage.NetStore
+	netStore          *network.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
 	swap              *swap.Swap
@@ -149,7 +149,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		return nil, err
 	}
 
-	self.netStore = storage.NewNetStore(lstore)
+	nodeID := config.Enode.ID()
+	self.netStore = network.NewNetStore(lstore, nodeID)
 
 	to := network.NewKademlia(
 		common.FromHex(config.BzzKey),
@@ -157,7 +158,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	)
 	delivery := stream.NewDelivery(to, self.netStore)
 	network.RemoteGet = delivery.RequestFromPeers
-	storage.RemoteFetch = network.RemoteFetch
 
 	if config.SwapEnabled {
 		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))
@@ -167,8 +167,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.swap = swap.New(balancesStore)
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
-
-	nodeID := config.Enode.ID()
 
 	syncing := stream.SyncingAutoSubscribe
 	if !config.SyncEnabled || config.LightNodeEnabled {
@@ -190,7 +188,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams)
+	lnetStore := network.NewLNetStore(self.netStore)
+	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams)
 
 	var feedsHandler *feed.Handler
 	fhParams := &feed.HandlerParams{}

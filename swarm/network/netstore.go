@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package storage
+package network
 
 import (
 	"bytes"
@@ -26,8 +26,10 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
 )
@@ -48,8 +50,6 @@ func getGID() uint64 {
 	n, _ := strconv.ParseUint(string(b), 10, 64)
 	return n
 }
-
-var RemoteFetch func(ctx context.Context, ref Address, fi *FetcherItem) error
 
 // FetcherItem are stored in fetchers map and signal to all interested parties if a given chunk is delivered
 // the mutex controls who closes the channel, and make sure we close the channel only once
@@ -76,15 +76,17 @@ func (fi *FetcherItem) SafeClose() {
 // it implements the ChunkStore interface
 // on request it initiates remote cloud retrieval
 type NetStore struct {
-	store    *LocalStore
+	localID  enode.ID // our local enode - used when issuing RetrieveRequests
+	store    *storage.LocalStore
 	fetchers sync.Map
 	putMu    sync.Mutex
 }
 
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
 // constructor function that can create a fetch function for a specific chunk address.
-func NewNetStore(store *LocalStore) *NetStore {
+func NewNetStore(store *storage.LocalStore, localID enode.ID) *NetStore {
 	return &NetStore{
+		localID:  localID,
 		store:    store,
 		fetchers: sync.Map{},
 		putMu:    sync.Mutex{},
@@ -93,7 +95,7 @@ func NewNetStore(store *LocalStore) *NetStore {
 
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
 // the fetchers cache
-func (n *NetStore) Put(ctx context.Context, chunk Chunk) error {
+func (n *NetStore) Put(ctx context.Context, chunk storage.Chunk) error {
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
@@ -126,7 +128,7 @@ func (n *NetStore) BinIndex(po uint8) uint64 {
 	return n.store.BinIndex(po)
 }
 
-func (n *NetStore) Iterator(from uint64, to uint64, po uint8, f func(Address, uint64) bool) error {
+func (n *NetStore) Iterator(from uint64, to uint64, po uint8, f func(storage.Address, uint64) bool) error {
 	return n.store.Iterator(from, to, po, f)
 }
 
@@ -137,7 +139,8 @@ func (n *NetStore) Close() {
 
 // Get retrieves a chunk
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
-func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, error) {
+func (n *NetStore) Get(ctx context.Context, req *Request) (storage.Chunk, error) {
+	ref := req.Addr
 	metrics.GetOrRegisterCounter("netstore.get", nil).Inc(1)
 	rid := getGID()
 
@@ -146,22 +149,19 @@ func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, error) {
 	chunk, err := n.store.Get(ctx, ref)
 	if err != nil {
 		// TODO: fix comparison - we should be comparing against leveldb.ErrNotFound, this error should be wrapped.
-		if err != ErrChunkNotFound && err != leveldb.ErrNotFound {
+		if err != storage.ErrChunkNotFound && err != leveldb.ErrNotFound {
 			log.Error("got error from LocalStore other than leveldb.ErrNotFound or ErrChunkNotFound", "err", err)
 		}
 
-		var hopCount uint8
-		hopCount, _ = ctx.Value("hopCount").(uint8)
-
-		if hopCount >= maxHopCount {
-			return nil, fmt.Errorf("reach %v hop counts for ref=%s", maxHopCount, fmt.Sprintf("%x", hopCount))
+		if req.HopCount >= maxHopCount {
+			return nil, fmt.Errorf("reach %v hop counts for ref=%s", maxHopCount, fmt.Sprintf("%x", req.HopCount))
 		}
 
-		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "hopCount", hopCount, "rid", rid)
+		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "hopCount", req.HopCount, "rid", rid)
 		v, err, _ := requestGroup.Do(ref.String(), func() (interface{}, error) {
 			has, fi := n.HasWithCallback(ctx, ref)
 			if !has {
-				err := RemoteFetch(ctx, ref, fi)
+				err := RemoteFetch(ctx, req, fi, n.localID)
 				if err != nil {
 					return nil, err
 				}
@@ -176,7 +176,7 @@ func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, error) {
 			return chunk, nil
 		})
 
-		res, _ := v.(Chunk)
+		res, _ := v.(storage.Chunk)
 
 		log.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err, "rid", rid)
 
@@ -200,11 +200,11 @@ func (n *NetStore) Get(ctx context.Context, ref Address) (Chunk, error) {
 
 // Has is the storage layer entry point to query the underlying
 // database to return if it has a chunk or not.
-func (n *NetStore) Has(ctx context.Context, ref Address) bool {
+func (n *NetStore) Has(ctx context.Context, ref storage.Address) bool {
 	return n.store.Has(ctx, ref)
 }
 
-func (n *NetStore) HasWithCallback(ctx context.Context, ref Address) (bool, *FetcherItem) {
+func (n *NetStore) HasWithCallback(ctx context.Context, ref storage.Address) (bool, *FetcherItem) {
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
