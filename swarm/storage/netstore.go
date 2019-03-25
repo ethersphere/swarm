@@ -35,7 +35,7 @@ import (
 const (
 	// maximum number of forwarded requests (hops), to make sure requests are not
 	// forwarded forever in peer loops
-	maxHopCount uint8 = 20
+	maxHopCount uint8 = 10
 )
 
 var requestGroup singleflight.Group

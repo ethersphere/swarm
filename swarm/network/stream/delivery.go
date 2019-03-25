@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"runtime"
 	"strconv"
 
@@ -30,8 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/tracing"
-	opentracing "github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
@@ -216,26 +213,11 @@ type ChunkDeliveryMsgSyncing ChunkDeliveryMsg
 
 // chunk delivery msg is response to retrieverequest msg
 func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req *ChunkDeliveryMsg) error {
-	var osp opentracing.Span
-	ctx, osp = spancontext.StartSpan(
-		ctx,
-		"handle.chunk.delivery")
 	rid := getGID()
 
 	processReceivedChunksCount.Inc(1)
 
-	// retrieve the span for the originating retrieverequest
-	spanId := fmt.Sprintf("stream.send.request.%v.%v", sp.ID(), req.Addr)
-	span := tracing.ShiftSpanByKey(spanId)
-
 	go func() {
-		defer osp.Finish()
-
-		if span != nil {
-			span.LogFields(olog.String("finish", "from handleChunkDeliveryMsg"))
-			defer span.Finish()
-		}
-
 		log.Trace("handle.chunk.delivery", "ref", req.Addr, "peer", sp.ID(), "rid", rid)
 
 		err := d.chunkStore.Put(ctx, storage.NewChunk(req.Addr, req.SData))
