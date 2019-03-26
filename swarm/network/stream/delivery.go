@@ -123,7 +123,7 @@ func (s *SwarmChunkServer) Close() {
 	close(s.quit)
 }
 
-// GetData retrives chunk data from db store
+// GetData retrieves chunk data from db store
 func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
 	ch, err := s.chunkStore.Get(ctx, chunk.ModeGetRequest, storage.Address(key))
 	if err != nil {

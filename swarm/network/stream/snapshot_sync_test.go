@@ -255,7 +255,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 						Data: ch.String(),
 					}
 					sim.Net.Events().Send(evt)
-					log.Debug("chunk found", "address", ch.Hex(), "node", id)
+					log.Trace("chunk found", "address", ch.Hex(), "node", id)
 				}
 			}
 			return nil

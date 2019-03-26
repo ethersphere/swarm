@@ -81,7 +81,7 @@ func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
 }
 
 // SetNextBatch retrieves the next batch of hashes from the localstore.
-// It expects a range if bin IDs, both ends inclusive in syncing, and returns
+// It expects a range of bin IDs, both ends inclusive in syncing, and returns
 // concatenated byte slice of chunk addresses and bin IDs of the first and
 // the last one in that slice. The batch may have up to BatchSize number of
 // chunk addresses. If at least one chunk is added to the batch and no new chunks

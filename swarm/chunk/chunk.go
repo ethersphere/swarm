@@ -157,7 +157,7 @@ type Descriptor struct {
 
 func (d *Descriptor) String() string {
 	if d == nil {
-		return "none"
+		return ""
 	}
 	return fmt.Sprintf("%s bin id %v", d.Address.Hex(), d.BinID)
 }

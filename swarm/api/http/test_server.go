@@ -38,9 +38,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 	if err != nil {
 		t.Fatal(err)
 	}
-	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
-		Capacity: 5000000,
-	})
+	localStore, err := localstore.New(dir, make([]byte, 32), nil)
 	if err != nil {
 		os.RemoveAll(dir)
 		t.Fatal(err)

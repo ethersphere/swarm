@@ -42,9 +42,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
-		Capacity: 50000,
-	})
+	localStore, err := localstore.New(dir, make([]byte, 32), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,9 +107,7 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
-		Capacity: 50000,
-	})
+	localStore, err := localstore.New(dir, make([]byte, 32), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,9 +176,7 @@ func TestGetAllReferences(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
-	localStore, err := localstore.New(dir, make([]byte, 32), &localstore.Options{
-		Capacity: 50000,
-	})
+	localStore, err := localstore.New(dir, make([]byte, 32), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

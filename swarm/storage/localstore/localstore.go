@@ -131,7 +131,10 @@ type Options struct {
 // One goroutine for writing batches is created.
 func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if o == nil {
-		o = new(Options)
+		// default options
+		o = &Options{
+			Capacity: 5000000,
+		}
 	}
 	db = &DB{
 		capacity: o.Capacity,
