@@ -18,10 +18,14 @@ package localstore
 
 import (
 	"bytes"
+	"fmt"
+	"math"
 	"math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/shed"
 )
 
 // TestDB_pullIndex validates the ordering of keys in pull index.
@@ -219,4 +223,48 @@ func TestDB_gcIndex(t *testing.T) {
 
 		newIndexGCSizeTest(db)(t)
 	})
+}
+
+// TestDB_pushIndex_Tags validates that pushIndex encodes
+// and decodes shed index item tags.
+func TestDB_pushIndex_Tags(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	for _, tc := range []struct {
+		tags []uint64
+	}{
+		{tags: nil},
+		{tags: []uint64{}},
+		{tags: []uint64{0}},
+		{tags: []uint64{math.MaxUint64}},
+		{tags: []uint64{1, 2, 3, 100, 256}},
+		{tags: []uint64{64, 65, 256, 257, 1024, 1025, math.MaxUint64}},
+	} {
+		ch := generateTestRandomChunk()
+
+		i := shed.Item{
+			Address:        ch.Address(),
+			StoreTimestamp: time.Now().UnixNano(),
+			Tags:           tc.tags,
+		}
+
+		if err := db.pushIndex.Put(i); err != nil {
+			t.Fatal(err)
+		}
+
+		got, err := db.pushIndex.Get(shed.Item{
+			Address:        i.Address,
+			StoreTimestamp: i.StoreTimestamp,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		wantTags := fmt.Sprint(tc.tags)
+		gotTags := fmt.Sprint(got.Tags)
+		if gotTags != wantTags {
+			t.Errorf("got tags %s, want %s", gotTags, wantTags)
+		}
+	}
 }
