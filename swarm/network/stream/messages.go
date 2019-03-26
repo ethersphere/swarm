@@ -356,7 +356,7 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 			if err != nil {
 				return fmt.Errorf("handleWantedHashesMsg get data %x: %v", hash, err)
 			}
-			chunk := storage.NewChunk(hash, data)
+			chunk := storage.NewChunk(hash, data, []uint64{})
 			syncing := true
 			if err := p.Deliver(ctx, chunk, s.priority, syncing); err != nil {
 				return err

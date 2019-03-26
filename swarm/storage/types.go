@@ -23,6 +23,8 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"io"
+	mrand "math/rand"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/bmt"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
@@ -95,7 +97,13 @@ func GenerateRandomChunk(dataSize int64) Chunk {
 	binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
 	hasher.ResetWithLength(sdata[:8])
 	hasher.Write(sdata[8:])
-	return NewChunk(hasher.Sum(nil), sdata)
+	r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+	n := r.Intn(10)
+	tags := []uint64{}
+	for i := 0; i < n; i++ {
+		tags = append(tags, r.Uint64())
+	}
+	return NewChunk(hasher.Sum(nil), sdata, tags)
 }
 
 func GenerateRandomChunks(dataSize int64, count int) (chunks []Chunk) {
