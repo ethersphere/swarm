@@ -90,6 +90,17 @@ type Chunk = chunk.Chunk
 // NewChunk is the same as chunk.NewChunk for backward compatibility.
 var NewChunk = chunk.NewChunk
 
+func GenerateRandomChunkWithTag(dataSize int64, tag uint64) Chunk {
+	hasher := MakeHashFunc(DefaultHash)()
+	sdata := make([]byte, dataSize+8)
+	rand.Read(sdata[8:])
+	binary.LittleEndian.PutUint64(sdata[:8], uint64(dataSize))
+	hasher.ResetWithLength(sdata[:8])
+	hasher.Write(sdata[8:])
+
+	return NewChunk(hasher.Sum(nil), sdata, []uint64{tag})
+}
+
 func GenerateRandomChunk(dataSize int64) Chunk {
 	hasher := MakeHashFunc(DefaultHash)()
 	sdata := make([]byte, dataSize+8)

@@ -127,6 +127,8 @@ const (
 	ModeGetSync
 	// ModeGetLookup: when accessed to lookup a a chunk in feeds or other places
 	ModeGetLookup
+
+	ModeGetTags
 )
 
 // ModePut enumerates different Putter modes.

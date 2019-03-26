@@ -19,10 +19,13 @@ package storage
 import (
 	"bytes"
 	"context"
+	mrand "math/rand"
 	"testing"
+	"time"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 )
 
@@ -45,16 +48,19 @@ func TestHasherStore(t *testing.T) {
 		chunkStore := NewMapChunkStore()
 		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt)
 
+		r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+		customTag := r.Uint64()
 		// Put two random chunks into the hasherStore
-		chunkData1 := GenerateRandomChunk(int64(tt.chunkLength)).Data()
-		ctx, cancel := context.WithTimeout(context.Background(), getTimeout)
+		chunkData1 := GenerateRandomChunkWithTag(int64(tt.chunkLength), customTag).Data()
+		parentCtx := context.WithValue(context.Background(), sctx.PushTagKey{}, customTag)
+		ctx, cancel := context.WithTimeout(parentCtx, getTimeout)
 		defer cancel()
 		key1, err := hasherStore.Put(ctx, chunkData1)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
 		}
 
-		chunkData2 := GenerateRandomChunk(int64(tt.chunkLength)).Data()
+		chunkData2 := GenerateRandomChunkWithTag(int64(tt.chunkLength), customTag).Data()
 		key2, err := hasherStore.Put(ctx, chunkData2)
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
@@ -79,6 +85,17 @@ func TestHasherStore(t *testing.T) {
 			t.Fatalf("Expected retrieved chunk data %v, got %v", common.Bytes2Hex(chunkData1), common.Bytes2Hex(retrievedChunkData1))
 		}
 
+		tags, err := hasherStore.GetTags(ctx, key1)
+		if err != nil {
+			t.Fatalf("had an error fetching tags from hasher store: %v", err)
+		}
+		if len(tags) != 1 {
+			t.Fatalf("tag length mismatch, want %d got %d", 1, len(tags))
+		}
+		if tags[0] != customTag {
+			t.Fatalf("tag mismatch. want %d, got %d", customTag, tags[0])
+		}
+
 		// Get the second chunk
 		retrievedChunkData2, err := hasherStore.Get(ctx, key2)
 		if err != nil {
@@ -88,6 +105,20 @@ func TestHasherStore(t *testing.T) {
 		// Retrieved data should be same as the original
 		if !bytes.Equal(chunkData2, retrievedChunkData2) {
 			t.Fatalf("Expected retrieved chunk data %v, got %v", common.Bytes2Hex(chunkData2), common.Bytes2Hex(retrievedChunkData2))
+		}
+
+		// get the tags from the underlying localstore and assert they are equal to the tag assigned
+		// in the context above (hasherstore should put the file with the appropriate tags from Context
+		// rather than from the chunk struct)
+		tags2, err := hasherStore.GetTags(ctx, key2)
+		if err != nil {
+			t.Fatalf("had an error fetching tags from hasher store: %v", err)
+		}
+		if len(tags2) != 1 {
+			t.Fatalf("tag length mismatch, want %d got %d", 1, len(tags2))
+		}
+		if tags2[0] != customTag {
+			t.Fatalf("tag mismatch. want %d, got %d", customTag, tags2[0])
 		}
 
 		hash1, encryptionKey1, err := parseReference(key1, hasherStore.hashSize)

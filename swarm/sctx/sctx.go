@@ -5,6 +5,7 @@ import "context"
 type (
 	HTTPRequestIDKey struct{}
 	requestHostKey   struct{}
+	PushTagKey       struct{}
 )
 
 func SetHost(ctx context.Context, domain string) context.Context {

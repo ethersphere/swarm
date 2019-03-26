@@ -110,6 +110,19 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 	return chunkData, nil
 }
 
+func (h *hasherStore) GetTags(ctx context.Context, ref Reference) ([]uint64, error) {
+	addr, _, err := parseReference(ref, h.hashSize)
+	if err != nil {
+		return nil, err
+	}
+
+	chunk, err := h.store.Get(ctx, chunk.ModeGetTags, addr)
+	if err != nil {
+		return nil, err
+	}
+	return chunk.Tags(), nil
+}
+
 // Close indicates that no more chunks will be put with the hasherStore, so the Wait
 // function can return when all the previously put chunks has been stored.
 func (h *hasherStore) Close() {

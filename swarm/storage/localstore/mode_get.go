@@ -79,6 +79,12 @@ func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err er
 	// no updates to indexes
 	case chunk.ModeGetSync:
 	case chunk.ModeGetLookup:
+	case chunk.ModeGetTags:
+		c, err := db.pushIndex.Get(out)
+		if err != nil {
+			return out, err
+		}
+		return c, nil
 	default:
 		return out, ErrInvalidMode
 	}
