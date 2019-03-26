@@ -41,6 +41,7 @@ type Item struct {
 	AccessTimestamp int64
 	StoreTimestamp  int64
 	BinID           uint64
+	Tags            []uint64
 }
 
 // Merge is a helper method to construct a new
