@@ -5,7 +5,7 @@ import "context"
 type (
 	HTTPRequestIDKey struct{}
 	requestHostKey   struct{}
-	PushTagKey       struct{}
+	pushTagKey       struct{}
 )
 
 func SetHost(ctx context.Context, domain string) context.Context {
@@ -18,4 +18,16 @@ func GetHost(ctx context.Context) string {
 		return v
 	}
 	return ""
+}
+
+func SetPushTag(ctx context.Context, tag uint64) context.Context {
+	return context.WithValue(ctx, pushTagKey{}, tag)
+}
+
+func GetPushTag(ctx context.Context) uint64 {
+	v, ok := ctx.Value(pushTagKey{}).(uint64)
+	if ok {
+		return v
+	}
+	return 0
 }

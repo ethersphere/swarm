@@ -22,6 +22,7 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
 )
@@ -78,7 +79,7 @@ func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, 
 			return nil, err
 		}
 	}
-	chunk := h.createChunk(c)
+	chunk := h.createChunk(ctx, c)
 	h.storeChunk(ctx, chunk)
 
 	return Reference(append(chunk.Address(), encryptionKey...)), nil
@@ -169,10 +170,14 @@ func (h *hasherStore) createHash(chunkData ChunkData) Address {
 	return hasher.Sum(nil)
 }
 
-func (h *hasherStore) createChunk(chunkData ChunkData) Chunk {
+func (h *hasherStore) createChunk(ctx context.Context, chunkData ChunkData) Chunk {
 	hash := h.createHash(chunkData)
-	//TODO: CHANGE THIS, should come from context
-	chunk := NewChunk(hash, chunkData, []uint64{})
+	tag := sctx.GetPushTag(ctx)
+	tags := []uint64{}
+	if tag != 0 {
+		tags = append(tags, tag)
+	}
+	chunk := NewChunk(hash, chunkData, tags)
 	return chunk
 }
 

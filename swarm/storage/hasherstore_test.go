@@ -52,8 +52,7 @@ func TestHasherStore(t *testing.T) {
 		customTag := r.Uint64()
 		// Put two random chunks into the hasherStore
 		chunkData1 := GenerateRandomChunkWithTag(int64(tt.chunkLength), customTag).Data()
-		parentCtx := context.WithValue(context.Background(), sctx.PushTagKey{}, customTag)
-		ctx, cancel := context.WithTimeout(parentCtx, getTimeout)
+		ctx, cancel := context.WithTimeout(sctx.SetPushTag(context.Background(), customTag), getTimeout)
 		defer cancel()
 		key1, err := hasherStore.Put(ctx, chunkData1)
 		if err != nil {
