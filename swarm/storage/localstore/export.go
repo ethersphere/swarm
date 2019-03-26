@@ -20,6 +20,7 @@ import (
 	"archive/tar"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"io/ioutil"
 
@@ -28,12 +29,33 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/shed"
 )
 
+const (
+	// filename in tar archive that holds the information
+	// about exported data format version
+	exportVersionFilename = ".swarm-export-version"
+	// legacy version for previous LDBStore
+	legacyExportVersion = "1"
+	// current export format version
+	currentExportVersion = "2"
+)
+
 // Export writes a tar structured data to the writer of
 // all chunks in the retrieval data index. It returns the
 // number of chunks exported.
 func (db *DB) Export(w io.Writer) (count int64, err error) {
 	tw := tar.NewWriter(w)
 	defer tw.Close()
+
+	if err := tw.WriteHeader(&tar.Header{
+		Name: exportVersionFilename,
+		Mode: 0644,
+		Size: int64(len(currentExportVersion)),
+	}); err != nil {
+		return 0, err
+	}
+	if _, err := tw.Write([]byte(currentExportVersion)); err != nil {
+		return 0, err
+	}
 
 	err = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		hdr := &tar.Header{
@@ -66,6 +88,12 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 	countC := make(chan int64)
 	errC := make(chan error)
 	go func() {
+		var (
+			firstFile = true
+			// if exportVersionFilename file is not present
+			// assume legacy version
+			version = legacyExportVersion
+		)
 		for {
 			hdr, err := tr.Next()
 			if err != nil {
@@ -75,6 +103,20 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 				select {
 				case errC <- err:
 				case <-ctx.Done():
+				}
+			}
+			if firstFile {
+				firstFile = false
+				if hdr.Name == exportVersionFilename {
+					data, err := ioutil.ReadAll(tr)
+					if err != nil {
+						select {
+						case errC <- err:
+						case <-ctx.Done():
+						}
+					}
+					version = string(data)
+					continue
 				}
 			}
 
@@ -97,7 +139,22 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 				}
 			}
 			key := chunk.Address(keybytes)
-			ch := chunk.NewChunk(key, data)
+
+			var ch chunk.Chunk
+			switch version {
+			case legacyExportVersion:
+				// LDBStore Export exported chunk data prefixed with the chunk key.
+				// That is not necessary, as the key is in the chunk filename,
+				// but backward compatibility needs to be preserved.
+				ch = chunk.NewChunk(key, data[32:])
+			case currentExportVersion:
+				ch = chunk.NewChunk(key, data)
+			default:
+				select {
+				case errC <- fmt.Errorf("unsupported export data version %q", version):
+				case <-ctx.Done():
+				}
+			}
 
 			go func() {
 				select {
