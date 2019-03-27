@@ -25,6 +25,7 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -157,21 +158,7 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 	log.Info("uploaded successfully", "hash", hash, "took", t2, "digest", fmt.Sprintf("%x", fhash))
 
-	t1 = time.Now()
-
-	var wg sync.WaitGroup
-	wg.Add(len(hosts))
-	for i := 0; i < len(hosts); i++ {
-		i := i
-		go func(idx int) {
-			waitUntilSyncingStops(wsEndpoint(hosts[idx]))
-			wg.Done()
-		}(i)
-	}
-	wg.Wait()
-
-	t2 = time.Since(t1)
-	metrics.GetOrRegisterResettingTimer("upload-and-sync.single.wait-for-sync.deployment", nil).Update(t2)
+	waitToSync()
 
 	log.Debug("chunks before fetch attempt", "hash", hash)
 
@@ -199,39 +186,49 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 	return nil
 }
 
-func waitUntilSyncingStops(wsHost string) {
-	defer metrics.GetOrRegisterResettingTimer("upload-and-sync.single.wait-for-sync.individual", nil).UpdateSince(time.Now())
-
-	var rpcClient *rpc.Client
-	var err error
-
-	for {
-		rpcClient, err = rpc.Dial(wsHost)
-		if err != nil {
-			log.Error("error dialing host", "err", err)
-
-			time.Sleep(5 * time.Second)
-			continue
-		}
-		break
+func isSyncing(wsHost string) (bool, error) {
+	rpcClient, err := rpc.Dial(wsHost)
+	if err != nil {
+		log.Error("error dialing host", "err", err)
+		return false, err
 	}
 
-	for {
-		var isSyncing bool
-		err = rpcClient.Call(&isSyncing, "bzz_isSyncing")
-		if err != nil {
-			log.Error("error calling host for isSyncing", "err", err)
-
-			time.Sleep(5 * time.Second)
-			continue
-		}
-
-		log.Info("isSyncing result", "host", wsHost, "isSyncing", isSyncing)
-		if isSyncing {
-			time.Sleep(5 * time.Second)
-			continue
-		} else {
-			return
-		}
+	var isSyncing bool
+	err = rpcClient.Call(&isSyncing, "bzz_isSyncing")
+	if err != nil {
+		log.Error("error calling host for isSyncing", "err", err)
+		return false, err
 	}
+
+	log.Debug("isSyncing result", "host", wsHost, "isSyncing", isSyncing)
+
+	return isSyncing, nil
+}
+
+func waitToSync() {
+	t1 := time.Now()
+
+	notSynced := uint64(1)
+	for notSynced > 0 {
+		time.Sleep(3 * time.Second)
+
+		notSynced = 0
+		var wg sync.WaitGroup
+		wg.Add(len(hosts))
+		for i := 0; i < len(hosts); i++ {
+			i := i
+			go func(idx int) {
+				stillSyncing, err := isSyncing(wsEndpoint(hosts[idx]))
+
+				if stillSyncing || err != nil {
+					atomic.AddUint64(&notSynced, 1)
+				}
+				wg.Done()
+			}(i)
+		}
+		wg.Wait()
+	}
+
+	t2 := time.Since(t1)
+	metrics.GetOrRegisterResettingTimer("upload-and-sync.single.wait-for-sync.deployment", nil).Update(t2)
 }
