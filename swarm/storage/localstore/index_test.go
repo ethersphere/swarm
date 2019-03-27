@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -39,23 +40,21 @@ func TestDB_pullIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(chunk.ModePutUpload)
-
 	chunkCount := 50
 
 	chunks := make([]testIndexChunk, chunkCount)
 
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
-		chunk := generateTestRandomChunk()
+		ch := generateTestRandomChunk()
 
-		err := uploader.Put(chunk)
+		err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		chunks[i] = testIndexChunk{
-			Chunk: chunk,
+			Chunk: ch,
 			binID: uint64(i),
 		}
 	}
@@ -86,23 +85,21 @@ func TestDB_gcIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(chunk.ModePutUpload)
-
 	chunkCount := 50
 
 	chunks := make([]testIndexChunk, chunkCount)
 
 	// upload random chunks
 	for i := 0; i < chunkCount; i++ {
-		chunk := generateTestRandomChunk()
+		ch := generateTestRandomChunk()
 
-		err := uploader.Put(chunk)
+		err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		chunks[i] = testIndexChunk{
-			Chunk: chunk,
+			Chunk: ch,
 		}
 	}
 
@@ -124,7 +121,7 @@ func TestDB_gcIndex(t *testing.T) {
 	t.Run("request unsynced", func(t *testing.T) {
 		ch := chunks[1]
 
-		_, err := db.NewGetter(chunk.ModeGetRequest).Get(ch.Address())
+		_, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -141,7 +138,7 @@ func TestDB_gcIndex(t *testing.T) {
 	t.Run("sync one chunk", func(t *testing.T) {
 		ch := chunks[0]
 
-		err := db.NewSetter(chunk.ModeSetSync).Set(ch.Address())
+		err := db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -153,10 +150,8 @@ func TestDB_gcIndex(t *testing.T) {
 	})
 
 	t.Run("sync all chunks", func(t *testing.T) {
-		setter := db.NewSetter(chunk.ModeSetSync)
-
 		for i := range chunks {
-			err := setter.Set(chunks[i].Address())
+			err := db.Set(context.Background(), chunk.ModeSetSync, chunks[i].Address())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -170,7 +165,7 @@ func TestDB_gcIndex(t *testing.T) {
 	t.Run("request one chunk", func(t *testing.T) {
 		i := 6
 
-		_, err := db.NewGetter(chunk.ModeGetRequest).Get(chunks[i].Address())
+		_, err := db.Get(context.Background(), chunk.ModeGetRequest, chunks[i].Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -188,14 +183,13 @@ func TestDB_gcIndex(t *testing.T) {
 	})
 
 	t.Run("random chunk request", func(t *testing.T) {
-		requester := db.NewGetter(chunk.ModeGetRequest)
 
 		rand.Shuffle(len(chunks), func(i, j int) {
 			chunks[i], chunks[j] = chunks[j], chunks[i]
 		})
 
-		for _, chunk := range chunks {
-			_, err := requester.Get(chunk.Address())
+		for _, ch := range chunks {
+			_, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -211,7 +205,7 @@ func TestDB_gcIndex(t *testing.T) {
 	t.Run("remove one chunk", func(t *testing.T) {
 		i := 3
 
-		err := db.NewSetter(chunk.ModeSetRemove).Set(chunks[i].Address())
+		err := db.Set(context.Background(), chunk.ModeSetRemove, chunks[i].Address())
 		if err != nil {
 			t.Fatal(err)
 		}

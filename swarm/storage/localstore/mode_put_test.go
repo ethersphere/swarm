@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"sync"
 	"testing"
@@ -31,9 +32,7 @@ func TestModePutRequest(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	putter := db.NewPutter(chunk.ModePutRequest)
-
-	chunk := generateTestRandomChunk()
+	ch := generateTestRandomChunk()
 
 	// keep the record when the chunk is stored
 	var storeTimestamp int64
@@ -46,12 +45,12 @@ func TestModePutRequest(t *testing.T) {
 
 		storeTimestamp = wantTimestamp
 
-		err := putter.Put(chunk)
+		err := db.Put(context.Background(), chunk.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, wantTimestamp, wantTimestamp))
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, wantTimestamp, wantTimestamp))
 
 		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -64,12 +63,12 @@ func TestModePutRequest(t *testing.T) {
 			return wantTimestamp
 		})()
 
-		err := putter.Put(chunk)
+		err := db.Put(context.Background(), chunk.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, chunk, storeTimestamp, wantTimestamp))
+		t.Run("retrieve indexes", newRetrieveIndexesTestWithAccess(db, ch, storeTimestamp, wantTimestamp))
 
 		t.Run("gc index count", newItemsCountTest(db.gcIndex, 1))
 
@@ -89,7 +88,7 @@ func TestModePutSync(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(chunk.ModePutSync).Put(ch)
+	err := db.Put(context.Background(), chunk.ModePutSync, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -111,7 +110,7 @@ func TestModePutUpload(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
+	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,14 +139,13 @@ func TestModePutUpload_parallel(t *testing.T) {
 	// start uploader workers
 	for i := 0; i < workerCount; i++ {
 		go func(i int) {
-			uploader := db.NewPutter(chunk.ModePutUpload)
 			for {
 				select {
-				case chunk, ok := <-chunkChan:
+				case ch, ok := <-chunkChan:
 					if !ok {
 						return
 					}
-					err := uploader.Put(chunk)
+					err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 					select {
 					case errChan <- err:
 					case <-doneChan:
@@ -188,17 +186,15 @@ func TestModePutUpload_parallel(t *testing.T) {
 	}
 
 	// get every chunk and validate its data
-	getter := db.NewGetter(chunk.ModeGetRequest)
-
 	chunksMu.Lock()
 	defer chunksMu.Unlock()
-	for _, chunk := range chunks {
-		got, err := getter.Get(chunk.Address())
+	for _, ch := range chunks {
+		got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(got.Data(), chunk.Data()) {
-			t.Fatalf("got chunk %s data %x, want %x", chunk.Address().Hex(), got.Data(), chunk.Data())
+		if !bytes.Equal(got.Data(), ch.Data()) {
+			t.Fatalf("got chunk %s data %x, want %x", ch.Address().Hex(), got.Data(), ch.Data())
 		}
 	}
 }
@@ -270,7 +266,6 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 	db, cleanupFunc := newTestDB(b, o)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(chunk.ModePutUpload)
 	chunks := make([]chunk.Chunk, count)
 	for i := 0; i < count; i++ {
 		chunks[i] = generateTestRandomChunk()
@@ -285,8 +280,7 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 
 			go func(i int) {
 				defer func() { <-sem }()
-
-				errs <- uploader.Put(chunks[i])
+				errs <- db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
 			}(i)
 		}
 	}()

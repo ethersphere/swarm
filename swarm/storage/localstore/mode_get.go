@@ -25,37 +25,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// Getter provides Get method to retrieve Chunks
-// from database.
-type Getter struct {
-	db   *DB
-	mode chunk.ModeGet
-}
-
-// NewGetter returns a new Getter on database
-// with a specific Mode.
-func (db *DB) NewGetter(mode chunk.ModeGet) *Getter {
-	return &Getter{
-		mode: mode,
-		db:   db,
-	}
-}
-
-// Get returns a chunk from the database. If the chunk is
-// not found chunk.ErrChunkNotFound will be returned.
-// All required indexes will be updated required by the
-// Getter Mode.
-func (g *Getter) Get(addr chunk.Address) (ch chunk.Chunk, err error) {
-	out, err := g.db.get(g.mode, addr)
-	if err != nil {
-		if err == leveldb.ErrNotFound {
-			return nil, chunk.ErrChunkNotFound
-		}
-		return nil, err
-	}
-	return chunk.NewChunk(out.Address, out.Data), nil
-}
-
 // Get returns a chunk from the database. If the chunk is
 // not found chunk.ErrChunkNotFound will be returned.
 // All required indexes will be updated required by the

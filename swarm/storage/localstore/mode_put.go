@@ -24,28 +24,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// Putter provides Put method to store Chunks
-// to database.
-type Putter struct {
-	db   *DB
-	mode chunk.ModePut
-}
-
-// NewPutter returns a new Putter on database
-// with a specific Mode.
-func (db *DB) NewPutter(mode chunk.ModePut) *Putter {
-	return &Putter{
-		mode: mode,
-		db:   db,
-	}
-}
-
-// Put stores the Chunk to database and depending
-// on the Putter mode, it updates required indexes.
-func (p *Putter) Put(ch chunk.Chunk) (err error) {
-	return p.db.put(p.mode, chunkToItem(ch))
-}
-
 // Put stores the Chunk to database and depending
 // on the Putter mode, it updates required indexes.
 // Put is required to implement chunk.Store

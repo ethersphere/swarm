@@ -17,6 +17,7 @@
 package localstore
 
 import (
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
@@ -30,14 +31,12 @@ func TestHas(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
+	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	hasser := db.NewHasser()
-
-	has, err := hasser.Has(ch.Address())
+	has, err := db.Has(context.Background(), ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +46,7 @@ func TestHas(t *testing.T) {
 
 	missingChunk := generateTestRandomChunk()
 
-	has, err = hasser.Has(missingChunk.Address())
+	has, err = db.Has(context.Background(), missingChunk.Address())
 	if err != nil {
 		t.Fatal(err)
 	}

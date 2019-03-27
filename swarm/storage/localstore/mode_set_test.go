@@ -17,6 +17,7 @@
 package localstore
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -36,7 +37,7 @@ func TestModeSetAccess(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	err := db.NewSetter(chunk.ModeSetAccess).Set(ch.Address())
+	err := db.Set(context.Background(), chunk.ModeSetAccess, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,12 +65,12 @@ func TestModeSetSync(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
+	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = db.NewSetter(chunk.ModeSetSync).Set(ch.Address())
+	err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,12 +93,12 @@ func TestModeSetRemove(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
+	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = db.NewSetter(chunk.ModeSetRemove).Set(ch.Address())
+	err = db.Set(context.Background(), chunk.ModeSetRemove, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,5 +126,4 @@ func TestModeSetRemove(t *testing.T) {
 	t.Run("gc index count", newItemsCountTest(db.gcIndex, 0))
 
 	t.Run("gc size", newIndexGCSizeTest(db))
-
 }

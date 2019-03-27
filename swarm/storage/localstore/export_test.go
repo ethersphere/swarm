@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
@@ -36,7 +37,7 @@ func TestExportImport(t *testing.T) {
 	for i := 0; i < chunkCount; i++ {
 		ch := generateTestRandomChunk()
 
-		err := db1.NewPutter(chunk.ModePutUpload).Put(ch)
+		err := db1.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,11 +66,9 @@ func TestExportImport(t *testing.T) {
 		t.Errorf("got import count %v, want %v", c, wantChunksCount)
 	}
 
-	getter := db2.NewGetter(chunk.ModeGetRequest)
-
 	for a, want := range chunks {
 		addr := chunk.Address([]byte(a))
-		ch, err := getter.Get(addr)
+		ch, err := db2.Get(context.Background(), chunk.ModeGetRequest, addr)
 		if err != nil {
 			t.Fatal(err)
 		}

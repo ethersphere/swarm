@@ -23,28 +23,6 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-// Setter sets the state of a particular
-// Chunk in database by changing indexes.
-type Setter struct {
-	db   *DB
-	mode chunk.ModeSet
-}
-
-// NewSetter returns a new Setter on database
-// with a specific Mode.
-func (db *DB) NewSetter(mode chunk.ModeSet) *Setter {
-	return &Setter{
-		mode: mode,
-		db:   db,
-	}
-}
-
-// Set updates database indexes for a specific
-// chunk represented by the address.
-func (s *Setter) Set(addr chunk.Address) (err error) {
-	return s.db.set(s.mode, addr)
-}
-
 // Set updates database indexes for a specific
 // chunk represented by the address.
 // Set is required to implement chunk.Store

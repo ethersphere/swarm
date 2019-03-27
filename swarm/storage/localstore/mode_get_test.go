@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"bytes"
+	"context"
 	"testing"
 	"time"
 
@@ -36,12 +37,10 @@ func TestModeGetRequest(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
+	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	requester := db.NewGetter(chunk.ModeGetRequest)
 
 	// set update gc test hook to signal when
 	// update gc goroutine is done by sending to
@@ -54,7 +53,7 @@ func TestModeGetRequest(t *testing.T) {
 	})()
 
 	t.Run("get unsynced", func(t *testing.T) {
-		got, err := requester.Get(ch.Address())
+		got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -77,13 +76,13 @@ func TestModeGetRequest(t *testing.T) {
 	})
 
 	// set chunk to synced state
-	err = db.NewSetter(chunk.ModeSetSync).Set(ch.Address())
+	err = db.Set(context.Background(), chunk.ModeSetSync, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("first get", func(t *testing.T) {
-		got, err := requester.Get(ch.Address())
+		got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -113,7 +112,7 @@ func TestModeGetRequest(t *testing.T) {
 			return accessTimestamp
 		})()
 
-		got, err := requester.Get(ch.Address())
+		got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -150,12 +149,12 @@ func TestModeGetSync(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.NewPutter(chunk.ModePutUpload).Put(ch)
+	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	got, err := db.NewGetter(chunk.ModeGetSync).Get(ch.Address())
+	got, err := db.Get(context.Background(), chunk.ModeGetSync, ch.Address())
 	if err != nil {
 		t.Fatal(err)
 	}

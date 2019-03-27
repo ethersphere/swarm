@@ -36,15 +36,13 @@ func TestDB_SubscribePull(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(chunk.ModePutUpload)
-
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
 	// prepopulate database with some chunks
 	// before the subscription
-	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 10)
+	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -63,14 +61,14 @@ func TestDB_SubscribePull(t *testing.T) {
 	}
 
 	// upload some chunks just after subscribe
-	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 5)
+	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 5)
 
 	time.Sleep(200 * time.Millisecond)
 
 	// upload some chunks after some short time
 	// to ensure that subscription will include them
 	// in a dynamic environment
-	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 3)
+	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
@@ -83,15 +81,13 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(chunk.ModePutUpload)
-
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
 	var wantedChunksCount int
 
 	// prepopulate database with some chunks
 	// before the subscription
-	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 10)
+	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -116,14 +112,14 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 	}
 
 	// upload some chunks just after subscribe
-	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 5)
+	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 5)
 
 	time.Sleep(200 * time.Millisecond)
 
 	// upload some chunks after some short time
 	// to ensure that subscription will include them
 	// in a dynamic environment
-	uploadRandomChunksBin(t, db, uploader, addrs, &addrsMu, &wantedChunksCount, 3)
+	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount*subsCount)
 }
@@ -135,8 +131,6 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 func TestDB_SubscribePull_since(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
-
-	uploader := db.NewPutter(chunk.ModePutUpload)
 
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
@@ -153,7 +147,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			err := uploader.Put(ch)
+			err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -217,8 +211,6 @@ func TestDB_SubscribePull_until(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(chunk.ModePutUpload)
-
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
 	var wantedChunksCount int
@@ -234,7 +226,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			err := uploader.Put(ch)
+			err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -298,8 +290,6 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(chunk.ModePutUpload)
-
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
 	var wantedChunksCount int
@@ -315,7 +305,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			err := uploader.Put(ch)
+			err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -386,14 +376,14 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 
 // uploadRandomChunksBin uploads random chunks to database and adds them to
 // the map of addresses ber bin.
-func uploadRandomChunksBin(t *testing.T, db *DB, uploader *Putter, addrs map[uint8][]chunk.Address, addrsMu *sync.Mutex, wantedChunksCount *int, count int) {
+func uploadRandomChunksBin(t *testing.T, db *DB, addrs map[uint8][]chunk.Address, addrsMu *sync.Mutex, wantedChunksCount *int, count int) {
 	addrsMu.Lock()
 	defer addrsMu.Unlock()
 
 	for i := 0; i < count; i++ {
 		ch := generateTestRandomChunk()
 
-		err := uploader.Put(ch)
+		err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -478,8 +468,6 @@ func TestDB_LastPullSubscriptionBinID(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 
-	uploader := db.NewPutter(chunk.ModePutUpload)
-
 	addrs := make(map[uint8][]chunk.Address)
 
 	binIDCounter := make(map[uint8]uint64)
@@ -495,7 +483,7 @@ func TestDB_LastPullSubscriptionBinID(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			err := uploader.Put(ch)
+			err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 			if err != nil {
 				t.Fatal(err)
 			}
