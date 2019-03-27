@@ -40,8 +40,8 @@ var (
 	allhosts     string
 	hosts        []string
 	filesize     int
-	inputSeed    int
 	syncDelay    int
+	inputSeed    int
 	httpPort     int
 	wsPort       int
 	verbosity    int
@@ -101,7 +101,7 @@ func main() {
 		},
 		cli.IntFlag{
 			Name:        "timeout",
-			Value:       120,
+			Value:       180,
 			Usage:       "timeout in seconds after which kill the process",
 			Destination: &timeout,
 		},
