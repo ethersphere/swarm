@@ -230,13 +230,21 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 	switch r := req.(type) {
 	case *ChunkDeliveryMsgRetrieval:
 		msg = (*ChunkDeliveryMsg)(r)
-		// do not sync if peer that is sending us a chunk is closer to the chunk then we are
 		peerPO := chunk.Proximity(sp.ID().Bytes(), msg.Addr)
 		po := chunk.Proximity(d.kad.BaseAddr(), msg.Addr)
-		if peerPO > po {
-			mode = chunk.ModePutRequest
-		} else {
+		depth := d.kad.NeighbourhoodDepth()
+		// is the chunk within our area of responsibility?
+		if po < depth {
+			// chunks within the area of responsibility should always sync
+			// https://github.com/ethersphere/go-ethereum/pull/1282#discussion_r269406125
 			mode = chunk.ModePutSync
+		} else {
+			if peerPO > po {
+				// do not sync if peer that is sending us a chunk is closer to the chunk then we are
+				mode = chunk.ModePutRequest
+			} else {
+				mode = chunk.ModePutSync
+			}
 		}
 	case *ChunkDeliveryMsgSyncing:
 		msg = (*ChunkDeliveryMsg)(r)
