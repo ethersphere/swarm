@@ -38,7 +38,7 @@ import (
 
 const (
 	swarmChunkServerStreamName = "RETRIEVE_REQUEST"
-	deliveryCap                = 32
+	deliveryCap                = 10000
 )
 
 var (

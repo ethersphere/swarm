@@ -233,12 +233,12 @@ func isSyncing(wsHost string) (bool, error) {
 func waitToSync() {
 	t1 := time.Now()
 
-	notSynced := uint64(1)
+	ns := uint64(1)
 
-	for v := atomic.LoadUint64(&notSynced); v > 0; {
+	for ns > 0 {
 		time.Sleep(3 * time.Second)
 
-		atomic.StoreUint64(&notSynced, 0)
+		notSynced := uint64(0)
 		var wg sync.WaitGroup
 		wg.Add(len(hosts))
 		for i := 0; i < len(hosts); i++ {
@@ -253,6 +253,8 @@ func waitToSync() {
 			}(i)
 		}
 		wg.Wait()
+
+		ns = atomic.LoadUint64(&notSynced)
 	}
 
 	t2 := time.Since(t1)
