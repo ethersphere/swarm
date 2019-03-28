@@ -234,10 +234,11 @@ func waitToSync() {
 	t1 := time.Now()
 
 	notSynced := uint64(1)
-	for notSynced > 0 {
+
+	for v := atomic.LoadUint64(&notSynced); v > 0; {
 		time.Sleep(3 * time.Second)
 
-		notSynced = 0
+		atomic.StoreUint64(&notSynced, 0)
 		var wg sync.WaitGroup
 		wg.Add(len(hosts))
 		for i := 0; i < len(hosts); i++ {
