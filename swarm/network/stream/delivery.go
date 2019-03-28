@@ -65,7 +65,7 @@ func NewDelivery(kad *network.Kademlia, netStore *network.NetStore) *Delivery {
 type SwarmChunkServer struct {
 	deliveryC  chan []byte
 	batchC     chan []byte
-	chunkStore *network.NetStore
+	netStore   *network.NetStore
 	currentLen uint64
 	quit       chan struct{}
 }
@@ -73,10 +73,10 @@ type SwarmChunkServer struct {
 // NewSwarmChunkServer is SwarmChunkServer constructor
 func NewSwarmChunkServer(chunkStore *network.NetStore) *SwarmChunkServer {
 	s := &SwarmChunkServer{
-		deliveryC:  make(chan []byte, deliveryCap),
-		batchC:     make(chan []byte),
-		chunkStore: chunkStore,
-		quit:       make(chan struct{}),
+		deliveryC: make(chan []byte, deliveryCap),
+		batchC:    make(chan []byte),
+		netStore:  chunkStore,
+		quit:      make(chan struct{}),
 	}
 	go s.processDeliveries()
 	return s
@@ -132,7 +132,7 @@ func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, err
 		Origin:   enode.ID{},
 		HopCount: 0,
 	}
-	chunk, err := s.chunkStore.Get(ctx, r)
+	chunk, err := s.netStore.Get(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -162,7 +162,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	}
 	streamer := s.Server.(*SwarmChunkServer)
 
-	ctx, cancel := context.WithTimeout(ctx, network.RequestTimeout)
+	ctx, cancel := context.WithTimeout(ctx, network.FetcherGlobalTimeout)
 
 	go func() {
 		select {
@@ -186,8 +186,6 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
 			return
 		}
-
-		osp.LogFields(olog.Bool("skipCheck", true))
 
 		log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", sp.ID())
 		err = sp.Deliver(ctx, chunk, s.priority, false)

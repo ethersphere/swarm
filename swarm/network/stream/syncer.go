@@ -38,17 +38,17 @@ const (
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
-	po    uint8
-	store *network.NetStore
-	quit  chan struct{}
+	po       uint8
+	netStore *network.NetStore
+	quit     chan struct{}
 }
 
 // NewSwarmSyncerServer is constructor for SwarmSyncerServer
 func NewSwarmSyncerServer(po uint8, netStore *network.NetStore) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
-		po:    po,
-		store: netStore,
-		quit:  make(chan struct{}),
+		po:       po,
+		netStore: netStore,
+		quit:     make(chan struct{}),
 	}, nil
 }
 
@@ -78,7 +78,7 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 		Origin:   enode.ID{},
 		HopCount: 0,
 	}
-	chunk, err := s.store.Get(ctx, r)
+	chunk, err := s.netStore.Get(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -87,7 +87,7 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 
 // SessionIndex returns current storage bin (po) index.
 func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
-	return s.store.BinIndex(s.po), nil
+	return s.netStore.BinIndex(s.po), nil
 }
 
 // GetBatch retrieves the next batch of hashes from the dbstore
@@ -115,7 +115,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		}
 
 		metrics.GetOrRegisterCounter("syncer.setnextbatch.iterator", nil).Inc(1)
-		err := s.store.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
+		err := s.netStore.Iterator(from, to, s.po, func(key storage.Address, idx uint64) bool {
 			select {
 			case <-s.quit:
 				return false
@@ -135,7 +135,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		wait = true
 	}
 
-	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.store.BinIndex(s.po))
+	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.netStore.BinIndex(s.po))
 	return batch, from, to, nil, nil
 }
 
@@ -164,7 +164,9 @@ func RegisterSwarmSyncerClient(streamer *Registry, netStore *network.NetStore) {
 }
 
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
-	has, fi := s.store.HasWithCallback(ctx, key)
+	start := time.Now()
+
+	has, fi := s.store.HasWithCallback(ctx, key, "syncer")
 	if has {
 		return nil
 	}
@@ -172,7 +174,9 @@ func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func
 	return func(ctx context.Context) error {
 		select {
 		case <-fi.Delivered:
+			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
 		case <-time.After(20 * time.Second):
+			metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
 			return fmt.Errorf("chunk not delivered through syncing after 20sec. ref=%s", fmt.Sprintf("%x", key))
 		}
 		return nil

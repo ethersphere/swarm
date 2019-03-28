@@ -24,6 +24,7 @@ import (
 	"runtime"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -39,8 +40,6 @@ const (
 	// forwarded forever in peer loops
 	maxHopCount uint8 = 10
 )
-
-var requestGroup singleflight.Group
 
 func getGID() uint64 {
 	b := make([]byte, 64)
@@ -60,10 +59,13 @@ type FetcherItem struct {
 	// for example through syncing and through retrieve request. however we want the `Delivered` channel to be closed only
 	// once, even if we put the same chunk multiple times in the NetStore.
 	once sync.Once
+
+	CreatedAt time.Time // timestamp when the fetcher was created, used for metrics measuring lifetime of fetchers
+	CreatedBy string    // who created the fethcer - "request" or "syncing", used for metrics measuring lifecycle of fetchers
 }
 
 func NewFetcherItem() *FetcherItem {
-	return &FetcherItem{make(chan struct{}), sync.Once{}}
+	return &FetcherItem{make(chan struct{}), sync.Once{}, time.Now(), ""}
 }
 
 func (fi *FetcherItem) SafeClose() {
@@ -76,20 +78,22 @@ func (fi *FetcherItem) SafeClose() {
 // it implements the ChunkStore interface
 // on request it initiates remote cloud retrieval
 type NetStore struct {
-	localID  enode.ID // our local enode - used when issuing RetrieveRequests
-	store    *storage.LocalStore
-	fetchers sync.Map
-	putMu    sync.Mutex
+	localID      enode.ID // our local enode - used when issuing RetrieveRequests
+	store        *storage.LocalStore
+	fetchers     sync.Map
+	putMu        sync.Mutex
+	requestGroup singleflight.Group
 }
 
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
 // constructor function that can create a fetch function for a specific chunk address.
 func NewNetStore(store *storage.LocalStore, localID enode.ID) *NetStore {
 	return &NetStore{
-		localID:  localID,
-		store:    store,
-		fetchers: sync.Map{},
-		putMu:    sync.Mutex{},
+		localID:      localID,
+		store:        store,
+		fetchers:     sync.Map{},
+		putMu:        sync.Mutex{},
+		requestGroup: singleflight.Group{},
 	}
 }
 
@@ -118,6 +122,8 @@ func (n *NetStore) Put(ctx context.Context, chunk storage.Chunk) error {
 		fii.SafeClose()
 		log.Trace("netstore.put chunk delivered and stored", "ref", chunk.Address().String(), "rid", rid)
 
+		metrics.GetOrRegisterResettingTimer("netstore.fetcher.lifetime", nil).UpdateSince(fii.CreatedAt)
+
 		n.fetchers.Delete(chunk.Address().String())
 	}
 
@@ -140,8 +146,10 @@ func (n *NetStore) Close() {
 // Get retrieves a chunk
 // If it is not found in the LocalStore then it uses RemoteGet to fetch from the network.
 func (n *NetStore) Get(ctx context.Context, req *Request) (storage.Chunk, error) {
-	ref := req.Addr
 	metrics.GetOrRegisterCounter("netstore.get", nil).Inc(1)
+	start := time.Now()
+
+	ref := req.Addr
 	rid := getGID()
 
 	log.Trace("netstore.get", "ref", ref.String(), "rid", rid)
@@ -158,8 +166,8 @@ func (n *NetStore) Get(ctx context.Context, req *Request) (storage.Chunk, error)
 		}
 
 		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "hopCount", req.HopCount, "rid", rid)
-		v, err, _ := requestGroup.Do(ref.String(), func() (interface{}, error) {
-			has, fi := n.HasWithCallback(ctx, ref)
+		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
+			has, fi := n.HasWithCallback(ctx, ref, "request")
 			if !has {
 				err := RemoteFetch(ctx, req, fi, n.localID)
 				if err != nil {
@@ -172,6 +180,8 @@ func (n *NetStore) Get(ctx context.Context, req *Request) (storage.Chunk, error)
 				log.Error(err.Error(), "ref", ref, "rid", rid)
 				return nil, errors.New("item should have been in localstore, but it is not")
 			}
+
+			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.request", fi.CreatedBy), nil).UpdateSince(start)
 
 			return chunk, nil
 		})
@@ -204,7 +214,7 @@ func (n *NetStore) Has(ctx context.Context, ref storage.Address) bool {
 	return n.store.Has(ctx, ref)
 }
 
-func (n *NetStore) HasWithCallback(ctx context.Context, ref storage.Address) (bool, *FetcherItem) {
+func (n *NetStore) HasWithCallback(ctx context.Context, ref storage.Address, interestedParty string) (bool, *FetcherItem) {
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
@@ -217,6 +227,8 @@ func (n *NetStore) HasWithCallback(ctx context.Context, ref storage.Address) (bo
 	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
 	if loaded {
 		fi = v.(*FetcherItem)
+	} else {
+		fi.CreatedBy = interestedParty
 	}
 	return false, fi
 }

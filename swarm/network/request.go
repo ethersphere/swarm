@@ -34,12 +34,9 @@ import (
 // because this peer failed to deliver it during the SearchTimeout interval
 var FailedPeerSkipDelay = 10 * time.Second
 
-// RequestTimeout is the max time for which we try to find a chunk while handling a retrieve request
-var RequestTimeout = 10 * time.Second
-
-// FetcherTimeout is the max time a node tries to find a chunk for a client, after which it returns a 404
+// FetcherGlobalTimeout is the max time a node tries to find a chunk for a client, after which it returns a 404
 // Basically this is the amount of time a singleflight request for a given chunk lives
-var FetcherTimeout = 10 * time.Second
+var FetcherGlobalTimeout = 10 * time.Second
 
 // SearchTimeout is the max time we wait for a peer to deliver a chunk we requests, after which we try another peer
 var SearchTimeout = 1 * time.Second
@@ -48,8 +45,8 @@ var RemoteGet func(ctx context.Context, req *Request, localID enode.ID) (*enode.
 
 type Request struct {
 	Addr        storage.Address // chunk address
-	Origin      enode.ID        // who is sending us that request?
-	PeersToSkip sync.Map        // peers not to request chunk from (only makes sense if source is nil)
+	Origin      enode.ID        // who is sending us that request? we compare Origin to the suggested peer from RequestFromPeers
+	PeersToSkip sync.Map        // peers not to request chunk from
 	HopCount    uint8           // number of forwarded requests (hops)
 }
 
@@ -57,7 +54,6 @@ func RemoteFetch(ctx context.Context, req *Request, fi *FetcherItem, localID eno
 	// while we haven't timed-out, and while we don't have a chunk,
 	// iterate over peers and try to find a chunk
 	metrics.GetOrRegisterCounter("remote.fetch", nil).Inc(1)
-	gt := time.After(FetcherTimeout)
 
 	ref := req.Addr
 
@@ -96,7 +92,7 @@ func RemoteFetch(ctx context.Context, req *Request, fi *FetcherItem, localID eno
 			osp.LogFields(olog.Bool("timeout", true))
 			osp.Finish()
 			break
-		case <-gt:
+		case <-ctx.Done(): // global timeout
 			log.Trace("remote.fetch, fail", "ref", ref, "rid", rid)
 
 			osp.LogFields(olog.Bool("fail", true))
