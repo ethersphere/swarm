@@ -88,6 +88,7 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 
 	errC := make(chan error)
 	doneC := make(chan struct{})
+	tokenPool := make(chan struct{}, 100)
 	var wg sync.WaitGroup
 	go func() {
 		var (
@@ -157,19 +158,21 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 				case <-ctx.Done():
 				}
 			}
-
+			tokenPool <- struct{}{}
 			wg.Add(1)
 
 			go func() {
 				select {
 				case <-ctx.Done():
 					wg.Done()
+					<-tokenPool
 				default:
 					err := db.Put(ctx, chunk.ModePutUpload, ch)
 					if err != nil {
 						errC <- err
 					}
 					wg.Done()
+					<-tokenPool
 				}
 			}()
 
@@ -189,7 +192,6 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 		case <-ctx.Done():
 			return count, ctx.Err()
 		default:
-			// this select is to give priority to ctx.Done() and <-errC
 			select {
 			case <-doneC:
 				return count, nil

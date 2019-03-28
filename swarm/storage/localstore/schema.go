@@ -29,7 +29,6 @@ func IsLegacyDatabase(datadir string) bool {
 
 	var (
 		legacyDbSchemaKey = []byte{8}
-		dbSchemaKey       = []byte{0}
 	)
 
 	db, err := leveldb.OpenFile(datadir, &opt.Options{OpenFilesCacheCapacity: 128})
@@ -42,14 +41,7 @@ func IsLegacyDatabase(datadir string) bool {
 	data, err := db.Get(legacyDbSchemaKey, nil)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-
-			data, err = db.Get(dbSchemaKey, nil)
-			if err != nil {
-				log.Error("got an error fetching schema name from the database", "err", err)
-			}
-
-			// todo add check for current localstore schema name - the values are encoded differently so we'd have
-			// to initialize localstore object here
+			// if we haven't found anything under the legacy db schema key- we are not on legacy
 			return false
 		}
 
