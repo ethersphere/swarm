@@ -88,7 +88,9 @@ func trackChunks(testData []byte) error {
 
 		hostChunks := []string{}
 
-		rpcClient, err := rpc.Dial(httpHost)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		rpcClient, err := rpc.DialContext(ctx, httpHost)
 		if err != nil {
 			log.Error("error dialing host", "err", err, "host", httpHost)
 			continue
