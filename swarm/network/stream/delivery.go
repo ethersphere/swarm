@@ -144,7 +144,6 @@ type RetrieveRequestMsg struct {
 	Addr      storage.Address
 	SkipCheck bool
 	HopCount  uint8
-	Origin    enode.ID
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
@@ -318,12 +317,11 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request, l
 	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
 	// this span will finish only when delivery is handled (or times out)
 	r := &RetrieveRequestMsg{
-		Origin:    localID, // this is redundant, we should be able to extract it from the p2p sub system
 		Addr:      req.Addr,
 		HopCount:  req.HopCount + 1,
 		SkipCheck: true, // this has something to do with old syncing
 	}
-	log.Trace("sending retrieve request", "ref", r.Addr, "peer", sp.ID().String(), "origin", r.Origin)
+	log.Trace("sending retrieve request", "ref", r.Addr, "peer", sp.ID().String(), "origin", localID)
 	err = sp.Send(ctx, r)
 	if err != nil {
 		log.Error(err.Error())
