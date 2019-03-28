@@ -35,7 +35,7 @@ func NewLNetStore(store *NetStore) *LNetStore {
 }
 
 func (n *LNetStore) Get(ctx context.Context, ref storage.Address) (ch storage.Chunk, err error) {
-	cctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 	defer cancel()
 
 	req := &Request{
@@ -44,5 +44,5 @@ func (n *LNetStore) Get(ctx context.Context, ref storage.Address) (ch storage.Ch
 		Origin:   enode.ID{},
 	}
 
-	return n.NetStore.Get(cctx, req)
+	return n.NetStore.Get(ctx, req)
 }

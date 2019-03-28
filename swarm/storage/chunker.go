@@ -393,9 +393,7 @@ func (r *LazyChunkReader) Context() context.Context {
 func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
 
-	var sp opentracing.Span
-	var cctx context.Context
-	cctx, sp = spancontext.StartSpan(
+	ctx, sp := spancontext.StartSpan(
 		ctx,
 		"lcr.size")
 	defer sp.Finish()
@@ -403,7 +401,7 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 	log.Debug("lazychunkreader.size", "addr", r.addr)
 	if r.chunkData == nil {
 		startTime := time.Now()
-		chunkData, err := r.getter.Get(cctx, Reference(r.addr))
+		chunkData, err := r.getter.Get(ctx, Reference(r.addr))
 		if err != nil {
 			metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 			return 0, err

@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/timeouts"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -78,6 +79,13 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 		Origin:   enode.ID{},
 		HopCount: 0,
 	}
+
+	// this timeout shouldn't be necessary as syncer server is supposed to go straight to localstore,
+	// but if a chunk is garbage collected while we actually offered it, it is possible for this
+	// to trigger a network request
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
+
 	chunk, err := s.netStore.Get(ctx, r)
 	if err != nil {
 		return nil, err

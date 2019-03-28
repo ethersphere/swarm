@@ -134,10 +134,10 @@ func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, err
 		HopCount: 0,
 	}
 
-	cctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 	defer cancel()
 
-	chunk, err := s.netStore.Get(cctx, r)
+	chunk, err := s.netStore.Get(ctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -166,10 +166,10 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		return err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
-
 	go func() {
 		defer osp.Finish()
+
+		ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 		defer cancel()
 
 		r := &network.Request{
