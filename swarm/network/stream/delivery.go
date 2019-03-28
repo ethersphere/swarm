@@ -187,27 +187,15 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
 			return
 		}
-		if req.SkipCheck {
-			syncing := false
-			osp.LogFields(olog.Bool("skipCheck", true))
 
-			log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", sp.ID())
-			err = sp.Deliver(ctx, chunk, s.priority, syncing)
-			if err != nil {
-				log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
-			}
-			osp.LogFields(olog.Bool("delivered", true))
-			return
+		osp.LogFields(olog.Bool("skipCheck", true))
+
+		log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", sp.ID())
+		err = sp.Deliver(ctx, chunk, s.priority, false)
+		if err != nil {
+			log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 		}
-		metrics.GetOrRegisterCounter("handleRetrieveRequest.skipcheck", nil).Inc(1)
-
-		osp.LogFields(olog.Bool("skipCheck", false))
-		select {
-		case streamer.deliveryC <- chunk.Address()[:]:
-			metrics.GetOrRegisterCounter("handleRetrieveRequest.skipcheck.deliveryC", nil).Inc(1)
-		case <-streamer.quit:
-		}
-
+		osp.LogFields(olog.Bool("delivered", true))
 	}()
 
 	return nil
