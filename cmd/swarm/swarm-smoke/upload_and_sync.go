@@ -65,7 +65,7 @@ func uploadAndSyncCmd(ctx *cli.Context) error {
 	}
 
 	// trigger debug functionality on randomBytes
-	e := trackChunks(randomBytes[:])
+	e := trackChunks(randomBytes[:], true)
 	if e != nil {
 		log.Error(e.Error())
 	}
@@ -73,7 +73,7 @@ func uploadAndSyncCmd(ctx *cli.Context) error {
 	return err
 }
 
-func trackChunks(testData []byte) error {
+func trackChunks(testData []byte, submitMetrics bool) error {
 	addrs, err := getAllRefs(testData)
 	if err != nil {
 		return err
@@ -83,6 +83,9 @@ func trackChunks(testData []byte) error {
 		log.Debug(fmt.Sprintf("ref %d", i), "ref", ref)
 	}
 
+	var globalYes, globalNo int
+	var hasErr bool
+
 	for _, host := range hosts {
 		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
 
@@ -91,8 +94,10 @@ func trackChunks(testData []byte) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		rpcClient, err := rpc.DialContext(ctx, httpHost)
+		defer rpcClient.Close()
 		if err != nil {
 			log.Error("error dialing host", "err", err, "host", httpHost)
+			hasErr = true
 			continue
 		}
 
@@ -100,6 +105,7 @@ func trackChunks(testData []byte) error {
 		err = rpcClient.Call(&hasInfo, "bzz_has", addrs)
 		if err != nil {
 			log.Error("error calling rpc client", "err", err, "host", httpHost)
+			hasErr = true
 			continue
 		}
 
@@ -119,7 +125,22 @@ func trackChunks(testData []byte) error {
 		}
 
 		log.Debug("chunks", "chunks", strings.Join(hostChunks, ""), "yes", yes, "no", no, "host", host)
+
+		if submitMetrics {
+			globalYes += yes
+			globalNo += no
+		}
 	}
+
+	if !hasErr && submitMetrics {
+		// remove the chunks stored on the uplaoder node
+		globalYes -= len(addrs)
+
+		metrics.GetOrRegisterCounter("deployment.chunks.yes", nil).Inc(int64(globalYes))
+		metrics.GetOrRegisterCounter("deployment.chunks.no", nil).Inc(int64(globalNo))
+		metrics.GetOrRegisterCounter("deployment.chunks.refs", nil).Inc(int64(len(addrs)))
+	}
+
 	return nil
 }
 
@@ -164,7 +185,7 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 	log.Debug("chunks before fetch attempt", "hash", hash)
 
-	err = trackChunks(randomBytes)
+	err = trackChunks(randomBytes, false)
 	if err != nil {
 		log.Error(err.Error())
 	}
@@ -190,6 +211,8 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 func isSyncing(wsHost string) (bool, error) {
 	rpcClient, err := rpc.Dial(wsHost)
+	defer rpcClient.Close()
+
 	if err != nil {
 		log.Error("error dialing host", "err", err)
 		return false, err
