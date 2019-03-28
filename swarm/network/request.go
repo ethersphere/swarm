@@ -25,21 +25,11 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/network/timeouts"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	olog "github.com/opentracing/opentracing-go/log"
 )
-
-// FailedPeerSkipDelay is the time we consider a peer to be skipped for a particular request/chunk,
-// because this peer failed to deliver it during the SearchTimeout interval
-var FailedPeerSkipDelay = 10 * time.Second
-
-// FetcherGlobalTimeout is the max time a node tries to find a chunk for a client, after which it returns a 404
-// Basically this is the amount of time a singleflight request for a given chunk lives
-var FetcherGlobalTimeout = 10 * time.Second
-
-// SearchTimeout is the max time we wait for a peer to deliver a chunk we requests, after which we try another peer
-var SearchTimeout = 1 * time.Second
 
 var RemoteGet func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, error)
 
@@ -88,11 +78,11 @@ func RemoteFetch(ctx context.Context, req *Request, fi *FetcherItem, localID eno
 			osp.LogFields(olog.Bool("delivered", true))
 			osp.Finish()
 			return nil
-		case <-time.After(SearchTimeout):
+		case <-time.After(timeouts.SearchTimeout):
 			osp.LogFields(olog.Bool("timeout", true))
 			osp.Finish()
 			break
-		case <-ctx.Done(): // global timeout
+		case <-ctx.Done(): // global fetcher timeout
 			log.Trace("remote.fetch, fail", "ref", ref, "rid", rid)
 
 			osp.LogFields(olog.Bool("fail", true))
@@ -120,7 +110,7 @@ func (r *Request) SkipPeer(nodeID string) bool {
 		return false
 	}
 	t, ok := val.(time.Time)
-	if ok && time.Now().After(t.Add(FailedPeerSkipDelay)) {
+	if ok && time.Now().After(t.Add(timeouts.FailedPeerSkipDelay)) {
 		r.PeersToSkip.Delete(nodeID)
 		return false
 	}

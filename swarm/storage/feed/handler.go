@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/timeouts"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -187,7 +188,7 @@ func (h *Handler) Lookup(ctx context.Context, query *Query) (*cacheEntry, error)
 	requestPtr, err := lookup.Lookup(timeLimit, query.Hint, func(epoch lookup.Epoch, now uint64) (interface{}, error) {
 		readCount++
 		id.Epoch = epoch
-		ctx, cancel := context.WithTimeout(ctx, defaultRetrieveTimeout)
+		ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 		defer cancel()
 
 		r := &network.Request{

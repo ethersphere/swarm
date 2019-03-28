@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/timeouts"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	olog "github.com/opentracing/opentracing-go/log"
@@ -132,7 +133,11 @@ func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, err
 		Origin:   enode.ID{},
 		HopCount: 0,
 	}
-	chunk, err := s.netStore.Get(ctx, r)
+
+	cctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
+
+	chunk, err := s.netStore.Get(cctx, r)
 	if err != nil {
 		return nil, err
 	}
@@ -160,20 +165,12 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	if err != nil {
 		return err
 	}
-	streamer := s.Server.(*SwarmChunkServer)
 
-	ctx, cancel := context.WithTimeout(ctx, network.FetcherGlobalTimeout)
-
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-streamer.quit:
-		}
-		cancel()
-	}()
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 
 	go func() {
 		defer osp.Finish()
+		defer cancel()
 
 		r := &network.Request{
 			Addr:     req.Addr,

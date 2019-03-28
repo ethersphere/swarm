@@ -20,6 +20,7 @@ import (
 	"context"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/swarm/network/timeouts"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -34,11 +35,14 @@ func NewLNetStore(store *NetStore) *LNetStore {
 }
 
 func (n *LNetStore) Get(ctx context.Context, ref storage.Address) (ch storage.Chunk, err error) {
+	cctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
+
 	req := &Request{
 		Addr:     ref,
 		HopCount: 0,
 		Origin:   enode.ID{},
 	}
 
-	return n.NetStore.Get(ctx, req)
+	return n.NetStore.Get(cctx, req)
 }
