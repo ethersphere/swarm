@@ -19,6 +19,7 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -69,13 +70,19 @@ type HasInfo struct {
 // Has checks whether each chunk address is present in the underlying datastore,
 // the bool in the returned structs indicates if the underlying datastore has
 // the chunk stored with the given address (true), or not (false)
-func (inspector *Inspector) Has(chunkAddresses []storage.Address) []HasInfo {
-	results := make([]HasInfo, 0)
+func (inspector *Inspector) Has(chunkAddresses []storage.Address) string {
+	//TODO: update to a byte slice
+	hostChunks := []string{}
 	for _, addr := range chunkAddresses {
 		res := HasInfo{}
 		res.Addr = addr.String()
 		res.Has = inspector.netStore.Has(context.Background(), addr)
-		results = append(results, res)
+		if res.Has {
+			hostChunks = append(hostChunks, "1")
+		} else {
+			hostChunks = append(hostChunks, "0")
+		}
 	}
-	return results
+
+	return strings.Join(hostChunks, "")
 }

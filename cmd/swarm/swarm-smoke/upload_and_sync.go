@@ -23,7 +23,6 @@ import (
 	"io/ioutil"
 	"math/rand"
 	"os"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -31,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/api"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 
@@ -89,8 +87,6 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 	for _, host := range hosts {
 		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
 
-		hostChunks := []string{}
-
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		rpcClient, err := rpc.DialContext(ctx, httpHost)
@@ -101,8 +97,8 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 			continue
 		}
 
-		var hasInfo []api.HasInfo
-		err = rpcClient.Call(&hasInfo, "bzz_has", addrs)
+		var hostChunks string
+		err = rpcClient.Call(&hostChunks, "bzz_has", addrs)
 		if err != nil {
 			log.Error("error calling rpc client", "err", err, "host", httpHost)
 			hasErr = true
@@ -110,12 +106,10 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 		}
 
 		yes, no := 0, 0
-		for _, info := range hasInfo {
-			if info.Has {
-				hostChunks = append(hostChunks, "1")
+		for _, val := range hostChunks {
+			if val == '1' {
 				yes++
 			} else {
-				hostChunks = append(hostChunks, "0")
 				no++
 			}
 		}
@@ -124,7 +118,7 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 			log.Info("host reported to have all chunks", "host", host)
 		}
 
-		log.Debug("chunks", "chunks", strings.Join(hostChunks, ""), "yes", yes, "no", no, "host", host)
+		log.Debug("chunks", "chunks", hostChunks, "yes", yes, "no", no, "host", host)
 
 		if submitMetrics {
 			globalYes += yes
