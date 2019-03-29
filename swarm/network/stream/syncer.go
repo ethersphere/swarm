@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"strconv"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -170,6 +171,8 @@ func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func
 	}
 
 	return func(ctx context.Context) error {
+		atomic.AddInt64(&s.peer.streamer.syncClientDeliveryCounter, 1)
+		defer atomic.AddInt64(&s.peer.streamer.syncClientDeliveryCounter, -1)
 		select {
 		case <-fi.Delivered:
 		case <-time.After(20 * time.Second):
@@ -207,4 +210,8 @@ func ParseSyncBinKey(s string) (uint8, error) {
 		return 0, err
 	}
 	return uint8(bin), nil
+}
+
+func (r *Registry) SyncClientDeliveryCount() int64 {
+	return atomic.LoadInt64(&r.syncClientDeliveryCounter)
 }

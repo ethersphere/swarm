@@ -370,7 +370,7 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 				nodeIDs[i], nodeIDs[j] = nodeIDs[j], nodeIDs[i]
 			})
 			for _, id := range nodeIDs {
-				key, data, err := uploadFile(sim.Service("swarm", id).(*Swarm))
+				key, data, err := uploadFile(sim.Service("swarm", id).(*Swarm), 8)
 				if err != nil {
 					return err
 				}
@@ -406,15 +406,15 @@ func testSwarmNetwork(t *testing.T, o *testSwarmNetworkOptions, steps ...testSwa
 
 // uploadFile, uploads a short file to the swarm instance
 // using the api.Put method.
-func uploadFile(swarm *Swarm) (storage.Address, string, error) {
-	b := make([]byte, 8)
+func uploadFile(swarm *Swarm, size int) (storage.Address, string, error) {
+	b := make([]byte, size)
 	_, err := rand.Read(b)
 	if err != nil {
 		return nil, "", err
 	}
 	// File data is very short, but it is ensured that its
 	// uniqueness is very certain.
-	data := fmt.Sprintf("test content %s %x", time.Now().Round(0), b)
+	data := string(b)
 	ctx := context.TODO()
 	k, wait, err := swarm.api.Put(ctx, data, "text/plain", false)
 	if err != nil {

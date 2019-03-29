@@ -1045,6 +1045,13 @@ func (s *LDBStore) setCapacity(c uint64) {
 	}
 }
 
+func (s *LDBStore) Size() (c uint64) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	return s.entryCnt
+}
+
 func (s *LDBStore) Close() {
 	close(s.quit)
 	s.lock.Lock()

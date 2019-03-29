@@ -78,23 +78,24 @@ var subscriptionFunc = doRequestSubscription
 
 // Registry registry for outgoing and incoming streamer constructors
 type Registry struct {
-	addr           enode.ID
-	api            *API
-	skipCheck      bool
-	clientMu       sync.RWMutex
-	serverMu       sync.RWMutex
-	peersMu        sync.RWMutex
-	serverFuncs    map[string]func(*Peer, string, bool) (Server, error)
-	clientFuncs    map[string]func(*Peer, string, bool) (Client, error)
-	peers          map[enode.ID]*Peer
-	delivery       *Delivery
-	intervalsStore state.Store
-	autoRetrieval  bool // automatically subscribe to retrieve request stream
-	maxPeerServers int
-	spec           *protocols.Spec   //this protocol's spec
-	balance        protocols.Balance //implements protocols.Balance, for accounting
-	prices         protocols.Prices  //implements protocols.Prices, provides prices to accounting
-	quit           chan struct{}     // terminates registry goroutines
+	addr                      enode.ID
+	api                       *API
+	skipCheck                 bool
+	clientMu                  sync.RWMutex
+	serverMu                  sync.RWMutex
+	peersMu                   sync.RWMutex
+	serverFuncs               map[string]func(*Peer, string, bool) (Server, error)
+	clientFuncs               map[string]func(*Peer, string, bool) (Client, error)
+	peers                     map[enode.ID]*Peer
+	delivery                  *Delivery
+	intervalsStore            state.Store
+	autoRetrieval             bool // automatically subscribe to retrieve request stream
+	maxPeerServers            int
+	spec                      *protocols.Spec   //this protocol's spec
+	balance                   protocols.Balance //implements protocols.Balance, for accounting
+	prices                    protocols.Prices  //implements protocols.Prices, provides prices to accounting
+	quit                      chan struct{}     // terminates registry goroutines
+	syncClientDeliveryCounter int64
 }
 
 // RegistryOptions holds optional values for NewRegistry constructor.

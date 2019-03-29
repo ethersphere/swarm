@@ -73,6 +73,7 @@ type Swarm struct {
 	backend           chequebook.Backend // simple blockchain Backend
 	privateKey        *ecdsa.PrivateKey
 	netStore          *network.NetStore
+	ldbStore          *storage.LDBStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
 	swap              *swap.Swap
@@ -148,6 +149,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if err != nil {
 		return nil, err
 	}
+
+	self.ldbStore = lstore.DbStore
 
 	nodeID := config.Enode.ID()
 	self.netStore = network.NewNetStore(lstore, nodeID)
@@ -546,4 +549,12 @@ type Info struct {
 
 func (s *Info) Info() *Info {
 	return s
+}
+
+func (s *Swarm) Size() uint64 {
+	return s.ldbStore.Size()
+}
+
+func (s *Swarm) SyncClientDeliveryCount() int64 {
+	return s.streamer.SyncClientDeliveryCount()
 }
