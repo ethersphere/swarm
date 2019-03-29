@@ -874,6 +874,11 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 	return fkey, newMkey.String(), nil
 }
 
+// CreateTag creates a new push tag and stores it in localstore
+func (a *API) CreateTag(filename string, timestamp uint64) (uint64, error) {
+	return a.fileStore.CreateTag(filename, timestamp)
+}
+
 // BuildDirectoryTree used by swarmfs_unix
 func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 

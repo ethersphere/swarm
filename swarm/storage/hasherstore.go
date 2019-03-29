@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/sctx"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
 )
@@ -79,6 +80,7 @@ func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, 
 			return nil, err
 		}
 	}
+	h.GetTags()
 	chunk := h.createChunk(ctx, c)
 	h.storeChunk(ctx, chunk)
 
@@ -172,8 +174,11 @@ func (h *hasherStore) createHash(chunkData ChunkData) Address {
 
 func (h *hasherStore) createChunk(ctx context.Context, chunkData ChunkData) Chunk {
 	hash := h.createHash(chunkData)
+	tags, err := h.GetTags(ctx, storage.Address(hash)) // TODO: this is really bad but if we want to persist tags across sessions this would be the way
+	if err != nil {
+		panic("wtf")
+	}
 	tag := sctx.GetPushTag(ctx)
-	tags := []uint64{}
 	if tag != 0 {
 		tags = append(tags, tag)
 	}

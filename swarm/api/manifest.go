@@ -27,6 +27,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -118,10 +119,14 @@ func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC
 
 // AddEntry stores the given data and adds the resulting address to the manifest
 func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (addr storage.Address, err error) {
+
+	now := time.Now().Unix()
+	ctxTag := m.api.CreateTag(e.Path, now)
+	childCtx := sctx.SetPushTag(ctx, ctxTag)
 	entry := newManifestTrieEntry(e, nil)
 	if data != nil {
 		var wait func(context.Context) error
-		addr, wait, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+		addr, wait, err = m.api.Store(childCtx, data, e.Size, m.trie.encrypted)
 		if err != nil {
 			return nil, err
 		}

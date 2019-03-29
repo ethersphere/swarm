@@ -18,10 +18,12 @@ package storage
 
 import (
 	"context"
+	"encoding/binary"
 	"io"
 	"sort"
 	"sync"
 
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
@@ -97,6 +99,19 @@ func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEnc
 
 func (f *FileStore) HashSize() int {
 	return f.hashFunc().Size()
+}
+
+// CreateTag creates a new push tag and stores it in localstore
+// it returns the tag as uint64
+func (f *FileStore) CreateTag(filename string, timestamp uint64) (uint64, error) {
+	intBuf := make([]byte, 8)
+	binary.BigEndian.PutUint64(intBuf, now)
+	// Tag is SHA3(filename|storetimestamp)[:8]
+	tag := make([]byte, 8)
+	buf := []byte(hdr.Name)
+	buf = append(buf, intBuf)
+	tagHash := crypto.Keccak256(buf)[:8]
+
 }
 
 // GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
