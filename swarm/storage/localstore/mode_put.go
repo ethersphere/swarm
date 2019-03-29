@@ -102,28 +102,40 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 	case chunk.ModePutUpload:
 		// put to indexes: retrieve, push, pull
 
-		item.StoreTimestamp = now()
-		item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
+		has, err := db.retrievalDataIndex.Has(item)
 		if err != nil {
 			return err
 		}
-		db.retrievalDataIndex.PutInBatch(batch, item)
-		db.pullIndex.PutInBatch(batch, item)
-		triggerPullFeed = true
-		db.pushIndex.PutInBatch(batch, item)
-		triggerPushFeed = true
+		if !has {
+			item.StoreTimestamp = now()
+			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
+			if err != nil {
+				return err
+			}
+			db.retrievalDataIndex.PutInBatch(batch, item)
+			db.pullIndex.PutInBatch(batch, item)
+			triggerPullFeed = true
+			db.pushIndex.PutInBatch(batch, item)
+			triggerPushFeed = true
+		}
 
 	case chunk.ModePutSync:
 		// put to indexes: retrieve, pull
 
-		item.StoreTimestamp = now()
-		item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
+		has, err := db.retrievalDataIndex.Has(item)
 		if err != nil {
 			return err
 		}
-		db.retrievalDataIndex.PutInBatch(batch, item)
-		db.pullIndex.PutInBatch(batch, item)
-		triggerPullFeed = true
+		if !has {
+			item.StoreTimestamp = now()
+			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
+			if err != nil {
+				return err
+			}
+			db.retrievalDataIndex.PutInBatch(batch, item)
+			db.pullIndex.PutInBatch(batch, item)
+			triggerPullFeed = true
+		}
 
 	default:
 		return ErrInvalidMode

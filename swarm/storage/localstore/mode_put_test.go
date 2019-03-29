@@ -199,6 +199,62 @@ func TestModePutUpload_parallel(t *testing.T) {
 	}
 }
 
+// TestModePut_sameChunk puts the same chunk multiple times
+// and validates that all relevant indexes have only one item
+// in them.
+func TestModePut_sameChunk(t *testing.T) {
+	ch := generateTestRandomChunk()
+
+	for _, tc := range []struct {
+		name      string
+		mode      chunk.ModePut
+		pullIndex bool
+		pushIndex bool
+	}{
+		{
+			name:      "ModePutRequest",
+			mode:      chunk.ModePutRequest,
+			pullIndex: false,
+			pushIndex: false,
+		},
+		{
+			name:      "ModePutUpload",
+			mode:      chunk.ModePutUpload,
+			pullIndex: true,
+			pushIndex: true,
+		},
+		{
+			name:      "ModePutSync",
+			mode:      chunk.ModePutSync,
+			pullIndex: true,
+			pushIndex: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
+
+			for i := 0; i < 10; i++ {
+				err := db.Put(context.Background(), tc.mode, ch)
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				count := func(b bool) (c int) {
+					if b {
+						return 1
+					}
+					return 0
+				}
+
+				newItemsCountTest(db.retrievalDataIndex, 1)(t)
+				newItemsCountTest(db.pullIndex, count(tc.pullIndex))(t)
+				newItemsCountTest(db.pushIndex, count(tc.pushIndex))(t)
+			}
+		})
+	}
+}
+
 // BenchmarkPutUpload runs a series of benchmarks that upload
 // a specific number of chunks in parallel.
 //
