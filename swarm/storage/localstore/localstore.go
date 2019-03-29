@@ -76,6 +76,9 @@ type DB struct {
 	// proximity order bin
 	binIDs shed.Uint64Vector
 
+	// push syncing tags index
+	tagIndex shed.Item
+
 	// garbage collection index
 	gcIndex shed.Index
 
@@ -318,6 +321,26 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	}
 	// create a push syncing triggers used by SubscribePush function
 	db.pushTriggers = make([]chan struct{}, 0)
+
+	// tag index for push syncing tags
+	db.pushIndex, err = db.shed.NewIndex("Tag->Filename", shed.IndexFuncs{ //TODO: should this be Tag->Filename|StoreTimestamp?
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return nil, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			return nil, nil
+		},
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+			return nil, nil
+		},
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			return nil, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// gc index for removable chunk ordered by ascending last access time
 	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|BinID|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {

@@ -142,7 +142,7 @@ const (
 	ModePutSync
 	// ModePutUpload: when a chunk is created by local upload
 	ModePutUpload
-	// ModePutTags
+	// ModePutTags: used to store a new tag when a file is uploaded
 	ModePutTags
 )
 
