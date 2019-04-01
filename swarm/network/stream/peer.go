@@ -94,33 +94,6 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		}
 	})
 
-	// basic monitoring for pq contention
-	go func(pq *pq.PriorityQueue) {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				var lenMaxi int
-				var capMaxi int
-				for k := range pq.Queues {
-					if lenMaxi < len(pq.Queues[k]) {
-						lenMaxi = len(pq.Queues[k])
-					}
-
-					if capMaxi < cap(pq.Queues[k]) {
-						capMaxi = cap(pq.Queues[k])
-					}
-				}
-
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(lenMaxi))
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(capMaxi))
-			case <-p.quit:
-				return
-			}
-		}
-	}(p.pq)
-
 	go func() {
 		<-p.quit
 
@@ -243,6 +216,7 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 		priority:     priority,
 		sessionIndex: sessionIndex,
 	}
+	log.Warn("peer setServer", "s.name", s.String(), "peer", p.ID().String())
 	p.servers[s] = os
 	return os, nil
 }
@@ -255,6 +229,8 @@ func (p *Peer) removeServer(s Stream) error {
 	if !ok {
 		return newNotFoundError("server", s)
 	}
+
+	log.Warn("peer removeServer", "s.name", s.String(), "peer", p.ID().String())
 	server.Close()
 	delete(p.servers, s)
 	return nil
@@ -282,6 +258,8 @@ func (p *Peer) getClient(ctx context.Context, s Stream) (c *client, err error) {
 			return nil, err
 		}
 	}
+
+	log.Warn("peer removeClient", "s", s, "peer", p)
 
 	p.clientMu.RLock()
 	defer p.clientMu.RUnlock()
@@ -416,7 +394,8 @@ func (p *Peer) removeClientParams(s Stream) error {
 }
 
 func (p *Peer) close() {
-	for _, s := range p.servers {
+	for stream, s := range p.servers {
+		log.Warn("closing servers", "s", stream.String())
 		s.Close()
 	}
 }

@@ -252,6 +252,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			case err := <-errC:
 				if err != nil {
 					log.Error("handleOfferedHashesMsg() error waiting for chunk", "peer", p.ID(), "err", err, "rid", rid)
+					// TODO: fix
 					//p.Drop(err)
 					return
 				}

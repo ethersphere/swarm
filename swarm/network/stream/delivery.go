@@ -38,7 +38,6 @@ import (
 
 const (
 	swarmChunkServerStreamName = "RETRIEVE_REQUEST"
-	deliveryCap                = 1
 )
 
 var (
@@ -64,7 +63,6 @@ func NewDelivery(kad *network.Kademlia, netStore *network.NetStore) *Delivery {
 
 // SwarmChunkServer implements Server
 type SwarmChunkServer struct {
-	deliveryC  chan []byte
 	batchC     chan []byte
 	netStore   *network.NetStore
 	currentLen uint64
@@ -74,33 +72,11 @@ type SwarmChunkServer struct {
 // NewSwarmChunkServer is SwarmChunkServer constructor
 func NewSwarmChunkServer(chunkStore *network.NetStore) *SwarmChunkServer {
 	s := &SwarmChunkServer{
-		deliveryC: make(chan []byte, deliveryCap),
-		batchC:    make(chan []byte),
-		netStore:  chunkStore,
-		quit:      make(chan struct{}),
+		batchC:   make(chan []byte),
+		netStore: chunkStore,
+		quit:     make(chan struct{}),
 	}
-	go s.processDeliveries()
 	return s
-}
-
-// processDeliveries handles delivered chunk hashes
-func (s *SwarmChunkServer) processDeliveries() {
-	var hashes []byte
-	var batchC chan []byte
-	for {
-		select {
-		case <-s.quit:
-			return
-		case hash := <-s.deliveryC:
-			log.Trace("processing deliveries", "hash", hash)
-			hashes = append(hashes, hash...)
-			batchC = s.batchC
-		case batchC <- hashes:
-			log.Trace("sending hashes to batchC", "hashes", hashes)
-			hashes = nil
-			batchC = nil
-		}
-	}
 }
 
 // SessionIndex returns zero in all cases for SwarmChunkServer.
