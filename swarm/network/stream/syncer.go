@@ -184,6 +184,8 @@ func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func
 		case <-fi.Delivered:
 			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
 		case <-time.After(20 * time.Second):
+			// TODO: whats the proper timeout here? it is not the global fetcher timeout,
+			// since we don't do NetStore.Get(), but just wait for chunk delivery via offered/wanted hashes
 			metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
 			return fmt.Errorf("chunk not delivered through syncing after 20sec. ref=%s", fmt.Sprintf("%x", key))
 		}
