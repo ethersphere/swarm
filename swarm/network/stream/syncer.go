@@ -143,7 +143,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		wait = true
 	}
 
-	log.Trace("Swarm syncer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.netStore.BinIndex(s.po))
+	log.Trace("SwarmSyncerServer offer batch", "po", s.po, "len", i, "from", from, "to", to, "current store count", s.netStore.BinIndex(s.po))
 	return batch, from, to, nil, nil
 }
 

@@ -38,7 +38,7 @@ import (
 
 const (
 	swarmChunkServerStreamName = "RETRIEVE_REQUEST"
-	deliveryCap                = 10000
+	deliveryCap                = 1
 )
 
 var (
@@ -92,9 +92,11 @@ func (s *SwarmChunkServer) processDeliveries() {
 		case <-s.quit:
 			return
 		case hash := <-s.deliveryC:
+			log.Trace("processing deliveries", "hash", hash)
 			hashes = append(hashes, hash...)
 			batchC = s.batchC
 		case batchC <- hashes:
+			log.Trace("sending hashes to batchC", "hashes", hashes)
 			hashes = nil
 			batchC = nil
 		}
@@ -116,6 +118,7 @@ func (s *SwarmChunkServer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64
 
 	from = s.currentLen
 	s.currentLen += uint64(len(hashes))
+	log.Trace("SwarmChunkServer incrementing currentLen with", "lenhashes", len(hashes))
 	to = s.currentLen
 	return
 }
