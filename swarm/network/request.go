@@ -79,11 +79,14 @@ func RemoteFetch(ctx context.Context, req *Request, fi *FetcherItem, localID eno
 			osp.Finish()
 			return nil
 		case <-time.After(timeouts.SearchTimeout):
+			metrics.GetOrRegisterCounter("remote.fetch.timeout.search", nil).Inc(1)
+
 			osp.LogFields(olog.Bool("timeout", true))
 			osp.Finish()
 			break
 		case <-ctx.Done(): // global fetcher timeout
 			log.Trace("remote.fetch, fail", "ref", ref, "rid", rid)
+			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
 
 			osp.LogFields(olog.Bool("fail", true))
 			osp.Finish()
