@@ -90,7 +90,9 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		rpcClient, err := rpc.DialContext(ctx, httpHost)
-		defer rpcClient.Close()
+		if rpcClient != nil {
+			defer rpcClient.Close()
+		}
 		if err != nil {
 			log.Error("error dialing host", "err", err, "host", httpHost)
 			hasErr = true
@@ -205,7 +207,9 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 
 func isSyncing(wsHost string) (bool, error) {
 	rpcClient, err := rpc.Dial(wsHost)
-	defer rpcClient.Close()
+	if rpcClient != nil {
+		defer rpcClient.Close()
+	}
 
 	if err != nil {
 		log.Error("error dialing host", "err", err)

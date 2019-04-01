@@ -118,7 +118,13 @@ func (n *NetStore) Put(ctx context.Context, chunk storage.Chunk) error {
 	if ok {
 		// we need SafeClose, because it is possible for a chunk to both be
 		// delivered through syncing and through a retrieve request
-		fii := fi.(*FetcherItem)
+		fii, ok := fi.(*FetcherItem)
+		if !ok {
+			panic("loaded item from n.fetchers is not *FetcherItem")
+		}
+		if fii == nil {
+			panic("fii is nil")
+		}
 		fii.SafeClose()
 		log.Trace("netstore.put chunk delivered and stored", "ref", chunk.Address().String(), "rid", rid)
 
@@ -226,9 +232,16 @@ func (n *NetStore) HasWithCallback(ctx context.Context, ref storage.Address, int
 	v, loaded := n.fetchers.LoadOrStore(ref.String(), fi)
 	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
 	if loaded {
-		fi = v.(*FetcherItem)
+		var ok bool
+		fi, ok = v.(*FetcherItem)
+		if !ok {
+			panic("loaded item from n.fetchers is not *FetcherItem")
+		}
 	} else {
 		fi.CreatedBy = interestedParty
+	}
+	if fi == nil {
+		panic("fi is nil")
 	}
 	return false, fi
 }
