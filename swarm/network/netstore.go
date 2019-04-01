@@ -187,7 +187,10 @@ func (n *NetStore) Get(ctx context.Context, req *Request) (storage.Chunk, error)
 				return nil, errors.New("item should have been in localstore, but it is not")
 			}
 
-			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.request", fi.CreatedBy), nil).UpdateSince(start)
+			// fi could be nil if the chunk was added to the NetStore inbetween n.store.Get and the call to n.HasWithCallback
+			if fi != nil {
+				metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.request", fi.CreatedBy), nil).UpdateSince(start)
+			}
 
 			return chunk, nil
 		})
