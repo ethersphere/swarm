@@ -175,6 +175,9 @@ type QuitMsg struct {
 }
 
 func (p *Peer) handleQuitMsg(req *QuitMsg) error {
+	log.Trace("handle quit msg", "peer", p.ID(), "quit stream", req.Stream.String())
+	metrics.GetOrRegisterCounter("peer.handle_quit_msg", nil).Inc(1)
+
 	return p.removeClient(req.Stream)
 }
 

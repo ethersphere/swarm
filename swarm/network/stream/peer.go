@@ -259,8 +259,6 @@ func (p *Peer) getClient(ctx context.Context, s Stream) (c *client, err error) {
 		}
 	}
 
-	log.Warn("peer removeClient", "s", s, "peer", p)
-
 	p.clientMu.RLock()
 	defer p.clientMu.RUnlock()
 
@@ -357,6 +355,8 @@ func (p *Peer) removeClient(s Stream) error {
 	if !ok {
 		return newNotFoundError("client", s)
 	}
+
+	log.Warn("peer removeClient", "s", s, "peer", p)
 	client.close()
 	delete(p.clients, s)
 	return nil
