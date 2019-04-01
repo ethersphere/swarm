@@ -50,9 +50,12 @@ func InfluxDBWithTags(r metrics.Registry, d time.Duration, url, database, userna
 		tags:      tags,
 		cache:     make(map[string]int64),
 	}
-	if err := rep.makeClient(); err != nil {
+
+	err = rep.makeClient()
+	for err != nil {
+		err = rep.makeClient()
 		log.Warn("Unable to make InfluxDB client", "err", err)
-		return
+		time.Sleep(5 * time.Second)
 	}
 
 	rep.run()
