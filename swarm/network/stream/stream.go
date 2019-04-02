@@ -494,6 +494,8 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer close(sp.quit)
 	defer sp.close()
 
+	go r.updateSyncing() //TODO: should this be in a go-routine?
+
 	//if r.autoRetrieval && !p.LightNode {
 	//err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", true), nil, Top)
 	//if err != nil {
