@@ -879,6 +879,18 @@ func (a *API) CreateTag(filename string, timestamp uint64) (uint64, error) {
 	return a.fileStore.CreateTag(filename, timestamp)
 }
 
+func (a *API) GetTagFilename(tag uint64) (string, error) {
+	panic("implement this")
+}
+
+func (a *API) TotalChunksForTag(tag uint64) (uint64, error) {
+	panic("implement this")
+}
+
+func (a *API) RemainingChunksForTag(tag uint64) (uint64, error) {
+	panic("implement this")
+}
+
 // BuildDirectoryTree used by swarmfs_unix
 func (a *API) BuildDirectoryTree(ctx context.Context, mhash string, nameresolver bool) (addr storage.Address, manifestEntryMap map[string]*manifestTrieEntry, err error) {
 
