@@ -119,8 +119,7 @@ func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC
 
 // AddEntry stores the given data and adds the resulting address to the manifest
 func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (addr storage.Address, err error) {
-
-	now := time.Now().Unix()
+	now := time.Now().Unix() // leaving this as is since we consider deprecating e.ModTime
 	ctxTag := m.api.CreateTag(e.Path, now)
 	childCtx := sctx.SetPushTag(ctx, ctxTag)
 	entry := newManifestTrieEntry(e, nil)

@@ -48,7 +48,8 @@ const (
 
 type FileStore struct {
 	ChunkStore
-	hashFunc SwarmHasher
+	localStore *localstore.DB
+	hashFunc   SwarmHasher
 }
 
 type FileStoreParams struct {
@@ -67,12 +68,13 @@ func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	return NewFileStore(chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams()), nil
+	return NewFileStore(localStore, chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams()), nil
 }
 
-func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
+func NewFileStore(localstore *localstore.DB, store ChunkStore, params *FileStoreParams) *FileStore {
 	hashFunc := MakeHashFunc(params.Hash)
 	return &FileStore{
+		localStore: localstore,
 		ChunkStore: store,
 		hashFunc:   hashFunc,
 	}
@@ -103,7 +105,7 @@ func (f *FileStore) HashSize() int {
 
 // CreateTag creates a new push tag and stores it in localstore
 // it returns the tag as uint64
-func (f *FileStore) CreateTag(filename string, timestamp uint64) (uint64, error) {
+func (f *FileStore) CreateTag(ctx context.Context, filename string, timestamp uint64) (uint64, error) {
 	intBuf := make([]byte, 8)
 	binary.BigEndian.PutUint64(intBuf, timestamp)
 	// Tag is SHA3(filename|storetimestamp)[:8]
@@ -111,7 +113,12 @@ func (f *FileStore) CreateTag(filename string, timestamp uint64) (uint64, error)
 	buf = append(buf, intBuf...)
 	tagHash := crypto.Keccak256(buf)[:8]
 
-	return binary.BigEndian.Uint64(tagHash), nil
+	tag := binary.BigEndian.Uint64(tagHash)
+	err := f.localStore.PutGeneric(ctx, chunk.ModePutTags, interface{}(tag), interface{}(filename))
+	if err != nil {
+		return tag, err
+	}
+	return tag, nil
 }
 
 // GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file

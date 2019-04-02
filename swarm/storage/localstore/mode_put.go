@@ -161,3 +161,28 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 	}
 	return nil
 }
+
+func (db *DB) PutGeneric(_ context.Context, mode chunk.ModePut, itemK, itemV interface{}) (err error) {
+	return db.putGeneric(mode, itemK, itemV)
+}
+
+func (db *DB) putGeneric(mode chunk.ModePut, itemK, itemV interface{}) (err error) {
+	// protect parallel updates
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+
+	batch := new(leveldb.Batch)
+
+	switch mode {
+	case chunk.ModePutTags:
+		// put to indexes: tag
+		db.tagIndex.PutInBatch(batch, itemK, itemV)
+	default:
+		return ErrInvalidMode
+	}
+	err = db.shed.WriteBatch(batch)
+	if err != nil {
+		return err
+	}
+	return nil
+}
