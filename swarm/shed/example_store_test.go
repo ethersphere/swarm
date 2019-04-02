@@ -229,7 +229,7 @@ func (s *Store) Get(_ context.Context, addr storage.Address) (c storage.Chunk, e
 	}
 
 	// Return the chunk.
-	return storage.NewChunk(item.Address, item.Data), nil
+	return storage.NewChunk(item.Address, item.Data, []uint64{}), nil
 }
 
 // CollectGarbage is an example of index iteration.

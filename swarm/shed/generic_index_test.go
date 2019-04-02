@@ -17,25 +17,36 @@
 package shed
 
 import (
+	"errors"
 	"testing"
-	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Index functions for the index that is used in tests in this file.
-var retrievalIndexFuncs = GenericIndexFuncs{
+var retrievalGenericIndexFuncs = GenericIndexFuncs{
 	EncodeKey: func(fields interface{}) (key []byte, err error) {
-		return nil, nil
+		//marshal the fields as something, return a byte array
+		val, ok := fields.(string)
+		if !ok {
+			return nil, errors.New("could not unmarshal field")
+		}
+		return []byte(val), nil
 	},
 	DecodeKey: func(key []byte) (e interface{}, err error) {
-		return e, nil
+		str := string(key)
+		return str, nil
 	},
 	EncodeValue: func(fields interface{}) (value []byte, err error) {
-		return value, nil
+		val, ok := fields.(string)
+		if !ok {
+			return nil, errors.New("could not unmarshal value")
+		}
+		return []byte(val), nil
 	},
 	DecodeValue: func(keyItem interface{}, value []byte) (e interface{}, err error) {
-		return nil, nil
+		str := string(value)
+		return str, nil
 	},
 }
 
@@ -44,64 +55,68 @@ func TestGenericIndex(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
-	index, err := db.NewGenericIndex("retrieval", retrievalIndexFuncs)
+	index, err := db.NewGenericIndex("retrieval", retrievalGenericIndexFuncs)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Run("put", func(t *testing.T) {
-		want := //
-		err := index.Put(want)
+		wantK := "wantKey"
+		wantV := "wantVal"
+		err := index.Put(wantK, wantV)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(...)
+		got, err := index.Get(wantK)
 		if err != nil {
 			t.Fatal(err)
 		}
-		//checkItem(t, got, want)
+		checkItemString(t, got, wantV)
 
 		t.Run("overwrite", func(t *testing.T) {
-			want := ...
-			err = index.Put(want)
+			wantK := "wantKey"
+			wantV := "wantNewVal"
+			err = index.Put(wantK, wantV)
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := index.Get(...)
+			got, err := index.Get(wantK)
 			if err != nil {
 				t.Fatal(err)
 			}
-			checkItem(t, got, want)
+			checkItemString(t, got, wantV)
 		})
 	})
 
 	t.Run("put in batch", func(t *testing.T) {
-		want :=...
+		wantK := "wantKey"
+		wantV := "anotherNewVal"
 		batch := new(leveldb.Batch)
-		index.PutInBatch(batch, want)
+		index.PutInBatch(batch, wantK, wantV)
 		err := db.WriteBatch(batch)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(...)
+		got, err := index.Get(wantK)
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkItem(t, got, want)
+		checkItemString(t, got, wantV)
 
 		t.Run("overwrite", func(t *testing.T) {
-			want :=...
+			wantK := "wantKey"
+			wantV := "overrideBatchVal"
 			batch := new(leveldb.Batch)
-			index.PutInBatch(batch, want)
+			index.PutInBatch(batch, wantK, wantV)
 			db.WriteBatch(batch)
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := index.Get(...)
+			got, err := index.Get(wantK)
 			if err != nil {
 				t.Fatal(err)
 			}
-			checkItem(t, got, want)
+			checkItemString(t, got, wantV)
 		})
 	})
 
@@ -109,55 +124,37 @@ func TestGenericIndex(t *testing.T) {
 		// ensure that the last item of items with the same db keys
 		// is actually saved
 		batch := new(leveldb.Batch)
-		address := []byte("put-in-batch-twice-hash")
+		wantK := "doubleWantKey"
+		firstWantV := "should override"
+		secondWantV := "should persist"
 
 		// put the first item
-		index.PutInBatch(batch, Item{
-			Address:        address,
-			Data:           []byte("DATA"),
-			StoreTimestamp: time.Now().UTC().UnixNano(),
-		})
+		index.PutInBatch(batch, wantK, firstWantV)
 
-		want := Item{
-			Address:        address,
-			Data:           []byte("New DATA"),
-			StoreTimestamp: time.Now().UTC().UnixNano(),
-		}
 		// then put the item that will produce the same key
 		// but different value in the database
-		index.PutInBatch(batch, want)
+		index.PutInBatch(batch, wantK, secondWantV)
 		db.WriteBatch(batch)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(Item{
-			Address: address,
-		})
+		got, err := index.Get(wantK)
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkItem(t, got, want)
+		checkItemString(t, got, secondWantV)
 	})
 
 	t.Run("has", func(t *testing.T) {
-		want := Item{
-			Address:        []byte("has-hash"),
-			Data:           []byte("DATA"),
-			StoreTimestamp: time.Now().UTC().UnixNano(),
-		}
-
-		dontWant := Item{
-			Address:        []byte("do-not-has-hash"),
-			Data:           []byte("DATA"),
-			StoreTimestamp: time.Now().UTC().UnixNano(),
-		}
-
-		err := index.Put(want)
+		wantK := "wantHasThis"
+		wantV := "shouldHaveThis"
+		dontWantK := "dontWantHasThis"
+		err := index.Put(wantK, wantV)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		has, err := index.Has(want)
+		has, err := index.Has(wantK)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -165,7 +162,7 @@ func TestGenericIndex(t *testing.T) {
 			t.Error("item is not found")
 		}
 
-		has, err = index.Has(dontWant)
+		has, err = index.Has(dontWantK)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -175,92 +172,66 @@ func TestGenericIndex(t *testing.T) {
 	})
 
 	t.Run("delete", func(t *testing.T) {
-		want := Item{
-			Address:        []byte("delete-hash"),
-			Data:           []byte("DATA"),
-			StoreTimestamp: time.Now().UTC().UnixNano(),
-		}
-
-		err := index.Put(want)
+		wantK := "wantDelete"
+		wantV := "wantDeleteVal"
+		err := index.Put(wantK, wantV)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(Item{
-			Address: want.Address,
-		})
+		got, err := index.Get(wantK)
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkItem(t, got, want)
+		checkItemString(t, got, wantV)
 
-		err = index.Delete(Item{
-			Address: want.Address,
-		})
+		err = index.Delete(wantK)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		wantErr := leveldb.ErrNotFound
-		got, err = index.Get(Item{
-			Address: want.Address,
-		})
+		got, err = index.Get(wantK)
 		if err != wantErr {
 			t.Fatalf("got error %v, want %v", err, wantErr)
 		}
 	})
 
 	t.Run("delete in batch", func(t *testing.T) {
-		want := Item{
-			Address:        []byte("delete-in-batch-hash"),
-			Data:           []byte("DATA"),
-			StoreTimestamp: time.Now().UTC().UnixNano(),
-		}
-
-		err := index.Put(want)
+		wantK := "wantDelInBatch"
+		wantV := "wantDelInBatchVal"
+		err := index.Put(wantK, wantV)
 		if err != nil {
 			t.Fatal(err)
 		}
-		got, err := index.Get(Item{
-			Address: want.Address,
-		})
+		got, err := index.Get(wantK)
 		if err != nil {
 			t.Fatal(err)
 		}
-		checkItem(t, got, want)
+		checkItemString(t, got, wantV)
 
 		batch := new(leveldb.Batch)
-		index.DeleteInBatch(batch, Item{
-			Address: want.Address,
-		})
+		index.DeleteInBatch(batch, wantK)
 		err = db.WriteBatch(batch)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		wantErr := leveldb.ErrNotFound
-		got, err = index.Get(Item{
-			Address: want.Address,
-		})
+		got, err = index.Get(wantK)
 		if err != wantErr {
 			t.Fatalf("got error %v, want %v", err, wantErr)
 		}
 	})
 }
 
-// checkItem is a test helper function that compares if two Index items are the same.
-/*func checkItem(t *testing.T, got, want Item) {
+// checkItemString is a test helper function that compares if two generic items are the same string.
+func checkItemString(t *testing.T, got, want interface{}) {
 	t.Helper()
 
-	if !bytes.Equal(got.Address, want.Address) {
-		t.Errorf("got hash %q, expected %q", string(got.Address), string(want.Address))
+	g := got.(string)
+	w := want.(string)
+
+	if g != w {
+		t.Errorf("got %s, expected %s", g, w)
 	}
-	if !bytes.Equal(got.Data, want.Data) {
-		t.Errorf("got data %q, expected %q", string(got.Data), string(want.Data))
-	}
-	if got.StoreTimestamp != want.StoreTimestamp {
-		t.Errorf("got store timestamp %v, expected %v", got.StoreTimestamp, want.StoreTimestamp)
-	}
-	if got.AccessTimestamp != want.AccessTimestamp {
-		t.Errorf("got access timestamp %v, expected %v", got.AccessTimestamp, want.AccessTimestamp)
-	}
-}*/
+}

@@ -31,8 +31,8 @@ type GenericIndex struct {
 	prefix          []byte
 	encodeKeyFunc   func(item interface{}) (key []byte, err error)
 	decodeKeyFunc   func(key []byte) (item interface{}, err error)
-	encodeValueFunc func(fields Item) (value []byte, err error)
-	decodeValueFunc func(keyFields Item, value []byte) (e Item, err error)
+	encodeValueFunc func(fields interface{}) (value []byte, err error)
+	decodeValueFunc func(keyFields interface{}, value []byte) (e interface{}, err error)
 }
 
 // GenericIndexFuncs structure defines functions for encoding and decoding
@@ -41,19 +41,19 @@ type GenericIndexFuncs struct {
 	EncodeKey   func(fields interface{}) (key []byte, err error)
 	DecodeKey   func(key []byte) (e interface{}, err error)
 	EncodeValue func(fields interface{}) (value []byte, err error)
-	DecodeValue func(keyFields Item, value []byte) (e interface{}, err error)
+	DecodeValue func(keyFields interface{}, value []byte) (e interface{}, err error)
 }
 
 // NewIndex returns a new Index instance with defined name and
 // encoding functions. The name must be unique and will be validated
 // on database schema for a key prefix byte.
-func (db *DB) NewGenericIndex(name string, funcs GenericIndexFuncs) (f Index, err error) {
+func (db *DB) NewGenericIndex(name string, funcs GenericIndexFuncs) (f GenericIndex, err error) {
 	id, err := db.schemaIndexPrefix(name)
 	if err != nil {
 		return f, err
 	}
 	prefix := []byte{id}
-	return Index{
+	return GenericIndex{
 		db:     db,
 		prefix: prefix,
 		// This function adjusts Index LevelDB key
@@ -110,12 +110,12 @@ func (f GenericIndex) Has(keyFields interface{}) (bool, error) {
 
 // Put accepts Item to encode information from it
 // and save it to the database.
-func (f GenericIndex) Put(i interface{}) (err error) {
-	key, err := f.encodeKeyFunc(i)
+func (f GenericIndex) Put(k, v interface{}) (err error) {
+	key, err := f.encodeKeyFunc(k)
 	if err != nil {
 		return err
 	}
-	value, err := f.encodeValueFunc(i)
+	value, err := f.encodeValueFunc(v)
 	if err != nil {
 		return err
 	}
@@ -125,12 +125,12 @@ func (f GenericIndex) Put(i interface{}) (err error) {
 // PutInBatch is the same as Put method, but it just
 // saves the key/value pair to the batch instead
 // directly to the database.
-func (f GenericIndex) PutInBatch(batch *leveldb.Batch, i interface{}) (err error) {
-	key, err := f.encodeKeyFunc(i)
+func (f GenericIndex) PutInBatch(batch *leveldb.Batch, k, v interface{}) (err error) {
+	key, err := f.encodeKeyFunc(k)
 	if err != nil {
 		return err
 	}
-	value, err := f.encodeValueFunc(i)
+	value, err := f.encodeValueFunc(v)
 	if err != nil {
 		return err
 	}
@@ -140,7 +140,7 @@ func (f GenericIndex) PutInBatch(batch *leveldb.Batch, i interface{}) (err error
 
 // Delete accepts Item to remove a key/value pair
 // from the database based on its fields.
-func (f Index) Delete(keyFields interface{}) (err error) {
+func (f GenericIndex) Delete(keyFields interface{}) (err error) {
 	key, err := f.encodeKeyFunc(keyFields)
 	if err != nil {
 		return err
@@ -288,28 +288,10 @@ func (f GenericIndex) Last(prefix []byte) (i Item, err error) {
 	return f.itemFromIterator(it, totalPrefix)
 }
 */
-// incByteSlice returns the byte slice of the same size
-// of the provided one that is by one incremented in its
-// total value. If all bytes in provided slice are equal
-// to 255 a nil slice would be returned indicating that
-// increment can not happen for the same length.
-func incByteSlice(b []byte) (next []byte) {
-	l := len(b)
-	next = make([]byte, l)
-	copy(next, b)
-	for i := l - 1; i >= 0; i-- {
-		if b[i] == 255 {
-			next[i] = 0
-		} else {
-			next[i] = b[i] + 1
-			return next
-		}
-	}
-	return nil
-}
 
+/*
 // Count returns the number of items in index.
-/*func (f GenericIndex) Count() (count int, err error) {
+func (f GenericIndex) Count() (count int, err error) {
 	it := f.db.NewIterator()
 	defer it.Release()
 
@@ -325,7 +307,7 @@ func incByteSlice(b []byte) (next []byte) {
 
 // CountFrom returns the number of items in index keys
 // starting from the key encoded from the provided Item.
-func (f GenericIndex) CountFrom(start Item) (count int, err error) {
+func (f GenericIndex) CountFrom(start interface{}) (count int, err error) {
 	startKey, err := f.encodeKeyFunc(start)
 	if err != nil {
 		return 0, err

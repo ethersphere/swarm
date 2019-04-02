@@ -77,7 +77,7 @@ type DB struct {
 	binIDs shed.Uint64Vector
 
 	// push syncing tags index
-	tagIndex shed.Item
+	tagIndex shed.GenericIndex
 
 	// garbage collection index
 	gcIndex shed.Index
@@ -323,17 +323,17 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	db.pushTriggers = make([]chan struct{}, 0)
 
 	// tag index for push syncing tags
-	db.pushIndex, err = db.shed.NewIndex("Tag->Filename", shed.IndexFuncs{ //TODO: should this be Tag->Filename|StoreTimestamp?
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+	db.tagIndex, err = db.shed.NewGenericIndex("Tag->Filename", shed.GenericIndexFuncs{ //TODO: should this be Tag->Filename|StoreTimestamp?
+		EncodeKey: func(fields interface{}) (key []byte, err error) {
 			return nil, nil
 		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
+		DecodeKey: func(key []byte) (e interface{}, err error) {
 			return nil, nil
 		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+		EncodeValue: func(fields interface{}) (value []byte, err error) {
 			return nil, nil
 		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+		DecodeValue: func(keyItem interface{}, value []byte) (e interface{}, err error) {
 			return nil, nil
 		},
 	})

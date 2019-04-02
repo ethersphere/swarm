@@ -137,8 +137,9 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 			triggerPullFeed = true
 		}
 
-	case ModePutTag:
+	case chunk.ModePutTags:
 		// put to indexes: tag
+
 	default:
 		return ErrInvalidMode
 	}

@@ -105,13 +105,13 @@ func (f *FileStore) HashSize() int {
 // it returns the tag as uint64
 func (f *FileStore) CreateTag(filename string, timestamp uint64) (uint64, error) {
 	intBuf := make([]byte, 8)
-	binary.BigEndian.PutUint64(intBuf, now)
+	binary.BigEndian.PutUint64(intBuf, timestamp)
 	// Tag is SHA3(filename|storetimestamp)[:8]
-	tag := make([]byte, 8)
-	buf := []byte(hdr.Name)
-	buf = append(buf, intBuf)
+	buf := []byte(filename)
+	buf = append(buf, intBuf...)
 	tagHash := crypto.Keccak256(buf)[:8]
 
+	return binary.BigEndian.Uint64(tagHash), nil
 }
 
 // GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
