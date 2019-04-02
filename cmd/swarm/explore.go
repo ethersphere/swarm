@@ -47,7 +47,7 @@ func hashes(ctx *cli.Context) {
 	}
 	defer f.Close()
 
-	fileStore := storage.NewFileStore(&storage.FakeChunkStore{}, storage.NewFileStoreParams())
+	fileStore := storage.NewFileStore(nil, &storage.FakeChunkStore{}, storage.NewFileStoreParams())
 	refs, err := fileStore.GetAllReferences(context.TODO(), f, false)
 	if err != nil {
 		utils.Fatalf("%v\n", err)

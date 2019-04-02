@@ -875,8 +875,8 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 }
 
 // CreateTag creates a new push tag and stores it in localstore
-func (a *API) CreateTag(filename string, timestamp uint64) (uint64, error) {
-	return a.fileStore.CreateTag(filename, timestamp)
+func (a *API) CreateTag(ctx context.Context, filename string, timestamp uint64) (uint64, error) {
+	return a.fileStore.CreateTag(ctx, filename, timestamp)
 }
 
 func (a *API) GetTagFilename(tag uint64) (string, error) {
