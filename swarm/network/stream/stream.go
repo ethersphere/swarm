@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -139,21 +138,21 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *network.NetStor
 	delivery.getPeer = streamer.getPeer
 
 	// if retrieval is enabled, register the server func, so that retrieve requests will be served (non-light nodes only)
-	if options.Retrieval == RetrievalEnabled {
-		streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, live bool) (Server, error) {
-			if !live {
-				return nil, errors.New("only live retrieval requests supported")
-			}
-			return NewSwarmChunkServer(delivery.netStore), nil
-		})
-	}
+	//if options.Retrieval == RetrievalEnabled {
+	//streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, live bool) (Server, error) {
+	//if !live {
+	//return nil, errors.New("only live retrieval requests supported")
+	//}
+	//return NewSwarmChunkServer(delivery.netStore), nil
+	//})
+	//}
 
 	// if retrieval is not disabled, register the client func (both light nodes and normal nodes can issue retrieve requests)
-	if options.Retrieval != RetrievalDisabled {
-		streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
-			return NewSwarmSyncerClient(p, netStore, NewStream(swarmChunkServerStreamName, t, live))
-		})
-	}
+	//if options.Retrieval != RetrievalDisabled {
+	//streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
+	//return NewSwarmSyncerClient(p, netStore, NewStream(swarmChunkServerStreamName, t, live))
+	//})
+	//}
 
 	// If syncing is not disabled, the syncing functions are registered (both client and server)
 	if options.Syncing != SyncingDisabled {
@@ -495,12 +494,12 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer close(sp.quit)
 	defer sp.close()
 
-	if r.autoRetrieval && !p.LightNode {
-		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", true), nil, Top)
-		if err != nil {
-			return err
-		}
-	}
+	//if r.autoRetrieval && !p.LightNode {
+	//err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", true), nil, Top)
+	//if err != nil {
+	//return err
+	//}
+	//}
 
 	return sp.Run(sp.HandleMsg)
 }
@@ -510,6 +509,7 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 // and they are no longer required after iteration, request to Quit
 // them will be send to appropriate peers.
 func (r *Registry) updateSyncing() {
+	log.Trace("update syncing")
 	kad := r.delivery.kad
 	// map of all SYNC streams for all peers
 	// used at the and of the function to remove servers

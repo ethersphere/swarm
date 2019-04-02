@@ -36,10 +36,6 @@ import (
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
-const (
-	swarmChunkServerStreamName = "RETRIEVE_REQUEST"
-)
-
 var (
 	processReceivedChunksCount    = metrics.GetOrRegisterCounter("network.stream.received_chunks.count", nil)
 	handleRetrieveRequestMsgCount = metrics.GetOrRegisterCounter("network.stream.handle_retrieve_request_msg.count", nil)
@@ -140,11 +136,6 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	osp.LogFields(olog.String("ref", req.Addr.String()))
 
-	s, err := sp.getServer(NewStream(swarmChunkServerStreamName, "", true))
-	if err != nil {
-		return err
-	}
-
 	go func() {
 		defer osp.Finish()
 
@@ -164,7 +155,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		}
 
 		log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", sp.ID())
-		err = sp.Deliver(ctx, chunk, s.priority, false)
+		err = sp.Deliver(ctx, chunk, false)
 		if err != nil {
 			log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 		}
