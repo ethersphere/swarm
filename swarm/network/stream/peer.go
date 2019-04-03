@@ -133,8 +133,14 @@ func NewPeer(peer *network.BzzPeer, streamer *Registry) *Peer {
 }
 
 func (p *Peer) Registrations() error {
-	time.Sleep(p.streamer.syncUpdateDelay)
 	if p.streamer.syncMode != SyncingAutoSubscribe {
+		return nil
+	}
+	timer := time.NewTimer(p.streamer.syncUpdateDelay)
+	select {
+	case <-timer.C:
+	case <-p.quit:
+		timer.Stop()
 		return nil
 	}
 
@@ -148,7 +154,17 @@ func (p *Peer) Registrations() error {
 		case <-p.quit:
 			return nil
 		case <-p.bzzPeer.ChangeC:
-			time.Sleep(p.streamer.syncUpdateDelay)
+			// ugly hack here as I was getting double subscription requests in snapshot_sync_test,
+			// which means that new subscription requests were being issued before
+			// a first round finished and the servers were being created
+			//TODO: needs investigation about why that is
+			timer = time.NewTimer(p.streamer.syncUpdateDelay)
+			select {
+			case <-timer.C:
+			case <-p.quit:
+				timer.Stop()
+				return nil
+			}
 			err := p.doRegistrations()
 			if err != nil {
 				log.Error(err.Error())
