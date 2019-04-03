@@ -127,8 +127,6 @@ const (
 	ModeGetSync
 	// ModeGetLookup: when accessed to lookup a a chunk in feeds or other places
 	ModeGetLookup
-	// ModeGetTags: gets the tags for a given reference
-	ModeGetTags
 )
 
 // ModePut enumerates different Putter modes.
@@ -142,8 +140,6 @@ const (
 	ModePutSync
 	// ModePutUpload: when a chunk is created by local upload
 	ModePutUpload
-	// ModePutTags: used to store a new tag when a file is uploaded
-	ModePutTags
 )
 
 // ModeSet enumerates different Setter modes.

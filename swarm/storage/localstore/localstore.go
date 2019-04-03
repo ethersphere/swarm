@@ -76,7 +76,10 @@ type DB struct {
 	// proximity order bin
 	binIDs shed.Uint64Vector
 
-	// push syncing tags index
+	// uploads index maintains a list of pending uploads
+	uploadIndex shed.GenericIndex
+
+	// tags index maintains a mapping between tags and pending uploads
 	tagIndex shed.GenericIndex
 
 	// garbage collection index
@@ -322,8 +325,26 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	// create a push syncing triggers used by SubscribePush function
 	db.pushTriggers = make([]chan struct{}, 0)
 
+	db.uploadIndex, err = db.shed.NewGenericIndex("UploadID->UploadTime|UploadName", shed.GenericIndexFuncs{
+		EncodeKey: func(fields interface{}) (key []byte, err error) {
+			return nil, nil
+		},
+		DecodeKey: func(key []byte) (e interface{}, err error) {
+			return nil, nil
+		},
+		EncodeValue: func(fields interface{}) (value []byte, err error) {
+			return nil, nil
+		},
+		DecodeValue: func(keyItem interface{}, value []byte) (e interface{}, err error) {
+			return nil, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	// tag index for push syncing tags
-	db.tagIndex, err = db.shed.NewGenericIndex("Tag->Filename", shed.GenericIndexFuncs{ //TODO: should this be Tag->Filename|StoreTimestamp?
+	db.tagIndex, err = db.shed.NewGenericIndex("UploadID|Tag->Filename", shed.GenericIndexFuncs{
 		EncodeKey: func(fields interface{}) (key []byte, err error) {
 			return nil, nil
 		},
