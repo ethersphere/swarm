@@ -18,7 +18,6 @@ package localstore
 
 import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
-	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -28,8 +27,8 @@ type TagStore interface {
 	PutUploadID(uploadId uint64, timestamp int64, uploadName string) error
 	PutTags(key, value interface{}) error
 
-	GetTags(addr chunk.Address) ([]uint64, error)
-	PutTags(item shed.Item, tags []uint64) ([]uint64, error)
+	GetChunkTags(addr chunk.Address) ([]uint64, error)
+	PutTag(uploadId, tag uint64, path string) error
 }
 
 func (db *DB) PutUploadID(id uint64, uploadTime int64, uploadName string) (err error) {
@@ -49,7 +48,7 @@ func (db *DB) PutUploadID(id uint64, uploadTime int64, uploadName string) (err e
 
 }
 
-func (db *DB) GetTags(addr chunk.Address) ([]uint64, error) {
+func (db *DB) GetChunkTags(addr chunk.Address) ([]uint64, error) {
 	item := addressToItem(addr)
 
 	out, err = db.retrievalDataIndex.Get(item)
@@ -64,7 +63,7 @@ func (db *DB) GetTags(addr chunk.Address) ([]uint64, error) {
 	return c.Tags(), nil
 }
 
-func (db *DB) PutTags(uploadId, tag uint64, path string) (err error) {
+func (db *DB) PutTag(uploadId, tag uint64, path string) (err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
