@@ -535,7 +535,7 @@ func TestSuggestPeerRetries(t *testing.T) {
 	tk.checkSuggestPeer("<nil>", 0, false)
 }
 
-func TestKademliaHiveString(t *testing.T) {
+func XTestKademliaHiveString(t *testing.T) {
 	tk := newTestKademlia(t, "00000000")
 	tk.On("01000000", "00100000")
 	tk.Register("10000000", "10000001")

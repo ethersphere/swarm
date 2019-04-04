@@ -393,9 +393,7 @@ func (r *LazyChunkReader) Context() context.Context {
 func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, err error) {
 	metrics.GetOrRegisterCounter("lazychunkreader.size", nil).Inc(1)
 
-	var sp opentracing.Span
-	var cctx context.Context
-	cctx, sp = spancontext.StartSpan(
+	ctx, sp := spancontext.StartSpan(
 		ctx,
 		"lcr.size")
 	defer sp.Finish()
@@ -403,7 +401,7 @@ func (r *LazyChunkReader) Size(ctx context.Context, quitC chan bool) (n int64, e
 	log.Debug("lazychunkreader.size", "addr", r.addr)
 	if r.chunkData == nil {
 		startTime := time.Now()
-		chunkData, err := r.getter.Get(cctx, Reference(r.addr))
+		chunkData, err := r.getter.Get(ctx, Reference(r.addr))
 		if err != nil {
 			metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 			return 0, err
@@ -473,7 +471,7 @@ func (r *LazyChunkReader) ReadAt(b []byte, off int64) (read int, err error) {
 
 	err = <-errC
 	if err != nil {
-		log.Debug("lazychunkreader.readat.errc", "err", err)
+		log.Error("lazychunkreader.readat.errc", "err", err)
 		close(quitC)
 		return 0, err
 	}
@@ -537,7 +535,7 @@ func (r *LazyChunkReader) join(ctx context.Context, b []byte, off int64, eoff in
 			if err != nil {
 				metrics.GetOrRegisterResettingTimer("lcr.getter.get.err", nil).UpdateSince(startTime)
 				select {
-				case errC <- fmt.Errorf("chunk %v-%v not found; key: %s", off, off+treeSize, fmt.Sprintf("%x", childAddress)):
+				case errC <- fmt.Errorf("lcr.join chunk not found ref=%s", fmt.Sprintf("%x", childAddress)):
 				case <-quitC:
 				}
 				return
@@ -569,6 +567,7 @@ func (r *LazyChunkReader) Read(b []byte) (read int, err error) {
 		metrics.GetOrRegisterCounter("lazychunkreader.read.err", nil).Inc(1)
 	}
 
+	log.Trace("lazychunkreader.read.bytes", "key", r.addr, "bytes", read)
 	metrics.GetOrRegisterCounter("lazychunkreader.read.bytes", nil).Inc(int64(read))
 
 	r.off += int64(read)

@@ -19,7 +19,11 @@ package api
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -27,10 +31,10 @@ import (
 type Inspector struct {
 	api      *API
 	hive     *network.Hive
-	netStore *storage.NetStore
+	netStore *network.NetStore
 }
 
-func NewInspector(api *API, hive *network.Hive, netStore *storage.NetStore) *Inspector {
+func NewInspector(api *API, hive *network.Hive, netStore *network.NetStore) *Inspector {
 	return &Inspector{api, hive, netStore}
 }
 
@@ -47,6 +51,18 @@ func (inspector *Inspector) ListKnown() []string {
 	return res
 }
 
+func (inspector *Inspector) IsSyncing() bool {
+	lastReceivedChunksMsg := metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
+
+	// last received chunks msg time
+	lrct := time.Unix(0, lastReceivedChunksMsg.Value())
+
+	// if last received chunks msg time is after now-30sec. (i.e. within the last 30sec.) then we say that the node is still syncing
+	// technically this is not correct, because this might have been a retrieve request, but for the time being it works for our purposes
+	// because we know we are not making retrieve requests on the node while checking this
+	return lrct.After(time.Now().Add(-30 * time.Second))
+}
+
 type HasInfo struct {
 	Addr string `json:"address"`
 	Has  bool   `json:"has"`
@@ -55,17 +71,21 @@ type HasInfo struct {
 // Has checks whether each chunk address is present in the underlying datastore,
 // the bool in the returned structs indicates if the underlying datastore has
 // the chunk stored with the given address (true), or not (false)
-func (inspector *Inspector) Has(chunkAddresses []storage.Address) []HasInfo {
-	results := make([]HasInfo, 0)
+func (inspector *Inspector) Has(chunkAddresses []storage.Address) string {
+	hostChunks := []string{}
 	for _, addr := range chunkAddresses {
-		res := HasInfo{}
-		res.Addr = addr.String()
 		has, err := inspector.netStore.Has(context.Background(), addr)
 		if err != nil {
-			has = false
+			log.Error(err.Error())
+			continue
 		}
-		res.Has = has
-		results = append(results, res)
+
+		if has {
+			hostChunks = append(hostChunks, "1")
+		} else {
+			hostChunks = append(hostChunks, "0")
+		}
 	}
-	return results
+
+	return strings.Join(hostChunks, "")
 }

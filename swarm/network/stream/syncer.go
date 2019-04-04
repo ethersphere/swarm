@@ -18,15 +18,18 @@ package stream
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
-	BatchSize = 128
+	BatchSize = 1
 )
 
 // SwarmSyncerServer implements an Server for history syncing on bins
@@ -35,26 +38,26 @@ const (
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
 	po    uint8
-	store chunk.FetchStore
+	store chunk.Store
 	quit  chan struct{}
 }
 
 // NewSwarmSyncerServer is constructor for SwarmSyncerServer
-func NewSwarmSyncerServer(po uint8, syncChunkStore chunk.FetchStore) (*SwarmSyncerServer, error) {
+func NewSwarmSyncerServer(po uint8, store chunk.Store) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
 		po:    po,
-		store: syncChunkStore,
+		store: store,
 		quit:  make(chan struct{}),
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, syncChunkStore chunk.FetchStore) {
+func RegisterSwarmSyncerServer(streamer *Registry, netStore *network.NetStore) {
 	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
 			return nil, err
 		}
-		return NewSwarmSyncerServer(po, syncChunkStore)
+		return NewSwarmSyncerServer(po, netStore.Store)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -68,7 +71,20 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	ch, err := s.store.Get(ctx, chunk.ModeGetSync, storage.Address(key))
+	//TODO: this should be localstore, not netstore?
+	//r := &network.Request{
+	//Addr:     storage.Address(key),
+	//Origin:   enode.ID{},
+	//HopCount: 0,
+	//}
+
+	// this timeout shouldn't be necessary as syncer server is supposed to go straight to localstore,
+	// but if a chunk is garbage collected while we actually offered it, it is possible for this
+	// to trigger a network request
+	//ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	//defer cancel()
+
+	ch, err := s.store.Get(context.TODO(), chunk.ModeGetSync, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
@@ -158,70 +174,50 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	store  chunk.FetchStore
+	store  *network.NetStore
 	peer   *Peer
 	stream Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, store chunk.FetchStore, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, netStore *network.NetStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		store:  store,
+		store:  netStore,
 		peer:   p,
 		stream: stream,
 	}, nil
 }
 
-// // NewIncomingProvableSwarmSyncer is a contructor for provable data exchange syncer
-// func NewIncomingProvableSwarmSyncer(po int, priority int, index uint64, sessionAt uint64, intervals []uint64, sessionRoot storage.Address, chunker *storage.PyramidChunker, store storage.ChunkStore, p Peer) *SwarmSyncerClient {
-// 	retrieveC := make(storage.Chunk, chunksCap)
-// 	RunChunkRequestor(p, retrieveC)
-// 	storeC := make(storage.Chunk, chunksCap)
-// 	RunChunkStorer(store, storeC)
-// 	s := &SwarmSyncerClient{
-// 		po:            po,
-// 		priority:      priority,
-// 		sessionAt:     sessionAt,
-// 		start:         index,
-// 		end:           index,
-// 		nextC:         make(chan struct{}, 1),
-// 		intervals:     intervals,
-// 		sessionRoot:   sessionRoot,
-// 		sessionReader: chunker.Join(sessionRoot, retrieveC),
-// 		retrieveC:     retrieveC,
-// 		storeC:        storeC,
-// 	}
-// 	return s
-// }
-
-// // StartSyncing is called on the Peer to start the syncing process
-// // the idea is that it is called only after kademlia is close to healthy
-// func StartSyncing(s *Streamer, peerId enode.ID, po uint8, nn bool) {
-// 	lastPO := po
-// 	if nn {
-// 		lastPO = maxPO
-// 	}
-//
-// 	for i := po; i <= lastPO; i++ {
-// 		s.Subscribe(peerId, "SYNC", newSyncLabel("LIVE", po), 0, 0, High, true)
-// 		s.Subscribe(peerId, "SYNC", newSyncLabel("HISTORY", po), 0, 0, Mid, false)
-// 	}
-// }
-
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, store chunk.FetchStore) {
+func RegisterSwarmSyncerClient(streamer *Registry, netStore *network.NetStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
-		return NewSwarmSyncerClient(p, store, NewStream("SYNC", t, live))
+		return NewSwarmSyncerClient(p, netStore, NewStream("SYNC", t, live))
 	})
 }
 
-// NeedData
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
-	return s.store.FetchFunc(ctx, key)
+	start := time.Now()
+
+	has, fi := s.store.HasWithCallback(ctx, key, "syncer")
+	if has {
+		return nil
+	}
+
+	return func(ctx context.Context) error {
+		select {
+		case <-fi.Delivered:
+			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
+		case <-time.After(20 * time.Second):
+			// TODO: whats the proper timeout here? it is not the global fetcher timeout,
+			// since we don't do NetStore.Get(), but just wait for chunk delivery via offered/wanted hashes
+			metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
+			return fmt.Errorf("chunk not delivered through syncing after 20sec. ref=%s", fmt.Sprintf("%x", key))
+		}
+		return nil
+	}
 }
 
-// BatchDone
 func (s *SwarmSyncerClient) BatchDone(stream Stream, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
 	// TODO: reenable this with putter/getter refactored code
 	// if s.chunker != nil {

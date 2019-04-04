@@ -19,15 +19,13 @@ package feed
 import (
 	"bytes"
 	"context"
-	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 const (
-	hasherCount            = 8
-	feedsHashAlgorithm     = storage.SHA3Hash
-	defaultRetrieveTimeout = 100 * time.Millisecond
+	hasherCount        = 8
+	feedsHashAlgorithm = storage.SHA3Hash
 )
 
 // cacheEntry caches the last known update of a specific Swarm feed.

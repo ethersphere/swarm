@@ -25,6 +25,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
 )
@@ -261,4 +262,58 @@ func TestDB_pushIndex_Tags(t *testing.T) {
 			t.Errorf("got tags %s, want %s", gotTags, wantTags)
 		}
 	}
+}
+
+func TestDommy(t *testing.T) {
+	c := common.FromHex("0ed0025f8759f09073564aceebea54231a291bb1023e5e12afefb64fcebc9bac")
+
+	//sp0 := common.FromHex("d29e6d")
+	sp4 := common.FromHex("3a028e")
+	//sp11 := common.FromHex("531e93")
+	//sp16 := common.FromHex("64c63a")
+	sp1 := common.FromHex("1f21c3")
+	sp6 := common.FromHex("16c150")
+	sp7 := common.FromHex("1c995f")
+
+	prox1 := chunk.Proximity(sp1, c)
+	fmt.Println("prox1:", prox1)
+
+	prox6 := chunk.Proximity(sp6, c)
+	fmt.Println("prox6:", prox6)
+
+	prox7 := chunk.Proximity(sp7, c)
+	fmt.Println("prox7:", prox7)
+
+	prox4 := chunk.Proximity(sp4, c)
+	fmt.Println("prox4:", prox4)
+
+	// prox for all 1 6 and 7: 3
+	// depth: 3
+
+	//$ kubectl -n tony exec -it swarm-private-1 -- ./geth attach /root/.ethereum/bzzd.ipc --exec="console.log(bzz.hive)"
+
+	//=========================================================================
+	//commit hash: 789bc8662
+	//Mon Apr  1 08:25:12 UTC 2019 K???MLI? hive: queen's address: 1f21c3
+	//population: 14 (25), NeighbourhoodSize: 2, MinBinSize: 2, MaxBinSize: 4
+	//000  3 ce23 ecbf afd2               | 14 ecbf (0) ce23 (0) d29e (0) d334 (0)
+	//001  8 42a6 531e 578c 64c6          |  8 578c (0) 531e (0) 42a6 (0) 66bb (0)
+	//002  1 3a02                         |  1 3a02 (0)
+	//============ DEPTH: 3 ==========================================
+	//003  0                              |  0
+	//004  1 16c1                         |  1 16c1 (0)
+	//005  0                              |  0
+	//006  1 1c99                         |  1 1c99 (0)
+	//007  0                              |  0
+	//008  0                              |  0
+	//009  0                              |  0
+	//010  0                              |  0
+	//011  0                              |  0
+	//012  0                              |  0
+	//013  0                              |  0
+	//014  0                              |  0
+	//015  0                              |  0
+	//=========================================================================
+	//undefined
+
 }

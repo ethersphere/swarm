@@ -35,7 +35,7 @@ func InfluxDB(r metrics.Registry, d time.Duration, url, database, username, pass
 func InfluxDBWithTags(r metrics.Registry, d time.Duration, url, database, username, password, namespace string, tags map[string]string) {
 	u, err := uurl.Parse(url)
 	if err != nil {
-		log.Warn("Unable to parse InfluxDB", "url", url, "err", err)
+		log.Error("Unable to parse InfluxDB", "url", url, "err", err)
 		return
 	}
 
@@ -50,9 +50,12 @@ func InfluxDBWithTags(r metrics.Registry, d time.Duration, url, database, userna
 		tags:      tags,
 		cache:     make(map[string]int64),
 	}
-	if err := rep.makeClient(); err != nil {
-		log.Warn("Unable to make InfluxDB client", "err", err)
-		return
+
+	err = rep.makeClient()
+	for err != nil {
+		err = rep.makeClient()
+		log.Error("Unable to make InfluxDB client", "err", err)
+		time.Sleep(5 * time.Second)
 	}
 
 	rep.run()

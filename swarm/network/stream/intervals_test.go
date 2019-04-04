@@ -29,7 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/simulation"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -288,32 +288,34 @@ func enableNotifications(r *Registry, peerID enode.ID, s Stream) error {
 
 type testExternalClient struct {
 	hashes               chan []byte
-	store                chunk.FetchStore
+	store                *network.NetStore
 	enableNotificationsC chan struct{}
 }
 
-func newTestExternalClient(store chunk.FetchStore) *testExternalClient {
+func newTestExternalClient(netstore *network.NetStore) *testExternalClient {
 	return &testExternalClient{
 		hashes:               make(chan []byte),
-		store:                store,
+		store:                netstore,
 		enableNotificationsC: make(chan struct{}),
 	}
 }
 
 func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
-	wait := c.store.FetchFunc(ctx, storage.Address(hash))
-	if wait == nil {
+	has, fi := c.store.HasWithCallback(ctx, storage.Address(hash), "syncer")
+	if has {
 		return nil
 	}
-	select {
-	case c.hashes <- hash:
-	case <-ctx.Done():
-		log.Warn("testExternalClient NeedData context", "err", ctx.Err())
-		return func(_ context.Context) error {
-			return ctx.Err()
+
+	return func(ctx context.Context) error {
+		select {
+		case <-fi.Delivered:
+		case <-time.After(20 * time.Second):
+			// TODO: whats the proper timeout here? it is not the global fetcher timeout,
+			// since we don't do NetStore.Get(), but just wait for chunk delivery via offered/wanted hashes
+			return fmt.Errorf("chunk not delivered through syncing after 20sec. ref=%s", fmt.Sprintf("%x", hash))
 		}
+		return nil
 	}
-	return wait
 }
 
 func (c *testExternalClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {

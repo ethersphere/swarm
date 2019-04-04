@@ -90,36 +90,9 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 		err := p.Send(wmsg.Context, wmsg.Msg)
 		if err != nil {
 			log.Error("Message send error, dropping peer", "peer", p.ID(), "err", err)
-			p.Drop(err)
+			//p.Drop(err)
 		}
 	})
-
-	// basic monitoring for pq contention
-	go func(pq *pq.PriorityQueue) {
-		ticker := time.NewTicker(5 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				var lenMaxi int
-				var capMaxi int
-				for k := range pq.Queues {
-					if lenMaxi < len(pq.Queues[k]) {
-						lenMaxi = len(pq.Queues[k])
-					}
-
-					if capMaxi < cap(pq.Queues[k]) {
-						capMaxi = cap(pq.Queues[k])
-					}
-				}
-
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(lenMaxi))
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(capMaxi))
-			case <-p.quit:
-				return
-			}
-		}
-	}(p.pq)
 
 	go func() {
 		<-p.quit
@@ -154,7 +127,7 @@ func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8,
 	}
 
 	ctx = context.WithValue(ctx, "stream_send_tag", nil)
-	return p.SendPriority(ctx, msg, priority)
+	return p.Send(ctx, msg)
 }
 
 // SendPriority sends message to the peer using the outgoing priority queue
@@ -205,9 +178,9 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		To:            to,
 		Stream:        s.stream,
 	}
-	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
+	log.Trace("SendOfferedHashes", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
 	ctx = context.WithValue(ctx, "stream_send_tag", "send.offered.hashes")
-	return p.SendPriority(ctx, msg, s.priority)
+	return p.Send(ctx, msg)
 }
 
 func (p *Peer) getServer(s Stream) (*server, error) {
@@ -243,6 +216,7 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 		priority:     priority,
 		sessionIndex: sessionIndex,
 	}
+	log.Warn("peer setServer", "s.name", s.String(), "peer", p.ID().String())
 	p.servers[s] = os
 	return os, nil
 }
@@ -255,6 +229,8 @@ func (p *Peer) removeServer(s Stream) error {
 	if !ok {
 		return newNotFoundError("server", s)
 	}
+
+	log.Warn("peer removeServer", "s.name", s.String(), "peer", p.ID().String())
 	server.Close()
 	delete(p.servers, s)
 	return nil
@@ -379,6 +355,8 @@ func (p *Peer) removeClient(s Stream) error {
 	if !ok {
 		return newNotFoundError("client", s)
 	}
+
+	log.Warn("peer removeClient", "s", s, "peer", p)
 	client.close()
 	delete(p.clients, s)
 	return nil
@@ -416,7 +394,8 @@ func (p *Peer) removeClientParams(s Stream) error {
 }
 
 func (p *Peer) close() {
-	for _, s := range p.servers {
+	for stream, s := range p.servers {
+		log.Warn("closing servers", "s", stream.String())
 		s.Close()
 	}
 }

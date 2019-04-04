@@ -30,7 +30,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
@@ -108,7 +107,7 @@ type RegistryOptions struct {
 }
 
 // NewRegistry is Streamer constructor
-func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore chunk.FetchStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
+func NewRegistry(localID enode.ID, delivery *Delivery, netStore *network.NetStore, intervalsStore state.Store, options *RegistryOptions, balance protocols.Balance) *Registry {
 	if options == nil {
 		options = &RegistryOptions{}
 	}
@@ -145,21 +144,21 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore chunk.Fetc
 			if !live {
 				return nil, errors.New("only live retrieval requests supported")
 			}
-			return NewSwarmChunkServer(delivery.chunkStore), nil
+			return NewSwarmChunkServer(delivery.netStore), nil
 		})
 	}
 
 	// if retrieval is not disabled, register the client func (both light nodes and normal nodes can issue retrieve requests)
 	if options.Retrieval != RetrievalDisabled {
 		streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
-			return NewSwarmSyncerClient(p, syncChunkStore, NewStream(swarmChunkServerStreamName, t, live))
+			return NewSwarmSyncerClient(p, netStore, NewStream(swarmChunkServerStreamName, t, live))
 		})
 	}
 
 	// If syncing is not disabled, the syncing functions are registered (both client and server)
 	if options.Syncing != SyncingDisabled {
-		RegisterSwarmSyncerServer(streamer, syncChunkStore)
-		RegisterSwarmSyncerClient(streamer, syncChunkStore)
+		RegisterSwarmSyncerServer(streamer, netStore)
+		RegisterSwarmSyncerClient(streamer, netStore)
 	}
 
 	// if syncing is set to automatically subscribe to the syncing stream, start the subscription process
@@ -258,6 +257,38 @@ func NewRegistry(localID enode.ID, delivery *Delivery, syncChunkStore chunk.Fetc
 			}
 		}()
 	}
+
+	go func() {
+		for {
+
+			select {
+			case <-time.After(10 * time.Second):
+
+				var clientStreams int64
+				var serverStreams int64
+
+				streamer.peersMu.RLock()
+
+				//iterate all streamer peers
+				for _, p := range streamer.peers {
+					//every peer has a map of stream clients
+					//every stream server represents a subscription
+					p.clientMu.RLock()
+					clientStreams += int64(len(p.clients))
+					p.clientMu.RUnlock()
+
+					p.serverMu.RLock()
+					serverStreams += int64(len(p.servers))
+					p.serverMu.RUnlock()
+				}
+
+				streamer.peersMu.RUnlock()
+
+				metrics.GetOrRegisterGauge("registry.serversubscr", nil).Update(serverStreams)
+				metrics.GetOrRegisterGauge("registry.clientsubscr", nil).Update(clientStreams)
+			}
+		}
+	}()
 
 	return streamer
 }
@@ -381,7 +412,7 @@ func (r *Registry) Subscribe(peerId enode.ID, s Stream, h *Range, priority uint8
 	}
 	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
-	return peer.SendPriority(context.TODO(), msg, priority)
+	return peer.Send(context.TODO(), msg)
 }
 
 func (r *Registry) Unsubscribe(peerId enode.ID, s Stream) error {
@@ -463,6 +494,8 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
 	defer sp.close()
+
+	//go r.updateSyncing() //TODO: should this be in a go-routine?
 
 	if r.autoRetrieval && !p.LightNode {
 		err := r.Subscribe(p.ID(), NewStream(swarmChunkServerStreamName, "", true), nil, Top)
@@ -762,7 +795,7 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 			return err
 		}
 
-		if err := p.SendPriority(context.TODO(), tp, c.priority); err != nil {
+		if err := p.Send(context.TODO(), tp); err != nil {
 			return err
 		}
 		if c.to > 0 && tp.Takeover.End >= c.to {
@@ -968,7 +1001,7 @@ GetPeerSubscriptions is a API function which allows to query a peer for stream s
 It can be called via RPC.
 It returns a map of node IDs with an array of string representations of Stream objects.
 */
-func (api *API) GetPeerSubscriptions() map[string][]string {
+func (api *API) GetPeerServerSubscriptions() map[string][]string {
 	//create the empty map
 	pstreams := make(map[string][]string)
 
@@ -987,6 +1020,31 @@ func (api *API) GetPeerSubscriptions() map[string][]string {
 			streams = append(streams, s.String())
 		}
 		p.serverMu.RUnlock()
+		//set the array of stream servers to the map
+		pstreams[id.String()] = streams
+	}
+	return pstreams
+}
+
+func (api *API) GetPeerClientSubscriptions() map[string][]string {
+	//create the empty map
+	pstreams := make(map[string][]string)
+
+	//iterate all streamer peers
+	api.streamer.peersMu.RLock()
+	defer api.streamer.peersMu.RUnlock()
+
+	for id, p := range api.streamer.peers {
+		var streams []string
+		//every peer has a map of stream clients
+		//every stream server represents a subscription
+		p.clientMu.RLock()
+		for s := range p.clients {
+			//append the string representation of the stream
+			//to the list for this peer
+			streams = append(streams, s.String())
+		}
+		p.clientMu.RUnlock()
 		//set the array of stream servers to the map
 		pstreams[id.String()] = streams
 	}

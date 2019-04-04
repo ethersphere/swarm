@@ -200,7 +200,12 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 						return fmt.Errorf("No DB")
 					}
 					db := item.(chunk.Store)
-					_, err := db.Get(ctx, chunk.ModeGetRequest, key)
+					r := &network.Request{
+						Addr:     key,
+						Origin:   enode.ID{},
+						HopCount: 0,
+					}
+					_, err := db.Get(ctx, chunk.ModeGetRequest, r)
 					if err == nil {
 						found++
 					}

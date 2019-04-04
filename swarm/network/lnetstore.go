@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2016 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -14,43 +14,36 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package feed
+package network
 
 import (
-	"path/filepath"
+	"context"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
-	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/timeouts"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
 
-const (
-	testDbDirName = "feeds"
-)
-
-type TestHandler struct {
-	*Handler
+type LNetStore struct {
+	*NetStore
 }
 
-func (t *TestHandler) Close() {
-	t.chunkStore.Close()
+func NewLNetStore(store *NetStore) *LNetStore {
+	return &LNetStore{
+		NetStore: store,
+	}
 }
 
-// NewTestHandler creates Handler object to be used for testing purposes.
-func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
-	path := filepath.Join(datadir, testDbDirName)
-	fh := NewHandler(params)
+func (n *LNetStore) Get(ctx context.Context, mode chunk.ModeGet, ref storage.Address) (ch storage.Chunk, err error) {
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
 
-	db, err := localstore.New(filepath.Join(path, "chunks"), make([]byte, 32), nil)
-	if err != nil {
-		return nil, err
+	req := &Request{
+		Addr:     ref,
+		HopCount: 0,
+		Origin:   enode.ID{},
 	}
 
-	localStore := chunk.NewValidatorStore(db, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)), fh)
-
-	netStore := network.NewNetStore(localStore, enode.ID{})
-	fh.SetStore(netStore)
-	return &TestHandler{fh}, nil
+	return n.NetStore.Get(ctx, mode, req)
 }
