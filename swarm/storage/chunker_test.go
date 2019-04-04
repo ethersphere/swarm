@@ -24,6 +24,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"golang.org/x/crypto/sha3"
 )
@@ -42,8 +43,8 @@ type chunkerTester struct {
 	t      test
 }
 
-func newTestHasherStore(store ChunkStore, hash string) *hasherStore {
-	return NewHasherStore(store, MakeHashFunc(hash), false)
+func newTestHasherStore(store ChunkStore, tagStore localstore.TagStore, hash string) *hasherStore {
+	return NewHasherStore(store, tagStore, MakeHashFunc(hash), false)
 }
 
 func testRandomBrokenData(n int, tester *chunkerTester) {
@@ -58,8 +59,8 @@ func testRandomBrokenData(n int, tester *chunkerTester) {
 
 	data = testutil.RandomReader(2, n)
 	brokendata = brokenLimitReader(data, n, n/2)
-
-	putGetter := newTestHasherStore(NewMapChunkStore(), SHA3Hash)
+	cs := NewMapChunkStore()
+	putGetter := newTestHasherStore(cs, cs, SHA3Hash)
 
 	expectedError := fmt.Errorf("Broken reader")
 	ctx := context.Background()
@@ -83,8 +84,8 @@ func testRandomData(usePyramid bool, hash string, n int, tester *chunkerTester) 
 	} else {
 		data = io.LimitReader(bytes.NewReader(input), int64(n))
 	}
-
-	putGetter := newTestHasherStore(NewMapChunkStore(), hash)
+	cs := NewMapChunkStore()
+	putGetter := newTestHasherStore(cs, cs, hash)
 
 	var addr Address
 	var wait func(context.Context) error
@@ -185,7 +186,7 @@ func TestDataAppend(t *testing.T) {
 		}
 
 		store := NewMapChunkStore()
-		putGetter := newTestHasherStore(store, SHA3Hash)
+		putGetter := newTestHasherStore(store, store, SHA3Hash)
 
 		ctx := context.TODO()
 		addr, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
@@ -207,7 +208,7 @@ func TestDataAppend(t *testing.T) {
 			appendData = io.LimitReader(bytes.NewReader(appendInput), int64(m))
 		}
 
-		putGetter = newTestHasherStore(store, SHA3Hash)
+		putGetter = newTestHasherStore(store, store, SHA3Hash)
 		newAddr, wait, err := PyramidAppend(ctx, addr, appendData, putGetter, putGetter)
 		if err != nil {
 			tester.t.Fatalf(err.Error())
@@ -276,7 +277,8 @@ func benchmarkSplitJoin(n int, t *testing.B) {
 	for i := 0; i < t.N; i++ {
 		data := testutil.RandomReader(i, n)
 
-		putGetter := newTestHasherStore(NewMapChunkStore(), SHA3Hash)
+		cs := NewMapChunkStore()
+		putGetter := newTestHasherStore(cs, cs, SHA3Hash)
 		ctx := context.TODO()
 		key, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
 		if err != nil {
@@ -295,7 +297,7 @@ func benchmarkSplitTreeSHA3(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testutil.RandomReader(i, n)
-		putGetter := newTestHasherStore(&FakeChunkStore{}, SHA3Hash)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, &FakeChunkStore{}, SHA3Hash)
 
 		ctx := context.Background()
 		_, wait, err := TreeSplit(ctx, data, int64(n), putGetter)
@@ -314,7 +316,7 @@ func benchmarkSplitTreeBMT(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testutil.RandomReader(i, n)
-		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, &FakeChunkStore{}, BMTHash)
 
 		ctx := context.Background()
 		_, wait, err := TreeSplit(ctx, data, int64(n), putGetter)
@@ -332,7 +334,7 @@ func benchmarkSplitPyramidBMT(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testutil.RandomReader(i, n)
-		putGetter := newTestHasherStore(&FakeChunkStore{}, BMTHash)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, &FakeChunkStore{}, BMTHash)
 
 		ctx := context.Background()
 		_, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
@@ -350,7 +352,7 @@ func benchmarkSplitPyramidSHA3(n int, t *testing.B) {
 	t.ReportAllocs()
 	for i := 0; i < t.N; i++ {
 		data := testutil.RandomReader(i, n)
-		putGetter := newTestHasherStore(&FakeChunkStore{}, SHA3Hash)
+		putGetter := newTestHasherStore(&FakeChunkStore{}, &FakeChunkStore{}, SHA3Hash)
 
 		ctx := context.Background()
 		_, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
@@ -371,7 +373,7 @@ func benchmarkSplitAppendPyramid(n, m int, t *testing.B) {
 		data1 := testutil.RandomReader(t.N+i, m)
 
 		store := NewMapChunkStore()
-		putGetter := newTestHasherStore(store, SHA3Hash)
+		putGetter := newTestHasherStore(store, store, SHA3Hash)
 
 		ctx := context.Background()
 		key, wait, err := PyramidSplit(ctx, data, putGetter, putGetter)
@@ -383,7 +385,7 @@ func benchmarkSplitAppendPyramid(n, m int, t *testing.B) {
 			t.Fatalf(err.Error())
 		}
 
-		putGetter = newTestHasherStore(store, SHA3Hash)
+		putGetter = newTestHasherStore(store, store, SHA3Hash)
 		_, wait, err = PyramidAppend(ctx, key, data1, putGetter, putGetter)
 		if err != nil {
 			t.Fatalf(err.Error())

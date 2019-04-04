@@ -48,8 +48,8 @@ const (
 
 type FileStore struct {
 	ChunkStore
-	localStore *localstore.DB
-	hashFunc   SwarmHasher
+	tagStore localstore.TagStore
+	hashFunc SwarmHasher
 }
 
 type FileStoreParams struct {
@@ -71,10 +71,10 @@ func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
 	return NewFileStore(localStore, chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams()), nil
 }
 
-func NewFileStore(localstore *localstore.DB, store ChunkStore, params *FileStoreParams) *FileStore {
+func NewFileStore(tagStore localstore.TagStore, store ChunkStore, params *FileStoreParams) *FileStore {
 	hashFunc := MakeHashFunc(params.Hash)
 	return &FileStore{
-		localStore: localstore,
+		tagStore:   tagStore,
 		ChunkStore: store,
 		hashFunc:   hashFunc,
 	}
@@ -87,7 +87,7 @@ func NewFileStore(localstore *localstore.DB, store ChunkStore, params *FileStore
 // It returns a reader with the chunk data and whether the content was encrypted
 func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > f.hashFunc().Size()
-	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted)
+	getter := NewHasherStore(f.ChunkStore, f.tagStore, f.hashFunc, isEncrypted)
 	reader = TreeJoin(ctx, addr, getter, 0)
 	return
 }
@@ -95,7 +95,7 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 // Store is a public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
 func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
-	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt)
+	putter := NewHasherStore(f.ChunkStore, f.tagStore, f.hashFunc, toEncrypt)
 	return PyramidSplit(ctx, data, putter, putter)
 }
 
@@ -106,6 +106,9 @@ func (f *FileStore) HashSize() int {
 // CreateTag creates a new push tag and stores it in localstore
 // it returns the tag as uint64
 func (f *FileStore) CreateTag(ctx context.Context, filename string, timestamp uint64) (uint64, error) {
+	// add uploadID
+
+	var uploadId uint64 = 0
 	intBuf := make([]byte, 8)
 	binary.BigEndian.PutUint64(intBuf, timestamp)
 	// Tag is SHA3(filename|storetimestamp)[:8]
@@ -114,7 +117,7 @@ func (f *FileStore) CreateTag(ctx context.Context, filename string, timestamp ui
 	tagHash := crypto.Keccak256(buf)[:8]
 
 	tag := binary.BigEndian.Uint64(tagHash)
-	err := f.localStore.PutGeneric(ctx, chunk.ModePutTags, interface{}(tag), interface{}(filename))
+	err := f.tagStore.PutTag(uploadId, tag, filename)
 	if err != nil {
 		return tag, err
 	}
@@ -125,7 +128,7 @@ func (f *FileStore) CreateTag(ctx context.Context, filename string, timestamp ui
 func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
 	// create a special kind of putter, which only will store the references
 	putter := &hashExplorer{
-		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
+		hasherStore: NewHasherStore(f.ChunkStore, f.tagStore, f.hashFunc, toEncrypt),
 	}
 	// do the actual splitting anyway, no way around it
 	_, wait, err := PyramidSplit(ctx, data, putter, putter)

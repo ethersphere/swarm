@@ -46,7 +46,7 @@ func TestHasherStore(t *testing.T) {
 
 	for _, tt := range tests {
 		chunkStore := NewMapChunkStore()
-		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt)
+		hasherStore := NewHasherStore(chunkStore, chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt)
 
 		r := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 		customTag := r.Uint64()
@@ -83,8 +83,11 @@ func TestHasherStore(t *testing.T) {
 		if !bytes.Equal(chunkData1, retrievedChunkData1) {
 			t.Fatalf("Expected retrieved chunk data %v, got %v", common.Bytes2Hex(chunkData1), common.Bytes2Hex(retrievedChunkData1))
 		}
-
-		tags, err := hasherStore.GetTags(ctx, key1)
+		hash1, encryptionKey1, err := parseReference(key1, hasherStore.hashSize)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tags, err := hasherStore.GetTags(ctx, hash1)
 		if err != nil {
 			t.Fatalf("had an error fetching tags from hasher store: %v", err)
 		}
@@ -109,7 +112,9 @@ func TestHasherStore(t *testing.T) {
 		// get the tags from the underlying localstore and assert they are equal to the tag assigned
 		// in the context above (hasherstore should put the file with the appropriate tags from Context
 		// rather than from the chunk struct)
-		tags2, err := hasherStore.GetTags(ctx, key2)
+		hash2, _, err := parseReference(key1, hasherStore.hashSize)
+
+		tags2, err := hasherStore.GetTags(ctx, hash2)
 		if err != nil {
 			t.Fatalf("had an error fetching tags from hasher store: %v", err)
 		}
@@ -118,11 +123,6 @@ func TestHasherStore(t *testing.T) {
 		}
 		if tags2[0] != customTag {
 			t.Fatalf("tag mismatch. want %d, got %d", customTag, tags2[0])
-		}
-
-		hash1, encryptionKey1, err := parseReference(key1, hasherStore.hashSize)
-		if err != nil {
-			t.Fatalf("Expected no error, got \"%v\"", err)
 		}
 
 		if tt.toEncrypt {

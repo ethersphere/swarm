@@ -24,11 +24,13 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"golang.org/x/crypto/sha3"
 )
 
 type hasherStore struct {
 	store     ChunkStore
+	tagStore  localstore.TagStore
 	toEncrypt bool
 	hashFunc  SwarmHasher
 	hashSize  int           // content hash size
@@ -45,7 +47,7 @@ type hasherStore struct {
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
 // With the HasherStore you can put and get chunk data (which is just []byte) into a ChunkStore
 // and the hasherStore will take core of encryption/decryption of data if necessary
-func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
+func NewHasherStore(store ChunkStore, tagStore localstore.TagStore, hashFunc SwarmHasher, toEncrypt bool) *hasherStore {
 	hashSize := hashFunc().Size()
 	refSize := int64(hashSize)
 	if toEncrypt {
@@ -54,6 +56,7 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 
 	h := &hasherStore{
 		store:     store,
+		tagStore:  tagStore,
 		toEncrypt: toEncrypt,
 		hashFunc:  hashFunc,
 		hashSize:  hashSize,
@@ -113,11 +116,11 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 }
 
 func (h *hasherStore) GetTags(ctx context.Context, addr chunk.Address) ([]uint64, error) {
-	chunk, err := h.store.Get(ctx, chunk.ModeGetTags, addr)
+	tags, err := h.tagStore.GetChunkTags(addr)
 	if err != nil {
 		return nil, err
 	}
-	return chunk.Tags(), nil
+	return tags, nil
 }
 
 // Close indicates that no more chunks will be put with the hasherStore, so the Wait
@@ -168,9 +171,9 @@ func (h *hasherStore) createHash(chunkData ChunkData) Address {
 
 func (h *hasherStore) createChunk(ctx context.Context, chunkData ChunkData) Chunk {
 	hash := h.createHash(chunkData)
-	tags, err := h.GetTags(ctx, chunk.Address(hash)) // TODO: this is really bad but if we want to persist tags across sessions this would be the way
+	tags, err := h.tagStore.GetChunkTags(chunk.Address(hash)) // TODO: this is really bad but if we want to persist tags across sessions this would be the way
 	if err != nil {
-		panic("wtf")
+		panic(err)
 	}
 	tag := sctx.GetPushTag(ctx)
 	if tag != 0 {

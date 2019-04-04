@@ -53,10 +53,17 @@ func (db *DB) GetChunkTags(addr chunk.Address) ([]uint64, error) {
 
 	out, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return []uint64{}, nil
+		}
+
 		return nil, err
 	}
 	c, err := db.pushIndex.Get(out)
 	if err != nil {
+		if err == leveldb.ErrNotFound {
+			return []uint64{}, nil
+		}
 		return nil, err
 	}
 

@@ -375,7 +375,7 @@ func TestValidator(t *testing.T) {
 	address[0] = 11
 	address[15] = 99
 
-	if rh.Validate(storage.NewChunk(address, chunk.Data())) {
+	if rh.Validate(storage.NewChunk(address, chunk.Data(), []uint64{})) {
 		t.Fatal("Expected Validate to fail with false chunk address")
 	}
 }
@@ -414,7 +414,7 @@ func TestValidatorInStore(t *testing.T) {
 	// create content addressed chunks, one good, one faulty
 	chunks := storage.GenerateRandomChunks(chunk.DefaultSize, 2)
 	goodChunk := chunks[0]
-	badChunk := storage.NewChunk(chunks[1].Address(), goodChunk.Data())
+	badChunk := storage.NewChunk(chunks[1].Address(), goodChunk.Data(), []uint64{})
 
 	topic, _ := NewTopic("xyzzy", nil)
 	fd := Feed{

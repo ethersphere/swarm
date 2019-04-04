@@ -262,6 +262,23 @@ func (m *MapChunkStore) SubscribePull(ctx context.Context, bin uint8, since, unt
 	return nil, nil
 }
 
+func (m *MapChunkStore) GetChunkTags(addr Address) ([]uint64, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	chunk := m.chunks[addr.Hex()]
+	if chunk == nil {
+		return []uint64{}, nil
+	}
+	return chunk.Tags(), nil
+}
+func (m *MapChunkStore) PutUploadID(uploadId uint64, timestamp int64, uploadName string) error {
+	return nil
+}
+
+func (m *MapChunkStore) PutTag(uploadId, tag uint64, path string) error {
+	return nil
+}
+
 func (m *MapChunkStore) Close() error {
 	return nil
 }

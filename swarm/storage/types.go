@@ -263,6 +263,17 @@ func (f *FakeChunkStore) SubscribePull(ctx context.Context, bin uint8, since, un
 	panic("FakeChunkStore doesn't support SubscribePull")
 }
 
+func (f *FakeChunkStore) GetChunkTags(addr Address) ([]uint64, error) {
+	panic("FakeChunkStore doesn't support GetChunkTags")
+}
+func (f *FakeChunkStore) PutUploadID(uploadId uint64, timestamp int64, uploadName string) error {
+	panic("FakeChunkStore doesn't support PutUploadID")
+}
+
+func (f *FakeChunkStore) PutTag(uploadId, tag uint64, path string) error {
+	panic("FakeChunkStore doesn't support PutTag")
+}
+
 // Close doesn't store anything it is just here to implement ChunkStore
 func (f *FakeChunkStore) Close() error {
 	return nil
