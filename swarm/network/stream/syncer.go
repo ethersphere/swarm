@@ -24,6 +24,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -51,13 +52,13 @@ func NewSwarmSyncerServer(po uint8, store chunk.Store) (*SwarmSyncerServer, erro
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, netStore *network.NetStore) {
+func RegisterSwarmSyncerServer(streamer *Registry, store chunk.Store) {
 	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
 			return nil, err
 		}
-		return NewSwarmSyncerServer(po, netStore.Store)
+		return NewSwarmSyncerServer(po, store)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -71,21 +72,9 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	//TODO: this should be localstore, not netstore?
-	//r := &network.Request{
-	//Addr:     storage.Address(key),
-	//Origin:   enode.ID{},
-	//HopCount: 0,
-	//}
-
-	// this timeout shouldn't be necessary as syncer server is supposed to go straight to localstore,
-	// but if a chunk is garbage collected while we actually offered it, it is possible for this
-	// to trigger a network request
-	//ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
-	//defer cancel()
-
 	ch, err := s.store.Get(context.TODO(), chunk.ModeGetSync, storage.Address(key))
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
 	return ch.Data(), nil
@@ -174,17 +163,17 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	store  *network.NetStore
-	peer   *Peer
-	stream Stream
+	netStore *network.NetStore
+	peer     *Peer
+	stream   Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
 func NewSwarmSyncerClient(p *Peer, netStore *network.NetStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		store:  netStore,
-		peer:   p,
-		stream: stream,
+		netStore: netStore,
+		peer:     p,
+		stream:   stream,
 	}, nil
 }
 
@@ -199,7 +188,7 @@ func RegisterSwarmSyncerClient(streamer *Registry, netStore *network.NetStore) {
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
 	start := time.Now()
 
-	has, fi := s.store.HasWithCallback(ctx, key, "syncer")
+	has, fi := s.netStore.HasWithCallback(ctx, key, "syncer")
 	if has {
 		return nil
 	}

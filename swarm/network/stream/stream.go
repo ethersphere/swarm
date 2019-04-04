@@ -157,7 +157,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *network.NetStor
 
 	// If syncing is not disabled, the syncing functions are registered (both client and server)
 	if options.Syncing != SyncingDisabled {
-		RegisterSwarmSyncerServer(streamer, netStore)
+		RegisterSwarmSyncerServer(streamer, netStore.Store)
 		RegisterSwarmSyncerClient(streamer, netStore)
 	}
 

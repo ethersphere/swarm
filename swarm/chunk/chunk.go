@@ -127,7 +127,7 @@ type ModePut int
 
 // Putter modes.
 const (
-	// ModePutRequest: when a chunk is received as a result of retrieve request and delivery
+	// ModePutRequest: when a chunk is received as a result of retrieve request
 	ModePutRequest ModePut = iota
 	// ModePutSync: when a chunk is received via syncing
 	ModePutSync
@@ -142,7 +142,7 @@ type ModeSet int
 const (
 	// ModeSetAccess: when an update request is received for a chunk or chunk is retrieved for delivery
 	ModeSetAccess ModeSet = iota
-	// ModeSetSync: when push sync receipt is received
+	// ModeSetSync: when push sync receipt is received (when a chunk is synced)
 	ModeSetSync
 	// ModeSetRemove: when a chunk is removed
 	ModeSetRemove

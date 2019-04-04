@@ -106,18 +106,9 @@ func (s *SwarmChunkServer) Close() {
 
 // GetData retrieves chunk data from db store
 func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	//TODO: this should be localstore, not netstore?
-	r := &network.Request{
-		Addr:     storage.Address(key),
-		Origin:   enode.ID{},
-		HopCount: 0,
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
-	defer cancel()
-
-	ch, err := s.netStore.Get(ctx, chunk.ModeGetRequest, r)
+	ch, err := s.netStore.Store.Get(ctx, chunk.ModeGetRequest, storage.Address(key))
 	if err != nil {
+		log.Error(err.Error())
 		return nil, err
 	}
 	return ch.Data(), nil

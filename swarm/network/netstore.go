@@ -89,7 +89,7 @@ type NetStore struct {
 	fetchers     sync.Map
 	putMu        sync.Mutex
 	requestGroup singleflight.Group
-	//RemoteGet    func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, error)
+
 	RemoteGet RemoteGetFunc
 }
 
