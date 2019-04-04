@@ -29,8 +29,10 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/network/timeouts"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
 )
@@ -74,6 +76,8 @@ func (fi *FetcherItem) SafeClose() {
 	})
 }
 
+type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, error)
+
 // NetStore is an extension of LocalStore
 // it implements the ChunkStore interface
 // on request it initiates remote cloud retrieval
@@ -83,6 +87,8 @@ type NetStore struct {
 	fetchers     sync.Map
 	putMu        sync.Mutex
 	requestGroup singleflight.Group
+	//RemoteGet    func(ctx context.Context, req *Request, localID enode.ID) (*enode.ID, error)
+	RemoteGet RemoteGetFunc
 }
 
 // NewNetStore creates a new NetStore object using the given local store. newFetchFunc is a
@@ -175,7 +181,7 @@ func (n *NetStore) Get(ctx context.Context, req *Request) (storage.Chunk, error)
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			has, fi := n.HasWithCallback(ctx, ref, "request")
 			if !has {
-				err := RemoteFetch(ctx, req, fi, n.localID)
+				err := n.RemoteFetch(ctx, req, fi)
 				if err != nil {
 					return nil, err
 				}
@@ -215,6 +221,61 @@ func (n *NetStore) Get(ctx context.Context, req *Request) (storage.Chunk, error)
 	defer ssp.Finish()
 
 	return chunk, nil
+}
+
+func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *FetcherItem) error {
+	// while we haven't timed-out, and while we don't have a chunk,
+	// iterate over peers and try to find a chunk
+	metrics.GetOrRegisterCounter("remote.fetch", nil).Inc(1)
+
+	ref := req.Addr
+
+	rid := getGID()
+
+	for {
+		metrics.GetOrRegisterCounter("remote.fetch.inner", nil).Inc(1)
+
+		innerCtx, osp := spancontext.StartSpan(
+			ctx,
+			"remote.fetch")
+		osp.LogFields(olog.String("ref", ref.String()))
+
+		log.Trace("remote.fetch", "ref", ref, "rid", rid)
+		currentPeer, err := n.RemoteGet(innerCtx, req, n.localID)
+		if err != nil {
+			log.Error(err.Error(), "ref", ref, "rid", rid)
+			osp.LogFields(olog.String("err", err.Error()))
+			osp.Finish()
+			return err
+		}
+		osp.LogFields(olog.String("peer", currentPeer.String()))
+
+		// add peer to the set of peers to skip from now
+		log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String(), "rid", rid)
+		req.PeersToSkip.Store(currentPeer.String(), time.Now())
+
+		select {
+		case <-fi.Delivered:
+			log.Trace("remote.fetch, chunk delivered", "ref", ref, "rid", rid)
+
+			osp.LogFields(olog.Bool("delivered", true))
+			osp.Finish()
+			return nil
+		case <-time.After(timeouts.SearchTimeout):
+			metrics.GetOrRegisterCounter("remote.fetch.timeout.search", nil).Inc(1)
+
+			osp.LogFields(olog.Bool("timeout", true))
+			osp.Finish()
+			break
+		case <-ctx.Done(): // global fetcher timeout
+			log.Trace("remote.fetch, fail", "ref", ref, "rid", rid)
+			metrics.GetOrRegisterCounter("remote.fetch.timeout.global", nil).Inc(1)
+
+			osp.LogFields(olog.Bool("fail", true))
+			osp.Finish()
+			return errors.New("chunk couldnt be retrieved from remote nodes")
+		}
+	}
 }
 
 // Has is the storage layer entry point to query the underlying

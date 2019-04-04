@@ -1135,7 +1135,7 @@ func TestGetSubscriptions(t *testing.T) {
 	r := &Registry{}
 	api := NewAPI(r)
 	// call once, at this point should be empty
-	regs := api.GetPeerSubscriptions()
+	regs := api.GetPeerServerSubscriptions()
 	if len(regs) != 0 {
 		t.Fatal("Expected subscription count to be 0, but it is not")
 	}
@@ -1159,7 +1159,7 @@ func TestGetSubscriptions(t *testing.T) {
 	r.peers = peerMap
 
 	// call the subscriptions again
-	regs = api.GetPeerSubscriptions()
+	regs = api.GetPeerServerSubscriptions()
 	// count how many (fake) subscriptions there are
 	cnt := 0
 	for _, reg := range regs {

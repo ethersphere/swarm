@@ -156,8 +156,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
+
 	delivery := stream.NewDelivery(to, self.netStore)
-	network.RemoteGet = delivery.RequestFromPeers
+	self.netStore.RemoteGet = delivery.RequestFromPeers
 
 	if config.SwapEnabled {
 		balancesStore, err := state.NewDBStore(filepath.Join(config.Path, "balances.db"))

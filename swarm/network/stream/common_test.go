@@ -71,7 +71,7 @@ func init() {
 }
 
 // newNetStoreAndDelivery is a default constructor for BzzAddr, NetStore and Delivery, used in Simulations
-func newNetStoreAndDelivery(ctx *adapters.ServiceContext, bucket *sync.Map) (*network.BzzAddr, *storage.NetStore, *Delivery, func(), error) {
+func newNetStoreAndDelivery(ctx *adapters.ServiceContext, bucket *sync.Map) (*network.BzzAddr, *network.NetStore, *Delivery, func(), error) {
 	addr := network.NewAddr(ctx.Config.Node())
 
 	netStore, delivery, cleanup, err := netStoreAndDeliveryWithAddr(ctx, bucket, addr)
@@ -79,25 +79,25 @@ func newNetStoreAndDelivery(ctx *adapters.ServiceContext, bucket *sync.Map) (*ne
 		return nil, nil, nil, nil, err
 	}
 
-	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+	netStore.RemoteGet = delivery.RequestFromPeers
 
 	return addr, netStore, delivery, cleanup, nil
 }
 
 // newNetStoreAndDeliveryWithBzzAddr is a constructor for NetStore and Delivery, used in Simulations, accepting any BzzAddr
-func newNetStoreAndDeliveryWithBzzAddr(ctx *adapters.ServiceContext, bucket *sync.Map, addr *network.BzzAddr) (*storage.NetStore, *Delivery, func(), error) {
+func newNetStoreAndDeliveryWithBzzAddr(ctx *adapters.ServiceContext, bucket *sync.Map, addr *network.BzzAddr) (*network.NetStore, *Delivery, func(), error) {
 	netStore, delivery, cleanup, err := netStoreAndDeliveryWithAddr(ctx, bucket, addr)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+	netStore.RemoteGet = delivery.RequestFromPeers
 
 	return netStore, delivery, cleanup, nil
 }
 
 // newNetStoreAndDeliveryWithRequestFunc is a constructor for NetStore and Delivery, used in Simulations, accepting any NetStore.RequestFunc
-func newNetStoreAndDeliveryWithRequestFunc(ctx *adapters.ServiceContext, bucket *sync.Map, rf network.RequestFunc) (*network.BzzAddr, *storage.NetStore, *Delivery, func(), error) {
+func newNetStoreAndDeliveryWithRequestFunc(ctx *adapters.ServiceContext, bucket *sync.Map, rf network.RemoteGetFunc) (*network.BzzAddr, *network.NetStore, *Delivery, func(), error) {
 	addr := network.NewAddr(ctx.Config.Node())
 
 	netStore, delivery, cleanup, err := netStoreAndDeliveryWithAddr(ctx, bucket, addr)
@@ -105,12 +105,12 @@ func newNetStoreAndDeliveryWithRequestFunc(ctx *adapters.ServiceContext, bucket 
 		return nil, nil, nil, nil, err
 	}
 
-	netStore.NewNetFetcherFunc = network.NewFetcherFactory(rf, true).New
+	netStore.RemoteGet = rf
 
 	return addr, netStore, delivery, cleanup, nil
 }
 
-func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map, addr *network.BzzAddr) (*storage.NetStore, *Delivery, func(), error) {
+func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map, addr *network.BzzAddr) (*network.NetStore, *Delivery, func(), error) {
 	n := ctx.Config.Node()
 
 	store, datadir, err := createTestLocalStorageForID(n.ID(), addr)
@@ -121,12 +121,10 @@ func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map,
 		return nil, nil, nil, err
 	}
 	localStore := store.(*storage.LocalStore)
-	netStore, err := storage.NewNetStore(localStore, nil)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	netStore := network.NewNetStore(localStore, enode.ID{})
 
-	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams())
+	lnetStore := network.NewLNetStore(netStore)
+	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams())
 
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	delivery := NewDelivery(kad, netStore)
@@ -171,14 +169,11 @@ func newStreamerTester(registryOptions *RegistryOptions) (*p2ptest.ProtocolTeste
 		return nil, nil, nil, nil, err
 	}
 
-	netStore, err := storage.NewNetStore(localStore, nil)
-	if err != nil {
-		removeDataDir()
-		return nil, nil, nil, nil, err
-	}
+	netStore := network.NewNetStore(localStore, enode.ID{})
 
 	delivery := NewDelivery(to, netStore)
-	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+
+	netStore.RemoteGet = delivery.RequestFromPeers
 	streamer := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), registryOptions, nil)
 	teardown := func() {
 		streamer.Close()

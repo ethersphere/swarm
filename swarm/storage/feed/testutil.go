@@ -17,12 +17,11 @@
 package feed
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
-	"sync"
 
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -38,17 +37,6 @@ func (t *TestHandler) Close() {
 	t.chunkStore.Close()
 }
 
-type mockNetFetcher struct{}
-
-func (m *mockNetFetcher) Request(hopCount uint8) {
-}
-func (m *mockNetFetcher) Offer(source *enode.ID) {
-}
-
-func newFakeNetFetcher(context.Context, storage.Address, *sync.Map) storage.NetFetcher {
-	return &mockNetFetcher{}
-}
-
 // NewTestHandler creates Handler object to be used for testing purposes.
 func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error) {
 	path := filepath.Join(datadir, testDbDirName)
@@ -61,11 +49,7 @@ func NewTestHandler(datadir string, params *HandlerParams) (*TestHandler, error)
 	}
 	localStore.Validators = append(localStore.Validators, storage.NewContentAddressValidator(storage.MakeHashFunc(feedsHashAlgorithm)))
 	localStore.Validators = append(localStore.Validators, fh)
-	netStore, err := storage.NewNetStore(localStore, nil)
-	if err != nil {
-		return nil, err
-	}
-	netStore.NewNetFetcherFunc = newFakeNetFetcher
+	netStore := network.NewNetStore(localStore, enode.ID{})
 	fh.SetStore(netStore)
 	return &TestHandler{fh}, nil
 }

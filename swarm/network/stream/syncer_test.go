@@ -185,7 +185,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			if !ok {
 				return fmt.Errorf("No DB")
 			}
-			netStore := item.(*storage.NetStore)
+			netStore := item.(*network.NetStore)
 			netStore.Iterator(0, math.MaxUint64, po, func(addr storage.Address, index uint64) bool {
 				hashes[i] = append(hashes[i], addr)
 				totalHashes++
@@ -204,8 +204,13 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 					if !ok {
 						return fmt.Errorf("No DB")
 					}
-					db := item.(*storage.NetStore)
-					_, err := db.Get(ctx, key)
+					r := &network.Request{
+						Addr:     key,
+						Origin:   enode.ID{},
+						HopCount: 0,
+					}
+					db := item.(*network.NetStore)
+					_, err := db.Get(ctx, r)
 					if err == nil {
 						found++
 					}

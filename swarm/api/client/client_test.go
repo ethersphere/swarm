@@ -374,7 +374,7 @@ func newTestSigner() (*feed.GenericSigner, error) {
 // This effectively uses a feed to store a pointer to content rather than the content itself
 // Retrieving the update with the Swarm hash should return the manifest pointing directly to the data
 // and raw retrieve of that hash should return the data
-func TestClientBzzWithFeed(t *testing.T) {
+func XTestClientBzzWithFeed(t *testing.T) {
 
 	signer, _ := newTestSigner()
 
