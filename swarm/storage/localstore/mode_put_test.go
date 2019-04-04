@@ -98,28 +98,6 @@ func TestModePutSync(t *testing.T) {
 	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
 }
 
-func TestModePutTag(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
-
-	wantTimestamp := time.Now().UTC().UnixNano()
-	defer setNow(func() (t int64) {
-		return wantTimestamp
-	})()
-
-	ch := generateTestRandomChunk()
-
-	err := db.Put(context.Background(), chunk.ModePutTags, ch)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
-
-	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
-
-}
-
 // TestModePutUpload validates ModePutUpload index values on the provided DB.
 func TestModePutUpload(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)

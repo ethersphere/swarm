@@ -297,7 +297,7 @@ func newPushIndexTest(db *DB, ch chunk.Chunk, storeTimestamp int64, wantError er
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, ch.Address(), nil, storeTimestamp, ch.Tags())
+			validateItem(t, item, ch.Address(), nil, storeTimestamp, 0, ch.Tags())
 		}
 	}
 }

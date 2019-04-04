@@ -15,3 +15,25 @@
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
 package localstore
+
+/*func TestPutTag(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	wantTimestamp := time.Now().UTC().UnixNano()
+	defer setNow(func() (t int64) {
+		return wantTimestamp
+	})()
+
+	ch := generateTestRandomChunk()
+
+	err := db.Put(context.Background(), chunk.ModePutTags, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("retrieve indexes", newRetrieveIndexesTest(db, ch, wantTimestamp, 0))
+
+	t.Run("pull index", newPullIndexTest(db, ch, 1, nil))
+
+}*/
