@@ -169,6 +169,7 @@ func (p *Peer) Registrations() error {
 			if err != nil {
 				log.Error(err.Error())
 			}
+		default:
 		}
 	}
 	return nil
@@ -180,10 +181,7 @@ func (p *Peer) doRegistrations() error {
 
 	kad := p.streamer.delivery.kad
 	kadDepth := kad.NeighbourhoodDepth()
-	po, err := kad.PoOfPeer(p.bzzPeer)
-	if err != nil {
-		return err
-	}
+	po := kad.PoOfPeer(p.bzzPeer)
 
 	if po < kadDepth {
 		startPo = po
