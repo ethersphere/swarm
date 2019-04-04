@@ -31,7 +31,7 @@ import (
 
 const testDataSize = 0x0001000
 
-func TestFileStorerandom(t *testing.T) {
+func TestFileStoreRandom(t *testing.T) {
 	testFileStoreRandom(false, t)
 	testFileStoreRandom(true, t)
 }
