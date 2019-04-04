@@ -18,6 +18,8 @@ package localstore
 
 import (
 	"encoding/binary"
+	"math/rand"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -25,10 +27,13 @@ import (
 
 var _ chunk.TagStore = &DB{}
 
-func (db *DB) PutUploadID(id uint64, uploadTime int64, uploadName string) (err error) {
+func (db *DB) NewTag(uploadTime int64, uploadName string) (tag uint64, err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+
+	tag := r.Uint64()
 
 	batch := new(leveldb.Batch)
 	val := make([]byte, 8)
@@ -36,7 +41,7 @@ func (db *DB) PutUploadID(id uint64, uploadTime int64, uploadName string) (err e
 	val = append(val, []byte(uploadName))
 
 	// put to indexes: tag
-	db.uploadIndex.PutInBatch(batch, interface{ id }, interface{ val })
+	db.uploadIndex.PutInBatch(batch, interface{ tag }, interface{ val })
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
 		return err
@@ -45,7 +50,19 @@ func (db *DB) PutUploadID(id uint64, uploadTime int64, uploadName string) (err e
 
 }
 
-func (db *DB) GetChunkTags(addr chunk.Address) ([]uint64, error) {
+func (db *DB) DeleteTag(tag uint64) error {
+
+}
+
+func (db *DB) GetTags() ([]chunk.Tag, error) {
+
+}
+
+func (db *DB) GetTag(uint64 tag) (chunk.Tag, error) {
+
+}
+
+func (db *DB) ChunkTags(addr chunk.Address) ([]uint64, error) {
 	item := addressToItem(addr)
 
 	out, err := db.retrievalDataIndex.Get(item)
@@ -65,20 +82,4 @@ func (db *DB) GetChunkTags(addr chunk.Address) ([]uint64, error) {
 	}
 
 	return c.Tags, nil
-}
-
-func (db *DB) PutTag(uploadId, tag uint64, path string) (err error) {
-	// protect parallel updates
-	db.batchMu.Lock()
-	defer db.batchMu.Unlock()
-
-	batch := new(leveldb.Batch)
-	var k, v interface{}
-	// put to indexes: tag
-	db.tagIndex.PutInBatch(batch, k, v)
-	err = db.shed.WriteBatch(batch)
-	if err != nil {
-		return err
-	}
-	return nil
 }

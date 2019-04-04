@@ -191,6 +191,17 @@ func generateTestRandomChunk() chunk.Chunk {
 	return chunk.NewChunk(key, data, tags)
 }
 
+// generateTestRandomChunkWithTags does the same at the above but allows a custom tag
+func generateTestRandomChunkWithTags(tags []uint64) chunk.Chunk {
+	data := make([]byte, chunk.DefaultSize)
+	rand.Read(data)
+	key := make([]byte, 32)
+	rand.Read(key)
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	n := r.Intn(10)
+	return chunk.NewChunk(key, data, tags)
+}
+
 // TestGenerateTestRandomChunk validates that
 // generateTestRandomChunk returns random data by comparing
 // two generated chunks.

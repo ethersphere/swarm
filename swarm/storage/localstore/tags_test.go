@@ -16,6 +16,46 @@
 
 package localstore
 
+import (
+	"testing"
+	"time"
+)
+
+// tests that new tag is created, iterated over (one or all) and deleted in the database
+func TestTags(t *testing.T) {
+	db, cleanupFunc := newTestDB(t, nil)
+	defer cleanupFunc()
+
+	tag := db.NewTag(time.Now().Unix(), "path/to/directory")
+
+	/*	c := generateTestRandomChunkWithTags([]uint64{tag})
+
+		err := db.Put(context.Background(), chunk.ModePutUpload, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+	*/
+	existingTags = db.GetTags()
+
+	//expect tag to be in existingTags
+
+	oneTag = db.GetTag(tag)
+
+	// expect to exist
+
+	//delete tag
+	err = db.DeleteTag(tag)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tagShouldNotExist, err := db.GetTag(tag)
+	if err == nil {
+		t.Fatal("tag should not exist")
+	}
+
+}
+
 /*func TestPutTag(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
