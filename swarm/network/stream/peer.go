@@ -104,7 +104,7 @@ func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
 
 // Deliver sends a storeRequestMsg protocol message to the peer
 // Depending on the `syncing` parameter we send different message types
-func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, syncing bool) error {
+func (p *Peer) Deliver(ctx context.Context, chunk storage.Chunk, priority uint8, syncing bool) error {
 	var msg interface{}
 
 	spanName := "send.chunk.delivery"
