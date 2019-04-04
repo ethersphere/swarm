@@ -21,14 +21,7 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
-var _ TagStore = &DB{}
-
-type TagStore interface {
-	PutUploadID(uploadId uint64, timestamp int64, uploadName string) error
-
-	GetChunkTags(addr chunk.Address) ([]uint64, error)
-	PutTag(uploadId, tag uint64, path string) error
-}
+var _ chunk.TagStore = &DB{}
 
 func (db *DB) PutUploadID(id uint64, uploadTime int64, uploadName string) (err error) {
 	// protect parallel updates

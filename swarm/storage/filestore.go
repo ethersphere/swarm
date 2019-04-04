@@ -48,7 +48,7 @@ const (
 
 type FileStore struct {
 	ChunkStore
-	tagStore localstore.TagStore
+	tagStore chunk.TagStore
 	hashFunc SwarmHasher
 }
 
@@ -71,7 +71,7 @@ func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
 	return NewFileStore(localStore, chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams()), nil
 }
 
-func NewFileStore(tagStore localstore.TagStore, store ChunkStore, params *FileStoreParams) *FileStore {
+func NewFileStore(tagStore chunk.TagStore, store ChunkStore, params *FileStoreParams) *FileStore {
 	hashFunc := MakeHashFunc(params.Hash)
 	return &FileStore{
 		tagStore:   tagStore,

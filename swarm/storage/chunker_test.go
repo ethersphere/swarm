@@ -24,7 +24,7 @@ import (
 	"io"
 	"testing"
 
-	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 	"golang.org/x/crypto/sha3"
 )
@@ -43,7 +43,7 @@ type chunkerTester struct {
 	t      test
 }
 
-func newTestHasherStore(store ChunkStore, tagStore localstore.TagStore, hash string) *hasherStore {
+func newTestHasherStore(store ChunkStore, tagStore chunk.TagStore, hash string) *hasherStore {
 	return NewHasherStore(store, tagStore, MakeHashFunc(hash), false)
 }
 
