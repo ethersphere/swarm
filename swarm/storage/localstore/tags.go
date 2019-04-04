@@ -17,6 +17,8 @@
 package localstore
 
 import (
+	"encoding/binary"
+
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -29,10 +31,12 @@ func (db *DB) PutUploadID(id uint64, uploadTime int64, uploadName string) (err e
 	defer db.batchMu.Unlock()
 
 	batch := new(leveldb.Batch)
-	var k, v interface{}
+	val := make([]byte, 8)
+	binary.BigEndian.PutInt64(val, uploadTime)
+	val = append(val, []byte(uploadName))
 
 	// put to indexes: tag
-	db.uploadIndex.PutInBatch(batch, k, v)
+	db.uploadIndex.PutInBatch(batch, interface{ id }, interface{ val })
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
 		return err
