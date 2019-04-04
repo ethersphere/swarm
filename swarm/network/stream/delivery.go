@@ -222,8 +222,8 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 		err := d.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
-				log.Warn("invalid chunk delivered", "peer", sp.ID(), "chunk", msg.Addr)
-				msg.peer.Drop(err)
+				log.Error("invalid chunk delivered", "peer", sp.ID(), "chunk", msg.Addr)
+				//msg.peer.Drop(err)
 			}
 
 			log.Error("err", err.Error(), "peer", sp.ID(), "chunk", msg.Addr)
