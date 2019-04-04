@@ -256,7 +256,7 @@ func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, ac
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, ch.Address(), ch.Data(), storeTimestamp, []uint64{})
+		validateItem(t, item, ch.Address(), ch.Data(), storeTimestamp, accessTimestamp, []uint64{})
 
 		if accessTimestamp > 0 {
 			item, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
@@ -280,7 +280,7 @@ func newPullIndexTest(db *DB, ch chunk.Chunk, binID uint64, wantError error) fun
 			t.Errorf("got error %v, want %v", err, wantError)
 		}
 		if err == nil {
-			validateItem(t, item, ch.Address(), nil, 0, []uint64{})
+			validateItem(t, item, ch.Address(), nil, 0, 0, []uint64{})
 		}
 	}
 }
