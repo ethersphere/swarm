@@ -256,7 +256,7 @@ func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, ac
 		if err != nil {
 			t.Fatal(err)
 		}
-		validateItem(t, item, ch.Address(), ch.Data(), storeTimestamp, []uint64)
+		validateItem(t, item, ch.Address(), ch.Data(), storeTimestamp, []uint64{})
 
 		if accessTimestamp > 0 {
 			item, err = db.retrievalAccessIndex.Get(addressToItem(ch.Address()))
