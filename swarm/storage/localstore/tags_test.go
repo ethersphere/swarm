@@ -35,6 +35,7 @@ func TestTags(t *testing.T) {
 			t.Fatal(err)
 		}
 	*/
+
 	existingTags = db.GetTags()
 
 	//expect tag to be in existingTags

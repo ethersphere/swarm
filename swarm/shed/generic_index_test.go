@@ -285,17 +285,16 @@ func TestGenericIndex_Iterate(t *testing.T) {
 	})
 
 	sort.SliceStable(items, func(i, j int) bool {
-		return bytes.Compare(items[i].k, items[j].k) < 0
+		return bytes.Compare([]byte(items[i].k), []byte(items[j].k)) < 0
 	})
-	//////////
 	t.Run("all", func(t *testing.T) {
 		var i int
-		err := index.Iterate(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			i++
 			return false, nil
 		}, nil)
@@ -307,16 +306,16 @@ func TestGenericIndex_Iterate(t *testing.T) {
 	t.Run("start from", func(t *testing.T) {
 		startIndex := 2
 		i := startIndex
-		err := index.Iterate(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			i++
 			return false, nil
-		}, &IterateOptions{
-			StartFrom: &items[startIndex],
+		}, &GenericIterateOptions{
+			StartFrom: items[startIndex].k,
 		})
 		if err != nil {
 			t.Fatal(err)
@@ -326,16 +325,16 @@ func TestGenericIndex_Iterate(t *testing.T) {
 	t.Run("skip start from", func(t *testing.T) {
 		startIndex := 2
 		i := startIndex + 1
-		err := index.Iterate(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			i++
 			return false, nil
-		}, &IterateOptions{
-			StartFrom:         &items[startIndex],
+		}, &GenericIterateOptions{
+			StartFrom:         items[startIndex].k,
 			SkipStartFromItem: true,
 		})
 		if err != nil {
@@ -347,12 +346,12 @@ func TestGenericIndex_Iterate(t *testing.T) {
 		var i int
 		stopIndex := 3
 		var count int
-		err := index.Iterate(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			count++
 			if i == stopIndex {
 				return true, nil
@@ -370,27 +369,30 @@ func TestGenericIndex_Iterate(t *testing.T) {
 	})
 
 	t.Run("no overflow", func(t *testing.T) {
-		secondIndex, err := db.NewIndex("second-index", retrievalIndexFuncs)
+		secondIndex, err := db.NewGenericIndex("second-index", retrievalGenericIndexFuncs)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		secondItem := Item{
-			Address: []byte("iterate-hash-10"),
-			Data:    []byte("data-second"),
+		secondItem := struct {
+			k string
+			v string
+		}{
+			k: "iterate-hash-10",
+			v: "data-second",
 		}
-		err = secondIndex.Put(secondItem)
+		err = secondIndex.Put(secondItem.k, secondItem.v)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		var i int
-		err = index.Iterate(func(item Item) (stop bool, err error) {
+		err = index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			i++
 			return false, nil
 		}, nil)
@@ -399,11 +401,11 @@ func TestGenericIndex_Iterate(t *testing.T) {
 		}
 
 		i = 0
-		err = secondIndex.Iterate(func(item Item) (stop bool, err error) {
+		err = secondIndex.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > 1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			checkItem(t, item, secondItem)
+			checkItemString(t, v, secondItem.v)
 			i++
 			return false, nil
 		}, nil)
@@ -419,27 +421,27 @@ func TestGenericIndex_Iterate_withPrefix(t *testing.T) {
 	db, cleanupFunc := newTestDB(t)
 	defer cleanupFunc()
 
-	index, err := db.NewIndex("retrieval", retrievalIndexFuncs)
+	index, err := db.NewGenericIndex("retrieval", retrievalGenericIndexFuncs)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	allItems := []Item{
-		{Address: []byte("want-hash-00"), Data: []byte("data80")},
-		{Address: []byte("skip-hash-01"), Data: []byte("data81")},
-		{Address: []byte("skip-hash-02"), Data: []byte("data82")},
-		{Address: []byte("skip-hash-03"), Data: []byte("data83")},
-		{Address: []byte("want-hash-04"), Data: []byte("data84")},
-		{Address: []byte("want-hash-05"), Data: []byte("data85")},
-		{Address: []byte("want-hash-06"), Data: []byte("data86")},
-		{Address: []byte("want-hash-07"), Data: []byte("data87")},
-		{Address: []byte("want-hash-08"), Data: []byte("data88")},
-		{Address: []byte("want-hash-09"), Data: []byte("data89")},
-		{Address: []byte("skip-hash-10"), Data: []byte("data90")},
+	allItems := []struct{ k, v string }{
+		{k: "want-hash-00", v: "data80"},
+		{k: "skip-hash-01", v: "data81"},
+		{k: "skip-hash-02", v: "data82"},
+		{k: "skip-hash-03", v: "data83"},
+		{k: "want-hash-04", v: "data84"},
+		{k: "want-hash-05", v: "data85"},
+		{k: "want-hash-06", v: "data86"},
+		{k: "want-hash-07", v: "data87"},
+		{k: "want-hash-08", v: "data88"},
+		{k: "want-hash-09", v: "data89"},
+		{k: "skip-hash-10", v: "data90"},
 	}
 	batch := new(leveldb.Batch)
 	for _, i := range allItems {
-		index.PutInBatch(batch, i)
+		index.PutInBatch(batch, i.k, i.v)
 	}
 	err = db.WriteBatch(batch)
 	if err != nil {
@@ -448,27 +450,27 @@ func TestGenericIndex_Iterate_withPrefix(t *testing.T) {
 
 	prefix := []byte("want")
 
-	items := make([]Item, 0)
+	items := make([]struct{ k, v string }, 0)
 	for _, item := range allItems {
-		if bytes.HasPrefix(item.Address, prefix) {
+		if bytes.HasPrefix([]byte(item.k), prefix) {
 			items = append(items, item)
 		}
 	}
 	sort.SliceStable(items, func(i, j int) bool {
-		return bytes.Compare(items[i].Address, items[j].Address) < 0
+		return bytes.Compare([]byte(items[i].k), []byte(items[j].k)) < 0
 	})
 
 	t.Run("with prefix", func(t *testing.T) {
 		var i int
-		err := index.Iterate(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			i++
 			return false, nil
-		}, &IterateOptions{
+		}, &GenericIterateOptions{
 			Prefix: prefix,
 		})
 		if err != nil {
@@ -483,17 +485,17 @@ func TestGenericIndex_Iterate_withPrefix(t *testing.T) {
 		startIndex := 2
 		var count int
 		i := startIndex
-		err := index.Iterate(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			i++
 			count++
 			return false, nil
-		}, &IterateOptions{
-			StartFrom: &items[startIndex],
+		}, &GenericIterateOptions{
+			StartFrom: items[startIndex].k,
 			Prefix:    prefix,
 		})
 		if err != nil {
@@ -509,17 +511,17 @@ func TestGenericIndex_Iterate_withPrefix(t *testing.T) {
 		startIndex := 2
 		var count int
 		i := startIndex + 1
-		err := index.Iterate(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			i++
 			count++
 			return false, nil
-		}, &IterateOptions{
-			StartFrom:         &items[startIndex],
+		}, &GenericIterateOptions{
+			StartFrom:         items[startIndex].k,
 			SkipStartFromItem: true,
 			Prefix:            prefix,
 		})
@@ -536,19 +538,19 @@ func TestGenericIndex_Iterate_withPrefix(t *testing.T) {
 		var i int
 		stopIndex := 3
 		var count int
-		err := index.Iterate(func(item Item) (stop bool, err error) {
+		err := index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			count++
 			if i == stopIndex {
 				return true, nil
 			}
 			i++
 			return false, nil
-		}, &IterateOptions{
+		}, &GenericIterateOptions{
 			Prefix: prefix,
 		})
 		if err != nil {
@@ -561,30 +563,30 @@ func TestGenericIndex_Iterate_withPrefix(t *testing.T) {
 	})
 
 	t.Run("no overflow", func(t *testing.T) {
-		secondIndex, err := db.NewIndex("second-index", retrievalIndexFuncs)
+		secondIndex, err := db.NewGenericIndex("second-index", retrievalGenericIndexFuncs)
 		if err != nil {
 			t.Fatal(err)
 		}
 
-		secondItem := Item{
-			Address: []byte("iterate-hash-10"),
-			Data:    []byte("data-second"),
+		secondItem := struct{ k, v string }{
+			k: "iterate-hash-10",
+			v: "data-second",
 		}
-		err = secondIndex.Put(secondItem)
+		err = secondIndex.Put(secondItem.k, secondItem.v)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		var i int
-		err = index.Iterate(func(item Item) (stop bool, err error) {
+		err = index.Iterate(func(k, v interface{}) (stop bool, err error) {
 			if i > len(items)-1 {
-				return true, fmt.Errorf("got unexpected index item: %#v", item)
+				return true, fmt.Errorf("got unexpected index item: %#v", v)
 			}
-			want := items[i]
-			checkItem(t, item, want)
+			want := items[i].v
+			checkItemString(t, v, want)
 			i++
 			return false, nil
-		}, &IterateOptions{
+		}, &GenericIterateOptions{
 			Prefix: prefix,
 		})
 		if err != nil {

@@ -18,12 +18,11 @@ package storage
 
 import (
 	"context"
-	"encoding/binary"
 	"io"
 	"sort"
 	"sync"
+	"time"
 
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
@@ -107,17 +106,18 @@ func (f *FileStore) HashSize() int {
 // it returns the tag as uint64
 func (f *FileStore) CreateTag(ctx context.Context, filename string, timestamp uint64) (uint64, error) {
 	// add uploadID
+	/*
+		var uploadId uint64 = 0
+		intBuf := make([]byte, 8)
+		binary.BigEndian.PutUint64(intBuf, timestamp)
+		// Tag is SHA3(filename|storetimestamp)[:8]
+		buf := []byte(filename)
+		buf = append(buf, intBuf...)
+		tagHash := crypto.Keccak256(buf)[:8]
 
-	var uploadId uint64 = 0
-	intBuf := make([]byte, 8)
-	binary.BigEndian.PutUint64(intBuf, timestamp)
-	// Tag is SHA3(filename|storetimestamp)[:8]
-	buf := []byte(filename)
-	buf = append(buf, intBuf...)
-	tagHash := crypto.Keccak256(buf)[:8]
-
-	tag := binary.BigEndian.Uint64(tagHash)
-	err := f.tagStore.PutTag(uploadId, tag, filename)
+		tag := binary.BigEndian.Uint64(tagHash)
+	*/
+	tag, err := f.tagStore.NewTag(time.Now().Unix(), filename)
 	if err != nil {
 		return tag, err
 	}

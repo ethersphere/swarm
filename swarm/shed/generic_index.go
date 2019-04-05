@@ -17,7 +17,11 @@
 package shed
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
 // Index represents a set of LevelDB key value pairs that have common
@@ -29,10 +33,10 @@ import (
 type GenericIndex struct {
 	db              *DB
 	prefix          []byte
-	encodeKeyFunc   func(item interface{}) (key []byte, err error)
-	decodeKeyFunc   func(key []byte) (item interface{}, err error)
-	encodeValueFunc func(fields interface{}) (value []byte, err error)
-	decodeValueFunc func(keyFields interface{}, value []byte) (e interface{}, err error)
+	encodeKeyFunc   func(k interface{}) (key []byte, err error)
+	decodeKeyFunc   func(key []byte) (k interface{}, err error)
+	encodeValueFunc func(v interface{}) (value []byte, err error)
+	decodeValueFunc func(v interface{}, value []byte) (e interface{}, err error)
 }
 
 // GenericIndexFuncs structure defines functions for encoding and decoding
@@ -157,4 +161,96 @@ func (f GenericIndex) DeleteInBatch(batch *leveldb.Batch, keyFields interface{})
 	}
 	batch.Delete(key)
 	return nil
+}
+
+// GenericIndexIterFunc is a callback on every Item that is decoded
+// by iterating on an Index keys.
+// By returning a true for stop variable, iteration will
+// stop, and by returning the error, that error will be
+// propagated to the called iterator method on Index.
+type GenericIndexIterFunc func(k, v interface{}) (stop bool, err error)
+
+// IterateOptions defines optional parameters for Iterate function.
+type GenericIterateOptions struct {
+	// StartFrom is the Item to start the iteration from.
+	StartFrom interface{}
+	// If SkipStartFromItem is true, StartFrom item will not
+	// be iterated on.
+	SkipStartFromItem bool
+	// Iterate over items which keys have a common prefix.
+	Prefix []byte
+}
+
+// Iterate function iterates over keys of the Index.
+// If IterateOptions is nil, the iterations is over all keys.
+func (f GenericIndex) Iterate(fn GenericIndexIterFunc, options *GenericIterateOptions) (err error) {
+	if options == nil {
+		options = new(GenericIterateOptions)
+	}
+	// construct a prefix with Index prefix and optional common key prefix
+	prefix := append(f.prefix, options.Prefix...)
+	// start from the prefix
+	startKey := prefix
+	if options.StartFrom != nil {
+		// start from the provided StartFrom Item key value
+		startKey, err = f.encodeKeyFunc(options.StartFrom)
+		if err != nil {
+			return err
+		}
+	}
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	// move the cursor to the start key
+	ok := it.Seek(startKey)
+	if !ok {
+		// stop iterator if seek has failed
+		return it.Error()
+	}
+	if options.SkipStartFromItem && bytes.Equal(startKey, it.Key()) {
+		// skip the start from Item if it is the first key
+		// and it is explicitly configured to skip it
+		ok = it.Next()
+	}
+	for ; ok; ok = it.Next() {
+		itemK, itemV, err := f.tupleFromIterator(it, prefix)
+		if err != nil {
+			if err == leveldb.ErrNotFound {
+				break
+			}
+			return err
+		}
+		stop, err := fn(itemK, itemV)
+		if err != nil {
+			return err
+		}
+		if stop {
+			break
+		}
+	}
+	return it.Error()
+}
+
+// tupleFromIterator returns the key value tuple from the current iterator position.
+// If the complete encoded key does not start with totalPrefix,
+// leveldb.ErrNotFound is returned. Value for totalPrefix must start with
+// Index prefix.
+func (f GenericIndex) tupleFromIterator(it iterator.Iterator, totalPrefix []byte) (k, v interface{}, err error) {
+	fmt.Println("tupleFrom")
+
+	key := it.Key()
+	if !bytes.HasPrefix(key, totalPrefix) {
+		return nil, nil, leveldb.ErrNotFound
+	}
+	// create a copy of key byte slice not to share leveldb underlaying slice array
+	keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
+	if err != nil {
+		return nil, nil, err
+	}
+	// create a copy of value byte slice not to share leveldb underlaying slice array
+	valueItem, err := f.decodeValueFunc(keyItem, append([]byte(nil), it.Value()...))
+	if err != nil {
+		return nil, nil, err
+	}
+	return keyItem, valueItem, it.Error()
 }

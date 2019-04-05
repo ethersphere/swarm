@@ -15,6 +15,11 @@ var (
 	errNoETA  = errors.New("unable to calculate ETA")
 )
 
+type TagStore interface {
+	ChunkTags(addr Address) ([]uint64, error)
+	NewTag(uploadTime int64, path string) (tag uint64, err error)
+}
+
 // State is the enum type for chunk states
 type State = uint32
 

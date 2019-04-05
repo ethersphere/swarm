@@ -33,33 +33,35 @@ func (db *DB) NewTag(uploadTime int64, uploadName string) (tag uint64, err error
 	defer db.batchMu.Unlock()
 	r := rand.New(rand.NewSource(time.Now().Unix()))
 
-	tag := r.Uint64()
+	tag = r.Uint64()
 
 	batch := new(leveldb.Batch)
 	val := make([]byte, 8)
-	binary.BigEndian.PutInt64(val, uploadTime)
-	val = append(val, []byte(uploadName))
+	binary.BigEndian.PutUint64(val, uint64(uploadTime))
+	val = append(val, []byte(uploadName)...)
 
 	// put to indexes: tag
-	db.uploadIndex.PutInBatch(batch, interface{ tag }, interface{ val })
+	db.tagIndex.PutInBatch(batch, tag, val)
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
-		return err
+		return tag, err
 	}
-	return nil
+	return tag, nil
 
 }
 
 func (db *DB) DeleteTag(tag uint64) error {
-
+	return nil
 }
 
 func (db *DB) GetTags() ([]chunk.Tag, error) {
 
+	return nil, nil
 }
 
-func (db *DB) GetTag(uint64 tag) (chunk.Tag, error) {
+func (db *DB) GetTag(tag uint64) (chunk.Tag, error) {
 
+	return chunk.Tag{}, nil
 }
 
 func (db *DB) ChunkTags(addr chunk.Address) ([]uint64, error) {

@@ -217,10 +217,3 @@ func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, ch Chunk) (err e
 	}
 	return ErrChunkInvalid
 }
-
-type TagStore interface {
-	PutUploadID(uploadId uint64, timestamp int64, uploadName string) error
-
-	GetChunkTags(addr Address) ([]uint64, error)
-	PutTag(uploadId, tag uint64, path string) error
-}

@@ -115,7 +115,7 @@ func (h *hasherStore) Get(ctx context.Context, ref Reference) (ChunkData, error)
 }
 
 func (h *hasherStore) GetTags(ctx context.Context, addr chunk.Address) ([]uint64, error) {
-	tags, err := h.tagStore.GetChunkTags(addr)
+	tags, err := h.tagStore.ChunkTags(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (h *hasherStore) createHash(chunkData ChunkData) Address {
 
 func (h *hasherStore) createChunk(ctx context.Context, chunkData ChunkData) Chunk {
 	hash := h.createHash(chunkData)
-	tags, err := h.tagStore.GetChunkTags(chunk.Address(hash)) // TODO: this is really bad but if we want to persist tags across sessions this would be the way
+	tags, err := h.tagStore.ChunkTags(chunk.Address(hash)) // TODO: this is really bad but if we want to persist tags across sessions this would be the way
 	if err != nil {
 		panic(err)
 	}
