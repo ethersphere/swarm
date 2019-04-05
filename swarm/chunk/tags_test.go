@@ -1,16 +1,9 @@
 package chunk
 
 import (
-	"context"
-	"io/ioutil"
-	"math/rand"
-	"os"
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/ethereum/go-ethereum/swarm/chunk"
-	"github.com/ethereum/go-ethereum/swarm/network"
 )
 
 var (
@@ -79,7 +72,7 @@ func TestTagConcurrentIncrements(t *testing.T) {
 
 // TestTagsMultipleConcurrentIncrements tests Inc calls concurrently
 func TestTagsMultipleConcurrentIncrements(t *testing.T) {
-	ts := newTags()
+	ts := NewTags()
 	n := 100
 	wg := sync.WaitGroup{}
 	wg.Add(10 * 4 * n)
@@ -110,7 +103,7 @@ func TestTagsMultipleConcurrentIncrements(t *testing.T) {
 }
 
 // tests the correct behaviour of tags while using the DB
-func TestDBWithTags(t *testing.T) {
+/*func TestDBWithTags(t *testing.T) {
 	names := []string{"1", "2", "3", "4"}
 	receiptsC := make(chan chunk.Address)
 	quit := make(chan struct{})
@@ -141,7 +134,7 @@ func TestDBWithTags(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer os.RemoveAll(dbpath)
-	db, err := NewDB(dbpath, nil, sync, receiptsC, nil)
+	db, err := localstore.New(dbpath, nil, sync, receiptsC, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,4 +168,4 @@ func TestDBWithTags(t *testing.T) {
 			}
 		}
 	}
-}
+}*/

@@ -38,20 +38,20 @@ type Tag struct {
 }
 
 // tags holds the tag infos indexed by name
-type tags struct {
+type Tags struct {
 	tags *sync.Map
 }
 
 // NewTags creates a tags object
-func newTags() *tags {
-	return &tags{
+func NewTags() *Tags {
+	return &Tags{
 		&sync.Map{},
 	}
 }
 
 // New creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func (ts *tags) New(s string, total int) (*Tag, error) {
+func (ts *Tags) New(s string, total int) (*Tag, error) {
 	t := &Tag{
 		name:      s,
 		startedAt: time.Now(),
@@ -131,7 +131,7 @@ func (t *Tag) ETA(state State) (time.Time, error) {
 }
 
 // Inc increments the state count for a tag if tag is found
-func (ts *tags) Inc(s string, f State) {
+func (ts *Tags) Inc(s string, f State) {
 	t, ok := ts.tags.Load(s)
 	if !ok {
 		return
@@ -140,7 +140,7 @@ func (ts *tags) Inc(s string, f State) {
 }
 
 // Get returns the state count for a tag
-func (ts *tags) Get(s string, f State) int {
+func (ts *Tags) Get(s string, f State) int {
 	t, _ := ts.tags.Load(s)
 	return t.(*Tag).Get(f)
 }
