@@ -29,7 +29,7 @@ func TestTags(t *testing.T) {
 	defer cleanupFunc()
 	timeNow := time.Now().Unix()
 	testTags := []struct {
-		tag  uint64
+		tag  uint32
 		path string
 	}{
 		{path: "path/to/dir1"},
@@ -37,7 +37,7 @@ func TestTags(t *testing.T) {
 		{path: "another/path"},
 	}
 
-	tagMap := make(map[uint64]string)
+	tagMap := make(map[uint32]string)
 
 	for _, v := range testTags {
 		localTag, err := db.NewTag(timeNow, v.path)
@@ -53,7 +53,7 @@ func TestTags(t *testing.T) {
 	}
 
 	existingTags.Range(func(k, v interface{}) bool {
-		keyVal := k.(uint64)
+		keyVal := k.(uint32)
 		vv := v.(*chunk.Tag)
 		if vv.GetName() != tagMap[keyVal] {
 			t.Fatal("tag not equal")

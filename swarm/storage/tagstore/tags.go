@@ -25,11 +25,28 @@ import (
 
 var _ chunk.TagStore = &DB{}
 
-func (db *DB) NewTag(uploadTime int64, uploadName string) (tag uint64, err error) {
+/*
+type Tag struct {
+	uid       uint64 //a unique identifier for this tag
+	name      string
+	total     uint32     // total chunks belonging to a tag
+	split     uint32     // number of chunks already processed by splitter for hashing
+	stored    uint32     // number of chunks already stored locally
+	sent      uint32     // number of chunks sent for push syncing
+	synced    uint32     // number of chunks synced with proof
+	startedAt time.Time  // tag started to calculate ETA
+	State     chan State // channel to signal completion
+}
+*/
+func (db *DB) SaveTag(tag *chunk.Tag) error {
+	return nil
+}
+
+func (db *DB) NewTag(uploadTime int64, uploadName string) (tag uint32, err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
-	tag = db.rng.Uint64()
+	tag = db.rng.Uint32()
 	batch := new(leveldb.Batch)
 	val := make([]byte, 8)
 	binary.BigEndian.PutUint64(val, uint64(uploadTime))
@@ -49,16 +66,16 @@ func (db *DB) NewTag(uploadTime int64, uploadName string) (tag uint64, err error
 	return tag, nil
 }
 
-func (db *DB) DeleteTag(tag uint64) error {
+func (db *DB) DeleteTag(tag uint32) error {
 	return nil
 }
 
 func (db *DB) GetTags() (*chunk.Tags, error) {
 	t := chunk.NewTags()
 	err := db.tagIndex.Iterate(func(k, v interface{}) (bool, error) {
-		keyVal := k.(uint64)
+		keyVal := k.(uint32)
 		valBytes := v.([]byte)
-		_ = binary.BigEndian.Uint64(valBytes)
+		_ = binary.BigEndian.Uint32(valBytes)
 
 		tagName := string(valBytes[8:])
 		_, err := t.New(keyVal, tagName, 0)
@@ -70,18 +87,18 @@ func (db *DB) GetTags() (*chunk.Tags, error) {
 	return t, err
 }
 
-func (db *DB) GetTag(tag uint64) (chunk.Tag, error) {
+func (db *DB) GetTag(tag uint32) (chunk.Tag, error) {
 
 	return chunk.Tag{}, nil
 }
 
-func (db *DB) ChunkTags(addr chunk.Address) ([]uint64, error) {
+func (db *DB) ChunkTags(addr chunk.Address) ([]uint32, error) {
 	/*item := addressToItem(addr)
 
 	out, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return []uint64{}, nil
+			return []uint32{}, nil
 		}
 
 		return nil, err
@@ -89,11 +106,11 @@ func (db *DB) ChunkTags(addr chunk.Address) ([]uint64, error) {
 	c, err := db.pushIndex.Get(out)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
-			return []uint64{}, nil
+			return []uint32{}, nil
 		}
 		return nil, err
 	}
 
 	return c.Tags, nil*/
-	return []uint64{}, nil
+	return []uint32{}, nil
 }

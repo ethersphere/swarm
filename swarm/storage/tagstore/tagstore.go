@@ -111,17 +111,30 @@ func New(path string, o *Options) (db *DB, err error) {
 
 	// initialise the random number generator
 	db.rng = rand.New(rand.NewSource(time.Now().Unix()))
+	/*
+	   type Tag struct {
+	   	uid       uint64 //a unique identifier for this tag
+	   	name      string
+	   	total     uint32     // total chunks belonging to a tag
+	   	split     uint32     // number of chunks already processed by splitter for hashing
+	   	stored    uint32     // number of chunks already stored locally
+	   	sent      uint32     // number of chunks sent for push syncing
+	   	synced    uint32     // number of chunks synced with proof
+	   	startedAt time.Time  // tag started to calculate ETA
+	   	State     chan State // channel to signal completion
+	   }
+	*/
 
-	db.tagIndex, err = db.shed.NewGenericIndex("Tag->UploadTime|UploadName", shed.GenericIndexFuncs{
+	db.tagIndex, err = db.shed.NewGenericIndex("Tag->TotalChunks|SplitChunks|StoredChunks|SentChunks|SyncedChunks|UploadTime|UploadName", shed.GenericIndexFuncs{
 		EncodeKey: func(tag interface{}) (key []byte, err error) {
-			// key is uint64
+			// Tag is uint64
 			key = make([]byte, 8)
-			tagUint := tag.(uint64)
-			binary.BigEndian.PutUint64(key, tagUint)
+			tagUint := tag.(uint32)
+			binary.BigEndian.PutUint32(key, tagUint)
 			return key, nil
 		},
 		DecodeKey: func(key []byte) (e interface{}, err error) {
-			tag := binary.BigEndian.Uint64(key)
+			tag := binary.BigEndian.Uint32(key)
 			return tag, nil
 		},
 		EncodeValue: func(fields interface{}) (value []byte, err error) {
