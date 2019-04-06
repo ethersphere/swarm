@@ -18,8 +18,6 @@ package tagstore
 
 import (
 	"encoding/binary"
-	"math/rand"
-	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -31,23 +29,24 @@ func (db *DB) NewTag(uploadTime int64, uploadName string) (tag uint64, err error
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
-	r := rand.New(rand.NewSource(time.Now().Unix()))
-
-	tag = r.Uint64()
-
+	tag = db.rng.Uint64()
 	batch := new(leveldb.Batch)
 	val := make([]byte, 8)
 	binary.BigEndian.PutUint64(val, uint64(uploadTime))
 	val = append(val, []byte(uploadName)...)
-
+	//check that it doesnt exist
 	// put to indexes: tag
-	db.tagIndex.PutInBatch(batch, tag, val)
+	err = db.tagIndex.PutInBatch(batch, tag, val)
+	if err != nil {
+		return tag, err
+	}
+
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
 		return tag, err
 	}
-	return tag, nil
 
+	return tag, nil
 }
 
 func (db *DB) DeleteTag(tag uint64) error {
@@ -55,16 +54,17 @@ func (db *DB) DeleteTag(tag uint64) error {
 }
 
 func (db *DB) GetTags() (*chunk.Tags, error) {
-	//tags := make([]chunk.Tag, 0)
 	t := chunk.NewTags()
 	err := db.tagIndex.Iterate(func(k, v interface{}) (bool, error) {
-		_ = k.(uint64)
+		keyVal := k.(uint64)
+		valBytes := v.([]byte)
+		_ = binary.BigEndian.Uint64(valBytes)
 
-		_, err := t.New("tag", 0)
+		tagName := string(valBytes[8:])
+		_, err := t.New(keyVal, tagName, 0)
 		if err != nil {
 			return true, err
 		}
-		//todo append
 		return false, nil
 	}, nil)
 	return t, err

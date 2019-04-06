@@ -18,7 +18,6 @@ package shed
 
 import (
 	"bytes"
-	"fmt"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -236,8 +235,6 @@ func (f GenericIndex) Iterate(fn GenericIndexIterFunc, options *GenericIterateOp
 // leveldb.ErrNotFound is returned. Value for totalPrefix must start with
 // Index prefix.
 func (f GenericIndex) tupleFromIterator(it iterator.Iterator, totalPrefix []byte) (k, v interface{}, err error) {
-	fmt.Println("tupleFrom")
-
 	key := it.Key()
 	if !bytes.HasPrefix(key, totalPrefix) {
 		return nil, nil, leveldb.ErrNotFound

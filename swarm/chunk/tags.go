@@ -32,6 +32,7 @@ const (
 
 // Tag represents info on the status of new chunks
 type Tag struct {
+	uid       uint64 //a unique identifier for this tag
 	name      string
 	total     uint32     // total chunks belonging to a tag
 	split     uint32     // number of chunks already processed by splitter for hashing
@@ -56,14 +57,15 @@ func NewTags() *Tags {
 
 // New creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func (ts *Tags) New(s string, total int) (*Tag, error) {
+func (ts *Tags) New(uid uint64, s string, total int) (*Tag, error) {
 	t := &Tag{
+		uid:       uid,
 		name:      s,
 		startedAt: time.Now(),
 		total:     uint32(total),
 		State:     make(chan State, 5),
 	}
-	_, loaded := ts.tags.LoadOrStore(s, t)
+	_, loaded := ts.tags.LoadOrStore(uid, t)
 	if loaded {
 		return nil, errExists
 	}
@@ -103,6 +105,15 @@ func (t *Tag) Get(state State) int {
 		v = &t.synced
 	}
 	return int(atomic.LoadUint32(v))
+}
+
+// GetUid returns the unique identifier
+func (t Tag) GetUid() uint64 {
+	return t.uid
+}
+
+func (t Tag) GetName() string {
+	return t.name
 }
 
 // GetTotal returns the total count

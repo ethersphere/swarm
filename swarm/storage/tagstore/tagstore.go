@@ -17,6 +17,8 @@
 package tagstore
 
 import (
+	"encoding/binary"
+	"math/rand"
 	"sync"
 	"time"
 
@@ -43,6 +45,9 @@ type DB struct {
 
 	// capacity
 	capacity uint64
+
+	// random number generator
+	rng *rand.Rand
 
 	// retrieval indexes
 	// tags index maintains a mapping between tags and upload time, chunk status and tag name
@@ -104,66 +109,27 @@ func New(path string, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 
-	// Functions for retrieval data index.
-	/*	var (
-		encodeValueFunc func(fields shed.Item) (value []byte, err error)
-		decodeValueFunc func(keyItem shed.Item, value []byte) (e shed.Item, err error)
-	)*/
-
-	/*db.pushIndex, err = db.shed.NewIndex("StoreTimestamp|Hash->Tags", shed.IndexFuncs{
-		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			key = make([]byte, 40)
-			binary.BigEndian.PutUint64(key[:8], uint64(fields.StoreTimestamp))
-			copy(key[8:], fields.Address[:])
-			return key, nil
-		},
-		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key[8:]
-			e.StoreTimestamp = int64(binary.BigEndian.Uint64(key[:8]))
-			return e, nil
-		},
-		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			valueBuffer := []byte{}
-			buf := make([]byte, binary.MaxVarintLen64)
-
-			for _, v := range fields.Tags {
-				n := binary.PutUvarint(buf, v)
-				if n > 0 {
-					valueBuffer = append(valueBuffer, buf[:n]...)
-				}
-			}
-
-			return valueBuffer, nil
-		},
-		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			for {
-				v, n := binary.Uvarint(value)
-				if n > 0 {
-					e.Tags = append(e.Tags, v)
-				} else {
-					break
-				}
-				value = value[n:]
-			}
-			return e, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}*/
+	// initialise the random number generator
+	db.rng = rand.New(rand.NewSource(time.Now().Unix()))
 
 	db.tagIndex, err = db.shed.NewGenericIndex("Tag->UploadTime|UploadName", shed.GenericIndexFuncs{
-		EncodeKey: func(fields interface{}) (key []byte, err error) {
-			return nil, nil
+		EncodeKey: func(tag interface{}) (key []byte, err error) {
+			// key is uint64
+			key = make([]byte, 8)
+			tagUint := tag.(uint64)
+			binary.BigEndian.PutUint64(key, tagUint)
+			return key, nil
 		},
 		DecodeKey: func(key []byte) (e interface{}, err error) {
-			return nil, nil
+			tag := binary.BigEndian.Uint64(key)
+			return tag, nil
 		},
 		EncodeValue: func(fields interface{}) (value []byte, err error) {
-			return nil, nil
+			b := fields.([]byte)
+			return b, nil
 		},
 		DecodeValue: func(keyItem interface{}, value []byte) (e interface{}, err error) {
-			return nil, nil
+			return value, nil
 		},
 	})
 	if err != nil {

@@ -17,9 +17,10 @@
 package tagstore
 
 import (
-	"fmt"
 	"testing"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 )
 
 // tests that new tag is created, iterated over (one or all) and deleted in the database
@@ -27,27 +28,36 @@ func TestTags(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
 	timeNow := time.Now().Unix()
-	tag, err := db.NewTag(timeNow, "path/to/directory")
-	if err != nil {
-		t.Fatal(err)
+	testTags := []struct {
+		tag  uint64
+		path string
+	}{
+		{path: "path/to/dir1"},
+		{path: "path/to/dir2"},
+		{path: "another/path"},
 	}
 
-	/*	c := generateTestRandomChunkWithTags([]uint64{tag})
+	tagMap := make(map[uint64]string)
 
-		err := db.Put(context.Background(), chunk.ModePutUpload, c)
+	for _, v := range testTags {
+		localTag, err := db.NewTag(timeNow, v.path)
 		if err != nil {
 			t.Fatal(err)
 		}
-	*/
+		tagMap[localTag] = v.path
+	}
 
 	existingTags, err := db.GetTags()
 	if err != nil {
 		t.Fatal(err)
 	}
-	tag++
+
 	existingTags.Range(func(k, v interface{}) bool {
-		fmt.Println(k)
-		fmt.Println(v)
+		keyVal := k.(uint64)
+		vv := v.(*chunk.Tag)
+		if vv.GetName() != tagMap[keyVal] {
+			t.Fatal("tag not equal")
+		}
 		return true
 	})
 
