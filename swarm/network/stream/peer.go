@@ -25,6 +25,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
@@ -181,7 +182,7 @@ func (p *Peer) doRegistrations() error {
 
 	kad := p.streamer.delivery.kad
 	kadDepth := kad.NeighbourhoodDepth()
-	po := kad.PoOfPeer(p.bzzPeer)
+	po := chunk.Proximity(kad.BaseAddr(), p.bzzPeer.Over())
 
 	if po < kadDepth {
 		startPo = po

@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	sv "github.com/ethereum/go-ethereum/swarm/version"
@@ -292,10 +291,6 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 		return suggestedPeer, saturationDepth, true
 	}
 	return suggestedPeer, 0, false
-}
-
-func (k *Kademlia) PoOfPeer(peer *BzzPeer) int {
-	return chunk.Proximity(k.BaseAddr(), peer.Over())
 }
 
 // On inserts the peer as a kademlia peer into the live peers
