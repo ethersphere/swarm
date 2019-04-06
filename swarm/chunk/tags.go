@@ -150,6 +150,10 @@ func (ts *Tags) Get(s string, f State) int {
 	return t.(*Tag).Get(f)
 }
 
+func (ts *Tags) Range(f func(key, value interface{}) bool) {
+	ts.tags.Range(f)
+}
+
 // WaitTill blocks until count for the State reaches total cnt
 func (tg *Tag) WaitTill(ctx context.Context, s State) error {
 	ticker := time.NewTicker(1 * time.Second)

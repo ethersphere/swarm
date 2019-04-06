@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package tagstore
 
 import (
+	"fmt"
 	"testing"
 	"time"
 )
@@ -25,8 +26,11 @@ import (
 func TestTags(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
-
-	tag := db.NewTag(time.Now().Unix(), "path/to/directory")
+	timeNow := time.Now().Unix()
+	tag, err := db.NewTag(timeNow, "path/to/directory")
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	/*	c := generateTestRandomChunkWithTags([]uint64{tag})
 
@@ -36,16 +40,27 @@ func TestTags(t *testing.T) {
 		}
 	*/
 
-	existingTags = db.GetTags()
+	existingTags, err := db.GetTags()
+	if err != nil {
+		t.Fatal(err)
+	}
+	tag++
+	existingTags.Range(func(k, v interface{}) bool {
+		fmt.Println(k)
+		fmt.Println(v)
+		return true
+	})
 
 	//expect tag to be in existingTags
 
-	oneTag = db.GetTag(tag)
-
+	//oneTag, err := db.GetTag(tag)
+	if err != nil {
+		t.Fatal(err)
+	}
 	// expect to exist
 
 	//delete tag
-	err = db.DeleteTag(tag)
+	/*err = db.DeleteTag(tag)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +69,7 @@ func TestTags(t *testing.T) {
 	if err == nil {
 		t.Fatal("tag should not exist")
 	}
-
+	*/
 }
 
 /*func TestPutTag(t *testing.T) {

@@ -686,6 +686,8 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 
 func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestPath, defaultPath string, mw *ManifestWriter) (storage.Address, error) {
 	apiUploadTarCount.Inc(1)
+
+	panic("create tag here and inject to context")
 	var contentKey storage.Address
 	tr := tar.NewReader(bodyReader)
 	defer bodyReader.Close()

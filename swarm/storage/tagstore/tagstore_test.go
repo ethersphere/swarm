@@ -14,160 +14,26 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package tagstore
 
 import (
 	"bytes"
-	"context"
-	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"runtime"
-	"sort"
-	"sync"
 	"testing"
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
-	"github.com/ethereum/go-ethereum/swarm/shed"
-	"github.com/syndtr/goleveldb/leveldb"
 )
-
-func init() {
-	// Some of the tests in localstore package rely on the same ordering of
-	// items uploaded or accessed compared to the ordering of items in indexes
-	// that contain StoreTimestamp or AccessTimestamp in keys. In tests
-	// where the same order is required from the database as the order
-	// in which chunks are put or accessed, if the StoreTimestamp or
-	// AccessTimestamp are the same for two or more sequential items
-	// their order in database will be based on the chunk address value,
-	// in which case the ordering of items/chunks stored in a test slice
-	// will not be the same. To ensure the same ordering in database on such
-	// indexes on windows systems, an additional short sleep is added to
-	// the now function.
-	if runtime.GOOS == "windows" {
-		setNow(func() int64 {
-			time.Sleep(time.Microsecond)
-			return time.Now().UTC().UnixNano()
-		})
-	}
-}
 
 // TestDB validates if the chunk can be uploaded and
 // correctly retrieved.
 func TestDB(t *testing.T) {
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
+	//	db, cleanupFunc := newTestDB(t, nil)
+	//	defer cleanupFunc()
 
-	ch := generateTestRandomChunk()
-
-	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !bytes.Equal(got.Address(), ch.Address()) {
-		t.Errorf("got address %x, want %x", got.Address(), ch.Address())
-	}
-	if !bytes.Equal(got.Data(), ch.Data()) {
-		t.Errorf("got data %x, want %x", got.Data(), ch.Data())
-	}
-}
-
-// TestDB_updateGCSem tests maxParallelUpdateGC limit.
-// This test temporary sets the limit to a low number,
-// makes updateGC function execution time longer by
-// setting a custom testHookUpdateGC function with a sleep
-// and a count current and maximal number of goroutines.
-func TestDB_updateGCSem(t *testing.T) {
-	updateGCSleep := time.Second
-	var count int
-	var max int
-	var mu sync.Mutex
-	defer setTestHookUpdateGC(func() {
-		mu.Lock()
-		// add to the count of current goroutines
-		count++
-		if count > max {
-			// set maximal detected numbers of goroutines
-			max = count
-		}
-		mu.Unlock()
-
-		// wait for some time to ensure multiple parallel goroutines
-		time.Sleep(updateGCSleep)
-
-		mu.Lock()
-		count--
-		mu.Unlock()
-	})()
-
-	defer func(m int) { maxParallelUpdateGC = m }(maxParallelUpdateGC)
-	maxParallelUpdateGC = 3
-
-	db, cleanupFunc := newTestDB(t, nil)
-	defer cleanupFunc()
-
-	ch := generateTestRandomChunk()
-
-	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// get more chunks then maxParallelUpdateGC
-	// in time shorter then updateGCSleep
-	for i := 0; i < 5; i++ {
-		_, err = db.Get(context.Background(), chunk.ModeGetRequest, ch.Address())
-		if err != nil {
-			t.Fatal(err)
-		}
-	}
-
-	if max != maxParallelUpdateGC {
-		t.Errorf("got max %v, want %v", max, maxParallelUpdateGC)
-	}
-}
-
-// newTestDB is a helper function that constructs a
-// temporary database and returns a cleanup function that must
-// be called to remove the data.
-func newTestDB(t testing.TB, o *Options) (db *DB, cleanupFunc func()) {
-	t.Helper()
-
-	dir, err := ioutil.TempDir("", "localstore-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cleanupFunc = func() { os.RemoveAll(dir) }
-	baseKey := make([]byte, 32)
-	if _, err := rand.Read(baseKey); err != nil {
-		t.Fatal(err)
-	}
-	db, err = New(dir, baseKey, o)
-	if err != nil {
-		cleanupFunc()
-		t.Fatal(err)
-	}
-	cleanupFunc = func() {
-		err := db.Close()
-		if err != nil {
-			t.Error(err)
-		}
-		os.RemoveAll(dir)
-	}
-	return db, cleanupFunc
-}
-
-func init() {
-	// needed for generateTestRandomChunk
-	rand.Seed(time.Now().UnixNano())
 }
 
 // generateTestRandomChunk generates a Chunk that is not
@@ -238,6 +104,7 @@ func TestGenerateTestRandomChunk(t *testing.T) {
 	}
 }
 
+/*
 // newRetrieveIndexesTest returns a test function that validates if the right
 // chunk values are in the retrieval indexes.
 func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
@@ -255,8 +122,8 @@ func newRetrieveIndexesTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTim
 			t.Errorf("got error %v, want %v", err, wantErr)
 		}
 	}
-}
-
+}*/
+/*
 // newRetrieveIndexesTestWithAccess returns a test function that validates if the right
 // chunk values are in the retrieval indexes when access time must be stored.
 func newRetrieveIndexesTestWithAccess(db *DB, ch chunk.Chunk, storeTimestamp, accessTimestamp int64) func(t *testing.T) {
@@ -325,8 +192,8 @@ func newGCIndexTest(db *DB, chunk chunk.Chunk, storeTimestamp, accessTimestamp i
 		}
 		validateItem(t, item, chunk.Address(), nil, 0, accessTimestamp, []uint64{})
 	}
-}
-
+}*/
+/*
 // newItemsCountTest returns a test function that validates if
 // an index contains expected number of key/value pairs.
 func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
@@ -344,39 +211,11 @@ func newItemsCountTest(i shed.Index, want int) func(t *testing.T) {
 		}
 	}
 }
-
-// newIndexGCSizeTest retruns a test function that validates if DB.gcSize
-// value is the same as the number of items in DB.gcIndex.
-func newIndexGCSizeTest(db *DB) func(t *testing.T) {
-	return func(t *testing.T) {
-		var want uint64
-		err := db.gcIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-			want++
-			return
-		}, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		got, err := db.gcSize.Get()
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != want {
-			t.Errorf("got gc size %v, want %v", got, want)
-		}
-	}
-}
-
-// testIndexChunk embeds storageChunk with additional data that is stored
-// in database. It is used for index values validations.
-type testIndexChunk struct {
-	chunk.Chunk
-	binID uint64
-}
+*/
 
 // testItemsOrder tests the order of chunks in the index. If sortFunc is not nil,
 // chunks will be sorted with it before validation.
-func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFunc func(i, j int) (less bool)) {
+/*func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFunc func(i, j int) (less bool)) {
 	newItemsCountTest(i, len(chunks))(t)
 
 	if sortFunc != nil {
@@ -396,34 +235,7 @@ func testItemsOrder(t *testing.T, i shed.Index, chunks []testIndexChunk, sortFun
 	if err != nil {
 		t.Fatal(err)
 	}
-}
-
-// validateItem is a helper function that checks Item values.
-func validateItem(t *testing.T, item shed.Item, address, data []byte, storeTimestamp, accessTimestamp int64, tags []uint64) {
-	t.Helper()
-	if !bytes.Equal(item.Address, address) {
-		t.Errorf("got item address %x, want %x", item.Address, address)
-	}
-	if !bytes.Equal(item.Data, data) {
-		t.Errorf("got item data %x, want %x", item.Data, data)
-	}
-	if item.StoreTimestamp != storeTimestamp {
-		t.Errorf("got item store timestamp %v, want %v", item.StoreTimestamp, storeTimestamp)
-	}
-	if item.AccessTimestamp != accessTimestamp {
-		t.Errorf("got item access timestamp %v, want %v", item.AccessTimestamp, accessTimestamp)
-	}
-	count := 0
-	for i, v := range tags {
-		if item.Tags[i] != v {
-			t.Errorf("expected item %d to equal %d but got %d", i, v, tags[i])
-		}
-		count++
-	}
-	if count != len(tags) {
-		t.Errorf("did not process enough tags, want %d got %d", len(item.Tags), count)
-	}
-}
+}*/
 
 // setNow replaces now function and
 // returns a function that will reset it to the
@@ -481,5 +293,60 @@ func TestSetNow(t *testing.T) {
 	// test if got variable is set correctly to original value
 	if got != original {
 		t.Errorf("got hook value %v, want %v", got, original)
+	}
+}
+
+// newTestDB is a helper function that constructs a
+// temporary database and returns a cleanup function that must
+// be called to remove the data.
+func newTestDB(t testing.TB, o *Options) (db *DB, cleanupFunc func()) {
+	t.Helper()
+
+	dir, err := ioutil.TempDir("", "tagstore-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cleanupFunc = func() { os.RemoveAll(dir) }
+	baseKey := make([]byte, 32)
+	if _, err := rand.Read(baseKey); err != nil {
+		t.Fatal(err)
+	}
+	db, err = New(dir, o)
+	if err != nil {
+		cleanupFunc()
+		t.Fatal(err)
+	}
+	cleanupFunc = func() {
+		err := db.Close()
+		if err != nil {
+			t.Error(err)
+		}
+		os.RemoveAll(dir)
+	}
+	return db, cleanupFunc
+}
+
+func init() {
+	// needed for generateTestRandomChunk
+	rand.Seed(time.Now().UnixNano())
+}
+
+func init() {
+	// Some of the tests in localstore package rely on the same ordering of
+	// items uploaded or accessed compared to the ordering of items in indexes
+	// that contain StoreTimestamp or AccessTimestamp in keys. In tests
+	// where the same order is required from the database as the order
+	// in which chunks are put or accessed, if the StoreTimestamp or
+	// AccessTimestamp are the same for two or more sequential items
+	// their order in database will be based on the chunk address value,
+	// in which case the ordering of items/chunks stored in a test slice
+	// will not be the same. To ensure the same ordering in database on such
+	// indexes on windows systems, an additional short sleep is added to
+	// the now function.
+	if runtime.GOOS == "windows" {
+		setNow(func() int64 {
+			time.Sleep(time.Microsecond)
+			return time.Now().UTC().UnixNano()
+		})
 	}
 }

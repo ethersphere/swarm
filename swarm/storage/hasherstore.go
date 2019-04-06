@@ -264,6 +264,8 @@ func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
 	go func() {
 		select {
 		case h.errC <- h.store.Put(ctx, chunk.ModePutUpload, ch):
+			//if its a new chunk -> increment some counter and store in tag store
+
 		case <-h.quitC:
 		}
 	}()

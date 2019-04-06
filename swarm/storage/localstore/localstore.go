@@ -322,43 +322,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	// create a push syncing triggers used by SubscribePush function
 	db.pushTriggers = make([]chan struct{}, 0)
 
-	db.tagIndex, err = db.shed.NewGenericIndex("Tag->UploadTime|UploadName", shed.GenericIndexFuncs{
-		EncodeKey: func(fields interface{}) (key []byte, err error) {
-			return nil, nil
-		},
-		DecodeKey: func(key []byte) (e interface{}, err error) {
-			return nil, nil
-		},
-		EncodeValue: func(fields interface{}) (value []byte, err error) {
-			return nil, nil
-		},
-		DecodeValue: func(keyItem interface{}, value []byte) (e interface{}, err error) {
-			return nil, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// tag index for push syncing tags
-	db.tagIndex, err = db.shed.NewGenericIndex("UploadID|Tag->Filename", shed.GenericIndexFuncs{
-		EncodeKey: func(fields interface{}) (key []byte, err error) {
-			return nil, nil
-		},
-		DecodeKey: func(key []byte) (e interface{}, err error) {
-			return nil, nil
-		},
-		EncodeValue: func(fields interface{}) (value []byte, err error) {
-			return nil, nil
-		},
-		DecodeValue: func(keyItem interface{}, value []byte) (e interface{}, err error) {
-			return nil, nil
-		},
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	// gc index for removable chunk ordered by ascending last access time
 	db.gcIndex, err = db.shed.NewIndex("AccessTimestamp|BinID|Hash->nil", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {

@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package localstore
+package tagstore
 
 import (
 	"encoding/binary"
@@ -54,9 +54,20 @@ func (db *DB) DeleteTag(tag uint64) error {
 	return nil
 }
 
-func (db *DB) GetTags() ([]chunk.Tag, error) {
+func (db *DB) GetTags() (*chunk.Tags, error) {
+	//tags := make([]chunk.Tag, 0)
+	t := chunk.NewTags()
+	err := db.tagIndex.Iterate(func(k, v interface{}) (bool, error) {
+		_ = k.(uint64)
 
-	return nil, nil
+		_, err := t.New("tag", 0)
+		if err != nil {
+			return true, err
+		}
+		//todo append
+		return false, nil
+	}, nil)
+	return t, err
 }
 
 func (db *DB) GetTag(tag uint64) (chunk.Tag, error) {
@@ -65,7 +76,7 @@ func (db *DB) GetTag(tag uint64) (chunk.Tag, error) {
 }
 
 func (db *DB) ChunkTags(addr chunk.Address) ([]uint64, error) {
-	item := addressToItem(addr)
+	/*item := addressToItem(addr)
 
 	out, err := db.retrievalDataIndex.Get(item)
 	if err != nil {
@@ -83,5 +94,6 @@ func (db *DB) ChunkTags(addr chunk.Address) ([]uint64, error) {
 		return nil, err
 	}
 
-	return c.Tags, nil
+	return c.Tags, nil*/
+	return []uint64{}, nil
 }
