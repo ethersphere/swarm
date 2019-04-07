@@ -18,6 +18,8 @@ package tagstore
 
 import (
 	"encoding/binary"
+	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -38,7 +40,7 @@ type Tag struct {
 	State     chan State // channel to signal completion
 }
 */
-func (db *DB) SaveTag(tag *chunk.Tag) error {
+func (db *DB) Write(tag *chunk.Tag) error {
 	return nil
 }
 
@@ -67,29 +69,32 @@ func (db *DB) NewTag(uploadTime int64, uploadName string) (tag uint32, err error
 }
 
 func (db *DB) DeleteTag(tag uint32) error {
-	return nil
+	return db.tagIndex.Delete(tag)
 }
 
 func (db *DB) GetTags() (*chunk.Tags, error) {
 	t := chunk.NewTags()
 	err := db.tagIndex.Iterate(func(k, v interface{}) (bool, error) {
-		keyVal := k.(uint32)
-		valBytes := v.([]byte)
-		_ = binary.BigEndian.Uint32(valBytes)
+		tag := tagFromInterface(k, v)
 
-		tagName := string(valBytes[8:])
-		_, err := t.New(keyVal, tagName, 0)
-		if err != nil {
-			return true, err
+		_, loaded := t.LoadOrStore(tag.GetUid(), tag)
+		if loaded {
+			return true, fmt.Errorf("tag uid %d already exists", tag.GetUid())
 		}
 		return false, nil
 	}, nil)
 	return t, err
 }
 
-func (db *DB) GetTag(tag uint32) (chunk.Tag, error) {
+func (db *DB) GetTag(tag uint32) (*chunk.Tag, error) {
+	out, err := db.tagIndex.Get(tag)
+	if err != nil {
+		return nil, err
+	}
 
-	return chunk.Tag{}, nil
+	t := tagFromInterface(tag, out)
+
+	return t, nil
 }
 
 func (db *DB) ChunkTags(addr chunk.Address) ([]uint32, error) {
@@ -113,4 +118,23 @@ func (db *DB) ChunkTags(addr chunk.Address) ([]uint32, error) {
 
 	return c.Tags, nil*/
 	return []uint32{}, nil
+}
+
+func tagFromInterface(k, v interface{}) (*chunk.Tag, error) {
+	uid := k.(uint32)
+	valBytes := v.([]byte)
+	_ = binary.BigEndian.Uint32(valBytes)
+
+	tagName := string(valBytes[8:])
+
+	t := &chunk.Tag{
+		uid:       uid,
+		name:      s,
+		startedAt: time.Now(),
+		total:     uint32(total),
+		State:     make(chan State, 5),
+	}
+
+	return t
+
 }

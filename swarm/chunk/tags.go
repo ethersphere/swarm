@@ -72,6 +72,10 @@ func (ts *Tags) New(uid uint32, s string, total int) (*Tag, error) {
 	return t, nil
 }
 
+func (ts *Tags) LoadOrStore(k, v interface{}) (actual interface{}, loaded bool) {
+	return ts.tags.LoadOrStore(k, v)
+}
+
 // Inc increments the count for a state
 func (t *Tag) Inc(state State) {
 	var v *uint32
