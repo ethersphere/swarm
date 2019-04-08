@@ -186,6 +186,11 @@ func uploadAndSync(c *cli.Context, randomBytes []byte) error {
 		log.Error(err.Error())
 	}
 
+	if onlyUpload {
+		log.Debug("only-upload is true, stoppping test", "hash", hash)
+		return nil
+	}
+
 	randIndex := 1 + rand.Intn(len(hosts)-1)
 
 	for {

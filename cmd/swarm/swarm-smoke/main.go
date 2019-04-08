@@ -47,6 +47,7 @@ var (
 	verbosity    int
 	timeout      int
 	single       bool
+	onlyUpload   bool
 	trackTimeout int
 )
 
@@ -109,6 +110,11 @@ func main() {
 			Name:        "single",
 			Usage:       "whether to fetch content from a single node or from all nodes",
 			Destination: &single,
+		},
+		cli.BoolFlag{
+			Name:        "only-upload",
+			Usage:       "whether to only upload content to a single node without fetching",
+			Destination: &onlyUpload,
 		},
 		cli.IntFlag{
 			Name:        "track-timeout",

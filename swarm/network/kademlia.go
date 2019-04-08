@@ -474,6 +474,27 @@ func (k *Kademlia) Nearest(chunkRef string) (string, error) {
 	return sp.ID().String(), nil
 }
 
+func (k *Kademlia) AllNearest(chunkRef string) ([]*Peer, error) {
+	b, err := hex.DecodeString(chunkRef)
+	if err != nil {
+		return nil, err
+	}
+
+	var peers []*Peer
+
+	k.EachConn(b, 255, func(p *Peer, po int) bool {
+		// skip light nodes
+		if p.LightNode {
+			return true
+		}
+
+		peers = append(peers, p)
+		return true
+	})
+
+	return peers, nil
+}
+
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
 // that has proximity order po or less as measured from the base
 // if base is nil, kademlia base address is used

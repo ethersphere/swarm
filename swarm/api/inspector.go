@@ -60,6 +60,15 @@ func (inspector *Inspector) Nearest(chunkRef string) string {
 	return node
 }
 
+func (inspector *Inspector) AllNearest(chunkRef string) []*network.Peer {
+	nodes, err := inspector.hive.Kademlia.AllNearest(chunkRef)
+	if err != nil {
+		log.Error(err.Error())
+		return nil
+	}
+	return nodes
+}
+
 func (inspector *Inspector) IsSyncing() bool {
 	lastReceivedChunksMsg := metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 
