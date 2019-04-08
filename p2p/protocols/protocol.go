@@ -312,6 +312,20 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 // * handles decoding with reflection,
 // * call handlers as callbacks
 func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) error) error {
+	now := time.Now()
+
+	var ok bool
+	var val interface{}
+
+	defer func() {
+		metrics.GetOrRegisterResettingTimer("peer.handleincoming", nil).UpdateSince(now)
+
+		snc := time.Since(now)
+		if snc > 2*time.Second {
+			log.Trace("slow handle incoming", "since", snc, "msg", fmt.Sprintf("%T", val))
+		}
+	}()
+
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
 		return err
@@ -350,7 +364,7 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 		ctx = spancontext.WithContext(ctx, sctx)
 	}
 
-	val, ok := p.spec.NewMsg(msg.Code)
+	val, ok = p.spec.NewMsg(msg.Code)
 	if !ok {
 		return errorf(ErrInvalidMsgCode, "%v", msg.Code)
 	}
