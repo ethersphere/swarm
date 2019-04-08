@@ -136,7 +136,7 @@ func (n *NetStore) Put(ctx context.Context, chunk storage.Chunk) error {
 
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
 
-		if time.Since(fii.CreatedAt) > 8*time.Second {
+		if time.Since(fii.CreatedAt) > 5*time.Second {
 			log.Trace("netstore.put slow chunk delivery", "ref", chunk.Address().String(), "rid", rid)
 		}
 
