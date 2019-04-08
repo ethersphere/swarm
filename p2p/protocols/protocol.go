@@ -312,6 +312,11 @@ func (p *Peer) Send(ctx context.Context, msg interface{}) error {
 // * handles decoding with reflection,
 // * call handlers as callbacks
 func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) error) error {
+	msg, err := p.rw.ReadMsg()
+	if err != nil {
+		return err
+	}
+
 	now := time.Now()
 
 	var ok bool
@@ -326,10 +331,6 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 		}
 	}()
 
-	msg, err := p.rw.ReadMsg()
-	if err != nil {
-		return err
-	}
 	// make sure that the payload has been fully consumed
 	defer msg.Discard()
 
