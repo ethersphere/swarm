@@ -1,0 +1,27 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: smoke
+  namespace: tony
+  labels:
+    app: smoke
+spec:
+  template:
+    metadata:
+      name: smoke
+    spec:
+      containers:
+      - name: smoke
+        image: ethdevops/swarm-smoke:anton
+        command: ["/run-smoke.sh"]
+        resources:
+        args:
+        - --hosts=swarm-private-0.swarm-private-headless,swarm-private-1.swarm-private-headless,swarm-private-2.swarm-private-headless,swarm-private-3.swarm-private-headless,swarm-private-4.swarm-private-headless,swarm-private-5.swarm-private-headless,swarm-private-6.swarm-private-headless,swarm-private-7.swarm-private-headless,swarm-private-8.swarm-private-headless,swarm-private-9.swarm-private-headless,swarm-private-10.swarm-private-headless,swarm-private-11.swarm-private-headless,swarm-private-12.swarm-private-headless,swarm-private-13.swarm-private-headless,swarm-private-14.swarm-private-headless,swarm-private-15.swarm-private-headless,swarm-private-16.swarm-private-headless,swarm-private-17.swarm-private-headless,swarm-private-18.swarm-private-headless,swarm-private-19.swarm-private-headless,swarm-private-20.swarm-private-headless,swarm-private-21.swarm-private-headless,swarm-private-22.swarm-private-headless,swarm-private-23.swarm-private-headless,swarm-private-24.swarm-private-headless,swarm-private-25.swarm-private-headless,swarm-private-26.swarm-private-headless,swarm-private-27.swarm-private-headless,swarm-private-28.swarm-private-headless,swarm-private-29.swarm-private-headless,swarm-private-30.swarm-private-headless,swarm-private-31.swarm-private-headless,swarm-private-32.swarm-private-headless,swarm-private-33.swarm-private-headless,swarm-private-34.swarm-private-headless,swarm-private-35.swarm-private-headless,swarm-private-36.swarm-private-headless,swarm-private-37.swarm-private-headless,swarm-private-38.swarm-private-headless,swarm-private-39.swarm-private-headless
+        - --verbosity=5
+        - --single
+        - --http-port=8500
+        - --filesize=6000
+        - --sync-delay=30
+        - --seed=1553004523953603920
+        - upload_and_sync
+      restartPolicy: Never
