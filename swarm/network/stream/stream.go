@@ -652,7 +652,8 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		return p.handleUnsubscribeMsg(msg)
 
 	case *OfferedHashesMsg:
-		return p.handleOfferedHashesMsg(ctx, msg)
+		go p.handleOfferedHashesMsg(ctx, msg)
+		return nil
 
 	case *TakeoverProofMsg:
 		return p.handleTakeoverProofMsg(ctx, msg)
