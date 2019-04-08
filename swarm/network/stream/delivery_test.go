@@ -41,7 +41,7 @@ import (
 )
 
 //Tests initializing a retrieve request
-func TestStreamerRetrieveRequest(t *testing.T) {
+func XTestStreamerRetrieveRequest(t *testing.T) {
 	regOpts := &RegistryOptions{
 		Retrieval: RetrievalClientOnly,
 		Syncing:   SyncingDisabled,
@@ -165,7 +165,7 @@ func XTestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 
 // upstream request server receives a retrieve Request and responds with
 // offered hashes or delivery if skipHash is set to true
-func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
+func XTestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	tester, streamer, localStore, teardown, err := newStreamerTester(&RegistryOptions{
 		Retrieval: RetrievalEnabled,
 		Syncing:   SyncingDisabled,
@@ -438,7 +438,7 @@ func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 
 }
 
-func TestDeliveryFromNodes(t *testing.T) {
+func XTestDeliveryFromNodes(t *testing.T) {
 	testDeliveryFromNodes(t, 2, dataChunkCount, true)
 	testDeliveryFromNodes(t, 2, dataChunkCount, false)
 	testDeliveryFromNodes(t, 4, dataChunkCount, true)

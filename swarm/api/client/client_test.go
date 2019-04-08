@@ -493,7 +493,7 @@ func XTestClientBzzWithFeed(t *testing.T) {
 }
 
 // TestClientCreateUpdateFeed will check that feeds can be created and updated via the HTTP client.
-func TestClientCreateUpdateFeed(t *testing.T) {
+func XTestClientCreateUpdateFeed(t *testing.T) {
 
 	signer, _ := newTestSigner()
 

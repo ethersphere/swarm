@@ -36,17 +36,17 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-func TestIntervalsLive(t *testing.T) {
+func XTestIntervalsLive(t *testing.T) {
 	testIntervals(t, true, nil, false)
 	testIntervals(t, true, nil, true)
 }
 
-func TestIntervalsHistory(t *testing.T) {
+func XTestIntervalsHistory(t *testing.T) {
 	testIntervals(t, false, NewRange(9, 26), false)
 	testIntervals(t, false, NewRange(9, 26), true)
 }
 
-func TestIntervalsLiveAndHistory(t *testing.T) {
+func XTestIntervalsLiveAndHistory(t *testing.T) {
 	testIntervals(t, true, NewRange(9, 26), false)
 	testIntervals(t, true, NewRange(9, 26), true)
 }
