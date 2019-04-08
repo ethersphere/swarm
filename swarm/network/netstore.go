@@ -134,7 +134,7 @@ func (n *NetStore) Put(ctx context.Context, chunk storage.Chunk) error {
 		fii.SafeClose()
 		log.Trace("netstore.put chunk delivered and stored", "ref", chunk.Address().String(), "rid", rid)
 
-		metrics.GetOrRegisterResettingTimer("netstore.fetcher.lifetime", nil).UpdateSince(fii.CreatedAt)
+		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
 
 		n.fetchers.Delete(chunk.Address().String())
 	}
