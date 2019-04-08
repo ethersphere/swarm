@@ -327,7 +327,7 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 
 		snc := time.Since(now)
 		if snc > 2*time.Second {
-			log.Trace("slow handle incoming", "since", snc, "msg", fmt.Sprintf("%T", val))
+			log.Error("slow handle incoming", "since", snc, "msg", fmt.Sprintf("%T", val))
 		}
 	}()
 
