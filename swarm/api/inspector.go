@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
@@ -48,6 +49,15 @@ func (inspector *Inspector) ListKnown() []string {
 		res = append(res, fmt.Sprintf("%v", v))
 	}
 	return res
+}
+
+func (inspector *Inspector) Nearest(chunkRef string) string {
+	node, err := inspector.hive.Kademlia.Nearest(chunkRef)
+	if err != nil {
+		log.Error(err.Error())
+		return ""
+	}
+	return node
 }
 
 func (inspector *Inspector) IsSyncing() bool {
