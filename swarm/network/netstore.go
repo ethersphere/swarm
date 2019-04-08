@@ -183,7 +183,13 @@ func (n *NetStore) Get(ctx context.Context, req *Request) (storage.Chunk, error)
 
 		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "hopCount", req.HopCount, "rid", rid)
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
-			has, fi := n.HasWithCallback(ctx, ref, "request")
+			//TODO: decide if we want to issue a retrieve request if a fetcher
+			// has already been created by a syncer for that particular chunk.
+			// for now we issue a retrieve request, so it is possible to
+			// have 2 in-flight requests for the same chunk - one by a
+			// syncer (offered/wanted/deliver flow) and one from
+			// here - retrieve request!
+			has, fi, _ := n.HasWithCallback(ctx, ref, "request")
 			if !has {
 				err := n.RemoteFetch(ctx, req, fi)
 				if err != nil {
@@ -288,12 +294,12 @@ func (n *NetStore) Has(ctx context.Context, ref storage.Address) bool {
 	return n.store.Has(ctx, ref)
 }
 
-func (n *NetStore) HasWithCallback(ctx context.Context, ref storage.Address, interestedParty string) (bool, *FetcherItem) {
+func (n *NetStore) HasWithCallback(ctx context.Context, ref storage.Address, interestedParty string) (bool, *FetcherItem, bool) {
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
 	if n.store.Has(ctx, ref) {
-		return true, nil
+		return true, nil, false
 	}
 
 	fi := NewFetcherItem()
@@ -311,5 +317,5 @@ func (n *NetStore) HasWithCallback(ctx context.Context, ref storage.Address, int
 	if fi == nil {
 		panic("fi is nil")
 	}
-	return false, fi
+	return false, fi, loaded
 }

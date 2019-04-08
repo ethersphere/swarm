@@ -171,15 +171,15 @@ func RegisterSwarmSyncerClient(streamer *Registry, netStore *network.NetStore) {
 	})
 }
 
-func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
+func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
 	start := time.Now()
 
-	has, fi := s.store.HasWithCallback(ctx, key, "syncer")
+	has, fi, loaded := s.store.HasWithCallback(ctx, key, "syncer")
 	if has {
-		return nil
+		return loaded, nil
 	}
 
-	return func(ctx context.Context) error {
+	return loaded, func(ctx context.Context) error {
 		select {
 		case <-fi.Delivered:
 			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)

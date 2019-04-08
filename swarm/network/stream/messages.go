@@ -231,11 +231,17 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
 
-		if wait := c.NeedData(ctx, hash); wait != nil {
+		if shouldNOTRequestAgain, wait := c.NeedData(ctx, hash); wait != nil {
 			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid)
 			ctr++
-			want.Set(i/HashSize, true)
-			// create request and wait until the chunk data arrives and is stored
+
+			if !shouldNOTRequestAgain { // if !loaded
+				// set the bit, so create a request
+				want.Set(i/HashSize, true)
+			}
+
+			// wait until the chunk data arrives and is stored, no
+			// matter if we created a request or not
 			go func(w func(context.Context) error) {
 				log.Trace("waiting for", "ref", fmt.Sprintf("%x", hash), "rid", rid)
 				select {
