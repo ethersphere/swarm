@@ -157,8 +157,9 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 			}
 
 			go func() {
+				_, err := db.Put(ctx, chunk.ModePutUpload, ch)
 				select {
-				case errC <- db.Put(ctx, chunk.ModePutUpload, ch):
+				case errC <- err:
 				case <-ctx.Done():
 				}
 			}()

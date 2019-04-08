@@ -446,15 +446,15 @@ func TestValidatorInStore(t *testing.T) {
 	}
 
 	// put the chunks in the store and check their error status
-	err = store.Put(context.Background(), chunk.ModePutUpload, goodChunk)
+	_, err = store.Put(context.Background(), chunk.ModePutUpload, goodChunk)
 	if err == nil {
 		t.Fatal("expected error on good content address chunk with feed update validator only, but got nil")
 	}
-	err = store.Put(context.Background(), chunk.ModePutUpload, badChunk)
+	_, err = store.Put(context.Background(), chunk.ModePutUpload, badChunk)
 	if err == nil {
 		t.Fatal("expected error on bad content address chunk with feed update validator only, but got nil")
 	}
-	err = store.Put(context.Background(), chunk.ModePutUpload, uglyChunk)
+	_, err = store.Put(context.Background(), chunk.ModePutUpload, uglyChunk)
 	if err != nil {
 		t.Fatalf("expected no error on feed update chunk with feed update validator only, but got: %s", err)
 	}

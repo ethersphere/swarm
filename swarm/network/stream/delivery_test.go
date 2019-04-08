@@ -191,7 +191,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 
 	hash := storage.Address(hash0[:])
 	ch := storage.NewChunk(hash, hash)
-	err = localStore.Put(context.TODO(), chunk.ModePutUpload, ch)
+	_, err = localStore.Put(context.TODO(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -243,7 +243,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 
 	hash = storage.Address(hash1[:])
 	ch = storage.NewChunk(hash, hash1[:])
-	err = localStore.Put(context.TODO(), chunk.ModePutUpload, ch)
+	_, err = localStore.Put(context.TODO(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}

@@ -164,7 +164,7 @@ func (d *Descriptor) String() string {
 
 type Store interface {
 	Get(ctx context.Context, mode ModeGet, addr Address) (ch Chunk, err error)
-	Put(ctx context.Context, mode ModePut, ch Chunk) (err error)
+	Put(ctx context.Context, mode ModePut, ch Chunk) (exists bool, err error)
 	Has(ctx context.Context, addr Address) (yes bool, err error)
 	Set(ctx context.Context, mode ModeSet, addr Address) (err error)
 	LastPullSubscriptionBinID(bin uint8) (id uint64, err error)
@@ -202,11 +202,11 @@ func NewValidatorStore(store Store, validators ...Validator) (s *ValidatorStore)
 // Put overrides Store put method with validators check. If one of the validators
 // return true, the chunk is considered valid and Store Put method is called.
 // If all validators return false, ErrChunkInvalid is returned.
-func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, ch Chunk) (err error) {
+func (s *ValidatorStore) Put(ctx context.Context, mode ModePut, ch Chunk) (exists bool, err error) {
 	for _, v := range s.validators {
 		if v.Validate(ch) {
 			return s.Store.Put(ctx, mode, ch)
 		}
 	}
-	return ErrChunkInvalid
+	return false, ErrChunkInvalid
 }
