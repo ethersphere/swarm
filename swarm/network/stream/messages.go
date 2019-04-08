@@ -27,6 +27,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/opentracing/opentracing-go"
+	"github.com/pborman/uuid"
 )
 
 var syncBatchTimeout = 30 * time.Second
@@ -198,7 +199,8 @@ func (m OfferedHashesMsg) String() string {
 // handleOfferedHashesMsg protocol msg handler calls the incoming streamer interface
 // Filter method
 func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg) error {
-	rid := getGID()
+	//rid := getGID()
+	rid := uuid.New()[:8]
 
 	metrics.GetOrRegisterCounter("peer.handleofferedhashes", nil).Inc(1)
 
@@ -237,9 +239,9 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			if !shouldNOTRequestAgain { // if !loaded
 				// set the bit, so create a request
 				want.Set(i/HashSize, true)
-				log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid, "request", true)
+				log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid, "hashes", fmt.Sprintf("%x", req.Hashes), "request", true)
 			} else {
-				log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid)
+				log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid, "hashes", fmt.Sprintf("%x", req.Hashes))
 			}
 
 			// wait until the chunk data arrives and is stored, no
