@@ -232,12 +232,14 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		hash := hashes[i : i+HashSize]
 
 		if shouldNOTRequestAgain, wait := c.NeedData(ctx, hash); wait != nil {
-			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid)
 			ctr++
 
 			if !shouldNOTRequestAgain { // if !loaded
 				// set the bit, so create a request
 				want.Set(i/HashSize, true)
+				log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid, "request", true)
+			} else {
+				log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "rid", rid)
 			}
 
 			// wait until the chunk data arrives and is stored, no
@@ -299,7 +301,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		To:     to,
 	}
 	go func() {
-		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+		log.Trace("sending want batch before", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To, "rid", rid)
 		select {
 		case err := <-c.next:
 			if err != nil {
@@ -314,7 +316,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
 			return
 		}
-		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+		log.Trace("sending want batch after", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To, "rid", rid)
 		err := p.Send(ctx, msg)
 		if err != nil {
 			log.Error("Send error", "err", err)
