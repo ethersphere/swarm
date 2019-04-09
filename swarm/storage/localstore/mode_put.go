@@ -28,7 +28,7 @@ import (
 // on the Putter mode, it updates required indexes.
 // Put is required to implement chunk.Store
 // interface.
-func (db *DB) Put(_ context.Context, mode chunk.ModePut, ch chunk.Chunk) (err error) {
+func (db *DB) Put(_ context.Context, mode chunk.ModePut, ch chunk.Chunk) (exists bool, err error) {
 	return db.put(mode, chunkToItem(ch))
 }
 
@@ -37,7 +37,7 @@ func (db *DB) Put(_ context.Context, mode chunk.ModePut, ch chunk.Chunk) (err er
 // of this function for the same address in parallel.
 // Item fields Address and Data must not be
 // with their nil values.
-func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
+func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
@@ -59,21 +59,25 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 		i, err := db.retrievalAccessIndex.Get(item)
 		switch err {
 		case nil:
+			exists = true
 			item.AccessTimestamp = i.AccessTimestamp
 		case leveldb.ErrNotFound:
+			exists = false
 			// no chunk accesses
 		default:
-			return err
+			return false, err
 		}
 		i, err = db.retrievalDataIndex.Get(item)
 		switch err {
 		case nil:
+			exists = true
 			item.StoreTimestamp = i.StoreTimestamp
 			item.BinID = i.BinID
 		case leveldb.ErrNotFound:
 			// no chunk accesses
+			exists = false
 		default:
-			return err
+			return false, err
 		}
 		if item.AccessTimestamp != 0 {
 			// delete current entry from the gc index
@@ -86,7 +90,7 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 		if item.BinID == 0 {
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
 			if err != nil {
-				return err
+				return false, err
 			}
 		}
 		// update access timestamp
@@ -102,15 +106,15 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 	case chunk.ModePutUpload:
 		// put to indexes: retrieve, push, pull
 
-		has, err := db.retrievalDataIndex.Has(item)
+		exists, err = db.retrievalDataIndex.Has(item)
 		if err != nil {
-			return err
+			return false, err
 		}
-		if !has {
+		if !exists {
 			item.StoreTimestamp = now()
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
 			if err != nil {
-				return err
+				return false, err
 			}
 			db.retrievalDataIndex.PutInBatch(batch, item)
 			db.pullIndex.PutInBatch(batch, item)
@@ -122,15 +126,15 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 	case chunk.ModePutSync:
 		// put to indexes: retrieve, pull
 
-		has, err := db.retrievalDataIndex.Has(item)
+		exists, err = db.retrievalDataIndex.Has(item)
 		if err != nil {
-			return err
+			return exists, err
 		}
-		if !has {
+		if !exists {
 			item.StoreTimestamp = now()
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
 			if err != nil {
-				return err
+				return false, err
 			}
 			db.retrievalDataIndex.PutInBatch(batch, item)
 			db.pullIndex.PutInBatch(batch, item)
@@ -138,17 +142,17 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 		}
 
 	default:
-		return ErrInvalidMode
+		return false, ErrInvalidMode
 	}
 
 	err = db.incGCSizeInBatch(batch, gcSizeChange)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	err = db.shed.WriteBatch(batch)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if triggerPullFeed {
 		db.triggerPullSubscriptions(db.po(item.Address))
@@ -156,5 +160,5 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (err error) {
 	if triggerPushFeed {
 		db.triggerPushSubscriptions()
 	}
-	return nil
+	return exists, nil
 }

@@ -45,7 +45,7 @@ func TestModePutRequest(t *testing.T) {
 
 		storeTimestamp = wantTimestamp
 
-		err := db.Put(context.Background(), chunk.ModePutRequest, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +63,7 @@ func TestModePutRequest(t *testing.T) {
 			return wantTimestamp
 		})()
 
-		err := db.Put(context.Background(), chunk.ModePutRequest, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,7 +88,7 @@ func TestModePutSync(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.Put(context.Background(), chunk.ModePutSync, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutSync, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestModePutUpload(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 					if !ok {
 						return
 					}
-					err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+					_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 					select {
 					case errChan <- err:
 					case <-doneChan:
@@ -235,9 +235,19 @@ func TestModePut_sameChunk(t *testing.T) {
 			defer cleanupFunc()
 
 			for i := 0; i < 10; i++ {
-				err := db.Put(context.Background(), tc.mode, ch)
+				exists, err := db.Put(context.Background(), tc.mode, ch)
 				if err != nil {
 					t.Fatal(err)
+				}
+				switch exists {
+				case false:
+					if i != 0 {
+						t.Fatal("should not exist only on first Put")
+					}
+				case true:
+					if i == 0 {
+						t.Fatal("should exist on all cases other than the first one")
+					}
 				}
 
 				count := func(b bool) (c int) {
@@ -336,7 +346,9 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 
 			go func(i int) {
 				defer func() { <-sem }()
-				errs <- db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
+
+				_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
+				errs <- err
 			}(i)
 		}
 	}()

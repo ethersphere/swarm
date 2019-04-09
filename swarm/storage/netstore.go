@@ -76,14 +76,14 @@ func NewNetStore(store chunk.Store, nnf NewNetFetcherFunc) (*NetStore, error) {
 
 // Put stores a chunk in localstore, and delivers to all requestor peers using the fetcher stored in
 // the fetchers cache
-func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) error {
+func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool, error) {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 
 	// put to the chunk to the store, there should be no error
-	err := n.Store.Put(ctx, mode, ch)
+	exists, err := n.Store.Put(ctx, mode, ch)
 	if err != nil {
-		return err
+		return exists, err
 	}
 
 	// if chunk is now put in the store, check if there was an active fetcher and call deliver on it
@@ -93,7 +93,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) error 
 		log.Trace("n.getFetcher deliver", "ref", ch.Address())
 		f.deliver(ctx, ch)
 	}
-	return nil
+	return exists, nil
 }
 
 // Get retrieves the chunk from the NetStore DPA synchronously.

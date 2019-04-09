@@ -65,7 +65,7 @@ func TestModeSetSync(t *testing.T) {
 		return wantTimestamp
 	})()
 
-	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestModeSetRemove(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
