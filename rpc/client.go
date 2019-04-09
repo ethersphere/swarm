@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"reflect"
 	"strconv"
@@ -551,7 +552,9 @@ func (c *Client) dispatch(codec ServerCodec) {
 			}
 
 		case err := <-c.readErr:
-			conn.handler.log.Debug("RPC connection read error", "err", err)
+			if err != io.EOF {
+				conn.handler.log.Debug("RPC connection read error", "err", err)
+			}
 			conn.close(err, lastOp)
 			reading = false
 
