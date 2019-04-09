@@ -75,10 +75,10 @@ func (inspector *Inspector) IsSyncing() bool {
 	// last received chunks msg time
 	lrct := time.Unix(0, lastReceivedChunksMsg.Value())
 
-	// if last received chunks msg time is after now-30sec. (i.e. within the last 30sec.) then we say that the node is still syncing
+	// if last received chunks msg time is after now-15sec. (i.e. within the last 15sec.) then we say that the node is still syncing
 	// technically this is not correct, because this might have been a retrieve request, but for the time being it works for our purposes
 	// because we know we are not making retrieve requests on the node while checking this
-	return lrct.After(time.Now().Add(-30 * time.Second))
+	return lrct.After(time.Now().Add(-15 * time.Second))
 }
 
 type HasInfo struct {

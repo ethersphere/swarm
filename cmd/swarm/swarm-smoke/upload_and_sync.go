@@ -74,6 +74,7 @@ func uploadAndSyncCmd(ctx *cli.Context) error {
 func trackChunks(testData []byte, submitMetrics bool) error {
 	addrs, err := getAllRefs(testData)
 	if err != nil {
+		log.Error("cannot get refs", "err", err.Error())
 		return err
 	}
 
@@ -162,11 +163,9 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
 
 	reader := bytes.NewReader(testData)
-	return fileStore.GetAllReferences(ctx, reader, false)
+	return fileStore.GetAllReferences(context.Background(), reader, false)
 }
 
 func uploadAndSync(c *cli.Context, randomBytes []byte) error {
