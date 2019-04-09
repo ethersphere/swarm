@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	BatchSize = 1
+	BatchSize = 8
 )
 
 // SwarmSyncerServer implements an Server for history syncing on bins
