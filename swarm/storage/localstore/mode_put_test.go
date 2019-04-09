@@ -239,8 +239,15 @@ func TestModePut_sameChunk(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if i == 0 && exists {
-					t.Fatal("should not exist at this point")
+				switch exists {
+				case false:
+					if i != 0 {
+						t.Fatal("should not exist only on first Put")
+					}
+				case true:
+					if i == 0 {
+						t.Fatal("should exist on all cases other than the first one")
+					}
 				}
 
 				count := func(b bool) (c int) {
@@ -338,9 +345,9 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 			sem <- struct{}{}
 
 			go func(i int) {
-				_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
-
 				defer func() { <-sem }()
+
+				_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
 				errs <- err
 			}(i)
 		}
