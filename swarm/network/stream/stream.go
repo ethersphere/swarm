@@ -656,7 +656,8 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		return nil
 
 	case *TakeoverProofMsg:
-		return p.handleTakeoverProofMsg(ctx, msg)
+		go p.handleTakeoverProofMsg(ctx, msg)
+		return nil
 
 	case *WantedHashesMsg:
 		go p.handleWantedHashesMsg(ctx, msg)
@@ -664,14 +665,17 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 
 	case *ChunkDeliveryMsgRetrieval:
 		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
-		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+		go p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+		return nil
 
 	case *ChunkDeliveryMsgSyncing:
 		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
-		return p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+		go p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
+		return nil
 
 	case *RetrieveRequestMsg:
-		return p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)
+		go p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)
+		return nil
 
 	case *RequestSubscriptionMsg:
 		return p.handleRequestSubscription(ctx, msg)
