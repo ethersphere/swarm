@@ -24,9 +24,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	bv "github.com/ethereum/go-ethereum/swarm/network/bitvector"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
-	"github.com/opentracing/opentracing-go"
 	"github.com/pborman/uuid"
 )
 
@@ -203,12 +201,6 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	rid := uuid.New()[:8]
 
 	metrics.GetOrRegisterCounter("peer.handleofferedhashes", nil).Inc(1)
-
-	var sp opentracing.Span
-	ctx, sp = spancontext.StartSpan(
-		ctx,
-		"handle.offered.hashes")
-	defer sp.Finish()
 
 	c, _, err := p.getOrSetClient(req.Stream, req.From, req.To)
 	if err != nil {

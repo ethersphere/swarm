@@ -28,11 +28,9 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/log"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
-	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
-	opentracing "github.com/opentracing/opentracing-go"
 )
 
 type notFoundError struct {
@@ -148,13 +146,6 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
 func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
-	var sp opentracing.Span
-	ctx, sp := spancontext.StartSpan(
-		context.TODO(),
-		"send.offered.hashes",
-	)
-	defer sp.Finish()
-
 	defer metrics.GetOrRegisterResettingTimer("send.offered.hashes", nil).UpdateSince(time.Now())
 
 	hashes, from, to, proof, err := s.setNextBatch(f, t)
