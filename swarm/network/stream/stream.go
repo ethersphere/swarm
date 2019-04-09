@@ -659,7 +659,8 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		return p.handleTakeoverProofMsg(ctx, msg)
 
 	case *WantedHashesMsg:
-		return p.handleWantedHashesMsg(ctx, msg)
+		go p.handleWantedHashesMsg(ctx, msg)
+		return nil
 
 	case *ChunkDeliveryMsgRetrieval:
 		// handling chunk delivery is the same for retrieval and syncing, so let's cast the msg
