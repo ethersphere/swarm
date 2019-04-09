@@ -82,51 +82,63 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 	}
 
 	var globalYes, globalNo int
+	var globalMu sync.Mutex
 	var hasErr bool
 
+	var wg sync.WaitGroup
+	wg.Add(len(hosts))
+
 	for _, host := range hosts {
-		httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
+		host := host
+		go func() {
+			defer wg.Done()
+			httpHost := fmt.Sprintf("ws://%s:%d", host, 8546)
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		rpcClient, err := rpc.DialContext(ctx, httpHost)
-		if rpcClient != nil {
-			defer rpcClient.Close()
-		}
-		if err != nil {
-			log.Error("error dialing host", "err", err, "host", httpHost)
-			hasErr = true
-			continue
-		}
-
-		var hostChunks string
-		err = rpcClient.Call(&hostChunks, "bzz_has", addrs)
-		if err != nil {
-			log.Error("error calling rpc client", "err", err, "host", httpHost)
-			hasErr = true
-			continue
-		}
-
-		yes, no := 0, 0
-		for _, val := range hostChunks {
-			if val == '1' {
-				yes++
-			} else {
-				no++
+			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+			rpcClient, err := rpc.DialContext(ctx, httpHost)
+			if rpcClient != nil {
+				defer rpcClient.Close()
 			}
-		}
+			if err != nil {
+				log.Error("error dialing host", "err", err, "host", httpHost)
+				hasErr = true
+				return
+			}
 
-		if no == 0 {
-			log.Info("host reported to have all chunks", "host", host)
-		}
+			var hostChunks string
+			err = rpcClient.Call(&hostChunks, "bzz_has", addrs)
+			if err != nil {
+				log.Error("error calling rpc client", "err", err, "host", httpHost)
+				hasErr = true
+				return
+			}
 
-		log.Debug("chunks", "chunks", hostChunks, "yes", yes, "no", no, "host", host)
+			yes, no := 0, 0
+			for _, val := range hostChunks {
+				if val == '1' {
+					yes++
+				} else {
+					no++
+				}
+			}
 
-		if submitMetrics {
-			globalYes += yes
-			globalNo += no
-		}
+			if no == 0 {
+				log.Info("host reported to have all chunks", "host", host)
+			}
+
+			log.Debug("chunks", "chunks", hostChunks, "yes", yes, "no", no, "host", host)
+
+			if submitMetrics {
+				globalMu.Lock()
+				globalYes += yes
+				globalNo += no
+				globalMu.Unlock()
+			}
+		}()
 	}
+
+	wg.Wait()
 
 	if !hasErr && submitMetrics {
 		// remove the chunks stored on the uplaoder node
@@ -150,7 +162,7 @@ func getAllRefs(testData []byte) (storage.AddressCollection, error) {
 	if err != nil {
 		return nil, err
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(trackTimeout)*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	reader := bytes.NewReader(testData)
