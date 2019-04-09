@@ -235,9 +235,12 @@ func TestModePut_sameChunk(t *testing.T) {
 			defer cleanupFunc()
 
 			for i := 0; i < 10; i++ {
-				_, err := db.Put(context.Background(), tc.mode, ch)
+				exists, err := db.Put(context.Background(), tc.mode, ch)
 				if err != nil {
 					t.Fatal(err)
+				}
+				if i == 0 && exists {
+					t.Fatal("should not exist at this point")
 				}
 
 				count := func(b bool) (c int) {

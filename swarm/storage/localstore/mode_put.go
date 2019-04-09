@@ -59,8 +59,10 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 		i, err := db.retrievalAccessIndex.Get(item)
 		switch err {
 		case nil:
+			exists = true
 			item.AccessTimestamp = i.AccessTimestamp
 		case leveldb.ErrNotFound:
+			exists = false
 			// no chunk accesses
 		default:
 			return false, err
@@ -68,10 +70,12 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 		i, err = db.retrievalDataIndex.Get(item)
 		switch err {
 		case nil:
+			exists = true
 			item.StoreTimestamp = i.StoreTimestamp
 			item.BinID = i.BinID
 		case leveldb.ErrNotFound:
 			// no chunk accesses
+			exists = false
 		default:
 			return false, err
 		}
@@ -102,11 +106,11 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 	case chunk.ModePutUpload:
 		// put to indexes: retrieve, push, pull
 
-		has, err := db.retrievalDataIndex.Has(item)
+		exists, err = db.retrievalDataIndex.Has(item)
 		if err != nil {
 			return false, err
 		}
-		if !has {
+		if !exists {
 			item.StoreTimestamp = now()
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
 			if err != nil {
@@ -122,11 +126,11 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 	case chunk.ModePutSync:
 		// put to indexes: retrieve, pull
 
-		has, err := db.retrievalDataIndex.Has(item)
+		exists, err = db.retrievalDataIndex.Has(item)
 		if err != nil {
-			return false, err
+			return exists, err
 		}
-		if !has {
+		if !exists {
 			item.StoreTimestamp = now()
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
 			if err != nil {
@@ -156,5 +160,5 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 	if triggerPushFeed {
 		db.triggerPushSubscriptions()
 	}
-	return false, nil
+	return exists, nil
 }
