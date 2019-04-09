@@ -326,7 +326,7 @@ func (p *Peer) handleIncoming(handle func(ctx context.Context, msg interface{}) 
 		metrics.GetOrRegisterResettingTimer("peer.handleincoming", nil).UpdateSince(now)
 
 		snc := time.Since(now)
-		if snc > 2*time.Second {
+		if snc > 200*time.Millisecond {
 			log.Error("slow handle incoming", "since", snc, "msg", fmt.Sprintf("%T", val))
 		}
 	}()
