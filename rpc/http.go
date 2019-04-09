@@ -36,7 +36,7 @@ import (
 )
 
 const (
-	maxRequestContentLength = 1024 * 512
+	maxRequestContentLength = 5 * 1024 * 1024
 	contentType             = "application/json"
 )
 
