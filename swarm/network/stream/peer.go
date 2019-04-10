@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -137,71 +138,103 @@ func (p *Peer) Registrations() error {
 	if p.streamer.syncMode != SyncingAutoSubscribe {
 		return nil
 	}
-	timer := time.NewTimer(p.streamer.syncUpdateDelay)
-	select {
-	case <-timer.C:
-	case <-p.quit:
-		timer.Stop()
-		return nil
-	}
 
-	err := p.doRegistrations()
-	if err != nil {
-		return err
-	}
+	var change chan int
+
+	kad := p.streamer.delivery.kad
+	po := chunk.Proximity(p.bzzPeer.Over(), kad.BaseAddr())
+	newdepth := kad.NeighbourhoodDepth()
+	timer := time.NewTimer(p.streamer.syncUpdateDelay)
+	nn := po >= newdepth
 
 	for {
+		depth := newdepth
 		select {
+		case <-timer.C:
+			change = p.bzzPeer.ChangeC
+		case newdepth := <-change:
+			if changed := nn != (po >= depth); changed {
+				nn = !nn
+				if nn {
+					//request peer to subscribe to PO bins depth, depth+1, po - 1, po+1, ... MaxProxDisplay
+					poList := []int{depth, depth + 1, po - 1}
+					for i := po + 1; i <= kad.MaxProxDisplay; i++ {
+						poList = append(poList, i)
+					}
+					err := p.doRegister(poList)
+					if err != nil {
+						return err
+					}
+					continue
+				}
+				//quit all but po
+				poList := make([]int, 1)
+				for stream := range p.servers {
+					if stream.Name == "SYNC" {
+						if stream.Key == FormatSyncBinKey(uint8(po)) {
+							poList[0] = po
+							break
+						}
+					}
+				}
+				p.doQuit(poList)
+				continue
+			}
+			// if only depth changed then
+			if nn {
+				if newdepth < depth {
+					// request  peer to subscribe to PO bins newdepth, newdepth+1,... depth -1
+					poList := []int{newdepth}
+					for i := newdepth + 1; i <= depth-1; i++ {
+						poList = append(poList, int(i))
+					}
+					err := p.doRegister(poList)
+					if err != nil {
+						return err
+					}
+				} else {
+					// quit PO depth, depth+1, ... newdepth-1
+					poList := []int{depth}
+					for i := depth + 1; i <= newdepth-1; i++ {
+						poList = append(poList, i)
+					}
+					p.doQuit(poList)
+				}
+			}
 		case <-p.quit:
-			return nil
-		case <-p.bzzPeer.ChangeC:
-			// ugly hack here as I was getting double subscription requests in snapshot_sync_test,
-			// which means that new subscription requests were being issued before
-			// a first round finished and the servers were being created
-			//TODO: needs investigation about why that is
-			timer = time.NewTimer(p.streamer.syncUpdateDelay)
-			select {
-			case <-timer.C:
-			case <-p.quit:
-				timer.Stop()
-				return nil
-			}
-			err := p.doRegistrations()
-			if err != nil {
-				log.Error(err.Error())
-			}
-		default:
+			// quit all subs
+			p.doQuit(nil)
 		}
 	}
+
 	return nil
 }
 
-func (p *Peer) doRegistrations() error {
-	var startPo int
-	var endPo int
-
-	kad := p.streamer.delivery.kad
-	kadDepth := kad.NeighbourhoodDepth()
-	po := chunk.Proximity(kad.BaseAddr(), p.bzzPeer.Over())
-
-	if po < kadDepth {
-		startPo = po
-		endPo = po
-	} else {
-		//if the peer's bin is equal or deeper than the kademlia depth,
-		//each bin from the depth up to k.MaxProxDisplay should be subscribed
-		startPo = kadDepth
-		endPo = kad.MaxProxDisplay
-	}
-
-	for bin := startPo; bin <= endPo; bin++ {
-		//do the actual subscription
-		err := subscriptionFunc(p.streamer, p.bzzPeer, uint8(bin))
+//request peer to subscribe to PO bins depth, depth+1, po - 1, po+1, ... MaxProxDisplay
+func (p *Peer) doRegister(poList []int) error {
+	for _, po := range poList {
+		err := subscriptionFunc(p.streamer, p.bzzPeer, uint8(po))
 		if err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// quit - TODO: should this return error?
+func (p *Peer) doQuit(poList []int) {
+	for _, po := range poList {
+		live := NewStream("SYNC", FormatSyncBinKey(uint8(po)), true)
+		history := getHistoryStream(live)
+		err := p.streamer.Quit(p.ID(), live)
+		if err != nil && err != p2p.ErrShuttingDown {
+			log.Error("quit", "err", err, "peer", p.ID(), "stream", live)
+		}
+		err = p.streamer.Quit(p.ID(), history)
+		if err != nil && err != p2p.ErrShuttingDown {
+			log.Error("quit", "err", err, "peer", p.ID(), "stream", history)
+		}
+	}
 }
 
 // Deliver sends a storeRequestMsg protocol message to the peer

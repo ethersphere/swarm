@@ -249,7 +249,7 @@ func (b *Bzz) runBzz(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 type BzzPeer struct {
 	*protocols.Peer // represents the connection for online peers
 	*BzzAddr        // remote address -> implements Addr interface = protocols.Peer
-	ChangeC         chan struct{}
+	ChangeC         chan int
 	lastActive      time.Time // time is updated whenever mutexes are releasing
 	LightNode       bool
 }
@@ -258,12 +258,12 @@ func NewBzzPeer(p *protocols.Peer) *BzzPeer {
 	return &BzzPeer{
 		Peer:    p,
 		BzzAddr: NewAddr(p.Node()),
-		ChangeC: make(chan struct{}, 1),
+		ChangeC: make(chan int, 1),
 	}
 }
 
-func (p *BzzPeer) NotifyChanged() {
-	p.ChangeC <- struct{}{}
+func (p *BzzPeer) NotifyChanged(depth int) {
+	p.ChangeC <- depth
 }
 
 // TODO: call this function from somewhere

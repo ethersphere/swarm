@@ -336,8 +336,9 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 }
 
 func (k *Kademlia) notifyKadChange() {
+	depth := k.NeighbourhoodDepth()
 	k.EachConn(nil, 255, func(p *Peer, po int) bool {
-		go p.NotifyChanged()
+		go p.NotifyChanged(depth)
 		return true
 	})
 }
