@@ -65,7 +65,7 @@ func benchmarkRetrievalIndexes(b *testing.B, o *Options, count int) {
 	addrs := make([]chunk.Address, count)
 	for i := 0; i < count; i++ {
 		ch := generateTestRandomChunk()
-		err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -139,7 +139,7 @@ func benchmarkUpload(b *testing.B, o *Options, count int) {
 	b.StartTimer()
 
 	for i := 0; i < count; i++ {
-		err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
 		if err != nil {
 			b.Fatal(err)
 		}

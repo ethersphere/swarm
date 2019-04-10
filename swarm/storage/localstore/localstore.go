@@ -299,28 +299,9 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			valueBuffer := []byte{}
-			buf := make([]byte, binary.MaxVarintLen64)
-
-			for _, v := range fields.Tags {
-				n := binary.PutUvarint(buf, v)
-				if n > 0 {
-					valueBuffer = append(valueBuffer, buf[:n]...)
-				}
-			}
-
-			return valueBuffer, nil
+			return nil, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
-			for {
-				v, n := binary.Uvarint(value)
-				if n > 0 {
-					e.Tags = append(e.Tags, v)
-				} else {
-					break
-				}
-				value = value[n:]
-			}
 			return e, nil
 		},
 	})

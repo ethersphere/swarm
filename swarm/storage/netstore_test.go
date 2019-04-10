@@ -131,7 +131,7 @@ func TestNetStoreGetAndPut(t *testing.T) {
 			return
 		}
 
-		err := netStore.Put(ctx, chunk.ModePutRequest, ch)
+		_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 		if err != nil {
 			putErrC <- fmt.Errorf("Expected no err got %v", err)
 			return
@@ -181,7 +181,7 @@ func TestNetStoreGetAfterPut(t *testing.T) {
 	defer cancel()
 
 	// First we Put the chunk, so the chunk will be available locally
-	err := netStore.Put(ctx, chunk.ModePutRequest, ch)
+	_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -331,7 +331,7 @@ func TestNetStoreMultipleGetAndPut(t *testing.T) {
 			putErrC <- errors.New("Expected netStore to use one fetcher for all Get calls")
 			return
 		}
-		err := netStore.Put(ctx, chunk.ModePutRequest, ch)
+		_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 		if err != nil {
 			putErrC <- fmt.Errorf("Expected no err got %v", err)
 			return
@@ -438,7 +438,7 @@ func TestNetStoreFetchFuncAfterPut(t *testing.T) {
 	defer cancel()
 
 	// We deliver the created the chunk with a Put
-	err := netStore.Put(ctx, chunk.ModePutRequest, ch)
+	_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}
@@ -610,7 +610,7 @@ func TestNetStoreFetchFuncCalledMultipleTimes(t *testing.T) {
 	}
 
 	// Deliver the chunk with a Put
-	err := netStore.Put(ctx, chunk.ModePutRequest, ch)
+	_, err := netStore.Put(ctx, chunk.ModePutRequest, ch)
 	if err != nil {
 		t.Fatalf("Expected no err got %v", err)
 	}

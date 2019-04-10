@@ -45,7 +45,7 @@ func TestModePutRequest(t *testing.T) {
 
 		storeTimestamp = wantTimestamp
 
-		err := db.Put(context.Background(), chunk.ModePutRequest, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +63,7 @@ func TestModePutRequest(t *testing.T) {
 			return wantTimestamp
 		})()
 
-		err := db.Put(context.Background(), chunk.ModePutRequest, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,7 +88,7 @@ func TestModePutSync(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.Put(context.Background(), chunk.ModePutSync, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutSync, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestModePutUpload(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 					if !ok {
 						return
 					}
-					err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+					_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
 					select {
 					case errChan <- err:
 					case <-doneChan:
@@ -196,6 +196,72 @@ func TestModePutUpload_parallel(t *testing.T) {
 		if !bytes.Equal(got.Data(), ch.Data()) {
 			t.Fatalf("got chunk %s data %x, want %x", ch.Address().Hex(), got.Data(), ch.Data())
 		}
+	}
+}
+
+// TestModePut_sameChunk puts the same chunk multiple times
+// and validates that all relevant indexes have only one item
+// in them.
+func TestModePut_sameChunk(t *testing.T) {
+	ch := generateTestRandomChunk()
+
+	for _, tc := range []struct {
+		name      string
+		mode      chunk.ModePut
+		pullIndex bool
+		pushIndex bool
+	}{
+		{
+			name:      "ModePutRequest",
+			mode:      chunk.ModePutRequest,
+			pullIndex: false,
+			pushIndex: false,
+		},
+		{
+			name:      "ModePutUpload",
+			mode:      chunk.ModePutUpload,
+			pullIndex: true,
+			pushIndex: true,
+		},
+		{
+			name:      "ModePutSync",
+			mode:      chunk.ModePutSync,
+			pullIndex: true,
+			pushIndex: false,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db, cleanupFunc := newTestDB(t, nil)
+			defer cleanupFunc()
+
+			for i := 0; i < 10; i++ {
+				exists, err := db.Put(context.Background(), tc.mode, ch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				switch exists {
+				case false:
+					if i != 0 {
+						t.Fatal("should not exist only on first Put")
+					}
+				case true:
+					if i == 0 {
+						t.Fatal("should exist on all cases other than the first one")
+					}
+				}
+
+				count := func(b bool) (c int) {
+					if b {
+						return 1
+					}
+					return 0
+				}
+
+				newItemsCountTest(db.retrievalDataIndex, 1)(t)
+				newItemsCountTest(db.pullIndex, count(tc.pullIndex))(t)
+				newItemsCountTest(db.pushIndex, count(tc.pushIndex))(t)
+			}
+		})
 	}
 }
 
@@ -280,7 +346,9 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 
 			go func(i int) {
 				defer func() { <-sem }()
-				errs <- db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
+
+				_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
+				errs <- err
 			}(i)
 		}
 	}()

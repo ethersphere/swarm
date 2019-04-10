@@ -162,7 +162,9 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			wg.Add(1)
 
 			go func() {
+				_, err := db.Put(ctx, chunk.ModePutUpload, ch)
 				select {
+				case errC <- err:
 				case <-ctx.Done():
 					wg.Done()
 					<-tokenPool

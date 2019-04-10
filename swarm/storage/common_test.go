@@ -70,8 +70,9 @@ func mput(store ChunkStore, n int, f func(i int64) Chunk) (hs []Chunk, err error
 	for i := int64(0); i < int64(n); i++ {
 		ch := f(chunk.DefaultSize)
 		go func() {
+			_, err := store.Put(ctx, chunk.ModePutUpload, ch)
 			select {
-			case errc <- store.Put(ctx, chunk.ModePutUpload, ch):
+			case errc <- err:
 			case <-ctx.Done():
 			}
 		}()
@@ -224,11 +225,12 @@ func NewMapChunkStore() *MapChunkStore {
 	}
 }
 
-func (m *MapChunkStore) Put(_ context.Context, _ chunk.ModePut, ch Chunk) error {
+func (m *MapChunkStore) Put(_ context.Context, _ chunk.ModePut, ch Chunk) (bool, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	_, exists := m.chunks[ch.Address().Hex()]
 	m.chunks[ch.Address().Hex()] = ch
-	return nil
+	return exists, nil
 }
 
 func (m *MapChunkStore) Get(_ context.Context, _ chunk.ModeGet, ref Address) (Chunk, error) {
