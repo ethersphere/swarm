@@ -61,68 +61,6 @@ func NewDelivery(kad *network.Kademlia, netStore *network.NetStore) *Delivery {
 	}
 }
 
-// SwarmChunkServer implements Server
-type SwarmChunkServer struct {
-	batchC     chan []byte
-	netStore   *network.NetStore
-	currentLen uint64
-	quit       chan struct{}
-}
-
-// NewSwarmChunkServer is SwarmChunkServer constructor
-func NewSwarmChunkServer(chunkStore *network.NetStore) *SwarmChunkServer {
-	s := &SwarmChunkServer{
-		batchC:   make(chan []byte),
-		netStore: chunkStore,
-		quit:     make(chan struct{}),
-	}
-	return s
-}
-
-// SessionIndex returns zero in all cases for SwarmChunkServer.
-func (s *SwarmChunkServer) SessionIndex() (uint64, error) {
-	return 0, nil
-}
-
-// SetNextBatch
-func (s *SwarmChunkServer) SetNextBatch(_, _ uint64) (hashes []byte, from uint64, to uint64, proof *HandoverProof, err error) {
-	select {
-	case hashes = <-s.batchC:
-	case <-s.quit:
-		return
-	}
-
-	from = s.currentLen
-	s.currentLen += uint64(len(hashes))
-	log.Trace("SwarmChunkServer incrementing currentLen with", "lenhashes", len(hashes))
-	to = s.currentLen
-	return
-}
-
-// Close needs to be called on a stream server
-func (s *SwarmChunkServer) Close() {
-	close(s.quit)
-}
-
-// GetData retrives chunk data from db store
-func (s *SwarmChunkServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	//TODO: this should be localstore, not netstore?
-	r := &network.Request{
-		Addr:     storage.Address(key),
-		Origin:   enode.ID{},
-		HopCount: 0,
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
-	defer cancel()
-
-	chunk, err := s.netStore.Get(ctx, r)
-	if err != nil {
-		return nil, err
-	}
-	return chunk.Data(), nil
-}
-
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
 type RetrieveRequestMsg struct {
 	Addr      storage.Address

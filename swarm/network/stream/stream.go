@@ -137,23 +137,6 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *network.NetStor
 	streamer.api = NewAPI(streamer)
 	delivery.getPeer = streamer.getPeer
 
-	// if retrieval is enabled, register the server func, so that retrieve requests will be served (non-light nodes only)
-	//if options.Retrieval == RetrievalEnabled {
-	//streamer.RegisterServerFunc(swarmChunkServerStreamName, func(_ *Peer, _ string, live bool) (Server, error) {
-	//if !live {
-	//return nil, errors.New("only live retrieval requests supported")
-	//}
-	//return NewSwarmChunkServer(delivery.netStore), nil
-	//})
-	//}
-
-	// if retrieval is not disabled, register the client func (both light nodes and normal nodes can issue retrieve requests)
-	//if options.Retrieval != RetrievalDisabled {
-	//streamer.RegisterClientFunc(swarmChunkServerStreamName, func(p *Peer, t string, live bool) (Client, error) {
-	//return NewSwarmSyncerClient(p, netStore, NewStream(swarmChunkServerStreamName, t, live))
-	//})
-	//}
-
 	// If syncing is not disabled, the syncing functions are registered (both client and server)
 	if options.Syncing != SyncingDisabled {
 		RegisterSwarmSyncerServer(streamer, netStore)
