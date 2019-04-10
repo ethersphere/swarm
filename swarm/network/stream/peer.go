@@ -18,14 +18,18 @@ package stream
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/protocols"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/network"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
@@ -418,5 +422,109 @@ func (p *Peer) removeClientParams(s Stream) error {
 func (p *Peer) close() {
 	for _, s := range p.servers {
 		s.Close()
+	}
+}
+
+func (p *Peer) runUpdateSyncing() error {
+	timer := time.NewTimer(p.streamer.syncUpdateDelay)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+	case <-p.streamer.quit:
+		return nil
+	}
+
+	kad := p.streamer.delivery.kad
+	po := chunk.Proximity(network.NewAddr(p.Node()).Over(), kad.BaseAddr())
+
+	depth := kad.NeighbourhoodDepth()
+
+	// initial subscriptions
+	var startPo int
+	var endPo int
+	if po < depth {
+		startPo = po
+		endPo = po
+	} else {
+		// if the peer's bin is equal or deeper than the kademlia depth,
+		// each bin from the depth up to k.MaxProxDisplay should be subscribed
+		startPo = depth
+		endPo = kad.MaxProxDisplay
+	}
+	for bin := startPo; bin <= endPo; bin++ {
+		// do the initial subscription
+		p.doSubscribe(bin)
+	}
+
+	prevNN := po >= depth
+	prevDepth := depth
+
+	depthC, unsubscribeDepthC := kad.SubscribeToNeighbourhoodDepthChange()
+	defer unsubscribeDepthC()
+
+	for {
+		select {
+		case depth, ok := <-depthC:
+			if !ok {
+				return nil
+			}
+			nn := po >= depth
+			// TODO: formalize logic in updating (requesting and making) subscriptions
+			if nn != prevNN {
+				if nn {
+					//request peer to subscribe to PO bins depth, depth+1, po - 1, po+1, ... MaxProxDisplay
+					for i := depth; i <= kad.MaxProxDisplay; i++ {
+						if po != i {
+							p.doSubscribe(i)
+						}
+					}
+				} else {
+					//quit all but po
+					for i := prevDepth; i <= kad.MaxProxDisplay; i++ {
+						if po != i {
+							p.doQuit(i)
+						}
+					}
+				}
+			} else {
+				// if only depth changed then
+				if depth < prevDepth {
+					// request  peer to subscribe to PO bins depth, depth+1,... prevDepth -1
+					for i := depth; i <= prevDepth-1; i++ {
+						p.doSubscribe(i)
+					}
+				} else {
+					// quit PO prevDepth, prevDepth+1, ... depth-1
+					for i := prevDepth + 1; i < depth; i++ {
+						p.doQuit(i)
+					}
+				}
+			}
+			prevDepth = depth
+		case <-p.streamer.quit:
+			return nil
+		}
+	}
+}
+
+func (p *Peer) doSubscribe(po int) {
+	err := subscriptionFunc(p.streamer, p.ID(), uint8(po))
+	if err != nil {
+		log.Error("subscriptionFunc", "err", err)
+	}
+}
+
+func (p *Peer) doQuit(po int) {
+	fmt.Println("doQuit", hex.EncodeToString(p.streamer.delivery.kad.BaseAddr()), p.ID(), po)
+	live := NewStream("SYNC", FormatSyncBinKey(uint8(po)), true)
+	history := getHistoryStream(live)
+	err := p.streamer.Quit(p.ID(), live)
+	if err != nil && err != p2p.ErrShuttingDown {
+		log.Error("quit", "err", err, "peer", p.ID(), "stream", live)
+	}
+	err = p.streamer.Quit(p.ID(), history)
+	if err != nil && err != p2p.ErrShuttingDown {
+		log.Error("quit", "err", err, "peer", p.ID(), "stream", history)
 	}
 }

@@ -81,15 +81,14 @@ func NewKadParams() *KadParams {
 
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
-	lock       sync.RWMutex
-	*KadParams          // Kademlia configuration parameters
-	base       []byte   // immutable baseaddress of the table
-	addrs      *pot.Pot // pots container for known peer addresses
-	conns      *pot.Pot // pots container for live peer connections
-	depth      uint8    // stores the last current depth of saturation
-	nDepth     int      // stores the last neighbourhood depth
-	nDepthC    chan int // returned by DepthC function to signal neighbourhood depth change
-	addrCountC chan int // returned by AddrCountC function to signal peer count change
+	lock        sync.RWMutex
+	*KadParams           // Kademlia configuration parameters
+	base        []byte   // immutable baseaddress of the table
+	addrs       *pot.Pot // pots container for known peer addresses
+	conns       *pot.Pot // pots container for live peer connections
+	depth       uint8    // stores the last current depth of saturation
+	nDepth      int      // stores the last neighbourhood depth
+	nDepthChans []chan int
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -172,10 +171,6 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 			known++
 		}
 		size++
-	}
-	// send new address count value only if there are new addresses
-	if k.addrCountC != nil && size-known > 0 {
-		k.addrCountC <- k.addrs.Size()
 	}
 
 	k.sendNeighbourhoodDepthChange()
@@ -315,10 +310,6 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 		k.addrs, _, _, _ = pot.Swap(k.addrs, p, Pof, func(v pot.Val) pot.Val {
 			return a
 		})
-		// send new address count value only if the peer is inserted
-		if k.addrCountC != nil {
-			k.addrCountC <- k.addrs.Size()
-		}
 	}
 	log.Trace(k.string())
 	// calculate if depth of saturation changed
@@ -332,71 +323,67 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 	return k.depth, changed
 }
 
-// NeighbourhoodDepthC returns the channel that sends a new kademlia
-// neighbourhood depth on each change.
-// Not receiving from the returned channel will block On function
-// when the neighbourhood depth is changed.
-// TODO: Why is this exported, and if it should be; why can't we have more subscribers than one?
-func (k *Kademlia) NeighbourhoodDepthC() <-chan int {
-	k.lock.Lock()
-	defer k.lock.Unlock()
-	if k.nDepthC == nil {
-		k.nDepthC = make(chan int)
-	}
-	return k.nDepthC
-}
-
-// CloseNeighbourhoodDepthC closes the channel returned by
-// NeighbourhoodDepthC and stops sending neighbourhood change.
-func (k *Kademlia) CloseNeighbourhoodDepthC() {
-	k.lock.Lock()
-	defer k.lock.Unlock()
-
-	if k.nDepthC != nil {
-		close(k.nDepthC)
-		k.nDepthC = nil
-	}
-}
-
-// sendNeighbourhoodDepthChange sends new neighbourhood depth to k.nDepth channel
-// if it is initialized.
 func (k *Kademlia) sendNeighbourhoodDepthChange() {
-	// nDepthC is initialized when NeighbourhoodDepthC is called and returned by it.
-	// It provides signaling of neighbourhood depth change.
-	// This part of the code is sending new neighbourhood depth to nDepthC if that condition is met.
-	if k.nDepthC != nil {
+	if k.nDepthChans != nil {
 		nDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 		if nDepth != k.nDepth {
 			k.nDepth = nDepth
-			k.nDepthC <- nDepth
+			for _, c := range k.nDepthChans {
+				select {
+				case c <- nDepth:
+				default:
+				}
+			}
 		}
 	}
 }
 
-// AddrCountC returns the channel that sends a new
-// address count value on each change.
-// Not receiving from the returned channel will block Register function
-// when address count value changes.
-func (k *Kademlia) AddrCountC() <-chan int {
+func (k *Kademlia) SubscribeToNeighbourhoodDepthChange() (c <-chan int, unsubscribe func()) {
+	channel := make(chan int, 1)
+	var closeOnce sync.Once
+
+	latestIntC := func(in <-chan int) <-chan int {
+		out := make(chan int, 1)
+
+		go func() {
+			defer close(out)
+
+			for {
+				i, ok := <-in
+				if !ok {
+					return
+				}
+				select {
+				case <-out:
+				default:
+				}
+				out <- i
+			}
+		}()
+
+		return out
+	}
+
 	k.lock.Lock()
 	defer k.lock.Unlock()
 
-	if k.addrCountC == nil {
-		k.addrCountC = make(chan int)
-	}
-	return k.addrCountC
-}
+	k.nDepthChans = append(k.nDepthChans, channel)
 
-// CloseAddrCountC closes the channel returned by
-// AddrCountC and stops sending address count change.
-func (k *Kademlia) CloseAddrCountC() {
-	k.lock.Lock()
-	defer k.lock.Unlock()
+	unsubscribe = func() {
+		k.lock.Lock()
+		defer k.lock.Unlock()
 
-	if k.addrCountC != nil {
-		close(k.addrCountC)
-		k.addrCountC = nil
+		for i, c := range k.nDepthChans {
+			if c == channel {
+				k.nDepthChans = append(k.nDepthChans[:i], k.nDepthChans[i+1:]...)
+				break
+			}
+		}
+
+		closeOnce.Do(func() { close(channel) })
 	}
+
+	return latestIntC(channel), unsubscribe
 }
 
 // Off removes a peer from among live peers
@@ -422,10 +409,6 @@ func (k *Kademlia) Off(p *Peer) {
 			// v cannot be nil, but no need to check
 			return nil
 		})
-		// send new address count value only if the peer is deleted
-		if k.addrCountC != nil {
-			k.addrCountC <- k.addrs.Size()
-		}
 		k.sendNeighbourhoodDepthChange()
 	}
 }
