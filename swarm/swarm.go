@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ecdsa"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -146,6 +147,13 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		}
 		resolver = api.NewMultiResolver(opts...)
 		self.dns = resolver
+	}
+	// check that we are not in the old database schema
+	// if so - fail and exit
+	isLegacy := localstore.IsLegacyDatabase(config.ChunkDbPath)
+
+	if isLegacy {
+		return nil, errors.New("Legacy database format detected! Please read the migration announcement at: https://github.com/ethersphere/go-ethereum/wiki/Swarm-v0.4-local-store-migration")
 	}
 
 	var feedsHandler *feed.Handler

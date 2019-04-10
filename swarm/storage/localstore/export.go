@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
@@ -79,14 +80,16 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 // Import reads a tar structured data from the reader and
 // stores chunks in the database. It returns the number of
 // chunks imported.
-func (db *DB) Import(r io.Reader) (count int64, err error) {
+func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 	tr := tar.NewReader(r)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	countC := make(chan int64)
 	errC := make(chan error)
+	doneC := make(chan struct{})
+	tokenPool := make(chan struct{}, 100)
+	var wg sync.WaitGroup
 	go func() {
 		var (
 			firstFile = true
@@ -155,39 +158,47 @@ func (db *DB) Import(r io.Reader) (count int64, err error) {
 				case <-ctx.Done():
 				}
 			}
+			tokenPool <- struct{}{}
+			wg.Add(1)
 
 			go func() {
 				_, err := db.Put(ctx, chunk.ModePutUpload, ch)
 				select {
 				case errC <- err:
 				case <-ctx.Done():
+					wg.Done()
+					<-tokenPool
+				default:
+					err := db.Put(ctx, chunk.ModePutUpload, ch)
+					if err != nil {
+						errC <- err
+					}
+					wg.Done()
+					<-tokenPool
 				}
 			}()
 
 			count++
 		}
-		select {
-		case countC <- count:
-		case <-ctx.Done():
-		}
+		wg.Wait()
+		close(doneC)
 	}()
 
 	// wait for all chunks to be stored
-	var i int64
-	var total int64
 	for {
 		select {
 		case err := <-errC:
 			if err != nil {
 				return count, err
 			}
-			i++
-		case total = <-countC:
 		case <-ctx.Done():
-			return i, ctx.Err()
-		}
-		if total > 0 && i == total {
-			return total, nil
+			return count, ctx.Err()
+		default:
+			select {
+			case <-doneC:
+				return count, nil
+			default:
+			}
 		}
 	}
 }
