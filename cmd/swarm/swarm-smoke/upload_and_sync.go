@@ -74,7 +74,6 @@ func uploadAndSyncCmd(ctx *cli.Context) error {
 func trackChunks(testData []byte, submitMetrics bool) error {
 	addrs, err := getAllRefs(testData)
 	if err != nil {
-		log.Error("cannot get refs", "err", err.Error())
 		return err
 	}
 
