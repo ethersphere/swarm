@@ -104,8 +104,6 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 			log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
 		}
 		osp.LogFields(olog.Bool("delivered", true))
-		return
-
 	}()
 
 	return nil
@@ -156,7 +154,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 		msg = (*ChunkDeliveryMsg)(r)
 		mode = chunk.ModePutSync
 	case *ChunkDeliveryMsg:
-		msg = (*ChunkDeliveryMsg)(r)
+		msg = r
 		mode = chunk.ModePutSync
 	}
 
