@@ -224,40 +224,7 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStor
 		}()
 	}
 
-	go streamer.emitPeriodicSubscriptionMetrics()
-
 	return streamer
-}
-
-func (r *Registry) emitPeriodicSubscriptionMetrics() {
-	for {
-		select {
-		case <-r.quit:
-			return
-		case <-time.After(10 * time.Second):
-			var clientStreams int64
-			var serverStreams int64
-
-			r.peersMu.RLock()
-
-			for _, p := range r.peers {
-				//every peer has a map of stream clients
-				//every stream server represents a subscription
-				p.clientMu.RLock()
-				clientStreams += int64(len(p.clients))
-				p.clientMu.RUnlock()
-
-				p.serverMu.RLock()
-				serverStreams += int64(len(p.servers))
-				p.serverMu.RUnlock()
-			}
-
-			r.peersMu.RUnlock()
-
-			metrics.GetOrRegisterGauge("registry.serversubscr", nil).Update(serverStreams)
-			metrics.GetOrRegisterGauge("registry.clientsubscr", nil).Update(clientStreams)
-		}
-	}
 }
 
 // This is an accounted protocol, therefore we need to provide a pricing Hook to the spec
@@ -1001,7 +968,7 @@ func (api *API) UnsubscribeStream(peerId enode.ID, s Stream) error {
 }
 
 /*
-GetPeerSubscriptions is a API function which allows to query a peer for stream subscriptions it has.
+GetPeerServerSubscriptions is a API function which allows to query a peer for stream subscriptions it has.
 It can be called via RPC.
 It returns a map of node IDs with an array of string representations of Stream objects.
 */
@@ -1022,29 +989,6 @@ func (api *API) GetPeerServerSubscriptions() map[string][]string {
 			streams = append(streams, s.String())
 		}
 		p.serverMu.RUnlock()
-		//set the array of stream servers to the map
-		pstreams[id.String()] = streams
-	}
-	return pstreams
-}
-
-func (api *API) GetPeerClientSubscriptions() map[string][]string {
-	pstreams := make(map[string][]string)
-
-	api.streamer.peersMu.RLock()
-	defer api.streamer.peersMu.RUnlock()
-
-	for id, p := range api.streamer.peers {
-		var streams []string
-		//every peer has a map of stream clients
-		//every stream client represents a subscription
-		p.clientMu.RLock()
-		for s := range p.clients {
-			//append the string representation of the stream
-			//to the list for this peer
-			streams = append(streams, s.String())
-		}
-		p.clientMu.RUnlock()
 		//set the array of stream servers to the map
 		pstreams[id.String()] = streams
 	}
