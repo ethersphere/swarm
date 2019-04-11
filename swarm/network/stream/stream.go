@@ -249,6 +249,8 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStor
 func (r *Registry) emitPeriodicSubscriptionMetrics() {
 	for {
 		select {
+		case <-r.quit:
+			return
 		case <-time.After(10 * time.Second):
 			var clientStreams int64
 			var serverStreams int64

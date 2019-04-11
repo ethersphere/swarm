@@ -1123,8 +1123,8 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 	}
 }
 
-// TestGetSubscriptions is a unit test for the api.GetPeerServerSubscriptions() function
-func TestGetSubscriptions(t *testing.T) {
+// TestGetServerSubscriptions is a unit test for the api.GetPeerServerSubscriptions() function
+func TestGetServerSubscriptions(t *testing.T) {
 	// create an amount of dummy peers
 	testPeerCount := 8
 	// every peer will have this amount of dummy servers
@@ -1175,11 +1175,11 @@ func TestGetSubscriptions(t *testing.T) {
 }
 
 /*
-TestGetSubscriptionsRPC sets up a simulation network of `nodeCount` nodes,
+TestGetServerSubscriptionsRPC sets up a simulation network of `nodeCount` nodes,
 starts the simulation, waits for SyncUpdateDelay in order to kick off
 stream registration, then tests that there are subscriptions.
 */
-func TestGetSubscriptionsRPC(t *testing.T) {
+func TestGetServerSubscriptionsRPC(t *testing.T) {
 
 	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
 		t.Skip("flaky with -race on Travis")
