@@ -18,7 +18,6 @@ package network
 
 import (
 	"bytes"
-	"encoding/hex"
 	"fmt"
 	"math/rand"
 	"strings"
@@ -450,49 +449,6 @@ func (k *Kademlia) ListKnown() []*BzzAddr {
 	})
 
 	return res
-}
-
-func (k *Kademlia) Nearest(chunkRef string) (string, error) {
-	b, err := hex.DecodeString(chunkRef)
-	if err != nil {
-		return "", err
-	}
-
-	var sp *Peer
-
-	k.EachConn(b, 255, func(p *Peer, po int) bool {
-		// skip light nodes
-		if p.LightNode {
-			return true
-		}
-
-		sp = p
-
-		return false
-	})
-
-	return sp.ID().String(), nil
-}
-
-func (k *Kademlia) AllNearest(chunkRef string) ([]*Peer, error) {
-	b, err := hex.DecodeString(chunkRef)
-	if err != nil {
-		return nil, err
-	}
-
-	var peers []*Peer
-
-	k.EachConn(b, 255, func(p *Peer, po int) bool {
-		// skip light nodes
-		if p.LightNode {
-			return true
-		}
-
-		peers = append(peers, p)
-		return true
-	})
-
-	return peers, nil
 }
 
 // EachConn is an iterator with args (base, po, f) applies f to each live peer
