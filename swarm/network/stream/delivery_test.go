@@ -45,8 +45,7 @@ import (
 //Should time out as the peer does not have the chunk (no syncing happened previously)
 func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 	tester, _, _, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval: RetrievalEnabled,
-		Syncing:   SyncingDisabled, //do no syncing
+		Syncing: SyncingDisabled, //do no syncing
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -95,8 +94,7 @@ func TestStreamerUpstreamRetrieveRequestMsgExchangeWithoutStore(t *testing.T) {
 // offered hashes or delivery if skipHash is set to true
 func TestStreamerUpstreamRetrieveRequestMsgExchange(t *testing.T) {
 	tester, _, localStore, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval: RetrievalEnabled,
-		Syncing:   SyncingDisabled,
+		Syncing: SyncingDisabled,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -222,8 +220,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 func TestStreamerDownstreamChunkDeliveryMsgExchange(t *testing.T) {
 	tester, streamer, localStore, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval: RetrievalDisabled,
-		Syncing:   SyncingDisabled,
+		Syncing: SyncingDisabled,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -335,7 +332,6 @@ func testDeliveryFromNodes(t *testing.T, nodes, chunkCount int, skipCheck bool) 
 				r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 					SkipCheck: skipCheck,
 					Syncing:   SyncingDisabled,
-					Retrieval: RetrievalEnabled,
 				}, nil)
 				bucket.Store(bucketKeyRegistry, r)
 
@@ -486,7 +482,6 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
 				SkipCheck:       skipCheck,
 				Syncing:         SyncingDisabled,
-				Retrieval:       RetrievalDisabled,
 				SyncUpdateDelay: 0,
 			}, nil)
 			bucket.Store(bucketKeyRegistry, r)

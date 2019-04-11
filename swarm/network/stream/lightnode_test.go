@@ -25,8 +25,7 @@ import (
 // when syncing is enabled.
 func TestLigthnodeRequestSubscriptionWithSync(t *testing.T) {
 	registryOptions := &RegistryOptions{
-		Retrieval: RetrievalDisabled,
-		Syncing:   SyncingRegisterOnly,
+		Syncing: SyncingRegisterOnly,
 	}
 	tester, _, _, teardown, err := newStreamerTester(registryOptions)
 	if err != nil {
@@ -70,8 +69,7 @@ func TestLigthnodeRequestSubscriptionWithSync(t *testing.T) {
 // when syncing is disabled.
 func TestLigthnodeRequestSubscriptionWithoutSync(t *testing.T) {
 	registryOptions := &RegistryOptions{
-		Retrieval: RetrievalDisabled,
-		Syncing:   SyncingDisabled,
+		Syncing: SyncingDisabled,
 	}
 	tester, _, _, teardown, err := newStreamerTester(registryOptions)
 	if err != nil {

@@ -779,7 +779,6 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 	var maxPeerServers = 6
 	tester, streamer, _, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval:      RetrievalDisabled,
 		Syncing:        SyncingDisabled,
 		MaxPeerServers: maxPeerServers,
 	})
@@ -940,8 +939,7 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 //`Price` interface implementation
 func TestHasPriceImplementation(t *testing.T) {
 	_, r, _, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval: RetrievalDisabled,
-		Syncing:   SyncingDisabled,
+		Syncing: SyncingDisabled,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1226,7 +1224,6 @@ func TestGetServerSubscriptionsRPC(t *testing.T) {
 
 			// configure so that sync registrations actually happen
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				Retrieval:       RetrievalEnabled,
 				Syncing:         SyncingAutoSubscribe, //enable sync registrations
 				SyncUpdateDelay: syncUpdateDelay,
 			}, nil)
