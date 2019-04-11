@@ -43,11 +43,15 @@ func TestTagPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	if persistedTag.GetUid() != tag.GetUid() {
 		t.Fatalf("persisted tag and created tag uids not equal. want %d got %d", tag.GetUid(), persistedTag.GetUid())
 	}
 	if persistedTag.GetName() != tag.GetName() {
 		t.Fatalf("tag names dont match. want '%s' got '%s'", tag.GetName(), persistedTag.GetName())
+	}
+	if persistedTag.GetTotal() != tag.GetTotal() {
+		t.Fatalf("persisted tag and created tag totals not equal. want %d got %d", tag.GetTotal(), persistedTag.GetTotal())
 	}
 }
 
