@@ -628,6 +628,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		go func() {
 			err := p.handleOfferedHashesMsg(ctx, msg)
 			if err != nil {
+				log.Error(err.Error())
 				p.Drop()
 			}
 		}()
@@ -637,6 +638,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		go func() {
 			err := p.handleTakeoverProofMsg(ctx, msg)
 			if err != nil {
+				log.Error(err.Error())
 				p.Drop()
 			}
 		}()
@@ -646,6 +648,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		go func() {
 			err := p.handleWantedHashesMsg(ctx, msg)
 			if err != nil {
+				log.Error(err.Error())
 				p.Drop()
 			}
 		}()
@@ -656,6 +659,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		go func() {
 			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
 			if err != nil {
+				log.Error(err.Error())
 				p.Drop()
 			}
 		}()
@@ -666,6 +670,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		go func() {
 			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
 			if err != nil {
+				log.Error(err.Error())
 				p.Drop()
 			}
 		}()
@@ -675,6 +680,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 		go func() {
 			err := p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)
 			if err != nil {
+				log.Error(err.Error())
 				p.Drop()
 			}
 		}()
