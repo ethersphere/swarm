@@ -46,12 +46,14 @@ type Delivery struct {
 	chunkStore chunk.FetchStore
 	kad        *network.Kademlia
 	getPeer    func(enode.ID) *Peer
+	quit       chan struct{}
 }
 
 func NewDelivery(kad *network.Kademlia, chunkStore chunk.FetchStore) *Delivery {
 	return &Delivery{
 		chunkStore: chunkStore,
 		kad:        kad,
+		quit:       make(chan struct{}),
 	}
 }
 
@@ -82,6 +84,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	go func() {
 		select {
 		case <-ctx.Done():
+		case <-d.quit:
 		}
 		cancel()
 	}()
@@ -176,6 +179,12 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 		log.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
 	}()
 	return nil
+}
+
+func (d *Delivery) Close() {
+	d.kad.CloseNeighbourhoodDepthC()
+	d.kad.CloseAddrCountC()
+	close(d.quit)
 }
 
 // RequestFromPeers sends a chunk retrieve request to a peer
