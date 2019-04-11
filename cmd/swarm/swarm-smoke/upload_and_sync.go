@@ -142,7 +142,7 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 	wg.Wait()
 
 	if !hasErr && submitMetrics {
-		// remove the chunks stored on the uplaoder node
+		// remove the chunks stored on the uploader node
 		globalYes -= len(addrs)
 
 		metrics.GetOrRegisterCounter("deployment.chunks.yes", nil).Inc(int64(globalYes))
