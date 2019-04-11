@@ -48,7 +48,6 @@ const (
 
 // Enumerate options for syncing and retrieval
 type SyncingOption int
-type RetrievalOption int
 
 // Syncing options
 const (
@@ -58,17 +57,6 @@ const (
 	SyncingRegisterOnly
 	// Both client and server funcs are registered, subscribe sent automatically
 	SyncingAutoSubscribe
-)
-
-const (
-	// Retrieval disabled. Used mostly for tests to isolate syncing features (i.e. syncing only)
-	RetrievalDisabled RetrievalOption = iota
-	// Only the client side of the retrieve request is registered.
-	// (light nodes do not serve retrieve requests)
-	// once the client is registered, subscription to retrieve request stream is always sent
-	RetrievalClientOnly
-	// Both client and server funcs are registered, subscribe sent automatically
-	RetrievalEnabled
 )
 
 // subscriptionFunc is used to determine what to do in order to perform subscriptions
@@ -89,7 +77,6 @@ type Registry struct {
 	peers          map[enode.ID]*Peer
 	delivery       *Delivery
 	intervalsStore state.Store
-	autoRetrieval  bool // automatically subscribe to retrieve request stream
 	maxPeerServers int
 	spec           *protocols.Spec   //this protocol's spec
 	balance        protocols.Balance //implements protocols.Balance, for accounting
@@ -100,8 +87,7 @@ type Registry struct {
 // RegistryOptions holds optional values for NewRegistry constructor.
 type RegistryOptions struct {
 	SkipCheck       bool
-	Syncing         SyncingOption   // Defines syncing behavior
-	Retrieval       RetrievalOption // Defines retrieval behavior
+	Syncing         SyncingOption // Defines syncing behavior
 	SyncUpdateDelay time.Duration
 	MaxPeerServers  int // The limit of servers for each peer in registry
 }
@@ -114,8 +100,6 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStor
 	if options.SyncUpdateDelay <= 0 {
 		options.SyncUpdateDelay = 15 * time.Second
 	}
-	// check if retrieval has been disabled
-	retrieval := options.Retrieval != RetrievalDisabled
 
 	quit := make(chan struct{})
 
@@ -127,7 +111,6 @@ func NewRegistry(localID enode.ID, delivery *Delivery, netStore *storage.NetStor
 		peers:          make(map[enode.ID]*Peer),
 		delivery:       delivery,
 		intervalsStore: intervalsStore,
-		autoRetrieval:  retrieval,
 		maxPeerServers: options.MaxPeerServers,
 		balance:        balance,
 		quit:           quit,
