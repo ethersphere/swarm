@@ -539,7 +539,7 @@ func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedError := errors.New("Message handler error: (msg code 1): error invalid hashes length (len: 40)")
+	expectedError := errors.New("subprotocol error")
 	if err := tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: expectedError}); err != nil {
 		t.Fatal(err)
 	}
@@ -1123,7 +1123,7 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 	}
 }
 
-// TestGetSubscriptions is a unit test for the api.GetPeerSubscriptions() function
+// TestGetSubscriptions is a unit test for the api.GetPeerServerSubscriptions() function
 func TestGetSubscriptions(t *testing.T) {
 	// create an amount of dummy peers
 	testPeerCount := 8
@@ -1135,7 +1135,7 @@ func TestGetSubscriptions(t *testing.T) {
 	r := &Registry{}
 	api := NewAPI(r)
 	// call once, at this point should be empty
-	regs := api.GetPeerSubscriptions()
+	regs := api.GetPeerServerSubscriptions()
 	if len(regs) != 0 {
 		t.Fatal("Expected subscription count to be 0, but it is not")
 	}
@@ -1159,7 +1159,7 @@ func TestGetSubscriptions(t *testing.T) {
 	r.peers = peerMap
 
 	// call the subscriptions again
-	regs = api.GetPeerSubscriptions()
+	regs = api.GetPeerServerSubscriptions()
 	// count how many (fake) subscriptions there are
 	cnt := 0
 	for _, reg := range regs {
@@ -1321,7 +1321,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 
 			//ask it for subscriptions
 			pstreams := make(map[string][]string)
-			err = client.Call(&pstreams, "stream_getPeerSubscriptions")
+			err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
 			if err != nil {
 				return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
 			}
