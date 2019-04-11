@@ -60,7 +60,7 @@ func (st *SerializingType) UnmarshalBinary(data []byte) (err error) {
 func TestDBStore(t *testing.T) {
 	dir, err := ioutil.TempDir("", "db_store_test")
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	defer os.RemoveAll(dir)
 
