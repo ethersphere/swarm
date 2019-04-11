@@ -507,7 +507,7 @@ func makeAccountManager(conf *Config) (*accounts.Manager, string, error) {
 		}
 		// Start a smart card hub
 		if schub, err := scwallet.NewHub(scwallet.Scheme, keydir); err != nil {
-			//log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
+			log.Warn(fmt.Sprintf("Failed to start smart card hub, disabling: %v", err))
 		} else {
 			backends = append(backends, schub)
 		}
