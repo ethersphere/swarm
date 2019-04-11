@@ -168,8 +168,6 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 				return newEntry(p)
 			}
 
-			//log.Trace("found among known peers, underlay addr is same, do nothing", "new", p, "old", e.BzzAddr)
-
 			return v
 		})
 		if found {
