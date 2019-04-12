@@ -34,27 +34,27 @@ const (
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
-	po    uint8
-	store chunk.FetchStore
-	quit  chan struct{}
+	po       uint8
+	netStore *storage.NetStore
+	quit     chan struct{}
 }
 
 // NewSwarmSyncerServer is constructor for SwarmSyncerServer
-func NewSwarmSyncerServer(po uint8, syncChunkStore chunk.FetchStore) (*SwarmSyncerServer, error) {
+func NewSwarmSyncerServer(po uint8, netStore *storage.NetStore) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
-		po:    po,
-		store: syncChunkStore,
-		quit:  make(chan struct{}),
+		po:       po,
+		netStore: netStore,
+		quit:     make(chan struct{}),
 	}, nil
 }
 
-func RegisterSwarmSyncerServer(streamer *Registry, syncChunkStore chunk.FetchStore) {
+func RegisterSwarmSyncerServer(streamer *Registry, netStore *storage.NetStore) {
 	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
 			return nil, err
 		}
-		return NewSwarmSyncerServer(po, syncChunkStore)
+		return NewSwarmSyncerServer(po, netStore)
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -68,7 +68,7 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	ch, err := s.store.Get(ctx, chunk.ModeGetSync, storage.Address(key))
+	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
@@ -77,7 +77,7 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 
 // SessionIndex returns current storage bin (po) index.
 func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
-	return s.store.LastPullSubscriptionBinID(s.po)
+	return s.netStore.LastPullSubscriptionBinID(s.po)
 }
 
 // SetNextBatch retrieves the next batch of hashes from the localstore.
@@ -88,7 +88,7 @@ func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
 // are added in batchTimeout period, the batch will be returned. This function
 // will block until new chunks are received from localstore pull subscription.
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	descriptors, stop := s.store.SubscribePull(context.Background(), s.po, from, to)
+	descriptors, stop := s.netStore.SubscribePull(context.Background(), s.po, from, to)
 	defer stop()
 
 	const batchTimeout = 2 * time.Second
@@ -118,7 +118,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			// This is the most naive approach to label the chunk as synced
 			// allowing it to be garbage collected. A proper way requires
 			// validating that the chunk is successfully stored by the peer.
-			err := s.store.Set(context.Background(), chunk.ModeSetSync, d.Address)
+			err := s.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
 			if err != nil {
 				return nil, 0, 0, nil, err
 			}
@@ -158,13 +158,13 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	store  chunk.FetchStore
+	store  *storage.NetStore
 	peer   *Peer
 	stream Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, store chunk.FetchStore, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, store *storage.NetStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
 		store:  store,
 		peer:   p,
@@ -210,7 +210,7 @@ func NewSwarmSyncerClient(p *Peer, store chunk.FetchStore, stream Stream) (*Swar
 
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, store chunk.FetchStore) {
+func RegisterSwarmSyncerClient(streamer *Registry, store *storage.NetStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
 		return NewSwarmSyncerClient(p, store, NewStream("SYNC", t, live))
 	})
