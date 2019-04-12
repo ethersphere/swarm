@@ -158,67 +158,31 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 
 // SwarmSyncerClient
 type SwarmSyncerClient struct {
-	store  *storage.NetStore
-	peer   *Peer
-	stream Stream
+	netStore *storage.NetStore
+	peer     *Peer
+	stream   Stream
 }
 
 // NewSwarmSyncerClient is a contructor for provable data exchange syncer
-func NewSwarmSyncerClient(p *Peer, store *storage.NetStore, stream Stream) (*SwarmSyncerClient, error) {
+func NewSwarmSyncerClient(p *Peer, netStore *storage.NetStore, stream Stream) (*SwarmSyncerClient, error) {
 	return &SwarmSyncerClient{
-		store:  store,
-		peer:   p,
-		stream: stream,
+		netStore: netStore,
+		peer:     p,
+		stream:   stream,
 	}, nil
 }
 
-// // NewIncomingProvableSwarmSyncer is a contructor for provable data exchange syncer
-// func NewIncomingProvableSwarmSyncer(po int, priority int, index uint64, sessionAt uint64, intervals []uint64, sessionRoot storage.Address, chunker *storage.PyramidChunker, store storage.ChunkStore, p Peer) *SwarmSyncerClient {
-// 	retrieveC := make(storage.Chunk, chunksCap)
-// 	RunChunkRequestor(p, retrieveC)
-// 	storeC := make(storage.Chunk, chunksCap)
-// 	RunChunkStorer(store, storeC)
-// 	s := &SwarmSyncerClient{
-// 		po:            po,
-// 		priority:      priority,
-// 		sessionAt:     sessionAt,
-// 		start:         index,
-// 		end:           index,
-// 		nextC:         make(chan struct{}, 1),
-// 		intervals:     intervals,
-// 		sessionRoot:   sessionRoot,
-// 		sessionReader: chunker.Join(sessionRoot, retrieveC),
-// 		retrieveC:     retrieveC,
-// 		storeC:        storeC,
-// 	}
-// 	return s
-// }
-
-// // StartSyncing is called on the Peer to start the syncing process
-// // the idea is that it is called only after kademlia is close to healthy
-// func StartSyncing(s *Streamer, peerId enode.ID, po uint8, nn bool) {
-// 	lastPO := po
-// 	if nn {
-// 		lastPO = maxPO
-// 	}
-//
-// 	for i := po; i <= lastPO; i++ {
-// 		s.Subscribe(peerId, "SYNC", newSyncLabel("LIVE", po), 0, 0, High, true)
-// 		s.Subscribe(peerId, "SYNC", newSyncLabel("HISTORY", po), 0, 0, Mid, false)
-// 	}
-// }
-
 // RegisterSwarmSyncerClient registers the client constructor function for
 // to handle incoming sync streams
-func RegisterSwarmSyncerClient(streamer *Registry, store *storage.NetStore) {
+func RegisterSwarmSyncerClient(streamer *Registry, netStore *storage.NetStore) {
 	streamer.RegisterClientFunc("SYNC", func(p *Peer, t string, live bool) (Client, error) {
-		return NewSwarmSyncerClient(p, store, NewStream("SYNC", t, live))
+		return NewSwarmSyncerClient(p, netStore, NewStream("SYNC", t, live))
 	})
 }
 
 // NeedData
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
-	return s.store.FetchFunc(ctx, key)
+	return s.netStore.FetchFunc(ctx, key)
 }
 
 // BatchDone
