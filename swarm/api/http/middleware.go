@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -83,6 +84,47 @@ func InitLoggingResponseWriter(h http.Handler) http.Handler {
 		log.Info("request served", "ruid", GetRUID(r.Context()), "code", writer.statusCode, "time", ts)
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.time", r.Method), nil).Update(ts)
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("http.request.%s.%d.time", r.Method, writer.statusCode), nil).Update(ts)
+	})
+}
+
+func InitUploadTag(h http.Handler, a *api.API) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var (
+			tagName        string
+			err            error
+			estimatedTotal = 0
+			contentType    = r.Header.Get("Content-Type")
+			contentLength  = r.Header.Get("Content-Length")
+			headerTag      = r.Header.Get(SwarmTagHeaderName)
+		)
+		if headerTag != "" {
+			tagName = headerTag
+			log.Trace("got tag name from http header", "tagName", tagName)
+		} else {
+			tagName = fmt.Sprintf("unnamed_tag_%d", time.Now().Unix())
+		}
+
+		log.Trace("trying to estimate tag size", "contentType", contentType, "contentLength", contentLength, "cl", r.ContentLength)
+
+		if !strings.Contains(contentType, "multipart") && contentLength != "" {
+			estimatedTotal, err = strconv.Atoi(contentLength)
+			if err != nil {
+				log.Error("error parsing content-length string, falling back to 0", "contentLength", contentLength)
+				estimatedTotal = 0
+			} else {
+				estimatedTotal = estimatedTotal / 4096
+			}
+
+		}
+		log.Trace("creating tag", "tagName", tagName, "estimatedTotal", estimatedTotal)
+
+		t, err := a.NewTag(tagName, estimatedTotal)
+		if err != nil {
+			log.Error("error creating tag", "err", err, "tagName", tagName)
+		}
+		ctx := sctx.SetTag(r.Context(), t.Uid)
+
+		h.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
 

@@ -38,7 +38,9 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/rs/cors"
@@ -59,6 +61,8 @@ var (
 	getListCount    = metrics.NewRegisteredCounter("api.http.get.list.count", nil)
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
+
+const SwarmTagHeaderName = "x-swarm-tag"
 
 type methodHandler map[string]http.Handler
 
@@ -102,7 +106,15 @@ func NewServer(api *api.API, corsString string) *Server {
 		),
 		"POST": Adapt(
 			http.HandlerFunc(server.HandlePostFiles),
-			defaultMiddlewares...,
+			Adapter(func(h http.Handler) http.Handler {
+				return InitUploadTag(h, api)
+			}),
+			RecoverPanic,
+			SetRequestID,
+			SetRequestHost,
+			InitLoggingResponseWriter,
+			ParseURI,
+			InstrumentOpenTracing,
 		),
 		"DELETE": Adapt(
 			http.HandlerFunc(server.HandleDelete),
@@ -116,7 +128,15 @@ func NewServer(api *api.API, corsString string) *Server {
 		),
 		"POST": Adapt(
 			http.HandlerFunc(server.HandlePostRaw),
-			defaultMiddlewares...,
+			Adapter(func(h http.Handler) http.Handler {
+				return InitUploadTag(h, api)
+			}),
+			RecoverPanic,
+			SetRequestID,
+			SetRequestHost,
+			InitLoggingResponseWriter,
+			ParseURI,
+			InstrumentOpenTracing,
 		),
 	})
 	mux.Handle("/bzz-immutable:/", methodHandler{
@@ -147,6 +167,12 @@ func NewServer(api *api.API, corsString string) *Server {
 			defaultMiddlewares...,
 		),
 	})
+	mux.Handle("/bzz-tag:/", methodHandler{
+		"GET": Adapt(
+			http.HandlerFunc(server.HandleGetTag),
+			defaultMiddlewares...,
+		),
+	})
 
 	mux.Handle("/", methodHandler{
 		"GET": Adapt(
@@ -173,6 +199,11 @@ type Server struct {
 	http.Handler
 	api        *api.API
 	listenAddr string
+}
+
+// HandleGetTag handles the HTTP GET for a certain (or all) tags
+func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
+	log.Debug("handleGetTag", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
 }
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
@@ -230,6 +261,12 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.post.raw", "ruid", ruid)
 
+	tagUid := sctx.GetTag(r.Context())
+	tag, err := s.api.GetTag(tagUid)
+	if err != nil {
+		log.Error("handle post raw got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
+	}
+
 	postRawCount.Inc(1)
 
 	toEncrypt := false
@@ -262,6 +299,8 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	tag.DoneSplit(addr)
 
 	log.Debug("stored content", "ruid", ruid, "key", addr)
 
@@ -333,6 +372,15 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, fmt.Sprintf("cannot create manifest: %s", err), http.StatusInternalServerError)
 		return
 	}
+	tagUid := sctx.GetTag(r.Context())
+	tag, err := s.api.GetTag(tagUid)
+
+	if err != nil {
+		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
+	}
+
+	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.SPLIT), "TOTAL", tag.Total())
+	tag.DoneSplit(newAddr)
 
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
 

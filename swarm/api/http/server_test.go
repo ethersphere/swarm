@@ -37,6 +37,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -755,6 +756,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Add("Content-Type", "application/x-tar")
+	req.Header.Add(SwarmTagHeaderName, "test-upload")
 	client := &http.Client{}
 	resp2, err := client.Do(req)
 	if err != nil {
@@ -763,6 +765,10 @@ func testBzzTar(encrypted bool, t *testing.T) {
 	if resp2.StatusCode != http.StatusOK {
 		t.Fatalf("err %s", resp2.Status)
 	}
+
+	// check that the tag was written correctly
+	testutil.CheckTag(t, srv.Tags, chunk.SPLIT, 4, 4)
+
 	swarmHash, err := ioutil.ReadAll(resp2.Body)
 	resp2.Body.Close()
 	if err != nil {
@@ -834,6 +840,55 @@ func testBzzTar(encrypted bool, t *testing.T) {
 			t.Fatalf("file %s did not pass content assertion", hdr.Name)
 		}
 	}
+
+	// now check the tags endpoint
+}
+
+// TestBzzCorrectTagEstimate checks that the HTTP middleware sets the total number of chunks
+// in the tag according to an estimate from the HTTP request Content-Length header divided
+// by chunk size (4096). It is needed to be checked BEFORE chunking is done, therefore
+// concurrency was introduced to slow down the HTTP request
+func TestBzzCorrectTagEstimate(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
+	pr, pw := io.Pipe()
+	c := make(chan struct{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequest("POST", srv.URL+"/bzz:/", pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	req = req.WithContext(ctx)
+	req.ContentLength = 1000000
+	req.Header.Add("x-swarm-tag", "1000000")
+
+	go func() {
+		for {
+			select {
+			case <-c:
+				return
+			default:
+				_, err := pw.Write([]byte{0})
+				if err != nil {
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
+
+	client := &http.Client{}
+	_, err = client.Do(req)
+	if err != nil {
+		t.Log(err)
+	}
+	time.Sleep(100 * time.Millisecond)
+	testutil.CheckTag(t, srv.Tags, chunk.SEEN, 0, 244)
+	close(c)
+	cancel()
 }
 
 // TestBzzRootRedirect tests that getting the root path of a manifest without

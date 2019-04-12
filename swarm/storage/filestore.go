@@ -23,6 +23,7 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
 
@@ -47,6 +48,7 @@ const (
 type FileStore struct {
 	ChunkStore
 	hashFunc SwarmHasher
+	tags     *chunk.Tags
 }
 
 type FileStoreParams struct {
@@ -60,19 +62,20 @@ func NewFileStoreParams() *FileStoreParams {
 }
 
 // for testing locally
-func NewLocalFileStore(datadir string, basekey []byte) (*FileStore, error) {
+func NewLocalFileStore(datadir string, basekey []byte, tags *chunk.Tags) (*FileStore, error) {
 	localStore, err := localstore.New(datadir, basekey, nil)
 	if err != nil {
 		return nil, err
 	}
-	return NewFileStore(chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams()), nil
+	return NewFileStore(chunk.NewValidatorStore(localStore, NewContentAddressValidator(MakeHashFunc(DefaultHash))), NewFileStoreParams(), tags), nil
 }
 
-func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
+func NewFileStore(store ChunkStore, params *FileStoreParams, tags *chunk.Tags) *FileStore {
 	hashFunc := MakeHashFunc(params.Hash)
 	return &FileStore{
 		ChunkStore: store,
 		hashFunc:   hashFunc,
+		tags:       tags,
 	}
 }
 
@@ -83,7 +86,12 @@ func NewFileStore(store ChunkStore, params *FileStoreParams) *FileStore {
 // It returns a reader with the chunk data and whether the content was encrypted
 func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > f.hashFunc().Size()
-	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted)
+	tag, err := f.tags.GetContext(ctx)
+	if err != nil {
+		tag = chunk.NewTag(0, "ephemeral", 0) //note: how to handle this. this function does not return an error
+		log.Error("did not find a tag for retrieve, creating ephemeral")
+	}
+	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted, tag)
 	reader = TreeJoin(ctx, addr, getter, 0)
 	return
 }
@@ -91,8 +99,13 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 // Store is a public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
 func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
-	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt)
-	return PyramidSplit(ctx, data, putter, putter)
+	tag, err := f.tags.GetContext(ctx)
+	if err != nil {
+		//tag = chunk.NewTag(0, "", 0) //create an ephemeral tag
+		return nil, nil, err
+	}
+	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag)
+	return PyramidSplit(ctx, data, putter, putter, tag)
 }
 
 func (f *FileStore) HashSize() int {
@@ -101,12 +114,14 @@ func (f *FileStore) HashSize() int {
 
 // GetAllReferences is a public API. This endpoint returns all chunk hashes (only) for a given file
 func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncrypt bool) (addrs AddressCollection, err error) {
+	tag := chunk.NewTag(0, "ephemeral-tag", 0) //this tag is just a mock ephemeral tag since we don't want to save these results
+
 	// create a special kind of putter, which only will store the references
 	putter := &hashExplorer{
-		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt),
+		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag),
 	}
 	// do the actual splitting anyway, no way around it
-	_, wait, err := PyramidSplit(ctx, data, putter, putter)
+	_, wait, err := PyramidSplit(ctx, data, putter, putter, tag)
 	if err != nil {
 		return nil, err
 	}

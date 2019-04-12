@@ -41,6 +41,7 @@ import (
 	"github.com/ethereum/go-ethereum/contracts/ens"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -188,15 +189,17 @@ type API struct {
 	feed      *feed.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
+	tags      *chunk.Tags
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
 		feed:      feedHandler,
+		tags:      tags,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},
@@ -295,31 +298,6 @@ func (a *API) ResolveURI(ctx context.Context, uri *URI, credentials string) (sto
 	}
 	addr = storage.Address(common.Hex2Bytes(entry.Hash))
 	return addr, nil
-}
-
-// Put provides singleton manifest creation on top of FileStore store
-func (a *API) Put(ctx context.Context, content string, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
-	apiPutCount.Inc(1)
-	r := strings.NewReader(content)
-	key, waitContent, err := a.fileStore.Store(ctx, r, int64(len(content)), toEncrypt)
-	if err != nil {
-		apiPutFail.Inc(1)
-		return nil, nil, err
-	}
-	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
-	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.fileStore.Store(ctx, r, int64(len(manifest)), toEncrypt)
-	if err != nil {
-		apiPutFail.Inc(1)
-		return nil, nil, err
-	}
-	return key, func(ctx context.Context) error {
-		err := waitContent(ctx)
-		if err != nil {
-			return err
-		}
-		return waitManifest(ctx)
-	}, nil
 }
 
 // Get uses iterative manifest retrieval and prefix matching
@@ -986,6 +964,13 @@ func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feed.Values) (*f
 	}
 	return fd, nil
 }
+
+// NewTag exposes chunk.Tags New method for incoming upload requests
+func (a *API) NewTag(s string, total int) (*chunk.Tag, error) {
+	return a.tags.New(s, total)
+}
+
+func (a *API) GetTag(uid uint32) (*chunk.Tag, error) { return a.tags.Get(uid) }
 
 // MimeOctetStream default value of http Content-Type header
 const MimeOctetStream = "application/octet-stream"
