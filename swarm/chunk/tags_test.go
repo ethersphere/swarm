@@ -71,7 +71,7 @@ func TestTagConcurrentIncrements(t *testing.T) {
 }
 
 // TestTagsMultipleConcurrentIncrements tests Inc calls concurrently
-func TestTagsMultipleConcurrentIncrements2(t *testing.T) {
+func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 	ts := newTags()
 	n := 100
 	wg := sync.WaitGroup{}

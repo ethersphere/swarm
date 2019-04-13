@@ -1,7 +1,6 @@
 package chunk
 
 import (
-	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -9,8 +8,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-
-	"github.com/ethereum/go-ethereum/log"
 )
 
 var (
@@ -41,7 +38,6 @@ func (ts *tags) New(s string, total int) (*Tag, error) {
 		name:      s,
 		startedAt: time.Now(),
 		total:     uint32(total),
-		State:     make(chan State, 5),
 	}
 	_, loaded := ts.tags.LoadOrStore(s, t)
 	if loaded {
@@ -77,29 +73,27 @@ const (
 
 // Tag represents info on the status of new chunks
 type Tag struct {
-	uid       uint32     // a unique identifier for this tag
-	name      string     // a name tag for this tag
-	total     uint32     // total chunks belonging to a tag
-	split     uint32     // number of chunks already processed by splitter for hashing
-	stored    uint32     // number of chunks already stored locally
-	sent      uint32     // number of chunks sent for push syncing
-	synced    uint32     // number of chunks synced with proof
-	startedAt time.Time  // tag started to calculate ETA
-	State     chan State // channel to signal completion
+	uid       uint32    // a unique identifier for this tag
+	name      string    // a name tag for this tag
+	total     uint32    // total chunks belonging to a tag
+	split     uint32    // number of chunks already processed by splitter for hashing
+	stored    uint32    // number of chunks already stored locally
+	sent      uint32    // number of chunks sent for push syncing
+	synced    uint32    // number of chunks synced with proof
+	startedAt time.Time // tag started to calculate ETA
 }
 
 // New creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
 func NewTag(uid uint32, s string, total uint32) *Tag {
 	if len(s) == 0 {
-		s = fmt.Sprintf("upload_%d", time.Now().Unix())
+		s = fmt.Sprintf("upload_%d", time.Now().UnixNano())
 	}
 	t := &Tag{
 		uid:       uid,
 		name:      s,
 		startedAt: time.Now(),
 		total:     uint32(total),
-		State:     make(chan State, 5),
 	}
 	return t
 }
@@ -117,10 +111,7 @@ func (t *Tag) Inc(state State) {
 	case SYNCED:
 		v = &t.synced
 	}
-	n := atomic.AddUint32(v, 1)
-	if int(n) == t.GetTotal() {
-		t.State <- state
-	}
+	atomic.AddUint32(v, 1)
 }
 
 // Get returns the count for a state on a tag
@@ -140,11 +131,11 @@ func (t *Tag) Get(state State) int {
 }
 
 // GetUid returns the unique identifier
-func (t Tag) GetUid() uint32 {
+func (t *Tag) GetUid() uint32 {
 	return t.uid
 }
 
-func (t Tag) GetName() string {
+func (t *Tag) GetName() string {
 	return t.name
 }
 
@@ -176,24 +167,6 @@ func (t *Tag) ETA(state State) (time.Time, error) {
 	diff := time.Since(t.startedAt)
 	dur := time.Duration(total) * diff / time.Duration(cnt)
 	return t.startedAt.Add(dur), nil
-}
-
-// WaitTill blocks until count for the State reaches total cnt
-func (tg *Tag) WaitTill(ctx context.Context, s State) error {
-	ticker := time.NewTicker(1 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case c := <-tg.State:
-			if c == s {
-				return nil
-			}
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-ticker.C:
-			log.Info("Status", "name", tg.name, "SENT", tg.Get(SENT), "SYNCED", tg.Get(SYNCED))
-		}
-	}
 }
 
 func (tag *Tag) MarshalBinary() (data []byte, err error) {
