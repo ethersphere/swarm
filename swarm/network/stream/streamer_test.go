@@ -539,7 +539,7 @@ func TestStreamerDownstreamCorruptHashesMsgExchange(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedError := errors.New("Message handler error: (msg code 1): error invalid hashes length (len: 40)")
+	expectedError := errors.New("subprotocol error")
 	if err := tester.TestDisconnected(&p2ptest.Disconnect{Peer: node.ID(), Error: expectedError}); err != nil {
 		t.Fatal(err)
 	}
@@ -779,7 +779,6 @@ func TestStreamerRequestSubscriptionQuitMsgExchange(t *testing.T) {
 func TestMaxPeerServersWithUnsubscribe(t *testing.T) {
 	var maxPeerServers = 6
 	tester, streamer, _, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval:      RetrievalDisabled,
 		Syncing:        SyncingDisabled,
 		MaxPeerServers: maxPeerServers,
 	})
@@ -940,8 +939,7 @@ func TestMaxPeerServersWithoutUnsubscribe(t *testing.T) {
 //`Price` interface implementation
 func TestHasPriceImplementation(t *testing.T) {
 	_, r, _, teardown, err := newStreamerTester(&RegistryOptions{
-		Retrieval: RetrievalDisabled,
-		Syncing:   SyncingDisabled,
+		Syncing: SyncingDisabled,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1126,8 +1124,8 @@ func TestRequestPeerSubscriptions(t *testing.T) {
 	}
 }
 
-// TestGetSubscriptions is a unit test for the api.GetPeerSubscriptions() function
-func TestGetSubscriptions(t *testing.T) {
+// TestGetServerSubscriptions is a unit test for the api.GetPeerServerSubscriptions() function
+func TestGetServerSubscriptions(t *testing.T) {
 	// create an amount of dummy peers
 	testPeerCount := 8
 	// every peer will have this amount of dummy servers
@@ -1138,7 +1136,7 @@ func TestGetSubscriptions(t *testing.T) {
 	r := &Registry{}
 	api := NewAPI(r)
 	// call once, at this point should be empty
-	regs := api.GetPeerSubscriptions()
+	regs := api.GetPeerServerSubscriptions()
 	if len(regs) != 0 {
 		t.Fatal("Expected subscription count to be 0, but it is not")
 	}
@@ -1162,7 +1160,7 @@ func TestGetSubscriptions(t *testing.T) {
 	r.peers = peerMap
 
 	// call the subscriptions again
-	regs = api.GetPeerSubscriptions()
+	regs = api.GetPeerServerSubscriptions()
 	// count how many (fake) subscriptions there are
 	cnt := 0
 	for _, reg := range regs {
@@ -1178,11 +1176,11 @@ func TestGetSubscriptions(t *testing.T) {
 }
 
 /*
-TestGetSubscriptionsRPC sets up a simulation network of `nodeCount` nodes,
+TestGetServerSubscriptionsRPC sets up a simulation network of `nodeCount` nodes,
 starts the simulation, waits for SyncUpdateDelay in order to kick off
 stream registration, then tests that there are subscriptions.
 */
-func TestGetSubscriptionsRPC(t *testing.T) {
+func TestGetServerSubscriptionsRPC(t *testing.T) {
 
 	if testutil.RaceEnabled && os.Getenv("TRAVIS") == "true" {
 		t.Skip("flaky with -race on Travis")
@@ -1227,7 +1225,6 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 
 			// configure so that sync registrations actually happen
 			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
-				Retrieval:       RetrievalEnabled,
 				Syncing:         SyncingAutoSubscribe, //enable sync registrations
 				SyncUpdateDelay: syncUpdateDelay,
 			}, nil)
@@ -1322,7 +1319,7 @@ func TestGetSubscriptionsRPC(t *testing.T) {
 
 			//ask it for subscriptions
 			pstreams := make(map[string][]string)
-			err = client.Call(&pstreams, "stream_getPeerSubscriptions")
+			err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
 			if err != nil {
 				return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
 			}
