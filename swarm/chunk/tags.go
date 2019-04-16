@@ -165,8 +165,7 @@ func (t *Tag) Status(state State) (int, int) {
 
 // ETA returns the time of completion estimated based on time passed and rate of completion
 func (t *Tag) ETA(state State) (time.Time, error) {
-	cnt := t.Get(state)
-	total := t.GetTotal()
+	cnt, total := t.Status(state)
 	if cnt == 0 || total == 0 {
 		return time.Time{}, errNoETA
 	}
