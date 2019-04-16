@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	allStates = []State{SPLIT, STORED, SENT, SYNCED}
+	allStates = []State{SPLIT, STORED, SEEN, SENT, SYNCED}
 )
 
 // TestTagSingleIncrements tests if Inc increments the tag state value
@@ -50,7 +50,7 @@ func TestTagConcurrentIncrements(t *testing.T) {
 	tg := &Tag{}
 	n := 1000
 	wg := sync.WaitGroup{}
-	wg.Add(4 * n)
+	wg.Add(5 * n)
 	for _, f := range allStates {
 		go func(f State) {
 			for j := 0; j < n; j++ {
@@ -75,7 +75,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 	ts := newTags()
 	n := 100
 	wg := sync.WaitGroup{}
-	wg.Add(10 * 4 * n)
+	wg.Add(10 * 5 * n)
 	for i := 0; i < 10; i++ {
 		s := string([]byte{uint8(i)})
 		ts.New(s, n)

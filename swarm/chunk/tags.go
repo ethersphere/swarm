@@ -67,6 +67,7 @@ type State = uint32
 const (
 	SPLIT  State = iota // chunk has been processed by filehasher/swarm safe call
 	STORED              // chunk stored locally
+	SEEN                // chunk previously seen
 	SENT                // chunk sent to neighbourhood
 	SYNCED              // proof is received; chunk removed from sync db; chunk is available everywhere
 )
@@ -77,6 +78,7 @@ type Tag struct {
 	name      string    // a name tag for this tag
 	total     uint32    // total chunks belonging to a tag
 	split     uint32    // number of chunks already processed by splitter for hashing
+	seen      uint32    // number of chunks already seen
 	stored    uint32    // number of chunks already stored locally
 	sent      uint32    // number of chunks sent for push syncing
 	synced    uint32    // number of chunks synced with proof
@@ -106,6 +108,8 @@ func (t *Tag) Inc(state State) {
 		v = &t.split
 	case STORED:
 		v = &t.stored
+	case SEEN:
+		v = &t.seen
 	case SENT:
 		v = &t.sent
 	case SYNCED:
@@ -122,6 +126,8 @@ func (t *Tag) Get(state State) int {
 		v = &t.split
 	case STORED:
 		v = &t.stored
+	case SEEN:
+		v = &t.seen
 	case SENT:
 		v = &t.sent
 	case SYNCED:
