@@ -441,66 +441,21 @@ func (p *Peer) runUpdateSyncing() error {
 	depth := kad.NeighbourhoodDepth()
 
 	// initial subscriptions
-	var startPo int
-	var endPo int
-	if po < depth {
-		startPo = po
-		endPo = po
-	} else {
-		// if the peer's bin is equal or deeper than the kademlia depth,
-		// each bin from the depth up to k.MaxProxDisplay should be subscribed
-		startPo = depth
-		endPo = kad.MaxProxDisplay
-	}
-	for bin := startPo; bin <= endPo; bin++ {
-		// do the initial subscription
-		p.doSubscribe(bin)
-	}
+	p.updateSyncSubscriptions(syncSubscriptionsDiff(po, -1, depth, kad.MaxProxDisplay))
 
-	prevNN := po >= depth
+	depthChangeSignal, unsubscribeDepthChangeSignal := kad.SubscribeToNeighbourhoodDepthChange()
+	defer unsubscribeDepthChangeSignal()
+
 	prevDepth := depth
-
-	depthC, unsubscribeDepthC := kad.SubscribeToNeighbourhoodDepthChange()
-	defer unsubscribeDepthC()
-
 	for {
 		select {
-		case depth, ok := <-depthC:
+		case _, ok := <-depthChangeSignal:
 			if !ok {
 				return nil
 			}
-			nn := po >= depth
-			// TODO: formalize logic in updating (requesting and making) subscriptions
-			if nn != prevNN {
-				if nn {
-					//request peer to subscribe to PO bins depth, depth+1, po - 1, po+1, ... MaxProxDisplay
-					for i := depth; i <= kad.MaxProxDisplay; i++ {
-						if po != i {
-							p.doSubscribe(i)
-						}
-					}
-				} else {
-					//quit all but po
-					for i := prevDepth; i <= kad.MaxProxDisplay; i++ {
-						if po != i {
-							p.doQuit(i)
-						}
-					}
-				}
-			} else {
-				// if only depth changed then
-				if depth < prevDepth {
-					// request  peer to subscribe to PO bins depth, depth+1,... prevDepth -1
-					for i := depth; i <= prevDepth-1; i++ {
-						p.doSubscribe(i)
-					}
-				} else {
-					// quit PO prevDepth, prevDepth+1, ... depth-1
-					for i := prevDepth + 1; i < depth; i++ {
-						p.doQuit(i)
-					}
-				}
-			}
+			// update subscriptions for this peer when depth changes
+			depth := kad.NeighbourhoodDepth()
+			p.updateSyncSubscriptions(syncSubscriptionsDiff(po, prevDepth, depth, kad.MaxProxDisplay))
 			prevDepth = depth
 		case <-p.streamer.quit:
 			return nil
@@ -508,14 +463,23 @@ func (p *Peer) runUpdateSyncing() error {
 	}
 }
 
-func (p *Peer) doSubscribe(po int) {
+func (p *Peer) updateSyncSubscriptions(subBins, quitBins []int) {
+	for _, po := range subBins {
+		p.subscribeSync(po)
+	}
+	for _, po := range quitBins {
+		p.quitSync(po)
+	}
+}
+
+func (p *Peer) subscribeSync(po int) {
 	err := subscriptionFunc(p.streamer, p.ID(), uint8(po))
 	if err != nil {
 		log.Error("subscriptionFunc", "err", err)
 	}
 }
 
-func (p *Peer) doQuit(po int) {
+func (p *Peer) quitSync(po int) {
 	fmt.Println("doQuit", hex.EncodeToString(p.streamer.delivery.kad.BaseAddr()), p.ID(), po)
 	live := NewStream("SYNC", FormatSyncBinKey(uint8(po)), true)
 	history := getHistoryStream(live)
@@ -527,4 +491,65 @@ func (p *Peer) doQuit(po int) {
 	if err != nil && err != p2p.ErrShuttingDown {
 		log.Error("quit", "err", err, "peer", p.ID(), "stream", history)
 	}
+}
+
+// syncSubscriptionsDiff calculates to which proximity order bins a peer
+// (with po peerPO) needs to be subscribed after kademlia neighbourhood depth
+// change from prevDepth to newDepth. Max argument limits the number of
+// proximity order bins. Returned values are slices of integers which represent
+// proximity order bins, the firs one to which additional subscriptions need to
+// be requested and the second one which subscriptions need to be quit. Argument
+// prevDepth with value less then 0 represents no previous depth, used for
+// initial syncing subscriptions.
+func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int) (subBins, quitBins []int) {
+	// subs returns the range to which proximity order bins syncing
+	// subscriptions need to be requested, based on peer proximity and
+	// kademlia neighbourhood depth. Returned range is [start,end), inclusive for
+	// start and exclusive for end.
+	syncBins := func(peerPO, depth, max int) (start, end int) {
+		if peerPO < depth {
+			// subscribe only to peerPO bin if it is not
+			// in the nearest neighbourhood
+			return peerPO, peerPO + 1
+		}
+		// subscribe from depth to max bin if the peer
+		// is in the nearest neighbourhood
+		return depth, max + 1
+	}
+
+	newStart, newEnd := syncBins(peerPO, newDepth, max)
+	if prevDepth < 0 {
+		// no previous depth, return the complete range
+		// for subscriptions requests and nothing for quitting
+		return intRange(newStart, newEnd), nil
+	}
+
+	prevStart, prevEnd := syncBins(peerPO, prevDepth, max)
+
+	if newStart < prevStart {
+		subBins = append(subBins, intRange(newStart, prevStart)...)
+	}
+
+	if prevStart < newStart {
+		quitBins = append(quitBins, intRange(prevStart, newStart)...)
+	}
+
+	if newEnd < prevEnd {
+		quitBins = append(quitBins, intRange(newEnd, prevEnd)...)
+	}
+
+	if prevEnd < newEnd {
+		subBins = append(subBins, intRange(prevEnd, newEnd)...)
+	}
+
+	return subBins, quitBins
+}
+
+// intRange returns the slice of integers [start,end). The start
+// is inclusive and the end is not.
+func intRange(start, end int) (r []int) {
+	for i := start; i < end; i++ {
+		r = append(r, i)
+	}
+	return r
 }
