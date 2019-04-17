@@ -41,7 +41,7 @@ func newTags() *tags {
 // it returns an error if the tag with this name already exists
 func (ts *tags) New(s string, total int) (*Tag, error) {
 	t := &Tag{
-		uid:       ts.rng.Uint32(),
+		Uid:       ts.rng.Uint32(),
 		Name:      s,
 		startedAt: time.Now(),
 		total:     uint32(total),

@@ -151,8 +151,8 @@ func TestMarshalling(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if unmarshalledTag.GetUid() != tg.GetUid() {
-		t.Fatalf("tag uids not equal. want %d got %d", tg.GetUid(), unmarshalledTag.GetUid())
+	if unmarshalledTag.Uid != tg.Uid {
+		t.Fatalf("tag uids not equal. want %d got %d", tg.Uid, unmarshalledTag.Uid)
 	}
 
 	if unmarshalledTag.Name != tg.Name {

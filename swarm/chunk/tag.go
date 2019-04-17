@@ -42,7 +42,7 @@ const (
 
 // Tag represents info on the status of new chunks
 type Tag struct {
-	uid       uint32    // a unique identifier for this tag
+	Uid       uint32    // a unique identifier for this tag
 	Name      string    // a name tag for this tag
 	total     uint32    // total chunks belonging to a tag
 	split     uint32    // number of chunks already processed by splitter for hashing
@@ -57,7 +57,7 @@ type Tag struct {
 // it returns an error if the tag with this name already exists
 func NewTag(uid uint32, s string, total uint32) *Tag {
 	t := &Tag{
-		uid:       uid,
+		Uid:       uid,
 		Name:      s,
 		startedAt: time.Now(),
 		total:     total,
@@ -99,11 +99,6 @@ func (t *Tag) Get(state State) int {
 		v = &t.synced
 	}
 	return int(atomic.LoadUint32(v))
-}
-
-// GetUid returns the unique identifier
-func (t *Tag) GetUid() uint32 {
-	return t.uid
 }
 
 // GetTotal returns the total count
@@ -155,7 +150,7 @@ func (t *Tag) ETA(state State) (time.Time, error) {
 // MarshalBinary marshals the tag into a byte slice
 func (tag *Tag) MarshalBinary() (data []byte, err error) {
 	intBuffer := make([]byte, 4)
-	binary.BigEndian.PutUint32(intBuffer, tag.uid)
+	binary.BigEndian.PutUint32(intBuffer, tag.Uid)
 	buffer := append([]byte{}, intBuffer...)
 
 	binary.BigEndian.PutUint32(intBuffer, tag.synced)
@@ -179,7 +174,7 @@ func (tag *Tag) UnmarshalBinary(buffer []byte) error {
 		return errors.New("buffer too short")
 	}
 
-	tag.uid = binary.BigEndian.Uint32(buffer[:4])
+	tag.Uid = binary.BigEndian.Uint32(buffer[:4])
 	tag.synced = binary.BigEndian.Uint32(buffer[4:8])
 	tag.total = binary.BigEndian.Uint32(buffer[8:12])
 	t, n := binary.Varint(buffer[12:])
