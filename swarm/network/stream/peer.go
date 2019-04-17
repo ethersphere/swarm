@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"sync"
@@ -425,6 +424,11 @@ func (p *Peer) close() {
 	}
 }
 
+// runUpdateSyncing is a long running function that creates the initial
+// syncing subscriptions to the peer and waits for neighbourhood depth change
+// to create new ones or quit existing ones based on the new neighbourhood depth
+// and if peer enters or leaves nearest neighbourhood by using
+// syncSubscriptionsDiff and updateSyncSubscriptions functions.
 func (p *Peer) runUpdateSyncing() error {
 	timer := time.NewTimer(p.streamer.syncUpdateDelay)
 	defer timer.Stop()
@@ -463,6 +467,11 @@ func (p *Peer) runUpdateSyncing() error {
 	}
 }
 
+// updateSyncSubscriptions accepts two slices of integers, the first one
+// representing proximity order bins for required syncing subscriptions
+// and the second one representing bins for syncing subscriptions that
+// need to be removed. This function sends request for subscription
+// messages and quit messages for provided bins.
 func (p *Peer) updateSyncSubscriptions(subBins, quitBins []int) {
 	for _, po := range subBins {
 		p.subscribeSync(po)
@@ -472,15 +481,20 @@ func (p *Peer) updateSyncSubscriptions(subBins, quitBins []int) {
 	}
 }
 
+// subscribeSync send the request for syncing subscriptions to the peer
+// using subscriptionFunc. This function is used to request syncing subscriptions
+// when new peer is added to the registry and on neighbourhood depth change.
 func (p *Peer) subscribeSync(po int) {
 	err := subscriptionFunc(p.streamer, p.ID(), uint8(po))
 	if err != nil {
-		log.Error("subscriptionFunc", "err", err)
+		log.Error("subscription", "err", err)
 	}
 }
 
+// quitSync sends the quit message for live and history syncing streams to the peer.
+// This function is used in runUpdateSyncing indirectly over updateSyncSubscriptions
+// to remove unneeded syncing subscriptions on neighbourhood depth change.
 func (p *Peer) quitSync(po int) {
-	fmt.Println("doQuit", hex.EncodeToString(p.streamer.delivery.kad.BaseAddr()), p.ID(), po)
 	live := NewStream("SYNC", FormatSyncBinKey(uint8(po)), true)
 	history := getHistoryStream(live)
 	err := p.streamer.Quit(p.ID(), live)
@@ -497,7 +511,7 @@ func (p *Peer) quitSync(po int) {
 // (with po peerPO) needs to be subscribed after kademlia neighbourhood depth
 // change from prevDepth to newDepth. Max argument limits the number of
 // proximity order bins. Returned values are slices of integers which represent
-// proximity order bins, the firs one to which additional subscriptions need to
+// proximity order bins, the first one to which additional subscriptions need to
 // be requested and the second one which subscriptions need to be quit. Argument
 // prevDepth with value less then 0 represents no previous depth, used for
 // initial syncing subscriptions.

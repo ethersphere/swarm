@@ -656,11 +656,11 @@ func TestKademlia_SubscribeToNeighbourhoodDepthChange(t *testing.T) {
 	t.Run("no new peers", func(t *testing.T) {
 		k := newTestKademlia(t, "00000000")
 
-		c, u := k.SubscribeToNeighbourhoodDepthChange()
-		defer u()
+		changeC, unsubscribe := k.SubscribeToNeighbourhoodDepthChange()
+		defer unsubscribe()
 
 		select {
-		case _, ok := <-c:
+		case _, ok := <-changeC:
 			if !ok {
 				t.Error("closed signal channel")
 			}

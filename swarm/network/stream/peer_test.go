@@ -91,7 +91,7 @@ func TestSyncSubscriptionsDiff(t *testing.T) {
 		},
 		{
 			po: 4, prevDepth: 0, newDepth: 4, // 0-16 -> 4-16
-			quitBins: intRange(0, 4),
+			quitBins: []int{0, 1, 2, 3},
 		},
 		{
 			po: 4, prevDepth: 0, newDepth: 5, // 0-16 -> 4
