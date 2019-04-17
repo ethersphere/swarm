@@ -1,3 +1,19 @@
+// Copyright 2019 The go-ethereum Authors
+// This file is part of the go-ethereum library.
+//
+// The go-ethereum library is free software: you can redistribute it and/or modify
+// it under the terms of the GNU Lesser General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// The go-ethereum library is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU Lesser General Public License for more details.
+//
+// You should have received a copy of the GNU Lesser General Public License
+// along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
+
 package chunk
 
 import (
@@ -18,7 +34,10 @@ func TestTagSingleIncrements(t *testing.T) {
 		if tg.Get(f) != 1 {
 			t.Fatalf("not incremented")
 		}
-		cnt, total := tg.Status(f)
+		cnt, total, err := tg.Status(f)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if cnt != 1 {
 			t.Fatalf("expected count 1 for state %v, got %v", f, cnt)
 		}
@@ -109,7 +128,10 @@ func TestMarshalling(t *testing.T) {
 		if tg.Get(f) != 1 {
 			t.Fatalf("not incremented")
 		}
-		cnt, total := tg.Status(f)
+		cnt, total, err := tg.Status(f)
+		if err != nil {
+			t.Fatal(err)
+		}
 		if cnt != 1 {
 			t.Fatalf("expected count 1 for state %v, got %v", f, cnt)
 		}
@@ -133,15 +155,15 @@ func TestMarshalling(t *testing.T) {
 		t.Fatalf("tag uids not equal. want %d got %d", tg.GetUid(), unmarshalledTag.GetUid())
 	}
 
-	if unmarshalledTag.GetName() != tg.GetName() {
-		t.Fatalf("tag names not equal. want %s got %s", tg.GetName(), unmarshalledTag.GetName())
+	if unmarshalledTag.Name != tg.Name {
+		t.Fatalf("tag names not equal. want %s got %s", tg.Name, unmarshalledTag.Name)
 	}
 
 	if unmarshalledTag.Get(SYNCED) != tg.Get(SYNCED) {
 		t.Fatalf("tag names not equal. want %d got %d", tg.Get(SYNCED), unmarshalledTag.Get(SYNCED))
 	}
 
-	if unmarshalledTag.GetTotal() != tg.GetTotal() {
-		t.Fatalf("tag names not equal. want %d got %d", tg.GetTotal(), unmarshalledTag.GetTotal())
+	if unmarshalledTag.Total() != tg.Total() {
+		t.Fatalf("tag names not equal. want %d got %d", tg.Total(), unmarshalledTag.Total())
 	}
 }
