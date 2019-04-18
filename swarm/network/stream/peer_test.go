@@ -17,10 +17,21 @@
 package stream
 
 import (
+	"context"
 	"fmt"
+	"reflect"
+	"sort"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/ethereum/go-ethereum/node"
+	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/network"
+	"github.com/ethereum/go-ethereum/swarm/network/simulation"
+	"github.com/ethereum/go-ethereum/swarm/state"
 )
 
 // TestSyncSubscriptionsDiff validates the output of syncSubscriptionsDiff
@@ -113,4 +124,161 @@ func TestSyncSubscriptionsDiff(t *testing.T) {
 			t.Errorf("po: %v, prevDepth: %v, newDepth: %v: got quitBins %v, want %v", tc.po, tc.prevDepth, tc.newDepth, quitBins, tc.quitBins)
 		}
 	}
+}
+
+// TestUpdateSyncingSubscriptions validates that syncing subscriptions are correctly
+// made on initial node connections and that subscriptions are correctly changed
+// when kademlia neighbourhood depth is changed by connecting more nodes.
+func TestUpdateSyncingSubscriptions(t *testing.T) {
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			addr, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
+			if err != nil {
+				return nil, nil, err
+			}
+			r := NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				SyncUpdateDelay: 100 * time.Millisecond,
+				Syncing:         SyncingAutoSubscribe,
+			}, nil)
+			cleanup = func() {
+				r.Close()
+				clean()
+			}
+			return r, cleanup, nil
+		},
+	})
+	defer sim.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		// initial nodes, first one as pivot center of the start
+		ids, err := sim.AddNodesAndConnectStar(20)
+		if err != nil {
+			return err
+		}
+
+		// pivot values
+		pivotRegistryID := ids[0]
+		pivotRegistry := sim.Service("streamer", pivotRegistryID).(*Registry)
+		pivotKademlia := pivotRegistry.delivery.kad
+		// nodes proximities from the pivot node
+		nodeProximities := make(map[string]int)
+		for _, id := range ids[1:] {
+			nodeProximities[id.String()] = chunk.Proximity(pivotKademlia.BaseAddr(), id.Bytes())
+		}
+		// wait until sync subscriptions are done for all nodes
+		waitForSubscriptions(t, pivotRegistry, ids[1:]...)
+
+		// check initial sync streams
+		err = checkSyncStreamsWithRetry(pivotRegistry, nodeProximities)
+		if err != nil {
+			return err
+		}
+
+		// add more nodes until the depth is changed
+		prevDepth := pivotKademlia.NeighbourhoodDepth()
+		for {
+			ids, err := sim.AddNodes(10)
+			if err != nil {
+				return err
+			}
+			err = sim.Net.ConnectNodesStar(ids, pivotRegistryID)
+			if err != nil {
+				return err
+			}
+			waitForSubscriptions(t, pivotRegistry, ids...)
+
+			newDepth := pivotKademlia.NeighbourhoodDepth()
+			if newDepth != prevDepth {
+				break
+			}
+		}
+		// check sync streams for changed depth
+		return checkSyncStreamsWithRetry(pivotRegistry, nodeProximities)
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
+
+// waitForSubscriptions is a test helper function that blocks until
+// stream server subscriptions are established on the provided registry
+// to the nodes with provided IDs.
+func waitForSubscriptions(t *testing.T, r *Registry, ids ...enode.ID) {
+	t.Helper()
+
+	for reties := 0; reties < 100; reties++ {
+		subs := r.api.GetPeerServerSubscriptions()
+		if allSubscribed(subs, ids) {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("missing subscriptions")
+}
+
+// allSubscribed returns true if nodes with ids have subscriptions
+// in provided subs map.
+func allSubscribed(subs map[string][]string, ids []enode.ID) bool {
+	for _, id := range ids {
+		if s, ok := subs[id.String()]; !ok || len(s) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+// checkSyncStreamsWithRetry is calling checkSyncStreams with retries.
+func checkSyncStreamsWithRetry(r *Registry, nodeProximities map[string]int) (err error) {
+	for retries := 0; retries < 5; retries++ {
+		err = checkSyncStreams(r, nodeProximities)
+		if err == nil {
+			return nil
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return err
+}
+
+// checkSyncStreams validates that registry contains expected sync
+// subscriptions to nodes with proximities in a map nodeProximities.
+func checkSyncStreams(r *Registry, nodeProximities map[string]int) error {
+	depth := r.delivery.kad.NeighbourhoodDepth()
+	maxPO := r.delivery.kad.MaxProxDisplay
+	for id, po := range nodeProximities {
+		wantStreams := syncStreams(po, depth, maxPO)
+		gotStreams := nodeStreams(r, id)
+
+		if r.getPeer(enode.HexID(id)) == nil {
+			// ignore removed peer
+			continue
+		}
+
+		if !reflect.DeepEqual(gotStreams, wantStreams) {
+			return fmt.Errorf("node %s got streams %v, want %v", id, gotStreams, wantStreams)
+		}
+	}
+	return nil
+}
+
+// syncStreams returns expected sync streams that need to be
+// established between a node with kademlia neighbourhood depth
+// and a node with proximity order po.
+func syncStreams(po, depth, maxPO int) (streams []string) {
+	start, end := syncBins(po, depth, maxPO)
+	for bin := start; bin < end; bin++ {
+		streams = append(streams, NewStream("SYNC", FormatSyncBinKey(uint8(bin)), false).String())
+		streams = append(streams, NewStream("SYNC", FormatSyncBinKey(uint8(bin)), true).String())
+	}
+	return streams
+}
+
+// nodeStreams returns stream server subscriptions on a registry
+// to the peer with provided id.
+func nodeStreams(r *Registry, id string) []string {
+	streams := r.api.GetPeerServerSubscriptions()[id]
+	sort.Strings(streams)
+	return streams
 }
