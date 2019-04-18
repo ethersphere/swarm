@@ -116,11 +116,12 @@ func (t *Tag) DoneSplit() int {
 
 // Status returns the value of state and the total count
 func (t *Tag) Status(state State) (int, int, error) {
-	count, total := t.Get(state), int(atomic.LoadUint32(&t.total))
+	count, seen, total := t.Get(state), int(atomic.LoadUint32(&t.seen)), int(atomic.LoadUint32(&t.total))
 	switch state {
+	//SENT and SYNCED should compare to STORED but only when TOTAL is set and STORED +SEEN == TOTAL.
 	case SPLIT:
 		if total > 0 {
-			return count, total, nil
+			return count, total - seen, nil
 		}
 		return count, total, errNA
 	case STORED:
@@ -128,7 +129,17 @@ func (t *Tag) Status(state State) (int, int, error) {
 	case SEEN:
 		return count, total, nil
 	case SENT:
+		if total > 0 {
+			stored := int(atonic.LoadUint32(&t.stored))
+			return count, stored, nil
+		}
+		return count, total, errNA
 	case SYNCED:
+		if total > 0 {
+			stored := int(atonic.LoadUint32(&t.stored))
+			return count, stored, nil
+		}
+		return count, total, errNA
 	}
 	return count, total, nil
 }
