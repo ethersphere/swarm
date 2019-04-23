@@ -19,7 +19,6 @@ package localstore
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sync"
 	"time"
 
@@ -42,7 +41,7 @@ import (
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
 func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
-	metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.SubscribePull.bin%v", bin), nil).Inc(1)
+	metrics.GetOrRegisterCounter("localstore.SubscribePull", nil).Inc(1)
 
 	chunkDescriptors := make(chan chunk.Descriptor)
 	trigger := make(chan struct{}, 1)
@@ -65,7 +64,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 	var errStopSubscription = errors.New("stop subscription")
 
 	go func() {
-		defer metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.SubscribePull.bin%v.stop", bin), nil).Inc(1)
+		defer metrics.GetOrRegisterCounter("localstore.SubscribePull.stop", nil).Inc(1)
 		// close the returned chunk.Descriptor channel at the end to
 		// signal that the subscription is done
 		defer close(chunkDescriptors)
@@ -86,7 +85,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				// - last index Item is reached
 				// - subscription stop is called
 				// - context is done
-				metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.SubscribePull.bin%v.iter", bin), nil).Inc(1)
+				metrics.GetOrRegisterCounter("localstore.SubscribePull.iter", nil).Inc(1)
 
 				ctx, sp := spancontext.StartSpan(ctx, "localstore.SubscribePull.iter")
 				sp.LogFields(olog.Int("bin", int(bin)), olog.Uint64("since", since), olog.Uint64("until", until))
@@ -143,7 +142,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 						// if until is reached
 						return
 					}
-					metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.SubscribePull.bin%v.iter.error", bin), nil).Inc(1)
+					metrics.GetOrRegisterCounter("localstore.SubscribePull.iter.error", nil).Inc(1)
 					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
@@ -189,7 +188,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 // in pull syncing index for a provided bin. If there are no chunks in
 // that bin, 0 value is returned.
 func (db *DB) LastPullSubscriptionBinID(bin uint8) (id uint64, err error) {
-	metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.LastPullSubscriptionBinID.bin%v", bin), nil).Inc(1)
+	metrics.GetOrRegisterCounter("localstore.LastPullSubscriptionBinID", nil).Inc(1)
 
 	item, err := db.pullIndex.Last([]byte{bin})
 	if err != nil {
