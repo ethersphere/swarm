@@ -24,9 +24,10 @@ import (
 )
 
 var (
-	errExists = errors.New("already exists")
-	errNA     = errors.New("not available yet")
-	errNoETA  = errors.New("unable to calculate ETA")
+	errExists       = errors.New("already exists")
+	errNA           = errors.New("not available yet")
+	errUnknownState = errors.New("unknown state")
+	errNoETA        = errors.New("unable to calculate ETA")
 )
 
 // State is the enum type for chunk states
@@ -117,31 +118,27 @@ func (t *Tag) DoneSplit() int {
 // Status returns the value of state and the total count
 func (t *Tag) Status(state State) (int, int, error) {
 	count, seen, total := t.Get(state), int(atomic.LoadUint32(&t.seen)), int(atomic.LoadUint32(&t.total))
-	switch state {
-	//SENT and SYNCED should compare to STORED but only when TOTAL is set and STORED +SEEN == TOTAL.
-	case SPLIT:
-		if total > 0 {
-			return count, total - seen, nil
-		}
+	if total == 0 {
 		return count, total, errNA
+	}
+	switch state {
+	case SPLIT:
+		return count, total, nil //chunker does not care about duplicate chunks
 	case STORED:
-		return count, total, nil
+		return count, total - seen, nil
 	case SEEN:
 		return count, total, nil
 	case SENT:
-		if total > 0 {
-			stored := int(atonic.LoadUint32(&t.stored))
-			return count, stored, nil
-		}
-		return count, total, errNA
+		return count, total - seen, nil
 	case SYNCED:
-		if total > 0 {
-			stored := int(atonic.LoadUint32(&t.stored))
+		stored := int(atomic.LoadUint32(&t.stored))
+		if total-seen == stored {
 			return count, stored, nil
 		}
 		return count, total, errNA
+	default:
+		return count, total, errUnknownState
 	}
-	return count, total, nil
 }
 
 // ETA returns the time of completion estimated based on time passed and rate of completion

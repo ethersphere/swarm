@@ -47,6 +47,25 @@ func TestTagSingleIncrements(t *testing.T) {
 	}
 }
 
+// TestTagDiffIncrements tests if Inc increments the value and if status returns the correct values
+func TestTagDiffIncrements(t *testing.T) {
+	tg := &Tag{total: 10}
+	tg.Inc(SEEN)
+	for i := 0; i < 10; i++ {
+		tg.Inc(STORED)
+	}
+	val, total, err := tg.Status(STORED)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if val != 10 {
+		t.Fatalf("should be 10, got %d", val)
+	}
+	if total != 9 {
+		t.Fatalf("expected total to be 9, got %d", total)
+	}
+}
+
 // tests ETA is precise
 func TestTagETA(t *testing.T) {
 	now := time.Now()
