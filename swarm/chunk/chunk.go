@@ -121,7 +121,7 @@ func (m ModeGet) String() string {
 	case ModeGetLookup:
 		return "Lookup"
 	default:
-		return "Unknown Mode Get"
+		return "Unknown"
 	}
 }
 
@@ -147,7 +147,7 @@ func (m ModePut) String() string {
 	case ModePutUpload:
 		return "Upload"
 	default:
-		return "Unknown Mode Put"
+		return "Unknown"
 	}
 }
 
@@ -173,7 +173,7 @@ func (m ModeSet) String() string {
 	case ModeSetRemove:
 		return "Remove"
 	default:
-		return "Unknown Mode Set"
+		return "Unknown"
 	}
 }
 
