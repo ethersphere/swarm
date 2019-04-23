@@ -18,8 +18,12 @@ package localstore
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -27,8 +31,18 @@ import (
 // chunk represented by the address.
 // Set is required to implement chunk.Store
 // interface.
-func (db *DB) Set(_ context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
-	return db.set(mode, addr)
+func (db *DB) Set(ctx context.Context, mode chunk.ModeSet, addr chunk.Address) (err error) {
+	ctx, sp := spancontext.StartSpan(ctx, fmt.Sprintf("localstore.Set.%s", mode))
+	defer sp.Finish()
+
+	sp.LogFields(olog.String("ref", addr.String()), olog.String("mode-set", mode.String()))
+
+	metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.Set.%s", mode), nil).Inc(1)
+	err = db.set(mode, addr)
+	if err != nil {
+		metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.Set.%s.error", mode), nil).Inc(1)
+	}
+	return err
 }
 
 // set updates database indexes for a specific

@@ -19,10 +19,23 @@ package localstore
 import (
 	"context"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 // Has returns true if the chunk is stored in database.
-func (db *DB) Has(_ context.Context, addr chunk.Address) (bool, error) {
-	return db.retrievalDataIndex.Has(addressToItem(addr))
+func (db *DB) Has(ctx context.Context, addr chunk.Address) (bool, error) {
+	ctx, sp := spancontext.StartSpan(ctx, "localstore.Has")
+	defer sp.Finish()
+
+	sp.LogFields(olog.String("ref", addr.String()))
+
+	metrics.GetOrRegisterCounter("localstore.Has.%s", nil).Inc(1)
+	has, err := db.retrievalDataIndex.Has(addressToItem(addr))
+	if err != nil {
+		metrics.GetOrRegisterCounter("localstore.Has.%s.error", nil).Inc(1)
+	}
+	return has, err
 }

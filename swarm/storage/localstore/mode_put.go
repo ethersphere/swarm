@@ -18,9 +18,13 @@ package localstore
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -28,8 +32,18 @@ import (
 // on the Putter mode, it updates required indexes.
 // Put is required to implement chunk.Store
 // interface.
-func (db *DB) Put(_ context.Context, mode chunk.ModePut, ch chunk.Chunk) (exists bool, err error) {
-	return db.put(mode, chunkToItem(ch))
+func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk) (exists bool, err error) {
+	ctx, sp := spancontext.StartSpan(ctx, fmt.Sprintf("localstore.Put.%s", mode))
+	defer sp.Finish()
+
+	sp.LogFields(olog.String("ref", ch.Address().String()), olog.String("mode-put", mode.String()))
+
+	metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.Put.%s", mode), nil).Inc(1)
+	exists, err = db.put(mode, chunkToItem(ch))
+	if err != nil {
+		metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.Put.%s.error", mode), nil).Inc(1)
+	}
+	return exists, err
 }
 
 // put stores Item to database and updates other

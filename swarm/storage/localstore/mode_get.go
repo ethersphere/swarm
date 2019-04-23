@@ -18,10 +18,14 @@ package localstore
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -30,7 +34,19 @@ import (
 // All required indexes will be updated required by the
 // Getter Mode. Get is required to implement chunk.Store
 // interface.
-func (db *DB) Get(_ context.Context, mode chunk.ModeGet, addr chunk.Address) (ch chunk.Chunk, err error) {
+func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (ch chunk.Chunk, err error) {
+	ctx, sp := spancontext.StartSpan(ctx, fmt.Sprintf("localstore.Get.%s", mode))
+	defer sp.Finish()
+
+	sp.LogFields(olog.String("ref", addr.String()), olog.String("mode-get", mode.String()))
+
+	metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.Get.%s", mode), nil).Inc(1)
+	defer func() {
+		if err != nil {
+			metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.Get.%s.error", mode), nil).Inc(1)
+		}
+	}()
+
 	out, err := db.get(mode, addr)
 	if err != nil {
 		if err == leveldb.ErrNotFound {
@@ -66,8 +82,10 @@ func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err er
 				// for a new goroutine
 				defer func() { <-db.updateGCSem }()
 			}
+			metrics.GetOrRegisterCounter("localstore.updateGC", nil).Inc(1)
 			err := db.updateGC(out)
 			if err != nil {
+				metrics.GetOrRegisterCounter("localstore.updateGC.error", nil).Inc(1)
 				log.Error("localstore update gc", "err", err)
 			}
 			// if gc update hook is defined, call it
