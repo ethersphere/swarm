@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
@@ -27,15 +28,18 @@ import (
 
 // Has returns true if the chunk is stored in database.
 func (db *DB) Has(ctx context.Context, addr chunk.Address) (bool, error) {
-	ctx, sp := spancontext.StartSpan(ctx, "localstore.Has")
-	defer sp.Finish()
+	metricName := "localstore.Has"
 
+	ctx, sp := spancontext.StartSpan(ctx, metricName)
+	defer sp.Finish()
 	sp.LogFields(olog.String("ref", addr.String()))
 
-	metrics.GetOrRegisterCounter("localstore.Has.%s", nil).Inc(1)
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+	defer totalTimeMetric(metricName, time.Now())
+
 	has, err := db.retrievalDataIndex.Has(addressToItem(addr))
 	if err != nil {
-		metrics.GetOrRegisterCounter("localstore.Has.%s.error", nil).Inc(1)
+		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 	}
 	return has, err
 }

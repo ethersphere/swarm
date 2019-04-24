@@ -19,6 +19,7 @@ package localstore
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
@@ -35,15 +36,18 @@ import (
 // Getter Mode. Get is required to implement chunk.Store
 // interface.
 func (db *DB) Get(ctx context.Context, mode chunk.ModeGet, addr chunk.Address) (ch chunk.Chunk, err error) {
-	ctx, sp := spancontext.StartSpan(ctx, fmt.Sprintf("localstore.Get.%s", mode))
-	defer sp.Finish()
+	metricName := fmt.Sprintf("localstore.Get.%s", mode)
 
+	ctx, sp := spancontext.StartSpan(ctx, metricName)
+	defer sp.Finish()
 	sp.LogFields(olog.String("ref", addr.String()), olog.String("mode-get", mode.String()))
 
-	metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.Get.%s", mode), nil).Inc(1)
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+	defer totalTimeMetric(metricName, time.Now())
+
 	defer func() {
 		if err != nil {
-			metrics.GetOrRegisterCounter(fmt.Sprintf("localstore.Get.%s.error", mode), nil).Inc(1)
+			metrics.GetOrRegisterCounter(fmt.Sprintf(metricName+".error", mode), nil).Inc(1)
 		}
 	}()
 
@@ -82,10 +86,14 @@ func (db *DB) get(mode chunk.ModeGet, addr chunk.Address) (out shed.Item, err er
 				// for a new goroutine
 				defer func() { <-db.updateGCSem }()
 			}
-			metrics.GetOrRegisterCounter("localstore.updateGC", nil).Inc(1)
+
+			metricName := "localstore.updateGC"
+			metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
+			defer totalTimeMetric(metricName, time.Now())
+
 			err := db.updateGC(out)
 			if err != nil {
-				metrics.GetOrRegisterCounter("localstore.updateGC.error", nil).Inc(1)
+				metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 				log.Error("localstore update gc", "err", err)
 			}
 			// if gc update hook is defined, call it

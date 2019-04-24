@@ -41,7 +41,8 @@ import (
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
 func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
-	metrics.GetOrRegisterCounter("localstore.SubscribePull", nil).Inc(1)
+	metricName := "localstore.SubscribePull"
+	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 
 	chunkDescriptors := make(chan chunk.Descriptor)
 	trigger := make(chan struct{}, 1)
@@ -64,7 +65,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 	var errStopSubscription = errors.New("stop subscription")
 
 	go func() {
-		defer metrics.GetOrRegisterCounter("localstore.SubscribePull.stop", nil).Inc(1)
+		defer metrics.GetOrRegisterCounter(metricName+".stop", nil).Inc(1)
 		// close the returned chunk.Descriptor channel at the end to
 		// signal that the subscription is done
 		defer close(chunkDescriptors)
@@ -85,11 +86,12 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				// - last index Item is reached
 				// - subscription stop is called
 				// - context is done
-				metrics.GetOrRegisterCounter("localstore.SubscribePull.iter", nil).Inc(1)
+				metrics.GetOrRegisterCounter(metricName+".iter", nil).Inc(1)
 
-				ctx, sp := spancontext.StartSpan(ctx, "localstore.SubscribePull.iter")
+				ctx, sp := spancontext.StartSpan(ctx, metricName+".iter")
 				sp.LogFields(olog.Int("bin", int(bin)), olog.Uint64("since", since), olog.Uint64("until", until))
 
+				iterStart := time.Now()
 				var count int
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 					select {
@@ -127,6 +129,8 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					Prefix:            []byte{bin},
 				})
 
+				totalTimeMetric(metricName+".iter", iterStart)
+
 				sp.FinishWithOptions(opentracing.FinishOptions{
 					LogRecords: []opentracing.LogRecord{
 						{
@@ -142,7 +146,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 						// if until is reached
 						return
 					}
-					metrics.GetOrRegisterCounter("localstore.SubscribePull.iter.error", nil).Inc(1)
+					metrics.GetOrRegisterCounter(metricName+".iter.error", nil).Inc(1)
 					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
