@@ -209,7 +209,7 @@ func TestUpdateSyncingSubscriptions(t *testing.T) {
 func waitForSubscriptions(t *testing.T, r *Registry, ids ...enode.ID) {
 	t.Helper()
 
-	for reties := 0; reties < 100; reties++ {
+	for retries := 0; retries < 100; retries++ {
 		subs := r.api.GetPeerServerSubscriptions()
 		if allSubscribed(subs, ids) {
 			return
