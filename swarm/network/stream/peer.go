@@ -444,6 +444,8 @@ func (p *Peer) runUpdateSyncing() {
 
 	depth := kad.NeighbourhoodDepth()
 
+	log.Debug("update syncing subscriptions: initial", "peer", p.ID(), "po", po, "depth", depth)
+
 	// initial subscriptions
 	p.updateSyncSubscriptions(syncSubscriptionsDiff(po, -1, depth, kad.MaxProxDisplay))
 
@@ -459,12 +461,14 @@ func (p *Peer) runUpdateSyncing() {
 			}
 			// update subscriptions for this peer when depth changes
 			depth := kad.NeighbourhoodDepth()
+			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth)
 			p.updateSyncSubscriptions(syncSubscriptionsDiff(po, prevDepth, depth, kad.MaxProxDisplay))
 			prevDepth = depth
 		case <-p.streamer.quit:
 			return
 		}
 	}
+	log.Debug("update syncing subscriptions: exiting", "peer", p.ID())
 }
 
 // updateSyncSubscriptions accepts two slices of integers, the first one
@@ -474,8 +478,10 @@ func (p *Peer) runUpdateSyncing() {
 // messages and quit messages for provided bins.
 func (p *Peer) updateSyncSubscriptions(subBins, quitBins []int) {
 	if p.streamer.getPeer(p.ID()) == nil {
+		log.Debug("update syncing subscriptions", "peer not found", p.ID())
 		return
 	}
+	log.Debug("update syncing subscriptions", "peer", p.ID(), "subscribe", subBins, "quit", quitBins)
 	for _, po := range subBins {
 		p.subscribeSync(po)
 	}
