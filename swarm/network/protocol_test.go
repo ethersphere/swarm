@@ -86,9 +86,12 @@ func newBzzBaseTester(n int, prvkey *ecdsa.PrivateKey, spec *protocols.Spec, run
 func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *protocols.Spec, run func(*BzzPeer) error) (*bzzTester, [][]byte, error) {
 	n := len(addrs)
 	cs := make(map[enode.ID]chan bool)
+	var csMu sync.Mutex
 
 	srv := func(p *BzzPeer) error {
 		defer func() {
+			csMu.Lock()
+			defer csMu.Unlock()
 			if cs[p.ID()] != nil {
 				close(cs[p.ID()])
 			}
@@ -99,8 +102,8 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 	nodeToAddr := make(map[enode.ID][]byte)
 	protocol := func(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 		mu.Lock()
-		defer mu.Unlock()
 		nodeToAddr[p.ID()] = addrs[0]
+		mu.Unlock()
 		bzzAddr := &BzzAddr{addrs[0], []byte(p.Node().String())}
 		addrs = addrs[1:]
 		return srv(&BzzPeer{Peer: protocols.NewPeer(p, rw, spec), BzzAddr: bzzAddr})
@@ -120,10 +123,12 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 	}
 	addr := getENRBzzAddr(nod)
 
+	csMu.Lock()
 	for _, node := range s.Nodes {
 		log.Warn("node", "node", node)
 		cs[node.ID()] = make(chan bool)
 	}
+	csMu.Unlock()
 
 	var nodeAddrs [][]byte
 	pt := &bzzTester{
@@ -131,9 +136,11 @@ func newBzzBaseTesterWithAddrs(prvkey *ecdsa.PrivateKey, addrs [][]byte, spec *p
 		ProtocolTester: s,
 		cs:             cs,
 	}
+	mu.Lock()
 	for _, n := range pt.Nodes {
 		nodeAddrs = append(nodeAddrs, nodeToAddr[n.ID()])
 	}
+	mu.Unlock()
 
 	return pt, nodeAddrs, nil
 }
@@ -228,6 +235,7 @@ func TestBzzHandshakeNetworkIDMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Stop()
 	node := s.Nodes[0]
 
 	err = s.testHandshake(
@@ -251,6 +259,7 @@ func TestBzzHandshakeVersionMismatch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Stop()
 	node := s.Nodes[0]
 
 	err = s.testHandshake(
@@ -274,6 +283,7 @@ func TestBzzHandshakeSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer s.Stop()
 	node := s.Nodes[0]
 
 	err = s.testHandshake(
@@ -305,6 +315,7 @@ func TestBzzHandshakeLightNode(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			defer pt.Stop()
 
 			node := pt.Nodes[0]
 			addr := NewAddr(node)
