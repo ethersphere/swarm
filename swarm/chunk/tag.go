@@ -24,10 +24,9 @@ import (
 )
 
 var (
-	errExists       = errors.New("already exists")
-	errNA           = errors.New("not available yet")
-	errUnknownState = errors.New("unknown state")
-	errNoETA        = errors.New("unable to calculate ETA")
+	errExists = errors.New("already exists")
+	errNA     = errors.New("not available yet")
+	errNoETA  = errors.New("unable to calculate ETA")
 )
 
 // State is the enum type for chunk states
@@ -122,23 +121,16 @@ func (t *Tag) Status(state State) (int, int, error) {
 		return count, total, errNA
 	}
 	switch state {
-	case SPLIT:
-		return count, total, nil //chunker does not care about duplicate chunks
-	case STORED:
-		return count, total - seen, nil
-	case SEEN:
+	case SPLIT, STORED, SEEN:
 		return count, total, nil
-	case SENT:
-		return count, total - seen, nil
-	case SYNCED:
+	case SENT, SYNCED:
 		stored := int(atomic.LoadUint32(&t.stored))
 		if total-seen == stored {
 			return count, stored, nil
 		}
 		return count, total, errNA
-	default:
-		return count, total, errUnknownState
 	}
+	return 0, 0, errNA
 }
 
 // ETA returns the time of completion estimated based on time passed and rate of completion
