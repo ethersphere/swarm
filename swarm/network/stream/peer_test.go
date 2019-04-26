@@ -154,7 +154,7 @@ func TestUpdateSyncingSubscriptions(t *testing.T) {
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		// initial nodes, first one as pivot center of the start
-		ids, err := sim.AddNodesAndConnectStar(20)
+		ids, err := sim.AddNodesAndConnectStar(10)
 		if err != nil {
 			return err
 		}
@@ -179,10 +179,15 @@ func TestUpdateSyncingSubscriptions(t *testing.T) {
 
 		// add more nodes until the depth is changed
 		prevDepth := pivotKademlia.NeighbourhoodDepth()
+		var noDepthChangeChecked bool // true it there was a check when no depth is changed
 		for {
-			ids, err := sim.AddNodes(10)
+			ids, err := sim.AddNodes(5)
 			if err != nil {
 				return err
+			}
+			// add new nodes to sync subscriptions check
+			for _, id := range ids {
+				nodeProximities[id.String()] = chunk.Proximity(pivotKademlia.BaseAddr(), id.Bytes())
 			}
 			err = sim.Net.ConnectNodesStar(ids, pivotRegistryID)
 			if err != nil {
@@ -191,12 +196,23 @@ func TestUpdateSyncingSubscriptions(t *testing.T) {
 			waitForSubscriptions(t, pivotRegistry, ids...)
 
 			newDepth := pivotKademlia.NeighbourhoodDepth()
-			if newDepth != prevDepth {
-				break
+			// depth is not changed, check if streams are still correct
+			if newDepth == prevDepth {
+				err = checkSyncStreamsWithRetry(pivotRegistry, nodeProximities)
+				if err != nil {
+					return err
+				}
+				noDepthChangeChecked = true
 			}
+			// do the final check when depth is changed and
+			// there has been at least one check
+			// for the case when depth is not changed
+			if newDepth != prevDepth && noDepthChangeChecked {
+				// check sync streams for changed depth
+				return checkSyncStreamsWithRetry(pivotRegistry, nodeProximities)
+			}
+			prevDepth = newDepth
 		}
-		// check sync streams for changed depth
-		return checkSyncStreamsWithRetry(pivotRegistry, nodeProximities)
 	})
 	if result.Error != nil {
 		t.Fatal(result.Error)
