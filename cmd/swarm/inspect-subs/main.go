@@ -13,11 +13,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// echo '{"jsonrpc":"2.0","method":"admin_nodeInfo","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/<<namespace>>/pods/http:<<deploymentName>>-<<index>>:8546/proxy/ --origin localhost
-// echo '{"jsonrpc":"2.0","method":"admin_peers","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/gluk256/pods/http:swarm-3:8546/proxy/ --origin localhost | jq ".[]" | tail -n+3 | jq ".[] | .enode"
-// echo '{"jsonrpc":"2.0","method":"admin_peers","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/<<namespace>>/pods/http:<<deploymentName>>-<<index>>:8546/proxy/ --origin localhost
-// echo '{"jsonrpc":"2.0","method":"admin_peers","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/gluk256/pods/http:swarm-3:8546/proxy/ --origin localhost | jq ".[]" | tail -n+3 | jq ".[] | .id"
-
 var (
 	nodes          int
 	printNode      int
@@ -102,6 +97,7 @@ func main() {
 	mapNodeIDToBzzAddr := map[string]string{}
 	hostInfo := map[int]string{}
 
+	// generate the map from nodeID -> bzz addresses , and the host info header (host, bzzaddr, nodeid)
 	for i := 0; i < nodes; i++ {
 		i := i
 		go func() {
@@ -129,10 +125,16 @@ func main() {
 	wg.Wait()
 
 	wg = sync.WaitGroup{}
-	wg.Add(nodes)
 
+	// generate the map from nodeID -> bzz addresses , and the host info header (host, bzzaddr, nodeid)
 	for i := 0; i < nodes; i++ {
 		i := i
+		if printNode != -1 && printNode != i {
+			continue
+		}
+
+		wg.Add(1)
+
 		go func() {
 			cl := getClient(fmt.Sprintf("ws://localhost:8001/api/v1/namespaces/%s/pods/http:%s-%d:8546/proxy/", namespace, deploymentName, i))
 			defer cl.Close()
@@ -148,8 +150,6 @@ func main() {
 				panic(err)
 			}
 
-			res := fmt.Sprintf("%s\nKADEMLIA\n---------------------------%s\nSubscriptions\n----------------------------\n", hostInfo[i], kad)
-
 			output := []string{}
 			for nodeId, v := range subs {
 				bzzAddr := mapNodeIDToBzzAddr[nodeId]
@@ -159,15 +159,13 @@ func main() {
 
 			sort.Strings(output)
 
+			res := "host                    ;       bzz addr                                                                ;       id\n"
+			res += fmt.Sprintf("%s\nKADEMLIA\n---------------------------%s\nSubscriptions\n----------------------------\n", hostInfo[i], kad)
 			res += strings.Join(output, "")
 
-			if printNode == -1 || printNode == i {
-				fmt.Println("host                    ;       bzz addr                                                                ;       id")
-				fmt.Println(res)
-			}
+			fmt.Println(res)
 		}()
 	}
 
 	wg.Wait()
-
 }

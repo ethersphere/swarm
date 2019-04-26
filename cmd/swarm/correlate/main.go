@@ -12,11 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
-// echo '{"jsonrpc":"2.0","method":"admin_nodeInfo","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/<<namespace>>/pods/http:<<deploymentName>>-<<index>>:8546/proxy/ --origin localhost
-// echo '{"jsonrpc":"2.0","method":"admin_peers","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/gluk256/pods/http:swarm-3:8546/proxy/ --origin localhost | jq ".[]" | tail -n+3 | jq ".[] | .enode"
-// echo '{"jsonrpc":"2.0","method":"admin_peers","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/<<namespace>>/pods/http:<<deploymentName>>-<<index>>:8546/proxy/ --origin localhost
-// echo '{"jsonrpc":"2.0","method":"admin_peers","id":1}' | websocat ws://localhost:8001/api/v1/namespaces/gluk256/pods/http:swarm-3:8546/proxy/ --origin localhost | jq ".[]" | tail -n+3 | jq ".[] | .id"
-
 var (
 	nodes          int
 	namespace      string
@@ -64,9 +59,6 @@ func getNodeInfoId(client *rpc.Client) (string, error) {
 		return "", err
 	}
 
-	// we make an ugly assumption about the output format of the hive.String() method
-	// ideally we should replace this with an API call that returns the bzz addr for a given host,
-	// but this also works for now (provided we don't change the hive.String() method, which we haven't in some time
 	return nodeInfo.ID, nil
 }
 
