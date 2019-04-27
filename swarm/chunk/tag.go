@@ -118,17 +118,17 @@ func (t *Tag) DoneSplit() int {
 func (t *Tag) Status(state State) (int, int, error) {
 	count, seen, total := t.Get(state), int(atomic.LoadUint32(&t.seen)), int(atomic.LoadUint32(&t.total))
 	if total == 0 {
-		return count, total, errNA
+		return count, total, errors.New("wtf")
 	}
 	switch state {
 	case SPLIT, STORED, SEEN:
 		return count, total, nil
 	case SENT, SYNCED:
 		stored := int(atomic.LoadUint32(&t.stored))
-		if total-seen == stored {
-			return count, stored, nil
+		if stored < total {
+			return count, total - seen, errNA
 		}
-		return count, total, errNA
+		return count, total - seen, nil
 	}
 	return 0, 0, errNA
 }

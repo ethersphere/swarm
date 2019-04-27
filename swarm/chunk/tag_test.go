@@ -34,35 +34,43 @@ func TestTagSingleIncrements(t *testing.T) {
 		if tg.Get(f) != 1 {
 			t.Fatalf("not incremented")
 		}
-		cnt, total, err := tg.Status(f)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cnt != 1 {
-			t.Fatalf("expected count 1 for state %v, got %v", f, cnt)
-		}
-		if total != 10 {
-			t.Fatalf("expected total count %v for state %v, got %v", 10, f, cnt)
-		}
 	}
 }
 
-// TestTagDiffIncrements tests if Inc increments the value and if status returns the correct values
-func TestTagDiffIncrements(t *testing.T) {
+// TestTagStatus is a unit test to cover Tag.Status method functionality
+func TestTagStatus(t *testing.T) {
 	tg := &Tag{total: 10}
 	tg.Inc(SEEN)
+	tg.Inc(SENT)
+	tg.Inc(SYNCED)
+	for i := 0; i < 10; i++ {
+		tg.Inc(SPLIT)
+	}
 	for i := 0; i < 10; i++ {
 		tg.Inc(STORED)
 	}
-	val, total, err := tg.Status(STORED)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if val != 10 {
-		t.Fatalf("should be 10, got %d", val)
-	}
-	if total != 9 {
-		t.Fatalf("expected total to be 9, got %d", total)
+	for _, v := range []struct {
+		state    State
+		expVal   int
+		expTotal int
+	}{
+		{state: STORED, expVal: 10, expTotal: 10},
+		{state: SPLIT, expVal: 10, expTotal: 10},
+		{state: SEEN, expVal: 1, expTotal: 10},
+		{state: SENT, expVal: 1, expTotal: 9},
+		{state: SYNCED, expVal: 1, expTotal: 9},
+	} {
+		val, total, err := tg.Status(v.state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if val != v.expVal {
+			t.Fatalf("should be %d, got %d", v.expVal, val)
+		}
+		if total != v.expTotal {
+			t.Fatalf("expected total to be %d, got %d", v.expTotal, total)
+		}
+
 	}
 }
 
@@ -140,22 +148,13 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 	}
 }
 
+// TestMarshalling tests that a Tag gets correctly marshalled and unmarshalled to and from a byte slice
 func TestMarshalling(t *testing.T) {
 	tg := NewTag(111, "test/tag", 10)
 	for _, f := range allStates {
 		tg.Inc(f)
 		if tg.Get(f) != 1 {
 			t.Fatalf("not incremented")
-		}
-		cnt, total, err := tg.Status(f)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if cnt != 1 {
-			t.Fatalf("expected count 1 for state %v, got %v", f, cnt)
-		}
-		if total != 10 {
-			t.Fatalf("expected total count %v for state %v, got %v", 10, f, cnt)
 		}
 	}
 
