@@ -202,7 +202,7 @@ func (pc *PyramidChunker) decrementWorkerCount() {
 
 func (pc *PyramidChunker) Split(ctx context.Context) (k Address, wait func(context.Context) error, err error) {
 	pc.wg.Add(1)
-	pc.prepareChunks(ctx, false)
+	go pc.prepareChunks(ctx, false)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
@@ -237,7 +237,7 @@ func (pc *PyramidChunker) Append(ctx context.Context) (k Address, wait func(cont
 	pc.loadTree(ctx)
 
 	pc.wg.Add(1)
-	pc.prepareChunks(ctx, true)
+	go pc.prepareChunks(ctx, true)
 
 	// closes internal error channel if all subprocesses in the workgroup finished
 	go func() {
