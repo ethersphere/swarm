@@ -146,17 +146,19 @@ func TestRequestFromPeers(t *testing.T) {
 	to := network.NewKademlia(addr.OAddr, network.NewKadParams())
 	delivery := NewDelivery(to, nil)
 	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
-	peer := network.NewPeer(&network.BzzPeer{
+	bzzPeer := &network.BzzPeer{
 		BzzAddr:   network.RandomAddr(),
 		LightNode: false,
 		Peer:      protocolsPeer,
-	}, to)
+	}
+	peer := network.NewPeer(bzzPeer, to)
+
 	to.On(peer)
 	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
 
 	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
-		Peer:     protocolsPeer,
+		bzzPeer:  bzzPeer,
 		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer: r,
 	}
@@ -187,16 +189,17 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 
 	protocolsPeer := protocols.NewPeer(p2p.NewPeer(dummyPeerID, "dummy", nil), nil, nil)
 	// setting up a lightnode
-	peer := network.NewPeer(&network.BzzPeer{
+	bzzPeer := &network.BzzPeer{
 		BzzAddr:   network.RandomAddr(),
 		LightNode: true,
 		Peer:      protocolsPeer,
-	}, to)
+	}
+	peer := network.NewPeer(bzzPeer, to)
 	to.On(peer)
 	r := NewRegistry(addr.ID(), delivery, nil, nil, nil, nil)
 	// an empty priorityQueue has to be created to prevent a goroutine being called after the test has finished
 	sp := &Peer{
-		Peer:     protocolsPeer,
+		bzzPeer:  bzzPeer,
 		pq:       pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer: r,
 	}

@@ -204,7 +204,7 @@ func (r *Registry) RequestSubscription(peerId enode.ID, s Stream, h *Range, prio
 		if e, ok := err.(*notFoundError); ok && e.t == "server" {
 			// request subscription only if the server for this stream is not created
 			log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "history", h)
-			return peer.Send(context.TODO(), &RequestSubscriptionMsg{
+			return peer.bzzPeer.Send(context.TODO(), &RequestSubscriptionMsg{
 				Stream:   s,
 				History:  h,
 				Priority: prio,
@@ -253,7 +253,7 @@ func (r *Registry) Subscribe(peerId enode.ID, s Stream, h *Range, priority uint8
 	}
 	log.Debug("Subscribe ", "peer", peerId, "stream", s, "history", h)
 
-	return peer.Send(context.TODO(), msg)
+	return peer.bzzPeer.Send(context.TODO(), msg)
 }
 
 func (r *Registry) Unsubscribe(peerId enode.ID, s Stream) error {
@@ -267,7 +267,7 @@ func (r *Registry) Unsubscribe(peerId enode.ID, s Stream) error {
 	}
 	log.Debug("Unsubscribe ", "peer", peerId, "stream", s)
 
-	if err := peer.Send(context.TODO(), msg); err != nil {
+	if err := peer.bzzPeer.Send(context.TODO(), msg); err != nil {
 		return err
 	}
 	return peer.removeClient(s)
@@ -288,7 +288,7 @@ func (r *Registry) Quit(peerId enode.ID, s Stream) error {
 	}
 	log.Debug("Quit ", "peer", peerId, "stream", s)
 
-	return peer.Send(context.TODO(), msg)
+	return peer.bzzPeer.Send(context.TODO(), msg)
 }
 
 func (r *Registry) Close() error {
@@ -308,7 +308,7 @@ func (r *Registry) getPeer(peerId enode.ID) *Peer {
 
 func (r *Registry) setPeer(peer *Peer) {
 	r.peersMu.Lock()
-	r.peers[peer.ID()] = peer
+	r.peers[peer.bzzPeer.ID()] = peer
 	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(r.peers)))
 
 	if r.syncMode == SyncingAutoSubscribe {
@@ -320,7 +320,7 @@ func (r *Registry) setPeer(peer *Peer) {
 
 func (r *Registry) deletePeer(peer *Peer) {
 	r.peersMu.Lock()
-	delete(r.peers, peer.ID())
+	delete(r.peers, peer.bzzPeer.ID())
 	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(r.peers)))
 	r.peersMu.Unlock()
 }
@@ -340,7 +340,7 @@ func (r *Registry) Run(p *network.BzzPeer) error {
 	defer close(sp.quit)
 	defer sp.close()
 
-	return sp.Run(sp.HandleMsg)
+	return sp.bzzPeer.Run(sp.HandleMsg)
 }
 
 // doRequestSubscription sends the actual RequestSubscription to the peer
@@ -369,7 +369,7 @@ func (r *Registry) runProtocol(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	select {
 	case <-p.streamer.quit:
-		log.Trace("message received after the streamer is closed", "peer", p.ID())
+		log.Trace("message received after the streamer is closed", "peer", p.bzzPeer.ID())
 		// return without an error since streamer is closed and
 		// no messages should be handled as other subcomponents like
 		// storage leveldb may be closed
@@ -393,7 +393,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 			err := p.handleOfferedHashesMsg(ctx, msg)
 			if err != nil {
 				log.Error(err.Error())
-				p.Drop()
+				p.bzzPeer.Drop()
 			}
 		}()
 		return nil
@@ -403,7 +403,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 			err := p.handleTakeoverProofMsg(ctx, msg)
 			if err != nil {
 				log.Error(err.Error())
-				p.Drop()
+				p.bzzPeer.Drop()
 			}
 		}()
 		return nil
@@ -413,7 +413,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 			err := p.handleWantedHashesMsg(ctx, msg)
 			if err != nil {
 				log.Error(err.Error())
-				p.Drop()
+				p.bzzPeer.Drop()
 			}
 		}()
 		return nil
@@ -424,7 +424,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
 			if err != nil {
 				log.Error(err.Error())
-				p.Drop()
+				p.bzzPeer.Drop()
 			}
 		}()
 		return nil
@@ -435,7 +435,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 			err := p.streamer.delivery.handleChunkDeliveryMsg(ctx, p, ((*ChunkDeliveryMsg)(msg)))
 			if err != nil {
 				log.Error(err.Error())
-				p.Drop()
+				p.bzzPeer.Drop()
 			}
 		}()
 		return nil
@@ -445,7 +445,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 			err := p.streamer.delivery.handleRetrieveRequestMsg(ctx, p, msg)
 			if err != nil {
 				log.Error(err.Error())
-				p.Drop()
+				p.bzzPeer.Drop()
 			}
 		}()
 		return nil
@@ -517,7 +517,7 @@ type client struct {
 }
 
 func peerStreamIntervalsKey(p *Peer, s Stream) string {
-	return p.ID().String() + s.String()
+	return p.bzzPeer.ID().String() + s.String()
 }
 
 func (c *client) AddInterval(start, end uint64) (err error) {
@@ -579,11 +579,11 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 			return err
 		}
 
-		if err := p.Send(context.TODO(), tp); err != nil {
+		if err := p.bzzPeer.Send(context.TODO(), tp); err != nil {
 			return err
 		}
 		if c.to > 0 && tp.Takeover.End >= c.to {
-			return p.streamer.Unsubscribe(p.Peer.ID(), req.Stream)
+			return p.streamer.Unsubscribe(p.bzzPeer.ID(), req.Stream)
 		}
 		return nil
 	}

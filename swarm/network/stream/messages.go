@@ -75,13 +75,13 @@ type RequestSubscriptionMsg struct {
 }
 
 func (p *Peer) handleRequestSubscription(ctx context.Context, req *RequestSubscriptionMsg) (err error) {
-	log.Debug(fmt.Sprintf("handleRequestSubscription: streamer %s to subscribe to %s with stream %s", p.streamer.addr, p.ID(), req.Stream))
-	if err = p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority); err != nil {
+	log.Debug(fmt.Sprintf("handleRequestSubscription: streamer %s to subscribe to %s with stream %s", p.streamer.addr, p.bzzPeer.ID(), req.Stream))
+	if err = p.streamer.Subscribe(p.bzzPeer.ID(), req.Stream, req.History, req.Priority); err != nil {
 		// The error will be sent as a subscribe error message
 		// and will not be returned as it will prevent any new message
 		// exchange between peers over p2p. Instead, error will be returned
 		// only if there is one from sending subscribe error message.
-		err = p.Send(ctx, SubscribeErrorMsg{
+		err = p.bzzPeer.Send(ctx, SubscribeErrorMsg{
 			Error: err.Error(),
 		})
 	}
@@ -97,13 +97,13 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 			// and will not be returned as it will prevent any new message
 			// exchange between peers over p2p. Instead, error will be returned
 			// only if there is one from sending subscribe error message.
-			err = p.Send(context.TODO(), SubscribeErrorMsg{
+			err = p.bzzPeer.Send(context.TODO(), SubscribeErrorMsg{
 				Error: err.Error(),
 			})
 		}
 	}()
 
-	log.Debug("received subscription", "from", p.streamer.addr, "peer", p.ID(), "stream", req.Stream, "history", req.History)
+	log.Debug("received subscription", "from", p.streamer.addr, "peer", p.bzzPeer.ID(), "stream", req.Stream, "history", req.History)
 
 	f, err := p.streamer.GetServerFunc(req.Stream.Name)
 	if err != nil {
@@ -128,7 +128,7 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 
 	go func() {
 		if err := p.SendOfferedHashes(os, from, to); err != nil {
-			log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
+			log.Warn("SendOfferedHashes error", "peer", p.bzzPeer.ID().TerminalString(), "err", err)
 		}
 	}()
 
@@ -145,7 +145,7 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 		}
 		go func() {
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
-				log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
+				log.Warn("SendOfferedHashes error", "peer", p.bzzPeer.ID().TerminalString(), "err", err)
 			}
 		}()
 	}
@@ -159,7 +159,7 @@ type SubscribeErrorMsg struct {
 
 func (p *Peer) handleSubscribeErrorMsg(req *SubscribeErrorMsg) (err error) {
 	//TODO the error should be channeled to whoever calls the subscribe
-	return fmt.Errorf("subscribe to peer %s: %v", p.ID(), req.Error)
+	return fmt.Errorf("subscribe to peer %s: %v", p.bzzPeer.ID(), req.Error)
 }
 
 type UnsubscribeMsg struct {
@@ -223,7 +223,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	errC := make(chan error)
 	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
 
-	ctx = context.WithValue(ctx, "source", p.ID().String())
+	ctx = context.WithValue(ctx, "source", p.bzzPeer.ID().String())
 	for i := 0; i < lenHashes; i += HashSize {
 		hash := hashes[i : i+HashSize]
 
@@ -246,8 +246,8 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			select {
 			case err := <-errC:
 				if err != nil {
-					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk, dropping peer", "peer", p.ID(), "err", err)
-					p.Drop()
+					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk, dropping peer", "peer", p.bzzPeer.ID(), "err", err)
+					p.bzzPeer.Drop()
 					return
 				}
 			case <-ctx.Done():
@@ -272,7 +272,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		c.sessionAt = req.From
 	}
 	from, to := c.nextBatch(req.To + 1)
-	log.Trace("set next batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "addr", p.streamer.addr)
+	log.Trace("set next batch", "peer", p.bzzPeer.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "addr", p.streamer.addr)
 	if from == to {
 		return nil
 	}
@@ -284,12 +284,12 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		To:     to,
 	}
 	go func() {
-		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+		log.Trace("sending want batch", "peer", p.bzzPeer.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		select {
 		case err := <-c.next:
 			if err != nil {
 				log.Warn("c.next error dropping peer", "err", err)
-				p.Drop()
+				p.bzzPeer.Drop()
 				return
 			}
 		case <-c.quit:
@@ -299,7 +299,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
 			return
 		}
-		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+		log.Trace("sending want batch", "peer", p.bzzPeer.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
 		err := p.SendPriority(ctx, msg, c.priority)
 		if err != nil {
 			log.Warn("SendPriority error", "err", err)
@@ -327,7 +327,7 @@ func (m WantedHashesMsg) String() string {
 func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) error {
 	metrics.GetOrRegisterCounter("peer.handlewantedhashesmsg", nil).Inc(1)
 
-	log.Trace("received wanted batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
+	log.Trace("received wanted batch", "peer", p.bzzPeer.ID(), "stream", req.Stream, "from", req.From, "to", req.To)
 	s, err := p.getServer(req.Stream)
 	if err != nil {
 		return err
@@ -336,13 +336,13 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
 		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
-			log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
+			log.Warn("SendOfferedHashes error", "peer", p.bzzPeer.ID().TerminalString(), "err", err)
 		}
 	}()
 	// go p.SendOfferedHashes(s, req.From, req.To)
 	l := len(hashes) / HashSize
 
-	log.Trace("wanted batch length", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "lenhashes", len(hashes), "l", l)
+	log.Trace("wanted batch length", "peer", p.bzzPeer.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "lenhashes", len(hashes), "l", l)
 	want, err := bv.NewFromBytes(req.Want, l)
 	if err != nil {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", l, err)

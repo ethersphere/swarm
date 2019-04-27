@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -57,7 +56,6 @@ var ErrMaxPeerServers = errors.New("max peer servers")
 
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
-	*protocols.Peer
 	bzzPeer  *network.BzzPeer
 	streamer *Registry
 	pq       *pq.PriorityQueue
@@ -80,7 +78,6 @@ type WrappedPriorityMsg struct {
 // NewPeer is the constructor for Peer
 func NewPeer(peer *network.BzzPeer, streamer *Registry) *Peer {
 	p := &Peer{
-		Peer:         peer.Peer,
 		bzzPeer:      peer,
 		pq:           pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer:     streamer,
@@ -92,10 +89,10 @@ func NewPeer(peer *network.BzzPeer, streamer *Registry) *Peer {
 	ctx, cancel := context.WithCancel(context.Background())
 	go p.pq.Run(ctx, func(i interface{}) {
 		wmsg := i.(WrappedPriorityMsg)
-		err := p.Send(wmsg.Context, wmsg.Msg)
+		err := p.bzzPeer.Send(wmsg.Context, wmsg.Msg)
 		if err != nil {
-			log.Error("Message send error, dropping peer", "peer", p.ID(), "err", err)
-			p.Drop()
+			log.Error("Message send error, dropping peer", "peer", p.bzzPeer.ID(), "err", err)
+			p.bzzPeer.Drop()
 		}
 	})
 
@@ -118,8 +115,8 @@ func NewPeer(peer *network.BzzPeer, streamer *Registry) *Peer {
 					}
 				}
 
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.ID().TerminalString()), nil).Update(int64(lenMaxi))
-				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.ID().TerminalString()), nil).Update(int64(capMaxi))
+				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_len_%s", p.bzzPeer.ID().TerminalString()), nil).Update(int64(lenMaxi))
+				metrics.GetOrRegisterGauge(fmt.Sprintf("pq_cap_%s", p.bzzPeer.ID().TerminalString()), nil).Update(int64(capMaxi))
 			case <-p.quit:
 				return
 			}
@@ -173,7 +170,7 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 	}
 	err := p.pq.Push(wmsg, int(priority))
 	if err != nil {
-		log.Error("err on p.pq.Push", "err", err, "peer", p.ID())
+		log.Error("err on p.pq.Push", "err", err, "peer", p.bzzPeer.ID())
 	}
 	return err
 }
@@ -210,7 +207,7 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		To:            to,
 		Stream:        s.stream,
 	}
-	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
+	log.Trace("Swarm syncer offer batch", "peer", p.bzzPeer.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
 	ctx = context.WithValue(ctx, "stream_send_tag", "send.offered.hashes")
 	return p.SendPriority(ctx, msg, s.priority)
 }
@@ -406,7 +403,7 @@ func (p *Peer) setClientParams(s Stream, params *clientParams) error {
 func (p *Peer) getClientParams(s Stream) (*clientParams, error) {
 	params := p.clientParams[s]
 	if params == nil {
-		return nil, fmt.Errorf("client params '%v' not provided to peer %v", s, p.ID())
+		return nil, fmt.Errorf("client params '%v' not provided to peer %v", s, p.bzzPeer.ID())
 	}
 	return params, nil
 }
@@ -446,7 +443,7 @@ func (p *Peer) runUpdateSyncing() {
 
 	depth := kad.NeighbourhoodDepth()
 
-	log.Debug("update syncing subscriptions: initial", "peer", p.ID(), "po", po, "depth", depth)
+	log.Debug("update syncing subscriptions: initial", "peer", p.bzzPeer.ID(), "po", po, "depth", depth)
 
 	// initial subscriptions
 	p.updateSyncSubscriptions(syncSubscriptionsDiff(po, -1, depth, kad.MaxProxDisplay))
@@ -463,14 +460,14 @@ func (p *Peer) runUpdateSyncing() {
 			}
 			// update subscriptions for this peer when depth changes
 			depth := kad.NeighbourhoodDepth()
-			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth)
+			log.Debug("update syncing subscriptions", "peer", p.bzzPeer.ID(), "po", po, "depth", depth)
 			p.updateSyncSubscriptions(syncSubscriptionsDiff(po, prevDepth, depth, kad.MaxProxDisplay))
 			prevDepth = depth
 		case <-p.streamer.quit:
 			return
 		}
 	}
-	log.Debug("update syncing subscriptions: exiting", "peer", p.ID())
+	log.Debug("update syncing subscriptions: exiting", "peer", p.bzzPeer.ID())
 }
 
 // updateSyncSubscriptions accepts two slices of integers, the first one
@@ -479,11 +476,11 @@ func (p *Peer) runUpdateSyncing() {
 // need to be removed. This function sends request for subscription
 // messages and quit messages for provided bins.
 func (p *Peer) updateSyncSubscriptions(subBins, quitBins []int) {
-	if p.streamer.getPeer(p.ID()) == nil {
-		log.Debug("update syncing subscriptions", "peer not found", p.ID())
+	if p.streamer.getPeer(p.bzzPeer.ID()) == nil {
+		log.Debug("update syncing subscriptions", "peer not found", p.bzzPeer.ID())
 		return
 	}
-	log.Debug("update syncing subscriptions", "peer", p.ID(), "subscribe", subBins, "quit", quitBins)
+	log.Debug("update syncing subscriptions", "peer", p.bzzPeer.ID(), "subscribe", subBins, "quit", quitBins)
 	for _, po := range subBins {
 		p.subscribeSync(po)
 	}
@@ -496,7 +493,7 @@ func (p *Peer) updateSyncSubscriptions(subBins, quitBins []int) {
 // using subscriptionFunc. This function is used to request syncing subscriptions
 // when new peer is added to the registry and on neighbourhood depth change.
 func (p *Peer) subscribeSync(po int) {
-	err := subscriptionFunc(p.streamer, p.ID(), uint8(po))
+	err := subscriptionFunc(p.streamer, p.bzzPeer.ID(), uint8(po))
 	if err != nil {
 		log.Error("subscription", "err", err)
 	}
@@ -508,13 +505,13 @@ func (p *Peer) subscribeSync(po int) {
 func (p *Peer) quitSync(po int) {
 	live := NewStream("SYNC", FormatSyncBinKey(uint8(po)), true)
 	history := getHistoryStream(live)
-	err := p.streamer.Quit(p.ID(), live)
+	err := p.streamer.Quit(p.bzzPeer.ID(), live)
 	if err != nil && err != p2p.ErrShuttingDown {
-		log.Error("quit", "err", err, "peer", p.ID(), "stream", live)
+		log.Error("quit", "err", err, "peer", p.bzzPeer.ID(), "stream", live)
 	}
-	err = p.streamer.Quit(p.ID(), history)
+	err = p.streamer.Quit(p.bzzPeer.ID(), history)
 	if err != nil && err != p2p.ErrShuttingDown {
-		log.Error("quit", "err", err, "peer", p.ID(), "stream", history)
+		log.Error("quit", "err", err, "peer", p.bzzPeer.ID(), "stream", history)
 	}
 }
 

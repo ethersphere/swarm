@@ -68,7 +68,7 @@ type RetrieveRequestMsg struct {
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
-	log.Trace("received request", "peer", sp.ID(), "hash", req.Addr)
+	log.Trace("received request", "peer", sp.bzzPeer.ID(), "hash", req.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
 	var osp opentracing.Span
@@ -80,7 +80,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 
 	var cancel func()
 	// TODO: do something with this hardcoded timeout, maybe use TTL in the future
-	ctx = context.WithValue(ctx, "peer", sp.ID().String())
+	ctx = context.WithValue(ctx, "peer", sp.bzzPeer.ID().String())
 	ctx = context.WithValue(ctx, "hopcount", req.HopCount)
 	ctx, cancel = context.WithTimeout(ctx, network.RequestTimeout)
 
@@ -97,7 +97,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		ch, err := d.netStore.Get(ctx, chunk.ModeGetRequest, req.Addr)
 		if err != nil {
 			retrieveChunkFail.Inc(1)
-			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
+			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.bzzPeer.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
 			return
 		}
 		syncing := false
@@ -145,7 +145,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 	switch r := req.(type) {
 	case *ChunkDeliveryMsgRetrieval:
 		msg = (*ChunkDeliveryMsg)(r)
-		peerPO := chunk.Proximity(sp.ID().Bytes(), msg.Addr)
+		peerPO := chunk.Proximity(sp.bzzPeer.ID().Bytes(), msg.Addr)
 		po := chunk.Proximity(d.kad.BaseAddr(), msg.Addr)
 		depth := d.kad.NeighbourhoodDepth()
 		// chunks within the area of responsibility should always sync
@@ -164,7 +164,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 		mode = chunk.ModePutSync
 	}
 
-	log.Trace("handle.chunk.delivery", "ref", msg.Addr, "from peer", sp.ID())
+	log.Trace("handle.chunk.delivery", "ref", msg.Addr, "from peer", sp.bzzPeer.ID())
 
 	go func() {
 		defer osp.Finish()
@@ -177,7 +177,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 				// we removed this log because it spams the logs
 				// TODO: Enable this log line
 				// log.Warn("invalid chunk delivered", "peer", sp.ID(), "chunk", msg.Addr, )
-				msg.peer.Drop()
+				msg.peer.bzzPeer.Drop()
 			}
 		}
 		log.Trace("handle.chunk.delivery", "done put", msg.Addr, "err", err)
@@ -229,8 +229,8 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (
 	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
 	// this span will finish only when delivery is handled (or times out)
 	ctx = context.WithValue(ctx, tracing.StoreLabelId, "stream.send.request")
-	ctx = context.WithValue(ctx, tracing.StoreLabelMeta, fmt.Sprintf("%v.%v", sp.ID(), req.Addr))
-	log.Trace("request.from.peers", "peer", sp.ID(), "ref", req.Addr)
+	ctx = context.WithValue(ctx, tracing.StoreLabelMeta, fmt.Sprintf("%v.%v", sp.bzzPeer.ID(), req.Addr))
+	log.Trace("request.from.peers", "peer", sp.bzzPeer.ID(), "ref", req.Addr)
 	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
 		Addr:      req.Addr,
 		SkipCheck: req.SkipCheck,
