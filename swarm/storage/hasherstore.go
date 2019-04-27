@@ -70,6 +70,7 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 // Asynchronous function, the data will not necessarily be stored when it returns.
 func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, error) {
 	c := chunkData
+
 	var encryptionKey encryption.Key
 	if h.toEncrypt {
 		var err error
