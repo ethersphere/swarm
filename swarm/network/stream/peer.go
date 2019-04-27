@@ -28,7 +28,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
-	"github.com/ethereum/go-ethereum/swarm/network"
 	pq "github.com/ethereum/go-ethereum/swarm/network/priorityqueue"
 	"github.com/ethereum/go-ethereum/swarm/network/stream/intervals"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
@@ -440,11 +439,15 @@ func (p *Peer) runUpdateSyncing() {
 	}
 
 	kad := p.streamer.delivery.kad
-	po := chunk.Proximity(network.NewAddr(p.Node()).Over(), kad.BaseAddr())
+	ba := kad.GetBzzAddr(p.Peer)
+	bzzAddr := ba.Address()
+	//bzzAddr := network.NewAddr(p.Node()).Over()
+	po := chunk.Proximity(bzzAddr, kad.BaseAddr())
 
 	depth := kad.NeighbourhoodDepth()
 
-	log.Debug("update syncing subscriptions: initial", "peer", p.ID(), "po", po, "depth", depth)
+	//log.Debug("update syncing subscriptions: initial", "peer", p.ID(), "bzzaddr", ba, "po", po, "depth", depth)
+	log.Debug("update syncing subscriptions: initial", "peer", p.ID(), "bzzaddr", fmt.Sprintf("%x", bzzAddr), "po", po, "depth", depth)
 
 	// initial subscriptions
 	p.updateSyncSubscriptions(syncSubscriptionsDiff(po, -1, depth, kad.MaxProxDisplay))

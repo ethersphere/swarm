@@ -145,7 +145,8 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 	switch r := req.(type) {
 	case *ChunkDeliveryMsgRetrieval:
 		msg = (*ChunkDeliveryMsg)(r)
-		peerPO := chunk.Proximity(sp.ID().Bytes(), msg.Addr)
+		peerBzzAddr := d.kad.GetBzzAddr(sp.Peer)
+		peerPO := chunk.Proximity(peerBzzAddr.Address(), msg.Addr)
 		po := chunk.Proximity(d.kad.BaseAddr(), msg.Addr)
 		depth := d.kad.NeighbourhoodDepth()
 		// chunks within the area of responsibility should always sync

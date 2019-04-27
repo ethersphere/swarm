@@ -26,6 +26,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/pot"
 	sv "github.com/ethereum/go-ethereum/swarm/version"
@@ -420,6 +421,25 @@ func (k *Kademlia) Off(p *Peer) {
 		})
 		k.setNeighbourhoodDepth()
 	}
+}
+
+func (k *Kademlia) GetBzzAddr(p *protocols.Peer) *BzzAddr {
+	var res *BzzAddr
+
+	k.addrs.Each(func(val pot.Val) bool {
+		e := val.(*entry)
+		if bytes.Equal(e.BzzAddr.ID().Bytes(), p.Node().ID().Bytes()) {
+			res = e.BzzAddr
+			return false
+		}
+		return true
+	})
+
+	if res == nil {
+		panic("i think we should always be able to map a peer's enode.ID to its BzzAddr")
+	}
+
+	return res
 }
 
 func (k *Kademlia) ListKnown() []*BzzAddr {
