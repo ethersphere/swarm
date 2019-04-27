@@ -144,6 +144,7 @@ func TestUpdateSyncingSubscriptions(t *testing.T) {
 				r.Close()
 				clean()
 			}
+			bucket.Store("addr", addr)
 			return r, cleanup, nil
 		},
 	})
@@ -166,7 +167,13 @@ func TestUpdateSyncingSubscriptions(t *testing.T) {
 		// nodes proximities from the pivot node
 		nodeProximities := make(map[string]int)
 		for _, id := range ids[1:] {
-			nodeProximities[id.String()] = chunk.Proximity(pivotKademlia.BaseAddr(), id.Bytes())
+			item, ok := sim.NodeItem(id, "addr")
+			if !ok {
+				t.Fatal("No addr")
+			}
+
+			bzzAddr := item.(*network.BzzAddr)
+			nodeProximities[id.String()] = chunk.Proximity(pivotKademlia.BaseAddr(), bzzAddr.Address())
 		}
 		// wait until sync subscriptions are done for all nodes
 		waitForSubscriptions(t, pivotRegistry, ids[1:]...)

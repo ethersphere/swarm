@@ -58,6 +58,7 @@ var ErrMaxPeerServers = errors.New("max peer servers")
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*protocols.Peer
+	bzzPeer  *network.BzzPeer
 	streamer *Registry
 	pq       *pq.PriorityQueue
 	serverMu sync.RWMutex
@@ -77,9 +78,10 @@ type WrappedPriorityMsg struct {
 }
 
 // NewPeer is the constructor for Peer
-func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
+func NewPeer(peer *network.BzzPeer, streamer *Registry) *Peer {
 	p := &Peer{
-		Peer:         peer,
+		Peer:         peer.Peer,
+		bzzPeer:      peer,
 		pq:           pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer:     streamer,
 		servers:      make(map[Stream]*server),
@@ -440,7 +442,7 @@ func (p *Peer) runUpdateSyncing() {
 	}
 
 	kad := p.streamer.delivery.kad
-	po := chunk.Proximity(network.NewAddr(p.Node()).Over(), kad.BaseAddr())
+	po := chunk.Proximity(p.bzzPeer.Over(), kad.BaseAddr())
 
 	depth := kad.NeighbourhoodDepth()
 

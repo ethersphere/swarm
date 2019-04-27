@@ -334,7 +334,7 @@ func (r *Registry) peersCount() (c int) {
 
 // Run protocol run function
 func (r *Registry) Run(p *network.BzzPeer) error {
-	sp := NewPeer(p.Peer, r)
+	sp := NewPeer(p, r)
 	r.setPeer(sp)
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
