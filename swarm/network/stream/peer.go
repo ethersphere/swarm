@@ -553,7 +553,7 @@ func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int) (subBins, quitB
 	return subBins, quitBins
 }
 
-// subs returns the range to which proximity order bins syncing
+// syncBins returns the range to which proximity order bins syncing
 // subscriptions need to be requested, based on peer proximity and
 // kademlia neighbourhood depth. Returned range is [start,end), inclusive for
 // start and exclusive for end.
