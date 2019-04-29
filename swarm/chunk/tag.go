@@ -24,9 +24,10 @@ import (
 )
 
 var (
-	errExists = errors.New("already exists")
-	errNA     = errors.New("not available yet")
-	errNoETA  = errors.New("unable to calculate ETA")
+	errExists       = errors.New("already exists")
+	errNA           = errors.New("not available yet")
+	errUnknownState = errors.New("unknown state")
+	errNoETA        = errors.New("unable to calculate ETA")
 )
 
 // State is the enum type for chunk states
@@ -44,6 +45,7 @@ const (
 type Tag struct {
 	Uid       uint32    // a unique identifier for this tag
 	Name      string    // a name tag for this tag
+	Address   Address   // the associated swarm hash for this tag
 	total     uint32    // total chunks belonging to a tag
 	split     uint32    // number of chunks already processed by splitter for hashing
 	seen      uint32    // number of chunks already seen
@@ -106,11 +108,12 @@ func (t *Tag) Total() int {
 	return int(atomic.LoadUint32(&t.total))
 }
 
-// DoneSplit sets total count to SPLIT count
+// DoneSplit sets total count to SPLIT count and sets the associated swarm hash for this tag
 // is meant to be called when splitter finishes for input streams of unknown size
-func (t *Tag) DoneSplit() int {
+func (t *Tag) DoneSplit(address Address) int {
 	total := atomic.LoadUint32(&t.split)
 	atomic.StoreUint32(&t.total, total)
+	t.Address = address
 	return int(total)
 }
 
@@ -118,19 +121,26 @@ func (t *Tag) DoneSplit() int {
 func (t *Tag) Status(state State) (int, int, error) {
 	count, seen, total := t.Get(state), int(atomic.LoadUint32(&t.seen)), int(atomic.LoadUint32(&t.total))
 	if total == 0 {
-		return count, total, errors.New("wtf")
+		return count, total, errNA
 	}
 	switch state {
-	case SPLIT, STORED, SEEN:
-		return count, total, nil
-	case SENT, SYNCED:
-		stored := int(atomic.LoadUint32(&t.stored))
-		if stored < total {
-			return count, total - seen, errNA
-		}
+	case SPLIT:
+		return count, total, nil //chunker does not care about duplicate chunks
+	case STORED:
 		return count, total - seen, nil
+	case SEEN:
+		return count, total, nil
+	case SENT:
+		return count, total - seen, nil
+	case SYNCED:
+		stored := int(atomic.LoadUint32(&t.stored))
+		if total-seen == stored {
+			return count, stored, nil
+		}
+		return count, total, errNA
+	default:
+		return count, total, errUnknownState
 	}
-	return 0, 0, errNA
 }
 
 // ETA returns the time of completion estimated based on time passed and rate of completion
@@ -149,19 +159,24 @@ func (t *Tag) ETA(state State) (time.Time, error) {
 
 // MarshalBinary marshals the tag into a byte slice
 func (tag *Tag) MarshalBinary() (data []byte, err error) {
-	intBuffer := make([]byte, 4)
-	binary.BigEndian.PutUint32(intBuffer, tag.Uid)
-	buffer := append([]byte{}, intBuffer...)
+	buffer := make([]byte, 0)
+	encodeUint32Append(&buffer, tag.Uid)
+	encodeUint32Append(&buffer, tag.total)
+	encodeUint32Append(&buffer, tag.split)
+	encodeUint32Append(&buffer, tag.seen)
+	encodeUint32Append(&buffer, tag.stored)
+	encodeUint32Append(&buffer, tag.sent)
+	encodeUint32Append(&buffer, tag.synced)
 
-	binary.BigEndian.PutUint32(intBuffer, tag.synced)
-	buffer = append(buffer, intBuffer...)
+	intBuffer := make([]byte, 8)
 
-	binary.BigEndian.PutUint32(intBuffer, tag.total)
-	buffer = append(buffer, intBuffer...)
-
-	intBuffer = make([]byte, 8)
 	n := binary.PutVarint(intBuffer, tag.startedAt.Unix())
 	buffer = append(buffer, intBuffer[:n]...)
+
+	n = binary.PutVarint(intBuffer, int64(len(tag.Address)))
+	buffer = append(buffer, intBuffer[:n]...)
+
+	buffer = append(buffer, tag.Address[:]...)
 
 	buffer = append(buffer, []byte(tag.Name)...)
 
@@ -174,13 +189,37 @@ func (tag *Tag) UnmarshalBinary(buffer []byte) error {
 		return errors.New("buffer too short")
 	}
 
-	tag.Uid = binary.BigEndian.Uint32(buffer[:4])
-	tag.synced = binary.BigEndian.Uint32(buffer[4:8])
-	tag.total = binary.BigEndian.Uint32(buffer[8:12])
-	t, n := binary.Varint(buffer[12:])
+	tag.Uid = decodeUint32Splice(&buffer)
+	tag.total = decodeUint32Splice(&buffer)
+	tag.split = decodeUint32Splice(&buffer)
+	tag.seen = decodeUint32Splice(&buffer)
+	tag.stored = decodeUint32Splice(&buffer)
+	tag.sent = decodeUint32Splice(&buffer)
+	tag.synced = decodeUint32Splice(&buffer)
+
+	t, n := binary.Varint(buffer)
 	tag.startedAt = time.Unix(t, 0)
-	tag.Name = string(buffer[12+n:])
+	buffer = buffer[n:]
+
+	t, n = binary.Varint(buffer)
+	buffer = buffer[n:]
+	if t > 0 {
+		tag.Address = buffer[:t]
+	}
+	tag.Name = string(buffer[t:])
 
 	return nil
 
+}
+
+func encodeUint32Append(buffer *[]byte, val uint32) {
+	intBuffer := make([]byte, 4)
+	binary.BigEndian.PutUint32(intBuffer, val)
+	*buffer = append(*buffer, intBuffer...)
+}
+
+func decodeUint32Splice(buffer *[]byte) uint32 {
+	val := binary.BigEndian.Uint32((*buffer)[:4])
+	*buffer = (*buffer)[4:]
+	return val
 }

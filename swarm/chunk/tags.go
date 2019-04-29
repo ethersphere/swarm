@@ -17,21 +17,24 @@
 package chunk
 
 import (
+	"context"
+	"errors"
 	"math/rand"
 	"sync"
 	"time"
+
+	"github.com/ethereum/go-ethereum/swarm/sctx"
 )
 
 // tags holds the tag infos indexed by name
-type tags struct {
+type Tags struct {
 	tags *sync.Map
 	rng  *rand.Rand
 }
 
 // NewTags creates a tags object
-func newTags() *tags {
-
-	return &tags{
+func NewTags() *Tags {
+	return &Tags{
 		tags: &sync.Map{},
 		rng:  rand.New(rand.NewSource(time.Now().Unix())),
 	}
@@ -39,30 +42,39 @@ func newTags() *tags {
 
 // New creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func (ts *tags) New(s string, total int) (*Tag, error) {
+func (ts *Tags) New(s string, total int) (*Tag, error) {
 	t := &Tag{
 		Uid:       ts.rng.Uint32(),
 		Name:      s,
 		startedAt: time.Now(),
 		total:     uint32(total),
 	}
-	if _, loaded := ts.tags.LoadOrStore(s, t); loaded {
+	if _, loaded := ts.tags.LoadOrStore(t.Uid, t); loaded {
 		return nil, errExists
 	}
 	return t, nil
 }
 
-// Inc increments the state count for a tag if tag is found
-func (ts *tags) Inc(s string, f State) {
-	t, ok := ts.tags.Load(s)
+// Get returns the undelying tag for the uid or an error if not found
+func (ts *Tags) Get(uid uint32) (*Tag, error) {
+	t, ok := ts.tags.Load(uid)
 	if !ok {
-		return
+		return nil, errors.New("tag not found")
 	}
-	t.(*Tag).Inc(f)
+	return t.(*Tag), nil
 }
 
-// Get returns the state count for a tag
-func (ts *tags) Get(s string, f State) int {
-	t, _ := ts.tags.Load(s)
-	return t.(*Tag).Get(f)
+// GetContext gets a tag from the tag uid stored in the context
+func (ts *Tags) GetContext(ctx context.Context) (*Tag, error) {
+	uid := sctx.GetTag(ctx)
+	t, ok := ts.tags.Load(uid)
+	if !ok {
+		return nil, errors.New("tag not found")
+	}
+	return t.(*Tag), nil
+}
+
+// Iterate exposes sync.Map's iterator
+func (ts *Tags) Range(fn func(k, v interface{}) bool) {
+	ts.tags.Range(fn)
 }

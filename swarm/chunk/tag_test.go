@@ -17,6 +17,7 @@
 package chunk
 
 import (
+	"bytes"
 	"sync"
 	"testing"
 	"time"
@@ -29,48 +30,71 @@ var (
 // TestTagSingleIncrements tests if Inc increments the tag state value
 func TestTagSingleIncrements(t *testing.T) {
 	tg := &Tag{total: 10}
-	for _, f := range allStates {
-		tg.Inc(f)
-		if tg.Get(f) != 1 {
+
+	tc := []struct {
+		state    uint32
+		inc      int
+		expcount int
+		exptotal int
+	}{
+		{state: SPLIT, inc: 10, expcount: 10, exptotal: 10},
+		{state: STORED, inc: 9, expcount: 9, exptotal: 9},
+		{state: SEEN, inc: 1, expcount: 1, exptotal: 10},
+		{state: SENT, inc: 9, expcount: 9, exptotal: 9},
+		{state: SYNCED, inc: 9, expcount: 9, exptotal: 9},
+	}
+
+	for _, tc := range tc {
+		for i := 0; i < tc.inc; i++ {
+			tg.Inc(tc.state)
+		}
+	}
+
+	for _, tc := range tc {
+		if tg.Get(tc.state) != tc.expcount {
 			t.Fatalf("not incremented")
 		}
+		cnt, total, err := tg.Status(tc.state)
+		if err != nil {
+			t.Fatalf("state %d got error: %v", tc.state, err)
+		}
+		if cnt != tc.expcount {
+			t.Fatalf("expected count %d for state %v, got %v", tc.expcount, tc.state, cnt)
+		}
+		switch tc.state {
+		case SPLIT:
+			if total != 10 {
+				t.Fatalf("expected total to be %d, got %d", 10, total)
+			}
+		case SEEN:
+			if total != 10 {
+				t.Fatalf("expected total to be %d, got %d", 10, total)
+			}
+		default:
+			if total != 9 {
+				t.Fatalf("expected state %d total to be %d, got %d", tc.state, 9, total)
+			}
+		}
+
 	}
 }
 
-// TestTagStatus is a unit test to cover Tag.Status method functionality
-func TestTagStatus(t *testing.T) {
+// TestTagDiffIncrements tests if Inc increments the value and if status returns the correct values
+func TestTagDiffIncrements(t *testing.T) {
 	tg := &Tag{total: 10}
 	tg.Inc(SEEN)
-	tg.Inc(SENT)
-	tg.Inc(SYNCED)
-	for i := 0; i < 10; i++ {
-		tg.Inc(SPLIT)
-	}
 	for i := 0; i < 10; i++ {
 		tg.Inc(STORED)
 	}
-	for _, v := range []struct {
-		state    State
-		expVal   int
-		expTotal int
-	}{
-		{state: STORED, expVal: 10, expTotal: 10},
-		{state: SPLIT, expVal: 10, expTotal: 10},
-		{state: SEEN, expVal: 1, expTotal: 10},
-		{state: SENT, expVal: 1, expTotal: 9},
-		{state: SYNCED, expVal: 1, expTotal: 9},
-	} {
-		val, total, err := tg.Status(v.state)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if val != v.expVal {
-			t.Fatalf("should be %d, got %d", v.expVal, val)
-		}
-		if total != v.expTotal {
-			t.Fatalf("expected total to be %d, got %d", v.expTotal, total)
-		}
-
+	val, total, err := tg.Status(STORED)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if val != 10 {
+		t.Fatalf("should be 10, got %d", val)
+	}
+	if total != 9 {
+		t.Fatalf("expected total to be 9, got %d", total)
 	}
 }
 
@@ -118,44 +142,55 @@ func TestTagConcurrentIncrements(t *testing.T) {
 
 // TestTagsMultipleConcurrentIncrements tests Inc calls concurrently
 func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
-	ts := newTags()
+	ts := NewTags()
 	n := 100
 	wg := sync.WaitGroup{}
 	wg.Add(10 * 5 * n)
 	for i := 0; i < 10; i++ {
 		s := string([]byte{uint8(i)})
-		ts.New(s, n)
+		tag, err := ts.New(s, n)
+		if err != nil {
+			t.Fatal(err)
+		}
 		for _, f := range allStates {
-			go func(s string, f State) {
+			go func(tag *Tag, f State) {
 				for j := 0; j < n; j++ {
 					go func() {
-						ts.Inc(s, f)
+						tag.Inc(f)
 						wg.Done()
 					}()
 				}
-			}(s, f)
+			}(tag, f)
 		}
 	}
 	wg.Wait()
-	for i := 0; i < 10; i++ {
-		s := string([]byte{uint8(i)})
+	i := 0
+	ts.Range(func(k, v interface{}) bool {
+		i++
+		uid := k.(uint32)
 		for _, f := range allStates {
-			v := ts.Get(s, f)
-			if v != n {
-				t.Fatalf("expected tag %v state %v to be %v, got %v", s, f, n, v)
+			tag, err := ts.Get(uid)
+			if err != nil {
+				t.Fatal(err)
+			}
+			stateVal := tag.Get(f)
+			if stateVal != n {
+				t.Fatalf("expected tag %v state %v to be %v, got %v", uid, f, n, v)
 			}
 		}
+		return true
+
+	})
+	if i != 10 {
+		t.Fatal("not enough tagz")
 	}
 }
-
-// TestMarshalling tests that a Tag gets correctly marshalled and unmarshalled to and from a byte slice
-func TestMarshalling(t *testing.T) {
+func TestMarshallingWithAddr(t *testing.T) {
 	tg := NewTag(111, "test/tag", 10)
+	tg.Address = []byte{0, 1, 2, 3, 4, 5, 6}
+
 	for _, f := range allStates {
 		tg.Inc(f)
-		if tg.Get(f) != 1 {
-			t.Fatalf("not incremented")
-		}
 	}
 
 	b, err := tg.MarshalBinary()
@@ -177,11 +212,62 @@ func TestMarshalling(t *testing.T) {
 		t.Fatalf("tag names not equal. want %s got %s", tg.Name, unmarshalledTag.Name)
 	}
 
-	if unmarshalledTag.Get(SYNCED) != tg.Get(SYNCED) {
-		t.Fatalf("tag names not equal. want %d got %d", tg.Get(SYNCED), unmarshalledTag.Get(SYNCED))
+	for _, state := range allStates {
+		uv, tv := unmarshalledTag.Get(state), tg.Get(state)
+		if uv != tv {
+			t.Fatalf("state %d inconsistent. expected %d to equal %d", state, uv, tv)
+		}
 	}
 
 	if unmarshalledTag.Total() != tg.Total() {
 		t.Fatalf("tag names not equal. want %d got %d", tg.Total(), unmarshalledTag.Total())
+	}
+
+	if len(unmarshalledTag.Address) != len(tg.Address) {
+		t.Fatalf("tag addresses length mismatch, want %d, got %d", len(tg.Address), len(unmarshalledTag.Address))
+	}
+
+	if !bytes.Equal(unmarshalledTag.Address, tg.Address) {
+		t.Fatalf("expected tag address to be %v got %v", unmarshalledTag.Address, tg.Address)
+	}
+}
+func TestMarshallingNoAddr(t *testing.T) {
+	tg := NewTag(111, "test/tag", 10)
+	for _, f := range allStates {
+		tg.Inc(f)
+	}
+
+	b, err := tg.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	unmarshalledTag := &Tag{}
+	err = unmarshalledTag.UnmarshalBinary(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if unmarshalledTag.Uid != tg.Uid {
+		t.Fatalf("tag uids not equal. want %d got %d", tg.Uid, unmarshalledTag.Uid)
+	}
+
+	if unmarshalledTag.Name != tg.Name {
+		t.Fatalf("tag names not equal. want %s got %s", tg.Name, unmarshalledTag.Name)
+	}
+
+	for _, state := range allStates {
+		uv, tv := unmarshalledTag.Get(state), tg.Get(state)
+		if uv != tv {
+			t.Fatalf("state %d inconsistent. expected %d to equal %d", state, uv, tv)
+		}
+	}
+
+	if unmarshalledTag.Total() != tg.Total() {
+		t.Fatalf("tag names not equal. want %d got %d", tg.Total(), unmarshalledTag.Total())
+	}
+
+	if len(unmarshalledTag.Address) != len(tg.Address) {
+		t.Fatalf("expected tag addresses to be equal length")
 	}
 }
