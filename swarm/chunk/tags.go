@@ -26,7 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/sctx"
 )
 
-// tags holds the tag infos indexed by name
+// Tags hold tag information indexed by a unique random uint32
 type Tags struct {
 	tags *sync.Map
 	rng  *rand.Rand
@@ -74,7 +74,7 @@ func (ts *Tags) GetContext(ctx context.Context) (*Tag, error) {
 	return t.(*Tag), nil
 }
 
-// Iterate exposes sync.Map's iterator
+// Range exposes sync.Map's iterator
 func (ts *Tags) Range(fn func(k, v interface{}) bool) {
 	ts.tags.Range(fn)
 }
