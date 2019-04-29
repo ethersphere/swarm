@@ -104,7 +104,7 @@ func TestTagETA(t *testing.T) {
 		t.Fatal(err)
 	}
 	diff := time.Until(eta) - 9*time.Since(now)
-	if int(diff) > maxDiff || int(diff) < -maxDiff {
+	if int(diff) > maxDiff {
 		t.Fatalf("ETA is not precise, got diff %v > .1ms", diff)
 	}
 }
