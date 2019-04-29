@@ -310,11 +310,6 @@ func (r *Registry) setPeer(peer *Peer) {
 	r.peersMu.Lock()
 	r.peers[peer.ID()] = peer
 	metrics.GetOrRegisterGauge("registry.peers", nil).Update(int64(len(r.peers)))
-
-	if r.syncMode == SyncingAutoSubscribe {
-		go peer.runUpdateSyncing()
-	}
-
 	r.peersMu.Unlock()
 }
 
@@ -334,8 +329,13 @@ func (r *Registry) peersCount() (c int) {
 
 // Run protocol run function
 func (r *Registry) Run(p *network.BzzPeer) error {
-	sp := NewPeer(p.Peer, r)
+	sp := NewPeer(p, r)
 	r.setPeer(sp)
+
+	if r.syncMode == SyncingAutoSubscribe {
+		go sp.runUpdateSyncing()
+	}
+
 	defer r.deletePeer(sp)
 	defer close(sp.quit)
 	defer sp.close()

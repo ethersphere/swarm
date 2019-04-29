@@ -25,7 +25,6 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/ethereum/go-ethereum/p2p/protocols"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -57,7 +56,7 @@ var ErrMaxPeerServers = errors.New("max peer servers")
 
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
-	*protocols.Peer
+	*network.BzzPeer
 	streamer *Registry
 	pq       *pq.PriorityQueue
 	serverMu sync.RWMutex
@@ -77,9 +76,9 @@ type WrappedPriorityMsg struct {
 }
 
 // NewPeer is the constructor for Peer
-func NewPeer(peer *protocols.Peer, streamer *Registry) *Peer {
+func NewPeer(peer *network.BzzPeer, streamer *Registry) *Peer {
 	p := &Peer{
-		Peer:         peer,
+		BzzPeer:      peer,
 		pq:           pq.New(int(PriorityQueue), PriorityQueueCap),
 		streamer:     streamer,
 		servers:      make(map[Stream]*server),
@@ -440,7 +439,7 @@ func (p *Peer) runUpdateSyncing() {
 	}
 
 	kad := p.streamer.delivery.kad
-	po := chunk.Proximity(network.NewAddr(p.Node()).Over(), kad.BaseAddr())
+	po := chunk.Proximity(p.BzzAddr.Over(), kad.BaseAddr())
 
 	depth := kad.NeighbourhoodDepth()
 
