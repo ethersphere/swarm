@@ -513,6 +513,15 @@ func (p *Peer) quitSync(po int) {
 	if err != nil && err != p2p.ErrShuttingDown {
 		log.Error("quit", "err", err, "peer", p.ID(), "stream", history)
 	}
+
+	err = p.removeServer(live)
+	if err != nil {
+		log.Error("remove server", "err", err, "peer", p.ID(), "stream", live)
+	}
+	err = p.removeServer(history)
+	if err != nil {
+		log.Error("remove server", "err", err, "peer", p.ID(), "stream", live)
+	}
 }
 
 // syncSubscriptionsDiff calculates to which proximity order bins a peer
