@@ -54,47 +54,41 @@ func TestTagSingleIncrements(t *testing.T) {
 		if tg.Get(tc.state) != tc.expcount {
 			t.Fatalf("not incremented")
 		}
-		cnt, total, err := tg.Status(tc.state)
-		if err != nil {
-			t.Fatalf("state %d got error: %v", tc.state, err)
-		}
-		if cnt != tc.expcount {
-			t.Fatalf("expected count %d for state %v, got %v", tc.expcount, tc.state, cnt)
-		}
-		switch tc.state {
-		case SPLIT:
-			if total != 10 {
-				t.Fatalf("expected total to be %d, got %d", 10, total)
-			}
-		case SEEN:
-			if total != 10 {
-				t.Fatalf("expected total to be %d, got %d", 10, total)
-			}
-		default:
-			if total != 9 {
-				t.Fatalf("expected state %d total to be %d, got %d", tc.state, 9, total)
-			}
-		}
-
 	}
 }
 
-// TestTagDiffIncrements tests if Inc increments the value and if status returns the correct values
-func TestTagDiffIncrements(t *testing.T) {
+// TestTagStatus is a unit test to cover Tag.Status method functionality
+func TestTagStatus(t *testing.T) {
 	tg := &Tag{total: 10}
 	tg.Inc(SEEN)
+	tg.Inc(SENT)
+	tg.Inc(SYNCED)
+
 	for i := 0; i < 10; i++ {
+		tg.Inc(SPLIT)
 		tg.Inc(STORED)
 	}
-	val, total, err := tg.Status(STORED)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if val != 10 {
-		t.Fatalf("should be 10, got %d", val)
-	}
-	if total != 9 {
-		t.Fatalf("expected total to be 9, got %d", total)
+	for _, v := range []struct {
+		state    State
+		expVal   int
+		expTotal int
+	}{
+		{state: STORED, expVal: 10, expTotal: 10},
+		{state: SPLIT, expVal: 10, expTotal: 10},
+		{state: SEEN, expVal: 1, expTotal: 10},
+		{state: SENT, expVal: 1, expTotal: 9},
+		{state: SYNCED, expVal: 1, expTotal: 9},
+	} {
+		val, total, err := tg.Status(v.state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if val != v.expVal {
+			t.Fatalf("should be %d, got %d", v.expVal, val)
+		}
+		if total != v.expTotal {
+			t.Fatalf("expected total to be %d, got %d", v.expTotal, total)
+		}
 	}
 }
 
