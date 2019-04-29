@@ -69,7 +69,7 @@ func (ts *Tags) GetContext(ctx context.Context) (*Tag, error) {
 	uid := sctx.GetTag(ctx)
 	t, ok := ts.tags.Load(uid)
 	if !ok {
-		return nil, errors.New("tag not found")
+		return nil, errTagNotFound
 	}
 	return t.(*Tag), nil
 }
