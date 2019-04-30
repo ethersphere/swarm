@@ -22,7 +22,6 @@ import (
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
-	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
 )
@@ -246,7 +245,6 @@ func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
 	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
 		seen, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
-		uid := sctx.GetTag(ctx)
 		h.tag.Inc(chunk.STORED)
 		if seen {
 			h.tag.Inc(chunk.SEEN)
