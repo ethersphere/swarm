@@ -44,7 +44,7 @@ var (
 
 var (
 	// Default value for Capacity DB option.
-	defaultCapacity uint64 = 5000000
+	defaultCapacity uint64 = 30000000
 	// Limit the number of goroutines created by Getters
 	// that call updateGC function. Value 0 sets no limit.
 	maxParallelUpdateGC = 1000
@@ -134,7 +134,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if o == nil {
 		// default options
 		o = &Options{
-			Capacity: 5000000,
+			Capacity: 30000000,
 		}
 	}
 	db = &DB{
