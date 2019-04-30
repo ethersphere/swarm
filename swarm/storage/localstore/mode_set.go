@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/shed"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -141,11 +142,54 @@ func (db *DB) set(mode chunk.ModeSet, addr chunk.Address) (err error) {
 		default:
 			return err
 		}
-		item.AccessTimestamp = now()
+
+		// set access timestamp based on quantile calculated from
+		// chunk proximity and db.responsibilityRadius
+		f := chunkQuantileFraction(int(db.po(item.Address)), db.getResponsibilityRadius())
+		gcSize, err := db.gcSize.Get()
+		if err != nil {
+			return err
+		}
+		position := quantilePosition(gcSize, f.Numerator, f.Denominator)
+		var gcQuantiles quantiles
+		err = db.gcQuantiles.Get(&gcQuantiles)
+		if err != nil && err != shed.ErrNotFound {
+			return err
+		}
+		var found bool
+		for _, q := range gcQuantiles {
+			if q.fraction == f {
+				item.AccessTimestamp = q.Item.AccessTimestamp + 1
+				found = true
+				break
+			}
+		}
+		if !found {
+			var shift int64
+			if closest := gcQuantiles.Closest(f); closest == nil {
+				shift = int64(position)
+			} else {
+				shift = int64(closest.Position) - int64(position)
+			}
+			i, err = db.gcIndex.Offset(nil, shift)
+			if err != nil {
+				return err
+			}
+			item.AccessTimestamp = i.AccessTimestamp + 1
+		}
+		gcQuantiles.Set(f, item, position)
+		db.gcQuantiles.PutInBatch(batch, gcQuantiles)
+
 		db.retrievalAccessIndex.PutInBatch(batch, item)
 		db.pushIndex.DeleteInBatch(batch, item)
 		db.gcIndex.PutInBatch(batch, item)
 		gcSizeChange++
+
+		defer func() {
+			// update all other quantiles after the batch is written
+			// since one quantile is added or changed
+			err = db.updateGCQuantiles()
+		}()
 
 	case chunk.ModeSetRemove:
 		// delete from retrieve, pull, gc

@@ -186,6 +186,26 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	delivery := stream.NewDelivery(to, self.netStore)
 	self.netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, config.DeliverySkipCheck).New
 
+	// update localstore responsibility radius on kademlia
+	// neighbourhood depth change.
+	go func() {
+		c, unsbscribe := to.SubscribeToNeighbourhoodDepthChange()
+		self.cleanupFuncs = append(self.cleanupFuncs, func() error {
+			unsbscribe()
+			return nil
+		})
+
+		for {
+			select {
+			case _, ok := <-c:
+				if !ok {
+					return
+				}
+				localStore.SetResponsibilityRadius(to.NeighbourhoodDepth())
+			}
+		}
+	}()
+
 	feedsHandler.SetStore(self.netStore)
 
 	if config.SwapEnabled {

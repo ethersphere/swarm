@@ -18,6 +18,7 @@ package shed
 
 import (
 	"bytes"
+	"errors"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -387,4 +388,45 @@ func (f Index) CountFrom(start Item) (count int, err error) {
 		count++
 	}
 	return count, it.Error()
+}
+
+func (f Index) Offset(start *Item, shift int64) (i Item, err error) {
+	var startKey []byte
+	if start != nil {
+		startKey, err = f.encodeKeyFunc(*start)
+		if err != nil {
+			return i, err
+		}
+	}
+	it := f.db.NewIterator()
+	defer it.Release()
+
+	next := it.Next
+	if shift < 0 {
+		next = it.Prev
+		shift *= -1
+	}
+
+	var key []byte
+	for ok := it.Seek(startKey); ok && shift > 0; ok = next() {
+		key = it.Key()
+		if key[0] != f.prefix[0] {
+			break
+		}
+		shift--
+	}
+	if key == nil {
+		return i, errors.New("key not found")
+	}
+
+	keyItem, err := f.decodeKeyFunc(append([]byte(nil), key...))
+	if err != nil {
+		return i, err
+	}
+	// create a copy of value byte slice not to share leveldb underlaying slice array
+	valueItem, err := f.decodeValueFunc(keyItem, append([]byte(nil), it.Value()...))
+	if err != nil {
+		return i, err
+	}
+	return keyItem.Merge(valueItem), it.Error()
 }

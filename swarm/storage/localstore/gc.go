@@ -90,7 +90,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	batch := new(leveldb.Batch)
 	target := db.gcTarget()
 
-	// protect database from changing idexes and gcSize
+	// protect database from changing indexes and gcSize
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
 
@@ -111,7 +111,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 		db.gcIndex.DeleteInBatch(batch, item)
 		collectedCount++
 		if collectedCount >= gcBatchSize {
-			// bach size limit reached,
+			// batch size limit reached,
 			// another gc run is needed
 			done = false
 			return true, nil
@@ -128,7 +128,9 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	if err != nil {
 		return 0, false, err
 	}
-	return collectedCount, done, nil
+
+	err = db.updateGCQuantiles()
+	return collectedCount, done, err
 }
 
 // gcTrigger retruns the absolute value for garbage collection
@@ -167,7 +169,7 @@ func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 		// a conversion is needed with correct sign
 		c := uint64(-change)
 		if c > gcSize {
-			// protect uint64 undeflow
+			// protect uint64 underflow
 			return nil
 		}
 		new = gcSize - c
@@ -179,6 +181,46 @@ func (db *DB) incGCSizeInBatch(batch *leveldb.Batch, change int64) (err error) {
 		db.triggerGarbageCollection()
 	}
 	return nil
+}
+
+// updateGCQuantiles adjusts gc quantiles based on the
+// current gc size, by comparing stored quantile
+// positions with the ones calculated from the current
+// gc index size.
+func (db *DB) updateGCQuantiles() (err error) {
+	var gcQuantiles quantiles
+	if err = db.gcQuantiles.Get(&gcQuantiles); err != nil {
+		return err
+	}
+	gcSize, err := db.gcSize.Get()
+	if err != nil {
+		return err
+	}
+	var newQuantiles quantiles
+	for _, q := range gcQuantiles {
+		item, position, found := gcQuantiles.Get(q.fraction)
+		if !found {
+			continue
+		}
+		newPosition := quantilePosition(gcSize, q.Numerator, q.Denominator)
+		diff := uint64Diff(position, newPosition)
+		if diff == 0 {
+			continue
+		}
+		newItem, err := db.gcIndex.Offset(&item, diff)
+		if err != nil {
+			return err
+		}
+		newQuantiles.Set(q.fraction, newItem, newPosition)
+	}
+	return db.gcQuantiles.Put(newQuantiles)
+}
+
+func uint64Diff(one, two uint64) int64 {
+	if one > two {
+		return int64(one - two)
+	}
+	return -1 * int64(two-one)
 }
 
 // testHookCollectGarbage is a hook that can provide
