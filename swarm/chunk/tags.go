@@ -55,6 +55,19 @@ func (ts *Tags) New(s string, total int) (*Tag, error) {
 	return t, nil
 }
 
+func (ts *Tags) All() []*Tag {
+	t := make([]*Tag, 0)
+
+	ts.tags.Range(func(k, v interface{}) bool {
+		tag := v.(*Tag)
+		t = append(t, tag)
+
+		return true
+	})
+
+	return t
+}
+
 // Get returns the undelying tag for the uid or an error if not found
 func (ts *Tags) Get(uid uint32) (*Tag, error) {
 	t, ok := ts.tags.Load(uid)
