@@ -37,7 +37,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -767,7 +766,7 @@ func testBzzTar(encrypted bool, t *testing.T) {
 	}
 
 	// check that the tag was written correctly
-	testutil.CheckTag(t, srv.Tags, chunk.SPLIT, 4, 4)
+	testutil.CheckTag(t, srv.Tags, 4, 4, 0, 4)
 
 	swarmHash, err := ioutil.ReadAll(resp2.Body)
 	resp2.Body.Close()
@@ -856,6 +855,7 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 	c := make(chan struct{})
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	req, err := http.NewRequest("POST", srv.URL+"/bzz:/", pr)
 	if err != nil {
 		t.Fatal(err)
@@ -863,7 +863,7 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 
 	req = req.WithContext(ctx)
 	req.ContentLength = 1000000
-	req.Header.Add("x-swarm-tag", "1000000")
+	req.Header.Add(SwarmTagHeaderName, "1000000")
 
 	go func() {
 		for {
@@ -886,9 +886,8 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 		t.Log(err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	testutil.CheckTag(t, srv.Tags, chunk.SEEN, 0, 244)
+	testutil.CheckTag(t, srv.Tags, 0, 0, 0, 244)
 	close(c)
-	cancel()
 }
 
 // TestBzzRootRedirect tests that getting the root path of a manifest without

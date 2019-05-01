@@ -243,9 +243,9 @@ func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryptio
 
 func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
 	atomic.AddUint64(&h.nrChunks, 1)
-	h.tag.Inc(chunk.STORED) // this has to be here otherwise tests flake
 	go func() {
 		seen, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
+		h.tag.Inc(chunk.STORED)
 		if seen {
 			h.tag.Inc(chunk.SEEN)
 		}

@@ -29,7 +29,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
-	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed/lookup"
@@ -68,7 +67,7 @@ func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
 	}
 
 	// check the tag was created successfully
-	checkTag(t, srv.Tags, 1, 1, 0, 1)
+	testutil.CheckTag(t, srv.Tags, 1, 1, 0, 1)
 
 	// check we can download the same data
 	res, isEncrypted, err := client.DownloadRaw(hash)
@@ -212,7 +211,7 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	}
 
 	// check the tag was created successfully
-	checkTag(t, srv.Tags, 9, 9, 0, 9)
+	testutil.CheckTag(t, srv.Tags, 9, 9, 0, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string, expected []byte) {
@@ -355,7 +354,7 @@ func TestClientMultipartUpload(t *testing.T) {
 	}
 
 	// check the tag was created successfully
-	checkTag(t, srv.Tags, 9, 9, 7, 9)
+	testutil.CheckTag(t, srv.Tags, 9, 9, 7, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {
@@ -602,43 +601,5 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 	}
 	if !bytes.Equal(databytes, gotData) {
 		t.Fatalf("Expected: %v, got %v", databytes, gotData)
-	}
-}
-
-func checkTag(t *testing.T, tags *chunk.Tags, split, stored, seen, total int) {
-	t.Helper()
-	i := 0
-	// check that the tag was created and incremented accordingly
-	tags.Range(func(k, v interface{}) bool {
-		vv, ok := v.(*chunk.Tag)
-		if !ok {
-			t.Fatal("error unmarshalling tag pointer")
-		}
-
-		tSplit := vv.Get(chunk.SPLIT)
-		if tSplit != split {
-			t.Fatalf("should have had split chunks, got %d want %d", tSplit, split)
-		}
-
-		tSeen := vv.Get(chunk.SEEN)
-		if tSeen != seen {
-			t.Fatalf("should have had seen chunks, got %d want %d", tSeen, seen)
-		}
-
-		tStored := vv.Get(chunk.STORED)
-		if tStored != stored {
-			t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
-		}
-
-		tTotal := vv.Total()
-		if tTotal != total {
-			t.Fatalf("mismatch total chunks, got %d want %d", tTotal, total)
-		}
-		i++
-
-		return false
-	})
-	if i == 0 {
-		t.Fatal("no tags found")
 	}
 }

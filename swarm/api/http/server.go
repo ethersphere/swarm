@@ -350,9 +350,9 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		respondError(w, r, fmt.Sprintf("cannot create manifest: %s", err), http.StatusInternalServerError)
 		return
 	}
+
 	tagUid := sctx.GetTag(r.Context())
 	tag, err := s.api.Tags.Get(tagUid)
-
 	if err != nil {
 		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
 	}

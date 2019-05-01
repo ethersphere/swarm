@@ -23,28 +23,37 @@ import (
 )
 
 // CheckTag checks the first tag in the api struct to be in a certain state
-func CheckTag(t *testing.T, tags *chunk.Tags, state chunk.State, exp, expTotal int) {
+func CheckTag(t *testing.T, tags *chunk.Tags, split, stored, seen, total int) {
 	t.Helper()
 	i := 0
+	// check that the tag was created and incremented accordingly
 	tags.Range(func(k, v interface{}) bool {
+		vv := v.(*chunk.Tag)
+
+		tSplit := vv.Get(chunk.SPLIT)
+		if tSplit != split {
+			t.Fatalf("should have had split chunks, got %d want %d", tSplit, split)
+		}
+
+		tSeen := vv.Get(chunk.SEEN)
+		if tSeen != seen {
+			t.Fatalf("should have had seen chunks, got %d want %d", tSeen, seen)
+		}
+
+		tStored := vv.Get(chunk.STORED)
+		if tStored != stored {
+			t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
+		}
+
+		tTotal := vv.Total()
+		if tTotal != total {
+			t.Fatalf("mismatch total chunks, got %d want %d", tTotal, total)
+		}
 		i++
-		tag := v.(*chunk.Tag)
-		count, total, err := tag.Status(state)
-		if err != nil {
-			t.Fatal(err)
-		}
 
-		if count != exp {
-			t.Fatalf("expected count to be %d, got %d", exp, count)
-		}
-
-		if total != expTotal {
-			t.Fatalf("expected total to be %d, got %d", expTotal, total)
-		}
 		return false
 	})
-
 	if i == 0 {
-		t.Fatal("did not find any tags")
+		t.Fatal("no tags found")
 	}
 }
