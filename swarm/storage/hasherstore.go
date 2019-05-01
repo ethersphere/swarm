@@ -19,12 +19,15 @@ package storage
 import (
 	"context"
 	"fmt"
-	"runtime"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
+)
+
+const (
+	NoOfStorageWorkers = 150
 )
 
 type hasherStore struct {
@@ -67,7 +70,7 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 		waitC:     make(chan error),
 		doneC:     make(chan struct{}),
 		quitC:     make(chan struct{}),
-		workers:   make(chan Chunk, 3 * runtime.NumCPU() * ChunkProcessors),
+		workers:   make(chan Chunk, NoOfStorageWorkers),
 	}
 
 	return h
