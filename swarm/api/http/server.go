@@ -98,6 +98,12 @@ func NewServer(api *api.API, corsString string) *Server {
 		InstrumentOpenTracing,
 	}
 
+	tagAdapter := Adapter(func(h http.Handler) http.Handler {
+		return InitUploadTag(h, api.Tags)
+	})
+
+	defaultPostMiddlewares := append(defaultMiddlewares, tagAdapter)
+
 	mux := http.NewServeMux()
 	mux.Handle("/bzz:/", methodHandler{
 		"GET": Adapt(
@@ -106,15 +112,7 @@ func NewServer(api *api.API, corsString string) *Server {
 		),
 		"POST": Adapt(
 			http.HandlerFunc(server.HandlePostFiles),
-			Adapter(func(h http.Handler) http.Handler {
-				return InitUploadTag(h, api)
-			}),
-			RecoverPanic,
-			SetRequestID,
-			SetRequestHost,
-			InitLoggingResponseWriter,
-			ParseURI,
-			InstrumentOpenTracing,
+			defaultPostMiddlewares...,
 		),
 		"DELETE": Adapt(
 			http.HandlerFunc(server.HandleDelete),
@@ -128,15 +126,7 @@ func NewServer(api *api.API, corsString string) *Server {
 		),
 		"POST": Adapt(
 			http.HandlerFunc(server.HandlePostRaw),
-			Adapter(func(h http.Handler) http.Handler {
-				return InitUploadTag(h, api)
-			}),
-			RecoverPanic,
-			SetRequestID,
-			SetRequestHost,
-			InitLoggingResponseWriter,
-			ParseURI,
-			InstrumentOpenTracing,
+			defaultPostMiddlewares...,
 		),
 	})
 	mux.Handle("/bzz-immutable:/", methodHandler{
@@ -167,12 +157,6 @@ func NewServer(api *api.API, corsString string) *Server {
 			defaultMiddlewares...,
 		),
 	})
-	mux.Handle("/bzz-tag:/", methodHandler{
-		"GET": Adapt(
-			http.HandlerFunc(server.HandleGetTag),
-			defaultMiddlewares...,
-		),
-	})
 
 	mux.Handle("/", methodHandler{
 		"GET": Adapt(
@@ -199,11 +183,6 @@ type Server struct {
 	http.Handler
 	api        *api.API
 	listenAddr string
-}
-
-// HandleGetTag handles the HTTP GET for a certain (or all) tags
-func (s *Server) HandleGetTag(w http.ResponseWriter, r *http.Request) {
-	log.Debug("handleGetTag", "ruid", GetRUID(r.Context()), "uri", r.RequestURI)
 }
 
 func (s *Server) HandleBzzGet(w http.ResponseWriter, r *http.Request) {
@@ -262,7 +241,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.raw", "ruid", ruid)
 
 	tagUid := sctx.GetTag(r.Context())
-	tag, err := s.api.GetTag(tagUid)
+	tag, err := s.api.Tags.Get(tagUid)
 	if err != nil {
 		log.Error("handle post raw got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
 	}
@@ -350,7 +329,6 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Debug("new manifest", "ruid", ruid, "key", addr)
 	}
-
 	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 		case "application/x-tar":
@@ -373,7 +351,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	tagUid := sctx.GetTag(r.Context())
-	tag, err := s.api.GetTag(tagUid)
+	tag, err := s.api.Tags.Get(tagUid)
 
 	if err != nil {
 		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
@@ -390,7 +368,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleTarUpload(r *http.Request, mw *api.ManifestWriter) (storage.Address, error) {
-	log.Debug("handle.tar.upload", "ruid", GetRUID(r.Context()))
+	log.Debug("handle.tar.upload", "ruid", GetRUID(r.Context()), "tag", sctx.GetTag(r.Context()))
 
 	defaultPath := r.URL.Query().Get("defaultpath")
 

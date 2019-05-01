@@ -189,7 +189,7 @@ type API struct {
 	feed      *feed.Handler
 	fileStore *storage.FileStore
 	dns       Resolver
-	tags      *chunk.Tags
+	Tags      *chunk.Tags
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
@@ -199,7 +199,7 @@ func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handle
 		fileStore: fileStore,
 		dns:       dns,
 		feed:      feedHandler,
-		tags:      tags,
+		Tags:      tags,
 		Decryptor: func(ctx context.Context, credentials string) DecryptFunc {
 			return self.doDecrypt(ctx, credentials, pk)
 		},
@@ -964,13 +964,6 @@ func (a *API) ResolveFeed(ctx context.Context, uri *URI, values feed.Values) (*f
 	}
 	return fd, nil
 }
-
-// NewTag exposes chunk.Tags New method for incoming upload requests
-func (a *API) NewTag(s string, total int) (*chunk.Tag, error) {
-	return a.tags.New(s, total)
-}
-
-func (a *API) GetTag(uid uint32) (*chunk.Tag, error) { return a.tags.Get(uid) }
 
 // MimeOctetStream default value of http Content-Type header
 const MimeOctetStream = "application/octet-stream"

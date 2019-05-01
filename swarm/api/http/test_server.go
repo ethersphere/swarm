@@ -65,6 +65,7 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 	tss := &TestSwarmServer{
 		Server:    apiServer,
 		FileStore: fileStore,
+		Tags:      tags,
 		dir:       swarmDir,
 		Hasher:    storage.MakeHashFunc(storage.DefaultHash)(),
 		cleanup: func() {
@@ -75,7 +76,6 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 			os.RemoveAll(feedsDir)
 		},
 		CurrentTime: 42,
-		Tags:        tags,
 	}
 	feed.TimestampProvider = tss
 	return tss

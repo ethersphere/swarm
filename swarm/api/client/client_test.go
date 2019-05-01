@@ -355,7 +355,7 @@ func TestClientMultipartUpload(t *testing.T) {
 	}
 
 	// check the tag was created successfully
-	checkTag(t, srv.Tags, 9, 7, 7, 9)
+	checkTag(t, srv.Tags, 9, 9, 7, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {
@@ -606,6 +606,7 @@ func TestClientCreateUpdateFeed(t *testing.T) {
 }
 
 func checkTag(t *testing.T, tags *chunk.Tags, split, stored, seen, total int) {
+	t.Helper()
 	i := 0
 	// check that the tag was created and incremented accordingly
 	tags.Range(func(k, v interface{}) bool {

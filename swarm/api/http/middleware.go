@@ -10,6 +10,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/sctx"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
@@ -87,7 +88,7 @@ func InitLoggingResponseWriter(h http.Handler) http.Handler {
 	})
 }
 
-func InitUploadTag(h http.Handler, a *api.API) http.Handler {
+func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		var (
 			tagName        string
@@ -118,10 +119,12 @@ func InitUploadTag(h http.Handler, a *api.API) http.Handler {
 		}
 		log.Trace("creating tag", "tagName", tagName, "estimatedTotal", estimatedTotal)
 
-		t, err := a.NewTag(tagName, estimatedTotal)
+		t, err := tags.New(tagName, estimatedTotal)
 		if err != nil {
 			log.Error("error creating tag", "err", err, "tagName", tagName)
 		}
+
+		log.Trace("setting tag id to context", "uid", t.Uid)
 		ctx := sctx.SetTag(r.Context(), t.Uid)
 
 		h.ServeHTTP(w, r.WithContext(ctx))

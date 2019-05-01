@@ -202,7 +202,6 @@ func (tag *Tag) UnmarshalBinary(buffer []byte) error {
 	tag.Name = string(buffer[t:])
 
 	return nil
-
 }
 
 func encodeUint32Append(buffer *[]byte, val uint32) {

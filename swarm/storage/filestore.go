@@ -23,7 +23,6 @@ import (
 	"sync"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
-	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 )
 
@@ -88,8 +87,7 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 	isEncrypted = len(addr) > f.hashFunc().Size()
 	tag, err := f.tags.GetContext(ctx)
 	if err != nil {
-		tag = chunk.NewTag(0, "ephemeral", 0) //note: how to handle this. this function does not return an error
-		log.Error("did not find a tag for retrieve, creating ephemeral")
+		tag = chunk.NewTag(0, "ephemeral-retrieval-tag", 0)
 	}
 	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted, tag)
 	reader = TreeJoin(ctx, addr, getter, 0)
@@ -101,8 +99,12 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
 	tag, err := f.tags.GetContext(ctx)
 	if err != nil {
-		//tag = chunk.NewTag(0, "", 0) //create an ephemeral tag
-		return nil, nil, err
+		// some of the parts of the codebase, namely the manifest trie, do not store the context
+		// of the original request nor the tag with the trie, recalculating the trie hence
+		// loses the tag uid. thus we create an ephemeral tag here for that purpose
+
+		tag = chunk.NewTag(0, "", 0)
+		//return nil, nil, err
 	}
 	putter := NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag)
 	return PyramidSplit(ctx, data, putter, putter, tag)
