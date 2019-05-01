@@ -54,8 +54,6 @@ import (
 var (
 	apiResolveCount        = metrics.NewRegisteredCounter("api.resolve.count", nil)
 	apiResolveFail         = metrics.NewRegisteredCounter("api.resolve.fail", nil)
-	apiPutCount            = metrics.NewRegisteredCounter("api.put.count", nil)
-	apiPutFail             = metrics.NewRegisteredCounter("api.put.fail", nil)
 	apiGetCount            = metrics.NewRegisteredCounter("api.get.count", nil)
 	apiGetNotFound         = metrics.NewRegisteredCounter("api.get.notfound", nil)
 	apiGetHTTP300          = metrics.NewRegisteredCounter("api.get.http.300", nil)
