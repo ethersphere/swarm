@@ -55,12 +55,10 @@ func (ts *Tags) New(s string, total int) (*Tag, error) {
 	return t, nil
 }
 
-func (ts *Tags) All() []*Tag {
-	t := make([]*Tag, 0)
-
+// All returns all existing tags in Tags' sync.Map
+func (ts *Tags) All() (t []*Tag) {
 	ts.tags.Range(func(k, v interface{}) bool {
-		tag := v.(*Tag)
-		t = append(t, tag)
+		t = append(t, v.(*Tag))
 
 		return true
 	})
