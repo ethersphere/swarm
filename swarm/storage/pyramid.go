@@ -275,7 +275,7 @@ func (pc *PyramidChunker) processor(ctx context.Context, id int64) {
 				return
 			}
 			pc.processChunk(ctx, id, job)
-			pc.tag.Inc(chunk.SPLIT)
+			pc.tag.Inc(chunk.StateSplit)
 		case <-pc.quitC:
 			return
 		}

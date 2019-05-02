@@ -357,7 +357,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
 	}
 
-	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.SPLIT), "TOTAL", tag.Total())
+	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.Total())
 	tag.DoneSplit(newAddr)
 
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)

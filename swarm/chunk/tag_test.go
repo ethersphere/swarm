@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	allStates = []State{SPLIT, STORED, SEEN, SENT, SYNCED}
+	allStates = []State{StateSplit, StateStored, StateSeen, StateSent, StateSynced}
 )
 
 // TestTagSingleIncrements tests if Inc increments the tag state value
@@ -37,11 +37,11 @@ func TestTagSingleIncrements(t *testing.T) {
 		expcount int
 		exptotal int
 	}{
-		{state: SPLIT, inc: 10, expcount: 10, exptotal: 10},
-		{state: STORED, inc: 9, expcount: 9, exptotal: 9},
-		{state: SEEN, inc: 1, expcount: 1, exptotal: 10},
-		{state: SENT, inc: 9, expcount: 9, exptotal: 9},
-		{state: SYNCED, inc: 9, expcount: 9, exptotal: 9},
+		{state: StateSplit, inc: 10, expcount: 10, exptotal: 10},
+		{state: StateStored, inc: 9, expcount: 9, exptotal: 9},
+		{state: StateSeen, inc: 1, expcount: 1, exptotal: 10},
+		{state: StateSent, inc: 9, expcount: 9, exptotal: 9},
+		{state: StateSynced, inc: 9, expcount: 9, exptotal: 9},
 	}
 
 	for _, tc := range tc {
@@ -60,24 +60,24 @@ func TestTagSingleIncrements(t *testing.T) {
 // TestTagStatus is a unit test to cover Tag.Status method functionality
 func TestTagStatus(t *testing.T) {
 	tg := &Tag{total: 10}
-	tg.Inc(SEEN)
-	tg.Inc(SENT)
-	tg.Inc(SYNCED)
+	tg.Inc(StateSeen)
+	tg.Inc(StateSent)
+	tg.Inc(StateSynced)
 
 	for i := 0; i < 10; i++ {
-		tg.Inc(SPLIT)
-		tg.Inc(STORED)
+		tg.Inc(StateSplit)
+		tg.Inc(StateStored)
 	}
 	for _, v := range []struct {
 		state    State
 		expVal   int
 		expTotal int
 	}{
-		{state: STORED, expVal: 10, expTotal: 10},
-		{state: SPLIT, expVal: 10, expTotal: 10},
-		{state: SEEN, expVal: 1, expTotal: 10},
-		{state: SENT, expVal: 1, expTotal: 9},
-		{state: SYNCED, expVal: 1, expTotal: 9},
+		{state: StateStored, expVal: 10, expTotal: 10},
+		{state: StateSplit, expVal: 10, expTotal: 10},
+		{state: StateSeen, expVal: 1, expTotal: 10},
+		{state: StateSent, expVal: 1, expTotal: 9},
+		{state: StateSynced, expVal: 1, expTotal: 9},
 	} {
 		val, total, err := tg.Status(v.state)
 		if err != nil {
@@ -98,8 +98,8 @@ func TestTagETA(t *testing.T) {
 	maxDiff := 100000 // 100 microsecond
 	tg := &Tag{total: 10, startedAt: now}
 	time.Sleep(100 * time.Millisecond)
-	tg.Inc(SPLIT)
-	eta, err := tg.ETA(SPLIT)
+	tg.Inc(StateSplit)
+	eta, err := tg.ETA(StateSplit)
 	if err != nil {
 		t.Fatal(err)
 	}

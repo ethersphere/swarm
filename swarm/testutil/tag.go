@@ -29,17 +29,17 @@ func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, total int) {
 		t.Fatal("no tag found")
 	}
 
-	tSplit := tag.Get(chunk.SPLIT)
+	tSplit := tag.Get(chunk.StateSplit)
 	if tSplit != split {
 		t.Fatalf("should have had split chunks, got %d want %d", tSplit, split)
 	}
 
-	tSeen := tag.Get(chunk.SEEN)
+	tSeen := tag.Get(chunk.StateSeen)
 	if tSeen != seen {
 		t.Fatalf("should have had seen chunks, got %d want %d", tSeen, seen)
 	}
 
-	tStored := tag.Get(chunk.STORED)
+	tStored := tag.Get(chunk.StateStored)
 	if tStored != stored {
 		t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
 	}

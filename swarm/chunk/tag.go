@@ -34,11 +34,11 @@ var (
 type State = uint32
 
 const (
-	SPLIT  State = iota // chunk has been processed by filehasher/swarm safe call
-	STORED              // chunk stored locally
-	SEEN                // chunk previously seen
-	SENT                // chunk sent to neighbourhood
-	SYNCED              // proof is received; chunk removed from sync db; chunk is available everywhere
+	StateSplit  State = iota // chunk has been processed by filehasher/swarm safe call
+	StateStored              // chunk stored locally
+	StateSeen                // chunk previously seen
+	StateSent                // chunk sent to neighbourhood
+	StateSynced              // proof is received; chunk removed from sync db; chunk is available everywhere
 )
 
 // Tag represents info on the status of new chunks
@@ -71,15 +71,15 @@ func NewTag(uid uint32, s string, total uint32) *Tag {
 func (t *Tag) Inc(state State) {
 	var v *uint32
 	switch state {
-	case SPLIT:
+	case StateSplit:
 		v = &t.split
-	case STORED:
+	case StateStored:
 		v = &t.stored
-	case SEEN:
+	case StateSeen:
 		v = &t.seen
-	case SENT:
+	case StateSent:
 		v = &t.sent
-	case SYNCED:
+	case StateSynced:
 		v = &t.synced
 	}
 	atomic.AddUint32(v, 1)
@@ -89,15 +89,15 @@ func (t *Tag) Inc(state State) {
 func (t *Tag) Get(state State) int {
 	var v *uint32
 	switch state {
-	case SPLIT:
+	case StateSplit:
 		v = &t.split
-	case STORED:
+	case StateStored:
 		v = &t.stored
-	case SEEN:
+	case StateSeen:
 		v = &t.seen
-	case SENT:
+	case StateSent:
 		v = &t.sent
-	case SYNCED:
+	case StateSynced:
 		v = &t.synced
 	}
 	return int(atomic.LoadUint32(v))
@@ -124,9 +124,9 @@ func (t *Tag) Status(state State) (int, int, error) {
 		return count, total, errNA
 	}
 	switch state {
-	case SPLIT, STORED, SEEN:
+	case StateSplit, StateStored, StateSeen:
 		return count, total, nil
-	case SENT, SYNCED:
+	case StateSent, StateSynced:
 		stored := int(atomic.LoadUint32(&t.stored))
 		if stored < total {
 			return count, total - seen, errNA

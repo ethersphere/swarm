@@ -245,9 +245,9 @@ func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
 	atomic.AddUint64(&h.nrChunks, 1)
 	go func() {
 		seen, err := h.store.Put(ctx, chunk.ModePutUpload, ch)
-		h.tag.Inc(chunk.STORED)
+		h.tag.Inc(chunk.StateStored)
 		if seen {
-			h.tag.Inc(chunk.SEEN)
+			h.tag.Inc(chunk.StateSeen)
 		}
 		select {
 		case h.errC <- err:
