@@ -766,7 +766,8 @@ func testBzzTar(encrypted bool, t *testing.T) {
 	}
 
 	// check that the tag was written correctly
-	testutil.CheckTag(t, srv.Tags, 4, 4, 0, 4)
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 4, 4, 0, 4)
 
 	swarmHash, err := ioutil.ReadAll(resp2.Body)
 	resp2.Body.Close()
@@ -886,7 +887,8 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 		t.Log(err)
 	}
 	time.Sleep(100 * time.Millisecond)
-	testutil.CheckTag(t, srv.Tags, 0, 0, 0, 244)
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 0, 0, 0, 244)
 	close(c)
 }
 

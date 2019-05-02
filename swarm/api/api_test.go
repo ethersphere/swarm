@@ -141,7 +141,8 @@ func TestApiPut(t *testing.T) {
 		}
 		resp := testGet(t, api, addr.Hex(), "")
 		checkResponse(t, resp, exp)
-		testutil.CheckTag(t, tags, 2, 2, 0, 2) //1 chunk data, 1 chunk manifest
+		tag := tags.All()[0]
+		testutil.CheckTag(t, tag, 2, 2, 0, 2) //1 chunk data, 1 chunk manifest
 	})
 }
 
@@ -161,7 +162,8 @@ func TestApiTagLarge(t *testing.T) {
 		}
 		if toEncrypt {
 		} else {
-			testutil.CheckTag(t, tags, 4129, 4129, 0, 4129)
+			tag := tags.All()[0]
+			testutil.CheckTag(t, tag, 4129, 4129, 0, 4129)
 			//testutil.CheckTag() //whatever
 		}
 	})

@@ -67,7 +67,8 @@ func testClientUploadDownloadRaw(toEncrypt bool, t *testing.T) {
 	}
 
 	// check the tag was created successfully
-	testutil.CheckTag(t, srv.Tags, 1, 1, 0, 1)
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 1, 1, 0, 1)
 
 	// check we can download the same data
 	res, isEncrypted, err := client.DownloadRaw(hash)
@@ -211,7 +212,8 @@ func TestClientUploadDownloadDirectory(t *testing.T) {
 	}
 
 	// check the tag was created successfully
-	testutil.CheckTag(t, srv.Tags, 9, 9, 0, 9)
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 9, 9, 0, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string, expected []byte) {
@@ -354,7 +356,8 @@ func TestClientMultipartUpload(t *testing.T) {
 	}
 
 	// check the tag was created successfully
-	testutil.CheckTag(t, srv.Tags, 9, 9, 7, 9)
+	tag := srv.Tags.All()[0]
+	testutil.CheckTag(t, tag, 9, 9, 7, 9)
 
 	// check we can download the individual files
 	checkDownloadFile := func(path string) {

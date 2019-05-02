@@ -14,38 +14,34 @@
 // You should have received a copy of the GNU Lesser General Public License
 // along with the go-ethereum library. If not, see <http://www.gnu.org/licenses/>.
 
-package testutil
+package chunk
 
-import (
-	"testing"
+import "testing"
 
-	"github.com/ethereum/go-ethereum/swarm/chunk"
-)
+func TestAll(t *testing.T) {
+	ts := NewTags()
 
-// CheckTag checks the first tag in the api struct to be in a certain state
-func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, total int) {
-	t.Helper()
-	if tag == nil {
-		t.Fatal("no tag found")
+	ts.New("1", 1)
+	ts.New("2", 1)
+
+	all := ts.All()
+
+	if len(all) != 2 {
+		t.Fatalf("expected length to be 2 got %d", len(all))
 	}
 
-	tSplit := tag.Get(chunk.SPLIT)
-	if tSplit != split {
-		t.Fatalf("should have had split chunks, got %d want %d", tSplit, split)
+	if all[0].Total() != 1 {
+		t.Fatal("mismatch")
+	}
+	if all[1].Total() != 1 {
+		t.Fatal("mismatch")
 	}
 
-	tSeen := tag.Get(chunk.SEEN)
-	if tSeen != seen {
-		t.Fatalf("should have had seen chunks, got %d want %d", tSeen, seen)
+	ts.New("3", 1)
+	all = ts.All()
+
+	if len(all) != 3 {
+		t.Fatalf("expected length to be 2 got %d", len(all))
 	}
 
-	tStored := tag.Get(chunk.STORED)
-	if tStored != stored {
-		t.Fatalf("mismatch stored chunks, got %d want %d", tStored, stored)
-	}
-
-	tTotal := tag.Total()
-	if tTotal != total {
-		t.Fatalf("mismatch total chunks, got %d want %d", tTotal, total)
-	}
 }
