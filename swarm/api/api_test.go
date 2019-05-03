@@ -124,7 +124,6 @@ func testGet(t *testing.T, api *API, bzzhash, path string) *testResponse {
 	}
 	reader.Seek(0, 0)
 	return &testResponse{reader, &Response{mimeType, status, size, string(s)}}
-	// return &testResponse{reader, &Response{mimeType, status, reader.Size(), nil}}
 }
 
 func TestApiPut(t *testing.T) {
@@ -149,16 +148,23 @@ func TestApiPut(t *testing.T) {
 
 // TestApiTagLarge tests that the the number of chunks counted is larger for a larger input
 func TestApiTagLarge(t *testing.T) {
+	const contentLength = 4096 * 4095
 	testAPI(t, func(api *API, tags *chunk.Tags, toEncrypt bool) {
-		ctx := context.TODO()
-		_, wait, err := putRandomContent(ctx, api, 4096*4095, "text/plain", toEncrypt)
+		randomContentReader := io.LimitReader(crand.Reader, int64(contentLength))
+		tag, err := api.Tags.New("unnamed-tag", 0)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatal(err)
 		}
-		err = wait(ctx)
+		ctx := sctx.SetTag(context.Background(), tag.Uid)
+		key, waitContent, err := api.Store(ctx, randomContentReader, int64(contentLength), toEncrypt)
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatal(err)
 		}
+		err = waitContent(ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		tag.DoneSplit(key)
 
 		if toEncrypt {
 			tag := tags.All()[0]
@@ -539,37 +545,6 @@ func TestDetectContentType(t *testing.T) {
 
 		})
 	}
-}
-
-// putRandomContent provides singleton manifest creation on top of API. it uploads an arbitrary byte stream
-// of the desired contentLength and wraps it in a manifest
-func putRandomContent(ctx context.Context, a *API, contentLength int, contentType string, toEncrypt bool) (k storage.Address, wait func(context.Context) error, err error) {
-	randomContentReader := io.LimitReader(crand.Reader, int64(contentLength))
-
-	tag, err := a.Tags.New("unnamed-tag", 0)
-
-	log.Trace("created new tag", "uid", tag.Uid)
-
-	cCtx := sctx.SetTag(ctx, tag.Uid)
-	key, waitContent, err := a.Store(cCtx, randomContentReader, int64(contentLength), toEncrypt)
-	if err != nil {
-		return nil, nil, err
-	}
-	//manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
-	//r := strings.NewReader(manifest)
-	//key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt)
-	if err != nil {
-		return nil, nil, err
-	}
-	tag.DoneSplit(key)
-	return key, func(ctx context.Context) error {
-		return waitContent(ctx)
-		/*		err := waitContent(ctx)
-				if err != nil {
-					return err
-				}
-				return waitManifest(ctx)*/
-	}, nil
 }
 
 // putString provides singleton manifest creation on top of api.API
