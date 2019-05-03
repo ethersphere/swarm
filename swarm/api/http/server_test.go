@@ -1114,21 +1114,10 @@ func TestGet(t *testing.T) {
 func TestModify(t *testing.T) {
 	srv := NewTestSwarmServer(t, serverFunc, nil)
 	defer srv.Close()
-
-	swarmClient := swarm.NewClient(srv.URL)
-	data := []byte("data")
-	file := &swarm.File{
-		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
-		ManifestEntry: api.ManifestEntry{
-			Path:        "",
-			ContentType: "text/plain",
-			Size:        int64(len(data)),
-		},
-	}
-
-	hash, err := swarmClient.Upload(file, "", false)
-	if err != nil {
-		t.Fatal(err)
+	headers := map[string]string{"Content-Type": "text/plain"}
+	res, hash := httpDo("POST", srv.URL+"/bzz:/", bytes.NewReader([]byte("data")), headers, false, t)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status code from server %d want %d", res.StatusCode, http.StatusOK)
 	}
 
 	for _, testCase := range []struct {
