@@ -849,47 +849,59 @@ func testBzzTar(encrypted bool, t *testing.T) {
 // by chunk size (4096). It is needed to be checked BEFORE chunking is done, therefore
 // concurrency was introduced to slow down the HTTP request
 func TestBzzCorrectTagEstimate(t *testing.T) {
-	srv := NewTestSwarmServer(t, serverFunc, nil)
-	defer srv.Close()
+	for _, v := range []struct {
+		toEncrypt bool
+		expChunks int64
+	}{
+		{toEncrypt: false, expChunks: 248},
+		{toEncrypt: true, expChunks: 250},
+	} {
+		srv := NewTestSwarmServer(t, serverFunc, nil)
+		defer srv.Close()
 
-	pr, pw := io.Pipe()
-	c := make(chan struct{})
+		pr, pw := io.Pipe()
+		c := make(chan struct{})
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	req, err := http.NewRequest("POST", srv.URL+"/bzz:/", pr)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	req = req.WithContext(ctx)
-	req.ContentLength = 1000000
-	req.Header.Add(SwarmTagHeaderName, "1000000")
-
-	go func() {
-		for {
-			select {
-			case <-c:
-				return
-			default:
-				_, err := pw.Write([]byte{0})
-				if err != nil {
-					return
-				}
-				time.Sleep(100 * time.Millisecond)
-			}
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		addr := ""
+		if v.toEncrypt {
+			addr = "encrypt"
 		}
-	}()
+		req, err := http.NewRequest("POST", srv.URL+"/bzz:/"+addr, pr)
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	client := &http.Client{}
-	_, err = client.Do(req)
-	if err != nil {
-		t.Log(err)
+		req = req.WithContext(ctx)
+		req.ContentLength = 1000000
+		req.Header.Add(SwarmTagHeaderName, "1000000")
+
+		go func() {
+			for {
+				select {
+				case <-c:
+					return
+				default:
+					_, err := pw.Write([]byte{0})
+					if err != nil {
+						return
+					}
+					time.Sleep(100 * time.Millisecond)
+				}
+			}
+		}()
+
+		client := &http.Client{}
+		_, err = client.Do(req)
+		if err != nil {
+			t.Log(err)
+		}
+		time.Sleep(100 * time.Millisecond)
+		tag := srv.Tags.All()[0]
+		testutil.CheckTag(t, tag, 0, 0, 0, v.expChunks)
+		close(c)
 	}
-	time.Sleep(100 * time.Millisecond)
-	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 0, 0, 0, 248)
-	close(c)
 }
 
 // TestBzzRootRedirect tests that getting the root path of a manifest without

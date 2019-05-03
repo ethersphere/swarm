@@ -273,12 +273,14 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr, _, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
+	addr, wait, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
 	if err != nil {
 		postRawFail.Inc(1)
 		respondError(w, r, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	wait(r.Context())
 
 	tag.DoneSplit(addr)
 
