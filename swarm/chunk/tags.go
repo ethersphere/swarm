@@ -42,12 +42,12 @@ func NewTags() *Tags {
 
 // New creates a new tag, stores it by the name and returns it
 // it returns an error if the tag with this name already exists
-func (ts *Tags) New(s string, total int) (*Tag, error) {
+func (ts *Tags) New(s string, total int64) (*Tag, error) {
 	t := &Tag{
 		Uid:       ts.rng.Uint32(),
 		Name:      s,
 		startedAt: time.Now(),
-		total:     uint32(total),
+		total:     total,
 	}
 	if _, loaded := ts.tags.LoadOrStore(t.Uid, t); loaded {
 		return nil, errExists

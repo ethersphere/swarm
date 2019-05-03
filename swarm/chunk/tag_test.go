@@ -34,8 +34,8 @@ func TestTagSingleIncrements(t *testing.T) {
 	tc := []struct {
 		state    uint32
 		inc      int
-		expcount int
-		exptotal int
+		expcount int64
+		exptotal int64
 	}{
 		{state: StateSplit, inc: 10, expcount: 10, exptotal: 10},
 		{state: StateStored, inc: 9, expcount: 9, exptotal: 9},
@@ -70,8 +70,8 @@ func TestTagStatus(t *testing.T) {
 	}
 	for _, v := range []struct {
 		state    State
-		expVal   int
-		expTotal int
+		expVal   int64
+		expTotal int64
 	}{
 		{state: StateStored, expVal: 10, expTotal: 10},
 		{state: StateSplit, expVal: 10, expTotal: 10},
@@ -128,7 +128,7 @@ func TestTagConcurrentIncrements(t *testing.T) {
 	wg.Wait()
 	for _, f := range allStates {
 		v := tg.Get(f)
-		if v != n {
+		if v != int64(n) {
 			t.Fatalf("expected state %v to be %v, got %v", f, n, v)
 		}
 	}
@@ -142,7 +142,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 	wg.Add(10 * 5 * n)
 	for i := 0; i < 10; i++ {
 		s := string([]byte{uint8(i)})
-		tag, err := ts.New(s, n)
+		tag, err := ts.New(s, int64(n))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -168,7 +168,7 @@ func TestTagsMultipleConcurrentIncrementsSyncMap(t *testing.T) {
 				t.Fatal(err)
 			}
 			stateVal := tag.Get(f)
-			if stateVal != n {
+			if stateVal != int64(n) {
 				t.Fatalf("expected tag %v state %v to be %v, got %v", uid, f, n, v)
 			}
 		}

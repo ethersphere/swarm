@@ -864,7 +864,7 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
 }
 
-func CalculateNumberOfChunks(contentLength int, isEncrypted bool) int {
+func CalculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 	if contentLength < 4096 {
 		return 1
 	}
@@ -882,7 +882,7 @@ func CalculateNumberOfChunks(contentLength int, isEncrypted bool) int {
 		intermediate = intermediate / float64(branchingFactor)
 	}
 
-	return int(totalChunks) + 1
+	return int64(totalChunks) + 1
 }
 
 // The size of buffer used for bufio.Reader on LazyChunkReader passed to

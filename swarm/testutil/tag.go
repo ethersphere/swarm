@@ -23,7 +23,7 @@ import (
 )
 
 // CheckTag checks the first tag in the api struct to be in a certain state
-func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, total int) {
+func CheckTag(t *testing.T, tag *chunk.Tag, split, stored, seen, total int64) {
 	t.Helper()
 	if tag == nil {
 		t.Fatal("no tag found")

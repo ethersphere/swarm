@@ -888,7 +888,7 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 	}
 	time.Sleep(100 * time.Millisecond)
 	tag := srv.Tags.All()[0]
-	testutil.CheckTag(t, tag, 0, 0, 0, 244)
+	testutil.CheckTag(t, tag, 0, 0, 0, 248)
 	close(c)
 }
 
@@ -1344,7 +1344,7 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 func TestCalculateNumberOfChunks(t *testing.T) {
 
 	//test cases:
-	for _, tc := range []struct{ len, chunks int }{
+	for _, tc := range []struct{ len, chunks int64 }{
 		{len: 1000, chunks: 1},
 		{len: 5000, chunks: 3},
 		{len: 10000, chunks: 4},
@@ -1364,7 +1364,7 @@ func TestCalculateNumberOfChunks(t *testing.T) {
 func TestCalculateNumberOfChunksEncrypted(t *testing.T) {
 
 	//test cases:
-	for _, tc := range []struct{ len, chunks int }{
+	for _, tc := range []struct{ len, chunks int64 }{
 		{len: 1000, chunks: 1},
 		{len: 5000, chunks: 3},
 		{len: 10000, chunks: 4},

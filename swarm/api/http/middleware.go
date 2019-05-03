@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
-	"strconv"
 	"strings"
 	"time"
 
@@ -93,10 +92,9 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 		var (
 			tagName        string
 			err            error
-			estimatedTotal = 0
-			contentType    = r.Header.Get("Content-Type")
-			contentLength  = r.Header.Get("Content-Length")
-			headerTag      = r.Header.Get(SwarmTagHeaderName)
+			estimatedTotal int64 = 0
+			contentType          = r.Header.Get("Content-Type")
+			headerTag            = r.Header.Get(SwarmTagHeaderName)
 		)
 		if headerTag != "" {
 			tagName = headerTag
@@ -105,18 +103,19 @@ func InitUploadTag(h http.Handler, tags *chunk.Tags) http.Handler {
 			tagName = fmt.Sprintf("unnamed_tag_%d", time.Now().Unix())
 		}
 
-		log.Trace("trying to estimate tag size", "contentType", contentType, "contentLength", contentLength, "cl", r.ContentLength)
-
-		if !strings.Contains(contentType, "multipart") && contentLength != "" {
-			estimatedTotal, err = strconv.Atoi(contentLength)
-			if err != nil {
-				log.Error("error parsing content-length string, falling back to 0", "contentLength", contentLength)
-				estimatedTotal = 0
-			} else {
-				estimatedTotal = estimatedTotal / 4096
+		if !strings.Contains(contentType, "multipart") && r.ContentLength > 0 {
+			log.Trace("calculating tag size", "contentType", contentType, "contentLength", r.ContentLength)
+			uri := GetURI(r.Context())
+			if uri != nil {
+				log.Debug("got uri from context")
+				if uri.Addr == "encrypt" {
+					estimatedTotal = CalculateNumberOfChunks(r.ContentLength, true)
+				} else {
+					estimatedTotal = CalculateNumberOfChunks(r.ContentLength, false)
+				}
 			}
-
 		}
+
 		log.Trace("creating tag", "tagName", tagName, "estimatedTotal", estimatedTotal)
 
 		t, err := tags.New(tagName, estimatedTotal)

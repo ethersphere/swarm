@@ -46,19 +46,20 @@ func init() {
 }
 
 func testAPI(t *testing.T, f func(*API, *chunk.Tags, bool)) {
-	datadir, err := ioutil.TempDir("", "bzz-test")
-	if err != nil {
-		t.Fatalf("unable to create temp dir: %v", err)
+	for _, v := range []bool{true, false} {
+		datadir, err := ioutil.TempDir("", "bzz-test")
+		if err != nil {
+			t.Fatalf("unable to create temp dir: %v", err)
+		}
+		defer os.RemoveAll(datadir)
+		tags := chunk.NewTags()
+		fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32), tags)
+		if err != nil {
+			return
+		}
+		api := NewAPI(fileStore, nil, nil, nil, tags)
+		f(api, tags, v)
 	}
-	defer os.RemoveAll(datadir)
-	tags := chunk.NewTags()
-	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32), tags)
-	if err != nil {
-		return
-	}
-	api := NewAPI(fileStore, nil, nil, nil, tags)
-	f(api, tags, false)
-	f(api, tags, true)
 }
 
 type testResponse struct {
@@ -150,9 +151,7 @@ func TestApiPut(t *testing.T) {
 func TestApiTagLarge(t *testing.T) {
 	testAPI(t, func(api *API, tags *chunk.Tags, toEncrypt bool) {
 		ctx := context.TODO()
-		//(data length / 4096) + 128
-		// nr of data chunks divided by 128 for unencrypted, 64 for encrypted, till u get to 1, add one root chunk
-		_, wait, err := putRandomContent(ctx, api, 4096*4095, "text/plain", true)
+		_, wait, err := putRandomContent(ctx, api, 4096*4095, "text/plain", toEncrypt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -160,11 +159,15 @@ func TestApiTagLarge(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
+
 		if toEncrypt {
+			tag := tags.All()[0]
+			expect := int64(4095 + 64 + 1)
+			testutil.CheckTag(t, tag, expect, expect, 0, expect)
 		} else {
 			tag := tags.All()[0]
-			testutil.CheckTag(t, tag, 4129, 4129, 0, 4129)
-			//testutil.CheckTag() //whatever
+			expect := int64(4095 + 32 + 1)
+			testutil.CheckTag(t, tag, expect, expect, 0, expect)
 		}
 	})
 }
