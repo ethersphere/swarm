@@ -40,6 +40,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/api"
+	swarmhttp "github.com/ethereum/go-ethereum/swarm/api/http"
 	"github.com/ethereum/go-ethereum/swarm/spancontext"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/pborman/uuid"
@@ -48,8 +49,6 @@ import (
 var (
 	ErrUnauthorized = errors.New("unauthorized")
 )
-
-const SwarmTagHeaderName = "x-swarm-tag"
 
 func NewClient(gateway string) *Client {
 	return &Client{
@@ -77,7 +76,7 @@ func (c *Client) UploadRaw(r io.Reader, size int64, toEncrypt bool) (string, err
 		return "", err
 	}
 	req.ContentLength = size
-	req.Header.Set(SwarmTagHeaderName, fmt.Sprintf("raw_upload_%d", time.Now().Unix()))
+	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("raw_upload_%d", time.Now().Unix()))
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -539,7 +538,7 @@ func (c *Client) TarUpload(hash string, uploader Uploader, defaultPath string, t
 	}
 	log.Trace("setting upload tag", "tag", tag)
 
-	req.Header.Set(SwarmTagHeaderName, tag)
+	req.Header.Set(swarmhttp.SwarmTagHeaderName, tag)
 
 	// use 'Expect: 100-continue' so we don't send the request body if
 	// the server refuses the request
@@ -606,7 +605,7 @@ func (c *Client) MultipartUpload(hash string, uploader Uploader) (string, error)
 
 	mw := multipart.NewWriter(reqW)
 	req.Header.Set("Content-Type", fmt.Sprintf("multipart/form-data; boundary=%q", mw.Boundary()))
-	req.Header.Set(SwarmTagHeaderName, fmt.Sprintf("multipart_upload_%d", time.Now().Unix()))
+	req.Header.Set(swarmhttp.SwarmTagHeaderName, fmt.Sprintf("multipart_upload_%d", time.Now().Unix()))
 
 	// define an UploadFn which adds files to the multipart form
 	uploadFn := func(file *File) error {
