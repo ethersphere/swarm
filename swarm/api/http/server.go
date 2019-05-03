@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
 	"mime"
 	"mime/multipart"
 	"net/http"
@@ -861,6 +862,27 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", fileName))
 
 	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
+}
+
+func CalculateNumberOfChunks(contentLength int, isEncrypted bool) int {
+	if contentLength < 4096 {
+		return 1
+	}
+	branchingFactor := 128
+	if isEncrypted {
+		branchingFactor = 64
+	}
+
+	dataChunks := math.Ceil(float64(contentLength) / float64(4096))
+	totalChunks := dataChunks
+	intermediate := float64(dataChunks) / float64(branchingFactor)
+
+	for intermediate > 1 {
+		totalChunks += math.Ceil(intermediate)
+		intermediate = intermediate / float64(branchingFactor)
+	}
+
+	return int(totalChunks) + 1
 }
 
 // The size of buffer used for bufio.Reader on LazyChunkReader passed to

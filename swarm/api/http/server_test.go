@@ -1339,6 +1339,46 @@ func TestBzzGetFileWithResolver(t *testing.T) {
 	}
 }
 
+// TestCalculateNumberOfChunks is a unit test for the chunk-number-according-to-content-length
+// calculation
+func TestCalculateNumberOfChunks(t *testing.T) {
+
+	//test cases:
+	for _, tc := range []struct{ len, chunks int }{
+		{len: 1000, chunks: 1},
+		{len: 5000, chunks: 3},
+		{len: 10000, chunks: 4},
+		{len: 100000, chunks: 26},
+		{len: 1000000, chunks: 248},
+		{len: 325839339210, chunks: 79550620 + 621490 + 4856 + 38 + 1},
+	} {
+		res := CalculateNumberOfChunks(tc.len, false)
+		if res != tc.chunks {
+			t.Fatalf("expected result for %d bytes to be %d got %d", tc.len, tc.chunks, res)
+		}
+	}
+}
+
+// TestCalculateNumberOfChunksEncrypted is a unit test for the chunk-number-according-to-content-length
+// calculation with encryption (branching factor=64)
+func TestCalculateNumberOfChunksEncrypted(t *testing.T) {
+
+	//test cases:
+	for _, tc := range []struct{ len, chunks int }{
+		{len: 1000, chunks: 1},
+		{len: 5000, chunks: 3},
+		{len: 10000, chunks: 4},
+		{len: 100000, chunks: 26},
+		{len: 1000000, chunks: 245 + 4 + 1},
+		{len: 325839339210, chunks: 79550620 + 1242979 + 19422 + 304 + 5 + 1},
+	} {
+		res := CalculateNumberOfChunks(tc.len, true)
+		if res != tc.chunks {
+			t.Fatalf("expected result for %d bytes to be %d got %d", tc.len, tc.chunks, res)
+		}
+	}
+}
+
 // testResolver implements the Resolver interface and either returns the given
 // hash if it is set, or returns a "name not found" error
 type testResolveValidator struct {
@@ -1364,6 +1404,7 @@ func (t *testResolveValidator) Resolve(addr string) (common.Hash, error) {
 func (t *testResolveValidator) Owner(node [32]byte) (addr common.Address, err error) {
 	return
 }
+
 func (t *testResolveValidator) HeaderByNumber(context.Context, *big.Int) (header *types.Header, err error) {
 	return
 }
