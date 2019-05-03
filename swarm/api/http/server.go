@@ -281,7 +281,6 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wait(r.Context())
-
 	tag.DoneSplit(addr)
 
 	log.Debug("stored content", "ruid", ruid, "key", addr)

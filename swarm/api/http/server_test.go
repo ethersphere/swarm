@@ -920,7 +920,7 @@ func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 	// create a manifest with some data at the root path
 	data := []byte("data")
 	headers := map[string]string{"Content-Type": "text/plain"}
-	res, hash := httpDo("POST", srv.URL+"/bzz:/", bytes.NewReader([]byte("data")), headers, false, t)
+	res, hash := httpDo("POST", srv.URL+"/bzz:/", bytes.NewReader(data), headers, false, t)
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("unexpected status code from server %d want %d", res.StatusCode, http.StatusOK)
 	}
