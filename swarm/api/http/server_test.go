@@ -44,7 +44,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/swarm/api"
-	swarm "github.com/ethereum/go-ethereum/swarm/api/client"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 	"github.com/ethereum/go-ethereum/swarm/storage/feed"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
@@ -919,19 +918,11 @@ func testBzzRootRedirect(toEncrypt bool, t *testing.T) {
 	defer srv.Close()
 
 	// create a manifest with some data at the root path
-	client := swarm.NewClient(srv.URL)
 	data := []byte("data")
-	file := &swarm.File{
-		ReadCloser: ioutil.NopCloser(bytes.NewReader(data)),
-		ManifestEntry: api.ManifestEntry{
-			Path:        "",
-			ContentType: "text/plain",
-			Size:        int64(len(data)),
-		},
-	}
-	hash, err := client.Upload(file, "", toEncrypt)
-	if err != nil {
-		t.Fatal(err)
+	headers := map[string]string{"Content-Type": "text/plain"}
+	res, hash := httpDo("POST", srv.URL+"/bzz:/", bytes.NewReader([]byte("data")), headers, false, t)
+	if res.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected status code from server %d want %d", res.StatusCode, http.StatusOK)
 	}
 
 	// define a CheckRedirect hook which ensures there is only a single
