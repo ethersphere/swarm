@@ -85,7 +85,7 @@ func NewFileStore(store ChunkStore, params *FileStoreParams, tags *chunk.Tags) *
 // It returns a reader with the chunk data and whether the content was encrypted
 func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChunkReader, isEncrypted bool) {
 	isEncrypted = len(addr) > f.hashFunc().Size()
-	tag, err := f.tags.GetContext(ctx)
+	tag, err := f.tags.GetFromContext(ctx)
 	if err != nil {
 		tag = chunk.NewTag(0, "ephemeral-retrieval-tag", 0)
 	}
@@ -97,7 +97,7 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 // Store is a public API. Main entry point for document storage directly. Used by the
 // FS-aware API and httpaccess
 func (f *FileStore) Store(ctx context.Context, data io.Reader, size int64, toEncrypt bool) (addr Address, wait func(context.Context) error, err error) {
-	tag, err := f.tags.GetContext(ctx)
+	tag, err := f.tags.GetFromContext(ctx)
 	if err != nil {
 		// some of the parts of the codebase, namely the manifest trie, do not store the context
 		// of the original request nor the tag with the trie, recalculating the trie hence

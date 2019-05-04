@@ -865,7 +865,8 @@ func (s *Server) HandleGetFile(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, fileName, time.Now(), newBufferedReadSeeker(reader, getFileBufferSize))
 }
 
-func CalculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
+// calculateNumberOfChunks calculates the number of chunks in an arbitrary content length
+func calculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 	if contentLength < 4096 {
 		return 1
 	}
@@ -876,7 +877,7 @@ func CalculateNumberOfChunks(contentLength int64, isEncrypted bool) int64 {
 
 	dataChunks := math.Ceil(float64(contentLength) / float64(4096))
 	totalChunks := dataChunks
-	intermediate := float64(dataChunks) / float64(branchingFactor)
+	intermediate := dataChunks / float64(branchingFactor)
 
 	for intermediate > 1 {
 		totalChunks += math.Ceil(intermediate)

@@ -154,13 +154,12 @@ func (t *Tag) ETA(state State) (time.Time, error) {
 func (tag *Tag) MarshalBinary() (data []byte, err error) {
 	buffer := make([]byte, 4)
 	binary.BigEndian.PutUint32(buffer, tag.Uid)
-	//encodeUint64Append(&buffer, tag.Uid)
-	encodeUint64Append(&buffer, tag.total)
-	encodeUint64Append(&buffer, tag.split)
-	encodeUint64Append(&buffer, tag.seen)
-	encodeUint64Append(&buffer, tag.stored)
-	encodeUint64Append(&buffer, tag.sent)
-	encodeUint64Append(&buffer, tag.synced)
+	encodeInt64Append(&buffer, tag.total)
+	encodeInt64Append(&buffer, tag.split)
+	encodeInt64Append(&buffer, tag.seen)
+	encodeInt64Append(&buffer, tag.stored)
+	encodeInt64Append(&buffer, tag.sent)
+	encodeInt64Append(&buffer, tag.synced)
 
 	intBuffer := make([]byte, 8)
 
@@ -185,7 +184,6 @@ func (tag *Tag) UnmarshalBinary(buffer []byte) error {
 	tag.Uid = binary.BigEndian.Uint32(buffer)
 	buffer = buffer[4:]
 
-	//tag.Uid = decodeInt64Splice(&buffer)
 	tag.total = decodeInt64Splice(&buffer)
 	tag.split = decodeInt64Splice(&buffer)
 	tag.seen = decodeInt64Splice(&buffer)
@@ -207,7 +205,7 @@ func (tag *Tag) UnmarshalBinary(buffer []byte) error {
 	return nil
 }
 
-func encodeUint64Append(buffer *[]byte, val int64) {
+func encodeInt64Append(buffer *[]byte, val int64) {
 	intBuffer := make([]byte, 8)
 	n := binary.PutVarint(intBuffer, val)
 	*buffer = append(*buffer, intBuffer[:n]...)

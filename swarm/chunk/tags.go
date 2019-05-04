@@ -56,6 +56,7 @@ func (ts *Tags) New(s string, total int64) (*Tag, error) {
 }
 
 // All returns all existing tags in Tags' sync.Map
+// Note that tags are returned in no particular order
 func (ts *Tags) All() (t []*Tag) {
 	ts.tags.Range(func(k, v interface{}) bool {
 		t = append(t, v.(*Tag))
@@ -75,8 +76,8 @@ func (ts *Tags) Get(uid uint32) (*Tag, error) {
 	return t.(*Tag), nil
 }
 
-// GetContext gets a tag from the tag uid stored in the context
-func (ts *Tags) GetContext(ctx context.Context) (*Tag, error) {
+// GetFromContext gets a tag from the tag uid stored in the context
+func (ts *Tags) GetFromContext(ctx context.Context) (*Tag, error) {
 	uid := sctx.GetTag(ctx)
 	t, ok := ts.tags.Load(uid)
 	if !ok {
@@ -88,4 +89,8 @@ func (ts *Tags) GetContext(ctx context.Context) (*Tag, error) {
 // Range exposes sync.Map's iterator
 func (ts *Tags) Range(fn func(k, v interface{}) bool) {
 	ts.tags.Range(fn)
+}
+
+func (ts *Tags) Delete(k interface{}) {
+	ts.tags.Delete(k)
 }

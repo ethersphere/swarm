@@ -848,6 +848,9 @@ func testBzzTar(encrypted bool, t *testing.T) {
 // by chunk size (4096). It is needed to be checked BEFORE chunking is done, therefore
 // concurrency was introduced to slow down the HTTP request
 func TestBzzCorrectTagEstimate(t *testing.T) {
+	srv := NewTestSwarmServer(t, serverFunc, nil)
+	defer srv.Close()
+
 	for _, v := range []struct {
 		toEncrypt bool
 		expChunks int64
@@ -855,11 +858,7 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 		{toEncrypt: false, expChunks: 248},
 		{toEncrypt: true, expChunks: 250},
 	} {
-		srv := NewTestSwarmServer(t, serverFunc, nil)
-		defer srv.Close()
-
 		pr, pw := io.Pipe()
-		c := make(chan struct{})
 
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -879,27 +878,35 @@ func TestBzzCorrectTagEstimate(t *testing.T) {
 		go func() {
 			for {
 				select {
-				case <-c:
+				case <-ctx.Done():
 					return
-				default:
+				case <-time.After(1 * time.Millisecond):
 					_, err := pw.Write([]byte{0})
 					if err != nil {
-						return
+						t.Error(err)
 					}
-					time.Sleep(100 * time.Millisecond)
 				}
 			}
 		}()
-
-		client := &http.Client{}
-		_, err = client.Do(req)
-		if err != nil {
-			t.Log(err)
+		go func() {
+			transport := http.DefaultTransport
+			_, err := transport.RoundTrip(req)
+			if err != nil {
+				t.Error(err)
+			}
+		}()
+		done := false
+		for !done {
+			switch len(srv.Tags.All()) {
+			case 0:
+				<-time.After(10 * time.Millisecond)
+			case 1:
+				tag := srv.Tags.All()[0]
+				testutil.CheckTag(t, tag, 0, 0, 0, v.expChunks)
+				srv.Tags.Delete(tag.Uid)
+				done = true
+			}
 		}
-		time.Sleep(100 * time.Millisecond)
-		tag := srv.Tags.All()[0]
-		testutil.CheckTag(t, tag, 0, 0, 0, v.expChunks)
-		close(c)
 	}
 }
 
@@ -1344,7 +1351,7 @@ func TestCalculateNumberOfChunks(t *testing.T) {
 		{len: 1000000, chunks: 248},
 		{len: 325839339210, chunks: 79550620 + 621490 + 4856 + 38 + 1},
 	} {
-		res := CalculateNumberOfChunks(tc.len, false)
+		res := calculateNumberOfChunks(tc.len, false)
 		if res != tc.chunks {
 			t.Fatalf("expected result for %d bytes to be %d got %d", tc.len, tc.chunks, res)
 		}
@@ -1364,7 +1371,7 @@ func TestCalculateNumberOfChunksEncrypted(t *testing.T) {
 		{len: 1000000, chunks: 245 + 4 + 1},
 		{len: 325839339210, chunks: 79550620 + 1242979 + 19422 + 304 + 5 + 1},
 	} {
-		res := CalculateNumberOfChunks(tc.len, true)
+		res := calculateNumberOfChunks(tc.len, true)
 		if res != tc.chunks {
 			t.Fatalf("expected result for %d bytes to be %d got %d", tc.len, tc.chunks, res)
 		}
