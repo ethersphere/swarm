@@ -566,79 +566,73 @@ func newTestDiscoveryPeer(addr pot.Address, kad *Kademlia) *Peer {
 // when neighbourhood depth is changed.
 func TestKademlia_SubscribeToNeighbourhoodDepthChange(t *testing.T) {
 
-	testSignal := func(t *testing.T, k *testKademlia, prevDepth int, c <-chan struct{}) (newDepth int) {
+	testSignal := func(t *testing.T, k *testKademlia, prevDepth int) chan int {
 		t.Helper()
+		doneC := make(chan int)
+		go func() {
+			d := 0
+			k.DepthChangeCond.L.Lock()
+			for d = k.nDepth; d == prevDepth; d = k.nDepth {
+				k.DepthChangeCond.Wait()
+			}
 
-		select {
-		case _, ok := <-c:
-			if !ok {
-				t.Error("closed signal channel")
-			}
-			newDepth = k.NeighbourhoodDepth()
-			if prevDepth == newDepth {
-				t.Error("depth not changed")
-			}
-			return newDepth
-		case <-time.After(2 * time.Second):
-			t.Error("timeout")
-		}
-		return newDepth
+			k.DepthChangeCond.L.Unlock()
+			doneC <- d //must unlock since notification order is not guaranteed
+
+		}()
+
+		return doneC
 	}
 
 	t.Run("single subscription", func(t *testing.T) {
 		k := newTestKademlia(t, "00000000")
-
-		c, u := k.SubscribeToNeighbourhoodDepthChange()
-		defer u()
+		dC := testSignal(t, k, 0)
 
 		depth := k.NeighbourhoodDepth()
 
 		k.On("11111101", "01000000", "10000000", "00000010")
+		select {
+		case d := <-dC:
+			if d == depth {
+				t.Fatal("depth didnt change")
+			}
+		case <-time.After(1 * time.Second):
+			t.Fatal("timout")
+		}
 
-		testSignal(t, k, depth, c)
 	})
 
 	t.Run("multiple subscriptions", func(t *testing.T) {
 		k := newTestKademlia(t, "00000000")
 
-		c1, u1 := k.SubscribeToNeighbourhoodDepthChange()
-		defer u1()
-
-		c2, u2 := k.SubscribeToNeighbourhoodDepthChange()
-		defer u2()
-
 		depth := k.NeighbourhoodDepth()
-
+		t1 := testSignal(t, k, depth)
+		t2 := testSignal(t, k, depth)
 		k.On("11111101", "01000000", "10000000", "00000010")
 
-		testSignal(t, k, depth, c1)
-
-		testSignal(t, k, depth, c2)
+		<-t1
+		<-t2
 	})
 
 	t.Run("multiple changes", func(t *testing.T) {
 		k := newTestKademlia(t, "00000000")
 
-		c, u := k.SubscribeToNeighbourhoodDepthChange()
-		defer u()
-
 		depth := k.NeighbourhoodDepth()
+		t1 := testSignal(t, k, depth)
 
 		k.On("11111101", "01000000", "10000000", "00000010")
 
-		depth = testSignal(t, k, depth, c)
+		<-t1
 
+		t2 := testSignal(t, k, depth)
 		k.On("11111101", "01000010", "10000010", "00000110")
-
-		testSignal(t, k, depth, c)
+		<-t2
 	})
 
 	t.Run("no depth change", func(t *testing.T) {
 		k := newTestKademlia(t, "00000000")
 
-		c, u := k.SubscribeToNeighbourhoodDepthChange()
-		defer u()
-
+		c := testSignal(t, k, 0)
 		// does not trigger the depth change
 		k.On("11111101")
 
@@ -655,12 +649,9 @@ func TestKademlia_SubscribeToNeighbourhoodDepthChange(t *testing.T) {
 
 	t.Run("no new peers", func(t *testing.T) {
 		k := newTestKademlia(t, "00000000")
-
-		changeC, unsubscribe := k.SubscribeToNeighbourhoodDepthChange()
-		defer unsubscribe()
-
+		c := testSignal(t, k, 0)
 		select {
-		case _, ok := <-changeC:
+		case _, ok := <-c:
 			if !ok {
 				t.Error("closed signal channel")
 			}

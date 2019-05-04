@@ -446,30 +446,31 @@ func (p *Peer) runUpdateSyncing() {
 	depth := kad.NeighbourhoodDepth()
 
 	log.Debug("update syncing subscriptions: initial", "peer", p.ID(), "po", po, "depth", depth)
+	defer log.Debug("update syncing subscriptions: exiting", "peer", p.ID())
 
 	// initial subscriptions
 	p.updateSyncSubscriptions(syncSubscriptionsDiff(po, -1, depth, kad.MaxProxDisplay))
 
-	depthChangeSignal, unsubscribeDepthChangeSignal := kad.SubscribeToNeighbourhoodDepthChange()
-	defer unsubscribeDepthChangeSignal()
-
 	prevDepth := depth
 	for {
+		kad.DepthChangeCond.L.Lock()
+
+		// Wait has to be called under lock. we cannot call NeighbourhoodDepth under this critical section
+		// due to the fact it acquires a read lock under the same lock
+		kad.DepthChangeCond.Wait()
+		kad.DepthChangeCond.L.Unlock()
+
 		select {
-		case _, ok := <-depthChangeSignal:
-			if !ok {
-				return
-			}
+		case <-p.streamer.quit:
+			return
+		default:
 			// update subscriptions for this peer when depth changes
 			depth := kad.NeighbourhoodDepth()
 			log.Debug("update syncing subscriptions", "peer", p.ID(), "po", po, "depth", depth)
 			p.updateSyncSubscriptions(syncSubscriptionsDiff(po, prevDepth, depth, kad.MaxProxDisplay))
 			prevDepth = depth
-		case <-p.streamer.quit:
-			return
 		}
 	}
-	log.Debug("update syncing subscriptions: exiting", "peer", p.ID())
 }
 
 // updateSyncSubscriptions accepts two slices of integers, the first one

@@ -83,14 +83,14 @@ func NewKadParams() *KadParams {
 // Kademlia is a table of live peers and a db of known peers (node records)
 type Kademlia struct {
 	lock       sync.RWMutex
-	*KadParams                 // Kademlia configuration parameters
-	base       []byte          // immutable baseaddress of the table
-	addrs      *pot.Pot        // pots container for known peer addresses
-	conns      *pot.Pot        // pots container for live peer connections
-	depth      uint8           // stores the last current depth of saturation
-	nDepth     int             // stores the last neighbourhood depth
-	nDepthMu   sync.RWMutex    // protects neighbourhood depth nDepth
-	nDepthSig  []chan struct{} // signals when neighbourhood depth nDepth is changed
+	*KadParams          // Kademlia configuration parameters
+	base       []byte   // immutable baseaddress of the table
+	addrs      *pot.Pot // pots container for known peer addresses
+	conns      *pot.Pot // pots container for live peer connections
+	depth      uint8    // stores the last current depth of saturation
+	nDepth     int      // stores the last neighbourhood depth
+
+	DepthChangeCond *sync.Cond
 }
 
 // NewKademlia creates a Kademlia table for base address addr
@@ -100,11 +100,14 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	if params == nil {
 		params = NewKadParams()
 	}
+	lock := sync.RWMutex{}
 	return &Kademlia{
-		base:      addr,
-		KadParams: params,
-		addrs:     pot.NewPot(nil, 0),
-		conns:     pot.NewPot(nil, 0),
+		base:            addr,
+		KadParams:       params,
+		addrs:           pot.NewPot(nil, 0),
+		conns:           pot.NewPot(nil, 0),
+		lock:            lock,
+		DepthChangeCond: sync.NewCond(&lock),
 	}
 }
 
@@ -335,64 +338,22 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 // sets it to the nDepth and sends a signal to every nDepthSig channel.
 func (k *Kademlia) setNeighbourhoodDepth() {
 	nDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
-	var changed bool
-	k.nDepthMu.Lock()
 	if nDepth != k.nDepth {
-		k.nDepth = nDepth
-		changed = true
-	}
-	k.nDepthMu.Unlock()
+		k.DepthChangeCond.L.Lock()
 
-	if len(k.nDepthSig) > 0 && changed {
-		for _, c := range k.nDepthSig {
-			// Every nDepthSig channel has a buffer capacity of 1,
-			// so every receiver will get the signal even if the
-			// select statement has the default case to avoid blocking.
-			select {
-			case c <- struct{}{}:
-			default:
-			}
-		}
+		k.nDepth = nDepth
+
+		k.DepthChangeCond.Broadcast()
+		k.DepthChangeCond.L.Unlock()
 	}
 }
 
 // NeighbourhoodDepth returns the value calculated by depthForPot function
 // in setNeighbourhoodDepth method.
 func (k *Kademlia) NeighbourhoodDepth() int {
-	k.nDepthMu.RLock()
-	defer k.nDepthMu.RUnlock()
+	k.lock.RLock()
+	defer k.lock.RUnlock()
 	return k.nDepth
-}
-
-// SubscribeToNeighbourhoodDepthChange returns the channel that signals
-// when neighbourhood depth value is changed. The current neighbourhood depth
-// is returned by NeighbourhoodDepth method. Returned function unsubscribes
-// the channel from signaling and releases the resources. Returned function is safe
-// to be called multiple times.
-func (k *Kademlia) SubscribeToNeighbourhoodDepthChange() (c <-chan struct{}, unsubscribe func()) {
-	channel := make(chan struct{}, 1)
-	var closeOnce sync.Once
-
-	k.lock.Lock()
-	defer k.lock.Unlock()
-
-	k.nDepthSig = append(k.nDepthSig, channel)
-
-	unsubscribe = func() {
-		k.lock.Lock()
-		defer k.lock.Unlock()
-
-		for i, c := range k.nDepthSig {
-			if c == channel {
-				k.nDepthSig = append(k.nDepthSig[:i], k.nDepthSig[i+1:]...)
-				break
-			}
-		}
-
-		closeOnce.Do(func() { close(channel) })
-	}
-
-	return channel, unsubscribe
 }
 
 // Off removes a peer from among live peers
@@ -418,6 +379,7 @@ func (k *Kademlia) Off(p *Peer) {
 			// v cannot be nil, but no need to check
 			return nil
 		})
+
 		k.setNeighbourhoodDepth()
 	}
 }
