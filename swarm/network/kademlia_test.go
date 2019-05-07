@@ -570,7 +570,7 @@ func TestKademlia_SubscribeToNeighbourhoodDepthChange(t *testing.T) {
 		t.Helper()
 		doneC := make(chan int)
 		go func() {
-			d := 0
+			var d int
 			k.DepthChangeCond.L.Lock()
 			for d = k.nDepth; d == prevDepth; d = k.nDepth {
 				k.DepthChangeCond.Wait()

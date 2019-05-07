@@ -339,12 +339,11 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 func (k *Kademlia) setNeighbourhoodDepth() {
 	nDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 	if nDepth != k.nDepth {
-		k.DepthChangeCond.L.Lock()
+		k.lock.Lock()
+		defer k.lock.Unlock()
 
 		k.nDepth = nDepth
-
 		k.DepthChangeCond.Broadcast()
-		k.DepthChangeCond.L.Unlock()
 	}
 }
 
