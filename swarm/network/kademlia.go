@@ -340,9 +340,9 @@ func (k *Kademlia) setNeighbourhoodDepth() {
 	nDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 	if nDepth != k.nDepth {
 		k.lock.Lock()
-		defer k.lock.Unlock()
-
 		k.nDepth = nDepth
+		k.lock.Unlock()
+
 		k.DepthChangeCond.Broadcast()
 	}
 }
