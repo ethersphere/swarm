@@ -296,6 +296,7 @@ func (r *Registry) Close() error {
 	// change from Kademlia that were initiated in NewRegistry constructor.
 	r.delivery.Close()
 	close(r.quit)
+	r.delivery.kad.DepthChangeCond.Broadcast()
 	return r.intervalsStore.Close()
 }
 
