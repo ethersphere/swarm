@@ -90,6 +90,7 @@ type Kademlia struct {
 	depth      uint8    // stores the last current depth of saturation
 	nDepth     int      // stores the last neighbourhood depth
 
+	mtx             sync.Mutex
 	DepthChangeCond *sync.Cond
 }
 
@@ -100,13 +101,13 @@ func NewKademlia(addr []byte, params *KadParams) *Kademlia {
 	if params == nil {
 		params = NewKadParams()
 	}
-	lock := sync.RWMutex{}
+	lock := sync.Mutex{}
 	return &Kademlia{
 		base:            addr,
 		KadParams:       params,
 		addrs:           pot.NewPot(nil, 0),
 		conns:           pot.NewPot(nil, 0),
-		lock:            lock,
+		mtx:             lock,
 		DepthChangeCond: sync.NewCond(&lock),
 	}
 }
@@ -140,6 +141,7 @@ func (e *entry) Hex() string {
 // Register enters each address as kademlia peer record into the
 // database of known peer addresses
 func (k *Kademlia) Register(peers ...*BzzAddr) error {
+	defer k.setNeighbourhoodDepth()
 	k.lock.Lock()
 	defer k.lock.Unlock()
 
@@ -179,7 +181,6 @@ func (k *Kademlia) Register(peers ...*BzzAddr) error {
 		size++
 	}
 
-	k.setNeighbourhoodDepth()
 	return nil
 }
 
@@ -299,6 +300,7 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 
 // On inserts the peer as a kademlia peer into the live peers
 func (k *Kademlia) On(p *Peer) (uint8, bool) {
+	defer k.setNeighbourhoodDepth()
 	k.lock.Lock()
 	defer k.lock.Unlock()
 
@@ -330,7 +332,6 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 		changed = true
 		k.depth = depth
 	}
-	k.setNeighbourhoodDepth()
 	return k.depth, changed
 }
 
@@ -339,9 +340,9 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 func (k *Kademlia) setNeighbourhoodDepth() {
 	nDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
 	if nDepth != k.nDepth {
-		k.lock.Lock()
+		k.DepthChangeCond.L.Lock()
 		k.nDepth = nDepth
-		k.lock.Unlock()
+		k.DepthChangeCond.L.Unlock()
 
 		k.DepthChangeCond.Broadcast()
 	}
@@ -350,13 +351,14 @@ func (k *Kademlia) setNeighbourhoodDepth() {
 // NeighbourhoodDepth returns the value calculated by depthForPot function
 // in setNeighbourhoodDepth method.
 func (k *Kademlia) NeighbourhoodDepth() int {
-	k.lock.RLock()
-	defer k.lock.RUnlock()
+	k.DepthChangeCond.L.Lock()
+	defer k.DepthChangeCond.L.Unlock()
 	return k.nDepth
 }
 
 // Off removes a peer from among live peers
 func (k *Kademlia) Off(p *Peer) {
+	defer k.setNeighbourhoodDepth()
 	k.lock.Lock()
 	defer k.lock.Unlock()
 	var del bool
@@ -378,8 +380,6 @@ func (k *Kademlia) Off(p *Peer) {
 			// v cannot be nil, but no need to check
 			return nil
 		})
-
-		k.setNeighbourhoodDepth()
 	}
 }
 
