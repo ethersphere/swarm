@@ -241,6 +241,7 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 		stream:       s,
 		priority:     priority,
 		sessionIndex: sessionIndex,
+		timestamp:    time.Now(),
 	}
 	p.servers[s] = os
 	return os, nil
@@ -425,6 +426,8 @@ func (p *Peer) close() {
 	p.servers = nil
 }
 
+var noSubscribeMsgTimeout = 5 * time.Second
+
 // runUpdateSyncing is a long running function that creates the initial
 // syncing subscriptions to the peer and waits for neighbourhood depth change
 // to create new ones or quit existing ones based on the new neighbourhood depth
@@ -467,6 +470,17 @@ func (p *Peer) runUpdateSyncing() {
 			prevDepth = depth
 		case <-p.streamer.quit:
 			return
+		case <-time.After(1 * time.Second):
+			// prune stuff
+			for k, srv := range p.servers {
+
+				if !srv.est && time.Since(srv.timestamp) > noSubscribeMsgTimeout {
+					err := p.removeServer(k)
+					if err != nil {
+						log.Error("error removing server on prune", "err", err)
+					}
+				}
+			}
 		}
 	}
 	log.Debug("update syncing subscriptions: exiting", "peer", p.ID())

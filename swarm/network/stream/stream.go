@@ -203,7 +203,34 @@ func (r *Registry) RequestSubscription(peerId enode.ID, s Stream, h *Range, prio
 	if _, err := peer.getServer(s); err != nil {
 		if e, ok := err.(*notFoundError); ok && e.t == "server" {
 			// request subscription only if the server for this stream is not created
-			log.Debug("RequestSubscription ", "peer", peerId, "stream", s, "history", h)
+
+			f, err := r.GetServerFunc(s.Name)
+			if err != nil {
+				return err
+			}
+
+			server, err := f(peer, s.Key, s.Live)
+			if err != nil {
+				return err
+			}
+			_, err = peer.setServer(s, server, prio)
+			if err != nil {
+				return err
+			}
+
+			// this should be actually determined by the node's capabilities
+			// and should be guarded for light nodes
+
+			hserver, err := f(peer, s.Key, false)
+			if err != nil {
+				return err
+			}
+
+			_, err = peer.setServer(getHistoryStream(s), hserver, getHistoryPriority(prio))
+			if err != nil {
+				return err
+			}
+
 			return peer.Send(context.TODO(), &RequestSubscriptionMsg{
 				Stream:   s,
 				History:  h,
@@ -212,7 +239,7 @@ func (r *Registry) RequestSubscription(peerId enode.ID, s Stream, h *Range, prio
 		}
 		return err
 	}
-	log.Trace("RequestSubscription: already subscribed", "peer", peerId, "stream", s, "history", h)
+	log.Trace("RequestSubscription: already requested", "peer", peerId, "stream", s, "history", h)
 	return nil
 }
 
@@ -469,6 +496,8 @@ type server struct {
 	priority     uint8
 	currentBatch []byte
 	sessionIndex uint64
+	est          bool //indicates if a subscribe msg has been received for this subscribe request
+	timestamp    time.Time
 }
 
 // setNextBatch adjusts passed interval based on session index and whether

@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -72,6 +73,8 @@ type RequestSubscriptionMsg struct {
 	Priority uint8  // delivered on priority channel
 }
 
+// handleRequestSubscription is being handled by the downstream peer (client) when a RequestSubscription
+// message comes in from the upstream peer
 func (p *Peer) handleRequestSubscription(ctx context.Context, req *RequestSubscriptionMsg) (err error) {
 	log.Debug(fmt.Sprintf("handleRequestSubscription: streamer %s to subscribe to %s with stream %s", p.streamer.addr, p.ID(), req.Stream))
 	if err = p.streamer.Subscribe(p.ID(), req.Stream, req.History, req.Priority); err != nil {
@@ -80,12 +83,17 @@ func (p *Peer) handleRequestSubscription(ctx context.Context, req *RequestSubscr
 		// exchange between peers over p2p. Instead, error will be returned
 		// only if there is one from sending subscribe error message.
 		err = p.Send(ctx, SubscribeErrorMsg{
-			Error: err.Error(),
+			Server: true,
+			Stream: req.Stream,
+			Error:  err.Error(),
 		})
 	}
 	return err
 }
 
+// handleSubscribeMsg is being handled by the upstream peer (server) after the downstream
+// peer has processed the RequestSubscribe message and has issued a subscribe message
+// to the upstream peer
 func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err error) {
 	metrics.GetOrRegisterCounter("peer.handlesubscribemsg", nil).Inc(1)
 
@@ -96,26 +104,29 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 			// exchange between peers over p2p. Instead, error will be returned
 			// only if there is one from sending subscribe error message.
 			err = p.Send(context.TODO(), SubscribeErrorMsg{
-				Error: err.Error(),
+				Server: true,
+				Stream: req.Stream,
+				Error:  err.Error(),
 			})
 		}
 	}()
 
 	log.Debug("received subscription", "from", p.streamer.addr, "peer", p.ID(), "stream", req.Stream, "history", req.History)
 
-	f, err := p.streamer.GetServerFunc(req.Stream.Name)
+	os, err := p.getServer(req.Stream)
 	if err != nil {
 		return err
 	}
 
-	s, err := f(p, req.Stream.Key, req.Stream.Live)
-	if err != nil {
-		return err
+	/*if os.est && os.stream.String() == req.Stream.String() {
+		log.Debug("stream already exists between peers, dont panic", "peer", p.ID(), "other", p.streamer.addr)
+	}*/
+
+	// todo: i think this ^^ option is better but need to see how this affects current batches
+	if os.est {
+		return fmt.Errorf("peer subscription already established, stream %s, peer %s, other %s", req.Stream, p.ID(), p.streamer.addr)
 	}
-	os, err := p.setServer(req.Stream, s, req.Priority)
-	if err != nil {
-		return err
-	}
+	os.est = true
 
 	var from uint64
 	var to uint64
@@ -131,16 +142,13 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 	}()
 
 	if req.Stream.Live && req.History != nil {
-		// subscribe to the history stream
-		s, err := f(p, req.Stream.Key, false)
+		os, err := p.getServer(getHistoryStream(req.Stream))
 		if err != nil {
 			return err
 		}
 
-		os, err := p.setServer(getHistoryStream(req.Stream), s, getHistoryPriority(req.Priority))
-		if err != nil {
-			return err
-		}
+		os.est = true //todo same check for this as above
+
 		go func() {
 			if err := p.SendOfferedHashes(os, req.History.From, req.History.To); err != nil {
 				log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
@@ -152,12 +160,27 @@ func (p *Peer) handleSubscribeMsg(ctx context.Context, req *SubscribeMsg) (err e
 }
 
 type SubscribeErrorMsg struct {
-	Error string
+	Server bool //true indicates message came from upstream, false means downstream
+	Stream Stream
+	Error  string
 }
 
-func (p *Peer) handleSubscribeErrorMsg(req *SubscribeErrorMsg) (err error) {
+func (p *Peer) handleSubscribeErrorMsg(subscribeErr *SubscribeErrorMsg) (err error) {
 	//TODO the error should be channeled to whoever calls the subscribe
-	return fmt.Errorf("subscribe to peer %s: %v", p.ID(), req.Error)
+	if subscribeErr.Server {
+		// we are on the client, do some cleanups
+		err := p.removeClient(subscribeErr.Stream)
+		if err != nil {
+			log.Error("error removing client for peer", "peer", p.ID().TerminalString(), "err", err)
+		}
+	} else {
+		// we are on the server, do some cleanups?
+		err := p.removeServer(subscribeErr.Stream)
+		if err != nil {
+			log.Error("error removing server for peer", "peer", p.ID().TerminalString(), "err", err)
+		}
+	}
+	return fmt.Errorf("subscribe to peer %s: %v", p.ID(), subscribeErr.Error)
 }
 
 type UnsubscribeMsg struct {
@@ -344,6 +367,11 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 	if err != nil {
 		return err
 	}
+
+	if !s.est {
+		return errors.New("server not yet instantiated for peer") //this will result in a drop(?). who cleans up?
+	}
+
 	hashes := s.currentBatch
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
