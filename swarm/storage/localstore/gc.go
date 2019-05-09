@@ -126,7 +126,7 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 	if err != nil {
 		return 0, false, err
 	}
-	metrics.GetOrRegisterGauge(metricName+".collected-count", nil).Update(int64(collectedCount))
+	metrics.GetOrRegisterCounter(metricName+".collected-count", nil).Inc(int64(collectedCount))
 
 	db.gcSize.PutInBatch(batch, gcSize-collectedCount)
 
