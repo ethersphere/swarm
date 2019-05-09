@@ -131,6 +131,8 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			// validating that the chunk is successfully stored by the peer.
 			err := s.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
 			if err != nil {
+				metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
+				log.Debug("syncer pull subscription - err setting chunk as synced", "err", err)
 				return nil, 0, 0, nil, err
 			}
 			batchSize++
