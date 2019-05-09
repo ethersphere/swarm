@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
@@ -136,13 +137,16 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			batchEndID = d.BinID
 			if batchSize >= BatchSize {
 				iterate = false
+				log.Debug("syncer pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 			}
 			if timer == nil {
 				timer = time.NewTimer(batchTimeout)
 			} else {
+				log.Debug("syncer pull subscription - stopping timer")
 				if !timer.Stop() {
 					<-timer.C
 				}
+				log.Debug("syncer pull subscription - channel drained, resetting timer")
 				timer.Reset(batchTimeout)
 			}
 			timerC = timer.C
@@ -150,8 +154,10 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			// return batch if new chunks are not
 			// received after some time
 			iterate = false
+			log.Debug("syncer pull subscription timer expired", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		case <-s.quit:
 			iterate = false
+			log.Debug("syncer pull subscription - quit received", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		}
 	}
 	if batchStartID == nil {
