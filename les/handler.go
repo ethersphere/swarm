@@ -174,9 +174,12 @@ func NewProtocolManager(
 	if disableClientRemovePeer {
 		removePeer = func(id string) {}
 	}
-
 	if lightSync {
-		manager.downloader = downloader.New(downloader.LightSync, chainDb, manager.eventMux, nil, blockchain, removePeer)
+		var checkpoint uint64
+		if cht, ok := params.TrustedCheckpoints[blockchain.Genesis().Hash()]; ok {
+			checkpoint = (cht.SectionIndex+1)*params.CHTFrequency - 1
+		}
+		manager.downloader = downloader.New(downloader.LightSync, checkpoint, chainDb, manager.eventMux, nil, blockchain, removePeer)
 		manager.peers.notify((*downloaderPeerNotify)(manager))
 		manager.fetcher = newLightFetcher(manager)
 	}
@@ -733,7 +736,7 @@ func (pm *ProtocolManager) handleMsg(p *peer) error {
 				// Retrieve the requested block's receipts, skipping if unknown to us
 				var results types.Receipts
 				if number := rawdb.ReadHeaderNumber(pm.chainDb, hash); number != nil {
-					results = rawdb.ReadReceipts(pm.chainDb, hash, *number)
+					results = rawdb.ReadRawReceipts(pm.chainDb, hash, *number)
 				}
 				if results == nil {
 					if header := pm.blockchain.GetHeaderByHash(hash); header == nil || header.ReceiptHash != types.EmptyRootHash {

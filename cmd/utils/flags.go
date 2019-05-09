@@ -49,6 +49,7 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/metrics/influxdb"
+	"github.com/ethereum/go-ethereum/miner"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
@@ -91,16 +92,13 @@ GLOBAL OPTIONS:
 }
 
 // NewApp creates an app with sane defaults.
-func NewApp(gitCommit, usage string) *cli.App {
+func NewApp(gitCommit, gitDate, usage string) *cli.App {
 	app := cli.NewApp()
 	app.Name = filepath.Base(os.Args[0])
 	app.Author = ""
 	//app.Authors = nil
 	app.Email = ""
-	app.Version = params.VersionWithMeta
-	if len(gitCommit) >= 8 {
-		app.Version += "-" + gitCommit[:8]
-	}
+	app.Version = params.VersionWithCommit(gitCommit, gitDate)
 	app.Usage = usage
 	return app
 }
@@ -331,7 +329,7 @@ var (
 	// Performance tuning settings
 	CacheFlag = cli.IntFlag{
 		Name:  "cache",
-		Usage: "Megabytes of memory allocated to internal caching",
+		Usage: "Megabytes of memory allocated to internal caching (default = 4096 mainnet full node, 128 light mode)",
 		Value: 1024,
 	}
 	CacheDatabaseFlag = cli.IntFlag{
@@ -375,27 +373,27 @@ var (
 	MinerGasTargetFlag = cli.Uint64Flag{
 		Name:  "miner.gastarget",
 		Usage: "Target gas floor for mined blocks",
-		Value: eth.DefaultConfig.MinerGasFloor,
+		Value: eth.DefaultConfig.Miner.GasFloor,
 	}
 	MinerLegacyGasTargetFlag = cli.Uint64Flag{
 		Name:  "targetgaslimit",
 		Usage: "Target gas floor for mined blocks (deprecated, use --miner.gastarget)",
-		Value: eth.DefaultConfig.MinerGasFloor,
+		Value: eth.DefaultConfig.Miner.GasFloor,
 	}
 	MinerGasLimitFlag = cli.Uint64Flag{
 		Name:  "miner.gaslimit",
 		Usage: "Target gas ceiling for mined blocks",
-		Value: eth.DefaultConfig.MinerGasCeil,
+		Value: eth.DefaultConfig.Miner.GasCeil,
 	}
 	MinerGasPriceFlag = BigFlag{
 		Name:  "miner.gasprice",
 		Usage: "Minimum gas price for mining a transaction",
-		Value: eth.DefaultConfig.MinerGasPrice,
+		Value: eth.DefaultConfig.Miner.GasPrice,
 	}
 	MinerLegacyGasPriceFlag = BigFlag{
 		Name:  "gasprice",
 		Usage: "Minimum gas price for mining a transaction (deprecated, use --miner.gasprice)",
-		Value: eth.DefaultConfig.MinerGasPrice,
+		Value: eth.DefaultConfig.Miner.GasPrice,
 	}
 	MinerEtherbaseFlag = cli.StringFlag{
 		Name:  "miner.etherbase",
@@ -418,7 +416,7 @@ var (
 	MinerRecommitIntervalFlag = cli.DurationFlag{
 		Name:  "miner.recommit",
 		Usage: "Time interval to recreate the block being mined",
-		Value: eth.DefaultConfig.MinerRecommit,
+		Value: eth.DefaultConfig.Miner.Recommit,
 	}
 	MinerNoVerfiyFlag = cli.BoolFlag{
 		Name:  "miner.noverify",
@@ -564,12 +562,12 @@ var (
 	MaxPeersFlag = cli.IntFlag{
 		Name:  "maxpeers",
 		Usage: "Maximum number of network peers (network disabled if set to 0)",
-		Value: 25,
+		Value: node.DefaultConfig.P2P.MaxPeers,
 	}
 	MaxPendingPeersFlag = cli.IntFlag{
 		Name:  "maxpendpeers",
 		Usage: "Maximum number of pending connection attempts (defaults used if set to 0)",
-		Value: 0,
+		Value: node.DefaultConfig.P2P.MaxPendingPeers,
 	}
 	ListenPortFlag = cli.IntFlag{
 		Name:  "port",
@@ -1023,7 +1021,7 @@ func setEtherbase(ctx *cli.Context, ks *keystore.KeyStore, cfg *eth.Config) {
 			if err != nil {
 				Fatalf("Invalid miner etherbase: %v", err)
 			}
-			cfg.Etherbase = account.Address
+			cfg.Miner.Etherbase = account.Address
 		} else {
 			Fatalf("No etherbase configured")
 		}
@@ -1231,6 +1229,39 @@ func setEthash(ctx *cli.Context, cfg *eth.Config) {
 	}
 }
 
+func setMiner(ctx *cli.Context, cfg *miner.Config) {
+	if ctx.GlobalIsSet(MinerNotifyFlag.Name) {
+		cfg.Notify = strings.Split(ctx.GlobalString(MinerNotifyFlag.Name), ",")
+	}
+	if ctx.GlobalIsSet(MinerLegacyExtraDataFlag.Name) {
+		cfg.ExtraData = []byte(ctx.GlobalString(MinerLegacyExtraDataFlag.Name))
+	}
+	if ctx.GlobalIsSet(MinerExtraDataFlag.Name) {
+		cfg.ExtraData = []byte(ctx.GlobalString(MinerExtraDataFlag.Name))
+	}
+	if ctx.GlobalIsSet(MinerLegacyGasTargetFlag.Name) {
+		cfg.GasFloor = ctx.GlobalUint64(MinerLegacyGasTargetFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasTargetFlag.Name) {
+		cfg.GasFloor = ctx.GlobalUint64(MinerGasTargetFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasLimitFlag.Name) {
+		cfg.GasCeil = ctx.GlobalUint64(MinerGasLimitFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerLegacyGasPriceFlag.Name) {
+		cfg.GasPrice = GlobalBig(ctx, MinerLegacyGasPriceFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
+		cfg.GasPrice = GlobalBig(ctx, MinerGasPriceFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerRecommitIntervalFlag.Name) {
+		cfg.Recommit = ctx.Duration(MinerRecommitIntervalFlag.Name)
+	}
+	if ctx.GlobalIsSet(MinerNoVerfiyFlag.Name) {
+		cfg.Noverify = ctx.Bool(MinerNoVerfiyFlag.Name)
+	}
+}
+
 func setWhitelist(ctx *cli.Context, cfg *eth.Config) {
 	whitelist := ctx.GlobalString(WhitelistFlag.Name)
 	if whitelist == "" {
@@ -1323,6 +1354,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	setGPO(ctx, &cfg.GPO)
 	setTxPool(ctx, &cfg.TxPool)
 	setEthash(ctx, cfg)
+	setMiner(ctx, &cfg.Miner)
 	setWhitelist(ctx, cfg)
 
 	if ctx.GlobalIsSet(SyncModeFlag.Name) {
@@ -1359,38 +1391,8 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 	if ctx.GlobalIsSet(CacheFlag.Name) || ctx.GlobalIsSet(CacheGCFlag.Name) {
 		cfg.TrieDirtyCache = ctx.GlobalInt(CacheFlag.Name) * ctx.GlobalInt(CacheGCFlag.Name) / 100
 	}
-	if ctx.GlobalIsSet(MinerNotifyFlag.Name) {
-		cfg.MinerNotify = strings.Split(ctx.GlobalString(MinerNotifyFlag.Name), ",")
-	}
 	if ctx.GlobalIsSet(DocRootFlag.Name) {
 		cfg.DocRoot = ctx.GlobalString(DocRootFlag.Name)
-	}
-	if ctx.GlobalIsSet(MinerLegacyExtraDataFlag.Name) {
-		cfg.MinerExtraData = []byte(ctx.GlobalString(MinerLegacyExtraDataFlag.Name))
-	}
-	if ctx.GlobalIsSet(MinerExtraDataFlag.Name) {
-		cfg.MinerExtraData = []byte(ctx.GlobalString(MinerExtraDataFlag.Name))
-	}
-	if ctx.GlobalIsSet(MinerLegacyGasTargetFlag.Name) {
-		cfg.MinerGasFloor = ctx.GlobalUint64(MinerLegacyGasTargetFlag.Name)
-	}
-	if ctx.GlobalIsSet(MinerGasTargetFlag.Name) {
-		cfg.MinerGasFloor = ctx.GlobalUint64(MinerGasTargetFlag.Name)
-	}
-	if ctx.GlobalIsSet(MinerGasLimitFlag.Name) {
-		cfg.MinerGasCeil = ctx.GlobalUint64(MinerGasLimitFlag.Name)
-	}
-	if ctx.GlobalIsSet(MinerLegacyGasPriceFlag.Name) {
-		cfg.MinerGasPrice = GlobalBig(ctx, MinerLegacyGasPriceFlag.Name)
-	}
-	if ctx.GlobalIsSet(MinerGasPriceFlag.Name) {
-		cfg.MinerGasPrice = GlobalBig(ctx, MinerGasPriceFlag.Name)
-	}
-	if ctx.GlobalIsSet(MinerRecommitIntervalFlag.Name) {
-		cfg.MinerRecommit = ctx.Duration(MinerRecommitIntervalFlag.Name)
-	}
-	if ctx.GlobalIsSet(MinerNoVerfiyFlag.Name) {
-		cfg.MinerNoverify = ctx.Bool(MinerNoVerfiyFlag.Name)
 	}
 	if ctx.GlobalIsSet(VMEnableDebugFlag.Name) {
 		// TODO(fjl): force-enable this in --dev mode
@@ -1449,7 +1451,7 @@ func SetEthConfig(ctx *cli.Context, stack *node.Node, cfg *eth.Config) {
 
 		cfg.Genesis = core.DeveloperGenesisBlock(uint64(ctx.GlobalInt(DeveloperPeriodFlag.Name)), developer.Address)
 		if !ctx.GlobalIsSet(MinerGasPriceFlag.Name) && !ctx.GlobalIsSet(MinerLegacyGasPriceFlag.Name) {
-			cfg.MinerGasPrice = big.NewInt(1)
+			cfg.Miner.GasPrice = big.NewInt(1)
 		}
 	}
 }

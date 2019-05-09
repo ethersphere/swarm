@@ -35,7 +35,6 @@ import (
 	"github.com/ethereum/go-ethereum/core/state"
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
@@ -43,7 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/trie"
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 )
 
 var (
@@ -79,12 +78,22 @@ const (
 
 	// BlockChainVersion ensures that an incompatible database forces a resync from scratch.
 	//
-	// During the process of upgrading the database version from 3 to 4,
-	// the following incompatible database changes were added.
-	// * the `BlockNumber`, `TxHash`, `TxIndex`, `BlockHash` and `Index` fields of log are deleted
-	// * the `Bloom` field of receipt is deleted
-	// * the `BlockIndex` and `TxIndex` fields of txlookup are deleted
-	BlockChainVersion uint64 = 4
+	// Changelog:
+	//
+	// - Version 4
+	//   The following incompatible database changes were added:
+	//   * the `BlockNumber`, `TxHash`, `TxIndex`, `BlockHash` and `Index` fields of log are deleted
+	//   * the `Bloom` field of receipt is deleted
+	//   * the `BlockIndex` and `TxIndex` fields of txlookup are deleted
+	// - Version 5
+	//  The following incompatible database changes were added:
+	//    * the `TxHash`, `GasCost`, and `ContractAddress` fields are no longer stored for a receipt
+	//    * the `TxHash`, `GasCost`, and `ContractAddress` fields are computed by looking up the
+	//      receipts' corresponding block
+	// - Version 6
+	//  The following incompatible database changes were added:
+	//    * Transaction lookup information stores the corresponding block number instead of block hash
+	BlockChainVersion uint64 = 6
 )
 
 // CacheConfig contains the configuration values for the trie caching/pruning
@@ -647,7 +656,7 @@ func (bc *BlockChain) GetReceiptsByHash(hash common.Hash) types.Receipts {
 	if number == nil {
 		return nil
 	}
-	receipts := rawdb.ReadReceipts(bc.db, hash, *number)
+	receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 	if receipts == nil {
 		return nil
 	}
@@ -784,49 +793,6 @@ func (bc *BlockChain) Rollback(chain []common.Hash) {
 	}
 }
 
-// SetReceiptsData computes all the non-consensus fields of the receipts
-func SetReceiptsData(config *params.ChainConfig, block *types.Block, receipts types.Receipts) error {
-	signer := types.MakeSigner(config, block.Number())
-
-	transactions, logIndex := block.Transactions(), uint(0)
-	if len(transactions) != len(receipts) {
-		return errors.New("transaction and receipt count mismatch")
-	}
-
-	for j := 0; j < len(receipts); j++ {
-		// The transaction hash can be retrieved from the transaction itself
-		receipts[j].TxHash = transactions[j].Hash()
-
-		// block location fields
-		receipts[j].BlockHash = block.Hash()
-		receipts[j].BlockNumber = block.Number()
-		receipts[j].TransactionIndex = uint(j)
-
-		// The contract address can be derived from the transaction itself
-		if transactions[j].To() == nil {
-			// Deriving the signer is expensive, only do if it's actually needed
-			from, _ := types.Sender(signer, transactions[j])
-			receipts[j].ContractAddress = crypto.CreateAddress(from, transactions[j].Nonce())
-		}
-		// The used gas can be calculated based on previous receipts
-		if j == 0 {
-			receipts[j].GasUsed = receipts[j].CumulativeGasUsed
-		} else {
-			receipts[j].GasUsed = receipts[j].CumulativeGasUsed - receipts[j-1].CumulativeGasUsed
-		}
-		// The derived log fields can simply be set from the block and transaction
-		for k := 0; k < len(receipts[j].Logs); k++ {
-			receipts[j].Logs[k].BlockNumber = block.NumberU64()
-			receipts[j].Logs[k].BlockHash = block.Hash()
-			receipts[j].Logs[k].TxHash = receipts[j].TxHash
-			receipts[j].Logs[k].TxIndex = uint(j)
-			receipts[j].Logs[k].Index = logIndex
-			logIndex++
-		}
-	}
-	return nil
-}
-
 // InsertReceiptChain attempts to complete an already existing header chain with
 // transaction and receipt data.
 func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain []types.Receipts) (int, error) {
@@ -865,8 +831,8 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 			continue
 		}
 		// Compute all the non-consensus fields of the receipts
-		if err := SetReceiptsData(bc.chainConfig, block, receipts); err != nil {
-			return i, fmt.Errorf("failed to set receipts data: %v", err)
+		if err := receipts.DeriveFields(bc.chainConfig, block.Hash(), block.NumberU64(), block.Transactions()); err != nil {
+			return i, fmt.Errorf("failed to derive receipts data: %v", err)
 		}
 		// Write all the data out into the database
 		rawdb.WriteBody(batch, block.Hash(), block.NumberU64(), block.Body())
@@ -917,10 +883,10 @@ func (bc *BlockChain) InsertReceiptChain(blockChain types.Blocks, receiptChain [
 
 var lastWrite uint64
 
-// WriteBlockWithoutState writes only the block and its metadata to the database,
+// writeBlockWithoutState writes only the block and its metadata to the database,
 // but does not write any state. This is used to construct competing side forks
 // up to the point where they exceed the canonical total difficulty.
-func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (err error) {
+func (bc *BlockChain) writeBlockWithoutState(block *types.Block, td *big.Int) (err error) {
 	bc.wg.Add(1)
 	defer bc.wg.Done()
 
@@ -929,6 +895,26 @@ func (bc *BlockChain) WriteBlockWithoutState(block *types.Block, td *big.Int) (e
 	}
 	rawdb.WriteBlock(bc.db, block)
 
+	return nil
+}
+
+// writeKnownBlock updates the head block flag with a known block
+// and introduces chain reorg if necessary.
+func (bc *BlockChain) writeKnownBlock(block *types.Block) error {
+	bc.wg.Add(1)
+	defer bc.wg.Done()
+
+	current := bc.CurrentBlock()
+	if block.ParentHash() != current.Hash() {
+		if err := bc.reorg(current, block); err != nil {
+			return err
+		}
+	}
+	// Write the positional metadata for transaction/receipt lookups.
+	// Preimages here is empty, ignore it.
+	rawdb.WriteTxLookupEntries(bc.db, block)
+
+	bc.insert(block)
 	return nil
 }
 
@@ -1173,9 +1159,33 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 		//   2. The block is stored as a sidechain, and is lying about it's stateroot, and passes a stateroot
 		// 	    from the canonical chain, which has not been verified.
 		// Skip all known blocks that are behind us
-		current := bc.CurrentBlock().NumberU64()
-		for block != nil && err == ErrKnownBlock && current >= block.NumberU64() {
+		var (
+			current  = bc.CurrentBlock()
+			localTd  = bc.GetTd(current.Hash(), current.NumberU64())
+			externTd = bc.GetTd(block.ParentHash(), block.NumberU64()-1) // The first block can't be nil
+		)
+		for block != nil && err == ErrKnownBlock {
+			externTd = new(big.Int).Add(externTd, block.Difficulty())
+			if localTd.Cmp(externTd) < 0 {
+				break
+			}
 			stats.ignored++
+			block, err = it.next()
+		}
+		// The remaining blocks are still known blocks, the only scenario here is:
+		// During the fast sync, the pivot point is already submitted but rollback
+		// happens. Then node resets the head full block to a lower height via `rollback`
+		// and leaves a few known blocks in the database.
+		//
+		// When node runs a fast sync again, it can re-import a batch of known blocks via
+		// `insertChain` while a part of them have higher total difficulty than current
+		// head full block(new pivot point).
+		for block != nil && err == ErrKnownBlock {
+			if err := bc.writeKnownBlock(block); err != nil {
+				return it.index, nil, nil, err
+			}
+			lastCanon = block
+
 			block, err = it.next()
 		}
 		// Falls through to the block import
@@ -1184,7 +1194,7 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	switch {
 	// First block is pruned, insert as sidechain and reorg only if TD grows enough
 	case err == consensus.ErrPrunedAncestor:
-		return bc.insertSidechain(block, it)
+		return bc.insertSideChain(block, it)
 
 	// First block is future, shove it (and all children) to the future queue (unknown ancestor)
 	case err == consensus.ErrFutureBlock || (err == consensus.ErrUnknownAncestor && bc.futureBlocks.Contains(it.first().ParentHash())):
@@ -1347,13 +1357,13 @@ func (bc *BlockChain) insertChain(chain types.Blocks, verifySeals bool) (int, []
 	return it.index, events, coalescedLogs, err
 }
 
-// insertSidechain is called when an import batch hits upon a pruned ancestor
+// insertSideChain is called when an import batch hits upon a pruned ancestor
 // error, which happens when a sidechain with a sufficiently old fork-block is
 // found.
 //
 // The method writes all (header-and-body-valid) blocks to disk, then tries to
 // switch over to the new chain if the TD exceeded the current chain.
-func (bc *BlockChain) insertSidechain(block *types.Block, it *insertIterator) (int, []interface{}, []*types.Log, error) {
+func (bc *BlockChain) insertSideChain(block *types.Block, it *insertIterator) (int, []interface{}, []*types.Log, error) {
 	var (
 		externTd *big.Int
 		current  = bc.CurrentBlock()
@@ -1394,7 +1404,7 @@ func (bc *BlockChain) insertSidechain(block *types.Block, it *insertIterator) (i
 
 		if !bc.HasBlock(block.Hash(), block.NumberU64()) {
 			start := time.Now()
-			if err := bc.WriteBlockWithoutState(block, externTd); err != nil {
+			if err := bc.writeBlockWithoutState(block, externTd); err != nil {
 				return it.index, nil, nil, err
 			}
 			log.Debug("Injected sidechain block", "number", block.Number(), "hash", block.Hash(),
@@ -1488,7 +1498,7 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 			if number == nil {
 				return
 			}
-			receipts := rawdb.ReadReceipts(bc.db, hash, *number)
+			receipts := rawdb.ReadReceipts(bc.db, hash, *number, bc.chainConfig)
 			for _, receipt := range receipts {
 				for _, log := range receipt.Logs {
 					l := *log
@@ -1558,15 +1568,15 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	} else {
 		log.Error("Impossible reorg, please file an issue", "oldnum", oldBlock.Number(), "oldhash", oldBlock.Hash(), "newnum", newBlock.Number(), "newhash", newBlock.Hash())
 	}
-	// Insert the new chain, taking care of the proper incremental order
-	for i := len(newChain) - 1; i >= 0; i-- {
+	// Insert the new chain(except the head block(reverse order)),
+	// taking care of the proper incremental order.
+	for i := len(newChain) - 1; i >= 1; i-- {
 		// Insert the block in the canonical way, re-writing history
 		bc.insert(newChain[i])
 
-		// Collect reborn logs due to chain reorg (except head block (reverse order))
-		if i != 0 {
-			collectLogs(newChain[i].Hash(), false)
-		}
+		// Collect reborn logs due to chain reorg
+		collectLogs(newChain[i].Hash(), false)
+
 		// Write lookup entries for hash based transaction/receipt searches
 		rawdb.WriteTxLookupEntries(bc.db, newChain[i])
 		addedTxs = append(addedTxs, newChain[i].Transactions()...)
@@ -1577,8 +1587,16 @@ func (bc *BlockChain) reorg(oldBlock, newBlock *types.Block) error {
 	for _, tx := range types.TxDifference(deletedTxs, addedTxs) {
 		rawdb.DeleteTxLookupEntry(batch, tx.Hash())
 	}
+	// Delete any canonical number assignments above the new head
+	number := bc.CurrentBlock().NumberU64()
+	for i := number + 1; ; i++ {
+		hash := rawdb.ReadCanonicalHash(bc.db, i)
+		if hash == (common.Hash{}) {
+			break
+		}
+		rawdb.DeleteCanonicalHash(batch, i)
+	}
 	batch.Write()
-
 	// If any logs need to be fired, do it now. In theory we could avoid creating
 	// this goroutine if there are no events to fire, but realistcally that only
 	// ever happens if we're reorging empty blocks, which will only happen on idle
