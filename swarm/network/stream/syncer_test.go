@@ -345,3 +345,78 @@ func TestDifferentVersionID(t *testing.T) {
 	log.Info("Simulation ended")
 
 }
+
+func TestSyncAllChunks(t *testing.T) {
+	const nodeCount = 2
+	const chunkCount = 1024
+	const storeSize = chunkCount * 4096
+
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			address, netStore, delivery, clean, err := newNetStoreAndDelivery(ctx, bucket)
+			if err != nil {
+				return nil, nil, err
+			}
+			r := NewRegistry(address.ID(), delivery, netStore, state.NewInmemoryStore(), &RegistryOptions{
+				SkipCheck: true,
+				Syncing:   SyncingAutoSubscribe,
+			}, nil)
+			bucket.Store(bucketKeyRegistry, r)
+			cleanup = func() {
+				r.Close()
+				clean()
+			}
+			return r, cleanup, nil
+		},
+	})
+	defer sim.Close()
+
+	log.Info("Adding nodes to simulation")
+	_, err := sim.AddNodesAndConnectChain(nodeCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	log.Info("Starting simulation")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		disconnected := watchDisconnections(ctx, sim)
+		defer func() {
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
+			}
+		}()
+
+		nodeIDs := sim.UpNodeIDs()
+		pivot := nodeIDs[0] // pick any node as the pivot node
+		remote := nodeIDs[1]
+		lStores := sim.NodesItems(bucketKeyStore) // get all stores from the simulation
+		store := lStores[remote]
+		robinFileStore := storage.NewFileStore(newRoundRobinStore(store.(storage.ChunkStore)), storage.NewFileStoreParams())
+		fileHash, wait, err := robinFileStore.Store(ctx, testutil.RandomReader(1, storeSize), int64(storeSize), false)
+		if err != nil {
+			return err
+		}
+		err = wait(ctx)
+		if err != nil {
+			return err
+		}
+		item, ok := sim.NodeItem(pivot, bucketKeyFileStore)
+		if !ok {
+			return errors.New("no filestore")
+		}
+		pivotFileStore := item.(*storage.FileStore)
+		total, err := readAll(pivotFileStore, fileHash) // check that the pivot node gets all chunks via the root hash
+		if err != nil {
+			return err
+		}
+		if total != int64(storeSize) {
+			return fmt.Errorf("Test failed, retrieved %d out of %d bytes", total, storeSize)
+		}
+		return nil
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
