@@ -137,9 +137,8 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 			db.retrievalDataIndex.PutInBatch(batch, item)
 			db.pullIndex.PutInBatch(batch, item)
 			triggerPullFeed = true
-
-			//db.pushIndex.PutInBatch(batch, item)
-			//triggerPushFeed = true
+			db.pushIndex.PutInBatch(batch, item)
+			triggerPushFeed = true
 		}
 
 	case chunk.ModePutSync:

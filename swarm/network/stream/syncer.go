@@ -36,27 +36,29 @@ const (
 // * live request delivery with or without checkback
 // * (live/non-live historical) chunk syncing per proximity bin
 type SwarmSyncerServer struct {
-	po       uint8
-	netStore *storage.NetStore
-	quit     chan struct{}
+	correlateId string //used for logging
+	po          uint8
+	netStore    *storage.NetStore
+	quit        chan struct{}
 }
 
 // NewSwarmSyncerServer is constructor for SwarmSyncerServer
-func NewSwarmSyncerServer(po uint8, netStore *storage.NetStore) (*SwarmSyncerServer, error) {
+func NewSwarmSyncerServer(po uint8, netStore *storage.NetStore, correlateId string) (*SwarmSyncerServer, error) {
 	return &SwarmSyncerServer{
-		po:       po,
-		netStore: netStore,
-		quit:     make(chan struct{}),
+		correlateId: correlateId,
+		po:          po,
+		netStore:    netStore,
+		quit:        make(chan struct{}),
 	}, nil
 }
 
 func RegisterSwarmSyncerServer(streamer *Registry, netStore *storage.NetStore) {
-	streamer.RegisterServerFunc("SYNC", func(_ *Peer, t string, _ bool) (Server, error) {
+	streamer.RegisterServerFunc("SYNC", func(p *Peer, t string, _ bool) (Server, error) {
 		po, err := ParseSyncBinKey(t)
 		if err != nil {
 			return nil, err
 		}
-		return NewSwarmSyncerServer(po, netStore)
+		return NewSwarmSyncerServer(po, netStore, p.ID().String()+"|"+string(po))
 	})
 	// streamer.RegisterServerFunc(stream, func(p *Peer) (Server, error) {
 	// 	return NewOutgoingProvableSwarmSyncer(po, db)
@@ -110,8 +112,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	)
 
 	defer func() {
-		tdiff := time.Since(batchStart)
-		metrics.GetOrRegisterResettingTimer("syncer.set-next-batch.total-time", nil).Update(tdiff)
+		metrics.GetOrRegisterResettingTimer("syncer.set-next-batch.total-time", nil).UpdateSince(batchStart)
 		metrics.GetOrRegisterCounter("syncer.set-next-batch.batch-size", nil).Inc(int64(batchSize))
 		if timer != nil {
 			timer.Stop()
@@ -132,7 +133,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			err := s.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
 			if err != nil {
 				metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
-				log.Debug("syncer pull subscription - err setting chunk as synced", "err", err)
+				log.Debug("syncer pull subscription - err setting chunk as synced", "correlateId", s.correlateId, "err", err)
 				return nil, 0, 0, nil, err
 			}
 			batchSize++
@@ -145,16 +146,16 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			if batchSize >= BatchSize {
 				iterate = false
 				metrics.GetOrRegisterCounter("syncer.set-next-batch.full-batch", nil).Inc(1)
-				log.Debug("syncer pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+				log.Debug("syncer pull subscription - batch size reached", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 			}
 			if timer == nil {
 				timer = time.NewTimer(batchTimeout)
 			} else {
-				log.Debug("syncer pull subscription - stopping timer")
+				log.Debug("syncer pull subscription - stopping timer", "correlateId", s.correlateId)
 				if !timer.Stop() {
 					<-timer.C
 				}
-				log.Debug("syncer pull subscription - channel drained, resetting timer")
+				log.Debug("syncer pull subscription - channel drained, resetting timer", "correlateId", s.correlateId)
 				timer.Reset(batchTimeout)
 			}
 			timerC = timer.C
@@ -163,18 +164,17 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			// received after some time
 			iterate = false
 			metrics.GetOrRegisterCounter("syncer.set-next-batch.timer-expire", nil).Inc(1)
-			log.Debug("syncer pull subscription timer expired", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+			log.Debug("syncer pull subscription timer expired", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		case <-s.quit:
 			iterate = false
 			metrics.GetOrRegisterCounter("syncer.set-next-batch.quit-sig", nil).Inc(1)
-			log.Debug("syncer pull subscription - quit received", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
+			log.Debug("syncer pull subscription - quit received", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		}
 	}
 	if batchStartID == nil {
 		// if batch start id is not set, return 0
 		batchStartID = new(uint64)
 	}
-
 	return batch, *batchStartID, batchEndID, nil, nil
 }
 
