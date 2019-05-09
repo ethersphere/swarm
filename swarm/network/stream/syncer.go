@@ -112,7 +112,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	defer func() {
 		tdiff := time.Since(batchStart)
 		metrics.GetOrRegisterResettingTimer("syncer.set-next-batch.total-time", nil).Update(tdiff)
-		metrics.GetOrRegisterCounter("syncer.set-next-batch.batch-size", nil).Inc(batchSize)
+		metrics.GetOrRegisterCounter("syncer.set-next-batch.batch-size", nil).Inc(int64(batchSize))
 		if timer != nil {
 			timer.Stop()
 		}
