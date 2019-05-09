@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/storage"
@@ -93,7 +94,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	if from > 0 {
 		from--
 	}
-
+	batchStart := time.Now()
 	descriptors, stop := s.netStore.SubscribePull(context.Background(), s.po, from, to)
 	defer stop()
 
@@ -107,7 +108,11 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		timer        *time.Timer
 		timerC       <-chan time.Time
 	)
+
 	defer func() {
+		tdiff := time.Since(batchStart)
+		metrics.GetOrRegisterResettingTimer("syncer.set-next-batch.total-time", nil).Update(tdiff)
+		metrics.GetOrRegisterCounter("syncer.set-next-batch.batch-size", nil).Inc(batchSize)
 		if timer != nil {
 			timer.Stop()
 		}
@@ -137,6 +142,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			batchEndID = d.BinID
 			if batchSize >= BatchSize {
 				iterate = false
+				metrics.GetOrRegisterCounter("syncer.set-next-batch.full-batch", nil).Inc(1)
 				log.Debug("syncer pull subscription - batch size reached", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 			}
 			if timer == nil {
@@ -154,9 +160,11 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			// return batch if new chunks are not
 			// received after some time
 			iterate = false
+			metrics.GetOrRegisterCounter("syncer.set-next-batch.timer-expire", nil).Inc(1)
 			log.Debug("syncer pull subscription timer expired", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		case <-s.quit:
 			iterate = false
+			metrics.GetOrRegisterCounter("syncer.set-next-batch.quit-sig", nil).Inc(1)
 			log.Debug("syncer pull subscription - quit received", "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		}
 	}
@@ -164,6 +172,7 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		// if batch start id is not set, return 0
 		batchStartID = new(uint64)
 	}
+
 	return batch, *batchStartID, batchEndID, nil, nil
 }
 
