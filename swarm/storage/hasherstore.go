@@ -160,7 +160,7 @@ func (h *hasherStore) createHash(chunkData ChunkData) Address {
 
 func (h *hasherStore) createChunk(chunkData ChunkData) Chunk {
 	hash := h.createHash(chunkData)
-	chunk := NewChunk(hash, chunkData)
+	chunk := NewChunk(hash, chunkData).WithTag(h.tag.Uid)
 	return chunk
 }
 
