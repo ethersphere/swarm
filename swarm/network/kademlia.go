@@ -339,11 +339,11 @@ func (k *Kademlia) On(p *Peer) (uint8, bool) {
 // sets it to the nDepth and sends a signal to every nDepthSig channel.
 func (k *Kademlia) setNeighbourhoodDepth() {
 	nDepth := depthForPot(k.conns, k.NeighbourhoodSize, k.base)
-	if nDepth != k.nDepth {
-		k.DepthChangeCond.L.Lock()
-		k.nDepth = nDepth
-		k.DepthChangeCond.L.Unlock()
+	k.DepthChangeCond.L.Lock()
+	defer k.DepthChangeCond.L.Unlock()
 
+	if nDepth != k.nDepth {
+		k.nDepth = nDepth
 		k.DepthChangeCond.Broadcast()
 	}
 }
@@ -358,9 +358,9 @@ func (k *Kademlia) NeighbourhoodDepth() int {
 
 // Off removes a peer from among live peers
 func (k *Kademlia) Off(p *Peer) {
-	defer k.setNeighbourhoodDepth()
 	k.lock.Lock()
 	defer k.lock.Unlock()
+	defer k.setNeighbourhoodDepth()
 	var del bool
 	if !p.BzzPeer.LightNode {
 		k.addrs, _, _, _ = pot.Swap(k.addrs, p, Pof, func(v pot.Val) pot.Val {
