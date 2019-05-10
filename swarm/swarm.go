@@ -30,11 +30,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ethereum/go-ethereum/swarm/chunk"
-
-	"github.com/ethereum/go-ethereum/swarm/storage/feed"
-	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/contracts/chequebook"
@@ -47,6 +42,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethereum/go-ethereum/swarm/api"
 	httpapi "github.com/ethereum/go-ethereum/swarm/api/http"
+	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/fuse"
 	"github.com/ethereum/go-ethereum/swarm/log"
 	"github.com/ethereum/go-ethereum/swarm/network"
@@ -54,7 +50,10 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/pss"
 	"github.com/ethereum/go-ethereum/swarm/state"
 	"github.com/ethereum/go-ethereum/swarm/storage"
+	"github.com/ethereum/go-ethereum/swarm/storage/feed"
+	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
+	"github.com/ethereum/go-ethereum/swarm/storage/pushsync"
 	"github.com/ethereum/go-ethereum/swarm/swap"
 	"github.com/ethereum/go-ethereum/swarm/tracing"
 )
@@ -80,6 +79,8 @@ type Swarm struct {
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
+	pushSync          *pushsync.Pusher
+	storer            *pushsync.Storer
 	swap              *swap.Swap
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
@@ -228,6 +229,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if pss.IsActiveHandshake {
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
+
+	pubsub := pss.NewPubSub(self.ps)
+	self.pushSync = pushsync.New(localStore, pubsub, tags)
+	self.storer = pushsync.NewStorer(localStore, pubsub, self.pushSync.PushReceipt)
 
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
 
@@ -458,6 +463,9 @@ func (s *Swarm) Stop() error {
 	if s.stateStore != nil {
 		s.stateStore.Close()
 	}
+
+	s.pushSync.Close()
+	s.storer.Close()
 
 	for _, cleanF := range s.cleanupFuncs {
 		err = cleanF()
