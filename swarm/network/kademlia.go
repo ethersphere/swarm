@@ -141,9 +141,9 @@ func (e *entry) Hex() string {
 // Register enters each address as kademlia peer record into the
 // database of known peer addresses
 func (k *Kademlia) Register(peers ...*BzzAddr) error {
-	defer k.setNeighbourhoodDepth()
 	k.lock.Lock()
 	defer k.lock.Unlock()
+	defer k.setNeighbourhoodDepth()
 
 	metrics.GetOrRegisterCounter("kad.register", nil).Inc(1)
 
@@ -300,9 +300,9 @@ func (k *Kademlia) SuggestPeer() (suggestedPeer *BzzAddr, saturationDepth int, c
 
 // On inserts the peer as a kademlia peer into the live peers
 func (k *Kademlia) On(p *Peer) (uint8, bool) {
-	defer k.setNeighbourhoodDepth()
 	k.lock.Lock()
 	defer k.lock.Unlock()
+	defer k.setNeighbourhoodDepth()
 
 	metrics.GetOrRegisterCounter("kad.on", nil).Inc(1)
 
