@@ -19,6 +19,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/swarm/chunk"
@@ -27,13 +28,13 @@ import (
 )
 
 const (
-	NoOfStorageWorkers = 150
+	noOfStorageWorkers = 150
 )
 
 type hasherStore struct {
 	store     ChunkStore
 	toEncrypt bool
-	frstChunk bool
+	doWait    sync.Once
 	hashFunc  SwarmHasher
 	hashSize  int           // content hash size
 	refSize   int64         // reference size (content hash + possibly encryption key)
@@ -62,7 +63,6 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 	h := &hasherStore{
 		store:     store,
 		toEncrypt: toEncrypt,
-		frstChunk: false,
 		hashFunc:  hashFunc,
 		hashSize:  hashSize,
 		refSize:   refSize,
@@ -70,7 +70,7 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 		waitC:     make(chan error),
 		doneC:     make(chan struct{}),
 		quitC:     make(chan struct{}),
-		workers:   make(chan Chunk, NoOfStorageWorkers),
+		workers:   make(chan Chunk, noOfStorageWorkers),
 	}
 
 	return h
@@ -80,6 +80,8 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool) *has
 // If hasherStore has a chunkEncryption object, the data will be encrypted.
 // Asynchronous function, the data will not necessarily be stored when it returns.
 func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, error) {
+
+
 	c := chunkData
 	var encryptionKey encryption.Key
 	if h.toEncrypt {
@@ -92,10 +94,11 @@ func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, 
 	chunk := h.createChunk(c)
 	h.storeChunk(ctx, chunk)
 
-	if !h.frstChunk {
-		h.frstChunk = true
+	// Start the wait function which will detect completion of put
+	h.doWait.Do(func() {
 		go h.startWait(ctx)
-	}
+	})
+
 
 	return Reference(append(chunk.Address(), encryptionKey...)), nil
 }

@@ -134,7 +134,7 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if o == nil {
 		// default options
 		o = &Options{
-			Capacity: 30000000,
+			Capacity: defaultCapacity,
 		}
 	}
 	db = &DB{
