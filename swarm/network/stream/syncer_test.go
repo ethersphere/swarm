@@ -147,6 +147,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 		}
 		time.Sleep(5 * time.Second)
 
+		log.Warn("uploader node", "enode", nodeIDs[0])
 		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No DB")
@@ -157,9 +158,14 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			return err
 		}
 
-		for idx, node := range nodeIDs[1:] {
+		for idx, node := range nodeIDs {
+			if nodeIDs[idx] == nodeIDs[0] {
+				continue
+			}
+
 			i := nodeIndex[node]
 
+			log.Warn("compare to", "enode", nodeIDs[idx])
 			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
 			if !ok {
 				return fmt.Errorf("No DB")
@@ -169,12 +175,12 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			if err != nil {
 				t.Fatal(err)
 			}
-			log.Debug("last pull subscription bin id", "shouldUntil", shouldUntil, "until", until, "po", po)
+			log.Warn("last pull subscription bin id", "shouldUntil", shouldUntil, "until", until, "po", po)
 			if shouldUntil != until {
 				t.Fatalf("did not get correct bin index from peer. got %d want %d", shouldUntil, until)
 			}
 
-			log.Debug("sync check", "node", node, "index", i, "bin", po)
+			log.Warn("sync check", "node", node, "index", i, "bin", po)
 		}
 		return nil
 	})
