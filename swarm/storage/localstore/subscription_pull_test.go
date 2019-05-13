@@ -210,7 +210,6 @@ func TestDB_SubscribePull_since(t *testing.T) {
 func TestDB_SubscribePull_until(t *testing.T) {
 	db, cleanupFunc := newTestDB(t, nil)
 	defer cleanupFunc()
-
 	addrs := make(map[uint8][]chunk.Address)
 	var addrsMu sync.Mutex
 	var wantedChunksCount int

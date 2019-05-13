@@ -478,6 +478,7 @@ func (p *Peer) runUpdateSyncing() {
 // need to be removed. This function sends request for subscription
 // messages and quit messages for provided bins.
 func (p *Peer) updateSyncSubscriptions(subBins, quitBins []int) {
+	log.Debug("updateSyncSubscriptions")
 	if p.streamer.getPeer(p.ID()) == nil {
 		log.Debug("update syncing subscriptions", "peer not found", p.ID())
 		return

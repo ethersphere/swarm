@@ -27,8 +27,8 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
-const (
-	BatchSize = 128
+var (
+	BatchSize = 8
 )
 
 // SwarmSyncerServer implements an Server for history syncing on bins
