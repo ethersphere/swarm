@@ -19,12 +19,11 @@ package storage
 import (
 	"context"
 	"fmt"
-	"sync"
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
+	"sync"
+	"sync/atomic"
 )
 
 const (
@@ -147,8 +146,7 @@ func (h *hasherStore) Wait(ctx context.Context) error {
 }
 
 
-func (h *hasherStore) startWait(ctx context.Context) error {
-	defer close(h.quitC)
+func (h *hasherStore) startWait(ctx context.Context)  {
 	var nrStoredChunks uint64 // number of stored chunks
 	var done bool
 	doneC := h.doneC
@@ -172,6 +170,7 @@ func (h *hasherStore) startWait(ctx context.Context) error {
 		if done {
 			if nrStoredChunks >= atomic.LoadUint64(&h.nrChunks) {
 				h.waitC <- nil
+				break
 			}
 		}
 	}
