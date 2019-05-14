@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"time"
 
@@ -28,7 +29,8 @@ import (
 )
 
 var (
-	BatchSize = 8
+	BatchSize            = 128
+	EmptySubscriptionErr = errors.New("empty subscription, no chunks to sync")
 )
 
 // SwarmSyncerServer implements an Server for history syncing on bins
@@ -93,42 +95,34 @@ func (s *SwarmSyncerServer) SessionIndex() (uint64, error) {
 // will block until new chunks are received from localstore pull subscription.
 func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
 	//TODO: maybe add unit test for intervals usage in netstore/localstore together with SwarmSyncerServer?
-	//if from > 0 {
-	//from--
-	//}
+	log.Debug("swarmSyncerServer.SetNextBatch", "from", from, "to", to)
+
 	batchStart := time.Now()
-	if s.po == 1 {
-		log.Warn("set next batch", "from", from, "to", to, "id", s.correlateId)
-	}
 	descriptors, stop := s.netStore.SubscribePull(context.Background(), s.po, from, to)
 	defer stop()
-
-	const batchTimeout = 2 * time.Second
 
 	var (
 		batch        []byte
 		batchSize    int
 		batchStartID *uint64
 		batchEndID   uint64
-		timer        *time.Timer
-		timerC       <-chan time.Time
 	)
 
 	defer func(start time.Time) {
 		metrics.GetOrRegisterResettingTimer("syncer.set-next-batch.total-time", nil).UpdateSince(start)
 		metrics.GetOrRegisterCounter("syncer.set-next-batch.batch-size", nil).Inc(int64(batchSize))
-		if timer != nil {
-			timer.Stop()
-		}
 	}(batchStart)
 
 	for iterate := true; iterate; {
+		log.Trace("itrate, iterating")
 		select {
 		case d, ok := <-descriptors:
 			if !ok {
+				log.Trace("not ok, closing")
 				iterate = false
 				break
 			}
+			log.Trace("got a descriptor")
 			batch = append(batch, d.Address[:]...)
 			// This is the most naive approach to label the chunk as synced
 			// allowing it to be garbage collected. A proper way requires
@@ -151,23 +145,6 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 				metrics.GetOrRegisterCounter("syncer.set-next-batch.full-batch", nil).Inc(1)
 				log.Debug("syncer pull subscription - batch size reached", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 			}
-			if timer == nil {
-				timer = time.NewTimer(batchTimeout)
-			} else {
-				log.Debug("syncer pull subscription - stopping timer", "correlateId", s.correlateId)
-				if !timer.Stop() {
-					<-timer.C
-				}
-				log.Debug("syncer pull subscription - channel drained, resetting timer", "correlateId", s.correlateId)
-				timer.Reset(batchTimeout)
-			}
-			timerC = timer.C
-		case <-timerC:
-			// return batch if new chunks are not
-			// received after some time
-			iterate = false
-			metrics.GetOrRegisterCounter("syncer.set-next-batch.timer-expire", nil).Inc(1)
-			log.Debug("syncer pull subscription timer expired", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
 		case <-s.quit:
 			iterate = false
 			log.Debug("syncer pull subscription - quit received", "correlateId", s.correlateId, "batchSize", batchSize, "batchStartID", batchStartID, "batchEndID", batchEndID)
@@ -177,6 +154,10 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 		// if batch start id is not set, return 0
 		batchStartID = new(uint64)
 	}
+	if len(batch) == 0 && *batchStartID == 0 && batchEndID == 0 {
+		return batch, *batchStartID, batchEndID, nil, EmptySubscriptionErr
+	}
+	log.Debug("SetNextBatch finished", "batchLength", len(batch), "batchStartID", *batchStartID, "batchEndID", batchEndID)
 	return batch, *batchStartID, batchEndID, nil, nil
 }
 

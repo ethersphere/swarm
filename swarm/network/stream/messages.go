@@ -183,10 +183,11 @@ func (p *Peer) handleQuitMsg(req *QuitMsg) error {
 // OfferedHashesMsg is the protocol msg for offering to hand over a
 // stream section
 type OfferedHashesMsg struct {
-	Stream         Stream // name of Stream
-	From, To       uint64 // peer and db-specific entry count
-	Hashes         []byte // stream of hashes (128)
-	*HandoverProof        // HandoverProof
+	Stream   Stream // name of Stream
+	From, To uint64 // peer and db-specific entry count
+	Hashes   []byte // stream of hashes (128)
+	//NoChunksInInterval bool   //indicates that no chunks have been found in the requested interval
+	*HandoverProof // HandoverProof
 }
 
 // String pretty prints OfferedHashesMsg
@@ -210,17 +211,24 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		return fmt.Errorf("error invalid hashes length (len: %v)", lenHashes)
 	}
 
-	want, err := bv.New(lenHashes / HashSize)
+	ctr := 0
+	errC := make(chan error)
+	var (
+		wantDelaySet bool
+		wantDelay    time.Time
+		want         *bv.BitVector
+	)
+
+	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
+
+	if lenHashes == 0 {
+		goto CONTINUE_BATCH
+	}
+
+	want, err = bv.New(lenHashes / HashSize)
 	if err != nil {
 		return fmt.Errorf("error initiaising bitvector of length %v: %v", lenHashes/HashSize, err)
 	}
-
-	var wantDelaySet bool
-	var wantDelay time.Time
-
-	ctr := 0
-	errC := make(chan error)
-	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
 
 	ctx = context.WithValue(ctx, "source", p.ID().String())
 	for i := 0; i < lenHashes; i += HashSize {
@@ -246,6 +254,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		}
 	}
 
+CONTINUE_BATCH:
 	go func() {
 		defer cancel()
 		for i := 0; i < ctr; i++ {
@@ -278,7 +287,8 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		c.sessionAt = req.From
 	}
 	from, to := c.nextBatch(req.To + 1)
-	log.Trace("set next batch", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "addr", p.streamer.addr)
+	l := len(hashes) / HashSize
+	log.Trace("set next batch", "peer", p.ID(), "stream", req.Stream, "from", from, "to", to, "req.From", req.From, "req.To", req.To, "addr", p.streamer.addr, "lenhashes", len(hashes), "l", l)
 	if from == to {
 		return nil
 	}

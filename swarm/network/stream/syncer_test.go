@@ -133,19 +133,19 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 		}
 		fileStore := item.(*storage.FileStore)
 		size := chunkCount * chunkSize
-		_, wait, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
+		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}
-		wait(ctx)
-		time.Sleep(5 * time.Second)
 		// here we distribute chunks of a random file into stores 1...nodes
 		// collect hashes in po 1 bin for each node
-		_, wait, err = fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
+		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}
-		time.Sleep(5 * time.Second)
+		wait1(ctx)
+		wait2(ctx)
+		time.Sleep(2 * time.Second)
 
 		log.Warn("uploader node", "enode", nodeIDs[0])
 		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
