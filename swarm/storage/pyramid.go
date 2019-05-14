@@ -539,6 +539,15 @@ func (pc *PyramidChunker) buildTree(isAppend bool, ent *TreeEntry, chunkWG *sync
 		if lvlCount >= pc.branches {
 			endLvl = lvl + 1
 			compress = true
+
+			// Move up the chunk level to see if there is any boundry wrapping
+			for uprLvl := endLvl; uprLvl < pc.branches; uprLvl++ {
+				uprLvlCount := int64(len(pc.chunkLevel[uprLvl]))
+				if uprLvlCount >= pc.branches-1 {
+					endLvl = endLvl + 1
+				}
+			}
+
 			break
 		}
 	}
