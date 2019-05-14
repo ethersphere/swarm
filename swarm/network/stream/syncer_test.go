@@ -317,9 +317,3 @@ func TestDifferentVersionID(t *testing.T) {
 	log.Info("Simulation ended")
 
 }
-
-func TestFromOne(t *testing.T) {
-	// localstore instance
-	// NewSwarmSyncerServer
-
-}

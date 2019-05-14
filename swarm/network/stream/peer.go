@@ -199,10 +199,6 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		return err
 	}
 
-	/*if len(hashes) == 0 {
-		return nil
-	}*/
-
 	if proof == nil {
 		proof = &HandoverProof{
 			Handover: &Handover{},
@@ -217,9 +213,6 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 		Stream:        s.stream,
 	}
 	log.Trace("Swarm syncer offer batch", "peer", p.ID(), "stream", s.stream, "len", len(hashes), "from", from, "to", to)
-	if from == 0 && to == 0 && len(hashes) == 0 {
-		panic("wtf")
-	}
 	ctx = context.WithValue(ctx, "stream_send_tag", "send.offered.hashes")
 	return p.SendPriority(ctx, msg, s.priority)
 }

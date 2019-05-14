@@ -183,11 +183,10 @@ func (p *Peer) handleQuitMsg(req *QuitMsg) error {
 // OfferedHashesMsg is the protocol msg for offering to hand over a
 // stream section
 type OfferedHashesMsg struct {
-	Stream   Stream // name of Stream
-	From, To uint64 // peer and db-specific entry count
-	Hashes   []byte // stream of hashes (128)
-	//NoChunksInInterval bool   //indicates that no chunks have been found in the requested interval
-	*HandoverProof // HandoverProof
+	Stream         Stream // name of Stream
+	From, To       uint64 // peer and db-specific entry count
+	Hashes         []byte // stream of hashes (128)
+	*HandoverProof        // HandoverProof
 }
 
 // String pretty prints OfferedHashesMsg

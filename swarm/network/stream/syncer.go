@@ -114,15 +114,12 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 	}(batchStart)
 
 	for iterate := true; iterate; {
-		log.Trace("itrate, iterating")
 		select {
 		case d, ok := <-descriptors:
 			if !ok {
-				log.Trace("not ok, closing")
 				iterate = false
 				break
 			}
-			log.Trace("got a descriptor")
 			batch = append(batch, d.Address[:]...)
 			// This is the most naive approach to label the chunk as synced
 			// allowing it to be garbage collected. A proper way requires
