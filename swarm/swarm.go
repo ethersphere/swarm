@@ -214,7 +214,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	tags := chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
-	self.fileStore = storage.NewFileStore(self.netStore, self.config.FileStoreParams, tags)
+	self.fileStore = storage.NewFileStore(localStore, self.config.FileStoreParams, tags)
 
 	log.Debug("Setup local storage")
 
