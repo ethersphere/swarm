@@ -434,7 +434,6 @@ func checkErrChan(ctx context.Context, t *testing.T, errChan chan error, wantedC
 	t.Helper()
 
 	for i := 0; i < wantedChunksCount; i++ {
-		fmt.Println(i)
 		select {
 		case err := <-errChan:
 			if err != nil {

@@ -185,6 +185,10 @@ func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func
 	return s.netStore.FetchFunc(ctx, key)
 }
 
+// BatchDone
+func (s *SwarmSyncerClient) BatchDone(stream Stream, from uint64, hashes []byte, root []byte) func() (*TakeoverProof, error) {
+	return nil
+}
 func (s *SwarmSyncerClient) Close() {}
 
 // base for parsing and formating sync bin key

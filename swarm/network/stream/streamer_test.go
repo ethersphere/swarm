@@ -111,6 +111,11 @@ func (self *testClient) NeedData(ctx context.Context, hash []byte) func(context.
 	return nil
 }
 
+func (self *testClient) BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error) {
+	close(self.batchDone)
+	return nil
+}
+
 func (self *testClient) Close() {}
 
 type testServer struct {

@@ -185,6 +185,12 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 
 	hashes, from, to, proof, err := s.setNextBatch(f, t)
 	if err != nil {
+		switch err {
+		case ShouldQuitStreamErr:
+			return p.streamer.Quit(p.ID(), s.stream)
+		case EmptySubscriptionErr:
+			return nil
+		}
 		return err
 	}
 	// true only when quitting
