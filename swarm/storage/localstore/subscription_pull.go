@@ -67,7 +67,9 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 	go func() {
 		defer metrics.GetOrRegisterCounter(metricName+".stop", nil).Inc(1)
 		// close the returned chunk.Descriptor channel at the end to
-		// signal that the subscription is done
+		// signal that the subscription is done. whenever count > 0 and some chunks
+		// were pushed to the channel - the goroutine would be immediately exited without
+		// waiting for more chunks
 		defer close(chunkDescriptors)
 		// sinceItem is the Item from which the next iteration
 		// should start. The first iteration starts from the first Item.
@@ -145,6 +147,9 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
+
+				// if we sent some chunks on the channel - return so that the consumer can
+				// close the batch
 				if count > 0 {
 					return
 				}
