@@ -17,10 +17,14 @@
 package chunk
 
 import (
+	"context"
 	"encoding/binary"
 	"errors"
 	"sync/atomic"
 	"time"
+
+	"github.com/ethersphere/swarm/spancontext"
+	"github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -53,6 +57,10 @@ type Tag struct {
 	Sent      int64     // number of chunks sent for push syncing
 	Synced    int64     // number of chunks synced with proof
 	StartedAt time.Time // tag started to calculate ETA
+
+	// end-to-end tag tracing
+	Tctx context.Context  // tracing context
+	Span opentracing.Span // tracing root span TODO: should it be exported?
 }
 
 // New creates a new tag, stores it by the name and returns it
@@ -64,7 +72,13 @@ func NewTag(uid uint32, s string, total int64) *Tag {
 		StartedAt: time.Now(),
 		Total:     total,
 	}
+
+	t.Tctx, t.Span = spancontext.StartSpan(context.Background(), "new.upload.tag")
 	return t
+}
+
+func (t *Tag) FinishRootSpan() {
+	t.Span.Finish()
 }
 
 // Inc increments the count for a state
@@ -106,6 +120,16 @@ func (t *Tag) Get(state State) int64 {
 // GetTotal returns the total count
 func (t *Tag) TotalCounter() int64 {
 	return atomic.LoadInt64(&t.Total)
+}
+
+func (t *Tag) DoneSyncing() bool {
+	n, total, err := t.Status(StateSynced)
+
+	if err == nil && n == total {
+		return true
+	}
+
+	return false
 }
 
 // DoneSplit sets total count to SPLIT count and sets the associated swarm hash for this tag

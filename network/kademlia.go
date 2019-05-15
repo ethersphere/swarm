@@ -29,6 +29,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/capability"
 	"github.com/ethersphere/swarm/pot"
@@ -692,6 +693,53 @@ func (k *Kademlia) callable(e *entry) bool {
 	log.Trace(fmt.Sprintf("%08x: peer %v is callable", k.BaseAddr()[:4], e))
 
 	return true
+}
+
+func (k *Kademlia) CloserPeerThanMeXOR(addr []byte) bool {
+	var ret bool
+
+	myDistance := make([]byte, 32)
+	chunk.XOR(myDistance, k.BaseAddr(), addr)
+
+	// iterate connection in kademlia
+	k.EachConn(addr, 255, func(p *Peer, po int) bool {
+		if !p.BzzPeer.Peer.HasCap("pss") {
+			return true
+		}
+
+		otherDistance := make([]byte, 32)
+		chunk.XOR(otherDistance, p.Over(), addr)
+
+		if bytes.Compare(myDistance, otherDistance) == 1 {
+			ret = true
+			return false
+		}
+
+		return true
+	})
+
+	return ret
+}
+
+func (k *Kademlia) CloserPeerThanMe(addr []byte) bool {
+	var ret bool
+
+	myPo, _ := Pof(k.BaseAddr(), addr, 0)
+
+	// iterate connection in kademlia
+	k.EachConn(addr, 255, func(p *Peer, po int) bool {
+		if !p.BzzPeer.Peer.HasCap("pss") {
+			return true
+		}
+
+		if po > myPo {
+			ret = true
+		}
+
+		return false
+	})
+
+	return ret
 }
 
 // BaseAddr return the kademlia base address

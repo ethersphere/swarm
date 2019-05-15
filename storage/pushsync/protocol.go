@@ -48,8 +48,9 @@ type chunkMsg struct {
 // it is currently a notification only (contains no proof) sent to the originator
 // Nonce is there to make multiple responses immune to deduplication cache
 type receiptMsg struct {
-	Addr  []byte
-	Nonce []byte
+	Addr   []byte
+	Origin []byte
+	Nonce  []byte
 }
 
 func decodeChunkMsg(msg []byte) (*chunkMsg, error) {
