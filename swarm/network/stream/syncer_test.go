@@ -317,3 +317,157 @@ func TestDifferentVersionID(t *testing.T) {
 	log.Info("Simulation ended")
 
 }
+
+// Tests that when two nodes connect:
+// 1. All subscriptions are created
+// 2. All chunks are transferred from one node to another
+func TestTwoNodesFullSync(t *testing.T) { //
+	const chunkCount = 1000
+
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			addr := network.NewAddr(ctx.Config.Node())
+			//hack to put addresses in same space
+			addr.OAddr[0] = byte(0)
+
+			netStore, delivery, clean, err := newNetStoreAndDeliveryWithBzzAddr(ctx, bucket, addr)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			var dir string
+			var store *state.DBStore
+			if testutil.RaceEnabled {
+				// Use on-disk DBStore to reduce memory consumption in race tests.
+				dir, err = ioutil.TempDir("", "swarm-stream-")
+				if err != nil {
+					return nil, nil, err
+				}
+				store, err = state.NewDBStore(dir)
+				if err != nil {
+					return nil, nil, err
+				}
+			} else {
+				store = state.NewInmemoryStore()
+			}
+
+			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
+				Syncing:         SyncingAutoSubscribe,
+				SyncUpdateDelay: 50 * time.Millisecond,
+				SkipCheck:       true,
+			}, nil)
+
+			cleanup = func() {
+				r.Close()
+				clean()
+				if dir != "" {
+					os.RemoveAll(dir)
+				}
+			}
+
+			return r, cleanup, nil
+		},
+	})
+	defer sim.Close()
+
+	// create context for simulation run
+	timeout := 30 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
+
+	_, err := sim.AddNodesAndConnectChain(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		nodeIDs := sim.UpNodeIDs()
+
+		nodeIndex := make(map[enode.ID]int)
+		for i, id := range nodeIDs {
+			nodeIndex[id] = i
+		}
+
+		disconnected := watchDisconnections(ctx, sim)
+		defer func() {
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
+			}
+		}()
+
+		// each node Subscribes to each other's swarmChunkServerStreamName
+		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
+		fileStore := item.(*storage.FileStore)
+		size := chunkCount * chunkSize
+
+		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
+		}
+
+		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
+		}
+
+		wait1(ctx)
+		wait2(ctx)
+		time.Sleep(5 * time.Second)
+
+		log.Warn("uploader node", "enode", nodeIDs[0])
+		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
+		if !ok {
+			return fmt.Errorf("No DB")
+		}
+		store := item.(chunk.Store)
+		uploaderNodeBinIDs := make([]uint64, 17)
+
+		for po := 0; po <= 16; po++ {
+			until, err := store.LastPullSubscriptionBinID(uint8(po))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			uploaderNodeBinIDs[po] = until
+		}
+
+		for idx, node := range nodeIDs {
+			if nodeIDs[idx] == nodeIDs[0] {
+				continue
+			}
+
+			nodeIdx := nodeIndex[node]
+
+			log.Warn("compare to", "enode", nodeIDs[idx])
+			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
+			if !ok {
+				return fmt.Errorf("No DB")
+			}
+			db := item.(chunk.Store)
+
+			time.Sleep(10 * time.Second)
+
+			for po, uploaderUntil := range uploaderNodeBinIDs {
+				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
+				if err != nil {
+					t.Fatal(err)
+				}
+				log.Warn("last pull subscription bin id", "shouldUntil", shouldUntil, "uploader node until", uploaderUntil, "po", po)
+				if shouldUntil != uploaderUntil {
+					t.Fatalf("did not get correct bin index from peer. got %d want %d", shouldUntil, uploaderUntil)
+				}
+				log.Warn("sync check", "node", node, "index", nodeIdx, "bin", po)
+			}
+
+		}
+		return nil
+	})
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
