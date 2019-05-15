@@ -37,7 +37,6 @@ import (
 	"github.com/ethersphere/swarm/testutil"
 	"github.com/pborman/uuid"
 	"golang.org/x/sync/errgroup"
-
 	cli "gopkg.in/urfave/cli.v1"
 )
 
@@ -207,6 +206,8 @@ func checkChunksVsMostProxHosts(addrs []storage.Address, allHostChunks map[strin
 				maxProxHosts = append(maxProxHosts, host)
 			}
 		}
+
+		log.Trace("sync mode", "sync mode", syncMode)
 
 		if syncMode == "pullsync" || syncMode == "both" {
 			for _, maxProxHost := range maxProxHosts {

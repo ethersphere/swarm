@@ -119,6 +119,22 @@ func (a *Address) UnmarshalJSON(value []byte) error {
 	return nil
 }
 
+// XOR stores (a xor b) in dst, stopping when the end of any slice is
+// reached. It returns the number of bytes xor'd.
+func XOR(dst, a, b []byte) int {
+	n := len(a)
+	if len(b) < n {
+		n = len(b)
+	}
+	if len(dst) < n {
+		n = len(dst)
+	}
+	for i := 0; i < n; i++ {
+		dst[i] = a[i] ^ b[i]
+	}
+	return n
+}
+
 // Proximity returns the proximity order of the MSB distance between x and y
 //
 // The distance metric MSB(x, y) of two equal length byte sequences x an y is the

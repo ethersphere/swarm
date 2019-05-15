@@ -246,7 +246,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	pubsub := pss.NewPubSub(self.ps)
 	self.pushSync = pushsync.NewPusher(localStore, pubsub, tags)
-	self.storer = pushsync.NewStorer(localStore, pubsub)
+	self.storer = pushsync.NewStorer(self.netStore, pubsub)
 
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
 
