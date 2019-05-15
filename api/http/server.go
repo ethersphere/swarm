@@ -279,10 +279,10 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.post.raw", "ruid", ruid)
 
-	tagUid := sctx.GetTag(r.Context())
-	tag, err := s.api.Tags.Get(tagUid)
+	tagUID := sctx.GetTag(r.Context())
+	tag, err := s.api.Tags.Get(tagUID)
 	if err != nil {
-		log.Error("handle post raw got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
+		log.Error("handle post raw got an error retrieving tag for DoneSplit", "tagUID", tagUID, "err", err)
 	}
 
 	postRawCount.Inc(1)
@@ -337,7 +337,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set(TagHeaderName, fmt.Sprint(tagUid))
+	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, addr)
 }
@@ -352,14 +352,16 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
 
-	ctx, sp := spancontext.StartSpan(r.Context(), "handle.post.files")
+	tagUID := sctx.GetTag(r.Context())
+	tag, err := s.api.Tags.Get(tagUID)
+	if err != nil {
+		log.Error("handle post raw got an error retrieving tag", "tagUID", tagUID, "err", err)
+	}
+
+	ctx := r.Context()
+
+	_, sp := spancontext.StartSpan(tag.Tctx, "http.post")
 	defer sp.Finish()
-
-	quitChan := make(chan struct{})
-	defer close(quitChan)
-
-	// periodically  monitor the tag for this upload and log its state to the `handle.post.files` span
-	go periodicTagTrace(s.api.Tags, sctx.GetTag(ctx), quitChan, sp)
 
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
@@ -417,10 +419,10 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tagUid := sctx.GetTag(r.Context())
-	tag, err := s.api.Tags.Get(tagUid)
+	tagUID = sctx.GetTag(r.Context())
+	tag, err = s.api.Tags.Get(tagUID)
 	if err != nil {
-		log.Error("got an error retrieving tag for DoneSplit", "tagUid", tagUid, "err", err)
+		log.Error("got an error retrieving tag for DoneSplit", "tagUID", tagUID, "err", err)
 	}
 
 	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.TotalCounter())
@@ -439,7 +441,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
 
 	w.Header().Set("Content-Type", "text/plain")
-	w.Header().Set(TagHeaderName, fmt.Sprint(tagUid))
+	w.Header().Set(TagHeaderName, fmt.Sprint(tagUID))
 	w.WriteHeader(http.StatusOK)
 	fmt.Fprint(w, newAddr)
 }
@@ -1148,11 +1150,11 @@ func isDecryptError(err error) bool {
 }
 
 // periodicTagTrace queries the tag every 2 seconds and logs its state to the span
-func periodicTagTrace(tags *chunk.Tags, tagUid uint32, q chan struct{}, sp opentracing.Span) {
+func periodicTagTrace(tags *chunk.Tags, tagUID uint32, q chan struct{}, sp opentracing.Span) {
 	f := func() {
-		tag, err := tags.Get(tagUid)
+		tag, err := tags.Get(tagUID)
 		if err != nil {
-			log.Error("error while getting tag", "tagUid", tagUid, "err", err)
+			log.Error("error while getting tag", "tagUID", tagUID, "err", err)
 		}
 
 		sp.LogFields(olog.String("tag state", fmt.Sprintf("split=%d stored=%d seen=%d synced=%d", tag.Get(chunk.StateSplit), tag.Get(chunk.StateStored), tag.Get(chunk.StateSeen), tag.Get(chunk.StateSynced))))

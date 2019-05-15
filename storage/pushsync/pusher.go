@@ -18,6 +18,7 @@ package pushsync
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -25,7 +26,10 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 )
 
 // DB interface implemented by localstore
@@ -39,16 +43,17 @@ type DB interface {
 
 // Pusher takes care of the push syncing
 type Pusher struct {
-	store    DB                     // localstore DB
-	tags     *chunk.Tags            // tags to update counts
-	quit     chan struct{}          // channel to signal quitting on all loops
-	pushed   map[string]*pushedItem // cache of items push-synced
-	receipts chan chunk.Address     // channel to receive receipts
-	ps       PubSub                 // PubSub interface to send chunks and receive receipts
+	nnf      func(storage.Address) bool // determines if self address is closer to a chunk
+	store    DB                         // localstore DB
+	tags     *chunk.Tags                // tags to update counts
+	quit     chan struct{}              // channel to signal quitting on all loops
+	pushed   map[string]*pushedItem     // cache of items push-synced
+	receipts chan *receiptMsg           // channel to receive receipts
+	ps       PubSub                     // PubSub interface to send chunks and receive receipts
 }
 
 var (
-	retryInterval = 2 * time.Second // seconds to wait before retry sync
+	retryInterval = 30 * time.Second // seconds to wait before retry sync
 )
 
 // pushedItem captures the info needed for the pusher about a chunk during the
@@ -57,6 +62,9 @@ type pushedItem struct {
 	tag    *chunk.Tag // tag for the chunk
 	sentAt time.Time  // most recently sent at time
 	synced bool       // set when chunk got synced
+
+	// roundtrip span
+	sp opentracing.Span
 }
 
 // NewPusher contructs a Pusher and starts up the push sync protocol
@@ -64,13 +72,14 @@ type pushedItem struct {
 // - a DB interface to subscribe to push sync index to allow iterating over recently stored chunks
 // - a pubsub interface to send chunks and receive statements of custody
 // - tags that hold the several tag
-func NewPusher(store DB, ps PubSub, tags *chunk.Tags) *Pusher {
+func NewPusher(store DB, ps PubSub, tags *chunk.Tags, nnf func(storage.Address) bool) *Pusher {
 	p := &Pusher{
+		nnf:      nnf,
 		store:    store,
 		tags:     tags,
 		quit:     make(chan struct{}),
 		pushed:   make(map[string]*pushedItem),
-		receipts: make(chan chunk.Address),
+		receipts: make(chan *receiptMsg),
 		ps:       ps,
 	}
 	go p.sync()
@@ -149,50 +158,72 @@ func (p *Pusher) sync() {
 
 		// handle incoming chunks
 		case ch, more := <-chunks:
-			chunksInBatch++
-			// if no more, set to nil and wait for timer
-			if !more {
-				chunks = nil
-				continue
-			}
+			func() {
+				chunksInBatch++
+				// if no more, set to nil and wait for timer
+				if !more {
+					chunks = nil
+					return
+				}
 
-			metrics.GetOrRegisterCounter("pusher.send-chunk", nil).Inc(1)
-			// if no need to sync this chunk then continue
-			if !p.needToSync(ch) {
-				continue
-			}
+				metrics.GetOrRegisterCounter("pusher.send-chunk", nil).Inc(1)
+				// if no need to sync this chunk then continue
+				if !p.needToSync(ch) {
+					return
+				}
 
-			metrics.GetOrRegisterCounter("pusher.send-chunk.send-to-sync", nil).Inc(1)
-			// send the chunk and ignore the error
-			if err := p.sendChunkMsg(ch); err != nil {
-				log.Error("error sending chunk", "addr", ch.Address(), "err", err)
-			}
+				metrics.GetOrRegisterCounter("pusher.send-chunk.send-to-sync", nil).Inc(1)
+				// send the chunk and ignore the error
+				go func(ch chunk.Chunk) {
+					if err := p.sendChunkMsg(ch); err != nil {
+						log.Error("error sending chunk", "addr", ch.Address(), "err", err)
+					}
+				}(ch)
+			}()
 
 		// handle incoming receipts
-		case addr := <-p.receipts:
-			metrics.GetOrRegisterCounter("pusher.receipts.all", nil).Inc(1)
-			log.Debug("synced", "addr", addr)
-			// ignore if already received receipt
-			item, found := p.pushed[addr.Hex()]
-			if !found {
-				metrics.GetOrRegisterCounter("pusher.receipts.not-found", nil).Inc(1)
-				log.Debug("not wanted or already got... ignore", "addr", addr)
-				continue
-			}
-			if item.synced {
-				metrics.GetOrRegisterCounter("pusher.receipts.already-synced", nil).Inc(1)
-				log.Debug("just synced... ignore", "addr", addr)
-				continue
-			}
-			metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
-			// collect synced addresses
-			synced = append(synced, addr)
-			// set synced flag
-			item.synced = true
-			// increment synced count for the tag if exists
-			if item.tag != nil {
-				item.tag.Inc(chunk.StateSynced)
-			}
+		case rec := <-p.receipts:
+			addr := chunk.Address(rec.Addr)
+			origin := rec.Origin
+			func() {
+				metrics.GetOrRegisterCounter("pusher.receipts.all", nil).Inc(1)
+				log.Debug("synced", "addr", addr)
+				// ignore if already received receipt
+				item, found := p.pushed[addr.Hex()]
+				if !found {
+					metrics.GetOrRegisterCounter("pusher.receipts.not-found", nil).Inc(1)
+					log.Debug("not wanted or already got... ignore", "addr", addr)
+					return
+				}
+				if item.synced {
+					metrics.GetOrRegisterCounter("pusher.receipts.already-synced", nil).Inc(1)
+					log.Debug("just synced... ignore", "addr", addr)
+					return
+				}
+
+				timediff := time.Since(item.sentAt)
+				log.Debug("time to sync", "dur", timediff)
+
+				metrics.GetOrRegisterResettingTimer("pusher.chunk.roundtrip", nil).Update(timediff)
+
+				metrics.GetOrRegisterCounter("pusher.receipts.synced", nil).Inc(1)
+				// collect synced addresses
+				synced = append(synced, addr)
+				// set synced flag
+				item.synced = true
+				// increment synced count for the tag if exists
+				if item.tag != nil {
+					item.tag.Inc(chunk.StateSynced)
+
+					item.sp.LogFields(olog.String("ro", fmt.Sprintf("%x", origin)))
+					item.sp.Finish()
+
+					if item.tag.DoneSyncing() {
+						log.Info("closing root span for tag", "taguid", item.tag.Uid, "tagname", item.tag.Name)
+						item.tag.FinishRootSpan()
+					}
+				}
+			}()
 
 		case <-p.quit:
 			// if there was a subscription, cancel it
@@ -213,15 +244,20 @@ func (p *Pusher) handleReceiptMsg(msg []byte) error {
 		return err
 	}
 	log.Debug("Handler", "receipt", label(receipt.Addr), "self", label(p.ps.BaseAddr()))
-	p.PushReceipt(receipt.Addr)
+	p.pushReceipt(receipt.Addr, receipt.Origin)
 	return nil
 }
 
 // pushReceipt just inserts the address into the channel
 // it is also called by the push sync Storer if the originator and storer identical
-func (p *Pusher) PushReceipt(addr []byte) {
+func (p *Pusher) pushReceipt(addr []byte, origin []byte) {
+	r := &receiptMsg{
+		addr,
+		origin,
+		[]byte{},
+	}
 	select {
-	case p.receipts <- addr:
+	case p.receipts <- r:
 	case <-p.quit:
 	}
 }
@@ -229,6 +265,8 @@ func (p *Pusher) PushReceipt(addr []byte) {
 // sendChunkMsg sends chunks to their destination
 // using the PubSub interface Send method (e.g., pss neighbourhood addressing)
 func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
+	rlpTimer := time.Now()
+
 	cmsg := &chunkMsg{
 		Origin: p.ps.BaseAddr(),
 		Addr:   ch.Address()[:],
@@ -240,6 +278,10 @@ func (p *Pusher) sendChunkMsg(ch chunk.Chunk) error {
 		return err
 	}
 	log.Debug("send chunk", "addr", label(ch.Address()), "self", label(p.ps.BaseAddr()))
+
+	metrics.GetOrRegisterResettingTimer("pusher.send.chunk.rlp", nil).UpdateSince(rlpTimer)
+
+	defer metrics.GetOrRegisterResettingTimer("pusher.send.chunk.pss", nil).UpdateSince(time.Now())
 	return p.ps.Send(ch.Address()[:], pssChunkTopic, msg)
 }
 
@@ -260,15 +302,63 @@ func (p *Pusher) needToSync(ch chunk.Chunk) bool {
 		}
 		// first time encountered
 	} else {
+
+		addr := ch.Address()
+
 		// remember item
 		tag, _ := p.tags.Get(ch.TagID())
 		item = &pushedItem{
 			tag: tag,
 		}
-		// increment SENT count on tag  if it exists
-		if item.tag != nil {
-			item.tag.Inc(chunk.StateSent)
+
+		// should i sync??
+		if !p.nnf(addr) {
+			// no =>
+
+			// mark as synced
+			// set chunk status to synced, insert to db GC index
+			if err := p.store.Set(context.Background(), chunk.ModeSetSync, addr); err != nil {
+				log.Warn("error setting chunk to synced", "addr", addr, "err", err)
+			}
+
+			// set synced flag
+			item.synced = true
+			// increment synced count for the tag if exists
+			if item.tag != nil {
+				item.tag.Inc(chunk.StateSynced)
+
+				// opentracing for self chunks that don't need syncing?
+				_, osp := spancontext.StartSpan(
+					tag.Tctx,
+					"chunk.mine")
+				osp.LogFields(olog.String("ref", ch.Address().String()))
+				osp.SetTag("addr", ch.Address().String())
+				osp.Finish()
+
+				if item.tag.DoneSyncing() {
+					log.Info("closing root span for tag", "taguid", item.tag.Uid, "tagname", item.tag.Name)
+					item.tag.FinishRootSpan()
+				}
+			}
+
+			return false
 		}
+		// i should sync
+
+		// increment SENT count on tag  if it exists
+		if tag != nil {
+			tag.Inc(chunk.StateSent)
+
+			// opentracing for chunk roundtrip
+			_, osp := spancontext.StartSpan(
+				tag.Tctx,
+				"chunk.sent")
+			osp.LogFields(olog.String("ref", ch.Address().String()))
+			osp.SetTag("addr", ch.Address().String())
+
+			item.sp = osp
+		}
+
 		// remember the item
 		p.pushed[ch.Address().Hex()] = item
 	}
