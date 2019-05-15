@@ -18,7 +18,6 @@ package stream
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"time"
 
@@ -29,8 +28,7 @@ import (
 )
 
 var (
-	BatchSize            = 128
-	EmptySubscriptionErr = errors.New("empty subscription, no chunks to sync")
+	BatchSize = 128
 )
 
 // SwarmSyncerServer implements an Server for history syncing on bins
