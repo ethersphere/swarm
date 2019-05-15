@@ -490,3 +490,18 @@ func TestTwoNodesFullSync(t *testing.T) { //
 //  - localstore get on node 1 (without caring about po of node 1 and the chunk)
 //node 2 -> 1 -> does not have chunks from 0 2 3 4 5 .. 16
 //node 3 -> 2 3 4 5 .. 16 -> does not have chunks from 0 1
+/*
+
+   //create rpc client
+   client, err := node.Client()
+   if err != nil {
+       return fmt.Errorf("create node 1 rpc client fail: %v", err)
+   }
+
+   //ask it for subscriptions
+   pstreams := make(map[string][]string)
+   err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
+   if err != nil {
+       return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
+   }
+*/
