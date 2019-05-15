@@ -140,10 +140,8 @@ func (h *hasherStore) Close() {
 //    1) if there is error while storing chunk
 func (h *hasherStore) Wait(ctx context.Context) error {
 	defer close(h.quitC)
-	select {
-	case err := <-h.waitC:
-		return err
-	}
+	err := <-h.waitC
+	return err
 }
 
 func (h *hasherStore) startWait(ctx context.Context) {
