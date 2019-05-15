@@ -426,6 +426,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		store := item.(chunk.Store)
 		uploaderNodeBinIDs := make([]uint64, 17)
 
+		log.Debug("checking pull subscription bin ids")
 		for po := 0; po <= 16; po++ {
 			until, err := store.LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
@@ -435,12 +436,12 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			uploaderNodeBinIDs[po] = until
 		}
 
-		for idx, node := range nodeIDs {
+		for idx, _ := range nodeIDs {
 			if nodeIDs[idx] == nodeIDs[0] {
 				continue
 			}
 
-			nodeIdx := nodeIndex[node]
+			//nodeIdx := nodeIndex[node]
 
 			log.Warn("compare to", "enode", nodeIDs[idx])
 			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
@@ -449,19 +450,21 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 			db := item.(chunk.Store)
 
-			time.Sleep(10 * time.Second)
-
+			time.Sleep(5 * time.Second)
+			uploaderSum, otherSum := 0, 0
 			for po, uploaderUntil := range uploaderNodeBinIDs {
 				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
 				if err != nil {
 					t.Fatal(err)
 				}
-				log.Warn("last pull subscription bin id", "shouldUntil", shouldUntil, "uploader node until", uploaderUntil, "po", po)
-				if shouldUntil != uploaderUntil {
-					t.Fatalf("did not get correct bin index from peer. got %d want %d", shouldUntil, uploaderUntil)
-				}
-				log.Warn("sync check", "node", node, "index", nodeIdx, "bin", po)
+				otherSum += int(shouldUntil)
+				uploaderSum += int(uploaderUntil)
 			}
+			//				log.Warn("last pull subscription bin id", "shouldUntil", shouldUntil, "uploader node until", uploaderUntil, "po", po)
+			if uploaderSum != otherSum {
+				t.Fatalf("did not get correct bin index from peer. got %d want %d", uploaderSum, otherSum)
+			}
+			//log.Warn("sync check", "node", node, "index", nodeIdx, "bin", po)
 
 		}
 		return nil
@@ -471,3 +474,19 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		t.Fatal(result.Error)
 	}
 }
+
+// connect simulation of X nodes in a star topology (min 8 nodes)
+// get all chunk refs from the smoke test util
+// let them sync
+// iterate over all chunk refs
+// for each chunk, check pos with all nodes, for the node with highest PO - check if that node has the chunk in its localstore (with a GET)
+// iterate over the subscirptions and if the node has only subscription 0, it should not have chunks
+// Anton Evangelatov @nonsense 17:39
+// exclusivity test (after we do the most prox inclusivity test, similar to the smoke test)
+// ---
+// uploader node 0
+// node 1 -> 0 -> does not have chunks from 1 2 3 4 5 .. 16
+//  - pick random (or any) chunk from bin 1 2 3 4 5 .. 16 from uploader node
+//  - localstore get on node 1 (without caring about po of node 1 and the chunk)
+//node 2 -> 1 -> does not have chunks from 0 2 3 4 5 .. 16
+//node 3 -> 2 3 4 5 .. 16 -> does not have chunks from 0 1
