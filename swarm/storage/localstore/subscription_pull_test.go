@@ -45,7 +45,7 @@ func TestDB_SubscribePull(t *testing.T) {
 	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 10)
 
 	// set a timeout on subscription
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	// collect all errors from validating addresses, even nil ones
@@ -60,16 +60,10 @@ func TestDB_SubscribePull(t *testing.T) {
 		go readPullSubscriptionBin(ctx, db, bin, ch, addrs, &addrsMu, errChan)
 	}
 
-	// upload some chunks just after subscribe
-	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 5)
-
-	time.Sleep(200 * time.Millisecond)
-
-	// upload some chunks after some short time
-	// to ensure that subscription will include them
-	// in a dynamic environment
-	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 3)
-
+	// we no longer upload after subscriptions because the timer functionality
+	// does not exist on the pull subscription anymore. thus effectively we cannot
+	// assume that all chunks uploaded after a subscription was made will be trigerred
+	// in a certain batch
 	checkErrChan(ctx, t, errChan, wantedChunksCount)
 }
 
@@ -110,16 +104,6 @@ func TestDB_SubscribePull_multiple(t *testing.T) {
 			go readPullSubscriptionBin(ctx, db, bin, ch, addrs, &addrsMu, errChan)
 		}
 	}
-
-	// upload some chunks just after subscribe
-	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 5)
-
-	time.Sleep(200 * time.Millisecond)
-
-	// upload some chunks after some short time
-	// to ensure that subscription will include them
-	// in a dynamic environment
-	uploadRandomChunksBin(t, db, addrs, &addrsMu, &wantedChunksCount, 3)
 
 	checkErrChan(ctx, t, errChan, wantedChunksCount*subsCount)
 }
@@ -450,15 +434,16 @@ func checkErrChan(ctx context.Context, t *testing.T, errChan chan error, wantedC
 	t.Helper()
 
 	for i := 0; i < wantedChunksCount; i++ {
+		fmt.Println(i)
 		select {
 		case err := <-errChan:
 			if err != nil {
 				t.Error(err)
 			}
-		case <-ctx.Done():
-			t.Fatal(ctx.Err())
+
 		}
 	}
+	<-ctx.Done()
 }
 
 // TestDB_LastPullSubscriptionBinID validates that LastPullSubscriptionBinID
