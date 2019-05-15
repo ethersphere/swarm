@@ -221,7 +221,31 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	ctx, cancel := context.WithTimeout(ctx, syncBatchTimeout)
 
 	if lenHashes == 0 {
-		goto CONTINUE_BATCH
+		log.Debug("got a zero length hashes msg WITH interval", "req.From", req.From, "req.To", req.To)
+		if c.stream.Live {
+			c.sessionAt = req.From
+		}
+		from, to := c.nextBatch(req.To + 1)
+		l := len(hashes) / HashSize
+		log.Trace("set next batch", "peer", p.ID(), "stream", req.Stream, "from", from, "to", to, "req.From", req.From, "req.To", req.To, "addr", p.streamer.addr, "lenhashes", len(hashes), "l", l)
+		if from == to {
+			return nil
+		}
+
+		msg := &WantedHashesMsg{
+			Stream: req.Stream,
+			Want:   want.Bytes(),
+			From:   from,
+			To:     to,
+		}
+
+		log.Trace("sending want batch", "peer", p.ID(), "stream", msg.Stream, "from", msg.From, "to", msg.To)
+		c.next <- c.batchDone(p, req, hashes)
+		err = p.SendPriority(ctx, msg, c.priority)
+		if err != nil {
+			log.Warn("SendPriority error", "err", err)
+		}
+		return nil
 	}
 
 	want, err = bv.New(lenHashes / HashSize)
@@ -253,7 +277,6 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 		}
 	}
 
-CONTINUE_BATCH:
 	go func() {
 		defer cancel()
 		for i := 0; i < ctr; i++ {

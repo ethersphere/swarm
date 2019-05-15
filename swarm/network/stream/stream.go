@@ -559,7 +559,7 @@ func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
 }
 
 func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error {
-	if tf := c.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
+	/*if tf := c.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
 		tp, err := tf()
 		if err != nil {
 			return err
@@ -572,7 +572,7 @@ func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error 
 			return p.streamer.Unsubscribe(p.Peer.ID(), req.Stream)
 		}
 		return nil
-	}
+	}*/
 	log.Debug("client.batchDone - adding interval", "req.From", req.From, "req.To", req.To)
 	return c.AddInterval(req.From, req.To)
 }
