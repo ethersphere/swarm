@@ -42,6 +42,7 @@ type Item struct {
 	StoreTimestamp  int64
 	BinID           uint64
 	PinCounter      uint64 // maintains the no of time a chunk is pinned
+	Tag             uint32
 }
 
 // Merge is a helper method to construct a new
@@ -65,6 +66,9 @@ func (i Item) Merge(i2 Item) (new Item) {
 	}
 	if i.PinCounter == 0 {
 		i.PinCounter = i2.PinCounter
+	}
+	if i.Tag == 0 {
+		i.Tag = i2.Tag
 	}
 	return i
 }
@@ -97,7 +101,7 @@ type IndexFuncs struct {
 // NewIndex returns a new Index instance with defined name and
 // encoding functions. The name must be unique and will be validated
 // on database schema for a key prefix byte.
-func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err error) {
+func (db *DB) NewIndex(name string, funcs IndexFuncs) (f Index, err 	error) {
 	id, err := db.schemaIndexPrefix(name)
 	if err != nil {
 		return f, err

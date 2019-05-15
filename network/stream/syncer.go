@@ -128,12 +128,6 @@ func (s *SwarmSyncerServer) SetNextBatch(from, to uint64) ([]byte, uint64, uint6
 			// This is the most naive approach to label the chunk as synced
 			// allowing it to be garbage collected. A proper way requires
 			// validating that the chunk is successfully stored by the peer.
-			err := s.netStore.Set(context.Background(), chunk.ModeSetSync, d.Address)
-			if err != nil {
-				metrics.GetOrRegisterCounter("syncer.set-next-batch.set-sync-err", nil).Inc(1)
-				log.Debug("syncer pull subscription - err setting chunk as synced", "correlateId", s.correlateId, "err", err)
-				return nil, 0, 0, err
-			}
 			batchSize++
 			if batchStartID == nil {
 				// set batch start id only if
