@@ -40,7 +40,7 @@ type Item struct {
 	Data            []byte
 	AccessTimestamp int64
 	StoreTimestamp  int64
-	BinID           uint64
+	BinID           uint64 // BinID is never 0
 }
 
 // Merge is a helper method to construct a new

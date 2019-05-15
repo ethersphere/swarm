@@ -265,7 +265,7 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			}
 		}
 		select {
-		case c.next <- c.batchDone(p, req, hashes):
+		case c.next <- c.AddInterval(req.From, req.To)
 		case <-c.quit:
 			log.Debug("client.handleOfferedHashesMsg() quit")
 		case <-ctx.Done():
@@ -347,11 +347,11 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 	hashes := s.currentBatch
 	// launch in go routine since GetBatch blocks until new hashes arrive
 	go func() {
+		// req.From and req.To correlate relate to the next batch that the client wants from the server
 		if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
 			log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
 		}
 	}()
-	// go p.SendOfferedHashes(s, req.From, req.To)
 	l := len(hashes) / HashSize
 
 	log.Trace("wanted batch length", "peer", p.ID(), "stream", req.Stream, "from", req.From, "to", req.To, "lenhashes", len(hashes), "l", l)

@@ -18,6 +18,7 @@ package stream
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"reflect"
@@ -44,6 +45,11 @@ const (
 	PriorityQueue    = 4    // number of priority queues - Low, Mid, High, Top
 	PriorityQueueCap = 4096 // queue capacity
 	HashSize         = 32
+)
+
+var (
+	ShouldQuitStreamErr  = errors.New("stream is done, quitting")
+	EmptySubscriptionErr = errors.New("empty subscription, no chunks to sync")
 )
 
 // Enumerate options for syncing and retrieval
@@ -490,7 +496,16 @@ func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, *Handove
 			to = s.sessionIndex
 		}
 	}
-	return s.SetNextBatch(from, to)
+
+	log.Debug("calling s.SetNextBatch with", "from", from, "to", to)
+	hashes, from, to, proof, err := s.SetNextBatch(from, to)
+	if err != nil {
+		return nil, 0, 0, nil, err
+	}
+	if len(hashes) == 0 && from > s.sessionIndex {
+		return nil, 0, 0, nil, ShouldQuitStreamErr
+	}
+	return hashes, from, to, proof, err
 }
 
 // Server interface for outgoing peer Streamer
@@ -544,7 +559,6 @@ func (c *client) NextInterval() (start, end uint64, err error) {
 // Client interface for incoming peer Streamer
 type Client interface {
 	NeedData(context.Context, []byte) func(context.Context) error
-	BatchDone(Stream, uint64, []byte, []byte) func() (*TakeoverProof, error)
 	Close()
 }
 
@@ -572,24 +586,6 @@ func (c *client) nextBatch(from uint64) (nextFrom uint64, nextTo uint64) {
 		nextTo = c.sessionAt
 	}
 	return
-}
-
-func (c *client) batchDone(p *Peer, req *OfferedHashesMsg, hashes []byte) error {
-	if tf := c.BatchDone(req.Stream, req.From, hashes, req.Root); tf != nil {
-		tp, err := tf()
-		if err != nil {
-			return err
-		}
-
-		if err := p.Send(context.TODO(), tp); err != nil {
-			return err
-		}
-		if c.to > 0 && tp.Takeover.End >= c.to {
-			return p.streamer.Unsubscribe(p.Peer.ID(), req.Stream)
-		}
-		return nil
-	}
-	return c.AddInterval(req.From, req.To)
 }
 
 func (c *client) close() {

@@ -26,6 +26,9 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/shed"
+	"github.com/ethereum/go-ethereum/swarm/spancontext"
+	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -64,7 +67,9 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 	go func() {
 		defer metrics.GetOrRegisterCounter(metricName+".stop", nil).Inc(1)
 		// close the returned chunk.Descriptor channel at the end to
-		// signal that the subscription is done
+		// signal that the subscription is done. whenever count > 0 and some chunks
+		// were pushed to the channel - the goroutine would be immediately exited without
+		// waiting for more chunks
 		defer close(chunkDescriptors)
 		// sinceItem is the Item from which the next iteration
 		// should start. The first iteration starts from the first Item.
@@ -75,7 +80,6 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				BinID:   since,
 			}
 		}
-		first := true // first iteration flag for SkipStartFromItem
 		for {
 			select {
 			case <-trigger:
@@ -84,6 +88,9 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				// - subscription stop is called
 				// - context is done
 				metrics.GetOrRegisterCounter(metricName+".iter", nil).Inc(1)
+
+				ctx, sp := spancontext.StartSpan(ctx, metricName+".iter")
+				sp.LogFields(olog.Int("bin", int(bin)), olog.Uint64("since", since), olog.Uint64("until", until))
 
 				iterStart := time.Now()
 				var count int
@@ -116,14 +123,19 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					}
 				}, &shed.IterateOptions{
 					StartFrom: sinceItem,
-					// sinceItem was sent as the last Address in the previous
-					// iterator call, skip it in this one, but not the item with
-					// the provided since bin id as it should be sent to a channel
-					SkipStartFromItem: !first,
-					Prefix:            []byte{bin},
+					Prefix:    []byte{bin},
 				})
 
 				totalTimeMetric(metricName+".iter", iterStart)
+
+				sp.FinishWithOptions(opentracing.FinishOptions{
+					LogRecords: []opentracing.LogRecord{
+						{
+							Timestamp: time.Now(),
+							Fields:    []olog.Field{olog.Int("count", count)},
+						},
+					},
+				})
 
 				if err != nil {
 					if err == errStopSubscription {
@@ -135,7 +147,12 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
-				first = false
+
+				// if we sent some chunks on the channel - return so that the consumer can
+				// close the batch
+				if count > 0 {
+					return
+				}
 			case <-stopChan:
 				// terminate the subscription
 				// on stop

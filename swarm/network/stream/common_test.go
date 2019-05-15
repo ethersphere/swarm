@@ -44,7 +44,6 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/storage/localstore"
 	"github.com/ethereum/go-ethereum/swarm/storage/mock"
 	"github.com/ethereum/go-ethereum/swarm/testutil"
-	colorable "github.com/mattn/go-colorable"
 )
 
 var (
@@ -69,7 +68,7 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 
 	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(colorable.NewColorableStderr(), log.TerminalFormat(true))))
+	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
 }
 
 // newNetStoreAndDelivery is a default constructor for BzzAddr, NetStore and Delivery, used in Simulations
