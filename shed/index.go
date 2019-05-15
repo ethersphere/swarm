@@ -41,6 +41,7 @@ type Item struct {
 	AccessTimestamp int64
 	StoreTimestamp  int64
 	BinID           uint64
+	Tag             uint32
 }
 
 // Merge is a helper method to construct a new
@@ -61,6 +62,9 @@ func (i Item) Merge(i2 Item) (new Item) {
 	}
 	if i.BinID == 0 {
 		i.BinID = i2.BinID
+	}
+	if i.Tag == 0 {
+		i.Tag = i2.Tag
 	}
 	return i
 }

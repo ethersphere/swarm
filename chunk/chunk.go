@@ -38,11 +38,14 @@ var (
 type Chunk interface {
 	Address() Address
 	Data() []byte
+	TagID() uint32
+	WithTagID(t uint32) Chunk
 }
 
 type chunk struct {
 	addr  Address
 	sdata []byte
+	tagID uint32
 }
 
 func NewChunk(addr Address, data []byte) Chunk {
@@ -52,12 +55,21 @@ func NewChunk(addr Address, data []byte) Chunk {
 	}
 }
 
+func (c *chunk) WithTagID(t uint32) Chunk {
+	c.tagID = t
+	return c
+}
+
 func (c *chunk) Address() Address {
 	return c.addr
 }
 
 func (c *chunk) Data() []byte {
 	return c.sdata
+}
+
+func (c *chunk) TagID() uint32 {
+	return c.tagID
 }
 
 func (self *chunk) String() string {

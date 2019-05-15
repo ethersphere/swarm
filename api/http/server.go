@@ -42,8 +42,11 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/sctx"
+	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/opentracing/opentracing-go"
+	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/rs/cors"
 )
 
@@ -300,6 +303,15 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.post.files", "ruid", ruid)
 	postFilesCount.Inc(1)
 
+	ctx, sp := spancontext.StartSpan(r.Context(), "handle.post.files")
+	defer sp.Finish()
+
+	quitChan := make(chan struct{})
+	defer close(quitChan)
+
+	// periodically  monitor the tag for this upload and log its state to the `handle.post.files` span
+	go periodicTagTrace(s.api.Tags, sctx.GetTag(ctx), quitChan, sp)
+
 	contentType, params, err := mime.ParseMediaType(r.Header.Get("Content-Type"))
 	if err != nil {
 		postFilesFail.Inc(1)
@@ -315,7 +327,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != "encrypt" {
-		addr, err = s.api.Resolve(r.Context(), uri.Addr)
+		addr, err = s.api.Resolve(ctx, uri.Addr)
 		if err != nil {
 			postFilesFail.Inc(1)
 			respondError(w, r, fmt.Sprintf("cannot resolve %s: %s", uri.Addr, err), http.StatusInternalServerError)
@@ -323,7 +335,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Debug("resolved key", "ruid", ruid, "key", addr)
 	} else {
-		addr, err = s.api.NewManifest(r.Context(), toEncrypt)
+		addr, err = s.api.NewManifest(ctx, toEncrypt)
 		if err != nil {
 			postFilesFail.Inc(1)
 			respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -331,7 +343,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Debug("new manifest", "ruid", ruid, "key", addr)
 	}
-	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
+	newAddr, err := s.api.UpdateManifest(ctx, addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 		case "application/x-tar":
 			_, err := s.handleTarUpload(r, mw)
@@ -934,4 +946,29 @@ func (lrw *loggingResponseWriter) WriteHeader(code int) {
 
 func isDecryptError(err error) bool {
 	return strings.Contains(err.Error(), api.ErrDecrypt.Error())
+}
+
+// periodicTagTrace queries the tag every 2 seconds and logs its state to the span
+func periodicTagTrace(tags *chunk.Tags, tagUid uint32, q chan struct{}, sp opentracing.Span) {
+	f := func() {
+		tag, err := tags.Get(tagUid)
+		if err != nil {
+			log.Error("error while getting tag", "tagUid", tagUid, "err", err)
+		}
+
+		sp.LogFields(olog.String("tag state", fmt.Sprintf("split=%d stored=%d seen=%d synced=%d", tag.Get(chunk.StateSplit), tag.Get(chunk.StateStored), tag.Get(chunk.StateSeen), tag.Get(chunk.StateSynced))))
+	}
+
+	for {
+		select {
+		case <-q:
+			f()
+
+			return
+		default:
+			f()
+
+			time.Sleep(2 * time.Second)
+		}
+	}
 }

@@ -1,4 +1,4 @@
-// Copyright 2018 The go-ethereum Authors
+// Copyright 2019 The go-ethereum Authors
 // This file is part of the go-ethereum library.
 //
 // The go-ethereum library is free software: you can redistribute it and/or modify
@@ -300,9 +300,12 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 			return e, nil
 		},
 		EncodeValue: func(fields shed.Item) (value []byte, err error) {
-			return nil, nil
+			tag := make([]byte, 4)
+			binary.BigEndian.PutUint32(tag, fields.Tag)
+			return tag, nil
 		},
 		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.Tag = binary.BigEndian.Uint32(value)
 			return e, nil
 		},
 	})
@@ -367,6 +370,7 @@ func chunkToItem(ch chunk.Chunk) shed.Item {
 	return shed.Item{
 		Address: ch.Address(),
 		Data:    ch.Data(),
+		Tag:     ch.TagID(),
 	}
 }
 

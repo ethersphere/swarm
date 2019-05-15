@@ -30,11 +30,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ethersphere/swarm/chunk"
-
-	"github.com/ethersphere/swarm/storage/feed"
-	"github.com/ethersphere/swarm/storage/localstore"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -44,6 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	httpapi "github.com/ethersphere/swarm/api/http"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/chequebook"
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/fuse"
@@ -54,7 +50,10 @@ import (
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/storage/pushsync"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
 )
@@ -79,6 +78,8 @@ type Swarm struct {
 	netStore          *storage.NetStore
 	sfs               *fuse.SwarmFS // need this to cleanup all the active mounts on node exit
 	ps                *pss.Pss
+	pushSync          *pushsync.Pusher
+	storer            *pushsync.Storer
 	swap              *swap.Swap
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
@@ -224,6 +225,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	if pss.IsActiveHandshake {
 		pss.SetHandshakeController(self.ps, pss.NewHandshakeParams())
 	}
+
+	pubsub := pss.NewPubSub(self.ps)
+	self.pushSync = pushsync.NewPusher(localStore, pubsub, tags)
+	self.storer = pushsync.NewStorer(localStore, pubsub, self.pushSync.PushReceipt)
 
 	self.api = api.NewAPI(self.fileStore, self.dns, feedsHandler, self.privateKey, tags)
 
@@ -453,6 +458,9 @@ func (s *Swarm) Stop() error {
 	if s.stateStore != nil {
 		s.stateStore.Close()
 	}
+
+	s.pushSync.Close()
+	s.storer.Close()
 
 	for _, cleanF := range s.cleanupFuncs {
 		err = cleanF()
