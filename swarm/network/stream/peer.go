@@ -240,6 +240,7 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 		return nil, ErrMaxPeerServers
 	}
 
+	// sessionIndex = this node's LastPullSubscriptionBinID(po) at the time of creation of the stream
 	sessionIndex, err := o.SessionIndex()
 	if err != nil {
 		return nil, err

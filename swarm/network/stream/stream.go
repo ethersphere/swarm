@@ -497,7 +497,7 @@ func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, *Handove
 		}
 		if from > s.sessionIndex {
 			// this happens when historical syncing is over, then the historical stream should be quit
-
+			log.Debug("detected from > s.sessionIndex. quitting historical stream", "from", from, "sessionIndex", s.sessionIndex)
 			return nil, 0, 0, nil, ShouldQuitStreamErr
 		}
 		if to == 0 || to > s.sessionIndex {
