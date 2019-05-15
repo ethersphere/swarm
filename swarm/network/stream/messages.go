@@ -276,33 +276,6 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 			}(wait)
 		}
 	}
-
-	go func() {
-		defer cancel()
-		for i := 0; i < ctr; i++ {
-			select {
-			case err := <-errC:
-				if err != nil {
-					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk, dropping peer", "peer", p.ID(), "err", err)
-					p.Drop()
-					return
-				}
-			case <-ctx.Done():
-				log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
-				return
-			case <-c.quit:
-				log.Debug("client.handleOfferedHashesMsg() quit")
-				return
-			}
-		}
-		select {
-		case c.next <- c.batchDone(p, req, hashes):
-		case <-c.quit:
-			log.Debug("client.handleOfferedHashesMsg() quit")
-		case <-ctx.Done():
-			log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
-		}
-	}()
 	// only send wantedKeysMsg if all missing chunks of the previous batch arrived
 	// except
 	if c.stream.Live {
@@ -348,6 +321,34 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 	if err != nil {
 		log.Warn("SendPriority error", "err", err)
 	}
+
+	go func() {
+		defer cancel()
+		for i := 0; i < ctr; i++ {
+			select {
+			case err := <-errC:
+				if err != nil {
+					log.Debug("client.handleOfferedHashesMsg() error waiting for chunk, dropping peer", "peer", p.ID(), "err", err)
+					p.Drop()
+					return
+				}
+			case <-ctx.Done():
+				log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
+				return
+			case <-c.quit:
+				log.Debug("client.handleOfferedHashesMsg() quit")
+				return
+			}
+		}
+		select {
+		case c.next <- c.batchDone(p, req, hashes):
+		case <-c.quit:
+			log.Debug("client.handleOfferedHashesMsg() quit")
+		case <-ctx.Done():
+			log.Debug("client.handleOfferedHashesMsg() context done", "ctx.Err()", ctx.Err())
+		}
+
+	}()
 
 	return nil
 }
