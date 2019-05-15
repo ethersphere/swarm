@@ -268,6 +268,8 @@ func (p *Peer) setServer(s Stream, o Server, priority uint8) (*server, error) {
 	}
 
 	// sessionIndex = this node's LastPullSubscriptionBinID(po) at the time of creation of the stream
+	// can be 0 - this is indicative of no items in the po bin, which means in turn that there's no
+	// historical syncing to be made on this bin
 	sessionIndex, err := o.SessionIndex()
 	if err != nil {
 		return nil, err
