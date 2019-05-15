@@ -379,6 +379,7 @@ func (p *Peer) handleWantedHashesMsg(ctx context.Context, req *WantedHashesMsg) 
 		}
 	}
 
+	// IMPORTANT: req.From and req.To correlate relate to the next batch that the client wants from the server
 	log.Debug("handleWantedHashesMsg.SendOfferedHashes", "from", req.From, "to", req.To)
 	if err := p.SendOfferedHashes(s, req.From, req.To); err != nil {
 		log.Warn("SendOfferedHashes error", "peer", p.ID().TerminalString(), "err", err)
