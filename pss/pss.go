@@ -172,14 +172,13 @@ func New(k *network.Kademlia, params *Params) (*Pss, error) {
 		privateKey: params.privateKey,
 		quitC:      make(chan struct{}),
 
-		peers:           make(map[string]*protocols.Peer),
-		fwdCache:        make(map[digest]cacheEntry),
-		cacheTTL:        params.CacheTTL,
-		msgTTL:          params.MsgTTL,
-		paddingByteSize: defaultPaddingByteSize,
-		capstring:       c.String(),
-		outbox:          make(chan *outboxMsg, defaultOutboxCapacity),
-
+		peers:            make(map[string]*protocols.Peer),
+		fwdCache:         make(map[digest]cacheEntry),
+		cacheTTL:         params.CacheTTL,
+		msgTTL:           params.MsgTTL,
+		paddingByteSize:  defaultPaddingByteSize,
+		capstring:        c.String(),
+		outbox:           make(chan *outboxMsg, defaultOutboxCapacity),
 		handlers:         make(map[Topic]map[*handler]bool),
 		topicHandlerCaps: make(map[Topic]*handlerCaps),
 

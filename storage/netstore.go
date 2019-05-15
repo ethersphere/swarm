@@ -154,7 +154,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 
 	ref := req.Addr
 
-	log.Trace("netstore.get", "ref", ref.String(), "self", n.localID.String())
+	log.Trace("netstore.get", "ref", ref.String(), "node", n.localID.String())
 
 	ch, err := n.Store.Get(ctx, mode, ref)
 	if err != nil {
@@ -163,7 +163,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			log.Error("localstore get error", "err", err)
 		}
 
-		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "self", n.localID.String())
+		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "node", n.localID.String())
 
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher
@@ -232,6 +232,8 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			ctx,
 			"remote.fetch")
 		osp.LogFields(olog.String("ref", ref.String()))
+
+		ctx = context.WithValue(ctx, "remote.fetch", osp)
 
 		log.Trace("remote.fetch", "ref", ref)
 

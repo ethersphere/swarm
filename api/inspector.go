@@ -48,6 +48,23 @@ func (i *Inspector) KademliaInfo() network.KademliaInfo {
 	return i.hive.KademliaInfo()
 }
 
+func (i *Inspector) IsPushSynced(tagname string) bool {
+	log.Info("is push synced", "tagname", tagname)
+	tags := i.api.Tags.All()
+
+	for _, t := range tags {
+		if t.Name == tagname {
+			ds := t.DoneSyncing()
+
+			log.Debug("found tag", "tagname", tagname, "done-syncing", ds)
+
+			return ds
+		}
+	}
+
+	return false
+}
+
 func (i *Inspector) IsPullSyncing() bool {
 	lastReceivedChunksMsg := metrics.GetOrRegisterGauge("network.stream.received_chunks", nil)
 

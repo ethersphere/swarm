@@ -26,7 +26,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -57,14 +56,18 @@ var (
 // * downloader downloads the chunk
 // Trials are run concurrently
 func TestPushSyncSimulation(t *testing.T) {
-	nodeCnt := 64
-	chunkCnt := 32
-	trials := 32
-	testSyncerWithPubSub(t, nodeCnt, chunkCnt, trials, newServiceFunc)
+	nodeCnt := 16
+	chunkCnt := 500
+	testcases := 10
+	err := testSyncerWithPubSub(t, nodeCnt, chunkCnt, testcases, newServiceFunc)
+	if err != nil {
+		t.Fatal(err)
+	}
 }
 
-func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simulation.ServiceFunc) {
-	sim := simulation.New(map[string]simulation.ServiceFunc{
+func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, testcases int, sf simulation.ServiceFunc) error {
+	t.Helper()
+	sim := simulation.NewInProc(map[string]simulation.ServiceFunc{
 		"streamer": sf,
 	})
 	defer sim.Close()
@@ -75,10 +78,13 @@ func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simula
 	if err != nil {
 		t.Fatal(err)
 	}
+
 	log.Info("Snapshot loaded")
+	// time.Sleep(5 * time.Second)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		time.Sleep(1 * time.Second)
 		errc := make(chan error)
-		for i := 0; i < trials; i++ {
+		for i := 0; i < testcases; i++ {
 			go uploadAndDownload(ctx, sim, errc, nodeCnt, chunkCnt, i)
 		}
 		i := 0
@@ -87,15 +93,17 @@ func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simula
 				return err
 			}
 			i++
-			if i >= trials {
+			if i >= testcases {
 				break
 			}
 		}
 		return nil
 	})
+
 	if result.Error != nil {
 		t.Fatalf("simulation error: %v", result.Error)
 	}
+	return nil
 }
 
 // pickNodes selects 2 distinct
@@ -131,11 +139,7 @@ func uploadAndDownload(ctx context.Context, sim *simulation.Simulation, errc cha
 	}
 
 	// wait till synced
-	for {
-		n, total, err := tag.Status(chunk.StateSynced)
-		if err == nil && n == total {
-			break
-		}
+	for !tag.DoneSyncing() {
 		time.Sleep(100 * time.Millisecond)
 	}
 
@@ -165,6 +169,8 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		os.RemoveAll(dir)
 		return nil, nil, err
 	}
+	// setup netstore
+	netStore := storage.NewNetStore(lstore, enode.ID{})
 
 	// setup pss
 	kadParams := network.NewKadParams()
@@ -172,13 +178,12 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	bucket.Store(simulation.BucketKeyKademlia, kad)
 
 	privKey, err := crypto.GenerateKey()
-	pssp := pss.NewPssParams().WithPrivateKey(privKey)
-	ps, err := pss.NewPss(kad, pssp)
+	pssp := pss.NewParams().WithPrivateKey(privKey)
+	ps, err := pss.New(kad, pssp)
 	if err != nil {
 		return nil, nil, err
 	}
-	// setup netstore
-	netStore := storage.NewNetStore(lstore, enode.HexID(hexutil.Encode(kad.BaseAddr())))
+
 	// streamer
 	delivery := stream.NewDelivery(kad, netStore)
 	netStore.RemoteGet = delivery.RequestFromPeers
@@ -191,11 +196,11 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	pubSub := pss.NewPubSub(ps)
 
 	// set up syncer
-	p := NewPusher(lstore, pubSub, chunk.NewTags())
+	p := NewPusher(lstore, pubSub, chunk.NewTags(), kad)
 	bucket.Store(bucketKeyPushSyncer, p)
 
 	// setup storer
-	s := NewStorer(netStore, pubSub, p.PushReceipt)
+	s := NewStorer(netStore, pubSub, kad, p.pushReceipt)
 
 	cleanup := func() {
 		p.Close()
@@ -235,7 +240,7 @@ func (s *StreamerAndPss) Stop() error {
 }
 
 func upload(ctx context.Context, store Store, tags *chunk.Tags, tagname string, n int) (tag *chunk.Tag, addrs []storage.Address, err error) {
-	tag, err = tags.New(tagname, int64(n))
+	tag, err = tags.Create(tagname, int64(n))
 	if err != nil {
 		return nil, nil, err
 	}
