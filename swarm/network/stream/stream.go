@@ -474,50 +474,6 @@ type server struct {
 	sessionIndex uint64
 }
 
-// setNextBatch adjusts passed interval based on session index and whether
-// stream is live or history. It calls Server SetNextBatch with adjusted
-// interval and returns batch hashes and their interval.
-func (s *server) setNextBatch(from, to uint64) ([]byte, uint64, uint64, *HandoverProof, error) {
-	log.Debug("server.setNextBatch", "from", from, "to", to, "sessionIndex", s.sessionIndex)
-
-	if s.stream.Live {
-		log.Debug("stream is LIVE")
-		if from == 0 {
-			log.Debug("from==0")
-			from = s.sessionIndex
-		}
-		if to <= from || from >= s.sessionIndex {
-			log.Debug("to <= from ...", "sessionIndex", s.sessionIndex)
-			to = math.MaxUint64
-		}
-	} else {
-		log.Debug("stream is HIST")
-		if to < from && to != 0 {
-			return nil, 0, 0, nil, errors.New("illegal range requested")
-		}
-		if from > s.sessionIndex {
-			// this happens when historical syncing is over, then the historical stream should be quit
-			log.Debug("detected from > s.sessionIndex. quitting historical stream", "from", from, "sessionIndex", s.sessionIndex)
-			return nil, 0, 0, nil, ShouldQuitStreamErr
-		}
-		if to == 0 || to > s.sessionIndex {
-			log.Debug("to==0 || to >sessionIndex")
-			// set a ceiling to historical syncing
-			to = s.sessionIndex
-		}
-	}
-	log.Debug("calling s.SetNextBatch with", "from", from, "to", to)
-	hashes, from, to, _, err := s.SetNextBatch(from, to)
-	if err != nil {
-		log.Error("syncer setNextBatch returned error", "err", err)
-		return hashes, from, to, nil, err
-	}
-	if len(hashes) == 0 && from > s.sessionIndex {
-		return nil, 0, 0, nil, ShouldQuitStreamErr
-	}
-	return hashes, from, to, nil, err
-}
-
 // Server interface for outgoing peer Streamer
 type Server interface {
 	// SessionIndex is called when a server is initialized

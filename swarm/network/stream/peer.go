@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -173,7 +174,7 @@ func (p *Peer) SendPriority(ctx context.Context, msg interface{}, priority uint8
 }
 
 // SendOfferedHashes sends OfferedHashesMsg protocol msg
-func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
+func (p *Peer) SendOfferedHashes(s *server, from, to uint64) error {
 	var sp opentracing.Span
 	ctx, sp := spancontext.StartSpan(
 		context.TODO(),
@@ -182,21 +183,47 @@ func (p *Peer) SendOfferedHashes(s *server, f, t uint64) error {
 	defer sp.Finish()
 
 	defer metrics.GetOrRegisterResettingTimer("send.offered.hashes", nil).UpdateSince(time.Now())
+	var err error
+	if s.stream.Live {
+		log.Debug("stream is LIVE")
+		if from == 0 {
+			log.Debug("from==0")
+			from = s.sessionIndex
+		}
+		if to <= from || from >= s.sessionIndex {
+			log.Debug("to <= from ...", "sessionIndex", s.sessionIndex)
+			to = math.MaxUint64
+		}
+	} else {
+		log.Debug("stream is HIST")
+		if to < from && to != 0 {
+			err = errors.New("illegal range requested")
+		}
+		if from > s.sessionIndex {
+			// this happens when historical syncing is over, then the historical stream should be quit
+			log.Debug("detected from > s.sessionIndex. quitting historical stream", "from", from, "sessionIndex", s.sessionIndex)
+			return p.streamer.Quit(p.ID(), s.stream)
+		}
+		if to == 0 || to > s.sessionIndex {
+			log.Debug("to==0 || to >sessionIndex")
+			// set a ceiling to historical syncing
+			to = s.sessionIndex
+		}
+	}
 
-	hashes, from, to, proof, err := s.setNextBatch(f, t)
+	log.Debug("calling s.SetNextBatch with", "from", from, "to", to)
+	hashes, from, to, proof, err := s.SetNextBatch(from, to)
 	if err != nil {
-		switch err {
-		case ShouldQuitStreamErr:
-			log.Debug("stream is over. send quit to client", "peer", p.ID(), "stream", s.stream)
-			err := p.streamer.Quit(p.ID(), s.stream)
-			if err != nil {
-				return err
-			}
-		case EmptySubscriptionErr:
+		if err == EmptySubscriptionErr {
 			log.Debug("localstore subscription returned no chunks")
 			return nil
 		}
+
+		log.Error("syncer setNextBatch returned error", "err", err)
 		return err
+	}
+	if len(hashes) == 0 && from > s.sessionIndex {
+		return p.streamer.Quit(p.ID(), s.stream)
 	}
 
 	if proof == nil {
