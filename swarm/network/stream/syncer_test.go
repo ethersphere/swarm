@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -549,7 +550,7 @@ func TestStarNetworkSync(t *testing.T) { //
 	defer sim.Close()
 
 	// create context for simulation run
-	timeout := 30 * time.Second
+	timeout := 60 * time.Second
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	// defer cancel should come before defer simulation teardown
 	defer cancel()
@@ -578,7 +579,7 @@ func TestStarNetworkSync(t *testing.T) { //
 
 		chunkAddrs, err := getAllRefs(randomBytes[:])
 		if err != nil {
-			t.Fatal(err)
+			return err
 		}
 		chunksProx := make([]chunkProxData, 0)
 		for _, chunkAddr := range chunkAddrs {
@@ -615,14 +616,17 @@ func TestStarNetworkSync(t *testing.T) { //
 		}
 
 		wait1(ctx)
-		time.Sleep(15 * time.Second)
 
+		// check that chunks with a marked proximate host are where they should be
 		count := 0
+		goto other
+		// wait to sync
+		time.Sleep(30 * time.Second)
 		for _, c := range chunksProx {
 			// if the most proximate host is set - check that the chunk is there
 			if c.closestNodePO > 0 {
 				count++
-				log.Debug("found chunk with proximate host set, trying to find in localstore", "po", c.closestNodePO, "closestNode", c.closestNode)
+				log.Warn("found chunk with proximate host set, trying to find in localstore", "po", c.closestNodePO, "closestNode", c.closestNode)
 				item, ok = sim.NodeItem(c.closestNode, bucketKeyStore)
 				if !ok {
 					return fmt.Errorf("No DB")
@@ -631,11 +635,51 @@ func TestStarNetworkSync(t *testing.T) { //
 
 				_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
 				if err != nil {
-					t.Fatal(err)
+					return err
 				}
 			}
 		}
 		log.Debug("done checking stores", "checked chunks", count, "total chunks", len(chunksProx))
+	other:
+		// check that chunks from each po are _not_ on nodes that don't have subscriptions for these POs
+		//create rpc client
+		node := sim.Net.GetNode(nodeIDs[0])
+		client, err := node.Client()
+		if err != nil {
+			return fmt.Errorf("create node 1 rpc client fail: %v", err)
+		}
+
+		//ask it for subscriptions
+		pstreams := make(map[string][]string)
+		err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
+		if err != nil {
+			return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
+		}
+
+		// create a slice where a slice of enodes correlates to a bin
+		subs := make([][]enode.ID, 17)
+		for subscribedNode, streams := range pstreams {
+			id := enode.HexID(subscribedNode)
+			//subscriptions := make([]int, 0)
+			for _, sub := range streams {
+				subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
+				if err != nil {
+					return err
+				}
+				found := false
+				for _, v := range subs[int(subPO)] {
+					if v == id {
+						found = true
+					}
+				}
+				if !found {
+					subs[int(subPO)] = append(subs[int(subPO)], id)
+					//subscriptions = append(subscriptions, int(subPO))
+				}
+			}
+			//subMap[id] = subscriptions
+		}
+
 		return nil
 	})
 
