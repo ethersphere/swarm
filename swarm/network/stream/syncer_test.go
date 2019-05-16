@@ -656,9 +656,6 @@ func TestStarNetworkSync(t *testing.T) { //
 			return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
 		}
 
-		// create a slice where a slice of enodes correlates to a bin
-		subs := make([][]enode.ID, 17)
-
 		//create a map of subscribed POs per node
 		subMap := make(map[enode.ID][]int)
 		//create a map of no-subs for a node
@@ -674,15 +671,7 @@ func TestStarNetworkSync(t *testing.T) { //
 				}
 				b[int(subPO)] = true
 				found := false
-				for _, v := range subs[int(subPO)] {
-					if v == id {
-						found = true
-					}
-				}
-				if !found {
-					subs[int(subPO)] = append(subs[int(subPO)], id)
-				}
-				found = false
+
 				for _, v := range subscriptions {
 					if v == int(subPO) {
 						found = true
@@ -702,9 +691,6 @@ func TestStarNetworkSync(t *testing.T) { //
 			subMap[id] = subscriptions
 		}
 
-		for nodeId, nodeSubs := range subMap {
-
-		}
 		return nil
 	})
 
