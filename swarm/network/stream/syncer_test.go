@@ -660,6 +660,8 @@ func TestStarNetworkSync(t *testing.T) { //
 		subMap := make(map[enode.ID][]int)
 		//create a map of no-subs for a node
 		noSubMap := make(map[enode.ID][]int)
+		noSubMapMap := make(map[enode.ID]map[int]bool)
+
 		for subscribedNode, streams := range pstreams {
 			id := enode.HexID(subscribedNode)
 			subscriptions := make([]int, 0)
@@ -682,15 +684,38 @@ func TestStarNetworkSync(t *testing.T) { //
 				}
 			}
 			noSubs := make([]int, 0)
+			noMapMap := make(map[int]bool)
 			for i, v := range b {
 				if !v {
 					noSubs = append(noSubs, i)
+					noMapMap[i] = true
 				}
 			}
+			noSubMapMap[id] = noMapMap
 			noSubMap[id] = noSubs
 			subMap[id] = subscriptions
 		}
 
+		// iterate over noSubMap, for each node check if it has any of the chunks it shouldn't have
+		for nodeId, noSubs := range noSubMap {
+			for _, c := range chunksProx {
+				// if the chunk PO is equal to the sub that the node shouldnt have - check if the node has the chunk!
+				if _, ok := noSubMapMap[nodeId][c.uploaderNodePO]; ok {
+					count++
+					item, ok = sim.NodeItem(nodeId, bucketKeyStore)
+					if !ok {
+						return fmt.Errorf("No DB")
+					}
+					store := item.(chunk.Store)
+
+					_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
+					if err == nil {
+						return fmt.Errorf("got a chunk where it shouldn't be! addr %s, nodeId %s", c.addr, nodeId)
+					}
+				}
+			}
+
+		}
 		return nil
 	})
 
