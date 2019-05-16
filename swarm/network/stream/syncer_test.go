@@ -619,7 +619,7 @@ func TestStarNetworkSync(t *testing.T) { //
 
 		// check that chunks with a marked proximate host are where they should be
 		count := 0
-		goto other
+
 		// wait to sync
 		time.Sleep(30 * time.Second)
 		for _, c := range chunksProx {
@@ -640,7 +640,7 @@ func TestStarNetworkSync(t *testing.T) { //
 			}
 		}
 		log.Debug("done checking stores", "checked chunks", count, "total chunks", len(chunksProx))
-	other:
+
 		// check that chunks from each po are _not_ on nodes that don't have subscriptions for these POs
 		//create rpc client
 		node := sim.Net.GetNode(nodeIDs[0])
