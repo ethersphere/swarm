@@ -596,11 +596,11 @@ func TestStarNetworkSync(t *testing.T) { //
 					chunkInfo.closestNodePO = po
 					chunkInfo.closestNode = nodeAddr
 				}
-				log.Error("123", "uploaderPO", chunkInfo.uploaderNodePO, "ci", chunkInfo.closestNode, "cpo", chunkInfo.closestNodePO, "cadrr", chunkInfo.addr)
+				log.Error("processed chunk", "uploaderPO", chunkInfo.uploaderNodePO, "ci", chunkInfo.closestNode, "cpo", chunkInfo.closestNodePO, "cadrr", chunkInfo.addr)
 			}
 			chunksProx = append(chunksProx, chunkInfo)
 		}
-		//log.Debug("w", "w", chunksProx)
+
 		// get the pivot node and pump some data
 		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
 		if !ok {
@@ -615,13 +615,14 @@ func TestStarNetworkSync(t *testing.T) { //
 		}
 
 		wait1(ctx)
-		time.Sleep(5 * time.Second)
+		time.Sleep(15 * time.Second)
+
 		count := 0
 		for _, c := range chunksProx {
 			// if the most proximate host is set - check that the chunk is there
 			if c.closestNodePO > 0 {
 				count++
-				log.Debug("found chunk with proximate host set, trying to find in localstore")
+				log.Debug("found chunk with proximate host set, trying to find in localstore", "po", c.closestNodePO, "closestNode", c.closestNode)
 				item, ok = sim.NodeItem(c.closestNode, bucketKeyStore)
 				if !ok {
 					return fmt.Errorf("No DB")
@@ -635,46 +636,6 @@ func TestStarNetworkSync(t *testing.T) { //
 			}
 		}
 		log.Debug("done checking stores", "checked chunks", count, "total chunks", len(chunksProx))
-		panic("wtf")
-		log.Warn("uploader node", "enode", nodeIDs[0])
-		uploaderNodeBinIDs := make([]uint64, 17)
-
-		log.Debug("checking pull subscription bin ids")
-		/*	for po := 0; po <= 16; po++ {
-				until, err := store.LastPullSubscriptionBinID(uint8(po))
-				if err != nil {
-					t.Fatal(err)
-				}
-
-				uploaderNodeBinIDs[po] = until
-			}
-		*/
-		for idx, _ := range nodeIDs {
-			if nodeIDs[idx] == nodeIDs[0] {
-				continue
-			}
-
-			log.Warn("compare to", "enode", nodeIDs[idx])
-			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
-			if !ok {
-				return fmt.Errorf("No DB")
-			}
-			db := item.(chunk.Store)
-
-			time.Sleep(5 * time.Second)
-			uploaderSum, otherSum := 0, 0
-			for po, uploaderUntil := range uploaderNodeBinIDs {
-				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
-				if err != nil {
-					t.Fatal(err)
-				}
-				otherSum += int(shouldUntil)
-				uploaderSum += int(uploaderUntil)
-			}
-			if uploaderSum != otherSum {
-				t.Fatalf("did not get correct bin index from peer. got %d want %d", uploaderSum, otherSum)
-			}
-		}
 		return nil
 	})
 
