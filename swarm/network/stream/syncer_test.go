@@ -656,15 +656,11 @@ func TestStarNetworkSync(t *testing.T) { //
 			return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
 		}
 
-		//create a map of subscribed POs per node
-		subMap := make(map[enode.ID][]int)
 		//create a map of no-subs for a node
-		noSubMap := make(map[enode.ID][]int)
-		noSubMapMap := make(map[enode.ID]map[int]bool)
+		noSubMap := make(map[enode.ID]map[int]bool)
 
 		for subscribedNode, streams := range pstreams {
 			id := enode.HexID(subscribedNode)
-			subscriptions := make([]int, 0)
 			b := make([]bool, 17)
 			for _, sub := range streams {
 				subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
@@ -672,35 +668,22 @@ func TestStarNetworkSync(t *testing.T) { //
 					return err
 				}
 				b[int(subPO)] = true
-				found := false
-
-				for _, v := range subscriptions {
-					if v == int(subPO) {
-						found = true
-					}
-				}
-				if !found {
-					subscriptions = append(subscriptions, int(subPO))
-				}
 			}
-			noSubs := make([]int, 0)
 			noMapMap := make(map[int]bool)
 			for i, v := range b {
 				if !v {
-					noSubs = append(noSubs, i)
 					noMapMap[i] = true
 				}
 			}
-			noSubMapMap[id] = noMapMap
-			noSubMap[id] = noSubs
-			subMap[id] = subscriptions
+			noSubMap[id] = noMapMap
 		}
 
 		// iterate over noSubMap, for each node check if it has any of the chunks it shouldn't have
-		for nodeId, noSubs := range noSubMap {
+		for nodeId, nodeNoSubs := range noSubMap {
 			for _, c := range chunksProx {
+				log.Error("checking chunk", "c.addr", c.addr)
 				// if the chunk PO is equal to the sub that the node shouldnt have - check if the node has the chunk!
-				if _, ok := noSubMapMap[nodeId][c.uploaderNodePO]; ok {
+				if _, ok := nodeNoSubs[c.uploaderNodePO]; ok {
 					count++
 					item, ok = sim.NodeItem(nodeId, bucketKeyStore)
 					if !ok {
@@ -714,7 +697,6 @@ func TestStarNetworkSync(t *testing.T) { //
 					}
 				}
 			}
-
 		}
 		return nil
 	})
