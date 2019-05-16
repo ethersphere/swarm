@@ -681,7 +681,6 @@ func TestStarNetworkSync(t *testing.T) { //
 		// iterate over noSubMap, for each node check if it has any of the chunks it shouldn't have
 		for nodeId, nodeNoSubs := range noSubMap {
 			for _, c := range chunksProx {
-				log.Error("checking chunk", "c.addr", c.addr)
 				// if the chunk PO is equal to the sub that the node shouldnt have - check if the node has the chunk!
 				if _, ok := nodeNoSubs[c.uploaderNodePO]; ok {
 					count++
