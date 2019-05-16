@@ -18,12 +18,17 @@ package testutil
 
 import (
 	"bytes"
+	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"math/rand"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/ethereum/go-ethereum/swarm/chunk"
+	"github.com/ethereum/go-ethereum/swarm/storage"
 )
 
 // TempFileWithContent is a helper function that creates a temp file that contains the following string content then closes the file handle
@@ -62,4 +67,19 @@ func RandomBytes(seed, length int) []byte {
 
 func RandomReader(seed, length int) *bytes.Reader {
 	return bytes.NewReader(RandomBytes(seed, length))
+}
+
+func GetAllRefs(testData []byte) (storage.AddressCollection, error) {
+	datadir, err := ioutil.TempDir("", "chunk-debug")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(datadir)
+	fileStore, err := storage.NewLocalFileStore(datadir, make([]byte, 32), chunk.NewTags())
+	if err != nil {
+		return nil, err
+	}
+
+	reader := bytes.NewReader(testData)
+	return fileStore.GetAllReferences(context.Background(), reader, false)
 }

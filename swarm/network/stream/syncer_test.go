@@ -17,6 +17,7 @@
 package stream
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -38,7 +39,7 @@ import (
 	"github.com/ethereum/go-ethereum/swarm/testutil"
 )
 
-const dataChunkCount = 200
+const dataChunkCount = 1000
 
 func TestSyncerSimulation(t *testing.T) {
 	testSyncBetweenNodes(t, 2, dataChunkCount, true, 1)
@@ -46,11 +47,11 @@ func TestSyncerSimulation(t *testing.T) {
 	// race detector. Allow it to finish successfully by
 	// reducing its scope, and still check for data races
 	// with the smallest number of nodes.
-	if !testutil.RaceEnabled {
+	/*if !testutil.RaceEnabled {
 		testSyncBetweenNodes(t, 4, dataChunkCount, true, 1)
 		testSyncBetweenNodes(t, 8, dataChunkCount, true, 1)
 		testSyncBetweenNodes(t, 16, dataChunkCount, true, 1)
-	}
+	}*/
 }
 
 func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, po uint8) {
@@ -83,8 +84,9 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 			}
 
 			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
-				Syncing:   SyncingAutoSubscribe,
-				SkipCheck: skipCheck,
+				Syncing:         SyncingAutoSubscribe,
+				SyncUpdateDelay: 50 * time.Millisecond,
+				SkipCheck:       skipCheck,
 			}, nil)
 
 			cleanup = func() {
@@ -126,91 +128,62 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 		}()
 
 		// each node Subscribes to each other's swarmChunkServerStreamName
-		for j := 0; j < nodes-1; j++ {
-			id := nodeIDs[j]
-			client, err := sim.Net.GetNode(id).Client()
-			if err != nil {
-				return fmt.Errorf("node %s client: %v", id, err)
-			}
-			sid := nodeIDs[j+1]
-			client.CallContext(ctx, nil, "stream_subscribeStream", sid, NewStream("SYNC", FormatSyncBinKey(1), false), NewRange(0, 0), Top)
-			if err != nil {
-				return err
-			}
-			if j > 0 || nodes == 2 {
-				item, ok := sim.NodeItem(nodeIDs[j], bucketKeyFileStore)
-				if !ok {
-					return fmt.Errorf("No filestore")
-				}
-				fileStore := item.(*storage.FileStore)
-				size := chunkCount * chunkSize
-				_, wait, err := fileStore.Store(ctx, testutil.RandomReader(j, size), int64(size), false)
-				if err != nil {
-					return fmt.Errorf("fileStore.Store: %v", err)
-				}
-				wait(ctx)
-			}
+		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
+		fileStore := item.(*storage.FileStore)
+		size := chunkCount * chunkSize
+		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
 		}
 		// here we distribute chunks of a random file into stores 1...nodes
 		// collect hashes in po 1 bin for each node
-		hashes := make([][]storage.Address, nodes)
-		totalHashes := 0
-		hashCounts := make([]int, nodes)
-		for i := nodes - 1; i >= 0; i-- {
-			if i < nodes-1 {
-				hashCounts[i] = hashCounts[i+1]
+		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
+		}
+		wait1(ctx)
+		wait2(ctx)
+		time.Sleep(2 * time.Second)
+
+		log.Warn("uploader node", "enode", nodeIDs[0])
+		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
+		if !ok {
+			return fmt.Errorf("No DB")
+		}
+		store := item.(chunk.Store)
+		until, err := store.LastPullSubscriptionBinID(po)
+		if err != nil {
+			return err
+		}
+
+		for idx, node := range nodeIDs {
+			if nodeIDs[idx] == nodeIDs[0] {
+				continue
 			}
-			item, ok := sim.NodeItem(nodeIDs[i], bucketKeyStore)
+
+			i := nodeIndex[node]
+
+			log.Warn("compare to", "enode", nodeIDs[idx])
+			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
 			if !ok {
 				return fmt.Errorf("No DB")
 			}
-			store := item.(chunk.Store)
-			until, err := store.LastPullSubscriptionBinID(po)
+			db := item.(chunk.Store)
+			shouldUntil, err := db.LastPullSubscriptionBinID(po)
 			if err != nil {
-				return err
+				t.Fatal(err)
 			}
-			if until > 0 {
-				c, _ := store.SubscribePull(ctx, po, 0, until)
-				for iterate := true; iterate; {
-					select {
-					case cd, ok := <-c:
-						if !ok {
-							iterate = false
-							break
-						}
-						hashes[i] = append(hashes[i], cd.Address)
-						totalHashes++
-						hashCounts[i]++
-					case <-ctx.Done():
-						return ctx.Err()
-					}
-				}
+			log.Warn("last pull subscription bin id", "shouldUntil", shouldUntil, "until", until, "po", po)
+			if shouldUntil != until {
+				t.Fatalf("did not get correct bin index from peer. got %d want %d", shouldUntil, until)
 			}
-		}
-		var total, found int
-		for _, node := range nodeIDs {
-			i := nodeIndex[node]
 
-			for j := i; j < nodes; j++ {
-				total += len(hashes[j])
-				for _, key := range hashes[j] {
-					item, ok := sim.NodeItem(nodeIDs[j], bucketKeyStore)
-					if !ok {
-						return fmt.Errorf("No DB")
-					}
-					db := item.(chunk.Store)
-					_, err := db.Get(ctx, chunk.ModeGetRequest, key)
-					if err == nil {
-						found++
-					}
-				}
-			}
-			log.Debug("sync check", "node", node, "index", i, "bin", po, "found", found, "total", total)
+			log.Warn("sync check", "node", node, "index", i, "bin", po)
 		}
-		if total == found && total > 0 {
-			return nil
-		}
-		return fmt.Errorf("Total not equallying found %v: total is %d", found, total)
+		return nil
 	})
 
 	if result.Error != nil {
@@ -344,4 +317,376 @@ func TestDifferentVersionID(t *testing.T) {
 	}
 	log.Info("Simulation ended")
 
+}
+
+// Tests that when two nodes connect:
+// 1. All subscriptions are created
+// 2. All chunks are transferred from one node to another
+func TestTwoNodesFullSync(t *testing.T) { //
+	const chunkCount = 1000
+
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			addr := network.NewAddr(ctx.Config.Node())
+			//hack to put addresses in same space
+			addr.OAddr[0] = byte(0) //wtf is this?
+
+			netStore, delivery, clean, err := newNetStoreAndDeliveryWithBzzAddr(ctx, bucket, addr)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			var dir string
+			var store *state.DBStore
+			if testutil.RaceEnabled {
+				// Use on-disk DBStore to reduce memory consumption in race tests.
+				dir, err = ioutil.TempDir("", "swarm-stream-")
+				if err != nil {
+					return nil, nil, err
+				}
+				store, err = state.NewDBStore(dir)
+				if err != nil {
+					return nil, nil, err
+				}
+			} else {
+				store = state.NewInmemoryStore()
+			}
+
+			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
+				Syncing:         SyncingAutoSubscribe,
+				SyncUpdateDelay: 50 * time.Millisecond,
+				SkipCheck:       true,
+			}, nil)
+
+			cleanup = func() {
+				r.Close()
+				clean()
+				if dir != "" {
+					os.RemoveAll(dir)
+				}
+			}
+
+			return r, cleanup, nil
+		},
+	})
+	defer sim.Close()
+
+	// create context for simulation run
+	timeout := 30 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
+
+	_, err := sim.AddNodesAndConnectChain(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		nodeIDs := sim.UpNodeIDs()
+
+		nodeIndex := make(map[enode.ID]int)
+		for i, id := range nodeIDs {
+			nodeIndex[id] = i
+		}
+
+		disconnected := watchDisconnections(ctx, sim)
+		defer func() {
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
+			}
+		}()
+
+		// each node Subscribes to each other's swarmChunkServerStreamName
+		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
+		fileStore := item.(*storage.FileStore)
+		size := chunkCount * chunkSize
+
+		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
+		}
+
+		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
+		}
+
+		wait1(ctx)
+		wait2(ctx)
+		time.Sleep(5 * time.Second)
+
+		log.Warn("uploader node", "enode", nodeIDs[0])
+		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
+		if !ok {
+			return fmt.Errorf("No DB")
+		}
+		store := item.(chunk.Store)
+		uploaderNodeBinIDs := make([]uint64, 17)
+
+		log.Debug("checking pull subscription bin ids")
+		for po := 0; po <= 16; po++ {
+			until, err := store.LastPullSubscriptionBinID(uint8(po))
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			uploaderNodeBinIDs[po] = until
+		}
+
+		for idx, _ := range nodeIDs {
+			if nodeIDs[idx] == nodeIDs[0] {
+				continue
+			}
+
+			log.Warn("compare to", "enode", nodeIDs[idx])
+			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
+			if !ok {
+				return fmt.Errorf("No DB")
+			}
+			db := item.(chunk.Store)
+
+			time.Sleep(5 * time.Second)
+			uploaderSum, otherSum := 0, 0
+			for po, uploaderUntil := range uploaderNodeBinIDs {
+				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
+				if err != nil {
+					t.Fatal(err)
+				}
+				otherSum += int(shouldUntil)
+				uploaderSum += int(uploaderUntil)
+			}
+			if uploaderSum != otherSum {
+				t.Fatalf("did not get correct bin index from peer. got %d want %d", uploaderSum, otherSum)
+			}
+		}
+		return nil
+	})
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
+
+// connect simulation of X nodes in a star topology (min 8 nodes)
+// get all chunk refs from the smoke test util
+// let them sync
+// iterate over all chunk refs
+// for each chunk, check pos with all nodes, for the node with highest PO - check if that node has the chunk in its localstore (with a GET)
+// exclusivity test (after we do the most prox inclusivity test, similar to the smoke test)
+// ---
+// uploader node 0
+// node 1 -> 0 -> does not have chunks from 1 2 3 4 5 .. 16
+//  - pick random (or any) chunk from bin 1 2 3 4 5 .. 16 from uploader node
+//  - localstore get on node 1 (without caring about po of node 1 and the chunk)
+//node 2 -> 1 -> does not have chunks from 0 2 3 4 5 .. 16
+//node 3 -> 2 3 4 5 .. 16 -> does not have chunks from 0 1
+/*
+
+   //create rpc client
+   client, err := node.Client()
+   if err != nil {
+       return fmt.Errorf("create node 1 rpc client fail: %v", err)
+   }
+
+   //ask it for subscriptions
+   pstreams := make(map[string][]string)
+   err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
+   if err != nil {
+       return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
+   }
+*/
+func TestStarNetworkSync(t *testing.T) { //
+	const chunkCount = 1000
+
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			addr := network.NewAddr(ctx.Config.Node())
+			//hack to put addresses in same space
+			//addr.OAddr[0] = byte(0) //wtf
+
+			netStore, delivery, clean, err := newNetStoreAndDeliveryWithBzzAddr(ctx, bucket, addr)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			var dir string
+			var store *state.DBStore
+			if testutil.RaceEnabled {
+				// Use on-disk DBStore to reduce memory consumption in race tests.
+				dir, err = ioutil.TempDir("", "swarm-stream-")
+				if err != nil {
+					return nil, nil, err
+				}
+				store, err = state.NewDBStore(dir)
+				if err != nil {
+					return nil, nil, err
+				}
+			} else {
+				store = state.NewInmemoryStore()
+			}
+
+			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
+				Syncing:         SyncingAutoSubscribe,
+				SyncUpdateDelay: 50 * time.Millisecond,
+				SkipCheck:       true,
+			}, nil)
+
+			cleanup = func() {
+				r.Close()
+				clean()
+				if dir != "" {
+					os.RemoveAll(dir)
+				}
+			}
+
+			return r, cleanup, nil
+		},
+	})
+	defer sim.Close()
+
+	// create context for simulation run
+	timeout := 30 * time.Second
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
+	const filesize = 1000 //kb
+	_, err := sim.AddNodesAndConnectStar(10)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
+		nodeIDs := sim.UpNodeIDs()
+
+		nodeIndex := make(map[enode.ID]int)
+		for i, id := range nodeIDs {
+			nodeIndex[id] = i
+		}
+		log.Error("node indexes", "idx", nodeIndex, "nodeIDs", nodeIDs)
+		disconnected := watchDisconnections(ctx, sim)
+		defer func() {
+			if err != nil && disconnected.bool() {
+				err = errors.New("disconnect events received")
+			}
+		}()
+
+		randomBytes := testutil.RandomBytes(1010, filesize*1000)
+
+		chunkAddrs, err := getAllRefs(randomBytes[:])
+		if err != nil {
+			t.Fatal(err)
+		}
+		chunksProx := make([]chunkProxData, 0)
+		for _, chunkAddr := range chunkAddrs {
+			chunkInfo := chunkProxData{
+				addr:            chunkAddr,
+				uploaderNodePO:  chunk.Proximity(nodeIDs[0].Bytes(), chunkAddr),
+				nodeProximities: make(map[enode.ID]int),
+			}
+			closestNodePO := 0
+			for nodeAddr, _ := range nodeIndex {
+				po := chunk.Proximity(nodeAddr.Bytes(), chunkAddr)
+
+				chunkInfo.nodeProximities[nodeAddr] = po
+				if po > closestNodePO {
+					chunkInfo.closestNodePO = po
+					chunkInfo.closestNode = nodeAddr
+				}
+				log.Error("123", "uploaderPO", chunkInfo.uploaderNodePO, "ci", chunkInfo.closestNode, "cpo", chunkInfo.closestNodePO, "cadrr", chunkInfo.addr)
+			}
+			chunksProx = append(chunksProx, chunkInfo)
+		}
+		//log.Debug("w", "w", chunksProx)
+		// get the pivot node and pump some data
+		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
+		if !ok {
+			return fmt.Errorf("No filestore")
+		}
+		fileStore := item.(*storage.FileStore)
+		size := chunkCount * chunkSize
+		reader := bytes.NewReader(randomBytes[:])
+		_, wait1, err := fileStore.Store(ctx, reader, int64(size), false)
+		if err != nil {
+			return fmt.Errorf("fileStore.Store: %v", err)
+		}
+
+		wait1(ctx)
+		time.Sleep(5 * time.Second)
+		count := 0
+		for _, c := range chunksProx {
+			// if the most proximate host is set - check that the chunk is there
+			if c.closestNodePO > 0 {
+				count++
+				log.Debug("found chunk with proximate host set, trying to find in localstore")
+				item, ok = sim.NodeItem(c.closestNode, bucketKeyStore)
+				if !ok {
+					return fmt.Errorf("No DB")
+				}
+				store := item.(chunk.Store)
+
+				_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
+				if err != nil {
+					t.Fatal(err)
+				}
+			}
+		}
+		log.Debug("done checking stores", "checked chunks", count, "total chunks", len(chunksProx))
+		panic("wtf")
+		log.Warn("uploader node", "enode", nodeIDs[0])
+		uploaderNodeBinIDs := make([]uint64, 17)
+
+		log.Debug("checking pull subscription bin ids")
+		/*	for po := 0; po <= 16; po++ {
+				until, err := store.LastPullSubscriptionBinID(uint8(po))
+				if err != nil {
+					t.Fatal(err)
+				}
+
+				uploaderNodeBinIDs[po] = until
+			}
+		*/
+		for idx, _ := range nodeIDs {
+			if nodeIDs[idx] == nodeIDs[0] {
+				continue
+			}
+
+			log.Warn("compare to", "enode", nodeIDs[idx])
+			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
+			if !ok {
+				return fmt.Errorf("No DB")
+			}
+			db := item.(chunk.Store)
+
+			time.Sleep(5 * time.Second)
+			uploaderSum, otherSum := 0, 0
+			for po, uploaderUntil := range uploaderNodeBinIDs {
+				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
+				if err != nil {
+					t.Fatal(err)
+				}
+				otherSum += int(shouldUntil)
+				uploaderSum += int(uploaderUntil)
+			}
+			if uploaderSum != otherSum {
+				t.Fatalf("did not get correct bin index from peer. got %d want %d", uploaderSum, otherSum)
+			}
+		}
+		return nil
+	})
+
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
+
+type chunkProxData struct {
+	addr            chunk.Address
+	uploaderNodePO  int
+	nodeProximities map[enode.ID]int
+	closestNode     enode.ID
+	closestNodePO   int
 }
