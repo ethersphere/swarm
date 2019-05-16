@@ -658,14 +658,21 @@ func TestStarNetworkSync(t *testing.T) { //
 
 		// create a slice where a slice of enodes correlates to a bin
 		subs := make([][]enode.ID, 17)
+
+		//create a map of subscribed POs per node
+		subMap := make(map[enode.ID][]int)
+		//create a map of no-subs for a node
+		noSubMap := make(map[enode.ID][]int)
 		for subscribedNode, streams := range pstreams {
 			id := enode.HexID(subscribedNode)
-			//subscriptions := make([]int, 0)
+			subscriptions := make([]int, 0)
+			b := make([]bool, 17)
 			for _, sub := range streams {
 				subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
 				if err != nil {
 					return err
 				}
+				b[int(subPO)] = true
 				found := false
 				for _, v := range subs[int(subPO)] {
 					if v == id {
@@ -674,12 +681,30 @@ func TestStarNetworkSync(t *testing.T) { //
 				}
 				if !found {
 					subs[int(subPO)] = append(subs[int(subPO)], id)
-					//subscriptions = append(subscriptions, int(subPO))
+				}
+				found = false
+				for _, v := range subscriptions {
+					if v == int(subPO) {
+						found = true
+					}
+				}
+				if !found {
+					subscriptions = append(subscriptions, int(subPO))
 				}
 			}
-			//subMap[id] = subscriptions
+			noSubs := make([]int, 0)
+			for i, v := range b {
+				if !v {
+					noSubs = append(noSubs, i)
+				}
+			}
+			noSubMap[id] = noSubs
+			subMap[id] = subscriptions
 		}
 
+		for nodeId, nodeSubs := range subMap {
+
+		}
 		return nil
 	})
 
