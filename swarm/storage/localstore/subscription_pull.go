@@ -75,7 +75,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				BinID:   since,
 			}
 		}
-		first := true // first iteration flag for SkipStartFromItem
+		//first := true // first iteration flag for SkipStartFromItem
 		for {
 			select {
 			case <-trigger:
@@ -119,8 +119,8 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					// sinceItem was sent as the last Address in the previous
 					// iterator call, skip it in this one, but not the item with
 					// the provided since bin id as it should be sent to a channel
-					SkipStartFromItem: !first,
-					Prefix:            []byte{bin},
+					//SkipStartFromItem: !first,
+					Prefix: []byte{bin},
 				})
 
 				totalTimeMetric(metricName+".iter", iterStart)
@@ -135,7 +135,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 					log.Error("localstore pull subscription iteration", "bin", bin, "since", since, "until", until, "err", err)
 					return
 				}
-				first = false
+				//first = false
 			case <-stopChan:
 				// terminate the subscription
 				// on stop
