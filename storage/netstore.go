@@ -83,7 +83,7 @@ type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*e
 // on request it initiates remote cloud retrieval
 type NetStore struct {
 	chunk.Store
-	localID      enode.ID // our local enode - used when issuing RetrieveRequests
+	LocalID      enode.ID // our local enode - used when issuing RetrieveRequests
 	fetchers     *lru.Cache
 	putMu        sync.Mutex
 	requestGroup singleflight.Group
@@ -97,7 +97,7 @@ func NewNetStore(store chunk.Store, localID enode.ID) *NetStore {
 	return &NetStore{
 		fetchers: fetchers,
 		Store:    store,
-		localID:  localID,
+		LocalID:  localID,
 	}
 }
 
@@ -236,7 +236,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 
 		log.Trace("remote.fetch", "ref", ref)
 
-		currentPeer, err := n.RemoteGet(ctx, req, n.localID)
+		currentPeer, err := n.RemoteGet(ctx, req, n.LocalID)
 		if err != nil {
 			log.Trace(err.Error(), "ref", ref)
 			osp.LogFields(olog.String("err", err.Error()))
@@ -287,6 +287,7 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 	has, err := n.Store.Has(ctx, ref)
 	if err != nil {
 		log.Error(err.Error())
+		panic(err)
 	}
 	if has {
 		return nil, false, false

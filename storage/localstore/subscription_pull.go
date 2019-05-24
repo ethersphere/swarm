@@ -18,6 +18,7 @@ package localstore
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"sync"
 	"time"
@@ -38,6 +39,7 @@ import (
 // Make sure that you check the second returned parameter from the channel to stop iteration when its value
 // is false.
 func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64) (c <-chan chunk.Descriptor, stop func()) {
+	log.Debug("db.SubscribePull", "base", hex.EncodeToString(db.baseKey), "bin", bin, "since", since, "until", until)
 	metricName := "localstore.SubscribePull"
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 
@@ -75,6 +77,7 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				BinID:   since,
 			}
 		}
+		ccc := make(map[string]bool)
 		first := true // first iteration flag for SkipStartFromItem
 		for {
 			select {
@@ -88,17 +91,25 @@ func (db *DB) SubscribePull(ctx context.Context, bin uint8, since, until uint64)
 				iterStart := time.Now()
 				var count int
 				err := db.pullIndex.Iterate(func(item shed.Item) (stop bool, err error) {
+					// until chunk descriptor is sent
+					// break the iteration
+					if until > 0 && item.BinID > until {
+						return true, errStopSubscription
+					}
 					select {
 					case chunkDescriptors <- chunk.Descriptor{
 						Address: item.Address,
 						BinID:   item.BinID,
 					}:
-						count++
-						// until chunk descriptor is sent
-						// break the iteration
-						if until > 0 && item.BinID >= until {
+						if _, ok := ccc[hex.EncodeToString(item.Address)]; ok {
+							panic("shouldnt")
+						}
+						ccc[hex.EncodeToString(item.Address)] = true
+						if until > 0 && item.BinID == until {
+							log.Debug("breaking on reached bin ID")
 							return true, errStopSubscription
 						}
+						count++
 						// set next iteration start item
 						// when its chunk is successfully sent to channel
 						sinceItem = &item

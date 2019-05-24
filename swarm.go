@@ -47,7 +47,8 @@ import (
 	"github.com/ethersphere/swarm/fuse"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
-	"github.com/ethersphere/swarm/network/stream"
+	"github.com/ethersphere/swarm/network/newstream"
+	"github.com/ethersphere/swarm/network/retrieval"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
@@ -73,7 +74,8 @@ type Swarm struct {
 	api               *api.API           // high level api layer (fs/manifest)
 	dns               api.Resolver       // DNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
-	streamer          *stream.Registry
+	newstreamer       *newstream.SlipStream
+	retrieval         *retrieval.Retrieval
 	bzz               *network.Bzz       // the logistic manager
 	backend           chequebook.Backend // simple blockchain Backend
 	privateKey        *ecdsa.PrivateKey
@@ -187,8 +189,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		common.FromHex(config.BzzKey),
 		network.NewKadParams(),
 	)
-	delivery := stream.NewDelivery(to, self.netStore)
-	self.netStore.RemoteGet = delivery.RequestFromPeers
+	self.retrieval = retrieval.New(to, self.netStore)
+	self.netStore.RemoteGet = self.retrieval.RequestFromPeers
 
 	feedsHandler.SetStore(self.netStore)
 
@@ -201,19 +203,13 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		self.accountingMetrics = protocols.SetupAccountingMetrics(10*time.Second, filepath.Join(config.Path, "metrics.db"))
 	}
 
-	syncing := stream.SyncingAutoSubscribe
-	if !config.SyncEnabled || config.LightNodeEnabled {
-		syncing = stream.SyncingDisabled
-	}
+	//if !config.SyncEnabled || config.LightNodeEnabled {
+	//syncing = stream.SyncingDisabled
+	//}
 
-	registryOptions := &stream.RegistryOptions{
-		SkipCheck:       config.DeliverySkipCheck,
-		Syncing:         syncing,
-		SyncUpdateDelay: config.SyncUpdateDelay,
-		MaxPeerServers:  config.MaxStreamPeerServers,
-	}
-	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
-	self.tags = chunk.NewTags() //todo load from state store
+	syncProvider := newstream.NewSyncProvider(self.netStore, to, false)
+	self.newstreamer = newstream.New(self.stateStore, bzzconfig.OverlayAddr, syncProvider)
+	tags := chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
@@ -221,7 +217,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 
 	log.Debug("Setup local storage")
 
-	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
+	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, newstream.Spec, self.newstreamer.Run)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.New(to, config.Pss)
@@ -432,7 +428,8 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	}(startTime)
 
 	startCounter.Inc(1)
-	s.streamer.Start(srv)
+	_ = s.newstreamer.Start(srv)
+	_ = s.retrieval.Start(srv)
 	return nil
 }
 
@@ -460,13 +457,15 @@ func (s *Swarm) Stop() error {
 	if s.accountingMetrics != nil {
 		s.accountingMetrics.Close()
 	}
+
+	_ = s.newstreamer.Stop()
+	_ = s.retrieval.Stop()
+
 	if s.netStore != nil {
 		s.netStore.Close()
 	}
 	s.sfs.Stop()
 	stopCounter.Inc(1)
-	s.streamer.Stop()
-
 	err := s.bzz.Stop()
 	if s.stateStore != nil {
 		s.stateStore.Close()
@@ -488,6 +487,8 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 		protos = append(protos, s.bzz.Protocols()...)
 	} else {
 		protos = append(protos, s.bzz.Protocols()...)
+
+		protos = append(protos, s.retrieval.Protocols()...)
 
 		if s.ps != nil {
 			protos = append(protos, s.ps.Protocols()...)
@@ -511,7 +512,7 @@ func (s *Swarm) APIs() []rpc.API {
 		{
 			Namespace: "bzz",
 			Version:   "3.0",
-			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore),
+			Service:   api.NewInspector(s.api, s.bzz.Hive, s.netStore, s.newstreamer),
 			Public:    false,
 		},
 		{
@@ -536,7 +537,7 @@ func (s *Swarm) APIs() []rpc.API {
 
 	apis = append(apis, s.bzz.APIs()...)
 
-	apis = append(apis, s.streamer.APIs()...)
+	apis = append(apis, s.newstreamer.APIs()...)
 
 	if s.ps != nil {
 		apis = append(apis, s.ps.APIs()...)

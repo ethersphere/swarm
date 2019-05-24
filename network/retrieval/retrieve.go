@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -65,26 +66,68 @@ var (
 	ErrNoPeerFound = errors.New("no peer found")
 )
 
+// RetrievalPrices define the price matrix that correlates a message
+// type to a certain price (or price function)
+type RetrievalPrices struct {
+	priceMatrix map[reflect.Type]*protocols.Price
+}
+
+// Price implements the protocols.Price interface and returns the price for a specific message
+func (p *RetrievalPrices) Price(msg interface{}) *protocols.Price {
+	t := reflect.TypeOf(msg).Elem()
+	return p.priceMatrix[t]
+}
+
+func (p *RetrievalPrices) retrieveRequestPrice() uint64 {
+	return uint64(1)
+}
+
+func (p *RetrievalPrices) chunkDeliveryPrice() uint64 {
+	return uint64(1)
+}
+
+// createPriceOracle sets up a matrix which can be queried to get
+// the price for a message via the Price method
+func (r *Retrieval) createPriceOracle() {
+	p := &RetrievalPrices{}
+	p.priceMatrix = map[reflect.Type]*protocols.Price{
+		reflect.TypeOf(ChunkDelivery{}): {
+			Value:   p.chunkDeliveryPrice(),
+			PerByte: true,
+			Payer:   protocols.Receiver,
+		},
+		reflect.TypeOf(RetrieveRequest{}): {
+			Value:   p.retrieveRequestPrice(),
+			PerByte: false,
+			Payer:   protocols.Sender,
+		},
+	}
+	r.prices = p
+}
+
 // Retrieval holds state and handles protocol messages for the `bzz-retrieve` protocol
 type Retrieval struct {
 	mtx      sync.Mutex
 	netStore *storage.NetStore
 	kad      *network.Kademlia
 	peers    map[enode.ID]*Peer
-	spec     *protocols.Spec //this protocol's spec
+	spec     *protocols.Spec
+	prices   protocols.Prices
 
-	quit chan struct{} // termination
+	quit chan struct{}
 }
 
-// NewRetrieval returns a new instance of the retrieval protocol handler
+// New returns a new instance of the retrieval protocol handler
 func New(kad *network.Kademlia, ns *storage.NetStore) *Retrieval {
-	return &Retrieval{
+	r := &Retrieval{
 		kad:      kad,
 		peers:    make(map[enode.ID]*Peer),
 		netStore: ns,
 		quit:     make(chan struct{}),
 		spec:     spec,
 	}
+	r.createPriceOracle()
+	return r
 }
 
 func (r *Retrieval) addPeer(p *Peer) {

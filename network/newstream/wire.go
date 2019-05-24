@@ -49,12 +49,15 @@ type StreamProvider interface {
 	// Subscribe to a data stream from an arbitrary data source
 	Subscribe(ctx context.Context, key interface{}, from, to uint64) (<-chan chunk.Descriptor, func())
 
-	// Cursor returns the last known Cursor for a given Stream Key
-	Cursor(interface{}) (uint64, error)
+	// CursorStr returns the last known Cursor for a given Stream Key string
+	CursorStr(string) (uint64, error)
 
-	// RunUpdateStreams is a provider specific implementation on how to maintain running streams with
+	// InitPeer is a provider specific implementation on how to maintain running streams with
 	// an arbitrary Peer. This method should always be run in a separate goroutine
-	RunUpdateStreams(p *Peer)
+	InitPeer(p *Peer)
+
+	// WantStream indicates if we are interested in a stream
+	WantStream(*Peer, ID) bool
 
 	// StreamName returns the Name of the Stream (see ID)
 	StreamName() string
@@ -65,28 +68,10 @@ type StreamProvider interface {
 	// EncodeStream from a Stream Key to a Stream pipe-separated string representation
 	EncodeKey(interface{}) (string, error)
 
-	// StreamBehavior defines how the stream behaves upon initialisation
-	StreamBehavior() StreamInitBehavior
-
 	Boundedness() bool
+
+	Close()
 }
-
-// StreamInitBehavior defines the stream behavior upon init
-type StreamInitBehavior int
-
-const (
-	// StreamIdle means that there is no initial automatic message exchange
-	// between the nodes when the protocol gets established
-	StreamIdle StreamInitBehavior = iota
-
-	// StreamGetCursors tells the two nodes to automatically fetch stream
-	// cursors from each other
-	StreamGetCursors
-
-	// StreamAutostart automatically starts fetching data from the streams
-	// once the cursors arrive
-	StreamAutostart
-)
 
 // StreamInfoReq is a request to get information about particular streams
 type StreamInfoReq struct {
@@ -111,7 +96,7 @@ type GetRange struct {
 	Ruid      uint
 	Stream    ID
 	From      uint64
-	To        uint64 `rlp:"nil"`
+	To        *uint64 `rlp:"nil"`
 	BatchSize uint
 	Roundtrip bool
 }
@@ -120,7 +105,7 @@ type GetRange struct {
 // to selectively ask for chunks within a particular requested interval
 type OfferedHashes struct {
 	Ruid      uint
-	LastIndex uint
+	LastIndex uint64
 	Hashes    []byte
 }
 
@@ -133,9 +118,8 @@ type WantedHashes struct {
 
 // ChunkDelivery delivers a frame of chunks in response to a WantedHashes message
 type ChunkDelivery struct {
-	Ruid      uint
-	LastIndex uint
-	Chunks    []DeliveredChunk
+	Ruid   uint
+	Chunks []DeliveredChunk
 }
 
 // DeliveredChunk encapsulates a particular chunk's underlying data within a ChunkDelivery message

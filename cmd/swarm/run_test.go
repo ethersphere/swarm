@@ -45,7 +45,7 @@ import (
 	"github.com/ethersphere/swarm/storage/pin"
 )
 
-var loglevel = flag.Int("loglevel", 3, "verbosity of logs")
+var loglevel = flag.Int("loglevel", 0, "verbosity of logs")
 
 func init() {
 	// Run the app if we've been exec'd as "swarm-test" in runSwarm.
