@@ -24,7 +24,9 @@ import (
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/p2p/protocols"
+	"github.com/ethersphere/swarm/storage"
 )
 
 var (
@@ -36,15 +38,19 @@ var _ node.Service = &BzzEth{}
 
 // BzzEth is a global module handling ethereum state on swarm
 type BzzEth struct {
-	peers *peers        // bzzeth peer pool
-	quit  chan struct{} // quit channel to close go routines
+	peers    *peers            // bzzeth peer pool
+	netStore *storage.NetStore // netstore to retrieve and store
+	kad      *network.Kademlia // kademlia to determine if a header chunk belongs to us
+	quit     chan struct{}     // quit channel to close go routines
 }
 
 // New constructs the BzzEth node service
-func New() *BzzEth {
+func New(ns *storage.NetStore, kad *network.Kademlia) *BzzEth {
 	return &BzzEth{
-		peers: newPeers(),
-		quit:  make(chan struct{}),
+		peers:    newPeers(),
+		netStore: ns,
+		kad:      kad,
+		quit:     make(chan struct{}),
 	}
 }
 
