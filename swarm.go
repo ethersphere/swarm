@@ -32,11 +32,6 @@ import (
 	"time"
 	"unicode"
 
-	"github.com/ethersphere/swarm/chunk"
-
-	"github.com/ethersphere/swarm/storage/feed"
-	"github.com/ethersphere/swarm/storage/localstore"
-
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
@@ -46,6 +41,8 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 	"github.com/ethersphere/swarm/api"
 	httpapi "github.com/ethersphere/swarm/api/http"
+	"github.com/ethersphere/swarm/bzzeth"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/chequebook"
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/fuse"
@@ -56,6 +53,8 @@ import (
 	"github.com/ethersphere/swarm/pss"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
 	"github.com/ethersphere/swarm/swap"
 	"github.com/ethersphere/swarm/tracing"
@@ -75,6 +74,7 @@ type Swarm struct {
 	dns               api.Resolver       // DNS registrar
 	fileStore         *storage.FileStore // distributed preimage archive, the local API to the storage with document level storage/retrieval support
 	streamer          *stream.Registry
+	bzzEth            *bzzeth.BzzEth
 	bzz               *network.Bzz       // the logistic manager
 	backend           chequebook.Backend // simple blockchain Backend
 	privateKey        *ecdsa.PrivateKey
@@ -212,6 +212,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		MaxPeerServers:  config.MaxStreamPeerServers,
 	}
 	self.streamer = stream.NewRegistry(nodeID, delivery, self.netStore, self.stateStore, registryOptions, self.swap)
+
 	tags := chunk.NewTags() //todo load from state store
 
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
@@ -221,6 +222,8 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	log.Debug("Setup local storage")
 
 	self.bzz = network.NewBzz(bzzconfig, to, self.stateStore, self.streamer.GetSpec(), self.streamer.Run)
+
+	self.bzzEth = bzzeth.New(self.netStore, to)
 
 	// Pss = postal service over swarm (devp2p over bzz)
 	self.ps, err = pss.New(to, config.Pss)
@@ -379,6 +382,11 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 	}
 	log.Info("Swarm network started", "bzzaddr", fmt.Sprintf("%x", s.bzz.Hive.BaseAddr()))
 
+	err = s.bzzEth.Start(srv)
+	if err != nil {
+		return err
+	}
+
 	if s.ps != nil {
 		s.ps.Start(srv)
 	}
@@ -464,7 +472,12 @@ func (s *Swarm) Stop() error {
 	stopCounter.Inc(1)
 	s.streamer.Stop()
 
-	err := s.bzz.Stop()
+	err := s.bzzEth.Stop()
+	if err != nil {
+		log.Error("error during bzz-eth shutdown", "err", err)
+	}
+
+	err = s.bzz.Stop()
 	if s.stateStore != nil {
 		s.stateStore.Close()
 	}
@@ -485,7 +498,7 @@ func (s *Swarm) Protocols() (protos []p2p.Protocol) {
 		protos = append(protos, s.bzz.Protocols()...)
 	} else {
 		protos = append(protos, s.bzz.Protocols()...)
-
+		protos = append(protos, s.bzzEth.Protocols()...)
 		if s.ps != nil {
 			protos = append(protos, s.ps.Protocols()...)
 		}
@@ -532,7 +545,7 @@ func (s *Swarm) APIs() []rpc.API {
 	}
 
 	apis = append(apis, s.bzz.APIs()...)
-
+	apis = append(apis, s.bzzEth.APIs()...)
 	apis = append(apis, s.streamer.APIs()...)
 
 	if s.ps != nil {
