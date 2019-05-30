@@ -48,11 +48,11 @@ func TestSyncerSimulation(t *testing.T) {
 	// race detector. Allow it to finish successfully by
 	// reducing its scope, and still check for data races
 	// with the smallest number of nodes.
-	/*if !testutil.RaceEnabled {
+	if !testutil.RaceEnabled {
 		testSyncBetweenNodes(t, 4, dataChunkCount, true, 1)
 		testSyncBetweenNodes(t, 8, dataChunkCount, true, 1)
 		testSyncBetweenNodes(t, 16, dataChunkCount, true, 1)
-	}*/
+	}
 }
 
 func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, po uint8) {
@@ -320,17 +320,19 @@ func TestDifferentVersionID(t *testing.T) {
 
 }
 
-// Tests that when two nodes connect:
+// TestTwoNodesFullSync connects two nodes, uploads content to one node and expects the
+// uploader node's chunks to be synced to the second node. This is expected behaviour since although
+// both nodes might share address bits, due to kademlia depth=0 when under ProxBinSize - this will
+// eventually create subscriptions on all bins between the two nodes, causing a full sync between them
+// The test checks that:
 // 1. All subscriptions are created
-// 2. All chunks are transferred from one node to another
+// 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) { //
 	const chunkCount = 1000
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr := network.NewAddr(ctx.Config.Node())
-			//hack to put addresses in same space
-			addr.OAddr[0] = byte(0) //wtf is this?
 
 			netStore, delivery, clean, err := newNetStoreAndDeliveryWithBzzAddr(ctx, bucket, addr)
 			if err != nil {
@@ -355,7 +357,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 
 			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
 				Syncing:         SyncingAutoSubscribe,
-				SyncUpdateDelay: 50 * time.Millisecond,
+				SyncUpdateDelay: 50 * time.Millisecond, //this is needed to trigger the update subscriptions loop
 				SkipCheck:       true,
 			}, nil)
 
@@ -385,6 +387,9 @@ func TestTwoNodesFullSync(t *testing.T) { //
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
+		if len(nodeIDs) != 2 {
+			return errors.New("not enough nodes up")
+		}
 
 		nodeIndex := make(map[enode.ID]int)
 		for i, id := range nodeIDs {
@@ -418,8 +423,39 @@ func TestTwoNodesFullSync(t *testing.T) { //
 
 		wait1(ctx)
 		wait2(ctx)
-		time.Sleep(5 * time.Second)
+		time.Sleep(2 * time.Second)
 
+		//explicitly check that all subscriptions are there on all bins
+		for idx, id := range nodeIDs {
+			node := sim.Net.GetNode(id)
+			client, err := node.Client()
+			if err != nil {
+				return fmt.Errorf("create node %d rpc client fail: %v", idx, err)
+			}
+
+			//ask it for subscriptions
+			pstreams := make(map[string][]string)
+			err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
+			if err != nil {
+				return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
+			}
+			for _, streams := range pstreams {
+				b := make([]bool, 17)
+				for _, sub := range streams {
+					subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
+					if err != nil {
+						return err
+					}
+					b[int(subPO)] = true
+				}
+				for bin, v := range b {
+					if !v {
+						return fmt.Errorf("did not find any subscriptions for node %d on bin %d", idx, bin)
+					}
+				}
+			}
+		}
+		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Warn("uploader node", "enode", nodeIDs[0])
 		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
 		if !ok {
@@ -438,6 +474,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			uploaderNodeBinIDs[po] = until
 		}
 
+		// check that the sum of bin indexes is equal
 		for idx, _ := range nodeIDs {
 			if nodeIDs[idx] == nodeIDs[0] {
 				continue
@@ -450,7 +487,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 			db := item.(chunk.Store)
 
-			time.Sleep(5 * time.Second)
+			time.Sleep(2 * time.Second)
 			uploaderSum, otherSum := 0, 0
 			for po, uploaderUntil := range uploaderNodeBinIDs {
 				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
