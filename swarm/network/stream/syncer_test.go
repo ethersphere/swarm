@@ -167,7 +167,7 @@ func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, p
 
 			i := nodeIndex[node]
 
-			log.Warn("compare to", "enode", nodeIDs[idx])
+			log.Info("compare to", "enode", nodeIDs[idx])
 			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
 			if !ok {
 				return fmt.Errorf("No DB")
@@ -455,7 +455,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 		}
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
-		log.Warn("uploader node", "enode", nodeIDs[0])
+		log.Info("uploader node", "enode", nodeIDs[0])
 		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No DB")
@@ -479,7 +479,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 				continue
 			}
 
-			log.Warn("compare to", "enode", nodeIDs[idx])
+			log.Info("compare to", "enode", nodeIDs[idx])
 			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
 			if !ok {
 				return fmt.Errorf("No DB")
@@ -654,7 +654,7 @@ func TestStarNetworkSync(t *testing.T) { //
 			}
 		}
 		log.Debug("done checking stores", "checked chunks", count, "total chunks", len(chunksProx))
-		if count != chunksProx {
+		if count != len(chunksProx) {
 			return fmt.Errorf("checked chunks dont match numer of chunks. got %d want %d", count, len(chunksProx))
 		}
 
