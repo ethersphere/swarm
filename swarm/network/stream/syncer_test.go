@@ -509,42 +509,20 @@ func TestTwoNodesFullSync(t *testing.T) { //
 	}
 }
 
-// connect simulation of X nodes in a star topology (min 8 nodes)
-// get all chunk refs from the smoke test util
-// let them sync
-// iterate over all chunk refs
-// for each chunk, check pos with all nodes, for the node with highest PO - check if that node has the chunk in its localstore (with a GET)
-// exclusivity test (after we do the most prox inclusivity test, similar to the smoke test)
-// ---
-// uploader node 0
-// node 1 -> 0 -> does not have chunks from 1 2 3 4 5 .. 16
-//  - pick random (or any) chunk from bin 1 2 3 4 5 .. 16 from uploader node
-//  - localstore get on node 1 (without caring about po of node 1 and the chunk)
-//node 2 -> 1 -> does not have chunks from 0 2 3 4 5 .. 16
-//node 3 -> 2 3 4 5 .. 16 -> does not have chunks from 0 1
-/*
-
-   //create rpc client
-   client, err := node.Client()
-   if err != nil {
-       return fmt.Errorf("create node 1 rpc client fail: %v", err)
-   }
-
-   //ask it for subscriptions
-   pstreams := make(map[string][]string)
-   err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
-   if err != nil {
-       return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
-   }
-*/
+// TestStarNetworkSync tests that syncing works on a more elaborate network topology
+// the test creates a network of 10 nodes and connects them in a star topology, this causes
+// the pivot node to have neighbourhood depth > 0, which in turn means that each individual node
+// will only get SOME of the chunks that exist on the uploader node (the pivot node).
+// The test checks that EVERY chunk that exists on the pivot node:
+//	a. exists on the most proximate node
+//	b. exists on the nodes subscribed on the corresponding chunk PO
+//	c. does not exist on the peers that do not have that PO subscription
 func TestStarNetworkSync(t *testing.T) { //
 	const chunkCount = 1000
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr := network.NewAddr(ctx.Config.Node())
-			//hack to put addresses in same space
-			//addr.OAddr[0] = byte(0) //wtf
 
 			netStore, delivery, clean, err := newNetStoreAndDeliveryWithBzzAddr(ctx, bucket, addr)
 			if err != nil {
