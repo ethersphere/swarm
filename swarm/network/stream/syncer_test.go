@@ -403,7 +403,6 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 		}()
 
-		// each node Subscribes to each other's swarmChunkServerStreamName
 		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
 		if !ok {
 			return fmt.Errorf("No filestore")
