@@ -654,9 +654,11 @@ func TestStarNetworkSync(t *testing.T) { //
 			}
 		}
 		log.Debug("done checking stores", "checked chunks", count, "total chunks", len(chunksProx))
+		if count != chunksProx {
+			return fmt.Errorf("checked chunks dont match numer of chunks. got %d want %d", count, len(chunksProx))
+		}
 
 		// check that chunks from each po are _not_ on nodes that don't have subscriptions for these POs
-		//create rpc client
 		node := sim.Net.GetNode(nodeIDs[0])
 		client, err := node.Client()
 		if err != nil {
