@@ -42,156 +42,6 @@ import (
 
 const dataChunkCount = 1000
 
-func TestSyncerSimulation(t *testing.T) {
-	testSyncBetweenNodes(t, 2, dataChunkCount, true, 1)
-	// This test uses much more memory when running with
-	// race detector. Allow it to finish successfully by
-	// reducing its scope, and still check for data races
-	// with the smallest number of nodes.
-	if !testutil.RaceEnabled {
-		testSyncBetweenNodes(t, 4, dataChunkCount, true, 1)
-		testSyncBetweenNodes(t, 8, dataChunkCount, true, 1)
-		testSyncBetweenNodes(t, 16, dataChunkCount, true, 1)
-	}
-}
-
-func testSyncBetweenNodes(t *testing.T, nodes, chunkCount int, skipCheck bool, po uint8) {
-
-	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			addr := network.NewAddr(ctx.Config.Node())
-			//hack to put addresses in same space
-			addr.OAddr[0] = byte(0)
-
-			netStore, delivery, clean, err := newNetStoreAndDeliveryWithBzzAddr(ctx, bucket, addr)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			var dir string
-			var store *state.DBStore
-			if testutil.RaceEnabled {
-				// Use on-disk DBStore to reduce memory consumption in race tests.
-				dir, err = ioutil.TempDir("", "swarm-stream-")
-				if err != nil {
-					return nil, nil, err
-				}
-				store, err = state.NewDBStore(dir)
-				if err != nil {
-					return nil, nil, err
-				}
-			} else {
-				store = state.NewInmemoryStore()
-			}
-
-			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
-				Syncing:         SyncingAutoSubscribe,
-				SyncUpdateDelay: 50 * time.Millisecond,
-				SkipCheck:       skipCheck,
-			}, nil)
-
-			cleanup = func() {
-				r.Close()
-				clean()
-				if dir != "" {
-					os.RemoveAll(dir)
-				}
-			}
-
-			return r, cleanup, nil
-		},
-	})
-	defer sim.Close()
-
-	// create context for simulation run
-	timeout := 30 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	// defer cancel should come before defer simulation teardown
-	defer cancel()
-
-	_, err := sim.AddNodesAndConnectChain(nodes)
-	if err != nil {
-		t.Fatal(err)
-	}
-	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
-		nodeIDs := sim.UpNodeIDs()
-
-		nodeIndex := make(map[enode.ID]int)
-		for i, id := range nodeIDs {
-			nodeIndex[id] = i
-		}
-
-		disconnected := watchDisconnections(ctx, sim)
-		defer func() {
-			if err != nil && disconnected.bool() {
-				err = errors.New("disconnect events received")
-			}
-		}()
-
-		// each node Subscribes to each other's swarmChunkServerStreamName
-		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
-		if !ok {
-			return fmt.Errorf("No filestore")
-		}
-		fileStore := item.(*storage.FileStore)
-		size := chunkCount * chunkSize
-		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
-		if err != nil {
-			return fmt.Errorf("fileStore.Store: %v", err)
-		}
-		// here we distribute chunks of a random file into stores 1...nodes
-		// collect hashes in po 1 bin for each node
-		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
-		if err != nil {
-			return fmt.Errorf("fileStore.Store: %v", err)
-		}
-		wait1(ctx)
-		wait2(ctx)
-		time.Sleep(2 * time.Second)
-
-		log.Warn("uploader node", "enode", nodeIDs[0])
-		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
-		if !ok {
-			return fmt.Errorf("No DB")
-		}
-		store := item.(chunk.Store)
-		until, err := store.LastPullSubscriptionBinID(po)
-		if err != nil {
-			return err
-		}
-
-		for idx, node := range nodeIDs {
-			if nodeIDs[idx] == nodeIDs[0] {
-				continue
-			}
-
-			i := nodeIndex[node]
-
-			log.Info("compare to", "enode", nodeIDs[idx])
-			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
-			if !ok {
-				return fmt.Errorf("No DB")
-			}
-			db := item.(chunk.Store)
-			shouldUntil, err := db.LastPullSubscriptionBinID(po)
-			if err != nil {
-				t.Fatal(err)
-			}
-			log.Warn("last pull subscription bin id", "shouldUntil", shouldUntil, "until", until, "po", po)
-			if shouldUntil != until {
-				t.Fatalf("did not get correct bin index from peer. got %d want %d", shouldUntil, until)
-			}
-
-			log.Warn("sync check", "node", node, "index", i, "bin", po)
-		}
-		return nil
-	})
-
-	if result.Error != nil {
-		t.Fatal(result.Error)
-	}
-}
-
 //TestSameVersionID just checks that if the version is not changed,
 //then streamer peers see each other
 func TestSameVersionID(t *testing.T) {
@@ -516,7 +366,10 @@ func TestTwoNodesFullSync(t *testing.T) { //
 //	a. exists on the most proximate node
 //	b. exists on the nodes subscribed on the corresponding chunk PO
 //	c. does not exist on the peers that do not have that PO subscription
-func TestStarNetworkSync(t *testing.T) { //
+func TestStarNetworkSync(t *testing.T) {
+	if testutil.RaceEnabled {
+		return
+	}
 	const chunkCount = 1000
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
