@@ -324,7 +324,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		}
 
 		// check that the sum of bin indexes is equal
-		for idx, _ := range nodeIDs {
+		for idx := range nodeIDs {
 			if nodeIDs[idx] == nodeIDs[0] {
 				continue
 			}
@@ -456,7 +456,7 @@ func TestStarNetworkSync(t *testing.T) {
 				nodeProximities: make(map[enode.ID]int),
 			}
 			closestNodePO := 0
-			for nodeAddr, _ := range nodeIndex {
+			for nodeAddr := range nodeIndex {
 				po := chunk.Proximity(nodeAddr.Bytes(), chunkAddr)
 
 				chunkInfo.nodeProximities[nodeAddr] = po
