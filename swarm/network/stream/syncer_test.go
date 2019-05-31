@@ -305,7 +305,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 		}
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
-		log.Info("uploader node", "enode", nodeIDs[0])
+		log.Debug("uploader node", "enode", nodeIDs[0])
 		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
 		if !ok {
 			return fmt.Errorf("No DB")
@@ -329,7 +329,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 				continue
 			}
 
-			log.Info("compare to", "enode", nodeIDs[idx])
+			log.Debug("compare to", "enode", nodeIDs[idx])
 			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
 			if !ok {
 				return fmt.Errorf("No DB")
@@ -434,15 +434,14 @@ func TestStarNetworkSync(t *testing.T) {
 		for i, id := range nodeIDs {
 			nodeIndex[id] = i
 		}
-		log.Error("node indexes", "idx", nodeIndex, "nodeIDs", nodeIDs)
 		disconnected := watchDisconnections(ctx, sim)
 		defer func() {
 			if err != nil && disconnected.bool() {
 				err = errors.New("disconnect events received")
 			}
 		}()
-
-		randomBytes := testutil.RandomBytes(1010, filesize*1000)
+		seed := int(time.Now().Unix())
+		randomBytes := testutil.RandomBytes(seed, filesize*1000)
 
 		chunkAddrs, err := getAllRefs(randomBytes[:])
 		if err != nil {
@@ -464,7 +463,7 @@ func TestStarNetworkSync(t *testing.T) {
 					chunkInfo.closestNodePO = po
 					chunkInfo.closestNode = nodeAddr
 				}
-				log.Info("processed chunk", "uploaderPO", chunkInfo.uploaderNodePO, "ci", chunkInfo.closestNode, "cpo", chunkInfo.closestNodePO, "cadrr", chunkInfo.addr)
+				log.Trace("processed chunk", "uploaderPO", chunkInfo.uploaderNodePO, "ci", chunkInfo.closestNode, "cpo", chunkInfo.closestNodePO, "cadrr", chunkInfo.addr)
 			}
 			chunksProx = append(chunksProx, chunkInfo)
 		}
@@ -475,9 +474,8 @@ func TestStarNetworkSync(t *testing.T) {
 			return fmt.Errorf("No filestore")
 		}
 		fileStore := item.(*storage.FileStore)
-		size := chunkCount * chunkSize
 		reader := bytes.NewReader(randomBytes[:])
-		_, wait1, err := fileStore.Store(ctx, reader, int64(size), false)
+		_, wait1, err := fileStore.Store(ctx, reader, int64(len(randomBytes)), false)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}
@@ -493,7 +491,7 @@ func TestStarNetworkSync(t *testing.T) {
 			// if the most proximate host is set - check that the chunk is there
 			if c.closestNodePO > 0 {
 				count++
-				log.Warn("found chunk with proximate host set, trying to find in localstore", "po", c.closestNodePO, "closestNode", c.closestNode)
+				log.Trace("found chunk with proximate host set, trying to find in localstore", "po", c.closestNodePO, "closestNode", c.closestNode)
 				item, ok = sim.NodeItem(c.closestNode, bucketKeyStore)
 				if !ok {
 					return fmt.Errorf("No DB")
