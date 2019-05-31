@@ -611,7 +611,7 @@ func TestStarNetworkSync(t *testing.T) { //
 					chunkInfo.closestNodePO = po
 					chunkInfo.closestNode = nodeAddr
 				}
-				log.Error("processed chunk", "uploaderPO", chunkInfo.uploaderNodePO, "ci", chunkInfo.closestNode, "cpo", chunkInfo.closestNodePO, "cadrr", chunkInfo.addr)
+				log.Info("processed chunk", "uploaderPO", chunkInfo.uploaderNodePO, "ci", chunkInfo.closestNode, "cpo", chunkInfo.closestNodePO, "cadrr", chunkInfo.addr)
 			}
 			chunksProx = append(chunksProx, chunkInfo)
 		}
@@ -635,7 +635,7 @@ func TestStarNetworkSync(t *testing.T) { //
 		count := 0
 
 		// wait to sync
-		time.Sleep(30 * time.Second)
+		time.Sleep(5 * time.Second)
 		for _, c := range chunksProx {
 			// if the most proximate host is set - check that the chunk is there
 			if c.closestNodePO > 0 {
