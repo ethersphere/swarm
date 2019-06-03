@@ -175,7 +175,7 @@ swarm --help | grep metrics
 
 We use Grafana and InfluxDB to visualise metrics reported by Swarm. We keep our Grafana dashboards under version control at https://github.com/ethersphere/grafana-dashboards. You could use them or design your own.
 
-We have built a tool to help with automatic start of Grafana and InfluxDB and provisioning of dashboards at https://github.com/nonsense/stateth , which requires that you have Docker installed.
+We have built a tool to help with automatic start of Grafana and InfluxDB and provisioning of dashboards at https://github.com/nonsense/stateth, which requires that you have Docker installed.
 
 Once you have `stateth` installed, and you have Docker running locally, you have to:
 
