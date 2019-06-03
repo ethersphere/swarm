@@ -68,7 +68,6 @@ func NewHasherStore(store ChunkStore, hashFunc SwarmHasher, toEncrypt bool, tag 
 		quitC:     make(chan struct{}),
 		workers:   make(chan Chunk, noOfStorageWorkers),
 	}
-
 	return h
 }
 
