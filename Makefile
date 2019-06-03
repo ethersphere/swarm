@@ -3,8 +3,6 @@
 # don't need to bother with make.
 
 GOBIN = $(shell pwd)/build/bin
-GO ?= latest
-
 
 swarm:
 	build/env.sh go run build/ci.go install ./cmd/swarm
