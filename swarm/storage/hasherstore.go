@@ -19,12 +19,10 @@ package storage
 import (
 	"context"
 	"fmt"
-	"sync"
-	"sync/atomic"
-
 	"github.com/ethereum/go-ethereum/swarm/chunk"
 	"github.com/ethereum/go-ethereum/swarm/storage/encryption"
 	"golang.org/x/crypto/sha3"
+	"sync"
 )
 
 const (
@@ -44,10 +42,6 @@ type hasherStore struct {
 	doneC     chan struct{} // closed by Close() call to indicate that count is the final number of chunks
 	quitC     chan struct{} // closed to quit unterminated routines
 	workers   chan Chunk    // back pressure for limiting storage workers goroutines
-	// nrChunks is used with atomic functions
-	// it is required to be at the end of the struct to ensure 64bit alignment for arm architecture
-	// see: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
-	nrChunks uint64 // number of chunks to store
 }
 
 // NewHasherStore creates a hasherStore object, which implements Putter and Getter interfaces.
@@ -145,7 +139,6 @@ func (h *hasherStore) Wait(ctx context.Context) error {
 }
 
 func (h *hasherStore) startWait(ctx context.Context) {
-	var nrStoredChunks uint64 // number of stored chunks
 	var done bool
 	doneC := h.doneC
 	for {
@@ -162,14 +155,10 @@ func (h *hasherStore) startWait(ctx context.Context) {
 			if err != nil {
 				h.waitC <- err
 			}
-			nrStoredChunks++
 		}
 		// if all the chunks have been submitted and all of them are stored, then we can return
 		if done {
-			count, total, err := h.tag.Status(chunk.StateStored)
-			if err !=  nil{
-				continue
-			} else if count == total {
+			if count, total, err := h.tag.Status(chunk.StateStored); err == nil && count == total {
 				h.waitC <- nil
 				break
 			}
@@ -268,7 +257,6 @@ func (h *hasherStore) newDataEncryption(key encryption.Key) encryption.Encryptio
 }
 
 func (h *hasherStore) storeChunk(ctx context.Context, ch Chunk) {
-	atomic.AddUint64(&h.nrChunks, 1)
 	h.workers <- ch
 	go func() {
 		defer func() {
