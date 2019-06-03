@@ -1,6 +1,9 @@
 language: go
 go_import_path: github.com/ethersphere/swarm
 sudo: false
+branches:
+  only:
+    - master
 matrix:
   include:
     - os: linux
