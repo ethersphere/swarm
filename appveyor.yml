@@ -1,5 +1,9 @@
 os: Visual Studio 2015
 
+branches:
+  only:
+    - master
+
 # Clone directly into GOPATH.
 clone_folder: C:\gopath\src\github.com\ethereum\swarm
 clone_depth: 5
