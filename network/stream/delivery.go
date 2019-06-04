@@ -27,9 +27,9 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
-	"github.com/ethersphere/swarm/tracing"
 	opentracing "github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
@@ -68,46 +68,39 @@ type RetrieveRequestMsg struct {
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
-	log.Trace("received request", "peer", sp.ID(), "hash", req.Addr)
+	log.Trace("handle retrieve request", "peer", sp.ID(), "hash", req.Addr)
 	handleRetrieveRequestMsgCount.Inc(1)
 
-	var osp opentracing.Span
-	ctx, osp = spancontext.StartSpan(
+	ctx, osp := spancontext.StartSpan(
 		ctx,
-		"stream.handle.retrieve")
+		"handle.retrieve.request")
 
-	osp.LogFields(olog.String("ref", req.Addr.String()))
+	//osp.LogFields(olog.String("ref", req.Addr.String()))
 
-	var cancel func()
-	// TODO: do something with this hardcoded timeout, maybe use TTL in the future
-	ctx = context.WithValue(ctx, "peer", sp.ID().String())
-	ctx = context.WithValue(ctx, "hopcount", req.HopCount)
-	ctx, cancel = context.WithTimeout(ctx, network.RequestTimeout)
+	defer osp.Finish()
 
-	go func() {
-		select {
-		case <-ctx.Done():
-		case <-d.quit:
-		}
-		cancel()
-	}()
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
 
-	go func() {
-		defer osp.Finish()
-		ch, err := d.netStore.Get(ctx, chunk.ModeGetRequest, req.Addr)
-		if err != nil {
-			retrieveChunkFail.Inc(1)
-			log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
-			return
-		}
-		syncing := false
+	r := &storage.Request{
+		Addr:     req.Addr,
+		Origin:   sp.ID(),
+		HopCount: req.HopCount,
+	}
+	chunk, err := d.netStore.Get(ctx, chunk.ModeGetRequest, r)
+	if err != nil {
+		retrieveChunkFail.Inc(1)
+		log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
+		return nil
+	}
 
-		err = sp.Deliver(ctx, ch, Top, syncing)
-		if err != nil {
-			log.Warn("ERROR in handleRetrieveRequestMsg", "err", err)
-		}
-		osp.LogFields(olog.Bool("delivered", true))
-	}()
+	log.Trace("retrieve request, delivery", "ref", req.Addr, "peer", sp.ID())
+	syncing := false
+	err = sp.Deliver(ctx, chunk, 0, syncing)
+	if err != nil {
+		log.Error("sp.Deliver errored", "err", err)
+	}
+	osp.LogFields(olog.Bool("delivered", true))
 
 	return nil
 }
@@ -189,57 +182,174 @@ func (d *Delivery) Close() {
 	close(d.quit)
 }
 
-// RequestFromPeers sends a chunk retrieve request to a peer
-// The most eligible peer that hasn't already been sent to is chosen
-// TODO: define "eligible"
-func (d *Delivery) RequestFromPeers(ctx context.Context, req *network.Request) (*enode.ID, chan struct{}, error) {
-	requestFromPeersCount.Inc(1)
+// FindPeer is returning the closest peer from Kademlia that a chunk
+// request hasn't already been sent to
+func (d *Delivery) FindPeer(ctx context.Context, req *storage.Request) (*Peer, error) {
 	var sp *Peer
-	spID := req.Source
+	var err error
 
-	if spID != nil {
-		sp = d.getPeer(*spID)
-		if sp == nil {
-			return nil, nil, fmt.Errorf("source peer %v not found", spID.String())
-		}
-	} else {
-		d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
-			id := p.ID()
-			if p.LightNode {
-				// skip light nodes
-				return true
-			}
-			if req.SkipPeer(id.String()) {
-				log.Trace("Delivery.RequestFromPeers: skip peer", "peer id", id)
-				return true
-			}
-			sp = d.getPeer(id)
-			// sp is nil, when we encounter a peer that is not registered for delivery, i.e. doesn't support the `stream` protocol
-			if sp == nil {
-				return true
-			}
-			spID = &id
+	osp, _ := ctx.Value("remote.fetchh").(opentracing.Span)
+
+	depth := d.kad.NeighbourhoodDepth()
+
+	originPo := -1
+	d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
+		id := p.ID()
+
+		// get po between chunk and origin
+		if req.Origin.String() == id.String() {
+			originPo = po
 			return false
-		})
-		if sp == nil {
-			return nil, nil, errors.New("no peer found")
 		}
+
+		return true
+	})
+
+	if osp != nil {
+		osp.LogFields(olog.Int("originPo", originPo))
+		osp.LogFields(olog.Int("depth", depth))
+	}
+
+	selectedPeerPo := -1
+
+	myPo := chunk.Proximity(req.Addr, d.kad.BaseAddr())
+
+	if osp != nil {
+		osp.LogFields(olog.Int("myPo", myPo))
+	}
+
+	skipped := 0
+
+	// do not forward requests if origin proximity is bigger than our node's proximity
+	// this means that origin is closer to the chunk
+	// 6 > 7
+	if originPo > myPo {
+		return nil, errors.New("not forwarding request, origin node is closer to chunk than this node")
+	}
+
+	/// origin (made the request)
+	/// my po (this node)
+	/// select peer po (kademlia suggestion)
+
+	d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
+		id := p.ID()
+
+		// skip light nodes
+		if p.LightNode {
+			return true
+		}
+
+		// do not send request back to peer who asked us. maybe merge with SkipPeer at some point
+		if req.Origin.String() == id.String() {
+			return true
+		}
+
+		// skip peers that we have already tried
+		if req.SkipPeer(id.String()) {
+			skipped++
+			log.Trace("findpeer skip peer", "peer", id, "ref", req.Addr.String())
+			return true
+		}
+
+		if myPo < depth { //  chunk is NOT within the neighbourhood
+			if po <= myPo { // always choose a peer strictly closer to chunk than us
+				log.Trace("findpeer1a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				return false
+			} else {
+				log.Trace("findpeer1b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			}
+		} else { // chunk IS WITHIN neighbourhood
+			if po < depth { // do not select peer outside the neighbourhood. But allows peers further from the chunk than us
+				log.Trace("findpeer2a", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				return false
+			} else if po <= originPo { // avoid loop in neighbourhood, so not forward when a request comes from the neighbourhood
+				log.Trace("findpeer2b", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+				return false
+			} else {
+				log.Trace("findpeer2c", "originpo", originPo, "mypo", myPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+			}
+		}
+
+		// if selected peer is not in the depth (2nd condition; if depth <= po, then peer is in nearest neighbourhood)
+		// and they have a lower po than ours, return error
+		if po < myPo && depth > po {
+			log.Trace("findpeer4 skip peer because origin was closer", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+
+			err = fmt.Errorf("not asking peers further away from origin; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
+			return false
+		}
+
+		// if chunk falls in our nearest neighbourhood (1st condition), but suggested peer is not in
+		// the nearest neighbourhood (2nd condition), don't forward the request to suggested peer
+		if depth <= myPo && depth > po {
+			log.Trace("findpeer5 skip peer because depth", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
+
+			err = fmt.Errorf("not going outside of depth; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
+			return false
+		}
+
+		// compare to MinBinSize == 2
+		if skipped >= 2 {
+			log.Trace("findpeer6 already skipped MinBinSize legit peers, no point continuing the search", "skipped", skipped)
+
+			err = fmt.Errorf("skipped MinBinSize legit peers, can't find chunk")
+			return false
+		}
+
+		sp = d.getPeer(id)
+
+		// sp could be nil, if we encountered a peer that is not registered for delivery, i.e. doesn't support the `stream` protocol
+		// if sp is not nil, then we have selected the next peer and we stop iterating
+		// if sp is nil, we continue iterating
+		if sp != nil {
+			selectedPeerPo = po
+
+			return false
+		}
+
+		// continue iterating
+		return true
+	})
+
+	if osp != nil {
+		osp.LogFields(olog.Int("selectedPeerPo", selectedPeerPo))
+	}
+
+	if err != nil {
+		return nil, err
+	}
+
+	if sp == nil {
+		return nil, errors.New("no peer found")
+	}
+
+	return sp, nil
+}
+
+// RequestFromPeers sends a chunk retrieve request to the next found peer
+func (d *Delivery) RequestFromPeers(ctx context.Context, req *storage.Request, localID enode.ID) (*enode.ID, error) {
+	metrics.GetOrRegisterCounter("delivery.requestfrompeers", nil).Inc(1)
+
+	sp, err := d.FindPeer(ctx, req)
+	if err != nil {
+		log.Trace(err.Error())
+		return nil, err
 	}
 
 	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
 	// this span will finish only when delivery is handled (or times out)
-	ctx = context.WithValue(ctx, tracing.StoreLabelId, "stream.send.request")
-	ctx = context.WithValue(ctx, tracing.StoreLabelMeta, fmt.Sprintf("%v.%v", sp.ID(), req.Addr))
-	log.Trace("request.from.peers", "peer", sp.ID(), "ref", req.Addr)
-	err := sp.SendPriority(ctx, &RetrieveRequestMsg{
+	r := &RetrieveRequestMsg{
 		Addr:      req.Addr,
-		SkipCheck: req.SkipCheck,
-		HopCount:  req.HopCount,
-	}, Top)
-	if err != nil {
-		return nil, nil, err
+		HopCount:  req.HopCount + 1,
+		SkipCheck: true, // this has something to do with old syncing
 	}
-	requestFromPeersEachCount.Inc(1)
+	log.Trace("sending retrieve request", "ref", r.Addr, "peer", sp.ID().String(), "origin", localID)
+	err = sp.Send(ctx, r)
+	if err != nil {
+		log.Error(err.Error())
+		return nil, err
+	}
 
-	return spID, sp.quit, nil
+	spID := sp.ID()
+	return &spID, nil
 }

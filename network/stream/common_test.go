@@ -120,14 +120,9 @@ func netStoreAndDeliveryWithAddr(ctx *adapters.ServiceContext, bucket *sync.Map,
 		return nil, nil, nil, err
 	}
 
-	netStore, err := storage.NewNetStore(localStore, nil)
-	if err != nil {
-		localStore.Close()
-		localStoreCleanup()
-		return nil, nil, nil, err
-	}
-
-	fileStore := storage.NewFileStore(netStore, storage.NewFileStoreParams(), chunk.NewTags())
+	netStore := storage.NewNetStore(localStore, enode.ID{})
+	lnetStore := storage.NewLNetStore(netStore)
+	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
 	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
 	delivery := NewDelivery(kad, netStore)

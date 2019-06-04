@@ -25,6 +25,7 @@ import (
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
+	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/storage"
 )
 
@@ -73,7 +74,13 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.Address(key))
+	// this timeout shouldn't be necessary as syncer server is supposed to go straight to localstore,
+	// but if a chunk is garbage collected while we actually offered it, it is possible for this
+	// to trigger a network request
+	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
+	defer cancel()
+
+	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(storage.Address(key), 0))
 	if err != nil {
 		return nil, err
 	}
@@ -198,9 +205,24 @@ func RegisterSwarmSyncerClient(streamer *Registry, netStore *storage.NetStore) {
 	})
 }
 
-// NeedData
-func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (wait func(context.Context) error) {
-	return s.netStore.FetchFunc(ctx, key)
+func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
+	start := time.Now()
+
+	fi, loaded, ok := s.netStore.GetOrCreateFetcherItem(ctx, key, "syncer")
+	if !ok {
+		return loaded, nil
+	}
+
+	return loaded, func(ctx context.Context) error {
+		select {
+		case <-fi.Delivered:
+			metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.syncer", fi.CreatedBy), nil).UpdateSince(start)
+		case <-time.After(timeouts.SyncerClientWaitTimeout):
+			metrics.GetOrRegisterCounter("fetcher.syncer.timeout", nil).Inc(1)
+			return fmt.Errorf("chunk not delivered through syncing after %dsec. ref=%s", timeouts.SyncerClientWaitTimeout, fmt.Sprintf("%x", key))
+		}
+		return nil
+	}
 }
 
 func (s *SwarmSyncerClient) Close() {}
