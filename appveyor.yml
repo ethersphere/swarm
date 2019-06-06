@@ -32,6 +32,8 @@ environment:
       PATH: C:\msys64\mingw32\bin\;C:\Program Files (x86)\NSIS\;%PATH%
 
 install:
+  - echo AAAAAAAAAAAA:%AAAAAAAAAAAA%
+  - echo BBBBBBBBBBBB:%BBBBBBBBBBBB%
   - git submodule update --init
   - rmdir C:\go /s /q
   - appveyor DownloadFile https://dl.google.com/go/go1.12.windows-%APP_ARCH%.zip
