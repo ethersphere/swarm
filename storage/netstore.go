@@ -220,15 +220,13 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *FetcherIte
 
 		log.Trace("remote.fetch", "ref", ref)
 
-		nctx := context.WithValue(innerCtx, "remote.fetchh", osp)
-		currentPeer, err := n.RemoteGet(nctx, req, n.localID)
+		currentPeer, err := n.RemoteGet(ctx, req, n.localID)
 		if err != nil {
 			log.Trace(err.Error(), "ref", ref)
 			osp.LogFields(olog.String("err", err.Error()))
 			osp.Finish()
 			return err
 		}
-		//osp.LogFields(olog.String("peer", currentPeer.String()))
 
 		// add peer to the set of peers to skip from now
 		log.Trace("remote.fetch, adding peer to skip", "ref", ref, "peer", currentPeer.String())

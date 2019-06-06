@@ -227,21 +227,17 @@ func (p *Peer) handleOfferedHashesMsg(ctx context.Context, req *OfferedHashesMsg
 
 		log.Trace("checking offered hash", "ref", fmt.Sprintf("%x", hash))
 
-		if shouldNOTRequestAgain, wait := c.NeedData(ctx, hash); wait != nil {
+		if _, wait := c.NeedData(ctx, hash); wait != nil {
 			ctr++
 
-			if !shouldNOTRequestAgain { // if !loaded
-				// set the bit, so create a request
-				want.Set(i/HashSize, true)
-				log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true)
+			// set the bit, so create a request
+			want.Set(i/HashSize, true)
+			log.Trace("need data", "ref", fmt.Sprintf("%x", hash), "request", true)
 
-				// measure how long it takes before we mark chunks for retrieval, and actually send the request
-				if !wantDelaySet {
-					wantDelaySet = true
-					wantDelay = time.Now()
-				}
-			} else {
-				log.Trace("need data", "ref", fmt.Sprintf("%x", hash))
+			// measure how long it takes before we mark chunks for retrieval, and actually send the request
+			if !wantDelaySet {
+				wantDelaySet = true
+				wantDelay = time.Now()
 			}
 
 			// create request and wait until the chunk data arrives and is stored

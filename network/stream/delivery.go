@@ -75,7 +75,7 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 		ctx,
 		"handle.retrieve.request")
 
-	//osp.LogFields(olog.String("ref", req.Addr.String()))
+	osp.LogFields(olog.String("ref", req.Addr.String()))
 
 	defer osp.Finish()
 
