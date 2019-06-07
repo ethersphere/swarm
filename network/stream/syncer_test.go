@@ -178,7 +178,7 @@ func TestDifferentVersionID(t *testing.T) {
 // 1. All subscriptions are created
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) { //
-	const chunkCount = 1000
+	const chunkCount = 3000 //~12mb
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -322,6 +322,8 @@ func TestTwoNodesFullSync(t *testing.T) { //
 
 			uploaderNodeBinIDs[po] = until
 		}
+		// wait for syncing
+		time.Sleep(2 * time.Second)
 
 		// check that the sum of bin indexes is equal
 		for idx := range nodeIDs {
@@ -336,7 +338,6 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 			db := item.(chunk.Store)
 
-			time.Sleep(2 * time.Second)
 			uploaderSum, otherSum := 0, 0
 			for po, uploaderUntil := range uploaderNodeBinIDs {
 				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
