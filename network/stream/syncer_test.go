@@ -372,6 +372,7 @@ func TestStarNetworkSync(t *testing.T) {
 		return
 	}
 	const chunkCount = 1000
+	const filesize = chunkCount * chunkSize
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
@@ -422,7 +423,6 @@ func TestStarNetworkSync(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	// defer cancel should come before defer simulation teardown
 	defer cancel()
-	const filesize = 1000 //kb
 	_, err := sim.AddNodesAndConnectStar(10)
 	if err != nil {
 		t.Fatal(err)
