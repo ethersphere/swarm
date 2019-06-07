@@ -178,8 +178,10 @@ func TestDifferentVersionID(t *testing.T) {
 // 1. All subscriptions are created
 // 2. All chunks are transferred from one node to another (asserted by summing and comparing bin indexes on both nodes)
 func TestTwoNodesFullSync(t *testing.T) { //
-	const chunkCount = 3000 //~12mb
-
+	var (
+		chunkCount = 1000 //~4mb
+		syncTime   = 5 * time.Second
+	)
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr := network.NewAddr(ctx.Config.Node())
@@ -207,7 +209,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 
 			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
 				Syncing:         SyncingAutoSubscribe,
-				SyncUpdateDelay: 50 * time.Millisecond, //this is needed to trigger the update subscriptions loop
+				SyncUpdateDelay: 500 * time.Millisecond, //this is needed to trigger the update subscriptions loop
 				SkipCheck:       true,
 			}, nil)
 
@@ -272,7 +274,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 
 		wait1(ctx)
 		wait2(ctx)
-		time.Sleep(2 * time.Second)
+		time.Sleep(1 * time.Second)
 
 		//explicitly check that all subscriptions are there on all bins
 		for idx, id := range nodeIDs {
@@ -323,7 +325,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			uploaderNodeBinIDs[po] = until
 		}
 		// wait for syncing
-		time.Sleep(2 * time.Second)
+		time.Sleep(syncTime)
 
 		// check that the sum of bin indexes is equal
 		for idx := range nodeIDs {
@@ -348,7 +350,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 				uploaderSum += int(uploaderUntil)
 			}
 			if uploaderSum != otherSum {
-				t.Fatalf("did not get correct bin index from peer. got %d want %d", uploaderSum, otherSum)
+				t.Fatalf("did not get correct bin index from peer. got %d want %d", otherSum, uploaderSum)
 			}
 		}
 		return nil
@@ -371,9 +373,13 @@ func TestStarNetworkSync(t *testing.T) {
 	if testutil.RaceEnabled {
 		return
 	}
-	const chunkCount = 1000
-	const filesize = chunkCount * chunkSize
-
+	var (
+		chunkCount = 500
+		nodeCount  = 6
+		simTimeout = 60 * time.Second
+		syncTime   = 30 * time.Second
+		filesize   = chunkCount * chunkSize
+	)
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
 			addr := network.NewAddr(ctx.Config.Node())
@@ -401,7 +407,7 @@ func TestStarNetworkSync(t *testing.T) {
 
 			r := NewRegistry(addr.ID(), delivery, netStore, store, &RegistryOptions{
 				Syncing:         SyncingAutoSubscribe,
-				SyncUpdateDelay: 50 * time.Millisecond,
+				SyncUpdateDelay: 200 * time.Millisecond,
 				SkipCheck:       true,
 			}, nil)
 
@@ -419,11 +425,10 @@ func TestStarNetworkSync(t *testing.T) {
 	defer sim.Close()
 
 	// create context for simulation run
-	timeout := 60 * time.Second
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), simTimeout)
 	// defer cancel should come before defer simulation teardown
 	defer cancel()
-	_, err := sim.AddNodesAndConnectStar(10)
+	_, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -442,7 +447,7 @@ func TestStarNetworkSync(t *testing.T) {
 			}
 		}()
 		seed := int(time.Now().Unix())
-		randomBytes := testutil.RandomBytes(seed, filesize*1000)
+		randomBytes := testutil.RandomBytes(seed, filesize)
 
 		chunkAddrs, err := getAllRefs(randomBytes[:])
 		if err != nil {
@@ -487,7 +492,9 @@ func TestStarNetworkSync(t *testing.T) {
 		count := 0
 
 		// wait to sync
-		time.Sleep(5 * time.Second)
+		time.Sleep(syncTime)
+
+		log.Info("checking if chunks are on prox hosts")
 		for _, c := range chunksProx {
 			// if the most proximate host is set - check that the chunk is there
 			if c.closestNodePO > 0 {
