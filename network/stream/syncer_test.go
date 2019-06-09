@@ -212,17 +212,17 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 			db := item.(chunk.Store)
 
-			uploaderSum, otherSum := 0, 0
+			uploaderSum, otherNodeSum := 0, 0
 			for po, uploaderUntil := range uploaderNodeBinIDs {
 				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
 				if err != nil {
 					t.Fatal(err)
 				}
-				otherSum += int(shouldUntil)
+				otherNodeSum += int(shouldUntil)
 				uploaderSum += int(uploaderUntil)
 			}
-			if uploaderSum != otherSum {
-				t.Fatalf("did not get correct bin index from peer. got %d want %d", otherSum, uploaderSum)
+			if uploaderSum != otherNodeSum {
+				t.Fatalf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
 			}
 		}
 		return nil
@@ -585,5 +585,4 @@ func TestDifferentVersionID(t *testing.T) {
 		t.Fatal(result.Error)
 	}
 	log.Info("Simulation ended")
-
 }
