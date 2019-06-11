@@ -44,14 +44,7 @@ func TestHasherStore(t *testing.T) {
 	for _, tt := range tests {
 
 		chunkStore := NewMapChunkStore()
-
-		// this is needed due to the fact the pyramid chunker is not at all used in this test, so manual manipulation of these values is needed
-		tag := chunk.NewTag(0, "test-tag", 2)
-		tag.Inc(chunk.StateSplit)
-		tag.Inc(chunk.StateSplit)
-		tag.DoneSplit(nil)
-
-		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt, tag)
+		hasherStore := NewHasherStore(chunkStore, MakeHashFunc(DefaultHash), tt.toEncrypt, chunk.NewTag(0, "test-tag", 2))
 
 		// Put two random chunks into the hasherStore
 		chunkData1 := GenerateRandomChunk(int64(tt.chunkLength)).Data()
@@ -67,8 +60,6 @@ func TestHasherStore(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Expected no error got \"%v\"", err)
 		}
-
-		hasherStore.tag.DoneSplit(nil)
 
 		hasherStore.Close()
 
