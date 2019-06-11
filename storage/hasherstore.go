@@ -19,6 +19,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"sync"
 	"sync/atomic"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -27,13 +28,15 @@ import (
 )
 
 const (
-	noOfStorageWorkers = 150
+	noOfStorageWorkers = 150 // Since we want 128 data chunks to be processed parallel + few for processing tree chunks
+
 )
 
 type hasherStore struct {
 	store     ChunkStore
 	tag       *chunk.Tag
 	toEncrypt bool
+	doWait    sync.Once
 	hashFunc  SwarmHasher
 	hashSize  int           // content hash size
 	refSize   int64         // reference size (content hash + possibly encryption key)
@@ -90,6 +93,11 @@ func (h *hasherStore) Put(ctx context.Context, chunkData ChunkData) (Reference, 
 	chunk := h.createChunk(c)
 	h.storeChunk(ctx, chunk)
 
+	// Start the wait function which will detect completion of put
+	h.doWait.Do(func() {
+		go h.startWait(ctx)
+	})
+
 	return Reference(append(chunk.Address(), encryptionKey...)), nil
 }
 
@@ -132,6 +140,11 @@ func (h *hasherStore) Close() {
 //    1) if there is error while storing chunk
 func (h *hasherStore) Wait(ctx context.Context) error {
 	defer close(h.quitC)
+	err := <-h.waitC
+	return err
+}
+
+func (h *hasherStore) startWait(ctx context.Context) {
 	var nrStoredChunks uint64 // number of stored chunks
 	var done bool
 	doneC := h.doneC
@@ -139,7 +152,7 @@ func (h *hasherStore) Wait(ctx context.Context) error {
 		select {
 		// if context is done earlier, just return with the error
 		case <-ctx.Done():
-			return ctx.Err()
+			h.waitC <- ctx.Err()
 		// doneC is closed if all chunks have been submitted, from then we just wait until all of them are also stored
 		case <-doneC:
 			done = true
@@ -147,14 +160,15 @@ func (h *hasherStore) Wait(ctx context.Context) error {
 		// a chunk has been stored, if err is nil, then successfully, so increase the stored chunk counter
 		case err := <-h.errC:
 			if err != nil {
-				return err
+				h.waitC <- err
 			}
 			nrStoredChunks++
 		}
 		// if all the chunks have been submitted and all of them are stored, then we can return
 		if done {
 			if nrStoredChunks >= atomic.LoadUint64(&h.nrChunks) {
-				return nil
+				h.waitC <- nil
+				break
 			}
 		}
 	}
