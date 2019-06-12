@@ -23,16 +23,21 @@ import (
 	"github.com/ethersphere/swarm/network/timeouts"
 )
 
+// LNetStore is a wrapper of NetStore, which implements the chunk.Store interface. It is used only by the FileStore,
+// the component used by the Swarm API to store and retrieve content and to split and join chunks.
 type LNetStore struct {
 	*NetStore
 }
 
+// NewLNetStore is a constructor for LNetStore
 func NewLNetStore(store *NetStore) *LNetStore {
 	return &LNetStore{
 		NetStore: store,
 	}
 }
 
+// Get converts a chunk reference to a chunk Request (with empty Origin), handled by the NetStore, and
+// returns the requested chunk, or error.
 func (n *LNetStore) Get(ctx context.Context, mode chunk.ModeGet, ref Address) (ch Chunk, err error) {
 	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 	defer cancel()

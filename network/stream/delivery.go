@@ -177,8 +177,10 @@ func (d *Delivery) Close() {
 }
 
 // getOriginPo returns the originPo if the incoming Request has an Origin
-// if our ndoe is the first node that requests this chunk, then we don't have an Origin,
+// if our node is the first node that requests this chunk, then we don't have an Origin,
 // and return -1
+// this is used only for tracing, and can probably be refactor so that we don't have to
+// iterater over Kademlia
 func (d *Delivery) getOriginPo(req *storage.Request) int {
 	originPo := -1
 
@@ -205,9 +207,9 @@ func (d *Delivery) FindPeer(ctx context.Context, req *storage.Request) (*Peer, e
 
 	osp, _ := ctx.Value("remote.fetch").(opentracing.Span)
 
-	// originPo - made the request
-	// myPo - this node's proximity with the chunk
-	// selectedPeerPo - kademlia suggested node's proximity with the chunk (computed further below)
+	// originPo - proximity of the node that made the request; -1 if the request originator is our node;
+	// myPo - this node's proximity with the requested chunk
+	// selectedPeerPo - kademlia suggested node's proximity with the requested chunk (computed further below)
 	originPo := d.getOriginPo(req)
 	myPo := chunk.Proximity(req.Addr, d.kad.BaseAddr())
 	selectedPeerPo := -1
