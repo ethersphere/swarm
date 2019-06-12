@@ -213,7 +213,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *FetcherIte
 	for {
 		metrics.GetOrRegisterCounter("remote.fetch.inner", nil).Inc(1)
 
-		innerCtx, osp := spancontext.StartSpan(
+		ctx, osp := spancontext.StartSpan(
 			ctx,
 			"remote.fetch")
 		osp.LogFields(olog.String("ref", ref.String()))

@@ -182,17 +182,12 @@ func (d *Delivery) Close() {
 	close(d.quit)
 }
 
-// FindPeer is returning the closest peer from Kademlia that a chunk
-// request hasn't already been sent to
-func (d *Delivery) FindPeer(ctx context.Context, req *storage.Request) (*Peer, error) {
-	var sp *Peer
-	var err error
-
-	osp, _ := ctx.Value("remote.fetchh").(opentracing.Span)
-
-	depth := d.kad.NeighbourhoodDepth()
-
+// getOriginPo returns the originPo if the incoming Request has an Origin
+// if our ndoe is the first node that requests this chunk, then we don't have an Origin,
+// and return -1
+func (d *Delivery) getOriginPo(req *storage.Request) int {
 	originPo := -1
+
 	d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
 
@@ -205,31 +200,37 @@ func (d *Delivery) FindPeer(ctx context.Context, req *storage.Request) (*Peer, e
 		return true
 	})
 
+	return originPo
+}
+
+// FindPeer is returning the closest peer from Kademlia that a chunk
+// request hasn't already been sent to
+func (d *Delivery) FindPeer(ctx context.Context, req *storage.Request) (*Peer, error) {
+	var sp *Peer
+	var err error
+
+	osp, _ := ctx.Value("remote.fetch").(opentracing.Span)
+
+	// originPo - made the request
+	// myPo - this node's proximity with the chunk
+	// selectedPeerPo - kademlia suggested node's proximity with the chunk (computed further below)
+	originPo := d.getOriginPo(req)
+	myPo := chunk.Proximity(req.Addr, d.kad.BaseAddr())
+	selectedPeerPo := -1
+
+	depth := d.kad.NeighbourhoodDepth()
+
 	if osp != nil {
 		osp.LogFields(olog.Int("originPo", originPo))
 		osp.LogFields(olog.Int("depth", depth))
-	}
-
-	selectedPeerPo := -1
-
-	myPo := chunk.Proximity(req.Addr, d.kad.BaseAddr())
-
-	if osp != nil {
 		osp.LogFields(olog.Int("myPo", myPo))
 	}
 
-	skipped := 0
-
 	// do not forward requests if origin proximity is bigger than our node's proximity
 	// this means that origin is closer to the chunk
-	// 6 > 7
 	if originPo > myPo {
 		return nil, errors.New("not forwarding request, origin node is closer to chunk than this node")
 	}
-
-	/// origin (made the request)
-	/// my po (this node)
-	/// select peer po (kademlia suggestion)
 
 	d.kad.EachConn(req.Addr[:], 255, func(p *network.Peer, po int) bool {
 		id := p.ID()
@@ -246,7 +247,6 @@ func (d *Delivery) FindPeer(ctx context.Context, req *storage.Request) (*Peer, e
 
 		// skip peers that we have already tried
 		if req.SkipPeer(id.String()) {
-			skipped++
 			log.Trace("findpeer skip peer", "peer", id, "ref", req.Addr.String())
 			return true
 		}
@@ -285,14 +285,6 @@ func (d *Delivery) FindPeer(ctx context.Context, req *storage.Request) (*Peer, e
 			log.Trace("findpeer5 skip peer because depth", "originpo", originPo, "po", po, "depth", depth, "peer", id, "ref", req.Addr.String())
 
 			err = fmt.Errorf("not going outside of depth; ref=%s originpo=%v po=%v depth=%v myPo=%v", req.Addr.String(), originPo, po, depth, myPo)
-			return false
-		}
-
-		// compare to MinBinSize == 2
-		if skipped >= 2 {
-			log.Trace("findpeer6 already skipped MinBinSize legit peers, no point continuing the search", "skipped", skipped)
-
-			err = fmt.Errorf("skipped MinBinSize legit peers, can't find chunk")
 			return false
 		}
 

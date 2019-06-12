@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/state"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/testutil"
@@ -298,20 +299,20 @@ func newTestExternalClient(netStore *storage.NetStore) *testExternalClient {
 	}
 }
 
-func (c *testExternalClient) NeedData(ctx context.Context, hash []byte) func(context.Context) error {
-	wait := c.netStore.FetchFunc(ctx, storage.Address(hash))
-	if wait == nil {
+func (c *testExternalClient) NeedData(ctx context.Context, key []byte) (bool, func(context.Context) error) {
+	fi, loaded, ok := c.netStore.GetOrCreateFetcherItem(ctx, key, "syncer")
+	if !ok {
+		return loaded, nil
+	}
+
+	return loaded, func(ctx context.Context) error {
+		select {
+		case <-fi.Delivered:
+		case <-time.After(timeouts.SyncerClientWaitTimeout):
+			return fmt.Errorf("chunk not delivered through syncing after %dsec. ref=%s", timeouts.SyncerClientWaitTimeout, fmt.Sprintf("%x", key))
+		}
 		return nil
 	}
-	select {
-	case c.hashes <- hash:
-	case <-ctx.Done():
-		log.Warn("testExternalClient NeedData context", "err", ctx.Err())
-		return func(_ context.Context) error {
-			return ctx.Err()
-		}
-	}
-	return wait
 }
 
 func (c *testExternalClient) Close() {}

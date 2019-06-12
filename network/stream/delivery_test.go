@@ -160,18 +160,15 @@ func TestRequestFromPeers(t *testing.T) {
 		streamer: r,
 	}
 	r.setPeer(sp)
-	req := network.NewRequest(
+	req := storage.NewRequest(
 		storage.Address(hash0[:]),
-		true,
-		&sync.Map{},
+		0,
 	)
-	ctx := context.Background()
-	id, _, err := delivery.RequestFromPeers(ctx, req)
-
+	id, err := delivery.FindPeer(context.TODO(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if *id != dummyPeerID {
+	if id.ID() != dummyPeerID {
 		t.Fatalf("Expected an id, got %v", id)
 	}
 }
@@ -201,15 +198,13 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	}
 	r.setPeer(sp)
 
-	req := network.NewRequest(
+	req := storage.NewRequest(
 		storage.Address(hash0[:]),
-		true,
-		&sync.Map{},
+		0,
 	)
 
-	ctx := context.Background()
 	// making a request which should return with "no peer found"
-	_, _, err := delivery.RequestFromPeers(ctx, req)
+	_, err := delivery.FindPeer(context.TODO(), req)
 
 	expectedError := "no peer found"
 	if err.Error() != expectedError {
@@ -558,7 +553,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 			errs := make(chan error)
 			for _, hash := range hashes {
 				go func(h storage.Address) {
-					_, err := netStore.Get(ctx, chunk.ModeGetRequest, h)
+					_, err := netStore.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(h, 0))
 					log.Warn("test check netstore get", "hash", h, "err", err)
 					errs <- err
 				}(hash)
