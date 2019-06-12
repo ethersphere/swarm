@@ -32,15 +32,13 @@ type Request struct {
 	Addr        Address  // chunk address
 	Origin      enode.ID // who is sending us that request? we compare Origin to the suggested peer from RequestFromPeers
 	PeersToSkip sync.Map // peers not to request chunk from
-	HopCount    uint8    // number of forwarded requests (hops)
 }
 
 // NewRequest returns a new instance of Request based on chunk address skip check and
 // a map of peers to skip.
-func NewRequest(addr Address, hopCount uint8) *Request {
+func NewRequest(addr Address) *Request {
 	return &Request{
 		Addr:        addr,
-		HopCount:    hopCount,
 		PeersToSkip: sync.Map{},
 	}
 }

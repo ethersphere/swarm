@@ -80,7 +80,7 @@ func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, er
 	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 	defer cancel()
 
-	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(storage.Address(key), 0))
+	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(storage.Address(key)))
 	if err != nil {
 		return nil, err
 	}

@@ -62,9 +62,7 @@ func NewDelivery(kad *network.Kademlia, netStore *storage.NetStore) *Delivery {
 
 // RetrieveRequestMsg is the protocol msg for chunk retrieve requests
 type RetrieveRequestMsg struct {
-	Addr      storage.Address
-	SkipCheck bool
-	HopCount  uint8
+	Addr storage.Address
 }
 
 func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *RetrieveRequestMsg) error {
@@ -83,14 +81,13 @@ func (d *Delivery) handleRetrieveRequestMsg(ctx context.Context, sp *Peer, req *
 	defer cancel()
 
 	r := &storage.Request{
-		Addr:     req.Addr,
-		Origin:   sp.ID(),
-		HopCount: req.HopCount,
+		Addr:   req.Addr,
+		Origin: sp.ID(),
 	}
 	chunk, err := d.netStore.Get(ctx, chunk.ModeGetRequest, r)
 	if err != nil {
 		retrieveChunkFail.Inc(1)
-		log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "hopcount", req.HopCount, "err", err)
+		log.Debug("ChunkStore.Get can not retrieve chunk", "peer", sp.ID().String(), "addr", req.Addr, "err", err)
 		return nil
 	}
 
@@ -331,9 +328,7 @@ func (d *Delivery) RequestFromPeers(ctx context.Context, req *storage.Request, l
 	// setting this value in the context creates a new span that can persist across the sendpriority queue and the network roundtrip
 	// this span will finish only when delivery is handled (or times out)
 	r := &RetrieveRequestMsg{
-		Addr:      req.Addr,
-		HopCount:  req.HopCount + 1,
-		SkipCheck: true, // this has something to do with old syncing
+		Addr: req.Addr,
 	}
 	log.Trace("sending retrieve request", "ref", r.Addr, "peer", sp.ID().String(), "origin", localID)
 	err = sp.Send(ctx, r)

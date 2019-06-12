@@ -160,10 +160,7 @@ func TestRequestFromPeers(t *testing.T) {
 		streamer: r,
 	}
 	r.setPeer(sp)
-	req := storage.NewRequest(
-		storage.Address(hash0[:]),
-		0,
-	)
+	req := storage.NewRequest(storage.Address(hash0[:]))
 	id, err := delivery.FindPeer(context.TODO(), req)
 	if err != nil {
 		t.Fatal(err)
@@ -198,10 +195,7 @@ func TestRequestFromPeersWithLightNode(t *testing.T) {
 	}
 	r.setPeer(sp)
 
-	req := storage.NewRequest(
-		storage.Address(hash0[:]),
-		0,
-	)
+	req := storage.NewRequest(storage.Address(hash0[:]))
 
 	// making a request which should return with "no peer found"
 	_, err := delivery.FindPeer(context.TODO(), req)
@@ -553,7 +547,7 @@ func benchmarkDeliveryFromNodes(b *testing.B, nodes, chunkCount int, skipCheck b
 			errs := make(chan error)
 			for _, hash := range hashes {
 				go func(h storage.Address) {
-					_, err := netStore.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(h, 0))
+					_, err := netStore.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(h))
 					log.Warn("test check netstore get", "hash", h, "err", err)
 					errs <- err
 				}(hash)

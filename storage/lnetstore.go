@@ -40,9 +40,8 @@ func (n *LNetStore) Get(ctx context.Context, mode chunk.ModeGet, ref Address) (c
 	defer cancel()
 
 	req := &Request{
-		Addr:     ref,
-		HopCount: 0,
-		Origin:   enode.ID{},
+		Addr:   ref,
+		Origin: enode.ID{},
 	}
 
 	return n.NetStore.Get(ctx, mode, req)

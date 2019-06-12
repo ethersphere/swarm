@@ -35,8 +35,6 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-var hopcountHistogram = metrics.GetOrRegisterResettingTimer("hopcount", nil)
-
 // FetcherItem are stored in fetchers map and signal to all interested parties if a given chunk is delivered
 // the mutex controls who closes the channel, and make sure we close the channel only once
 type FetcherItem struct {
@@ -147,10 +145,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			log.Error("localstore get error", "err", err)
 		}
 
-		// keep track of hopCount for informational purposes
-		hopcountHistogram.Update(time.Duration(req.HopCount))
-
-		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String(), "hopCount", req.HopCount)
+		log.Trace("netstore.chunk-not-in-localstore", "ref", ref.String())
 
 		v, err, _ := n.requestGroup.Do(ref.String(), func() (interface{}, error) {
 			// currently we issue a retrieve request if a fetcher
