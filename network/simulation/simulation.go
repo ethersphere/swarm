@@ -19,7 +19,9 @@ package simulation
 import (
 	"context"
 	"errors"
+	"io/ioutil"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -29,6 +31,11 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/simulations"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/network"
+)
+
+const (
+	SimulationTypeInproc = iota
+	SimulationTypeExec
 )
 
 // Common errors that are returned by functions in this package.
@@ -50,6 +57,8 @@ type Simulation struct {
 	done              chan struct{}
 	mu                sync.RWMutex
 	neighbourhoodSize int
+	baseDir           string
+	typ               int
 
 	httpSrv *http.Server        //attach a HTTP server via SimulationOptions
 	handler *simulations.Server //HTTP handler for the server
@@ -76,8 +85,44 @@ func New(services map[string]ServiceFunc) (s *Simulation) {
 		buckets:           make(map[enode.ID]*sync.Map),
 		done:              make(chan struct{}),
 		neighbourhoodSize: network.NewKadParams().NeighbourhoodSize,
+		typ:               SimulationTypeInproc,
 	}
 
+	adapterServices := addServices(s, services)
+
+	s.Net = simulations.NewNetwork(
+		adapters.NewTCPAdapter(adapterServices),
+		&simulations.NetworkConfig{ID: "0"},
+	)
+
+	return s
+}
+
+// NewExec does the same as New but lets the caller specify the adapter to use
+func NewExec(services map[string]ServiceFunc) (s *Simulation, err error) {
+	s = &Simulation{
+		buckets:           make(map[enode.ID]*sync.Map),
+		done:              make(chan struct{}),
+		neighbourhoodSize: network.NewKadParams().NeighbourhoodSize,
+		typ:               SimulationTypeExec,
+	}
+
+	adapterServices := addServices(s, services)
+	adapters.RegisterServices(adapterServices)
+
+	s.baseDir, err = ioutil.TempDir("", "swarm-sim")
+	if err != nil {
+		return nil, err
+	}
+	s.Net = simulations.NewNetwork(
+		adapters.NewExecAdapter(s.baseDir),
+		&simulations.NetworkConfig{ID: "0"},
+	)
+
+	return s, nil
+}
+
+func addServices(s *Simulation, services map[string]ServiceFunc) map[string]adapters.ServiceFunc {
 	adapterServices := make(map[string]adapters.ServiceFunc, len(services))
 	for name, serviceFunc := range services {
 		// Scope this variables correctly
@@ -102,13 +147,7 @@ func New(services map[string]ServiceFunc) (s *Simulation) {
 			return service, nil
 		}
 	}
-
-	s.Net = simulations.NewNetwork(
-		adapters.NewTCPAdapter(adapterServices),
-		&simulations.NetworkConfig{ID: "0"},
-	)
-
-	return s
+	return adapterServices
 }
 
 // RunFunc is the function that will be called
@@ -208,6 +247,9 @@ func (s *Simulation) Close() {
 
 	s.shutdownWG.Wait()
 	s.Net.Shutdown()
+	if s.baseDir != "" {
+		os.RemoveAll(s.baseDir)
+	}
 }
 
 // Done returns a channel that is closed when the simulation
