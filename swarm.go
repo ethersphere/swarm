@@ -64,7 +64,6 @@ var (
 	startCounter       = metrics.NewRegisteredCounter("stack,start", nil)
 	stopCounter        = metrics.NewRegisteredCounter("stack,stop", nil)
 	uptimeGauge        = metrics.NewRegisteredGauge("stack.uptime", nil)
-	requestsCacheGauge = metrics.NewRegisteredGauge("storage.cache.requests.size", nil)
 )
 
 // the swarm stack
@@ -408,7 +407,6 @@ func (s *Swarm) Start(srv *p2p.Server) error {
 			select {
 			case <-time.After(updateGaugesPeriod):
 				uptimeGauge.Update(time.Since(startTime).Nanoseconds())
-				//requestsCacheGauge.Update(int64(s.netStore.RequestsCacheLen()))
 			case <-doneC:
 				return
 			}

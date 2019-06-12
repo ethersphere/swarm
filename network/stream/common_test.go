@@ -56,7 +56,6 @@ var (
 
 	bucketKeyStore     = simulation.BucketKey("store")
 	bucketKeyFileStore = simulation.BucketKey("filestore")
-	bucketKeyNetStore  = simulation.BucketKey("netstore")
 	bucketKeyDelivery  = simulation.BucketKey("delivery")
 	bucketKeyRegistry  = simulation.BucketKey("registry")
 
