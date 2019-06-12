@@ -38,8 +38,7 @@ type Request struct {
 // a map of peers to skip.
 func NewRequest(addr Address) *Request {
 	return &Request{
-		Addr:        addr,
-		PeersToSkip: sync.Map{},
+		Addr: addr,
 	}
 }
 

@@ -74,13 +74,7 @@ func (s *SwarmSyncerServer) Close() {
 
 // GetData retrieves the actual chunk from netstore
 func (s *SwarmSyncerServer) GetData(ctx context.Context, key []byte) ([]byte, error) {
-	// this timeout shouldn't be necessary as syncer server is supposed to go straight to localstore,
-	// but if a chunk is garbage collected while we actually offered it, it is possible for this
-	// to trigger a network request
-	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
-	defer cancel()
-
-	ch, err := s.netStore.Get(ctx, chunk.ModeGetSync, storage.NewRequest(storage.Address(key)))
+	ch, err := s.netStore.Store.Get(ctx, chunk.ModeGetSync, storage.Address(key))
 	if err != nil {
 		return nil, err
 	}
