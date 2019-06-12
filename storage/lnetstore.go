@@ -21,8 +21,6 @@ import (
 
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network/timeouts"
-
-	"github.com/ethereum/go-ethereum/p2p/enode"
 )
 
 type LNetStore struct {
@@ -39,10 +37,5 @@ func (n *LNetStore) Get(ctx context.Context, mode chunk.ModeGet, ref Address) (c
 	ctx, cancel := context.WithTimeout(ctx, timeouts.FetcherGlobalTimeout)
 	defer cancel()
 
-	req := &Request{
-		Addr:   ref,
-		Origin: enode.ID{},
-	}
-
-	return n.NetStore.Get(ctx, mode, req)
+	return n.NetStore.Get(ctx, mode, NewRequest(ref))
 }
