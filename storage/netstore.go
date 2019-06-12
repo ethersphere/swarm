@@ -35,10 +35,11 @@ import (
 	"golang.org/x/sync/singleflight"
 )
 
-// FetcherItem are stored in fetchers map and signal to all interested parties if a given chunk is delivered
+// Fetcher is a struct which maintains state of remote requests.
+// Fetchers are stored in fetchers map and signal to all interested parties if a given chunk is delivered
 // the mutex controls who closes the channel, and make sure we close the channel only once
-type FetcherItem struct {
-	Delivered chan struct{} // when closed, it means that the chunk this FetcherItem refers to is delivered
+type Fetcher struct {
+	Delivered chan struct{} // when closed, it means that the chunk this Fetcher refers to is delivered
 
 	// it is possible for multiple actors to be delivering the same chunk,
 	// for example through syncing and through retrieve request. however we want the `Delivered` channel to be closed only
@@ -51,15 +52,15 @@ type FetcherItem struct {
 	RequestedBySyncer bool // whether we have issued at least once a request through Offered/Wanted hashes flow
 }
 
-// NewFetcherItem is a constructor for a FetcherItem
-func NewFetcherItem() *FetcherItem {
-	return &FetcherItem{make(chan struct{}), sync.Once{}, time.Now(), "", false}
+// NewFetcher is a constructor for a Fetcher
+func NewFetcher() *Fetcher {
+	return &Fetcher{make(chan struct{}), sync.Once{}, time.Now(), "", false}
 }
 
 // SafeClose signals to interested parties (those waiting for a signal on fi.Delivered) that a chunk is delivered.
 // It closes the fi.Delivered channel through the sync.Once object, because it is possible for a chunk to be
 // delivered multiple times concurrently.
-func (fi *FetcherItem) SafeClose() {
+func (fi *Fetcher) SafeClose() {
 	fi.once.Do(func() {
 		close(fi.Delivered)
 	})
@@ -106,7 +107,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool,
 	if ok {
 		// we need SafeClose, because it is possible for a chunk to both be
 		// delivered through syncing and through a retrieve request
-		fii := fi.(*FetcherItem)
+		fii := fi.(*Fetcher)
 		fii.SafeClose()
 		log.Trace("netstore.put chunk delivered and stored", "ref", ch.Address().String())
 
@@ -154,7 +155,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 			// have 2 in-flight requests for the same chunk - one by a
 			// syncer (offered/wanted/deliver flow) and one from
 			// here - retrieve request
-			fi, _, ok := n.GetOrCreateFetcherItem(ctx, ref, "request")
+			fi, _, ok := n.GetOrCreateFetcher(ctx, ref, "request")
 			if ok {
 				err := n.RemoteFetch(ctx, req, fi)
 				if err != nil {
@@ -168,7 +169,7 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 				return nil, errors.New("item should have been in localstore, but it is not")
 			}
 
-			// fi could be nil (when ok == false) if the chunk was added to the NetStore between n.store.Get and the call to n.GetOrCreateFetcherItem
+			// fi could be nil (when ok == false) if the chunk was added to the NetStore between n.store.Get and the call to n.GetOrCreateFetcher
 			if fi != nil {
 				metrics.GetOrRegisterResettingTimer(fmt.Sprintf("fetcher.%s.request", fi.CreatedBy), nil).UpdateSince(start)
 			}
@@ -198,7 +199,11 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 	return ch, nil
 }
 
-func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *FetcherItem) error {
+// RemoteFetch is handling the retry mechanism when making a chunk request to our peers.
+// For a given chunk Request, we call RemoteGet, which selects the next eligible peer and
+// issues a RetrieveRequest and we wait for a delivery. If a delivery doesn't arrive within the SearchTimeout
+// we retry.
+func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) error {
 	// while we haven't timed-out, and while we don't have a chunk,
 	// iterate over peers and try to find a chunk
 	metrics.GetOrRegisterCounter("remote.fetch", nil).Inc(1)
@@ -257,9 +262,9 @@ func (n *NetStore) Has(ctx context.Context, ref Address) (bool, error) {
 	return n.Store.Has(ctx, ref)
 }
 
-// GetOrCreateFetcherItem returns a FetcherItem for a given chunk, if this chunk is not in the LocalStore.
-// If the chunk is in the LocalStore, it returns nil for the FetcherItem and ok == false
-func (n *NetStore) GetOrCreateFetcherItem(ctx context.Context, ref Address, interestedParty string) (fi *FetcherItem, loaded bool, ok bool) {
+// GetOrCreateFetcher returns the Fetcher for a given chunk, if this chunk is not in the LocalStore.
+// If the chunk is in the LocalStore, it returns nil for the Fetcher and ok == false
+func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interestedParty string) (fi *Fetcher, loaded bool, ok bool) {
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
@@ -271,11 +276,11 @@ func (n *NetStore) GetOrCreateFetcherItem(ctx context.Context, ref Address, inte
 		return nil, false, false
 	}
 
-	fi = NewFetcherItem()
+	fi = NewFetcher()
 	v, loaded := n.fetchers.LoadOrStore(ref.String(), fi)
 	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
 	if loaded {
-		fi = v.(*FetcherItem)
+		fi = v.(*Fetcher)
 	} else {
 		fi.CreatedBy = interestedParty
 	}

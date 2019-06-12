@@ -300,7 +300,7 @@ func newTestExternalClient(netStore *storage.NetStore) *testExternalClient {
 }
 
 func (c *testExternalClient) NeedData(ctx context.Context, key []byte) (bool, func(context.Context) error) {
-	fi, loaded, ok := c.netStore.GetOrCreateFetcherItem(ctx, key, "syncer")
+	fi, loaded, ok := c.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 	if !ok {
 		return loaded, nil
 	}

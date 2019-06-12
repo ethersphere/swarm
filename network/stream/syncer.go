@@ -202,7 +202,7 @@ func RegisterSwarmSyncerClient(streamer *Registry, netStore *storage.NetStore) {
 func (s *SwarmSyncerClient) NeedData(ctx context.Context, key []byte) (loaded bool, wait func(context.Context) error) {
 	start := time.Now()
 
-	fi, loaded, ok := s.netStore.GetOrCreateFetcherItem(ctx, key, "syncer")
+	fi, loaded, ok := s.netStore.GetOrCreateFetcher(ctx, key, "syncer")
 	if !ok {
 		return loaded, nil
 	}
