@@ -27,12 +27,18 @@ import (
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
+	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	olog "github.com/opentracing/opentracing-go/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"golang.org/x/sync/singleflight"
+)
+
+const (
+	// capacity for the fetchers LRU cache
+	fetchersCapacity = 500000
 )
 
 // Fetcher is a struct which maintains state of remote requests.
@@ -74,7 +80,7 @@ type RemoteGetFunc func(ctx context.Context, req *Request, localID enode.ID) (*e
 type NetStore struct {
 	chunk.Store
 	localID      enode.ID // our local enode - used when issuing RetrieveRequests
-	fetchers     sync.Map
+	fetchers     *lru.Cache
 	putMu        sync.Mutex
 	requestGroup singleflight.Group
 	RemoteGet    RemoteGetFunc
@@ -82,9 +88,12 @@ type NetStore struct {
 
 // NewNetStore creates a new NetStore using the provided chunk.Store and localID of the node.
 func NewNetStore(store chunk.Store, localID enode.ID) *NetStore {
+	fetchers, _ := lru.New(fetchersCapacity)
+
 	return &NetStore{
-		Store:   store,
-		localID: localID,
+		fetchers: fetchers,
+		Store:    store,
+		localID:  localID,
 	}
 }
 
@@ -102,8 +111,8 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool,
 		return exists, err
 	}
 
-	// notify RemoteGet about a chunk being stored
-	fi, ok := n.fetchers.Load(ch.Address().String())
+	// notify RemoteGet (or SwarmSyncerClient) about a chunk delivery and it being stored
+	fi, ok := n.fetchers.Get(ch.Address().String())
 	if ok {
 		// we need SafeClose, because it is possible for a chunk to both be
 		// delivered through syncing and through a retrieve request
@@ -118,7 +127,7 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool,
 			log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
 		}
 
-		n.fetchers.Delete(ch.Address().String())
+		n.fetchers.Remove(ch.Address().String())
 	}
 
 	return exists, nil
@@ -264,7 +273,7 @@ func (n *NetStore) Has(ctx context.Context, ref Address) (bool, error) {
 
 // GetOrCreateFetcher returns the Fetcher for a given chunk, if this chunk is not in the LocalStore.
 // If the chunk is in the LocalStore, it returns nil for the Fetcher and ok == false
-func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interestedParty string) (fi *Fetcher, loaded bool, ok bool) {
+func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interestedParty string) (f *Fetcher, loaded bool, ok bool) {
 	n.putMu.Lock()
 	defer n.putMu.Unlock()
 
@@ -276,20 +285,22 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 		return nil, false, false
 	}
 
-	fi = NewFetcher()
-	v, loaded := n.fetchers.LoadOrStore(ref.String(), fi)
+	f = NewFetcher()
+	v, loaded := n.fetchers.Get(ref.String())
 	log.Trace("netstore.has-with-callback.loadorstore", "ref", ref.String(), "loaded", loaded)
 	if loaded {
-		fi = v.(*Fetcher)
+		f = v.(*Fetcher)
 	} else {
-		fi.CreatedBy = interestedParty
+		f.CreatedBy = interestedParty
+
+		n.fetchers.Add(ref.String(), f)
 	}
 
 	// if fetcher created by request, but we get a call from syncer, make sure we issue a second request
-	if fi.CreatedBy != interestedParty && !fi.RequestedBySyncer {
-		fi.RequestedBySyncer = true
-		return fi, false, true
+	if f.CreatedBy != interestedParty && !f.RequestedBySyncer {
+		f.RequestedBySyncer = true
+		return f, false, true
 	}
 
-	return fi, loaded, true
+	return f, loaded, true
 }
