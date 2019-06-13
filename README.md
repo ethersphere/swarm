@@ -9,23 +9,28 @@ Swarm is a distributed storage platform and content distribution service, a nati
 
 ## Table of Contents
 
-*  [Building the source](#building-the-source)
-*  [Running Swarm](#running-swarm)
-*  [Documentation](#documentation)
-*  [Developers Guide](#developers-guide)
-   *  [Go Environment](#development-environment)
-   *  [Vendored Dependencies](#vendored-dependencies)
-   *  [Testing](#testing)
-   *  [Profiling Swarm](#profiling-swarm)
-   *  [Metrics and Instrumentation in Swarm](#metrics-and-instrumentation-in-swarm)
-*  [Public Gateways](#public-gateways)
-*  [Swarm Dapps](#swarm-dapps)
-*  [Contributing](#contributing)
-*  [License](#license)
+- [Swarm](#swarm)
+- [Table of Contents](#table-of-contents)
+- [Building the source](#building-the-source)
+- [Running Swarm](#running-swarm)
+  - [Verifying that your local Swarm node is running](#verifying-that-your-local-swarm-node-is-running)
+  - [Ethereum Name Service resolution](#ethereum-name-service-resolution)
+- [Documentation](#documentation)
+- [Developers Guide](#developers-guide)
+  - [Go Environment](#go-environment)
+  - [Vendored Dependencies](#vendored-dependencies)
+  - [Testing](#testing)
+  - [Profiling Swarm](#profiling-swarm)
+  - [Metrics and Instrumentation in Swarm](#metrics-and-instrumentation-in-swarm)
+    - [Visualizing metrics](#visualizing-metrics)
+- [Public Gateways](#public-gateways)
+- [Swarm Dapps](#swarm-dapps)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Building the source
 
-Building Swarm requires Go (version 1.11 or later).
+Building Swarm requires Go (version 1.12 or later).
 
 To simply compile the `swarm` binary without a `GOPATH`:
 
@@ -98,7 +103,7 @@ Swarm documentation can be found at [https://swarm-guide.readthedocs.io](https:/
 
 ### Go Environment
 
-We assume that you have Go v1.11 installed, and `GOPATH` is set.
+We assume that you have Go v1.12 installed, and `GOPATH` is set.
 
 You must have your working copy under `$GOPATH/src/github.com/ethersphere/swarm`.
 
