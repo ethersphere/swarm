@@ -178,12 +178,26 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 // getChunksBitVectorFromHost returns a bit vector of presence for a given slice of chunks from a given host
 func getChunksBitVectorFromHost(client *rpc.Client, addrs []storage.Address) (string, error) {
 	var hostChunks string
-
-	err := client.Call(&hostChunks, "bzz_has", addrs)
-	if err != nil {
-		return "", err
+	lastPage := false
+	for {
+		var pageChunks string
+		var page []storage.Address
+		if len(addrs) > 7500 {
+			page = addrs[:7500]
+			addrs = addrs[7500:]
+		} else {
+			page = addrs
+			lastPage = true
+		}
+		err := client.Call(&pageChunks, "bzz_has", page)
+		if err != nil {
+			return "", err
+		}
+		hostChunks += pageChunks
+		if lastPage {
+			break
+		}
 	}
-
 	return hostChunks, nil
 }
 
