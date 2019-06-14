@@ -41,6 +41,10 @@ const (
 	fetchersCapacity = 500000
 )
 
+var (
+	ErrNoSuitablePeer = errors.New("no suitable peer")
+)
+
 // Fetcher is a struct which maintains state of remote requests.
 // Fetchers are stored in fetchers map and signal to all interested parties if a given chunk is delivered
 // the mutex controls who closes the channel, and make sure we close the channel only once
@@ -234,7 +238,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 			log.Trace(err.Error(), "ref", ref)
 			osp.LogFields(olog.String("err", err.Error()))
 			osp.Finish()
-			return err
+			return ErrNoSuitablePeer
 		}
 
 		// add peer to the set of peers to skip from now
@@ -260,7 +264,7 @@ func (n *NetStore) RemoteFetch(ctx context.Context, req *Request, fi *Fetcher) e
 
 			osp.LogFields(olog.Bool("fail", true))
 			osp.Finish()
-			return errors.New("chunk couldnt be retrieved from remote nodes")
+			return ctx.Err()
 		}
 	}
 }
