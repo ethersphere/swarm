@@ -39,6 +39,8 @@ import (
 	cli "gopkg.in/urfave/cli.v1"
 )
 
+const trackChunksPageSize = 7500
+
 func uploadAndSyncCmd(ctx *cli.Context) error {
 	// use input seed if it has been set
 	if inputSeed != 0 {
@@ -178,26 +180,22 @@ func trackChunks(testData []byte, submitMetrics bool) error {
 // getChunksBitVectorFromHost returns a bit vector of presence for a given slice of chunks from a given host
 func getChunksBitVectorFromHost(client *rpc.Client, addrs []storage.Address) (string, error) {
 	var hostChunks string
-	lastPage := false
-	for {
-		var pageChunks string
-		var page []storage.Address
-		if len(addrs) > 7500 {
-			page = addrs[:7500]
-			addrs = addrs[7500:]
-		} else {
-			page = addrs
-			lastPage = true
+
+	for len(addrs) > 0 {
+		// get current page size, so that we avoid a slice out of bounds on the last page
+		pagesize := trackChunksPageSize
+		if cap(addrs) < trackChunksPageSize {
+			pagesize = cap(addrs)
 		}
+
 		err := client.Call(&pageChunks, "bzz_has", page)
 		if err != nil {
 			return "", err
 		}
 		hostChunks += pageChunks
-		if lastPage {
-			break
-		}
+		addrs = addrs[pagesize:]
 	}
+
 	return hostChunks, nil
 }
 
