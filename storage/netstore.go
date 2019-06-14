@@ -127,7 +127,8 @@ func (n *NetStore) Put(ctx context.Context, mode chunk.ModePut, ch Chunk) (bool,
 		metrics.GetOrRegisterResettingTimer(fmt.Sprintf("netstore.fetcher.lifetime.%s", fii.CreatedBy), nil).UpdateSince(fii.CreatedAt)
 
 		// helper snippet to log if a chunk took way to long to be delivered
-		if time.Since(fii.CreatedAt) > 5*time.Second {
+		slowChunkDeliveryThreshold := 5 * time.Second
+		if time.Since(fii.CreatedAt) > slowChunkDeliveryThreshold {
 			log.Trace("netstore.put slow chunk delivery", "ref", ch.Address().String())
 		}
 
@@ -198,8 +199,6 @@ func (n *NetStore) Get(ctx context.Context, mode chunk.ModeGet, req *Request) (C
 		c := v.(Chunk)
 
 		log.Trace("netstore.singleflight returned", "ref", ref.String(), "err", err)
-
-		log.Trace("netstore return", "ref", ref.String(), "chunk len", len(c.Data()))
 
 		return c, nil
 	}
@@ -296,7 +295,6 @@ func (n *NetStore) GetOrCreateFetcher(ctx context.Context, ref Address, interest
 		f = v.(*Fetcher)
 	} else {
 		f.CreatedBy = interestedParty
-
 		n.fetchers.Add(ref.String(), f)
 	}
 
