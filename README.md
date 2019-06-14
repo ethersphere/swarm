@@ -1,4 +1,4 @@
-## Swarm
+## Swarm  <!-- omit in toc -->
 
 [https://swarm.ethereum.org](https://swarm.ethereum.org)
 
@@ -7,10 +7,8 @@ Swarm is a distributed storage platform and content distribution service, a nati
 [![Travis](https://travis-ci.org/ethersphere/swarm.svg?branch=master)](https://travis-ci.org/ethersphere/swarm)
 [![Gitter](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/ethersphere/orange-lounge?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
-## Table of Contents
+## Table of Contents  <!-- omit in toc -->
 
-- [Swarm](#swarm)
-- [Table of Contents](#table-of-contents)
 - [Building the source](#building-the-source)
 - [Running Swarm](#running-swarm)
   - [Verifying that your local Swarm node is running](#verifying-that-your-local-swarm-node-is-running)
