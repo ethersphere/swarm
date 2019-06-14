@@ -189,7 +189,7 @@ func getChunksBitVectorFromHost(client *rpc.Client, addrs []storage.Address) (st
 			pagesize = cap(addrs)
 		}
 
-		err := client.Call(&pageChunks, "bzz_has", pagesize)
+		err := client.Call(&pageChunks, "bzz_has", addrs[:pagesize])
 		if err != nil {
 			return "", err
 		}
