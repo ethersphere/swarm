@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 )
 
@@ -49,12 +50,22 @@ func (p *Peer) Left() {
 
 // HandleMsg is the message handler that delegates incoming messages
 func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
+	log.Info("handling msg")
 	switch msg := msg.(type) {
 
-	//case *someType:
-	//return p.handleSomeMsgt(msg)
+	case *StreamMsg:
+		return p.handleStreamMsg(msg)
 
 	default:
 		return fmt.Errorf("unknown message type: %T", msg)
 	}
+}
+
+func (p *Peer) handleStreamMsg(msg *StreamMsg) error {
+	log.Error("msg handled")
+	return nil
+}
+
+type StreamMsg struct {
+	Bins []uint16
 }

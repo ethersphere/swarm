@@ -1,6 +1,9 @@
 package orbit
 
 import (
+	"context"
+	"time"
+
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -42,7 +45,29 @@ func NewOrb(me enode.ID, intervalsStore state.Store, kad *network.Kademlia, ns *
 		quit:           make(chan struct{}),
 	}
 
+	var spec = &protocols.Spec{
+		Name:       "orb",
+		Version:    8,
+		MaxMsgSize: 10 * 1024 * 1024,
+		Messages: []interface{}{
+			StreamMsg{},
+		},
+	}
+	orb.spec = spec
+
 	return orb
+}
+
+func (o *Orb) addPeer(p *Peer) {
+	o.peers = append(o.peers, p)
+}
+
+func (o *Orb) removePeer(p *Peer) {
+	for i, v := range o.peers {
+		if v == p {
+			o.peers = append(o.peers[:i], o.peers[i+1:])
+		}
+	}
 }
 
 func (o *Orb) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
@@ -53,16 +78,16 @@ func (o *Orb) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	defer o.kad.Off(np)
 
 	sp := NewPeer(bp)
-	//r.setPeer(sp)
-
-	//if r.syncMode == SyncingAutoSubscribe {
-	//	go sp.runUpdateSyncing()
-	//}
-
-	//defer r.deletePeer(sp)
-	//defer close(sp.quit)
-	//defer sp.close()
+	o.addPeer(sp)
+	defer o.removePeer(sp)
 	defer sp.Left()
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		if err := sp.Send(context.TODO(), StreamMsg{}); err != nil {
+			log.Error("err sending", "err", err)
+		}
+
+	}()
 
 	return peer.Run(sp.HandleMsg)
 }
