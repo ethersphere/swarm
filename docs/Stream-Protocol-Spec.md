@@ -3,7 +3,7 @@ stream! protocol
 ======
 
 ### definition of stream
-a protocol that facilitates data transmission between two swarm nodes, specifically targeting sequencial data in the form of a sequence of chunks as defined by swarm. the protocol should cater for the following requirements: 
+a protocol that facilitates data transmission between two swarm nodes, specifically targeting sequential data in the form of a sequence of chunks as defined by swarm. the protocol should cater for the following requirements: 
 - client should be able to request arbitrary ranges from the server
 - client can be assumed to have some of the data already and therefore can opt in to selectivally request chunks based on their hashes
 
