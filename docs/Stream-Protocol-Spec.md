@@ -8,7 +8,7 @@ a protocol that facilitates data transmission between two swarm nodes, specifica
 - client can be assumed to have some of the data already and therefore can opt in to selectivally request chunks based on their hashes
 
 As mentioned, the client is typically expected to have some of the data in the stream. to mitigate duplicate data transmission the stream protocol provides a configurable message roundtrip before batch delivery which allows the downstream peer to selectively request the chunks which it does not store at the time of the request.
-This comes, expectedly, at a certain price. Since delivery batches are pre-negotiated and do not rely on the mere benevolence of nodes, we can conclude that the delivery batches are optimsed for _urgency_ rather than for maximising batch utilisation (this is however, would be more apparent with unbounded streams).
+When delivery batches are pre-negotiated (i.e. when the client selectively tells the server which chunks it would like to receive), we can conclude that the delivery batches are optimsed for _urgency_ rather than for maximising batch utilisation (since the server sends a certain batch that potentially gets reduced into a smaller one by the client before actually being transmitted).
 
 the protocol defines the notions of:
 - **stream** - data source which is composed of a sequence of hashes, referenced by monotonically increasing integers, with unguaranteed contiguity with respect to one particular stream.
@@ -58,7 +58,7 @@ syncing contracts:
 | -------- | -------- | -------- | ------- |
 | Stream   | Client->Server  | Streams`[]string` | `SYNC\|6, SYNC\|5` |
 | StreamAck   | Server->Client  | Streams`[]Info` <br>Stream`string`<br>SessionIdx`uint64` <br>Bounded`bool` | `SYNC\|6;CUR=1632;bounded, SYNC\|7;CUR=18433;bounded` |
-| GetRange | Client->Server| Ruid`uint`<br>Stream `string`<br>From`uint`<br>To`*uint`(nullable) | `Stream: SYNC\|6, From: 1, To: 100`(bounded)<br>`Stream: SYNC\|7, From: 109`(unbounded) | 
+| GetRange | Client->Server| Ruid`uint`<br>Stream `string`<br>From`uint`<br>To`*uint`(nullable)<br>Roundtrip`bool` | `Stream: SYNC\|6, From: 1, To: 100`(bounded), Roundtrip: true<br>`Stream: SYNC\|7, From: 109, Roundtrip: true`(unbounded) | 
 | OfferedHashes | Server->Client| Ruid`uint`<br>Hashes `[]byte` | `Hashes: [cbcbbaddda, bcbbbdbbdc, ....]` |
 | WantedHashes | Client->Server | Ruid`uint`<br>Bitvector`[]byte` | `Bitvector: [0100100100] ` |
 | ChunkDelivery | Server->Client | Chunk `[]byte` | `Stream: SYNC\|6, Chunk: [001000101]` |
