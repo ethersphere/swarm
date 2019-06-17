@@ -62,7 +62,7 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 }
 
 func (p *Peer) handleStreamMsg(msg *StreamMsg) error {
-	log.Error("msg handled")
+	log.Error("msg handled", "peer", p.ID().String())
 	return nil
 }
 

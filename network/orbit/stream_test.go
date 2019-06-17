@@ -71,21 +71,16 @@ func TestNodesCanTalk(t *testing.T) {
 	// any new subscriptions any more
 	go func() {
 		//for long running sims, waiting 1 sec will not be enough
-		//waitDuration := 1 * time.Second
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case m := <-msgs: // just reset the loop
 				if m.Error != nil {
-					log.Error("orb message", "err", m.Error)
+					log.Error("orb message errored", "err", m.Error)
 					continue
 				}
 				log.Trace("orb message", "node", m.NodeID, "peer", m.PeerID)
-				//case <-time.After(waitDuration):
-				//// one second passed, don't assume more subscriptions
-				//log.Info("All subscriptions received")
-				//return
 
 			}
 		}
