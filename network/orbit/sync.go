@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/rpc"
@@ -16,7 +17,7 @@ import (
 )
 
 // Orb implements node.Service
-//var _ = &Orb{}.(node.Service)
+var _ node.Service = (*Orb)(nil)
 var pollTime = 1 * time.Second
 
 // Orb is the base type that handles all client/server operations on a node
