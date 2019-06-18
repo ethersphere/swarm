@@ -29,6 +29,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
@@ -170,10 +171,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		return nil, nil, err
 	}
 	// setup netstore
-	netStore, err := storage.NewNetStore(lstore, nil)
-	if err != nil {
-		return nil, nil, err
-	}
+	netStore := storage.NewNetStore(lstore, enode.ID{})
 
 	// setup pss
 	kadParams := network.NewKadParams()
@@ -189,7 +187,8 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 
 	// streamer
 	delivery := stream.NewDelivery(kad, netStore)
-	netStore.NewNetFetcherFunc = network.NewFetcherFactory(delivery.RequestFromPeers, true).New
+	netStore.RemoteGet = delivery.RequestFromPeers
+
 	bucket.Store(bucketKeyNetStore, netStore)
 
 	noSyncing := &stream.RegistryOptions{Syncing: stream.SyncingDisabled}
@@ -259,7 +258,7 @@ func download(ctx context.Context, store *storage.NetStore, addrs []storage.Addr
 	errc := make(chan error)
 	for _, addr := range addrs {
 		go func(addr storage.Address) {
-			_, err := store.Get(ctx, chunk.ModeGetRequest, addr)
+			_, err := store.Get(ctx, chunk.ModeGetRequest, storage.NewRequest(addr))
 			select {
 			case errc <- err:
 			case <-ctx.Done():
