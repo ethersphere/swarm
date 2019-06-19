@@ -59,13 +59,14 @@ func TestPushSyncSimulation(t *testing.T) {
 	nodeCnt := 4
 	chunkCnt := 500
 	trials := 10
-	err := testSyncerWithPubSub(nodeCnt, chunkCnt, trials, newServiceFunc)
+	err := testSyncerWithPubSub(t, nodeCnt, chunkCnt, trials, newServiceFunc)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
-func testSyncerWithPubSub(nodeCnt, chunkCnt, trials int, sf simulation.ServiceFunc) error {
+func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simulation.ServiceFunc) error {
+	t.Helper()
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": sf,
 	})
@@ -75,11 +76,12 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, trials int, sf simulation.ServiceFu
 	defer cancel()
 	err := sim.UploadSnapshot(ctx, fmt.Sprintf("../../network/stream/testing/snapshot_%d.json", nodeCnt))
 	if err != nil {
-		return err
+		t.Fatal(err)
 	}
 	log.Info("Snapshot loaded")
-
+	time.Sleep(2 * time.Second)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		time.Sleep(2 * time.Second)
 		errc := make(chan error)
 		for i := 0; i < trials; i++ {
 			go uploadAndDownload(ctx, sim, errc, nodeCnt, chunkCnt, i)
@@ -98,7 +100,7 @@ func testSyncerWithPubSub(nodeCnt, chunkCnt, trials int, sf simulation.ServiceFu
 	})
 
 	if result.Error != nil {
-		return fmt.Errorf("simulation error: %v", result.Error)
+		t.Fatalf("simulation error: %v", result.Error)
 	}
 	return nil
 }
@@ -191,7 +193,7 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 
 	bucket.Store(bucketKeyNetStore, netStore)
 
-	noSyncing := &stream.RegistryOptions{Syncing: stream.SyncingDisabled}
+	noSyncing := &stream.RegistryOptions{Syncing: stream.SyncingDisabled, SyncUpdateDelay: 50 * time.Millisecond}
 	r := stream.NewRegistry(addr.ID(), delivery, netStore, state.NewInmemoryStore(), noSyncing, nil)
 
 	pubSub := pss.NewPubSub(ps)
