@@ -2,6 +2,13 @@
 stream! protocol
 ======
 
+| Subject | Description |
+|---|---|
+| Authors | @zelig, @acud, @nonsense |
+| Status | Draft |
+| Created |	2019-06-11 |
+
+
 ### definition of stream
 a protocol that facilitates data transmission between two swarm nodes, specifically targeting sequential data in the form of a sequence of chunks as defined by swarm. the protocol should cater for the following requirements: 
 - client should be able to request arbitrary ranges from the server
