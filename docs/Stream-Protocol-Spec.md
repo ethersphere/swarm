@@ -60,8 +60,8 @@ Wire Protocol Specifications
 
 | Msg Name | From->To | Params   | Example |
 | -------- | -------- | -------- | ------- |
-| GetStreamInfo   | Client->Server  | Streams`[]string` | `SYNC\|6, SYNC\|5` |
-| StreamInfo   | Server->Client  | Streams`[]Info` <br>Stream`string`<br>SessionIdx`uint64` <br>Bounded`bool` | `SYNC\|6;CUR=1632;bounded, SYNC\|7;CUR=18433;bounded` |
+| StreamInfoReq   | Client->Server  | Streams`[]string` | `SYNC\|6, SYNC\|5` |
+| StreamInfoRes   | Server->Client  | Streams`[]StreamDescriptor` <br>Stream`string`<br>Cursor`uint64`<br>Bounded`bool` | `SYNC\|6;CUR=1632;bounded, SYNC\|7;CUR=18433;bounded` |
 | GetRange | Client->Server| Ruid`uint`<br>Stream `string`<br>From`uint`<br>To`*uint`(nullable)<br>Roundtrip`bool` | `Ruid: 21321, Stream: SYNC\|6, From: 1, To: 100`(bounded), Roundtrip: true<br>`Stream: SYNC\|7, From: 109, Roundtrip: true`(unbounded) | 
 | OfferedHashes | Server->Client| Ruid`uint`<br>Hashes `[]byte` | `Ruid: 21321, Hashes: [cbcbbaddda, bcbbbdbbdc, ....]` |
 | WantedHashes | Client->Server | Ruid`uint`<br>Bitvector`[]byte` | `Ruid: 21321, Bitvector: [0100100100] ` |
@@ -76,50 +76,49 @@ Notes:
 
 ### Message struct definitions:
 ```go
-type GetStreamInfo struct {
+type StreamInfoReq struct {
   Streams []string
 }
 ```
-
 ```go
-type StreamInfo struct {
+type StreamInfoRes struct {
   Streams []StreamDescriptor
 }
 ```
-
 ```go
 type StreamDescriptor struct {
-  Name    string
-  Index   uint
-  Bounded bool
+  Name      string
+  Cursor    uint
+  Bounded   bool
 }
 ```
-
 ```go
 type GetRange struct {
   Ruid      uint
   Stream    string
   From      uint
   To        uint `rlp:nil`
+  BatchSize uint
   Roundtrip bool
 }
 ```
-
 ```go
 type OfferedHashes struct {
-  Ruid uint
-  Hashes []byte
+  Ruid      uint
+  LastIndex uint
+  Hashes    []byte
 }
 ```
 ```go
 type WantedHashes struct {
-  Ruid uint
-  BitVector []byte
+  Ruid        uint
+  BitVector   []byte
 }
 ```
 ```go
 type ChunkDelivery struct {
   Ruid uint
+  LastIndex uint
   Chunks [][]byte
 }
 ```
