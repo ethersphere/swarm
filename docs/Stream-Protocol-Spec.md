@@ -10,7 +10,7 @@ a protocol that facilitates data transmission between two swarm nodes, specifica
 As mentioned, the client is typically expected to have some of the data in the stream. to mitigate duplicate data transmission the stream protocol provides a configurable message roundtrip before batch delivery which allows the downstream peer to selectively request the chunks which it does not store at the time of the request.
 When delivery batches are pre-negotiated (i.e. when the client selectively tells the server which chunks it would like to receive), we can conclude that the delivery batches are optimsed for _urgency_ rather than for maximising batch utilisation (since the server sends a certain batch that potentially gets reduced into a smaller one by the client before actually being transmitted).
 
-the protocol defines the notions of:
+### the protocol defines the notions of:
 - **stream** - data source which is composed of a sequence of hashes, referenced by monotonically increasing integers, with unguaranteed contiguity with respect to one particular stream.
 - **client** _(downstream peer)_ - the peer which is requesting data and does not posses it (client)
 - **server** _(upstream peer)_ - the peer that has the data and sends it to the downstream peer (server)
@@ -22,7 +22,7 @@ both offered and wanted go together - note this
     - **offered hashes** - from the server to the client
     - **wanted hashes** - at the discretion of the client in response to offered hashes
 
-responsibilities:
+### responsibilities:
 - client is able to request a range but doesnt know how many results the interval will return from the server
 - client does not know if interval is continuous or has gaps
 - range is defined by client and should be strictly respected and followed by server
@@ -37,14 +37,14 @@ responsibilities:
 - the server should always respond to the client
 
  
-stream termination condition:
+#### stream termination condition:
  - timeout, connection died, we get an error and remove the client, server also gets an error from p2p layer and removes all servers/clients and drops the peer
 
-considerations:
+### considerations:
 - server must make sure that chunk got to client in order to account in SWAP (synchronous). if the send does not result in an error - the send should be accounted
 - there is always a max batch size so that clients cannot grieve servers with very large ranges
 
-syncing contracts:
+### syncing contracts:
  - stream indexes always > 0
  - syncing is an implementation of the stream protocol
  - client is expected to manage all intervals, and therefore:
@@ -53,10 +53,14 @@ syncing contracts:
  - the server does not initiate any messages unless instructed to
  - the server does not instruct client on which bins to subscribe to it
 
+Wire Protocol Specifications
+=======
+
+### The wire protocol defines the following messages:
 
 | Msg Name | From->To | Params   | Example |
 | -------- | -------- | -------- | ------- |
-| StreamInfoReq   | Client->Server  | Streams`[]string` | `SYNC\|6, SYNC\|5` |
+| GetStreamInfo   | Client->Server  | Streams`[]string` | `SYNC\|6, SYNC\|5` |
 | StreamInfo   | Server->Client  | Streams`[]Info` <br>Stream`string`<br>SessionIdx`uint64` <br>Bounded`bool` | `SYNC\|6;CUR=1632;bounded, SYNC\|7;CUR=18433;bounded` |
 | GetRange | Client->Server| Ruid`uint`<br>Stream `string`<br>From`uint`<br>To`*uint`(nullable)<br>Roundtrip`bool` | `Ruid: 21321, Stream: SYNC\|6, From: 1, To: 100`(bounded), Roundtrip: true<br>`Stream: SYNC\|7, From: 109, Roundtrip: true`(unbounded) | 
 | OfferedHashes | Server->Client| Ruid`uint`<br>Hashes `[]byte` | `Ruid: 21321, Hashes: [cbcbbaddda, bcbbbdbbdc, ....]` |
@@ -65,14 +69,76 @@ syncing contracts:
 | BatchDone | Server->Client| Ruid `uint`<br>Last `uint` | `Ruid: 21321, Last: 113331` |
 | StreamState | Client<->Server | Stream`string`<br>Code`uint16`<br>Message`string`| `Stream: SYNC\|6, Code:1, Message:"Stream became bounded"`<br>`Stream: SYNC\|5, Code:2, Message: "No such stream"` |
 
-
 Notes:
 * communicating the last bin index when roundtrip is configured - can be done on top of OfferedHashes message (alongside the hashes), or to reuse the ACK from the no-roundtrip config
 * two notions of bounded - on the stream level and on the localstore
 * if TO is not specified - we assume unbounded stream, and we just send whatever, until at most, we fill up an entire batch.
 
+### Message struct definitions:
+```go
+type GetStreamInfo struct {
+  Streams []string
+}
+```
+
+```go
+type StreamInfo struct {
+  Streams []StreamDescriptor
+}
+```
+
+```go
+type StreamDescriptor struct {
+  Name    string
+  Index   uint
+  Bounded bool
+}
+```
+
+```go
+type GetRange struct {
+  Ruid      uint
+  Stream    string
+  From      uint
+  To        uint `rlp:nil`
+  Roundtrip bool
+}
+```
+
+```go
+type OfferedHashes struct {
+  Ruid uint
+  Hashes []byte
+}
+```
+```go
+type WantedHashes struct {
+  Ruid uint
+  BitVector []byte
+}
+```
+```go
+type ChunkDelivery struct {
+  Ruid uint
+  Chunks [][]byte
+}
+```
+```go
+type BatchDone struct {
+  Ruid uint
+  Last uint
+}
+```
+```go
+type StreamState struct {
+  Stream string
+  Code uint16
+  Message string
+}
+```
 
 Message exchange examples:
+======
 
 Initial handshake - client queries server for stream states<br>
 ![handshake](https://raw.githubusercontent.com/ethersphere/swarm/stream-spec/docs/diagrams/stream-handshake.png)
