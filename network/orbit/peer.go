@@ -50,7 +50,6 @@ func (p *Peer) Left() {
 
 // HandleMsg is the message handler that delegates incoming messages
 func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
-	log.Info("handling msg")
 	switch msg := msg.(type) {
 
 	case *StreamMsg:
