@@ -19,60 +19,27 @@ package syncer
 import (
 	"context"
 	"errors"
-	"flag"
-	"io/ioutil"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/storage"
-	"github.com/ethersphere/swarm/storage/localstore"
-	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
-	loglevel = flag.Int("loglevel", 5, "verbosity of logs")
+	bucketKeyFileStore = simulation.BucketKey("filestore")
+	bucketKeyBinIndex  = simulation.BucketKey("bin-indexes")
+	bucketKeySyncer    = simulation.BucketKey("syncer")
 )
 
-func init() {
-	flag.Parse()
-
-	log.PrintOrigins(true)
-	log.Root().SetHandler(log.LvlFilterHandler(log.Lvl(*loglevel), log.StreamHandler(os.Stderr, log.TerminalFormat(false))))
-}
-func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.GlobalStorer) (localStore *localstore.DB, cleanup func(), err error) {
-	dir, err := ioutil.TempDir("", "swarm-stream-")
-	if err != nil {
-		return nil, nil, err
-	}
-	cleanup = func() {
-		os.RemoveAll(dir)
-	}
-
-	var mockStore *mock.NodeStore
-	if globalStore != nil {
-		mockStore = globalStore.NewNodeStore(common.BytesToAddress(id.Bytes()))
-	}
-
-	localStore, err = localstore.New(dir, addr.Over(), &localstore.Options{
-		MockStore: mockStore,
-	})
-	if err != nil {
-		cleanup()
-		return nil, nil, err
-	}
-	return localStore, cleanup, nil
-}
-
-func TestNodesCanTalk(t *testing.T) {
+func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	nodeCount := 2
 
 	// create a standard sim
@@ -86,10 +53,43 @@ func TestNodesCanTalk(t *testing.T) {
 				return nil, nil, err
 			}
 
-			netStore := storage.NewNetStore(localStore, enode.ID{})
-
 			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			netStore := storage.NewNetStore(localStore, enode.ID{})
+			lnetStore := storage.NewLNetStore(netStore)
+			fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
+
+			filesize := 1000 * 4096
+			cctx := context.Background()
+			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := wait(cctx); err != nil {
+				t.Fatal(err)
+			}
+
+			// verify bins just upto 8 (given random distribution and 1000 chunks
+			// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
+			for i := 0; i <= 7; i++ {
+				if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
+					t.Fatalf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
+				}
+			}
+
+			binIndexes := make([]uint64, 17)
+			for i := 0; i <= 16; i++ {
+				binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
+				if err != nil {
+					t.Fatal(err)
+				}
+				binIndexes[i] = binIndex
+			}
 			o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
+			bucket.Store(bucketKeyBinIndex, binIndexes)
+			bucket.Store(bucketKeyFileStore, fileStore)
+			bucket.Store(simulation.BucketKeyKademlia, kad)
+			bucket.Store(bucketKeySyncer, o)
+
 			cleanup = func() {
 				localStore.Close()
 				localStoreCleanup()
@@ -109,51 +109,51 @@ func TestNodesCanTalk(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// setup the filter for SubscribeMsg
-	msgs := sim.PeerEvents(
-		context.Background(),
-		sim.UpNodeIDs(),
-		simulation.NewPeerEventsFilter().ReceivedMessages().Protocol("bzz-sync"),
-	)
-
-	// strategy: listen to all SubscribeMsg events; after every event we wait
-	// if after `waitDuration` no more messages are being received, we assume the
-	// subscription phase has terminated!
-
-	// the loop in this go routine will either wait for new message events
-	// or times out after 1 second, which signals that we are not receiving
-	// any new subscriptions any more
-	go func() {
-		//for long running sims, waiting 1 sec will not be enough
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case m := <-msgs: // just reset the loop
-				if m.Error != nil {
-					log.Error("syncer message errored", "err", m.Error)
-					continue
-				}
-				log.Trace("syncer message", "node", m.NodeID, "peer", m.PeerID)
-
-			}
-		}
-	}()
-
 	//run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		log.Info("Simulation running")
-		_ = sim.Net.Nodes
-
-		//wait until all subscriptions are done
-		select {
-		case <-ctx.Done():
-			return errors.New("Context timed out")
+		nodeIDs := sim.UpNodeIDs()
+		if len(nodeIDs) != 2 {
+			return errors.New("not enough nodes up")
 		}
 
+		nodeIndex := make(map[enode.ID]int)
+		for i, id := range nodeIDs {
+			nodeIndex[id] = i
+		}
+		// wait for the nodes to exchange StreamInfo messages
+		time.Sleep(100 * time.Millisecond)
+		for i := 0; i < 2; i++ {
+			idOne := nodeIDs[i]
+			idOther := nodeIDs[(i+1)%2]
+			onesSyncer, ok := sim.NodeItem(idOne, bucketKeySyncer)
+			if !ok {
+				t.Fatal("cant find item")
+			}
+
+			s := onesSyncer.(*SwarmSyncer)
+			onesCursors := s.peers[idOther].streamCursors
+			othersBins, ok := sim.NodeItem(idOther, bucketKeyBinIndex)
+			if !ok {
+				t.Fatal("cant find item")
+			}
+
+			compareNodeBinsToStreams(t, onesCursors, othersBins.([]uint64))
+		}
 		return nil
 	})
 	if result.Error != nil {
 		t.Fatal(result.Error)
+	}
+}
+
+// compareNodeBinsToStreams checks that the values on `onesCursors` correlate to the values in `othersBins`
+// onesCursors represents the stream cursors that node A knows about node B (i.e. they shoud reflect directly in this case
+// the values which node B retrieved from its local store)
+// othersBins is the array of bin indexes on node B's local store as they were inserted into the store
+func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]uint, othersBins []uint64) {
+	for bin, cur := range onesCursors {
+		if othersBins[bin] != uint64(cur) {
+			t.Fatalf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin])
+		}
 	}
 }
