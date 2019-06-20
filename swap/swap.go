@@ -33,9 +33,11 @@ import (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	stateStore state.Store        //stateStore is needed in order to keep balances across sessions
-	lock       sync.RWMutex       //lock the balances
-	balances   map[enode.ID]int64 //map of balances for each peer
+	stateStore          state.Store        //stateStore is needed in order to keep balances across sessions
+	lock                sync.RWMutex       //lock the balances
+	balances            map[enode.ID]int64 //map of balances for each peer
+	paymentThreshold    int64              // unit?
+	disconnectThreshold int64              // unit?
 }
 
 // New - swap constructor
