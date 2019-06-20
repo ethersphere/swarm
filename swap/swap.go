@@ -62,12 +62,19 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if err != nil && err != state.ErrNotFound {
 		return
 	}
+
+	peerBalance := s.balances[peer.ID()]
+
+	if peerBalance >= s.disconnectThreshold {
+		return fmt.Errorf("balance for peer %s over the disconnect threshold %v", peer.ID().String(), s.disconnectThreshold)
+	}
+
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
 	s.balances[peer.ID()] += amount
 
 	//save the new balance to the state store
-	peerBalance := s.balances[peer.ID()]
+	peerBalance = s.balances[peer.ID()]
 	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
 	if err != nil {
 		return
@@ -81,10 +88,6 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 			peerBalance := s.balances[peer.ID()]
 			err = s.stateStore.Put(peer.ID().String(), &peerBalance)
 		}
-	}
-
-	if peerBalance >= s.disconnectThreshold {
-		peer.Drop()
 	}
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
