@@ -82,13 +82,13 @@ func NewSwarmSyncer(me enode.ID, intervalsStore state.Store, kad *network.Kademl
 	return syncer
 }
 
-func (o *SwarmSyncer) addPeer(p *Peer) {
+func (s *SwarmSyncer) addPeer(p *Peer) {
 	o.mtx.Lock()
 	defer o.mtx.Unlock()
 	o.peers[p.ID()] = p
 }
 
-func (o *SwarmSyncer) removePeer(p *Peer) {
+func (s *SwarmSyncer) removePeer(p *Peer) {
 	o.mtx.Lock()
 	defer o.mtx.Unlock()
 	if _, found := o.peers[p.ID()]; found {
@@ -102,7 +102,7 @@ func (o *SwarmSyncer) removePeer(p *Peer) {
 }
 
 // Run is being dispatched when 2 nodes connect
-func (o *SwarmSyncer) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
+func (s *SwarmSyncer) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, o.spec)
 	bp := network.NewBzzPeer(peer)
 	sp := NewPeer(bp, o)
@@ -112,7 +112,8 @@ func (o *SwarmSyncer) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return peer.Run(sp.HandleMsg)
 }
 
-// CreateStreams creates and maintains the streams per peer. Runs in a separate goroutine
+// CreateStreams creates and maintains the streams per peer.
+// Runs per peer, in a separate goroutine
 func (s *SwarmSyncer) CreateStreams(p *Peer) {
 	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
 	sub, _ := syncSubscriptionsDiff(peerPo, -1, s.kad.NeighbourhoodDepth(), s.kad.MaxProxDisplay)
@@ -121,9 +122,13 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 	if err := p.Send(context.TODO(), streamsMsg); err != nil {
 		log.Error("err establishing initial subscription", "err", err)
 	}
+	v := s.kad.SubscribeToNeighbourhoodDepthChange()
+	for {
+		select {}
+	}
 }
 
-func (o *SwarmSyncer) Protocols() []p2p.Protocol {
+func (s *SwarmSyncer) Protocols() []p2p.Protocol {
 	return []p2p.Protocol{
 		{
 			Name:    "bzz-sync",
@@ -150,11 +155,11 @@ type API struct {
 	*SwarmSyncer
 }
 
-func NewAPI(o *SwarmSyncer) *API {
+func NewAPI(s *SwarmSyncer) *API {
 	return &API{SwarmSyncer: o}
 }
 
-func (o *SwarmSyncer) Start(server *p2p.Server) error {
+func (s *SwarmSyncer) Start(server *p2p.Server) error {
 	log.Info("started getting this done")
 	o.mtx.Lock()
 	defer o.mtx.Unlock()
@@ -190,7 +195,7 @@ func (o *SwarmSyncer) Start(server *p2p.Server) error {
 	return nil
 }
 
-func (o *SwarmSyncer) Stop() error {
+func (s *SwarmSyncer) Stop() error {
 	log.Info("shutting down")
 	o.mtx.Lock()
 	defer o.mtx.Unlock()
