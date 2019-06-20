@@ -36,7 +36,7 @@ type Swap struct {
 	stateStore          state.Store        // stateStore is needed in order to keep balances across sessions
 	lock                sync.RWMutex       // lock the balances
 	balances            map[enode.ID]int64 // map of balances for each peer
-	paymentThreshold    int64              // balance difference required for requesting cheques
+	paymentThreshold    int64              // balance difference required for requesting cheque
 	disconnectThreshold int64              // balance difference required for dropping peer
 }
 
@@ -65,9 +65,21 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
 	s.balances[peer.ID()] += amount
+
 	//save the new balance to the state store
 	peerBalance := s.balances[peer.ID()]
 	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
+	if err != nil {
+		return
+	}
+
+	if peerBalance >= s.paymentThreshold {
+		cheque, err := s.requestCheque(peer, peerBalance)
+		if cheque != nil {
+			//reduce balance based on received cheque
+			s.balances[peer.ID()] -= cheque.amount
+		}
+	}
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
 	return err
