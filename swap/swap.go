@@ -36,6 +36,7 @@ type Swap struct {
 	stateStore state.Store        //stateStore is needed in order to keep balances across sessions
 	lock       sync.RWMutex       //lock the balances
 	balances   map[enode.ID]int64 //map of balances for each peer
+	service    *SwapService
 }
 
 // New - swap constructor
@@ -95,4 +96,11 @@ func (s *Swap) loadState(peer *protocols.Peer) (err error) {
 //Clean up Swap
 func (swap *Swap) Close() {
 	swap.stateStore.Close()
+}
+
+func (s *Swap) resetBalance(peer *protocols.Peer) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.balances[peer.ID()] = 0
 }
