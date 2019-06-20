@@ -78,7 +78,13 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		if cheque != nil {
 			//reduce balance based on received cheque
 			s.balances[peer.ID()] -= cheque.amount
+			peerBalance := s.balances[peer.ID()]
+			err = s.stateStore.Put(peer.ID().String(), &peerBalance)
 		}
+	}
+
+	if peerBalance >= s.disconnectThreshold {
+		peer.Drop()
 	}
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
