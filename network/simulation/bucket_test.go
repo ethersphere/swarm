@@ -82,11 +82,12 @@ func TestServiceBucket(t *testing.T) {
 			t.Fatalf("expected %q, got %q", customValue, s)
 		}
 
-		//should somehow recover panic here?
-		_, ok = sim.NodeItem(id2, customKey)
-		if ok {
-			t.Fatal("bucket item should not be found")
-		}
+		defer func() {
+			if r := recover(); r == nil {
+				t.Fatal("bucket item should not be found")
+			}
+		}()
+		_ = sim.NodeItem(id2, customKey)
 	})
 
 	if err := sim.StopNode(id2); err != nil {
