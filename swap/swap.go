@@ -80,18 +80,20 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
+	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
+
 	//check if balance with peer is over the payment threshold
 	if peerBalance >= s.paymentThreshold {
 		//if so, send cheque request message with the current peer balance as its amount
-		s.ChequeRequestMsg(peer, peerBalance)
+		err = s.ChequeRequestMsg(peer, peerBalance)
 	}
 
-	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
 	return err
 }
 
-func (s *Swap) ChequeRequestMsg(peer *protocols.Peer, amount int64) {
+func (s *Swap) ChequeRequestMsg(peer *protocols.Peer, amount int64) error {
 	// Not implemented
+	return nil
 }
 
 //GetPeerBalance returns the balance for a given peer
