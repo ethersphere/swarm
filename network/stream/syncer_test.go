@@ -361,10 +361,7 @@ func TestStarNetworkSync(t *testing.T) {
 			if c.closestNodePO > 0 {
 				count++
 				log.Trace("found chunk with proximate host set, trying to find in localstore", "po", c.closestNodePO, "closestNode", c.closestNode)
-				item, ok = sim.NodeItem(c.closestNode, bucketKeyStore)
-				if !ok {
-					return fmt.Errorf("No DB")
-				}
+				item = sim.NodeItem(c.closestNode, bucketKeyStore)
 				store := item.(chunk.Store)
 
 				_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
@@ -420,10 +417,7 @@ func TestStarNetworkSync(t *testing.T) {
 				// if the chunk PO is equal to the sub that the node shouldnt have - check if the node has the chunk!
 				if _, ok := nodeNoSubs[c.uploaderNodePO]; ok {
 					count++
-					item, ok = sim.NodeItem(nodeId, bucketKeyStore)
-					if !ok {
-						return fmt.Errorf("No DB")
-					}
+					item = sim.NodeItem(nodeId, bucketKeyStore)
 					store := item.(chunk.Store)
 
 					_, err := store.Get(context.TODO(), chunk.ModeGetRequest, c.addr)
@@ -494,10 +488,7 @@ func TestSameVersionID(t *testing.T) {
 		//get the pivot node's filestore
 		nodes := sim.UpNodeIDs()
 
-		item, ok := sim.NodeItem(nodes[0], bucketKeyRegistry)
-		if !ok {
-			return fmt.Errorf("No filestore")
-		}
+		item := sim.NodeItem(nodes[0], bucketKeyRegistry)
 		registry := item.(*Registry)
 
 		//the peers should connect, thus getting the peer should not return nil
@@ -558,10 +549,7 @@ func TestDifferentVersionID(t *testing.T) {
 		//get the pivot node's filestore
 		nodes := sim.UpNodeIDs()
 
-		item, ok := sim.NodeItem(nodes[0], bucketKeyRegistry)
-		if !ok {
-			return fmt.Errorf("No filestore")
-		}
+		item := sim.NodeItem(nodes[0], bucketKeyRegistry)
 		registry := item.(*Registry)
 
 		//getting the other peer should fail due to the different version numbers
