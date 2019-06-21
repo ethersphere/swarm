@@ -188,10 +188,8 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 		//get the node at that index
 		//this is the node selected for upload
 		node := sim.Net.GetRandomUpNode()
-		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
-		if !ok {
-			return errors.New("no store in simulation bucket")
-		}
+		item := sim.NodeItem(node.ID(), bucketKeyStore)
+
 		store := item.(chunk.Store)
 		hashes, err := uploadFileToSingleNodeStore(node.ID(), chunkCount, store)
 		if err != nil {
@@ -231,10 +229,7 @@ func runSim(conf *synctestConfig, ctx context.Context, sim *simulation.Simulatio
 						_, err = globalStore.Get(common.BytesToAddress(id.Bytes()), ch)
 					} else {
 						//use the actual localstore
-						item, ok := sim.NodeItem(id, bucketKeyStore)
-						if !ok {
-							return errors.New("no store in simulation bucket")
-						}
+						item := sim.NodeItem(id, bucketKeyStore)
 						store := item.(chunk.Store)
 						_, err = store.Get(ctx, chunk.ModeGetLookup, ch)
 					}

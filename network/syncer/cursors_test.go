@@ -39,6 +39,8 @@ var (
 	bucketKeySyncer    = simulation.BucketKey("syncer")
 )
 
+// TestNodesExchangeCorrectBinIndexes tests that two nodes exchange the correct cursors for all streams
+// it tests that all streams are exchanged
 func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	nodeCount := 2
 
@@ -122,22 +124,124 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		}
 		// wait for the nodes to exchange StreamInfo messages
 		time.Sleep(100 * time.Millisecond)
-		for i := 0; i < 2; i++ {
+		for i := 0; i < nodeCount; i++ {
 			idOne := nodeIDs[i]
 			idOther := nodeIDs[(i+1)%2]
-			onesSyncer, ok := sim.NodeItem(idOne, bucketKeySyncer)
-			if !ok {
-				t.Fatal("cant find item")
-			}
+			onesSyncer := sim.NodeItem(idOne, bucketKeySyncer)
 
 			s := onesSyncer.(*SwarmSyncer)
 			onesCursors := s.peers[idOther].streamCursors
-			othersBins, ok := sim.NodeItem(idOther, bucketKeyBinIndex)
-			if !ok {
-				t.Fatal("cant find item")
-			}
+			othersBins := sim.NodeItem(idOther, bucketKeyBinIndex)
 
 			compareNodeBinsToStreams(t, onesCursors, othersBins.([]uint64))
+		}
+		return nil
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+}
+
+// TestNodesExchangeCorrectBinIndexesInPivot creates a pivot network of 8 nodes, in which the pivot node
+// has depth > 0, puts data into every node's localstore and checks that the pivot node exchanges
+// with each other node the correct indexes
+func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
+	nodeCount := 8
+
+	// create a standard sim
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"bzz-sync": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+			n := ctx.Config.Node()
+			addr := network.NewAddr(n)
+
+			localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
+			if err != nil {
+				return nil, nil, err
+			}
+
+			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+			netStore := storage.NewNetStore(localStore, enode.ID{})
+			lnetStore := storage.NewLNetStore(netStore)
+			fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
+
+			filesize := 2000 * 4096
+			cctx := context.Background()
+			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := wait(cctx); err != nil {
+				t.Fatal(err)
+			}
+
+			// verify bins just upto 8 (given random distribution and 1000 chunks
+			// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
+			for i := 0; i <= 7; i++ {
+				if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
+					t.Fatalf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
+				}
+			}
+
+			binIndexes := make([]uint64, 17)
+			for i := 0; i <= 16; i++ {
+				binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
+				if err != nil {
+					t.Fatal(err)
+				}
+				binIndexes[i] = binIndex
+			}
+			o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
+			bucket.Store(bucketKeyBinIndex, binIndexes)
+			bucket.Store(bucketKeyFileStore, fileStore)
+			bucket.Store(simulation.BucketKeyKademlia, kad)
+			bucket.Store(bucketKeySyncer, o)
+
+			cleanup = func() {
+				localStore.Close()
+				localStoreCleanup()
+			}
+
+			return o, cleanup, nil
+		},
+	})
+	defer sim.Close()
+
+	// create context for simulation run
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
+	_, err := sim.AddNodesAndConnectStar(nodeCount)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//run the simulation
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		nodeIDs := sim.UpNodeIDs()
+		if len(nodeIDs) != nodeCount {
+			return errors.New("not enough nodes up")
+		}
+
+		nodeIndex := make(map[enode.ID]int)
+		for i, id := range nodeIDs {
+			nodeIndex[id] = i
+		}
+		// wait for the nodes to exchange StreamInfo messages
+		time.Sleep(100 * time.Millisecond)
+		idPivot := nodeIDs[0]
+		for i := 1; i < nodeCount; i++ {
+			idOther := nodeIDs[i]
+			pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
+			otherSyncer := sim.NodeItem(idOther, bucketKeySyncer)
+
+			pivotCursors := pivotSyncer.(*SwarmSyncer).peers[idOther].streamCursors
+			otherCursors := otherSyncer.(*SwarmSyncer).peers[idPivot].streamCursors
+
+			othersBins := sim.NodeItem(idOther, bucketKeyBinIndex)
+			pivotBins := sim.NodeItem(idPivot, bucketKeyBinIndex)
+
+			compareNodeBinsToStreams(t, pivotCursors, othersBins.([]uint64))
+			compareNodeBinsToStreams(t, otherCursors, pivotBins.([]uint64))
 		}
 		return nil
 	})

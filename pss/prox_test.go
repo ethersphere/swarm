@@ -110,10 +110,7 @@ func newTestData() *testData {
 }
 
 func (td *testData) getKademlia(nodeId *enode.ID) (*network.Kademlia, error) {
-	kadif, ok := td.sim.NodeItem(*nodeId, simulation.BucketKeyKademlia)
-	if !ok {
-		return nil, fmt.Errorf("no kademlia entry for %v", nodeId)
-	}
+	kadif := td.sim.NodeItem(*nodeId, simulation.BucketKeyKademlia)
 	kad, ok := kadif.(*network.Kademlia)
 	if !ok {
 		return nil, fmt.Errorf("invalid kademlia entry for %v", nodeId)
