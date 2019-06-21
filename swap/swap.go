@@ -65,8 +65,10 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 
 	peerBalance := s.balances[peer.ID()]
 
+	//check if peer is over the disconnect threshold
 	if peerBalance >= s.disconnectThreshold {
-		return fmt.Errorf("balance for peer %s over the disconnect threshold %v", peer.ID().String(), s.disconnectThreshold)
+		//if so, return error in order to abort the transfer
+		return fmt.Errorf("balance for peer %s went over the disconnect threshold %v", peer.ID().String(), s.disconnectThreshold)
 	}
 
 	//adjust the balance
