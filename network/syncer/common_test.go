@@ -17,16 +17,24 @@
 package syncer
 
 import (
+	"context"
 	"flag"
 	"io/ioutil"
 	"os"
+	"sync"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/network"
+	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/ethersphere/swarm/storage/mock"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
@@ -61,4 +69,58 @@ func newTestLocalStore(id enode.ID, addr *network.BzzAddr, globalStore mock.Glob
 		return nil, nil, err
 	}
 	return localStore, cleanup, nil
+}
+
+func newBzzSyncWithLocalstoreDataInsertion(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+	n := ctx.Config.Node()
+	addr := network.NewAddr(n)
+
+	localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	netStore := storage.NewNetStore(localStore, enode.ID{})
+	lnetStore := storage.NewLNetStore(netStore)
+	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
+
+	filesize := 2000 * 4096
+	cctx := context.Background()
+	_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := wait(cctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// verify bins just upto 8 (given random distribution and 1000 chunks
+	// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
+	for i := 0; i <= 7; i++ {
+		if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
+			t.Fatalf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
+		}
+	}
+
+	binIndexes := make([]uint64, 17)
+	for i := 0; i <= 16; i++ {
+		binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
+		if err != nil {
+			t.Fatal(err)
+		}
+		binIndexes[i] = binIndex
+	}
+	o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
+	bucket.Store(bucketKeyBinIndex, binIndexes)
+	bucket.Store(bucketKeyFileStore, fileStore)
+	bucket.Store(simulation.BucketKeyKademlia, kad)
+	bucket.Store(bucketKeySyncer, o)
+
+	cleanup = func() {
+		localStore.Close()
+		localStoreCleanup()
+	}
+
+	return o, cleanup, nil
 }
