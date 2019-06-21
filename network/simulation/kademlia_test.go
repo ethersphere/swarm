@@ -103,10 +103,7 @@ func TestWaitTillHealthy(t *testing.T) {
 
 	for _, node := range nodeIDs {
 		// ...get its kademlia
-		item, ok := controlSim.NodeItem(node, BucketKeyKademlia)
-		if !ok {
-			t.Fatal("No kademlia bucket item")
-		}
+		item := controlSim.NodeItem(node, BucketKeyKademlia)
 		kad := item.(*network.Kademlia)
 		// get its base address
 		kid := common.Bytes2Hex(kad.BaseAddr())
