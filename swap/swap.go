@@ -63,7 +63,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
-	//check if peer is over the disconnect threshold
+	//check if balance with peer is over the disconnect threshold
 	if s.balances[peer.ID()] >= s.disconnectThreshold {
 		//if so, return error in order to abort the transfer
 		return fmt.Errorf("balance for peer %s went over the disconnect threshold %v", peer.ID().String(), s.disconnectThreshold)
@@ -80,7 +80,9 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		return
 	}
 
+	//check if balance with peer is over the payment threshold
 	if peerBalance >= s.paymentThreshold {
+		//if so, send cheque request message with the current peer balance as its amount
 		s.ChequeRequestMsg(peer, peerBalance)
 	}
 
