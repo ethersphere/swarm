@@ -19,18 +19,11 @@ package syncer
 import (
 	"context"
 	"errors"
-	"sync"
 	"testing"
 	"time"
 
-	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
-	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
-	"github.com/ethersphere/swarm/chunk"
-	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
-	"github.com/ethersphere/swarm/storage"
-	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
@@ -46,59 +39,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 
 	// create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz-sync": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			n := ctx.Config.Node()
-			addr := network.NewAddr(n)
-
-			localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			netStore := storage.NewNetStore(localStore, enode.ID{})
-			lnetStore := storage.NewLNetStore(netStore)
-			fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
-
-			filesize := 2000 * 4096
-			cctx := context.Background()
-			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := wait(cctx); err != nil {
-				t.Fatal(err)
-			}
-
-			// verify bins just upto 8 (given random distribution and 1000 chunks
-			// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
-			for i := 0; i <= 7; i++ {
-				if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
-					t.Fatalf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
-				}
-			}
-
-			binIndexes := make([]uint64, 17)
-			for i := 0; i <= 16; i++ {
-				binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
-				if err != nil {
-					t.Fatal(err)
-				}
-				binIndexes[i] = binIndex
-			}
-			o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
-			bucket.Store(bucketKeyBinIndex, binIndexes)
-			bucket.Store(bucketKeyFileStore, fileStore)
-			bucket.Store(simulation.BucketKeyKademlia, kad)
-			bucket.Store(bucketKeySyncer, o)
-
-			cleanup = func() {
-				localStore.Close()
-				localStoreCleanup()
-			}
-
-			return o, cleanup, nil
-		},
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
 	})
 	defer sim.Close()
 
@@ -150,59 +91,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 
 	// create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz-sync": func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-			n := ctx.Config.Node()
-			addr := network.NewAddr(n)
-
-			localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
-			if err != nil {
-				return nil, nil, err
-			}
-
-			kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-			netStore := storage.NewNetStore(localStore, enode.ID{})
-			lnetStore := storage.NewLNetStore(netStore)
-			fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
-
-			filesize := 2000 * 4096
-			cctx := context.Background()
-			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if err := wait(cctx); err != nil {
-				t.Fatal(err)
-			}
-
-			// verify bins just upto 8 (given random distribution and 1000 chunks
-			// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
-			for i := 0; i <= 7; i++ {
-				if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
-					t.Fatalf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
-				}
-			}
-
-			binIndexes := make([]uint64, 17)
-			for i := 0; i <= 16; i++ {
-				binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
-				if err != nil {
-					t.Fatal(err)
-				}
-				binIndexes[i] = binIndex
-			}
-			o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
-			bucket.Store(bucketKeyBinIndex, binIndexes)
-			bucket.Store(bucketKeyFileStore, fileStore)
-			bucket.Store(simulation.BucketKeyKademlia, kad)
-			bucket.Store(bucketKeySyncer, o)
-
-			cleanup = func() {
-				localStore.Close()
-				localStoreCleanup()
-			}
-
-			return o, cleanup, nil
-		},
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
 	})
 	defer sim.Close()
 
@@ -248,6 +137,25 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
+}
+
+// TestNodesCorrectBinsDynamic adds nodes to a star toplogy, connecting new nodes to the pivot node
+// after each connection is made, the cursors on the pivot are checked, to reflect the bins that we are
+// currently still interested in. this makes sure that correct bins are of interest
+// when nodes enter the kademlia of the pivot node
+func TestNodesCorrectBinsDynamic(t *testing.T) {
+
+	/* append nodes to simulation
+	   ids, err = s.AddNodes(count, opts...)
+	   if err != nil {
+	   	return nil, err
+	   }
+	   err = s.Net.ConnectNodesStar(ids[1:], ids[0])
+	   if err != nil {
+	   	return nil, err
+	   }
+	*/
+
 }
 
 // compareNodeBinsToStreams checks that the values on `onesCursors` correlate to the values in `othersBins`
