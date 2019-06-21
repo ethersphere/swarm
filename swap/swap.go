@@ -88,7 +88,7 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 		err = s.ChequeRequestMsg(peer, peerBalance)
 	}
 
-	return err
+	return
 }
 
 func (s *Swap) ChequeRequestMsg(peer *protocols.Peer, amount int64) error {
