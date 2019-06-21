@@ -35,7 +35,10 @@ import (
 
 // SwarmSyncer implements node.Service
 var _ node.Service = (*SwarmSyncer)(nil)
-var pollTime = 1 * time.Second
+var (
+	pollTime           = 1 * time.Second
+	createStreamsDelay = 50 * time.Millisecond //to avoid a race condition where we send a message to a server that hasnt set up yet
+)
 
 var SyncerSpec = &protocols.Spec{
 	Name:       "bzz-sync",
@@ -114,20 +117,64 @@ func (s *SwarmSyncer) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 
 // CreateStreams creates and maintains the streams per peer.
 // Runs per peer, in a separate goroutine
+// when the depth changes on our node
+//  - peer moves from out-of-depth to depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
+//  - peer moves from depth to out-of-depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
+//  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams.. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
+// peer connects and disconnects quickly
 func (s *SwarmSyncer) CreateStreams(p *Peer) {
+	//bins, po, lastDepth := s.GetBinsForPeer(p)
 	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
-	sub, _ := syncSubscriptionsDiff(peerPo, -1, s.kad.NeighbourhoodDepth(), s.kad.MaxProxDisplay)
-	streamsMsg := StreamInfoReq{Streams: sub}
-	log.Debug("sending subscriptions message", "bins", sub)
-	if err := p.Send(context.TODO(), streamsMsg); err != nil {
-		log.Error("err establishing initial subscription", "err", err)
+	depth := s.kad.NeighbourhoodDepth()
+	withinDepth := peerPo > depth
+
+	if withinDepth {
+		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay)
+
+		streamsMsg := StreamInfoReq{Streams: sub}
+		log.Debug("sending subscriptions message", "bins", sub)
+		time.Sleep(createStreamsDelay)
+		if err := p.Send(context.TODO(), streamsMsg); err != nil {
+			log.Error("err establishing initial subscription", "err", err)
+		}
 	}
+
 	subscription, unsubscribe := s.kad.SubscribeToNeighbourhoodDepthChange()
 	defer unsubscribe()
 	for {
 		select {
 		case <-subscription:
+			switch newDepth := s.kad.NeighbourhoodDepth(); {
+			case newDepth == depth:
+				// do nothing
+			case peerPo > newDepth:
+				// peer is within depth
+				if !withinDepth {
+					// a transition has occured - peer moved into depth
+					withinDepth = peerPo > newDepth
 
+					sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay)
+
+					streamsMsg := StreamInfoReq{Streams: sub}
+					log.Debug("sending subscriptions message", "bins", sub)
+					time.Sleep(createStreamsDelay)
+					if err := p.Send(context.TODO(), streamsMsg); err != nil {
+						log.Error("err establishing initial subscription", "err", err)
+					}
+				}
+			case peerPo < newDepth:
+				if withinDepth {
+					// transition occured - peer moved out of depth
+					// kill all humans (and streams)
+				}
+			}
+
+			// possible transitions:
+			// - peer moves out of depth, remove some streams
+			// - peer moves into depth, set up some streams
+			// - no change - do nothing
+		case <-s.quit:
+			return
 		}
 	}
 }
@@ -164,45 +211,21 @@ func NewAPI(s *SwarmSyncer) *API {
 }
 
 func (s *SwarmSyncer) Start(server *p2p.Server) error {
-	log.Info("started getting this done")
-	s.mtx.Lock()
-	defer s.mtx.Unlock()
-
-	//if o.started {
-	//panic("shouldnt happen")
-	//}
-	//o.started = true
-	//go func() {
-
-	//o.started = true
-	////kadDepthChanged = false
-	//for {
-	//// check kademlia depth
-	//// polling of peers
-	//// for each peer, establish streams:
-	//// - do the stream info query
-	//// - maintain session cursor somewhere
-	//// - start get ranges
-	//v := o.kad.SubscribeToNeighbourhoodDepthChange()
-	//select {
-	//case <-v:
-	////kadDepthChanged = true
-	//case <-o.quit:
-	//return
-	//case <-time.After(pollTime):
-	//// go over each peer and for each subprotocol check that each stream is working
-	//// i.e. for each peer, for each subprotocol, a client should be created (with an infinite loop)
-	//// fetching the stream
-	//}
-	//}
-	//}()
+	log.Info("syncer starting")
 	return nil
 }
 
 func (s *SwarmSyncer) Stop() error {
-	log.Info("shutting down")
+	log.Info("syncer shutting down")
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	close(s.quit)
 	return nil
+}
+
+func (s *SwarmSyncer) GetBinsForPeer(p *Peer) (bins []uint, depth int) {
+	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
+	depth = s.kad.NeighbourhoodDepth()
+	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay)
+	return sub, depth
 }
