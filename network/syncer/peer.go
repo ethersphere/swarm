@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
@@ -32,7 +33,9 @@ var ErrMaxPeerServers = errors.New("max peer servers")
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*network.BzzPeer
-	streamCursors map[uint]uint //key: bin, value: session cursor
+	mtx           sync.Mutex
+	streamCursors map[uint]*uint // key: bin, value: session cursor. when unset - we are not interested in that bin
+	streamsDirty  bool           // a request for StreamInfo is underway and awaiting reply
 	syncer        *SwarmSyncer
 
 	quit chan struct{}
@@ -42,7 +45,7 @@ type Peer struct {
 func NewPeer(peer *network.BzzPeer, s *SwarmSyncer) *Peer {
 	p := &Peer{
 		BzzPeer:       peer,
-		streamCursors: make(map[uint]uint),
+		streamCursors: make(map[uint]*uint),
 		syncer:        s,
 		quit:          make(chan struct{}),
 	}
