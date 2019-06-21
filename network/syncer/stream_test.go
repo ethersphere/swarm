@@ -58,7 +58,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 			lnetStore := storage.NewLNetStore(netStore)
 			fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
-			filesize := 1000 * 4096
+			filesize := 2000 * 4096
 			cctx := context.Background()
 			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
 			if err != nil {
@@ -150,9 +150,12 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 // onesCursors represents the stream cursors that node A knows about node B (i.e. they shoud reflect directly in this case
 // the values which node B retrieved from its local store)
 // othersBins is the array of bin indexes on node B's local store as they were inserted into the store
-func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]uint, othersBins []uint64) {
+func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]*uint, othersBins []uint64) {
 	for bin, cur := range onesCursors {
-		if othersBins[bin] != uint64(cur) {
+		if cur == nil {
+			continue
+		}
+		if othersBins[bin] != uint64(*cur) {
 			t.Fatalf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin])
 		}
 	}
