@@ -127,10 +127,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 		}()
 
-		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
-		if !ok {
-			return fmt.Errorf("No filestore")
-		}
+		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
 		fileStore := item.(*storage.FileStore)
 		size := chunkCount * chunkSize
 
@@ -180,10 +177,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		}
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
-		item, ok = sim.NodeItem(nodeIDs[0], bucketKeyStore)
-		if !ok {
-			return fmt.Errorf("No DB")
-		}
+		item = sim.NodeItem(nodeIDs[0], bucketKeyStore)
 		store := item.(chunk.Store)
 		uploaderNodeBinIDs := make([]uint64, 17)
 
@@ -206,10 +200,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 			}
 
 			log.Debug("compare to", "enode", nodeIDs[idx])
-			item, ok = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
-			if !ok {
-				return fmt.Errorf("No DB")
-			}
+			item = sim.NodeItem(nodeIDs[idx], bucketKeyStore)
 			db := item.(chunk.Store)
 
 			uploaderSum, otherNodeSum := 0, 0
@@ -348,10 +339,7 @@ func TestStarNetworkSync(t *testing.T) {
 		}
 
 		// get the pivot node and pump some data
-		item, ok := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
-		if !ok {
-			return fmt.Errorf("No filestore")
-		}
+		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
 		fileStore := item.(*storage.FileStore)
 		reader := bytes.NewReader(randomBytes[:])
 		_, wait1, err := fileStore.Store(ctx, reader, int64(len(randomBytes)), false)

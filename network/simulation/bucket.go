@@ -26,14 +26,20 @@ import (
 type BucketKey string
 
 // NodeItem returns an item set in ServiceFunc function for a particular node.
-func (s *Simulation) NodeItem(id enode.ID, key interface{}) (value interface{}, ok bool) {
+func (s *Simulation) NodeItem(id enode.ID, key interface{}) (value interface{}) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, ok := s.buckets[id]; !ok {
-		return nil, false
+		e := fmt.Errorf("cannot find node id %s in bucket", id.String())
+		panic(e)
 	}
-	return s.buckets[id].Load(key)
+	if v, ok := s.buckets[id].Load(key); ok {
+		return v
+	} else {
+		e := fmt.Errorf("cannot find key %s on node bucket", key.(string))
+		panic(e)
+	}
 }
 
 // MustNodeItem returns the item set in ServiceFunc for a particular node or panics in case

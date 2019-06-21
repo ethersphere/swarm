@@ -245,10 +245,7 @@ func runPureRetrievalTest(t *testing.T, nodeCount int, chunkCount int) {
 		for _, id := range nodeIDs {
 			// for every chunk for this node (which are only indexes)...
 			for _, ch := range conf.idToChunksMap[id] {
-				item, ok := sim.NodeItem(id, bucketKeyStore)
-				if !ok {
-					return fmt.Errorf("Error accessing localstore")
-				}
+				item := sim.NodeItem(id, bucketKeyStore)
 				lstore := item.(chunk.Store)
 				// ...get the actual chunk
 				for _, chnk := range chunks {
@@ -267,10 +264,7 @@ func runPureRetrievalTest(t *testing.T, nodeCount int, chunkCount int) {
 		cnt := 0
 
 		for _, id := range nodeIDs {
-			item, ok := sim.NodeItem(id, bucketKeyFileStore)
-			if !ok {
-				return fmt.Errorf("No filestore")
-			}
+			item := sim.NodeItem(id, bucketKeyFileStore)
 			fileStore := item.(*storage.FileStore)
 			for _, chunk := range chunks {
 				reader, _ := fileStore.Retrieve(context.TODO(), chunk.Address())
@@ -369,10 +363,7 @@ func runFileRetrievalTest(t *testing.T, nodeCount int) {
 		for {
 			for _, id := range nodeIDs {
 				//for each expected file, check if it is in the local store
-				item, ok := sim.NodeItem(id, bucketKeyFileStore)
-				if !ok {
-					return fmt.Errorf("No filestore")
-				}
+				item := sim.NodeItem(id, bucketKeyFileStore)
 				fileStore := item.(*storage.FileStore)
 				//check all chunks
 				for i, hash := range conf.hashes {
@@ -439,10 +430,7 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) {
 
 		//this is the node selected for upload
 		node := sim.Net.GetRandomUpNode()
-		item, ok := sim.NodeItem(node.ID(), bucketKeyStore)
-		if !ok {
-			return fmt.Errorf("No localstore")
-		}
+		item := sim.NodeItem(node.ID(), bucketKeyStore)
 		lstore := item.(chunk.Store)
 		conf.hashes, err = uploadFileToSingleNodeStore(node.ID(), chunkCount, lstore)
 		if err != nil {
@@ -456,10 +444,7 @@ func runRetrievalTest(t *testing.T, chunkCount int, nodeCount int) {
 			for _, id := range nodeIDs {
 				//for each expected chunk, check if it is in the local store
 				//check on the node's FileStore (netstore)
-				item, ok := sim.NodeItem(id, bucketKeyFileStore)
-				if !ok {
-					return fmt.Errorf("No filestore")
-				}
+				item := sim.NodeItem(id, bucketKeyFileStore)
 				fileStore := item.(*storage.FileStore)
 				//check all chunks
 				for _, hash := range conf.hashes {
