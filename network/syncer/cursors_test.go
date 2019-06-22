@@ -28,6 +28,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
 	"github.com/ethersphere/swarm/storage"
@@ -51,7 +52,6 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	defer sim.Close()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	// defer cancel should come before defer simulation teardown
 	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
@@ -69,7 +69,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 			nodeIndex[id] = i
 		}
 		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 		for i := 0; i < nodeCount; i++ {
 			idOne := nodeIDs[i]
 			idOther := nodeIDs[(i+1)%nodeCount]
@@ -113,21 +113,36 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 		}
 
 		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(2 * time.Second)
 		idPivot := nodeIDs[0]
+		pivotBins := sim.NodeItem(idPivot, bucketKeyBinIndex).([]uint64)
+		pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia).(*network.Kademlia)
+
 		for i := 1; i < nodeCount; i++ {
+			time.Sleep(1 * time.Second)
 			idOther := nodeIDs[i]
-			pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
+			pivotPeers := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers
+			peerRecord := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther]
+			pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther].streamCursors
 			otherSyncer := sim.NodeItem(idOther, bucketKeySyncer)
-
-			pivotCursors := pivotSyncer.(*SwarmSyncer).peers[idOther].streamCursors
 			otherCursors := otherSyncer.(*SwarmSyncer).peers[idPivot].streamCursors
+			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
 
-			othersBins := sim.NodeItem(idOther, bucketKeyBinIndex)
-			pivotBins := sim.NodeItem(idPivot, bucketKeyBinIndex)
+			othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
 
-			compareNodeBinsToStreams(t, pivotCursors, othersBins.([]uint64))
-			compareNodeBinsToStreams(t, otherCursors, pivotBins.([]uint64))
+			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
+			depth := pivotKademlia.NeighbourhoodDepth()
+			log.Error("i", "i", i, "po", po, "d", depth, "idOther", idOther, "peerRecord", peerRecord, "pivotCursors", pivotCursors, "peers", pivotPeers)
+
+			// if the peer is outside the depth - the pivot node should not request any streams
+
+			if po > depth {
+				log.Error("trying inner comparison")
+				compareNodeBinsToStreams(t, pivotCursors, othersBins)
+			}
+
+			log.Error("trying uter comparison", "otherCursors", otherCursors, "pivotBins", pivotBins)
+			compareNodeBinsToStreams(t, otherCursors, pivotBins)
 		}
 		return nil
 	})
@@ -141,7 +156,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 // currently still interested in. this makes sure that correct bins are of interest
 // when nodes enter the kademlia of the pivot node
 func TestNodesCorrectBinsDynamic(t *testing.T) {
-	nodeCount := 8
+	nodeCount := 10
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
@@ -169,6 +184,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		idPivot := nodeIDs[0]
 		for j := 2; j <= nodeCount; j++ {
+			log.Error("w00t", "j", j)
 			// append a node to the simulation
 			id, err := sim.AddNodes(1)
 			if err != nil {
@@ -182,18 +198,22 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 			if len(nodeIDs) != j+1 {
 				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), j)
 			}
-
+			time.Sleep(50 * time.Millisecond)
 			idPivot = nodeIDs[0]
+			pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
+			pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia).(*network.Kademlia)
+			pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
+
+			//fmt.Println(pivotKademlia.String())
+
 			for i := 1; i < j; i++ {
 				idOther := nodeIDs[i]
-				pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
 				pivotCursors := pivotSyncer.(*SwarmSyncer).peers[idOther].streamCursors
-				pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia)
-				pivotDepth := pivotKademlia.NeighbourhoodDepth()
+				// check that the pivot node is interested just in bins >= depth
 
-				othersBins := sim.NodeItem(idOther, bucketKeyBinIndex)
-
-				compareNodeBinsToStreams(t, pivotCursors, othersBins.([]uint64))
+				othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
+				log.Error("eee", "len1", len(pivotCursors), "len2", len(othersBins))
+				compareNodeBinsToStreamsWithDepth(t, pivotCursors, othersBins, pivotDepth)
 			}
 		}
 		return nil
@@ -201,21 +221,37 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	if result.Error != nil {
 		t.Fatal(result.Error)
 	}
-
-	/*	*/
-
 }
 
 // compareNodeBinsToStreams checks that the values on `onesCursors` correlate to the values in `othersBins`
 // onesCursors represents the stream cursors that node A knows about node B (i.e. they shoud reflect directly in this case
 // the values which node B retrieved from its local store)
 // othersBins is the array of bin indexes on node B's local store as they were inserted into the store
-func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]*uint, othersBins []uint64) {
+func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]uint64, othersBins []uint64) {
+	if len(onesCursors) == 0 {
+		panic("no cursors") //	t.Fatal("no cursors found")
+	}
+	if len(othersBins) == 0 {
+		panic("no bins")
+	}
+
 	for bin, cur := range onesCursors {
-		if cur == nil {
-			continue
+		if othersBins[bin] != uint64(cur) {
+			t.Fatalf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin])
 		}
-		if othersBins[bin] != uint64(*cur) {
+	}
+}
+
+func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[uint]uint64, othersBins []uint64, depth uint) {
+	if len(onesCursors) == 0 || len(othersBins) == 0 {
+		panic("no cursors") //	t.Fatal("no cursors found")
+	}
+
+	for bin, cur := range onesCursors {
+		if bin < depth {
+			t.Fatalf("cursor at bin %d should not exist. depth %d", bin, depth)
+		}
+		if othersBins[bin] != uint64(cur) {
 			t.Fatalf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin])
 		}
 	}
@@ -235,7 +271,7 @@ func newBzzSyncWithLocalstoreDataInsertion(ctx *adapters.ServiceContext, bucket 
 	lnetStore := storage.NewLNetStore(netStore)
 	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
 
-	filesize := 2000 * 4096
+	filesize := 1000 * 4096
 	cctx := context.Background()
 	_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
 	if err != nil {
@@ -247,7 +283,7 @@ func newBzzSyncWithLocalstoreDataInsertion(ctx *adapters.ServiceContext, bucket 
 
 	// verify bins just upto 8 (given random distribution and 1000 chunks
 	// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
-	for i := 0; i <= 7; i++ {
+	for i := 0; i <= 5; i++ {
 		if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
 			return nil, nil, fmt.Errorf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
 		}

@@ -108,6 +108,11 @@ func (s *SwarmSyncer) removePeer(p *Peer) {
 func (s *SwarmSyncer) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	peer := protocols.NewPeer(p, rw, s.spec)
 	bp := network.NewBzzPeer(peer)
+
+	np := network.NewPeer(bp, s.kad)
+	s.kad.On(np)
+	defer s.kad.Off(np)
+
 	sp := NewPeer(bp, s)
 	s.addPeer(sp)
 	defer s.removePeer(sp)
@@ -123,10 +128,11 @@ func (s *SwarmSyncer) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 //  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams.. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
 // peer connects and disconnects quickly
 func (s *SwarmSyncer) CreateStreams(p *Peer) {
-	//bins, po, lastDepth := s.GetBinsForPeer(p)
 	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
 	depth := s.kad.NeighbourhoodDepth()
-	withinDepth := peerPo > depth
+	withinDepth := peerPo >= depth
+
+	log.Debug("create streams", "peer", p.BzzAddr, "base", s.kad.BaseAddr(), "withinDepth", withinDepth, "depth", depth)
 
 	if withinDepth {
 		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay)
@@ -147,19 +153,17 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 			switch newDepth := s.kad.NeighbourhoodDepth(); {
 			case newDepth == depth:
 				// do nothing
-			case peerPo > newDepth:
+			case peerPo >= newDepth:
 				// peer is within depth
 				if !withinDepth {
 					// a transition has occured - peer moved into depth
 					withinDepth = peerPo > newDepth
 
-					sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay)
+					sub, _ := syncSubscriptionsDiff(peerPo, depth, newDepth, s.kad.MaxProxDisplay)
 
 					streamsMsg := StreamInfoReq{Streams: sub}
-					log.Debug("sending subscriptions message", "bins", sub)
-					time.Sleep(createStreamsDelay)
 					if err := p.Send(context.TODO(), streamsMsg); err != nil {
-						log.Error("err establishing initial subscription", "err", err)
+						log.Error("err establishing subsequent subscription", "err", err)
 					}
 				}
 			case peerPo < newDepth:
