@@ -132,7 +132,7 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 	depth := s.kad.NeighbourhoodDepth()
 	withinDepth := peerPo >= depth
 
-	log.Debug("create streams", "peer", p.BzzAddr, "base", s.kad.BaseAddr(), "withinDepth", withinDepth, "depth", depth)
+	log.Debug("create streams", "peer", p.BzzAddr, "base", s.kad.BaseAddr(), "withinDepth", withinDepth, "depth", depth, "po", peerPo)
 
 	if withinDepth {
 		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay)
@@ -156,11 +156,10 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 			case peerPo >= newDepth:
 				// peer is within depth
 				if !withinDepth {
-					// a transition has occured - peer moved into depth
-					withinDepth = peerPo > newDepth
+					log.Debug("peer moved into depth, requesting cursors")
 
+					withinDepth = peerPo >= newDepth
 					sub, _ := syncSubscriptionsDiff(peerPo, depth, newDepth, s.kad.MaxProxDisplay)
-
 					streamsMsg := StreamInfoReq{Streams: sub}
 					if err := p.Send(context.TODO(), streamsMsg); err != nil {
 						log.Error("err establishing subsequent subscription", "err", err)
@@ -168,15 +167,13 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 				}
 			case peerPo < newDepth:
 				if withinDepth {
-					// transition occured - peer moved out of depth
-					// kill all humans (and streams)
+					log.Debug("peer transitioned out of depth, removing cursors")
+					for k, _ := range p.streamCursors {
+						delete(p.streamCursors, k)
+					}
 				}
 			}
 
-			// possible transitions:
-			// - peer moves out of depth, remove some streams
-			// - peer moves into depth, set up some streams
-			// - no change - do nothing
 		case <-s.quit:
 			return
 		}

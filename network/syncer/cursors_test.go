@@ -244,16 +244,25 @@ func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]uint64, othersB
 }
 
 func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[uint]uint64, othersBins []uint64, depth uint) {
+	log.Debug("compareNodeBinsToStreamsWithDepth", "cursors", onesCursors, "othersBins", othersBins, "depth", depth)
 	if len(onesCursors) == 0 || len(othersBins) == 0 {
 		panic("no cursors")
 	}
-
+	// inclusive test
 	for bin, cur := range onesCursors {
 		if bin < depth {
 			panic(fmt.Errorf("cursor at bin %d should not exist. depth %d", bin, depth))
 		}
 		if othersBins[bin] != uint64(cur) {
 			panic(fmt.Errorf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin]))
+		}
+	}
+
+	// exclusive test
+	for i := 0; i < int(depth); i++ {
+		// should not have anything shallower than depth
+		if _, ok := onesCursors[uint(i)]; ok {
+			panic("should be nil")
 		}
 	}
 }
