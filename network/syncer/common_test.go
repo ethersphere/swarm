@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	loglevel = flag.Int("loglevel", 5, "verbosity of logs")
+	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
 func init() {
