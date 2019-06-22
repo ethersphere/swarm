@@ -183,8 +183,11 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 		// wait for the nodes to exchange StreamInfo messages
 		time.Sleep(100 * time.Millisecond)
 		idPivot := nodeIDs[0]
+		pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
+		pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia).(*network.Kademlia)
+		pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
+
 		for j := 2; j <= nodeCount; j++ {
-			log.Error("w00t", "j", j)
 			// append a node to the simulation
 			id, err := sim.AddNodes(1)
 			if err != nil {
@@ -200,20 +203,18 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 			}
 			time.Sleep(50 * time.Millisecond)
 			idPivot = nodeIDs[0]
-			pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
-			pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia).(*network.Kademlia)
-			pivotDepth := uint(pivotKademlia.NeighbourhoodDepth())
-
-			//fmt.Println(pivotKademlia.String())
-
 			for i := 1; i < j; i++ {
 				idOther := nodeIDs[i]
+				otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
+				po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
+				depth := pivotKademlia.NeighbourhoodDepth()
 				pivotCursors := pivotSyncer.(*SwarmSyncer).peers[idOther].streamCursors
-				// check that the pivot node is interested just in bins >= depth
 
-				othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
-				log.Error("eee", "len1", len(pivotCursors), "len2", len(othersBins))
-				compareNodeBinsToStreamsWithDepth(t, pivotCursors, othersBins, pivotDepth)
+				// check that the pivot node is interested just in bins >= depth
+				if po >= depth {
+					othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
+					compareNodeBinsToStreamsWithDepth(t, pivotCursors, othersBins, pivotDepth)
+				}
 			}
 		}
 		return nil
@@ -229,7 +230,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 // othersBins is the array of bin indexes on node B's local store as they were inserted into the store
 func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]uint64, othersBins []uint64) {
 	if len(onesCursors) == 0 {
-		panic("no cursors") //	t.Fatal("no cursors found")
+		panic("no cursors")
 	}
 	if len(othersBins) == 0 {
 		panic("no bins")
@@ -244,15 +245,15 @@ func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]uint64, othersB
 
 func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[uint]uint64, othersBins []uint64, depth uint) {
 	if len(onesCursors) == 0 || len(othersBins) == 0 {
-		panic("no cursors") //	t.Fatal("no cursors found")
+		panic("no cursors")
 	}
 
 	for bin, cur := range onesCursors {
 		if bin < depth {
-			t.Fatalf("cursor at bin %d should not exist. depth %d", bin, depth)
+			panic(fmt.Errorf("cursor at bin %d should not exist. depth %d", bin, depth))
 		}
 		if othersBins[bin] != uint64(cur) {
-			t.Fatalf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin])
+			panic(fmt.Errorf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin]))
 		}
 	}
 }
