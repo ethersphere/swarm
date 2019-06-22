@@ -19,6 +19,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -144,17 +145,79 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 // currently still interested in. this makes sure that correct bins are of interest
 // when nodes enter the kademlia of the pivot node
 func TestNodesCorrectBinsDynamic(t *testing.T) {
+	nodeCount := 8
 
-	/* append nodes to simulation
-	   ids, err = s.AddNodes(count, opts...)
-	   if err != nil {
-	   	return nil, err
-	   }
-	   err = s.Net.ConnectNodesStar(ids[1:], ids[0])
-	   if err != nil {
-	   	return nil, err
-	   }
-	*/
+	// create a standard sim
+	sim := simulation.New(map[string]simulation.ServiceFunc{
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
+	})
+	defer sim.Close()
+
+	// create context for simulation run
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	// defer cancel should come before defer simulation teardown
+	defer cancel()
+	_, err := sim.AddNodesAndConnectStar(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//run the simulation
+	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
+		nodeIndex := make(map[enode.ID]int)
+		nodeIDs := sim.UpNodeIDs()
+		if len(nodeIDs) != 2 {
+			return errors.New("not enough nodes up")
+		}
+
+		for i, id := range nodeIDs {
+			nodeIndex[id] = i
+		}
+		// wait for the nodes to exchange StreamInfo messages
+		time.Sleep(100 * time.Millisecond)
+		idPivot := nodeIDs[0]
+		for j := 2; j <= nodeCount; j++ {
+			// append a node to the simulation
+			id, err := sim.AddNodes(1)
+			if err != nil {
+				return err
+			}
+			err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+			if err != nil {
+				return err
+			}
+			nodeIDs := sim.UpNodeIDs()
+			if len(nodeIDs) != j+1 {
+				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), j)
+			}
+
+			for i, id := range nodeIDs {
+				nodeIndex[id] = i
+			}
+
+			idPivot = nodeIDs[0]
+			for i := 1; i < j; i++ {
+				idOther := nodeIDs[i]
+				pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
+				otherSyncer := sim.NodeItem(idOther, bucketKeySyncer)
+
+				pivotCursors := pivotSyncer.(*SwarmSyncer).peers[idOther].streamCursors
+				otherCursors := otherSyncer.(*SwarmSyncer).peers[idPivot].streamCursors
+
+				othersBins := sim.NodeItem(idOther, bucketKeyBinIndex)
+				pivotBins := sim.NodeItem(idPivot, bucketKeyBinIndex)
+
+				compareNodeBinsToStreams(t, pivotCursors, othersBins.([]uint64))
+				compareNodeBinsToStreams(t, otherCursors, pivotBins.([]uint64))
+			}
+		}
+		return nil
+	})
+	if result.Error != nil {
+		t.Fatal(result.Error)
+	}
+
+	/*	*/
 
 }
 
