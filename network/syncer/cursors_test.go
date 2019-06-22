@@ -113,13 +113,13 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 		}
 
 		// wait for the nodes to exchange StreamInfo messages
-		time.Sleep(2 * time.Second)
+		time.Sleep(100 * time.Millisecond)
 		idPivot := nodeIDs[0]
 		pivotBins := sim.NodeItem(idPivot, bucketKeyBinIndex).([]uint64)
 		pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia).(*network.Kademlia)
 
 		for i := 1; i < nodeCount; i++ {
-			time.Sleep(1 * time.Second)
+			//time.Sleep(1 * time.Second)
 			idOther := nodeIDs[i]
 			pivotPeers := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers
 			peerRecord := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther]
@@ -132,16 +132,16 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 
 			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 			depth := pivotKademlia.NeighbourhoodDepth()
-			log.Error("i", "i", i, "po", po, "d", depth, "idOther", idOther, "peerRecord", peerRecord, "pivotCursors", pivotCursors, "peers", pivotPeers)
+			log.Debug("i", "i", i, "po", po, "d", depth, "idOther", idOther, "peerRecord", peerRecord, "pivotCursors", pivotCursors, "peers", pivotPeers)
 
 			// if the peer is outside the depth - the pivot node should not request any streams
 
 			if po > depth {
-				log.Error("trying inner comparison")
+				log.Debug("trying inner comparison")
 				compareNodeBinsToStreams(t, pivotCursors, othersBins)
 			}
 
-			log.Error("trying uter comparison", "otherCursors", otherCursors, "pivotBins", pivotBins)
+			log.Debug("trying uter comparison", "otherCursors", otherCursors, "pivotBins", pivotBins)
 			compareNodeBinsToStreams(t, otherCursors, pivotBins)
 		}
 		return nil
