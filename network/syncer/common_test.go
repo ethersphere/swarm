@@ -19,6 +19,7 @@ package syncer
 import (
 	"context"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -89,17 +90,17 @@ func newBzzSyncWithLocalstoreDataInsertion(ctx *adapters.ServiceContext, bucket 
 	cctx := context.Background()
 	_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
 	if err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 	if err := wait(cctx); err != nil {
-		t.Fatal(err)
+		return nil, nil, err
 	}
 
 	// verify bins just upto 8 (given random distribution and 1000 chunks
 	// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
 	for i := 0; i <= 7; i++ {
 		if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
-			t.Fatalf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
+			return nil, nil, fmt.Errorf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
 		}
 	}
 
@@ -107,7 +108,7 @@ func newBzzSyncWithLocalstoreDataInsertion(ctx *adapters.ServiceContext, bucket 
 	for i := 0; i <= 16; i++ {
 		binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
 		if err != nil {
-			t.Fatal(err)
+			return nil, nil, err
 		}
 		binIndexes[i] = binIndex
 	}
