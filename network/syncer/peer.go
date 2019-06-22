@@ -87,7 +87,7 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 			log.Error("got an error parsing stream name", "descriptor", s)
 			p.Drop()
 		}
-		log.Error("setting bin cursor", "bin", uint(bin), "cursor", s.Cursor)
+		log.Debug("setting bin cursor", "bin", uint(bin), "cursor", s.Cursor)
 		p.streamCursors[uint(bin)] = s.Cursor
 	}
 }
