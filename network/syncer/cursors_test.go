@@ -136,7 +136,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 
 			// if the peer is outside the depth - the pivot node should not request any streams
 
-			if po > depth {
+			if po >= depth {
 				log.Debug("trying inner comparison")
 				compareNodeBinsToStreams(t, pivotCursors, othersBins)
 			}
