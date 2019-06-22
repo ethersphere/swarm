@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/ethersphere/swarm/log"
@@ -34,8 +36,8 @@ var ErrMaxPeerServers = errors.New("max peer servers")
 type Peer struct {
 	*network.BzzPeer
 	mtx           sync.Mutex
-	streamCursors map[uint]*uint // key: bin, value: session cursor. when unset - we are not interested in that bin
-	streamsDirty  bool           // a request for StreamInfo is underway and awaiting reply
+	streamCursors map[uint]uint64 // key: bin, value: session cursor. when unset - we are not interested in that bin
+	streamsDirty  bool            // a request for StreamInfo is underway and awaiting reply
 	syncer        *SwarmSyncer
 
 	quit chan struct{}
@@ -45,7 +47,7 @@ type Peer struct {
 func NewPeer(peer *network.BzzPeer, s *SwarmSyncer) *Peer {
 	p := &Peer{
 		BzzPeer:       peer,
-		streamCursors: make(map[uint]*uint),
+		streamCursors: make(map[uint]uint64),
 		syncer:        s,
 		quit:          make(chan struct{}),
 	}
@@ -72,7 +74,24 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 
 func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	log.Debug("handleStreamInfoRes", "msg", msg)
+
+	if len(msg.Streams) == 0 {
+		log.Error("StreamInfo response is empty")
+		p.Drop()
+	}
+
+	for _, s := range msg.Streams {
+		stream := strings.Split(s.Name, "|")
+		bin, err := strconv.Atoi(stream[1])
+		if err != nil {
+			log.Error("got an error parsing stream name", "descriptor", s)
+			p.Drop()
+		}
+		log.Error("setting bin cursor", "bin", uint(bin), "cursor", s.Cursor)
+		p.streamCursors[uint(bin)] = s.Cursor
+	}
 }
+
 func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 	log.Debug("handleStreamInfoReq", "msg", msg)
 	streamRes := StreamInfoRes{}
@@ -83,7 +102,7 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 			log.Error("error getting last bin id", "bin", v)
 		}
 		descriptor := StreamDescriptor{
-			Name:    "SYNC",
+			Name:    fmt.Sprintf("SYNC|%d", v),
 			Cursor:  streamCursor,
 			Bounded: false,
 		}
