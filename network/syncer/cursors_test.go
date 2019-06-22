@@ -20,11 +20,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
+	"github.com/ethersphere/swarm/chunk"
+	"github.com/ethersphere/swarm/network"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 var (
@@ -38,13 +45,11 @@ var (
 func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	nodeCount := 2
 
-	// create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
 	})
 	defer sim.Close()
 
-	// create context for simulation run
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	// defer cancel should come before defer simulation teardown
 	defer cancel()
@@ -53,10 +58,9 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
-		if len(nodeIDs) != 2 {
+		if len(nodeIDs) != nodeCount {
 			return errors.New("not enough nodes up")
 		}
 
@@ -68,7 +72,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 		for i := 0; i < nodeCount; i++ {
 			idOne := nodeIDs[i]
-			idOther := nodeIDs[(i+1)%2]
+			idOther := nodeIDs[(i+1)%nodeCount]
 			onesSyncer := sim.NodeItem(idOne, bucketKeySyncer)
 
 			s := onesSyncer.(*SwarmSyncer)
@@ -90,32 +94,24 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 	nodeCount := 8
 
-	// create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
 	})
 	defer sim.Close()
 
-	// create context for simulation run
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	// defer cancel should come before defer simulation teardown
 	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	//run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
 		if len(nodeIDs) != nodeCount {
 			return errors.New("not enough nodes up")
 		}
 
-		nodeIndex := make(map[enode.ID]int)
-		for i, id := range nodeIDs {
-			nodeIndex[id] = i
-		}
 		// wait for the nodes to exchange StreamInfo messages
 		time.Sleep(100 * time.Millisecond)
 		idPivot := nodeIDs[0]
@@ -147,22 +143,18 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 func TestNodesCorrectBinsDynamic(t *testing.T) {
 	nodeCount := 8
 
-	// create a standard sim
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
 	})
 	defer sim.Close()
 
-	// create context for simulation run
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
-	// defer cancel should come before defer simulation teardown
 	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	//run the simulation
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIndex := make(map[enode.ID]int)
 		nodeIDs := sim.UpNodeIDs()
@@ -191,24 +183,17 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), j)
 			}
 
-			for i, id := range nodeIDs {
-				nodeIndex[id] = i
-			}
-
 			idPivot = nodeIDs[0]
 			for i := 1; i < j; i++ {
 				idOther := nodeIDs[i]
 				pivotSyncer := sim.NodeItem(idPivot, bucketKeySyncer)
-				otherSyncer := sim.NodeItem(idOther, bucketKeySyncer)
-
 				pivotCursors := pivotSyncer.(*SwarmSyncer).peers[idOther].streamCursors
-				otherCursors := otherSyncer.(*SwarmSyncer).peers[idPivot].streamCursors
+				pivotKademlia := sim.NodeItem(idPivot, simulation.BucketKeyKademlia)
+				pivotDepth := pivotKademlia.NeighbourhoodDepth()
 
 				othersBins := sim.NodeItem(idOther, bucketKeyBinIndex)
-				pivotBins := sim.NodeItem(idPivot, bucketKeyBinIndex)
 
 				compareNodeBinsToStreams(t, pivotCursors, othersBins.([]uint64))
-				compareNodeBinsToStreams(t, otherCursors, pivotBins.([]uint64))
 			}
 		}
 		return nil
@@ -234,4 +219,58 @@ func compareNodeBinsToStreams(t *testing.T, onesCursors map[uint]*uint, othersBi
 			t.Fatalf("bin indexes not equal. bin %d, got %d, want %d", bin, cur, othersBins[bin])
 		}
 	}
+}
+
+func newBzzSyncWithLocalstoreDataInsertion(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+	n := ctx.Config.Node()
+	addr := network.NewAddr(n)
+
+	localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+	netStore := storage.NewNetStore(localStore, enode.ID{})
+	lnetStore := storage.NewLNetStore(netStore)
+	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
+
+	filesize := 2000 * 4096
+	cctx := context.Background()
+	_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := wait(cctx); err != nil {
+		return nil, nil, err
+	}
+
+	// verify bins just upto 8 (given random distribution and 1000 chunks
+	// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
+	for i := 0; i <= 7; i++ {
+		if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
+			return nil, nil, fmt.Errorf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
+		}
+	}
+
+	binIndexes := make([]uint64, 17)
+	for i := 0; i <= 16; i++ {
+		binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
+		if err != nil {
+			return nil, nil, err
+		}
+		binIndexes[i] = binIndex
+	}
+	o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
+	bucket.Store(bucketKeyBinIndex, binIndexes)
+	bucket.Store(bucketKeyFileStore, fileStore)
+	bucket.Store(simulation.BucketKeyKademlia, kad)
+	bucket.Store(bucketKeySyncer, o)
+
+	cleanup = func() {
+		localStore.Close()
+		localStoreCleanup()
+	}
+
+	return o, cleanup, nil
 }
