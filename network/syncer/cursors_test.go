@@ -66,17 +66,16 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 
 		// wait for the nodes to exchange StreamInfo messages
 		time.Sleep(100 * time.Millisecond)
-		for i := 0; i < nodeCount; i++ {
-			idOne := nodeIDs[i]
-			idOther := nodeIDs[(i+1)%nodeCount]
-			onesSyncer := sim.NodeItem(idOne, bucketKeySyncer)
+		idOne := nodeIDs[0]
+		idOther := nodeIDs[1]
+		onesCursors := sim.NodeItem(idOne, bucketKeySyncer).(*SwarmSyncer).peers[idOther].streamCursors
+		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SwarmSyncer).peers[idOne].streamCursors
 
-			s := onesSyncer.(*SwarmSyncer)
-			onesCursors := s.peers[idOther].streamCursors
-			othersBins := sim.NodeItem(idOther, bucketKeyBinIndex)
+		onesBins := sim.NodeItem(idOne, bucketKeyBinIndex).([]uint64)
+		othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
 
-			compareNodeBinsToStreams(t, onesCursors, othersBins.([]uint64))
-		}
+		compareNodeBinsToStreams(t, onesCursors, othersBins)
+		compareNodeBinsToStreams(t, othersCursors, onesBins)
 		return nil
 	})
 	if result.Error != nil {
