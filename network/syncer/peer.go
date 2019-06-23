@@ -18,7 +18,6 @@ package syncer
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -28,10 +27,6 @@ import (
 	"github.com/ethersphere/swarm/network"
 )
 
-// ErrMaxPeerServers will be returned if peer server limit is reached.
-// It will be sent in the SubscribeErrorMsg.
-var ErrMaxPeerServers = errors.New("max peer servers")
-
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*network.BzzPeer
@@ -39,8 +34,8 @@ type Peer struct {
 	streamsDirty bool // a request for StreamInfo is underway and awaiting reply
 	syncer       *SwarmSyncer
 
-	streamCursors     map[uint]uint64 // key: bin, value: session cursor. when unset - we are not interested in that bin
-	historicalStreams []syncStreamFetch
+	streamCursors     map[uint]uint64          // key: bin, value: session cursor. when unset - we are not interested in that bin
+	historicalStreams map[uint]syncStreamFetch //maintain state for each stream fetcher
 
 	quit chan struct{}
 }
@@ -48,10 +43,11 @@ type Peer struct {
 // NewPeer is the constructor for Peer
 func NewPeer(peer *network.BzzPeer, s *SwarmSyncer) *Peer {
 	p := &Peer{
-		BzzPeer:       peer,
-		streamCursors: make(map[uint]uint64),
-		syncer:        s,
-		quit:          make(chan struct{}),
+		BzzPeer:           peer,
+		streamCursors:     make(map[uint]uint64),
+		historicalStreams: make(map[uint]syncStreamFetch),
+		syncer:            s,
+		quit:              make(chan struct{}),
 	}
 	return p
 }

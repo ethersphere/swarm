@@ -71,11 +71,19 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		onesCursors := sim.NodeItem(idOne, bucketKeySyncer).(*SwarmSyncer).peers[idOther].streamCursors
 		othersCursors := sim.NodeItem(idOther, bucketKeySyncer).(*SwarmSyncer).peers[idOne].streamCursors
 
+		onesHistoricalFetchers := sim.NodeItem(idOne, bucketKeySyncer).(*SwarmSyncer).peers[idOther].historicalStreams
+		othersHistoricalFetchers := sim.NodeItem(idOther, bucketKeySyncer).(*SwarmSyncer).peers[idOne].historicalStreams
+
 		onesBins := sim.NodeItem(idOne, bucketKeyBinIndex).([]uint64)
 		othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
 
 		compareNodeBinsToStreams(t, onesCursors, othersBins)
 		compareNodeBinsToStreams(t, othersCursors, onesBins)
+
+		// check that the stream fetchers were created on each node
+		checkHistoricalStreamStates(t, onesCursors, onesHistoricalFetchers)
+		checkHistoricalStreamStates(t, othersCursors, othersHistoricalFetchers)
+
 		return nil
 	})
 	if result.Error != nil {
@@ -353,6 +361,10 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[uint]uint64
 			panic("should be nil")
 		}
 	}
+}
+
+func checkHistoricalStreamStates(t *testing.T, onesCursors map[uint]uint64, onesStreams map[uint]syncStreamFetch) {
+	t.Fatal("w00t")
 }
 
 func newBzzSyncWithLocalstoreDataInsertion(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
