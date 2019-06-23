@@ -80,7 +80,7 @@ type ServiceFunc func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Se
 // every ServiceFunc must return a node.Service of the unique type.
 // This restriction is required by node.Node.Start() function
 // which is used to start node.Service returned by ServiceFunc.
-func New(services map[string]ServiceFunc) (s *Simulation) {
+func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 	s = &Simulation{
 		buckets:           make(map[enode.ID]*sync.Map),
 		done:              make(chan struct{}),
@@ -88,7 +88,7 @@ func New(services map[string]ServiceFunc) (s *Simulation) {
 		typ:               SimulationTypeInproc,
 	}
 
-	adapterServices := addServices(s, services)
+	adapterServices := s.addServices(services)
 
 	s.Net = simulations.NewNetwork(
 		adapters.NewTCPAdapter(adapterServices),
@@ -107,7 +107,7 @@ func NewExec(services map[string]ServiceFunc) (s *Simulation, err error) {
 		typ:               SimulationTypeExec,
 	}
 
-	adapterServices := addServices(s, services)
+	adapterServices := s.addServices(services)
 	adapters.RegisterServices(adapterServices)
 
 	s.baseDir, err = ioutil.TempDir("", "swarm-sim")
@@ -122,7 +122,7 @@ func NewExec(services map[string]ServiceFunc) (s *Simulation, err error) {
 	return s, nil
 }
 
-func addServices(s *Simulation, services map[string]ServiceFunc) map[string]adapters.ServiceFunc {
+func (s *Simulation) addServices(services map[string]ServiceFunc) map[string]adapters.ServiceFunc {
 	adapterServices := make(map[string]adapters.ServiceFunc, len(services))
 	for name, serviceFunc := range services {
 		// Scope this variables correctly
