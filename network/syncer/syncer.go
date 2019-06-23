@@ -125,7 +125,7 @@ func (s *SwarmSyncer) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 // when the depth changes on our node
 //  - peer moves from out-of-depth to depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
 //  - peer moves from depth to out-of-depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
-//  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams.. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
+//  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams (WHY???).. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
 // peer connects and disconnects quickly
 func (s *SwarmSyncer) CreateStreams(p *Peer) {
 	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
@@ -170,7 +170,14 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 					log.Debug("peer transitioned out of depth, removing cursors")
 					for k, _ := range p.streamCursors {
 						delete(p.streamCursors, k)
-						delete(p.historicalStreams, k)
+
+						if hs, ok := p.historicalStreams[k]; ok {
+							close(hs.quit)
+							// todo: wait for the hs.done to close?
+							delete(p.historicalStreams, k)
+						} else {
+							// this could happen when the cursor was 0 thus the historical stream was not created - do nothing
+						}
 					}
 				}
 			}
