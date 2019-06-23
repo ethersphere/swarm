@@ -35,10 +35,12 @@ var ErrMaxPeerServers = errors.New("max peer servers")
 // Peer is the Peer extension for the streaming protocol
 type Peer struct {
 	*network.BzzPeer
-	mtx           sync.Mutex
-	streamCursors map[uint]uint64 // key: bin, value: session cursor. when unset - we are not interested in that bin
-	streamsDirty  bool            // a request for StreamInfo is underway and awaiting reply
-	syncer        *SwarmSyncer
+	mtx          sync.Mutex
+	streamsDirty bool // a request for StreamInfo is underway and awaiting reply
+	syncer       *SwarmSyncer
+
+	streamCursors     map[uint]uint64 // key: bin, value: session cursor. when unset - we are not interested in that bin
+	historicalStreams []syncStreamFetch
 
 	quit chan struct{}
 }
@@ -110,6 +112,24 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 	}
 	if err := p.Send(ctx, streamRes); err != nil {
 		log.Error("failed to send StreamInfoRes to client", "requested bins", msg.Streams)
+	}
+}
+
+type syncStreamFetch struct {
+	bin       uint          //the bin we're working on
+	lastIndex uint64        //last chunk bin index that we handled
+	quit      chan struct{} //used to signal from other components to quit this stream (i.e. on depth change)
+	done      chan struct{} //signaled by the actor on stream fetch done
+	err       chan error    //signaled by the actor on error
+}
+
+func newSyncStreamFetch(bin uint) *syncStreamFetch {
+	return &syncStreamFetch{
+		bin:       bin,
+		lastIndex: 0,
+		quit:      make(chan struct{}),
+		done:      make(chan struct{}),
+		err:       make(chan error),
 	}
 }
 
