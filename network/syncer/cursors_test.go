@@ -264,6 +264,12 @@ func TestNodeRemovesCursors(t *testing.T) {
 				foundId = i
 				foundPo = po
 				found = true
+				time.Sleep(500 * time.Millisecond)
+				// check that we established some streams for this peer
+				pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther].streamCursors
+				pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther].historicalStreams
+
+				checkHistoricalStreams(t, pivotCursors, pivotHistoricalFetchers)
 				break
 			}
 
@@ -282,7 +288,7 @@ func TestNodeRemovesCursors(t *testing.T) {
 				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), nodeCount)
 			}
 		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond)
 		if !found {
 			panic("did not find a node with po<=depth")
 		} else {
@@ -314,6 +320,11 @@ func TestNodeRemovesCursors(t *testing.T) {
 		pivotCursors := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SwarmSyncer).peers[nodeIDs[foundId]].streamCursors
 		if len(pivotCursors) > 0 {
 			panic("pivotCursors for node should be empty")
+		}
+		pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[nodeIDs[foundId]].historicalStreams
+		if len(pivotHistoricalFetchers) > 0 {
+			log.Error("pivot fetcher length>0", "len", len(pivotHistoricalFetchers))
+			panic("pivot historical fetchers for node should be empty")
 		}
 
 		return nil
@@ -367,6 +378,9 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[uint]uint64
 }
 
 func checkHistoricalStreams(t *testing.T, onesCursors map[uint]uint64, onesStreams map[uint]*syncStreamFetch) {
+	if len(onesCursors) == 0 || len(onesStreams) == 0 {
+		t.Fatal("zero length cursors/stream")
+	}
 	for k, v := range onesCursors {
 		if v > 0 {
 			// there should be a matching stream state
