@@ -116,6 +116,7 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 	}
 }
 
+// syncStreamFetch is a struct that holds exposed state used by a separate goroutine that handles stream retrievals
 type syncStreamFetch struct {
 	bin       uint          //the bin we're working on
 	lastIndex uint64        //last chunk bin index that we handled
