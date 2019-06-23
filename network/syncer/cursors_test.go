@@ -123,22 +123,25 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 
 		for i := 1; i < nodeCount; i++ {
 			idOther := nodeIDs[i]
-			pivotPeers := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers
 			peerRecord := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther]
+
+			// these are the cursors that the pivot node holds for the other peer
 			pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther].streamCursors
 			otherSyncer := sim.NodeItem(idOther, bucketKeySyncer)
 			otherCursors := otherSyncer.(*SwarmSyncer).peers[idPivot].streamCursors
 			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
+			pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther].historicalStreams
 
 			othersBins := sim.NodeItem(idOther, bucketKeyBinIndex).([]uint64)
 
 			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 			depth := pivotKademlia.NeighbourhoodDepth()
-			log.Debug("i", "i", i, "po", po, "d", depth, "idOther", idOther, "peerRecord", peerRecord, "pivotCursors", pivotCursors, "peers", pivotPeers)
+			log.Debug("i", "i", i, "po", po, "d", depth, "idOther", idOther, "peerRecord", peerRecord, "pivotCursors", pivotCursors)
 
 			// if the peer is outside the depth - the pivot node should not request any streams
 			if po >= depth {
 				compareNodeBinsToStreams(t, pivotCursors, othersBins)
+				checkHistoricalStreams(t, pivotCursors, pivotHistoricalFetchers)
 			}
 
 			compareNodeBinsToStreams(t, otherCursors, pivotBins)
