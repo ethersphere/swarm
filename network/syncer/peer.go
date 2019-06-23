@@ -34,8 +34,8 @@ type Peer struct {
 	streamsDirty bool // a request for StreamInfo is underway and awaiting reply
 	syncer       *SwarmSyncer
 
-	streamCursors     map[uint]uint64          // key: bin, value: session cursor. when unset - we are not interested in that bin
-	historicalStreams map[uint]syncStreamFetch //maintain state for each stream fetcher
+	streamCursors     map[uint]uint64           // key: bin, value: session cursor. when unset - we are not interested in that bin
+	historicalStreams map[uint]*syncStreamFetch //maintain state for each stream fetcher
 
 	quit chan struct{}
 }
@@ -45,7 +45,7 @@ func NewPeer(peer *network.BzzPeer, s *SwarmSyncer) *Peer {
 	p := &Peer{
 		BzzPeer:           peer,
 		streamCursors:     make(map[uint]uint64),
-		historicalStreams: make(map[uint]syncStreamFetch),
+		historicalStreams: make(map[uint]*syncStreamFetch),
 		syncer:            s,
 		quit:              make(chan struct{}),
 	}
@@ -87,6 +87,10 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 		}
 		log.Debug("setting bin cursor", "bin", uint(bin), "cursor", s.Cursor)
 		p.streamCursors[uint(bin)] = s.Cursor
+		if s.Cursor > 0 {
+			streamFetch := newSyncStreamFetch(uint(bin))
+			p.historicalStreams[uint(bin)] = streamFetch
+		}
 	}
 }
 
@@ -98,6 +102,7 @@ func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 		streamCursor, err := p.syncer.netStore.LastPullSubscriptionBinID(uint8(v))
 		if err != nil {
 			log.Error("error getting last bin id", "bin", v)
+			panic("shouldnt happen")
 		}
 		descriptor := StreamDescriptor{
 			Name:    fmt.Sprintf("SYNC|%d", v),
