@@ -64,10 +64,6 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 			return errors.New("not enough nodes up")
 		}
 
-		nodeIndex := make(map[enode.ID]int)
-		for i, id := range nodeIDs {
-			nodeIndex[id] = i
-		}
 		// wait for the nodes to exchange StreamInfo messages
 		time.Sleep(100 * time.Millisecond)
 		for i := 0; i < nodeCount; i++ {
@@ -167,15 +163,11 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	}
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		nodeIndex := make(map[enode.ID]int)
 		nodeIDs := sim.UpNodeIDs()
 		if len(nodeIDs) != 2 {
 			return errors.New("not enough nodes up")
 		}
 
-		for i, id := range nodeIDs {
-			nodeIndex[id] = i
-		}
 		// wait for the nodes to exchange StreamInfo messages
 		time.Sleep(100 * time.Millisecond)
 		idPivot := nodeIDs[0]
