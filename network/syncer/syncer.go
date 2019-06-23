@@ -170,6 +170,7 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 					log.Debug("peer transitioned out of depth, removing cursors")
 					for k, _ := range p.streamCursors {
 						delete(p.streamCursors, k)
+						delete(p.historicalStreams, k)
 					}
 				}
 			}
