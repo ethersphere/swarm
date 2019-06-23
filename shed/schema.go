@@ -61,7 +61,7 @@ func (db *DB) schemaFieldKey(name, fieldType string) (key []byte, err error) {
 	if fieldType == "" {
 		return nil, errors.New("field type can not be blank")
 	}
-	s, err := db.getSchema()
+	s, err := db.GetSchema()
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +92,7 @@ func (db *DB) schemaIndexPrefix(name string) (id byte, err error) {
 	if name == "" {
 		return 0, errors.New("index name can not be blank")
 	}
-	s, err := db.getSchema()
+	s, err := db.GetSchema()
 	if err != nil {
 		return 0, err
 	}
@@ -114,7 +114,8 @@ func (db *DB) schemaIndexPrefix(name string) (id byte, err error) {
 
 // getSchema retrieves the complete schema from
 // the database.
-func (db *DB) getSchema() (s schema, err error) {
+// This is exported for displaying the schema info outside
+func (db *DB) GetSchema() (s schema, err error) {
 	b, err := db.Get(keySchema)
 	if err != nil {
 		return s, err
@@ -122,6 +123,7 @@ func (db *DB) getSchema() (s schema, err error) {
 	err = json.Unmarshal(b, &s)
 	return s, err
 }
+
 
 // putSchema stores the complete schema to
 // the database.

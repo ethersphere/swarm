@@ -83,6 +83,7 @@ type Swarm struct {
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
+	pinApi            *localstore.PinApi
 
 	tracerClose io.Closer
 }
@@ -164,6 +165,10 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		MockStore: mockStore,
 		Capacity:  config.DbCapacity,
 	})
+
+	// Instantiate the pinAPI object with the already opened localstore
+	self.pinApi = localstore.NewPinApi(localStore)
+
 	if err != nil {
 		return nil, err
 	}
@@ -513,6 +518,12 @@ func (s *Swarm) APIs() []rpc.API {
 			Namespace: "accounting",
 			Version:   protocols.AccountingVersion,
 			Service:   protocols.NewAccountingApi(s.accountingMetrics),
+			Public:    false,
+		},
+		{
+			Namespace: "pin",
+			Version:   localstore.PinVersion,
+			Service:   s.pinApi,
 			Public:    false,
 		},
 	}

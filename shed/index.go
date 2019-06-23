@@ -41,6 +41,8 @@ type Item struct {
 	AccessTimestamp int64
 	StoreTimestamp  int64
 	BinID           uint64
+	TreeSize        uint64    // Used to store the merkle tree size in the pinIndex
+	PinCounter      uint8
 }
 
 // Merge is a helper method to construct a new
@@ -62,6 +64,15 @@ func (i Item) Merge(i2 Item) (new Item) {
 	if i.BinID == 0 {
 		i.BinID = i2.BinID
 	}
+
+	if i.TreeSize == 0 {
+		i.TreeSize = i2.TreeSize
+	}
+
+	if i.PinCounter == 0 {
+		i.PinCounter = i2.PinCounter
+	}
+
 	return i
 }
 

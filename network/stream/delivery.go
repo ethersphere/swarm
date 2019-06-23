@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -158,7 +159,9 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 
 		msg.peer = sp
 		log.Trace("handle.chunk.delivery", "put", msg.Addr)
-		_, err := d.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData))
+
+		// Dont pin the chunk if it comes from outside
+		_, err := d.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData), localstore.DONT_PIN)
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				// we removed this log because it spams the logs

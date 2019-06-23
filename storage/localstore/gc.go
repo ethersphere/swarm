@@ -106,6 +106,11 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			return true, nil
 		}
 
+		if item.PinCounter > 0 {
+			// TODO_PIN: skip this chunk as this is a pinned by someone
+			return false, nil
+		}
+
 		metrics.GetOrRegisterGauge(metricName+".storets", nil).Update(item.StoreTimestamp)
 		metrics.GetOrRegisterGauge(metricName+".accessts", nil).Update(item.AccessTimestamp)
 

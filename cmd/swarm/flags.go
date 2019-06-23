@@ -186,4 +186,8 @@ var (
 		Name:  "legacy",
 		Usage: "Use this flag when importing a db export from a legacy local store database dump (for schemas older than 'sanctuary')",
 	}
+	SwarmPinFlag = cli.BoolFlag{
+		Name:  "pin",
+		Usage: "pin during upload",
+	}
 )

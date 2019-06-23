@@ -80,6 +80,9 @@ type DB struct {
 	// garbage collection index
 	gcIndex shed.Index
 
+	// pin files Index
+	pinIndex shed.Index
+
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field
 
@@ -219,12 +222,17 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		}
 	}
 	// Index storing actual chunk address, data and bin id.
-	db.retrievalDataIndex, err = db.shed.NewIndex("Address->StoreTimestamp|BinID|Data", shed.IndexFuncs{
+	db.retrievalDataIndex, err = db.shed.NewIndex("pinCounter|Address->StoreTimestamp|BinID|Data", shed.IndexFuncs{
 		EncodeKey: func(fields shed.Item) (key []byte, err error) {
-			return fields.Address, nil
+			key = make([]byte, 33)
+			key[0] = fields.PinCounter
+			copy(key[1:], fields.Address[:])
+			return key, nil
 		},
 		DecodeKey: func(key []byte) (e shed.Item, err error) {
-			e.Address = key
+			e.PinCounter = key[0]
+			e.Address = key[1:33]
+			copy(e.Address[:], key[1:])
 			return e, nil
 		},
 		EncodeValue: encodeValueFunc,
@@ -336,6 +344,34 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Create a index structure for storing pin hash details
+	db.pinIndex, err = db.shed.NewIndex("Hash->TreeSize|StoreTimestamp", shed.IndexFuncs{
+		EncodeKey: func(fields shed.Item) (key []byte, err error) {
+			return fields.Address, nil
+		},
+		DecodeKey: func(key []byte) (e shed.Item, err error) {
+			e.Address = key
+			return e, nil
+		},
+		EncodeValue: func(fields shed.Item) (value []byte, err error) {
+			b := make([]byte, 16)
+			binary.BigEndian.PutUint64(b[:8], fields.TreeSize)
+			binary.BigEndian.PutUint64(b[8:16], uint64(fields.StoreTimestamp))
+			return b, nil
+		},
+		DecodeValue: func(keyItem shed.Item, value []byte) (e shed.Item, err error) {
+			e.TreeSize = binary.BigEndian.Uint64(value[:8])
+			e.StoreTimestamp = int64(binary.BigEndian.Uint64(value[8:16]))
+			return e, nil
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+
+
 	// start garbage collection worker
 	go db.collectGarbageWorker()
 	return db, nil

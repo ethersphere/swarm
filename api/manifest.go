@@ -22,6 +22,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"io"
 	"net/http"
 	"strings"
@@ -72,7 +73,9 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 	if err != nil {
 		return nil, err
 	}
-	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt)
+
+	// Dont pin this manifest because this function is used only to create a empty manifest
+	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt, localstore.DONT_PIN)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +96,9 @@ func (a *API) NewFeedManifest(ctx context.Context, feed *feed.Feed) (storage.Add
 	if err != nil {
 		return nil, err
 	}
-	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false)
+
+	// TODO_PIN: take care of pinned feeds
+	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false, localstore.DONT_PIN)
 	if err != nil {
 		return nil, err
 	}
@@ -117,11 +122,11 @@ func (a *API) NewManifestWriter(ctx context.Context, addr storage.Address, quitC
 }
 
 // AddEntry stores the given data and adds the resulting address to the manifest
-func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry) (addr storage.Address, err error) {
+func (m *ManifestWriter) AddEntry(ctx context.Context, data io.Reader, e *ManifestEntry, pinCounter uint8) (addr storage.Address, err error) {
 	entry := newManifestTrieEntry(e, nil)
 	if data != nil {
 		var wait func(context.Context) error
-		addr, wait, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted)
+		addr, wait, err = m.api.Store(ctx, data, e.Size, m.trie.encrypted, pinCounter)
 		if err != nil {
 			return nil, err
 		}
@@ -145,8 +150,8 @@ func (m *ManifestWriter) RemoveEntry(path string) error {
 }
 
 // Store stores the manifest, returning the resulting storage address
-func (m *ManifestWriter) Store() (storage.Address, error) {
-	return m.trie.ref, m.trie.recalcAndStore()
+func (m *ManifestWriter) Store(pinCounter uint8) (storage.Address, error) {
+	return m.trie.ref, m.trie.recalcAndStore(pinCounter)
 }
 
 // ManifestWalker is used to recursively walk the entries in the manifest and
@@ -390,7 +395,7 @@ func (mt *manifestTrie) deleteEntry(path string, quitC chan bool) {
 	}
 }
 
-func (mt *manifestTrie) recalcAndStore() error {
+func (mt *manifestTrie) recalcAndStore(pinCounter uint8) error {
 	if mt.ref != nil {
 		return nil
 	}
@@ -402,7 +407,7 @@ func (mt *manifestTrie) recalcAndStore() error {
 	for _, entry := range &mt.entries {
 		if entry != nil {
 			if entry.Hash == "" { // TODO: paralellize
-				err := entry.subtrie.recalcAndStore()
+				err := entry.subtrie.recalcAndStore(pinCounter)
 				if err != nil {
 					return err
 				}
@@ -420,7 +425,7 @@ func (mt *manifestTrie) recalcAndStore() error {
 
 	sr := bytes.NewReader(manifest)
 	ctx := context.TODO()
-	addr, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted)
+	addr, wait, err2 := mt.fileStore.Store(ctx, sr, int64(len(manifest)), mt.encrypted, pinCounter)
 	if err2 != nil {
 		return err2
 	}

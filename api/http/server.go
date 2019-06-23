@@ -44,6 +44,7 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/rs/cors"
 )
 
@@ -63,7 +64,10 @@ var (
 	getListFail     = metrics.NewRegisteredCounter("api.http.get.list.fail", nil)
 )
 
-const SwarmTagHeaderName = "x-swarm-tag"
+const (
+	SwarmTagHeaderName = "x-swarm-tag"
+	SwarmPinContent    = "x-swarm-pin"
+)
 
 type methodHandler map[string]http.Handler
 
@@ -255,6 +259,13 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		toEncrypt = true
 	}
 
+	// Set the pinCounter if there is a pin header present in the request
+	var pinCounter uint8
+	headerPin := r.Header.Get(SwarmPinContent)
+	if headerPin != "" {
+		pinCounter = 1
+	}
+
 	if uri.Path != "" {
 		postRawFail.Inc(1)
 		respondError(w, r, "raw POST request cannot contain a path", http.StatusBadRequest)
@@ -273,7 +284,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	addr, wait, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt)
+	addr, wait, err := s.api.Store(r.Context(), r.Body, r.ContentLength, toEncrypt, pinCounter)
 	if err != nil {
 		postRawFail.Inc(1)
 		respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -313,6 +324,13 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		toEncrypt = true
 	}
 
+	// Set the pinCounter if there is a pin header present in the request
+	var pinCounter uint8
+	headerPin := r.Header.Get(SwarmPinContent)
+	if headerPin != "" {
+		pinCounter = 1
+	}
+
 	var addr storage.Address
 	if uri.Addr != "" && uri.Addr != "encrypt" {
 		addr, err = s.api.Resolve(r.Context(), uri.Addr)
@@ -324,6 +342,8 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		log.Debug("resolved key", "ruid", ruid, "key", addr)
 	} else {
 		addr, err = s.api.NewManifest(r.Context(), toEncrypt)
+		fmt.Println("New Manifest", "Address", fmt.Sprintf("%064x", []byte(addr[:])))
+
 		if err != nil {
 			postFilesFail.Inc(1)
 			respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -334,19 +354,19 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	newAddr, err := s.api.UpdateManifest(r.Context(), addr, func(mw *api.ManifestWriter) error {
 		switch contentType {
 		case "application/x-tar":
-			_, err := s.handleTarUpload(r, mw)
+			_, err := s.handleTarUpload(r, mw, pinCounter)
 			if err != nil {
 				respondError(w, r, fmt.Sprintf("error uploading tarball: %v", err), http.StatusInternalServerError)
 				return err
 			}
 			return nil
 		case "multipart/form-data":
-			return s.handleMultipartUpload(r, params["boundary"], mw)
+			return s.handleMultipartUpload(r, params["boundary"], mw, pinCounter)
 
 		default:
-			return s.handleDirectUpload(r, mw)
+			return s.handleDirectUpload(r, mw, pinCounter)
 		}
-	})
+	}, pinCounter)
 	if err != nil {
 		postFilesFail.Inc(1)
 		respondError(w, r, fmt.Sprintf("cannot create manifest: %s", err), http.StatusInternalServerError)
@@ -369,19 +389,19 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, newAddr)
 }
 
-func (s *Server) handleTarUpload(r *http.Request, mw *api.ManifestWriter) (storage.Address, error) {
+func (s *Server) handleTarUpload(r *http.Request, mw *api.ManifestWriter, pinCounter uint8) (storage.Address, error) {
 	log.Debug("handle.tar.upload", "ruid", GetRUID(r.Context()), "tag", sctx.GetTag(r.Context()))
 
 	defaultPath := r.URL.Query().Get("defaultpath")
 
-	key, err := s.api.UploadTar(r.Context(), r.Body, GetURI(r.Context()).Path, defaultPath, mw)
+	key, err := s.api.UploadTar(r.Context(), r.Body, GetURI(r.Context()).Path, defaultPath, mw, pinCounter)
 	if err != nil {
 		return nil, err
 	}
 	return key, nil
 }
 
-func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api.ManifestWriter) error {
+func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api.ManifestWriter, pinCounter uint8) error {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.multipart.upload", "ruid", ruid)
 	mr := multipart.NewReader(r.Body, boundary)
@@ -432,7 +452,7 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 			Size:        size,
 		}
 		log.Debug("adding path to new manifest", "ruid", ruid, "bytes", entry.Size, "path", entry.Path)
-		contentKey, err := mw.AddEntry(r.Context(), reader, entry)
+		contentKey, err := mw.AddEntry(r.Context(), reader, entry, pinCounter)
 		if err != nil {
 			return fmt.Errorf("error adding manifest entry from multipart form: %s", err)
 		}
@@ -440,7 +460,7 @@ func (s *Server) handleMultipartUpload(r *http.Request, boundary string, mw *api
 	}
 }
 
-func (s *Server) handleDirectUpload(r *http.Request, mw *api.ManifestWriter) error {
+func (s *Server) handleDirectUpload(r *http.Request, mw *api.ManifestWriter, pinCounter uint8) error {
 	ruid := GetRUID(r.Context())
 	log.Debug("handle.direct.upload", "ruid", ruid)
 	key, err := mw.AddEntry(r.Context(), r.Body, &api.ManifestEntry{
@@ -448,7 +468,7 @@ func (s *Server) handleDirectUpload(r *http.Request, mw *api.ManifestWriter) err
 		ContentType: r.Header.Get("Content-Type"),
 		Mode:        0644,
 		Size:        r.ContentLength,
-	})
+	}, pinCounter)
 	if err != nil {
 		return err
 	}
@@ -464,7 +484,9 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	uri := GetURI(r.Context())
 	log.Debug("handle.delete", "ruid", ruid)
 	deleteCount.Inc(1)
-	newKey, err := s.api.Delete(r.Context(), uri.Addr, uri.Path)
+
+	//TODO_PIN: get the pin counter from the pinIndex???
+	newKey, err := s.api.Delete(r.Context(), uri.Addr, uri.Path, localstore.DONT_PIN)
 	if err != nil {
 		deleteFail.Inc(1)
 		respondError(w, r, fmt.Sprintf("could not delete from manifest: %v", err), http.StatusInternalServerError)

@@ -31,13 +31,13 @@ import (
 // on the Putter mode, it updates required indexes.
 // Put is required to implement chunk.Store
 // interface.
-func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk) (exists bool, err error) {
+func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk, pinCounter uint8) (exists bool, err error) {
 	metricName := fmt.Sprintf("localstore.Put.%s", mode)
 
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
 
-	exists, err = db.put(mode, chunkToItem(ch))
+	exists, err = db.put(mode, chunkToItem(ch),  pinCounter)
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 	}
@@ -49,7 +49,7 @@ func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk) (exis
 // of this function for the same address in parallel.
 // Item fields Address and Data must not be
 // with their nil values.
-func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
+func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists bool, err error) {
 	// protect parallel updates
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()
@@ -124,6 +124,7 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item) (exists bool, err error) {
 		}
 		if !exists {
 			item.StoreTimestamp = now()
+			item.PinCounter = pinCounter
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
 			if err != nil {
 				return false, err

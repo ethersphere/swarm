@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"context"
 	"fmt"
+	"github.com/ethersphere/swarm/storage/localstore"
 	"io"
 	"os"
 	"path"
@@ -121,7 +122,9 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 			var hash storage.Address
 			var wait func(context.Context) error
 			ctx := context.TODO()
-			hash, wait, err = fs.api.fileStore.Store(ctx, f, stat.Size(), toEncrypt)
+
+			// Fixing the pin counter as DONT_PIN , since this is deprecated
+			hash, wait, err = fs.api.fileStore.Store(ctx, f, stat.Size(), toEncrypt, localstore.DONT_PIN)
 			if err != nil {
 				errors[i] = err
 				return
@@ -165,7 +168,8 @@ func (fs *FileSystem) Upload(lpath, index string, toEncrypt bool) (string, error
 		trie.addEntry(entry, quitC)
 	}
 
-	err2 := trie.recalcAndStore()
+	// Fixing the pin counter as DONT_PIN , since this is deprecated
+	err2 := trie.recalcAndStore(localstore.DONT_PIN)
 	var hs string
 	if err2 == nil {
 		hs = trie.ref.Hex()
