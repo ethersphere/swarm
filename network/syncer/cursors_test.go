@@ -81,8 +81,8 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 		compareNodeBinsToStreams(t, othersCursors, onesBins)
 
 		// check that the stream fetchers were created on each node
-		checkHistoricalStreamStates(t, onesCursors, onesHistoricalFetchers)
-		checkHistoricalStreamStates(t, othersCursors, othersHistoricalFetchers)
+		checkHistoricalStreams(t, onesCursors, onesHistoricalFetchers)
+		checkHistoricalStreams(t, othersCursors, othersHistoricalFetchers)
 
 		return nil
 	})
@@ -363,7 +363,7 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[uint]uint64
 	}
 }
 
-func checkHistoricalStreamStates(t *testing.T, onesCursors map[uint]uint64, onesStreams map[uint]*syncStreamFetch) {
+func checkHistoricalStreams(t *testing.T, onesCursors map[uint]uint64, onesStreams map[uint]*syncStreamFetch) {
 	for k, v := range onesCursors {
 		if v > 0 {
 			// there should be a matching stream state
