@@ -239,12 +239,13 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	})
 	defer sim.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
-	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
+	defer cancel()
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
 		nodeIDs := sim.UpNodeIDs()
