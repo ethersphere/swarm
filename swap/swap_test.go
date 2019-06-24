@@ -37,6 +37,11 @@ var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
+type Booking struct {
+	amount int64
+	peer   *protocols.Peer
+}
+
 func init() {
 	flag.Parse()
 	mrand.Seed(time.Now().UnixNano())
@@ -117,6 +122,14 @@ func TestRepeatedBookings(t *testing.T) {
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After mixed debits and credits, expected balance to be: %d, but is: %d", expectedBalance, realBalance))
 	}
+}
+
+func addBookings(swap *Swap, bookings []Booking) {
+
+}
+
+func calculateExpectedBalance(swap *Swap) {
+
 }
 
 //try restoring a balance from state store
