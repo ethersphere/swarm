@@ -87,9 +87,11 @@ func TestRepeatedBookings(t *testing.T) {
 	testPeer := newDummyPeer()
 	amount := mrand.Intn(100)
 	cnt := 1 + mrand.Intn(10)
+	var bookings []Booking
 	for i := 0; i < cnt; i++ {
-		swap.Add(int64(amount), testPeer.Peer)
+		bookings = append(bookings, Booking{int64(amount), testPeer.Peer})
 	}
+	addBookings(swap, bookings)
 	expectedBalance := int64(cnt * amount)
 	realBalance := swap.balances[testPeer.ID()]
 	if expectedBalance != realBalance {
@@ -125,7 +127,10 @@ func TestRepeatedBookings(t *testing.T) {
 }
 
 func addBookings(swap *Swap, bookings []Booking) {
-
+	for i := 0; i < len(bookings); i++ {
+		booking := bookings[i]
+		swap.Add(booking.amount, booking.peer)
+	}
 }
 
 func calculateExpectedBalance(swap *Swap) {
