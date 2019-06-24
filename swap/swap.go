@@ -33,17 +33,20 @@ import (
 // A node maintains an individual balance with every peer
 // Only messages which have a price will be accounted for
 type Swap struct {
-	stateStore state.Store        //stateStore is needed in order to keep balances across sessions
-	lock       sync.RWMutex       //lock the balances
-	balances   map[enode.ID]int64 //map of balances for each peer
-	service    *SwapService
+	stateStore          state.Store        // stateStore is needed in order to keep balances across sessions
+	lock                sync.RWMutex       // lock the balances
+	balances            map[enode.ID]int64 // map of balances for each peer
+	paymentThreshold    int64              // balance difference required for requesting cheque
+	disconnectThreshold int64              // balance difference required for dropping peer
 }
 
 // New - swap constructor
 func New(stateStore state.Store) (swap *Swap) {
 	swap = &Swap{
-		stateStore: stateStore,
-		balances:   make(map[enode.ID]int64),
+		stateStore:          stateStore,
+		balances:            make(map[enode.ID]int64),
+		paymentThreshold:    DefaultPaymentThreshold,
+		disconnectThreshold: DefaultDisconnectThreshold,
 	}
 	return
 }
@@ -59,15 +62,38 @@ func (s *Swap) Add(amount int64, peer *protocols.Peer) (err error) {
 	if err != nil && err != state.ErrNotFound {
 		return
 	}
+
+	//check if balance with peer is over the disconnect threshold
+	if s.balances[peer.ID()] >= s.disconnectThreshold {
+		//if so, return error in order to abort the transfer
+		return fmt.Errorf("balance for peer %s went over the disconnect threshold %v", peer.ID().String(), s.disconnectThreshold)
+	}
+
 	//adjust the balance
 	//if amount is negative, it will decrease, otherwise increase
 	s.balances[peer.ID()] += amount
+
 	//save the new balance to the state store
 	peerBalance := s.balances[peer.ID()]
 	err = s.stateStore.Put(peer.ID().String(), &peerBalance)
+	if err != nil {
+		return
+	}
 
 	log.Debug(fmt.Sprintf("balance for peer %s: %s", peer.ID().String(), strconv.FormatInt(peerBalance, 10)))
-	return err
+
+	//check if balance with peer is over the payment threshold
+	if peerBalance >= s.paymentThreshold {
+		//if so, send cheque request message with the current peer balance as its amount
+		err = s.ChequeRequestMsg(peer, peerBalance)
+	}
+
+	return
+}
+
+func (s *Swap) ChequeRequestMsg(peer *protocols.Peer, amount int64) error {
+	// Not implemented
+	return nil
 }
 
 //GetPeerBalance returns the balance for a given peer

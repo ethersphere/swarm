@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -36,6 +37,11 @@ import (
 var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
+
+type Booking struct {
+	amount int64
+	peer   *protocols.Peer
+}
 
 func init() {
 	flag.Parse()
@@ -82,10 +88,13 @@ func TestRepeatedBookings(t *testing.T) {
 	testPeer := newDummyPeer()
 	amount := mrand.Intn(100)
 	cnt := 1 + mrand.Intn(10)
+	var bookings []Booking
 	for i := 0; i < cnt; i++ {
-		swap.Add(int64(amount), testPeer.Peer)
+		bookings = append(bookings, Booking{int64(amount), testPeer.Peer})
 	}
-	expectedBalance := int64(cnt * amount)
+	addBookings(swap, bookings)
+	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
+	expectedBalance := balancesAfterBookings[testPeer.Peer.ID()]
 	realBalance := swap.balances[testPeer.ID()]
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After %d credits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
@@ -95,28 +104,50 @@ func TestRepeatedBookings(t *testing.T) {
 	amount = mrand.Intn(100)
 	cnt = 1 + mrand.Intn(10)
 	for i := 0; i < cnt; i++ {
-		swap.Add(0-int64(amount), testPeer2.Peer)
+		bookings = append(bookings, Booking{0 - int64(amount), testPeer2.Peer})
 	}
-	expectedBalance = int64(0 - (cnt * amount))
+	addBookings(swap, bookings[len(bookings)-cnt:])
+	balancesAfterBookings = calculateExpectedBalances(swap, bookings)
+	expectedBalance = balancesAfterBookings[testPeer2.Peer.ID()]
 	realBalance = swap.balances[testPeer2.ID()]
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After %d debits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
 	}
 
 	//mixed debits and credits
-	amount1 := mrand.Intn(100)
-	amount2 := mrand.Intn(55)
-	amount3 := mrand.Intn(999)
-	swap.Add(int64(amount1), testPeer2.Peer)
-	swap.Add(int64(0-amount2), testPeer2.Peer)
-	swap.Add(int64(0-amount3), testPeer2.Peer)
-
-	expectedBalance = expectedBalance + int64(amount1-amount2-amount3)
+	mixedBookings := []Booking{
+		Booking{int64(mrand.Intn(100)), testPeer2.Peer},
+		Booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
+		Booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
+	}
+	addBookings(swap, mixedBookings)
+	balancesAfterBookings = calculateExpectedBalances(swap, append(bookings, mixedBookings...))
+	expectedBalance = balancesAfterBookings[testPeer2.Peer.ID()]
 	realBalance = swap.balances[testPeer2.ID()]
-
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After mixed debits and credits, expected balance to be: %d, but is: %d", expectedBalance, realBalance))
 	}
+}
+
+func addBookings(swap *Swap, bookings []Booking) {
+	for i := 0; i < len(bookings); i++ {
+		booking := bookings[i]
+		swap.Add(booking.amount, booking.peer)
+	}
+}
+
+func calculateExpectedBalances(swap *Swap, bookings []Booking) map[enode.ID]int64 {
+	expectedBalances := make(map[enode.ID]int64)
+	for i := 0; i < len(bookings); i++ {
+		booking := bookings[i]
+		peerID := booking.peer.ID()
+		peerBalance := expectedBalances[peerID]
+		if peerBalance < swap.disconnectThreshold {
+			peerBalance += booking.amount
+		}
+		expectedBalances[peerID] = peerBalance
+	}
+	return expectedBalances
 }
 
 //try restoring a balance from state store

@@ -658,13 +658,13 @@ func (sp *StreamerPrices) Price(msg interface{}) *protocols.Price {
 // Instead of hardcoding the price, get it
 // through a function - it could be quite complex in the future
 func (sp *StreamerPrices) getRetrieveRequestMsgPrice() uint64 {
-	return uint64(1)
+	return RetrieveRequestMsgPrice
 }
 
 // Instead of hardcoding the price, get it
 // through a function - it could be quite complex in the future
 func (sp *StreamerPrices) getChunkDeliveryMsgRetrievalPrice() uint64 {
-	return uint64(1)
+	return ChunkDeliveryMsgRetrievalPrice
 }
 
 // createPriceOracle sets up a matrix which can be queried to get
