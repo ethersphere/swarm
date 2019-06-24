@@ -17,6 +17,8 @@
 package localstore
 
 import (
+	"bytes"
+	"fmt"
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
@@ -106,8 +108,10 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 			return true, nil
 		}
 
-		if item.PinCounter > 0 {
-			// TODO_PIN: skip this chunk as this is a pinned by someone
+		// Check if this chunk is pinned, if YES, then skip GC on that chunk
+		pinItem, err := db.pinIndex.Get(item)
+		if err == nil && bytes.Equal(item.Address,pinItem.Address) {
+			log.Info("Ignoring GC for chunk", "Address", fmt.Sprintf("%0x",pinItem.Address), "PinCounter", pinItem.PinCounter)
 			return false, nil
 		}
 

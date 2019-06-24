@@ -414,31 +414,6 @@ func (db *DB) po(addr chunk.Address) (bin uint8) {
 	return uint8(chunk.Proximity(db.baseKey, addr))
 }
 
-
-func (db *DB) IsHashPinned(addr []byte) bool {
-
-	var foundIt bool
-
-	_ = db.pinIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-
-		if len(addr) != len(item.Address) {
-			foundIt = false
-			return true, nil
-		}
-
-		for i := range addr {
-			if addr[i] != item.Address[i] {
-				foundIt = false
-				return true, nil
-			}
-		}
-
-		return false, nil
-	}, nil)
-
-	return foundIt
-}
-
 func (db *DB) ListPinnedFiles() {
 	_ = db.pinFilesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 		log.Info("Pinned file", "Address", fmt.Sprintf("%0x",item.Address), "Size", item.TreeSize)

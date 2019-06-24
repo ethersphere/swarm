@@ -131,10 +131,6 @@ func (p *PinApi) ShowChunksOfRootHash(rootHash string) {
 
 }
 
-func (p *PinApi) IsHashPinned(addr []byte) bool {
-	return p.db.IsHashPinned(addr)
-}
-
 func (p *PinApi) PinHash() string {
 
 	// see if hash is valid and present in local DB
@@ -143,70 +139,3 @@ func (p *PinApi) PinHash() string {
 
 	return "Pin called"
 }
-
-//
-//
-//func (p *PinApi)  UnPinHash(hash Address) string {
-//
-//	// See if the root hash is pinned
-//
-//	// call
-//
-//
-//	return "UnPin called"
-//}
-
-//func (p *PinApi)  ListPinnedHashes() PinInfo {
-//
-//
-//	return pinInfo
-//}
-//
-//
-//
-//func loopAndPinHash(Address hashToPin) {
-//
-//	// for all the chunks in the hash
-//
-//	//   - Send to the Pin Queue
-//
-//	//   - When all chunks are pinned without error, return true otherwise false
-//
-//	//	 All pin ref. increment should be atomic
-//
-//	//
-//
-//}
-//
-//func loopAndUnpinHash(Address hashToUnpin) {
-//
-//	// for all the chunks in hash
-//
-//	//  - Send to the unpin Queue
-//
-//	//  - When all chunks are unpinned without error, return true otherwise false
-//
-//	//   All unpin ref. decrement should be atomic
-//}
-//
-//
-//func pinChunk(hunk chunkToPin) {
-//
-//	// < This should be spawned as a go-routine, 8 go-routine >
-//
-//	// read chunk from the pin Queue
-//
-//	// Increment the pinning reference counter
-//
-//}
-//
-//
-//func unpinChunk(Chunk chunkToUnpin) {
-//
-//	// < This should be spawned as a go-routine, 8 go-routine >
-//
-//	// read the chunk address from the unpin Queue
-//
-//	// decrement the pinning reference counter
-//
-//}
