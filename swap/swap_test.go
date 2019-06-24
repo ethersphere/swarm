@@ -104,9 +104,11 @@ func TestRepeatedBookings(t *testing.T) {
 	amount = mrand.Intn(100)
 	cnt = 1 + mrand.Intn(10)
 	for i := 0; i < cnt; i++ {
-		swap.Add(0-int64(amount), testPeer2.Peer)
+		bookings = append(bookings, Booking{0 - int64(amount), testPeer2.Peer})
 	}
-	expectedBalance = int64(0 - (cnt * amount))
+	addBookings(swap, bookings[len(bookings)-cnt:])
+	balancesAfterBookings = calculateExpectedBalances(swap, bookings)
+	expectedBalance = balancesAfterBookings[testPeer2.Peer.ID()]
 	realBalance = swap.balances[testPeer2.ID()]
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After %d debits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
