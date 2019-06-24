@@ -27,6 +27,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/ethereum/go-ethereum/p2p/enode"
 	"github.com/ethereum/go-ethereum/p2p/simulations/adapters"
 	"github.com/ethersphere/swarm/p2p/protocols"
 	"github.com/ethersphere/swarm/state"
@@ -92,7 +93,8 @@ func TestRepeatedBookings(t *testing.T) {
 		bookings = append(bookings, Booking{int64(amount), testPeer.Peer})
 	}
 	addBookings(swap, bookings)
-	expectedBalance := int64(cnt * amount)
+	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
+	expectedBalance := balancesAfterBookings[testPeer.Peer.ID()]
 	realBalance := swap.balances[testPeer.ID()]
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After %d credits of %d, expected balance to be: %d, but is: %d", cnt, amount, expectedBalance, realBalance))
@@ -133,8 +135,18 @@ func addBookings(swap *Swap, bookings []Booking) {
 	}
 }
 
-func calculateExpectedBalance(swap *Swap) {
-
+func calculateExpectedBalances(swap *Swap, bookings []Booking) map[enode.ID]int64 {
+	expectedBalances := make(map[enode.ID]int64)
+	for i := 0; i < len(bookings); i++ {
+		booking := bookings[i]
+		peerID := booking.peer.ID()
+		peerBalance := expectedBalances[peerID]
+		if peerBalance < swap.disconnectThreshold {
+			peerBalance += booking.amount
+		}
+		expectedBalances[peerID] = peerBalance
+	}
+	return expectedBalances
 }
 
 //try restoring a balance from state store
