@@ -88,7 +88,8 @@ func NewInProc(services map[string]ServiceFunc) (s *Simulation) {
 		typ:               SimulationTypeInproc,
 	}
 
-	adapterServices := s.addServices(services)
+	s.addServices(services)
+	adapterServices := s.toAdapterServices(services)
 
 	s.Net = simulations.NewNetwork(
 		adapters.NewTCPAdapter(adapterServices),
@@ -107,7 +108,10 @@ func NewExec(services map[string]ServiceFunc) (s *Simulation, err error) {
 		typ:               SimulationTypeExec,
 	}
 
-	adapterServices := s.addServices(services)
+	s.addServices(services)
+	adapterServices := s.toAdapterServices(services)
+
+	// exec adapters register services up front, not at node creation time
 	adapters.RegisterServices(adapterServices)
 
 	s.baseDir, err = ioutil.TempDir("", "swarm-sim")
@@ -122,13 +126,20 @@ func NewExec(services map[string]ServiceFunc) (s *Simulation, err error) {
 	return s, nil
 }
 
-func (s *Simulation) addServices(services map[string]ServiceFunc) map[string]adapters.ServiceFunc {
+// add names of available services to simulation
+func (s *Simulation) addServices(services map[string]ServiceFunc) {
+	for name := range services {
+		s.serviceNames = append(s.serviceNames, name)
+	}
+}
+
+// convert services array for use with adapters.RegisterServices
+func (s *Simulation) toAdapterServices(services map[string]ServiceFunc) map[string]adapters.ServiceFunc {
 	adapterServices := make(map[string]adapters.ServiceFunc, len(services))
 	for name, serviceFunc := range services {
 		// Scope this variables correctly
 		// as they will be in the adapterServices[name] function accessed later.
 		name, serviceFunc := name, serviceFunc
-		s.serviceNames = append(s.serviceNames, name)
 		adapterServices[name] = func(ctx *adapters.ServiceContext) (node.Service, error) {
 			s.mu.Lock()
 			defer s.mu.Unlock()
