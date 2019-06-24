@@ -115,16 +115,15 @@ func TestRepeatedBookings(t *testing.T) {
 	}
 
 	//mixed debits and credits
-	amount1 := mrand.Intn(100)
-	amount2 := mrand.Intn(55)
-	amount3 := mrand.Intn(999)
-	swap.Add(int64(amount1), testPeer2.Peer)
-	swap.Add(int64(0-amount2), testPeer2.Peer)
-	swap.Add(int64(0-amount3), testPeer2.Peer)
-
-	expectedBalance = expectedBalance + int64(amount1-amount2-amount3)
+	mixedBookings := []Booking{
+		Booking{int64(mrand.Intn(100)), testPeer2.Peer},
+		Booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
+		Booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
+	}
+	addBookings(swap, mixedBookings)
+	balancesAfterBookings = calculateExpectedBalances(swap, append(bookings, mixedBookings...))
+	expectedBalance = balancesAfterBookings[testPeer2.Peer.ID()]
 	realBalance = swap.balances[testPeer2.ID()]
-
 	if expectedBalance != realBalance {
 		t.Fatal(fmt.Sprintf("After mixed debits and credits, expected balance to be: %d, but is: %d", expectedBalance, realBalance))
 	}
