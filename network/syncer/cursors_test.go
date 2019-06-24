@@ -39,6 +39,8 @@ var (
 	bucketKeyFileStore = simulation.BucketKey("filestore")
 	bucketKeyBinIndex  = simulation.BucketKey("bin-indexes")
 	bucketKeySyncer    = simulation.BucketKey("syncer")
+
+	simContextTimeout = 10 * time.Second
 )
 
 // TestNodesExchangeCorrectBinIndexes tests that two nodes exchange the correct cursors for all streams
@@ -51,7 +53,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	})
 	defer sim.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
 	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
@@ -102,7 +104,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 	})
 	defer sim.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
 	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
@@ -165,7 +167,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	})
 	defer sim.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
 	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(2)
 	if err != nil {
@@ -223,9 +225,13 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 }
 
 // TestNodesRemovesCursors creates a pivot network of 2 nodes where the pivot's depth = 0.
-// the test then selects another node with po=0 to the pivot, and starts adding other nodes to the pivot until the depth goes above 0
-// the test then asserts that the pivot does not maintain any cursors of the node that moved out of depth
-func TestNodeRemovesCursors(t *testing.T) {
+// test sequence:
+// - select another node with po <= depth (of the pivot's kademlia)
+// - add other nodes to the pivot until the depth goes above that peer's po
+// - asserts that the pivot does not maintain any cursors of the node that moved out of depth
+// - start removing nodes from the simulation until that peer is again within depth
+// - check that the cursors are being re-established
+func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	nodeCount := 2
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
@@ -233,7 +239,7 @@ func TestNodeRemovesCursors(t *testing.T) {
 	})
 	defer sim.Close()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), simContextTimeout)
 	defer cancel()
 	_, err := sim.AddNodesAndConnectStar(nodeCount)
 	if err != nil {
@@ -254,6 +260,7 @@ func TestNodeRemovesCursors(t *testing.T) {
 		found := false
 		foundId := 0
 		foundPo := 0
+		var foundEnode enode.ID
 		for i := 1; i < nodeCount; i++ {
 			log.Debug("looking for a peer", "i", i, "nodecount", nodeCount)
 			idOther := nodeIDs[i]
@@ -264,7 +271,7 @@ func TestNodeRemovesCursors(t *testing.T) {
 				foundId = i
 				foundPo = po
 				found = true
-				time.Sleep(500 * time.Millisecond)
+				foundEnode = nodeIDs[i]
 				// check that we established some streams for this peer
 				pivotCursors := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther].streamCursors
 				pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[idOther].historicalStreams
@@ -287,8 +294,10 @@ func TestNodeRemovesCursors(t *testing.T) {
 			if len(nodeIDs) != nodeCount {
 				return fmt.Errorf("not enough nodes up. got %d, want %d", len(nodeIDs), nodeCount)
 			}
+
+			// allow the new node to exchange the stream info messages
+			time.Sleep(1000 * time.Millisecond)
 		}
-		time.Sleep(100 * time.Millisecond)
 		if !found {
 			panic("did not find a node with po<=depth")
 		} else {
@@ -327,6 +336,32 @@ func TestNodeRemovesCursors(t *testing.T) {
 			panic("pivot historical fetchers for node should be empty")
 		}
 
+		// remove nodes from the simulation until the peer moves again into depth
+		log.Error("pulling the plug on some nodes to make the depth go up again", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo)
+		for pivotKademlia.NeighbourhoodDepth() > foundPo {
+			_, err := sim.StopRandomNode(nodeIDs[0], foundEnode)
+			if err != nil {
+				panic(err)
+			}
+			time.Sleep(100 * time.Millisecond)
+			log.Debug("removed 1 node", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo)
+
+			nodeIDs = sim.UpNodeIDs()
+		}
+
+		// wait for cursors msg again
+		time.Sleep(500 * time.Millisecond)
+
+		//log.Debug("p", "peers", sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SwarmSyncer).peers)
+		pivotCursors = sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SwarmSyncer).peers[foundEnode].streamCursors
+		if len(pivotCursors) == 0 {
+			panic("pivotCursors for node should no longer be empty")
+		}
+		pivotHistoricalFetchers = sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[foundEnode].historicalStreams
+		if len(pivotHistoricalFetchers) == 0 {
+			log.Error("pivot fetcher length == 0", "len", len(pivotHistoricalFetchers))
+			panic("pivot historical fetchers for node should not be empty")
+		}
 		return nil
 	})
 	if result.Error != nil {
