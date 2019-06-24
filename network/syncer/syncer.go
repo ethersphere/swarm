@@ -40,6 +40,8 @@ var (
 	createStreamsDelay = 50 * time.Millisecond //to avoid a race condition where we send a message to a server that hasnt set up yet
 )
 
+const syncBinsWithinDepth = false
+
 var SyncerSpec = &protocols.Spec{
 	Name:       "bzz-sync",
 	Version:    8,
@@ -135,7 +137,7 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 	log.Debug("create streams", "peer", p.BzzAddr, "base", s.kad.BaseAddr(), "withinDepth", withinDepth, "depth", depth, "po", peerPo)
 
 	if withinDepth {
-		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay)
+		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, syncBinsWithinDepth)
 
 		streamsMsg := StreamInfoReq{Streams: sub}
 		log.Debug("sending subscriptions message", "bins", sub)
@@ -151,8 +153,8 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 		select {
 		case <-subscription:
 			switch newDepth := s.kad.NeighbourhoodDepth(); {
-			//case newDepth == depth:
-			// do nothing
+			case newDepth == depth:
+				continue
 			case peerPo >= newDepth:
 				// peer is within depth
 				if !withinDepth {
@@ -160,11 +162,17 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 
 					withinDepth = peerPo >= newDepth
 					// previous depth is -1 because we did not have any streams with the client beforehand
-					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay)
+					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay, syncBinsWithinDepth)
 					streamsMsg := StreamInfoReq{Streams: sub}
 					if err := p.Send(context.TODO(), streamsMsg); err != nil {
-						log.Error("err establishing subsequent subscription", "err", err)
+						log.Error("error establishing subsequent subscription", "err", err)
+						p.Drop()
 					}
+					depth = newDepth
+				} else {
+					// peer was within depth, but depth has changed. we should request the cursors for the
+					// necessary bins and quit the unnecessary ones
+					depth = newDepth
 				}
 			case peerPo < newDepth:
 				if withinDepth {
@@ -237,6 +245,6 @@ func (s *SwarmSyncer) Stop() error {
 func (s *SwarmSyncer) GetBinsForPeer(p *Peer) (bins []uint, depth int) {
 	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
 	depth = s.kad.NeighbourhoodDepth()
-	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay)
+	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, syncBinsWithinDepth)
 	return sub, depth
 }
