@@ -36,8 +36,9 @@ type Swap struct {
 	stateStore          state.Store        // stateStore is needed in order to keep balances across sessions
 	lock                sync.RWMutex       // lock the balances
 	balances            map[enode.ID]int64 // map of balances for each peer
-	paymentThreshold    int64              // balance difference required for requesting cheque
-	disconnectThreshold int64              // balance difference required for dropping peer
+	service             *SwapService
+	paymentThreshold    int64 // balance difference required for requesting cheque
+	disconnectThreshold int64 // balance difference required for dropping peer
 }
 
 // New - swap constructor
