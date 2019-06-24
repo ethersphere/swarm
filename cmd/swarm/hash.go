@@ -28,7 +28,6 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/storage"
-	"github.com/ethersphere/swarm/storage/localstore"
 	"gopkg.in/urfave/cli.v1"
 )
 
@@ -82,7 +81,7 @@ func hash(ctx *cli.Context) {
 	fileStore := storage.NewFileStore(&storage.FakeChunkStore{}, storage.NewFileStoreParams(), chunk.NewTags())
 
 	// Dont pin as the file is not stored in the chunk DB (its stored in FakeStore)
-	addr, _, err := fileStore.Store(context.TODO(), f, stat.Size(), false, localstore.DONT_PIN)
+	addr, _, err := fileStore.Store(context.TODO(), f, stat.Size(), false, storage.DONT_PIN)
 	if err != nil {
 		utils.Fatalf("%v\n", err)
 	} else {

@@ -93,7 +93,7 @@ func (f *FileStore) Retrieve(ctx context.Context, addr Address) (reader *LazyChu
 	}
 
 	// Pinning doesn't matter when retrieving a file
-	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted, tag, localstore.DONT_PIN)
+	getter := NewHasherStore(f.ChunkStore, f.hashFunc, isEncrypted, tag, DONT_PIN)
 	reader = TreeJoin(ctx, addr, getter, 0)
 	return
 }
@@ -126,7 +126,7 @@ func (f *FileStore) GetAllReferences(ctx context.Context, data io.Reader, toEncr
 	putter := &hashExplorer{
 		// Pinning doesn't matter when splitting file for getting hash
 		// The file is not stored in the chunk DB here
-		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag, localstore.DONT_PIN),
+		hasherStore: NewHasherStore(f.ChunkStore, f.hashFunc, toEncrypt, tag, DONT_PIN),
 	}
 	// do the actual splitting anyway, no way around it
 	_, wait, err := PyramidSplit(ctx, data, putter, putter, tag)

@@ -44,7 +44,6 @@ import (
 	"github.com/ethersphere/swarm/sctx"
 	"github.com/ethersphere/swarm/storage"
 	"github.com/ethersphere/swarm/storage/feed"
-	"github.com/ethersphere/swarm/storage/localstore"
 	"github.com/rs/cors"
 )
 
@@ -291,6 +290,14 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Add the root hash of the RAW file in the pinFilesIndex
+	err = storage.GetPinInstance().AddPinFile(addr, true)
+	if err != nil {
+		postRawFail.Inc(1)
+		respondError(w, r, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	wait(r.Context())
 	tag.DoneSplit(addr)
 
@@ -381,6 +388,13 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 
 	log.Debug("done splitting, setting tag total", "SPLIT", tag.Get(chunk.StateSplit), "TOTAL", tag.Total())
 	tag.DoneSplit(newAddr)
+
+	// Add the root hash of the manifest in the pinFilesIndex
+	fmt.Println("Add second Entry", "Address",newAddr.Hex())
+	err = storage.GetPinInstance().AddPinFile(newAddr, false)
+	if err != nil {
+		log.Error("Error adding root hash to pinFilesIndex", "Address", newAddr.Hex())
+	}
 
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
 
@@ -486,7 +500,8 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	deleteCount.Inc(1)
 
 	//TODO_PIN: get the pin counter from the pinIndex???
-	newKey, err := s.api.Delete(r.Context(), uri.Addr, uri.Path, localstore.DONT_PIN)
+	// make sure to pin the new manifest if the old manifest is also pinned
+	newKey, err := s.api.Delete(r.Context(), uri.Addr, uri.Path, storage.DONT_PIN)
 	if err != nil {
 		deleteFail.Inc(1)
 		respondError(w, r, fmt.Sprintf("could not delete from manifest: %v", err), http.StatusInternalServerError)

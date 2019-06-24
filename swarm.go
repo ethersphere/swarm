@@ -83,7 +83,7 @@ type Swarm struct {
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
-	pinApi            *localstore.PinApi
+	pinApi            *storage.PinApi	// PinAPI object implements all pinning related commands
 
 	tracerClose io.Closer
 }
@@ -166,8 +166,7 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		Capacity:  config.DbCapacity,
 	})
 
-	// Instantiate the pinAPI object with the already opened localstore
-	self.pinApi = localstore.NewPinApi(localStore)
+
 
 	if err != nil {
 		return nil, err
@@ -216,6 +215,9 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 	// Swarm Hash Merklised Chunking for Arbitrary-length Document/File storage
 	lnetStore := storage.NewLNetStore(self.netStore)
 	self.fileStore = storage.NewFileStore(lnetStore, self.config.FileStoreParams, tags)
+
+	// Instantiate the pinAPI object with the already opened localstore
+	self.pinApi = storage.NewPinApi(localStore, lnetStore, self.config.FileStoreParams, tags)
 
 	log.Debug("Setup local storage")
 
@@ -522,7 +524,7 @@ func (s *Swarm) APIs() []rpc.API {
 		},
 		{
 			Namespace: "pin",
-			Version:   localstore.PinVersion,
+			Version:   storage.PinVersion,
 			Service:   s.pinApi,
 			Public:    false,
 		},

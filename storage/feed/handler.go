@@ -22,7 +22,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"github.com/ethersphere/swarm/storage/localstore"
 	"sync"
 	"sync/atomic"
 
@@ -269,7 +268,7 @@ func (h *Handler) Update(ctx context.Context, r *Request) (updateAddr storage.Ad
 
 	// send the chunk
 	// TODO_PIN: Add pinning support to feeds
-	h.chunkStore.Put(ctx, chunk.ModePutUpload, ch, localstore.DONT_PIN)
+	h.chunkStore.Put(ctx, chunk.ModePutUpload, ch, storage.DONT_PIN)
 	log.Trace("feed update", "updateAddr", r.idAddr, "epoch time", r.Epoch.Time, "epoch level", r.Epoch.Level, "data", ch.Data())
 	// update our feed updates map cache entry if the new update is older than the one we have, if we have it.
 	if feedUpdate != nil && r.Epoch.After(feedUpdate.Epoch) {

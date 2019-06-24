@@ -148,7 +148,7 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			pinCounter := uint8(0)
 			if pc, ok := hdr.PAXRecords["swarm.pin.counter"]; ok {
 				val , err := strconv.Atoi(pc)
-				if err == nil && val > 0 && val < MAX_PINS {
+				if err == nil && val > 0 {
 					pinCounter = uint8(val)
 				}
 			}

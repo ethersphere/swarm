@@ -26,7 +26,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/ethersphere/swarm/storage/localstore"
 	"io"
 	"math/big"
 	"net/http"
@@ -606,7 +605,7 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 
 	//TODO_PIN: Get the pinCounter from the pinIndex
 	// care should be taken to unpin the old manifest
-	if err := trie.recalcAndStore(localstore.DONT_PIN); err != nil {
+	if err := trie.recalcAndStore(storage.DONT_PIN); err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
 	}
@@ -649,7 +648,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 
 	// TODO_PIN: support pinning when creating a file in fuse
 	// For now, don't pin it
-	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry, localstore.DONT_PIN)
+	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry, storage.DONT_PIN)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -658,7 +657,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	// TODO_PIN: support pinning manifests when creating a file in fuse
 	// For now, don't pin it
 	// care should be taken to unpin the old manifest
-	newMkey, err := mw.Store(localstore.DONT_PIN)
+	newMkey, err := mw.Store(storage.DONT_PIN)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -704,7 +703,7 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 		}
 		contentKey, err = mw.AddEntry(ctx, tr, entry, pinCounter)
 
-		fmt.Println("Add Entry", "Address", fmt.Sprintf("%064x",[]byte(contentKey[:])))
+		fmt.Println("Add Entry", "Address", contentKey.Hex())
 
 		if err != nil {
 			apiUploadTarFail.Inc(1)
@@ -725,7 +724,6 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 				ModTime:     hdr.ModTime,
 			}
 			contentKey, err = mw.AddEntry(ctx, nil, entry, pinCounter)
-			fmt.Println("Add second Entry", "Address", fmt.Sprintf("%064x", []byte(contentKey[:])))
 			if err != nil {
 				apiUploadTarFail.Inc(1)
 				return nil, fmt.Errorf("error adding default manifest entry from tar stream: %s", err)
@@ -773,7 +771,7 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 
 	// TODO_PIN: If a pinned manifest is modified then it needs to pinned too
 	// care should be taken to unpin the old manifest
-	newMkey, err := mw.Store(localstore.DONT_PIN)
+	newMkey, err := mw.Store(storage.DONT_PIN)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -850,7 +848,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 
 	// TODO_PIN: If a pinned file is modified in fuse, pin it here too
 	// For now, this is ignored
-	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry,localstore.DONT_PIN)
+	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry, storage.DONT_PIN)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -858,7 +856,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 
 	// TODO_PIN: If a pinned file is modified in fuse, pin the new manifest too
 	// For now, this is ignored
-	newMkey, err := mw.Store(localstore.DONT_PIN)
+	newMkey, err := mw.Store(storage.DONT_PIN)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err

@@ -124,7 +124,7 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists 
 		}
 		if !exists {
 			item.StoreTimestamp = now()
-			item.PinCounter = pinCounter
+			item.PinCounter = uint64(pinCounter)
 			item.BinID, err = db.binIDs.IncInBatch(batch, uint64(db.po(item.Address)))
 			if err != nil {
 				return false, err
@@ -134,6 +134,11 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists 
 			triggerPullFeed = true
 			db.pushIndex.PutInBatch(batch, item)
 			triggerPushFeed = true
+
+			// Index in the pinIndex only if the chunk is pinned
+			if item.PinCounter > 0 {
+				db.pinIndex.PutInBatch(batch, item)
+			}
 		}
 
 	case chunk.ModePutSync:
@@ -174,4 +179,24 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists 
 		db.triggerPushSubscriptions()
 	}
 	return exists, nil
+}
+
+// Adds a entry in the pinFilesIndex, used to list all pinned files
+func (db *DB) AddToPinFileIndex(hash []byte, isRaw bool) error{
+
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+
+	batch := new(leveldb.Batch)
+	var item shed.Item
+	item.Address = hash
+	if isRaw {
+		item.IsRaw = 1
+	}
+	db.pinFilesIndex.PutInBatch(batch, item)
+	err := db.shed.WriteBatch(batch)
+	if err != nil {
+		return err
+	}
+	return nil
 }
