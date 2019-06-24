@@ -143,15 +143,24 @@ func newSyncStreamFetch(bin uint) *syncStreamFetch {
 // be requested and the second one which subscriptions need to be quit. Argument
 // prevDepth with value less then 0 represents no previous depth, used for
 // initial syncing subscriptions.
-func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int) (subBins, quitBins []uint) {
-	newStart, newEnd := syncBins(peerPO, newDepth, max)
+func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int, syncBinsWithinDepth bool) (subBins, quitBins []uint) {
+	newStart, newEnd := syncBins(peerPO, newDepth, max, syncBinsWithinDepth)
 	if prevDepth < 0 {
+		if newStart == -1 && newEnd == -1 {
+			return nil, nil
+		}
 		// no previous depth, return the complete range
 		// for subscriptions requests and nothing for quitting
 		return intRange(newStart, newEnd), nil
 	}
 
-	prevStart, prevEnd := syncBins(peerPO, prevDepth, max)
+	prevStart, prevEnd := syncBins(peerPO, prevDepth, max, syncBinsWithinDepth)
+	if newStart == -1 && newEnd == -1 {
+		// this means that we should not have any streams on any bins with this peer
+		// get rid of what was established on the previous depth
+		quitBins = append(quitBins, intRange(prevStart, prevEnd)...)
+		return
+	}
 
 	if newStart < prevStart {
 		subBins = append(subBins, intRange(newStart, prevStart)...)
@@ -176,11 +185,16 @@ func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int) (subBins, quitB
 // subscriptions need to be requested, based on peer proximity and
 // kademlia neighbourhood depth. Returned range is [start,end), inclusive for
 // start and exclusive for end.
-func syncBins(peerPO, depth, max int) (start, end int) {
-	if peerPO < depth {
-		// subscribe only to peerPO bin if it is not
-		// in the nearest neighbourhood
-		return peerPO, peerPO + 1
+func syncBins(peerPO, depth, max int, syncBinsWithinDepth bool) (start, end int) {
+	if syncBinsWithinDepth && peerPO < depth {
+		// we don't want to request anything from peers outside depth
+		return -1, -1
+	} else {
+		if peerPO < depth {
+			// subscribe only to peerPO bin if it is not
+			// in the nearest neighbourhood
+			return peerPO, peerPO + 1
+		}
 	}
 	// subscribe from depth to max bin if the peer
 	// is in the nearest neighbourhood
