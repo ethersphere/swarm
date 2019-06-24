@@ -151,15 +151,16 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 		select {
 		case <-subscription:
 			switch newDepth := s.kad.NeighbourhoodDepth(); {
-			case newDepth == depth:
-				// do nothing
+			//case newDepth == depth:
+			// do nothing
 			case peerPo >= newDepth:
 				// peer is within depth
 				if !withinDepth {
 					log.Debug("peer moved into depth, requesting cursors")
 
 					withinDepth = peerPo >= newDepth
-					sub, _ := syncSubscriptionsDiff(peerPo, depth, newDepth, s.kad.MaxProxDisplay)
+					// previous depth is -1 because we did not have any streams with the client beforehand
+					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay)
 					streamsMsg := StreamInfoReq{Streams: sub}
 					if err := p.Send(context.TODO(), streamsMsg); err != nil {
 						log.Error("err establishing subsequent subscription", "err", err)
@@ -179,6 +180,7 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 							// this could happen when the cursor was 0 thus the historical stream was not created - do nothing
 						}
 					}
+					withinDepth = false
 				}
 			}
 
