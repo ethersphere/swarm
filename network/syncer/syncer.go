@@ -95,6 +95,7 @@ func (s *SwarmSyncer) removePeer(p *Peer) {
 	s.mtx.Lock()
 	defer s.mtx.Unlock()
 	if _, found := s.peers[p.ID()]; found {
+		log.Error("removing peer", "id", p.ID())
 		delete(s.peers, p.ID())
 		p.Left()
 
@@ -158,7 +159,7 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 				if !withinDepth {
 					log.Debug("peer moved into depth, requesting cursors")
 
-					withinDepth = peerPo >= newDepth
+					withinDepth = true // peerPo >= newDepth
 					// previous depth is -1 because we did not have any streams with the client beforehand
 					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay, true)
 					streamsMsg := StreamInfoReq{Streams: sub}
@@ -175,6 +176,7 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 			case peerPo < newDepth:
 				if withinDepth {
 					log.Debug("peer transitioned out of depth, removing cursors")
+					withinDepth = false
 					for k, _ := range p.streamCursors {
 						delete(p.streamCursors, k)
 
@@ -186,7 +188,6 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 							// this could happen when the cursor was 0 thus the historical stream was not created - do nothing
 						}
 					}
-					withinDepth = false
 				}
 			}
 

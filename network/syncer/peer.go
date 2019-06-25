@@ -72,6 +72,8 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 
 func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	log.Debug("handleStreamInfoRes", "msg", msg)
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 
 	if len(msg.Streams) == 0 {
 		log.Error("StreamInfo response is empty")
@@ -96,6 +98,8 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 
 func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
 	log.Debug("handleStreamInfoReq", "msg", msg)
+	p.mtx.Lock()
+	defer p.mtx.Unlock()
 	streamRes := StreamInfoRes{}
 
 	for _, v := range msg.Streams {
