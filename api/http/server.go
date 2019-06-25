@@ -349,8 +349,6 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 		log.Debug("resolved key", "ruid", ruid, "key", addr)
 	} else {
 		addr, err = s.api.NewManifest(r.Context(), toEncrypt)
-		fmt.Println("New Manifest", "Address", fmt.Sprintf("%064x", []byte(addr[:])))
-
 		if err != nil {
 			postFilesFail.Inc(1)
 			respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -390,7 +388,6 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	tag.DoneSplit(newAddr)
 
 	// Add the root hash of the manifest in the pinFilesIndex
-	fmt.Println("Add second Entry", "Address",newAddr.Hex())
 	err = storage.GetPinInstance().AddPinFile(newAddr, false)
 	if err != nil {
 		log.Error("Error adding root hash to pinFilesIndex", "Address", newAddr.Hex())

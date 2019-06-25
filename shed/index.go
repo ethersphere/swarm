@@ -41,9 +41,9 @@ type Item struct {
 	AccessTimestamp int64
 	StoreTimestamp  int64
 	BinID           uint64
-	TreeSize        uint64    // Used to store the merkle tree size in the pinIndex
-	PinCounter      uint64    // maintains the no of time a chunk is pinned
-	IsRaw			uint8     // defines if the root hash stored is from a RAW upload or is it a Manifest
+	TreeSize        uint64 // Used to store the merkle tree size in the pinIndex
+	PinCounter      uint64 // maintains the no of time a chunk is pinned
+	IsRaw           uint8  // defines if the root hash stored is from a RAW upload or is it a Manifest
 }
 
 // Merge is a helper method to construct a new

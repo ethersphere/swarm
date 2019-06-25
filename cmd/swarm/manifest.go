@@ -41,10 +41,10 @@ var manifestCommand = cli.Command{
 			Flags: []cli.Flag{
 				SwarmPinFlag,
 			},
-			Name:               "add",
-			Usage:              "add a new path to the manifest",
-			ArgsUsage:          "<MANIFEST> <path> <hash>",
-			Description:        "Adds a new path to the manifest",
+			Name:        "add",
+			Usage:       "add a new path to the manifest",
+			ArgsUsage:   "<MANIFEST> <path> <hash>",
+			Description: "Adds a new path to the manifest",
 		},
 		{
 			Action:             manifestUpdate,
@@ -52,10 +52,10 @@ var manifestCommand = cli.Command{
 			Flags: []cli.Flag{
 				SwarmPinFlag,
 			},
-			Name:               "update",
-			Usage:              "update the hash for an already existing path in the manifest",
-			ArgsUsage:          "<MANIFEST> <path> <newhash>",
-			Description:        "Update the hash for an already existing path in the manifest",
+			Name:        "update",
+			Usage:       "update the hash for an already existing path in the manifest",
+			ArgsUsage:   "<MANIFEST> <path> <newhash>",
+			Description: "Update the hash for an already existing path in the manifest",
 		},
 		{
 			Action:             manifestRemove,
@@ -63,10 +63,10 @@ var manifestCommand = cli.Command{
 			Flags: []cli.Flag{
 				SwarmPinFlag,
 			},
-			Name:               "remove",
-			Usage:              "removes a path from the manifest",
-			ArgsUsage:          "<MANIFEST> <path>",
-			Description:        "Removes a path from the manifest",
+			Name:        "remove",
+			Usage:       "removes a path from the manifest",
+			ArgsUsage:   "<MANIFEST> <path>",
+			Description: "Removes a path from the manifest",
 		},
 	},
 }
@@ -77,7 +77,7 @@ var manifestCommand = cli.Command{
 // On success, this function will print new (updated) manifest's hash.
 func manifestAdd(ctx *cli.Context) {
 
-	toPin  := ctx.Bool(SwarmPinFlag.Name)
+	toPin := ctx.Bool(SwarmPinFlag.Name)
 
 	args := ctx.Args()
 	if len(args) != 3 {
@@ -114,7 +114,7 @@ func manifestAdd(ctx *cli.Context) {
 // On success, this function will print hash of the updated manifest.
 func manifestUpdate(ctx *cli.Context) {
 
-	toPin  := ctx.Bool(SwarmPinFlag.Name)
+	toPin := ctx.Bool(SwarmPinFlag.Name)
 
 	args := ctx.Args()
 	if len(args) != 3 {
@@ -156,7 +156,7 @@ func manifestUpdate(ctx *cli.Context) {
 // contain the path.
 func manifestRemove(ctx *cli.Context) {
 
-	toPin  := ctx.Bool(SwarmPinFlag.Name)
+	toPin := ctx.Bool(SwarmPinFlag.Name)
 
 	args := ctx.Args()
 	if len(args) != 2 {

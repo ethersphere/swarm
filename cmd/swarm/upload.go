@@ -57,7 +57,7 @@ func upload(ctx *cli.Context) {
 		mimeType        = ctx.GlobalString(SwarmUploadMimeType.Name)
 		client          = swarm.NewClient(bzzapi)
 		toEncrypt       = ctx.Bool(SwarmEncryptedFlag.Name)
-		toPin			= ctx.Bool(SwarmPinFlag.Name)
+		toPin           = ctx.Bool(SwarmPinFlag.Name)
 		autoDefaultPath = false
 		file            string
 	)

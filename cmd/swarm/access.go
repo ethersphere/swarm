@@ -148,7 +148,7 @@ func accessNewPK(ctx *cli.Context) {
 		privateKey       = getPrivKey(ctx)
 		granteePublicKey = ctx.String(SwarmAccessGrantKeyFlag.Name)
 		dryRun           = ctx.Bool(SwarmDryRunFlag.Name)
-		toPin     		 = ctx.Bool(SwarmPinFlag.Name)
+		toPin            = ctx.Bool(SwarmPinFlag.Name)
 	)
 	sessionKey, ae, err = api.DoPK(ctx, privateKey, granteePublicKey, salt)
 	if err != nil {
@@ -189,7 +189,7 @@ func accessNewACT(ctx *cli.Context) {
 		passGranteesFilename = ctx.String(utils.PasswordFileFlag.Name)
 		privateKey           = getPrivKey(ctx)
 		dryRun               = ctx.Bool(SwarmDryRunFlag.Name)
-		toPin    			 = ctx.Bool(SwarmPinFlag.Name)
+		toPin                = ctx.Bool(SwarmPinFlag.Name)
 	)
 	if pkGranteesFilename == "" && passGranteesFilename == "" {
 		utils.Fatalf("you have to provide either a grantee public-keys file or an encryption passwords file (or both)")

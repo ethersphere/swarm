@@ -701,9 +701,6 @@ func (a *API) UploadTar(ctx context.Context, bodyReader io.ReadCloser, manifestP
 			ModTime:     hdr.ModTime,
 		}
 		contentKey, err = mw.AddEntry(ctx, tr, entry, pinCounter)
-
-		fmt.Println("Add Entry", "Address", contentKey.Hex())
-
 		if err != nil {
 			apiUploadTarFail.Inc(1)
 			return nil, fmt.Errorf("error adding manifest entry from tar stream: %s", err)

@@ -83,7 +83,7 @@ type Swarm struct {
 	stateStore        *state.DBStore
 	accountingMetrics *protocols.AccountingMetrics
 	cleanupFuncs      []func() error
-	pinApi            *storage.PinApi	// PinAPI object implements all pinning related commands
+	pinApi            *storage.PinApi // PinAPI object implements all pinning related commands
 
 	tracerClose io.Closer
 }
@@ -165,8 +165,6 @@ func NewSwarm(config *api.Config, mockStore *mock.NodeStore) (self *Swarm, err e
 		MockStore: mockStore,
 		Capacity:  config.DbCapacity,
 	})
-
-
 
 	if err != nil {
 		return nil, err

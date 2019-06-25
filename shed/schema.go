@@ -124,7 +124,6 @@ func (db *DB) GetSchema() (s schema, err error) {
 	return s, err
 }
 
-
 // putSchema stores the complete schema to
 // the database.
 func (db *DB) putSchema(s schema) (err error) {

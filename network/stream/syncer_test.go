@@ -134,7 +134,7 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		fileStore := item.(*storage.FileStore)
 		size := chunkCount * chunkSize
 
-		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false,0)
+		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false, 0)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}
