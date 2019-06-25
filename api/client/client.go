@@ -363,15 +363,13 @@ func (c *Client) DownloadFile(hash, path, dest, credentials string) error {
 }
 
 // UploadManifest uploads the given manifest to swarm
-func (c *Client) UploadManifest(m *api.Manifest, toEncrypt bool) (string, error) {
+func (c *Client) UploadManifest(m *api.Manifest, toEncrypt bool, toPin bool) (string, error) {
 	data, err := json.Marshal(m)
 	if err != nil {
 		return "", err
 	}
 
-	// TODO_PIN: Give pin support
-	// for now, upload the manifest without pining
-	return c.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt, false)
+	return c.UploadRaw(bytes.NewReader(data), int64(len(data)), toEncrypt, toPin)
 }
 
 // DownloadManifest downloads a swarm manifest

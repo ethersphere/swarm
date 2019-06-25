@@ -499,8 +499,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	log.Debug("handle.delete", "ruid", ruid)
 	deleteCount.Inc(1)
 
-	//TODO_PIN: get the pin counter from the pinIndex???
-	// make sure to pin the new manifest if the old manifest is also pinned
+	// Looks like this is not called from any client, dont pin for now
 	newKey, err := s.api.Delete(r.Context(), uri.Addr, uri.Path, storage.DONT_PIN)
 	if err != nil {
 		deleteFail.Inc(1)

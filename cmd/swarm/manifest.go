@@ -38,6 +38,9 @@ var manifestCommand = cli.Command{
 		{
 			Action:             manifestAdd,
 			CustomHelpTemplate: helpTemplate,
+			Flags: []cli.Flag{
+				SwarmPinFlag,
+			},
 			Name:               "add",
 			Usage:              "add a new path to the manifest",
 			ArgsUsage:          "<MANIFEST> <path> <hash>",
@@ -46,6 +49,9 @@ var manifestCommand = cli.Command{
 		{
 			Action:             manifestUpdate,
 			CustomHelpTemplate: helpTemplate,
+			Flags: []cli.Flag{
+				SwarmPinFlag,
+			},
 			Name:               "update",
 			Usage:              "update the hash for an already existing path in the manifest",
 			ArgsUsage:          "<MANIFEST> <path> <newhash>",
@@ -54,6 +60,9 @@ var manifestCommand = cli.Command{
 		{
 			Action:             manifestRemove,
 			CustomHelpTemplate: helpTemplate,
+			Flags: []cli.Flag{
+				SwarmPinFlag,
+			},
 			Name:               "remove",
 			Usage:              "removes a path from the manifest",
 			ArgsUsage:          "<MANIFEST> <path>",
@@ -67,6 +76,9 @@ var manifestCommand = cli.Command{
 // with only one entry, which meta-data will be added to the original manifest.
 // On success, this function will print new (updated) manifest's hash.
 func manifestAdd(ctx *cli.Context) {
+
+	toPin  := ctx.Bool(SwarmPinFlag.Name)
+
 	args := ctx.Args()
 	if len(args) != 3 {
 		utils.Fatalf("Need exactly three arguments <MHASH> <path> <HASH>")
@@ -92,7 +104,7 @@ func manifestAdd(ctx *cli.Context) {
 		utils.Fatalf("Too many entries in manifest %s", hash)
 	}
 
-	newManifest := addEntryToManifest(client, mhash, path, m.Entries[0])
+	newManifest := addEntryToManifest(client, mhash, path, m.Entries[0], toPin)
 	fmt.Println(newManifest)
 }
 
@@ -101,6 +113,9 @@ func manifestAdd(ctx *cli.Context) {
 // with only one entry, which meta-data will be added to the original manifest.
 // On success, this function will print hash of the updated manifest.
 func manifestUpdate(ctx *cli.Context) {
+
+	toPin  := ctx.Bool(SwarmPinFlag.Name)
+
 	args := ctx.Args()
 	if len(args) != 3 {
 		utils.Fatalf("Need exactly three arguments <MHASH> <path> <HASH>")
@@ -126,7 +141,7 @@ func manifestUpdate(ctx *cli.Context) {
 		utils.Fatalf("Too many entries in manifest %s", hash)
 	}
 
-	newManifest, _, defaultEntryUpdated := updateEntryInManifest(client, mhash, path, m.Entries[0], true)
+	newManifest, _, defaultEntryUpdated := updateEntryInManifest(client, mhash, path, m.Entries[0], true, toPin)
 	if defaultEntryUpdated {
 		// Print informational message to stderr
 		// allowing the user to get the new manifest hash from stdout
@@ -140,6 +155,9 @@ func manifestUpdate(ctx *cli.Context) {
 // On success, this function will print hash of the manifest which does not
 // contain the path.
 func manifestRemove(ctx *cli.Context) {
+
+	toPin  := ctx.Bool(SwarmPinFlag.Name)
+
 	args := ctx.Args()
 	if len(args) != 2 {
 		utils.Fatalf("Need exactly two arguments <MHASH> <path>")
@@ -153,11 +171,11 @@ func manifestRemove(ctx *cli.Context) {
 	bzzapi := strings.TrimRight(ctx.GlobalString(SwarmApiFlag.Name), "/")
 	client := swarm.NewClient(bzzapi)
 
-	newManifest := removeEntryFromManifest(client, mhash, path)
+	newManifest := removeEntryFromManifest(client, mhash, path, toPin)
 	fmt.Println(newManifest)
 }
 
-func addEntryToManifest(client *swarm.Client, mhash, path string, entry api.ManifestEntry) string {
+func addEntryToManifest(client *swarm.Client, mhash, path string, entry api.ManifestEntry, toPin bool) string {
 	var longestPathEntry = api.ManifestEntry{}
 
 	mroot, isEncrypted, err := client.DownloadManifest(mhash)
@@ -182,7 +200,7 @@ func addEntryToManifest(client *swarm.Client, mhash, path string, entry api.Mani
 	if longestPathEntry.Path != "" {
 		// Load the child Manifest add the entry there
 		newPath := path[len(longestPathEntry.Path):]
-		newHash := addEntryToManifest(client, longestPathEntry.Hash, newPath, entry)
+		newHash := addEntryToManifest(client, longestPathEntry.Hash, newPath, entry, toPin)
 
 		// Replace the hash for parent Manifests
 		newMRoot := &api.Manifest{}
@@ -199,7 +217,7 @@ func addEntryToManifest(client *swarm.Client, mhash, path string, entry api.Mani
 		mroot.Entries = append(mroot.Entries, entry)
 	}
 
-	newManifestHash, err := client.UploadManifest(mroot, isEncrypted)
+	newManifestHash, err := client.UploadManifest(mroot, isEncrypted, toPin)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
@@ -212,7 +230,7 @@ func addEntryToManifest(client *swarm.Client, mhash, path string, entry api.Mani
 // default entry in root manifest will be updated too.
 // Returned values are the new manifest hash, hash of the entry that was replaced by the new entry and
 // a a bool that is true if default entry is updated.
-func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.ManifestEntry, isRoot bool) (newManifestHash, oldHash string, defaultEntryUpdated bool) {
+func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.ManifestEntry, isRoot bool, toPin bool) (newManifestHash, oldHash string, defaultEntryUpdated bool) {
 	var (
 		newEntry         = api.ManifestEntry{}
 		longestPathEntry = api.ManifestEntry{}
@@ -248,7 +266,7 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 		// Load the child Manifest add the entry there
 		newPath := path[len(longestPathEntry.Path):]
 		var newHash string
-		newHash, oldHash, _ = updateEntryInManifest(client, longestPathEntry.Hash, newPath, entry, false)
+		newHash, oldHash, _ = updateEntryInManifest(client, longestPathEntry.Hash, newPath, entry, false, toPin)
 
 		// Replace the hash for parent Manifests
 		newMRoot := &api.Manifest{}
@@ -282,14 +300,14 @@ func updateEntryInManifest(client *swarm.Client, mhash, path string, entry api.M
 		mroot = newMRoot
 	}
 
-	newManifestHash, err = client.UploadManifest(mroot, isEncrypted)
+	newManifestHash, err = client.UploadManifest(mroot, isEncrypted, toPin)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}
 	return newManifestHash, oldHash, defaultEntryUpdated
 }
 
-func removeEntryFromManifest(client *swarm.Client, mhash, path string) string {
+func removeEntryFromManifest(client *swarm.Client, mhash, path string, toPin bool) string {
 	var (
 		entryToRemove    = api.ManifestEntry{}
 		longestPathEntry = api.ManifestEntry{}
@@ -321,7 +339,7 @@ func removeEntryFromManifest(client *swarm.Client, mhash, path string) string {
 	if longestPathEntry.Path != "" {
 		// Load the child Manifest remove the entry there
 		newPath := path[len(longestPathEntry.Path):]
-		newHash := removeEntryFromManifest(client, longestPathEntry.Hash, newPath)
+		newHash := removeEntryFromManifest(client, longestPathEntry.Hash, newPath, toPin)
 
 		// Replace the hash for parent Manifests
 		newMRoot := &api.Manifest{}
@@ -345,7 +363,7 @@ func removeEntryFromManifest(client *swarm.Client, mhash, path string) string {
 		mroot = newMRoot
 	}
 
-	newManifestHash, err := client.UploadManifest(mroot, isEncrypted)
+	newManifestHash, err := client.UploadManifest(mroot, isEncrypted, toPin)
 	if err != nil {
 		utils.Fatalf("Manifest upload failed: %v", err)
 	}

@@ -603,8 +603,7 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 		trie.deleteEntry(path, quitC)
 	}
 
-	//TODO_PIN: Get the pinCounter from the pinIndex
-	// care should be taken to unpin the old manifest
+	// Dont pin manifest as this is used only in test cases
 	if err := trie.recalcAndStore(storage.DONT_PIN); err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
