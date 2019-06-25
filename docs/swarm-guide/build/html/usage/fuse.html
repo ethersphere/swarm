@@ -1,0 +1,301 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>FUSE &mdash; Swarm 0.3 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Swarm
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">1. Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">2. Installation and Updates</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../gettingstarted.html">3. Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../up-and-download.html">4. Uploading and downloading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage.html">5. Working with content</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pss.html">6. PSS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apireference.html">7. API reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration.html">8. Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">9. Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../resources.html">10. Resources</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Swarm</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>FUSE</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/usage/fuse.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="fuse">
+<h1>FUSE<a class="headerlink" href="#fuse" title="Permalink to this headline">¶</a></h1>
+<p>Another way of interacting with Swarm is by mounting it as a local filesystem using <a class="reference external" href="https://en.wikipedia.org/wiki/Filesystem_in_Userspace">FUSE</a> (Filesystem in Userspace). There are three IPC API’s which help in doing this.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">FUSE needs to be installed on your Operating System for these commands to work. Windows is not supported by FUSE, so these command will work only in Linux, Mac OS and FreeBSD. For installation instruction for your OS, see “Installing FUSE” section below.</p>
+</div>
+<div class="section" id="installing-fuse">
+<h2>Installing FUSE<a class="headerlink" href="#installing-fuse" title="Permalink to this headline">¶</a></h2>
+<ol class="arabic simple">
+<li>Linux (Ubuntu)</li>
+</ol>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ sudo apt-get install fuse
+$ sudo modprobe fuse
+$ sudo chown &lt;username&gt;:&lt;groupname&gt; /etc/fuse.conf
+$ sudo chown &lt;username&gt;:&lt;groupname&gt; /dev/fuse
+</pre></div>
+</div>
+<ol class="arabic" start="2">
+<li><p class="first">Mac OS</p>
+<p>Either install the latest package from <a class="reference external" href="https://osxfuse.github.io/">https://osxfuse.github.io/</a> or use brew as below</p>
+</li>
+</ol>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ brew update
+$ brew install caskroom/cask/brew-cask
+$ brew cask install osxfuse
+</pre></div>
+</div>
+</div>
+<div class="section" id="cli-usage">
+<h2>CLI Usage<a class="headerlink" href="#cli-usage" title="Permalink to this headline">¶</a></h2>
+<p>The Swarm CLI now integrates commands to make FUSE usage easier and streamlined.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">When using FUSE from the CLI, we assume you are running a local Swarm node on your machine. The FUSE commands attach to the running node through <cite>bzzd.ipc</cite></p>
+</div>
+<div class="section" id="mount">
+<h3>Mount<a class="headerlink" href="#mount" title="Permalink to this headline">¶</a></h3>
+<p>One use case to mount a Swarm hash via FUSE is a file sharing feature accessible via your local file system.
+Files uploaded to Swarm are then transparently accessible via your local file system, just as if they were stored locally.</p>
+<p>To mount a Swarm resource, first upload some content to Swarm using the <code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">up</span> <span class="pre">&lt;resource&gt;</span></code> command.
+You can also upload a complete folder using <code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">--recursive</span> <span class="pre">up</span> <span class="pre">&lt;directory&gt;</span></code>.
+Once you get the returned manifest hash, use it to mount the manifest to a mount point
+(the mount point should exist on your hard drive):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm fs mount &lt;manifest-hash&gt; &lt;mount-point&gt;
+</pre></div>
+</div>
+<p>For example:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm fs mount &lt;manifest-hash&gt; /home/user/swarmmount
+</pre></div>
+</div>
+<p>Your running Swarm node terminal output should show something similar to the following in case the command returned successfuly:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Attempting to mount /path/to/mount/point
+Serving 6e4642148d0a1ea60e36931513f3ed6daf3deb5e499dcf256fa629fbc22cf247 at /path/to/mount/point
+Now serving swarm FUSE FS                manifest=6e4642148d0a1ea60e36931513f3ed6daf3deb5e499dcf256fa629fbc22cf247 mountpoint=/path/to/mount/point
+</pre></div>
+</div>
+<p>You may get a “Fatal: had an error calling the RPC endpoint while mounting: context deadline exceeded” error if it takes too long to retrieve the content.</p>
+<p>In your OS, via terminal or file browser, you now should be able to access the contents of the Swarm hash at <code class="docutils literal notranslate"><span class="pre">/path/to/mount/point</span></code>, i.e. <code class="docutils literal notranslate"><span class="pre">ls</span> <span class="pre">/home/user/swarmmount</span></code></p>
+</div>
+<div class="section" id="access">
+<h3>Access<a class="headerlink" href="#access" title="Permalink to this headline">¶</a></h3>
+<p>Through your terminal or file browser, you can interact with your new mount as if it was a local directory. Thus you can add, remove, edit, create files and directories just as on a local directory. Every such action will interact with Swarm, taking effect on the Swarm distributed storage. Every such action also will result <strong>in a new hash</strong> for your mounted directory. If you would unmount and remount the same directory with the previous hash, your changes would seem to have been lost (effectively you are just mounting the previous version). While you change the current mount, this happens under the hood and your mount remains up-to-date.</p>
+</div>
+<div class="section" id="unmount">
+<h3>Unmount<a class="headerlink" href="#unmount" title="Permalink to this headline">¶</a></h3>
+<p>To unmount a <code class="docutils literal notranslate"><span class="pre">swarmfs</span></code> mount, either use the List Mounts command below, or use a known mount point:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm fs unmount &lt;mount-point&gt;
+&gt; 41e422e6daf2f4b32cd59dc6a296cce2f8cce1de9f7c7172e9d0fc4c68a3987a
+</pre></div>
+</div>
+<p>The returned hash is the latest manifest version that was mounted.
+You can use this hash to remount the latest version with the most recent changes.</p>
+</div>
+<div class="section" id="list-mounts">
+<h3>List Mounts<a class="headerlink" href="#list-mounts" title="Permalink to this headline">¶</a></h3>
+<p>To see all existing swarmfs mount points, use the List Mounts command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm fs list
+</pre></div>
+</div>
+<p>Example Output:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Found 1 swarmfs mount(s):
+0:
+        Mount point: /path/to/mount/point
+        Latest Manifest: 6e4642148d0a1ea60e36931513f3ed6daf3deb5e499dcf256fa629fbc22cf247
+        Start Manifest: 6e4642148d0a1ea60e36931513f3ed6daf3deb5e499dcf256fa629fbc22cf247
+</pre></div>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Ethersphere
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+
+  
+
+  <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

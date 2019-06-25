@@ -1,0 +1,733 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>4. Uploading and downloading &mdash; Swarm 0.3 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/sphinx_tabs/tabs.css" type="text/css" />
+  <link rel="stylesheet" href="_static/sphinx_tabs/semantic-ui-2.2.10/segment.min.css" type="text/css" />
+  <link rel="stylesheet" href="_static/sphinx_tabs/semantic-ui-2.2.10/menu.min.css" type="text/css" />
+  <link rel="stylesheet" href="_static/sphinx_tabs/semantic-ui-2.2.10/tab.min.css" type="text/css" />
+  <link rel="stylesheet" href="_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="5. Working with content" href="usage.html" />
+    <link rel="prev" title="3. Getting started" href="gettingstarted.html" /> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> Swarm
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">1. Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">2. Installation and Updates</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gettingstarted.html">3. Getting started</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">4. Uploading and downloading</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#introduction">4.1. Introduction</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#using-http">4.2. Using HTTP</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#tar-stream-upload">4.2.1. Tar stream upload</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#multipart-form-upload">4.2.2. Multipart form upload</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#add-files-to-an-existing-manifest-using-multipart-form">4.2.3. Add files to an existing manifest using multipart form</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#upload-files-using-a-simple-html-form">4.2.4. Upload files using a simple HTML form</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#listing-files">4.2.5. Listing files</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#using-cli">4.3. Using CLI</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#uploading-a-file-to-your-local-swarm-node">4.3.1. Uploading a file to your local Swarm node</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#suppressing-automatic-manifest-creation">4.3.1.1. Suppressing automatic manifest creation</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#downloading-a-single-file">4.3.2. Downloading a single file</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#uploading-to-a-remote-swarm-node">4.3.3. Uploading to a remote Swarm node</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#uploading-a-directory">4.3.4. Uploading a directory</a><ul>
+<li class="toctree-l4"><a class="reference internal" href="#directory-with-default-entry">4.3.4.1. Directory with default entry</a></li>
+</ul>
+</li>
+<li class="toctree-l3"><a class="reference internal" href="#downloading-a-directory">4.3.5. Downloading a directory</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#adding-entries-to-a-manifest">4.3.6. Adding entries to a manifest</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#reference-table">4.3.7. Reference table</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#up-and-downloading-in-the-cli-example-usage">4.3.8. Up- and downloading in the CLI: example usage</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">5. Working with content</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pss.html">6. PSS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="apireference.html">7. API reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">8. Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">9. Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">10. Resources</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Swarm</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>4. Uploading and downloading</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/up-and-download.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="uploading-and-downloading">
+<span id="updownload"></span><h1><a class="toc-backref" href="#id1">4. Uploading and downloading</a><a class="headerlink" href="#uploading-and-downloading" title="Permalink to this headline">¶</a></h1>
+<div class="contents topic" id="contents">
+<p class="topic-title first">Contents</p>
+<ul class="simple">
+<li><a class="reference internal" href="#uploading-and-downloading" id="id1">Uploading and downloading</a><ul>
+<li><a class="reference internal" href="#introduction" id="id2">Introduction</a></li>
+<li><a class="reference internal" href="#using-http" id="id3">Using HTTP</a><ul>
+<li><a class="reference internal" href="#tar-stream-upload" id="id4">Tar stream upload</a></li>
+<li><a class="reference internal" href="#multipart-form-upload" id="id5">Multipart form upload</a></li>
+<li><a class="reference internal" href="#add-files-to-an-existing-manifest-using-multipart-form" id="id6">Add files to an existing manifest using multipart form</a></li>
+<li><a class="reference internal" href="#upload-files-using-a-simple-html-form" id="id7">Upload files using a simple HTML form</a></li>
+<li><a class="reference internal" href="#listing-files" id="id8">Listing files</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#using-cli" id="id9">Using CLI</a><ul>
+<li><a class="reference internal" href="#uploading-a-file-to-your-local-swarm-node" id="id10">Uploading a file to your local Swarm node</a><ul>
+<li><a class="reference internal" href="#suppressing-automatic-manifest-creation" id="id11">Suppressing automatic manifest creation</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#downloading-a-single-file" id="id12">Downloading a single file</a></li>
+<li><a class="reference internal" href="#uploading-to-a-remote-swarm-node" id="id13">Uploading to a remote Swarm node</a></li>
+<li><a class="reference internal" href="#uploading-a-directory" id="id14">Uploading a directory</a><ul>
+<li><a class="reference internal" href="#directory-with-default-entry" id="id15">Directory with default entry</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#downloading-a-directory" id="id16">Downloading a directory</a></li>
+<li><a class="reference internal" href="#adding-entries-to-a-manifest" id="id17">Adding entries to a manifest</a></li>
+<li><a class="reference internal" href="#reference-table" id="id18">Reference table</a></li>
+<li><a class="reference internal" href="#up-and-downloading-in-the-cli-example-usage" id="id19">Up- and downloading in the CLI: example usage</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</div>
+<div class="section" id="introduction">
+<h2><a class="toc-backref" href="#id2">4.1. Introduction</a><a class="headerlink" href="#introduction" title="Permalink to this headline">¶</a></h2>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This guide assumes you’ve installed the Swarm client and have a running node that listens by default on port 8500. See <a class="reference external" href="./gettingstarted.html">Getting Started</a> for details.</p>
+</div>
+<p>Arguably, uploading and downloading content is the raison d’être of Swarm. Uploading content consists of “uploading” content to your local Swarm node, followed by your local Swarm node “syncing” the resulting chunks of data with its peers in the network. Meanwhile, downloading content consists of your local Swarm node querying its peers in the network for the relevant chunks of data and then reassembling the content locally.</p>
+<p>Uploading and downloading data can be done through the <code class="docutils literal notranslate"><span class="pre">swarm</span></code> command line interface (CLI) on the terminal or via the HTTP interface on <a class="reference external" href="http://localhost:8500">http://localhost:8500</a>.</p>
+</div>
+<div class="section" id="using-http">
+<h2><a class="toc-backref" href="#id3">4.2. Using HTTP</a><a class="headerlink" href="#using-http" title="Permalink to this headline">¶</a></h2>
+<p>Swarm offers an HTTP API. Thus, a simple way to upload and download files to/from Swarm is through this API.
+We can use the <code class="docutils literal notranslate"><span class="pre">curl</span></code> <a class="reference external" href="https://curl.haxx.se/docs/httpscripting.html">tool</a> to exemplify how to interact with this API.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Files can be uploaded in a single HTTP request, where the body is either a single file to store, a tar stream (application/x-tar) or a multipart form (multipart/form-data).</p>
+</div>
+<p>To upload a single file to your node, run this:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl -H &quot;Content-Type: text/plain&quot; --data &quot;some-data&quot; http://localhost:8500/bzz:/
+</pre></div>
+</div>
+<p>Once the file is uploaded, you will receive a hex string which will look similar to this:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>027e57bcbae76c4b6a1c5ce589be41232498f1af86e1b1a2fc2bdffd740e9b39
+</pre></div>
+</div>
+<p>This is the Swarm hash of the address string of your content inside Swarm. It is the same hash that would have been returned by using the :ref:<code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">up</span> <span class="pre">&lt;swarmup&gt;</span></code> command.</p>
+<p>To download a file from Swarm, you just need the file’s Swarm hash. Once you have it, the process is simple. Run:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz:/027e57bcbae76c4b6a1c5ce589be41232498f1af86e1b1a2fc2bdffd740e9b39/
+</pre></div>
+</div>
+<p>The result should be your file:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>some-data
+</pre></div>
+</div>
+<p>And that’s it.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">If you omit the trailing slash from the url then the request will result in a HTTP redirect. The semantically correct way to access the root path of a Swarm manifest is using the trailing slash.</p>
+</div>
+<div class="section" id="tar-stream-upload">
+<h3><a class="toc-backref" href="#id4">4.2.1. Tar stream upload</a><a class="headerlink" href="#tar-stream-upload" title="Permalink to this headline">¶</a></h3>
+<p>Tar is a traditional unix/linux file format for packing a directory structure into a single file. Swarm provides a convenient way of using this format to make it possible to perform recursive uploads using the HTTP API.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span># create two directories with a file in each
+$ mkdir dir1 dir2
+$ echo &quot;some-data&quot; &gt; dir1/file.txt
+$ echo &quot;some-data&quot; &gt; dir2/file.txt
+
+# create a tar archive containing the two directories (this will tar everything in the working directory)
+tar cf files.tar .
+
+# upload the tar archive to Swarm to create a manifest
+$ curl -H &quot;Content-Type: application/x-tar&quot; --data-binary @files.tar http://localhost:8500/bzz:/
+&gt; 1e0e21894d731271e50ea2cecf60801fdc8d0b23ae33b9e808e5789346e3355e
+</pre></div>
+</div>
+<p>You can then download the files using:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz:/1e0e21894d731271e50ea2cecf60801fdc8d0b23ae33b9e808e5789346e3355e/dir1/file.txt
+&gt; some-data
+
+$ curl http://localhost:8500/bzz:/1e0e21894d731271e50ea2cecf60801fdc8d0b23ae33b9e808e5789346e3355e/dir2/file.txt
+&gt; some-data
+</pre></div>
+</div>
+<p>GET requests work the same as before with the added ability to download multiple files by setting <cite>Accept: application/x-tar</cite>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl -s -H &quot;Accept: application/x-tar&quot; http://localhost:8500/bzz:/ccef599d1a13bed9989e424011aed2c023fce25917864cd7de38a761567410b8/ | tar t
+&gt; dir1/file.txt
+  dir2/file.txt
+</pre></div>
+</div>
+</div>
+<div class="section" id="multipart-form-upload">
+<h3><a class="toc-backref" href="#id5">4.2.2. Multipart form upload</a><a class="headerlink" href="#multipart-form-upload" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl -F &#39;dir1/file.txt=some-data;type=text/plain&#39; -F &#39;dir2/file.txt=some-data;type=text/plain&#39; http://localhost:8500/bzz:/
+&gt; 9557bc9bb38d60368f5f07aae289337fcc23b4a03b12bb40a0e3e0689f76c177
+
+$ curl http://localhost:8500/bzz:/9557bc9bb38d60368f5f07aae289337fcc23b4a03b12bb40a0e3e0689f76c177/dir1/file.txt
+&gt; some-data
+
+$ curl http://localhost:8500/bzz:/9557bc9bb38d60368f5f07aae289337fcc23b4a03b12bb40a0e3e0689f76c177/dir2/file.txt
+&gt; some-data
+</pre></div>
+</div>
+</div>
+<div class="section" id="add-files-to-an-existing-manifest-using-multipart-form">
+<h3><a class="toc-backref" href="#id6">4.2.3. Add files to an existing manifest using multipart form</a><a class="headerlink" href="#add-files-to-an-existing-manifest-using-multipart-form" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl -F &#39;dir3/file.txt=some-other-data;type=text/plain&#39; http://localhost:8500/bzz:/9557bc9bb38d60368f5f07aae289337fcc23b4a03b12bb40a0e3e0689f76c177
+&gt; ccef599d1a13bed9989e424011aed2c023fce25917864cd7de38a761567410b8
+
+$ curl http://localhost:8500/bzz:/ccef599d1a13bed9989e424011aed2c023fce25917864cd7de38a761567410b8/dir1/file.txt
+&gt; some-data
+
+$ curl http://localhost:8500/bzz:/ccef599d1a13bed9989e424011aed2c023fce25917864cd7de38a761567410b8/dir3/file.txt
+&gt; some-other-data
+</pre></div>
+</div>
+</div>
+<div class="section" id="upload-files-using-a-simple-html-form">
+<h3><a class="toc-backref" href="#id7">4.2.4. Upload files using a simple HTML form</a><a class="headerlink" href="#upload-files-using-a-simple-html-form" title="Permalink to this headline">¶</a></h3>
+<div class="highlight-html notranslate"><div class="highlight"><pre><span></span><span class="p">&lt;</span><span class="nt">form</span> <span class="na">method</span><span class="o">=</span><span class="s">&quot;POST&quot;</span> <span class="na">action</span><span class="o">=</span><span class="s">&quot;/bzz:/&quot;</span> <span class="na">enctype</span><span class="o">=</span><span class="s">&quot;multipart/form-data&quot;</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">input</span> <span class="na">type</span><span class="o">=</span><span class="s">&quot;file&quot;</span> <span class="na">name</span><span class="o">=</span><span class="s">&quot;dir1/file.txt&quot;</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">input</span> <span class="na">type</span><span class="o">=</span><span class="s">&quot;file&quot;</span> <span class="na">name</span><span class="o">=</span><span class="s">&quot;dir2/file.txt&quot;</span><span class="p">&gt;</span>
+  <span class="p">&lt;</span><span class="nt">input</span> <span class="na">type</span><span class="o">=</span><span class="s">&quot;submit&quot;</span> <span class="na">value</span><span class="o">=</span><span class="s">&quot;upload&quot;</span><span class="p">&gt;</span>
+<span class="p">&lt;/</span><span class="nt">form</span><span class="p">&gt;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="listing-files">
+<h3><a class="toc-backref" href="#id8">4.2.5. Listing files</a><a class="headerlink" href="#listing-files" title="Permalink to this headline">¶</a></h3>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The <code class="docutils literal notranslate"><span class="pre">jq</span></code> command mentioned below is a separate application that can be used to pretty-print the json data retrieved from the <code class="docutils literal notranslate"><span class="pre">curl</span></code> request</p>
+</div>
+<p>A <cite>GET</cite> request with <code class="docutils literal notranslate"><span class="pre">bzz-list</span></code> URL scheme returns a list of files contained under the path, grouped into common prefixes which represent directories:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl -s http://localhost:8500/bzz-list:/ccef599d1a13bed9989e424011aed2c023fce25917864cd7de38a761567410b8/ | jq .
+&gt; {
+   &quot;common_prefixes&quot;: [
+     &quot;dir1/&quot;,
+     &quot;dir2/&quot;,
+     &quot;dir3/&quot;
+   ]
+ }
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl -s http://localhost:8500/bzz-list:/ccef599d1a13bed9989e424011aed2c023fce25917864cd7de38a761567410b8/dir1/ | jq .
+&gt; {
+  &quot;entries&quot;: [
+    {
+      &quot;path&quot;: &quot;dir1/file.txt&quot;,
+      &quot;contentType&quot;: &quot;text/plain&quot;,
+      &quot;size&quot;: 9,
+      &quot;mod_time&quot;: &quot;2017-03-12T15:19:55.112597383Z&quot;,
+      &quot;hash&quot;: &quot;94f78a45c7897957809544aa6d68aa7ad35df695713895953b885aca274bd955&quot;
+    }
+  ]
+}
+</pre></div>
+</div>
+<p>Setting <code class="docutils literal notranslate"><span class="pre">Accept:</span> <span class="pre">text/html</span></code> returns the list as a browsable HTML document.</p>
+</div>
+</div>
+<div class="section" id="using-cli">
+<h2><a class="toc-backref" href="#id9">4.3. Using CLI</a><a class="headerlink" href="#using-cli" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="uploading-a-file-to-your-local-swarm-node">
+<span id="swarmup"></span><h3><a class="toc-backref" href="#id10">4.3.1. Uploading a file to your local Swarm node</a><a class="headerlink" href="#uploading-a-file-to-your-local-swarm-node" title="Permalink to this headline">¶</a></h3>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Once a file is uploaded to your local Swarm node, your node will <cite>sync</cite> the chunks of data with other nodes on the network. Thus, the file will eventually be available on the network even when your original node goes offline.</p>
+</div>
+<p>The basic command for uploading to your local node is <code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">up</span> <span class="pre">FILE</span></code>. For example, let’s create a file called example.md and issue the following command to upload the file example.md file to your local Swarm node.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ echo &quot;this is an example&quot; &gt; example.md
+$ swarm up example.md
+&gt; d1f25a870a7bb7e5d526a7623338e4e9b8399e76df8b634020d11d969594f24a
+</pre></div>
+</div>
+<p>The hash returned is the hash of a <a class="reference internal" href="usage/manifests.html#swarm-manifest"><span class="std std-ref">swarm manifest</span></a>. This manifest is a JSON file that contains the <code class="docutils literal notranslate"><span class="pre">example.md</span></code> file as its only entry. Both the primary content and the manifest are uploaded by default.</p>
+<p>After uploading, you can access this example.md file from Swarm by pointing your browser to:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ http://localhost:8500/bzz:/d1f25a870a7bb7e5d526a7623338e4e9b8399e76df8b634020d11d969594f24a/
+</pre></div>
+</div>
+<p>The manifest makes sure you could retrieve the file with the correct MIME type.</p>
+<p>You can encrypt your file using the <code class="docutils literal notranslate"><span class="pre">--encrypt</span></code> flag. See the <a class="reference internal" href="usage/encryption.html#encryption"><span class="std std-ref">Encryption</span></a> section for details.</p>
+<div class="section" id="suppressing-automatic-manifest-creation">
+<h4><a class="toc-backref" href="#id11">4.3.1.1. Suppressing automatic manifest creation</a><a class="headerlink" href="#suppressing-automatic-manifest-creation" title="Permalink to this headline">¶</a></h4>
+<p>You may wish to prevent a manifest from being created alongside with your content and only upload the raw content. You might want to include it in a custom index, or handle it as a data-blob known and used only by a certain application that knows its MIME type. For this you can set <code class="docutils literal notranslate"><span class="pre">--manifest=false</span></code>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm --manifest=false up FILE
+&gt; 7149075b7f485411e5cc7bb2d9b7c86b3f9f80fb16a3ba84f5dc6654ac3f8ceb
+</pre></div>
+</div>
+<p>This option suppresses automatic manifest upload. It uploads the content as-is.
+However, if you wish to retrieve this file, the browser can not be told unambiguously what that file represents.
+In the context, the hash <code class="docutils literal notranslate"><span class="pre">7149075b7f485411e5cc7bb2d9b7c86b3f9f80fb16a3ba84f5dc6654ac3f8ceb</span></code> does not refer to a manifest. Therefore, any attempt to retrieve it using the <code class="docutils literal notranslate"><span class="pre">bzz:/</span></code> scheme will result in a <code class="docutils literal notranslate"><span class="pre">404</span> <span class="pre">Not</span> <span class="pre">Found</span></code> error. In order to access this file, you would have to use the <a class="reference internal" href="usage/bzz.html#bzz-raw"><span class="std std-ref">bzz-raw</span></a> scheme.</p>
+</div>
+</div>
+<div class="section" id="downloading-a-single-file">
+<h3><a class="toc-backref" href="#id12">4.3.2. Downloading a single file</a><a class="headerlink" href="#downloading-a-single-file" title="Permalink to this headline">¶</a></h3>
+<p>To download single files, use the <code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">down</span></code> command.
+Single files can be downloaded in the following different manners. The following examples assume <code class="docutils literal notranslate"><span class="pre">&lt;hash&gt;</span></code> resolves into a single-file manifest:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm down bzz:/&lt;hash&gt;            #downloads the file at &lt;hash&gt; to the current working directory
+$ swarm down bzz:/&lt;hash&gt; file.tmp   #downloads the file at &lt;hash&gt; as ``file.tmp`` in the current working dir
+$ swarm down bzz:/&lt;hash&gt; dir1/      #downloads the file at &lt;hash&gt; to ``dir1/``
+</pre></div>
+</div>
+<p>You can also specify a custom proxy with <cite>–bzzapi</cite>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm --bzzapi http://localhost:8500 down bzz:/&lt;hash&gt;            #downloads the file at &lt;hash&gt; to the current working directory using the localhost node
+</pre></div>
+</div>
+<p>Downloading a single file from a multi-entry manifest can be done with (<code class="docutils literal notranslate"><span class="pre">&lt;hash&gt;</span></code> resolves into a multi-entry manifest):</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm down bzz:/&lt;hash&gt;/index.html            #downloads index.html to the current working directory
+$ swarm down bzz:/&lt;hash&gt;/index.html file.tmp   #downloads index.html as file.tmp in the current working directory
+$ swarm down bzz:/&lt;hash&gt;/index.html dir1/      #downloads index.html to dir1/
+</pre></div>
+</div>
+<p>..If you try to download from a multi-entry manifest without specifying the file, you will get a <cite>got too many matches for this path</cite> error. You will need to specify a <cite>–recursive</cite> flag (see below).</p>
+</div>
+<div class="section" id="uploading-to-a-remote-swarm-node">
+<h3><a class="toc-backref" href="#id13">4.3.3. Uploading to a remote Swarm node</a><a class="headerlink" href="#uploading-to-a-remote-swarm-node" title="Permalink to this headline">¶</a></h3>
+<p>You can upload to a remote Swarm node using the <code class="docutils literal notranslate"><span class="pre">--bzzapi</span></code> flag.
+For example, you can use one of the public gateways as a proxy, in which case you can upload to Swarm without even running a node.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm --bzzapi https://swarm-gateways.net up example.md
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This gateway currently only accepts uploads of limited size. In future, the ability to upload to this gateways is likely to disappear entirely.</p>
+</div>
+</div>
+<div class="section" id="uploading-a-directory">
+<h3><a class="toc-backref" href="#id14">4.3.4. Uploading a directory</a><a class="headerlink" href="#uploading-a-directory" title="Permalink to this headline">¶</a></h3>
+<p>Uploading directories is achieved with the <code class="docutils literal notranslate"><span class="pre">--recursive</span></code> flag.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm --recursive up /path/to/directory
+&gt; ab90f84c912915c2a300a94ec5bef6fc0747d1fbaf86d769b3eed1c836733a30
+</pre></div>
+</div>
+<p>The returned hash refers to a root manifest referencing all the files in the directory.</p>
+<div class="section" id="directory-with-default-entry">
+<h4><a class="toc-backref" href="#id15">4.3.4.1. Directory with default entry</a><a class="headerlink" href="#directory-with-default-entry" title="Permalink to this headline">¶</a></h4>
+<p>It is possible to declare a default entry in a manifest. In the example above, if <code class="docutils literal notranslate"><span class="pre">index.html</span></code> is declared as the default, then a request for a resource with an empty path will show the contents of the file <code class="docutils literal notranslate"><span class="pre">/index.html</span></code></p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm --defaultpath /path/to/directory/index.html --recursive up /path/to/directory
+&gt; ef6fc0747d1fbaf86d769b3eed1c836733a30ab90f84c912915c2a300a94ec5b
+</pre></div>
+</div>
+<p>You can now access index.html at</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ http://localhost:8500/bzz:/ef6fc0747d1fbaf86d769b3eed1c836733a30ab90f84c912915c2a300a94ec5b/
+</pre></div>
+</div>
+<p>and also at</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ http://localhost:8500/bzz:/ef6fc0747d1fbaf86d769b3eed1c836733a30ab90f84c912915c2a300a94ec5b/index.html
+</pre></div>
+</div>
+<p>This is especially useful when the hash (in this case <code class="docutils literal notranslate"><span class="pre">ef6fc0747d1fbaf86d769b3eed1c836733a30ab90f84c912915c2a300a94ec5b</span></code>) is given a registered name like <code class="docutils literal notranslate"><span class="pre">mysite.eth</span></code> in the <a class="reference external" href="./ens.html">Ethereum Name Service</a>. In this case the lookup would be even simpler:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>http://localhost:8500/bzz:/mysite.eth/
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">You can toggle automatic default entry detection with the <code class="docutils literal notranslate"><span class="pre">SWARM_AUTO_DEFAULTPATH</span></code> environment variable. You can do so by a simple <code class="docutils literal notranslate"><span class="pre">$</span> <span class="pre">export</span> <span class="pre">SWARM_AUTO_DEFAULTPATH=true</span></code>. This will tell Swarm to automatically look for <code class="docutils literal notranslate"><span class="pre">&lt;uploaded</span> <span class="pre">directory&gt;/index.html</span></code> file and set it as the default manifest entry (in the case it exists).</p>
+</div>
+</div>
+</div>
+<div class="section" id="downloading-a-directory">
+<h3><a class="toc-backref" href="#id16">4.3.5. Downloading a directory</a><a class="headerlink" href="#downloading-a-directory" title="Permalink to this headline">¶</a></h3>
+<p>To download a directory, use the <code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">down</span> <span class="pre">--recursive</span></code> command.
+Directories can be downloaded in the following different manners. The following examples assume &lt;hash&gt; resolves into a multi-entry manifest:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm down --recursive bzz:/&lt;hash&gt;            #downloads the directory at &lt;hash&gt; to the current working directory
+$ swarm down --recursive bzz:/&lt;hash&gt; dir1/      #downloads the file at &lt;hash&gt; to dir1/
+</pre></div>
+</div>
+<p>Similarly as with a single file, you can also specify a custom proxy with <code class="docutils literal notranslate"><span class="pre">--bzzapi</span></code>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm --bzzapi http://localhost:8500 down --recursive bzz:/&lt;hash&gt; #note the flag ordering
+</pre></div>
+</div>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last">Watch out for the order of arguments in directory upload/download: it’s <code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">--recursive</span> <span class="pre">up</span></code> and <code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">down</span> <span class="pre">--recursive</span></code>.</p>
+</div>
+</div>
+<div class="section" id="adding-entries-to-a-manifest">
+<h3><a class="toc-backref" href="#id17">4.3.6. Adding entries to a manifest</a><a class="headerlink" href="#adding-entries-to-a-manifest" title="Permalink to this headline">¶</a></h3>
+<p>The command for modifying manifests is <code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">manifest</span></code>.</p>
+<p>To add an entry to a manifest, use the command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm manifest add &lt;manifest-hash&gt; &lt;path&gt; &lt;hash&gt; [content-type]
+</pre></div>
+</div>
+<p>To remove an entry from a manifest, use the command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm manifest remove &lt;manifest-hash&gt; &lt;path&gt;
+</pre></div>
+</div>
+<p>To modify the hash of an entry in a manifest, use the command:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm manifest update &lt;manifest-hash&gt; &lt;path&gt; &lt;new-hash&gt;
+</pre></div>
+</div>
+</div>
+<div class="section" id="reference-table">
+<h3><a class="toc-backref" href="#id18">4.3.7. Reference table</a><a class="headerlink" href="#reference-table" title="Permalink to this headline">¶</a></h3>
+<table border="1" class="docutils">
+<colgroup>
+<col width="37%" />
+<col width="63%" />
+</colgroup>
+<tbody valign="top">
+<tr class="row-odd"><td><strong>upload</strong></td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">up</span> <span class="pre">&lt;file&gt;</span></code></td>
+</tr>
+<tr class="row-even"><td>~ dir</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">--recursive</span> <span class="pre">up</span> <span class="pre">&lt;dir&gt;</span></code></td>
+</tr>
+<tr class="row-odd"><td>~ dir w/ default entry (here: index.html)</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">--defaultpath</span> <span class="pre">&lt;dir&gt;/index.html</span> <span class="pre">--recursive</span> <span class="pre">up</span> <span class="pre">&lt;dir&gt;</span></code></td>
+</tr>
+<tr class="row-even"><td>~ w/o manifest</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">--manifest=false</span> <span class="pre">up</span></code></td>
+</tr>
+<tr class="row-odd"><td>~ to remote node</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">--bzzapi</span> <span class="pre">https://swarm-gateways.net</span> <span class="pre">up</span></code></td>
+</tr>
+<tr class="row-even"><td>~ with encryption</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">up</span> <span class="pre">--encrypt</span></code></td>
+</tr>
+<tr class="row-odd"><td><strong>download</strong></td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">down</span> <span class="pre">bzz:/&lt;hash&gt;</span></code></td>
+</tr>
+<tr class="row-even"><td>~ dir</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">down</span> <span class="pre">--recursive</span> <span class="pre">bzz:/&lt;hash&gt;</span></code></td>
+</tr>
+<tr class="row-odd"><td>~ as file</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">down</span> <span class="pre">bzz:/&lt;hash&gt;</span> <span class="pre">file.tmp</span></code></td>
+</tr>
+<tr class="row-even"><td>~ into dir</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">down</span> <span class="pre">bzz:/&lt;hash&gt;</span> <span class="pre">dir/</span></code></td>
+</tr>
+<tr class="row-odd"><td>~ w/ custom proxy</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">down</span> <span class="pre">--bzzapi</span> <span class="pre">http://&lt;proxy</span> <span class="pre">address&gt;</span> <span class="pre">down</span> <span class="pre">bzz:/&lt;hash&gt;</span></code></td>
+</tr>
+<tr class="row-even"><td><strong>manifest</strong></td>
+<td>&#160;</td>
+</tr>
+<tr class="row-odd"><td>add ~</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">manifest</span> <span class="pre">add</span> <span class="pre">&lt;manifest-hash&gt;</span> <span class="pre">&lt;path&gt;</span> <span class="pre">&lt;hash&gt;</span> <span class="pre">[content-type]</span></code></td>
+</tr>
+<tr class="row-even"><td>remove ~</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">manifest</span> <span class="pre">remove</span> <span class="pre">&lt;manifest-hash&gt;</span> <span class="pre">&lt;path&gt;</span></code></td>
+</tr>
+<tr class="row-odd"><td>update ~</td>
+<td><code class="docutils literal notranslate"><span class="pre">swarm</span> <span class="pre">manifest</span> <span class="pre">update</span> <span class="pre">&lt;manifest-hash&gt;</span> <span class="pre">&lt;path&gt;</span> <span class="pre">&lt;new-hash&gt;</span></code></td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="section" id="up-and-downloading-in-the-cli-example-usage">
+<h3><a class="toc-backref" href="#id19">4.3.8. Up- and downloading in the CLI: example usage</a><a class="headerlink" href="#up-and-downloading-in-the-cli-example-usage" title="Permalink to this headline">¶</a></h3>
+<div class="sphinx-tabs docutils container">
+<div class="ui top attached tabular menu sphinx-menu docutils container">
+<div class="active item sphinx-data-tab-VXAvZG93bmxvYWRpbmc= docutils container">
+<div class="docutils container">
+Up/downloading</div>
+</div>
+<div class="item sphinx-data-tab-VXAvZG93biBhcyBpcw== docutils container">
+<div class="docutils container">
+Up/down as is</div>
+</div>
+<div class="item sphinx-data-tab-TWFuaXB1bGF0ZSBtYW5pZmVzdHM= docutils container">
+<div class="docutils container">
+Manipulate manifests</div>
+</div>
+</div>
+<div class="ui bottom attached sphinx-tab tab segment sphinx-data-tab-VXAvZG93bmxvYWRpbmc= active docutils container">
+<p>Let’s create a dummy file and upload it to Swarm:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ echo &quot;this is a test&quot; &gt; myfile.md
+$ swarm up myfile.md
+&gt; &lt;reference hash&gt;
+</pre></div>
+</div>
+<p>We can download it using the <code class="docutils literal notranslate"><span class="pre">bzz:/</span></code> scheme and give it a name.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm down bzz:/&lt;reference hash&gt; iwantmyfileback.md
+$ cat iwantmyfileback.md
+&gt; this is a test
+</pre></div>
+</div>
+<p>We can also <code class="docutils literal notranslate"><span class="pre">curl</span></code> it using the HTTP API.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz:/&lt;reference hash&gt;/
+&gt; this is a test
+</pre></div>
+</div>
+<p>We can use the <code class="docutils literal notranslate"><span class="pre">bzz-raw</span></code> scheme to see the manifest of the upload.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz-raw:/&lt;reference hash&gt;/
+</pre></div>
+</div>
+<p>This returns the manifest:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>{
+  &quot;entries&quot;: [
+    {
+      &quot;hash&quot;: &quot;&lt;file hash&gt;&quot;,
+      &quot;path&quot;: &quot;myfile.md&quot;,
+      &quot;contentType&quot;: &quot;text/markdown; charset=utf-8&quot;,
+      &quot;mode&quot;: 420,
+      &quot;size&quot;: 15,
+      &quot;mod_time&quot;: &quot;&lt;timestamp&gt;&quot;
+    }
+  ]
+}
+</pre></div>
+</div>
+</div>
+<div class="ui bottom attached sphinx-tab tab segment sphinx-data-tab-VXAvZG93biBhcyBpcw== docutils container">
+<p>We can upload the file as-is:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ echo &quot;this is a test&quot; &gt; myfile.md
+$ swarm --manifest=false up myfile.md
+&gt; &lt;as-is reference hash&gt;
+</pre></div>
+</div>
+<p>We can retrieve it using the <code class="docutils literal notranslate"><span class="pre">bzz-raw</span></code> scheme in the HTTP API.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz-raw:/&lt;as-is reference hash&gt;/
+&gt; this is a test
+</pre></div>
+</div>
+</div>
+<div class="ui bottom attached sphinx-tab tab segment sphinx-data-tab-TWFuaXB1bGF0ZSBtYW5pZmVzdHM= docutils container">
+<p>Let’s create a directory with a dummy file, and upload the directory to swarm.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ mkdir dir
+$ echo &quot;this is a test&quot; &gt; dir/dummyfile.md
+$ swarm --recursive up dir
+&gt; &lt;dir hash&gt;
+</pre></div>
+</div>
+<p>We can look at the manifest using <code class="docutils literal notranslate"><span class="pre">bzz-raw</span></code> and the HTTP API.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz-raw:/&lt;dir hash&gt;/
+</pre></div>
+</div>
+<p>It will look something like this:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>{
+  &quot;entries&quot;: [
+    {
+      &quot;hash&quot;: &quot;&lt;file hash&gt;&quot;,
+      &quot;path&quot;: &quot;dummyfile.md&quot;,
+      &quot;contentType&quot;: &quot;text/markdown; charset=utf-8&quot;,
+      &quot;mode&quot;: 420,
+      &quot;size&quot;: 15,
+      &quot;mod_time&quot;: &quot;2018-11-11T16:52:07+01:00&quot;
+    }
+  ]
+}
+</pre></div>
+</div>
+<p>We can remove the file from the manifest using <code class="docutils literal notranslate"><span class="pre">manifest</span> <span class="pre">remove</span></code>.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm manifest remove &lt;dir hash&gt; &quot;dummyfile.md&quot;
+&gt; &lt;new dir hash&gt;
+</pre></div>
+</div>
+<p>When we check the new dir hash, we notice that it’s empty – as it should be.</p>
+<p>Let’s put the file back in there.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ swarm up dir/dummyfile.md
+&gt; &lt;individual file hash&gt;
+$ swarm manifest add &lt;new dir hash&gt; &quot;dummyfileagain.md&quot; &lt;individual file hash&gt;
+&gt; &lt;new dir hash 2&gt;
+</pre></div>
+</div>
+<p>We can check the manifest under &lt;new dir hash 2&gt; to see that the file is back there.</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="usage.html" class="btn btn-neutral float-right" title="5. Working with content" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="gettingstarted.html" class="btn btn-neutral" title="3. Getting started" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Ethersphere
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script type="text/javascript" src="_static/sphinx_tabs/tabs.js"></script>
+        <script type="text/javascript" src="_static/sphinx_tabs/semantic-ui-2.2.10/tab.min.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+
+  
+
+  <script type="text/javascript" src="_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

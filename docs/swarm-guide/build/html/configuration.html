@@ -1,0 +1,506 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>8. Configuration &mdash; Swarm 0.3 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="9. Architecture" href="architecture.html" />
+    <link rel="prev" title="7. API reference" href="apireference.html" /> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> Swarm
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">1. Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">2. Installation and Updates</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gettingstarted.html">3. Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="up-and-download.html">4. Uploading and downloading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">5. Working with content</a></li>
+<li class="toctree-l1"><a class="reference internal" href="pss.html">6. PSS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="apireference.html">7. API reference</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">8. Configuration</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#command-line-options-for-swarm">8.1. Command line options for swarm</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#config-file">8.2. Config File</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#general-configuration-parameters">8.3. General configuration parameters</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">9. Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">10. Resources</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Swarm</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>8. Configuration</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/configuration.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="configuration">
+<h1>8. Configuration<a class="headerlink" href="#configuration" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="command-line-options-for-swarm">
+<span id="id1"></span><h2>8.1. Command line options for swarm<a class="headerlink" href="#command-line-options-for-swarm" title="Permalink to this headline">¶</a></h2>
+<p>The <code class="docutils literal notranslate"><span class="pre">swarm</span></code> executable supports the following configuration options:</p>
+<ul class="simple">
+<li>Configuration file</li>
+<li>Environment variables</li>
+<li>Command line</li>
+</ul>
+<p>Options provided via command line override options from the environment variables, which will override options in the config file. If an option is not explicitly provided, a default will be chosen.</p>
+<p>In order to keep the set of flags and variables manageable, only a subset of all available configuration options are available via command line and environment variables. Some are only available through a TOML configuration file.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">Swarm reuses code from ethereum, specifically some p2p networking protocol and other common parts. To this end, it accepts a number of environment variables which are actually from the <code class="docutils literal notranslate"><span class="pre">geth</span></code> environment. Refer to the geth documentation for reference on these flags.</p>
+</div>
+<p>This is the list of flags inherited from <code class="docutils literal notranslate"><span class="pre">geth</span></code>:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>--identity
+--bootnodes
+--datadir
+--keystore
+--port
+--nodiscover
+--v5disc
+--netrestrict
+--nodekey
+--nodekeyhex
+--maxpeers
+--nat
+--ipcdisable
+--ipcpath
+--password
+</pre></div>
+</div>
+</div>
+<div class="section" id="config-file">
+<h2>8.2. Config File<a class="headerlink" href="#config-file" title="Permalink to this headline">¶</a></h2>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><code class="docutils literal notranslate"><span class="pre">swarm</span></code> can be executed with the <code class="docutils literal notranslate"><span class="pre">dumpconfig</span></code> command, which prints a default configuration to STDOUT, and thus can be redirected to a file as a template for the config file.</p>
+</div>
+<p>A TOML configuration file is organized in sections. The below list of available configuration options is organized according to these sections. The sections correspond to <cite>Go</cite> modules, so need to be respected in order for file configuration to work properly. See <a class="reference external" href="https://github.com/naoina/toml">https://github.com/naoina/toml</a> for the TOML parser and encoder library for Golang, and <a class="reference external" href="https://github.com/toml-lang/toml">https://github.com/toml-lang/toml</a> for further information on TOML.</p>
+<p>To run Swarm with a config file, use:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span>$ swarm --config /path/to/config/file.toml
+</pre></div>
+</div>
+</div>
+<div class="section" id="general-configuration-parameters">
+<h2>8.3. General configuration parameters<a class="headerlink" href="#general-configuration-parameters" title="Permalink to this headline">¶</a></h2>
+<table border="1" class="colwidths-given docutils">
+<colgroup>
+<col width="11%" />
+<col width="6%" />
+<col width="6%" />
+<col width="17%" />
+<col width="61%" />
+</colgroup>
+<thead valign="bottom">
+<tr class="row-odd"><th class="head">Config file</th>
+<th class="head">Command-line flag</th>
+<th class="head">Environment variable</th>
+<th class="head">Default value</th>
+<th class="head">Description</th>
+</tr>
+</thead>
+<tbody valign="top">
+<tr class="row-even"><td>n/a</td>
+<td>–config</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>Path to config file in TOML format</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–bzzapi</td>
+<td>n/a</td>
+<td><a class="reference external" href="http://127.0.0.1:8500">http://127.0.0.1:8500</a></td>
+<td>Swarm HTTP endpoint</td>
+</tr>
+<tr class="row-even"><td>BootNodes</td>
+<td>–bootnodes</td>
+<td>SWARM_BOOTNODES</td>
+<td>&#160;</td>
+<td>Boot nodes</td>
+</tr>
+<tr class="row-odd"><td>BzzAccount</td>
+<td>–bzzaccount</td>
+<td>SWARM_ACCOUNT</td>
+<td>&#160;</td>
+<td>Swarm account key</td>
+</tr>
+<tr class="row-even"><td>BzzKey</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>Swarm node base address (<span class="math notranslate nohighlight">\(hash(PublicKey)hash(PublicKey))\)</span>. This is used to decide storage based on radius and routing by kademlia.</td>
+</tr>
+<tr class="row-odd"><td>Contract</td>
+<td>–chequebook</td>
+<td>SWARM_CHEQUEBOOK_ADDR</td>
+<td>0x0</td>
+<td>Swap chequebook contract address</td>
+</tr>
+<tr class="row-even"><td>Cors</td>
+<td>–corsdomain</td>
+<td>SWARM_CORS</td>
+<td>&#160;</td>
+<td>Domain on which to send Access-Control-Allow-Origin header (multiple domains can be supplied separated by a ‘,’)</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–debug</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>Prepends log messages with call-site location (file and line number)</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>–defaultpath</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>path to file served for empty url path (none)</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–delivery-skip-check</td>
+<td>SWARM_DELIVERY_SKIP_CHECK</td>
+<td>false</td>
+<td>Skip chunk delivery check (default false)</td>
+</tr>
+<tr class="row-even"><td>EnsApi</td>
+<td>–ens-api</td>
+<td>SWARM_ENS_API</td>
+<td>&lt;$GETH_DATADIR&gt;/geth.ipc</td>
+<td>Ethereum Name Service API address</td>
+</tr>
+<tr class="row-odd"><td>EnsRoot</td>
+<td>–ens-addr</td>
+<td>SWARM_ENS_ADDR</td>
+<td>ens.TestNetAddress</td>
+<td>Ethereum Name Service contract address</td>
+</tr>
+<tr class="row-even"><td>ListenAddr</td>
+<td>–httpaddr</td>
+<td>SWARM_LISTEN_ADDR</td>
+<td>127.0.0.1</td>
+<td>Swarm listen address</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–manifest value</td>
+<td>n/a</td>
+<td>true</td>
+<td>Automatic manifest upload (default true)</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>–mime value</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>Force mime type on upload</td>
+</tr>
+<tr class="row-odd"><td>NetworkId</td>
+<td>–bzznetworkid</td>
+<td>SWARM_NETWORK_ID</td>
+<td>3</td>
+<td>Network ID</td>
+</tr>
+<tr class="row-even"><td>Path</td>
+<td>–datadir</td>
+<td>GETH_DATADIR</td>
+<td>&lt;$GETH_DATADIR&gt;/swarm</td>
+<td>Path to the geth configuration directory</td>
+</tr>
+<tr class="row-odd"><td>Port</td>
+<td>–bzzport</td>
+<td>SWARM_PORT</td>
+<td>8500</td>
+<td>Port to run the http proxy server</td>
+</tr>
+<tr class="row-even"><td>PublicKey</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>Public key of swarm base account</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–recursive</td>
+<td>n/a</td>
+<td>false</td>
+<td>Upload directories recursively (default false)</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>–stdin</td>
+<td>&#160;</td>
+<td>n/a</td>
+<td>Reads data to be uploaded from stdin</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–store.path value</td>
+<td>SWARM_STORE_PATH</td>
+<td>&lt;$GETH_ENV_DIR&gt;/swarm/bzz-&lt;$BZZ_KEY&gt;/chunks</td>
+<td>Path to leveldb chunk DB</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>–store.size value</td>
+<td>SWARM_STORE_CAPACITY</td>
+<td>5000000</td>
+<td>Number of chunks (5M is roughly 20-25GB) (default 5000000)]</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–store.cache.size value</td>
+<td>SWARM_STORE_CACHE_CAPACITY</td>
+<td>5000</td>
+<td>Number of recent chunks cached in memory (default 5000)</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>–sync-update-delay value</td>
+<td>SWARM_ENV_SYNC_UPDATE_DELAY</td>
+<td>&#160;</td>
+<td>Duration for sync subscriptions update after no new peers are added (default 15s)</td>
+</tr>
+<tr class="row-odd"><td>SwapApi</td>
+<td>–swap-api</td>
+<td>SWARM_SWAP_API</td>
+<td>&#160;</td>
+<td>URL of the Ethereum API provider to use to settle SWAP payments</td>
+</tr>
+<tr class="row-even"><td>SwapEnabled</td>
+<td>–swap</td>
+<td>SWARM_SWAP_ENABLE</td>
+<td>false</td>
+<td>Enable SWAP</td>
+</tr>
+<tr class="row-odd"><td>SyncDisabled</td>
+<td>–nosync</td>
+<td>SWARM_ENV_SYNC_DISABLE</td>
+<td>false</td>
+<td>Disable Swarm node synchronization</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>–verbosity value</td>
+<td>n/a</td>
+<td>3</td>
+<td>Logging verbosity: 0=silent, 1=error, 2=warn, 3=info, 4=debug, 5=detail</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–ws</td>
+<td>n/a</td>
+<td>false</td>
+<td>Enable the WS-RPC server</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>–wsaddr value</td>
+<td>n/a</td>
+<td>localhost</td>
+<td>WS-RPC server listening interface</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–wsport value</td>
+<td>n/a</td>
+<td>8546</td>
+<td>WS-RPC server listening port</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>–wsapi value</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>API’s offered over the WS-RPC interface</td>
+</tr>
+<tr class="row-odd"><td>n/a</td>
+<td>–wsorigins value</td>
+<td>n/a</td>
+<td>n/a</td>
+<td>Origins from which to accept websockets requests</td>
+</tr>
+<tr class="row-even"><td>n/a</td>
+<td>n/a</td>
+<td>SWARM_AUTO_DEFAULTPATH</td>
+<td>false</td>
+<td>Toggle automatic manifest default path on recursive uploads (looks for index.html)</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="architecture.html" class="btn btn-neutral float-right" title="9. Architecture" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="apireference.html" class="btn btn-neutral" title="7. API reference" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Ethersphere
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+
+  
+
+  <script type="text/javascript" src="_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

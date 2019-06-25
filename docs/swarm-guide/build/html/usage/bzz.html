@@ -1,0 +1,387 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>BZZ URL schemes &mdash; Swarm 0.3 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="../_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="../_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" /> 
+
+  
+  <script src="../_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="../index.html" class="icon icon-home"> Swarm
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="../search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="../introduction.html">1. Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../installation.html">2. Installation and Updates</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../gettingstarted.html">3. Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../up-and-download.html">4. Uploading and downloading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../usage.html">5. Working with content</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../pss.html">6. PSS</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../apireference.html">7. API reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../configuration.html">8. Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../architecture.html">9. Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../resources.html">10. Resources</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="../index.html">Swarm</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="../index.html">Docs</a> &raquo;</li>
+        
+      <li>BZZ URL schemes</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="../_sources/usage/bzz.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="bzz-url-schemes">
+<span id="id1"></span><h1>BZZ URL schemes<a class="headerlink" href="#bzz-url-schemes" title="Permalink to this headline">¶</a></h1>
+<p>Swarm offers 6 distinct URL schemes:</p>
+<div class="section" id="bzz">
+<h2>bzz<a class="headerlink" href="#bzz" title="Permalink to this headline">¶</a></h2>
+<p>The bzz scheme assumes that the domain part of the url points to a manifest. When retrieving the asset addressed by the URL, the manifest entries are matched against the URL path. The entry with the longest matching path is retrieved and served with the content type specified in the corresponding manifest entry.</p>
+<p>Example:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>GET http://localhost:8500/bzz:/2477cc8584cc61091b5cc084cdcdb45bf3c6210c263b0143f030cf7d750e894d/readme.md
+</pre></div>
+</div>
+<p>returns a readme.md file if the manifest at the given hash address contains such an entry.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ ls
+readme.md
+$ swarm --recursive up .
+c4c81dbce3835846e47a83df549e4cad399c6a81cbf83234274b87d49f5f9020
+$ curl http://localhost:8500/bzz-raw:/c4c81dbce3835846e47a83df549e4cad399c6a81cbf83234274b87d49f5f9020/readme.md
+## Hello Swarm!
+
+Swarm is awesome%
+</pre></div>
+</div>
+<p>If the manifest does not contain an file at <code class="docutils literal notranslate"><span class="pre">readme.md</span></code> itself, but it does contain multiple entries to which the URL could be resolved, e.g. in the example above, the manifest has entries for <code class="docutils literal notranslate"><span class="pre">readme.md.1</span></code> and <code class="docutils literal notranslate"><span class="pre">readme.md.2</span></code>, the API returns an HTTP response “300 Multiple Choices”, indicating that the request could not be unambiguously resolved. A list of available entries is returned via HTTP or JSON.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ ls
+readme.md.1 readme.md.2
+$ swarm --recursive up .
+679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463
+$ curl -H &quot;Accept:application/json&quot; http://localhost:8500/bzz:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/readme.md
+{&quot;Msg&quot;:&quot;\u003ca href=&#39;/bzz:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/readme.md.1&#39;\u003ereadme.md.1\u003c/a\u003e\u003cbr/\u003e\u003ca href=&#39;/bzz:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/readme.md.2&#39;\u003ereadme.md.2\u003c/a\u003e\u003cbr/\u003e&quot;,&quot;Code&quot;:300,&quot;Timestamp&quot;:&quot;Fri, 15 Jun 2018 14:48:42 CEST&quot;,&quot;Details&quot;:&quot;&quot;}
+$ curl -H &quot;Accept:application/json&quot; http://localhost:8500/bzz:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/readme.md | jq
+{
+    &quot;Msg&quot;: &quot;&lt;a href=&#39;/bzz:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/readme.md.1&#39;&gt;readme.md.1&lt;/a&gt;&lt;br/&gt;&lt;a href=&#39;/bzz:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/readme.md.2&#39;&gt;readme.md.2&lt;/a&gt;&lt;br/&gt;&quot;,
+    &quot;Code&quot;: 300,
+    &quot;Timestamp&quot;: &quot;Fri, 15 Jun 2018 14:49:02 CEST&quot;,
+    &quot;Details&quot;: &quot;&quot;
+}
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">bzz</span></code> scheme also accepts POST requests to upload content and create manifest for them in one go:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl -H &quot;Content-Type: text/plain&quot; --data-binary &quot;some-data&quot; http://localhost:8500/bzz:/
+635d13a547d3252839e9e68ac6446b58ae974f4f59648fe063b07c248494c7b2%
+$ curl http://localhost:8500/bzz:/635d13a547d3252839e9e68ac6446b58ae974f4f59648fe063b07c248494c7b2/
+some-data%
+$ curl -H &quot;Accept:application/json&quot; http://localhost:8500/bzz-raw:/635d13a547d3252839e9e68ac6446b58ae974f4f59648fe063b07c248494c7b2/ | jq .
+{
+    &quot;entries&quot;: [
+        {
+            &quot;hash&quot;: &quot;379f234c04ed1a18722e4c76b5029ff6e21867186c4dfc101be4f1dd9a879d98&quot;,
+            &quot;contentType&quot;: &quot;text/plain&quot;,
+            &quot;mode&quot;: 420,
+            &quot;size&quot;: 9,
+            &quot;mod_time&quot;: &quot;2018-06-15T15:46:28.835066044+02:00&quot;
+        }
+    ]
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="bzz-raw">
+<span id="id2"></span><h2>bzz-raw<a class="headerlink" href="#bzz-raw" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>GET http://localhost:8500/bzz-raw:/2477cc8584cc61091b5cc084cdcdb45bf3c6210c263b0143f030cf7d750e894d
+</pre></div>
+</div>
+<p>When responding to GET requests with the bzz-raw scheme, Swarm does not assume that the hash resolves to a manifest. Instead it just serves the asset referenced by the hash directly. So if the hash actually resolves to a manifest, it returns the raw manifest content itself.</p>
+<p>E.g. continuing the example in the <code class="docutils literal notranslate"><span class="pre">bzz</span></code> section above with <code class="docutils literal notranslate"><span class="pre">readme.md.1</span></code> and <code class="docutils literal notranslate"><span class="pre">readme.md.2</span></code> in the manifest:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz-raw:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/ | jq
+{
+    &quot;entries&quot;: [
+        {
+        &quot;hash&quot;: &quot;efc6d4a7d7f0846973a321d1702c0c478a20f72519516ef230b63baa3da18c22&quot;,
+        &quot;path&quot;: &quot;readme.md.&quot;,
+        &quot;contentType&quot;: &quot;application/bzz-manifest+json&quot;,
+        &quot;mod_time&quot;: &quot;0001-01-01T00:00:00Z&quot;
+        }
+    ]
+    }
+$ curl http://localhost:8500/bzz-raw:/efc6d4a7d7f0846973a321d1702c0c478a20f72519516ef230b63baa3da18c22/ | jq
+{
+    &quot;entries&quot;: [
+        {
+            &quot;hash&quot;: &quot;d0675100bc4580a0ad890b5d6f06310c0705d4ab1e796cfa1a8c597840f9793f&quot;,
+            &quot;path&quot;: &quot;1&quot;,
+            &quot;mode&quot;: 420,
+            &quot;size&quot;: 33,
+            &quot;mod_time&quot;: &quot;2018-06-15T14:21:32+02:00&quot;
+        },
+        {
+            &quot;hash&quot;: &quot;f97cf36ac0dd7178c098f3661cd0402fcc711ff62b67df9893d29f1db35adac6&quot;,
+            &quot;path&quot;: &quot;2&quot;,
+            &quot;mode&quot;: 420,
+            &quot;size&quot;: 35,
+            &quot;mod_time&quot;: &quot;2018-06-15T14:42:06+02:00&quot;
+        }
+    ]
+    }
+</pre></div>
+</div>
+<p>The <code class="docutils literal notranslate"><span class="pre">content_type</span></code> query parameter can be supplied to specify the MIME type you are requesting, otherwise content is served as an octet-stream per default. For instance if you have a pdf document (not the manifest wrapping it) at hash <code class="docutils literal notranslate"><span class="pre">6a182226...</span></code> then the following url will properly serve it.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>GET http://localhost:8500/bzz-raw:/6a18222637cafb4ce692fa11df886a03e6d5e63432c53cbf7846970aa3e6fdf5?content_type=application/pdf
+</pre></div>
+</div>
+<p><code class="docutils literal notranslate"><span class="pre">bzz-raw</span></code> also supports POST requests to upload content to Swarm, the response is the hash of the uploaded content:</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl --data-binary &quot;some-data&quot; http://localhost:8500/bzz-raw:/
+379f234c04ed1a18722e4c76b5029ff6e21867186c4dfc101be4f1dd9a879d98%
+$ curl http://localhost:8500/bzz-raw:/379f234c04ed1a18722e4c76b5029ff6e21867186c4dfc101be4f1dd9a879d98/
+some-data%
+</pre></div>
+</div>
+</div>
+<div class="section" id="bzz-list">
+<h2>bzz-list<a class="headerlink" href="#bzz-list" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>GET http://localhost:8500/bzz-list:/2477cc8584cc61091b5cc084cdcdb45bf3c6210c263b0143f030cf7d750e894d/path
+</pre></div>
+</div>
+<p>Returns a list of all files contained in &lt;manifest&gt; under &lt;path&gt; grouped into common prefixes using <code class="docutils literal notranslate"><span class="pre">/</span></code> as a delimiter. If no path is supplied, all files in manifest are returned. The response is a JSON-encoded object with <code class="docutils literal notranslate"><span class="pre">common_prefixes</span></code> string field and <code class="docutils literal notranslate"><span class="pre">entries</span></code> list field.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz-list:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/ | jq
+{
+    &quot;entries&quot;: [
+        {
+            &quot;hash&quot;: &quot;d0675100bc4580a0ad890b5d6f06310c0705d4ab1e796cfa1a8c597840f9793f&quot;,
+            &quot;path&quot;: &quot;readme.md.1&quot;,
+            &quot;mode&quot;: 420,
+            &quot;size&quot;: 33,
+            &quot;mod_time&quot;: &quot;2018-06-15T14:21:32+02:00&quot;
+        },
+        {
+            &quot;hash&quot;: &quot;f97cf36ac0dd7178c098f3661cd0402fcc711ff62b67df9893d29f1db35adac6&quot;,
+            &quot;path&quot;: &quot;readme.md.2&quot;,
+            &quot;mode&quot;: 420,
+            &quot;size&quot;: 35,
+            &quot;mod_time&quot;: &quot;2018-06-15T14:42:06+02:00&quot;
+        }
+    ]
+    }
+</pre></div>
+</div>
+</div>
+<div class="section" id="bzz-hash">
+<h2>bzz-hash<a class="headerlink" href="#bzz-hash" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>GET http://localhost:8500/bzz-hash:/theswarm.eth/
+</pre></div>
+</div>
+<p>Swarm accepts GET requests for bzz-hash url scheme and responds with the hash value of the raw content, the same content returned by requests with bzz-raw scheme. Hash of the manifest is also the hash stored in ENS so bzz-hash can be used for ENS domain resolution.</p>
+<p>Response content type is <em>text/plain</em>.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz-hash:/theswarm.eth/
+7a90587bfc04ac4c64aeb1a96bc84f053d3d84cefc79012c9a07dd5230dc1fa4%
+</pre></div>
+</div>
+</div>
+<div class="section" id="bzz-immutable">
+<h2>bzz-immutable<a class="headerlink" href="#bzz-immutable" title="Permalink to this headline">¶</a></h2>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>GET http://localhost:8500/bzz-immutable:/2477cc8584cc61091b5cc084cdcdb45bf3c6210c263b0143f030cf7d750e894d
+</pre></div>
+</div>
+<p>The same as the generic scheme but there is no ENS domain resolution, the domain part of the path needs to be a valid hash. This is also a read-only scheme but explicit in its integrity protection. A particular bzz-immutable url will always necessarily address the exact same fixed immutable content.</p>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>$ curl http://localhost:8500/bzz-immutable:/679bde3ccb6fb911db96a0ea1586c04899c6c0cc6d3426e9ee361137b270a463/readme.md.1
+## Hello Swarm!
+
+Swarm is awesome%
+$ curl -H &quot;Accept:application/json&quot; http://localhost:8500/bzz-immutable:/theswarm.eth/ | jq .
+{
+    &quot;Msg&quot;: &quot;cannot resolve theswarm.eth: immutable address not a content hash: \&quot;theswarm.eth\&quot;&quot;,
+    &quot;Code&quot;: 404,
+    &quot;Timestamp&quot;: &quot;Fri, 15 Jun 2018 13:22:27 UTC&quot;,
+    &quot;Details&quot;: &quot;&quot;
+}
+</pre></div>
+</div>
+</div>
+<div class="section" id="bzz-resource">
+<h2>bzz-resource<a class="headerlink" href="#bzz-resource" title="Permalink to this headline">¶</a></h2>
+<p><code class="docutils literal notranslate"><span class="pre">bzz-resource</span></code> allows you to receive hash pointers to content that the ENS entry resolved to at different versions</p>
+<p>bzz-resource://&lt;id&gt; - get latest update
+bzz-resource://&lt;id&gt;/&lt;n&gt; - get latest update on period n
+bzz-resource://&lt;id&gt;/&lt;n&gt;/&lt;m&gt; - get update version m of period n
+&lt;id&gt; = ens name</p>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Ethersphere
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+        <script type="text/javascript" src="../_static/jquery.js"></script>
+        <script type="text/javascript" src="../_static/underscore.js"></script>
+        <script type="text/javascript" src="../_static/doctools.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+
+  
+
+  <script type="text/javascript" src="../_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>

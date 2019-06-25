@@ -1,0 +1,344 @@
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>6. PSS &mdash; Swarm 0.3 documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/theme_overrides.css" type="text/css" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="7. API reference" href="apireference.html" />
+    <link rel="prev" title="5. Working with content" href="usage.html" /> 
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+</head>
+
+<body class="wy-body-for-nav">
+
+   
+  <div class="wy-grid-for-nav">
+
+    
+    <nav data-toggle="wy-nav-shift" class="wy-nav-side">
+      <div class="wy-side-scroll">
+        <div class="wy-side-nav-search">
+          
+
+          
+            <a href="index.html" class="icon icon-home"> Swarm
+          
+
+          
+          </a>
+
+          
+            
+            
+              <div class="version">
+                0.3
+              </div>
+            
+          
+
+          
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+          
+        </div>
+
+        <div class="wy-menu wy-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          
+            
+            
+              
+            
+            
+              <ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="introduction.html">1. Introduction</a></li>
+<li class="toctree-l1"><a class="reference internal" href="installation.html">2. Installation and Updates</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gettingstarted.html">3. Getting started</a></li>
+<li class="toctree-l1"><a class="reference internal" href="up-and-download.html">4. Uploading and downloading</a></li>
+<li class="toctree-l1"><a class="reference internal" href="usage.html">5. Working with content</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">6. PSS</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#basics">6.1. Basics</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#privacy-features">6.1.1. Privacy features</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#usage">6.2. Usage</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#registering-a-recipient">6.2.1. Registering a recipient</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sending-a-message">6.2.2. Sending a message</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#sending-a-raw-message">6.2.3. Sending a raw message</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#receiving-messages">6.2.4. Receiving messages</a></li>
+</ul>
+</li>
+<li class="toctree-l2"><a class="reference internal" href="#advanced-features">6.3. Advanced features</a><ul>
+<li class="toctree-l3"><a class="reference internal" href="#handshakes">6.3.1. Handshakes</a></li>
+<li class="toctree-l3"><a class="reference internal" href="#protocols">6.3.2. Protocols</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="apireference.html">7. API reference</a></li>
+<li class="toctree-l1"><a class="reference internal" href="configuration.html">8. Configuration</a></li>
+<li class="toctree-l1"><a class="reference internal" href="architecture.html">9. Architecture</a></li>
+<li class="toctree-l1"><a class="reference internal" href="resources.html">10. Resources</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <section data-toggle="wy-nav-shift" class="wy-nav-content-wrap">
+
+      
+      <nav class="wy-nav-top" aria-label="top navigation">
+        
+          <i data-toggle="wy-nav-top" class="fa fa-bars"></i>
+          <a href="index.html">Swarm</a>
+        
+      </nav>
+
+
+      <div class="wy-nav-content">
+        
+        <div class="rst-content">
+        
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="wy-breadcrumbs">
+    
+      <li><a href="index.html">Docs</a> &raquo;</li>
+        
+      <li>6. PSS</li>
+    
+    
+      <li class="wy-breadcrumbs-aside">
+        
+            
+            <a href="_sources/pss.rst.txt" rel="nofollow"> View page source</a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+  <hr/>
+</div>
+          <div role="main" class="document" itemscope="itemscope" itemtype="http://schema.org/Article">
+           <div itemprop="articleBody">
+            
+  <div class="section" id="pss">
+<h1>6. PSS<a class="headerlink" href="#pss" title="Permalink to this headline">¶</a></h1>
+<p><em class="dfn">pss</em> (Postal Service over Swarm) is a messaging protocol over Swarm with strong privacy features.
+The pss API is exposed through a JSON RPC interface described in the <a class="reference external" href="./apireference.rst#PSS">API Reference</a>,
+here we explain the basic concepts and features.</p>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last"><code class="docutils literal notranslate"><span class="pre">pss</span></code> is still an experimental feature and under active development and is available as of POC3 of Swarm. Expect things to change.</p>
+</div>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">There is no CLI support for <code class="docutils literal notranslate"><span class="pre">pss</span></code>.</p>
+</div>
+<div class="section" id="basics">
+<h2>6.1. Basics<a class="headerlink" href="#basics" title="Permalink to this headline">¶</a></h2>
+<p>With <code class="docutils literal notranslate"><span class="pre">pss</span></code> you can send messages to any node in the Swarm network. The messages are routed in the same manner as retrieve requests for chunks. Instead of chunk hash reference, <code class="docutils literal notranslate"><span class="pre">pss</span></code> messages specify a destination in the overlay address space independently of the message payload. This destination can describe a <em>specific node</em> if it is a complete overlay address or a <em>neighbourhood</em> if it is partially specified one. Up to the destination, the message is relayed through devp2p peer connections using <em class="dfn">forwarding kademlia</em> (passing messages via semi-permanent peer-to-peer TCP connections between relaying nodes using kademlia routing). Within the destination neighbourhood the message is broadcast using gossip.</p>
+<p>Since <code class="docutils literal notranslate"><span class="pre">pss</span></code> messages are encrypted, ultimately <em>the recipient is whoever can decrypt the message</em>. Encryption can be done using asymmetric or symmetric encryption methods.</p>
+<p>The message payload is dispatched to <em>message handlers</em> by the recipient nodes and dispatched to subscribers via the API.</p>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last"><code class="docutils literal notranslate"><span class="pre">pss</span></code> does not guarantee message ordering (<a class="reference external" href="https://en.wikipedia.org/wiki/Best-effort_delivery">Best-effort delivery</a>)
+nor message delivery (e.g. messages to offline nodes will not be cached and replayed) at the moment.</p>
+</div>
+<div class="section" id="privacy-features">
+<h3>6.1.1. Privacy features<a class="headerlink" href="#privacy-features" title="Permalink to this headline">¶</a></h3>
+<p>Thanks to end-to-end encryption, pss caters for private communication.</p>
+<p>Due to forwarding kademlia, <code class="docutils literal notranslate"><span class="pre">pss</span></code> offers sender anonymity.</p>
+<p>Using partial addressing, <code class="docutils literal notranslate"><span class="pre">pss</span></code> offers a sliding scale of recipient anonymity: the larger the destination neighbourhood (the smaller prefix you reveal of the intended recipient overlay address), the more difficult it is to identify the real recipient. On the other hand, since dark routing is inefficient, there is a trade-off between anonymity on the one hand and message delivery latency and bandwidth (and therefore cost) on the other. This choice is left to the application.</p>
+<p>Forward secrecy is provided if you use the <cite>Handshakes</cite> module.</p>
+</div>
+</div>
+<div class="section" id="usage">
+<h2>6.2. Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h2>
+<p>See the <a class="reference external" href="./apireference.rst#PSS">API Reference</a> for details.</p>
+<div class="section" id="registering-a-recipient">
+<h3>6.2.1. Registering a recipient<a class="headerlink" href="#registering-a-recipient" title="Permalink to this headline">¶</a></h3>
+<p>Intended recipients first need to be registered with the node. This registration includes the following data:</p>
+<ol class="arabic">
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">Encryption</span> <span class="pre">key</span></code> - can be a ECDSA public key for asymmetric encryption or a 32 byte symmetric key.</p>
+</li>
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">Topic</span></code> - an arbitrary 4 byte word.</p>
+</li>
+<li><p class="first"><code class="docutils literal notranslate"><span class="pre">Address</span></code>- destination (fully or partially specified Swarm overlay address) to use for deterministic routing.</p>
+<p>The registration returns a key id which is used to refer to the stored key in subsequent operations.</p>
+</li>
+</ol>
+<p>After you associate an encryption key with an address they will be checked against any message that comes through (when sending or receiving) given it matches the topic and the destination of the message.</p>
+</div>
+<div class="section" id="sending-a-message">
+<h3>6.2.2. Sending a message<a class="headerlink" href="#sending-a-message" title="Permalink to this headline">¶</a></h3>
+<p>There are a few prerequisites for sending a message over <code class="docutils literal notranslate"><span class="pre">pss</span></code>:</p>
+<ol class="arabic simple">
+<li><code class="docutils literal notranslate"><span class="pre">Encryption</span> <span class="pre">key</span> <span class="pre">id</span></code> - id of the stored recipient’s encryption key.</li>
+<li><code class="docutils literal notranslate"><span class="pre">Topic</span></code> - an arbitrary 4 byte word (with the exception of <code class="docutils literal notranslate"><span class="pre">0x0000</span></code> to be reserved for <code class="docutils literal notranslate"><span class="pre">raw</span></code> messages).</li>
+<li><code class="docutils literal notranslate"><span class="pre">Message</span> <span class="pre">payload</span></code> - the message data as an arbitrary byte sequence.</li>
+</ol>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">The Address that is coupled with the encryption key is used for routing the message.
+This does <em>not</em> need to be a full address; the network will route the message to the best
+of its ability with the information that is available.
+If <em>no</em> address is given (zero-length byte slice), routing is effectively deactivated,
+and the message is passed to all peers by all peers.</p>
+</div>
+<p>Upon sending the message it is encrypted and passed on from peer to peer. Any node along the route that can successfully decrypt the message is regarded as a recipient. If the destination is a neighbourhood, the message is passed around so ultimately it reaches the intended recipient which also forwards the message to their peers, recipients will continue to pass on the message to their peers, to make it harder for anyone spying on the traffic to tell where the message “ended up.”</p>
+<p>After you associate an encryption key with a destination they will be checked against any message that comes through (when sending or receiving) given it matches the topic and the address in the message.</p>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last">When using the internal encryption methods, you MUST associate keys (whether symmetric or asymmetric) with an address space AND a topic before you will be able to send anything.</p>
+</div>
+</div>
+<div class="section" id="sending-a-raw-message">
+<h3>6.2.3. Sending a raw message<a class="headerlink" href="#sending-a-raw-message" title="Permalink to this headline">¶</a></h3>
+<p>It is also possible to send a message without using the builtin encryption. In this case no recipient registration is made, but the message is sent directly, with the following input data:</p>
+<ol class="arabic simple">
+<li><code class="docutils literal notranslate"><span class="pre">Message</span> <span class="pre">payload</span></code> - the message data as an arbitrary byte sequence.</li>
+<li><code class="docutils literal notranslate"><span class="pre">Address</span></code>- the Swarm overlay address to use for the routing.</li>
+</ol>
+</div>
+<div class="section" id="receiving-messages">
+<h3>6.2.4. Receiving messages<a class="headerlink" href="#receiving-messages" title="Permalink to this headline">¶</a></h3>
+<p>You can subscribe to incoming messages using a topic. Since subscription needs push notifications, the supported RPC transport interfaces are websockets and IPC.</p>
+<div class="admonition important">
+<p class="first admonition-title">Important</p>
+<p class="last"><code class="docutils literal notranslate"><span class="pre">pss</span></code> does not guarantee message ordering (<a class="reference external" href="https://en.wikipedia.org/wiki/Best-effort_delivery">Best-effort delivery</a>)
+nor message delivery (e.g. messages to offline nodes will not be cached and replayed) at the moment.</p>
+</div>
+</div>
+</div>
+<div class="section" id="advanced-features">
+<h2>6.3. Advanced features<a class="headerlink" href="#advanced-features" title="Permalink to this headline">¶</a></h2>
+<div class="admonition note">
+<p class="first admonition-title">Note</p>
+<p class="last">This functionalities are optional features in pss. They are compiled in by default, but can be omitted by providing the appropriate build tags.</p>
+</div>
+<div class="section" id="handshakes">
+<h3>6.3.1. Handshakes<a class="headerlink" href="#handshakes" title="Permalink to this headline">¶</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">pss</span></code> provides a convenience implementation of Diffie-Hellman handshakes using ephemeral symmetric keys. Peers keep separate sets of keys for a limited amount of incoming and outgoing communications, and create and exchange new keys when the keys expire.</p>
+</div>
+<div class="section" id="protocols">
+<h3>6.3.2. Protocols<a class="headerlink" href="#protocols" title="Permalink to this headline">¶</a></h3>
+<p>A framework is also in place for making <code class="docutils literal notranslate"><span class="pre">devp2p</span></code> protocols available using <code class="docutils literal notranslate"><span class="pre">pss</span></code> connections. This feature is only available using the internal golang API, read more in the GoDocs or the codes.</p>
+</div>
+</div>
+</div>
+
+
+           </div>
+           
+          </div>
+          <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="apireference.html" class="btn btn-neutral float-right" title="7. API reference" accesskey="n" rel="next">Next <span class="fa fa-arrow-circle-right"></span></a>
+      
+      
+        <a href="usage.html" class="btn btn-neutral" title="5. Working with content" accesskey="p" rel="prev"><span class="fa fa-arrow-circle-left"></span> Previous</a>
+      
+    </div>
+  
+
+  <hr/>
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright 2018, Ethersphere
+
+    </p>
+  </div>
+  Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>. 
+
+</footer>
+
+        </div>
+      </div>
+
+    </section>
+
+  </div>
+  
+
+
+  
+
+    
+    
+      <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+        <script type="text/javascript" src="_static/jquery.js"></script>
+        <script type="text/javascript" src="_static/underscore.js"></script>
+        <script type="text/javascript" src="_static/doctools.js"></script>
+        <script async="async" type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    
+
+  
+
+  <script type="text/javascript" src="_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+</body>
+</html>
