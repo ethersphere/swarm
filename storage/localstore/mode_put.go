@@ -189,7 +189,7 @@ func (db *DB) AddToPinFileIndex(hash []byte, isRaw bool) error {
 
 	batch := new(leveldb.Batch)
 	var item shed.Item
-	item.Address = hash
+	copy(item.Address, hash)
 	if isRaw {
 		item.IsRaw = 1
 	}

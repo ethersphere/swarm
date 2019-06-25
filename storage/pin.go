@@ -65,8 +65,8 @@ func (p *PinApi) ShowDatabase() string {
 	return "Check the swarm log file for the output"
 }
 
-func (p *PinApi) AddPinFile(roothash []byte, isRaw bool) error {
-	return p.db.AddToPinFileIndex(roothash, isRaw)
+func (p *PinApi) AddPinFile(hash []byte, isRaw bool) error {
+	return p.db.AddToPinFileIndex(hash, isRaw)
 }
 
 func (p *PinApi) ListPinFiles() {
