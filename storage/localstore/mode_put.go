@@ -195,8 +195,5 @@ func (db *DB) AddToPinFileIndex(hash []byte, isRaw bool) error {
 	}
 	db.pinFilesIndex.PutInBatch(batch, item)
 	err := db.shed.WriteBatch(batch)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }

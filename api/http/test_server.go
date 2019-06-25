@@ -48,6 +48,8 @@ func NewTestSwarmServer(t *testing.T, serverFunc func(*api.API) TestServer, reso
 	tags := chunk.NewTags()
 	fileStore := storage.NewFileStore(localStore, storage.NewFileStoreParams(), tags)
 
+	storage.NewPinApi(localStore, nil, nil, tags)
+
 	// Swarm feeds test setup
 	feedsDir, err := ioutil.TempDir("", "swarm-feeds-test")
 	if err != nil {
