@@ -196,7 +196,7 @@ func TestDB_SubscribePull_since(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -275,7 +275,7 @@ func TestDB_SubscribePull_until(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -354,7 +354,7 @@ func TestDB_SubscribePull_sinceAndUntil(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -432,7 +432,7 @@ func uploadRandomChunksBin(t *testing.T, db *DB, addrs map[uint8][]chunk.Address
 	for i := 0; i < count; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -532,7 +532,7 @@ func TestDB_LastPullSubscriptionBinID(t *testing.T) {
 		for i := 0; i < count; i++ {
 			ch := generateTestRandomChunk()
 
-			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+			_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 			if err != nil {
 				t.Fatal(err)
 			}

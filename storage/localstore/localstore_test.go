@@ -62,7 +62,7 @@ func TestDB(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestDB_updateGCSem(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

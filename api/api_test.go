@@ -157,7 +157,7 @@ func TestApiTagLarge(t *testing.T) {
 			t.Fatal(err)
 		}
 		ctx := sctx.SetTag(context.Background(), tag.Uid)
-		key, waitContent, err := api.Store(ctx, randomContentReader, int64(contentLength), toEncrypt)
+		key, waitContent, err := api.Store(ctx, randomContentReader, int64(contentLength), toEncrypt, storage.DONT_PIN)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -556,13 +556,13 @@ func putString(ctx context.Context, a *API, content string, contentType string, 
 	log.Trace("created new tag", "uid", tag.Uid)
 
 	cCtx := sctx.SetTag(ctx, tag.Uid)
-	key, waitContent, err := a.Store(cCtx, r, int64(len(content)), toEncrypt)
+	key, waitContent, err := a.Store(cCtx, r, int64(len(content)), toEncrypt, storage.DONT_PIN)
 	if err != nil {
 		return nil, nil, err
 	}
 	manifest := fmt.Sprintf(`{"entries":[{"hash":"%v","contentType":"%s"}]}`, key, contentType)
 	r = strings.NewReader(manifest)
-	key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt)
+	key, waitManifest, err := a.Store(cCtx, r, int64(len(manifest)), toEncrypt, storage.DONT_PIN)
 	if err != nil {
 		return nil, nil, err
 	}

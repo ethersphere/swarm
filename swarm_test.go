@@ -358,7 +358,7 @@ func testLocalStoreAndRetrieve(t *testing.T, swarm *Swarm, n int, randomData boo
 		t.Fatal(err)
 	}
 	ctx := sctx.SetTag(context.Background(), tag.Uid)
-	k, wait, err := swarm.api.Store(ctx, strings.NewReader(dataPut), int64(len(dataPut)), false)
+	k, wait, err := swarm.api.Store(ctx, strings.NewReader(dataPut), int64(len(dataPut)), false, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

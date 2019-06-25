@@ -45,7 +45,7 @@ func TestModePutRequest(t *testing.T) {
 
 		storeTimestamp = wantTimestamp
 
-		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -63,7 +63,7 @@ func TestModePutRequest(t *testing.T) {
 			return wantTimestamp
 		})()
 
-		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutRequest, ch, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,7 +88,7 @@ func TestModePutSync(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	_, err := db.Put(context.Background(), chunk.ModePutSync, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutSync, ch, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestModePutUpload(t *testing.T) {
 
 	ch := generateTestRandomChunk()
 
-	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+	_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ func TestModePutUpload_parallel(t *testing.T) {
 					if !ok {
 						return
 					}
-					_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+					_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 					select {
 					case errChan <- err:
 					case <-doneChan:
@@ -235,7 +235,7 @@ func TestModePut_sameChunk(t *testing.T) {
 			defer cleanupFunc()
 
 			for i := 0; i < 10; i++ {
-				exists, err := db.Put(context.Background(), tc.mode, ch)
+				exists, err := db.Put(context.Background(), tc.mode, ch, 0)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -347,7 +347,7 @@ func benchmarkPutUpload(b *testing.B, o *Options, count, maxParallelUploads int)
 			go func(i int) {
 				defer func() { <-sem }()
 
-				_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i])
+				_, err := db.Put(context.Background(), chunk.ModePutUpload, chunks[i], 0)
 				errs <- err
 			}(i)
 		}

@@ -70,7 +70,7 @@ func testDB_collectGarbageWorker(t *testing.T) {
 	for i := 0; i < chunkCount; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -143,7 +143,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	for i := 0; i < int(db.capacity)-1; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch,0)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -186,7 +186,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	// upload and sync another chunk to trigger
 	// garbage collection
 	ch := generateTestRandomChunk()
-	_, err = db.Put(context.Background(), chunk.ModePutUpload, ch)
+	_, err = db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -275,7 +275,7 @@ func TestDB_gcSize(t *testing.T) {
 	for i := 0; i < count; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

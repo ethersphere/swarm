@@ -134,12 +134,12 @@ func TestTwoNodesFullSync(t *testing.T) { //
 		fileStore := item.(*storage.FileStore)
 		size := chunkCount * chunkSize
 
-		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
+		_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false,0)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}
 
-		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
+		_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false, 0)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}
@@ -354,7 +354,7 @@ func TestStarNetworkSync(t *testing.T) {
 		}
 		fileStore := item.(*storage.FileStore)
 		reader := bytes.NewReader(randomBytes[:])
-		_, wait1, err := fileStore.Store(ctx, reader, int64(len(randomBytes)), false)
+		_, wait1, err := fileStore.Store(ctx, reader, int64(len(randomBytes)), false, 0)
 		if err != nil {
 			return fmt.Errorf("fileStore.Store: %v", err)
 		}

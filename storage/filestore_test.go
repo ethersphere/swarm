@@ -53,7 +53,7 @@ func testFileStoreRandom(toEncrypt bool, t *testing.T) {
 
 	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
-	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt, 0)
 	if err != nil {
 		t.Fatalf("Store error: %v", err)
 	}
@@ -117,7 +117,7 @@ func testFileStoreCapacity(toEncrypt bool, t *testing.T) {
 	fileStore := NewFileStore(localStore, NewFileStoreParams(), chunk.NewTags())
 	slice := testutil.RandomBytes(1, testDataSize)
 	ctx := context.TODO()
-	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt)
+	key, wait, err := fileStore.Store(ctx, bytes.NewReader(slice), testDataSize, toEncrypt, 0)
 	if err != nil {
 		t.Errorf("Store error: %v", err)
 	}

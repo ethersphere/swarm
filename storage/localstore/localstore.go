@@ -470,7 +470,7 @@ func (db *DB) ShowDatabaseInformation() {
 
 		log.Info("retrievalAccessIndex",
 			fmt.Sprintf("3|%0x", item.Address),
-			fmt.Sprintf("accessTS=", item.AccessTimestamp))
+			fmt.Sprintf("accessTS=%d", item.AccessTimestamp))
 
 		return false, nil
 	}, nil)
@@ -497,7 +497,7 @@ func (db *DB) ShowDatabaseInformation() {
 
 		log.Info("gcIndex",
 			fmt.Sprintf("6|accessTS=%d|binID=%d|%0x", item.AccessTimestamp, item.BinID, item.Address),
-			fmt.Sprintf("value=", ""))
+			fmt.Sprintf("value=%s", " - "))
 
 		return false, nil
 	}, nil)

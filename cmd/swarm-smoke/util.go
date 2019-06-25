@@ -206,7 +206,7 @@ func upload(data []byte, endpoint string) (string, error) {
 	}
 
 	// upload data to bzz:// and retrieve the content-addressed manifest hash, hex-encoded.
-	return swarm.Upload(f, "", false)
+	return swarm.Upload(f, "", false, false)
 }
 
 func digest(r io.Reader) ([]byte, error) {
