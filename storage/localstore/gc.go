@@ -110,8 +110,8 @@ func (db *DB) collectGarbage() (collectedCount uint64, done bool, err error) {
 
 		// Check if this chunk is pinned, if YES, then skip GC on that chunk
 		pinItem, err := db.pinIndex.Get(item)
-		if err == nil && bytes.Equal(item.Address,pinItem.Address) {
-			log.Info("Ignoring GC for chunk", "Address", fmt.Sprintf("%0x",pinItem.Address), "PinCounter", pinItem.PinCounter)
+		if err == nil && bytes.Equal(item.Address, pinItem.Address) {
+			log.Info("Ignoring GC for chunk", "Address", fmt.Sprintf("%0x", pinItem.Address), "PinCounter", pinItem.PinCounter)
 			return false, nil
 		}
 

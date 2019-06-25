@@ -83,8 +83,8 @@ type DB struct {
 	gcIndex shed.Index
 
 	// pin files Index
-	pinIndex shed.Index         // Index which stores address of all the pinned chunks and their pin counter
-	pinFilesIndex shed.Index    // Index that stores all the root hashes of the pinned files / manifests
+	pinIndex      shed.Index // Index which stores address of all the pinned chunks and their pin counter
+	pinFilesIndex shed.Index // Index that stores all the root hashes of the pinned files / manifests
 
 	// field that stores number of intems in gc index
 	gcSize shed.Uint64Field
@@ -386,8 +386,6 @@ func New(path string, baseKey []byte, o *Options) (db *DB, err error) {
 		return nil, err
 	}
 
-
-
 	// start garbage collection worker
 	go db.collectGarbageWorker()
 	return db, nil
@@ -416,14 +414,14 @@ func (db *DB) po(addr chunk.Address) (bin uint8) {
 
 func (db *DB) ListPinnedFiles() {
 	_ = db.pinFilesIndex.Iterate(func(item shed.Item) (stop bool, err error) {
-		log.Info("Pinned file", "Address", fmt.Sprintf("%0x",item.Address), "Size", item.TreeSize)
+		log.Info("Pinned file", "Address", fmt.Sprintf("%0x", item.Address), "Size", item.TreeSize)
 		return false, nil
 	}, nil)
 }
 
 func (db *DB) ShowDatabaseInformation() {
 
-	schemaName, err :=  db.schemaName.Get()
+	schemaName, err := db.schemaName.Get()
 	if err != nil {
 		schemaName = " - "
 	}
@@ -520,7 +518,6 @@ func (db *DB) ShowDatabaseInformation() {
 		return false, nil
 	}, nil)
 }
-
 
 // chunkToItem creates new Item with data provided by the Chunk.
 func chunkToItem(ch chunk.Chunk) shed.Item {

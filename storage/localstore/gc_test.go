@@ -143,7 +143,7 @@ func TestDB_collectGarbageWorker_withRequests(t *testing.T) {
 	for i := 0; i < int(db.capacity)-1; i++ {
 		ch := generateTestRandomChunk()
 
-		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch,0)
+		_, err := db.Put(context.Background(), chunk.ModePutUpload, ch, 0)
 		if err != nil {
 			t.Fatal(err)
 		}

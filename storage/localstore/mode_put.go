@@ -37,7 +37,7 @@ func (db *DB) Put(ctx context.Context, mode chunk.ModePut, ch chunk.Chunk, pinCo
 	metrics.GetOrRegisterCounter(metricName, nil).Inc(1)
 	defer totalTimeMetric(metricName, time.Now())
 
-	exists, err = db.put(mode, chunkToItem(ch),  pinCounter)
+	exists, err = db.put(mode, chunkToItem(ch), pinCounter)
 	if err != nil {
 		metrics.GetOrRegisterCounter(metricName+".error", nil).Inc(1)
 	}
@@ -182,7 +182,7 @@ func (db *DB) put(mode chunk.ModePut, item shed.Item, pinCounter uint8) (exists 
 }
 
 // Adds a entry in the pinFilesIndex, used to list all pinned files
-func (db *DB) AddToPinFileIndex(hash []byte, isRaw bool) error{
+func (db *DB) AddToPinFileIndex(hash []byte, isRaw bool) error {
 
 	db.batchMu.Lock()
 	defer db.batchMu.Unlock()

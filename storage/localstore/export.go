@@ -61,18 +61,18 @@ func (db *DB) Export(w io.Writer) (count int64, err error) {
 
 	err = db.retrievalDataIndex.Iterate(func(item shed.Item) (stop bool, err error) {
 
-		// To remember the pinned content accross export and import..
+		// To remember the pinned content across export and import..
 		// store the pin counter in the header
 		paxMap := make(map[string]string)
 		if item.PinCounter > 0 {
 			paxMap["swarm.pin.counter"] = strconv.Itoa(int(item.PinCounter))
 		}
-			hdr := &tar.Header{
-				Name:       hex.EncodeToString(item.Address),
-				Mode:       0644,
-				Size:       int64(len(item.Data)),
-				PAXRecords: paxMap,
-			}
+		hdr := &tar.Header{
+			Name:       hex.EncodeToString(item.Address),
+			Mode:       0644,
+			Size:       int64(len(item.Data)),
+			PAXRecords: paxMap,
+		}
 
 		if err := tw.WriteHeader(hdr); err != nil {
 			return false, err
@@ -147,7 +147,7 @@ func (db *DB) Import(r io.Reader, legacy bool) (count int64, err error) {
 			// Get the pin counter stored in the PAX header
 			pinCounter := uint8(0)
 			if pc, ok := hdr.PAXRecords["swarm.pin.counter"]; ok {
-				val , err := strconv.Atoi(pc)
+				val, err := strconv.Atoi(pc)
 				if err == nil && val > 0 {
 					pinCounter = uint8(val)
 				}

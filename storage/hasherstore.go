@@ -38,7 +38,7 @@ type hasherStore struct {
 	// see: https://golang.org/pkg/sync/atomic/#pkg-note-BUG
 	nrChunks   uint64 // number of chunks to store
 	store      ChunkStore
-	tag       *chunk.Tag
+	tag        *chunk.Tag
 	toEncrypt  bool
 	pinCounter uint8
 	doWait     sync.Once

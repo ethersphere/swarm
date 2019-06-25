@@ -19,10 +19,11 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"sync"
+
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/storage/localstore"
-	"sync"
 )
 
 const (
@@ -55,7 +56,7 @@ func NewPinApi(lstore *localstore.DB, store ChunkStore, params *FileStoreParams,
 	return pinApi
 }
 
-func GetPinInstance() *PinApi{
+func GetPinInstance() *PinApi {
 	return PinApiInstance
 }
 
@@ -78,8 +79,8 @@ func (p *PinApi) ShowChunksOfRootHash(rootHash string) {
 	doneC := make(chan struct{})
 
 	hashFunc := MakeHashFunc(p.fileParams.Hash)
-	addr, err :=  hex.DecodeString(rootHash)
-	fmt.Println("Address", fmt.Sprintf("%x",addr))
+	addr, err := hex.DecodeString(rootHash)
+	fmt.Println("Address", fmt.Sprintf("%x", addr))
 	if err != nil {
 		log.Info("Error decoding root hash")
 		return
