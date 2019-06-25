@@ -40,8 +40,6 @@ var (
 	createStreamsDelay = 50 * time.Millisecond //to avoid a race condition where we send a message to a server that hasnt set up yet
 )
 
-const syncBinsWithinDepth = false
-
 var SyncerSpec = &protocols.Spec{
 	Name:       "bzz-sync",
 	Version:    8,
@@ -137,7 +135,7 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 	log.Debug("create streams", "peer", p.BzzAddr, "base", s.kad.BaseAddr(), "withinDepth", withinDepth, "depth", depth, "po", peerPo)
 
 	if withinDepth {
-		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, syncBinsWithinDepth)
+		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
 
 		streamsMsg := StreamInfoReq{Streams: sub}
 		log.Debug("sending subscriptions message", "bins", sub)
@@ -162,7 +160,7 @@ func (s *SwarmSyncer) CreateStreams(p *Peer) {
 
 					withinDepth = peerPo >= newDepth
 					// previous depth is -1 because we did not have any streams with the client beforehand
-					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay, syncBinsWithinDepth)
+					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay, true)
 					streamsMsg := StreamInfoReq{Streams: sub}
 					if err := p.Send(context.TODO(), streamsMsg); err != nil {
 						log.Error("error establishing subsequent subscription", "err", err)
@@ -245,6 +243,6 @@ func (s *SwarmSyncer) Stop() error {
 func (s *SwarmSyncer) GetBinsForPeer(p *Peer) (bins []uint, depth int) {
 	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
 	depth = s.kad.NeighbourhoodDepth()
-	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, syncBinsWithinDepth)
+	sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
 	return sub, depth
 }
