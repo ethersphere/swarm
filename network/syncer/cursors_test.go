@@ -226,13 +226,13 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 
 // TestNodesRemovesCursors creates a pivot network of 2 nodes where the pivot's depth = 0.
 // test sequence:
-// - select another node with po <= depth (of the pivot's kademlia)
-// - add other nodes to the pivot until the depth goes above that peer's po
+// - select another node with po >= depth (of the pivot's kademlia)
+// - add other nodes to the pivot until the depth goes above that peer's po (depth > peerPo)
 // - asserts that the pivot does not maintain any cursors of the node that moved out of depth
 // - start removing nodes from the simulation until that peer is again within depth
 // - check that the cursors are being re-established
 func TestNodeRemovesAndReestablishCursors(t *testing.T) {
-	nodeCount := 2
+	nodeCount := 5
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
@@ -262,13 +262,14 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 		foundId := 0
 		foundPo := 0
 		var foundEnode enode.ID
+		//pivotPeerLen = len(sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers)
 		for i := 1; i < nodeCount; i++ {
 			log.Debug("looking for a peer", "i", i, "nodecount", nodeCount)
 			idOther := nodeIDs[i]
 			otherKademlia := sim.NodeItem(idOther, simulation.BucketKeyKademlia).(*network.Kademlia)
 			po := chunk.Proximity(otherKademlia.BaseAddr(), pivotKademlia.BaseAddr())
 			depth := pivotKademlia.NeighbourhoodDepth()
-			if po <= depth {
+			if po >= depth {
 				foundId = i
 				foundPo = po
 				found = true
@@ -286,7 +287,8 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 			if err != nil {
 				return err
 			}
-			err = sim.Net.ConnectNodesStar(id, nodeIDs[0])
+			log.Debug("added node to simulation, connecting to pivot", "id", id, "pivot", idPivot)
+			err = sim.Net.ConnectNodesStar(id, idPivot)
 			if err != nil {
 				return err
 			}
@@ -297,8 +299,9 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 			}
 
 			// allow the new node to exchange the stream info messages
-			time.Sleep(1000 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 		}
+
 		if !found {
 			panic("did not find a node with po<=depth")
 		} else {
@@ -328,33 +331,37 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 		log.Debug("added nodes to sim, node moved out of depth", "depth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo, "foundId", foundId, "nodeIDs", nodeIDs)
 
 		pivotCursors := sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SwarmSyncer).peers[nodeIDs[foundId]].streamCursors
-		if len(pivotCursors) > 0 {
+		if len(pivotCursors) != 0 {
 			panic("pivotCursors for node should be empty")
 		}
 		pivotHistoricalFetchers := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[nodeIDs[foundId]].historicalStreams
-		if len(pivotHistoricalFetchers) > 0 {
+		if len(pivotHistoricalFetchers) != 0 {
 			log.Error("pivot fetcher length>0", "len", len(pivotHistoricalFetchers))
 			panic("pivot historical fetchers for node should be empty")
 		}
-
+		removed := 0
 		// remove nodes from the simulation until the peer moves again into depth
-		log.Error("pulling the plug on some nodes to make the depth go up again", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo)
+		log.Error("pulling the plug on some nodes to make the depth go up again", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo, "peerIndex", foundId)
 		for pivotKademlia.NeighbourhoodDepth() > foundPo {
 			_, err := sim.StopRandomNode(nodeIDs[0], foundEnode)
 			if err != nil {
 				panic(err)
 			}
+			removed++
 			time.Sleep(100 * time.Millisecond)
-			log.Debug("removed 1 node", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo)
+			log.Error("removed 1 node", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo)
 
 			nodeIDs = sim.UpNodeIDs()
 		}
+		log.Error("done removing nodes", "pivotDepth", pivotKademlia.NeighbourhoodDepth(), "peerPo", foundPo, "removed", removed)
 
 		// wait for cursors msg again
-		time.Sleep(500 * time.Millisecond)
-
-		//log.Debug("p", "peers", sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SwarmSyncer).peers)
-		pivotCursors = sim.NodeItem(nodeIDs[0], bucketKeySyncer).(*SwarmSyncer).peers[foundEnode].streamCursors
+		time.Sleep(1000 * time.Millisecond)
+		if nodeCount-1-removed != len(sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers) {
+			panic("pivot syncer peer length mismatc")
+		}
+		pivotCursors = sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[foundEnode].streamCursors
+		log.Error("pc", "pc", pivotCursors)
 		if len(pivotCursors) == 0 {
 			panic("pivotCursors for node should no longer be empty")
 		}
@@ -414,9 +421,12 @@ func compareNodeBinsToStreamsWithDepth(t *testing.T, onesCursors map[uint]uint64
 }
 
 func checkHistoricalStreams(t *testing.T, onesCursors map[uint]uint64, onesStreams map[uint]*syncStreamFetch) {
-	if len(onesCursors) == 0 || len(onesStreams) == 0 {
-		t.Fatal("zero length cursors/stream")
+	if len(onesCursors) == 0 {
 	}
+	if len(onesStreams) == 0 {
+		t.Fatal("zero length cursors")
+	}
+
 	for k, v := range onesCursors {
 		if v > 0 {
 			// there should be a matching stream state
