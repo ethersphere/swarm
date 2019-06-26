@@ -67,61 +67,9 @@ func TestTwoNodesFullSync(t *testing.T) {
 			nodeIndex[id] = i
 		}
 
-		//disconnected := watchDisconnections(ctx, sim)
-		//defer func() {
-		//if err != nil && disconnected.bool() {
-		//err = errors.New("disconnect events received")
-		//}
-		//}()
-
 		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
-		//fileStore := item.(*storage.FileStore)
-		//size := chunkCount * 4096 // chunkSize
-
-		//_, wait1, err := fileStore.Store(ctx, testutil.RandomReader(0, size), int64(size), false)
-		//if err != nil {
-		//return fmt.Errorf("fileStore.Store: %v", err)
-		//}
-
-		//_, wait2, err := fileStore.Store(ctx, testutil.RandomReader(10, size), int64(size), false)
-		//if err != nil {
-		//return fmt.Errorf("fileStore.Store: %v", err)
-		//}
-
-		//wait1(ctx)
-		//wait2(ctx)
 		time.Sleep(1 * time.Second)
 
-		//explicitly check that all subscriptions are there on all bins
-		//for idx, id := range nodeIDs {
-		//node := sim.Net.GetNode(id)
-		//client, err := node.Client()
-		//if err != nil {
-		//return fmt.Errorf("create node %d rpc client fail: %v", idx, err)
-		//}
-
-		////ask it for subscriptions
-		//pstreams := make(map[string][]string)
-		//err = client.Call(&pstreams, "stream_getPeerServerSubscriptions")
-		//if err != nil {
-		//return fmt.Errorf("client call stream_getPeerSubscriptions: %v", err)
-		//}
-		//for _, streams := range pstreams {
-		//b := make([]bool, 17)
-		//for _, sub := range streams {
-		//subPO, err := ParseSyncBinKey(strings.Split(sub, "|")[1])
-		//if err != nil {
-		//return err
-		//}
-		//b[int(subPO)] = true
-		//}
-		//for bin, v := range b {
-		//if !v {
-		//return fmt.Errorf("did not find any subscriptions for node %d on bin %d", idx, bin)
-		//}
-		//}
-		//}
-		//}
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
 		item = sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
