@@ -155,10 +155,10 @@ func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
 	if i.IsRaw > 0 {
 		raw = true
 	}
-	return raw , nil
+	return raw, nil
 }
 
-func (db *DB) IsChunkPinned(hash []byte) (bool) {
+func (db *DB) IsChunkPinned(hash []byte) bool {
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
 	copy(item.Address[:], hash[:])
@@ -169,7 +169,6 @@ func (db *DB) IsChunkPinned(hash []byte) (bool) {
 	return false
 }
 
-
 func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
 	var item shed.Item
 	item.Address = make([]byte, len(hash))
@@ -178,7 +177,7 @@ func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return i.PinCounter , nil
+	return i.PinCounter, nil
 }
 
 // testHookUpdateGC is a hook that can provide

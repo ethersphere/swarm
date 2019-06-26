@@ -20,11 +20,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ethersphere/swarm/api"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
 	"github.com/ethereum/go-ethereum/p2p/enode"
+	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"

@@ -19,7 +19,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-
 	"sync"
 
 	"github.com/ethersphere/swarm/chunk"
@@ -186,7 +185,6 @@ QuitFileFor:
 
 				case ref := <-chunkWorkers:
 
-
 					go func() {
 
 						chunkData, err := getter.Get(context.TODO(), ref)
@@ -213,7 +211,7 @@ QuitFileFor:
 								err = p.db.UnpinChunk(ref)
 								if err != nil {
 									// TODO: if this happens, we should go back and revert the entire file's chunks
-									log.Error("Could not unpin chunk. Addres " + fmt.Sprintf("%0x", ref))
+									log.Error("Could not unpin chunk. Address " + fmt.Sprintf("%0x", ref))
 								} else {
 									log.Debug("Removing tree chunk", "Address", fmt.Sprintf("%0x", ref),
 										"Branches", branches, "SubTreeSize", subTreeSize)
@@ -235,7 +233,7 @@ QuitFileFor:
 								err := p.db.UnpinChunk(ref)
 								if err != nil {
 									// TODO: if this happens, we should go back and revert the entire file's chunks
-									log.Error("Could not unpin chunk. Addres " + fmt.Sprintf("%0x", ref))
+									log.Error("Could not unpin chunk. Address " + fmt.Sprintf("%0x", ref))
 								} else {
 									log.Debug("Removing data chunk", "Address", fmt.Sprintf("%0x", ref),
 										"SubTreeSize", subTreeSize)
@@ -258,7 +256,7 @@ QuitFileFor:
 				p.db.UnpinRootHash(fileRef)
 				if err != nil {
 					// TODO: if this happens, we should go back and revert the entire file's chunks
-					log.Error("Could not unpin root chunk. Addres " + fmt.Sprintf("%0x", fileRef))
+					log.Error("Could not unpin root chunk. Address " + fmt.Sprintf("%0x", fileRef))
 				}
 			}
 		}

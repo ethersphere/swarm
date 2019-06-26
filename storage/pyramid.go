@@ -129,10 +129,10 @@ func NewTreeEntry(pyramid *PyramidChunker) *TreeEntry {
 
 // Used by the hash processor to create a data/tree chunk and send to storage
 type chunkJob struct {
-	key      Address
-	chunk    []byte
+	key         Address
+	chunk       []byte
 	isTreeChunk bool
-	parentWg *sync.WaitGroup
+	parentWg    *sync.WaitGroup
 }
 
 type PyramidChunker struct {
@@ -300,7 +300,6 @@ func (pc *PyramidChunker) processChunk(ctx context.Context, id int64, job *chunk
 	} else {
 		log.Debug("Data chunk", "Addres", job.key.Hex())
 	}
-
 
 	// send off new chunk to storage
 	job.parentWg.Done()

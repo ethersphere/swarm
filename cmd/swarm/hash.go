@@ -21,11 +21,11 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"github.com/ethersphere/swarm/api"
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethersphere/swarm/api"
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/contracts/ens"
 	"github.com/ethersphere/swarm/storage"
