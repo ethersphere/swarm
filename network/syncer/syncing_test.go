@@ -54,24 +54,19 @@ func TestTwoNodesFullSync(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
-	_, err := sim.AddNodesAndConnectChain(2)
+	_, err := sim.AddNode()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) (err error) {
 		nodeIDs := sim.UpNodeIDs()
-		if len(nodeIDs) != 2 {
+		if len(nodeIDs) != 1 {
 			return errors.New("not enough nodes up")
 		}
 
-		nodeIndex := make(map[enode.ID]int)
-		for i, id := range nodeIDs {
-			nodeIndex[id] = i
-		}
-
-		item := sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
-		time.Sleep(1 * time.Second)
+		item := sim.NodeItem(sim.UpNodeIDs()[0], bucketKeyFileStore)
+		//time.Sleep(1 * time.Second)
 
 		log.Debug("subscriptions on all bins exist between the two nodes, proceeding to check bin indexes")
 		log.Debug("uploader node", "enode", nodeIDs[0])
@@ -86,6 +81,11 @@ func TestTwoNodesFullSync(t *testing.T) {
 			return err
 		}
 		if err := wait(cctx); err != nil {
+			return err
+		}
+
+		_, err := sim.AddNodesAndConnectStar(1)
+		if err != nil {
 			return err
 		}
 
