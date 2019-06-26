@@ -39,7 +39,7 @@ var (
 )
 
 // booking represents an accounting movement in relation to a particular node: `peer`
-// if `amount` is positive, it means the node which adds this booking will be credited
+// if `amount` is positive, it means the node which adds this booking will be credited in respect to `peer`
 // otherwise it will be debited
 type booking struct {
 	amount int64
