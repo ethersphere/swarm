@@ -180,8 +180,6 @@ func TestSyncSubscriptionsDiff(t *testing.T) {
 		},
 	} {
 		subBins, quitBins := syncSubscriptionsDiff(tc.po, tc.prevDepth, tc.newDepth, max, tc.syncWithinDepth)
-		fmt.Println(subBins)
-		fmt.Println(quitBins)
 		if fmt.Sprint(subBins) != fmt.Sprint(tc.subBins) {
 			t.Errorf("po: %v, prevDepth: %v, newDepth: %v, syncWithinDepth: %t: got subBins %v, want %v", tc.po, tc.prevDepth, tc.newDepth, tc.syncWithinDepth, subBins, tc.subBins)
 		}

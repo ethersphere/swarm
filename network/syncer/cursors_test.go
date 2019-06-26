@@ -359,9 +359,8 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 
 		// wait for cursors msg again
 		time.Sleep(100 * time.Millisecond)
-		pivotCursors2 := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[foundEnode].streamCursors
-		log.Error("pc", "pc", pivotCursors2, "peerPo", foundPo)
-		if len(pivotCursors2) == 0 {
+		pivotCursors = sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[foundEnode].streamCursors
+		if len(pivotCursors) == 0 {
 			panic("pivotCursors for node should no longer be empty")
 		}
 		pivotHistoricalFetchers = sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[foundEnode].historicalStreams
