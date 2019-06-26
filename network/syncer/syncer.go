@@ -17,7 +17,6 @@
 package syncer
 
 import (
-	"context"
 	"sync"
 	"time"
 
@@ -119,82 +118,6 @@ func (s *SwarmSyncer) Run(p *p2p.Peer, rw p2p.MsgReadWriter) error {
 	defer s.removePeer(sp)
 	go s.CreateStreams(sp)
 	return peer.Run(sp.HandleMsg)
-}
-
-// CreateStreams creates and maintains the streams per peer.
-// Runs per peer, in a separate goroutine
-// when the depth changes on our node
-//  - peer moves from out-of-depth to depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
-//  - peer moves from depth to out-of-depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
-//  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams (WHY???).. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
-// peer connects and disconnects quickly
-func (s *SwarmSyncer) CreateStreams(p *Peer) {
-	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
-	depth := s.kad.NeighbourhoodDepth()
-	withinDepth := peerPo >= depth
-
-	log.Debug("create streams", "peer", p.BzzAddr, "base", s.kad.BaseAddr(), "withinDepth", withinDepth, "depth", depth, "po", peerPo)
-
-	if withinDepth {
-		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
-
-		streamsMsg := StreamInfoReq{Streams: sub}
-		log.Debug("sending subscriptions message", "bins", sub)
-		time.Sleep(createStreamsDelay)
-		if err := p.Send(context.TODO(), streamsMsg); err != nil {
-			log.Error("err establishing initial subscription", "err", err)
-		}
-	}
-
-	subscription, unsubscribe := s.kad.SubscribeToNeighbourhoodDepthChange()
-	defer unsubscribe()
-	for {
-		select {
-		case <-subscription:
-			switch newDepth := s.kad.NeighbourhoodDepth(); {
-			case newDepth == depth:
-				continue
-			case peerPo >= newDepth:
-				// peer is within depth
-				if !withinDepth {
-					log.Debug("peer moved into depth, requesting cursors")
-
-					withinDepth = true // peerPo >= newDepth
-					// previous depth is -1 because we did not have any streams with the client beforehand
-					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay, true)
-					streamsMsg := StreamInfoReq{Streams: sub}
-					if err := p.Send(context.TODO(), streamsMsg); err != nil {
-						log.Error("error establishing subsequent subscription", "err", err)
-						p.Drop()
-					}
-					depth = newDepth
-				} else {
-					// peer was within depth, but depth has changed. we should request the cursors for the
-					// necessary bins and quit the unnecessary ones
-					depth = newDepth
-				}
-			case peerPo < newDepth:
-				if withinDepth {
-					log.Debug("peer transitioned out of depth, removing cursors")
-					withinDepth = false
-					for k, _ := range p.streamCursors {
-						delete(p.streamCursors, k)
-
-						if hs, ok := p.historicalStreams[k]; ok {
-							close(hs.quit)
-							// todo: wait for the hs.done to close?
-							delete(p.historicalStreams, k)
-						} else {
-							// this could happen when the cursor was 0 thus the historical stream was not created - do nothing
-						}
-					}
-				}
-			}
-
-		case <-s.quit:
-			return
-		}
-	}
 }
 
 func (s *SwarmSyncer) Protocols() []p2p.Protocol {
