@@ -49,7 +49,7 @@ func TestNodesExchangeCorrectBinIndexes(t *testing.T) {
 	nodeCount := 2
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
 
@@ -100,7 +100,7 @@ func TestNodesExchangeCorrectBinIndexesInPivot(t *testing.T) {
 	nodeCount := 8
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
 
@@ -163,7 +163,7 @@ func TestNodesCorrectBinsDynamic(t *testing.T) {
 	nodeCount := 10
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
 
@@ -235,7 +235,7 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 	nodeCount := 5
 
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion,
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(1000),
 	})
 	defer sim.Close()
 
@@ -440,56 +440,58 @@ func checkHistoricalStreams(t *testing.T, onesCursors map[uint]uint64, onesStrea
 	}
 }
 
-func newBzzSyncWithLocalstoreDataInsertion(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
-	n := ctx.Config.Node()
-	addr := network.NewAddr(n)
+func newBzzSyncWithLocalstoreDataInsertion(numChunks int) func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+	return func(ctx *adapters.ServiceContext, bucket *sync.Map) (s node.Service, cleanup func(), err error) {
+		n := ctx.Config.Node()
+		addr := network.NewAddr(n)
 
-	localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	kad := network.NewKademlia(addr.Over(), network.NewKadParams())
-	netStore := storage.NewNetStore(localStore, enode.ID{})
-	lnetStore := storage.NewLNetStore(netStore)
-	fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
-
-	filesize := 1000 * 4096
-	cctx := context.Background()
-	_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := wait(cctx); err != nil {
-		return nil, nil, err
-	}
-
-	// verify bins just upto 8 (given random distribution and 1000 chunks
-	// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
-	for i := 0; i <= 5; i++ {
-		if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
-			return nil, nil, fmt.Errorf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
-		}
-	}
-
-	binIndexes := make([]uint64, 17)
-	for i := 0; i <= 16; i++ {
-		binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
+		localStore, localStoreCleanup, err := newTestLocalStore(n.ID(), addr, nil)
 		if err != nil {
 			return nil, nil, err
 		}
-		binIndexes[i] = binIndex
-	}
-	o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
-	bucket.Store(bucketKeyBinIndex, binIndexes)
-	bucket.Store(bucketKeyFileStore, fileStore)
-	bucket.Store(simulation.BucketKeyKademlia, kad)
-	bucket.Store(bucketKeySyncer, o)
 
-	cleanup = func() {
-		localStore.Close()
-		localStoreCleanup()
-	}
+		kad := network.NewKademlia(addr.Over(), network.NewKadParams())
+		netStore := storage.NewNetStore(localStore, enode.ID{})
+		lnetStore := storage.NewLNetStore(netStore)
+		fileStore := storage.NewFileStore(lnetStore, storage.NewFileStoreParams(), chunk.NewTags())
+		if numChunks > 0 {
+			filesize := numChunks * 4096
+			cctx := context.Background()
+			_, wait, err := fileStore.Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+			if err != nil {
+				return nil, nil, err
+			}
+			if err := wait(cctx); err != nil {
+				return nil, nil, err
+			}
+		}
+		// verify bins just upto 8 (given random distribution and 1000 chunks
+		// bin index `i` cardinality for `n` chunks is assumed to be n/(2^i+1)
+		//for i := 0; i <= 5; i++ {
+		//if binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i)); binIndex == 0 || err != nil {
+		//return nil, nil, fmt.Errorf("error querying bin indexes. bin %d, index %d, err %v", i, binIndex, err)
+		//}
+		//}
 
-	return o, cleanup, nil
+		binIndexes := make([]uint64, 17)
+		for i := 0; i <= 16; i++ {
+			binIndex, err := netStore.LastPullSubscriptionBinID(uint8(i))
+			if err != nil {
+				return nil, nil, err
+			}
+			binIndexes[i] = binIndex
+		}
+		o := NewSwarmSyncer(enode.ID{}, nil, kad, netStore)
+		bucket.Store(bucketKeyBinIndex, binIndexes)
+		bucket.Store(bucketKeyFileStore, fileStore)
+		bucket.Store(simulation.BucketKeyKademlia, kad)
+		bucket.Store(bucketKeySyncer, o)
+
+		cleanup = func() {
+			localStore.Close()
+			localStoreCleanup()
+		}
+
+		return o, cleanup, nil
+	}
 }
