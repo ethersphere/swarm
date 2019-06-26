@@ -291,7 +291,7 @@ func (s *Server) HandlePostRaw(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add the root hash of the RAW file in the pinFilesIndex
-	err = storage.GetPinInstance().AddPinFile(addr, true)
+	err = s.api.PinApi.AddPinFile(addr, true)
 	if err != nil {
 		postRawFail.Inc(1)
 		respondError(w, r, err.Error(), http.StatusInternalServerError)
@@ -388,9 +388,11 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	tag.DoneSplit(newAddr)
 
 	// Add the root hash of the manifest in the pinFilesIndex
-	err = storage.GetPinInstance().AddPinFile(newAddr, false)
+	err = s.api.PinApi.AddPinFile(newAddr, true)
 	if err != nil {
-		log.Error("Error adding root hash to pinFilesIndex", "Address", newAddr.Hex())
+		postFilesFail.Inc(1)
+		respondError(w, r, fmt.Sprintf("Error adding root hash to pinFilesIndex for Address : %s", newAddr.Hex()), http.StatusInternalServerError)
+		return
 	}
 
 	log.Debug("stored content", "ruid", ruid, "key", newAddr)
