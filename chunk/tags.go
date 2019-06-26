@@ -30,14 +30,12 @@ import (
 // Tags hold tag information indexed by a unique random uint32
 type Tags struct {
 	tags *sync.Map
-	rng  *rand.Rand
 }
 
 // NewTags creates a tags object
 func NewTags() *Tags {
 	return &Tags{
 		tags: &sync.Map{},
-		rng:  rand.New(rand.NewSource(time.Now().Unix())),
 	}
 }
 
@@ -45,7 +43,7 @@ func NewTags() *Tags {
 // it returns an error if the tag with this name already exists
 func (ts *Tags) Create(s string, total int64) (*Tag, error) {
 	t := &Tag{
-		Uid:       ts.rng.Uint32(),
+		Uid:       uint32(rand.Int31()),
 		Name:      s,
 		StartedAt: time.Now(),
 		Total:     total,
