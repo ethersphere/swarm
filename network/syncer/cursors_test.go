@@ -40,7 +40,7 @@ var (
 	bucketKeyBinIndex  = simulation.BucketKey("bin-indexes")
 	bucketKeySyncer    = simulation.BucketKey("syncer")
 
-	simContextTimeout = 10 * time.Second
+	simContextTimeout = 20 * time.Second
 )
 
 // TestNodesExchangeCorrectBinIndexes tests that two nodes exchange the correct cursors for all streams
@@ -359,9 +359,6 @@ func TestNodeRemovesAndReestablishCursors(t *testing.T) {
 
 		// wait for cursors msg again
 		time.Sleep(100 * time.Millisecond)
-		if nodeCount-1-removed != len(sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers) {
-			panic("pivot syncer peer length mismatc")
-		}
 		pivotCursors2 := sim.NodeItem(idPivot, bucketKeySyncer).(*SwarmSyncer).peers[foundEnode].streamCursors
 		log.Error("pc", "pc", pivotCursors2, "peerPo", foundPo)
 		if len(pivotCursors2) == 0 {
