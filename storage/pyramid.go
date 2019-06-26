@@ -296,9 +296,9 @@ func (pc *PyramidChunker) processChunk(ctx context.Context, id int64, job *chunk
 	copy(job.key, ref)
 
 	if job.isTreeChunk {
-		log.Debug("Tree chunk", "Addres", job.key.Hex())
+		log.Debug("Tree chunk", "Address", job.key.Hex())
 	} else {
-		log.Debug("Data chunk", "Addres", job.key.Hex())
+		log.Debug("Data chunk", "Address", job.key.Hex())
 	}
 
 	// send off new chunk to storage
