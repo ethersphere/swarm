@@ -38,6 +38,9 @@ var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
+// booking represents an accounting movement in relation to a particular node: `peer`
+// if `amount` is positive, it means the node which adds this booking will be credited
+// otherwise it will be debited
 type booking struct {
 	amount int64
 	peer   *protocols.Peer
