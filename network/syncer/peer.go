@@ -22,7 +22,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
+	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network"
 )
@@ -70,10 +72,12 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
+// handleStreamInfoRes handles the StreamInfoRes message.
+// this message is handled by the CLIENT (*Peer is the server in this case)
 func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
-	log.Debug("handleStreamInfoRes", "msg", msg)
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+	log.Debug("handleStreamInfoRes", "peer", p.ID(), "msg", msg)
+	//p.mtx.Lock()
+	//defer p.mtx.Unlock()
 
 	if len(msg.Streams) == 0 {
 		log.Error("StreamInfo response is empty")
@@ -87,21 +91,28 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 			log.Error("got an error parsing stream name", "descriptor", s)
 			p.Drop()
 		}
-		log.Debug("setting bin cursor", "bin", uint(bin), "cursor", s.Cursor)
+		log.Debug("setting bin cursor", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor, "cursors", p.streamCursors)
+
 		p.streamCursors[uint(bin)] = s.Cursor
 		if s.Cursor > 0 {
 			streamFetch := newSyncStreamFetch(uint(bin))
 			p.historicalStreams[uint(bin)] = streamFetch
 		}
+
+		log.Debug("setting bin cursor done", "peer", p.ID(), "bin", uint(bin), "cursor", s.Cursor, "cursors", p.streamCursors)
 	}
 }
 
+// handleStreamInfoReq handles the StreamInfoReq message.
+// this message is handled by the SERVER (*Peer is the client in this case)
 func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
-	log.Debug("handleStreamInfoReq", "msg", msg)
-	p.mtx.Lock()
-	defer p.mtx.Unlock()
+	log.Debug("handleStreamInfoReq", "peer", p.ID(), "msg", msg)
+	//p.mtx.Lock()
+	//defer p.mtx.Unlock()
 	streamRes := StreamInfoRes{}
-
+	if len(msg.Streams) == 0 {
+		panic("nil streams msg requested")
+	}
 	for _, v := range msg.Streams {
 		streamCursor, err := p.syncer.netStore.LastPullSubscriptionBinID(uint8(v))
 		if err != nil {
@@ -183,6 +194,105 @@ func syncSubscriptionsDiff(peerPO, prevDepth, newDepth, max int, syncBinsWithinD
 	}
 
 	return subBins, quitBins
+}
+
+// CreateStreams creates and maintains the streams per peer.
+// Runs per peer, in a separate goroutine
+// when the depth changes on our node
+//  - peer moves from out-of-depth to depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
+//  - peer moves from depth to out-of-depth -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
+//  - depth changes, and peer stays in depth, but we need MORE (or LESS) streams (WHY???).. so again -> determine new streams ; init new streams (delete old streams, stop sending get range queries ; graceful shutdown of existing streams)
+// peer connects and disconnects quickly
+func (s *SwarmSyncer) CreateStreams(p *Peer) {
+	defer log.Debug("createStreams closed", "peer", p.ID())
+
+	peerPo := chunk.Proximity(s.kad.BaseAddr(), p.BzzAddr.Address())
+	depth := s.kad.NeighbourhoodDepth()
+	withinDepth := peerPo >= depth
+
+	log.Debug("create streams", "peer", p.BzzAddr, "base", s.kad.BaseAddr(), "withinDepth", withinDepth, "depth", depth, "po", peerPo)
+
+	if withinDepth {
+		sub, _ := syncSubscriptionsDiff(peerPo, -1, depth, s.kad.MaxProxDisplay, true)
+		log.Debug("sending initial subscriptions message", "peer", p.ID(), "bins", sub)
+		time.Sleep(createStreamsDelay)
+		doPeerSubUpdate(p, sub, nil)
+		if len(sub) == 0 {
+			panic("w00t")
+		}
+		//if err := p.Send(context.TODO(), streamsMsg); err != nil {
+		//log.Error("err establishing initial subscription", "err", err)
+		//}
+	}
+
+	subscription, unsubscribe := s.kad.SubscribeToNeighbourhoodDepthChange()
+	defer unsubscribe()
+	for {
+		select {
+		case <-subscription:
+			newDepth := s.kad.NeighbourhoodDepth()
+			log.Debug("got kademlia depth change sig", "peer", p.ID(), "peerPo", peerPo, "depth", depth, "newDepth", newDepth, "withinDepth", withinDepth)
+			switch {
+			//case newDepth == depth:
+			//continue
+			case peerPo >= newDepth:
+				// peer is within depth
+				if !withinDepth {
+					log.Debug("peer moved into depth, requesting cursors", "peer", p.ID())
+					withinDepth = true // peerPo >= newDepth
+					// previous depth is -1 because we did not have any streams with the client beforehand
+					sub, _ := syncSubscriptionsDiff(peerPo, -1, newDepth, s.kad.MaxProxDisplay, true)
+					doPeerSubUpdate(p, sub, nil)
+					if len(sub) == 0 {
+						panic("w00t")
+					}
+					depth = newDepth
+				} else {
+					// peer was within depth, but depth has changed. we should request the cursors for the
+					// necessary bins and quit the unnecessary ones
+					sub, quits := syncSubscriptionsDiff(peerPo, depth, newDepth, s.kad.MaxProxDisplay, true)
+					log.Debug("peer was inside depth, checking if needs changes", "peer", p.ID(), "peerPo", peerPo, "depth", depth, "newDepth", newDepth, "subs", sub, "quits", quits)
+					doPeerSubUpdate(p, sub, quits)
+					depth = newDepth
+				}
+			case peerPo < newDepth:
+				if withinDepth {
+					sub, quits := syncSubscriptionsDiff(peerPo, depth, newDepth, s.kad.MaxProxDisplay, true)
+					log.Debug("peer transitioned out of depth", "peer", p.ID(), "subs", sub, "quits", quits)
+					doPeerSubUpdate(p, sub, quits)
+					withinDepth = false
+				}
+			}
+
+		case <-s.quit:
+			return
+		}
+	}
+}
+
+func doPeerSubUpdate(p *Peer, subs, quits []uint) {
+	if len(subs) > 0 {
+		log.Debug("getting cursors info from peer", "peer", p.ID(), "subs", subs)
+		streamsMsg := StreamInfoReq{Streams: subs}
+		if err := p.Send(context.TODO(), streamsMsg); err != nil {
+			log.Error("error establishing subsequent subscription", "err", err)
+			p.Drop()
+		}
+	}
+	for _, v := range quits {
+		log.Debug("removing cursor info for peer", "peer", p.ID(), "bin", v, "cursors", p.streamCursors, "quits", quits)
+		delete(p.streamCursors, uint(v))
+
+		if hs, ok := p.historicalStreams[uint(v)]; ok {
+			log.Debug("closing historical stream for peer", "peer", p.ID(), "bin", v, "historicalStream", hs)
+
+			close(hs.quit)
+			// todo: wait for the hs.done to close?
+			delete(p.historicalStreams, uint(v))
+		} else {
+			// this could happen when the cursor was 0 thus the historical stream was not created - do nothing
+		}
+	}
 }
 
 // syncBins returns the range to which proximity order bins syncing
