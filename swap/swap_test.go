@@ -38,7 +38,7 @@ var (
 	loglevel = flag.Int("loglevel", 2, "verbosity of logs")
 )
 
-type Booking struct {
+type booking struct {
 	amount int64
 	peer   *protocols.Peer
 }
@@ -88,9 +88,9 @@ func TestRepeatedBookings(t *testing.T) {
 	testPeer := newDummyPeer()
 	amount := mrand.Intn(100)
 	cnt := 1 + mrand.Intn(10)
-	var bookings []Booking
+	var bookings []booking
 	for i := 0; i < cnt; i++ {
-		bookings = append(bookings, Booking{int64(amount), testPeer.Peer})
+		bookings = append(bookings, booking{int64(amount), testPeer.Peer})
 	}
 	addBookings(swap, bookings)
 	balancesAfterBookings := calculateExpectedBalances(swap, bookings)
@@ -104,7 +104,7 @@ func TestRepeatedBookings(t *testing.T) {
 	amount = mrand.Intn(100)
 	cnt = 1 + mrand.Intn(10)
 	for i := 0; i < cnt; i++ {
-		bookings = append(bookings, Booking{0 - int64(amount), testPeer2.Peer})
+		bookings = append(bookings, booking{0 - int64(amount), testPeer2.Peer})
 	}
 	addBookings(swap, bookings[len(bookings)-cnt:])
 	balancesAfterBookings = calculateExpectedBalances(swap, bookings)
@@ -115,10 +115,10 @@ func TestRepeatedBookings(t *testing.T) {
 	}
 
 	//mixed debits and credits
-	mixedBookings := []Booking{
-		Booking{int64(mrand.Intn(100)), testPeer2.Peer},
-		Booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
-		Booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
+	mixedBookings := []booking{
+		booking{int64(mrand.Intn(100)), testPeer2.Peer},
+		booking{int64(0 - mrand.Intn(55)), testPeer2.Peer},
+		booking{int64(0 - mrand.Intn(999)), testPeer2.Peer},
 	}
 	addBookings(swap, mixedBookings)
 	balancesAfterBookings = calculateExpectedBalances(swap, append(bookings, mixedBookings...))
@@ -129,14 +129,14 @@ func TestRepeatedBookings(t *testing.T) {
 	}
 }
 
-func addBookings(swap *Swap, bookings []Booking) {
+func addBookings(swap *Swap, bookings []booking) {
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
 		swap.Add(booking.amount, booking.peer)
 	}
 }
 
-func calculateExpectedBalances(swap *Swap, bookings []Booking) map[enode.ID]int64 {
+func calculateExpectedBalances(swap *Swap, bookings []booking) map[enode.ID]int64 {
 	expectedBalances := make(map[enode.ID]int64)
 	for i := 0; i < len(bookings); i++ {
 		booking := bookings[i]
