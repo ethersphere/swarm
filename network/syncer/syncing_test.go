@@ -19,6 +19,7 @@ package syncer
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -26,6 +27,8 @@ import (
 	"github.com/ethersphere/swarm/chunk"
 	"github.com/ethersphere/swarm/log"
 	"github.com/ethersphere/swarm/network/simulation"
+	"github.com/ethersphere/swarm/storage"
+	"github.com/ethersphere/swarm/testutil"
 )
 
 const dataChunkCount = 1000
@@ -43,7 +46,7 @@ func TestTwoNodesFullSync(t *testing.T) {
 		syncTime   = 5 * time.Second
 	)
 	sim := simulation.New(map[string]simulation.ServiceFunc{
-		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(chunkCount),
+		"bzz-sync": newBzzSyncWithLocalstoreDataInsertion(0),
 	})
 	defer sim.Close()
 
@@ -74,18 +77,31 @@ func TestTwoNodesFullSync(t *testing.T) {
 		log.Debug("uploader node", "enode", nodeIDs[0])
 		item = sim.NodeItem(nodeIDs[0], bucketKeyFileStore)
 		store := item.(chunk.Store)
+
+		//put some data into just the first node
+		filesize := chunkCount * 4096
+		cctx := context.Background()
+		_, wait, err := item.(*storage.FileStore).Store(cctx, testutil.RandomReader(0, filesize), int64(filesize), false)
+		if err != nil {
+			return err
+		}
+		if err := wait(cctx); err != nil {
+			return err
+		}
+
 		uploaderNodeBinIDs := make([]uint64, 17)
 
 		log.Debug("checking pull subscription bin ids")
 		for po := 0; po <= 16; po++ {
 			until, err := store.LastPullSubscriptionBinID(uint8(po))
 			if err != nil {
-				t.Fatal(err)
+				return err
 			}
 			log.Debug("uploader node got bin index", "bin", po, "binIndex", until)
 
 			uploaderNodeBinIDs[po] = until
 		}
+
 		// wait for syncing
 		time.Sleep(syncTime)
 
@@ -103,13 +119,13 @@ func TestTwoNodesFullSync(t *testing.T) {
 			for po, uploaderUntil := range uploaderNodeBinIDs {
 				shouldUntil, err := db.LastPullSubscriptionBinID(uint8(po))
 				if err != nil {
-					t.Fatal(err)
+					return err
 				}
 				otherNodeSum += int(shouldUntil)
 				uploaderSum += int(uploaderUntil)
 			}
 			if uploaderSum != otherNodeSum {
-				t.Fatalf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
+				return fmt.Errorf("bin indice sum mismatch. got %d want %d", otherNodeSum, uploaderSum)
 			}
 		}
 		return nil
