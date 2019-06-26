@@ -189,11 +189,51 @@ func (db *DB) AddToPinFileIndex(hash []byte, isRaw bool) error {
 
 	batch := new(leveldb.Batch)
 	var item shed.Item
-	copy(item.Address, hash)
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
 	if isRaw {
 		item.IsRaw = 1
 	}
 	db.pinFilesIndex.PutInBatch(batch, item)
 	err := db.shed.WriteBatch(batch)
+	return err
+}
+
+// decrements the pin counter by 1,
+// if the pincounter reached 0, the entry is removed from the pinIndex
+func (db *DB) UnpinChunk(hash []byte) error {
+
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+
+	batch := new(leveldb.Batch)
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+	if item.PinCounter > 0 {
+		item.PinCounter = item.PinCounter - 1
+		db.pinIndex.PutInBatch(batch, item)
+	} else {
+		db.pinIndex.DeleteInBatch(batch, item)
+	}
+
+	err := db.shed.WriteBatch(batch)
+
+	return err
+}
+
+func (db *DB) UnpinRootHash(hash []byte) error {
+
+	db.batchMu.Lock()
+	defer db.batchMu.Unlock()
+
+	batch := new(leveldb.Batch)
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+
+	db.pinFilesIndex.DeleteInBatch(batch, item)
+	err := db.shed.WriteBatch(batch)
+
 	return err
 }

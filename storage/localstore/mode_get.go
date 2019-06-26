@@ -143,6 +143,44 @@ func (db *DB) updateGC(item shed.Item) (err error) {
 	return db.shed.WriteBatch(batch)
 }
 
+func (db *DB) IsPinnedFileRaw(hash []byte) (bool, error) {
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+	i, err := db.pinFilesIndex.Get(item)
+	if err != nil {
+		return false, err
+	}
+	raw := false
+	if i.IsRaw > 0 {
+		raw = true
+	}
+	return raw , nil
+}
+
+func (db *DB) IsChunkPinned(hash []byte) (bool) {
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+	_, err := db.pinIndex.Get(item)
+	if err != nil {
+		return true
+	}
+	return false
+}
+
+
+func (db *DB) GetPinCounterOfChunk(hash []byte) (uint64, error) {
+	var item shed.Item
+	item.Address = make([]byte, len(hash))
+	copy(item.Address[:], hash[:])
+	i, err := db.pinIndex.Get(item)
+	if err != nil {
+		return 0, err
+	}
+	return i.PinCounter , nil
+}
+
 // testHookUpdateGC is a hook that can provide
 // information when a garbage collection index is updated.
 var testHookUpdateGC func()

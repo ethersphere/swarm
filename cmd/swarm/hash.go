@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"github.com/ethersphere/swarm/api"
 	"os"
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
@@ -81,7 +82,7 @@ func hash(ctx *cli.Context) {
 	fileStore := storage.NewFileStore(&storage.FakeChunkStore{}, storage.NewFileStoreParams(), chunk.NewTags())
 
 	// Dont pin as the file is not stored in the chunk DB (its stored in FakeStore)
-	addr, _, err := fileStore.Store(context.TODO(), f, stat.Size(), false, storage.DONT_PIN)
+	addr, _, err := fileStore.Store(context.TODO(), f, stat.Size(), false, api.DONT_PIN)
 	if err != nil {
 		utils.Fatalf("%v\n", err)
 	} else {

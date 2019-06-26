@@ -480,7 +480,7 @@ func testBzzGetPath(encrypted bool, t *testing.T) {
 		reader[i] = bytes.NewReader([]byte(mf))
 		var wait func(context.Context) error
 		ctx := context.TODO()
-		addr[i], wait, err = srv.FileStore.Store(ctx, reader[i], int64(len(mf)), encrypted, storage.DONT_PIN)
+		addr[i], wait, err = srv.FileStore.Store(ctx, reader[i], int64(len(mf)), encrypted, api.DONT_PIN)
 		if err != nil {
 			t.Fatal(err)
 		}

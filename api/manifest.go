@@ -74,7 +74,7 @@ func (a *API) NewManifest(ctx context.Context, toEncrypt bool) (storage.Address,
 	}
 
 	// Dont pin this manifest because this function is used only to create a empty manifest
-	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt, storage.DONT_PIN)
+	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), toEncrypt, DONT_PIN)
 	if err != nil {
 		return nil, err
 	}
@@ -97,7 +97,7 @@ func (a *API) NewFeedManifest(ctx context.Context, feed *feed.Feed) (storage.Add
 	}
 
 	// TODO_PIN: take care of pinned feeds
-	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false, storage.DONT_PIN)
+	addr, wait, err := a.Store(ctx, bytes.NewReader(data), int64(len(data)), false, DONT_PIN)
 	if err != nil {
 		return nil, err
 	}

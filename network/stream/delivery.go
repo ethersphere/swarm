@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/ethersphere/swarm/api"
 	"time"
 
 	"github.com/ethereum/go-ethereum/metrics"
@@ -30,7 +31,7 @@ import (
 	"github.com/ethersphere/swarm/network/timeouts"
 	"github.com/ethersphere/swarm/spancontext"
 	"github.com/ethersphere/swarm/storage"
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 	olog "github.com/opentracing/opentracing-go/log"
 )
 
@@ -160,7 +161,7 @@ func (d *Delivery) handleChunkDeliveryMsg(ctx context.Context, sp *Peer, req int
 		log.Trace("handle.chunk.delivery", "put", msg.Addr)
 
 		// Dont pin the chunk if it comes from outside
-		_, err := d.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData), storage.DONT_PIN)
+		_, err := d.netStore.Put(ctx, mode, storage.NewChunk(msg.Addr, msg.SData), api.DONT_PIN)
 		if err != nil {
 			if err == storage.ErrChunkInvalid {
 				// we removed this log because it spams the logs

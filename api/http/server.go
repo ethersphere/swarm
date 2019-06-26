@@ -388,7 +388,7 @@ func (s *Server) HandlePostFiles(w http.ResponseWriter, r *http.Request) {
 	tag.DoneSplit(newAddr)
 
 	// Add the root hash of the manifest in the pinFilesIndex
-	err = s.api.PinApi.AddPinFile(newAddr, true)
+	err = s.api.PinApi.AddPinFile(newAddr, false)
 	if err != nil {
 		postFilesFail.Inc(1)
 		respondError(w, r, fmt.Sprintf("Error adding root hash to pinFilesIndex for Address : %s", newAddr.Hex()), http.StatusInternalServerError)
@@ -499,7 +499,7 @@ func (s *Server) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	deleteCount.Inc(1)
 
 	// Looks like this is not called from any client, dont pin for now
-	newKey, err := s.api.Delete(r.Context(), uri.Addr, uri.Path, storage.DONT_PIN)
+	newKey, err := s.api.Delete(r.Context(), uri.Addr, uri.Path, api.DONT_PIN)
 	if err != nil {
 		deleteFail.Inc(1)
 		respondError(w, r, fmt.Sprintf("could not delete from manifest: %v", err), http.StatusInternalServerError)

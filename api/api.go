@@ -48,7 +48,7 @@ import (
 	"github.com/ethersphere/swarm/storage/feed"
 	"github.com/ethersphere/swarm/storage/feed/lookup"
 
-	opentracing "github.com/opentracing/opentracing-go"
+	"github.com/opentracing/opentracing-go"
 )
 
 var (
@@ -188,12 +188,12 @@ type API struct {
 	fileStore *storage.FileStore
 	dns       Resolver
 	Tags      *chunk.Tags
-	PinApi    *storage.PinApi
+	PinApi    *PinApi
 	Decryptor func(context.Context, string) DecryptFunc
 }
 
 // NewAPI the api constructor initialises a new API instance.
-func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags, pinApi *storage.PinApi) (self *API) {
+func NewAPI(fileStore *storage.FileStore, dns Resolver, feedHandler *feed.Handler, pk *ecdsa.PrivateKey, tags *chunk.Tags, pinApi *PinApi) (self *API) {
 	self = &API{
 		fileStore: fileStore,
 		dns:       dns,
@@ -606,7 +606,7 @@ func (a *API) Modify(ctx context.Context, addr storage.Address, path, contentHas
 	}
 
 	// Dont pin manifest as this is used only in test cases
-	if err := trie.recalcAndStore(storage.DONT_PIN); err != nil {
+	if err := trie.recalcAndStore(DONT_PIN); err != nil {
 		apiModifyFail.Inc(1)
 		return nil, err
 	}
@@ -649,7 +649,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 
 	// TODO_PIN: support pinning when creating a file in fuse
 	// For now, don't pin it
-	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry, storage.DONT_PIN)
+	fkey, err := mw.AddEntry(ctx, bytes.NewReader(content), entry, DONT_PIN)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -658,7 +658,7 @@ func (a *API) AddFile(ctx context.Context, mhash, path, fname string, content []
 	// TODO_PIN: support pinning manifests when creating a file in fuse
 	// For now, don't pin it
 	// care should be taken to unpin the old manifest
-	newMkey, err := mw.Store(storage.DONT_PIN)
+	newMkey, err := mw.Store(DONT_PIN)
 	if err != nil {
 		apiAddFileFail.Inc(1)
 		return nil, "", err
@@ -769,7 +769,7 @@ func (a *API) RemoveFile(ctx context.Context, mhash string, path string, fname s
 
 	// TODO_PIN: If a pinned manifest is modified then it needs to pinned too
 	// care should be taken to unpin the old manifest
-	newMkey, err := mw.Store(storage.DONT_PIN)
+	newMkey, err := mw.Store(DONT_PIN)
 	if err != nil {
 		apiRmFileFail.Inc(1)
 		return "", err
@@ -846,7 +846,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 
 	// TODO_PIN: If a pinned file is modified in fuse, pin it here too
 	// For now, this is ignored
-	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry, storage.DONT_PIN)
+	fkey, err := mw.AddEntry(ctx, io.Reader(combinedReader), entry, DONT_PIN)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
@@ -854,7 +854,7 @@ func (a *API) AppendFile(ctx context.Context, mhash, path, fname string, existin
 
 	// TODO_PIN: If a pinned file is modified in fuse, pin the new manifest too
 	// For now, this is ignored
-	newMkey, err := mw.Store(storage.DONT_PIN)
+	newMkey, err := mw.Store(DONT_PIN)
 	if err != nil {
 		apiAppendFileFail.Inc(1)
 		return nil, "", err
