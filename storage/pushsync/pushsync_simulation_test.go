@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
@@ -59,14 +60,10 @@ func TestPushSyncSimulation(t *testing.T) {
 	nodeCnt := 4
 	chunkCnt := 500
 	trials := 10
-	err := testSyncerWithPubSub(t, nodeCnt, chunkCnt, trials, newServiceFunc)
-	if err != nil {
-		t.Fatal(err)
-	}
+	testSyncerWithPubSub(t, nodeCnt, chunkCnt, trials, newServiceFunc)
 }
 
-func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simulation.ServiceFunc) error {
-	t.Helper()
+func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simulation.ServiceFunc) {
 	sim := simulation.New(map[string]simulation.ServiceFunc{
 		"streamer": sf,
 	})
@@ -79,9 +76,7 @@ func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simula
 		t.Fatal(err)
 	}
 	log.Info("Snapshot loaded")
-	time.Sleep(2 * time.Second)
 	result := sim.Run(ctx, func(ctx context.Context, sim *simulation.Simulation) error {
-		time.Sleep(2 * time.Second)
 		errc := make(chan error)
 		for i := 0; i < trials; i++ {
 			go uploadAndDownload(ctx, sim, errc, nodeCnt, chunkCnt, i)
@@ -98,11 +93,9 @@ func testSyncerWithPubSub(t *testing.T, nodeCnt, chunkCnt, trials int, sf simula
 		}
 		return nil
 	})
-
 	if result.Error != nil {
 		t.Fatalf("simulation error: %v", result.Error)
 	}
-	return nil
 }
 
 // pickNodes selects 2 distinct
@@ -172,8 +165,6 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 		os.RemoveAll(dir)
 		return nil, nil, err
 	}
-	// setup netstore
-	netStore := storage.NewNetStore(lstore, enode.ID{})
 
 	// setup pss
 	kadParams := network.NewKadParams()
@@ -186,7 +177,8 @@ func newServiceFunc(ctx *adapters.ServiceContext, bucket *sync.Map) (node.Servic
 	if err != nil {
 		return nil, nil, err
 	}
-
+	// setup netstore
+	netStore := storage.NewNetStore(lstore, enode.HexID(hexutil.Encode(kad.BaseAddr())))
 	// streamer
 	delivery := stream.NewDelivery(kad, netStore)
 	netStore.RemoteGet = delivery.RequestFromPeers
