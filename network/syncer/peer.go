@@ -78,6 +78,34 @@ func (p *Peer) HandleMsg(ctx context.Context, msg interface{}) error {
 	return nil
 }
 
+// handleStreamInfoReq handles the StreamInfoReq message.
+// this message is handled by the SERVER (*Peer is the client in this case)
+func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
+	log.Debug("handleStreamInfoReq", "peer", p.ID(), "msg", msg)
+	//p.mtx.Lock()
+	//defer p.mtx.Unlock()
+	streamRes := StreamInfoRes{}
+	if len(msg.Streams) == 0 {
+		panic("nil streams msg requested")
+	}
+	for _, v := range msg.Streams {
+		streamCursor, err := p.syncer.netStore.LastPullSubscriptionBinID(uint8(v))
+		if err != nil {
+			log.Error("error getting last bin id", "bin", v)
+			panic("shouldnt happen")
+		}
+		descriptor := StreamDescriptor{
+			Name:    fmt.Sprintf("SYNC|%d", v),
+			Cursor:  streamCursor,
+			Bounded: false,
+		}
+		streamRes.Streams = append(streamRes.Streams, descriptor)
+	}
+	if err := p.Send(ctx, streamRes); err != nil {
+		log.Error("failed to send StreamInfoRes to client", "requested bins", msg.Streams)
+	}
+}
+
 // handleStreamInfoRes handles the StreamInfoRes message.
 // this message is handled by the CLIENT (*Peer is the server in this case)
 func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
@@ -109,35 +137,9 @@ func (p *Peer) handleStreamInfoRes(ctx context.Context, msg *StreamInfoRes) {
 	}
 }
 
-// handleStreamInfoReq handles the StreamInfoReq message.
-// this message is handled by the SERVER (*Peer is the client in this case)
-func (p *Peer) handleStreamInfoReq(ctx context.Context, msg *StreamInfoReq) {
-	log.Debug("handleStreamInfoReq", "peer", p.ID(), "msg", msg)
-	//p.mtx.Lock()
-	//defer p.mtx.Unlock()
-	streamRes := StreamInfoRes{}
-	if len(msg.Streams) == 0 {
-		panic("nil streams msg requested")
-	}
-	for _, v := range msg.Streams {
-		streamCursor, err := p.syncer.netStore.LastPullSubscriptionBinID(uint8(v))
-		if err != nil {
-			log.Error("error getting last bin id", "bin", v)
-			panic("shouldnt happen")
-		}
-		descriptor := StreamDescriptor{
-			Name:    fmt.Sprintf("SYNC|%d", v),
-			Cursor:  streamCursor,
-			Bounded: false,
-		}
-		streamRes.Streams = append(streamRes.Streams, descriptor)
-	}
-	if err := p.Send(ctx, streamRes); err != nil {
-		log.Error("failed to send StreamInfoRes to client", "requested bins", msg.Streams)
-	}
-}
+func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange) {
 
-func (p *Peer) handleGetRange(ctx context.Context, msg *GetRange)           {}
+}
 func (p *Peer) handleOfferedHashes(ctx context.Context, msg *OfferedHashes) {}
 func (p *Peer) handleWantedHashes(ctx context.Context, msg *WantedHashes)   {}
 
